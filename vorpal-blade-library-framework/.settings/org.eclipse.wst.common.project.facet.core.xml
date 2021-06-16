@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<faceted-project>
+  <runtime name="OCCAS 7.1"/>
+  <fixed facet="java"/>
+  <fixed facet="jst.utility"/>
+  <installed facet="java" version="1.8"/>
+  <installed facet="jst.utility" version="1.0"/>
+  <installed facet="wls.utility" version="12.2.1.3"/>
+</faceted-project>
