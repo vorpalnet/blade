@@ -47,7 +47,6 @@ import javax.servlet.sip.annotation.Invite;
 import javax.servlet.sip.annotation.Register;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
-import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.Settings;
 import org.vorpal.blade.framework.config.SipUtil;
 import org.vorpal.blade.framework.logging.LogManager;
@@ -57,7 +56,7 @@ import org.vorpal.blade.framework.logging.Logger;
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
 public class ProxyRegistrarServlet implements SipServletListener {
-	private static Logger logger;
+	private static Logger sipLogger;
 
 	@Inject
 	private ProxyRegistrar proxyRegistrar;
@@ -77,7 +76,7 @@ public class ProxyRegistrarServlet implements SipServletListener {
 		key = SipUtil.getAccountName(req.getTo());
 //		}
 
-		logger.fine("Returning sessionKey: " + key);
+		sipLogger.fine("Returning sessionKey: " + key);
 
 		return key;
 	}
@@ -85,7 +84,7 @@ public class ProxyRegistrarServlet implements SipServletListener {
 	@Register
 	public void doRegister(SipServletRequest req) throws ServletException, IOException {
 
-		logger.fine("doRegister... proxyRegistrar: " + proxyRegistrar);
+		sipLogger.fine("doRegister... proxyRegistrar: " + proxyRegistrar);
 
 //		ProxyRegistrarSettings settings = (ProxyRegistrarSettings) ConfigurationManager.loadConfiguration(ProxyRegistrarSettings.class);
 
@@ -136,15 +135,15 @@ public class ProxyRegistrarServlet implements SipServletListener {
 
 			resp.send();
 
-			if (logger.isLoggable(Level.FINE)) {
-				logger.fine(req.getFrom() + " contacts=" + Arrays.toString(proxyRegistrar.getContacts().toArray()));
+			if (sipLogger.isLoggable(Level.FINE)) {
+				sipLogger.fine(req.getFrom() + " contacts=" + Arrays.toString(proxyRegistrar.getContacts().toArray()));
 			}
 
 			// jwm-bad
 			// req.getApplicationSession().setAttribute("PROXY_REGISTRAR", proxyRegistrar);
 
 		} catch (Exception e) {
-			logger.log(Level.SEVERE, e.getMessage(), e);
+			sipLogger.log(Level.SEVERE, e.getMessage(), e);
 			throw e;
 		}
 
@@ -155,7 +154,7 @@ public class ProxyRegistrarServlet implements SipServletListener {
 //		ProxyRegistrarSettings settings = (ProxyRegistrarSettings) ConfigurationManager.getConfiguration();
 
 //		logger.fine("------------INVITE-----------------");
-		logger.severe("ProxyRegistrarServlet.doInvite...");
+		sipLogger.severe("ProxyRegistrarServlet.doInvite...");
 
 //		logger.log(Level.FINE, Direction.RECEIVE, req);
 
@@ -168,17 +167,17 @@ public class ProxyRegistrarServlet implements SipServletListener {
 //		}
 
 		List<Address> contacts = proxyRegistrar.getContacts();
-		logger.fine("contacts: " + contacts);
+		sipLogger.fine("contacts: " + contacts);
 
-		logger.fine(req.getTo().getURI() + ", " + Arrays.toString(contacts.toArray()));
+		sipLogger.fine(req.getTo().getURI() + ", " + Arrays.toString(contacts.toArray()));
 
 		if (contacts.isEmpty()) {
 
 			if (settings.isProxyOnUnregistered()) {
-				logger.fine("Error. " + req.getTo() + " not registered. Proxying anyway.");
+				sipLogger.fine("Error. " + req.getTo() + " not registered. Proxying anyway.");
 				req.getProxy().proxyTo(req.getTo().getURI());
 			} else {
-				logger.fine("Error 404. " + req.getTo() + " not registered. ");
+				sipLogger.fine("Error 404. " + req.getTo() + " not registered. ");
 				req.createResponse(404).send();
 			}
 
@@ -200,8 +199,8 @@ public class ProxyRegistrarServlet implements SipServletListener {
 			proxy.createProxyBranches(aors);
 			proxy.startProxy();
 
-			if (logger.isLoggable(Level.FINE)) {
-				logger.fine("Proxying " + req.getTo() + " to: " + Arrays.toString(contacts.toArray()));
+			if (sipLogger.isLoggable(Level.FINE)) {
+				sipLogger.fine("Proxying " + req.getTo() + " to: " + Arrays.toString(contacts.toArray()));
 			}
 		}
 
@@ -209,13 +208,14 @@ public class ProxyRegistrarServlet implements SipServletListener {
 
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
+		sipLogger = LogManager.getLogger(event.getServletContext());
 
 		Settings settingsManager = new Settings(event);
 
 		try {
 			settings = (ProxyRegistrarSettings) settingsManager.load(ProxyRegistrarSettings.class);
 		} catch (Exception ex) {
-			Callflow.sipLogger.logStackTrace(ex);
+			sipLogger.logStackTrace(ex);
 			ex.printStackTrace();
 		}
 
@@ -229,8 +229,8 @@ public class ProxyRegistrarServlet implements SipServletListener {
 			}
 		}
 
-		logger = LogManager.getLogger(event.getServletContext());
-		logger.logConfiguration(settings);
+		sipLogger.logConfiguration(settings);
+
 	}
 
 }
