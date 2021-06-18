@@ -151,56 +151,48 @@ public class ProxyRegistrarServlet implements SipServletListener {
 
 	@Invite
 	public void doInvite(SipServletRequest req) throws ServletException, IOException {
-//		ProxyRegistrarSettings settings = (ProxyRegistrarSettings) ConfigurationManager.getConfiguration();
+		sipLogger.fine("ProxyRegistrarServlet.doInvite...");
 
-//		logger.fine("------------INVITE-----------------");
-		sipLogger.severe("ProxyRegistrarServlet.doInvite...");
+		if (req.isInitial()) {
 
-//		logger.log(Level.FINE, Direction.RECEIVE, req);
+			SipApplicationSession regAppSession = sipUtil.getApplicationSessionByKey(SipUtil.getAccountName(req.getTo()), false);
 
-		SipApplicationSession regAppSession = sipUtil.getApplicationSessionByKey(SipUtil.getAccountName(req.getTo()), false);
-//jwm-needed?
-//		if (regAppSession == null) {
-//			proxyRegistrar = new ProxyRegistrar();
-//		} else {
-//			proxyRegistrar = (ProxyRegistrar) regAppSession.getAttribute("PROXY_REGISTRAR");
-//		}
+			List<Address> contacts = proxyRegistrar.getContacts();
+			sipLogger.fine("contacts: " + contacts);
 
-		List<Address> contacts = proxyRegistrar.getContacts();
-		sipLogger.fine("contacts: " + contacts);
+			sipLogger.fine(req.getTo().getURI() + ", " + Arrays.toString(contacts.toArray()));
 
-		sipLogger.fine(req.getTo().getURI() + ", " + Arrays.toString(contacts.toArray()));
+			if (contacts.isEmpty()) {
 
-		if (contacts.isEmpty()) {
+				if (settings.isProxyOnUnregistered()) {
+					sipLogger.fine("Error. " + req.getTo() + " not registered. Proxying anyway.");
+					req.getProxy().proxyTo(req.getTo().getURI());
+				} else {
+					sipLogger.fine("Error 404. " + req.getTo() + " not registered. ");
+					req.createResponse(404).send();
+				}
 
-			if (settings.isProxyOnUnregistered()) {
-				sipLogger.fine("Error. " + req.getTo() + " not registered. Proxying anyway.");
-				req.getProxy().proxyTo(req.getTo().getURI());
 			} else {
-				sipLogger.fine("Error 404. " + req.getTo() + " not registered. ");
-				req.createResponse(404).send();
-			}
+				LinkedList<URI> aors = new LinkedList<URI>();
+				for (Address address : contacts) {
+					aors.add(address.getURI());
+				}
 
-		} else {
-			LinkedList<URI> aors = new LinkedList<URI>();
-			for (Address address : contacts) {
-				aors.add(address.getURI());
-			}
+				Proxy proxy = req.getProxy();
 
-			Proxy proxy = req.getProxy();
+				proxy.setAddToPath(settings.isAddToPath());
+				proxy.setNoCancel(settings.isNoCancel());
+				proxy.setParallel(settings.isParallel());
+				proxy.setProxyTimeout(settings.getProxyTimeout());
+				proxy.setRecordRoute(settings.isRecordRoute());
+				proxy.setRecurse(settings.isRecurse());
 
-			proxy.setAddToPath(settings.isAddToPath());
-			proxy.setNoCancel(settings.isNoCancel());
-			proxy.setParallel(settings.isParallel());
-			proxy.setProxyTimeout(settings.getProxyTimeout());
-			proxy.setRecordRoute(settings.isRecordRoute());
-			proxy.setRecurse(settings.isRecurse());
+				proxy.createProxyBranches(aors);
+				proxy.startProxy();
 
-			proxy.createProxyBranches(aors);
-			proxy.startProxy();
-
-			if (sipLogger.isLoggable(Level.FINE)) {
-				sipLogger.fine("Proxying " + req.getTo() + " to: " + Arrays.toString(contacts.toArray()));
+				if (sipLogger.isLoggable(Level.FINE)) {
+					sipLogger.fine("Proxying " + req.getTo() + " to: " + Arrays.toString(contacts.toArray()));
+				}
 			}
 		}
 
