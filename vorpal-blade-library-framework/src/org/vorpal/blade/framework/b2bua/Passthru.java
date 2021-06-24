@@ -62,13 +62,13 @@ public class Passthru extends Callflow {
 	}
 
 	private void callEvents(SipServletMessage alice, SipServletMessage bob) throws Exception {
-		if (((String) bob.getSession().getAttribute("USER_TYPE")).equals("CALLEE")) {
-			this.sipServlet.calleeEvent(bob);
-			this.sipServlet.callerEvent(alice);
-		} else {
-			this.sipServlet.calleeEvent(alice);
-			this.sipServlet.callerEvent(bob);
-		}
+//		if (((String) bob.getSession().getAttribute("USER_TYPE")).equals("CALLEE")) {
+//			this.sipServlet.calleeEvent(bob);
+//			this.sipServlet.callerEvent(alice);
+//		} else {
+//			this.sipServlet.calleeEvent(alice);
+//			this.sipServlet.callerEvent(bob);
+//		}
 	}
 
 }

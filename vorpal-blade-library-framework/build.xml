@@ -628,11 +628,13 @@
 	</path>
 	<path id="EAR Libraries.libraryclasspath" />
 	<path id="JSR-359 Libraries.userclasspath">
+		<!--
 		<pathelement location="../../../Documents/Projects/vorpal/libraries/jackson-core-asl-1.9.2.jar" />
 		<pathelement location="../../../Documents/Projects/vorpal/libraries/jackson-jaxrs-1.9.2.jar" />
 		<pathelement location="../../../Documents/Projects/vorpal/libraries/jackson-mapper-asl-1.9.2.jar" />
 		<pathelement location="../../../Documents/Projects/vorpal/libraries/jackson-xc-1.9.2.jar" />
 		<pathelement location="../../../Documents/Projects/vorpal/libraries/javax.annotation_1.2.0.0_1-1.jar" />
+		-->
 		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/sipservlet-api.jar" />
 		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/wlss.jar" />
 		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/wlssapi-internal.jar" />
@@ -655,7 +657,7 @@
 		</copy>
 	</target>
 	<target name="clean">
-		<delete dir="build/classes" />
+		<delete dir="build" />
 	</target>
 	<target depends="clean" name="cleanall" />
 	<target depends="build-subprojects,build-project,build-jar" name="build" />
@@ -670,7 +672,29 @@
 
 	<target depends="build-project" name="build-jar">
 		<jar destfile="build/${ant.project.name}.jar" basedir="build/classes" />
-	</target>
 
-	<target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects" />
+		<!--		
+		<exec executable="hostname" outputproperty="computer.hostname"/>
+		<echo message="hostname = ${computer.hostname}"/>
+-->
+
+		<javadoc packagenames="org.vorpal.*" sourcepath="src" destdir="build/javadocs" author="true" version="true" use="true" windowtitle="${ant.project.name}">
+			<classpath refid="vorpal-blade-library-framework.classpath" />
+			<doctitle>
+				<![CDATA[<h1>${ant.project.name}</h1>]]></doctitle>
+		<bottom>
+			<![CDATA[<i>Copyright &#169; 2018 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
+	<!--
+		  <tag name="todo" scope="all" description="To do:"/>
+		  <group title="Group 1 Packages" packages="com.dummy.test.a*"/>
+		  <group title="Group 2 Packages" packages="com.dummy.test.b*:com.dummy.test.c*"/>
+		  <link offline="true" href="https://docs.oracle.com/javase/8/docs/api/" packagelistLoc="C:\tmp"/>
+	<link href="https://docs.oracle.com/javase/8/docs/api/" />
+-->
+</javadoc>
+
+
+</target>
+
+<target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects" />
 </project>
