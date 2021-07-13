@@ -34,10 +34,10 @@ import org.vorpal.blade.framework.callflow.Callflow;
 public class Bye extends Callflow {
 	private static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-	private B2buaListener sipServlet;
+	private B2buaListener b2buaListener;
 
-	public Bye(B2buaListener sipServlet) {
-		this.sipServlet = sipServlet;
+	public Bye(B2buaListener b2buaListener) {
+		this.b2buaListener = b2buaListener;
 	}
 
 	@Override
@@ -52,7 +52,7 @@ public class Bye extends Callflow {
 		copyContentAndHeaders(aliceRequest, bobRequest);
 
 		callEvents(aliceRequest, bobRequest);
-		this.sipServlet.callCompleted(bobRequest);
+		b2buaListener.callCompleted(bobRequest);
 
 		sendRequest(bobRequest, (bobResponse) -> {
 			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());

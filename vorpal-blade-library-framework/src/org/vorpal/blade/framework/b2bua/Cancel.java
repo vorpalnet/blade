@@ -36,10 +36,10 @@ import org.vorpal.blade.framework.callflow.Callflow;
 public class Cancel extends Callflow {
 	private static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-	private B2buaListener sipServlet;
+	private B2buaListener b2buaListener;
 
-	public Cancel(B2buaListener sipServlet) {
-		this.sipServlet = sipServlet;
+	public Cancel(B2buaListener b2buaListener) {
+		this.b2buaListener = b2buaListener;
 	}
 
 	@Override
@@ -50,7 +50,9 @@ public class Cancel extends Callflow {
 		Collection<SipServletRequest> requests = linkedSession.getActiveRequests(UAMode.UAC);
 		for (SipServletRequest rq : requests) {
 			if (rq.getSession().getState().equals(State.EARLY)) {
-				sendRequest(copyContentAndHeaders(request, rq.createCancel()));
+				SipServletRequest cancel = copyContentAndHeaders(request, rq.createCancel());
+				b2buaListener.callAbandoned(cancel);
+				sendRequest(cancel);
 			}
 		}
 	}

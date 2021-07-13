@@ -37,16 +37,16 @@ public class InitialInvite extends Callflow {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
 	private Callback<SipServletRequest> loopOnPrack;
-	B2buaListener sipServlet;
+	private B2buaListener b2buaListener;
 
-	public InitialInvite(B2buaListener sipServlet) {
-		this.sipServlet = sipServlet;
+	public InitialInvite(B2buaListener b2buaListener) {
+		this.b2buaListener = b2buaListener;
 	}
 
 	@Override
 	public void process(SipServletRequest request) throws Exception {
 		aliceRequest = request;
-		this.sipServlet.callerEvent(aliceRequest);
+//		this.sipServlet.callerEvent(aliceRequest);
 
 		SipApplicationSession appSession = aliceRequest.getApplicationSession();
 
@@ -57,46 +57,38 @@ public class InitialInvite extends Callflow {
 		bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
 		copyContentAndHeaders(aliceRequest, bobRequest);
 		bobRequest.setRequestURI(aliceRequest.getRequestURI());
+
 		aliceRequest.getSession().setAttribute("USER_TYPE", "CALLER");
 		bobRequest.getSession().setAttribute("USER_TYPE", "CALLEE");
 		linkSessions(aliceRequest.getSession(), bobRequest.getSession());
 
-		// Change Request URI here
-		this.sipServlet.callStarted(bobRequest);
-		this.sipServlet.calleeEvent(bobRequest);
-		loopOnPrack = s -> sendRequest(bobRequest, (bobResponse) -> {
-			if (bobResponse.getStatus() >= 200) {
-				this.sipServlet.callAnswered(bobResponse);
-			}
+		b2buaListener.callStarted(bobRequest);
 
-			this.sipServlet.calleeEvent(bobResponse);
+//		Need to add support for PRACK
+//		loopOnPrack = s -> sendRequest(bobRequest, (bobResponse) -> {
+
+		sendRequest(bobRequest, (bobResponse) -> {
 
 			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 			copyContentAndHeaders(bobResponse, aliceResponse);
-			this.sipServlet.callerEvent(aliceResponse);
 
-			sendResponse(aliceResponse, (aliceAckOrPrack) -> {
-				this.sipServlet.callerEvent(aliceAckOrPrack);
+			if (successful(bobResponse)) {
+				b2buaListener.callAnswered(aliceResponse);
+			} else if (failure(bobResponse)) {
+				b2buaListener.callDeclined(aliceResponse);
+			}
 
-				if (aliceAckOrPrack.getMethod().equals(PRACK)) {
-					SipServletRequest bobPrack = bobResponse.createPrack();
-					copyContentAndHeaders(aliceAckOrPrack, bobPrack);
-					loopOnPrack.accept(bobPrack);
-				} else if (aliceAckOrPrack.getMethod().equals(ACK)) {
-					SipServletRequest bobAck = bobResponse.createAck();
-					copyContentAndHeaders(aliceAckOrPrack, bobAck);
-					this.sipServlet.calleeEvent(bobAck);
-					sendRequest(bobAck);
-					linkSessions(aliceAckOrPrack.getSession(), bobAck.getSession());
+			sendResponse(aliceResponse, (aliceAck) -> {
 
-				} else if (aliceAckOrPrack.getMethod().equals(CANCEL)) {
+				if (aliceAck.getMethod().equals(ACK)) {
+					sendRequest(copyContentAndHeaders(aliceAck, bobResponse.createAck()));
+					linkSessions(aliceAck.getSession(), bobResponse.getSession());
+				} else if (aliceAck.getMethod().equals(CANCEL)) {
 					SipServletRequest bobCancel = bobRequest.createCancel();
-					copyContentAndHeaders(aliceAckOrPrack, bobCancel);
-					sipServlet.calleeEvent(bobCancel);
+					copyContentAndHeaders(aliceAck, bobCancel);
+					b2buaListener.callAbandoned(bobCancel);
 					sendRequest(bobCancel, (bobCancelResponse) -> {
-						this.sipServlet.calleeEvent(bobCancel);
-						SipServletResponse aliceCancelResponse = createResponse(aliceAckOrPrack, bobCancelResponse, true);
-						this.sipServlet.callerEvent(aliceCancelResponse);
+						SipServletResponse aliceCancelResponse = createResponse(aliceAck, bobCancelResponse, true);
 						sendResponse(aliceCancelResponse);
 					});
 				}
@@ -105,7 +97,9 @@ public class InitialInvite extends Callflow {
 
 			});
 		});
-		loopOnPrack.accept(bobRequest);
+
+		// implement PRACK
+		// loopOnPrack.accept(bobRequest);
 	}
 
 }

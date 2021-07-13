@@ -30,11 +30,11 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
 import javax.servlet.sip.ServletTimer;
+import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletListener;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSessionsUtil;
@@ -58,9 +58,14 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 	protected static SipFactory sipFactory;
 	protected static SipSessionsUtil sipUtil;
 	protected static TimerService timerService;
+//	protected static Class listener;
+
+//	public static void registerListener(Class listener) {
+//		B2buaServlet.listener = listener;
+//	}
 
 	@Override
-	public void servletInitialized(SipServletContextEvent event) {
+	final public void servletInitialized(SipServletContextEvent event) {
 		this.event = event;
 		sipLogger = LogManager.getLogger(event.getServletContext());
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
@@ -73,26 +78,23 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 		Callflow.setTimerService(timerService);
 
 		try {
-			this.b2buaCreated(event);
+			b2buaCreated(event);
 		} catch (Exception e) {
 			Callflow.sipLogger.logStackTrace(e);
 		}
 
-		sipLogger.severe("Restarting B2buaServlet...");
-
 	}
 
 	@Override
-	public void contextInitialized(ServletContextEvent sce) {
-
+	final public void contextInitialized(ServletContextEvent sce) {
 	}
 
 	@Override
-	public void contextDestroyed(ServletContextEvent sce) {
+	final public void contextDestroyed(ServletContextEvent sce) {
 		try {
 			b2buaDestroyed(event);
 		} catch (Exception e) {
-			Callflow.sipLogger.logStackTrace(e);
+			sipLogger.logStackTrace(e);
 		}
 	}
 
@@ -100,8 +102,14 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 	protected void doRequest(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow;
 		Callback<SipServletRequest> requestLambda;
+		B2buaListener b2buaListener;
+		SipApplicationSession appSession = request.getApplicationSession();
 
 		try {
+//			b2buaListener = (B2buaListener) appSession.getAttribute("B2BUA_LISTENER");
+//			if (b2buaListener == null) {
+//				b2buaListener = (B2buaListener) listener.newInstance();
+//			}
 
 			requestLambda = Callflow.pullCallback(request);
 
@@ -112,19 +120,33 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 			} else {
 				if (request.getMethod().equals("INVITE")) {
 					if (request.isInitial()) {
+//						callflow = new InitialInvite(b2buaListener);
 						callflow = new InitialInvite(this);
+//						callflow = new InitialInvite();
+
 					} else {
+//						callflow = new Reinvite(b2buaListener);
 						callflow = new Reinvite(this);
+//						callflow = new Reinvite();
 					}
 				} else if (request.getMethod().equals("BYE")) {
+//					callflow = new Bye(b2buaListener);
 					callflow = new Bye(this);
+//					callflow = new Bye();
 				} else if (request.getMethod().equals("CANCEL")) {
+//					callflow = new Cancel(b2buaListener);
 					callflow = new Cancel(this);
+//					callflow = new Cancel();
 				} else {
+//					callflow = new Passthru(b2buaListener);
 					callflow = new Passthru(this);
+//					callflow = new Passthru();
 				}
 				callflow.processWrapper(request);
 			}
+
+//			request.getApplicationSession().setAttribute("B2BUA_LISTENER", b2buaListener);
+
 		} catch (Exception e) {
 			Callflow.sipLogger.logStackTrace(e);
 			if (e instanceof ServletException) {
@@ -172,43 +194,6 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 			Callflow.sipLogger.logStackTrace(e);
 		}
 
-	}
-
-	@Override
-	public void callStarted(SipServletRequest request) {
-		request.getApplicationSession().setAttribute("REMOTE_SESSION", request.getSession().getId());
-	}
-
-	@Override
-	public void calleeEvent(SipServletMessage msg) throws Exception {
-	}
-
-	@Override
-	public void callerEvent(SipServletMessage msg) throws Exception {
-	}
-
-	@Override
-	public void callAnswered(SipServletResponse response) throws Exception {
-	}
-
-	@Override
-	public void callCompleted(SipServletRequest request) throws Exception {
-	}
-
-	@Override
-	public void b2buaCreated(SipServletContextEvent event) throws Exception {
-	}
-
-	@Override
-	public void b2buaDestroyed(SipServletContextEvent event) throws Exception {
-	}
-
-	@Override
-	public void callConnected(SipServletRequest request) throws Exception {
-	}
-
-	@Override
-	public void callRefused(SipServletResponse response) throws Exception {
 	}
 
 	/**

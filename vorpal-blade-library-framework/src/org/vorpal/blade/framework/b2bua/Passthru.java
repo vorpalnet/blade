@@ -34,10 +34,10 @@ import org.vorpal.blade.framework.callflow.Callflow;
 public class Passthru extends Callflow {
 	private static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-	private B2buaListener sipServlet;
+	private B2buaListener b2buaListener;
 
-	public Passthru(B2buaListener sipServlet) {
-		this.sipServlet = sipServlet;
+	public Passthru(B2buaListener b2buaListener) {
+		this.b2buaListener = b2buaListener;
 	}
 
 	@Override

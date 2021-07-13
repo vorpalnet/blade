@@ -1,0 +1,90 @@
+<?xml version="1.0"?>
+<project name="BLADE" default="all" basedir=".">
+	<property environment="envvar" />
+	<exec executable="hostname" outputproperty="computer.hostname" />
+	<property file="${computer.hostname}.properties" />
+	<property file="build.properties" />
+
+	<taskdef resource="net/sf/antcontrib/antlib.xml">
+		<classpath>
+			<pathelement location="./lib/ant-contrib.jar" />
+		</classpath>
+	</taskdef>
+
+	<target name="init" depends="">
+		<copy file="build.properties" tofile="${computer.hostname}.properties" />
+		<mkdir dir="dist" />
+	</target>
+
+	<target name="all" depends="init, libraries, applications" />
+
+	<target name="compile" depends="init">
+		<ant dir="${var}" inheritrefs="true" inheritAll="true" />
+	</target>
+
+	<target name="libraries" depends="init">
+		<foreach list="${blade.libraries}" param="var" target="compile" />
+		<foreach list="${blade.libraries}" param="var" target="jar" />
+	</target>
+
+	<target name="applications" depends="libraries">
+		<foreach list="${blade.applications}" param="var" target="compile" />
+		<foreach list="${blade.applications}" param="var" target="war" />
+	</target>
+
+	<target name="clean" depends="">
+		<foreach list="${blade.libraries}" param="library" target="clean-project" />
+		<foreach list="${blade.applications}" param="library" target="clean-project" />
+		<delete dir="dist" />
+	</target>
+
+	<target name="clean-project" depends="">
+		<ant target="clean" dir="${library}" inheritrefs="true" inheritAll="true" />
+	</target>
+
+	<target name="war" depends="compile">
+		<war destfile="./dist/${var}.war" webxml="${var}/WebContent/WEB-INF/web.xml">
+			<fileset dir="${var}/WebContent">
+				<include name="**/*.*" />
+			</fileset>
+		</war>
+	</target>
+
+	<target name="jar" depends="compile">
+		<jar destfile="./dist/${var}.jar" basedir="${var}/build/classes" />
+	</target>
+
+	<target name="deploy">
+		<mkdir dir="dist" />
+
+		<copy todir="build/lib">
+			<fileset dir="witiko-admin/lib" />
+
+			<fileset dir="witiko-core/lib" />
+
+			<fileset dir="witiko-db/lib" />
+		</copy>
+
+		<ear earfile="dist/witiko.ear" appxml="application.xml">
+			<fileset dir="build">
+				<include name="lib/*.jar" />
+			</fileset>
+
+			<fileset dir="witiko-admin/dist">
+				<include name="**/*" />
+			</fileset>
+
+			<fileset dir="witiko-core/dist">
+				<include name="**/*" />
+			</fileset>
+
+			<fileset dir="witiko-db/dist">
+				<include name="**/*" />
+			</fileset>
+		</ear>
+
+		<delete file="${deploy.location}/witiko.ear" />
+		<copy file="dist/witiko.ear" todir="${deploy.location}" />
+	</target>
+</project>
+

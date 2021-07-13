@@ -36,10 +36,10 @@ public class Reinvite extends Callflow {
 	private SipServletRequest aliceRequest;
 //	private Callback<SipServletRequest> loopOnPrack;
 //	private Callback<SipServletResponse> bobCallback = null;
-	private B2buaListener sipServlet;
+	private B2buaListener b2buaListener;
 
-	public Reinvite(B2buaListener sipServlet) {
-		this.sipServlet = sipServlet;
+	public Reinvite(B2buaListener b2buaListener) {
+		this.b2buaListener = b2buaListener;
 	}
 
 	@Override
@@ -56,7 +56,7 @@ public class Reinvite extends Callflow {
 			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 			copyContentAndHeaders(bobResponse, aliceResponse);
 			callEvents(aliceResponse, bobResponse);
-			sendResponse(aliceResponse, (aliceAckOrPrack) -> {
+			sendResponse(aliceResponse, (aliceAck) -> {
 
 //				if (aliceAckOrPrack.getMethod().equals(PRACK)) {
 //					SipServletRequest bobPrack = bobResponse.createPrack();
@@ -66,8 +66,8 @@ public class Reinvite extends Callflow {
 //				} else {
 
 				SipServletRequest bobAck = bobResponse.createAck();
-				copyContentAndHeaders(aliceAckOrPrack, bobAck);
-				callEvents(aliceAckOrPrack, bobAck);
+				copyContentAndHeaders(aliceAck, bobAck);
+				callEvents(aliceAck, bobAck);
 				sendRequest(bobAck);
 
 //				}

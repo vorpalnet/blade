@@ -24,12 +24,17 @@
 
 package org.vorpal.blade.framework.b2bua;
 
+import java.io.Serializable;
+
 import javax.servlet.sip.SipServletContextEvent;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-public interface B2buaListener {
+public interface B2buaListener extends Serializable {
+	public void b2buaCreated(SipServletContextEvent event) throws Exception;
+
+	public void b2buaDestroyed(SipServletContextEvent event) throws Exception;
+
 	public void callStarted(SipServletRequest request) throws Exception;
 
 	public void callAnswered(SipServletResponse response) throws Exception;
@@ -38,13 +43,8 @@ public interface B2buaListener {
 
 	public void callCompleted(SipServletRequest request) throws Exception;
 
-	public void callRefused(SipServletResponse response) throws Exception;
+	public void callDeclined(SipServletResponse response) throws Exception;
 
-	public void callerEvent(SipServletMessage msg) throws Exception;
+	public void callAbandoned(SipServletRequest request) throws Exception;
 
-	public void calleeEvent(SipServletMessage msg) throws Exception;
-
-	public void b2buaCreated(SipServletContextEvent event) throws Exception;
-
-	public void b2buaDestroyed(SipServletContextEvent event) throws Exception;
 }
