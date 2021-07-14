@@ -80,7 +80,7 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 		try {
 			b2buaCreated(event);
 		} catch (Exception e) {
-			Callflow.sipLogger.logStackTrace(e);
+			Callflow.getLogger().logStackTrace(e);
 		}
 
 	}
@@ -115,7 +115,7 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 
 			if (requestLambda != null) {
 				String name = requestLambda.getClass().getSimpleName();
-				Callflow.sipLogger.superArrow(Direction.RECEIVE, request, null, name);
+				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, name);
 				requestLambda.accept(request);
 			} else {
 				if (request.getMethod().equals("INVITE")) {
@@ -148,7 +148,7 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 //			request.getApplicationSession().setAttribute("B2BUA_LISTENER", b2buaListener);
 
 		} catch (Exception e) {
-			Callflow.sipLogger.logStackTrace(e);
+			Callflow.getLogger().logStackTrace(e);
 			if (e instanceof ServletException) {
 				throw new ServletException(e);
 			} else if (e instanceof IOException) {
@@ -164,14 +164,14 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 
 			callback = Callflow.pullCallback(response);
 			if (callback != null) {
-				Callflow.sipLogger.superArrow(Direction.RECEIVE, null, response, callback.getClass().getSimpleName());
+				Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, callback.getClass().getSimpleName());
 				callback.accept(response);
 			} else {
-				Callflow.sipLogger.superArrow(Direction.RECEIVE, null, response, "null");
+				Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
 			}
 
 		} catch (Exception e) {
-			Callflow.sipLogger.logStackTrace(e);
+			Callflow.getLogger().logStackTrace(e);
 			if (e instanceof ServletException) {
 				throw new ServletException(e);
 			} else if (e instanceof IOException) {
@@ -184,14 +184,12 @@ public abstract class B2buaServlet extends SipServlet implements B2buaListener, 
 	@SuppressWarnings("unchecked")
 	@Override
 	public void timeout(ServletTimer timer) {
-		Callflow.sipLogger.fine("timer invoked... ");
-
 		try {
 			Callback<ServletTimer> callback;
 			callback = (Callback<ServletTimer>) timer.getInfo();
 			callback.accept(timer);
 		} catch (Exception e) {
-			Callflow.sipLogger.logStackTrace(e);
+			Callflow.getLogger().logStackTrace(e);
 		}
 
 	}

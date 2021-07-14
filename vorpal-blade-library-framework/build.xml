@@ -659,7 +659,7 @@
 	<target name="build-subprojects" />
 	<target depends="init" name="build-project">
 		<echo message="${ant.project.name}: ${ant.file}" />
-		<javac debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" source="${source}" target="${target}">
+		<javac nowarn="on" debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" source="${source}" target="${target}">
 			<src path="src" />
 			<classpath refid="vorpal-blade-library-framework.classpath" />
 		</javac>
@@ -673,7 +673,7 @@
 		<echo message="hostname = ${computer.hostname}"/>
 -->
 
-		<javadoc packagenames="org.vorpal.*" sourcepath="src" destdir="build/javadocs" author="true" version="true" use="true" windowtitle="${ant.project.name}">
+		<javadoc additionalparam="-Xdoclint:none" packagenames="org.vorpal.*" sourcepath="src" destdir="build/javadocs" author="true" version="true" use="true" windowtitle="${ant.project.name}">
 			<classpath refid="vorpal-blade-library-framework.classpath" />
 			<doctitle>
 				<![CDATA[<h1>${ant.project.name}</h1>]]></doctitle>

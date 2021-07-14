@@ -24,11 +24,8 @@
 package org.vorpal.blade.framework.callflow;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.io.Serializable;
-import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
-import java.util.HashMap;
 import java.util.logging.Level;
 
 import javax.servlet.sip.ServletParseException;
@@ -50,22 +47,22 @@ public abstract class Callflow implements Serializable {
 	protected static SipFactory sipFactory;
 	protected static SipSessionsUtil sipUtil;
 	protected static TimerService timerService;
+	protected static Logger sipLogger;
 
-	public static Logger sipLogger;
-
-	public static final String INVITE = "INVITE";
-	public static final String ACK = "ACK";
-	public static final String BYE = "BYE";
-	public static final String CANCEL = "CANCEL";
-	public static final String REGISTER = "REGISTER";
-	public static final String OPTIONS = "OPTIONS";
-	public static final String PRACK = "PRACK";
-	public static final String SUBSCRIBE = "SUBSCRIBE";
-	public static final String NOTIFY = "NOTIFY";
-	public static final String PUBLISH = "PUBLISH";
-	public static final String INFO = "INFO";
-	public static final String UPDATE = "UPDATE";
-	public static final String SIP = "SIP";
+	// Useful strings
+	protected static final String INVITE = "INVITE";
+	protected static final String ACK = "ACK";
+	protected static final String BYE = "BYE";
+	protected static final String CANCEL = "CANCEL";
+	protected static final String REGISTER = "REGISTER";
+	protected static final String OPTIONS = "OPTIONS";
+	protected static final String PRACK = "PRACK";
+	protected static final String SUBSCRIBE = "SUBSCRIBE";
+	protected static final String NOTIFY = "NOTIFY";
+	protected static final String PUBLISH = "PUBLISH";
+	protected static final String INFO = "INFO";
+	protected static final String UPDATE = "UPDATE";
+	protected static final String SIP = "SIP";
 
 	private static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
 	private static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
@@ -106,6 +103,12 @@ public abstract class Callflow implements Serializable {
 		callback = (Callback<SipServletRequest>) sipSession.getAttribute(attribute);
 		if (callback != null) {
 			sipSession.removeAttribute(attribute);
+		} else {
+			SipApplicationSession appSession = request.getApplicationSession();
+			callback = (Callback<SipServletRequest>) appSession.getAttribute(attribute);
+			if (callback != null) {
+				appSession.removeAttribute(attribute);
+			}
 		}
 		return callback;
 	}
@@ -130,30 +133,6 @@ public abstract class Callflow implements Serializable {
 		callback = (Callback<ServletTimer>) timer.getInfo();
 		return callback;
 	}
-
-//	public void putRequestLambda(SipSession sipSession, String method, Callback<SipServletRequest> requestLambda) {
-//		HashMap<String, Callback<SipServletRequest>> lambdaMap = requestLambdas.get(sipSession.getId());
-//		if (lambdaMap == null) {
-//			sipLogger.fine("Creating lambdaMap...");
-//			lambdaMap = new HashMap<String, Callback<SipServletRequest>>();
-//			requestLambdas.put(sipSession.getId(), lambdaMap);
-//		}
-//
-//		sipLogger.fine("Inserting requestLambda for method: " + method);
-//		lambdaMap.put(method, requestLambda);
-//
-//	}
-
-//	public Callback<SipServletRequest> pullRequestLambda(SipSession sipSession, String method) {
-//		Callback<SipServletRequest> requestLambda = null;
-//
-//		HashMap<String, Callback<SipServletRequest>> lambdaMap = requestLambdas.get(sipSession.getId());
-//		if (lambdaMap != null) {
-//			requestLambda = lambdaMap.remove(method);
-//		}
-//
-//		return requestLambda;
-//	}
 
 	public static Logger getLogger() {
 		return sipLogger;
@@ -214,6 +193,10 @@ public abstract class Callflow implements Serializable {
 
 	public void expectRequest(SipSession sipSession, String method, Callback<SipServletRequest> callback) {
 		sipSession.setAttribute(REQUEST_CALLBACK_ + method, callback);
+	}
+
+	public void expectRequest(SipApplicationSession appSession, String method, Callback<SipServletRequest> callback) {
+		appSession.setAttribute(REQUEST_CALLBACK_ + method, callback);
 	}
 
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction) throws Exception {

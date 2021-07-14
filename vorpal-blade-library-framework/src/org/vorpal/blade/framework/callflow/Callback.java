@@ -35,11 +35,6 @@ public interface Callback<T> extends Consumer<T>, Serializable {
 		try {
 			acceptThrows(elem);
 		} catch (final Exception ex) {
-//			StringWriter sw = new StringWriter();
-//			PrintWriter pw = new PrintWriter(sw);
-//			ex.printStackTrace(pw);
-//			Callflow.logger.warning(sw.toString());
-
 			Callflow.sipLogger.logStackTrace(ex);
 			throw new RuntimeException(ex);
 		}
