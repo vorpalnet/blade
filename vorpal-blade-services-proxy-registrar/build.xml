@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project basedir="." default="build" name="vorpal-blade-services-proxy-registrar">
+	<property environment="env" />
+
+	<path id="project.classpath">
+		<pathelement location="build/classes" />
+		<path refid="blade.classpath" />
+		<pathelement location="../vorpal-blade-library-framework/build/vorpal-blade-library-framework.jar" />
+		<fileset dir="WebContent/WEB-INF/lib">
+			<include name="**/*.jar" />
+		</fileset>
+	</path>
+
+	<target name="init">
+		<mkdir dir="build/classes" />
+		<copy includeemptydirs="false" todir="build/classes">
+			<fileset dir="src">
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+		<copy includeemptydirs="false" todir="build/classes">
+			<fileset dir=".apt_src">
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+	</target>
+	
+	<target name="clean">
+		<delete dir="build" />
+	</target>
+	
+	<target depends="clean" name="cleanall" />
+	
+	<target name="build-subprojects" />
+	
+	<target name="build" depends="init">
+		<echo message="${ant.project.name}: ${ant.file}" />
+
+		<copy includeemptydirs="false" todir="build/classes">
+			<fileset dir="src">
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+
+		<javac release="8" debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" >
+			<src path="src" />
+			<src path=".apt_src" />
+			<classpath refid="project.classpath" />
+		</javac>
+
+		<war destfile="build/${ant.project.name}.war" webxml="WebContent/WEB-INF/web.xml">
+			<fileset dir="WebContent" />
+			<lib dir="WebContent/WEB-INF/lib" />
+			<classes dir="build/classes" />
+		</war>
+	</target>
+
+</project>

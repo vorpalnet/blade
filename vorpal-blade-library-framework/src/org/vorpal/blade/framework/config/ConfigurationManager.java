@@ -27,13 +27,13 @@ package org.vorpal.blade.framework.config;
 import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
-import java.util.logging.Handler;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
+import javax.servlet.annotation.WebListener;
 
 import org.codehaus.jackson.JsonGenerationException;
 import org.codehaus.jackson.map.JsonMappingException;
@@ -43,9 +43,9 @@ import org.codehaus.jackson.schema.JsonSchema;
 import org.vorpal.blade.framework.logging.LogManager;
 import org.vorpal.blade.framework.logging.Logger;
 
-//@WebListener
+@WebListener
 public class ConfigurationManager implements ServletContextListener {
-	public static Logger logger;
+	public static Logger sipLogger;
 	private static Configuration configuration;
 	private ObjectName objectName;
 	private ObjectMapper mapper;
@@ -84,19 +84,18 @@ public class ConfigurationManager implements ServletContextListener {
 
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
-		logger = LogManager.getLogger(event.getServletContext());
+		sipLogger = LogManager.getLogger(event.getServletContext());
 
 		try {
-			System.out.println(event.getServletContext().getServletContextName() + " starting...");
 
 			String appName = event.getServletContext().getServletContextName();
 			filename = "./config/custom/" + appName + ".json";
-			schemaFilename = "./config/custom/" + appName + ".jschema";
+			schemaFilename = "./config/custom/vorpal/schemas/" + appName + ".jschema";
 
 			sampleFilename = filename + ".SAMPLE";
 
 			// Create Configuration MBean
-			String className = event.getServletContext().getInitParameter("vorpal.alice:configuration");
+			String className = event.getServletContext().getInitParameter("vorpal.blade:configuration");
 			if (className != null) {
 				mapper = new ObjectMapper();
 				mapper.configure(SerializationConfig.Feature.WRITE_ENUMS_USING_TO_STRING, true);
@@ -111,7 +110,7 @@ public class ConfigurationManager implements ServletContextListener {
 				// Register Configuration MBean
 				MBeanServer server = ManagementFactory.getPlatformMBeanServer();
 				String name = event.getServletContext().getServletContextName();
-				objectName = new ObjectName("vorpal.alice:Name=" + name + ",Type=Configuration");
+				objectName = new ObjectName("vorpal.blade:Name=" + name + ",Type=Configuration");
 				ObjectInstance oi = server.registerMBean(configuration, objectName);
 
 				// Save the fully qualified object name
@@ -132,9 +131,9 @@ public class ConfigurationManager implements ServletContextListener {
 				server.unregisterMBean(objectName);
 			}
 
-			for (Handler handler : logger.getHandlers()) {
-				handler.close();
-			}
+			/*
+			 * for (Handler handler : logger.getHandlers()) { handler.close(); }
+			 */
 
 		} catch (Exception ex) {
 			ex.printStackTrace();

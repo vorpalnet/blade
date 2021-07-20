@@ -63,7 +63,7 @@ public class Configuration implements ConfigurationMXBean {
 			System.out.println("Updating configuration for " + clazz.getName());
 			data = mapper.readValue(json, clazz);
 		} catch (IOException e) {
-			ConfigurationManager.logger.severe(e);
+			ConfigurationManager.sipLogger.severe(e);
 		}
 
 	}

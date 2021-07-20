@@ -46,7 +46,7 @@ public class Settings {
 
 		this.directory = "./config/custom/vorpal/";
 		this.filename = directory + appName + ".json";
-		this.schemaFilename = directory + appName + ".jschema";
+		this.schemaFilename = directory + "schemas/" + appName + ".jschema";
 	}
 
 	public Object load(Class<?> clazz) throws InstantiationException, IllegalAccessException, JsonGenerationException, JsonMappingException, IOException {
