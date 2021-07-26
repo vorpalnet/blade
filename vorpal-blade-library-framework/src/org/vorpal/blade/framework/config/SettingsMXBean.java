@@ -1,7 +1,7 @@
 /**
  *  MIT License
  *  
- *  Copyright (c) 2013-2021 Vorpal Networks, LLC
+ *  Copyright (c) 2021 Vorpal Networks, LLC
  *  
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files (the "Software"), to deal
@@ -21,13 +21,23 @@
  *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *  SOFTWARE.
  */
-
 package org.vorpal.blade.framework.config;
 
-public interface ConfigurationMXBean {
-	public String getData();
+import javax.management.MXBean;
 
-	public void setData(String json);
+/**
+ * @author Jeff McDonald
+ *
+ */
+@MXBean
+public interface SettingsMXBean {
 
-	public String getSchema();
+	public String getJson();
+
+	public void setJson(String json);
+
+	public String getName();
+
+	public String getJSchema();
+
 }

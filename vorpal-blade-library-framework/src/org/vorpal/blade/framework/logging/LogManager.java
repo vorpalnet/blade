@@ -42,10 +42,12 @@ public class LogManager implements ServletContextListener {
 	private static ConcurrentHashMap<String, Logger> logMap = new ConcurrentHashMap<String, Logger>();
 
 	public static Logger getLogger(ServletContext context) {
+		return getLogger(context.getServletContextName());
+	}
+
+	public static Logger getLogger(String name) {
 
 		Logger logger = null;
-
-		String name = context.getServletContextName();
 
 		try {
 			logger = logMap.get(name);
@@ -61,7 +63,7 @@ public class LogManager implements ServletContextListener {
 
 				handler.setFormatter(formatter);
 
-				logger = new Logger(context.getServletContextName(), null);
+				logger = new Logger(name, null);
 
 				logger.addHandler(handler);
 				logger.setParent(KernelLogManager.getLogger());

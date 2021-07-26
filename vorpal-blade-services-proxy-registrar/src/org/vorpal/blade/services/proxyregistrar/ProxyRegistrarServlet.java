@@ -47,7 +47,7 @@ import javax.servlet.sip.annotation.Invite;
 import javax.servlet.sip.annotation.Register;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
-import org.vorpal.blade.framework.config.Settings;
+import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.config.SipUtil;
 import org.vorpal.blade.framework.logging.LogManager;
 import org.vorpal.blade.framework.logging.Logger;
@@ -61,7 +61,8 @@ public class ProxyRegistrarServlet implements SipServletListener {
 	@Inject
 	private ProxyRegistrar proxyRegistrar;
 
-	private static ProxyRegistrarSettings settings = null;
+//	private static ProxyRegistrarSettings settings = null;
+	private static SettingsManager<ProxyRegistrarSettings> settingsManager;
 
 	@Resource
 	public static SipFactory sipFactory;
@@ -72,13 +73,17 @@ public class ProxyRegistrarServlet implements SipServletListener {
 	@SipApplicationKey
 	public static String sessionKey(SipServletRequest req) {
 		String key = null;
-//		if (req.getMethod().equals("REGISTER")) {
 		key = SipUtil.getAccountName(req.getTo());
-//		}
 
 		sipLogger.fine("Returning sessionKey: " + key);
 
 		return key;
+	}
+
+	@Override
+	public void servletInitialized(SipServletContextEvent event) {
+		sipLogger = LogManager.getLogger(event.getServletContext());
+		settingsManager = new SettingsManager<>(event.getServletContext().getServletContextName(), ProxyRegistrarSettings.class);
 	}
 
 	@Register
@@ -153,6 +158,8 @@ public class ProxyRegistrarServlet implements SipServletListener {
 	public void doInvite(SipServletRequest req) throws ServletException, IOException {
 		sipLogger.fine("ProxyRegistrarServlet.doInvite...");
 
+		ProxyRegistrarSettings settings = settingsManager.getCurrent();
+
 		if (req.isInitial()) {
 
 			SipApplicationSession regAppSession = sipUtil.getApplicationSessionByKey(SipUtil.getAccountName(req.getTo()), false);
@@ -195,33 +202,6 @@ public class ProxyRegistrarServlet implements SipServletListener {
 				}
 			}
 		}
-
-	}
-
-	@Override
-	public void servletInitialized(SipServletContextEvent event) {
-		sipLogger = LogManager.getLogger(event.getServletContext());
-
-		Settings settingsManager = new Settings(event);
-
-		try {
-			settings = (ProxyRegistrarSettings) settingsManager.load(ProxyRegistrarSettings.class);
-		} catch (Exception ex) {
-			sipLogger.logStackTrace(ex);
-			ex.printStackTrace();
-		}
-
-		if (settings == null) {
-			settings = new ProxyRegistrarSettings();
-
-			try {
-				settingsManager.save(settings);
-			} catch (Exception ex) {
-				ex.printStackTrace();
-			}
-		}
-
-		sipLogger.logConfiguration(settings);
 
 	}
 

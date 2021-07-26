@@ -33,7 +33,7 @@ import javax.servlet.sip.SipServletListener;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.config.Settings;
+import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.logging.LogManager;
 import org.vorpal.blade.framework.logging.Logger;
 
@@ -43,11 +43,19 @@ import org.vorpal.blade.framework.logging.Logger;
 public class OptionsSipServlet extends SipServlet implements SipServletListener {
 	private static final long serialVersionUID = 1L;
 	private static Logger logger;
+	private static SettingsManager<OptionsSettings> settingsManager;
 
-	private static OptionsSettings settings = null;
+	@Override
+	public void servletInitialized(SipServletContextEvent event) {
+		logger = LogManager.getLogger(event.getServletContext());
+		settingsManager = new SettingsManager<>(event.getServletContext().getServletContextName(), OptionsSettings.class);
+	}
 
 	@Override
 	protected void doOptions(SipServletRequest request) throws ServletException, IOException {
+
+		OptionsSettings settings = settingsManager.getCurrent();
+
 		SipServletResponse response = request.createResponse(200);
 		response.setHeader("Accept", settings.getAccept());
 		response.setHeader("Accept-Language", settings.getAcceptLanguage());
@@ -58,30 +66,6 @@ public class OptionsSipServlet extends SipServlet implements SipServletListener 
 
 		logger.finest(request.getRawContent().toString());
 		logger.finest(response.getRawContent().toString());
-	}
-
-	@Override
-	public void servletInitialized(SipServletContextEvent event) {
-		logger = LogManager.getLogger(event.getServletContext());
-
-		Settings config = new Settings(event);
-		try {
-			settings = (OptionsSettings) config.load(OptionsSettings.class);
-		} catch (Exception ex) {
-			// ex.printStackTrace();
-		}
-
-		if (settings == null) {
-			settings = new OptionsSettings();
-			try {
-				config.save(settings);
-			} catch (Exception ex) {
-				ex.printStackTrace();
-			}
-		}
-
-		logger.logConfiguration(settings);
-
 	}
 
 }
