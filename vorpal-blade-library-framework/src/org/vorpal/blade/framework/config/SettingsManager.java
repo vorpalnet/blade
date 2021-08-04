@@ -49,19 +49,19 @@ import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
  *
  */
 public class SettingsManager<T> {
-	private T current;
-	private ObjectName objectName;
-	private String servletContextName;
-	private MBeanServer server;
+	protected T current;
+	protected ObjectName objectName;
+	protected String servletContextName;
+	protected MBeanServer server;
 
 	public String filename;
 	public String sampleFilename;
 	public String schemaFilename;
 	public String directory;
-	ObjectMapper mapper;
-	Class<T> clazz;
-	ObjectInstance oi;
-	Settings settings;
+	protected ObjectMapper mapper;
+	protected Class<T> clazz;
+	protected ObjectInstance oi;
+	protected Settings settings;
 
 	public SettingsManager(String name, Class<T> clazz) {
 		this.servletContextName = name;
@@ -82,8 +82,16 @@ public class SettingsManager<T> {
 		}
 	}
 
-	public void register() throws InstanceAlreadyExistsException, MBeanRegistrationException, NotCompliantMBeanException, JsonGenerationException,
-			JsonMappingException, InstantiationException, IllegalAccessException, IOException {
+	/**
+	 * This method is intended to be overridden to allow configurations that require
+	 * additional work before they are ready to use.
+	 */
+	public void intialize(T config) {
+
+	}
+
+	public void register() throws InstanceAlreadyExistsException, MBeanRegistrationException, NotCompliantMBeanException,
+			JsonGenerationException, JsonMappingException, InstantiationException, IllegalAccessException, IOException {
 		this.settings = new Settings(this);
 		loadConfigFile(clazz);
 
@@ -100,8 +108,8 @@ public class SettingsManager<T> {
 		server.unregisterMBean(objectName);
 	}
 
-	private void loadConfigFile(Class<?> clazz)
-			throws InstantiationException, IllegalAccessException, JsonGenerationException, JsonMappingException, IOException {
+	private void loadConfigFile(Class<?> clazz) throws InstantiationException, IllegalAccessException,
+			JsonGenerationException, JsonMappingException, IOException {
 //		mapper.configure(SerializationConfig.Feature.WRITE_ENUMS_USING_TO_STRING, true);
 		// add save config example code
 
@@ -156,7 +164,11 @@ public class SettingsManager<T> {
 		try {
 			Callflow.getLogger().warning("Configuration changed...");
 			Callflow.getLogger().info(json);
-			current = mapper.readValue(json, clazz);
+
+			T tmp = mapper.readValue(json, clazz);
+			intialize(tmp);
+			current = tmp;
+
 		} catch (Exception e) {
 			Callflow.getLogger().logStackTrace(e);
 		}

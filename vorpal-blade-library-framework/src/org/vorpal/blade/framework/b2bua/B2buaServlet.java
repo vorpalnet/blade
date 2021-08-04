@@ -51,7 +51,8 @@ import org.vorpal.blade.framework.logging.Logger.Direction;
  * @author Jeff McDonald
  *
  */
-public abstract class B2buaServlet extends SipServlet implements B2buaListener, SipServletListener, ServletContextListener, TimerListener {
+public abstract class B2buaServlet extends SipServlet
+		implements B2buaListener, SipServletListener, ServletContextListener, TimerListener {
 	private static final long serialVersionUID = 1L;
 	private SipServletContextEvent event;
 	protected static Logger sipLogger;
