@@ -95,12 +95,8 @@ public class SettingsManager<T> {
 		this.settings = new Settings(this);
 		loadConfigFile(clazz);
 
-		Callflow.getLogger().severe("Registering MXBean " + objectName);
-
 		oi = server.registerMBean(this.settings, objectName);
 		objectName = oi.getObjectName();
-
-		Callflow.getLogger().severe("Changing object name to " + objectName);
 
 	}
 
