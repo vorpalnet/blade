@@ -46,7 +46,6 @@ public class LogManager implements ServletContextListener {
 	}
 
 	public static Logger getLogger(String name) {
-
 		Logger logger = null;
 
 		try {

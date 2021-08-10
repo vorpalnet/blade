@@ -86,7 +86,7 @@ public class SettingsManager<T> {
 	 * This method is intended to be overridden to allow configurations that require
 	 * additional work before they are ready to use.
 	 */
-	public void intialize(T config) {
+	public void initialize(T config) {
 
 	}
 
@@ -110,9 +110,13 @@ public class SettingsManager<T> {
 		// add save config example code
 
 		try {
-			current = (T) mapper.readValue(new File(filename), clazz);
+			T tmp = (T) mapper.readValue(new File(filename), clazz);
+			initialize(tmp);
+			current = tmp;
 		} catch (Exception e) {
-			current = (T) clazz.newInstance();
+			T tmp = (T) clazz.newInstance();
+			initialize(tmp);
+			current = tmp;
 			saveConfigFile();
 		}
 	}
@@ -162,7 +166,7 @@ public class SettingsManager<T> {
 			Callflow.getLogger().info(json);
 
 			T tmp = mapper.readValue(json, clazz);
-			intialize(tmp);
+			initialize(tmp);
 			current = tmp;
 
 		} catch (Exception e) {
