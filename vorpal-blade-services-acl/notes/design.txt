@@ -1,0 +1,60 @@
+SEVERE  2021-07-27 08:27:18.532 - LogManager creating new logger for acl
+SEVERE  2021-07-27 08:31:03.079 - LogManager destroying logger for acl
+SEVERE  2021-07-27 08:31:03.432 - LogManager creating new logger for acl
+INFO    2021-07-27 10:46:38.950 - getInitialPoppedRoute: null
+INFO    2021-07-27 10:46:38.952 - getPoppedRoute: null
+INFO    2021-07-27 10:46:38.952 - getRegion: From (ORIGINATING)
+INFO    2021-07-27 10:46:38.953 - getRequestURI: sip:bob@vorpal.net
+INFO    2021-07-27 10:46:38.953 - getRoutingDirective: NEW
+INFO    2021-07-27 10:46:38.953 - getSubscriberURI: "alice" <sip:alice@vorpal.net>;tag=8504e259
+INFO    2021-07-27 10:46:38.953 - getAttributeNames: com.bea.wcp.sip.util.EnumAdapter@5e586cc8
+INFO    2021-07-27 10:46:38.953 - getLocale: null
+INFO    2021-07-27 10:46:38.953 - getLocales: com.bea.wcp.sip.util.EnumAdapter@35144472
+INFO    2021-07-27 10:46:38.955 - getLocalName: blade
+INFO    2021-07-27 10:46:38.955 - getParameterNames: com.bea.wcp.sip.util.EnumAdapter@4d5457dd
+INFO    2021-07-27 10:46:38.955 - getRemoteAddr: 192.168.1.117
+INFO    2021-07-27 10:46:38.957 - getRemoteHost: mothra
+INFO    2021-07-27 10:46:38.957 - getRemotePort: 61753
+INFO    2021-07-27 10:46:38.957 - getServerName: 192.168.1.138
+INFO    2021-07-27 10:46:38.957 - getServerPort: 5060
+INFO    2021-07-27 10:46:38.957 - getAcceptLanguage: null
+INFO    2021-07-27 10:46:38.957 - getAttributeNames: com.bea.wcp.sip.util.EnumAdapter@5716becf
+INFO    2021-07-27 10:46:38.958 - getFrom: "alice" <sip:alice@vorpal.net>;tag=8504e259
+INFO    2021-07-27 10:46:38.965 - getHeaderNameList: [Allow, Content-Length, CSeq, Contact, Call-ID, Max-Forwards, From, Content-Type, To, Via, Supported, User-Agent]
+INFO    2021-07-27 10:46:38.965 - getRemoteUser: null
+INFO    2021-07-27 10:46:38.965 - getTo: <sip:bob@vorpal.net>
+INFO    2021-07-27 10:46:38.965 - getUserPrincipal: null
+SEVERE  2021-07-27 10:47:48.284 - LogManager destroying logger for acl
+
+
+Useful info...
+INFO    2021-07-27 10:46:38.953 - getRequestURI: sip:bob@vorpal.net
+INFO    2021-07-27 10:46:38.953 - getRoutingDirective: NEW
+INFO    2021-07-27 10:46:38.953 - getSubscriberURI: "alice" <sip:alice@vorpal.net>;tag=8504e259
+INFO    2021-07-27 10:46:38.955 - getRemoteAddr: 192.168.1.117
+INFO    2021-07-27 10:46:38.957 - getRemoteHost: mothra
+INFO    2021-07-27 10:46:38.957 - getRemotePort: 61753
+INFO    2021-07-27 10:46:38.957 - getServerName: 192.168.1.138
+INFO    2021-07-27 10:46:38.957 - getServerPort: 5060
+INFO    2021-07-27 10:46:38.958 - getFrom: "alice" <sip:alice@vorpal.net>;tag=8504e259
+INFO    2021-07-27 10:46:38.965 - getHeaderNameList: [Allow, Content-Length, CSeq, Contact, Call-ID, Max-Forwards, From, Content-Type, To, Via, Supported, User-Agent]
+INFO    2021-07-27 10:46:38.965 - getTo: <sip:bob@vorpal.net>
+
+ALLOW, MATCHES, HEADER, PARAMETER, PARAMETER, VALUE
+
+ALLOW, REMOTE_ADDRESS, RANGE, LOWER, UPPER, RANGE_TO, 
+
+
+REMOTE_ADDRESS
+	EQUALS(value) 
+ * PERMISSION(ALLOW/DENY)
+
+NETWORK(CIDER)
+   CONTAINS(value) - 
+
+NETWORK_RANGE(LOWER, UPPER)
+
+  
+
+
+
