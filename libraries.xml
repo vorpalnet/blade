@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<project basedir="." default="build" name="vorpal-blade-library-framework">
+<project basedir="." default="build" name="common-libraries">
 
-	<path id="blade.classpath">
+	<path id="WebLogic System Libraries.libraryclasspath">
 		<pathelement location="${OCCAS71}/wlserver/server/lib/weblogic.jar" />
 		<pathelement location="${OCCAS71}/wlserver/server/lib/pcl2.jar" />
 		<pathelement location="${OCCAS71}/wlserver/modules/com.bea.core.weblogic.security.psm.jar" />
@@ -617,12 +617,16 @@
 		<pathelement location="${OCCAS71}/wlserver/modules/com.oracle.weblogic.wtc.jar" />
 		<pathelement location="${OCCAS71}/wlserver/server/lib/wls-api.jar" />
 		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/sipservlet-api.jar" />
-		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/wlss.jar" />
-		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/wlssapi-internal.jar" />
 		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/wlssapi.jar" />
-		<pathelement location="${OCCAS71}/oracle_common/modules/javax.xml.bind.javax.xml.bind-api.jar" />
 	</path>
-
+    
+    <path id="vorpal-blade.classpath">
+        <pathelement location="vorpal-blade-library-framework/lib/jackson-annotations-2.7.9.jar"/>
+        <pathelement location="vorpal-blade-library-framework/lib/jackson-core-2.7.9.jar"/>
+        <pathelement location="vorpal-blade-library-framework/lib/jackson-databind-2.7.9.jar"/>
+        <pathelement location="vorpal-blade-library-framework/lib/jackson-module-jsonSchema-2.7.9.jar"/>
+        <pathelement location="vorpal-blade-library-framework/build/vorpal-blade-library-framework.jar"/>
+    </path>
 
 	<target name="build" />
 

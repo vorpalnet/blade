@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Extension-Name: vorpal-blade
+Specification-Title: Vorpal BLADE Framework 2.0
+Specification-Version: 2.0
+Implementation-Version: 2.0.1
