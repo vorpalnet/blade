@@ -79,12 +79,17 @@ public class LogManager implements ServletContextListener {
 		return logger;
 	}
 
-	@Override
-	public void contextDestroyed(ServletContextEvent event) {
-		Logger logger;
-		String name = event.getServletContext().getServletContextName();
+	public void closeLogger(ServletContextEvent event) {
+		if (event != null && event.getServletContext() != null
+				&& event.getServletContext().getServletContextName() != null) {
+			closeLogger(event.getServletContext().getServletContextName());
+		} else {
+			closeLogger("vorpal");
+		}
+	}
 
-		logger = logMap.remove(name);
+	public static void closeLogger(String name) {
+		Logger logger = logMap.remove(name);
 		if (logger != null) {
 			logger.severe("LogManager destroying logger for " + name);
 			for (Handler handler : logger.getHandlers()) {
@@ -94,10 +99,22 @@ public class LogManager implements ServletContextListener {
 	}
 
 	@Override
+	public void contextDestroyed(ServletContextEvent event) {
+		closeLogger(event);
+	}
+
+	@Override
 	public void contextInitialized(ServletContextEvent event) {
-		// Initialize logger
-		Logger logger = getLogger(event.getServletContext());
-		logger.severe("LogManager creating new logger for " + event.getServletContext().getServletContextName());
+		Logger logger;
+
+		if (event != null && event.getServletContext() != null
+				&& event.getServletContext().getServletContextName() != null) {
+			logger = getLogger(event.getServletContext());
+			logger.severe("LogManager creating new logger for " + event.getServletContext().getServletContextName());
+		} else {
+			logger = getLogger("vorpal");
+			System.out.println("No ServletContext found, creating logger for vorpal.log");
+		}
 	}
 
 }

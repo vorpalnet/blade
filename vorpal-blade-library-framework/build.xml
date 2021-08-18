@@ -7,7 +7,12 @@
 	<target name="init">
 		<mkdir dir="build/classes" />
 		<copy includeemptydirs="false" todir="build/classes">
-			<fileset dir="src">
+			<fileset dir="src/main/java">
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+		<copy includeemptydirs="false" todir="build/classes">
+			<fileset dir=".apt_src">
 				<exclude name="**/*.java" />
 			</fileset>
 		</copy>
@@ -21,7 +26,8 @@
 	<target depends="init" name="build-project">
 		<echo message="${ant.project.name}: ${ant.file}" />
 		<javac nowarn="on" debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" release="8">
-			<src path="src" />
+			<src path="src/main/java" />
+			<src path=".apt_src" />
 			<classpath refid="blade.classpath" />
 		</javac>
 	</target>
@@ -29,21 +35,20 @@
 	<target depends="build-project" name="build-jar">
 		<jar destfile="build/${ant.project.name}.jar" basedir="build/classes" />
 
-		<!--		
+
+
+	</target>
+
+	<target name="javadocs">
 		<javadoc additionalparam="-Xdoclint:none" packagenames="org.vorpal.*" sourcepath="src" destdir="build/javadocs" author="true" version="true" use="true" windowtitle="${ant.project.name}">
 			<classpath refid="vorpal-blade-library-framework.classpath" />
-			<doctitle>
-				<![CDATA[<h1>${ant.project.name}</h1>]]></doctitle>
-		<bottom>
-			<![CDATA[<i>Copyright &#169; 2018 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
-
-	<link offline="true" href="https://docs.oracle.com/javase/8/docs/api/" packagelistLoc="C:\tmp" />
-
-	<link href="https://docs.oracle.com/javase/8/docs/api/" />
-
-</javadoc>
--->
-
+			<doctitle><![CDATA[<h1>${ant.project.name}</h1>]]></doctitle>
+			<bottom><![CDATA[<i>Copyright &#169; 2013-2018 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
+			<!--
+			<link offline="true" href="https://docs.oracle.com/javase/8/docs/api/" packagelistLoc="C:\tmp" />
+			<link href="https://docs.oracle.com/javase/8/docs/api/" />
+			-->
+		</javadoc>
 	</target>
 
 	<target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects" />

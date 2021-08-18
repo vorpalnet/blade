@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <faceted-project>
-  <runtime name="OCCAS-7.1 (12.2.1.3)"/>
+  <runtime name="OCCAS 7.1 (12.2.1.3)"/>
   <fixed facet="java"/>
   <fixed facet="java.apt"/>
   <fixed facet="oracle.weblogic.webservice.clients"/>

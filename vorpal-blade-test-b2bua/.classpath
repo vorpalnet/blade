@@ -9,11 +9,12 @@
 	</classpathentry>
 	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.web.container"/>
 	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.module.container"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/JSR-359 Libraries"/>
 	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.system">
 		<attributes>
 			<attribute name="owner.project.facets" value="jst.web"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry combineaccessrules="false" kind="src" path="/vorpal-blade-shared-libraries"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/lib/sipservlet-api.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
