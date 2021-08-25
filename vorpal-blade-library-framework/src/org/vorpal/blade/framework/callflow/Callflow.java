@@ -26,6 +26,8 @@ package org.vorpal.blade.framework.callflow;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.logging.Level;
 
 import javax.servlet.sip.ServletParseException;
@@ -172,7 +174,8 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
-	public void schedulePeriodicTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction) throws Exception {
+	public void schedulePeriodicTimer(SipApplicationSession appSession, int seconds,
+			Callback<ServletTimer> lambdaFunction) throws Exception {
 		/*
 		 * ServletTimer createTimer(SipApplicationSession appSession, long delay, long
 		 * period, boolean fixedDelay, boolean isPersistent, Serializable info)
@@ -182,7 +185,8 @@ public abstract class Callflow implements Serializable {
 		timerService.createTimer(appSession, delay, delay, false, true, lambdaFunction);
 	}
 
-	public void scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction) throws Exception {
+	public void scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction)
+			throws Exception {
 		/*
 		 * ServletTimer createTimer(SipApplicationSession appSession, long delay,
 		 * boolean isPersistent, Serializable info)
@@ -259,10 +263,12 @@ public abstract class Callflow implements Serializable {
 		Callflow.sipUtil = sipUtil;
 	}
 
-	public SipServletRequest createRequest(SipServletRequest origin, boolean copyContent) throws IOException, ServletParseException {
+	public SipServletRequest createRequest(SipServletRequest origin, boolean copyContent)
+			throws IOException, ServletParseException {
 
 //		if (origin.isInitial()) {
-		SipServletRequest destination = sipFactory.createRequest(origin.getApplicationSession(), origin.getMethod(), origin.getFrom(), origin.getTo());
+		SipServletRequest destination = sipFactory.createRequest(origin.getApplicationSession(), origin.getMethod(),
+				origin.getFrom(), origin.getTo());
 //		} else {
 //
 //		}
@@ -277,7 +283,8 @@ public abstract class Callflow implements Serializable {
 		return destination;
 	}
 
-	public SipServletRequest createRequest(SipServletRequest previous, String method) throws IOException, ServletParseException {
+	public SipServletRequest createRequest(SipServletRequest previous, String method)
+			throws IOException, ServletParseException {
 		SipServletRequest request = previous.getSession().createRequest(method);
 //		request.setRequestURI(previous.getRequestURI());
 //		request.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, previous);
@@ -286,14 +293,15 @@ public abstract class Callflow implements Serializable {
 		return request;
 	}
 
-	public SipServletRequest createRequest(SipServletResponse response, String method) throws IOException, ServletParseException {
+	public SipServletRequest createRequest(SipServletResponse response, String method)
+			throws IOException, ServletParseException {
 		SipServletRequest request = response.getSession().createRequest(method);
 		copyHeaders(response, request);
 		return request;
 	}
 
-	public SipServletResponse createResponse(SipServletRequest request, SipServletResponse responseToCopy, boolean copyContent)
-			throws UnsupportedEncodingException, IOException, ServletParseException {
+	public SipServletResponse createResponse(SipServletRequest request, SipServletResponse responseToCopy,
+			boolean copyContent) throws UnsupportedEncodingException, IOException, ServletParseException {
 		SipServletResponse response;
 		response = request.createResponse(responseToCopy.getStatus(), responseToCopy.getReasonPhrase());
 		copyHeaders(responseToCopy, response);
@@ -342,17 +350,35 @@ public abstract class Callflow implements Serializable {
 					break;
 				default:
 
+//					StringBuilder sb = new StringBuilder();
+//					for (String value : copyFrom.getHeaderList(header)) {
+//						if (sb.length() == 0) {
+//							sb.append(value);
+//						} else {
+//							sb.append(",");
+//							sb.append(value);
+//						}
+//					}
+//					copyTo.setHeader(header, sb.toString());
+
+					String v;
+					HashSet<String> hashSet = new HashSet<>();
 					StringBuilder sb = new StringBuilder();
 					for (String value : copyFrom.getHeaderList(header)) {
+						hashSet.add(value);
+					}
+					Iterator<String> i = hashSet.iterator();
+					while (i.hasNext()) {
+						v = i.next();
 						if (sb.length() == 0) {
-							sb.append(value);
+							sb.append(v);
 						} else {
 							sb.append(",");
-							sb.append(value);
+							sb.append(v);
 						}
 					}
-
 					copyTo.setHeader(header, sb.toString());
+
 				}
 
 			} catch (Exception e) {
@@ -362,7 +388,8 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
-	public void copyContentMsg(SipServletMessage copyFrom, SipServletMessage copyTo) throws UnsupportedEncodingException, IOException {
+	public void copyContentMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
+			throws UnsupportedEncodingException, IOException {
 		copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
 	}
 
@@ -372,22 +399,26 @@ public abstract class Callflow implements Serializable {
 		copyContentMsg(copyFrom, copyTo);
 	}
 
-	public SipServletRequest copyContent(SipServletMessage copyFrom, SipServletRequest copyTo) throws UnsupportedEncodingException, IOException {
+	public SipServletRequest copyContent(SipServletMessage copyFrom, SipServletRequest copyTo)
+			throws UnsupportedEncodingException, IOException {
 		copyContentMsg(copyFrom, copyTo);
 		return copyTo;
 	}
 
-	public SipServletResponse copyContent(SipServletMessage copyFrom, SipServletResponse copyTo) throws UnsupportedEncodingException, IOException {
+	public SipServletResponse copyContent(SipServletMessage copyFrom, SipServletResponse copyTo)
+			throws UnsupportedEncodingException, IOException {
 		copyContentMsg(copyFrom, copyTo);
 		return copyTo;
 	}
 
-	public SipServletRequest copyHeaders(SipServletMessage copyFrom, SipServletRequest copyTo) throws ServletParseException {
+	public SipServletRequest copyHeaders(SipServletMessage copyFrom, SipServletRequest copyTo)
+			throws ServletParseException {
 		copyHeadersMsg(copyFrom, copyTo);
 		return copyTo;
 	}
 
-	public SipServletResponse copyHeaders(SipServletMessage copyFrom, SipServletResponse copyTo) throws ServletParseException {
+	public SipServletResponse copyHeaders(SipServletMessage copyFrom, SipServletResponse copyTo)
+			throws ServletParseException {
 		copyHeadersMsg(copyFrom, copyTo);
 		return copyTo;
 	}

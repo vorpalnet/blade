@@ -32,6 +32,10 @@ public class SampleACL {
 	private String header;
 	private String pattern;
 
+	public SampleACL() {
+
+	}
+
 	/**
 	 * @param header  Header name
 	 * @param pattern Pattern value

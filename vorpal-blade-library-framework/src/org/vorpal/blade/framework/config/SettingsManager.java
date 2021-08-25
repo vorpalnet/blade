@@ -114,6 +114,8 @@ public class SettingsManager<T> {
 			initialize(tmp);
 			current = tmp;
 		} catch (Exception e) {
+			Callflow.getLogger().logStackTrace(e);
+
 			T tmp = (T) clazz.newInstance();
 			initialize(tmp);
 			current = tmp;
