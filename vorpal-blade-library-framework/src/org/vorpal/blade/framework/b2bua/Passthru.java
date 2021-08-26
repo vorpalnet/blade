@@ -24,7 +24,9 @@
 
 package org.vorpal.blade.framework.b2bua;
 
-import javax.servlet.sip.SipServletMessage;
+import java.io.IOException;
+
+import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
@@ -41,7 +43,7 @@ public class Passthru extends Callflow {
 	}
 
 	@Override
-	public void process(SipServletRequest request) throws Exception {
+	public void process(SipServletRequest request) throws ServletException, IOException {
 		SipServletRequest bobRequest;
 
 		aliceRequest = request;
@@ -50,31 +52,22 @@ public class Passthru extends Callflow {
 		if (sipSession != null) {
 			bobRequest = sipSession.createRequest(request.getMethod());
 		} else {
-			bobRequest = sipFactory.createRequest(request, false);
+			bobRequest = sipFactory.createRequest(request.getApplicationSession(), request.getMethod(), request.getFrom(),
+					request.getTo());
+			bobRequest.setRequestURI(request.getRequestURI());
 			linkSessions(request.getSession(), bobRequest.getSession());
 		}
 
 		copyContentAndHeaders(aliceRequest, bobRequest);
-
-		callEvents(aliceRequest, bobRequest);
+		b2buaListener.callEvent(bobRequest);
 
 		sendRequest(bobRequest, (bobResponse) -> {
 			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 			copyContentAndHeaders(bobResponse, aliceResponse);
-			callEvents(aliceResponse, bobResponse);
+			b2buaListener.callEvent(aliceResponse);
 			sendResponse(aliceResponse);
 		});
 
-	}
-
-	private void callEvents(SipServletMessage alice, SipServletMessage bob) throws Exception {
-//		if (((String) bob.getSession().getAttribute("USER_TYPE")).equals("CALLEE")) {
-//			this.sipServlet.calleeEvent(bob);
-//			this.sipServlet.callerEvent(alice);
-//		} else {
-//			this.sipServlet.calleeEvent(alice);
-//			this.sipServlet.callerEvent(bob);
-//		}
 	}
 
 }
