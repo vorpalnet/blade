@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.logging.Level;
 
+import javax.servlet.ServletException;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
@@ -160,9 +161,9 @@ public abstract class Callflow implements Serializable {
 		return sipUtil;
 	}
 
-	public abstract void process(SipServletRequest request) throws Exception;
+	public abstract void process(SipServletRequest request) throws ServletException, IOException;
 
-	public void processWrapper(SipServletRequest request) throws Exception {
+	public void processWrapper(SipServletRequest request) throws ServletException, IOException {
 
 		try {
 			// Callflow.sipLogger.log(Level.FINE, this, Direction.RECEIVE, request);
@@ -175,7 +176,7 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public void schedulePeriodicTimer(SipApplicationSession appSession, int seconds,
-			Callback<ServletTimer> lambdaFunction) throws Exception {
+			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
 		/*
 		 * ServletTimer createTimer(SipApplicationSession appSession, long delay, long
 		 * period, boolean fixedDelay, boolean isPersistent, Serializable info)
@@ -186,7 +187,7 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public void scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction)
-			throws Exception {
+			throws ServletException, IOException {
 		/*
 		 * ServletTimer createTimer(SipApplicationSession appSession, long delay,
 		 * boolean isPersistent, Serializable info)
@@ -203,7 +204,8 @@ public abstract class Callflow implements Serializable {
 		appSession.setAttribute(REQUEST_CALLBACK_ + method, callback);
 	}
 
-	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction) throws Exception {
+	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
+			throws ServletException, IOException {
 		Callflow.sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
 		try {
@@ -215,7 +217,7 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
-	public void sendRequest(SipServletRequest request) throws Exception {
+	public void sendRequest(SipServletRequest request) throws ServletException, IOException {
 		Callflow.sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
 		try {
@@ -232,7 +234,8 @@ public abstract class Callflow implements Serializable {
 	}
 
 	// Send a response, expect an 'ACK'
-	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction) throws Exception {
+	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
+			throws ServletException, IOException {
 		Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
 		try {
@@ -244,7 +247,7 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
-	public void sendResponse(SipServletResponse response) throws Exception {
+	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
 		Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
 		try {
@@ -263,7 +266,7 @@ public abstract class Callflow implements Serializable {
 		Callflow.sipUtil = sipUtil;
 	}
 
-	public SipServletRequest createRequest(SipServletRequest origin, boolean copyContent)
+	public static SipServletRequest createRequest(SipServletRequest origin, boolean copyContent)
 			throws IOException, ServletParseException {
 
 //		if (origin.isInitial()) {
@@ -283,7 +286,7 @@ public abstract class Callflow implements Serializable {
 		return destination;
 	}
 
-	public SipServletRequest createRequest(SipServletRequest previous, String method)
+	public static SipServletRequest createRequest(SipServletRequest previous, String method)
 			throws IOException, ServletParseException {
 		SipServletRequest request = previous.getSession().createRequest(method);
 //		request.setRequestURI(previous.getRequestURI());
@@ -293,14 +296,14 @@ public abstract class Callflow implements Serializable {
 		return request;
 	}
 
-	public SipServletRequest createRequest(SipServletResponse response, String method)
+	public static SipServletRequest createRequest(SipServletResponse response, String method)
 			throws IOException, ServletParseException {
 		SipServletRequest request = response.getSession().createRequest(method);
 		copyHeaders(response, request);
 		return request;
 	}
 
-	public SipServletResponse createResponse(SipServletRequest request, SipServletResponse responseToCopy,
+	public static SipServletResponse createResponse(SipServletRequest request, SipServletResponse responseToCopy,
 			boolean copyContent) throws UnsupportedEncodingException, IOException, ServletParseException {
 		SipServletResponse response;
 		response = request.createResponse(responseToCopy.getStatus(), responseToCopy.getReasonPhrase());
@@ -328,7 +331,8 @@ public abstract class Callflow implements Serializable {
 	 * the other parts).
 	 */
 
-	public void copyHeadersMsg(SipServletMessage copyFrom, SipServletMessage copyTo) throws ServletParseException {
+	public static void copyHeadersMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
+			throws ServletParseException {
 
 		for (String header : copyFrom.getHeaderNameList()) {
 
@@ -388,18 +392,18 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
-	public void copyContentMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
+	public static void copyContentMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
 			throws UnsupportedEncodingException, IOException {
 		copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
 	}
 
-	public void copyContentAndHeadersMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
+	public static void copyContentAndHeadersMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
 			throws UnsupportedEncodingException, IOException, ServletParseException {
 		copyHeadersMsg(copyFrom, copyTo);
 		copyContentMsg(copyFrom, copyTo);
 	}
 
-	public SipServletRequest copyContent(SipServletMessage copyFrom, SipServletRequest copyTo)
+	public static SipServletRequest copyContent(SipServletMessage copyFrom, SipServletRequest copyTo)
 			throws UnsupportedEncodingException, IOException {
 		copyContentMsg(copyFrom, copyTo);
 		return copyTo;
@@ -411,43 +415,43 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
-	public SipServletRequest copyHeaders(SipServletMessage copyFrom, SipServletRequest copyTo)
+	public static SipServletRequest copyHeaders(SipServletMessage copyFrom, SipServletRequest copyTo)
 			throws ServletParseException {
 		copyHeadersMsg(copyFrom, copyTo);
 		return copyTo;
 	}
 
-	public SipServletResponse copyHeaders(SipServletMessage copyFrom, SipServletResponse copyTo)
+	public static SipServletResponse copyHeaders(SipServletMessage copyFrom, SipServletResponse copyTo)
 			throws ServletParseException {
 		copyHeadersMsg(copyFrom, copyTo);
 		return copyTo;
 	}
 
-	public SipServletRequest copyContentAndHeaders(SipServletMessage copyFrom, SipServletRequest copyTo)
+	public static SipServletRequest copyContentAndHeaders(SipServletMessage copyFrom, SipServletRequest copyTo)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		copyHeadersMsg(copyFrom, copyTo);
 		copyContentMsg(copyFrom, copyTo);
 		return copyTo;
 	}
 
-	public SipServletResponse copyContentAndHeaders(SipServletMessage copyFrom, SipServletResponse copyTo)
+	public static SipServletResponse copyContentAndHeaders(SipServletMessage copyFrom, SipServletResponse copyTo)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		copyHeadersMsg(copyFrom, copyTo);
 		copyContentMsg(copyFrom, copyTo);
 		return copyTo;
 	}
 
-	public void linkSessions(SipSession ss1, SipSession ss2) {
+	public static void linkSessions(SipSession ss1, SipSession ss2) {
 		ss1.setAttribute("LINKED_SESSION", ss2);
 		ss2.setAttribute("LINKED_SESSION", ss1);
 	}
 
-	public void unlinkSessions(SipSession ss1, SipSession ss2) {
+	public static void unlinkSessions(SipSession ss1, SipSession ss2) {
 		ss1.removeAttribute("LINKED_SESSION");
 		ss2.removeAttribute("LINKED_SESSION");
 	}
 
-	public SipSession getLinkedSession(SipSession ss) {
+	public static SipSession getLinkedSession(SipSession ss) {
 		return (SipSession) ss.getAttribute("LINKED_SESSION");
 	}
 

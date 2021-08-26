@@ -24,7 +24,9 @@
 
 package org.vorpal.blade.framework.b2bua;
 
-import javax.servlet.sip.SipServletMessage;
+import java.io.IOException;
+
+import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
@@ -41,7 +43,7 @@ public class Bye extends Callflow {
 	}
 
 	@Override
-	public void process(SipServletRequest request) throws Exception {
+	public void process(SipServletRequest request) throws ServletException, IOException {
 
 		SipServletRequest bobRequest;
 
@@ -51,26 +53,15 @@ public class Bye extends Callflow {
 		bobRequest = sipSession.createRequest(request.getMethod());
 		copyContentAndHeaders(aliceRequest, bobRequest);
 
-		callEvents(aliceRequest, bobRequest);
 		b2buaListener.callCompleted(bobRequest);
 
 		sendRequest(bobRequest, (bobResponse) -> {
 			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 			copyContentAndHeaders(bobResponse, aliceResponse);
-			callEvents(aliceResponse, bobResponse);
+			b2buaListener.callEvent(aliceResponse);
 			sendResponse(aliceResponse);
 		});
 
-	}
-
-	private void callEvents(SipServletMessage alice, SipServletMessage bob) throws Exception {
-//		if (((String) bob.getSession().getAttribute("USER_TYPE")).equals("CALLEE")) {
-//			this.sipServlet.calleeEvent(bob);
-//			this.sipServlet.callerEvent(alice);
-//		} else {
-//			this.sipServlet.calleeEvent(alice);
-//			this.sipServlet.callerEvent(bob);
-//		}
 	}
 
 }

@@ -24,7 +24,9 @@
 
 package org.vorpal.blade.framework.b2bua;
 
-import javax.servlet.sip.SipServletMessage;
+import java.io.IOException;
+
+import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
@@ -43,19 +45,19 @@ public class Reinvite extends Callflow {
 	}
 
 	@Override
-	public void process(SipServletRequest request) throws Exception {
+	public void process(SipServletRequest request) throws ServletException, IOException {
 
 		aliceRequest = request;
 		SipSession sipSession = getLinkedSession(aliceRequest.getSession());
 		SipServletRequest bobRequest = sipSession.createRequest(INVITE);
 		copyContentAndHeaders(aliceRequest, bobRequest);
 
-		callEvents(aliceRequest, bobRequest);
+		b2buaListener.callEvent(bobRequest);
 //		sendRequest(bobRequest, bobCallback = (bobResponse) -> {
 		sendRequest(bobRequest, (bobResponse) -> {
 			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 			copyContentAndHeaders(bobResponse, aliceResponse);
-			callEvents(aliceResponse, bobResponse);
+			b2buaListener.callEvent(aliceResponse);
 			sendResponse(aliceResponse, (aliceAck) -> {
 
 //				if (aliceAckOrPrack.getMethod().equals(PRACK)) {
@@ -67,7 +69,7 @@ public class Reinvite extends Callflow {
 
 				SipServletRequest bobAck = bobResponse.createAck();
 				copyContentAndHeaders(aliceAck, bobAck);
-				callEvents(aliceAck, bobAck);
+				b2buaListener.callEvent(bobAck);
 				sendRequest(bobAck);
 
 //				}
@@ -76,13 +78,4 @@ public class Reinvite extends Callflow {
 
 	}
 
-	private void callEvents(SipServletMessage alice, SipServletMessage bob) throws Exception {
-//		if (((String) bob.getSession().getAttribute("USER_TYPE")).equals("CALLEE")) {
-//			this.sipServlet.calleeEvent(bob);
-//			this.sipServlet.callerEvent(alice);
-//		} else {
-//			this.sipServlet.calleeEvent(alice);
-//			this.sipServlet.callerEvent(bob);
-//		}
-	}
 }

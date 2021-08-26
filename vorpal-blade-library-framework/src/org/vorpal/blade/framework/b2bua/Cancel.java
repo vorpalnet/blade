@@ -24,8 +24,10 @@
 
 package org.vorpal.blade.framework.b2bua;
 
+import java.io.IOException;
 import java.util.Collection;
 
+import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSession.State;
@@ -43,7 +45,7 @@ public class Cancel extends Callflow {
 	}
 
 	@Override
-	public void process(SipServletRequest request) throws Exception {
+	public void process(SipServletRequest request) throws ServletException, IOException {
 		aliceRequest = request;
 		SipSession linkedSession = getLinkedSession(aliceRequest.getSession());
 
@@ -56,15 +58,5 @@ public class Cancel extends Callflow {
 			}
 		}
 	}
-
-//	private void callEvents(SipServletMessage alice, SipServletMessage bob) throws Exception {
-//		if (((String) bob.getSession().getAttribute("USER_TYPE")).equals("CALLEE")) {
-//			this.sipServlet.calleeEvent(bob);
-//			this.sipServlet.callerEvent(alice);
-//		} else {
-//			this.sipServlet.calleeEvent(alice);
-//			this.sipServlet.callerEvent(bob);
-//		}
-//	}
 
 }

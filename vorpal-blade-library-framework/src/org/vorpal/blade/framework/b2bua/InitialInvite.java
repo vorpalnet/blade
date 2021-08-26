@@ -24,6 +24,9 @@
 
 package org.vorpal.blade.framework.b2bua;
 
+import java.io.IOException;
+
+import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
@@ -44,7 +47,7 @@ public class InitialInvite extends Callflow {
 	}
 
 	@Override
-	public void process(SipServletRequest request) throws Exception {
+	public void process(SipServletRequest request) throws ServletException, IOException {
 		aliceRequest = request;
 //		this.sipServlet.callerEvent(aliceRequest);
 
@@ -81,8 +84,9 @@ public class InitialInvite extends Callflow {
 			sendResponse(aliceResponse, (aliceAck) -> {
 
 				if (aliceAck.getMethod().equals(ACK)) {
-					sendRequest(copyContentAndHeaders(aliceAck, bobResponse.createAck()));
-					linkSessions(aliceAck.getSession(), bobResponse.getSession());
+					SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+					this.b2buaListener.callConnected(bobAck);
+					sendRequest(bobAck);
 				} else if (aliceAck.getMethod().equals(CANCEL)) {
 					SipServletRequest bobCancel = bobRequest.createCancel();
 					copyContentAndHeaders(aliceAck, bobCancel);
