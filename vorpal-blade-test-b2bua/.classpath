@@ -14,7 +14,6 @@
 			<attribute name="owner.project.facets" value="jst.web"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry combineaccessrules="false" kind="src" path="/vorpal-blade-library-framework"/>
-	<classpathentry kind="lib" path="/Users/jeff/weblogic/occas71/wlserver/sip/server/lib/sipservlet-api.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/JSR-359 Libraries"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
