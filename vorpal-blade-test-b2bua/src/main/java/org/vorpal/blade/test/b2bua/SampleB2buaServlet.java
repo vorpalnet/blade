@@ -23,8 +23,12 @@
  */
 package org.vorpal.blade.test.b2bua;
 
+import java.io.IOException;
+
+import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
+import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
@@ -48,7 +52,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 * This is invoked when the servlet starts up.
 	 */
 	@Override
-	public void b2buaCreated(SipServletContextEvent event) throws Exception {
+	public void b2buaCreated(SipServletContextEvent event) throws ServletException, IOException {
 		try {
 
 			sipLogger.info("b2buaCreated...");
@@ -74,7 +78,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 * This is invoked when the servlet shuts down.
 	 */
 	@Override
-	public void b2buaDestroyed(SipServletContextEvent event) throws Exception {
+	public void b2buaDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		try {
 			sipLogger.info("b2buaDestroyed...");
 			settingsManager.unregister();
@@ -97,7 +101,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 * This is the final response to Alice, it can be modified.
 	 */
 	@Override
-	public void callAnswered(SipServletResponse response) throws Exception {
+	public void callAnswered(SipServletResponse response) throws ServletException, IOException {
 //		String aliceValue = SampleB2buaServlet.sampleConfiguration.getAliceResponseData();
 //		response.setHeader("X-Sample-B2bua-Response", aliceValue);
 	}
@@ -106,7 +110,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 * This is the ACK sent to Alice.
 	 */
 	@Override
-	public void callConnected(SipServletRequest request) throws Exception {
+	public void callConnected(SipServletRequest request) throws ServletException, IOException {
 
 	}
 
@@ -114,21 +118,27 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 * This should be a BYE request from either Alice or Bob.
 	 */
 	@Override
-	public void callCompleted(SipServletRequest request) throws Exception {
+	public void callCompleted(SipServletRequest request) throws ServletException, IOException {
 	}
 
 	/*
 	 * This should be the error code from Bob, the destination.
 	 */
 	@Override
-	public void callDeclined(SipServletResponse response) throws Exception {
+	public void callDeclined(SipServletResponse response) throws ServletException, IOException {
 	}
 
 	/*
 	 * This should be a CANCEL from Alice.
 	 */
 	@Override
-	public void callAbandoned(SipServletRequest request) throws Exception {
+	public void callAbandoned(SipServletRequest request) throws ServletException, IOException {
+
+	}
+
+	@Override
+	public void callEvent(SipServletMessage message) throws ServletException, IOException {
+		// TODO Auto-generated method stub
 
 	}
 
