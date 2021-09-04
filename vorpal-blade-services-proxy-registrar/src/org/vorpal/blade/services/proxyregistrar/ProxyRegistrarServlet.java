@@ -42,13 +42,13 @@ import javax.servlet.sip.SipServletListener;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSessionsUtil;
+import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.annotation.Invite;
 import javax.servlet.sip.annotation.Register;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.config.SipUtil;
 import org.vorpal.blade.framework.logging.LogManager;
 import org.vorpal.blade.framework.logging.Logger;
 
@@ -73,7 +73,7 @@ public class ProxyRegistrarServlet implements SipServletListener {
 	@SipApplicationKey
 	public static String sessionKey(SipServletRequest req) {
 		String key = null;
-		key = SipUtil.getAccountName(req.getTo());
+		key = getAccountName(req.getTo());
 
 		sipLogger.fine("Returning sessionKey: " + key);
 
@@ -162,7 +162,7 @@ public class ProxyRegistrarServlet implements SipServletListener {
 
 		if (req.isInitial()) {
 
-			SipApplicationSession regAppSession = sipUtil.getApplicationSessionByKey(SipUtil.getAccountName(req.getTo()), false);
+			SipApplicationSession regAppSession = sipUtil.getApplicationSessionByKey(getAccountName(req.getTo()), false);
 
 			List<Address> contacts = proxyRegistrar.getContacts();
 			sipLogger.fine("contacts: " + contacts);
@@ -203,6 +203,15 @@ public class ProxyRegistrarServlet implements SipServletListener {
 			}
 		}
 
+	}
+	
+	public static String getAccountName(Address address) {
+		return getAccountName(address.getURI());
+	}
+
+	public static String getAccountName(URI _uri) {
+		SipURI sipUri = (SipURI) _uri;
+		return sipUri.getUser().toLowerCase() + "@" + sipUri.getHost().toLowerCase();
 	}
 
 }
