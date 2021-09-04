@@ -2,6 +2,6 @@
 <system-libraries>
     <library javadoc="http://docs.oracle.com/javaee/6/api/" path="server/lib/weblogic.jar"/>
     <library path="server/lib/wls-api.jar"/>
-    <library path="server/lib/wseeclient.jar"/>
     <library path="server/lib/weblogic.jar"/>
+    <library path="sip/server/lib/sipservlet-api.jar"/>
 </system-libraries>
