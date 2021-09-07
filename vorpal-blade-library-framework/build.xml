@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-library-framework">
 	<property environment="env" />
 	<property name="debuglevel" value="source,lines,vars" />
@@ -47,7 +48,7 @@
 	<target name="build-javadocs" depends="build-jar">
 		<javadoc splitindex="true" access="public" additionalparam="-Xdoclint:none" packagenames="org.vorpal.*" sourcepath="src" destdir="build/javadocs" author="true" version="true" use="true" windowtitle="${ant.project.name}">
 			<classpath refid="vorpal-blade-library-framework.classpath" />
-			<doctitle><![CDATA[<h1>${ant.project.name}</h1>]]></doctitle>
+			<doctitle><![CDATA[${ant.project.name}]]></doctitle>
 			<bottom><![CDATA[<i>Copyright &#169; 2013-2018 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
 			<link href="http://docs.oracle.com/javaee/6/api/" />
 		</javadoc>
