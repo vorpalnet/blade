@@ -1,6 +1,5 @@
 Manifest-Version: 1.0
-Bundle-Description: Vorpal BLADE, Blended Layer Asynchronous Developme
- nt Environment
+Bundle-Description: Vorpal BLADE Framework
 Bundle-Name: vorpal-blade-library-framework
 Bundle-SymbolicName: org.vorpal.blade.framework
 Bundle-Vendor: Vorpal.org

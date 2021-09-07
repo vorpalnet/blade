@@ -9,12 +9,6 @@
 	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.web.container"/>
 	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.module.container"/>
 	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.application/vorpal-blade-services"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/JSR-359 Libraries"/>
-	<classpathentry kind="lib" path="/vorpal-blade-library-framework/lib/jackson-annotations-2.7.9.jar"/>
-	<classpathentry kind="lib" path="/vorpal-blade-library-framework/lib/jackson-core-2.7.9.jar"/>
-	<classpathentry kind="lib" path="/vorpal-blade-library-framework/lib/jackson-databind-2.7.9.jar"/>
-	<classpathentry kind="lib" path="/vorpal-blade-library-framework/lib/jackson-module-jsonSchema-2.7.9.jar"/>
-	<classpathentry kind="lib" path="/vorpal-blade-library-framework/lib/sipservlet-api.jar"/>
 	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.system">
 		<attributes>
 			<attribute name="owner.project.facets" value="jst.web"/>
@@ -25,5 +19,6 @@
 			<attribute name="owner.project.facets" value="java"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.web.container/vorpal-blade-shared-libraries"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

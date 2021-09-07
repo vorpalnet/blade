@@ -18,6 +18,11 @@
 			<attribute name="owner.project.facets" value="java"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.application/vorpal-blade-libraries"/>
+	<classpathentry kind="src" path="/vorpal-blade-library-framework">
+		<attributes>
+			<attribute name="org.eclipse.jst.component.nondependency" value=""/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.web.container/vorpal-blade-shared-libraries"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
