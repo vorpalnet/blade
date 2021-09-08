@@ -59,11 +59,6 @@ public abstract class B2buaServlet extends SipServlet
 	protected static SipFactory sipFactory;
 	protected static SipSessionsUtil sipUtil;
 	protected static TimerService timerService;
-//	protected static Class listener;
-
-//	public static void registerListener(Class listener) {
-//		B2buaServlet.listener = listener;
-//	}
 
 	@Override
 	final public void servletInitialized(SipServletContextEvent event) {
@@ -99,67 +94,58 @@ public abstract class B2buaServlet extends SipServlet
 		}
 	}
 
+	/**
+	 * Override this method to choose different Callflow objects for incoming
+	 * requests that do not already have a callflow object assigned.
+	 * 
+	 * @param request
+	 * @return Callflow the chosen callflow object
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
+		Callflow callflow;
+
+		if (request.getMethod().equals("INVITE")) {
+			if (request.isInitial()) {
+				callflow = new InitialInvite(this);
+			} else {
+				callflow = new Reinvite(this);
+			}
+		} else if (request.getMethod().equals("BYE")) {
+			callflow = new Bye(this);
+		} else if (request.getMethod().equals("CANCEL")) {
+			callflow = new Cancel(this);
+		} else {
+			callflow = new Passthru(this);
+		}
+
+		return callflow;
+	}
+
 	@Override
-	protected void doRequest(SipServletRequest request) throws ServletException, IOException {
+	final protected void doRequest(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow;
 		Callback<SipServletRequest> requestLambda;
-		B2buaListener b2buaListener;
-		SipApplicationSession appSession = request.getApplicationSession();
 
 		try {
-//			b2buaListener = (B2buaListener) appSession.getAttribute("B2BUA_LISTENER");
-//			if (b2buaListener == null) {
-//				b2buaListener = (B2buaListener) listener.newInstance();
-//			}
-
 			requestLambda = Callflow.pullCallback(request);
-
 			if (requestLambda != null) {
 				String name = requestLambda.getClass().getSimpleName();
 				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, name);
 				requestLambda.accept(request);
 			} else {
-				if (request.getMethod().equals("INVITE")) {
-					if (request.isInitial()) {
-//						callflow = new InitialInvite(b2buaListener);
-						callflow = new InitialInvite(this);
-//						callflow = new InitialInvite();
-
-					} else {
-//						callflow = new Reinvite(b2buaListener);
-						callflow = new Reinvite(this);
-//						callflow = new Reinvite();
-					}
-				} else if (request.getMethod().equals("BYE")) {
-//					callflow = new Bye(b2buaListener);
-					callflow = new Bye(this);
-//					callflow = new Bye();
-				} else if (request.getMethod().equals("CANCEL")) {
-//					callflow = new Cancel(b2buaListener);
-					callflow = new Cancel(this);
-//					callflow = new Cancel();
-				} else {
-//					callflow = new Passthru(b2buaListener);
-					callflow = new Passthru(this);
-//					callflow = new Passthru();
-				}
+				callflow = chooseCallflow(request);
 				callflow.processWrapper(request);
 			}
-
-//			request.getApplicationSession().setAttribute("B2BUA_LISTENER", b2buaListener);
-
 		} catch (Exception e) {
 			Callflow.getLogger().logStackTrace(e);
-			if (e instanceof ServletException) {
-				throw new ServletException(e);
-			} else if (e instanceof IOException) {
-				throw new IOException(e);
-			}
+			throw e;
 		}
 	}
 
 	@Override
-	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
+	final protected void doResponse(SipServletResponse response) throws ServletException, IOException {
 		Callback<SipServletResponse> callback;
 		try {
 
@@ -184,7 +170,7 @@ public abstract class B2buaServlet extends SipServlet
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public void timeout(ServletTimer timer) {
+	final public void timeout(ServletTimer timer) {
 		try {
 			Callback<ServletTimer> callback;
 			callback = (Callback<ServletTimer>) timer.getInfo();
@@ -198,28 +184,28 @@ public abstract class B2buaServlet extends SipServlet
 	/**
 	 * @return the sipLogger
 	 */
-	public static Logger getSipLogger() {
+	final public static Logger getSipLogger() {
 		return sipLogger;
 	}
 
 	/**
 	 * @return the sipFactory
 	 */
-	public static SipFactory getSipFactory() {
+	final public static SipFactory getSipFactory() {
 		return sipFactory;
 	}
 
 	/**
 	 * @return the sipUtil
 	 */
-	public static SipSessionsUtil getSipUtil() {
+	final public static SipSessionsUtil getSipUtil() {
 		return sipUtil;
 	}
 
 	/**
 	 * @return the timerService
 	 */
-	public static TimerService getTimerService() {
+	final public static TimerService getTimerService() {
 		return timerService;
 	}
 
