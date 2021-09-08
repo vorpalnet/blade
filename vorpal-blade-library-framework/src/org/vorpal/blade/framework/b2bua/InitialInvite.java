@@ -49,7 +49,6 @@ public class InitialInvite extends Callflow {
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		aliceRequest = request;
-//		this.sipServlet.callerEvent(aliceRequest);
 
 		SipApplicationSession appSession = aliceRequest.getApplicationSession();
 
@@ -81,9 +80,13 @@ public class InitialInvite extends Callflow {
 				b2buaListener.callDeclined(aliceResponse);
 			}
 
+//			loopOnPrack = s -> sendResponse(aliceResponse, (aliceAck) -> {
 			sendResponse(aliceResponse, (aliceAck) -> {
-
-				if (aliceAck.getMethod().equals(ACK)) {
+				if (aliceAck.getMethod().equals(PRACK)) {
+					SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+					b2buaListener.callEvent(bobPrack);
+					sendRequest(bobPrack);
+				} else if (aliceAck.getMethod().equals(ACK)) {
 					SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
 					this.b2buaListener.callConnected(bobAck);
 					sendRequest(bobAck);
@@ -96,14 +99,12 @@ public class InitialInvite extends Callflow {
 						sendResponse(aliceCancelResponse);
 					});
 				}
-
 				// implement GLARE here
-
 			});
+			//loopOnPrack.accept(bobRequest);
+
 		});
 
-		// implement PRACK
-		// loopOnPrack.accept(bobRequest);
 	}
 
 }

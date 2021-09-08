@@ -18,9 +18,7 @@
  	<wls:library-ref>
        <wls:library-name>vorpal-blade</wls:library-name>
        <wls:specification-version>2.0</wls:specification-version>
-        <wls:implementation-version>2.0.1</wls:implementation-version>
        <wls:exact-match>false</wls:exact-match>
-       <wls:context-root>vorpal-blade-library-framework</wls:context-root>
     </wls:library-ref>
  
 

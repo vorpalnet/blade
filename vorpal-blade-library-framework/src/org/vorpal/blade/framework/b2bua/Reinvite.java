@@ -31,12 +31,13 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 
+import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
 
 public class Reinvite extends Callflow {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-//	private Callback<SipServletRequest> loopOnPrack;
+	private Callback<SipServletRequest> loopOnPrack;
 //	private Callback<SipServletResponse> bobCallback = null;
 	private B2buaListener b2buaListener;
 
@@ -58,22 +59,30 @@ public class Reinvite extends Callflow {
 			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 			copyContentAndHeaders(bobResponse, aliceResponse);
 			b2buaListener.callEvent(aliceResponse);
+
+//			loopOnPrack = s -> sendResponse(aliceResponse, (aliceAck) -> {
 			sendResponse(aliceResponse, (aliceAck) -> {
-
-//				if (aliceAckOrPrack.getMethod().equals(PRACK)) {
-//					SipServletRequest bobPrack = bobResponse.createPrack();
-//					copyContentAndHeaders(aliceAckOrPrack, bobPrack);
-//					callEvents(aliceAckOrPrack, bobPrack);
-//					sendRequest(bobPrack, this.bobCallback);
-//				} else {
-
-				SipServletRequest bobAck = bobResponse.createAck();
-				copyContentAndHeaders(aliceAck, bobAck);
-				b2buaListener.callEvent(bobAck);
-				sendRequest(bobAck);
-
-//				}
+				if (aliceAck.getMethod().equals(PRACK)) {
+					SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+					b2buaListener.callEvent(bobPrack);
+					sendRequest(bobPrack);
+				} else if (aliceAck.getMethod().equals(ACK)) {
+					SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+					b2buaListener.callEvent(bobAck);
+					sendRequest(bobAck);
+				} else if (aliceAck.getMethod().equals(CANCEL)) {
+					SipServletRequest bobCancel = bobRequest.createCancel();
+					copyContentAndHeaders(aliceAck, bobCancel);
+					b2buaListener.callEvent(bobCancel);
+					sendRequest(bobCancel, (bobCancelResponse) -> {
+						SipServletResponse aliceCancelResponse = createResponse(aliceAck, bobCancelResponse, true);
+						sendResponse(aliceCancelResponse);
+					});
+				}
+				// implement GLARE here
 			});
+//			loopOnPrack.accept(bobRequest);
+
 		});
 
 	}
