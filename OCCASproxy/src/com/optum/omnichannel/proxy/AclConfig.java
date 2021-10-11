@@ -20,10 +20,7 @@ public class AclConfig implements Serializable {
 		IPv4Address ipAddress;
 		for (AccessControl a : config.getAcl()) {
 			ipAddress = new IPAddressString(a.getSource()).getAddress().toIPv4();
-			LoadBalancerServlet.getSipLogger().info("adding... "+ipAddress);
 			accessControlList.put(ipAddress, a);
-			LoadBalancerServlet.getSipLogger().fine("found... "+a.getPermission());
-			
 		}
 
 		for (ProxyRule p : config.getProxyRules()) {
