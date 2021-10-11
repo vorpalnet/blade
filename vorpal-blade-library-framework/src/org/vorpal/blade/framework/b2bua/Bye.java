@@ -36,9 +36,9 @@ import org.vorpal.blade.framework.callflow.Callflow;
 public class Bye extends Callflow {
 	private static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-	private B2buaListener b2buaListener;
+	private B2buaServlet b2buaListener;
 
-	public Bye(B2buaListener b2buaListener) {
+	public Bye(B2buaServlet b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
 

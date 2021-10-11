@@ -27,45 +27,37 @@ package org.vorpal.blade.services.options;
 import java.io.IOException;
 
 import javax.servlet.ServletException;
-import javax.servlet.sip.SipServlet;
+import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
-import javax.servlet.sip.SipServletListener;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipServletResponse;
 
+import org.vorpal.blade.framework.AsyncSipServlet;
+import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.logging.LogManager;
-import org.vorpal.blade.framework.logging.Logger;
 
+@WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-public class OptionsSipServlet extends SipServlet implements SipServletListener {
+public class OptionsSipServlet extends AsyncSipServlet {
 	private static final long serialVersionUID = 1L;
-	private static Logger logger;
-	private static SettingsManager<OptionsSettings> settingsManager;
+	public static SettingsManager<OptionsSettings> settingsManager;
 
 	@Override
-	public void servletInitialized(SipServletContextEvent event) {
-		logger = LogManager.getLogger(event.getServletContext());
-		settingsManager = new SettingsManager<>(event.getServletContext().getServletContextName(), OptionsSettings.class);
+	protected void servletCreated(SipServletContextEvent event) {
+		this.sipLogger = LogManager.getLogger(event);
+		settingsManager = new SettingsManager<>(event, OptionsSettings.class);
 	}
 
 	@Override
-	protected void doOptions(SipServletRequest request) throws ServletException, IOException {
+	protected void servletDestroyed(SipServletContextEvent event) {
+		// do nothing;
+	}
 
-		OptionsSettings settings = settingsManager.getCurrent();
-
-		SipServletResponse response = request.createResponse(200);
-		response.setHeader("Accept", settings.getAccept());
-		response.setHeader("Accept-Language", settings.getAcceptLanguage());
-		response.setHeader("Allow", settings.getAllow());
-		response.setHeader("User-Agent", settings.getUserAgent());
-		response.setHeader("Allow-Events", settings.getAllowEvents());
-		response.send();
-
-		logger.finest(request.getRawContent().toString());
-		logger.finest(response.getRawContent().toString());
+	@Override
+	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
+		return new OptionsCallflow();
 	}
 
 }

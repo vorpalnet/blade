@@ -121,8 +121,7 @@ public class AclSipServlet extends SipServlet implements SipServletListener {
 		sipLogger = LogManager.getLogger(event.getServletContext());
 		Callflow.setLogger(sipLogger);
 
-		String name = event.getServletContext().getServletContextName();
-		configManager = new AclConfigManager(name);
+		configManager = new AclConfigManager(event);
 		sipLogger.logConfiguration(configManager.getCurrent());
 
 	}

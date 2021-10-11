@@ -34,15 +34,24 @@ import javax.management.MBeanServer;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
+import javax.servlet.sip.Address;
+import javax.servlet.sip.ServletParseException;
+import javax.servlet.sip.SipFactory;
+import javax.servlet.sip.SipServletContextEvent;
+import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.logging.LogManager;
+import org.vorpal.blade.framework.logging.Logger;
 
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
+
+import inet.ipaddr.IPAddress;
 
 /**
  * @author Jeff McDonald
@@ -63,8 +72,15 @@ public class SettingsManager<T> {
 	protected ObjectInstance oi;
 	protected Settings settings;
 
-	public SettingsManager(String name, Class<T> clazz) {
-		this.servletContextName = name;
+	public static SipFactory sipFactory;
+	public static Logger sipLogger;
+
+	public SettingsManager(SipServletContextEvent event, Class<T> clazz) {
+
+		sipLogger = LogManager.getLogger(event.getServletContext());
+		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+
+		this.servletContextName = event.getServletContext().getServletContextName();
 		this.clazz = clazz;
 		this.directory = "./config/custom/vorpal/";
 		this.filename = directory + servletContextName + ".json";
@@ -74,24 +90,36 @@ public class SettingsManager<T> {
 		try {
 			new File(directory + "/schemas/").mkdirs();
 			mapper = new ObjectMapper();
+
+			//Support for SipFactory classes
+			mapper.registerModule(new SimpleModule().addDeserializer(URI.class, new JsonUriDeserializer()));
+			mapper.registerModule(new SimpleModule().addDeserializer(Address.class, new JsonAddressDeserializer()));
+			mapper.registerModule(new SimpleModule().addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
+			mapper.registerModule(new SimpleModule().addSerializer(URI.class, new JsonUriSerializer()));
+			mapper.registerModule(new SimpleModule().addSerializer(Address.class, new JsonAddressSerializer()));
+			mapper.registerModule(new SimpleModule().addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
+
 			server = ManagementFactory.getPlatformMBeanServer();
 			objectName = new ObjectName("vorpal.blade:Name=" + servletContextName + ",Type=Configuration");
 			register();
 		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(e);
+			sipLogger.logStackTrace(e);
 		}
 	}
 
 	/**
 	 * This method is intended to be overridden to allow configurations that require
 	 * additional work before they are ready to use.
+	 * 
+	 * @throws ServletParseException
 	 */
-	public void initialize(T config) {
+	public void initialize(T config) throws ServletParseException {
 
 	}
 
-	public void register() throws InstanceAlreadyExistsException, MBeanRegistrationException, NotCompliantMBeanException,
-			JsonGenerationException, JsonMappingException, InstantiationException, IllegalAccessException, IOException {
+	public void register() throws InstanceAlreadyExistsException, MBeanRegistrationException,
+			NotCompliantMBeanException, JsonGenerationException, JsonMappingException, InstantiationException,
+			IllegalAccessException, IOException, ServletParseException {
 		this.settings = new Settings(this);
 		loadConfigFile(clazz);
 
@@ -105,7 +133,7 @@ public class SettingsManager<T> {
 	}
 
 	private void loadConfigFile(Class<?> clazz) throws InstantiationException, IllegalAccessException,
-			JsonGenerationException, JsonMappingException, IOException {
+			JsonGenerationException, JsonMappingException, IOException, ServletParseException {
 //		mapper.configure(SerializationConfig.Feature.WRITE_ENUMS_USING_TO_STRING, true);
 		// add save config example code
 
@@ -114,7 +142,7 @@ public class SettingsManager<T> {
 			initialize(tmp);
 			current = tmp;
 		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(e);
+			sipLogger.severe(e.getMessage());
 
 			T tmp = (T) clazz.newInstance();
 			initialize(tmp);
@@ -164,15 +192,15 @@ public class SettingsManager<T> {
 
 	public void setCurrentFromJson(String json) {
 		try {
-			Callflow.getLogger().warning("Configuration changed...");
-			Callflow.getLogger().info(json);
+			sipLogger.warning("Configuration changed...");
+			sipLogger.info(json);
 
 			T tmp = mapper.readValue(json, clazz);
 			initialize(tmp);
 			current = tmp;
 
 		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(e);
+			sipLogger.logStackTrace(e);
 		}
 	}
 
@@ -185,7 +213,7 @@ public class SettingsManager<T> {
 			// add title here
 			strSchema = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
 		} catch (JsonProcessingException e) {
-			Callflow.getLogger().logStackTrace(e);
+			sipLogger.logStackTrace(e);
 		}
 
 		return strSchema;

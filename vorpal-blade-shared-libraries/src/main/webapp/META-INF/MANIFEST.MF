@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
+Specification-Title: Vorpal BLADE Framework
+Specification-Version: 2.0
 Implementation-Title: Vorpal BLADE Framework Implementation
 Implementation-Version: 2.0.2
-Specification-Title: Vorpal BLADE Framework
 Extension-Name: vorpal-blade
-Specification-Version: 2.0
 

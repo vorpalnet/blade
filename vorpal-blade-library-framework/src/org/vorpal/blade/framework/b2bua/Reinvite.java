@@ -39,9 +39,9 @@ public class Reinvite extends Callflow {
 	private SipServletRequest aliceRequest;
 	private Callback<SipServletRequest> loopOnPrack;
 //	private Callback<SipServletResponse> bobCallback = null;
-	private B2buaListener b2buaListener;
+	private B2buaServlet b2buaListener;
 
-	public Reinvite(B2buaListener b2buaListener) {
+	public Reinvite(B2buaServlet b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
 

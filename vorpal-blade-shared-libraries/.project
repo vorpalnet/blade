@@ -3,7 +3,6 @@
 	<name>vorpal-blade-shared-libraries</name>
 	<comment></comment>
 	<projects>
-		<project>vorpal-blade-library-framework</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

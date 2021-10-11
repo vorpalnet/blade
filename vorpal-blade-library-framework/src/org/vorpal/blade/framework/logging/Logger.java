@@ -38,6 +38,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
+import javax.servlet.sip.SipSession.State;
 
 import org.codehaus.jackson.map.ObjectMapper;
 
@@ -121,7 +122,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		long timeRemaining = timer.getTimeRemaining();
 
 		if (timeRemaining > 0) {
-			str = hexHash(timer.getApplicationSession()) + " " + timer.getId() + " timer set for " + timer.getTimeRemaining() + "ms";
+			str = hexHash(timer.getApplicationSession()) + " " + timer.getId() + " timer set for "
+					+ timer.getTimeRemaining() + "ms";
 
 		} else {
 			str = hexHash(timer.getApplicationSession()) + " " + timer.getId() + " timer expired";
@@ -200,7 +202,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //#7                                    [BigLonedCall]-----------INVITE-->[255.255.255.255]   ; SDP
 //#8                                    [BigLon*amedCall]-----------200-->[255.255.255.255]   ; OK (INVITE)
 
-	public void superArrow(Direction direction, SipServletRequest request, SipServletResponse response, String name) throws ServletParseException {
+	public void superArrow(Direction direction, SipServletRequest request, SipServletResponse response, String name)
+			throws ServletParseException {
 
 		try {
 
@@ -211,8 +214,10 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				boolean leftSide = false;
 
 				String requestUri = "";
-				if (request != null && request.isInitial()) {
-					requestUri = request.getRequestURI().toString();
+				if (request != null) {
+					if (request.isInitial() || request.getSession().getState().equals(State.EARLY)) {
+						requestUri = request.getRequestURI().toString();
+					}
 				}
 
 				if (request != null && request.isInitial() && direction.equals(Direction.RECEIVE)) {
@@ -266,7 +271,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String alice = String.format("%-17s", shorten(to(response), 17)).replace(' ', '-');
 							String arrow = String.format("%17s", "" + status + "-->").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
-							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " (" + response.getMethod() + ")";
+							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
+									+ response.getMethod() + ")";
 
 //						str.append(hexHash(response.getSession())).append("2");
 							str.append(hexHash(response.getSession())).append(" ");
@@ -286,7 +292,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String alice = String.format("%-18s", shorten(from(response), 17) + "<").replace(' ', '-');
 							String arrow = String.format("%16s", "" + status + "---").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
-							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " (" + response.getMethod() + ")";
+							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
+									+ response.getMethod() + ")";
 
 //						str.append(hexHash(response.getSession())).append("4");
 							str.append(hexHash(response.getSession())).append(" ");

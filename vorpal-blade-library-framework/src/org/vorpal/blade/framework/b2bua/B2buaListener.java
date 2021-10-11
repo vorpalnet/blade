@@ -34,23 +34,6 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 public interface B2buaListener extends Serializable {
-	/**
-	 * This method is called upon startup of the B2BUA application.
-	 * 
-	 * @param event information about the application
-	 * @throws ServletException an exception
-	 * @throws IOException      an exception
-	 */
-	public void b2buaCreated(SipServletContextEvent event) throws ServletException, IOException;
-
-	/**
-	 * This method is called upon shutdown of the B2BUA application.
-	 * 
-	 * @param event the same event called in b2buaCreated()
-	 * @throws ServletException an exception
-	 * @throws IOException      an exception
-	 */
-	public void b2buaDestroyed(SipServletContextEvent event) throws ServletException, IOException;
 
 	/**
 	 * Called upon an initial INVITE. This method contain a copy of the initial
@@ -109,16 +92,5 @@ public interface B2buaListener extends Serializable {
 	 * @throws IOException      an exception
 	 */
 	public void callAbandoned(SipServletRequest request) throws ServletException, IOException;
-
-	/**
-	 * This method is called for every other type of message event. Useful for
-	 * intercepting INFO or other types of messages. It is invoked by the Passthru
-	 * and Reinvite Callflow classes.
-	 * 
-	 * @param message a modifiable message object, either a request or response
-	 * @throws ServletException an exception
-	 * @throws IOException      an exception
-	 */
-	public void callEvent(SipServletMessage message) throws ServletException, IOException;
 
 }
