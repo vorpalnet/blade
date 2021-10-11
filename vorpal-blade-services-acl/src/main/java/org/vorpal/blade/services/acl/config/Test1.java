@@ -144,13 +144,22 @@ public class Test1 {
 		try {
 
 			IPv4AddressAssociativeTrie ipv4aat = new IPv4AddressAssociativeTrie();
-			AddressTrieMap<Address, String> treeMap = new AddressTrieMap<Address, String>(ipv4aat);
+			AddressTrieMap<Address, String> trieMap = new AddressTrieMap<Address, String>(ipv4aat);
 
 			IPv4Address net1 = new IPAddressString("192.168.1.0/24").getAddress().toIPv4();
 			IPv4Address addr1 = new IPAddressString("192.168.1.1").getAddress().toIPv4();
 			IPv4Address addr2 = new IPAddressString("192.168.2.1").getAddress().toIPv4();
 
-			treeMap.put(net1, "ALLOW");
+			trieMap.put(net1, "ALLOW");
+			trieMap.put(addr1, "ALLOW");
+			trieMap.put(addr2, "ALLOW");
+			
+			System.out.println(net1 + ": "+trieMap.get(net1));
+			System.out.println(addr1 + ": "+trieMap.get(addr1));
+			System.out.println(addr2 + ": "+trieMap.get(addr2));
+			
+			
+			
 
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
@@ -163,6 +172,7 @@ public class Test1 {
 //		Test1.test1();
 //		Test1.test2();
 //		Test1.test3();
+		Test1.test4();
 	}
 
 }

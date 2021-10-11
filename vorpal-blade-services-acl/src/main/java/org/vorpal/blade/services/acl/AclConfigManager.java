@@ -23,7 +23,8 @@
  */
 package org.vorpal.blade.services.acl;
 
-import org.vorpal.blade.framework.callflow.Callflow;
+import javax.servlet.sip.SipServletContextEvent;
+
 import org.vorpal.blade.framework.config.SettingsManager;
 
 /**
@@ -32,26 +33,8 @@ import org.vorpal.blade.framework.config.SettingsManager;
  */
 public class AclConfigManager extends SettingsManager<AclConfig> {
 
-	public AclConfigManager(String name) {
+	public AclConfigManager(SipServletContextEvent name) {
 		super(name, AclConfig.class);
-	}
-
-	@Override
-	public void setCurrentFromJson(String json) {
-
-		try {
-			Callflow.getLogger().warning("Configuration changed...");
-			Callflow.getLogger().info(json);
-
-			AclConfig tmp = mapper.readValue(json, clazz);
-//			tmp.initialize();
-			current = tmp;
-
-		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(e);
-		}
-		super.setCurrentFromJson(json);
-
 	}
 
 	@Override

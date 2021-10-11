@@ -48,6 +48,7 @@ import javax.servlet.sip.annotation.Invite;
 import javax.servlet.sip.annotation.Register;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
+import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.logging.LogManager;
 import org.vorpal.blade.framework.logging.Logger;
@@ -83,7 +84,8 @@ public class ProxyRegistrarServlet implements SipServletListener {
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
 		sipLogger = LogManager.getLogger(event.getServletContext());
-		settingsManager = new SettingsManager<>(event.getServletContext().getServletContextName(), ProxyRegistrarSettings.class);
+		Callflow.setLogger(sipLogger);
+		settingsManager = new SettingsManager<>(event, ProxyRegistrarSettings.class);
 	}
 
 	@Register

@@ -7,15 +7,29 @@
 
 	<wls:container-descriptor>
 		<wls:prefer-application-packages>
-			<!-- apis -->
-			<wls:package-name>org.vorpal.blade.framework.*</wls:package-name>
+			<!-- wls:package-name>org.vorpal.blade.framework.*</wls:package-name -->
+			<wls:package-name>com.fasterxml.jackson.*</wls:package-name>
+			<wls:package-name>javax.validation.*</wls:package-name>		
+			<wls:package-name>inet.ipaddr.*</wls:package-name>	
+			<wls:package-name>io.swagger.*</wls:package-name>
+<!-- 			
 
-			<!-- jackson -->
-			<wls:package-name>com.fasterxml.jackson.core.*</wls:package-name>
-			<wls:package-name>com.fasterxml.jackson.annotation.*</wls:package-name>
-			<wls:package-name>com.fasterxml.jackson.databind.*</wls:package-name>
-			<wls:package-name>com.fasterxml.jackson.module.jsonSchema.*</wls:package-name>			
+<wls:package-name></wls:package-name>
 
+
+			nonapi/io/github/classgraph
+			io/github/classgraph
+			org/apache/commons/lang3
+			javax/activation
+			javax/validation
+			javax/xml/bind
+			javassist
+			org/slf4j
+			org/yaml/snakeyaml
+			io/swagger/v3/oas
+ -->			
+			
+				
 		</wls:prefer-application-packages>
 	</wls:container-descriptor>
 

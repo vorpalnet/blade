@@ -40,9 +40,9 @@ public class InitialInvite extends Callflow {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
 	private Callback<SipServletRequest> loopOnPrack;
-	private B2buaListener b2buaListener;
+	private B2buaServlet b2buaListener;
 
-	public InitialInvite(B2buaListener b2buaListener) {
+	public InitialInvite(B2buaServlet b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
 
@@ -71,38 +71,44 @@ public class InitialInvite extends Callflow {
 
 		sendRequest(bobRequest, (bobResponse) -> {
 
-			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-			copyContentAndHeaders(bobResponse, aliceResponse);
+			if (bobResponse.getStatus() != 487) { // container handles responses to canceled invites
+				// if (aliceRequest!=null && aliceRequest.getSession()!=null &&
+				// aliceRequest.getSession().isValid()) {
 
-			if (successful(bobResponse)) {
-				b2buaListener.callAnswered(aliceResponse);
-			} else if (failure(bobResponse)) {
-				b2buaListener.callDeclined(aliceResponse);
-			}
+				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+				copyContentAndHeaders(bobResponse, aliceResponse);
+
+				if (successful(bobResponse)) {
+					b2buaListener.callAnswered(aliceResponse);
+				} else if (failure(bobResponse)) {
+					b2buaListener.callDeclined(aliceResponse);
+				}
 
 //			loopOnPrack = s -> sendResponse(aliceResponse, (aliceAck) -> {
-			sendResponse(aliceResponse, (aliceAck) -> {
-				if (aliceAck.getMethod().equals(PRACK)) {
-					SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-					b2buaListener.callEvent(bobPrack);
-					sendRequest(bobPrack);
-				} else if (aliceAck.getMethod().equals(ACK)) {
-					SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-					this.b2buaListener.callConnected(bobAck);
-					sendRequest(bobAck);
-				} else if (aliceAck.getMethod().equals(CANCEL)) {
-					SipServletRequest bobCancel = bobRequest.createCancel();
-					copyContentAndHeaders(aliceAck, bobCancel);
-					b2buaListener.callAbandoned(bobCancel);
-					sendRequest(bobCancel, (bobCancelResponse) -> {
-						SipServletResponse aliceCancelResponse = createResponse(aliceAck, bobCancelResponse, true);
-						sendResponse(aliceCancelResponse);
-					});
-				}
-				// implement GLARE here
-			});
-			//loopOnPrack.accept(bobRequest);
 
+				sendResponse(aliceResponse, (aliceAck) -> {
+					if (aliceAck.getMethod().equals(PRACK)) {
+						SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
+						b2buaListener.callEvent(bobPrack);
+						sendRequest(bobPrack);
+					} else if (aliceAck.getMethod().equals(ACK)) {
+						SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+						b2buaListener.callConnected(bobAck);
+						sendRequest(bobAck);
+					} else if (aliceAck.getMethod().equals(CANCEL)) {
+						SipServletRequest bobCancel = bobRequest.createCancel();
+						copyContentAndHeaders(aliceAck, bobCancel);
+						b2buaListener.callAbandoned(bobCancel);
+						sendRequest(bobCancel, (bobCancelResponse) -> {
+							SipServletResponse aliceCancelResponse = createResponse(aliceAck, bobCancelResponse, true);
+							sendResponse(aliceCancelResponse);
+						});
+					}
+					// implement GLARE here
+				});
+				// loopOnPrack.accept(bobRequest);
+
+			}
 		});
 
 	}

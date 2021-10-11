@@ -166,7 +166,6 @@ public abstract class Callflow implements Serializable {
 	public void processWrapper(SipServletRequest request) throws ServletException, IOException {
 
 		try {
-			// Callflow.sipLogger.log(Level.FINE, this, Direction.RECEIVE, request);
 			Callflow.sipLogger.superArrow(Direction.RECEIVE, request, null, this.getClass().getSimpleName());
 			process(request);
 		} catch (Exception e) {
@@ -175,25 +174,47 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
-	public void schedulePeriodicTimer(SipApplicationSession appSession, int seconds,
+	public String schedulePeriodicTimer(SipApplicationSession appSession, int seconds,
 			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
 		/*
 		 * ServletTimer createTimer(SipApplicationSession appSession, long delay, long
 		 * period, boolean fixedDelay, boolean isPersistent, Serializable info)
 		 */
 
-		long delay = seconds * 1000;
-		timerService.createTimer(appSession, delay, delay, false, true, lambdaFunction);
+		ServletTimer timer = null;
+		long delay = 0;
+		long period = seconds * 1000;
+		boolean fixedDelay = false;
+		boolean isPersistent = false;
+		timer = timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction);
+		return timer.getId();
 	}
 
-	public void scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction)
+	public String scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction)
 			throws ServletException, IOException {
 		/*
 		 * ServletTimer createTimer(SipApplicationSession appSession, long delay,
 		 * boolean isPersistent, Serializable info)
 		 */
+		ServletTimer timer = null;
 		long delay = seconds * 1000;
-		timerService.createTimer(appSession, delay, true, lambdaFunction);
+		boolean isPersistent = false;
+		timer = timerService.createTimer(appSession, delay, isPersistent, lambdaFunction);
+		return timer.getId();
+
+	}
+
+	public String schedulePersistentTimer(SipApplicationSession appSession, int seconds,
+			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
+		/*
+		 * ServletTimer createTimer(SipApplicationSession appSession, long delay,
+		 * boolean isPersistent, Serializable info)
+		 */
+		ServletTimer timer = null;
+		long delay = seconds * 1000;
+		boolean isPersistent = true;
+		timer = timerService.createTimer(appSession, delay, isPersistent, lambdaFunction);
+		return timer.getId();
 	}
 
 	public void expectRequest(SipSession sipSession, String method, Callback<SipServletRequest> callback) {
@@ -221,10 +242,8 @@ public abstract class Callflow implements Serializable {
 		Callflow.sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
 		try {
-			request.getSession().removeAttribute(RESPONSE_CALLBACK_ + request.getMethod());
-			if (request.getMethod().equals(CANCEL)) {
-				request.getSession().removeAttribute(RESPONSE_CALLBACK_ + INVITE);
-			}
+// jwm--this seems unnecessary.
+//			request.getSession().removeAttribute(RESPONSE_CALLBACK_ + request.getMethod());
 
 			request.send();
 		} catch (Exception e) {
@@ -354,17 +373,6 @@ public abstract class Callflow implements Serializable {
 					break;
 				default:
 
-//					StringBuilder sb = new StringBuilder();
-//					for (String value : copyFrom.getHeaderList(header)) {
-//						if (sb.length() == 0) {
-//							sb.append(value);
-//						} else {
-//							sb.append(",");
-//							sb.append(value);
-//						}
-//					}
-//					copyTo.setHeader(header, sb.toString());
-
 					String v;
 					HashSet<String> hashSet = new HashSet<>();
 					StringBuilder sb = new StringBuilder();
@@ -453,6 +461,11 @@ public abstract class Callflow implements Serializable {
 
 	public static SipSession getLinkedSession(SipSession ss) {
 		return (SipSession) ss.getAttribute("LINKED_SESSION");
+	}
+
+	public void processLater(SipServletRequest request, long delay_in_milliseconds) {
+		request.getApplicationSession().setAttribute("DELAYED_REQUEST", request);
+		timerService.createTimer(request.getApplicationSession(), delay_in_milliseconds, false, this);
 	}
 
 }

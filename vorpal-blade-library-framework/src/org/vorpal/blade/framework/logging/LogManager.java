@@ -34,6 +34,7 @@ import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.SipServletContextEvent;
 
 import weblogic.kernel.KernelLogManager;
 
@@ -41,6 +42,11 @@ import weblogic.kernel.KernelLogManager;
 public class LogManager implements ServletContextListener {
 	private static ConcurrentHashMap<String, Logger> logMap = new ConcurrentHashMap<String, Logger>();
 
+	
+	public static Logger getLogger(SipServletContextEvent event) {
+		return getLogger(event.getServletContext().getServletContextName());
+	}
+	
 	public static Logger getLogger(ServletContext context) {
 		return getLogger(context.getServletContextName());
 	}

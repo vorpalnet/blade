@@ -52,16 +52,11 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 * This is invoked when the servlet starts up.
 	 */
 	@Override
-	public void b2buaCreated(SipServletContextEvent event) throws ServletException, IOException {
+	public void servletCreated(SipServletContextEvent event) {
 		try {
 
 			sipLogger.info("b2buaCreated...");
-
-			String servletContextName = event.getServletContext().getServletContextName();
-			sipLogger.warning(servletContextName + " has restarted.");
-
-			String settingsFileName = event.getServletContext().getServletContextName();
-			settingsManager = new SettingsManager<>(settingsFileName, SampleConfig.class);
+			settingsManager = new SettingsManager<>(event, SampleConfig.class);
 
 			SampleConfig sampleConfig = settingsManager.getCurrent();
 
@@ -78,7 +73,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 * This is invoked when the servlet shuts down.
 	 */
 	@Override
-	public void b2buaDestroyed(SipServletContextEvent event) throws ServletException, IOException {
+	public void servletDestroyed(SipServletContextEvent event) {
 		try {
 			sipLogger.info("b2buaDestroyed...");
 			settingsManager.unregister();
@@ -111,7 +106,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callConnected(SipServletRequest request) throws ServletException, IOException {
-
+		// do nothing;
 	}
 
 	/*
@@ -119,6 +114,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callCompleted(SipServletRequest request) throws ServletException, IOException {
+		// do nothing;
 	}
 
 	/*
@@ -126,6 +122,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callDeclined(SipServletResponse response) throws ServletException, IOException {
+		// do nothing;
 	}
 
 	/*
@@ -133,13 +130,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callAbandoned(SipServletRequest request) throws ServletException, IOException {
-
-	}
-
-	@Override
-	public void callEvent(SipServletMessage message) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
+		// do nothing;
 	}
 
 }

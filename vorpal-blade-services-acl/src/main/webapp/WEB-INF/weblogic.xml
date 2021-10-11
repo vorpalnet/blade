@@ -6,8 +6,10 @@
 	<wls:weblogic-version>12.2.1.3</wls:weblogic-version>
 	<wls:context-root>acl</wls:context-root>
 
-	<wls:container-descriptor>
-		<wls:prefer-web-inf-classes>true</wls:prefer-web-inf-classes>
-	</wls:container-descriptor>
+ 	<wls:library-ref>
+       <wls:library-name>vorpal-blade</wls:library-name>
+       <wls:specification-version>2.0</wls:specification-version>
+       <wls:exact-match>false</wls:exact-match>
+    </wls:library-ref>
 
 </wls:weblogic-web-app>

@@ -43,7 +43,7 @@ public class AclConfig {
 
 	private LinkedList<AclRule> remoteAddresses = new LinkedList<>();
 
-	private AddressTrieMap<Address, AclRule.Permission> treeMap;
+	private AddressTrieMap<Address, AclRule.Permission> trieMap;
 
 	public AclConfig() {
 		remoteAddresses.add(new AclRule("192.168.1.0/24", Permission.allow));
@@ -51,11 +51,11 @@ public class AclConfig {
 	}
 
 	public void initialize() {
-		IPv4AddressAssociativeTrie ipv4aat = new IPv4AddressAssociativeTrie();
-		treeMap = new AddressTrieMap<Address, AclRule.Permission>(ipv4aat);
+
+		trieMap = new AddressTrieMap<Address, AclRule.Permission>(new IPv4AddressAssociativeTrie());
 
 		for (AclRule aclRule : remoteAddresses) {
-			treeMap.put(new IPAddressString(aclRule.getAddress()).getAddress(), aclRule.getPermission());
+			trieMap.put(new IPAddressString(aclRule.getAddress()).getAddress(), aclRule.getPermission());
 		}
 
 	}
@@ -90,7 +90,7 @@ public class AclConfig {
 
 	AclRule.Permission evaulate(String address) {
 		IPv4Address addr = new IPAddressString(address).getAddress().toIPv4();
-		Permission tmpPermission = treeMap.get(addr);
+		Permission tmpPermission = trieMap.get(addr);
 		return (tmpPermission != null) ? tmpPermission : defaultPermission;
 	}
 
