@@ -11,7 +11,11 @@
 	<property name="debuglevel" value="source,lines,vars"/>
 	
 	<!-- Required for the 'foreach' command. -->
-	<taskdef resource="net/sf/antcontrib/antlib.xml" />
+	<taskdef resource="net/sf/antcontrib/antlib.xml" >
+		<classpath>
+			<pathelement location="./lib/ant-contrib-1.0b3.jar"/>
+	    </classpath>
+	</taskdef>
 	
     <target name="init" depends="">
         <copy file="build.properties" tofile="${computer.hostname}.properties" overwrite="false" />
