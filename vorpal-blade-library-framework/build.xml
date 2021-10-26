@@ -4,14 +4,7 @@
 	<property environment="env" />
 	<property name="debuglevel" value="source,lines,vars" />
 
-	<path id="vorpal-blade-library-framework.classpath">
-        <pathelement location="build/classes"/>
-        <path refid="WebLogic System Libraries.libraryclasspath"/>
-        <pathelement location="lib/jackson-annotations-2.7.9.jar"/>
-        <pathelement location="lib/jackson-core-2.7.9.jar"/>
-        <pathelement location="lib/jackson-databind-2.7.9.jar"/>
-        <pathelement location="lib/jackson-module-jsonSchema-2.7.9.jar"/>
-    </path>
+
 
 	<target name="init">
 		<mkdir dir="build/classes" />
@@ -37,7 +30,8 @@
 		<javac nowarn="on" debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" release="8">
 			<src path="src" />
 			<src path=".apt_src" />
-			<classpath refid="vorpal-blade-library-framework.classpath" />
+			<classpath refid="vorpal-blade.classpath" />
+			<classpath refid="WebLogic System Libraries.libraryclasspath" />	
 		</javac>
 	</target>
 
@@ -46,8 +40,14 @@
 	</target>
 
 	<target name="build-javadocs" depends="build-jar">
+		
+		<pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
+		<echo>Classpath is ${classpathInName}</echo>
+		
+		
 		<javadoc splitindex="true" access="public" additionalparam="-Xdoclint:none" packagenames="org.vorpal.*" sourcepath="src" destdir="build/javadocs" author="true" version="true" use="true" windowtitle="${ant.project.name}">
-			<classpath refid="vorpal-blade-library-framework.classpath" />
+			<classpath refid="vorpal-blade.classpath" />
+			<classpath refid="WebLogic System Libraries.libraryclasspath" />	
 			<doctitle><![CDATA[${ant.project.name}]]></doctitle>
 			<bottom><![CDATA[<i>Copyright &#169; 2013-2018 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
 			<link href="http://docs.oracle.com/javaee/6/api/" />
