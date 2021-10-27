@@ -5,6 +5,7 @@
 	<property name="debuglevel" value="source,lines,vars" />
 
 
+	<target depends="init,build-project,build-jar,build-javadocs" name="build" />
 
 	<target name="init">
 		<mkdir dir="build/classes" />
@@ -19,12 +20,15 @@
 			</fileset>
 		</copy>
 	</target>
+
 	<target name="clean">
 		<delete dir="build" />
 	</target>
-	<target depends="clean" name="cleanall" />
-	<target depends="init,build-subprojects,build-project,build-jar,build-javadocs" name="build" />
-	<target name="build-subprojects" />
+	
+	<target name="clean-all" depends="clean"  />
+
+
+
 	<target depends="init" name="build-project">
 		<echo message="${ant.project.name}: ${ant.file}" />
 		<javac nowarn="on" debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" release="8">
@@ -40,10 +44,11 @@
 	</target>
 
 	<target name="build-javadocs" depends="build-jar">
-		
+
+<!-- Cool, keep for future reference		
 		<pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
 		<echo>Classpath is ${classpathInName}</echo>
-		
+-->		
 		
 		<javadoc splitindex="true" access="public" additionalparam="-Xdoclint:none" packagenames="org.vorpal.*" sourcepath="src" destdir="build/javadocs" author="true" version="true" use="true" windowtitle="${ant.project.name}">
 			<classpath refid="vorpal-blade.classpath" />

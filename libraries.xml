@@ -624,6 +624,7 @@
     	<fileset dir="vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib">
     	  <include name="**/*.jar" />
     	</fileset>
+		<pathelement location="vorpal-blade-library-framework/build/vorpal-blade-library-framework.jar" />
     </path>
 
 	<target name="build" />
