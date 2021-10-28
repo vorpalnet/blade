@@ -40,9 +40,9 @@
         </copy>
     </target>
     <target name="clean">
-        <delete dir="build/classes"/>
+        <delete dir="build"/>
     </target>
-    <target depends="clean" name="cleanall"/>
+    <target depends="clean" name="clean-all"/>
     <target depends="build-subprojects,build-project,package" name="build"/>
     <target name="build-subprojects"/>
 	
