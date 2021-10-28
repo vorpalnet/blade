@@ -5,12 +5,17 @@
     <property file="${computer.hostname}.properties" />
 	<property file="build.properties" />
 	<property name="OCCAS71" value="/opt/oracle/occas-7.1"/>
+	<property name="blade.projects" value="vorpal-blade-library-framework,vorpal-blade-shared-libraries,vorpal-blade-test-b2bua"/>
 	
 	<include file="libraries.xml"/>
 	
 	<property name="debuglevel" value="source,lines,vars"/>
 	<property name="target" value="1.8" />
 	<property name="source" value="1.8" />
+	
+	
+	
+	
 	
 	<!-- Required for the 'foreach' command. -->
 	<taskdef resource="net/sf/antcontrib/antlib.xml" >

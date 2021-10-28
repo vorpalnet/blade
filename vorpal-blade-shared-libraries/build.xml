@@ -58,6 +58,9 @@
 			<lib refid="vorpal-blade-library-framework" />			
 			<classes dir="build/classes" />
 		</war>
+		
+		<copy file="build/${ant.project.name}.war" todir="${dist}"/>
+		
 	</target>
 
 </project>
