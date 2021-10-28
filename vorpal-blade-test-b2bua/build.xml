@@ -26,6 +26,8 @@
     </path>
     <target name="init">
         <mkdir dir="build/classes"/>
+    	<mkdir dir="src/main/webapp/WEB-INF/lib"/>
+    	
         <copy includeemptydirs="false" todir="build/classes">
             <fileset dir="src/main/java">
                 <exclude name="**/*.launch"/>

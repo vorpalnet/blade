@@ -12,9 +12,9 @@
 	<property name="debuglevel" value="source,lines,vars"/>
 	<property name="target" value="1.8" />
 	<property name="source" value="1.8" />
-	
-	
-	
+
+
+	<property name="dist"    value="dist"/>
 	
 	
 	<!-- Required for the 'foreach' command. -->
@@ -26,7 +26,9 @@
 	
     <target name="init" depends="">
         <copy file="build.properties" tofile="${computer.hostname}.properties" overwrite="false" />
-        <mkdir dir="dist" />
+    
+    <mkdir dir="${dist}" />
+
     </target>
 
     <target name="build" depends="init">
@@ -40,7 +42,7 @@
 	
     <target name="clean" depends="">
         <foreach list="${blade.projects}" param="var" target="clean-all" />
-        <delete dir="dist" />
+        <delete dir="${dist}" />
     </target>
 
 	<target name="clean-all" depends="init">
