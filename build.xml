@@ -5,17 +5,17 @@
     <property file="${computer.hostname}.properties" />
 	<property file="build.properties" />
 	<property name="OCCAS71" value="/opt/oracle/occas-7.1"/>
-	<property name="blade.projects" value="vorpal-blade-library-framework,vorpal-blade-shared-libraries,vorpal-blade-test-b2bua"/>
 	
-	<include file="libraries.xml"/>
+    <!-- These are all the subprojects to be built. Override using your build.properties file, if needed. -->
+    <property name="blade.projects" value="vorpal-blade-library-framework,vorpal-blade-shared-libraries,vorpal-blade-test-b2bua"/>
+	
+    <!-- Include all the standard WebLogic / OCCAS libraries. -->
+    <include file="libraries.xml"/>
 	
 	<property name="debuglevel" value="source,lines,vars"/>
 	<property name="target" value="1.8" />
 	<property name="source" value="1.8" />
-
-
-	<property name="dist"    value="dist"/>
-	
+	<property name="dist"    location="dist"/>
 	
 	<!-- Required for the 'foreach' command. -->
 	<taskdef resource="net/sf/antcontrib/antlib.xml" >
@@ -25,10 +25,16 @@
 	</taskdef>
 	
     <target name="init" depends="">
-        <copy file="build.properties" tofile="${computer.hostname}.properties" overwrite="false" />
-    
-    <mkdir dir="${dist}" />
-
+        <if>
+            <available file="${computer.hostname}.properties" />
+            <then>
+                <mkdir dir="${dist}" />
+            </then>
+            <else>
+                <copy file="build.properties" tofile="${computer.hostname}.properties" overwrite="false" />
+                <fail>WARNING! Please edit the newly created ${computer.hostname}.properties file, then run ANT again.</fail>
+            </else>
+        </if>
     </target>
 
     <target name="build" depends="init">
@@ -41,13 +47,13 @@
 	
 	
     <target name="clean" depends="">
-        <foreach list="${blade.projects}" param="var" target="clean-all" />
         <delete dir="${dist}" />
+        <foreach list="${blade.projects}" param="var" target="clean-all" />
     </target>
 
-	<target name="clean-all" depends="init">
+	<target name="clean-all" depends="">
 		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="clean" />
 	</target>
-	
+
 </project>
 

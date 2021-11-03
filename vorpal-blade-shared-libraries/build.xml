@@ -1,9 +1,4 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- WARNING: Eclipse auto-generated file.
-              Any modifications will be overwritten.
-              To include a user specific buildfile here, simply create one in the same
-              directory with the processing instruction <?eclipse.ant.import?>
-              as the first entry and export the buildfile again. -->
 <project basedir="." default="build" name="vorpal-blade-shared-libraries">
 	<property environment="env" />
 
@@ -40,7 +35,12 @@
 	<target depends="init,build-project,package" name="build" />
 	<target depends="init" name="build-project">
 		<echo message="${ant.project.name}: ${ant.file}" />
-		<javac debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" source="${source}" target="${target}">
+		<javac debug="true"
+		       debuglevel="${debuglevel}"
+		       destdir="build/classes"
+		       includeantruntime="false"
+		       source="${source}"
+		       target="${target}">
 			<src path="src/main/java" />
 			<src path=".apt_src" />
 			<classpath refid="vorpal-blade-shared-libraries.classpath" />
@@ -49,18 +49,20 @@
 
 	<target name="package" depends="init">
 		<fileset dir="../vorpal-blade-library-framework" id="vorpal-blade-library-framework">
-		  <filename name="**/*.jar"/>
+			<filename name="**/*.jar" />
 		</fileset>
-		
-		
-		<war destfile="build/${ant.project.name}.war" needxmlfile="false" basedir="src/main/webapp">
-			<lib dir="src/main/webapp/WEB-INF/lib" />
-			<lib refid="vorpal-blade-library-framework" />			
+
+
+		<war destfile="build/${ant.project.name}.war"
+		     needxmlfile="false"
+		     basedir="src/main/webapp"
+		     manifest="src/main/webapp/META-INF/MANIFEST.MF">
+			<lib refid="vorpal-blade-library-framework" />
 			<classes dir="build/classes" />
 		</war>
 		
 		<copy file="build/${ant.project.name}.war" todir="${dist}"/>
-		
+
 	</target>
 
 </project>

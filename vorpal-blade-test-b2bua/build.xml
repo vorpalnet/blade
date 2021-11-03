@@ -59,9 +59,12 @@
 	
 	<target name="package" depends="init">
 		<war destfile="build/${ant.project.name}.war" needxmlfile="false" basedir="src/main/webapp">
+			<!--
 			<lib dir="src/main/webapp/WEB-INF/lib" />
+			-->
 			<classes dir="build/classes" />
 		</war>
+		<copy file="build/${ant.project.name}.war" todir="${dist}"/>
 	</target>
 	
     <target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects"/>
