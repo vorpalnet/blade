@@ -48,8 +48,8 @@
 	</target>
 
 	<target name="package" depends="init">
-		<fileset dir="../vorpal-blade-library-framework" id="vorpal-blade-library-framework">
-			<filename name="**/*.jar" />
+		<fileset dir="../vorpal-blade-library-framework/build" id="vorpal-blade-library-framework">
+			<filename name="vorpal-blade-library-framework.jar" />
 		</fileset>
 
 

@@ -7,9 +7,6 @@
         <wb-resource deploy-path="/WEB-INF/classes" source-path="/src"/>
                 
         <wb-resource deploy-path="/WEB-INF/classes" source-path="/.apt_src"/>
-        <dependent-module archiveName="vorpal-blade-library-framework.jar" deploy-path="/WEB-INF/lib" handle="module:/resource/vorpal-blade-library-framework/vorpal-blade-library-framework">
-            <dependency-type>uses</dependency-type>
-        </dependent-module>
                 
         <property name="java-output-path" value="/vorpal-blade-services-proxy-registrar/build/classes"/>
                 
