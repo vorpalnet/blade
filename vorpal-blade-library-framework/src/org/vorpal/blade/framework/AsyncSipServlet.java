@@ -129,7 +129,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				callflow = chooseCallflow(request);
 
 				if (callflow == null) {
-					if (request.equals("ACK")) {
+					if (request.getMethod().equals("ACK")) {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
 					}else {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
