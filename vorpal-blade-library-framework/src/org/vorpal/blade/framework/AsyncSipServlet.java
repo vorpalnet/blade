@@ -127,7 +127,21 @@ public abstract class AsyncSipServlet extends SipServlet
 				requestLambda.accept(request);
 			} else {
 				callflow = chooseCallflow(request);
-				callflow.processWrapper(request);
+
+				if (callflow == null) {
+					if (request.equals("ACK")) {
+						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
+					}else {
+						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
+						SipServletResponse response = request.createResponse(501);
+						response.send();
+						Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
+						Callflow.getLogger().warning("No registered callflow for request method "+request.getMethod()+
+								", consider modifying the 'chooseCallflow' method.");
+					}
+				} else {
+					callflow.processWrapper(request);
+				}
 			}
 		} catch (Exception e) {
 			Callflow.getLogger().logStackTrace(e);
