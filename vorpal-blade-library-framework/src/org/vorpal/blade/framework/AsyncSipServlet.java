@@ -131,13 +131,13 @@ public abstract class AsyncSipServlet extends SipServlet
 				if (callflow == null) {
 					if (request.getMethod().equals("ACK")) {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
-					}else {
+					} else {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
 						SipServletResponse response = request.createResponse(501);
 						response.send();
 						Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
-						Callflow.getLogger().warning("No registered callflow for request method "+request.getMethod()+
-								", consider modifying the 'chooseCallflow' method.");
+						Callflow.getLogger().warning("No registered callflow for request method " + request.getMethod()
+								+ ", consider modifying the 'chooseCallflow' method.");
 					}
 				} else {
 					callflow.processWrapper(request);
@@ -207,6 +207,25 @@ public abstract class AsyncSipServlet extends SipServlet
 	 */
 	final public static TimerService getTimerService() {
 		return timerService;
+	}
+
+	/**
+	 * This is an alternate hashing algorithm that can be used during 
+	 * the @SipApplicationKey method.
+	 * 
+	 * @param string
+	 * @return a long number written as a hexadecimal string
+	 */
+	public static String hash(String string) {
+		long h = 1125899906842597L; // prime
+		int len = string.length();
+
+		for (int i = 0; i < len; i++) {
+			h = 31 * h + string.charAt(i);
+		}
+
+		return Long.toHexString(h);
+
 	}
 
 }
