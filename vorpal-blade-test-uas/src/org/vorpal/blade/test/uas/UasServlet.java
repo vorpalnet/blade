@@ -34,8 +34,10 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 		if (strStatus != null) {
 			status = Integer.parseInt(strStatus);
 		} else {
-			String host = ((SipURI) (request.getTo().getURI())).getHost();
-			status = settingsManager.getCurrent().getErrorMap().get(host);
+			String user = ((SipURI) (request.getTo().getURI())).getUser();
+			sipLogger.fine("user: "+user);
+			status = settingsManager.getCurrent().getErrorMap().get(user);
+			sipLogger.fine("status: "+status);
 		}
 
 		if (request.isInitial() && status != null) {
@@ -49,7 +51,8 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
-//		settingsManager = new SettingsManager<>(event.getServletContext().getServletContextName(), TestUasConfig.class);
+		settingsManager = new SettingsManager<TestUasConfig>(event, TestUasConfig.class);
+		sipLogger.logConfiguration(settingsManager.getCurrent());
 
 	}
 
