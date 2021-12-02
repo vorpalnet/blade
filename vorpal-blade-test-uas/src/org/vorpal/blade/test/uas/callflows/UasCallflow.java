@@ -12,15 +12,15 @@ import org.vorpal.blade.framework.callflow.Callflow;
 
 public class UasCallflow extends Callflow {
 
+	private Integer status;
+
+	public UasCallflow(Integer status) {
+		this.status = status;
+	}
+
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-
-		// this code is temporary, need to build a sophisticated sequenced approach
-
-		String strStatus = request.getRequestURI().getParameter("status");
-		int status = Integer.parseInt(strStatus);
 		sendResponse(request.createResponse(status));
-
 	}
 
 }
