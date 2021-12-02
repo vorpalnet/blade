@@ -7,6 +7,7 @@ import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.b2bua.B2buaListener;
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
@@ -25,10 +26,20 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
-		Callflow callflow;
+		Callflow callflow = null;
 
-		if (request.isInitial() && request.getRequestURI().getParameter("status") != null) {
-			callflow = new UasCallflow();
+		Integer status;
+
+		String strStatus = request.getRequestURI().getParameter("status");
+		if (strStatus != null) {
+			status = Integer.parseInt(strStatus);
+		} else {
+			String host = ((SipURI) (request.getTo().getURI())).getHost();
+			status = settingsManager.getCurrent().getErrorMap().get(host);
+		}
+
+		if (request.isInitial() && status != null) {
+			callflow = new UasCallflow(status);
 		} else {
 			callflow = super.chooseCallflow(request);
 		}
