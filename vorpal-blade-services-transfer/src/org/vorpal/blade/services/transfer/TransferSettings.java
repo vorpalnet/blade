@@ -5,31 +5,38 @@ import java.util.HashMap;
 
 public class TransferSettings implements Serializable {
 
-	private Boolean transferIfUserNotDefined;
-	private HashMap<String, String> userMap = new HashMap<>();
+	private Boolean transferAllRequests;
+	private String featureEnableHeader;
+	private String featureEnableValue;
 
 	public TransferSettings() {
-		transferIfUserNotDefined = true;
-		userMap.put("18165551234", "19135554321");
-		userMap.put("target1", "target2");
+		transferAllRequests = false;
+		featureEnableHeader = "OSM-Features";
+		featureEnableValue = "transfer";
 	}
 
-	public Boolean getTransferIfUserNotDefined() {
-		return transferIfUserNotDefined;
+	public Boolean getTransferAllRequests() {
+		return transferAllRequests;
 	}
 
-	public void setTransferIfUserNotDefined(Boolean transferIfUserNotDefined) {
-		this.transferIfUserNotDefined = transferIfUserNotDefined;
+	public void setTransferAllRequests(Boolean transferAllRequests) {
+		this.transferAllRequests = transferAllRequests;
 	}
 
-	public HashMap<String, String> getUserMap() {
-		return userMap;
+	public String getFeatureEnableHeader() {
+		return featureEnableHeader;
 	}
 
-	public void setUserMap(HashMap<String, String> userMap) {
-		this.userMap = userMap;
+	public void setFeatureEnableHeader(String featureEnableHeader) {
+		this.featureEnableHeader = featureEnableHeader;
 	}
 
-	
-	
+	public String getFeatureEnableValue() {
+		return featureEnableValue;
+	}
+
+	public void setFeatureEnableValue(String featureEnableValue) {
+		this.featureEnableValue = featureEnableValue;
+	}
+
 }
