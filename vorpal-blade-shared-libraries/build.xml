@@ -20,10 +20,12 @@
 			</fileset>
 		</copy>
 		<copy includeemptydirs="false" todir="build/classes">
+			<!--
 			<fileset dir=".apt_src">
 				<exclude name="**/*.launch" />
 				<exclude name="**/*.java" />
 			</fileset>
+			-->
 		</copy>
 	</target>
 	<target name="clean">
@@ -42,7 +44,11 @@
 		       source="${source}"
 		       target="${target}">
 			<src path="src/main/java" />
+			
+			<!--
 			<src path=".apt_src" />
+			-->
+			
 			<classpath refid="vorpal-blade-shared-libraries.classpath" />
 		</javac>
 	</target>
