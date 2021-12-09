@@ -34,6 +34,7 @@
                 <exclude name="**/*.java"/>
             </fileset>
         </copy>
+		<mkdir dir=".apt_src" />		
         <copy includeemptydirs="false" todir="build/classes">
             <fileset dir=".apt_src">
                 <exclude name="**/*.launch"/>
