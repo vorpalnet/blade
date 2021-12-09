@@ -1,17 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<!-- WARNING: Eclipse auto-generated file.
-              Any modifications will be overwritten.
-              To include a user specific buildfile here, simply create one in the same
-              directory with the processing instruction <?eclipse.ant.import?>
-              as the first entry and export the buildfile again. -->
 <project basedir="." default="build" name="vorpal-blade-services-transfer">
     <property environment="env"/>
     <property name="debuglevel" value="source,lines,vars"/>
     <property name="target" value="1.8"/>
     <property name="source" value="1.8"/>
     <path id="Web App Libraries.libraryclasspath">
-		<fileset dir="src/main/webapp/WEB-INF/lib" >
+		<fileset dir="WebContent/WEB-INF/lib" >
 		  <filename name="**/*.jar"/>
 		</fileset>
     </path>
@@ -26,7 +21,7 @@
     </path>
     <target name="init">
         <mkdir dir="build/classes"/>
-    	<mkdir dir="src/main/webapp/WEB-INF/lib"/>
+    	<mkdir dir="WebContent/WEB-INF/lib"/>
     	
         <copy includeemptydirs="false" todir="build/classes">
             <fileset dir="src">
@@ -59,9 +54,9 @@
     </target>
 	
 	<target name="package" depends="init">
-		<war destfile="build/${ant.project.name}.war" needxmlfile="false" basedir="src/main/webapp">
+		<war destfile="build/${ant.project.name}.war" needxmlfile="false" basedir="WebContent">
 			<!--
-			<lib dir="src/main/webapp/WEB-INF/lib" />
+			<lib dir="WebContent/WEB-INF/lib" />
 			-->
 			<classes dir="build/classes" />
 		</war>
