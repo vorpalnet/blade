@@ -50,12 +50,8 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 		TransferSettings ts = settingsManager.getCurrent();
 
 		if (request.getMethod().equals("REFER")) {
-			SipURI referTo = (SipURI) request.getAddressHeader("Refer-To").getURI();
-			String replacementUser = ts.getUserMap().get(referTo.getUser());
-			if (replacementUser != null) {
-				referTo.setUser(replacementUser);
-				callflow = new BlindTransfer(this);
-			} else if (true == ts.getTransferIfUserNotDefined()) {
+			if (request.getHeader(ts.getFeatureEnableHeader()) != null
+					&& request.getHeader(ts.getFeatureEnableHeader()).contains(ts.getFeatureEnableValue())) {
 				callflow = new BlindTransfer(this);
 			}
 		}
