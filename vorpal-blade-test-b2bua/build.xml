@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<!-- WARNING: Eclipse auto-generated file.
-              Any modifications will be overwritten.
-              To include a user specific buildfile here, simply create one in the same
-              directory with the processing instruction <?eclipse.ant.import?>
-              as the first entry and export the buildfile again. -->
 <project basedir="." default="build" name="vorpal-blade-test-b2bua">
     <property environment="env"/>
     <property name="debuglevel" value="source,lines,vars"/>
@@ -69,4 +64,44 @@
 	</target>
 	
     <target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects"/>
+	
+	<target name="build-javadocs" depends="build">
+		<!-- Cool, keep for future reference		
+		<pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
+		<echo>Classpath is ${classpathInName}</echo>
+	    -->
+		<delete dir="${docs}/${ant.project.name}" />
+		<javadoc useexternalfile="true"
+		         splitindex="true"
+		         access="protected"
+		         packagenames="org.vorpal.*"
+		         sourcepath="src/main/java"
+		         destdir="${docs}/${ant.project.name}"
+		         author="true"
+		         version="true"
+		         use="true"
+		         windowtitle="${ant.project.name}">
+			<classpath refid="vorpal-blade.classpath" />
+			<classpath refid="WebLogic System Libraries.libraryclasspath" />
+			<classpath refid="project.classpath"/>
+			<doclet name="org.umlgraph.markdown.doclet.UmlGraphDoc" path="../lib/MarkdownDoclet-3.0.jar">
+				<param name="-inferrel" />
+				<param name="-inferdep" />
+				<param name="-operations" />
+				<param name="-hide" value="java.*" />
+				<param name="-collpackages" value="java.util.*" />
+				<param name="-qualify" />
+				<param name="-postfixpackage" />
+				<param name="-nodefontsize" value="9" />
+				<param name="-nodefontpackagesize" value="7" />
+			</doclet>
+			<doctitle>
+				<![CDATA[${ant.project.name}]]>
+			</doctitle>
+			<bottom>
+				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
+			<link href="http://docs.oracle.com/javaee/6/api/" />
+		</javadoc>
+	</target>
+	
 </project>
