@@ -5,7 +5,7 @@
 	<property name="debuglevel" value="source,lines,vars" />
 
 
-	<target depends="init,build-project,build-jar,build-javadocs" name="build" />
+	<target depends="init,build-project,build-jar" name="build" />
 
 	<target name="init">
 		<mkdir dir="build/classes" />
@@ -31,7 +31,12 @@
 
 	<target depends="init" name="build-project">
 		<echo message="${ant.project.name}: ${ant.file}" />
-		<javac nowarn="on" debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" release="8">
+		<javac nowarn="on"
+		       debug="true"
+		       debuglevel="${debuglevel}"
+		       destdir="build/classes"
+		       includeantruntime="false"
+		       release="8">
 			<src path="src" />
 			<src path=".apt_src" />
 			<classpath refid="vorpal-blade.classpath" />
@@ -43,16 +48,44 @@
 		<jar destfile="build/${ant.project.name}.jar" basedir="build/classes" />
 	</target>
 
+
+
+
+
 	<target name="build-javadocs" depends="build-jar">
 
 		<!-- Cool, keep for future reference		
 		<pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
 		<echo>Classpath is ${classpathInName}</echo>
--->
+	    -->
 
-		<javadoc useexternalfile="true" splitindex="true" access="protected" additionalparam="-Xdoclint:none" packagenames="org.vorpal.*" sourcepath="src" destdir="build/javadocs" author="true" version="true" use="true" windowtitle="${ant.project.name}">
+		<delete dir="${docs}/${ant.project.name}" />
+
+		<javadoc useexternalfile="true"
+		         splitindex="true"
+		         access="protected"
+		         packagenames="org.vorpal.*"
+		         sourcepath="src"
+		         destdir="${docs}/${ant.project.name}"
+		         author="true"
+		         version="true"
+		         use="true"
+		         windowtitle="${ant.project.name}">
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
+
+			<doclet name="org.umlgraph.markdown.doclet.UmlGraphDoc" path="../lib/MarkdownDoclet-3.0.jar">
+				<param name="-inferrel" />
+				<param name="-inferdep" />
+				<param name="-operations" />
+				<param name="-hide" value="java.*" />
+				<param name="-collpackages" value="java.util.*" />
+				<param name="-qualify" />
+				<param name="-postfixpackage" />
+				<param name="-nodefontsize" value="9" />
+				<param name="-nodefontpackagesize" value="7" />
+			</doclet>
+
 			<doctitle>
 				<![CDATA[${ant.project.name}]]>
 			</doctitle>
@@ -60,8 +93,26 @@
 				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
 		<link href="http://docs.oracle.com/javaee/6/api/" />
 	</javadoc>
+
+
 </target>
 
 
-<target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects" />
+<target description="Build all projects which reference this project. Useful to propagate changes."
+        name="build-refprojects" />
+
+<!--
+<javadoc>
+	<classpath>
+		<path path="${javac.classpath}" />
+	</classpath>
+	<fileset dir="${src.dir}">
+		<filename name="**/*.java" />
+	</fileset>
+	<doclet name="com.visural.doclets.markdown.standard.Standard" path="lib/MarkdownDoclet.jar">
+	</doclet>
+</javadoc>
+-->
+
+
 </project>

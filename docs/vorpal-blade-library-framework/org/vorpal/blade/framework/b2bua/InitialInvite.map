@@ -1,0 +1,6 @@
+<map id="G" name="G">
+<area shape="rect" id="node1_0" href="./InitialInvite.html" title="org.vorpal.blade.framework.b2bua.InitialInvite" alt="" coords="217,11,291,83"/>
+<area shape="rect" id="node2_1" href="./B2buaServlet.html" title="org.vorpal.blade.framework.b2bua.B2buaServlet" alt="" coords="16,141,127,309"/>
+<area shape="rect" id="node4_2" href="../callflow/Callback.html" title="org.vorpal.blade.framework.callflow.Callback" alt="" coords="173,167,335,284"/>
+<area shape="rect" id="node3_3" href="../callflow/Callflow.html" title="org.vorpal.blade.framework.callflow.Callflow" alt="" coords="145,368,309,1061"/>
+</map>

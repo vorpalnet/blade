@@ -16,6 +16,8 @@
 	<property name="target" value="1.8" />
 	<property name="source" value="1.8" />
 	<property name="dist"    location="dist"/>
+	<property name="docs"    location="docs"/>
+	
 	
 	<!-- Required for the 'foreach' command. -->
 	<taskdef resource="net/sf/antcontrib/antlib.xml" >
@@ -54,6 +56,16 @@
 	<target name="clean-all" depends="">
 		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="clean" />
 	</target>
+	
+    <target name="javadocs" depends="">
+        <delete dir="${docs}" />
+        <foreach list="${blade.projects}" param="var" target="javadocs-all" />
+    </target>
+
+	<target name="javadocs-all" depends="">
+		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="build-javadocs" />
+	</target>
+	
 
 </project>
 
