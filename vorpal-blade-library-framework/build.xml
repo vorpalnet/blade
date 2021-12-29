@@ -48,19 +48,12 @@
 		<jar destfile="build/${ant.project.name}.jar" basedir="build/classes" />
 	</target>
 
-
-
-
-
 	<target name="build-javadocs" depends="build-jar">
-
 		<!-- Cool, keep for future reference		
 		<pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
 		<echo>Classpath is ${classpathInName}</echo>
 	    -->
-
 		<delete dir="${docs}/${ant.project.name}" />
-
 		<javadoc useexternalfile="true"
 		         splitindex="true"
 		         access="protected"
@@ -73,7 +66,6 @@
 		         windowtitle="${ant.project.name}">
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
-
 			<doclet name="org.umlgraph.markdown.doclet.UmlGraphDoc" path="../lib/MarkdownDoclet-3.0.jar">
 				<param name="-inferrel" />
 				<param name="-inferdep" />
@@ -85,17 +77,14 @@
 				<param name="-nodefontsize" value="9" />
 				<param name="-nodefontpackagesize" value="7" />
 			</doclet>
-
 			<doctitle>
 				<![CDATA[${ant.project.name}]]>
 			</doctitle>
 			<bottom>
 				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
-		<link href="http://docs.oracle.com/javaee/6/api/" />
-	</javadoc>
-
-
-</target>
+			<link href="http://docs.oracle.com/javaee/6/api/" />
+		</javadoc>
+	</target>
 
 
 <target description="Build all projects which reference this project. Useful to propagate changes."
