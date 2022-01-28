@@ -7,7 +7,7 @@
 	<property name="OCCAS71" value="/opt/oracle/occas-7.1"/>
 	
     <!-- These are all the subprojects to be built. Override using your build.properties file, if needed. -->
-    <property name="blade.projects" value="vorpal-blade-library-framework,vorpal-blade-shared-libraries,vorpal-blade-test-b2bua,vorpal-blade-test-uas,vorpal-blade-services-transfer"/>
+    <property name="blade.projects" value="vorpal-blade-library-framework,vorpal-blade-shared-libraries,vorpal-blade-test-b2bua,vorpal-blade-test-uas,vorpal-blade-services-transfer,vorpal-blade-services-options"/>
 	
     <!-- Include all the standard WebLogic / OCCAS libraries. -->
     <include file="libraries.xml"/>

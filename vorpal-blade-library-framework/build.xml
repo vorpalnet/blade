@@ -90,18 +90,4 @@
 <target description="Build all projects which reference this project. Useful to propagate changes."
         name="build-refprojects" />
 
-<!--
-<javadoc>
-	<classpath>
-		<path path="${javac.classpath}" />
-	</classpath>
-	<fileset dir="${src.dir}">
-		<filename name="**/*.java" />
-	</fileset>
-	<doclet name="com.visural.doclets.markdown.standard.Standard" path="lib/MarkdownDoclet.jar">
-	</doclet>
-</javadoc>
--->
-
-
 </project>
