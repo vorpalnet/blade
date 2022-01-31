@@ -20,15 +20,8 @@ public class OptionsCallflow extends Callflow {
 		response.setHeader("Allow", settings.getAllow());
 		response.setHeader("User-Agent", settings.getUserAgent());
 		response.setHeader("Allow-Events", settings.getAllowEvents());
-		response.send();
 
-		if (sipLogger != null) {
-			sipLogger.finest(request.toString());
-			sipLogger.finest(response.toString());
-		} else {
-			System.out.println("SipLogger set to NULL!");
-		}
-
+		sendResponse(response);
 	}
 
 }
