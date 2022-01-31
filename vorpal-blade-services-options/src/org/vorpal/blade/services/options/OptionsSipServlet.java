@@ -30,6 +30,7 @@ import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
@@ -43,6 +44,20 @@ import org.vorpal.blade.framework.logging.LogManager;
 public class OptionsSipServlet extends AsyncSipServlet {
 	private static final long serialVersionUID = 1L;
 	public static SettingsManager<OptionsSettings> settingsManager;
+
+	/**
+	 * This is an attempt at optimization. Instead of creating a new
+	 * SipApplicationSession for ever OPTIONS ping, reuse an existing one. We'll use
+	 * the remote IP address as the session key so as to not unnecessarily
+	 * single-thread things.
+	 * 
+	 * @param request
+	 * @return the UAC's IP address
+	 */
+	@SipApplicationKey
+	public static String sessionKey(SipServletRequest request) {
+		return request.getRemoteAddr();
+	}
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
