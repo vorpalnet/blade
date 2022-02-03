@@ -41,56 +41,56 @@ public interface B2buaListener extends Serializable {
 	 * invoked. You may modify this SipServletRequest object. (Do not call the
 	 * .send() method.)
 	 * 
-	 * @param request copy of the initial INVITE to be modified before sending
+	 * @param outboundRequest copy of the initial INVITE to be modified before sending
 	 * @throws ServletException an exception
 	 * @throws IOException      an exception
 	 */
-	public void callStarted(SipServletRequest request) throws ServletException, IOException;
+	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException;
 
 	/**
 	 * Called after a 200 OK is received. This response object may be modified
 	 * before it is sent back. (Do not call the .send() method.)
 	 * 
-	 * @param response modifiable successful response object
+	 * @param outboundResponse modifiable successful response object
 	 * @throws ServletException an exception
 	 * @throws IOException      an exception
 	 */
-	public void callAnswered(SipServletResponse response) throws ServletException, IOException;
+	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException;
 
 	/**
 	 * This method is called after the ACK for the initial INVITE is received.
 	 * 
-	 * @param request a modifiable ACK request
+	 * @param outboundRequest a modifiable ACK request
 	 * @throws ServletException an exception
 	 * @throws IOException      an exception
 	 */
-	public void callConnected(SipServletRequest request) throws ServletException, IOException;
+	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException;
 
 	/**
 	 * This method is called after receiving a BYE request.
 	 * 
-	 * @param request a modifiable BYE request
+	 * @param outboundRequest a modifiable BYE request
 	 * @throws ServletException an exception
 	 * @throws IOException      an exception
 	 */
-	public void callCompleted(SipServletRequest request) throws ServletException, IOException;
+	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException;
 
 	/**
 	 * This method is called after receiving an error status (like 404).
 	 * 
-	 * @param response a modifiable error response.
+	 * @param outboundResponse a modifiable error response.
 	 * @throws ServletException an exception
 	 * @throws IOException      an exception
 	 */
-	public void callDeclined(SipServletResponse response) throws ServletException, IOException;
+	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException;
 
 	/**
 	 * This method is called in response to receiving a CANCEL request.
 	 * 
-	 * @param request a modifiable CANCEL request
+	 * @param outboundRequest a modifiable CANCEL request
 	 * @throws ServletException an exception
 	 * @throws IOException      an exception
 	 */
-	public void callAbandoned(SipServletRequest request) throws ServletException, IOException;
+	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException;
 
 }
