@@ -69,9 +69,11 @@ import org.vorpal.blade.framework.callflow.Callflow;
 public class Cancel extends Callflow {
 	private static final long serialVersionUID = 1L;
 	private SipServletRequest aliceCancel;
-	private B2buaServlet b2buaListener;
-	private SipServletRequest aliceInvite;
+	private B2buaServlet b2buaListener = null;
 	private SipServletRequest bobInvite;
+
+	public Cancel() {
+	}
 
 	public Cancel(B2buaServlet b2buaListener) {
 		this.b2buaListener = b2buaListener;
@@ -80,13 +82,6 @@ public class Cancel extends Callflow {
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		aliceCancel = request;
-
-		for (SipServletRequest aliceRequest : request.getSession().getActiveRequests(UAMode.UAS)) {
-			if (aliceRequest.getSession().getState().equals(State.EARLY) && aliceRequest.getMethod().equals("INVITE")) {
-				aliceInvite = aliceRequest;
-				break;
-			}
-		}
 
 		SipSession linkedSession = getLinkedSession(aliceCancel.getSession());
 		if (linkedSession.isValid()) {
@@ -97,20 +92,13 @@ public class Cancel extends Callflow {
 				}
 			}
 
-			sendResponse(aliceCancel.createResponse(200));
-
 			SipServletRequest bobCancel = bobInvite.createCancel();
-			copyContentAndHeaders(aliceCancel, bobCancel);
-			b2buaListener.callAbandoned(bobCancel);
+			if (b2buaListener != null) {
+				b2buaListener.callAbandoned(bobCancel);
+			}
 
 			sendRequest(bobCancel, (bobCancelResponse) -> {
-				if (bobCancelResponse.getStatus() == 487) {
-					sendRequest(bobCancelResponse.createAck());
-					sendResponse(copyContentAndHeaders(bobCancelResponse, aliceInvite.createResponse(487)),
-							(bobAck) -> {
-								// do nothing
-							});
-				}
+				// do nothing;
 			});
 
 		}

@@ -67,9 +67,12 @@ public abstract class Callflow implements Serializable {
 	protected static final String UPDATE = "UPDATE";
 	protected static final String REFER = "REFER";
 	protected static final String SIP = "SIP";
+	protected static final String Contact = "Contact";
 
 	private static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
 	private static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
+	private static final String LINKED_SESSION = "LINKED_SESSION";
+	private static final String DELAYED_REQUEST = "DELAYED_REQUEST";
 
 	public static boolean provisional(SipServletResponse response) {
 		return (response.getStatus() >= 100 && response.getStatus() < 200);
@@ -103,7 +106,7 @@ public abstract class Callflow implements Serializable {
 	public static Callback<SipServletRequest> pullCallback(SipServletRequest request) {
 		Callback<SipServletRequest> callback = null;
 		SipSession sipSession = request.getSession();
-		String attribute = "REQUEST_CALLBACK_" + request.getMethod();
+		String attribute = REQUEST_CALLBACK_ + request.getMethod();
 		callback = (Callback<SipServletRequest>) sipSession.getAttribute(attribute);
 		if (callback != null) {
 			sipSession.removeAttribute(attribute);
@@ -121,7 +124,7 @@ public abstract class Callflow implements Serializable {
 	public static Callback<SipServletResponse> pullCallback(SipServletResponse response) {
 		Callback<SipServletResponse> callback = null;
 		SipSession sipSession = response.getSession();
-		String attribute = "RESPONSE_CALLBACK_" + response.getMethod();
+		String attribute = RESPONSE_CALLBACK_ + response.getMethod();
 		callback = (Callback<SipServletResponse>) sipSession.getAttribute(attribute);
 		if (callback != null) {
 			if (response.getStatus() >= 200) {
@@ -355,61 +358,62 @@ public abstract class Callflow implements Serializable {
 
 		for (String header : copyFrom.getHeaderNameList()) {
 
-			try {
+			// Walking the high-wire without a net;
+//			try {
 
 				switch (header.hashCode()) {
-				case 2715: // To
-				case 2198474: // From
-				case 85998: // Via
+				case 2715: // ------- To
+				case 2198474: // ---- From
+				case 85998: // ------ Via
 				case -2081731894: // Call-ID
 				case -1678787584: // Contact
-				case 1244061434: // Content-Length
-				case 2079004: // CSeq
-				case 1848913111: // Max-Forwards
-				case 949037134: // Content-Type
-				case 887838157: // Record-Route
-				case 79151657: // Route
+				case 1244061434: // - Content-Length
+				case 2079004: // --- CSeq
+				case 1848913111: // - Max-Forwards
+				case 949037134: // -- Content-Type
+				case 887838157: // -- Record-Route
+				case 79151657: // --- Route
+				case 2525869: // ---- RSeq
+				case 2508503: // ---- RAck
 					// do not copy these headers
 					break;
 				default:
-
-					String v;
-					HashSet<String> hashSet = new HashSet<>();
-					StringBuilder sb = new StringBuilder();
-					for (String value : copyFrom.getHeaderList(header)) {
-						hashSet.add(value);
-					}
-					Iterator<String> i = hashSet.iterator();
-					while (i.hasNext()) {
-						v = i.next();
-						if (sb.length() == 0) {
-							sb.append(v);
-						} else {
-							sb.append(",");
-							sb.append(v);
-						}
-					}
-					copyTo.setHeader(header, sb.toString());
-
+					copyHeader(header, copyFrom, copyTo);
 				}
 
-			} catch (Exception e) {
-				sipLogger.log(Level.WARNING, "Cannot copy header: " + header + " hash: " + header.hashCode());
-			}
+//			} catch (Exception e) {
+//				sipLogger.log(Level.WARNING, "Cannot copy header: " + header + " hash: " + header.hashCode());
+//			}
 
 		}
+	}
+
+	private static void copyHeader(String header, SipServletMessage copyFrom, SipServletMessage copyTo) {
+
+		String v;
+		HashSet<String> hashSet = new HashSet<>();
+		StringBuilder sb = new StringBuilder();
+		for (String value : copyFrom.getHeaderList(header)) {
+			hashSet.add(value);
+		}
+		Iterator<String> i = hashSet.iterator();
+		while (i.hasNext()) {
+			v = i.next();
+			if (sb.length() == 0) {
+				sb.append(v);
+			} else {
+				sb.append(",");
+				sb.append(v);
+			}
+		}
+		copyTo.setHeader(header, sb.toString());
+
 	}
 
 	private static void copyContentMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
 			throws UnsupportedEncodingException, IOException {
 		copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
 	}
-
-//	public static void copyContentAndHeadersMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
-//			throws UnsupportedEncodingException, IOException, ServletParseException {
-//		copyHeadersMsg(copyFrom, copyTo);
-//		copyContentMsg(copyFrom, copyTo);
-//	}
 
 	public static SipServletRequest copyContent(SipServletMessage copyFrom, SipServletRequest copyTo)
 			throws UnsupportedEncodingException, IOException {
@@ -423,14 +427,57 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
+	/**
+	 * Copy non-system headers with the exception of Contact for REGISTER requests.
+	 * 
+	 * @param copyFrom
+	 * @param copyTo
+	 * @return copyTo
+	 * @throws ServletParseException
+	 */
 	public static SipServletRequest copyHeaders(SipServletRequest copyFrom, SipServletRequest copyTo)
 			throws ServletParseException {
+
+		// Special case, copy Contact headers for REGISTER message
+		if (copyFrom.getMethod().equals(REGISTER)) {
+			for (String value : copyFrom.getHeaderList(Contact)) {
+				copyTo.setHeader(Contact, value);
+			}
+		}
+
 		copyHeadersMsg(copyFrom, copyTo);
 		return copyTo;
 	}
 
+	/**
+	 * Copy non-system headers with the exception of Contact for REGISTER responses,
+	 * 3xx and 485 responses, and 200/OPTIONS responses.
+	 * 
+	 * @param copyFrom
+	 * @param copyTo
+	 * @return copyTo
+	 * @throws ServletParseException
+	 */
 	public static SipServletResponse copyHeaders(SipServletResponse copyFrom, SipServletResponse copyTo)
 			throws ServletParseException {
+		boolean copyContact = false;
+
+		if (copyFrom.getMethod().equals(REGISTER)) {
+			copyContact = true;
+		} else if (copyFrom.getStatus() >= 300 && copyFrom.getStatus() < 400) {
+			copyContact = true;
+		} else if (copyFrom.getStatus() == 485) {
+			copyContact = true;
+		} else if (copyFrom.getMethod().equals(OPTIONS) && copyFrom.getStatus() == 200) {
+			copyContact = true;
+		}
+
+		if (copyContact) {
+			for (String value : copyFrom.getHeaderList(Contact)) {
+				copyTo.setHeader(Contact, value);
+			}
+		}
+
 		copyHeadersMsg(copyFrom, copyTo);
 		return copyTo;
 	}
@@ -450,22 +497,44 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public static void linkSessions(SipSession ss1, SipSession ss2) {
-		ss1.setAttribute("LINKED_SESSION", ss2);
-		ss2.setAttribute("LINKED_SESSION", ss1);
+		ss1.setAttribute(LINKED_SESSION, ss2);
+		ss2.setAttribute(LINKED_SESSION, ss1);
 	}
 
 	public static void unlinkSessions(SipSession ss1, SipSession ss2) {
-		ss1.removeAttribute("LINKED_SESSION");
-		ss2.removeAttribute("LINKED_SESSION");
+		ss1.removeAttribute(LINKED_SESSION);
+		ss2.removeAttribute(LINKED_SESSION);
 	}
 
 	public static SipSession getLinkedSession(SipSession ss) {
-		return (SipSession) ss.getAttribute("LINKED_SESSION");
+		return (SipSession) ss.getAttribute(LINKED_SESSION);
 	}
 
 	public void processLater(SipServletRequest request, long delay_in_milliseconds) {
-		request.getApplicationSession().setAttribute("DELAYED_REQUEST", request);
+		request.getApplicationSession().setAttribute(DELAYED_REQUEST, request);
 		timerService.createTimer(request.getApplicationSession(), delay_in_milliseconds, false, this);
+	}
+
+	/**
+	 * Used for testing, this method prints the hash-codes system headers.
+	 * 
+	 * @param args none required
+	 */
+	public static void main(String[] args) {
+		System.out.println("Hashcodes of system headers include: ");
+		System.out.println("\tTo: " + "To".hashCode());
+		System.out.println("\tFrom: " + "From".hashCode());
+		System.out.println("\tVia: " + "Via".hashCode());
+		System.out.println("\tCall-ID: " + "Call-ID".hashCode());
+		System.out.println("\tContact: " + "Contact".hashCode());
+		System.out.println("\tContent-Length: " + "Content-Length".hashCode());
+		System.out.println("\tCSeq: " + "CSeq".hashCode());
+		System.out.println("\tMax-Forwards: " + "Max-Forwards".hashCode());
+		System.out.println("\tContent-Type: " + "Content-Type".hashCode());
+		System.out.println("\tRecord-Route: " + "Record-Route".hashCode());
+		System.out.println("\tRoute: " + "Route".hashCode());
+		System.out.println("\tRSeq: " + "RSeq".hashCode());
+		System.out.println("\tRAck: " + "RAck".hashCode());
 	}
 
 }

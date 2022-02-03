@@ -48,25 +48,30 @@ import org.vorpal.blade.framework.logging.Logger;
 import org.vorpal.blade.framework.logging.Logger.Direction;
 
 /**
+ * This class implements a simple back-to-back user agent. It accepts an incoming
+ * SipServletRequest object and creates an outgoing copy of it. By extending this class
+ * and overriding the B2buaListener interface methods, users can create simple routing
+ * applications by modifying the outgoing request or response objects before they are sent.
+ * 
  * @author Jeff McDonald
- *
  */
 public abstract class B2buaServlet extends AsyncSipServlet
 		implements B2buaListener, SipServletListener, ServletContextListener, TimerListener {
 	private static final long serialVersionUID = 1L;
 
-	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
+	@Override
+	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
 		Callflow callflow;
 
-		if (request.getMethod().equals("INVITE")) {
-			if (request.isInitial()) {
+		if (inboundRequest.getMethod().equals("INVITE")) {
+			if (inboundRequest.isInitial()) {
 				callflow = new InitialInvite(this);
 			} else {
 				callflow = new Reinvite(this);
 			}
-		} else if (request.getMethod().equals("BYE")) {
+		} else if (inboundRequest.getMethod().equals("BYE")) {
 			callflow = new Bye(this);
-		} else if (request.getMethod().equals("CANCEL")) {
+		} else if (inboundRequest.getMethod().equals("CANCEL")) {
 			callflow = new Cancel(this);
 		} else {
 			callflow = new Passthru(this);
@@ -76,21 +81,21 @@ public abstract class B2buaServlet extends AsyncSipServlet
 	}
 
 	@Override
-	public abstract void callStarted(SipServletRequest request) throws ServletException, IOException; 
+	public abstract void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException; 
 	
 	@Override
-	public abstract void callAnswered(SipServletResponse response) throws ServletException, IOException;
+	public abstract void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException;
 	
 	@Override
-	public abstract void callConnected(SipServletRequest request) throws ServletException, IOException;
+	public abstract void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException;
 	
 	@Override
-	public abstract void callCompleted(SipServletRequest request) throws ServletException, IOException;
+	public abstract void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException;
 	
 	@Override
-	public abstract void callDeclined(SipServletResponse response) throws ServletException, IOException;
+	public abstract void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException;
 	
 	@Override
-	public abstract void callAbandoned(SipServletRequest request) throws ServletException, IOException;
+	public abstract void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException;
 	
 }

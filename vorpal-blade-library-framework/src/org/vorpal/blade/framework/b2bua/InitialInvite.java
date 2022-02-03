@@ -39,8 +39,11 @@ import org.vorpal.blade.framework.callflow.Callflow;
 public class InitialInvite extends Callflow {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-	private Callback<SipServletRequest> loopOnPrack;
-	private B2buaServlet b2buaListener;
+//	private Callback<SipServletRequest> loopOnPrack;
+	private B2buaServlet b2buaListener = null;
+
+	public InitialInvite() {
+	}
 
 	public InitialInvite(B2buaServlet b2buaListener) {
 		this.b2buaListener = b2buaListener;
@@ -64,7 +67,9 @@ public class InitialInvite extends Callflow {
 		bobRequest.getSession().setAttribute("USER_TYPE", "CALLEE");
 		linkSessions(aliceRequest.getSession(), bobRequest.getSession());
 
-		b2buaListener.callStarted(bobRequest);
+		if (b2buaListener != null) {
+			b2buaListener.callStarted(bobRequest);
+		}
 
 //		Need to add support for PRACK
 //		loopOnPrack = s -> sendRequest(bobRequest, (bobResponse) -> {
@@ -79,9 +84,13 @@ public class InitialInvite extends Callflow {
 				copyContentAndHeaders(bobResponse, aliceResponse);
 
 				if (successful(bobResponse)) {
-					b2buaListener.callAnswered(aliceResponse);
+					if (b2buaListener != null) {
+						b2buaListener.callAnswered(aliceResponse);
+					}
 				} else if (failure(bobResponse)) {
-					b2buaListener.callDeclined(aliceResponse);
+					if (b2buaListener != null) {
+						b2buaListener.callDeclined(aliceResponse);
+					}
 				}
 
 //			loopOnPrack = s -> sendResponse(aliceResponse, (aliceAck) -> {
@@ -89,16 +98,22 @@ public class InitialInvite extends Callflow {
 				sendResponse(aliceResponse, (aliceAck) -> {
 					if (aliceAck.getMethod().equals(PRACK)) {
 						SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
-						b2buaListener.callEvent(bobPrack);
+						if (b2buaListener != null) {
+							b2buaListener.callEvent(bobPrack);
+						}
 						sendRequest(bobPrack);
 					} else if (aliceAck.getMethod().equals(ACK)) {
 						SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-						b2buaListener.callConnected(bobAck);
+						if (b2buaListener != null) {
+							b2buaListener.callConnected(bobAck);
+						}
 						sendRequest(bobAck);
 					} else if (aliceAck.getMethod().equals(CANCEL)) {
 						SipServletRequest bobCancel = bobRequest.createCancel();
 						copyContentAndHeaders(aliceAck, bobCancel);
-						b2buaListener.callAbandoned(bobCancel);
+						if (b2buaListener != null) {
+							b2buaListener.callAbandoned(bobCancel);
+						}
 						sendRequest(bobCancel, (bobCancelResponse) -> {
 							SipServletResponse aliceCancelResponse = createResponse(aliceAck, bobCancelResponse, true);
 							sendResponse(aliceCancelResponse);

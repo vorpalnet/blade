@@ -41,6 +41,9 @@ public class Reinvite extends Callflow {
 //	private Callback<SipServletResponse> bobCallback = null;
 	private B2buaServlet b2buaListener;
 
+	public Reinvite() {
+	}
+
 	public Reinvite(B2buaServlet b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
@@ -53,27 +56,37 @@ public class Reinvite extends Callflow {
 		SipServletRequest bobRequest = sipSession.createRequest(INVITE);
 		copyContentAndHeaders(aliceRequest, bobRequest);
 
-		b2buaListener.callEvent(bobRequest);
-//		sendRequest(bobRequest, bobCallback = (bobResponse) -> {
+		if (b2buaListener != null) {
+			b2buaListener.callEvent(bobRequest);
+		}
+		// sendRequest(bobRequest, bobCallback = (bobResponse) -> {
 		sendRequest(bobRequest, (bobResponse) -> {
 			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 			copyContentAndHeaders(bobResponse, aliceResponse);
-			b2buaListener.callEvent(aliceResponse);
+			if (b2buaListener != null) {
+				b2buaListener.callEvent(aliceResponse);
+			}
 
 //			loopOnPrack = s -> sendResponse(aliceResponse, (aliceAck) -> {
 			sendResponse(aliceResponse, (aliceAck) -> {
 				if (aliceAck.getMethod().equals(PRACK)) {
 					SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-					b2buaListener.callEvent(bobPrack);
+					if (b2buaListener != null) {
+						b2buaListener.callEvent(bobPrack);
+					}
 					sendRequest(bobPrack);
 				} else if (aliceAck.getMethod().equals(ACK)) {
 					SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-					b2buaListener.callEvent(bobAck);
+					if (b2buaListener != null) {
+						b2buaListener.callEvent(bobAck);
+					}
 					sendRequest(bobAck);
 				} else if (aliceAck.getMethod().equals(CANCEL)) {
 					SipServletRequest bobCancel = bobRequest.createCancel();
 					copyContentAndHeaders(aliceAck, bobCancel);
-					b2buaListener.callEvent(bobCancel);
+					if (b2buaListener != null) {
+						b2buaListener.callEvent(bobCancel);
+					}
 					sendRequest(bobCancel, (bobCancelResponse) -> {
 						SipServletResponse aliceCancelResponse = createResponse(aliceAck, bobCancelResponse, true);
 						sendResponse(aliceCancelResponse);
