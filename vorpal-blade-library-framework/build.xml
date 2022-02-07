@@ -31,12 +31,12 @@
 
 	<target depends="init" name="build-project">
 		<echo message="${ant.project.name}: ${ant.file}" />
-		<javac nowarn="on"
-		       debug="true"
+		<javac debug="true"
 		       debuglevel="${debuglevel}"
 		       destdir="build/classes"
 		       includeantruntime="false"
-		       release="8">
+		       source="${source}"
+		       target="${target}">
 			<src path="src" />
 			<src path=".apt_src" />
 			<classpath refid="vorpal-blade.classpath" />
@@ -82,9 +82,9 @@
 			</doctitle>
 			<bottom>
 				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
-			<link href="http://docs.oracle.com/javaee/6/api/" />
-		</javadoc>
-	</target>
+		<link href="http://docs.oracle.com/javaee/6/api/" />
+	</javadoc>
+</target>
 
 
 <target description="Build all projects which reference this project. Useful to propagate changes."
