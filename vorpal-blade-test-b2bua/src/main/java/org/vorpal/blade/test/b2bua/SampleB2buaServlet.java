@@ -60,7 +60,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 
 			SampleConfig sampleConfig = settingsManager.getCurrent();
 
-			sipLogger.severe("This is the current config:");
+			sipLogger.info("This is the current config:");
 			sipLogger.logConfiguration(sampleConfig);
 
 		} catch (Exception e) {
@@ -87,9 +87,13 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callStarted(SipServletRequest request) {
-		request.getApplicationSession().setExpires(86400); // 24 hours
+		
+		sipLogger.info(request, "callStarted...");
+		
+//		request.getApplicationSession().setExpires(86400); // 24 hours
 //		String bobValue = SampleB2buaServlet.sampleConfiguration.getBobRequestData();
 //		request.setHeader("X-Sample-B2bua-Request", bobValue);
+		
 	}
 
 	/*
@@ -97,7 +101,9 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callAnswered(SipServletResponse response) throws ServletException, IOException {
-//		String aliceValue = SampleB2buaServlet.sampleConfiguration.getAliceResponseData();
+		sipLogger.info(response, "callAnswered...");
+
+		//		String aliceValue = SampleB2buaServlet.sampleConfiguration.getAliceResponseData();
 //		response.setHeader("X-Sample-B2bua-Response", aliceValue);
 	}
 
@@ -106,7 +112,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callConnected(SipServletRequest request) throws ServletException, IOException {
-		// do nothing;
+		sipLogger.info(request, "callConnected...");
 	}
 
 	/*
@@ -114,7 +120,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callCompleted(SipServletRequest request) throws ServletException, IOException {
-		// do nothing;
+		sipLogger.info(request, "callCompleted...");
 	}
 
 	/*
@@ -122,7 +128,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callDeclined(SipServletResponse response) throws ServletException, IOException {
-		// do nothing;
+		sipLogger.info(response, "callDeclined...");
 	}
 
 	/*
@@ -130,7 +136,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callAbandoned(SipServletRequest request) throws ServletException, IOException {
-		// do nothing;
+		sipLogger.info(request, "callAbandoned...");
 	}
 
 }

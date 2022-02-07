@@ -47,32 +47,39 @@ public class Passthru extends Callflow {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-		SipServletRequest bobRequest;
+		try {
 
-		aliceRequest = request;
-		SipSession sipSession = getLinkedSession(aliceRequest.getSession());
+			SipServletRequest bobRequest;
 
-		if (sipSession != null) {
-			bobRequest = sipSession.createRequest(request.getMethod());
-		} else {
-			bobRequest = sipFactory.createRequest(request.getApplicationSession(), request.getMethod(),
-					request.getFrom(), request.getTo());
-			bobRequest.setRequestURI(request.getRequestURI());
-			linkSessions(request.getSession(), bobRequest.getSession());
-		}
+			aliceRequest = request;
+			SipSession sipSession = getLinkedSession(aliceRequest.getSession());
 
-		copyContentAndHeaders(aliceRequest, bobRequest);
-		if (b2buaListener != null) {
-			b2buaListener.callEvent(bobRequest);
-		}
-		sendRequest(bobRequest, (bobResponse) -> {
-			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-			copyContentAndHeaders(bobResponse, aliceResponse);
-			if (b2buaListener != null) {
-				b2buaListener.callEvent(aliceResponse);
+			if (sipSession != null) {
+				bobRequest = sipSession.createRequest(request.getMethod());
+			} else {
+				bobRequest = sipFactory.createRequest(request.getApplicationSession(), request.getMethod(),
+						request.getFrom(), request.getTo());
+				bobRequest.setRequestURI(request.getRequestURI());
+				linkSessions(request.getSession(), bobRequest.getSession());
 			}
-			sendResponse(aliceResponse);
-		});
+
+			copyContentAndHeaders(aliceRequest, bobRequest);
+			if (b2buaListener != null) {
+				b2buaListener.callEvent(bobRequest);
+			}
+			sendRequest(bobRequest, (bobResponse) -> {
+				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+				copyContentAndHeaders(bobResponse, aliceResponse);
+				if (b2buaListener != null) {
+					b2buaListener.callEvent(aliceResponse);
+				}
+				sendResponse(aliceResponse);
+			});
+
+		} catch (Exception e) {
+			sipLogger.logStackTrace(request, e);
+			throw e;
+		}
 
 	}
 

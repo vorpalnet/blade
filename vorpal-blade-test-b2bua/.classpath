@@ -23,6 +23,7 @@
 			<attribute name="org.eclipse.jst.component.nondependency" value=""/>
 		</attributes>
 	</classpathentry>
+	<classpathentry kind="lib" path="/Users/jeff/weblogic/occas71/wlserver/sip/server/lib/sipservlet-api.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.web.container/vorpal-blade-shared-libraries"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

@@ -72,35 +72,53 @@ public class Cancel extends Callflow {
 	private B2buaServlet b2buaListener = null;
 	private SipServletRequest bobInvite;
 
+	/**
+	 * Implements the CANCEL callflow with no callback hooks.
+	 */
 	public Cancel() {
 	}
 
+	/**
+	 * Implements the CANCEL callflow with callback hooks for objects implementing
+	 * the B2buaListener interface.
+	 * 
+	 * @param b2buaListener
+	 */
 	public Cancel(B2buaServlet b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-		aliceCancel = request;
 
-		SipSession linkedSession = getLinkedSession(aliceCancel.getSession());
-		if (linkedSession.isValid()) {
-			for (SipServletRequest bobRequest : linkedSession.getActiveRequests(UAMode.UAC)) {
-				if (bobRequest.getSession().getState().equals(State.EARLY) && bobRequest.getMethod().equals("INVITE")) {
-					bobInvite = bobRequest;
-					break;
+		try {
+
+			aliceCancel = request;
+
+			SipSession linkedSession = getLinkedSession(aliceCancel.getSession());
+			if (linkedSession.isValid()) {
+				for (SipServletRequest bobRequest : linkedSession.getActiveRequests(UAMode.UAC)) {
+					if (bobRequest.getSession().getState().equals(State.EARLY)
+							&& bobRequest.getMethod().equals(INVITE)) {
+						bobInvite = bobRequest;
+						break;
+					}
 				}
+
+				SipServletRequest bobCancel = bobInvite.createCancel();
+				if (b2buaListener != null) {
+					b2buaListener.callAbandoned(bobCancel);
+				}
+
+				sendRequest(bobCancel, (bobCancelResponse) -> {
+					// do nothing;
+				});
+
 			}
 
-			SipServletRequest bobCancel = bobInvite.createCancel();
-			if (b2buaListener != null) {
-				b2buaListener.callAbandoned(bobCancel);
-			}
-
-			sendRequest(bobCancel, (bobCancelResponse) -> {
-				// do nothing;
-			});
-
+		} catch (Exception e) {
+			sipLogger.logStackTrace(request, e);
+			throw e;
 		}
 
 	}

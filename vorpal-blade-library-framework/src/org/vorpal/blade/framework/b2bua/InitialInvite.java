@@ -28,18 +28,17 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
+import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
 
 public class InitialInvite extends Callflow {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-//	private Callback<SipServletRequest> loopOnPrack;
 	private B2buaServlet b2buaListener = null;
 
 	public InitialInvite() {
@@ -51,80 +50,80 @@ public class InitialInvite extends Callflow {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-		aliceRequest = request;
+		try {
 
-		SipApplicationSession appSession = aliceRequest.getApplicationSession();
+			aliceRequest = request;
 
-		Address to = aliceRequest.getTo();
-		Address from = aliceRequest.getFrom();
+			SipApplicationSession appSession = aliceRequest.getApplicationSession();
 
-		SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, from, to);
-		bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
-		copyContentAndHeaders(aliceRequest, bobRequest);
-		bobRequest.setRequestURI(aliceRequest.getRequestURI());
+			Address to = aliceRequest.getTo();
+			Address from = aliceRequest.getFrom();
 
-		aliceRequest.getSession().setAttribute("USER_TYPE", "CALLER");
-		bobRequest.getSession().setAttribute("USER_TYPE", "CALLEE");
-		linkSessions(aliceRequest.getSession(), bobRequest.getSession());
+			SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, from, to);
+			bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
+			copyContentAndHeaders(aliceRequest, bobRequest);
+			bobRequest.setRequestURI(aliceRequest.getRequestURI());
+			linkSessions(aliceRequest.getSession(), bobRequest.getSession());
 
-		if (b2buaListener != null) {
-			b2buaListener.callStarted(bobRequest);
-		}
-
-//		Need to add support for PRACK
-//		loopOnPrack = s -> sendRequest(bobRequest, (bobResponse) -> {
-
-		sendRequest(bobRequest, (bobResponse) -> {
-
-			if (bobResponse.getStatus() != 487) { // container handles responses to canceled invites
-				// if (aliceRequest!=null && aliceRequest.getSession()!=null &&
-				// aliceRequest.getSession().isValid()) {
-
-				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-				copyContentAndHeaders(bobResponse, aliceResponse);
-
-				if (successful(bobResponse)) {
-					if (b2buaListener != null) {
-						b2buaListener.callAnswered(aliceResponse);
-					}
-				} else if (failure(bobResponse)) {
-					if (b2buaListener != null) {
-						b2buaListener.callDeclined(aliceResponse);
-					}
-				}
-
-//			loopOnPrack = s -> sendResponse(aliceResponse, (aliceAck) -> {
-
-				sendResponse(aliceResponse, (aliceAck) -> {
-					if (aliceAck.getMethod().equals(PRACK)) {
-						SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
-						if (b2buaListener != null) {
-							b2buaListener.callEvent(bobPrack);
-						}
-						sendRequest(bobPrack);
-					} else if (aliceAck.getMethod().equals(ACK)) {
-						SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-						if (b2buaListener != null) {
-							b2buaListener.callConnected(bobAck);
-						}
-						sendRequest(bobAck);
-					} else if (aliceAck.getMethod().equals(CANCEL)) {
-						SipServletRequest bobCancel = bobRequest.createCancel();
-						copyContentAndHeaders(aliceAck, bobCancel);
-						if (b2buaListener != null) {
-							b2buaListener.callAbandoned(bobCancel);
-						}
-						sendRequest(bobCancel, (bobCancelResponse) -> {
-							SipServletResponse aliceCancelResponse = createResponse(aliceAck, bobCancelResponse, true);
-							sendResponse(aliceCancelResponse);
-						});
-					}
-					// implement GLARE here
-				});
-				// loopOnPrack.accept(bobRequest);
-
+			if (b2buaListener != null) {
+				b2buaListener.callStarted(bobRequest);
 			}
-		});
+
+			// Used with keep-alive; Developer may override in 'callStarted'.
+			String sessionExpires = null;
+			Parameterable p = request.getParameterableHeader("Session-Expires");
+			if (p != null) {
+				sessionExpires = p.getValue();
+				if (sessionExpires != null) {
+					// Convert from milliseconds to seconds, round up and add an extra minute to
+					// handle session cleanup.
+					appSession.setExpires((int) Math.ceil(Integer.parseInt(sessionExpires) / 60.0) + 1);
+				}
+			}
+
+			sendRequest(bobRequest, (bobResponse) -> {
+
+				if (bobResponse.getStatus() != 487) { // container handles responses to canceled invites
+
+					SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+					copyContentAndHeaders(bobResponse, aliceResponse);
+
+					if (successful(bobResponse)) {
+						if (b2buaListener != null) {
+							b2buaListener.callAnswered(aliceResponse);
+						}
+					} else if (failure(bobResponse)) {
+						if (b2buaListener != null) {
+							b2buaListener.callDeclined(aliceResponse);
+						}
+					}
+
+					sendResponse(aliceResponse, (aliceAck) -> {
+						if (aliceAck.getMethod().equals(PRACK)) {
+							SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
+							if (b2buaListener != null) {
+								b2buaListener.callEvent(bobPrack);
+							}
+							sendRequest(bobPrack, (prackResponse) -> {
+								sendResponse(aliceAck.createResponse(prackResponse.getStatus()));
+							});
+						} else if (aliceAck.getMethod().equals(ACK)) {
+							SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+							if (b2buaListener != null) {
+								b2buaListener.callConnected(bobAck);
+							}
+							sendRequest(bobAck);
+						}
+//					// implement GLARE here?
+					});
+
+				}
+			});
+
+		} catch (Exception e) {
+			sipLogger.logStackTrace(request, e);
+			throw e;
+		}
 
 	}
 

@@ -37,8 +37,6 @@ import org.vorpal.blade.framework.callflow.Callflow;
 public class Reinvite extends Callflow {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-	private Callback<SipServletRequest> loopOnPrack;
-//	private Callback<SipServletResponse> bobCallback = null;
 	private B2buaServlet b2buaListener;
 
 	public Reinvite() {
@@ -50,53 +48,40 @@ public class Reinvite extends Callflow {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
+		try {
 
-		aliceRequest = request;
-		SipSession sipSession = getLinkedSession(aliceRequest.getSession());
-		SipServletRequest bobRequest = sipSession.createRequest(INVITE);
-		copyContentAndHeaders(aliceRequest, bobRequest);
+			aliceRequest = request;
+			SipSession sipSession = getLinkedSession(aliceRequest.getSession());
+			SipServletRequest bobRequest = sipSession.createRequest(INVITE);
+			copyContentAndHeaders(aliceRequest, bobRequest);
 
-		if (b2buaListener != null) {
-			b2buaListener.callEvent(bobRequest);
-		}
-		// sendRequest(bobRequest, bobCallback = (bobResponse) -> {
-		sendRequest(bobRequest, (bobResponse) -> {
-			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-			copyContentAndHeaders(bobResponse, aliceResponse);
 			if (b2buaListener != null) {
-				b2buaListener.callEvent(aliceResponse);
+				b2buaListener.callEvent(bobRequest);
 			}
 
-//			loopOnPrack = s -> sendResponse(aliceResponse, (aliceAck) -> {
-			sendResponse(aliceResponse, (aliceAck) -> {
-				if (aliceAck.getMethod().equals(PRACK)) {
-					SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-					if (b2buaListener != null) {
-						b2buaListener.callEvent(bobPrack);
-					}
-					sendRequest(bobPrack);
-				} else if (aliceAck.getMethod().equals(ACK)) {
-					SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-					if (b2buaListener != null) {
-						b2buaListener.callEvent(bobAck);
-					}
-					sendRequest(bobAck);
-				} else if (aliceAck.getMethod().equals(CANCEL)) {
-					SipServletRequest bobCancel = bobRequest.createCancel();
-					copyContentAndHeaders(aliceAck, bobCancel);
-					if (b2buaListener != null) {
-						b2buaListener.callEvent(bobCancel);
-					}
-					sendRequest(bobCancel, (bobCancelResponse) -> {
-						SipServletResponse aliceCancelResponse = createResponse(aliceAck, bobCancelResponse, true);
-						sendResponse(aliceCancelResponse);
-					});
+			sendRequest(bobRequest, (bobResponse) -> {
+				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+				copyContentAndHeaders(bobResponse, aliceResponse);
+				if (b2buaListener != null) {
+					b2buaListener.callEvent(aliceResponse);
 				}
-				// implement GLARE here
-			});
-//			loopOnPrack.accept(bobRequest);
 
-		});
+				sendResponse(aliceResponse, (aliceAck) -> {
+					if (aliceAck.getMethod().equals(ACK)) {
+						SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+						if (b2buaListener != null) {
+							b2buaListener.callEvent(bobAck);
+						}
+						sendRequest(bobAck);
+					}
+				});
+
+			});
+
+		} catch (Exception e) {
+			sipLogger.logStackTrace(request, e);
+			throw e;
+		}
 
 	}
 
