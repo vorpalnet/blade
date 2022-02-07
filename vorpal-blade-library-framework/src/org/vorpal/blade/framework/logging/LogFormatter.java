@@ -34,7 +34,7 @@ import java.util.logging.LogRecord;
 public final class LogFormatter extends Formatter {
 
 	private static final String LINE_SEPARATOR = System.getProperty("line.separator");
-	private static final DateFormat df = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
+	private static final DateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 
 	@Override
 	public String format(LogRecord record) {
