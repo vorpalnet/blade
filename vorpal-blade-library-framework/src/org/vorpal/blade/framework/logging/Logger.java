@@ -37,8 +37,8 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
-import javax.servlet.sip.SipURI;
 import javax.servlet.sip.SipSession.State;
+import javax.servlet.sip.SipURI;
 
 import org.codehaus.jackson.map.ObjectMapper;
 
@@ -59,19 +59,53 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //		return logger;
 //	}
 
+	private static final String NOSESS = "[----:----] ";
+
 	@Override
 	public void severe(String msg) {
-		super.severe(ConsoleColors.RED_BRIGHT + msg + ConsoleColors.RESET);
+		super.severe(NOSESS + ConsoleColors.RED_BRIGHT + msg + ConsoleColors.RESET);
 	}
 
 	@Override
 	public void warning(String msg) {
-		super.severe(ConsoleColors.BLUE_BRIGHT + msg + ConsoleColors.RESET);
+		super.severe(NOSESS + ConsoleColors.BLUE_BRIGHT + msg + ConsoleColors.RESET);
 	}
 
-	public void logStackTrace(Exception ex) {
+	@Override
+	public void fine(String msg) {
+		super.severe(NOSESS + msg);
+	}
+
+	@Override
+	public void finer(String msg) {
+		super.severe(NOSESS + msg);
+	}
+
+	@Override
+	public void finest(String msg) {
+		super.severe(NOSESS + msg);
+	}
+
+	@Override
+	public void info(String msg) {
+		super.severe(NOSESS + msg);
+	}
+
+	public void logStackTrace(SipApplicationSession appSession, Exception e) {
 		StringWriter errors = new StringWriter();
-		ex.printStackTrace(new PrintWriter(errors));
+		e.printStackTrace(new PrintWriter(errors));
+		severe(appSession, errors.toString());
+	}
+
+	public void logStackTrace(SipServletMessage msg, Exception e) {
+		StringWriter errors = new StringWriter();
+		e.printStackTrace(new PrintWriter(errors));
+		severe(msg, errors.toString());
+	}
+
+	public void logStackTrace(Exception e) {
+		StringWriter errors = new StringWriter();
+		e.printStackTrace(new PrintWriter(errors));
 		severe(errors.toString());
 	}
 
@@ -100,6 +134,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void log(Level level, ServletTimer timer, String comments) {
+
 		if (this.isLoggable(level)) {
 			String msg;
 			if (comments != null) {
@@ -112,6 +147,62 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 		}
 
+	}
+
+	public void log(Level level, SipServletMessage message, String comments) {
+		log(level, hexHash(message.getSession()) + " " + comments);
+	}
+
+	public void fine(SipServletMessage message, String comments) {
+		log(Level.FINE, message, comments);
+	}
+
+	public void finer(SipServletMessage message, String comments) {
+		log(Level.FINER, message, comments);
+	}
+
+	public void finest(SipServletMessage message, String comments) {
+		log(Level.FINEST, message, comments);
+	}
+
+	public void info(SipServletMessage message, String comments) {
+		log(Level.INFO, message, comments);
+	}
+
+	public void severe(SipServletMessage message, String comments) {
+		log(Level.SEVERE, message, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+	}
+
+	public void warning(SipServletMessage message, String comments) {
+		log(Level.WARNING, message, ConsoleColors.BLUE_BRIGHT + comments + ConsoleColors.RESET);
+	}
+
+	public void log(Level level, SipApplicationSession appSession, String comments) {
+		log(level, hexHash(appSession) + " " + comments);
+	}
+
+	public void fine(SipApplicationSession appSession, String comments) {
+		log(Level.FINE, appSession, comments);
+	}
+
+	public void finer(SipApplicationSession appSession, String comments) {
+		log(Level.FINER, appSession, comments);
+	}
+
+	public void finest(SipApplicationSession appSession, String comments) {
+		log(Level.FINEST, appSession, comments);
+	}
+
+	public void info(SipApplicationSession appSession, String comments) {
+		log(Level.INFO, appSession, comments);
+	}
+
+	public void severe(SipApplicationSession appSession, String comments) {
+		log(Level.SEVERE, appSession, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+	}
+
+	public void warning(SipApplicationSession appSession, String comments) {
+		log(Level.WARNING, appSession, ConsoleColors.BLUE_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
 	public static String timeout(ServletTimer timer) {

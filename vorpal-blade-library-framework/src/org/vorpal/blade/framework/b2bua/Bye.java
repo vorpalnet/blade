@@ -48,26 +48,33 @@ public class Bye extends Callflow {
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
-		SipServletRequest bobRequest;
+		try {
 
-		aliceRequest = request;
-		SipSession sipSession = getLinkedSession(aliceRequest.getSession());
+			SipServletRequest bobRequest;
 
-		bobRequest = sipSession.createRequest(request.getMethod());
-		copyContentAndHeaders(aliceRequest, bobRequest);
+			aliceRequest = request;
+			SipSession sipSession = getLinkedSession(aliceRequest.getSession());
 
-		if (b2buaListener != null) {
-			b2buaListener.callCompleted(bobRequest);
-		}
+			bobRequest = sipSession.createRequest(request.getMethod());
+			copyContentAndHeaders(aliceRequest, bobRequest);
 
-		sendRequest(bobRequest, (bobResponse) -> {
-			SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-			copyContentAndHeaders(bobResponse, aliceResponse);
 			if (b2buaListener != null) {
-				b2buaListener.callEvent(aliceResponse);
+				b2buaListener.callCompleted(bobRequest);
 			}
-			sendResponse(aliceResponse);
-		});
+
+			sendRequest(bobRequest, (bobResponse) -> {
+				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+				copyContentAndHeaders(bobResponse, aliceResponse);
+				if (b2buaListener != null) {
+					b2buaListener.callEvent(aliceResponse);
+				}
+				sendResponse(aliceResponse);
+			});
+
+		} catch (Exception e) {
+			sipLogger.logStackTrace(request, e);
+			throw e;
+		}
 
 	}
 

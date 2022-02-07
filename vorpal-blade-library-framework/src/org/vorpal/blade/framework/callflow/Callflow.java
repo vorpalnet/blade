@@ -68,6 +68,7 @@ public abstract class Callflow implements Serializable {
 	protected static final String REFER = "REFER";
 	protected static final String SIP = "SIP";
 	protected static final String Contact = "Contact";
+	protected static final String RELIABLE = "100rel";
 
 	private static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
 	private static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
@@ -90,18 +91,6 @@ public abstract class Callflow implements Serializable {
 		return (response.getStatus() >= 400);
 	}
 
-//	public static void putCallback(SipServletRequest request, Callback<SipServletResponse> callback) {
-//		SipSession sipSession = request.getSession();
-//		String attribute = "RESPONSE_CALLBACK_" + request.getMethod();
-//		sipSession.setAttribute(attribute, callback);
-//	}	
-//	
-//	public static void putCallback(SipSession sipSession, String method, Callback<SipServletRequest> callback) {
-//		String attribute = "REQUEST_CALLBACK_" + method;
-//		sipSession.setAttribute(attribute, callback);
-//	}	
-
-	// if request comes in
 	@SuppressWarnings("unchecked")
 	public static Callback<SipServletRequest> pullCallback(SipServletRequest request) {
 		Callback<SipServletRequest> callback = null;
@@ -180,13 +169,8 @@ public abstract class Callflow implements Serializable {
 
 	public String schedulePeriodicTimer(SipApplicationSession appSession, int seconds,
 			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
-		/*
-		 * ServletTimer createTimer(SipApplicationSession appSession, long delay, long
-		 * period, boolean fixedDelay, boolean isPersistent, Serializable info)
-		 */
-
 		ServletTimer timer = null;
-		long delay = 0;
+		long delay = seconds * 1000;
 		long period = seconds * 1000;
 		boolean fixedDelay = false;
 		boolean isPersistent = false;
@@ -196,27 +180,9 @@ public abstract class Callflow implements Serializable {
 
 	public String scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction)
 			throws ServletException, IOException {
-		/*
-		 * ServletTimer createTimer(SipApplicationSession appSession, long delay,
-		 * boolean isPersistent, Serializable info)
-		 */
 		ServletTimer timer = null;
 		long delay = seconds * 1000;
 		boolean isPersistent = false;
-		timer = timerService.createTimer(appSession, delay, isPersistent, lambdaFunction);
-		return timer.getId();
-
-	}
-
-	public String schedulePersistentTimer(SipApplicationSession appSession, int seconds,
-			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
-		/*
-		 * ServletTimer createTimer(SipApplicationSession appSession, long delay,
-		 * boolean isPersistent, Serializable info)
-		 */
-		ServletTimer timer = null;
-		long delay = seconds * 1000;
-		boolean isPersistent = true;
 		timer = timerService.createTimer(appSession, delay, isPersistent, lambdaFunction);
 		return timer.getId();
 	}
@@ -256,6 +222,18 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
+	/**
+	 * Marks the response to be sent 'reliably', meaning you should expect at PRACK
+	 * request.
+	 * 
+	 * @param response
+	 * @return
+	 */
+	public SipServletResponse makeReliable(SipServletResponse response) {
+		response.setAttribute(RELIABLE, true);
+		return response;
+	}
+
 	// Send a response, expect an 'ACK'
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
@@ -263,7 +241,20 @@ public abstract class Callflow implements Serializable {
 
 		try {
 			response.getSession().setAttribute(this.REQUEST_CALLBACK_ + ACK, lambdaFunction);
-			response.send();
+
+			if (provisional(response)) {
+
+				if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
+					response.getSession().setAttribute(this.REQUEST_CALLBACK_ + PRACK, lambdaFunction);
+					response.sendReliably();
+				} else {
+					response.send();
+				}
+
+			} else {
+				response.send();
+			}
+
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
 			throw e;
@@ -361,25 +352,25 @@ public abstract class Callflow implements Serializable {
 			// Walking the high-wire without a net;
 //			try {
 
-				switch (header.hashCode()) {
-				case 2715: // ------- To
-				case 2198474: // ---- From
-				case 85998: // ------ Via
-				case -2081731894: // Call-ID
-				case -1678787584: // Contact
-				case 1244061434: // - Content-Length
-				case 2079004: // --- CSeq
-				case 1848913111: // - Max-Forwards
-				case 949037134: // -- Content-Type
-				case 887838157: // -- Record-Route
-				case 79151657: // --- Route
-				case 2525869: // ---- RSeq
-				case 2508503: // ---- RAck
-					// do not copy these headers
-					break;
-				default:
-					copyHeader(header, copyFrom, copyTo);
-				}
+			switch (header.hashCode()) {
+			case 2715: // ------- To
+			case 2198474: // ---- From
+			case 85998: // ------ Via
+			case -2081731894: // Call-ID
+			case -1678787584: // Contact
+			case 1244061434: // - Content-Length
+			case 2079004: // --- CSeq
+			case 1848913111: // - Max-Forwards
+			case 949037134: // -- Content-Type
+			case 887838157: // -- Record-Route
+			case 79151657: // --- Route
+			case 2525869: // ---- RSeq
+			case 2508503: // ---- RAck
+				// do not copy these headers
+				break;
+			default:
+				copyHeader(header, copyFrom, copyTo);
+			}
 
 //			} catch (Exception e) {
 //				sipLogger.log(Level.WARNING, "Cannot copy header: " + header + " hash: " + header.hashCode());
