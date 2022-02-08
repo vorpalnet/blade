@@ -96,7 +96,7 @@ public class Cancel extends Callflow {
 			aliceCancel = request;
 
 			SipSession linkedSession = getLinkedSession(aliceCancel.getSession());
-			if (linkedSession.isValid()) {
+			if (linkedSession != null && linkedSession.isValid()) {
 				for (SipServletRequest bobRequest : linkedSession.getActiveRequests(UAMode.UAC)) {
 					if (bobRequest.getSession().getState().equals(State.EARLY)
 							&& bobRequest.getMethod().equals(INVITE)) {
@@ -105,14 +105,18 @@ public class Cancel extends Callflow {
 					}
 				}
 
-				SipServletRequest bobCancel = bobInvite.createCancel();
-				if (b2buaListener != null) {
-					b2buaListener.callAbandoned(bobCancel);
-				}
+				if (bobInvite != null) {
 
-				sendRequest(bobCancel, (bobCancelResponse) -> {
-					// do nothing;
-				});
+					SipServletRequest bobCancel = bobInvite.createCancel();
+					if (b2buaListener != null) {
+						b2buaListener.callAbandoned(bobCancel);
+					}
+
+					sendRequest(bobCancel, (bobCancelResponse) -> {
+						// do nothing;
+					});
+
+				}
 
 			}
 
