@@ -58,7 +58,7 @@ public class InitialInvite extends Callflow {
 	 * @param msg
 	 * @throws ServletParseException
 	 */
-	public void setSessionExpiration(SipServletMessage msg) throws ServletParseException {
+	public static void setSessionExpiration(SipServletMessage msg) throws ServletParseException {
 		SipApplicationSession appSession = msg.getApplicationSession();
 
 		String sessionExpires = null;
