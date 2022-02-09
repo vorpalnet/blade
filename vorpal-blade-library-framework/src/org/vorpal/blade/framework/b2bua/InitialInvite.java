@@ -29,7 +29,9 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.Parameterable;
+import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipApplicationSession;
+import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
@@ -46,6 +48,27 @@ public class InitialInvite extends Callflow {
 
 	public InitialInvite(B2buaServlet b2buaListener) {
 		this.b2buaListener = b2buaListener;
+	}
+
+	/**
+	 * This method looks for the "Session-Expires" header on either a request or
+	 * response object. If it exists, it sets the SipApplicationSession to be the
+	 * same (plus one minute for cleanup).
+	 * 
+	 * @param msg
+	 * @throws ServletParseException
+	 */
+	public void setSessionExpiration(SipServletMessage msg) throws ServletParseException {
+		SipApplicationSession appSession = msg.getApplicationSession();
+
+		String sessionExpires = null;
+		Parameterable p = msg.getParameterableHeader("Session-Expires");
+		if (p != null) {
+			sessionExpires = p.getValue();
+			if (sessionExpires != null) {
+				appSession.setExpires((Integer.parseInt(sessionExpires) / 60) + 1);
+			}
+		}
 	}
 
 	@Override
@@ -69,21 +92,11 @@ public class InitialInvite extends Callflow {
 				b2buaListener.callStarted(bobRequest);
 			}
 
-			// Used with keep-alive; Developer may override in 'callStarted'.
-			String sessionExpires = null;
-			Parameterable p = request.getParameterableHeader("Session-Expires");
-			if (p != null) {
-				sessionExpires = p.getValue();
-				if (sessionExpires != null) {
-					// Convert from milliseconds to seconds, round up and add an extra minute to
-					// handle session cleanup.
-					appSession.setExpires((int) Math.ceil(Integer.parseInt(sessionExpires) / 60.0) + 1);
-				}
-			}
-
 			sendRequest(bobRequest, (bobResponse) -> {
 
-				if (bobResponse.getStatus() != 487) { // container handles responses to canceled invites
+				if (false == aliceRequest.isCommitted()) {
+
+					setSessionExpiration(bobResponse);
 
 					SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 					copyContentAndHeaders(bobResponse, aliceResponse);
@@ -113,8 +126,10 @@ public class InitialInvite extends Callflow {
 								b2buaListener.callConnected(bobAck);
 							}
 							sendRequest(bobAck);
+						} else {
+							// implement GLARE here?
 						}
-//					// implement GLARE here?
+
 					});
 
 				}
