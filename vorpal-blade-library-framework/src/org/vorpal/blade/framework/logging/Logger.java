@@ -68,27 +68,27 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	@Override
 	public void warning(String msg) {
-		super.severe(NOSESS + ConsoleColors.BLUE_BRIGHT + msg + ConsoleColors.RESET);
+		super.warning(NOSESS + ConsoleColors.BLUE_BRIGHT + msg + ConsoleColors.RESET);
 	}
 
 	@Override
 	public void fine(String msg) {
-		super.severe(NOSESS + msg);
+		super.fine(NOSESS + msg);
 	}
 
 	@Override
 	public void finer(String msg) {
-		super.severe(NOSESS + msg);
+		super.finer(NOSESS + msg);
 	}
 
 	@Override
 	public void finest(String msg) {
-		super.severe(NOSESS + msg);
+		super.finest(NOSESS + msg);
 	}
 
 	@Override
 	public void info(String msg) {
-		super.severe(NOSESS + msg);
+		super.info(NOSESS + msg);
 	}
 
 	public void logStackTrace(SipApplicationSession appSession, Exception e) {
