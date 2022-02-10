@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Kurento Demo</title>
+
+<script
+	src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script
+	src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+
+
+<!-- 
+<script
+	src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.9/jstree.min.js"></script>
+<link rel="stylesheet"
+	href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.2.1/themes/default/style.min.css" />
+ -->
+
+
+<script
+	src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/js/all.min.js"></script>
+<link rel="stylesheet"
+	href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css" />
+
+
+
+<!-- jQuery EasyUI -->
+<link rel="stylesheet" type="text/css"
+	href="./jquery-easyui-1.9.5/themes/gray/easyui.css">
+<link rel="stylesheet" type="text/css"
+	href="./jquery-easyui-1.9.5/themes/icon.css">
+<link rel="stylesheet" type="text/css"
+	href="./jquery-easyui-1.9.5/demo.css">
+<script type="text/javascript" src="./jquery-easyui-1.9.5/jquery.min.js"></script>
+<script type="text/javascript"
+	src="./jquery-easyui-1.9.5/jquery.easyui.min.js"></script>
+
+
+<style type="text/css">
+.jstree-icon {
+	text-align: center;
+	color: rgb(52, 155.235);
+}
+
+.session {
+	color: blue;
+}
+
+.endpoint {
+	color: blue;
+}
+</style>
+
+
+</head>
+<body>
+	<div style="margin: 20px 0;"></div>
+	<div class="easyui-panel" style="padding: 5px;">
+		<a href="#" class="easyui-linkbutton" data-options="plain:true">Home</a>
+		<a href="#" class="easyui-menubutton"
+			data-options="menu:'#mm1',iconCls:'icon-edit'">Edit</a> <a href="#"
+			class="easyui-menubutton"
+			data-options="menu:'#mm2',iconCls:'icon-help'">Help</a> <a href="#"
+			class="easyui-menubutton" data-options="menu:'#mm3'">About</a> <a
+			href="#" class="easyui-menubutton" data-options="menu:'#mm4'">View</a>
+	</div>
+	<div id="mm1" style="width: 150px;">
+		<div data-options="iconCls:'icon-undo'">Undo</div>
+		<div data-options="iconCls:'icon-redo'">Redo</div>
+		<div class="menu-sep"></div>
+		<div>Cut</div>
+		<div>Copy</div>
+		<div>Paste</div>
+		<div class="menu-sep"></div>
+		<div>
+			<span>Toolbar</span>
+			<div>
+				<div>Address</div>
+				<div>Link</div>
+				<div>Navigation Toolbar</div>
+				<div>Bookmark Toolbar</div>
+				<div class="menu-sep"></div>
+				<div>New Toolbar...</div>
+			</div>
+		</div>
+		<div data-options="iconCls:'icon-remove'">Delete</div>
+		<div>Select All</div>
+	</div>
+	<div id="mm2" style="width: 100px;">
+		<div>Help</div>
+		<div>Update</div>
+		<div>About</div>
+	</div>
+	<div id="mm3" class="menu-content"
+		style="background: #f0f0f0; padding: 10px; text-align: left">
+		<img src="http://www.jeasyui.com/images/logo1.png"
+			style="width: 150px; height: 50px">
+		<p style="font-size: 14px; color: #444;">Try jQuery EasyUI to
+			build your modern, interactive, javascript applications.</p>
+	</div>
+	<div id="mm4" style="width: 150px;">
+		<div data-options="iconCls:'icon-ok'">Session Browser</div>
+
+		<div data-options="iconCls:'icon-undo'">Undo</div>
+		<div data-options="iconCls:'icon-redo'">Redo</div>
+		<div class="menu-sep"></div>
+		<div>Cut</div>
+		<div>Copy</div>
+		<div>Paste</div>
+		<div class="menu-sep"></div>
+		<div>
+			<span>Toolbar</span>
+			<div>
+				<div>Address</div>
+				<div>Link</div>
+				<div>Navigation Toolbar</div>
+				<div>Bookmark Toolbar</div>
+				<div class="menu-sep"></div>
+				<div>New Toolbar...</div>
+			</div>
+		</div>
+		<div data-options="iconCls:'icon-remove'">Delete</div>
+		<div>Select All</div>
+	</div>
+
+
+	<!-- Session Browser Window -->
+	<div id="w" class="easyui-window" title="Session Browser"
+		data-options="iconCls:'icon-save'"
+		style="width: auto; height: 300px; padding: 5px;">
+		<!-- Tree -->
+		<ul class="easyui-tree">
+			<li data-options="state:'open'"><span>Session 01</span>
+				<ul>
+					<li><span>sip:jeff@mcdonald.net</span></li>
+					<li><span>sip:kelly@mcdonald.net</span></li>
+					<li><span>sip:colin@mcdonald.net</span></li>
+					<li><span>sip:owen@mcdonald.net</span></li>
+				</ul></li>
+		</ul>
+	</div>
+
+
+
+	<!-- Session Window -->
+	<div id="session-window" class="easyui-window" title="Application Session"
+		data-options="iconCls:'icon-save'"
+		style="width: 200px; height: 300px; padding: 5px;">
+
+        <div style="margin-bottom:20px">
+            <input class="easyui-textbox" label="ID:" labelPosition="top" data-options="readonly:true" style="width:100%;">
+        </div>
+        
+        <div>
+            <a href="#" class="easyui-linkbutton" iconCls="icon-ok" style="float:left;width:80px;height:32px">Create</a>
+            <a href="#" class="easyui-linkbutton" iconCls="icon-ok" style="float:right;width:80px;height:32px">Destroy</a>
+        </div>
+
+	</div>
+
+
+	<script type="text/javascript">
+		var viewSessionBrowser = true;
+
+		$('#mm4').menu({
+			onClick : function(item) {
+				console.log("Something happened! " + item.text);
+				if (item.text == 'Session Browser') {
+					viewSessionBrowser = !viewSessionBrowser;
+
+					if (viewSessionBrowser == true) {
+						$('#w').window('open');
+					} else {
+						$('#w').window('close');
+					}
+
+				}
+			}
+		});
+	</script>
+
+</body>
+
+
+
+</html>

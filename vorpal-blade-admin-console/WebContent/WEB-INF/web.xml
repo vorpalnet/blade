@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
+	id="WebApp_ID" version="3.1">
+	<display-name>blade</display-name>
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+
+	<servlet>
+		<servlet-name>logout</servlet-name>
+		<servlet-class>org.vorpal.blade.applications.console.webapp.Logout</servlet-class>
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+
+
+	<servlet-mapping>
+		<servlet-name>logout</servlet-name>
+		<url-pattern>/logout</url-pattern>
+	</servlet-mapping>
+
+
+
+	<!-- <servlet> <description /> <display-name>SaveServlet</display-name> <servlet-name>SaveServlet</servlet-name> <servlet-class>org.vorpal.blade.applications.console.mxgraph.SaveServlet</servlet-class> 
+		</servlet> <servlet-mapping> <servlet-name>SaveServlet</servlet-name> <url-pattern>/fsmar/save</url-pattern> </servlet-mapping> 
+		<servlet> <description /> <display-name>OpenServlet</display-name> <servlet-name>OpenServlet</servlet-name> <servlet-class>org.vorpal.blade.applications.console.mxgraph.OpenServlet</servlet-class> 
+		</servlet> <servlet-mapping> <servlet-name>OpenServlet</servlet-name> <url-pattern>/fsmar/open</url-pattern> </servlet-mapping> -->
+
+	<!-- no security required -->
+
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>resources</web-resource-name>
+			<url-pattern>/login.jsp</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
+	<!-- admin privileges required -->
+	<security-constraint>
+		<display-name>Authorized</display-name>
+		<web-resource-collection>
+			<web-resource-name>allPages</web-resource-name>
+			<url-pattern>/limitless/*</url-pattern>
+			<http-method>GET</http-method>
+			<http-method>POST</http-method>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+		</auth-constraint>
+		<user-data-constraint>
+			<transport-guarantee>NONE</transport-guarantee>
+		</user-data-constraint>
+	</security-constraint>
+	<security-role>
+		<role-name>Admin</role-name>
+	</security-role>
+	<login-config>
+		<auth-method>FORM</auth-method>
+		<realm-name>default</realm-name>
+		<form-login-config>
+			<form-login-page>/login.jsp</form-login-page>
+			<form-error-page>/login.jsp</form-error-page>
+		</form-login-config>
+	</login-config>
+
+
+
+
+
+</web-app>
