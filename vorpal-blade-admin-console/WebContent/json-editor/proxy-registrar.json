@@ -1,0 +1,9 @@
+{
+  "proxyOnUnregistered" : false,
+  "addToPath" : false,
+  "noCancel" : false,
+  "parallel" : true,
+  "proxyTimeout" : 180,
+  "recordRoute" : true,
+  "recurse" : true
+}

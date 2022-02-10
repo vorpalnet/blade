@@ -1,0 +1,100 @@
+<html>
+
+<head>
+<title>ALICE - Microservice Broker</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+<link rel="stylesheet" href="./css/jquery-ui.modified.css">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css"
+	integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+
+<script src="./js/aliceTasks.js" defer></script>
+ 
+ 
+<style>
+body {
+	font-family: Arial;
+	font-size: 12;
+	background-color: #eef;
+}
+
+form {
+	width: 300px;
+	margin: auto;
+}
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+	<div id="ingress-view">
+
+		<form>
+
+			<div id="ingress-tabs">
+				<ul>
+					<li><a href="#ingress-tabs-1">Remote</a></li>
+					<li><a href="#ingress-tabs-2">Local</a></li>
+				</ul>
+				<div id="ingress-tabs-1">
+					<div class="ui-controlgroup">
+						<div class="ui-controlgroup-label">
+							<fieldset>
+								<legend>Address(es)</legend>
+								<div name="remote-address" class="dynamic-line">
+									<i class="fas fa-plus-circle add-or-remove" style="display: inline; color: green;"></i> 
+									<select style="width: 6em">
+										<option></option>
+										<option>UDP</option>
+										<option>TCP</option>
+										<option>TLS</option>
+										<option>SCTP</option>
+									</select> 
+									<input style="width: 40%;" name="address" type="text" placeholder="Address">
+									<input style="width: 5em;" name="port" type="text" placeholder="Port">
+								</div>
+							</fieldset>
+						</div>
+					</div>
+				</div>
+
+				<div id="ingress-tabs-2">
+					<div class="ui-controlgroup">
+						<div class="ui-controlgroup-label">
+							<fieldset>
+								<legend>Address(es)</legend>
+								<div name="local-address" class="dynamic-line">
+									<i class="fas fa-plus-circle add-or-remove" style="display: inline; color: green;"></i> <select style="width: 6em"
+										id="transition-request-method">
+										<option selected></option>
+										<option>UDP</option>
+										<option>TCP</option>
+										<option>TLS</option>
+										<option>SCTP</option>
+									</select> <input style="width: 40%;" name="address" type="text" placeholder="Address"> <input style="width: 5em;" name="port"
+										type="text" placeholder="Port">
+								</div>
+							</fieldset>
+						</div>
+					</div>
+				</div>
+
+			</div>
+
+
+		</form>
+	</div>
+
+
+
+</body>
+
+</html>
