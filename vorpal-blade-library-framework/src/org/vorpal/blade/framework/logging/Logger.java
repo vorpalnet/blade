@@ -97,6 +97,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		severe(appSession, errors.toString());
 	}
 
+	public void logStackTrace(SipSession sipSession, Exception e) {
+		StringWriter errors = new StringWriter();
+		e.printStackTrace(new PrintWriter(errors));
+		severe(sipSession, errors.toString());
+	}
+
 	public void logStackTrace(SipServletMessage msg, Exception e) {
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
@@ -181,24 +187,52 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		log(level, hexHash(appSession) + " " + comments);
 	}
 
+	public void log(Level level, SipSession sipSession, String comments) {
+		log(level, hexHash(sipSession) + " " + comments);
+	}
+
+	public void fine(SipSession sipSession, String comments) {
+		log(Level.FINE, sipSession, comments);
+	}
+
 	public void fine(SipApplicationSession appSession, String comments) {
 		log(Level.FINE, appSession, comments);
+	}
+
+	public void finer(SipSession sipSession, String comments) {
+		log(Level.FINER, sipSession, comments);
 	}
 
 	public void finer(SipApplicationSession appSession, String comments) {
 		log(Level.FINER, appSession, comments);
 	}
 
+	public void finest(SipSession sipSession, String comments) {
+		log(Level.FINEST, sipSession, comments);
+	}
+
 	public void finest(SipApplicationSession appSession, String comments) {
 		log(Level.FINEST, appSession, comments);
+	}
+
+	public void info(SipSession sipSession, String comments) {
+		log(Level.INFO, sipSession, comments);
 	}
 
 	public void info(SipApplicationSession appSession, String comments) {
 		log(Level.INFO, appSession, comments);
 	}
 
+	public void severe(SipSession sipSession, String comments) {
+		log(Level.SEVERE, sipSession, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+	}
+
 	public void severe(SipApplicationSession appSession, String comments) {
 		log(Level.SEVERE, appSession, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+	}
+
+	public void warning(SipSession sipSession, String comments) {
+		log(Level.WARNING, sipSession, ConsoleColors.BLUE_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
 	public void warning(SipApplicationSession appSession, String comments) {
