@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<project basedir="." default="build" name="vorpal-blade-services-proxy-registrar">
+<project basedir="." default="build" name="proxy-registrar">
     <property environment="env"/>
     <property name="debuglevel" value="source,lines,vars"/>
     <property name="target" value="1.8"/>
