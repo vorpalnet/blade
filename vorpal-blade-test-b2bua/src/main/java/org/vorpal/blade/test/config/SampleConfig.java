@@ -46,15 +46,17 @@ public class SampleConfig {
 
 	public SampleConfig() {
 		mapOfACLs = new HashMap<String, SampleACL>();
-		mapOfACLs.put("entry1", new SampleACL("attribute1", "value1"));
-		mapOfACLs.put("entry2", new SampleACL("attribute2", "value2"));
+		mapOfACLs.put("entry1", new SampleACL("attribute1", "set by domain"));
+		mapOfACLs.put("entry2", new SampleACL("attribute2", "set by domain"));
+		mapOfACLs.put("entry3", new SampleACL("attribute3", "set by domain"));
 
 		listOfACLs = new LinkedList<SampleACL>();
-		listOfACLs.add(new SampleACL("attribute3", "value3"));
-		listOfACLs.add(new SampleACL("attribute4", "value4"));
+		listOfACLs.add(new SampleACL("attribute1", "set by domain"));
+		listOfACLs.add(new SampleACL("attribute2", "set by domain"));
+		listOfACLs.add(new SampleACL("attribute3", "set by domain"));
 
 		version = "1.0";
-		defaultACL = new SampleACL("attribute0", "value0");
+		defaultACL = new SampleACL("attribute0", "set by domain");
 	}
 
 	/**

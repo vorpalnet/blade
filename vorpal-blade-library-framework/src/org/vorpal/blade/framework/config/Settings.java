@@ -23,6 +23,9 @@
  */
 package org.vorpal.blade.framework.config;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+
 /**
  * @author Jeff McDonald
  *
@@ -35,24 +38,82 @@ public class Settings implements SettingsMXBean {
 	}
 
 	@Override
-	public String getJson() {
-		return settingsManager.getCurrentAsJson();
-	}
-
-	@Override
-	public void setJson(String json) {
-		settingsManager.setCurrentFromJson(json);
-	}
-
-	@Override
 	public String getJSchema() {
 		return settingsManager.getJSchema();
 	}
 
 	@Override
-	public String getName() {
-		// TODO Auto-generated method stub
-		return null;
+	public String getDomainJson() {
+		try {
+			return settingsManager.getDomainJson();
+		} catch (JsonProcessingException e) {
+			e.printStackTrace();
+			return null;
+		}
 	}
+
+	@Override
+	public void setDomainJson(String json) {
+		try {
+			settingsManager.setDomainJson(json);
+			settingsManager.mergeCurrentFromJson();
+			settingsManager.logCurrent();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public String getClusterJson() {
+		try {
+			return settingsManager.getClusterJson();
+		} catch (JsonProcessingException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
+	@Override
+	public void setClusterJson(String json) {
+		try {
+			settingsManager.setClusterJson(json);
+			settingsManager.mergeCurrentFromJson();
+			settingsManager.logCurrent();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public String getServerJson() {
+		try {
+			return settingsManager.getServerJson();
+		} catch (JsonProcessingException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
+	@Override
+	public void setServerJson(String json) {
+		try {
+			settingsManager.setServerJson(json);
+			settingsManager.mergeCurrentFromJson();
+			settingsManager.logCurrent();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+//	
+//	@Override
+//	public String getJson() {
+//		return settingsManager.getCurrentAsJson();
+//	}
+//
+//	@Override
+//	public void setJson(String json) {
+//		settingsManager.setCurrentFromJson(json);
+//	}
 
 }

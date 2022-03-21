@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>vorpal-blade-library-fsmar</name>
+	<comment></comment>
+	<projects>
+		<project>vorpal-blade-library-framework</project>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>org.eclipse.jdt.core.javabuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.eclipse.wst.common.project.facet.core.builder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.eclipse.wst.validation.validationbuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>org.eclipse.jem.workbench.JavaEMFNature</nature>
+		<nature>org.eclipse.wst.common.modulecore.ModuleCoreNature</nature>
+		<nature>org.eclipse.wst.common.project.facet.core.nature</nature>
+		<nature>org.eclipse.jdt.core.javanature</nature>
+	</natures>
+	<linkedResources>
+		<link>
+			<name>framework-src</name>
+			<type>2</type>
+			<locationURI>$%7BBLADE%7D/vorpal-blade-library-framework/src</locationURI>
+		</link>
+	</linkedResources>
+	<variableList>
+		<variable>
+			<name>BLADE</name>
+			<value>file:/Users/jeff/git/blade</value>
+		</variable>
+	</variableList>
+</projectDescription>

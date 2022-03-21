@@ -19,7 +19,7 @@
 				<exclude name="**/*.java" />
 			</fileset>
 		</copy>
-		<mkdir dir=".apt_src" />		
+		<mkdir dir=".apt_src" />
 		<copy includeemptydirs="false" todir="build/classes">
 			<fileset dir=".apt_src">
 				<exclude name="**/*.launch" />
@@ -43,30 +43,41 @@
 		       source="${source}"
 		       target="${target}">
 			<src path="src/main/java" />
-			
+
 			<!--
 			<src path=".apt_src" />
 			-->
-			
+
 			<classpath refid="vorpal-blade-shared-libraries.classpath" />
 		</javac>
 	</target>
 
 	<target name="package" depends="init">
+
+		<manifest file="build/MANIFEST.MF">
+			<attribute name="Built-By" value="${user.name}" />
+			<attribute name="Specification-Title" value="Vorpal:BLADE Framework" />
+			<attribute name="Specification-Version" value="${specification}" />
+			<attribute name="Specification-Vendor" value="VORPAL.ORG" />
+			<attribute name="Implementation-Title" value="Vorpal:BLADE Framework Implementation" />
+			<attribute name="Implementation-Version" value="${implementation}" />
+			<attribute name="Implementation-Vendor" value="Vorpal Networks, LLC" />
+			<attribute name="Extension-Name" value="vorpal-blade" />
+		</manifest>
+
 		<fileset dir="../vorpal-blade-library-framework/build" id="vorpal-blade-library-framework">
-			<filename name="vorpal-blade-library-framework.jar" />
+			<filename name="vorpal-blade-library-framework-${implementation}.jar" />
 		</fileset>
 
-
-		<war destfile="build/${ant.project.name}.war"
-		     needxmlfile="false"
+		<war destfile="build/${ant.project.name}-${implementation}.war"
 		     basedir="src/main/webapp"
-		     manifest="src/main/webapp/META-INF/MANIFEST.MF">
+		     needxmlfile="false"
+		     manifest="build/MANIFEST.MF">
 			<lib refid="vorpal-blade-library-framework" />
 			<classes dir="build/classes" />
 		</war>
-		
-		<copy file="build/${ant.project.name}.war" todir="${dist}"/>
+
+		<copy file="build/${ant.project.name}-${implementation}.war" todir="${dist}" />
 
 	</target>
 

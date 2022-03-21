@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
 <project name="blade" default="build" basedir=".">
+	<buildnumber/>  	
     <property environment="envvar" />
     <exec executable="hostname" outputproperty="computer.hostname" />
     <property file="${computer.hostname}.properties" />
@@ -7,7 +8,7 @@
 	<property name="OCCAS71" value="/opt/oracle/occas-7.1"/>
 	
     <!-- These are all the subprojects to be built. Override using your build.properties file, if needed. -->
-    <property name="blade.projects" value="vorpal-blade-library-framework,vorpal-blade-shared-libraries,vorpal-blade-services-keep-alive,vorpal-blade-services-proxy-registrar,vorpal-blade-test-b2bua,vorpal-blade-test-uas,vorpal-blade-services-transfer,vorpal-blade-services-options,vorpal-blade-admin-console"/>
+    <property name="blade.projects" value="vorpal-blade-library-framework,vorpal-blade-shared-libraries,vorpal-blade-library-fsmar,vorpal-blade-services-keep-alive,vorpal-blade-services-proxy-registrar,vorpal-blade-test-b2bua,vorpal-blade-test-uas,vorpal-blade-services-transfer,vorpal-blade-services-options,vorpal-blade-admin-console"/>
 	
     <!-- Include all the standard WebLogic / OCCAS libraries. -->
     <include file="libraries.xml"/>

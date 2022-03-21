@@ -36,22 +36,26 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 
+import org.vorpal.blade.framework.config.SettingsManager;
+
 import weblogic.kernel.KernelLogManager;
 
 @WebListener
 public class LogManager implements ServletContextListener {
 	private static ConcurrentHashMap<String, Logger> logMap = new ConcurrentHashMap<String, Logger>();
 
-	
 	public static Logger getLogger(SipServletContextEvent event) {
-		return getLogger(event.getServletContext().getServletContextName());
+		String basename = SettingsManager.basename(event.getServletContext().getServletContextName());
+		return getLogger(basename);
 	}
-	
+
 	public static Logger getLogger(ServletContext context) {
-		return getLogger(context.getServletContextName());
+		String basename = SettingsManager.basename(context.getServletContextName());
+		return getLogger(basename);
 	}
 
 	public static Logger getLogger(String name) {
+		name = SettingsManager.basename(name);
 		Logger logger = null;
 
 		try {
