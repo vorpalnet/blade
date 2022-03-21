@@ -24,11 +24,14 @@
 package org.vorpal.blade.test.b2bua;
 
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.Map.Entry;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.Address;
+import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.SipServletContextEvent;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
@@ -51,6 +54,12 @@ public class SampleB2buaServlet extends B2buaServlet {
 	/*
 	 * This is invoked when the servlet starts up.
 	 */
+
+//	@Override
+//	public void servletCreated(SipServletContextEvent event) {
+//		sipLogger.info("Strarted...");
+//	}
+
 	@Override
 	public void servletCreated(SipServletContextEvent event) {
 		try {
@@ -60,9 +69,10 @@ public class SampleB2buaServlet extends B2buaServlet {
 
 			SampleConfig sampleConfig = settingsManager.getCurrent();
 
-			sipLogger.info("This is the current config:");
-			sipLogger.logConfiguration(sampleConfig);
+			sipLogger.info("This is the current config: " + sampleConfig);
+//			sipLogger.logConfiguration(sampleConfig);
 
+			
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
 		}
@@ -87,12 +97,63 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callStarted(SipServletRequest request) {
-		
+
 		sipLogger.info(request, "callStarted...");
-		
+
 //		request.getApplicationSession().setExpires(86400); // 24 hours
 //		String bobValue = SampleB2buaServlet.sampleConfiguration.getBobRequestData();
 //		request.setHeader("X-Sample-B2bua-Request", bobValue);
+
+		String name; String value;
+		Iterator<String> itr1 = request.getHeaderNames();
+		while(itr1.hasNext()) {
+			name = itr1.next();
+			sipLogger.info(name+":");
+			
+			Iterator<String> itr2 = request.getHeaders(name);
+			while(itr2.hasNext()) {
+				value = itr2.next();
+				sipLogger.info(request, "\t "+value);
+			}
+			
+			try {
+				sipLogger.info("\t parameterable...");
+				Parameterable p;
+				Iterator<Parameterable> itr3 = (Iterator<Parameterable>) request.getParameterableHeaders(name);
+				while(itr3.hasNext()) {
+					p = itr3.next();
+					sipLogger.info("\t\t value="+p.getValue());
+					for(Entry<String, String> entry : p.getParameters()) {
+						sipLogger.info("\t\t key="+entry.getKey()+", value="+entry.getValue());
+					}
+				}
+			}catch(Exception e) {
+				sipLogger.severe("Header " + name + " is not a parameterable header.");
+				sipLogger.severe(e.getMessage());
+			}
+
+			try {
+				sipLogger.info("\t addressable...");
+				Address a;
+				Iterator<Address> itr4 = request.getAddressHeaders(name);
+				while(itr4.hasNext()) {
+					a = itr4.next();
+					sipLogger.info("\t\t display name:"+a.getDisplayName());
+					sipLogger.info("\t\t value       :"+a.getValue());
+					sipLogger.info("\t\t uri         :"+a.getURI());
+				}
+			}catch(Exception e) {
+				sipLogger.severe("Header " + name + " is not an addressable header.");
+				sipLogger.severe(e.getMessage());
+			}
+			
+			
+			
+		}
+		
+		
+		
+		
 		
 	}
 
@@ -103,7 +164,8 @@ public class SampleB2buaServlet extends B2buaServlet {
 	public void callAnswered(SipServletResponse response) throws ServletException, IOException {
 		sipLogger.info(response, "callAnswered...");
 
-		//		String aliceValue = SampleB2buaServlet.sampleConfiguration.getAliceResponseData();
+		// String aliceValue =
+		// SampleB2buaServlet.sampleConfiguration.getAliceResponseData();
 //		response.setHeader("X-Sample-B2bua-Response", aliceValue);
 	}
 

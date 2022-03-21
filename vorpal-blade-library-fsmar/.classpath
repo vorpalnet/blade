@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="src" path="framework-src"/>
+	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.module.container"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/JSR-359 Libraries"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/vorpal-blade-library-framework"/>
+	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.system">
+		<attributes>
+			<attribute name="owner.project.facets" value="jst.appclient"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.launching.macosx.MacOSXType/Java SE 8 [1.8.0_301]">
+		<attributes>
+			<attribute name="owner.project.facets" value="java"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/sipservlet-api.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/classgraph-4.8.95.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/commons-lang3-3.7.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/IPAddress.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-annotations-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-core-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-databind-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-dataformat-xml-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-dataformat-yaml-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-datatype-joda-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-datatype-jsr310-2.12.1.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-jaxrs-base-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-jaxrs-json-provider-2.12.1.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-jaxrs-xml-provider-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-jaxrs-yaml-provider-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-module-jaxb-annotations-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jackson-module-jsonSchema-2.12.5.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jakarta.activation-api-1.2.1.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jakarta.validation-api-2.0.2.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/jakarta.xml.bind-api-2.3.2.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/javassist-3.25.0-GA.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/joda-time-2.10.8.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/slf4j-api-1.7.25.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/snakeyaml-1.27.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/stax2-api-4.2.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/swagger-annotations-2.1.11.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/swagger-core-2.1.11.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/swagger-integration-2.1.11.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/swagger-jaxrs2-2.1.11.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/swagger-jaxrs2-servlet-initializer-v2-2.1.11.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/swagger-models-2.1.11.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/validation-api-1.1.0.Final.jar"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/woodstox-core-6.2.4.jar"/>
+	<classpathentry kind="lib" path="lib/wlss.jar"/>
+	<classpathentry kind="lib" path="lib/wlssapi.jar"/>
+	<classpathentry kind="output" path="build/classes"/>
+</classpath>

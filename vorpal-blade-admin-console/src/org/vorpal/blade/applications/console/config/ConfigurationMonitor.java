@@ -22,9 +22,12 @@ import java.util.Set;
 
 import javax.management.JMX;
 import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import javax.naming.InitialContext;
+import javax.naming.NameNotFoundException;
+import javax.naming.NamingException;
 
 import org.vorpal.blade.framework.config.SettingsMXBean;
 
@@ -142,9 +145,15 @@ public class ConfigurationMonitor extends Thread {
 					}
 				}
 
-				if ((kind == ENTRY_CREATE || kind == ENTRY_MODIFY) && false == Files.isDirectory(child, NOFOLLOW_LINKS)) {
+				if ((kind == ENTRY_CREATE || kind == ENTRY_MODIFY)
+						&& false == Files.isDirectory(child, NOFOLLOW_LINKS)) {
 
 					String filename = child.getFileName().toString();
+
+					// jwm-test
+					System.out.println("child.getParent: " + child.getParent());
+					System.out.println("child.getParent.getParent: " + child.getParent().getParent());
+
 					if (filename.endsWith(".json")) {
 
 						String appName = filename.substring(0, filename.indexOf(".json"));
@@ -157,7 +166,8 @@ public class ConfigurationMonitor extends Thread {
 							e.printStackTrace();
 						}
 
-						updateManagedMBeans(appName, json);
+//						updateManagedMBeans(appName, json);
+						updateManagedMBeans(child, json);
 
 					}
 
@@ -178,51 +188,104 @@ public class ConfigurationMonitor extends Thread {
 		}
 	}
 
-	public void updateManagedMBeans(String appName, String json) {
+	public void updateManagedMBeans(Path path, String json) {
+
+		String filename = path.getFileName().toString();
+		String appName = filename.substring(0, filename.indexOf(".json"));
+		String parent = path.getParent().toFile().getName();
+		String grandParent = path.getParent().getParent().toFile().getName();
+		boolean cluster = grandParent.equals("cluster");
+		boolean server = grandParent.equals("server");
+		boolean domain = !(server || cluster);
 
 		try {
 			InitialContext ctx = new InitialContext();
-			MBeanServer server = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
+			MBeanServer mbeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
 
-			ObjectName objectName = new ObjectName("vorpal.blade:Name=" + appName + ",Type=Configuration");
+			ObjectName objectName = null;
+			if (domain) {
+				objectName = new ObjectName("vorpal.blade:Name=" + appName + ",Type=Configuration,*");
+			} else if (server) {
+				objectName = new ObjectName(
+						"vorpal.blade:Name=" + appName + ",Type=Configuration,Location=" + parent + ",*");
+			} else if (cluster) {
+				objectName = new ObjectName(
+						"vorpal.blade:Name=" + appName + ",Type=Configuration,Location=*,Cluster=" + parent);
+			}
+
 			System.out.println("Configuration changed...");
 			System.out.println("looking for " + objectName.toString());
 
-			Set<ObjectInstance> mbeans = server.queryMBeans(objectName, null);
+			Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(objectName, null);
 
 			for (ObjectInstance mbean : mbeans) {
 				ObjectName name = mbean.getObjectName();
+				System.out.println("Found... "+name.toString());
 
-				System.out.println("Getting Settings MBean...");
-				SettingsMXBean settings = JMX.newMXBeanProxy(server, name, SettingsMXBean.class);
+				SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
 
-				System.out.println("Updating JSON...");
-				settings.setJson(json);
-
-//				System.out.println("Updating MBean: " + name);
-//
-//				UpdateAction action = new UpdateAction(server, name, new Attribute("Data", json));
-//				System.out.println("UpdateAction: " + action);
-//
-//				AccessControlContext acc = AccessController.getContext();
-//				System.out.println("AccessControlContext: " + acc);
-//
-//				Subject subject = Subject.getSubject(acc);
-//				System.out.println("Subject: " + subject);
-//
-//				Object obj = weblogic.security.Security.runAs(subject, action);
-//				System.out.println("weblogic.security.Security: " + obj);
-//
-//				server.setAttribute(name, new Attribute("Data", json) );
-
+				if (domain) {
+					System.out.println("Updating Domain...");
+					settings.setDomainJson(json);
+				} else if (cluster) {
+					System.out.println("Updating Cluster...");
+					settings.setClusterJson(json);
+				} else if (server) {
+					System.out.println("Updating Server...");
+					settings.setServerJson(json);
+				}
 			}
 
 			ctx.close();
-		} catch (Exception e) {
+
+		} catch (NameNotFoundException e) {
+			System.out.println(e.getMessage());
+			System.out.println(
+					"Please verify that this application is running in the AdminServer (and not in a managed engine tier node).");
+		} catch (NamingException e) {
+			e.printStackTrace();
+		} catch (MalformedObjectNameException e) {
 			e.printStackTrace();
 		}
 
 	}
+
+//	public void updateManagedMBeans(String appName, String json) {
+//
+//		try {
+//			InitialContext ctx = new InitialContext();
+//			MBeanServer server = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
+//
+//			ObjectName objectName = new ObjectName("vorpal.blade:Name=" + appName + ",Type=Configuration,*");
+//			System.out.println("Configuration changed...");
+//			System.out.println("looking for " + objectName.toString());
+//
+//			Set<ObjectInstance> mbeans = server.queryMBeans(objectName, null);
+//
+//			for (ObjectInstance mbean : mbeans) {
+//				ObjectName name = mbean.getObjectName();
+//
+//				System.out.println("Getting Settings MBean...");
+//				SettingsMXBean settings = JMX.newMXBeanProxy(server, name, SettingsMXBean.class);
+//
+//				System.out.println("Updating JSON...");
+//				settings.setJson(json);
+//
+//			}
+//
+//			ctx.close();
+//
+//		} catch (NameNotFoundException e) {
+//			System.out.println(e.getMessage());
+//			System.out.println(
+//					"Please verify that this application is running in the AdminServer (and not in a managed engine tier node).");
+//		} catch (NamingException e) {
+//			e.printStackTrace();
+//		} catch (MalformedObjectNameException e) {
+//			e.printStackTrace();
+//		}
+//
+//	}
 
 	@Override
 	public void run() {

@@ -1,24 +1,27 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<project basedir="." default="build" name="vorpal-blade-library-framework">
+<project basedir="." default="build" name="fsmar">
 	<property environment="env" />
 	<property name="debuglevel" value="source,lines,vars" />
-
+	<property name="lib" location="../vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib" />
 
 	<target depends="init,build-project,build-jar" name="build" />
 
 	<target name="init">
 		<mkdir dir="build/classes" />
+
+		<unzip src="${lib}/jackson-core-2.12.5.jar" dest="build/classes" />
+		<unzip src="${lib}/jackson-annotations-2.12.5.jar" dest="build/classes" />
+		<unzip src="${lib}/jackson-databind-2.12.5.jar" dest="build/classes" />
+		<unzip src="${lib}/jackson-module-jsonSchema-2.12.5.jar" dest="build/classes" />
+		<unzip src="${lib}/IPAddress.jar" dest="build/classes" />
+
 		<copy includeemptydirs="false" todir="build/classes">
 			<fileset dir="src">
 				<exclude name="**/*.java" />
 			</fileset>
 		</copy>
-		<copy includeemptydirs="false" todir="build/classes">
-			<fileset dir=".apt_src">
-				<exclude name="**/*.java" />
-			</fileset>
-		</copy>
+
 	</target>
 
 	<target name="clean">
@@ -38,7 +41,7 @@
 		       source="${source}"
 		       target="${target}">
 			<src path="src" />
-			<src path=".apt_src" />
+			<src path="../vorpal-blade-library-framework/src" />
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 		</javac>
@@ -46,8 +49,9 @@
 
 	<target depends="build-project" name="build-jar">
 
-		<jar destfile="build/${ant.project.name}-${implementation}.jar"
-		     basedir="build/classes" />
+		<jar destfile="build/${ant.project.name}-${implementation}.jar" basedir="build/classes">
+
+		</jar>
 
 		<copy file="build/${ant.project.name}-${implementation}.jar" todir="${dist}" />
 

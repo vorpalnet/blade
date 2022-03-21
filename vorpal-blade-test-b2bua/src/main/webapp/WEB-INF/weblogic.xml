@@ -10,11 +10,9 @@
        <wls:exact-match>false</wls:exact-match>
     </wls:library-ref>
     
-        <wls:container-descriptor>
+    <wls:container-descriptor>
 		<wls:prefer-web-inf-classes>true</wls:prefer-web-inf-classes>
 	</wls:container-descriptor>
-    
-
  -->
  
 
@@ -22,6 +20,12 @@
     <wls:container-descriptor>
 		<wls:prefer-web-inf-classes>true</wls:prefer-web-inf-classes>
 	</wls:container-descriptor>
+	
+		<!-- Any defined user (aka 'weblogic') can invoke the REST APIs. -->
+	<wls:security-role-assignment>
+		<wls:role-name>authenticated-users</wls:role-name>
+		<wls:principal-name>users</wls:principal-name>
+	</wls:security-role-assignment>
  
 
 

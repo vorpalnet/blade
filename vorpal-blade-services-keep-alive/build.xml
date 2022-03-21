@@ -1,70 +1,80 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
 <project basedir="." default="build" name="keep-alive">
-    <property environment="env"/>
-    <property name="debuglevel" value="source,lines,vars"/>
-    <property name="target" value="1.8"/>
-    <property name="source" value="1.8"/>
-    <path id="Web App Libraries.libraryclasspath">
-		<fileset dir="WebContent/WEB-INF/lib" >
-		  <filename name="**/*.jar"/>
+	<property environment="env" />
+	<property name="debuglevel" value="source,lines,vars" />
+	<property name="target" value="1.8" />
+	<property name="source" value="1.8" />
+	<path id="Web App Libraries.libraryclasspath">
+		<fileset dir="WebContent/WEB-INF/lib">
+			<filename name="**/*.jar" />
 		</fileset>
-    </path>
-    <path id="EAR Libraries.libraryclasspath"/>
+	</path>
+	<path id="EAR Libraries.libraryclasspath" />
 
-    <path id="project.classpath">
-        <pathelement location="build/classes"/>
-        <path refid="Web App Libraries.libraryclasspath"/>
-        <path refid="EAR Libraries.libraryclasspath"/>
-        <path refid="WebLogic System Libraries.libraryclasspath"/>
-        <path refid="vorpal-blade.classpath"/>
-    </path>
-    <target name="init">
-        <mkdir dir="build/classes"/>
-    	<mkdir dir="WebContent/WEB-INF/lib"/>
-    	
-        <copy includeemptydirs="false" todir="build/classes">
-            <fileset dir="src">
-                <exclude name="**/*.launch"/>
-                <exclude name="**/*.java"/>
-            </fileset>
-        </copy>
-		<mkdir dir=".apt_src" />		
-        <copy includeemptydirs="false" todir="build/classes">
-            <fileset dir=".apt_src">
-                <exclude name="**/*.launch"/>
-                <exclude name="**/*.java"/>
-            </fileset>
-        </copy>
-    </target>
-    <target name="clean">
-        <delete dir="build"/>
-    </target>
-    <target depends="clean" name="clean-all"/>
-    <target depends="build-subprojects,build-project,package" name="build"/>
-    <target name="build-subprojects"/>
-	
-    <target depends="init" name="build-project">
-        <echo message="${ant.project.name}: ${ant.file}"/>
-        <javac debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" source="${source}" target="${target}">
-            <src path="src"/>
-            <src path=".apt_src"/>
-            <classpath refid="project.classpath"/>
-        </javac>
-    </target>
-	
+	<path id="project.classpath">
+		<pathelement location="build/classes" />
+		<path refid="Web App Libraries.libraryclasspath" />
+		<path refid="EAR Libraries.libraryclasspath" />
+		<path refid="WebLogic System Libraries.libraryclasspath" />
+		<path refid="vorpal-blade.classpath" />
+	</path>
+	<target name="init">
+		<mkdir dir="build/classes" />
+		<mkdir dir="WebContent/WEB-INF/lib" />
+
+		<copy includeemptydirs="false" todir="build/classes">
+			<fileset dir="src">
+				<exclude name="**/*.launch" />
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+		<mkdir dir=".apt_src" />
+		<copy includeemptydirs="false" todir="build/classes">
+			<fileset dir=".apt_src">
+				<exclude name="**/*.launch" />
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+	</target>
+	<target name="clean">
+		<delete dir="build" />
+	</target>
+	<target depends="clean" name="clean-all" />
+	<target depends="build-subprojects,build-project,package" name="build" />
+	<target name="build-subprojects" />
+
+	<target depends="init" name="build-project">
+		<echo message="${ant.project.name}: ${ant.file}" />
+		<javac debug="true"
+		       debuglevel="${debuglevel}"
+		       destdir="build/classes"
+		       includeantruntime="false"
+		       source="${source}"
+		       target="${target}">
+			<src path="src" />
+			<src path=".apt_src" />
+			<classpath refid="project.classpath" />
+		</javac>
+	</target>
+
 	<target name="package" depends="init">
-		<war destfile="build/${ant.project.name}.war" needxmlfile="false" basedir="WebContent">
-			<!--
-			<lib dir="src/main/webapp/WEB-INF/lib" />
-			-->
+		<manifest file="build/MANIFEST.MF">
+			<attribute name="Built-By" value="${user.name}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}-${build.number}" />
+		</manifest>
+		<war destfile="build/${ant.project.name}-${implementation}.war"
+		     manifest="build/MANIFEST.MF"
+		     basedir="WebContent">
 			<classes dir="build/classes" />
 		</war>
-		<copy file="build/${ant.project.name}.war" todir="${dist}"/>
+		<copy file="build/${ant.project.name}-${implementation}.war" todir="${dist}" />
 	</target>
-	
-    <target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects"/>
-	
+
+
+	<target description="Build all projects which reference this project. Useful to propagate changes."
+	        name="build-refprojects" />
+
 	<target name="build-javadocs" depends="build">
 		<!-- Cool, keep for future reference		
 		<pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
@@ -83,7 +93,7 @@
 		         windowtitle="${ant.project.name}">
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
-			<classpath refid="project.classpath"/>
+			<classpath refid="project.classpath" />
 			<doclet name="org.umlgraph.markdown.doclet.UmlGraphDoc" path="../lib/MarkdownDoclet-3.0.jar">
 				<param name="-inferrel" />
 				<param name="-inferdep" />
@@ -100,8 +110,8 @@
 			</doctitle>
 			<bottom>
 				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
-			<link href="http://docs.oracle.com/javaee/6/api/" />
-		</javadoc>
-	</target>
-	
+		<link href="http://docs.oracle.com/javaee/6/api/" />
+	</javadoc>
+</target>
+
 </project>

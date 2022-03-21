@@ -1,7 +1,7 @@
 /**
  *  MIT License
  *  
- *  Copyright (c) 2021 Vorpal Networks, LLC
+ *  Copyright (c) 2013, 2022 Vorpal Networks, LLC
  *  
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files (the "Software"), to deal
@@ -21,24 +21,37 @@
  *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *  SOFTWARE.
  */
-package org.vorpal.blade.framework.config;
 
-import javax.management.MXBean;
+package org.vorpal.blade.library.fsmar2;
 
-/**
- * @author Jeff McDonald
- *
- */
-@MXBean
-public interface SettingsMXBean {
-	public String getJSchema();
-	
-	public String getDomainJson();
-	public void setDomainJson(String json);
-	
-	public String getClusterJson();
-	public void setClusterJson(String json);
+import java.io.Serializable;
+import java.util.Iterator;
+import java.util.LinkedList;
 
-	public String getServerJson();
-	public void setServerJson(String json);	
+import javax.servlet.sip.ServletParseException;
+import javax.servlet.sip.SipServletRequest;
+
+public class ComparisonMap extends LinkedList<Comparison> implements Serializable, RequestCondition {
+
+	public Comparison addComparison(String operator, String expression) {
+		Comparison comparision = new Comparison(operator, expression);
+		this.add(comparision);
+		return comparision;
+	}
+
+	@Override
+	public boolean check(String headerName, SipServletRequest request) throws ServletParseException {
+		boolean match = true;
+
+		Comparison comparison;
+		Iterator<Comparison> itr = this.iterator();
+		while (itr.hasNext()) {
+			comparison = itr.next();
+			match = match && comparison.check(headerName, request);
+		}
+
+		return match;
+	}
+
+
 }

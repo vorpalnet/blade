@@ -31,13 +31,14 @@ import javax.management.MXBean;
  */
 @MXBean
 public interface SettingsMXBean {
-
-	public String getJson();
-
-	public void setJson(String json);
-
-	public String getName();
-
 	public String getJSchema();
+	
+	public String getDomainJson();
+	public void setDomainJson(String json);
+	
+	public String getClusterJson();
+	public void setClusterJson(String json);
 
+	public String getServerJson();
+	public void setServerJson(String json);
 }

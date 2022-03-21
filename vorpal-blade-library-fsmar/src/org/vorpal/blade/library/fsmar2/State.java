@@ -1,7 +1,7 @@
 /**
  *  MIT License
  *  
- *  Copyright (c) 2021 Vorpal Networks, LLC
+ *  Copyright (c) 2013, 2022 Vorpal Networks, LLC
  *  
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files (the "Software"), to deal
@@ -21,24 +21,25 @@
  *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  *  SOFTWARE.
  */
-package org.vorpal.blade.framework.config;
 
-import javax.management.MXBean;
+package org.vorpal.blade.library.fsmar2;
 
-/**
- * @author Jeff McDonald
- *
- */
-@MXBean
-public interface SettingsMXBean {
-	public String getJSchema();
-	
-	public String getDomainJson();
-	public void setDomainJson(String json);
-	
-	public String getClusterJson();
-	public void setClusterJson(String json);
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.List;
 
-	public String getServerJson();
-	public void setServerJson(String json);	
+import javax.servlet.sip.SipServletRequest;
+
+public class State extends HashMap<String, Trigger> implements Serializable {
+
+	public Trigger getMethod(String name) {
+		Trigger trigger = this.get(name);
+		if (trigger == null) {
+			trigger = new Trigger();
+			this.put(name, trigger);
+		}
+
+		return trigger;
+	}
+
 }

@@ -617,6 +617,7 @@
 		<pathelement location="${OCCAS71}/wlserver/modules/com.oracle.weblogic.wtc.jar" />
 		<pathelement location="${OCCAS71}/wlserver/server/lib/wls-api.jar" />
 		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/sipservlet-api.jar" />
+		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/wlss.jar" />
 		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/wlssapi.jar" />
 	</path>
     
@@ -624,7 +625,7 @@
     	<fileset dir="vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib">
     	  <include name="**/*.jar" />
     	</fileset>
-		<pathelement location="vorpal-blade-library-framework/build/vorpal-blade-library-framework.jar" />
+		<pathelement location="dist/vorpal-blade-library-framework-${implementation}.jar" />
     </path>
 
 	<target name="build" />
