@@ -74,7 +74,7 @@ public class AppRouter implements SipApplicationRouter {
 		SipApplicationRouterInfo nextApp = null;
 
 		try {
-
+			
 			ServletContext context = request.getServletContext();
 			Configuration config = (saved != null) ? (Configuration) saved : settingsManager.getCurrent();
 
@@ -110,70 +110,69 @@ public class AppRouter implements SipApplicationRouter {
 
 			// Iterate through all possible transitions
 			if (nextApp == null) {
-				State state = config.get(previous); // null
+				State state = config.getPrevious(previous);
 				if (state != null) {
-//					sipLogger.finer("matching previous state...");
+					sipLogger.finer("matching previous state...");
 
-					Trigger trigger = state.get(request.getMethod()); // invite
+					Trigger trigger = state.getTrigger(request.getMethod()); // invite
 
 					if (trigger != null) {
-//						sipLogger.finer("found matching trigger...");
+						sipLogger.finer("found matching trigger...");
 
-						NextState nextState;
-						String name = null;
 						boolean conditionMatches = false;
 						Transition t = null;
-						for (Entry<String, NextState> entry : trigger.entrySet()) {
 
-							name = entry.getKey();
-							nextState = entry.getValue();
+						Iterator<Transition> itr = trigger.transitions.iterator();						
+						if (itr.hasNext()) {
+							while (conditionMatches == false && itr.hasNext()) {
+								t = itr.next();
+								sipLogger.finer("t.condition=" + t.condition);
 
-//							sipLogger.finer("checking transitions for next state: " + name);
+								if (t.condition == null) {
+									sipLogger.finer("null condition, implicit match!");
+									conditionMatches = true;
+								} else {
 
-							Iterator<Transition> itr = nextState.iterator();
-
-							if (itr.hasNext()) {
-
-								while (conditionMatches == false && itr.hasNext()) {
-									t = itr.next();
-
-//									sipLogger.finer("t.condition=" + t.condition);
-
-									if (t.condition == null) {
-										sipLogger.finer("null condition, implicit match!");
+									if (t.condition.directive == null) {
+										sipLogger.finer("null directive, implicit match!");
 										conditionMatches = true;
 									} else {
-										conditionMatches = t.condition.checkAll(request);
-										sipLogger.finer("running check... " + conditionMatches);
+										if (directive.equals(t.condition.directive)) {
+											conditionMatches = true;
+										} else {
+											conditionMatches = false;
+											break;
+										}
 									}
+
+									conditionMatches = t.condition.checkAll(request);
+									sipLogger.finer("running check... " + conditionMatches);
+								}
+								
+								if (conditionMatches) {
+									sipLogger.finer("conditionMatches... break");
+									break;
 								}
 
-							} else {
-//								sipLogger.finer("null transition, implicit match!");
-								t = new Transition();
-								conditionMatches = true;
 							}
-
-							if (conditionMatches) {
-//								sipLogger.finer("conditionMatches... break");
-								break;
-							}
-
+						} else {
+							sipLogger.finer("null transition, implicit match!");
+							t = new Transition();
+							conditionMatches = true;
 						}
 
-						if (conditionMatches) {
 
+						if (conditionMatches) {
 							if (t.action == null) {
 								t.action = new Action();
 							}
-
-							nextApp = t.action.createRouterInfo(deployed.get(name), config, request);
+							nextApp = t.action.createRouterInfo(deployed.get(t.next), config, request);
 						}
 
 					}
 
 				} else {
-//					sipLogger.finer("No match for previous state...");
+					sipLogger.finer("No match for previous state...");
 				}
 			}
 

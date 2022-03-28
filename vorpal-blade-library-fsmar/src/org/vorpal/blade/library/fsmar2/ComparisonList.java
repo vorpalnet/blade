@@ -31,13 +31,8 @@ import java.util.LinkedList;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 
-public class ComparisonMap extends LinkedList<Comparison> implements Serializable, RequestCondition {
+public class ComparisonList extends LinkedList<Comparison> implements Serializable, RequestCondition {
 
-	public Comparison addComparison(String operator, String expression) {
-		Comparison comparision = new Comparison(operator, expression);
-		this.add(comparision);
-		return comparision;
-	}
 
 	@Override
 	public boolean check(String headerName, SipServletRequest request) throws ServletParseException {

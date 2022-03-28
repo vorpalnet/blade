@@ -25,20 +25,17 @@
 package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.LinkedList;
+import java.util.ArrayList;
 
-import org.vorpal.blade.library.fsmar2.NextState;
+public class Trigger implements Serializable {
 
-public class Trigger extends HashMap<String, NextState> implements Serializable{
+	public ArrayList<Transition> transitions = new ArrayList<>();
 
-	public NextState getNextState(String name) {
-		NextState ns = this.get(name);
-		if (ns == null) {
-			ns = new NextState();
-			this.put(name, ns);
-		}
-		return ns;
+	public Transition createTransition(String next) {
+		Transition transition = new Transition();
+		transition.next = next;
+		transitions.add(transition);
+		return transition;
 	}
 
 }

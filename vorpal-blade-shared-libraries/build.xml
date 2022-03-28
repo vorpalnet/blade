@@ -12,6 +12,9 @@
 		<path refid="WebLogic System Libraries.libraryclasspath" />
 	</path>
 	<target name="init">
+		<mkdir dir="build" />
+
+<!--		
 		<mkdir dir="build/classes" />
 		<copy includeemptydirs="false" todir="build/classes">
 			<fileset dir="src/main/java">
@@ -26,16 +29,18 @@
 				<exclude name="**/*.java" />
 			</fileset>
 		</copy>
+-->		
 	</target>
 	<target name="clean">
 		<delete dir="build" />
 	</target>
 
-	<target name="clean-all" depends="clean,init" />
+	<target name="clean-all" depends="clean" />
 
-	<target depends="init,build-project,package" name="build" />
-	<target depends="init" name="build-project">
+	<target name="build" depends="init,build-project,package"  />
+	<target name="build-project" depends="init" >
 		<echo message="${ant.project.name}: ${ant.file}" />
+<!--
 		<javac debug="true"
 		       debuglevel="${debuglevel}"
 		       destdir="build/classes"
@@ -43,13 +48,10 @@
 		       source="${source}"
 		       target="${target}">
 			<src path="src/main/java" />
-
-			<!--
-			<src path=".apt_src" />
-			-->
-
 			<classpath refid="vorpal-blade-shared-libraries.classpath" />
 		</javac>
+-->		
+		
 	</target>
 
 	<target name="package" depends="init">

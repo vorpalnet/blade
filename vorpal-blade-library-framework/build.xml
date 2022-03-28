@@ -31,6 +31,7 @@
 
 	<target depends="init" name="build-project">
 		<echo message="${ant.project.name}: ${ant.file}" />
+		
 		<javac debug="true"
 		       debuglevel="${debuglevel}"
 		       destdir="build/classes"
@@ -42,6 +43,7 @@
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 		</javac>
+		
 	</target>
 
 	<target depends="build-project" name="build-jar">

@@ -75,6 +75,10 @@
 	        name="build-refprojects" />
 
 	<target name="build-javadocs" depends="build">
+		<!-- Cool, keep for future reference		
+		<pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
+		<echo>Classpath is ${classpathInName}</echo>
+	    -->
 		<delete dir="${docs}/${ant.project.name}" />
 		<javadoc useexternalfile="true"
 		         splitindex="true"
@@ -105,9 +109,9 @@
 			</doctitle>
 			<bottom>
 				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
-			<link href="http://docs.oracle.com/javaee/6/api/" />
-		</javadoc>
-	</target>
+		<link href="http://docs.oracle.com/javaee/6/api/" />
+	</javadoc>
+</target>
 
 
 
