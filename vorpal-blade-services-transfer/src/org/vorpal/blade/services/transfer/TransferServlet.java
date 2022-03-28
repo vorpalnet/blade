@@ -1,13 +1,17 @@
 package org.vorpal.blade.services.transfer;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map.Entry;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
@@ -65,7 +69,25 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 
 	@Override
 	public void callStarted(SipServletRequest request) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+
+		ArrayList<String> headers = TransferServlet.settingsManager.getCurrent().getPreserveInviteHeaders();
+		if (headers != null && headers.size() > 0) {
+			HashMap<String, String> headersMap = new HashMap<>();
+			Iterator<String> itr = headers.iterator();
+			String headerName, headerValue;
+			while (itr.hasNext()) {
+				headerName = itr.next();
+				headerValue = request.getHeader(headerName);
+				if (headerValue != null) {
+					headersMap.put(headerName, headerValue);
+				}
+			}
+
+			if (headersMap.size() > 0) {
+				request.getApplicationSession().setAttribute("PRESERVE_HEADERS", headersMap);
+			}
+
+		}
 
 	}
 
@@ -101,8 +123,13 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 
 	@Override
 	public void transferInitiated(SipServletRequest request) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
+		SipApplicationSession appSession = request.getApplicationSession();
+		HashMap<String, String> headersMap = (HashMap<String, String>) appSession.getAttribute("PRESERVE_HEADERS");
+		if (headersMap != null) {
+			for (Entry<String, String> entry : headersMap.entrySet()) {
+				request.setHeader(entry.getKey(), entry.getValue());
+			}
+		}
 	}
 
 	@Override

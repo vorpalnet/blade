@@ -30,24 +30,30 @@ import java.util.HashMap;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipURI;
+import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-public class Condition extends HashMap<String, ComparisonMap> implements Serializable {
+public class Condition extends HashMap<String, ComparisonList> implements Serializable {
+	public SipApplicationRoutingDirective directive;
 
 	public Condition() {
 
 	}
-
-	public Condition(String name, ComparisonMap comparisonMap) {
-		this.put(name, comparisonMap);
+	
+	public Condition(SipApplicationRoutingDirective directive) {
+		this.directive = directive;
 	}
+
+//	public Condition(String name, ComparisonList comparisonList) {
+//		this.put(name, comparisonMap);
+//	}
 
 	public boolean checkAll(SipServletRequest request) throws ServletParseException {
 		boolean match = true;
 
 		String name;
-		ComparisonMap comp;
+		ComparisonList comp;
 		// Iterate through all comparisons in the condition
-		for (Entry<String, ComparisonMap> entry : this.entrySet()) {
+		for (Entry<String, ComparisonList> entry : this.entrySet()) {
 			name = entry.getKey();
 			comp = entry.getValue();
 

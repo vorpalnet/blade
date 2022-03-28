@@ -1,72 +1,86 @@
 <?xml version="1.0"?>
 <project name="blade" default="build" basedir=".">
-	<buildnumber/>  	
-    <property environment="envvar" />
-    <exec executable="hostname" outputproperty="computer.hostname" />
-    <property file="${computer.hostname}.properties" />
+	<buildnumber />
+	<property environment="envvar" />
+	<exec executable="hostname" outputproperty="computer.hostname" />
+	<property file="${computer.hostname}.properties" />
 	<property file="build.properties" />
-	<property name="OCCAS71" value="/opt/oracle/occas-7.1"/>
-	
-    <!-- These are all the subprojects to be built. Override using your build.properties file, if needed. -->
-    <property name="blade.projects" value="vorpal-blade-library-framework,vorpal-blade-shared-libraries,vorpal-blade-library-fsmar,vorpal-blade-services-keep-alive,vorpal-blade-services-proxy-registrar,vorpal-blade-test-b2bua,vorpal-blade-test-uas,vorpal-blade-services-transfer,vorpal-blade-services-options,vorpal-blade-admin-console"/>
-	
-    <!-- Include all the standard WebLogic / OCCAS libraries. -->
-    <include file="libraries.xml"/>
-	
-	<property name="debuglevel" value="source,lines,vars"/>
+	<property name="OCCAS71" value="/opt/oracle/occas-7.1" />
+
+	<!-- Include all the standard WebLogic / OCCAS libraries. -->
+	<include file="libraries.xml" />
+
+	<property name="debuglevel" value="source,lines,vars" />
 	<property name="target" value="1.8" />
 	<property name="source" value="1.8" />
-	<property name="dist"    location="dist"/>
-	<property name="docs"    location="docs"/>
-	
-	
-	<!-- Required for the 'foreach' command. -->
-	<taskdef resource="net/sf/antcontrib/antlib.xml" >
-		<classpath>
-			<pathelement location="./lib/ant-contrib-1.0b3.jar"/>
-	    </classpath>
-	</taskdef>
-	
-    <target name="init" depends="">
-        <if>
-            <available file="${computer.hostname}.properties" />
-            <then>
-                <mkdir dir="${dist}" />
-            </then>
-            <else>
-                <copy file="build.properties" tofile="${computer.hostname}.properties" overwrite="false" />
-                <fail>WARNING! Please edit the newly created ${computer.hostname}.properties file, then run ANT again.</fail>
-            </else>
-        </if>
-    </target>
+	<property name="dist" location="dist" />
+	<property name="docs" location="docs" />
 
-    <target name="build" depends="init">
-        <foreach list="${blade.projects}" param="var" target="build-all" />
-    </target>
- 
-	<target name="build-all" depends="init">
+
+	<!-- Required for the 'foreach' command. -->
+	<taskdef resource="net/sf/antcontrib/antlib.xml">
+		<classpath>
+			<pathelement location="./lib/ant-contrib-1.0b3.jar" />
+		</classpath>
+	</taskdef>
+
+	<target name="init" depends="">
+		<if>
+			<available file="${computer.hostname}.properties" />
+			<then>
+				<mkdir dir="${dist}" />
+			</then>
+			<else>
+				<copy file="build.properties" tofile="${computer.hostname}.properties" overwrite="false" />
+				<fail>WARNING! Please edit the newly created ${computer.hostname}.properties file, then run ANT again.</fail>
+			</else>
+		</if>
+	</target>
+
+	<target name="build" depends="init">
+		<foreach target="build-all" param="var">
+			<path refid="subprojects" />
+		</foreach>
+	</target>
+
+	<target name="build-all" depends="">
 		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="build" />
 	</target>
-	
-	
-    <target name="clean" depends="">
-        <delete dir="${dist}" />
-        <foreach list="${blade.projects}" param="var" target="clean-all" />
-    </target>
+
+
+	<target name="clean" depends="">
+		<delete dir="${dist}" />
+		<foreach target="clean-all" param="var">
+			<path refid="subprojects" />
+		</foreach>
+	</target>
 
 	<target name="clean-all" depends="">
 		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="clean" />
 	</target>
-	
-    <target name="javadocs" depends="">
-        <delete dir="${docs}" />
-        <foreach list="${blade.projects}" param="var" target="javadocs-all" />
-    </target>
+
+	<target name="javadocs" depends="">
+		<delete dir="${docs}" />
+		<foreach target="javadocs-all" param="var">
+			<path refid="subprojects" />
+		</foreach>
+	</target>
 
 	<target name="javadocs-all" depends="">
 		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="build-javadocs" />
 	</target>
 	
+	<path id="subprojects">
+		<pathelement location="vorpal-blade-library-framework" />
+		<pathelement location="vorpal-blade-shared-libraries" />
+		<dirset dir=".">
+			<include name="vorpal-*" />
+			<exclude name="vorpal-blade-library-framework" />
+			<exclude name="vorpal-blade-shared-libraries" />
+		</dirset>
+	</path>
+		
+
 
 </project>
 

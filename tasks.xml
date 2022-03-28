@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<project basedir="." default="build" name="b2bua">
+<project basedir="." default="build" name="tasks">
+	<!--
 	<property environment="env" />
 	<property name="debuglevel" value="source,lines,vars" />
 	<property name="target" value="1.8" />
@@ -19,6 +20,8 @@
 		<path refid="WebLogic System Libraries.libraryclasspath" />
 		<path refid="vorpal-blade.classpath" />
 	</path>
+
+
 	<target name="init">
 		<mkdir dir="build/classes" />
 		<mkdir dir="src/main/webapp/WEB-INF/lib" />
@@ -37,6 +40,8 @@
 			</fileset>
 		</copy>
 	</target>
+
+
 	<target name="clean">
 		<delete dir="build" />
 	</target>
@@ -74,6 +79,8 @@
 	<target description="Build all projects which reference this project. Useful to propagate changes."
 	        name="build-refprojects" />
 
+
+
 	<target name="build-javadocs" depends="build">
 		<delete dir="${docs}/${ant.project.name}" />
 		<javadoc useexternalfile="true"
@@ -105,10 +112,10 @@
 			</doctitle>
 			<bottom>
 				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
-			<link href="http://docs.oracle.com/javaee/6/api/" />
-		</javadoc>
-	</target>
-
+		<link href="http://docs.oracle.com/javaee/6/api/" />
+	</javadoc>
+</target>
+-->
 
 
 

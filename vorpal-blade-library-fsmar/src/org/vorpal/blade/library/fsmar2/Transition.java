@@ -28,54 +28,62 @@ import java.io.Serializable;
 
 public class Transition implements Serializable {
 
+	public String next;
 	public Condition condition;
 	public Action action;
 
 	public Transition() {
 	}
 
-	public Transition(Condition condition) {
-		this.condition = condition;
-	}
-
-	public ComparisonMap getComparisonMap(String name) {
+	public void addComparison(String header, String operator, String expression) {
+		Comparison comparison;
+		ComparisonList list;
 		if (condition == null) {
 			condition = new Condition();
 		}
-		ComparisonMap map = condition.get(name);
-		if (map == null) {
-			map = new ComparisonMap();
-			condition.put(name, map);
+		list = condition.get(header);
+		if (list == null) {
+			list = new ComparisonList();
+			condition.put(header, list);
 		}
 
-		return map;
+		comparison = new Comparison(operator, expression);
+		list.add(comparison);
 	}
 
-	public Transition(Action action) {
-		this.action = action;
+	public void setOriginating(String header) {
+		if (action == null) {
+			action = new Action();
+			action.originating = header;
+		}
 	}
 
-	public Transition(Condition condition, Action action) {
-		this.condition = condition;
-		this.action = action;
+	public void setTerminating(String header) {
+		if (action == null) {
+			action = new Action();
+			action.terminating = header;
+		}
 	}
 
-	public Condition getCondition() {
-		return condition;
+	public void setRoute(String[] routes) {
+		if (action == null) {
+			action = new Action();
+			action.route = routes;
+		}
 	}
 
-	public Condition setCondition(Condition condition) {
-		this.condition = condition;
-		return condition;
+	public void setRouteBack(String[] routes) {
+		if (action == null) {
+			action = new Action();
+			action.route_back = routes;
+		}
 	}
 
-	public Action getAction() {
-		return action;
-	}
-
-	public Action setAction(Action action) {
-		this.action = action;
-		return action;
+	public void setRouteFinal(String[] routes) {
+		if (action == null) {
+			action = new Action();
+			action.route_final = routes;
+		}
 	}
 
 }

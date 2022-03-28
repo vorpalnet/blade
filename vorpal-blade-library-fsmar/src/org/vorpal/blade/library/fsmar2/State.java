@@ -26,19 +26,16 @@ package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
 import java.util.HashMap;
-import java.util.List;
 
-import javax.servlet.sip.SipServletRequest;
+public class State implements Serializable {
+	public HashMap<String, Trigger> triggers = new HashMap<>();
 
-public class State extends HashMap<String, Trigger> implements Serializable {
-
-	public Trigger getMethod(String name) {
-		Trigger trigger = this.get(name);
+	public Trigger getTrigger(String name) {
+		Trigger trigger = triggers.get(name);
 		if (trigger == null) {
 			trigger = new Trigger();
-			this.put(name, trigger);
+			triggers.put(name, trigger);
 		}
-
 		return trigger;
 	}
 
