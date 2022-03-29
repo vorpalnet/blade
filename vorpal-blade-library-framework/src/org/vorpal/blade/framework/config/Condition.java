@@ -22,31 +22,57 @@
  *  SOFTWARE.
  */
 
-package org.vorpal.blade.library.fsmar2;
+package org.vorpal.blade.framework.config;
 
 import java.io.Serializable;
 import java.util.HashMap;
 
-import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipURI;
+import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-public class MapCondition<T> extends HashMap<String, T> implements Serializable {
+public class Condition extends HashMap<String, ComparisonList> implements Serializable {
+	public SipApplicationRoutingDirective directive;
 
-	public boolean check(SipServletRequest request) throws ServletParseException {
-		boolean condition = true;
+	public Condition() {
+	}
+	
+	public void addComparison(String header, String operator, String expression) {
+		Comparison comparison;
+		ComparisonList list;
 
-		T requestCondition;
-		Address address;
-		for (Entry<String, T> entry : this.entrySet()) {
-			requestCondition = entry.getValue();
-			condition = condition && ((RequestCondition) requestCondition).check(entry.getKey(), request);
-			if (condition == false) {
-				break;
-			}
+		list = this.get(header);
+		if (list == null) {
+			list = new ComparisonList();
+			this.put(header, list);
 		}
 
-		return condition;
+		comparison = new Comparison(operator, expression);
+		list.add(comparison);
+	}
+	
+	
+
+	public Condition(SipApplicationRoutingDirective directive) {
+		this.directive = directive;
 	}
 
+	public boolean checkAll(SipServletRequest request) throws ServletParseException {
+		boolean match = true;
+
+		String name;
+		ComparisonList comp;
+		// Iterate through all comparisons in the condition
+		for (Entry<String, ComparisonList> entry : this.entrySet()) {
+			name = entry.getKey();
+			comp = entry.getValue();
+
+			match = match && comp.check(name, request);
+
+		}
+
+		return match;
+
+	}
 }

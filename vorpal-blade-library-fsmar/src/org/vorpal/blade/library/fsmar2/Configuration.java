@@ -32,6 +32,11 @@ import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 import org.vorpal.blade.library.fsmar2.State;
 import org.vorpal.blade.library.fsmar2.Transition;
 
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
 //public class Configuration extends HashMap<String, State> implements Serializable {
 public class Configuration implements Serializable {
 
@@ -67,14 +72,26 @@ public class Configuration implements Serializable {
 		t1.addComparison("Allow", "includes", "INVITE");
 		t1.addComparison("Session-Expires", "value", "3600");
 		t1.addComparison("Session-Expires", "refresher", "uac");
-		t1.condition.directive = SipApplicationRoutingDirective.NEW;		
+		t1.condition.directive = SipApplicationRoutingDirective.NEW;
 		t1.setOriginating("From");
 		t1.setRoute(new String[] { "sip:proxy1", "sip:proxy2" });
-		
+
 		this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("b2bua");
 		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("proxy-registrar");
-		
-		
+
+	}
+
+	public static void main(String[] args) throws JsonProcessingException {
+
+		Configuration configuration = new Configuration();
+
+		ObjectMapper mapper = new ObjectMapper();
+		mapper.setSerializationInclusion(Include.NON_NULL);
+		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+
+		String output = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(configuration);
+
+		System.out.println(output);
 
 	}
 

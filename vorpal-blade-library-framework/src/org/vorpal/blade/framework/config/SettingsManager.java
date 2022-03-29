@@ -84,27 +84,27 @@ public class SettingsManager<T> {
 	protected Path schemaPath;
 
 	public static SipFactory sipFactory;
-	public Logger sipLogger;
+	public static Logger sipLogger;
 
 	private JsonNode domainNode = NullNode.getInstance();
 	private JsonNode clusterNode = NullNode.getInstance();
 	private JsonNode serverNode = NullNode.getInstance();
 	private JsonNode mergedNode = NullNode.getInstance();
 
-	public SipFactory getSipFactory() {
+	public static SipFactory getSipFactory() {
 		return sipFactory;
 	}
 
-	public void setSipFactory(SipFactory sipFactory) {
-		this.sipFactory = sipFactory;
+	public static void setSipFactory(SipFactory sipFactory) {
+		sipFactory = sipFactory;
 	}
 
-	public Logger getSipLogger() {
+	public static Logger getSipLogger() {
 		return sipLogger;
 	}
 
-	public void setSipLogger(Logger sipLogger) {
-		this.sipLogger = sipLogger;
+	public static void setSipLogger(Logger sipLogger) {
+		sipLogger = sipLogger;
 	}
 
 	public String getDomainJson() throws JsonProcessingException {

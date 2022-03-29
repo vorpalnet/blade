@@ -22,18 +22,13 @@
  *  SOFTWARE.
  */
 
-package org.vorpal.blade.library.fsmar2;
+package org.vorpal.blade.framework.config;
 
-import java.io.Serializable;
-import java.util.LinkedList;
+import javax.servlet.sip.ServletParseException;
+import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.library.fsmar2.Transition;
+public interface RequestCondition {
 
-public class NextState extends LinkedList<Transition> implements Serializable{
-
-	public Transition addTransition(Transition t) {
-		this.add(t);
-		return t;
-	}
+	public boolean check(String headerName, SipServletRequest request) throws ServletParseException;
 
 }

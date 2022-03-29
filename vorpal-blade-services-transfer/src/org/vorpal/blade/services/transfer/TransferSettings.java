@@ -3,20 +3,37 @@ package org.vorpal.blade.services.transfer;
 import java.io.Serializable;
 import java.util.ArrayList;
 
-public class TransferSettings implements Serializable {
+import org.vorpal.blade.framework.config.Condition;
 
+public class TransferSettings implements Serializable {
+	public enum TransferType { blind, assisted, media };
+	
 	private Boolean transferAllRequests;
-	private String featureEnableHeader;
-	private String featureEnableValue;
+	private Condition featureEnable;
+	private Condition blindTransfer;
+	private Condition assistedTransfer;
+	private Condition mediaTransfer;
+	private TransferType defaultTransferType;
 	private ArrayList<String> preserveInviteHeaders;
 
 	public TransferSettings() {
+		defaultTransferType = TransferType.blind;
 		transferAllRequests = false;
-		featureEnableHeader = "OSM-Features";
-		featureEnableValue = "transfer";
+		
+		featureEnable = new Condition();
+		featureEnable.addComparison("OSM-Features", "includes", "transfer");
+
+		blindTransfer = new Condition();
+		blindTransfer.addComparison("Request-URI", "txfer", "blind");
+		
+		assistedTransfer = new Condition();
+		assistedTransfer.addComparison("Request-URI", "txfer", "assisted");
+		
+		mediaTransfer = new Condition();
+		mediaTransfer.addComparison("Request-URI", "txfer", "media");
 
 		preserveInviteHeaders = new ArrayList<>();
-		preserveInviteHeaders.add("Cisco-GUCID");
+		preserveInviteHeaders.add("Cisco-Gucid");
 		preserveInviteHeaders.add("User-to-User");
 	}
 
@@ -28,21 +45,7 @@ public class TransferSettings implements Serializable {
 		this.transferAllRequests = transferAllRequests;
 	}
 
-	public String getFeatureEnableHeader() {
-		return featureEnableHeader;
-	}
 
-	public void setFeatureEnableHeader(String featureEnableHeader) {
-		this.featureEnableHeader = featureEnableHeader;
-	}
-
-	public String getFeatureEnableValue() {
-		return featureEnableValue;
-	}
-
-	public void setFeatureEnableValue(String featureEnableValue) {
-		this.featureEnableValue = featureEnableValue;
-	}
 
 	public ArrayList<String> getPreserveInviteHeaders() {
 		return preserveInviteHeaders;
@@ -50,6 +53,46 @@ public class TransferSettings implements Serializable {
 
 	public void setPreserveInviteHeaders(ArrayList<String> preserveInviteHeaders) {
 		this.preserveInviteHeaders = preserveInviteHeaders;
+	}
+
+	public Condition getFeatureEnable() {
+		return featureEnable;
+	}
+
+	public void setFeatureEnable(Condition featureEnable) {
+		this.featureEnable = featureEnable;
+	}
+
+	public Condition getBlindTransfer() {
+		return blindTransfer;
+	}
+
+	public void setBlindTransfer(Condition blindTransfer) {
+		this.blindTransfer = blindTransfer;
+	}
+
+	public Condition getAssistedTransfer() {
+		return assistedTransfer;
+	}
+
+	public void setAssistedTransfer(Condition assistedTransfer) {
+		this.assistedTransfer = assistedTransfer;
+	}
+
+	public Condition getMediaTransfer() {
+		return mediaTransfer;
+	}
+
+	public void setMediaTransfer(Condition mediaTransfer) {
+		this.mediaTransfer = mediaTransfer;
+	}
+
+	public TransferType getDefaultTransferType() {
+		return defaultTransferType;
+	}
+
+	public void setDefaultTransferType(TransferType defaultTransferType) {
+		this.defaultTransferType = defaultTransferType;
 	}
 
 }
