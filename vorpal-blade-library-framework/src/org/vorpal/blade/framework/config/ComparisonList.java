@@ -22,13 +22,31 @@
  *  SOFTWARE.
  */
 
-package org.vorpal.blade.library.fsmar2;
+package org.vorpal.blade.framework.config;
+
+import java.io.Serializable;
+import java.util.Iterator;
+import java.util.LinkedList;
 
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 
-public interface RequestCondition {
+public class ComparisonList extends LinkedList<Comparison> implements Serializable, RequestCondition {
 
-	public boolean check(String headerName, SipServletRequest request) throws ServletParseException;
+
+	@Override
+	public boolean check(String headerName, SipServletRequest request) throws ServletParseException {
+		boolean match = true;
+
+		Comparison comparison;
+		Iterator<Comparison> itr = this.iterator();
+		while (itr.hasNext()) {
+			comparison = itr.next();
+			match = match && comparison.check(headerName, request);
+		}
+
+		return match;
+	}
+
 
 }

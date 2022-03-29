@@ -22,7 +22,7 @@
  *  SOFTWARE.
  */
 
-package org.vorpal.blade.library.fsmar2;
+package org.vorpal.blade.framework.config;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -33,10 +33,13 @@ import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipURI;
 
+import org.vorpal.blade.framework.logging.Logger;
+
 public class Comparison extends HashMap<String, String> implements RequestCondition, Serializable {
+	Logger sipLogger; 
 
 	public Comparison() {
-
+		sipLogger = SettingsManager.getSipLogger();
 	}
 
 	public Comparison(String operator, String expression) {
@@ -65,13 +68,13 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 					match = false;
 				}
 
-				AppRouter.sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 				
 			case "uri":
 				value = (isRequestURI) ? request.getRequestURI().toString() : request.getAddressHeader(name).getURI().toString();
 				match = match && value.equalsIgnoreCase(expression);
-				AppRouter.sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			case "user":
@@ -82,14 +85,14 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				} else {
 					match = false;
 				}
-				AppRouter.sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			case "host":
 				value = (isRequestURI) ? ((SipURI) request.getRequestURI()).getHost()
 						: ((SipURI) request.getAddressHeader(name).getURI()).getHost();
 				match = match && value.equalsIgnoreCase(expression);
-				AppRouter.sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			case "equals":
@@ -99,7 +102,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				} else {
 					match = false;
 				}
-				AppRouter.sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			case "contains":
@@ -109,7 +112,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				} else {
 					match = false;
 				}
-				AppRouter.sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			case "includes":
@@ -126,7 +129,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				}
 
 				match = match && includes;
-				AppRouter.sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			case "value":
@@ -144,7 +147,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				}
 
 				match = match && hasValue;
-				AppRouter.sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			default:
@@ -175,7 +178,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				}
 
 				match = match && hasParam;
-				AppRouter.sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			}

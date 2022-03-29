@@ -26,6 +26,10 @@ package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
 
+import org.vorpal.blade.framework.config.Comparison;
+import org.vorpal.blade.framework.config.ComparisonList;
+import org.vorpal.blade.framework.config.Condition;
+
 public class Transition implements Serializable {
 
 	public String next;
@@ -36,19 +40,11 @@ public class Transition implements Serializable {
 	}
 
 	public void addComparison(String header, String operator, String expression) {
-		Comparison comparison;
-		ComparisonList list;
 		if (condition == null) {
 			condition = new Condition();
 		}
-		list = condition.get(header);
-		if (list == null) {
-			list = new ComparisonList();
-			condition.put(header, list);
-		}
-
-		comparison = new Comparison(operator, expression);
-		list.add(comparison);
+		
+		condition.addComparison(header, operator, expression);
 	}
 
 	public void setOriginating(String header) {

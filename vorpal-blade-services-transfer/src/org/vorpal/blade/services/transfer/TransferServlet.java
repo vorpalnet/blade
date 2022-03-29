@@ -16,7 +16,9 @@ import javax.servlet.sip.SipServletResponse;
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.transfer.AssistedTransfer;
 import org.vorpal.blade.framework.transfer.BlindTransfer;
+import org.vorpal.blade.framework.transfer.MediaTransfer;
 import org.vorpal.blade.framework.transfer.TransferListener;
 
 /**
@@ -54,10 +56,32 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 		TransferSettings ts = settingsManager.getCurrent();
 
 		if (request.getMethod().equals("REFER")) {
-			if (request.getHeader(ts.getFeatureEnableHeader()) != null
-					&& request.getHeader(ts.getFeatureEnableHeader()).contains(ts.getFeatureEnableValue())) {
-				callflow = new BlindTransfer(this);
+			
+			if(ts.getFeatureEnable().checkAll(request)) {
+				
+				if(ts.getBlindTransfer().checkAll(request)) {
+					callflow = new BlindTransfer(this);
+				}else if(ts.getAssistedTransfer().checkAll(request)) {
+					callflow = new AssistedTransfer(this);
+				} else if(ts.getMediaTransfer().checkAll(request)) {
+					callflow = new MediaTransfer(this);
+				} else {
+					switch(ts.getDefaultTransferType()) {
+					case assisted:
+						callflow = new AssistedTransfer(this);
+						break;
+					case media:
+						callflow = new MediaTransfer(this);
+						break;
+					case blind:
+					default:
+						callflow = new BlindTransfer(this);
+					}
+					
+				}
+				
 			}
+			
 		}
 
 		if (callflow == null) {
