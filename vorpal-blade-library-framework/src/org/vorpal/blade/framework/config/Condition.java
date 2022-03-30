@@ -52,6 +52,10 @@ public class Condition extends HashMap<String, ComparisonList> implements Serial
 		list.add(comparison);
 	}
 
+	public boolean checkAll(SipServletRequest request) throws ServletParseException {
+		return checkAll(null, request);
+	}
+
 	public boolean checkAll(String id, SipServletRequest request) throws ServletParseException {
 
 		boolean match = true;
