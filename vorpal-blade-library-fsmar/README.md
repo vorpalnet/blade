@@ -52,11 +52,10 @@ Below are some examples on how to configure this.
 * user     -- user part of a SIP URI, case sensitive, i.e.: bob
 * host     -- host (domain) part of a SIP URI, case insensitive, i.e.: vorpal.org
 * port     -- the port number of a SIP URI (matches 5060 if no port exists)
-* scheme   -- either 'sip' or 'sips'
 * equals   -- case sensitive comparison of the _full line_ of the first header found
 * matches  -- regular expression match of the _full line_ of the first header found
-* contains -- partial string match of the _full line_ of the first header found
-* includes -- regular expression match for any of the values found in a comma delimited header
+* contains -- partial string match of the value of all headers by the specified name
+* includes -- an exact string match for values found in a comma delimited header
 * value    -- case sensitive match of any 'value' of a header (without parameters / tags)
 * ???      -- anything else is treated as a parameter. i.e.: __Expires: 3600;refresher=uac__ ('refresher' in this case)
 
@@ -64,9 +63,7 @@ By default, if no condition is defined, it is considered a match. Multiple condi
 
 # Defining Actions
 
-The FSMAR can only take just a few actions once a condition is matched. They include:
-
-
+The FSMAR can only take just a few actions once a condition is matched. They include setting the region and subscriber URI as well as defining any routes to be pushed.
 
 
 # Examples
@@ -79,10 +76,10 @@ Content-Type: application/sdp
 To: "Bob" <sip:bob@vorpal.org>;loc=wonderland
 Via: SIP/2.0/TCP 192.168.1.206:5060;wlsscid=1a25;branch=z9b;wlsssid=12dnl1j
 Min-SE: 90
-Allow: INVITE, CANCEL, ACK, BYE, UPDATE
-Allow: INFO, PRACK
+Allow: INFO, CANCEL, ACK, BYE, UPDATE
+Allow: PRACK, INVITE
 Call-ID: wlss-19b2247c-c038baf4182b6d4aaa762b897434deb7@192.168.1.206
-From: <sip:alice@vorpal.org>loc=wonderland;tag=f234ee12
+From: "Alice" <sip:alice@vorpal.org>loc=wonderland;tag=f234ee12
 Max-Forwards: 70
 Contact: <sip:buyer@192.168.1.206:5060;transport=tcp;wlsscid=1a25;ob;sipappsessionid=6ccj>
 X-Version-Number: 2.1.3
@@ -95,245 +92,195 @@ Supported: 100rel, timer
 ...
 ```
 
-Here's a simple example of routing a call from the outside world, to an application named "b2bua", then to an application named "proxy-registrar", finally to the outside world again. Note: A message coming from outside the system is said to be originating from the 'null' state. A message leaving the system needs no documentation. The FSMAR will route the call to the outside world when there are no matching transitions found in the configuration.
 
-```
-{
-  "null" : {
-    "INVITE" : {
-      "b2bua" : [ ]
-    }
-  },
-  "b2bua" : {
-    "INVITE" : {
-      "proxy-registrar" : [ ]
-    }
-  }
-}
-```
-
-Consider the __Request-URI__. This example uses the 'uri' operator to perform a regular expression match.
+Here's a snippet of the sample config file "fsmar2.SAMPLE" that gets created when you start the application server:
 
 ```json
 {
-  "app1" : {
-    "INVITE" : {
-      "final" : [ {
-        "condition" : {
-          "Request-URI" : [ {
-            "uri" : "^.*sip[s]:alice@vorpal.org.*$"
-          } ]
-        }
-      } ]
-    }
-  }
-}
-```
-
-Consider the ____ header. Here's a example that uses 'address' to match a regular expression against the From header. It's slightly different from 'uri' in that it can match against the display name and any trailing parameters.
-
-```json
-{
-  "ex1" : {
-    "INVITE" : {
-      "app1" : [ {
-        "condition" : {
-          "To" : [ {
-            "address" : "^.*<sip[s]:alice@vorpal.org>.*loc=wonderland.*$"
-          } ]
-        }
-      } ]
-    }
-  }
-}
-```
-
-Consider the _From' header. Here's an example that uses 'user', 'host', and 'loc' to match against the address header. It's a little easer to read than using regular expressions.
-
-```json
-{
-  "ex3" : {
-    "INVITE" : {
-      "app3" : [ {
-        "condition" : {
-          "From" : [ { "user" : "alice" },
-                     { "host" : "vorpal.org" }, 
-                     { "loc" : "wonderland"  } ]
-        }
-      } ]
-    }
-  }
-}
-```
-
-Consider the mysterious header "X-Version-Number". Here's an example that uses 'equals' to do an exact match on the value "2.1.3".
-
-```json
-{
-  "ex4" : {
-    "INVITE" : {
-      "app4" : [ {
-        "condition" : {
-          "X-Version-Number" : [ {
-            "equals" : "2.1.3"
-          } ]
-        }
-      } ]
-    }
-  }
-}
-```
-
-
-Consider the same header. This example uses 'matches' to perform a regular expression match on the value "2.1".
-
-```json
-{
-  "ex5" : {
-    "INVITE" : {
-      "app5" : [ {
-        "condition" : {
-          "X-Version-Number" : [ {
-            "matches" : "^2\\.1.*$"
-          } ]
-        }
-      } ]
-    }
-  }
-}
-```
-
-Consider the header __Allow__. This example uses 'contains' to match against the value 'UPDATE'. Note: The operator 'contains' is only applied to the first header found. It would not match against the values "INFO" or "PRACK".
-
-```json
-{
-  "app5" : {
-    "INVITE" : {
-      "final" : [ {
-        "condition" : {
-          "Allow" : [ {
-            "contains" : "UPDATE"
-          } ]
-        }
-      } ]
-    }
-  }
-}
-```
-
-Consider the same __Allow__ headers. This example uses 'includes' to match against the value 'PRACK'.
-
-```json
-{
-  "app7" : {
-    "INVITE" : {
-      "app8" : [ {
-        "condition" : {
-          "Allow" : [ {
-            "includes" : "PRACK"
-          } ]
-        }
-      } ]
-    }
-  }
-}
-```
-
-Consider the __Session-Expires__ header. This example uses 'value' to match against '3600' and 'refresher' to match against 'uac'.
-
-```json
-{
-  "ex7" : {
-    "INVITE" : {
-      "app7" : [ {
-        "condition" : {
-          "Session-Expires" : [ {
-            "value" : "3600"
+  "previous" : {
+    "keep-alive" : {
+      "triggers" : {
+        "INVITE" : {
+          "transitions" : [ {
+            "id" : "INV-2",
+            "next" : "b2bua",
+            "condition" : {
+              "Session-Expires" : [ { "value" : "3600"}, { "refresher" : "uac"} ],
+              "Region" : [ { "equals" : "ORIGINATING" } ],
+              "Request-URI" : [ { "uri" : "^(sips?):([^@]+)(?:@(.+))?$" } ],
+              "From" : [ { "address" : "^.*<(sips?):([^@]+)(?:@(.+))?>.*$" } ],
+              "To" : [ { "user" : "bob" }, { "host" : "vorpal.net" }, { "equals" : "<sip:bob@vorpal.net>" } ],
+              "Directive" : [ { "equals" : "CONTINUE" } ],
+              "Region-Label" : [ { "equals" : "ORIGINATING" } ],
+              "Allow" : [ { "contains" : "INV" }, { "includes" : "INVITE" } ] },
+            "action" : {
+              "originating" : "From",
+              "route" : [ "sip:proxy1", "sip:proxy2" ] }
           }, {
-            "refresher" : "uac"
+            "id" : "INV-3",
+            "next" : "b2bua"
           } ]
         }
-      } ]
-    }
+      }
+    },
   }
 }
 ```
-Here's an example that sets the routing region to 'originating' and the subscriber URI to the value of the 'From' header.
+
+What does it mean? Let's take it line-by-line...
 
 ```
 {
-  "app8" : {
-    "INVITE" : {
-      "app9" : [ {
-        "action" : {
-          "originating" : "From"
-        }
-      } ]
-    }
-  }
-}
+  "previous" : {
+    "keep-alive" : {
+      "triggers" : {
+        "INVITE" : {
+          "transitions" : [ {
 ```
 
-Here's an example of an action that sets the routing region to 'terminating' and the subscriber URI to the value of the 'To' header.
+The config file consists of a map of 'previous' states with 'triggers' (SIP methods) that may have a list of 'transitions'. In this case we are looking at INVITE messages being sent from an application called "keep-alive". So far, so good?
 
 ```
-{
-  "app10" : {
-    "INVITE" : {
-      "app11" : [ {
-        "action" : {
-          "terminating" : "To"
-        }
-      } ]
-    }
-  }
-}
+          "transitions" : [ {
+            "id" : "INV-2",
+            "next" : "b2bua",
+            "condition" : {
 ```
 
-Here's an example that performs the "route" action.
+Now, we have a 'transition' called "INV-2" that will move the state from "keep-alive" to an application called "b2bua". The 'id' of the transition is optional and only serves to help with logging. Now we're getting to the juicy part. Consider this complicated 'condition':
 
 ```
-  "app11" : {
-    "INVITE" : {
-      "app12" : [ {
-        "action" : {
-          "route" : [ "sip:proxy1", "sip:proxy2" ]
-        }
-      } ]
-    }
-  }
-```
-Here's an example that performs the "route back" action.
-
-```
-{
-  "app12" : {
-    "INVITE" : {
-      "app13" : [ {
-        "action" : {
-          "route_back" : [ "sip:proxy1", "sip:proxy2" ]
-        }
-      } ]
-    }
-  }
-}
-```
-Here's an example that performs the "route final" action.
-
-```
-{
-  "app13" : {
-    "INVITE" : {
-      "app14" : [ {
-        "action" : {
-          "route_back" : [ "sip:proxy1", "sip:proxy2" ]
-        }
-      } ]
-    }
-  }
-}
+            "condition" : {
+              "Session-Expires" : [ { "value" : "3600"}, { "refresher" : "uac"} ],
+              "Region" : [ { "equals" : "ORIGINATING" } ],
+              "Request-URI" : [ { "uri" : "^(sips?):([^@]+)(?:@(.+))?$" } ],
+              "From" : [ { "address" : "^.*<(sips?):([^@]+)(?:@(.+))?>.*$" } ],
+              "To" : [ { "user" : "bob" }, { "host" : "vorpal.net" }, { "equals" : "<sip:bob@vorpal.net>" } ],
+              "Directive" : [ { "equals" : "CONTINUE" } ],
+              "Region-Label" : [ { "equals" : "ORIGINATING" } ],
+              "Allow" : [ { "contains" : "INV" }, { "includes" : "INVITE" } ] },
 ```
 
+A 'condition' is made up of a list of comparisons. If they're all true, the condition matches and the transition will take place, meaning the FSMAR will send the INVITE from the "keep-alive" application to the "b2bua" application.
+
+Let's take more careful look at each one.
+
+## Parameterable Headers
+
+```
+              "Session-Expires" : [ { "value" : "3600"}, { "refresher" : "uac"} ],
+```
+
+In this case, we have a "comparison list" with two comparisons to be made on the "Session-Expires" header. From the sample INVITE packet, the header looks like: __Session-Expires: 3600;refresher=uac__
+
+This is considered a 'parameterable' header. The 'value' of the header is '3600' and the parameter 'refresher' is 'uac'. Why would anyone bother to match on this? There's no good reason except to demonstrate how pattern matching on parameterable headers works.
+
+## Region
+
+```
+              "Region" : [ { "equals" : "ORIGINATING" } ],
+```
+
+In this example, Region is not a real header name, but it refers to the value in defined by: SipServletRequest.getRegion().getType().toString();
+
+In this example, if the value 'equals' the string 'ORIGINATING', the pattern matches.
+
+### Request-URI
+
+```
+              "Request-URI" : [ { "uri" : "^(sips?):([^@]+)(?:@(.+))?$" } ],
+```
+
+
+Once again, "Request-URI" is not a real header name, but it refers to the value defined by: SipServletRequest.getRequestURI();
+
+The 'uri' operator employs a Java Regular Expression 'match'. For the "Request-URI", you are not limited to the 'uri' operator. You can use any operator you like.
+
+## From
+
+```
+              "From" : [ { "address" : "^.*<(sips?):([^@]+)(?:@(.+))?>.*$" } ],
+```
+
+Here is a slight variation on the 'uri' operator, called 'address'. It is defined by: SipServletRequest.getAddressHeader("From");
+
+There's a subtle difference between 'uri' and 'address'.
+
+Consider the example SIP address: __From: "Alice" <sip:alice@vorpal.org>loc=wonderland;tag=f234ee12__
+
+If you were to use the 'uri' operator, the value would be: __alice@vorpal.org__
+
+So, address gives you the ability to apply a Java Regular Expression to the whole string.
+
+## To
+
+```
+              "To" : [ { "user" : "bob" }, { "host" : "vorpal.net" }, { "equals" : "<sip:bob@vorpal.net>" } ],
+```
+
+Here's another example of matching against and address header. In this case, the 'user' is bob, the 'host' is "vorpal.net" and just for giggles, the entire string must be an exact (ignore case) match to "<sip:bob@vorpal.net>". Why do an exact match? No good reason, except to show how the 'equals' operator works.
+
+## Directive
+
+```
+              "Directive" : [ { "equals" : "CONTINUE" } ],
+```
+
+The name "Directive" is not a normal header, but instead refers to the value defined by: SipServletRequest.getRoutingDirective().toString();
+
+## Region-Label
+
+```
+              "Region-Label" : [ { "equals" : "ORIGINATING" } ],
+```
+
+The name "Region-Label" is not a normal header, but instead refers to the value defined by: SipServletRequest.getRegion().getLabel().toString();
+
+Isn't that the same as "Region"? Almost... According to the SIP Servlet specs, application developers can define their own unique 'labels' to help clarify specifics around the region type.
+
+## Allow
+
+```
+              "Allow" : [ { "contains" : "INV" }, { "includes" : "INVITE" } ] },
+```
+
+Let's consider the sample SIP packet again:
+
+```
+Allow: INFO, CANCEL, ACK, BYE, UPDATE
+Allow: PRACK, INVITE
+```
+
+Here we have two similar operators 'contains' and 'includes'. The 'contains' operator will look through every header value and apply the Java String's 'contains' method. The 'includes' operator will do the same, except using the 'equalsIgnoreCase' method.
+
+# Action
+
+Actions are the functions the FSMAR can apply to the SIP message.
+
+```
+            "action" : {
+              "originating" : "From",
+              "route" : [ "sip:proxy1", "sip:proxy2" ] }
+```
+
+In this case, the FSMAR is setting the region to "ORIGINATING" and the subscriber URI to the value of the 'From' header.
+
+An alternate example would be to set the region to "TERMINATING" and the subscriber URI to the value of the 'To' header like so:
+
+```
+              "terminating" : "To",
+```
+
+Failure to specify 'originating' or 'terminating' sets the region to "NEUTRAL" and the subscriber URI to 'null'.
+
+
+```
+              "route" : [ "sip:proxy1", "sip:proxy2" ] }
+```
+
+Finally, the 'route' keyword pushes two SIP endpoints onto the route stack. Keywords 'route_back' and 'route_final' may be used as well. See the SIP Servlet specs for a full definition for each purpose. They're similar, but slightly different.
+
+Failure to specify 'route', 'route_back' or 'route_final' results in a SipRouteModifier of "NO_ROUTE".
 
 #Don't Overthink It
 
