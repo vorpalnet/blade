@@ -36,10 +36,8 @@ import javax.servlet.sip.SipURI;
 import org.vorpal.blade.framework.logging.Logger;
 
 public class Comparison extends HashMap<String, String> implements RequestCondition, Serializable {
-	Logger sipLogger; 
 
 	public Comparison() {
-		sipLogger = SettingsManager.getSipLogger();
 	}
 
 	public Comparison(String operator, String expression) {
@@ -47,11 +45,34 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 	}
 
 	@Override
-	public boolean check(String name, SipServletRequest request) throws ServletParseException {
-		boolean match = true;
-		boolean isRequestURI = name.equalsIgnoreCase("Request-URI");
+	public boolean check(String id, String name, SipServletRequest request) throws ServletParseException {
 
-		String operator, expression, value=null;
+		Logger sipLogger = SettingsManager.getSipLogger();
+
+		boolean match = true;
+
+		// assign these in advance for special conditions
+		String value = null;
+		SipURI sipUri = null;
+
+		switch (name) {
+		case "Request-URI":
+			value = request.getRequestURI().toString();
+			sipUri = (SipURI) request.getRequestURI();
+			break;
+		case "Directive":
+			value = request.getRoutingDirective().toString();
+			break;
+		case "Region":
+			value = request.getRegion().getType().toString();
+			break;
+		case "Region-Label":
+			value = request.getRegion().getLabel().toString();
+			break;
+		}
+
+		String operator = null, expression = null;
+
 		for (Entry<String, String> entry : this.entrySet()) {
 			operator = entry.getKey();
 			expression = entry.getValue();
@@ -60,135 +81,179 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 			case "address":
 			case "matches":
 
-				value = (isRequestURI) ? request.getRequestURI().toString() : request.getHeader(name);
-
+				value = (value != null) ? value : request.getHeader(name);
 				if (value != null) {
 					match = match && value.matches(expression);
 				} else {
 					match = false;
 				}
 
-				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
-				
+
 			case "uri":
-				value = (isRequestURI) ? request.getRequestURI().toString() : request.getAddressHeader(name).getURI().toString();
-				match = match && value.equalsIgnoreCase(expression);
-				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+				value = (value != null) ? value : request.getAddressHeader(name).getURI().toString();
+				match = match && value.matches(expression);
+
 				break;
 
 			case "user":
-				value = (isRequestURI) ? ((SipURI) request.getRequestURI()).getUser()
+
+				value = (sipUri != null) ? sipUri.getUser()
 						: ((SipURI) request.getAddressHeader(name).getURI()).getUser();
+
 				if (value != null) {
 					match = match && value.equalsIgnoreCase(expression);
 				} else {
 					match = false;
 				}
-				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+
 				break;
 
 			case "host":
-				value = (isRequestURI) ? ((SipURI) request.getRequestURI()).getHost()
+
+				value = (sipUri != null) ? sipUri.getHost()
 						: ((SipURI) request.getAddressHeader(name).getURI()).getHost();
 				match = match && value.equalsIgnoreCase(expression);
-				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+
 				break;
 
 			case "equals":
-				value = (isRequestURI) ? request.getRequestURI().toString() : request.getHeader(name);
+				value = (value != null) ? value : request.getHeader(name);
 				if (value != null) {
 					match = match && value.equalsIgnoreCase(expression);
 				} else {
 					match = false;
 				}
-				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+
 				break;
 
 			case "contains":
-				value = (isRequestURI) ? request.getRequestURI().toString() : request.getHeader(name);
+				boolean contains = false;
+
 				if (value != null) {
-					match = match && value.contains(expression);
+					contains = value.contains(expression);
 				} else {
-					match = false;
+					Iterator<String> itr = request.getHeaders(name);
+					while (itr.hasNext()) {
+						value = itr.next();
+
+						contains = value.contains(expression);
+
+						sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
+								+ operator + ", expression=" + expression + ", contains=" + contains);
+
+						if (contains == true) {
+							break;
+						}
+					}
 				}
-				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
+
+				match = match && contains;
 				break;
 
 			case "includes":
 				boolean includes = false;
 
-				Iterator<String> itr = request.getHeaders(name);
-				while (itr.hasNext()) {
-					value = itr.next();
+				if (value != null) {
+					includes = value.equalsIgnoreCase(expression);
+				} else {
+					Iterator<String> inc_itr = request.getHeaders(name);
+					while (inc_itr.hasNext()) {
+						value = inc_itr.next();
 
-					if (value.equalsIgnoreCase(expression)) {
-						includes = true;
-						break;
+						sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
+								+ operator + ", expression=" + expression + ", includes=" + includes);
+						if (includes == true) {
+							break;
+						}
 					}
 				}
 
 				match = match && includes;
-				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			case "value":
 				boolean hasValue = false;
 
-				Parameterable p;
-				Iterator<? extends Parameterable> pItr = request.getParameterableHeaders(name);
-				while (pItr.hasNext()) {
-					value = pItr.next().getValue();
+				if (value != null) {
+					hasValue = value.equalsIgnoreCase(expression);
+				} else {
+					Parameterable p;
+					Iterator<? extends Parameterable> pItr = request.getParameterableHeaders(name);
+					while (pItr.hasNext()) {
+						value = pItr.next().getValue();
 
-					if (value.equalsIgnoreCase(expression)) {
-						includes = true;
-						break;
+						hasValue = value.equalsIgnoreCase(expression);
+
+						sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
+								+ operator + ", expression=" + expression + ", hasValue=" + hasValue);
+
+						if (hasValue == true) {
+							break;
+						}
+
 					}
 				}
 
 				match = match && hasValue;
-				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			default:
 
 				boolean hasParam = false;
 
-				if (isRequestURI) {
-					String param = request.getRequestURI().getParameter(operator);
+				if (sipUri != null) {
+					String param = sipUri.getParameter(operator);
 					if (param != null) {
-						if (param.equalsIgnoreCase(expression)) {
-							hasParam = true;
-						}
+
+						hasParam = param.equalsIgnoreCase(expression);
+
+						sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
+								+ operator + ", expression=" + expression + ", hasParam=" + hasParam);
+
 					}
 				} else {
 
 					Parameterable p2;
 					Iterator<? extends Parameterable> p2Itr = request.getParameterableHeaders(name);
 					while (p2Itr.hasNext()) {
-						value = p2Itr.next().getParameter(operator);
+						p2 = p2Itr.next();
+						value = p2.getParameter(operator);
 
 						if (value != null) {
-							if (value.equalsIgnoreCase(expression)) {
-								hasParam = true;
+							hasParam = value.equalsIgnoreCase(expression);
+
+							sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
+									+ operator + ", expression=" + expression + ", hasParam=" + hasParam);
+
+							if (hasParam == true) {
 								break;
 							}
+
 						}
+
 					}
 				}
 
 				match = match && hasParam;
-				sipLogger.finer("Comparing " + name + ": " + value + ", " + operator + " " + expression + ": " + match);
 				break;
 
 			}
 
-			if (!match)
+			if (id != null) {
+				sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
+						+ ", expression=" + expression + ", match=" + match);
+			}
+
+			if (!match) {
 				break;
+			}
 
 		}
 
 		return match;
 	}
+
+
 
 }

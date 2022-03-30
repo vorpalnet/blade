@@ -29,15 +29,15 @@ import java.util.HashMap;
 
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipURI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
+import org.vorpal.blade.framework.logging.Logger;
+
 public class Condition extends HashMap<String, ComparisonList> implements Serializable {
-	public SipApplicationRoutingDirective directive;
 
 	public Condition() {
 	}
-	
+
 	public void addComparison(String header, String operator, String expression) {
 		Comparison comparison;
 		ComparisonList list;
@@ -51,14 +51,9 @@ public class Condition extends HashMap<String, ComparisonList> implements Serial
 		comparison = new Comparison(operator, expression);
 		list.add(comparison);
 	}
-	
-	
 
-	public Condition(SipApplicationRoutingDirective directive) {
-		this.directive = directive;
-	}
+	public boolean checkAll(String id, SipServletRequest request) throws ServletParseException {
 
-	public boolean checkAll(SipServletRequest request) throws ServletParseException {
 		boolean match = true;
 
 		String name;
@@ -67,9 +62,10 @@ public class Condition extends HashMap<String, ComparisonList> implements Serial
 		for (Entry<String, ComparisonList> entry : this.entrySet()) {
 			name = entry.getKey();
 			comp = entry.getValue();
-
-			match = match && comp.check(name, request);
-
+			match = match && comp.check(id, name, request);
+			if (!match) {
+				break;
+			}
 		}
 
 		return match;

@@ -31,6 +31,9 @@ import javax.servlet.sip.ar.SipApplicationRouterInfo;
 import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 import javax.servlet.sip.ar.SipRouteModifier;
 
+import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.logging.Logger;
+
 public class Action implements Serializable {
 	public String terminating;
 	public String originating;
@@ -40,16 +43,34 @@ public class Action implements Serializable {
 	public String[] route_final;
 
 	public SipApplicationRouterInfo createRouterInfo(String next, Configuration config, SipServletRequest request) {
+		Logger sipLogger = SettingsManager.getSipLogger();
+
 		String subscriberURI = null;
 		SipApplicationRoutingRegion region;
 		region = SipApplicationRoutingRegion.NEUTRAL_REGION;
 
 		if (originating != null) {
 			region = SipApplicationRoutingRegion.ORIGINATING_REGION;
-			subscriberURI = request.getHeader(originating);		
+			try {
+				subscriberURI = request.getAddressHeader(originating).getURI().toString();
+			} catch (Exception e) {
+				region = SipApplicationRoutingRegion.NEUTRAL_REGION;
+				subscriberURI = null;
+				SettingsManager.getSipLogger()
+						.severe("Invalid address header: " + originating + ", setting routing region to neutral.");
+				SettingsManager.getSipLogger().logStackTrace(e);
+			}
 		} else if (terminating != null) {
 			region = SipApplicationRoutingRegion.TERMINATING_REGION;
-			subscriberURI = request.getHeader(terminating);		
+			try {
+				subscriberURI = request.getAddressHeader(terminating).getURI().toString();
+			} catch (Exception e) {
+				region = SipApplicationRoutingRegion.NEUTRAL_REGION;
+				subscriberURI = null;
+				SettingsManager.getSipLogger()
+						.severe("Invalid address header: " + terminating + ", setting routing region to neutral.");
+				SettingsManager.getSipLogger().logStackTrace(e);
+			}
 		} else {
 			region = SipApplicationRoutingRegion.NEUTRAL_REGION;
 		}
@@ -64,7 +85,7 @@ public class Action implements Serializable {
 			mod = SipRouteModifier.ROUTE_BACK;
 		} else if (route_final != null) {
 			routes = route_final;
-			mod = mod = SipRouteModifier.ROUTE_FINAL;
+			mod = SipRouteModifier.ROUTE_FINAL;
 		}
 
 		return new SipApplicationRouterInfo(next, region, subscriberURI, routes, mod, config);

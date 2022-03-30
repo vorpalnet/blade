@@ -29,6 +29,6 @@ import javax.servlet.sip.SipServletRequest;
 
 public interface RequestCondition {
 
-	public boolean check(String headerName, SipServletRequest request) throws ServletParseException;
+	public boolean check(String id, String headerName, SipServletRequest request) throws ServletParseException;
 
 }

@@ -40,7 +40,9 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSession.State;
 import javax.servlet.sip.SipURI;
 
-import org.codehaus.jackson.map.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 
 public class Logger extends java.util.logging.Logger implements Serializable {
 //	private static Logger logger = null;
@@ -118,6 +120,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	public void logConfiguration(Object config) {
 		try {
 			ObjectMapper mapper = new ObjectMapper();
+			mapper.setSerializationInclusion(Include.NON_NULL);
+			mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+
 			StringWriter sw = new StringWriter();
 			PrintWriter pw = new PrintWriter(sw);
 			mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);

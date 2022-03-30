@@ -60,11 +60,14 @@ public class Configuration implements Serializable {
 		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
 		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
-		this.getPrevious("null").getTrigger("INVITE").createTransition("keep-alive");
-
-		Transition t1 = this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("proxy-registrar");
-		t1.addComparison("Request-URI", "uri", "^sip[s]:.*$");
-		t1.addComparison("From", "address", "^.*<sip[s]:.*>$");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("keep-alive").setId("INV-1").setOriginating("From");
+		
+		Transition t1 = this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("b2bua").setId("INV-2");
+		t1.addComparison("Directive", "equals", "CONTINUE");
+		t1.addComparison("Region", "equals", "ORIGINATING");
+		t1.addComparison("Region-Label", "equals", "ORIGINATING");
+		t1.addComparison("Request-URI", "uri", "^(sips?):([^@]+)(?:@(.+))?$");
+		t1.addComparison("From", "address", "^.*<(sips?):([^@]+)(?:@(.+))?>.*$");
 		t1.addComparison("To", "user", "bob");
 		t1.addComparison("To", "host", "vorpal.net");
 		t1.addComparison("To", "equals", "<sip:bob@vorpal.net>");
@@ -72,11 +75,10 @@ public class Configuration implements Serializable {
 		t1.addComparison("Allow", "includes", "INVITE");
 		t1.addComparison("Session-Expires", "value", "3600");
 		t1.addComparison("Session-Expires", "refresher", "uac");
-		t1.condition.directive = SipApplicationRoutingDirective.NEW;
 		t1.setOriginating("From");
 		t1.setRoute(new String[] { "sip:proxy1", "sip:proxy2" });
 
-		this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("b2bua");
+		this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("b2bua").setId("INV-3");
 		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("proxy-registrar");
 
 	}
