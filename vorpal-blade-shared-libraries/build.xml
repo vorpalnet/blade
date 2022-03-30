@@ -13,9 +13,9 @@
 	</path>
 	<target name="init">
 		<mkdir dir="build" />
+		<mkdir dir="build/classes" />
 
 <!--		
-		<mkdir dir="build/classes" />
 		<copy includeemptydirs="false" todir="build/classes">
 			<fileset dir="src/main/java">
 				<exclude name="**/*.launch" />
