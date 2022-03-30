@@ -31,22 +31,22 @@ import java.util.LinkedList;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.logging.Logger;
+
 public class ComparisonList extends LinkedList<Comparison> implements Serializable, RequestCondition {
 
-
 	@Override
-	public boolean check(String headerName, SipServletRequest request) throws ServletParseException {
+	public boolean check(String id, String headerName, SipServletRequest request) throws ServletParseException {
 		boolean match = true;
 
 		Comparison comparison;
 		Iterator<Comparison> itr = this.iterator();
-		while (itr.hasNext()) {
+		while (match && itr.hasNext()) {
 			comparison = itr.next();
-			match = match && comparison.check(headerName, request);
+			match = match && comparison.check(id, headerName, request);
 		}
 
 		return match;
 	}
-
 
 }

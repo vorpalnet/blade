@@ -228,7 +228,6 @@ public class SettingsManager<T> {
 		boolean noConfigFiles = true;
 		T tmp = (T) clazz.newInstance();
 
-		sipLogger.fine("0...");
 		File domainFile = new File(domainPath.toString() + "/" + servletContextName + ".json");
 		sipLogger.fine("Attempting to load... " + domainFile.getAbsolutePath());
 		try {
@@ -243,7 +242,6 @@ public class SettingsManager<T> {
 			sipLogger.severe(e);
 		}
 
-		sipLogger.fine("1...");
 		File clusterFile = new File(clusterPath.toString() + "/" + servletContextName + ".json");
 		sipLogger.fine("Attempting to load... " + clusterFile.getAbsolutePath());
 		try {
@@ -257,7 +255,6 @@ public class SettingsManager<T> {
 			sipLogger.severe(e);
 		}
 
-		sipLogger.fine("2...");
 		File serverFile = new File(serverPath.toString() + "/" + servletContextName + ".json");
 		sipLogger.fine("Attempting to load... " + serverFile.getAbsolutePath());
 		try {
@@ -275,10 +272,8 @@ public class SettingsManager<T> {
 			current = tmp;
 			saveConfigFile(domainFile, current);
 		} else {
-			sipLogger.fine("3...");
 			sipLogger.fine("Calling mergeCurrentFromJson...");
 			mergeCurrentFromJson();
-			sipLogger.fine("4...");
 		}
 
 	}
@@ -308,10 +303,6 @@ public class SettingsManager<T> {
 
 		// save matching schema to file
 		this.saveSchema();
-//		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper);
-//		JsonSchema schema = schemaGen.generateSchema(t.getClass());
-//		// add title here
-//		mapper.writerWithDefaultPrettyPrinter().writeValue(new File(schemaFilename), schema);
 	}
 
 	/**
@@ -384,32 +375,6 @@ public class SettingsManager<T> {
 	public JsonNode merge(JsonNode mainNode, JsonNode updateNode) throws IOException {
 		return mapper.readerForUpdating(mainNode).readValue(updateNode);
 	}
-
-//	public static JsonNode merge(JsonNode mainNode, JsonNode updateNode) {
-//		sipLogger.fine("calling merge...");
-//		Iterator<String> fieldNames = updateNode.fieldNames();
-//		while (fieldNames.hasNext()) {
-//
-//			String fieldName = fieldNames.next();
-//
-//			JsonNode jsonNode = mainNode.get(fieldName);
-//			// if field exists and is an embedded object
-//			if (jsonNode != null && jsonNode.isObject()) {
-//				sipLogger.fine("\tmerging " + fieldName + "=" + updateNode.get(fieldName));
-//				merge(jsonNode, updateNode.get(fieldName));
-//			} else {
-//				if (mainNode instanceof ObjectNode) {
-//					// Overwrite field
-//					JsonNode value = updateNode.get(fieldName);
-//					((ObjectNode) mainNode).set(fieldName, value);
-//					sipLogger.fine("\tsetting " + fieldName + "=" + value);
-//				}
-//			}
-//
-//		}
-//
-//		return mainNode;
-//	}
 
 	/**
 	 * Merges the three possible configuration files starting with 'domain' and

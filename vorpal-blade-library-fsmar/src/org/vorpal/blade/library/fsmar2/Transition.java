@@ -32,6 +32,7 @@ import org.vorpal.blade.framework.config.Condition;
 
 public class Transition implements Serializable {
 
+	public String id;
 	public String next;
 	public Condition condition;
 	public Action action;
@@ -43,43 +44,59 @@ public class Transition implements Serializable {
 		if (condition == null) {
 			condition = new Condition();
 		}
-		
+
 		condition.addComparison(header, operator, expression);
 	}
 
-	public void setOriginating(String header) {
+	public Transition setOriginating(String header) {
 		if (action == null) {
 			action = new Action();
-			action.originating = header;
 		}
+		action.originating = header;
+		return this;
 	}
 
-	public void setTerminating(String header) {
+	public Transition setTerminating(String header) {
 		if (action == null) {
 			action = new Action();
-			action.terminating = header;
 		}
+		action.terminating = header;
+		return this;
 	}
 
-	public void setRoute(String[] routes) {
+	public Transition setRoute(String[] routes) {
 		if (action == null) {
 			action = new Action();
-			action.route = routes;
 		}
+		action.route = routes;
+		return this;
 	}
 
-	public void setRouteBack(String[] routes) {
+	public Transition setRouteBack(String[] routes) {
 		if (action == null) {
 			action = new Action();
-			action.route_back = routes;
 		}
+		action.route_back = routes;
+
+		return this;
 	}
 
-	public void setRouteFinal(String[] routes) {
+	public Transition setRouteFinal(String[] routes) {
 		if (action == null) {
 			action = new Action();
-			action.route_final = routes;
 		}
+		action.route_final = routes;
+
+		return this;
+	}
+
+	public String getId() {
+		return id;
+	}
+
+	public Transition setId(String id) {
+		this.id = id;
+		return this;
 	}
 
 }
