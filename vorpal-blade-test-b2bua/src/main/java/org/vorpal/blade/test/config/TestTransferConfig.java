@@ -43,9 +43,7 @@ public class TestTransferConfig {
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setSerializationInclusion(Include.NON_NULL);
 		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
-
 		String output = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(config);
-
 		System.out.println(output);
 
 	}

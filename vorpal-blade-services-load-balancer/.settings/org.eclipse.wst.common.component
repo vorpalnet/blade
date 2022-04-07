@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?><project-modules id="moduleCoreId" project-version="1.5.0">
+    <wb-module deploy-name="vorpal-blade-services-load-balancer">
+        <wb-resource deploy-path="/" source-path="/WebContent" tag="defaultRootSource"/>
+        <wb-resource deploy-path="/WEB-INF/classes" source-path="/src"/>
+        <wb-resource deploy-path="/WEB-INF/classes" source-path="/.apt_src"/>
+        <property name="java-output-path" value="/vorpal-blade-services-load-balancer/build/classes"/>
+        <property name="context-root" value="load-balancer"/>
+    </wb-module>
+</project-modules>
