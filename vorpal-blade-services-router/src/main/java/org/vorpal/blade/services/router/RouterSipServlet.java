@@ -8,14 +8,10 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.services.router.config.RouterSettings;
-import org.vorpal.blade.services.router.junk.TestRouterSettings1;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
