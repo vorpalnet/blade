@@ -29,7 +29,6 @@ import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Iterator;
 
 import javax.management.InstanceAlreadyExistsException;
 import javax.management.InstanceNotFoundException;
@@ -55,7 +54,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
 import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator;
 
@@ -96,7 +94,7 @@ public class SettingsManager<T> {
 	}
 
 	public static void setSipFactory(SipFactory sipFactory) {
-		sipFactory = sipFactory;
+		SettingsManager.sipFactory = sipFactory;
 	}
 
 	public static Logger getSipLogger() {
@@ -104,7 +102,7 @@ public class SettingsManager<T> {
 	}
 
 	public static void setSipLogger(Logger sipLogger) {
-		sipLogger = sipLogger;
+		SettingsManager.sipLogger = sipLogger;
 	}
 
 	public String getDomainJson() throws JsonProcessingException {
@@ -141,7 +139,27 @@ public class SettingsManager<T> {
 
 	}
 
+	public SettingsManager(String name, Class<T> clazz, ObjectMapper mapper) {
+		this.mapper = mapper;
+		this.build(name, clazz, mapper);
+	}
+
 	public SettingsManager(String name, Class<T> clazz) {
+		this.build(name, clazz, null);
+	}
+
+	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
+		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		this.mapper = mapper;
+		this.build(basename(event.getServletContext().getServletContextName()), clazz, mapper);
+	}
+
+	public SettingsManager(SipServletContextEvent event, Class<T> clazz) {
+		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
+	}
+
+	public void build(String name, Class<T> clazz, ObjectMapper mapper) {
 
 		this.servletContextName = basename(name);
 		this.clazz = clazz;
@@ -169,13 +187,21 @@ public class SettingsManager<T> {
 			}
 
 			// Support for SipFactory classes
-			mapper = new ObjectMapper();
+
+			if (mapper != null) {
+				mapper = new ObjectMapper();
+			} else {
+				this.mapper = mapper;
+			}
+
 			mapper.registerModule(new SimpleModule().addDeserializer(URI.class, new JsonUriDeserializer()));
 			mapper.registerModule(new SimpleModule().addDeserializer(Address.class, new JsonAddressDeserializer()));
 			mapper.registerModule(new SimpleModule().addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
 			mapper.registerModule(new SimpleModule().addSerializer(URI.class, new JsonUriSerializer()));
 			mapper.registerModule(new SimpleModule().addSerializer(Address.class, new JsonAddressSerializer()));
 			mapper.registerModule(new SimpleModule().addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
+			mapper.registerModule(
+					new SimpleModule().addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
 
 			// Don't both to save attributes set to null.
 			mapper.setSerializationInclusion(Include.NON_NULL);
@@ -190,11 +216,7 @@ public class SettingsManager<T> {
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
 		}
-	}
 
-	public SettingsManager(SipServletContextEvent event, Class<T> clazz) {
-		this(basename(event.getServletContext().getServletContextName()), clazz);
-		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 	}
 
 	/**

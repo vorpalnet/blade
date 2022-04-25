@@ -27,11 +27,6 @@ package org.vorpal.blade.library.fsmar2;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import javax.servlet.sip.ar.SipApplicationRoutingDirective;
-
-import org.vorpal.blade.library.fsmar2.State;
-import org.vorpal.blade.library.fsmar2.Transition;
-
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
