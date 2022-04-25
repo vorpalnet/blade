@@ -52,7 +52,6 @@ public abstract class TranslationsMap {
 
 						// copy all SIP URI parameters (if not present in new request uri)
 						for (String name : request.getRequestURI().getParameterNameSet()) {
-
 							if (uri.getParameter(name) == null) {
 								uri.setParameter(name, uri.getParameter(name));
 							}

@@ -2,6 +2,7 @@ package org.vorpal.blade.services.router.config;
 
 import java.util.LinkedList;
 
+import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
@@ -12,6 +13,7 @@ import org.vorpal.blade.framework.config.JsonIPAddressDeserializer;
 import org.vorpal.blade.framework.config.JsonIPAddressSerializer;
 import org.vorpal.blade.framework.config.JsonUriDeserializer;
 import org.vorpal.blade.framework.config.JsonUriSerializer;
+import org.vorpal.blade.framework.config.SettingsManager;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -99,10 +101,10 @@ public class RouterSettings {
 		this.plan.add(prefixMap);
 	}
 
-	public Boolean applyRoutes(SipServletRequest outboundRequest) {
+	public Boolean applyRoutes(SipServletRequest outboundRequest) throws ServletParseException {
 		Boolean success = false;
 
-		Translation t;
+		Translation t = null;
 		for (TranslationsMap map : plan) {
 
 			t = map.applyTranslations(outboundRequest);
@@ -111,6 +113,18 @@ public class RouterSettings {
 				success = true;
 				break;
 			}
+		}
+
+		if (t == null && this.defaultRoute.requestUri != null) {
+			URI uri = SettingsManager.getSipFactory().createURI(defaultRoute.requestUri);
+
+			// copy all SIP URI parameters (if not present in new request uri)
+			for (String name : outboundRequest.getRequestURI().getParameterNameSet()) {
+				if (uri.getParameter(name) == null) {
+					uri.setParameter(name, uri.getParameter(name));
+				}
+			}
+			outboundRequest.setRequestURI(uri);
 		}
 
 		return success;

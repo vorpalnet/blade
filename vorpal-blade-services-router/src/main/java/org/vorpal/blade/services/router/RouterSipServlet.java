@@ -57,13 +57,7 @@ public class RouterSipServlet extends B2buaServlet {
 		SipApplicationSession appSession = outboundRequest.getApplicationSession();
 
 		RouterSettings config = settingsManager.getCurrent();
-
-		Boolean success = config.applyRoutes(outboundRequest);
-
-		if (!success) {
-			// pick a default route
-		}
-
+		config.applyRoutes(outboundRequest);
 	}
 
 	@Override
