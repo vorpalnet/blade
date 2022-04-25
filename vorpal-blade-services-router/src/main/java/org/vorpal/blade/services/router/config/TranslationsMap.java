@@ -30,7 +30,7 @@ public abstract class TranslationsMap {
 
 	public abstract Translation createTranslation(String key);
 
-	public abstract Translation lookup(SipServletRequest request);
+	protected abstract Translation lookup(SipServletRequest request);
 
 	public Translation applyTranslations(SipServletRequest request) {
 		String strRequestUri;
