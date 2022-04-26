@@ -188,7 +188,7 @@ public class SettingsManager<T> {
 
 			// Support for SipFactory classes
 
-			if (mapper != null) {
+			if (null==mapper) {
 				mapper = new ObjectMapper();
 			} else {
 				this.mapper = mapper;
