@@ -21,8 +21,9 @@ public class Translation {
 		return description;
 	}
 
-	public void setDescription(String description) {
+	public Translation setDescription(String description) {
 		this.description = description;
+		return this;
 	}
 
 	public String getId() {

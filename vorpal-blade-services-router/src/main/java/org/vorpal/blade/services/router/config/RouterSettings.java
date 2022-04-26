@@ -34,7 +34,7 @@ public class RouterSettings {
 
 		defaultRoute.id = "default";
 		defaultRoute.description = "If no translation found, apply default route.";
-		defaultRoute.requestUri = "sip:uas;status=404";
+		defaultRoute.requestUri = "sip:uas;status=404";		
 
 		Selector toUser = new Selector("to-user", "To", "^(sips?):([^@]+)(?:@(.+))?$", "$2");
 		this.selectors.add(toUser);
@@ -92,10 +92,13 @@ public class RouterSettings {
 		addressMap.createTranslation("10.29.194.20").setRequestUri("sip:10.173.165.142:5060")
 				.setDescription("CL2 STG OB");
 
+
 		prefixMap.createTranslation("19951").setRequestUri("sip:10.29.68.26:5060").setDescription("CL2 DEV");
 		prefixMap.createTranslation("19971").setRequestUri("sip:10.86.34.184:5060").setDescription("CL1 Dev2");
 		prefixMap.createTranslation("19954").setRequestUri("sip:10.29.82.110:5060").setDescription("CL2 STG");
-		prefixMap.createTranslation("19974").setRequestUri("sip:10.204.67.59:5060").setDescription("CL1 STG");
+		Translation tt = prefixMap.createTranslation("19974").setRequestUri("sip:10.204.67.59:5060").setDescription("CL1 STG");	
+		tt.list = new LinkedList<TranslationsMap>();
+		tt.list.add(addressMap);
 
 		this.plan.add(addressMap);
 		this.plan.add(prefixMap);
