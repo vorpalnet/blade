@@ -69,13 +69,11 @@ public class Selector {
 	}
 
 	public RegExRoute findKey(SipServletRequest request) {
-		System.out.println("Selector.findKey...");
 
 		RegExRoute regexRoute = null;
 		String key = null;
 		String header = null;
 
-		System.out.println("Selector.findKey.attribute: " + attribute);
 
 		switch (attribute) {
 		case "Request-URI":
@@ -93,16 +91,11 @@ public class Selector {
 			header = request.getHeader(attribute);
 		}
 
-		System.out.println("Selector.findKey.header: " + header);
 
 		Matcher matcher = pattern.matcher(header);
-		System.out.println("Selector.findKey.matcher: " + matcher);
 
 		if (matcher.matches()) {
 			key = matcher.replaceAll(expression);
-			System.out.println("Selector.findKey.key: " + key);
-		} else {
-			System.out.println("Selector.findKey no match!");
 		}
 
 		if (key != null) {
