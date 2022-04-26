@@ -12,11 +12,11 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Selector {
 
-	private String id;
-	private String description;
-	private String attribute;
-	private Pattern pattern;
-	private String expression;
+	private String id; // optional for JSON references
+	private String description; // optional for human readable descriptions
+	private String attribute; // location of the key data, like in the 'To' header
+	private Pattern pattern; // regular expression using capturing groups to parse the key data
+	private String expression; // replacement pattern, like $1 to format the key data
 
 	public Selector() {
 	}
@@ -74,23 +74,21 @@ public class Selector {
 		String key = null;
 		String header = null;
 
-
 		switch (attribute) {
 		case "Request-URI":
 			header = request.getRequestURI().toString();
 			break;
 		case "Remote-IP":
 			header = request.getRemoteAddr();
-			
-			if(header==null) { //test case only
+
+			if (header == null) { // test case only
 				header = "127.0.0.1";
 			}
-			
+
 			break;
 		default:
 			header = request.getHeader(attribute);
 		}
-
 
 		Matcher matcher = pattern.matcher(header);
 

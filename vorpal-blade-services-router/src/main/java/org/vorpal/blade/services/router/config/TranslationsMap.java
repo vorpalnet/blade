@@ -16,7 +16,6 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 @JsonSubTypes({
 //
 		@JsonSubTypes.Type(value = ConfigAddressMap.class, name = "address"),
-		@JsonSubTypes.Type(value = ConfigIPv4Map.class, name = "ipv4"),
 		@JsonSubTypes.Type(value = ConfigPrefixMap.class, name = "prefix"),
 		@JsonSubTypes.Type(value = ConfigHashMap.class, name = "hash"),
 		@JsonSubTypes.Type(value = ConfigLinkedHashMap.class, name = "linked"),
