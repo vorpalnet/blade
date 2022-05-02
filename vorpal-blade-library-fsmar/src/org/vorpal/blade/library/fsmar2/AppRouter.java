@@ -169,6 +169,13 @@ public class AppRouter implements SipApplicationRouter {
 
 				} else {
 					sipLogger.finer("No match for previous state...");
+
+					if (request.isInitial()) {
+						sipLogger.finer("Using defaultApplication: " + config.getDefaultApplication());
+						nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null, null,
+								SipRouteModifier.NO_ROUTE, config);
+					}
+
 				}
 			}
 

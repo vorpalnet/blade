@@ -35,6 +35,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 //public class Configuration extends HashMap<String, State> implements Serializable {
 public class Configuration implements Serializable {
 
+	public String defaultApplication = null;
 	public HashMap<String, State> previous = new HashMap<>();
 
 	public State getPrevious(String name) {
@@ -50,13 +51,16 @@ public class Configuration implements Serializable {
 	 * Creates a default configuration used to generate the FSMAR2.SAMPLE file.
 	 */
 	public Configuration() {
+		
+		this.setDefaultApplication("b2bua");
 
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
 		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
 		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
-		this.getPrevious("null").getTrigger("INVITE").createTransition("keep-alive").setId("INV-1").setOriginating("From");
-		
+		this.getPrevious("null").getTrigger("INVITE").createTransition("keep-alive").setId("INV-1")
+				.setOriginating("From");
+
 		Transition t1 = this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("b2bua").setId("INV-2");
 		t1.addComparison("Directive", "equals", "CONTINUE");
 		t1.addComparison("Region", "equals", "ORIGINATING");
@@ -76,6 +80,14 @@ public class Configuration implements Serializable {
 		this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("b2bua").setId("INV-3");
 		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("proxy-registrar");
 
+	}
+
+	public String getDefaultApplication() {
+		return defaultApplication;
+	}
+
+	public void setDefaultApplication(String defaultApplication) {
+		this.defaultApplication = defaultApplication;
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {
