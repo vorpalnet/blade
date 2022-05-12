@@ -82,5 +82,9 @@
 		<copy file="build/${ant.project.name}-${implementation}.war" todir="${dist}" />
 
 	</target>
+	
+	<target name="build-javadocs" depends="">
+		<!-- Do nothing. -->
+    </target>
 
 </project>

@@ -61,6 +61,7 @@
 		<echo>Classpath is ${classpathInName}</echo>
 	    -->
 		<delete dir="${docs}/${ant.project.name}" />
+		<mkdir dir="${docs}/${ant.project.name}" />
 		<javadoc useexternalfile="true"
 		         splitindex="true"
 		         access="protected"

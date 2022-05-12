@@ -5,6 +5,6 @@
         <wb-resource deploy-path="/WEB-INF/classes" source-path="/src/test/java"/>
         <wb-resource deploy-path="/WEB-INF/classes" source-path="/.apt_src"/>
         <property name="java-output-path" value="/vorpal-blade-services-router/build/classes"/>
-        <property name="context-root" value="blade-router"/>
+        <property name="context-root" value="R3"/>
     </wb-module>
 </project-modules>
