@@ -5,8 +5,12 @@
 	<property name="debuglevel" value="source,lines,vars" />
 	<property name="target" value="1.8" />
 	<property name="source" value="1.8" />
+	<property name="src" location="src" />
+	<property name="webapp" location="WebContent" />
+		
+			
 	<path id="Web App Libraries.libraryclasspath">
-		<fileset dir="WebContent/WEB-INF/lib">
+		<fileset dir="${webapp}/WEB-INF/lib">
 			<filename name="**/*.jar" />
 		</fileset>
 	</path>
@@ -21,10 +25,10 @@
 	</path>
 	<target name="init">
 		<mkdir dir="build/classes" />
-		<mkdir dir="WebContent/WEB-INF/lib" />
+		<mkdir dir="${webapp}/WEB-INF/lib" />
 
 		<copy includeemptydirs="false" todir="build/classes">
-			<fileset dir="src">
+			<fileset dir="${src}">
 				<exclude name="**/*.launch" />
 				<exclude name="**/*.java" />
 			</fileset>
@@ -52,7 +56,7 @@
 		       includeantruntime="false"
 		       source="${source}"
 		       target="${target}">
-			<src path="src" />
+			<src path="${src}" />
 			<src path=".apt_src" />
 			<classpath refid="project.classpath" />
 		</javac>
@@ -65,8 +69,7 @@
 		</manifest>
 		<war destfile="build/${ant.project.name}-${implementation}.war"
 		     manifest="build/MANIFEST.MF"
-		     basedir="WebContent">
-			<!--lib dir="WebContent/WEB-INF/lib" /-->
+		     basedir="${webapp}">
 			<classes dir="build/classes" />
 		</war>
 		<copy file="build/${ant.project.name}-${implementation}.war" todir="${dist}" />
@@ -86,7 +89,7 @@
 		         splitindex="true"
 		         access="protected"
 		         packagenames="org.vorpal.*"
-		         sourcepath="src"
+		         sourcepath="${src}"
 		         destdir="${docs}/${ant.project.name}"
 		         author="true"
 		         version="true"

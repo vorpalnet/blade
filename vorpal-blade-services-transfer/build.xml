@@ -5,8 +5,12 @@
 	<property name="debuglevel" value="source,lines,vars" />
 	<property name="target" value="1.8" />
 	<property name="source" value="1.8" />
+	<property name="src" location="src" />
+	<property name="webapp" location="WebContent" />
+		
+			
 	<path id="Web App Libraries.libraryclasspath">
-		<fileset dir="WebContent/WEB-INF/lib">
+		<fileset dir="${webapp}/WEB-INF/lib">
 			<filename name="**/*.jar" />
 		</fileset>
 	</path>
@@ -21,10 +25,10 @@
 	</path>
 	<target name="init">
 		<mkdir dir="build/classes" />
-		<mkdir dir="WebContent/WEB-INF/lib" />
+		<mkdir dir="${webapp}/WEB-INF/lib" />
 
 		<copy includeemptydirs="false" todir="build/classes">
-			<fileset dir="src">
+			<fileset dir="${src}">
 				<exclude name="**/*.launch" />
 				<exclude name="**/*.java" />
 			</fileset>
@@ -52,7 +56,7 @@
 		       includeantruntime="false"
 		       source="${source}"
 		       target="${target}">
-			<src path="src" />
+			<src path="${src}" />
 			<src path=".apt_src" />
 			<classpath refid="project.classpath" />
 		</javac>
@@ -65,7 +69,7 @@
 		</manifest>
 		<war destfile="build/${ant.project.name}-${implementation}.war"
 		     manifest="build/MANIFEST.MF"
-		     basedir="WebContent">
+		     basedir="${webapp}">
 			<classes dir="build/classes" />
 		</war>
 		<copy file="build/${ant.project.name}-${implementation}.war" todir="${dist}" />
@@ -74,4 +78,44 @@
 
 	<target description="Build all projects which reference this project. Useful to propagate changes."
 	        name="build-refprojects" />
+
+	<target name="build-javadocs" depends="build">
+		<!-- Cool, keep for future reference		
+		<pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
+		<echo>Classpath is ${classpathInName}</echo>
+	    -->
+		<delete dir="${docs}/${ant.project.name}" />
+		<javadoc useexternalfile="true"
+		         splitindex="true"
+		         access="protected"
+		         packagenames="org.vorpal.*"
+		         sourcepath="${src}"
+		         destdir="${docs}/${ant.project.name}"
+		         author="true"
+		         version="true"
+		         use="true"
+		         windowtitle="${ant.project.name}">
+			<classpath refid="vorpal-blade.classpath" />
+			<classpath refid="WebLogic System Libraries.libraryclasspath" />
+			<classpath refid="project.classpath" />
+			<doclet name="org.umlgraph.markdown.doclet.UmlGraphDoc" path="../lib/MarkdownDoclet-3.0.jar">
+				<param name="-inferrel" />
+				<param name="-inferdep" />
+				<param name="-operations" />
+				<param name="-hide" value="java.*" />
+				<param name="-collpackages" value="java.util.*" />
+				<param name="-qualify" />
+				<param name="-postfixpackage" />
+				<param name="-nodefontsize" value="9" />
+				<param name="-nodefontpackagesize" value="7" />
+			</doclet>
+			<doctitle>
+				<![CDATA[${ant.project.name}]]>
+			</doctitle>
+			<bottom>
+				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
+		<link href="http://docs.oracle.com/javaee/6/api/" />
+	</javadoc>
+</target>
+
 </project>

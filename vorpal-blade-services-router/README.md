@@ -208,7 +208,7 @@ respond back with a 404 "not found" status code.
 ## Additional Thoughts...
 
 So far, we've only discussed 'address' and 'prefix' maps. You can also use the three different
-String maps
+types of string maps to operate on other types of data in the SIP INVITE message.
 
 
 
