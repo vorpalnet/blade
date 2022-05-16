@@ -1,7 +1,0 @@
-<map id="G" name="G">
-<area shape="rect" id="node1_0" href="./AsyncSipServlet.html" title="org.vorpal.blade.framework.AsyncSipServlet" alt="" coords="225,11,347,307"/>
-<area shape="rect" id="node2_1" href="./b2bua/B2buaServlet.html" title="org.vorpal.blade.framework.b2bua.B2buaServlet" alt="" coords="16,365,175,547"/>
-<area shape="rect" id="node3_2" href="./callflow/Callflow.html" title="org.vorpal.blade.framework.callflow.Callflow" alt="" coords="201,605,365,1299"/>
-<area shape="rect" id="node4_3" href="./logging/Logger.html" title="org.vorpal.blade.framework.logging.Logger" alt="" coords="267,1357,430,1619"/>
-<area shape="rect" id="node5_4" href="./proxy/ProxyServlet.html" title="org.vorpal.blade.framework.proxy.ProxyServlet" alt="" coords="271,413,426,499"/>
-</map>
