@@ -1,13 +1,19 @@
 <?xml version="1.0"?>
 <project name="blade" default="build" basedir=".">
-	<buildnumber />
+    
+    <property name="dist" location="./dist" />
+    <property name="docs" location="../vorpalnet.github.io/blade" />
+
+    <include file="libraries.xml" />
+
+<!--
+    <buildnumber />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="${computer.hostname}.properties" />
 	<property file="build.properties" />
-	<property name="OCCAS71" value="/opt/oracle/occas-7.1" />
+	<property name="OCCAS71" location="/opt/oracle/occas-7.1" />
 
-	<!-- Include all the standard WebLogic / OCCAS libraries. -->
 	<include file="libraries.xml" />
 
 	<property name="debuglevel" value="source,lines,vars" />
@@ -15,7 +21,7 @@
 	<property name="source" value="1.8" />
 	<property name="dist" location="dist" />
 	<property name="docs" location="docs" />
-
+-->
 
 	<!-- Required for the 'foreach' command. -->
 	<taskdef resource="net/sf/antcontrib/antlib.xml">
@@ -79,8 +85,6 @@
 			<exclude name="vorpal-blade-shared-libraries" />
 		</dirset>
 	</path>
-		
-
 
 </project>
 

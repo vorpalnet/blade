@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project basedir="." default="build" name="common-libraries">
-
+    
+    <buildnumber />
+    <property environment="env" />
+    <property environment="envvar" />
+    <exec executable="hostname" outputproperty="computer.hostname" />
+    <property file="../${computer.hostname}.properties" />
+    <property file="../build.properties" />
+    <property name="debuglevel" value="source,lines,vars" />
+    <property name="target" value="1.8" />
+    <property name="source" value="1.8" />
+    <property name="dist" location="../dist" />
+    <property name="docs" location="../../vorpalnet.github.io/blade" />
+    
+    <path id="vorpal-blade.classpath">
+        <fileset dir="../vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib">
+          <include name="**/*.jar" />
+        </fileset>
+        <pathelement location="${dist}/vorpal-blade-library-framework-${implementation}.jar" />
+    </path>
+    
 	<path id="WebLogic System Libraries.libraryclasspath">
 		<pathelement location="${OCCAS71}/wlserver/server/lib/weblogic.jar" />
 		<pathelement location="${OCCAS71}/wlserver/server/lib/pcl2.jar" />
@@ -621,13 +640,6 @@
 		<pathelement location="${OCCAS71}/wlserver/sip/server/lib/wlssapi.jar" />
 	</path>
     
-    <path id="vorpal-blade.classpath">
-    	<fileset dir="vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib">
-    	  <include name="**/*.jar" />
-    	</fileset>
-		<pathelement location="dist/vorpal-blade-library-framework-${implementation}.jar" />
-    </path>
-
 	<target name="build" />
 
 </project>
