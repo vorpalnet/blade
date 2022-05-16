@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<project basedir="." default="build" name="fsmar">
-	<property environment="env" />
-	<property name="debuglevel" value="source,lines,vars" />
-	<property name="lib" location="../vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib" />
+<project basedir="." default="build" name="vorpal-blade-fsmar">
+    <include file="../libraries.xml" />
+
+    <property name="lib" location="../vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib" />
 
 	<target depends="init,build-project,build-jar" name="build" />
 
@@ -90,8 +90,9 @@
 			<doctitle>
 				<![CDATA[${ant.project.name}]]>
 			</doctitle>
-			<bottom>
-				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
+            <bottom>
+                <![CDATA[${copyright}]]>
+            </bottom>
 		<link href="http://docs.oracle.com/javaee/6/api/" />
 	</javadoc>
 </target>

@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-library-framework">
-	<property environment="env" />
-	<property name="debuglevel" value="source,lines,vars" />
-
+    <import file="../libraries.xml" />
 
 	<target depends="init,build-project,build-jar" name="build" />
 
@@ -88,8 +86,9 @@
 			<doctitle>
 				<![CDATA[${ant.project.name}]]>
 			</doctitle>
-			<bottom>
-				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
+            <bottom>
+                <![CDATA[${copyright}]]>
+            </bottom>
 		<link href="http://docs.oracle.com/javaee/6/api/" />
 	</javadoc>
 </target>

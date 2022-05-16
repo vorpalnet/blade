@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<project basedir="." default="build" name="acl">
-	<property environment="env" />
-	<property name="debuglevel" value="source,lines,vars" />
-	<property name="target" value="1.8" />
-	<property name="source" value="1.8" />
-	<property name="src" location="src/main/java" />
-	<property name="webapp" location="src/main/webapp" />
-		
+<project basedir="." default="build" name="vorpal-blade-acl">
+    <import file="../libraries.xml" />
+    <property name="docs" location="../../vorpalnet.github.io/javadocs" />
+    <property name="src" location="src/main/java" />
+    <property name="webapp" location="src/main/webapp" />
+			
 			
 	<path id="Web App Libraries.libraryclasspath">
 		<fileset dir="${webapp}/WEB-INF/lib">
@@ -68,6 +66,7 @@
 			<attribute name="Weblogic-Application-Version" value="${implementation}-${build.number}" />
 		</manifest>
 		<war destfile="build/${ant.project.name}-${implementation}.war"
+			 webxml="${webapp}/WEB-INF/web.xml"
 		     manifest="build/MANIFEST.MF"
 		     basedir="${webapp}">
 			<classes dir="build/classes" />
@@ -84,7 +83,13 @@
 		<pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
 		<echo>Classpath is ${classpathInName}</echo>
 	    -->
+		
+		<echo>docs: ${docs}</echo>
+		<echo>src: ${src}</echo>
+		
+		
 		<delete dir="${docs}/${ant.project.name}" />
+		<mkdir dir="${docs}/${ant.project.name}" />
 		<javadoc useexternalfile="true"
 		         splitindex="true"
 		         access="protected"
@@ -97,7 +102,6 @@
 		         windowtitle="${ant.project.name}">
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
-			<classpath refid="project.classpath" />
 			<doclet name="org.umlgraph.markdown.doclet.UmlGraphDoc" path="../lib/MarkdownDoclet-3.0.jar">
 				<param name="-inferrel" />
 				<param name="-inferdep" />
@@ -112,8 +116,9 @@
 			<doctitle>
 				<![CDATA[${ant.project.name}]]>
 			</doctitle>
-			<bottom>
-				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
+            <bottom>
+                <![CDATA[${copyright}]]>
+            </bottom>
 		<link href="http://docs.oracle.com/javaee/6/api/" />
 	</javadoc>
 </target>

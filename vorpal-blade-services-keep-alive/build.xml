@@ -1,13 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<project basedir="." default="build" name="keep-alive">
-	<property environment="env" />
-	<property name="debuglevel" value="source,lines,vars" />
-	<property name="target" value="1.8" />
-	<property name="source" value="1.8" />
+<project basedir="." default="build" name="vorpal-blade-keep-alive">
+    <import file="../libraries.xml" />
 	<property name="src" location="src" />
 	<property name="webapp" location="WebContent" />
-		
 			
 	<path id="Web App Libraries.libraryclasspath">
 		<fileset dir="${webapp}/WEB-INF/lib">
@@ -48,7 +44,7 @@
 	<target depends="build-subprojects,build-project,package" name="build" />
 	<target name="build-subprojects" />
 
-	<target depends="init" name="build-project">
+	<target name="build-project" depends="init" >
 		<echo message="${ant.project.name}: ${ant.file}" />
 		<javac debug="true"
 		       debuglevel="${debuglevel}"
@@ -112,8 +108,9 @@
 			<doctitle>
 				<![CDATA[${ant.project.name}]]>
 			</doctitle>
-			<bottom>
-				<![CDATA[<i>Copyright &#169; 2013-2021 Vorpal Networks, LLC. All Rights Reserved.</i>]]></bottom>
+            <bottom>
+                <![CDATA[${copyright}]]>
+            </bottom>
 		<link href="http://docs.oracle.com/javaee/6/api/" />
 	</javadoc>
 </target>

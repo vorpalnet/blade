@@ -159,12 +159,19 @@ public class SettingsManager<T> {
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
-	public void build(String name, Class<T> clazz, ObjectMapper mapper) {
+	public void build(String name, Class<T> clazz, ObjectMapper _mapper) {
 
 		this.servletContextName = basename(name);
 		this.clazz = clazz;
 
 		try {
+			
+			if (null==_mapper) {
+				this.mapper = new ObjectMapper();
+			} else {
+				this.mapper = _mapper;
+			}
+			
 			sipLogger = LogManager.getLogger(name);
 			settings = new Settings(this);
 
@@ -188,23 +195,19 @@ public class SettingsManager<T> {
 
 			// Support for SipFactory classes
 
-			if (null==mapper) {
-				mapper = new ObjectMapper();
-			} else {
-				this.mapper = mapper;
-			}
 
-			mapper.registerModule(new SimpleModule().addDeserializer(URI.class, new JsonUriDeserializer()));
-			mapper.registerModule(new SimpleModule().addDeserializer(Address.class, new JsonAddressDeserializer()));
-			mapper.registerModule(new SimpleModule().addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
-			mapper.registerModule(new SimpleModule().addSerializer(URI.class, new JsonUriSerializer()));
-			mapper.registerModule(new SimpleModule().addSerializer(Address.class, new JsonAddressSerializer()));
-			mapper.registerModule(new SimpleModule().addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
-			mapper.registerModule(
+
+			this.mapper.registerModule(new SimpleModule().addDeserializer(URI.class, new JsonUriDeserializer()));
+			this.mapper.registerModule(new SimpleModule().addDeserializer(Address.class, new JsonAddressDeserializer()));
+			this.mapper.registerModule(new SimpleModule().addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
+			this.mapper.registerModule(new SimpleModule().addSerializer(URI.class, new JsonUriSerializer()));
+			this.mapper.registerModule(new SimpleModule().addSerializer(Address.class, new JsonAddressSerializer()));
+			this.mapper.registerModule(new SimpleModule().addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
+			this.mapper.registerModule(
 					new SimpleModule().addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
 
 			// Don't both to save attributes set to null.
-			mapper.setSerializationInclusion(Include.NON_NULL);
+			this.mapper.setSerializationInclusion(Include.NON_NULL);
 
 			if (clusterName != null) {
 				objectName = new ObjectName(
