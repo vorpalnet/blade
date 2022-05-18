@@ -3,7 +3,6 @@
  * of this library is to provide the developer a convenient and intuitive
  * approach to developing SIP Servlet applications.
  *
- * @since 1.0
- * @see java.awt
+ * @since 2.0
  */
 package org.vorpal.blade.framework;

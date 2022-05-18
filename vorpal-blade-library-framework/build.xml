@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-library-framework">
-    <import file="../libraries.xml" />
+	<import file="../libraries.xml" />
 
 	<target depends="init,build-project,build-jar" name="build" />
 
@@ -29,7 +29,7 @@
 
 	<target depends="init" name="build-project">
 		<echo message="${ant.project.name}: ${ant.file}" />
-		
+
 		<javac debug="true"
 		       debuglevel="${debuglevel}"
 		       destdir="build/classes"
@@ -41,13 +41,12 @@
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 		</javac>
-		
+
 	</target>
 
 	<target depends="build-project" name="build-jar">
 
-		<jar destfile="build/${ant.project.name}-${implementation}.jar"
-		     basedir="build/classes" />
+		<jar destfile="build/${ant.project.name}-${implementation}.jar" basedir="build/classes" />
 
 		<copy file="build/${ant.project.name}-${implementation}.jar" todir="${dist}" />
 
@@ -86,15 +85,18 @@
 			<doctitle>
 				<![CDATA[${ant.project.name}]]>
 			</doctitle>
-            <bottom>
-                <![CDATA[${copyright}]]>
+			<bottom>
+				<![CDATA[${copyright}</br>${license}]]>
             </bottom>
-		<link href="http://docs.oracle.com/javaee/6/api/" />
-	</javadoc>
-</target>
+			<link href="https://vorpalnet.github.io/javadocs/jsr359/" />
+			<link href="https://docs.oracle.com/javaee/7/api/" />
+			<link href="https://docs.oracle.com/javase/8/docs/api/" />			
+			<link href="https://vorpalnet.github.io/javadocs/jsr309/" />
+		</javadoc>
+	</target>
 
 
-<target description="Build all projects which reference this project. Useful to propagate changes."
-        name="build-refprojects" />
+	<target description="Build all projects which reference this project. Useful to propagate changes."
+	        name="build-refprojects" />
 
 </project>
