@@ -12,12 +12,12 @@ The purpose of this library is to simplify SIP Servlet application development
 by adding additional features. They include:
 
 
-1. [org.vorpal.blade.framework](./tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework)
-1. [org.vorpal.blade.framework.b2bua](./tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/b2bua)
-1. [org.vorpal.blade.framework.callflow](./tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/callflow/)
-1. [org.vorpal.blade.framework.config](./tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/config/)
-1. [org.vorpal.blade.framework.logging](./tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/logging/)
-1. [org.vorpal.blade.framework.proxy](./tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/proxy/)
+1. [org.vorpal.blade.framework](https://github.com/vorpalnet/blade/tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework)
+1. [org.vorpal.blade.framework.b2bua](https://github.com/vorpalnet/blade/tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/b2bua)
+1. [org.vorpal.blade.framework.callflow](https://github.com/vorpalnet/blade/tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/callflow/)
+1. [org.vorpal.blade.framework.config](https://github.com/vorpalnet/blade/tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/config/)
+1. [org.vorpal.blade.framework.logging](https://github.com/vorpalnet/blade/tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/logging/)
+1. [org.vorpal.blade.framework.proxy](https://github.com/vorpalnet/blade/tree/main/vorpal-blade-library-framework/src/org/vorpal/blade/framework/proxy/)
 
 
 # Download
