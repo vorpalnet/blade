@@ -1,6 +1,6 @@
 # Router
 
-Welcome to the Vorpal:BLADE Reductive Reasoning Router (R3).
+Welcome to the Vorpal:BLADE R3, the Reductive Reasoning Router.
 
 The goal behind R3 is to build a universal router that can build translations maps based on any piece of data
 within a SIP message without scripting (for now). It is called "reductive" because it works upon a simple
@@ -209,6 +209,125 @@ respond back with a 404 "not found" status code.
 
 So far, we've only discussed 'address' and 'prefix' maps. You can also use the three different
 types of string maps to operate on other types of data in the SIP INVITE message.
+
+
+# Sample Configuration File
+
+A sample configuration file is saved as R3.SAMPLE.
+
+```
+jeff@mothra vorpal % cat R3.SAMPLE
+{
+  "selectors" : [ {
+    "id" : "to-user",
+    "attribute" : "To",
+    "pattern" : "^(sips?):([^@]+)(?:@(.+))?$",
+    "expression" : "$2"
+  }, {
+    "id" : "remote-ip",
+    "attribute" : "Remote-IP",
+    "pattern" : "^(.*)$",
+    "expression" : "$1"
+  } ],
+  "maps" : [ {
+    "type" : "address",
+    "id" : "address-map-1",
+    "description" : "Translations Map for Remote IP addresses",
+    "selector" : "remote-ip",
+    "map" : {
+      "10.28.82.132" : {
+        "description" : "CL2 STG OB",
+        "requestUri" : "sip:10.173.165.142:5060"
+      },
+      "10.28.194.166" : {
+        "description" : "CL2 DEV OB",
+        "requestUri" : "sip:10.173.165.140:5060"
+      },
+      "10.28.201.244" : {
+        "description" : "CL2 STG OB",
+        "requestUri" : "sip:10.173.165.142:5060"
+      },
+      "10.29.68.26" : {
+        "description" : "CL2 DEV OB",
+        "requestUri" : "sip:10.173.165.140:5060"
+      },
+      "10.29.82.110" : {
+        "description" : "CL2 STG OB",
+        "requestUri" : "sip:10.173.165.142:5060"
+      },
+      "10.29.194.20" : {
+        "description" : "CL2 STG OB",
+        "requestUri" : "sip:10.173.165.142:5060"
+      },
+      "10.87.152.172" : {
+        "description" : "CL1 STG OB",
+        "requestUri" : "sip:10.173.165.152:5060"
+      },
+      "10.87.152.173" : {
+        "description" : "CL1 STG OB",
+        "requestUri" : "sip:10.173.165.152:5060"
+      },
+      "10.173.101.86" : {
+        "id" : "STG_CL2_ATT_IB",
+        "requestUri" : "sip:10.173.165.128:5060"
+      },
+      "10.173.101.87" : {
+        "id" : "STG_CL2_VZB_IB",
+        "requestUri" : "sip:10.173.165.127:5060"
+      },
+      "10.173.101.120" : {
+        "id" : "STG_CL1_ATT_IB",
+        "requestUri" : "sip:10.173.165.70:5060"
+      },
+      "10.173.101.121" : {
+        "id" : "STG_CL1_VZB_IB",
+        "requestUri" : "sip:10.173.165.69:5060"
+      },
+      "10.204.67.59" : {
+        "description" : "CL1 STG OB",
+        "requestUri" : "sip:10.173.165.152:5060"
+      },
+      "10.204.67.60" : {
+        "description" : "CL1 STG OB",
+        "requestUri" : "sip:10.173.165.152:5060"
+      },
+      "127.0.0.1" : {
+        "requestUri" : "sip:localhost:5060"
+      }
+    }
+  }, {
+    "type" : "prefix",
+    "id" : "prefix-map-1",
+    "description" : "Translations map for dialed number prefixes",
+    "selector" : "to-user",
+    "map" : {
+      "19951" : {
+        "description" : "CL2 DEV",
+        "requestUri" : "sip:10.29.68.26:5060"
+      },
+      "19954" : {
+        "description" : "CL2 STG",
+        "requestUri" : "sip:10.29.82.110:5060"
+      },
+      "19971" : {
+        "description" : "CL1 Dev2",
+        "requestUri" : "sip:10.86.34.184:5060"
+      },
+      "19974" : {
+        "description" : "CL1 STG",
+        "list" : [ "address-map-1" ],
+        "requestUri" : "sip:10.204.67.59:5060"
+      }
+    }
+  } ],
+  "plan" : [ "address-map-1", "prefix-map-1" ],
+  "defaultRoute" : {
+    "id" : "default",
+    "description" : "If no translation found, apply default route.",
+    "requestUri" : "sip:uas;status=404"
+  }
+}
+```
 
 
 
