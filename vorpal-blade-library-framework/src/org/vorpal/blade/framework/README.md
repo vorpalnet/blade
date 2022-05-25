@@ -5,7 +5,7 @@ See Javadocs: [org.vorpal.blade.framework](https://vorpalnet.github.io/blade/vor
 Welcome to the Vorpal:BLADE framework library.
 
 The base package "org.vorpal.blade.framework" contains only one class:
-[https://vorpalnet.github.io/blade/vorpal-blade-library-framework/org/vorpal/blade/framework/AsyncSipServlet.html).
+[AsyncSipServlet](https://vorpalnet.github.io/vorpal-blade-library-framework/org/vorpal/blade/framework/AsyncSipServlet.html).
 
 The purpose of this class is to extend the JSR-359 SipServlet class to provide more functionality.
 
