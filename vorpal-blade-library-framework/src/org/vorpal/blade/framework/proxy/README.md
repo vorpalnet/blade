@@ -1,4 +1,4 @@
-# Vorpal:BLADE Framework Logging
+# Vorpal:BLADE Framework Proxy
 
 See Javadocs: [org.vorpal.blade.framework.proxy](https://vorpalnet.github.io/vorpal-blade-library-framework/index.html?org/vorpal/blade/framework/proxy/package-summary.html)
 
