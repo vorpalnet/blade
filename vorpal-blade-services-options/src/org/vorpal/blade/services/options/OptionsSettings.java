@@ -28,12 +28,12 @@ import java.io.Serializable;
 
 public class OptionsSettings implements Serializable {
 
-	String accept = "application/sdp";
-	String acceptLanguage = "en";
-	String allow = "INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, PRACK, SUBSCRIBE, NOTIFY, PUBLISH, INFO, REFER, MESSAGE, UPDATE";
-	String supported = "replaces";
-	String userAgent = "OCCAS 7.1";
-	String allowEvents = "talk, hold";
+	private String accept = "application/sdp";
+	private String acceptLanguage = "en";
+	private String allow = "INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, PRACK, SUBSCRIBE, NOTIFY, PUBLISH, INFO, REFER, MESSAGE, UPDATE";
+	private String supported = "replaces";
+	private String userAgent = "OCCAS 7.1";
+	private String allowEvents = "talk, hold";
 
 	public String getAllow() {
 		return allow;
