@@ -1,6 +1,6 @@
 # Vorpal:BLADE Framework
 
-See Javadocs: [org.vorpal.blade.framework](https://vorpalnet.github.io/blade/vorpal-blade-library-framework/index.html)
+[Javadocs](https://vorpalnet.github.io/blade/vorpal-blade-library-framework/index.html)
 
 Welcome to the Vorpal:BLADE framework library.
 

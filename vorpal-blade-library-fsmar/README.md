@@ -1,12 +1,12 @@
 # Vorpal:BLADE FSMAR 2.0
 
-Welcome to the one and only...  
+Welcome to the one and only... FSMAR!
 
-__F__inite  
-__S__tate  
-__M__achine  
-__A__pplication  
-__R__outer  
+Finite  
+State  
+Machine  
+Application  
+Router  
 
 ## The What Now?
 
@@ -27,7 +27,7 @@ Key features include:
 1. Drop 'fsmar.jar' in your domain's "approuter" directory.
 1. Update the OCCAS admin console to use 'fsmar.jar'.
 1. Restart one (or all) of the engine tier servers.
-1. Check the ./config/custom/vorpal folder for FSMAR.SAMPLE
+1. Check the ./config/custom/vorpal folder for FSMAR.SAMPLE (in the cluster)
 1. Rename FSMAR.SAMPLE to FSMAR.json end edit it to fit your needs.
 
 Please note: OCCAS 7.1 or older version require the 'fsmar.jar' file to also be in the leading CLASSPATH in addition to being in the 'approuter' directory. (This is due to version mismatches with the required Jackson JSON libraries.)
@@ -59,11 +59,11 @@ Below are some examples on how to configure this.
 * value    -- case sensitive match of any 'value' of a header (without parameters / tags)
 * ???      -- anything else is treated as a parameter. i.e.: __Expires: 3600;refresher=uac__ ('refresher' in this case)
 
-By default, if no condition is defined, it is considered a match. Multiple conditions are ANDed together. If you're looking for OR capabilities, consider creating two different transitions.
+By default, if no condition is defined, it is considered a match. Multiple conditions are ANDed together. If you're looking for OR capabilities, consider creating creating two different transitions with the same next state.
 
 # Defining Actions
 
-The FSMAR can only take just a few actions once a condition is matched. They include setting the region and subscriber URI as well as defining any routes to be pushed.
+The FSMAR can only take a few actions once a condition is matched. They include setting the region and subscriber URI as well as defining any routes to be pushed.
 
 
 # Examples
