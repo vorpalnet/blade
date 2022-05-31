@@ -1,0 +1,53 @@
+{
+  "defaultApplication" : "mediarouter",
+  "previous" : {
+    "null" : {
+      "triggers" : {
+        "OPTIONS" : {
+          "transitions" : [ {
+            "next" : "options"
+          } ]
+        },
+        "INVITE" : {
+          "transitions" : [ {
+            "next" : "siprec",
+            "condition" : {
+              "From" : [ {
+                "matches" : ".*sip:acmeSrc.*"
+              } ],
+              "Contact" : [ {
+                "matches" : "*.10.173.172.24.*"
+              } ]
+            },
+            "action" : {
+              "terminating" : "To"
+            }
+          }, {
+            "next" : "genrec",
+            "condition" : {
+              "From" : [ {
+                "matches" : ".*sip:Genesys.*"
+              } ],
+              "Contact" : [ {
+                "matches" : "*.10.173.172.24.*"
+              } ]
+            },
+            "action" : {
+              "terminating" : "To"
+            }
+          }, {
+            "next" : "mediahub",
+            "condition" : {
+              "Contact" : [ {
+                "matches" : "*.10.173.172.6.*"
+              } ]
+            },
+            "action" : {
+              "terminating" : "To"
+            }
+          } ]
+        }
+      }
+    }
+  }
+}

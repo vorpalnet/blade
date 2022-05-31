@@ -2,6 +2,7 @@
     <wb-module deploy-name="vorpal-blade-library-fsmar">
         <wb-resource deploy-path="/" source-path="/src" tag="defaultRootSource"/>
         <wb-resource deploy-path="/" source-path="/framework-src"/>
+        <wb-resource deploy-path="/" source-path="/test-src"/>
         <property name="java-output-path" value="/vorpal-blade-library-fsmar/build/classes"/>
     </wb-module>
 </project-modules>
