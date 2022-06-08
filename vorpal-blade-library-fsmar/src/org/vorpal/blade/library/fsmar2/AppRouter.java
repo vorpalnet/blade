@@ -83,14 +83,14 @@ public class AppRouter implements SipApplicationRouter {
 					.getSipApplicationSessionImpl();
 			String previous = (sasi != null) ? SettingsManager.basename(sasi.getApplicationName()) : "null";
 
-			if (sipLogger.isLoggable(Level.FINER)) {
+			if (sipLogger.isLoggable(Level.FINE)) {
 				String str = "getNextApplication... " + request.getMethod() + " " + request.getRequestURI();
 				str += ", previous: " + previous;
-				str += (region != null) ? ", " + region.getLabel() + " " + region.getType() : "";
-				str += (directive != null) ? ", " + directive : "";
-				str += (requestInfo != null) ? ", " + requestInfo.getType() + " " + requestInfo.getApplicationName()
+				str += (region != null) ? ", region: " + region.getLabel() + " " + region.getType() : "";
+				str += (directive != null) ? ", directive: " + directive : "";
+				str += (requestInfo != null) ? ", requestInfo" + requestInfo.getType() + " " + requestInfo.getApplicationName()
 						: "";
-				sipLogger.finer(str);
+				sipLogger.fine(str);
 			}
 
 			// For targeted sessions, skip all this nonsense and route to that app
@@ -115,81 +115,80 @@ public class AppRouter implements SipApplicationRouter {
 			// Iterate through all possible transitions
 			if (nextApp == null) {
 				State state = config.getPrevious(previous);
-				if (state != null) {
 
-					Trigger trigger = state.getTrigger(request.getMethod()); // invite
+				Trigger trigger = state.getTrigger(request.getMethod()); // invite
 
-					if (trigger != null) {
+				if (trigger != null) {
 
-						boolean conditionMatches = false;
-						Transition t = null;
+					boolean conditionMatches = false;
+					Transition t = null;
 
-						Iterator<Transition> itr = trigger.transitions.iterator();
-						if (itr.hasNext()) {
-							while (conditionMatches == false && itr.hasNext()) {
-								t = itr.next();
+					Iterator<Transition> itr = trigger.transitions.iterator();
+					if (itr.hasNext()) {
+						while (conditionMatches == false && itr.hasNext()) {
+							t = itr.next();
 
-								if (t.condition == null) {
-									sipLogger.finer("null condition, implicit match!");
-									conditionMatches = true;
-								} else {
-									conditionMatches = t.condition.checkAll(t.id, request);
-									sipLogger.finer("Condition matches: " + conditionMatches);
-								}
-
-								if (conditionMatches) {
-									sipLogger.finer("conditionMatches... break!");
-									break;
-								}
-
-							} // while
-						} else {
-							sipLogger.finer("null transition, implicit match!");
-							t = new Transition();
-							conditionMatches = true;
-						}
-
-						if (conditionMatches) {
-
-							System.out.println("t.action=" + t.action);
-
-							if (t.action == null) {
-								t.action = new Action();
+							if (t.condition == null) {
+								sipLogger.fine("null condition, implicit match!");
+								conditionMatches = true;
 							} else {
-								sipLogger.fine("Action:" + "\n\toriginating=" + t.action.originating
-										+ "\n\tterminating=" + t.action.terminating + "\n\troute=" + t.action.route
-										+ "\n\troute_back=" + t.action.route_back + "\n\troute_final="
-										+ t.action.route_final);
+								conditionMatches = t.condition.checkAll(t.id, request);
+								sipLogger.fine("Condition matches: " + conditionMatches);
 							}
 
-							nextApp = t.action.createRouterInfo(deployed.get(t.next), config, request);
-						}
+							if (conditionMatches) {
+								sipLogger.fine("conditionMatches... break!");
+								break;
+							}
 
+						} // while
+					} else {
+						sipLogger.fine("null transition, implicit match!");
+						t = new Transition();
+						conditionMatches = true;
 					}
 
-				} else {
-					sipLogger.finer("No match for previous state...");
+					if (conditionMatches) {
 
-					if (request.isInitial()) {
-						sipLogger.finer("Using defaultApplication: " + config.getDefaultApplication());
-						nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null, null,
-								SipRouteModifier.NO_ROUTE, config);
+						if (t.action == null) {
+							t.action = new Action();
+						} else {
+							sipLogger.fine(request,
+									"Action:" + "\n\toriginating=" + t.action.originating + "\n\tterminating="
+											+ t.action.terminating + "\n\troute=" + t.action.route + "\n\troute_back="
+											+ t.action.route_back + "\n\troute_final=" + t.action.route_final);
+						}
+
+						nextApp = t.action.createRouterInfo(deployed.get(t.next), config, request);
 					}
 
 				}
+
 			}
 
-			if (sipLogger.isLoggable(Level.FINER)) {
+			if (null == nextApp.getNextApplicationName()) {
+				if (request.isInitial()) {
+					sipLogger.fine("Using defaultApplication: " + config.getDefaultApplication());
+					nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null,
+							null, SipRouteModifier.NO_ROUTE, config);
+				}
+			}
+
+			if (sipLogger.isLoggable(Level.FINE)) {
 				if (nextApp != null) {
 					String str = "RouterInfo... " + nextApp.getNextApplicationName();
 					str += ", getSubscriberURI: " + nextApp.getSubscriberURI();
-					str += ", getRoutingRegion().getLabel: " + nextApp.getRoutingRegion().getLabel();
-					str += ", getRoutingRegion().getType: " + nextApp.getRoutingRegion().getType();
+					if (nextApp.getRoutingRegion() != null) {
+						str += ", getRoutingRegion().getLabel: " + nextApp.getRoutingRegion().getLabel();
+					}
+					if (nextApp.getRoutingRegion() != null) {
+						str += ", getRoutingRegion().getType: " + nextApp.getRoutingRegion().getType();
+					}
 					str += ", getRouteModifier: " + nextApp.getRouteModifier();
 					str += ", getRoutes: " + Arrays.toString(nextApp.getRoutes());
-					sipLogger.finer(str);
+					sipLogger.fine(str);
 				} else {
-					sipLogger.finer("No match. Setting router info to null.");
+					sipLogger.fine("No match. Setting router info to null.");
 				}
 			}
 
