@@ -1,22 +1,100 @@
 {
   "defaultApplication" : "mediarouter",
   "previous" : {
+    "keep-alive" : {
+      "triggers" : {
+        "INVITE" : {
+          "transitions" : [ {
+            "id" : "INV-2",
+            "next" : "b2bua",
+            "condition" : {
+              "Session-Expires" : [ {
+                "value" : "3600"
+              }, {
+                "refresher" : "uac"
+              } ],
+              "Region" : [ {
+                "equals" : "ORIGINATING"
+              } ],
+              "Request-URI" : [ {
+                "uri" : "^(sips?):([^@]+)(?:@(.+))?$"
+              } ],
+              "From" : [ {
+                "address" : "^.*<(sips?):([^@]+)(?:@(.+))?>.*$"
+              } ],
+              "To" : [ {
+                "user" : "bob"
+              }, {
+                "host" : "vorpal.net"
+              }, {
+                "equals" : "<sip:bob@vorpal.net>"
+              } ],
+              "Directive" : [ {
+                "equals" : "CONTINUE"
+              } ],
+              "Region-Label" : [ {
+                "equals" : "ORIGINATING"
+              } ],
+              "Allow" : [ {
+                "contains" : "INV"
+              }, {
+                "includes" : "INVITE"
+              } ]
+            },
+            "action" : {
+              "originating" : "From",
+              "route" : [ "sip:proxy1", "sip:proxy2" ]
+            }
+          }, {
+            "id" : "INV-3",
+            "next" : "b2bua"
+          } ]
+        }
+      }
+    },
+    "b2bua" : {
+      "triggers" : {
+        "INVITE" : {
+          "transitions" : [ {
+            "next" : "proxy-registrar"
+          } ]
+        }
+      }
+    },
     "null" : {
       "triggers" : {
+        "REGISTER" : {
+          "transitions" : [ {
+            "next" : "proxy-registrar"
+          } ]
+        },
+        "PUBLISH" : {
+          "transitions" : [ {
+            "next" : "presence"
+          } ]
+        },
         "OPTIONS" : {
           "transitions" : [ {
+            "next" : "options"
+          }, {
             "next" : "options"
           } ]
         },
         "INVITE" : {
           "transitions" : [ {
+            "id" : "INV-1",
+            "next" : "keep-alive",
+            "action" : {
+              "originating" : "From"
+            }
+          }, {
             "next" : "siprec",
             "condition" : {
               "From" : [ {
                 "matches" : ".*sip:acmeSrc.*"
               } ],
               "Contact" : [ {
-                "matches" : "*.10.173.172.24.*"
+                "matches" : ".*10.173.172.24.*"
               } ]
             },
             "action" : {
@@ -29,7 +107,7 @@
                 "matches" : ".*sip:Genesys.*"
               } ],
               "Contact" : [ {
-                "matches" : "*.10.173.172.24.*"
+                "matches" : ".*10.173.172.24.*"
               } ]
             },
             "action" : {
@@ -39,12 +117,17 @@
             "next" : "mediahub",
             "condition" : {
               "Contact" : [ {
-                "matches" : "*.10.173.172.6.*"
+                "matches" : ".*10.173.172.6.*"
               } ]
             },
             "action" : {
               "terminating" : "To"
             }
+          } ]
+        },
+        "SUBSCRIBE" : {
+          "transitions" : [ {
+            "next" : "presence"
           } ]
         }
       }

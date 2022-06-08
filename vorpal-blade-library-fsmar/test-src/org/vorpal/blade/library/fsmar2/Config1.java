@@ -1,3 +1,4 @@
+package org.vorpal.blade.library.fsmar2;
 import org.vorpal.blade.library.fsmar2.Configuration;
 import org.vorpal.blade.library.fsmar2.Transition;
 
