@@ -88,7 +88,8 @@ public class AppRouter implements SipApplicationRouter {
 				str += ", previous: " + previous;
 				str += (region != null) ? ", region: " + region.getLabel() + " " + region.getType() : "";
 				str += (directive != null) ? ", directive: " + directive : "";
-				str += (requestInfo != null) ? ", requestInfo" + requestInfo.getType() + " " + requestInfo.getApplicationName()
+				str += (requestInfo != null)
+						? ", requestInfo" + requestInfo.getType() + " " + requestInfo.getApplicationName()
 						: "";
 				sipLogger.fine(str);
 			}
@@ -153,10 +154,9 @@ public class AppRouter implements SipApplicationRouter {
 						if (t.action == null) {
 							t.action = new Action();
 						} else {
-							sipLogger.fine(request,
-									"Action:" + "\n\toriginating=" + t.action.originating + "\n\tterminating="
-											+ t.action.terminating + "\n\troute=" + t.action.route + "\n\troute_back="
-											+ t.action.route_back + "\n\troute_final=" + t.action.route_final);
+							sipLogger.fine("Action:" + "\n\toriginating=" + t.action.originating + "\n\tterminating="
+									+ t.action.terminating + "\n\troute=" + t.action.route + "\n\troute_back="
+									+ t.action.route_back + "\n\troute_final=" + t.action.route_final);
 						}
 
 						nextApp = t.action.createRouterInfo(deployed.get(t.next), config, request);
