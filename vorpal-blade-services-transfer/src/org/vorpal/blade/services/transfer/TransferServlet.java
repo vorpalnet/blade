@@ -19,6 +19,7 @@ import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.transfer.AssistedTransfer;
 import org.vorpal.blade.framework.transfer.BlindTransfer;
 import org.vorpal.blade.framework.transfer.MediaTransfer;
+import org.vorpal.blade.framework.transfer.TransferCondition;
 import org.vorpal.blade.framework.transfer.TransferListener;
 
 /**
@@ -50,38 +51,45 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 
 	}
 
+	private Callflow chooseCallflowStyle(TransferSettings.TransferStyle transferStyle) {
+		Callflow callflow = null;
+
+		switch (transferStyle) {
+		case media:
+			callflow = new MediaTransfer(this);
+			break;
+		case assisted:
+			callflow = new AssistedTransfer(this);
+			break;
+		case blind:
+		default:
+			callflow = new BlindTransfer(this);
+		}
+
+		return callflow;
+	}
+
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow = null;
 		TransferSettings ts = settingsManager.getCurrent();
 
 		if (request.getMethod().equals("REFER")) {
-			
-			if(ts.getFeatureEnable().checkAll(request)) {
-				
-				if(ts.getBlindTransfer().checkAll(request)) {
-					callflow = new BlindTransfer(this);
-				}else if(ts.getAssistedTransfer().checkAll(request)) {
-					callflow = new AssistedTransfer(this);
-				} else if(ts.getMediaTransfer().checkAll(request)) {
-					callflow = new MediaTransfer(this);
-				} else {
-					switch(ts.getDefaultTransferType()) {
-					case assisted:
-						callflow = new AssistedTransfer(this);
+
+			if (ts.getTransferAllRequests() == true) {
+				callflow = this.chooseCallflowStyle(ts.getDefaultTransferStyle());
+			} else {
+				for (TransferCondition tc : ts.getTransferConditions()) {
+					if (true == tc.getCondition().checkAll(request)) {
+						if (null != tc.getStyle()) {
+							callflow = this.chooseCallflowStyle(tc.getStyle());
+						} else {
+							callflow = this.chooseCallflowStyle(ts.getDefaultTransferStyle());
+						}
 						break;
-					case media:
-						callflow = new MediaTransfer(this);
-						break;
-					case blind:
-					default:
-						callflow = new BlindTransfer(this);
 					}
-					
 				}
-				
 			}
-			
 		}
 
 		if (callflow == null) {
