@@ -1,0 +1,65 @@
+{
+  "type" : "object",
+  "id" : "urn:jsonschema:org:vorpal:blade:test:loadbalancer:config:ProxyConfig",
+  "properties" : {
+    "defaultPermission" : {
+      "type" : "string",
+      "enum" : [ "deny", "allow" ]
+    },
+    "acl" : {
+      "type" : "array",
+      "items" : {
+        "type" : "object",
+        "id" : "urn:jsonschema:org:vorpal:blade:test:loadbalancer:config:AccessControl",
+        "properties" : {
+          "source" : {
+            "type" : "any"
+          },
+          "permission" : {
+            "type" : "string",
+            "enum" : [ "deny", "allow" ]
+          },
+          "proxyRuleId" : {
+            "type" : "string"
+          }
+        }
+      }
+    },
+    "proxyRules" : {
+      "type" : "array",
+      "items" : {
+        "type" : "object",
+        "id" : "urn:jsonschema:org:vorpal:blade:test:loadbalancer:config:ProxyRule",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "tiers" : {
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "id" : "urn:jsonschema:org:vorpal:blade:test:loadbalancer:config:ProxyTier",
+              "properties" : {
+                "mode" : {
+                  "type" : "string",
+                  "required" : true,
+                  "enum" : [ "parallel", "serial" ]
+                },
+                "timeout" : {
+                  "type" : "integer"
+                },
+                "endpoints" : {
+                  "type" : "array",
+                  "required" : true,
+                  "items" : {
+                    "type" : "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

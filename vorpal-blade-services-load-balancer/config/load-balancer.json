@@ -1,0 +1,27 @@
+{
+  "defaultPermission" : "deny",
+  "acl" : [ {
+    "source" : "192.168.1.116",
+    "permission" : "allow",
+    "proxyRuleId" : "ruleset-001"
+  }, {
+    "source" : "192.168.64.1",
+    "permission" : "allow",
+    "proxyRuleId" : "ruleset-001"
+  }, {
+    "source" : "10.0.1.0/24",
+    "permission" : "deny"
+  } ],
+  "proxyRules" : [ {
+    "id" : "ruleset-001",
+    "tiers" : [ {
+      "mode" : "parallel",
+      "timeout" : 5,
+      "endpoints" : [ "sip:172.16.1.1;status=403", "sip:172.16.1.2;status=404", "sip:172.16.1.3", "sip:172.16.1.4" ]
+    }, {
+      "mode" : "serial",
+      "timeout" : 5,
+      "endpoints" : [ "sip:172.16.2.1;status=410", "sip:172.16.2.2;status=503", "sip:172.16.2.3", "sip:172.16.2.4" ]
+    } ]
+  } ]
+}

@@ -1,0 +1,44 @@
+{
+  "type" : "object",
+  "id" : "urn:jsonschema:org:vorpal:blade:services:transfer:TransferSettings",
+  "properties" : {
+    "transferAllRequests" : {
+      "type" : "boolean"
+    },
+    "defaultTransferStyle" : {
+      "type" : "string",
+      "enum" : [ "blind", "assisted", "media" ]
+    },
+    "preserveInviteHeaders" : {
+      "type" : "array",
+      "items" : {
+        "type" : "string"
+      }
+    },
+    "transferConditions" : {
+      "type" : "array",
+      "items" : {
+        "type" : "object",
+        "id" : "urn:jsonschema:org:vorpal:blade:framework:transfer:TransferCondition",
+        "properties" : {
+          "style" : {
+            "type" : "string",
+            "enum" : [ "blind", "assisted", "media" ]
+          },
+          "condition" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "array",
+              "items" : {
+                "type" : "object",
+                "additionalProperties" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
