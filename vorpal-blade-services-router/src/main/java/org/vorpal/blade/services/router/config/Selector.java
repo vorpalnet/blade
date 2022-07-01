@@ -5,6 +5,8 @@ import java.util.regex.Pattern;
 
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.config.SettingsManager;
+
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
@@ -90,6 +92,8 @@ public class Selector {
 			header = request.getHeader(attribute);
 		}
 
+		
+		
 		Matcher matcher = pattern.matcher(header);
 
 		if (matcher.matches()) {
@@ -103,6 +107,8 @@ public class Selector {
 			regexRoute.matcher = matcher;
 			regexRoute.selector = this;
 		}
+
+		SettingsManager.getSipLogger().finer(request, "Selector... attribute: "+attribute+", value: "+header+", key: "+key+", regexRoute: "+regexRoute);
 
 		return regexRoute;
 	}

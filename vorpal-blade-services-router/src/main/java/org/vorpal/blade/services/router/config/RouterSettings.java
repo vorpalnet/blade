@@ -32,6 +32,7 @@ public class RouterSettings {
 
 	public RouterSettings() {
 
+/*		
 		defaultRoute.id = "default";
 		defaultRoute.description = "If no translation found, apply default route.";
 		defaultRoute.requestUri = "sip:uas;status=404";		
@@ -102,6 +103,8 @@ public class RouterSettings {
 
 		this.plan.add(addressMap);
 		this.plan.add(prefixMap);
+		
+		*/
 	}
 
 	public Boolean applyRoutes(SipServletRequest outboundRequest) throws ServletParseException {

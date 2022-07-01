@@ -11,25 +11,21 @@ public class Config1 extends Configuration {
 
 	public Config1() {
 
-		this.setDefaultApplication("mediarouter");
+		this.setDefaultApplication("proxy-registrar");
 
 		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
+		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
+		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
+		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 
-		Transition inv02 = this.getPrevious("null").getTrigger("INVITE").createTransition("siprec");
-		inv02.addComparison("From", "matches", ".*sip:acmeSrc.*");
-		inv02.addComparison("Contact", "matches", ".*10.173.172.24.*");
-		inv02.setTerminating("To");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("keep-alive");
+		this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("load-balancer");
+		this.getPrevious("load-balancer").getTrigger("INVITE").createTransition("proxy-registrar");
+
 		
 		
-		Transition inv03 = this.getPrevious("null").getTrigger("INVITE").createTransition("genrec");
-		inv03.addComparison("From", "matches", ".*sip:Genesys.*");
-		inv03.addComparison("Contact", "matches", ".*10.173.172.24.*");
-		inv03.setTerminating("To");
 		
-		Transition inv04 = this.getPrevious("null").getTrigger("INVITE").createTransition("mediahub");
-		inv04.addComparison("Contact", "matches", ".*10.173.172.6.*");
-		inv04.setTerminating("To");
-				
+		
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {

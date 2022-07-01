@@ -41,12 +41,12 @@ import org.vorpal.blade.framework.callflow.Callflow;
 public class InitialInvite extends Callflow {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-	private B2buaServlet b2buaListener = null;
+	private B2buaListener b2buaListener = null;
 
 	public InitialInvite() {
 	}
 
-	public InitialInvite(B2buaServlet b2buaListener) {
+	public InitialInvite(B2buaListener b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
 
@@ -114,9 +114,9 @@ public class InitialInvite extends Callflow {
 					sendResponse(aliceResponse, (aliceAck) -> {
 						if (aliceAck.getMethod().equals(PRACK)) {
 							SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
-							if (b2buaListener != null) {
-								b2buaListener.callEvent(bobPrack);
-							}
+//							if (b2buaListener != null) {
+//								b2buaListener.callEvent(bobPrack);
+//							}
 							sendRequest(bobPrack, (prackResponse) -> {
 								sendResponse(aliceAck.createResponse(prackResponse.getStatus()));
 							});

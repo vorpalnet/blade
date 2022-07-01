@@ -1,25 +1,20 @@
 {
   "transferAllRequests" : false,
-  "featureEnable" : {
-    "OSM-Features" : [ {
-      "includes" : "transfer"
-    } ]
-  },
-  "blindTransfer" : {
-    "Request-URI" : [ {
-      "txfer" : "blind"
-    } ]
-  },
-  "assistedTransfer" : {
-    "Request-URI" : [ {
-      "txfer" : "assisted"
-    } ]
-  },
-  "mediaTransfer" : {
-    "Request-URI" : [ {
-      "txfer" : "media"
-    } ]
-  },
-  "defaultTransferType" : "blind",
-  "preserveInviteHeaders" : [ "Cisco-Gucid", "User-to-User" ]
+  "defaultTransferStyle" : "blind",
+  "preserveInviteHeaders" : [ "Cisco-Gucid", "User-to-User" ],
+  "transferConditions" : [ {
+    "style" : "blind",
+    "condition" : {
+      "OSM-Features" : [ {
+        "includes" : "transfer"
+      } ]
+    }
+  }, {
+    "style" : "blind",
+    "condition" : {
+      "To" : [ {
+        "matches" : ".*sip:1996.*"
+      } ]
+    }
+  } ]
 }

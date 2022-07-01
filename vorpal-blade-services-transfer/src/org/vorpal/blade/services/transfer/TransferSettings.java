@@ -29,7 +29,7 @@ public class TransferSettings implements Serializable {
 
 		TransferCondition tc2 = new TransferCondition();
 		tc2.setStyle(TransferStyle.blind);
-		tc2.getCondition().addComparison("To", "matches", ".*sip:1996.*");
+		tc2.getCondition().addComparison("Refer-To", "matches", ".*sip:1996.*");
 		this.getTransferConditions().add(tc2);
 
 		preserveInviteHeaders.add("Cisco-Gucid");
