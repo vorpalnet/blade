@@ -2,37 +2,36 @@ package org.vorpal.blade.services.transfer;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.LinkedList;
 
 import org.vorpal.blade.framework.config.Condition;
+import org.vorpal.blade.framework.transfer.TransferCondition;
+import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 
 public class TransferSettings implements Serializable {
-	public enum TransferType { blind, assisted, media };
-	
+	public enum TransferStyle {
+		blind, assisted, media
+	};
+
 	private Boolean transferAllRequests;
-	private Condition featureEnable;
-	private Condition blindTransfer;
-	private Condition assistedTransfer;
-	private Condition mediaTransfer;
-	private TransferType defaultTransferType;
-	private ArrayList<String> preserveInviteHeaders;
+	private TransferStyle defaultTransferStyle;
+	private ArrayList<String> preserveInviteHeaders = new ArrayList<>();
+	private LinkedList<TransferCondition> transferConditions = new LinkedList<>();
 
 	public TransferSettings() {
-		defaultTransferType = TransferType.blind;
-		transferAllRequests = false;
-		
-		featureEnable = new Condition();
-		featureEnable.addComparison("OSM-Features", "includes", "transfer");
+		this.setTransferAllRequests(false);
+		this.setDefaultTransferStyle(TransferSettings.TransferStyle.blind);
 
-		blindTransfer = new Condition();
-		blindTransfer.addComparison("Request-URI", "txfer", "blind");
-		
-		assistedTransfer = new Condition();
-		assistedTransfer.addComparison("Request-URI", "txfer", "assisted");
-		
-		mediaTransfer = new Condition();
-		mediaTransfer.addComparison("Request-URI", "txfer", "media");
+		TransferCondition tc1 = new TransferCondition();
+		tc1.setStyle(TransferStyle.blind);
+		tc1.getCondition().addComparison("OSM-Features", "includes", "transfer");
+		this.getTransferConditions().add(tc1);
 
-		preserveInviteHeaders = new ArrayList<>();
+		TransferCondition tc2 = new TransferCondition();
+		tc2.setStyle(TransferStyle.blind);
+		tc2.getCondition().addComparison("To", "matches", ".*sip:1996.*");
+		this.getTransferConditions().add(tc2);
+
 		preserveInviteHeaders.add("Cisco-Gucid");
 		preserveInviteHeaders.add("User-to-User");
 	}
@@ -45,8 +44,6 @@ public class TransferSettings implements Serializable {
 		this.transferAllRequests = transferAllRequests;
 	}
 
-
-
 	public ArrayList<String> getPreserveInviteHeaders() {
 		return preserveInviteHeaders;
 	}
@@ -55,44 +52,20 @@ public class TransferSettings implements Serializable {
 		this.preserveInviteHeaders = preserveInviteHeaders;
 	}
 
-	public Condition getFeatureEnable() {
-		return featureEnable;
+	public TransferStyle getDefaultTransferStyle() {
+		return defaultTransferStyle;
 	}
 
-	public void setFeatureEnable(Condition featureEnable) {
-		this.featureEnable = featureEnable;
+	public void setDefaultTransferStyle(TransferStyle defaultTransferStyle) {
+		this.defaultTransferStyle = defaultTransferStyle;
 	}
 
-	public Condition getBlindTransfer() {
-		return blindTransfer;
+	public LinkedList<TransferCondition> getTransferConditions() {
+		return transferConditions;
 	}
 
-	public void setBlindTransfer(Condition blindTransfer) {
-		this.blindTransfer = blindTransfer;
-	}
-
-	public Condition getAssistedTransfer() {
-		return assistedTransfer;
-	}
-
-	public void setAssistedTransfer(Condition assistedTransfer) {
-		this.assistedTransfer = assistedTransfer;
-	}
-
-	public Condition getMediaTransfer() {
-		return mediaTransfer;
-	}
-
-	public void setMediaTransfer(Condition mediaTransfer) {
-		this.mediaTransfer = mediaTransfer;
-	}
-
-	public TransferType getDefaultTransferType() {
-		return defaultTransferType;
-	}
-
-	public void setDefaultTransferType(TransferType defaultTransferType) {
-		this.defaultTransferType = defaultTransferType;
+	public void setTransferConditions(LinkedList<TransferCondition> transferConditions) {
+		this.transferConditions = transferConditions;
 	}
 
 }
