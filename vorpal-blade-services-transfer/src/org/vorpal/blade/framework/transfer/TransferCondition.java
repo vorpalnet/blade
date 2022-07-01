@@ -3,8 +3,6 @@ package org.vorpal.blade.framework.transfer;
 import org.vorpal.blade.framework.config.Condition;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 
-import sun.net.ftp.FtpClient.TransferType;
-
 public class TransferCondition {
 
 	private TransferStyle style = TransferStyle.blind;
