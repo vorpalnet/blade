@@ -22,54 +22,57 @@
  *  SOFTWARE.
  */
 
-/*
- *   Notes:
- *   https://www.dialogic.com/webhelp/BorderNet2020/2.2.0/WebHelp/sip_rfr_calltrans.htm
+/**
+ *  Notes: https://www.dialogic.com/webhelp/BorderNet2020/2.2.0/WebHelp/sip_rfr_calltrans.htm
  * 
- * 
- *   |------------------->|------------------->|------------------->|
- *   |<-------------------|<-------------------|<-------------------|
- *   |                    |                    |                    |
- */
+ *   ALICE              Transfer              BOB                CAROL
+ * transferee                              transferor           target
+ * ----------           --------              ---               ------
+ *     |                   |                   |                   |
+ *     | RTP               |                   |                   |
+ *     |<=====================================>|                   |
+ *     |                   |                   |                   |
+ *     |                   |             REFER |                   |   REFER 
+ *     |                   |<------------------|                   |   To:          transferee
+ *     |                   |                   |                   |   Refer-To:    target
+ *     |                   |                   |                   |   Referred-By: transferor
+ *     |                   |                   |                   |
+ *     |          INVITE   |                   |                   |   INVITE
+ *     |<------------------|                   |                   |   empty reINVITE to get SDP
+ *     | 200 OK            |                   |                   |
+ *     |--(sdp)----------->|                   |                   |
+ *     |                   | 202 Accepted      |                   |   
+ *     |                   |------------------>|                   |
+ *     |                   | NOTIFY            |                   |   NOTIFY
+ *     |                   |------------------>|                   |   Subscription-State: pending;expires=3600
+ *     |                   |            200 OK |                   |   Event: refer
+ *     |                   |<------------------|                   |   Content-Type: message/sipfrag
+ *     |                   |                   |                   |   Content: SIP/2.0 100 Trying
+ *     |                   | INVITE            |                   |
+ *     |                   |--(sdp)------------------------------->|
+ *     |                   |                   |       180 Ringing |
+ *     |                   |<--------------------------------------|
+ *     |                   |                   |            200 OK |
+ *     |                   |<-------------------------------(sdp)--|
+ *     |               ACK |                   |                   |
+ *     |<-----------(sdp)--|                   |                   |
+ *     |                   | ACK               |                   |
+ *     |                   |-------------------------------------->|
+ *     |                   | NOTIFY            |                   |   NOTIFY
+ *     |                   |------------------>|                   |   Subscription-State: active;expires=3600
+ *     |                   |            200 OK |                   |   Event:              refer
+ *     |                   |<------------------|                   |   Content-Type:       message/sipfrag
+ *     |                   |                   |                   |   Content:            SIP/2.0 200 OK
+ *     | RTP               |                   |                   |
+ *     |<=========================================================>|
+ *     |                   | BYE               |                   |
+ *     |                   |------------------>|                   |
+ *     |                   |            200 OK |                   |
+ *     |                   |<------------------|                   |
+ *     |                   |                   |                   |
+*/
 
-/* Transferor             BLADE              Transferee             Target
- *     |                    |                    |                    |
- *     | RTP                |                    |                    |
- *     |<=======================================>|                    |
- *     |                    |                    |                    |
- *     |                    |              REFER |                    |    Refer-To: <sip:carol@vorpal.net>
- *     |                    |<-------------------|                    |    Referred-By: <sip:bob@vorpal.net>
- *     |                    | 202 Accepted       |                    |
- *     |                    |------------------->|                    |
- *     |                    | NOTIFY             |                    |    Subscription-State: active
- *     |                    |------------------->|                    |    Event: refer
- *     |                    |             200 OK |                    |    Content-Type: message/sipfrag
- *     |                    |<-------------------|                    |    Contact: ???
- *     |                    |                    |                    |    Body = SIP/2.0 100 Trying
- *     |             INVITE |                    |                    |
- *     |<-------------------|                    |                    |
- *     | 200 OK             |                    |                    |
- *     |------------------->|                    |                    |
- *     |                    | INVITE             |                    |
- *     |                    |---------------------------------------->|
- *     |                    |                    |             200 OK |
- *     |                    |<----------------------------------------|
- *     |                    | NOTIFY             |                    |    Subscription-State: active
- *     |                    |------------------->|                    |    Event: refer
- *     |                    |             200 OK |                    |    Content-Type: message/sipfrag
- *     |                    |<-------------------|                    |    Contact: ???
- *     |                ACK |                    |                    |    Body = SIP/2.0 200 OK
- *     |<-------------------|                    |                    |
- *     |                    | ACK                |                    |
- *     |                    |---------------------------------------->|
- *     |                    |                    | RTP                |
- *     |                    |                    |<==================>|
- *     |                BYE |                    |                    |
- *     |<-------------------|                    |                    |
- *     | 200 OK             |                    |                    |
- *     |------------------->|                    |                    |
- *     |                    |                    |                    |
- */
+
 
 package org.vorpal.blade.framework.transfer;
 

@@ -33,8 +33,17 @@ public class ProxyRegistrarSettings implements Serializable {
 	public boolean noCancel = false;
 	public boolean parallel = true;
 	public int proxyTimeout = 180;
-	public boolean recordRoute = true;
+	public boolean recordRoute = false;
 	public boolean recurse = true;
+//	public boolean supervised = false;
+
+//	public boolean isSupervised() {
+//		return supervised;
+//	}
+//
+//	public void setSupervised(boolean supervised) {
+//		this.supervised = supervised;
+//	}
 
 	public boolean isProxyOnUnregistered() {
 		return proxyOnUnregistered;

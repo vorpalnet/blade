@@ -7,13 +7,12 @@ import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.b2bua.B2buaListener;
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.test.uas.callflows.UasCallflow;
+import org.vorpal.blade.test.uas.callflows.TestInvite;
 import org.vorpal.blade.test.uas.config.TestUasConfig;
 
 @WebListener
@@ -28,20 +27,8 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow = null;
 
-		Integer status;
-
-		String strStatus = request.getRequestURI().getParameter("status");
-		if (strStatus != null) {
-			status = Integer.parseInt(strStatus);
-		} else {
-			String user = ((SipURI) (request.getTo().getURI())).getUser();
-			sipLogger.fine("user: "+user);
-			status = settingsManager.getCurrent().getErrorMap().get(user);
-			sipLogger.fine("status: "+status);
-		}
-
-		if (request.isInitial() && status != null) {
-			callflow = new UasCallflow(status);
+		if (request.isInitial()) {
+			callflow = new TestInvite();
 		} else {
 			callflow = super.chooseCallflow(request);
 		}

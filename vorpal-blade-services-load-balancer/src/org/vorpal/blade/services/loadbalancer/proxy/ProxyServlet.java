@@ -27,17 +27,18 @@ public abstract class ProxyServlet extends AsyncSipServlet implements ProxyListe
 
 				String key = ((SipURI) inboundRequest.getRequestURI()).getHost();
 
-				SettingsManager.getSipLogger().fine(inboundRequest, "Looking up key: "+key);
-				
+				SettingsManager.getSipLogger().fine(inboundRequest, "Looking up key: " + key);
+
 				ProxyRule rule = LoadBalancerServlet.settingsManager.getCurrent().getRules().get(key);
-				
-				if(rule!=null) {
-					SettingsManager.getSipLogger().fine(inboundRequest, "Rule found: "+rule.getId());
-					callflow = new ProxyInitialInvite(this, rule);
-				}else {
-					SettingsManager.getSipLogger().fine(inboundRequest, "No rule found for key: "+key);
+
+				if (rule != null) {
+					SettingsManager.getSipLogger().fine(inboundRequest,
+							"Rule found... id: " + rule.getId() + ", tiers: " + rule.getTiers().size());
+					callflow = new ProxyInvite(this, rule);
+				} else {
+					SettingsManager.getSipLogger().fine(inboundRequest, "No rule found for key: " + key);
 					callflow = new InitialInvite();
-					
+
 				}
 
 			} else {

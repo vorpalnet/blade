@@ -62,14 +62,14 @@
 	<target name="package" depends="init">
 		<manifest file="build/MANIFEST.MF">
 			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}-${build.number}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}" />
 		</manifest>
-		<war destfile="build/${ant.project.name}-${implementation}.war"
+		<war destfile="build/${ant.project.name}.war"
 		     manifest="build/MANIFEST.MF"
 		     basedir="${webapp}">
 			<classes dir="build/classes" />
 		</war>
-		<copy file="build/${ant.project.name}-${implementation}.war" todir="${dist}" />
+		<copy file="build/${ant.project.name}.war" todir="${dist}" />
 	</target>
 
 

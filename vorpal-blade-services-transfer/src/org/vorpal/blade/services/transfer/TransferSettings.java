@@ -4,36 +4,34 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.LinkedList;
 
-import org.vorpal.blade.framework.config.Condition;
 import org.vorpal.blade.framework.transfer.TransferCondition;
-import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 
 public class TransferSettings implements Serializable {
+
 	public enum TransferStyle {
 		blind, assisted, media
 	};
 
-	private Boolean transferAllRequests;
-	private TransferStyle defaultTransferStyle;
-	private ArrayList<String> preserveInviteHeaders = new ArrayList<>();
-	private LinkedList<TransferCondition> transferConditions = new LinkedList<>();
+	public enum LoggingLevel {
+		OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL
+	}
+
+	protected LoggingLevel loggingLevel = LoggingLevel.INFO;
+	protected Boolean transferAllRequests;
+	protected TransferStyle defaultTransferStyle;
+	protected ArrayList<String> preserveInviteHeaders = new ArrayList<>();
+	protected LinkedList<TransferCondition> transferConditions = new LinkedList<>();
 
 	public TransferSettings() {
-		this.setTransferAllRequests(false);
-		this.setDefaultTransferStyle(TransferSettings.TransferStyle.blind);
 
-		TransferCondition tc1 = new TransferCondition();
-		tc1.setStyle(TransferStyle.blind);
-		tc1.getCondition().addComparison("OSM-Features", "includes", "transfer");
-		this.getTransferConditions().add(tc1);
+	}
 
-		TransferCondition tc2 = new TransferCondition();
-		tc2.setStyle(TransferStyle.blind);
-		tc2.getCondition().addComparison("Refer-To", "matches", ".*sip:1996.*");
-		this.getTransferConditions().add(tc2);
+	public LoggingLevel getLoggingLevel() {
+		return loggingLevel;
+	}
 
-		preserveInviteHeaders.add("Cisco-Gucid");
-		preserveInviteHeaders.add("User-to-User");
+	public void setLoggingLevel(LoggingLevel loggingLevel) {
+		this.loggingLevel = loggingLevel;
 	}
 
 	public Boolean getTransferAllRequests() {

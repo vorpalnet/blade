@@ -195,6 +195,7 @@ public class ProxyRegistrarServlet implements SipServletListener {
 				proxy.setProxyTimeout(settings.getProxyTimeout());
 				proxy.setRecordRoute(settings.isRecordRoute());
 				proxy.setRecurse(settings.isRecurse());
+//				proxy.setSupervised(settings.isSupervised());
 
 				proxy.createProxyBranches(aors);
 				proxy.startProxy();

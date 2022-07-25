@@ -64,6 +64,7 @@ import inet.ipaddr.IPAddress;
  *
  */
 public class SettingsManager<T> {
+	private T sample = null;
 	private T current;
 	private ObjectName objectName;
 	private MBeanServer server;
@@ -106,36 +107,36 @@ public class SettingsManager<T> {
 	}
 
 	public String getDomainJson() throws JsonProcessingException {
-		sipLogger.fine("getDomainlJson...");
+		// sipLogger.fine("getDomainlJson...");
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode);
 	}
 
 	public void setDomainJson(String domainJson) throws JsonMappingException, JsonProcessingException {
-		sipLogger.fine("setDomainJson...");
+		// sipLogger.fine("setDomainJson...");
 		domainNode = mapper.readTree(domainJson);
-		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode));
+		// sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode));
 	}
 
 	public String getServerJson() throws JsonProcessingException {
-		sipLogger.fine("getServerJson...");
+		// sipLogger.fine("getServerJson...");
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode);
 	}
 
 	public void setServerJson(String serverJson) throws JsonMappingException, JsonProcessingException {
-		sipLogger.fine("setServerJson...");
+		// sipLogger.fine("setServerJson...");
 		serverNode = mapper.readTree(serverJson);
-		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode));
+		// sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode));
 	}
 
 	public String getClusterJson() throws JsonProcessingException {
-		sipLogger.fine("getServerJson...");
+		// sipLogger.fine("getServerJson...");
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode);
 	}
 
 	public void setClusterJson(String clusterJson) throws JsonMappingException, JsonProcessingException {
-		sipLogger.fine("setClusterJson...");
+		// sipLogger.fine("setClusterJson...");
 		clusterNode = mapper.readTree(clusterJson);
-		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode));
+		// sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode));
 
 	}
 
@@ -159,19 +160,25 @@ public class SettingsManager<T> {
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
+	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample) {
+		this.sample = sample;
+		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
+	}
+
 	public void build(String name, Class<T> clazz, ObjectMapper _mapper) {
 
 		this.servletContextName = basename(name);
 		this.clazz = clazz;
 
 		try {
-			
-			if (null==_mapper) {
+
+			if (null == _mapper) {
 				this.mapper = new ObjectMapper();
 			} else {
 				this.mapper = _mapper;
 			}
-			
+
 			sipLogger = LogManager.getLogger(name);
 			settings = new Settings(this);
 
@@ -195,14 +202,15 @@ public class SettingsManager<T> {
 
 			// Support for SipFactory classes
 
-
-
 			this.mapper.registerModule(new SimpleModule().addDeserializer(URI.class, new JsonUriDeserializer()));
-			this.mapper.registerModule(new SimpleModule().addDeserializer(Address.class, new JsonAddressDeserializer()));
-			this.mapper.registerModule(new SimpleModule().addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
+			this.mapper
+					.registerModule(new SimpleModule().addDeserializer(Address.class, new JsonAddressDeserializer()));
+			this.mapper.registerModule(
+					new SimpleModule().addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
 			this.mapper.registerModule(new SimpleModule().addSerializer(URI.class, new JsonUriSerializer()));
 			this.mapper.registerModule(new SimpleModule().addSerializer(Address.class, new JsonAddressSerializer()));
-			this.mapper.registerModule(new SimpleModule().addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
+			this.mapper
+					.registerModule(new SimpleModule().addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
 			this.mapper.registerModule(
 					new SimpleModule().addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
 
@@ -251,15 +259,21 @@ public class SettingsManager<T> {
 
 		// start with the default
 		boolean noConfigFiles = true;
-		T tmp = (T) clazz.newInstance();
+
+		T tmp;
+		if (sample == null) {
+			tmp = (T) clazz.newInstance();
+		} else {
+			tmp = sample;
+		}
 
 		File domainFile = new File(domainPath.toString() + "/" + servletContextName + ".json");
-		sipLogger.fine("Attempting to load... " + domainFile.getAbsolutePath());
+		// sipLogger.fine("Attempting to load... " + domainFile.getAbsolutePath());
 		try {
 			if (domainFile.exists()) {
-				sipLogger.fine("Loading... " + domainFile.getAbsolutePath());
+				// sipLogger.fine("Loading... " + domainFile.getAbsolutePath());
 				domainNode = mapper.readTree(domainFile);
-				sipLogger.fine("domainNode: " + domainNode);
+				// sipLogger.fine("domainNode: " + domainNode);
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
@@ -268,10 +282,10 @@ public class SettingsManager<T> {
 		}
 
 		File clusterFile = new File(clusterPath.toString() + "/" + servletContextName + ".json");
-		sipLogger.fine("Attempting to load... " + clusterFile.getAbsolutePath());
+		// sipLogger.fine("Attempting to load... " + clusterFile.getAbsolutePath());
 		try {
 			if (clusterFile.exists()) {
-				sipLogger.fine("Loading... " + clusterFile.getAbsolutePath());
+				// sipLogger.fine("Loading... " + clusterFile.getAbsolutePath());
 				clusterNode = mapper.readTree(clusterFile);
 				noConfigFiles = false;
 			}
@@ -281,10 +295,10 @@ public class SettingsManager<T> {
 		}
 
 		File serverFile = new File(serverPath.toString() + "/" + servletContextName + ".json");
-		sipLogger.fine("Attempting to load... " + serverFile.getAbsolutePath());
+		// sipLogger.fine("Attempting to load... " + serverFile.getAbsolutePath());
 		try {
 			if (serverFile.exists()) {
-				sipLogger.fine("Loading... " + serverFile.getAbsolutePath());
+				// sipLogger.fine("Loading... " + serverFile.getAbsolutePath());
 				serverNode = mapper.readTree(serverFile);
 				noConfigFiles = false;
 			}
@@ -297,10 +311,13 @@ public class SettingsManager<T> {
 			current = tmp;
 			saveConfigFile(domainFile, current);
 		} else {
-			sipLogger.fine("Calling mergeCurrentFromJson...");
+			// sipLogger.fine("Calling mergeCurrentFromJson...");
 			mergeCurrentFromJson();
 		}
 
+		
+		
+		sipLogger.info("Loading configuration...\n" + getCurrentAsJson());
 	}
 
 	private void saveSchema() throws JsonGenerationException, JsonMappingException, IOException {
@@ -358,8 +375,8 @@ public class SettingsManager<T> {
 
 	public void setCurrentFromJson(String json) {
 		try {
-			sipLogger.warning("Configuration changed...");
-			sipLogger.info(json);
+//			sipLogger.info("Configuration changed...");
+//			sipLogger.info(json);
 
 			T tmp = mapper.readValue(json, clazz);
 			initialize(tmp);
@@ -409,18 +426,18 @@ public class SettingsManager<T> {
 	 */
 	public void mergeCurrentFromJson() throws ServletParseException {
 		try {
-			sipLogger.fine("Starting to merge...");
+			// sipLogger.fine("Starting to merge...");
 			mergedNode = merge(merge(domainNode, clusterNode), serverNode);
 
-			sipLogger.fine("Merged Node:\n" + mergedNode);
+			// sipLogger.fine("Merged Node:\n" + mergedNode);
 
-			sipLogger.fine("Starting to convert...");
+			// sipLogger.fine("Starting to convert...");
 			T tmp = (T) mapper.convertValue(mergedNode, clazz);
-			sipLogger.fine("Starting to initialize...");
+			// sipLogger.fine("Starting to initialize...");
 			initialize(tmp);
-			sipLogger.fine("Assigning current...");
+			// sipLogger.fine("Assigning current...");
 			current = tmp;
-			sipLogger.fine("Current: " + current);
+			// sipLogger.fine("Current: " + current);
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
 		}
@@ -444,7 +461,7 @@ public class SettingsManager<T> {
 	}
 
 	public void logCurrent() {
-		sipLogger.info("Configuration has changed. New configuration:\n" + getCurrentAsJson());
+		sipLogger.info("Configuration has changed...\n" + getCurrentAsJson());
 	}
 
 	/**

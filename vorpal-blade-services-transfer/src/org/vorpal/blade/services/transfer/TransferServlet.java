@@ -8,6 +8,7 @@ import java.util.Map.Entry;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
@@ -15,7 +16,6 @@ import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.transfer.AssistedTransfer;
 import org.vorpal.blade.framework.transfer.BlindTransfer;
 import org.vorpal.blade.framework.transfer.MediaTransfer;
@@ -32,7 +32,7 @@ import org.vorpal.blade.framework.transfer.TransferListener;
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
 public class TransferServlet extends B2buaServlet implements TransferListener {
-	public static SettingsManager<TransferSettings> settingsManager;
+	public static TransferSettingsManager settingsManager;
 
 //	@SipApplicationKey
 //	public static String sessionKey(SipServletRequest request) {
@@ -41,14 +41,12 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
-		settingsManager = new SettingsManager<>(event, TransferSettings.class);
-		sipLogger.logConfiguration(settingsManager.getCurrent());
+		settingsManager = new TransferSettingsManager(event, TransferSettings.class, new TransferSettingsSample());
 	}
 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) {
 		// TODO Auto-generated method stub
-
 	}
 
 	private Callflow chooseCallflowStyle(TransferSettings.TransferStyle transferStyle) {

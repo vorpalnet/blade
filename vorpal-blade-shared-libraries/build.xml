@@ -67,10 +67,10 @@
 		</manifest>
 
 		<fileset dir="../vorpal-blade-library-framework/build" id="vorpal-blade-library-framework">
-			<filename name="vorpal-blade-library-framework-${implementation}.jar" />
+			<filename name="vorpal-blade-library-framework.jar" />
 		</fileset>
 
-		<war destfile="build/${ant.project.name}-${implementation}.war"
+		<war destfile="build/${ant.project.name}.war"
 		     basedir="src/main/webapp"
 		     needxmlfile="false"
 		     manifest="build/MANIFEST.MF">
@@ -78,7 +78,7 @@
 			<classes dir="build/classes" />
 		</war>
 
-		<copy file="build/${ant.project.name}-${implementation}.war" todir="${dist}" />
+		<copy file="build/${ant.project.name}.war" todir="${dist}" />
 
 	</target>
 	

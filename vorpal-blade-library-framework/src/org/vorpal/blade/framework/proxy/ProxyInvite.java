@@ -51,7 +51,7 @@ public class ProxyInvite extends Callflow {
 
 		} else {
 
-			bobRequest = createInitialRequest(aliceRequest, true); // create a fresh template request
+			bobRequest = createContinueRequest(aliceRequest); // create a fresh template request
 
 			if (proxyTier.getMode().equals(Mode.parallel)) {
 				proxyParallel(proxyTier.getTimeout(), proxyTier.getEndpoints());
@@ -88,7 +88,7 @@ public class ProxyInvite extends Callflow {
 
 		SipServletRequest proxyRequest;
 		for (URI uri : endpoints) {
-			proxyRequest = createInitialRequest(bobRequest, true);
+			proxyRequest = createContinueRequest(bobRequest);
 			proxyRequest.setRequestURI(uri);
 			proxyRequests.add(proxyRequest);
 			if (timerId != null) {
@@ -151,7 +151,7 @@ public class ProxyInvite extends Callflow {
 						// try to proxy again
 						proxyTier = listener.proxyRequest(this.bobRequest); // attempt to proxy again
 						if (proxyTier != null && proxyTier.getEndpoints().size() > 0) {
-							bobRequest = createInitialRequest(aliceRequest, true); // create a new dummy template
+							bobRequest = createContinueRequest(aliceRequest); // create a new dummy template
 							proxyOn(proxyTier); // you had all summer long, figure out what it is you do
 
 						} else {
@@ -178,7 +178,7 @@ public class ProxyInvite extends Callflow {
 			proxyTier = listener.proxyRequest(this.bobRequest); // attempt to proxy again
 
 			if (proxyTier != null && proxyTier.getEndpoints().size() > 0) {
-				this.bobRequest = createInitialRequest(aliceRequest, true);
+				this.bobRequest = createContinueRequest(aliceRequest);
 
 				if (proxyTier.getMode().equals(Mode.parallel)) {
 					proxyParallel(timeout, proxyTier.getEndpoints());
@@ -207,7 +207,7 @@ public class ProxyInvite extends Callflow {
 				});
 			}
 
-			proxyRequest = createInitialRequest(bobRequest, true);
+			proxyRequest = createContinueRequest(bobRequest);
 			proxyRequest.setRequestURI(endpoint);
 			if (timerId != null) {
 				proxyRequest.getSession().setAttribute("TIMER", timerId);

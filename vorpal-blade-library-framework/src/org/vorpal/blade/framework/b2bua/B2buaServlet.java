@@ -48,15 +48,15 @@ import org.vorpal.blade.framework.logging.Logger;
 import org.vorpal.blade.framework.logging.Logger.Direction;
 
 /**
- * This class implements a simple back-to-back user agent. It accepts an incoming
- * SipServletRequest object and creates an outgoing copy of it. By extending this class
- * and overriding the B2buaListener interface methods, users can create simple routing
- * applications by modifying the outgoing request or response objects before they are sent.
+ * This class implements a simple back-to-back user agent. It accepts an
+ * incoming SipServletRequest object and creates an outgoing copy of it. By
+ * extending this class and overriding the B2buaListener interface methods,
+ * users can create simple routing applications by modifying the outgoing
+ * request or response objects before they are sent.
  * 
  * @author Jeff McDonald
  */
-public abstract class B2buaServlet extends AsyncSipServlet
-		implements B2buaListener, SipServletListener, ServletContextListener, TimerListener {
+public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListener {
 	private static final long serialVersionUID = 1L;
 
 	@Override
@@ -81,21 +81,21 @@ public abstract class B2buaServlet extends AsyncSipServlet
 	}
 
 	@Override
-	public abstract void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException; 
-	
+	public abstract void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException;
+
 	@Override
 	public abstract void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException;
-	
+
 	@Override
 	public abstract void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException;
-	
+
 	@Override
 	public abstract void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException;
-	
+
 	@Override
 	public abstract void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException;
-	
+
 	@Override
 	public abstract void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException;
-	
+
 }

@@ -22,6 +22,45 @@
  *  SOFTWARE.
  */
 
+/**
+ *   ALICE              Transfer              BOB                CAROL
+ * transferee                              transferor           target
+ * ----------           --------              ---               ------
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |<==RTP================================>|                   |
+ *     |                   |                   |                   |
+ *     |                   |           REFER   |                   |   To:          transferee
+ *     |                   |<-----------------[ ]                  |   Referred-By: transferor
+ *     |                   |                   |                   |   Refer-To:    target
+ *     |                   |                   |                   | 
+ *     |          INVITE   |                   |                   |
+ *     |<-----------------[ ]                  |                   |   existing session
+ *     |                   |                   |                   |
+ *     |   200 OK          |                   |                   |
+ *    [ ]--(sdp)---------->|                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |                   |                   |                   |
+ *     |------------------>|------------------>|------------------>|
+ *  
+ *  
+ *  
+ *  
+ *  
+ */
+
 package org.vorpal.blade.framework.transfer;
 
 import java.io.IOException;
@@ -65,7 +104,6 @@ public class Transfer extends Callflow {
 		this.transferListener = transferListener;
 	}
 
-	
 	/**
 	 * Call this method to construct the various request objects.
 	 * 

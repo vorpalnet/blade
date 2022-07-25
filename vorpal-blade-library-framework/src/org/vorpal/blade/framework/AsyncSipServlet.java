@@ -101,12 +101,12 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	@Override
-	final public void contextInitialized(ServletContextEvent sce) {
+	public void contextInitialized(ServletContextEvent sce) {
 		// do nothing;
 	}
 
 	@Override
-	final public void contextDestroyed(ServletContextEvent sce) {
+	public void contextDestroyed(ServletContextEvent sce) {
 		try {
 			servletDestroyed(event);
 		} catch (Exception e) {
@@ -115,7 +115,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	@Override
-	final protected void doRequest(SipServletRequest request) throws ServletException, IOException {
+	protected void doRequest(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow;
 		Callback<SipServletRequest> requestLambda;
 
@@ -150,7 +150,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	@Override
-	final protected void doResponse(SipServletResponse response) throws ServletException, IOException {
+	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
 		Callback<SipServletResponse> callback;
 		try {
 
@@ -171,7 +171,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	@SuppressWarnings("unchecked")
 	@Override
-	final public void timeout(ServletTimer timer) {
+	public void timeout(ServletTimer timer) {
 		try {
 			Callback<ServletTimer> callback;
 			callback = (Callback<ServletTimer>) timer.getInfo();
@@ -184,28 +184,28 @@ public abstract class AsyncSipServlet extends SipServlet
 	/**
 	 * @return the sipLogger
 	 */
-	final public static Logger getSipLogger() {
+	public static Logger getSipLogger() {
 		return sipLogger;
 	}
 
 	/**
 	 * @return the sipFactory
 	 */
-	final public static SipFactory getSipFactory() {
+	public static SipFactory getSipFactory() {
 		return sipFactory;
 	}
 
 	/**
 	 * @return the sipUtil
 	 */
-	final public static SipSessionsUtil getSipUtil() {
+	public static SipSessionsUtil getSipUtil() {
 		return sipUtil;
 	}
 
 	/**
 	 * @return the timerService
 	 */
-	final public static TimerService getTimerService() {
+	public static TimerService getTimerService() {
 		return timerService;
 	}
 
@@ -225,7 +225,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 
 		return Long.toHexString(h);
-
 	}
 
 }
