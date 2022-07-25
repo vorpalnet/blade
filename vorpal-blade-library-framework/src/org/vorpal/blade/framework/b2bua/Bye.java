@@ -55,23 +55,33 @@ public class Bye extends Callflow {
 			aliceRequest = request;
 			SipSession sipSession = getLinkedSession(aliceRequest.getSession());
 
-			bobRequest = sipSession.createRequest(request.getMethod());
-			copyContentAndHeaders(aliceRequest, bobRequest);
+			if (sipSession != null) {
 
-			if (b2buaListener != null) {
-				b2buaListener.callCompleted(bobRequest);
+				bobRequest = sipSession.createRequest(request.getMethod());
+				copyContentAndHeaders(aliceRequest, bobRequest);
+
+				if (b2buaListener != null) {
+					b2buaListener.callCompleted(bobRequest);
+				}
+
+				sendRequest(bobRequest, (bobResponse) -> {
+					SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+					copyContentAndHeaders(bobResponse, aliceResponse);
+					if (b2buaListener != null) {
+						b2buaListener.callEvent(aliceResponse);
+					}
+					sendResponse(aliceResponse);
+				});
+
+			} else {
+				// In case a BYE comes in before sessions can be established.
+				// Should probably send a CANCEL in addition.
+				sendResponse(request.createResponse(200));
 			}
 
-			sendRequest(bobRequest, (bobResponse) -> {
-				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-				copyContentAndHeaders(bobResponse, aliceResponse);
-				if (b2buaListener != null) {
-					b2buaListener.callEvent(aliceResponse);
-				}
-				sendResponse(aliceResponse);
-			});
+		} catch (
 
-		} catch (Exception e) {
+		Exception e) {
 			sipLogger.logStackTrace(request, e);
 			throw e;
 		}
