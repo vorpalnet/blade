@@ -6,22 +6,10 @@
 
     <include file="libraries.xml" />
 
-<!--
-    <buildnumber />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="${computer.hostname}.properties" />
 	<property file="build.properties" />
-	<property name="OCCAS71" location="/opt/oracle/occas-7.1" />
-
-	<include file="libraries.xml" />
-
-	<property name="debuglevel" value="source,lines,vars" />
-	<property name="target" value="1.8" />
-	<property name="source" value="1.8" />
-	<property name="dist" location="dist" />
-	<property name="docs" location="docs" />
--->
 
 	<!-- Required for the 'foreach' command. -->
 	<taskdef resource="net/sf/antcontrib/antlib.xml">
@@ -44,6 +32,14 @@
 	</target>
 
 	<target name="build" depends="init">
+
+		<manifest file="dist/_version-${implementation}">
+                        <attribute name="Copyright" value="${copyright}" />
+                        <attribute name="License" value="${license}" />
+			<attribute name="Built-By" value="${user.name}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}" />
+		</manifest>
+
 		<foreach target="build-all" param="var">
 			<path refid="subprojects" />
 		</foreach>

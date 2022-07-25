@@ -27,6 +27,7 @@ package org.vorpal.blade.framework.config;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.logging.Level;
 
 import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.ServletParseException;
@@ -48,6 +49,11 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 	public boolean check(String id, String name, SipServletRequest request) throws ServletParseException {
 
 		Logger sipLogger = SettingsManager.getSipLogger();
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(request,
+					"Comparison.check... id: " + id + ", name: " + name + ", request:\n" + request.toString());
+		}
 
 		boolean match = true;
 
@@ -77,6 +83,10 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 			operator = entry.getKey();
 			expression = entry.getValue();
 
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(request, "Comparison.check... operator: " + operator + ", expression: " + expression);
+			}
+
 			switch (operator) {
 			case "address":
 			case "matches":
@@ -88,12 +98,19 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 					match = false;
 				}
 
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				}
+
 				break;
 
 			case "uri":
 				value = (value != null) ? value : request.getAddressHeader(name).getURI().toString();
 				match = match && value.matches(expression);
 
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				}
 				break;
 
 			case "user":
@@ -107,6 +124,9 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 					match = false;
 				}
 
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				}
 				break;
 
 			case "host":
@@ -115,6 +135,9 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 						: ((SipURI) request.getAddressHeader(name).getURI()).getHost();
 				match = match && value.equalsIgnoreCase(expression);
 
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				}
 				break;
 
 			case "equals":
@@ -125,6 +148,9 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 					match = false;
 				}
 
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				}
 				break;
 
 			case "contains":
@@ -139,8 +165,9 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 						contains = value.contains(expression);
 
-						sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
-								+ operator + ", expression=" + expression + ", contains=" + contains);
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
+						}
 
 						if (contains == true) {
 							break;
@@ -149,6 +176,11 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				}
 
 				match = match && contains;
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... contains: " + contains + ", match: " + match);
+				}
+
 				break;
 
 			case "includes":
@@ -161,8 +193,9 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 					while (inc_itr.hasNext()) {
 						value = inc_itr.next();
 
-						sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
-								+ operator + ", expression=" + expression + ", includes=" + includes);
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(request, "Comparison.check... value: " + value + ", includes: " + includes);
+						}
 						if (includes == true) {
 							break;
 						}
@@ -170,6 +203,11 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				}
 
 				match = match && includes;
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... includes: " + includes + ", match: " + match);
+				}
+
 				break;
 
 			case "value":
@@ -185,8 +223,9 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 						hasValue = value.equalsIgnoreCase(expression);
 
-						sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
-								+ operator + ", expression=" + expression + ", hasValue=" + hasValue);
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(request, "Comparison.check... value: " + value + ", hasValue: " + hasValue);
+						}
 
 						if (hasValue == true) {
 							break;
@@ -196,6 +235,10 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				}
 
 				match = match && hasValue;
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... includes: " + hasValue + ", hasValue: " + hasValue);
+				}
+
 				break;
 
 			default:
@@ -208,8 +251,9 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 						hasParam = param.equalsIgnoreCase(expression);
 
-						sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
-								+ operator + ", expression=" + expression + ", hasParam=" + hasParam);
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(request, "Comparison.check... param: " + param + ", hasParam: " + hasParam);
+						}
 
 					}
 				} else {
@@ -223,8 +267,10 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 						if (value != null) {
 							hasParam = value.equalsIgnoreCase(expression);
 
-							sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
-									+ operator + ", expression=" + expression + ", hasParam=" + hasParam);
+							if (sipLogger.isLoggable(Level.FINER)) {
+								sipLogger.finer(request,
+										"Comparison.check... value: " + value + ", hasParam: " + hasParam);
+							}
 
 							if (hasParam == true) {
 								break;
@@ -236,13 +282,13 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				}
 
 				match = match && hasParam;
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... includes: " + hasParam + ", hasValue: " + hasParam);
+				}
+
 				break;
 
-			}
-
-			if (id != null) {
-				sipLogger.finer("checking id=" + id + ", name=" + name + ", value=" + value + ", operator="
-						+ ", expression=" + expression + ", match=" + match);
 			}
 
 			if (!match) {
@@ -251,9 +297,11 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 		}
 
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(request, "Comparison.check... match: " + match);
+		}
+
 		return match;
 	}
-
-
 
 }

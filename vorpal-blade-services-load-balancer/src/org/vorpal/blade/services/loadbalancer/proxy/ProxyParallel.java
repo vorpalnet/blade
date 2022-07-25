@@ -23,9 +23,8 @@ public class ProxyParallel extends Callflow implements B2buaListener {
 	private List<SipServletResponse> failedResponses = new LinkedList<>();
 
 
-	public ProxyParallel(ProxyListener proxyListener, SipServletRequest inboundRequest, ProxyTier proxyTier) {
+	public ProxyParallel(ProxyListener proxyListener, ProxyTier proxyTier) {
 		this.proxyListener = proxyListener;
-		this.inboundRequest = inboundRequest;
 		this.proxyTier = proxyTier;
 	}
 	
@@ -33,7 +32,7 @@ public class ProxyParallel extends Callflow implements B2buaListener {
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
 		for(URI uri : proxyTier.getEndpoints()) {
-			SipServletRequest outboundRequest = this.createInitialRequest(inboundRequest, true);
+			SipServletRequest outboundRequest = this.createContinueRequest(inboundRequest);
 			outboundRequest.setRequestURI(uri);
 			
 			InitialInvite initialInvite = new InitialInvite(this);

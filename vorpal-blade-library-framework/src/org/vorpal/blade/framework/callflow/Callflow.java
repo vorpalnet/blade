@@ -28,7 +28,6 @@ import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.ServletParseException;
@@ -41,6 +40,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.TimerService;
+import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.logging.Logger;
 import org.vorpal.blade.framework.logging.Logger.Direction;
@@ -74,6 +74,7 @@ public abstract class Callflow implements Serializable {
 	private static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
 	private static final String LINKED_SESSION = "LINKED_SESSION";
 	private static final String DELAYED_REQUEST = "DELAYED_REQUEST";
+	private static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
 
 	public static boolean provisional(SipServletResponse response) {
 		return (response.getStatus() >= 100 && response.getStatus() < 200);
@@ -183,6 +184,8 @@ public abstract class Callflow implements Serializable {
 		ServletTimer timer = null;
 		long delay = seconds * 1000;
 		boolean isPersistent = false;
+		String timerId = null;
+
 		timer = timerService.createTimer(appSession, delay, isPersistent, lambdaFunction);
 		return timer.getId();
 	}
@@ -234,41 +237,77 @@ public abstract class Callflow implements Serializable {
 		return response;
 	}
 
+	/**
+	 * Mark the response as 'withheld' to prevent the method sendResponse() from
+	 * actually sending the message. This gives the user the ability to prevent an
+	 * automatically created response in the B2BUA or Proxy APIs from being sent
+	 * back upstream.
+	 * 
+	 * @param response
+	 */
+	public void withholdResponse(SipServletResponse response) {
+		response.setAttribute(WITHHOLD_RESPONSE, true);
+	}
+
 	// Send a response, expect an 'ACK'
+	/**
+	 * Send a response back upstream and expect an ACK/PRACK.
+	 * 
+	 * @param response
+	 * @param lambdaFunction
+	 * @throws ServletException
+	 * @throws IOException
+	 */
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
-		Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
-		try {
-			response.getSession().setAttribute(this.REQUEST_CALLBACK_ + ACK, lambdaFunction);
+		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
 
-			if (provisional(response)) {
+			Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
-				if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
-					response.getSession().setAttribute(this.REQUEST_CALLBACK_ + PRACK, lambdaFunction);
-					response.sendReliably();
+			try {
+				response.getSession().setAttribute(this.REQUEST_CALLBACK_ + ACK, lambdaFunction);
+
+				if (provisional(response)) {
+
+					if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
+						response.getSession().setAttribute(this.REQUEST_CALLBACK_ + PRACK, lambdaFunction);
+						response.sendReliably();
+					} else {
+						response.send();
+					}
+
 				} else {
 					response.send();
 				}
 
-			} else {
-				response.send();
+			} catch (Exception e) {
+				sipLogger.logStackTrace(e);
+				throw e;
 			}
-
-		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
-			throw e;
 		}
+
 	}
 
+	/**
+	 * Send a response back upstream and do not expect and ACK/PRACK. If one is
+	 * received, it will be absorbed by the framework without exception.
+	 * 
+	 * @param response
+	 * @throws ServletException
+	 * @throws IOException
+	 */
 	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
-		Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
 
-		try {
-			response.send();
-		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
-			throw e;
+			Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+
+			try {
+				response.send();
+			} catch (Exception e) {
+				sipLogger.logStackTrace(e);
+				throw e;
+			}
 		}
 	}
 
@@ -280,35 +319,55 @@ public abstract class Callflow implements Serializable {
 		Callflow.sipUtil = sipUtil;
 	}
 
-	public static SipServletRequest createInitialRequest(SipServletRequest origin, boolean copyContent)
+	public static SipServletRequest createContinueRequest(SipServletRequest origin)
 			throws IOException, ServletParseException {
 
-//		if (origin.isInitial()) {
-		SipServletRequest destination = sipFactory.createRequest(origin.getApplicationSession(), origin.getMethod(),
-				origin.getFrom(), origin.getTo());
-//		} else {
-//
-//		}
+		SipServletRequest destination = sipFactory.createRequest(//
+				origin.getApplicationSession(), //
+				origin.getMethod(), //
+				origin.getFrom(), //
+				origin.getTo()); //
 
-//		destination.setRequestURI(origin.getRequestURI());
-//		destination.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, origin);
-		copyHeaders(origin, destination);
-
-		if (copyContent == true) {
-			destination.setContent(origin.getContent(), origin.getContentType());
-		}
+		destination.setRequestURI(origin.getRequestURI());
+		destination.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, origin);
+		copyContentAndHeaders(origin, destination);
 		return destination;
 	}
 
-//	public static SipServletRequest createRequest(SipServletRequest previous, String method)
-//			throws IOException, ServletParseException {
-//		SipServletRequest request = previous.getSession().createRequest(method);
-////		request.setRequestURI(previous.getRequestURI());
-////		request.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, previous);
-//		copyHeaders(previous, request);
-//
-//		return request;
-//	}
+	public static SipServletRequest createNewRequest(SipServletRequest origin)
+			throws IOException, ServletParseException {
+
+		SipServletRequest destination = sipFactory.createRequest(//
+				origin.getApplicationSession(), //
+				origin.getMethod(), //
+				origin.getFrom(), //
+				origin.getTo()); //
+
+		destination.setRequestURI(origin.getRequestURI());
+		copyContentAndHeaders(origin, destination);
+		return destination;
+	}
+
+	@Deprecated
+	public static SipServletRequest createInitialRequest(SipServletRequest origin, boolean copyContent)
+			throws IOException, ServletParseException {
+
+		SipServletRequest destination = sipFactory.createRequest(//
+				origin.getApplicationSession(), //
+				origin.getMethod(), //
+				origin.getFrom(), //
+				origin.getTo()); //
+
+		destination.setRequestURI(origin.getRequestURI());
+		destination.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, origin);
+		if (copyContent) {
+			copyContentAndHeaders(origin, destination);
+		} else {
+			copyHeaders(origin, destination);
+		}
+
+		return destination;
+	}
 
 	public static SipServletRequest createRequest(SipServletResponse response, String method)
 			throws IOException, ServletParseException {

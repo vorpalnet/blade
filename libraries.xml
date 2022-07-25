@@ -21,7 +21,7 @@
         <fileset dir="../vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib">
           <include name="**/*.jar" />
         </fileset>
-        <pathelement location="${dist}/vorpal-blade-library-framework-${implementation}.jar" />
+        <pathelement location="${dist}/vorpal-blade-library-framework.jar" />
     </path>
     
 	<path id="WebLogic System Libraries.libraryclasspath">

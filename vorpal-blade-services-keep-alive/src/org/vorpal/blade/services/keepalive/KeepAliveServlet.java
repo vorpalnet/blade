@@ -63,7 +63,6 @@ public class KeepAliveServlet extends B2buaServlet implements SipApplicationSess
 	public void servletCreated(SipServletContextEvent event) {
 		try {
 			settingsManager = new SettingsManager<>(event, KeepAliveConfig.class);
-			sipLogger.logConfiguration(settingsManager.getCurrent());
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
 		}

@@ -133,6 +133,25 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		}
 	}
 
+	public void logObjectAsJson(SipServletMessage message, Level level, Object config) {
+		try {
+
+			if (this.isLoggable(level)) {
+				ObjectMapper mapper = new ObjectMapper();
+				mapper.setSerializationInclusion(Include.NON_NULL);
+				mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+
+				StringWriter sw = new StringWriter();
+				PrintWriter pw = new PrintWriter(sw);
+				mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);
+				log(Level.FINE, message, config.getClass().getSimpleName() + "=" + sw.toString());
+			}
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
 	public void severe(Exception e) {
 		StringWriter sw = new StringWriter();
 		PrintWriter pw = new PrintWriter(sw);
@@ -293,9 +312,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public static String hexHash(SipSession sipSession) {
-		int hash1 = Math.abs(sipSession.getApplicationSession().getId().hashCode()) % 0xFFFF;
-		int hash2 = Math.abs(sipSession.getId().hashCode()) % 0xFFFF;
-		return "[" + String.format("%04X", hash1) + ":" + String.format("%04X", hash2) + "]";
+		int hash1 = Math.abs(sipSession.getApplicationSession().getId().hashCode()) % 0xFFFFFF;
+		int hash2 = Math.abs(sipSession.getId().hashCode()) % 0xFF;
+		return "[" + String.format("%06X", hash1) + ":" + String.format("%02X", hash2) + "]";
 	}
 
 	public String shorten(String value, int length) {
@@ -345,9 +364,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				String requestUri = "";
 				if (request != null) {
-					if (request.isInitial() || request.getSession().getState().equals(State.EARLY)) {
+//					if (request.isInitial() || request.getSession().getState().equals(State.EARLY)) {
+//						requestUri = request.getRequestURI().toString();
+//					}
+
+					if (request.getSession().getState().equals(State.EARLY)) {
 						requestUri = request.getRequestURI().toString();
 					}
+
 				}
 
 				if (request != null && request.isInitial() && direction.equals(Direction.RECEIVE)) {
@@ -377,13 +401,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 						status += " (sdp)";
 					}
 				}
-
-//			String name;
-//			if (callflow != null) {
-//				name = callflow.getClass().getSimpleName();
-//			} else {
-//				name = "null";
-//			}
 
 				if (leftSide) {
 					if (direction.equals(Direction.RECEIVE)) {
@@ -482,11 +499,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				log(Level.FINE, str.toString());
 
-				if (isLoggable(Level.FINER)) {
+				if (isLoggable(Level.FINEST)) {
 					if (request != null) {
-						log(Level.FINER, "\r\n" + request.toString());
+						log(Level.FINEST, "\r\n" + request.toString());
 					} else {
-						log(Level.FINER, "\r\n" + response.toString());
+						log(Level.FINEST, "\r\n" + response.toString());
 					}
 				}
 
