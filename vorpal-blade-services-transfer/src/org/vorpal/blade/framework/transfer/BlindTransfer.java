@@ -72,8 +72,6 @@
  *     |                   |                   |                   |
 */
 
-
-
 package org.vorpal.blade.framework.transfer;
 
 import java.io.IOException;
@@ -108,7 +106,10 @@ public class BlindTransfer extends Transfer {
 
 			// in the event the transferee hangs up before the transfer completes
 			expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
-				sendRequest(targetRequest.createCancel());
+
+				if (targetRequest.isCommitted() != false) {
+					sendRequest(targetRequest.createCancel());
+				}
 
 				sendRequest(transferorRequest.getSession().createRequest(BYE), (byeResponse) -> {
 					sendResponse(bye.createResponse(byeResponse.getStatus()));
