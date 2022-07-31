@@ -52,7 +52,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 		if (sipLogger.isLoggable(Level.FINER)) {
 			sipLogger.finer(request,
-					"Comparison.check... id: " + id + ", name: " + name + ", request:\n" + request.toString());
+					"Comparison.check... id: " + id + ", name: " + name);
 		}
 
 		boolean match = true;
@@ -166,7 +166,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 						contains = value.contains(expression);
 
 						if (sipLogger.isLoggable(Level.FINER)) {
-							sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
+							sipLogger.finer(request, "Comparison.check... value: " + value);
 						}
 
 						if (contains == true) {
@@ -284,7 +284,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				match = match && hasParam;
 
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(request, "Comparison.check... includes: " + hasParam + ", hasValue: " + hasParam);
+					sipLogger.finer(request, "Comparison.check... match: " + match+ ", hasParam: " + hasParam);
 				}
 
 				break;

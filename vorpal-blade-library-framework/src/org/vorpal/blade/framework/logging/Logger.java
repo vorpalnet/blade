@@ -364,13 +364,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				String requestUri = "";
 				if (request != null) {
-//					if (request.isInitial() || request.getSession().getState().equals(State.EARLY)) {
-//						requestUri = request.getRequestURI().toString();
-//					}
-
-					if (request.getSession().getState().equals(State.EARLY)) {
+					if (request.isInitial() || request.getSession().getState().equals(State.EARLY)) {
 						requestUri = request.getRequestURI().toString();
 					}
+
+//					if (request.getSession().getState().equals(State.INITIAL)) {
+//						requestUri = request.getRequestURI().toString();
+//					}
 
 				}
 
