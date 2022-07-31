@@ -190,12 +190,15 @@ public abstract class Callflow implements Serializable {
 		return timer.getId();
 	}
 
-	public void expectRequest(SipSession sipSession, String method, Callback<SipServletRequest> callback) {
+	public Expectation expectRequest(SipSession sipSession, String method, Callback<SipServletRequest> callback) {
 		sipSession.setAttribute(REQUEST_CALLBACK_ + method, callback);
+		return new Expectation(sipSession, method);
 	}
 
-	public void expectRequest(SipApplicationSession appSession, String method, Callback<SipServletRequest> callback) {
+	public Expectation expectRequest(SipApplicationSession appSession, String method,
+			Callback<SipServletRequest> callback) {
 		appSession.setAttribute(REQUEST_CALLBACK_ + method, callback);
+		return new Expectation(appSession, method);
 	}
 
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)

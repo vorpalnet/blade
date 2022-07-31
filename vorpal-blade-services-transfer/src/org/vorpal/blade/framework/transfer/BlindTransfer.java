@@ -79,8 +79,8 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.b2bua.Bye;
 import org.vorpal.blade.framework.callflow.Callback;
+import org.vorpal.blade.framework.callflow.Expectation;
 
 public class BlindTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
@@ -106,19 +106,16 @@ public class BlindTransfer extends Transfer {
 			sendRequest(notify100);
 
 			// in the event the transferee hangs up before the transfer completes
-			expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
+			Expectation expectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
 				sendResponse(bye.createResponse(200));
 				sendRequest(targetRequest.createCancel());
 				sendRequest(transferorRequest.getSession().createRequest(BYE));
 			});
-			
-			
+
 			// Expect the transferor to hang up after the NOTIFY that the transfer succeeded
 			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
 				sendResponse(bye.createResponse(200));
 			});
-			
-			
 
 			sendRequest(transfereeRequest, (transfereeResponse) -> {
 				// Copy any headers that might be useful, but remove obvious REFER only headers
@@ -136,7 +133,8 @@ public class BlindTransfer extends Transfer {
 						linkSessions(transfereeResponse.getSession(), targetResponse.getSession());
 
 						// Clear the BYE expectation
-						transfereeRequest.getSession().removeAttribute("REQUEST_CALLBACK_BYE");
+						// transfereeRequest.getSession().removeAttribute("REQUEST_CALLBACK_BYE");
+						expectation.clear();
 
 						// User is notified of a successful transfer
 						transferListener.transferCompleted(targetResponse);
