@@ -35,7 +35,6 @@ public interface Callback<T> extends Consumer<T>, Serializable {
 		try {
 			acceptThrows(elem);
 		} catch (final Exception ex) {
-			Callflow.sipLogger.logStackTrace(ex);
 			throw new RuntimeException(ex);
 		}
 	}
