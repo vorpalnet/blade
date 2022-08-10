@@ -184,7 +184,7 @@ public class ProxyRegistrarServlet implements SipServletListener {
 			} else {
 				LinkedList<URI> aors = new LinkedList<URI>();
 				for (Address address : contacts) {
-					aors.add(address.getURI());
+					aors.add(Callflow.copyParameters(req.getRequestURI(), address.getURI()));
 				}
 
 				Proxy proxy = req.getProxy();
