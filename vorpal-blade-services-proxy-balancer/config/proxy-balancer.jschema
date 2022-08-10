@@ -1,0 +1,49 @@
+{
+  "type" : "object",
+  "id" : "urn:jsonschema:org:vorpal:blade:services:proxy:balancer:ProxyBalancerConfigSample",
+  "properties" : {
+    "rules" : {
+      "type" : "object",
+      "additionalProperties" : {
+        "type" : "object",
+        "id" : "urn:jsonschema:org:vorpal:blade:framework:proxy:ProxyRule",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "context" : {
+            "type" : "any"
+          },
+          "tiers" : {
+            "type" : "array",
+            "items" : {
+              "type" : "object",
+              "id" : "urn:jsonschema:org:vorpal:blade:framework:proxy:ProxyTier",
+              "properties" : {
+                "id" : {
+                  "type" : "string"
+                },
+                "mode" : {
+                  "type" : "string",
+                  "enum" : [ "parallel", "serial" ]
+                },
+                "timeout" : {
+                  "type" : "integer"
+                },
+                "endpoints" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "any"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

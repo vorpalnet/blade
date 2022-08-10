@@ -1,0 +1,15 @@
+{
+  "rules" : {
+    "test1" : {
+      "tiers" : [ {
+        "mode" : "parallel",
+        "timeout" : 15,
+        "endpoints" : [ "sip:transferor@blade1;status=501;delay=2", "sip:transferor@blade2;status=502;delay=4" ]
+      }, {
+        "mode" : "serial",
+        "timeout" : 15,
+        "endpoints" : [ "sip:transferor@blade3;status=503;delay=2", "sip:transferor@blade4;status=504;delay=2", "sip:transferor@blade5" ]
+      } ]
+    }
+  }
+}
