@@ -52,5 +52,6 @@
 	<classpathentry kind="lib" path="/Users/jeff/weblogic/occas71/wlserver/sip/server/lib/wlssapi.jar"/>
 	<classpathentry kind="lib" path="/Users/jeff/weblogic/occas71/wlserver/sip/server/lib/wlss.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/5"/>
+	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/commons-collections4-4.4.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

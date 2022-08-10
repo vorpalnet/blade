@@ -28,8 +28,11 @@ import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 
 import javax.servlet.ServletException;
+import javax.servlet.sip.Proxy;
+import javax.servlet.sip.ProxyBranch;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
@@ -40,10 +43,14 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.TimerService;
+import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.logging.Logger;
 import org.vorpal.blade.framework.logging.Logger.Direction;
+import org.vorpal.blade.framework.proxy.ProxyRule;
+import org.vorpal.blade.framework.proxy.ProxyTier;
+import org.vorpal.blade.framework.proxy.ProxyTier.Mode;
 
 public abstract class Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -70,11 +77,11 @@ public abstract class Callflow implements Serializable {
 	protected static final String Contact = "Contact";
 	protected static final String RELIABLE = "100rel";
 
-	private static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
-	private static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
-	private static final String LINKED_SESSION = "LINKED_SESSION";
-	private static final String DELAYED_REQUEST = "DELAYED_REQUEST";
-	private static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
+	protected static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
+	protected static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
+	protected static final String LINKED_SESSION = "LINKED_SESSION";
+	protected static final String DELAYED_REQUEST = "DELAYED_REQUEST";
+	protected static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
 
 	public static boolean provisional(SipServletResponse response) {
 		return (response.getStatus() >= 100 && response.getStatus() < 200);
@@ -110,19 +117,64 @@ public abstract class Callflow implements Serializable {
 		return callback;
 	}
 
+//	@SuppressWarnings("unchecked")
+//	public static Callback<SipServletResponse> pullCallback(SipServletResponse response) {
+//		Callback<SipServletResponse> callback = null;
+//		SipSession sipSession = response.getSession();
+//		String attribute = RESPONSE_CALLBACK_ + response.getMethod();
+//		callback = (Callback<SipServletResponse>) sipSession.getAttribute(attribute);
+//		if (callback != null) {
+//			if (response.getStatus() >= 200) {
+//				sipSession.removeAttribute(attribute);
+//			}
+//		}
+//		return callback;
+//	}
+	
+	
+	
 	@SuppressWarnings("unchecked")
 	public static Callback<SipServletResponse> pullCallback(SipServletResponse response) {
+
+		sipLogger.fine(response, "ProxyCallflow.pullCallback...");
+
 		Callback<SipServletResponse> callback = null;
 		SipSession sipSession = response.getSession();
 		String attribute = RESPONSE_CALLBACK_ + response.getMethod();
 		callback = (Callback<SipServletResponse>) sipSession.getAttribute(attribute);
 		if (callback != null) {
-			if (response.getStatus() >= 200) {
-				sipSession.removeAttribute(attribute);
+
+			List<ProxyBranch> proxyBranches = response.getProxy().getProxyBranches();
+
+			if (response.getProxyBranch() == null) {
+				sipLogger.fine(response, "No proxy branches...");
+
+				if (response.getStatus() >= 200) {
+					sipSession.removeAttribute(attribute);
+				}
+
+			} 
+			
+			//DELME - debugging purposes only
+			else {
+				int i = 0;
+				boolean hasResponse;
+				for (ProxyBranch pb : response.getProxy().getProxyBranches()) {
+					i++;
+					hasResponse = (pb.getResponse() != null) ? true : false;
+					sipLogger.fine(response, "pb[" + i + "] has response: " + hasResponse);
+				}
+
 			}
+
 		}
 		return callback;
 	}
+	
+	
+	
+	
+	
 
 	@SuppressWarnings("unchecked")
 	public static Callback<ServletTimer> pullCallback(ServletTimer timer) {
@@ -567,6 +619,162 @@ public abstract class Callflow implements Serializable {
 		request.getApplicationSession().setAttribute(DELAYED_REQUEST, request);
 		timerService.createTimer(request.getApplicationSession(), delay_in_milliseconds, false, this);
 	}
+
+	public static SipServletResponse createResponse(SipServletRequest aliceRequest, SipServletResponse bobResponse)
+			throws ServletParseException, UnsupportedEncodingException, IOException {
+		SipServletResponse aliceResponse;
+		aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+		copyContentAndHeaders(bobResponse, aliceResponse);
+		return aliceResponse;
+	}
+
+	public static SipServletRequest createAcknowlegement(SipServletResponse bobResponse, SipServletRequest aliceAckOrPrack)
+			throws ServletParseException {
+		SipServletRequest bobAckOrPrack = null;
+
+		try {
+			if (aliceAckOrPrack.getMethod().equals(PRACK)) {
+				bobAckOrPrack = copyContentAndHeaders(aliceAckOrPrack, bobResponse.createPrack());
+			} else if (aliceAckOrPrack.getMethod().equals(ACK)) {
+				bobAckOrPrack = copyContentAndHeaders(aliceAckOrPrack, bobResponse.createAck());
+			}
+		} catch (Exception e) {
+			throw new ServletParseException(e);
+		}
+
+		if (bobAckOrPrack == null) {
+			throw new ServletParseException("Acknowlegement for " + aliceAckOrPrack.getMethod() + " not allowed.");
+		}
+
+		return bobAckOrPrack;
+	}
+
+	public static SipServletRequest createInitialRequest(URI endpoint, SipApplicationRoutingDirective directive,
+			SipServletRequest aliceRequest) throws ServletParseException {
+		SipServletRequest bobRequest;
+
+		bobRequest = sipFactory.createRequest( //
+				aliceRequest.getApplicationSession(), //
+				aliceRequest.getMethod(), //
+				aliceRequest.getFrom(), //
+				aliceRequest.getTo());
+
+		copyHeaders(aliceRequest, bobRequest);
+		bobRequest.setRequestURI(copyParameters(aliceRequest.getRequestURI(), endpoint));
+		bobRequest.setRoutingDirective(directive, aliceRequest);
+		return bobRequest;
+	}
+
+	public static SipServletRequest createNewInitialRequest(URI endpoint, SipServletRequest aliceRequest)
+			throws ServletParseException {
+		return createInitialRequest(endpoint, SipApplicationRoutingDirective.NEW, aliceRequest);
+	}
+
+	public static SipServletRequest createContinueInitialRequest(URI endpoint, SipServletRequest aliceRequest)
+			throws ServletParseException {
+		return createInitialRequest(endpoint, SipApplicationRoutingDirective.CONTINUE, aliceRequest);
+	}
+
+	public static SipServletRequest createContinueInitialRequest(URI endpoint, SipServletRequest template,
+			SipServletRequest aliceRequest) throws ServletParseException, UnsupportedEncodingException, IOException {
+
+		SipServletRequest bobRequest;
+
+		bobRequest = sipFactory.createRequest( //
+				template.getApplicationSession(), //
+				template.getMethod(), //
+				template.getFrom(), //
+				template.getTo());
+
+		copyContentAndHeaders(template, bobRequest);
+		bobRequest.setRequestURI(copyParameters(template.getRequestURI(), endpoint));
+		bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
+		return bobRequest;
+	}
+
+	public static SipServletRequest createRequest(SipServletRequest aliceRequest)
+			throws ServletParseException, UnsupportedEncodingException, IOException {
+		SipServletRequest bobRequest;
+
+		bobRequest = sipFactory.createRequest( //
+				aliceRequest.getApplicationSession(), //
+				aliceRequest.getMethod(), //
+				aliceRequest.getFrom(), //
+				aliceRequest.getTo());
+
+		copyContentAndHeaders(aliceRequest, bobRequest);
+		bobRequest.setRequestURI(aliceRequest.getRequestURI());
+
+		return bobRequest;
+	}
+
+	/**
+	 * Copy any parameters (that do not already exist) from one URI to another.
+	 * 
+	 * @param from
+	 * @param to
+	 * @return
+	 * @throws ServletParseException
+	 */
+	public static URI copyParameters(URI from, URI to) throws ServletParseException {
+
+		String value;
+		for (String name : from.getParameterNameSet()) {
+			value = to.getParameter(name);
+			if (null == value) {
+				to.setParameter(name, from.getParameter(name));
+			}
+		}
+
+		return to;
+	}
+	
+	
+	public void proxyRequest(SipServletRequest inboundRequest, ProxyRule proxyRule,
+			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
+
+		if (proxyRule.isEmpty()) {
+			throw new ServletException("Invalid ProxyRule. No ProxyTiers defined.");
+		}
+
+
+		try {
+			Proxy proxy = inboundRequest.getProxy();
+
+			ProxyTier proxyTier = proxyRule.getTiers().remove(0);
+			
+			proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
+			// proxy.setRecordRoute(false);
+			// proxy.setSupervised(true);
+
+			List<ProxyBranch> proxyBranches = proxy.createProxyBranches(proxyTier.getEndpoints());
+
+			Integer timeout = proxyTier.getTimeout();
+			if (timeout != null && timeout > 0) {
+				proxy.setProxyTimeout(timeout);
+
+				for (ProxyBranch proxyBranch : proxyBranches) {
+//					proxyBranch.setProxyBranchTimeout(proxyTier.getTimeout());
+					inboundRequest.getSession().setAttribute("DIAGRAM_SIDE", "RIGHT");
+					Callflow.sipLogger.superArrow(Direction.SEND, inboundRequest, null,
+							this.getClass().getSimpleName());
+				}
+			}
+
+			inboundRequest.getSession().setAttribute("RESPONSE_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
+
+//			inboundRequest.getSession().setAttribute("PROXY_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
+//			inboundRequest.getSession().setAttribute("PROXY_RULE", proxyRule);
+
+			proxy.startProxy();
+
+		} catch (Exception e) {
+			sipLogger.logStackTrace(e);
+			throw e;
+		}
+
+	}
+	
 
 	/**
 	 * Used for testing, this method prints the hash-codes system headers.

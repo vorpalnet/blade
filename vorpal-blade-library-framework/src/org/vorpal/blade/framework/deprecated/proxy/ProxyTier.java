@@ -1,39 +1,35 @@
-package org.vorpal.blade.framework.proxy;
+package org.vorpal.blade.framework.deprecated.proxy;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 
 import javax.servlet.sip.URI;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
+@JsonPropertyOrder({ "mode", "timeout", "endpoints" })
 public class ProxyTier implements Serializable {
 	public enum Mode {
 		parallel, serial
 	}
 
-	String id = null;
+	@JsonProperty(required = true)
 	Mode mode = Mode.serial;
+
+	@JsonProperty(required = false)
 	Integer timeout = 0;
+
+	@JsonProperty(required = true)
 	ArrayList<URI> endpoints = new ArrayList<>();
 
 	public ProxyTier() {
 	}
 
-	public ProxyTier(URI endpoint) {
-		this.endpoints.add(endpoint);
-	}
-
 	public ProxyTier(ProxyTier that) {
 		this.mode = that.mode;
 		this.timeout = that.timeout;
-		this.endpoints = new ArrayList<URI>(that.getEndpoints());
-	}
-
-	public String getId() {
-		return id;
-	}
-
-	public void setId(String id) {
-		this.id = id;
+		this.endpoints = new ArrayList<>(that.getEndpoints());
 	}
 
 	public Mode getMode() {
@@ -58,10 +54,6 @@ public class ProxyTier implements Serializable {
 
 	public void setEndpoints(ArrayList<URI> endpoints) {
 		this.endpoints = endpoints;
-	}
-
-	public void addEndpoint(URI endpoint) {
-		this.endpoints.add(endpoint);
 	}
 
 }
