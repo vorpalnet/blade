@@ -140,6 +140,16 @@ public abstract class Callflow implements Serializable {
 		callback = (Callback<SipServletResponse>) sipSession.getAttribute(attribute);
 		if (callback != null) {
 
+			Proxy proxy = response.getProxy();
+			if(proxy!=null) {
+				// If this is due to a 'proxy' event, the incoming request object
+				// has the real callback. The response object just has a copy of it, which
+				// can't be relied upon for session locking to ensure consistent variable data.
+				callback = (Callback<SipServletResponse>) response.getRequest().getSession().getAttribute(attribute);
+			}
+			
+			// If this is the final response, remove the callback attribute to prevent weird echos.
+			// It is unnecessary to delete it for proxy requests since this will never be call again.
 			if (response.getProxyBranch() == null && response.getStatus() >= 200) {
 				sipSession.removeAttribute(attribute);
 			}
