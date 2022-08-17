@@ -96,7 +96,12 @@ public class Cancel extends Callflow {
 			aliceCancel = request;
 
 			SipSession linkedSession = getLinkedSession(aliceCancel.getSession());
-			if (linkedSession != null && linkedSession.isValid()) {
+
+			// jwm-test
+			sipLogger.fine(
+					"linkedSession... isValid: " + linkedSession.isValid() + ", state: " + linkedSession.getState());
+
+			if (linkedSession != null && linkedSession.isValid() && linkedSession.getState().equals(State.CONFIRMED)) {
 				for (SipServletRequest bobRequest : linkedSession.getActiveRequests(UAMode.UAC)) {
 					if (bobRequest.getSession().getState().equals(State.EARLY)
 							&& bobRequest.getMethod().equals(INVITE)) {
