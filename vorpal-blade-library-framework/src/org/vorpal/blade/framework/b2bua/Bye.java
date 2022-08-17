@@ -79,13 +79,14 @@ public class Bye extends Callflow {
 				sendResponse(request.createResponse(200));
 			}
 
-		} catch (
-
-		Exception e) {
-			sipLogger.logStackTrace(request, e);
-			throw e;
+		} catch (Exception e) {	
+			try {
+				sendResponse(request.createResponse(200));
+			}catch(Exception e2) {
+				// Just eat it, eat it, eat it, eat it
+				// Don't you make me repeat it --Weird Al
+			}
 		}
-
 	}
 
 }

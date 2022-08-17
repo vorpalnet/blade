@@ -130,13 +130,9 @@ public abstract class Callflow implements Serializable {
 //		}
 //		return callback;
 //	}
-	
-	
-	
+
 	@SuppressWarnings("unchecked")
 	public static Callback<SipServletResponse> pullCallback(SipServletResponse response) {
-
-		sipLogger.fine(response, "ProxyCallflow.pullCallback...");
 
 		Callback<SipServletResponse> callback = null;
 		SipSession sipSession = response.getSession();
@@ -144,37 +140,13 @@ public abstract class Callflow implements Serializable {
 		callback = (Callback<SipServletResponse>) sipSession.getAttribute(attribute);
 		if (callback != null) {
 
-			List<ProxyBranch> proxyBranches = response.getProxy().getProxyBranches();
-
-			if (response.getProxyBranch() == null) {
-				sipLogger.fine(response, "No proxy branches...");
-
-				if (response.getStatus() >= 200) {
-					sipSession.removeAttribute(attribute);
-				}
-
-			} 
-			
-			//DELME - debugging purposes only
-			else {
-				int i = 0;
-				boolean hasResponse;
-				for (ProxyBranch pb : response.getProxy().getProxyBranches()) {
-					i++;
-					hasResponse = (pb.getResponse() != null) ? true : false;
-					sipLogger.fine(response, "pb[" + i + "] has response: " + hasResponse);
-				}
-
+			if (response.getProxyBranch() == null && response.getStatus() >= 200) {
+				sipSession.removeAttribute(attribute);
 			}
 
 		}
 		return callback;
 	}
-	
-	
-	
-	
-	
 
 	@SuppressWarnings("unchecked")
 	public static Callback<ServletTimer> pullCallback(ServletTimer timer) {
@@ -628,8 +600,8 @@ public abstract class Callflow implements Serializable {
 		return aliceResponse;
 	}
 
-	public static SipServletRequest createAcknowlegement(SipServletResponse bobResponse, SipServletRequest aliceAckOrPrack)
-			throws ServletParseException {
+	public static SipServletRequest createAcknowlegement(SipServletResponse bobResponse,
+			SipServletRequest aliceAckOrPrack) throws ServletParseException {
 		SipServletRequest bobAckOrPrack = null;
 
 		try {
@@ -728,8 +700,7 @@ public abstract class Callflow implements Serializable {
 
 		return to;
 	}
-	
-	
+
 	public void proxyRequest(SipServletRequest inboundRequest, ProxyRule proxyRule,
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
@@ -737,12 +708,11 @@ public abstract class Callflow implements Serializable {
 			throw new ServletException("Invalid ProxyRule. No ProxyTiers defined.");
 		}
 
-
 		try {
 			Proxy proxy = inboundRequest.getProxy();
 
 			ProxyTier proxyTier = proxyRule.getTiers().remove(0);
-			
+
 			proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
 			// proxy.setRecordRoute(false);
 			// proxy.setSupervised(true);
@@ -774,7 +744,6 @@ public abstract class Callflow implements Serializable {
 		}
 
 	}
-	
 
 	/**
 	 * Used for testing, this method prints the hash-codes system headers.
