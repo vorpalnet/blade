@@ -70,7 +70,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	@Override
 	public void warning(String msg) {
-		super.warning(NOSESS + ConsoleColors.BLUE_BRIGHT + msg + ConsoleColors.RESET);
+		super.warning(NOSESS + ConsoleColors.YELLOW_BOLD_BRIGHT + msg + ConsoleColors.RESET);
 	}
 
 	@Override

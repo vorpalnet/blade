@@ -90,46 +90,28 @@ public class Cancel extends Callflow {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
+		// The container will send a 200 OK for CANCEL
+		// sendResponse(request.createResponse(200));
 
 		try {
-
 			aliceCancel = request;
-
 			SipSession linkedSession = getLinkedSession(aliceCancel.getSession());
-
-			// jwm-test
-			sipLogger.fine(
-					"linkedSession... isValid: " + linkedSession.isValid() + ", state: " + linkedSession.getState());
-
-			if (linkedSession != null && linkedSession.isValid() && linkedSession.getState().equals(State.CONFIRMED)) {
-				for (SipServletRequest bobRequest : linkedSession.getActiveRequests(UAMode.UAC)) {
-					if (bobRequest.getSession().getState().equals(State.EARLY)
-							&& bobRequest.getMethod().equals(INVITE)) {
-						bobInvite = bobRequest;
-						break;
-					}
+			if (linkedSession != null) {
+				bobInvite = linkedSession.getActiveInvite(UAMode.UAC);
+				SipServletRequest bobCancel = bobInvite.createCancel();
+				if (b2buaListener != null) {
+					b2buaListener.callAbandoned(bobCancel);
 				}
-
-				if (bobInvite != null) {
-
-					SipServletRequest bobCancel = bobInvite.createCancel();
-					if (b2buaListener != null) {
-						b2buaListener.callAbandoned(bobCancel);
-					}
-
-					sendRequest(bobCancel, (bobCancelResponse) -> {
-						// do nothing;
-					});
-
-				}
-
+				sendRequest(bobCancel, (bobCancelResponse) -> {
+					// do nothing;
+				});
+			} else {
+				// Ugh! complicated to find outstanding unlinked request.
+				sipLogger.warning(request, "CANCEL received, but no linked session. Ignoring request.");
 			}
-
 		} catch (Exception e) {
-			sipLogger.logStackTrace(request, e);
-			throw e;
+			sipLogger.warning(request, "CANCEL received, error during processing: " + e.getMessage());
 		}
-
 	}
 
 }
