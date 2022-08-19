@@ -76,15 +76,16 @@ public class Bye extends Callflow {
 			} else {
 				// In case a BYE comes in before sessions can be established.
 				// Should probably send a CANCEL in addition.
+				sipLogger.warning(request, "BYE received before session could be established.");
 				sendResponse(request.createResponse(200));
 			}
 
-		} catch (Exception e) {	
+		} catch (Exception e) {
 			try {
+				sipLogger.warning(request, "Exception sending BYE request: "+e.getMessage());
 				sendResponse(request.createResponse(200));
 			}catch(Exception e2) {
-				// Just eat it, eat it, eat it, eat it
-				// Don't you make me repeat it --Weird Al
+				sipLogger.warning(request, "Exception sending BYE response: "+e.getMessage());
 			}
 		}
 	}
