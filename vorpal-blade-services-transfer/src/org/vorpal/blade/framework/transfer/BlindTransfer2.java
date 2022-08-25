@@ -32,36 +32,37 @@
  *     | RTP               |                   |                   |
  *     |<=====================================>|                   |
  *     |                   |                   |                   |
- *     |                   |             REFER |                   |   To:          transferee
- *     |                   |<------------------|                   |   Refer-To:    target
+ *     |                   |             REFER |                   |   REFER 
+ *     |                   |<------------------|                   |   To:          transferee
+ *     |                   |                   |                   |   Refer-To:    target
  *     |                   |                   |                   |   Referred-By: transferor
- *     |                   |                   |                   |   
+ *     |                   |                   |                   |
+ *     |          INVITE   |                   |                   |   INVITE
+ *     |<------------------|                   |                   |   empty reINVITE to get SDP
+ *     | 200 OK            |                   |                   |
+ *     |--(sdp)----------->|                   |                   |
  *     |                   | 202 Accepted      |                   |   
  *     |                   |------------------>|                   |
- *     |                   | NOTIFY            |                   |   Subscription-State: pending
- *     |                   |------------------>|                   |   Event: refer
- *     |                   |            200 OK |                   |   Content-Type: message/sipfrag
- *     |                   |<------------------|                   |   Content: SIP/2.0 100 Trying
- *     |                   |                   |                   |   
+ *     |                   | NOTIFY            |                   |   NOTIFY
+ *     |                   |------------------>|                   |   Subscription-State: pending;expires=3600
+ *     |                   |            200 OK |                   |   Event: refer
+ *     |                   |<------------------|                   |   Content-Type: message/sipfrag
+ *     |                   |                   |                   |   Content: SIP/2.0 100 Trying
  *     |                   | INVITE            |                   |
- *     |                   |-------------------------------------->|   empty INVITE to get SDP
+ *     |                   |--(sdp)------------------------------->|
  *     |                   |                   |       180 Ringing |
  *     |                   |<--------------------------------------|
  *     |                   |                   |            200 OK |
  *     |                   |<-------------------------------(sdp)--|
- *     |                   | NOTIFY            |                   |   Subscription-State: active
- *     |                   |------------------>|                   |   Event:              refer
- *     |                   |            200 OK |                   |   Content-Type:       message/sipfrag
- *     |                   |<------------------|                   |   Content:            SIP/2.0 200 OK
- *     |                   |                   |                   |   
- *     |          INVITE   |                   |                   |   
- *     |<-----------(sdp)--|                   |                   |   
- *     | 200 OK            |                   |                   |
- *     |--(sdp)----------->|                   |                   |
  *     |               ACK |                   |                   |
- *     |<------------------|                   |                   |
+ *     |<-----------(sdp)--|                   |                   |
  *     |                   | ACK               |                   |
- *     |                   |--(sdp)------------------------------->|
+ *     |                   |-------------------------------------->|
+ *     |                   | NOTIFY            |                   |   NOTIFY
+ *     |                   |------------------>|                   |   Subscription-State: active;expires=3600
+ *     |                   |            200 OK |                   |   Event:              refer
+ *     |                   |<------------------|                   |   Content-Type:       message/sipfrag
+ *     |                   |                   |                   |   Content:            SIP/2.0 200 OK
  *     | RTP               |                   |                   |
  *     |<=========================================================>|
  *     |                   | BYE               |                   |
@@ -77,17 +78,16 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipSession.State;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Expectation;
 
-public class BlindTransfer extends Transfer {
+public class BlindTransfer2 extends Transfer {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
 	private Callback<SipServletRequest> loopOnPrack;
 
-	public BlindTransfer(TransferListener referListener) {
+	public BlindTransfer2(TransferListener referListener) {
 		super(referListener);
 	}
 
@@ -108,72 +108,68 @@ public class BlindTransfer extends Transfer {
 			// in the event the transferee hangs up before the transfer completes
 			Expectation expectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
 				sendResponse(bye.createResponse(200));
-
-				sipLogger.severe(bye,
-						"isValid: " + bye.getSession().isValid() + ", state: " + bye.getSession().getState());
-
-				if (false == bye.getSession().getState().equals(State.TERMINATED)) {
-					sendRequest(targetRequest.createCancel());
-					sendRequest(transferorRequest.getSession().createRequest(BYE));
-				}
-
+				sendRequest(targetRequest.createCancel());
+				sendRequest(transferorRequest.getSession().createRequest(BYE));
 			});
 
-//			// Expect the transferor to hang up after the NOTIFY that the transfer succeeded
-//			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-//				sendResponse(bye.createResponse(200));
-//			});
+			// Expect the transferor to hang up after the NOTIFY that the transfer succeeded
+			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
+				sendResponse(bye.createResponse(200));
+			});
 
-			copyHeaders(request, targetRequest);
-			targetRequest.removeHeader(REFER_TO);
-			targetRequest.removeHeader(REFERRED_BY);
+			sendRequest(transfereeRequest, (transfereeResponse) -> {
+				// Copy any headers that might be useful, but remove obvious REFER only headers
+				copyHeaders(request, targetRequest);
+				targetRequest.removeHeader(REFER_TO);
+				targetRequest.removeHeader(REFERRED_BY);
+				copyContent(transfereeResponse, targetRequest);
 
-			// User is notified that transfer is initiated
-			transferListener.transferInitiated(targetRequest);
+				// User can override the targetRequest parameters before sending
+				transferListener.transferInitiated(targetRequest);
 
-			sendRequest(targetRequest, (targetResponse) -> {
+				sendRequest(targetRequest, (targetResponse) -> {
 
-				if (successful(targetResponse)) {
+					if (successful(targetResponse)) {
+						linkSessions(transfereeResponse.getSession(), targetResponse.getSession());
 
-					SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
-					notify200.setHeader(EVENT, "refer");
-					notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
-					notify200.setContent(OK_200.getBytes(), SIPFRAG);
-					sendRequest(notify200);
+						// Clear the BYE expectation
+						// transfereeRequest.getSession().removeAttribute("REQUEST_CALLBACK_BYE");
+						expectation.clear();
 
-					// User is notified of a successful transfer
-					transferListener.transferCompleted(targetResponse);
+						// User is notified of a successful transfer
+						transferListener.transferCompleted(targetResponse);
 
-					copyContent(targetResponse, transfereeRequest);
-					sendRequest(transfereeRequest, (transfereeResponse) -> {
-						linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
+						SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
+						notify200.setHeader(EVENT, "refer");
+						notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
+						notify200.setContent(OK_200.getBytes(), SIPFRAG);
+						sendRequest(notify200);
 
-						// Expect a BYE from the transferor
+						sendRequest(copyContent(targetResponse, transfereeResponse.createAck()));
+						sendRequest(targetResponse.createAck());
+
+						// Is this needed?
 						expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
 							sendResponse(bye.createResponse(200));
 						});
 
-						sendRequest(transfereeResponse.createAck());
-						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
-					});
+					} else if (this.failure(targetResponse)) {
+						// User is notified that the transfer target did not answer
+						transferListener.transferDeclined(targetResponse);
 
-				} else if (failure(targetResponse)) {
+						if (targetResponse.getStatus() != 487) { // No point if canceled
+							SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
+							String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
+									+ targetResponse.getReasonPhrase();
+							notifyFailure.setHeader(EVENT, "refer");
+							notifyFailure.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
+							notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
+							sendRequest(notifyFailure);
+						}
 
-					// Clear the BYE expectation
-					expectation.clear();
+					}
 
-					// User is notified that the transfer target did not answer
-					transferListener.transferDeclined(targetResponse);
-
-					SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
-					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
-					notifyFailure.setHeader(EVENT, "refer");
-//					notifyFailure.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
-					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated");
-					notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
-					sendRequest(notifyFailure);
-
-				}
+				});
 
 			});
 

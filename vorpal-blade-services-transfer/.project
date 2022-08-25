@@ -3,6 +3,7 @@
 	<name>vorpal-blade-services-transfer</name>
 	<comment></comment>
 	<projects>
+		<project>vorpal-blade-library-framework</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
