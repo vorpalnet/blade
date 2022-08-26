@@ -128,6 +128,8 @@ public class BlindTransfer extends Transfer {
 			targetRequest.removeHeader(REFER_TO);
 			targetRequest.removeHeader(REFERRED_BY);
 
+			copyHeaders(request, transfereeRequest);
+
 			// User is notified that transfer is initiated
 			transferListener.transferInitiated(targetRequest);
 
