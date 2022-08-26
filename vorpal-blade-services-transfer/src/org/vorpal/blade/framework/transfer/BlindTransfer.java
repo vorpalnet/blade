@@ -127,11 +127,11 @@ public class BlindTransfer extends Transfer {
 
 			copyHeaders(request, targetRequest);
 			targetRequest.removeHeader(REFER_TO);
-			targetRequest.removeHeader(REFERRED_BY);
+//			targetRequest.removeHeader(REFERRED_BY);
 
-			copyHeaders(request, transfereeRequest);
-			String user = ((SipURI) request.getAddressHeader(REFER_TO).getURI()).getUser();
-			((SipURI) transfereeRequest.getRequestURI()).setUser(user);
+//			String user = ((SipURI) request.getAddressHeader(REFER_TO).getURI()).getUser();
+//			((SipURI) targetRequest.getRequestURI()).setUser(user);
+
 
 			// User is notified that transfer is initiated
 			transferListener.transferInitiated(targetRequest);
@@ -139,6 +139,7 @@ public class BlindTransfer extends Transfer {
 			sendRequest(targetRequest, (targetResponse) -> {
 
 				if (successful(targetResponse)) {
+					expectation.clear();
 
 					SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
 					notify200.setHeader(EVENT, "refer");
