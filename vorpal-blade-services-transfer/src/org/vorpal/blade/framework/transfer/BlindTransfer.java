@@ -78,6 +78,7 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession.State;
+import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Expectation;
@@ -129,6 +130,8 @@ public class BlindTransfer extends Transfer {
 			targetRequest.removeHeader(REFERRED_BY);
 
 			copyHeaders(request, transfereeRequest);
+			String user = ((SipURI) request.getAddressHeader(REFER_TO)).getUser();
+			((SipURI) transfereeRequest.getRequestURI()).setUser(user);
 
 			// User is notified that transfer is initiated
 			transferListener.transferInitiated(targetRequest);
