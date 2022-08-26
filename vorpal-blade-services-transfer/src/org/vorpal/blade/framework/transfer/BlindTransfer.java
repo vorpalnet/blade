@@ -130,7 +130,7 @@ public class BlindTransfer extends Transfer {
 			targetRequest.removeHeader(REFERRED_BY);
 
 			copyHeaders(request, transfereeRequest);
-			String user = ((SipURI) request.getAddressHeader(REFER_TO)).getUser();
+			String user = ((SipURI) request.getAddressHeader(REFER_TO).getURI()).getUser();
 			((SipURI) transfereeRequest.getRequestURI()).setUser(user);
 
 			// User is notified that transfer is initiated
