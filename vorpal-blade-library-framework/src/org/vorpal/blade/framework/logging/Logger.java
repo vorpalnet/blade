@@ -61,7 +61,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //		return logger;
 //	}
 
-	private static final String NOSESS = "[----:----] ";
+	private static final String NOSESS = "[------:--] ";
 
 	@Override
 	public void severe(String msg) {
@@ -402,16 +402,29 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					}
 				}
 
+				String note = "";
+
 				if (leftSide) {
 					if (direction.equals(Direction.RECEIVE)) {
 						if (request != null) { // #1
+
+							if (request.getMethod().equals("INVITE")) {
+								if (request.isInitial()) {
+									note = request.getRequestURI().toString();
+								} else {
+									note = "To: " + request.getTo();
+								}
+							} else if (request.getMethod().equals("REFER")) {
+								note = "Refer-To: " + request.getHeader("Refer-To");
+							}
+
 							String alice = String.format("%-17s", shorten(from(request), 17)).replace(' ', '-');
 							String arrow = String.format("%17s", method + "-->").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
-							String comment = String.format("%36s", ";") + " " + String.format("%-32s", requestUri);
+							String comment = String.format("%36s", ";") + " " + String.format("%-32s", note);
 
-							// str.append(hexHash(request.getSession())).append("1");
-							str.append(hexHash(request.getSession())).append(" ");
+							str.append(hexHash(request.getSession())).append("{1}");
+//							str.append(hexHash(request.getSession())).append(" ");
 
 							str.append(alice).append(arrow).append(middle).append(comment);
 						} else { // #2
@@ -421,18 +434,29 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
 									+ response.getMethod() + ")";
 
-//						str.append(hexHash(response.getSession())).append("2");
-							str.append(hexHash(response.getSession())).append(" ");
+							str.append(hexHash(response.getSession())).append("{2}");
+//							str.append(hexHash(response.getSession())).append(" ");
 							str.append(alice).append(arrow).append(middle).append(comment);
 						}
 					} else {
 						if (request != null) { // #3
+
+							if (request.getMethod().equals("NOTIFY")) {
+								if (request.getContentType().equals("message/sipfrag")) {
+									note = new String((byte[]) request.getContent());
+								}
+							}else if (request.getMethod().equals("INVITE")) {
+								note = "From: "+request.getHeader("From");
+							}
+
 							String alice = String.format("%-18s", shorten(to(request), 17) + "<").replace(' ', '-');
 							String arrow = String.format("%16s", "" + method + "---").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
-							String comment = String.format("%36s", ";") + " " + String.format("%-32s", requestUri);
-//						str.append(hexHash(request.getSession())).append("3");
-							str.append(hexHash(request.getSession())).append(" ");
+							String comment = String.format("%36s", ";") + " " + String.format("%-32s", note);
+
+							str.append(hexHash(request.getSession())).append("{3}");
+//							str.append(hexHash(request.getSession())).append(" ");
+
 							str.append(alice).append(arrow).append(middle).append(comment);
 
 						} else { // #4
@@ -442,8 +466,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
 									+ response.getMethod() + ")";
 
-//						str.append(hexHash(response.getSession())).append("4");
-							str.append(hexHash(response.getSession())).append(" ");
+							str.append(hexHash(response.getSession())).append("{4}");
+//							str.append(hexHash(response.getSession())).append(" ");
+
 							str.append(alice).append(arrow).append(middle).append(comment);
 						}
 					}
@@ -451,13 +476,26 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				} else {
 					if (direction.equals(Direction.RECEIVE)) {
 						if (request != null) { // #5
+
+							if (request.getMethod().equals("INVITE")) {
+								if (request.isInitial()) {
+									note = request.getRequestURI().toString();
+								} else {
+									note = "To: " + request.getTo();
+								}
+							} else if (request.getMethod().equals("REFER")) {
+								note = "Refer-To: " + request.getHeader("Refer-To");
+							}
+
 							String left = String.format("%34s", "");
 							String middle = String.format("%-18s", shorten(name, 17) + "<").replace(' ', '-');
 							String arrow = String.format("%16s", "" + method + "---").replace(' ', '-');
 							String bob = String.format("%-17s", shorten(from(request), 17));
-							String comment = " ; " + String.format("%-32s", requestUri);
-//						str.append(hexHash(request.getSession())).append("5");
-							str.append(hexHash(request.getSession())).append(" ");
+							String comment = " ; " + String.format("%-32s", note);
+
+							str.append(hexHash(request.getSession())).append("{5}");
+//							str.append(hexHash(request.getSession())).append(" ");
+
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 						} else { // #6
 							String left = String.format("%34s", "");
@@ -465,21 +503,38 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String arrow = String.format("%16s", "" + status + "---").replace(' ', '-');
 							String bob = String.format("%-17s", shorten(to(response), 17));
 							String comment = " ; " + response.getReasonPhrase() + " (" + response.getMethod() + ")";
-//						str.append(hexHash(response.getSession())).append("6");
-							str.append(hexHash(response.getSession())).append(" ");
+
+							str.append(hexHash(response.getSession())).append("{6}");
+//							str.append(hexHash(response.getSession())).append(" ");
+
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 						}
 
 					} else {
 
 						if (request != null) { // #7
+
+							if (request.getMethod().equals("INVITE")) {
+								if (request.isInitial()) {
+									note = request.getRequestURI().toString();
+								} else {
+									note = "From: " + request.getFrom();
+								}
+							} else if (request.getMethod().equals("NOTIFY")) {
+								if (request.getContentType().equals("message/sipfrag")) {
+									note = new String((byte[]) request.getContent());
+								}
+							}
+
 							String left = String.format("%34s", "");
 							String middle = String.format("%-17s", shorten(name, 17)).replace(' ', '-');
 							String arrow = String.format("%17s", method + "-->").replace(' ', '-');
 							String bob = String.format("%-17s", shorten(to(request), 17));
-							String comment = " ; " + String.format("%-32s", requestUri);
-//						str.append(hexHash(request.getSession())).append("7");
-							str.append(hexHash(request.getSession())).append(" ");
+							String comment = " ; " + String.format("%-32s", note);
+
+							str.append(hexHash(request.getSession())).append("{7}");
+//							str.append(hexHash(request.getSession())).append(" ");
+
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 
 						} else { // #8
@@ -488,8 +543,10 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String arrow = String.format("%17s", status + "-->").replace(' ', '-');
 							String bob = String.format("%-17s", shorten(from(response), 17));
 							String comment = " ; " + response.getReasonPhrase() + " (" + response.getMethod() + ")";
-//						str.append(hexHash(response.getSession())).append("8");
-							str.append(hexHash(response.getSession())).append(" ");
+
+							str.append(hexHash(response.getSession())).append("{8}");
+//							str.append(hexHash(response.getSession())).append(" ");
+
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 						}
 
