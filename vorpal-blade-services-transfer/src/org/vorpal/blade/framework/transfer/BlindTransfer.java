@@ -108,22 +108,32 @@ public class BlindTransfer extends Transfer {
 
 			// in the event the transferee hangs up before the transfer completes
 			Expectation expectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
-				sendResponse(bye.createResponse(200));
+				try {
+					sipLogger.finer(bye, "transferee disconnected before transfer completed");
+					sendResponse(bye.createResponse(200));
 
-				sipLogger.severe(bye,
-						"isValid: " + bye.getSession().isValid() + ", state: " + bye.getSession().getState());
 
-				if (false == bye.getSession().getState().equals(State.TERMINATED)) {
-					sendRequest(targetRequest.createCancel());
-					sendRequest(transferorRequest.getSession().createRequest(BYE));
+					if (false == bye.getSession().getState().equals(State.TERMINATED)) {
+						sendRequest(targetRequest.createCancel());
+						sendRequest(transferorRequest.getSession().createRequest(BYE));
+					}
+				} catch (Exception e) {
+					sipLogger.warning(bye,
+							"BYE received from transferee, CANCEL target session isValid: "
+									+ targetRequest.getSession().isValid() + ", state: "
+									+ targetRequest.getSession().getState());
+					sipLogger.warning(bye,
+							"BYE received from transferee, BYE transferor session isValid: "
+									+ transferorRequest.getSession().isValid() + ", state: "
+									+ transferorRequest.getSession().getState());
 				}
-
 			});
 
-//			// Expect the transferor to hang up after the NOTIFY that the transfer succeeded
-//			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-//				sendResponse(bye.createResponse(200));
-//			});
+			// Expect the transferor to hang up after the NOTIFY that the transfer succeeded
+			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
+				sipLogger.finer(bye, "transferor disconnected as expected");
+				sendResponse(bye.createResponse(200));
+			});
 
 			copyHeaders(request, targetRequest);
 			targetRequest.removeHeader(REFER_TO);
@@ -131,7 +141,6 @@ public class BlindTransfer extends Transfer {
 
 //			String user = ((SipURI) request.getAddressHeader(REFER_TO).getURI()).getUser();
 //			((SipURI) targetRequest.getRequestURI()).setUser(user);
-
 
 			// User is notified that transfer is initiated
 			transferListener.transferInitiated(targetRequest);
