@@ -34,11 +34,6 @@ import org.vorpal.blade.framework.transfer.TransferListener;
 public class TransferServlet extends B2buaServlet implements TransferListener {
 	public static TransferSettingsManager settingsManager;
 
-//	@SipApplicationKey
-//	public static String sessionKey(SipServletRequest request) {
-//
-//	}
-
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
 		settingsManager = new TransferSettingsManager(event, TransferSettings.class, new TransferSettingsSample());
@@ -81,12 +76,7 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 			} else {
 				for (TransferCondition tc : ts.getTransferConditions()) {
 					
-					
-					
 					if (true == tc.getCondition().checkAll(request)) {
-						
-						
-						
 						if (null != tc.getStyle()) {
 							callflow = this.chooseCallflowStyle(tc.getStyle());
 						} else {

@@ -52,7 +52,7 @@ public class TransferSettingsSample extends TransferSettings {
 
 		TransferCondition tc3 = new TransferCondition();
 		tc3.setStyle(TransferStyle.blind);
-		tc3.getCondition().addComparison("To", "user", "carol");
+		tc3.getCondition().addComparison("Refer-To", "user", "carol");
 		this.getTransferConditions().add(tc3);
 
 		TransferCondition tc2 = new TransferCondition();
