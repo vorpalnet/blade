@@ -6,16 +6,19 @@
 	<wls:weblogic-version>12.2.1.3</wls:weblogic-version>
 	<wls:context-root>transfer</wls:context-root>
 
+
 	<wls:library-ref>
 		<wls:library-name>vorpal-blade</wls:library-name>
 		<wls:specification-version>2.0</wls:specification-version>
 		<wls:exact-match>false</wls:exact-match>
 	</wls:library-ref>
 
+
 	<!-- Any defined user (aka 'weblogic') can invoke the REST APIs. -->
 	<wls:security-role-assignment>
 		<wls:role-name>authenticated-users</wls:role-name>
 		<wls:principal-name>users</wls:principal-name>
 	</wls:security-role-assignment>
+
 
 </wls:weblogic-web-app>

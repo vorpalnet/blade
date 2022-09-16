@@ -23,7 +23,6 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 	@Override
 	public Translation lookup(SipServletRequest request) {
-//		String request_uri = null;
 		Translation value = null;
 
 		Iterator<Entry<String, Translation>> itr = map.entrySet().iterator();
@@ -39,7 +38,6 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 				if (regexRoute.key.startsWith(entry.getKey())) {
 					value = entry.getValue();
-
 				}
 			}
 

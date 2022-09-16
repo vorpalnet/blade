@@ -18,6 +18,7 @@ public class TransferSettingsManager extends SettingsManager<TransferSettings> {
 	public void initialize(TransferSettings config) throws ServletParseException {
 		sipLogger.info("Initializng configuration logging level to: " + config.getLoggingLevel());
 
+		SettingsManager.getSipLogger().warning("Setting logging level to: " + config.getLoggingLevel());
 		switch (config.getLoggingLevel()) {
 		case OFF:
 			SettingsManager.getSipLogger().setLevel(Level.OFF);

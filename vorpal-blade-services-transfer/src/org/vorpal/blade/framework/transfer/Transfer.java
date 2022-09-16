@@ -74,6 +74,8 @@ import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.services.transfer.TransferServlet;
+import org.vorpal.blade.services.transfer.TransferSettings;
 
 public class Transfer extends Callflow {
 	static final long serialVersionUID = 1L;
@@ -120,6 +122,22 @@ public class Transfer extends Callflow {
 
 		targetRequest = sipFactory.createRequest(appSession, INVITE, transferee, target);
 		transfereeRequest = this.getLinkedSession(request.getSession()).createRequest(INVITE);
+	}
+
+	/**
+	 * Copies headers as defined in the settings.
+	 * 
+	 * @param copyFrom
+	 * @param copyTo
+	 */
+	public void preserveHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) {
+		TransferSettings ts = TransferServlet.settingsManager.getCurrent();
+		for (String header : ts.getPreserveInviteHeaders()) {
+			String value = copyFrom.getHeader(header);
+			if (value != null && null == copyTo.getHeader(header)) {
+				this.copyHeader(header, copyFrom, copyTo);
+			}
+		}
 	}
 
 	@Override

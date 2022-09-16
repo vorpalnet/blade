@@ -475,7 +475,7 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
-	private static void copyHeader(String header, SipServletMessage copyFrom, SipServletMessage copyTo) {
+	public static void copyHeader(String header, SipServletMessage copyFrom, SipServletMessage copyTo) {
 
 		String v;
 		HashSet<String> hashSet = new HashSet<>();

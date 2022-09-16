@@ -74,14 +74,16 @@
 package org.vorpal.blade.framework.transfer;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession.State;
-import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Expectation;
+import org.vorpal.blade.services.transfer.TransferServlet;
+import org.vorpal.blade.services.transfer.TransferSettings;
 
 public class BlindTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
@@ -98,6 +100,14 @@ public class BlindTransfer extends Transfer {
 
 			createRequests(request);
 
+			SipServletRequest intialInvite = (SipServletRequest) request.getApplicationSession()
+					.getAttribute("INITIAL_INVITE");
+
+			if (intialInvite != null) {
+				preserveHeaders(intialInvite, this.targetRequest);
+				preserveHeaders(request, this.targetRequest);
+			}
+
 			sendResponse(request.createResponse(202));
 
 			SipServletRequest notify100 = request.getSession().createRequest(NOTIFY);
@@ -111,7 +121,6 @@ public class BlindTransfer extends Transfer {
 				try {
 					sipLogger.finer(bye, "transferee disconnected before transfer completed");
 					sendResponse(bye.createResponse(200));
-
 
 					if (false == bye.getSession().getState().equals(State.TERMINATED)) {
 						sendRequest(targetRequest.createCancel());
@@ -135,12 +144,6 @@ public class BlindTransfer extends Transfer {
 				sendResponse(bye.createResponse(200));
 			});
 
-			copyHeaders(request, targetRequest);
-			targetRequest.removeHeader(REFER_TO);
-//			targetRequest.removeHeader(REFERRED_BY);
-
-//			String user = ((SipURI) request.getAddressHeader(REFER_TO).getURI()).getUser();
-//			((SipURI) targetRequest.getRequestURI()).setUser(user);
 
 			// User is notified that transfer is initiated
 			transferListener.transferInitiated(targetRequest);

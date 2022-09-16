@@ -16,10 +16,28 @@ public class TransferSettings implements Serializable {
 		OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL
 	}
 
+//	public LinkedList<Selector> selectors = new LinkedList<>();
+//	public LinkedList<TranslationsMap> maps = new LinkedList<>();
+
+//	ProxyRouterConfig performTransfer = new ProxyRouterConfig();
+	
+	
+	
+	
 	protected LoggingLevel loggingLevel = LoggingLevel.INFO;
 	protected Boolean transferAllRequests;
 	protected TransferStyle defaultTransferStyle;
 	protected ArrayList<String> preserveInviteHeaders = new ArrayList<>();
+	protected ArrayList<String> preserveReferHeaders = new ArrayList<>();
+
+	public ArrayList<String> getPreserveReferHeaders() {
+		return preserveReferHeaders;
+	}
+
+	public void setPreserveReferHeaders(ArrayList<String> preserveReferHeaders) {
+		this.preserveReferHeaders = preserveReferHeaders;
+	}
+
 	protected LinkedList<TransferCondition> transferConditions = new LinkedList<>();
 
 	public TransferSettings() {

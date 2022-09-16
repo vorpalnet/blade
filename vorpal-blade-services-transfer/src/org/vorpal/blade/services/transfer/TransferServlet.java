@@ -8,7 +8,6 @@ import java.util.Map.Entry;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
-import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
@@ -20,6 +19,7 @@ import org.vorpal.blade.framework.transfer.AssistedTransfer;
 import org.vorpal.blade.framework.transfer.BlindTransfer;
 import org.vorpal.blade.framework.transfer.MediaTransfer;
 import org.vorpal.blade.framework.transfer.TransferCondition;
+import org.vorpal.blade.framework.transfer.TransferInitialInvite;
 import org.vorpal.blade.framework.transfer.TransferListener;
 
 /**
@@ -72,13 +72,21 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 		Callflow callflow = null;
 		TransferSettings ts = settingsManager.getCurrent();
 
-		if (request.getMethod().equals("REFER")) {
-
+		if (request.getMethod().equals("INVITE") && request.isInitial()) {
+			callflow = new TransferInitialInvite();
+		} else if (request.getMethod().equals("REFER")) {
 			if (ts.getTransferAllRequests() == true) {
+				sipLogger.finer(request, "Transferring all requests...");
 				callflow = this.chooseCallflowStyle(ts.getDefaultTransferStyle());
 			} else {
 				for (TransferCondition tc : ts.getTransferConditions()) {
+					
+					
+					
 					if (true == tc.getCondition().checkAll(request)) {
+						
+						
+						
 						if (null != tc.getStyle()) {
 							callflow = this.chooseCallflowStyle(tc.getStyle());
 						} else {
