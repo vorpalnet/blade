@@ -15,14 +15,6 @@ public class TransferSettings implements Serializable {
 	public enum LoggingLevel {
 		OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL
 	}
-
-//	public LinkedList<Selector> selectors = new LinkedList<>();
-//	public LinkedList<TranslationsMap> maps = new LinkedList<>();
-
-//	ProxyRouterConfig performTransfer = new ProxyRouterConfig();
-	
-	
-	
 	
 	protected LoggingLevel loggingLevel = LoggingLevel.INFO;
 	protected Boolean transferAllRequests;
