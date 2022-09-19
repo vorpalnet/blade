@@ -66,11 +66,11 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 		if (request.getMethod().equals("INVITE") && request.isInitial()) {
 			callflow = new TransferInitialInvite();
 		} else if (request.getMethod().equals("REFER")) {
-			
-			request.getApplicationSession().setAttribute("INITIAL_REFER", request);
-			
-			
-			
+
+			if (request.getApplicationSession().getAttribute("INITIAL_REFER") == null) {
+				request.getApplicationSession().setAttribute("INITIAL_REFER", request);
+			}
+
 			if (ts.getTransferAllRequests() == true) {
 				sipLogger.finer(request, "Transferring all requests...");
 				callflow = this.chooseCallflowStyle(ts.getDefaultTransferStyle());
@@ -99,62 +99,61 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 	@Override
 	public void transferInitiated(SipServletRequest request) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void transferDeclined(SipServletResponse response) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void transferAbandoned(SipServletRequest request) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
 		// TODO Auto-generated method stub
-		
-	}
 
+	}
 
 }
