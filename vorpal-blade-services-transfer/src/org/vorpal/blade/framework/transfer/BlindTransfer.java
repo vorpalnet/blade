@@ -102,10 +102,14 @@ public class BlindTransfer extends Transfer {
 
 			SipServletRequest intialInvite = (SipServletRequest) request.getApplicationSession()
 					.getAttribute("INITIAL_INVITE");
-
 			if (intialInvite != null) {
 				preserveHeaders(intialInvite, this.targetRequest);
-				preserveHeaders(request, this.targetRequest);
+			}
+
+			SipServletRequest intialRefer = (SipServletRequest) request.getApplicationSession()
+					.getAttribute("INITIAL_REFER");
+			if (intialRefer != null) {
+				preserveHeaders(intialRefer, this.targetRequest);
 			}
 
 			sendResponse(request.createResponse(202));
@@ -143,7 +147,6 @@ public class BlindTransfer extends Transfer {
 				sipLogger.finer(bye, "transferor disconnected as expected");
 				sendResponse(bye.createResponse(200));
 			});
-
 
 			// User is notified that transfer is initiated
 			transferListener.transferInitiated(targetRequest);
