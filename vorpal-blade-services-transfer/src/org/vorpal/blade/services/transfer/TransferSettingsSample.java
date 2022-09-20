@@ -9,7 +9,7 @@ import org.vorpal.blade.framework.transfer.TransferCondition;
 public class TransferSettingsSample extends TransferSettings {
 
 	public TransferSettingsSample() {
-		
+
 //		// Perform transfer if "OSM-Features" header contains "transfer"
 //		Selector s1 = new Selector();
 //		s1.setId("osmTransfer");
@@ -38,10 +38,7 @@ public class TransferSettingsSample extends TransferSettings {
 //		prefixMap.createTranslation("19954").setRequestUri("sip:10.29.82.110:5060").setDescription("CL2 STG");
 //
 //		performTransfer.plan.add(prefixMap);
-		
-		
-		
-		
+
 		this.setTransferAllRequests(false);
 		this.setDefaultTransferStyle(TransferSettings.TransferStyle.blind);
 
@@ -60,9 +57,6 @@ public class TransferSettingsSample extends TransferSettings {
 		tc2.getCondition().addComparison("Refer-To", "matches", ".*sip:1996.*");
 		this.getTransferConditions().add(tc2);
 
-		
-		
-		
 		preserveInviteHeaders.add("Cisco-Gucid");
 		preserveInviteHeaders.add("User-to-User");
 		preserveReferHeaders.add("Referred-By");
