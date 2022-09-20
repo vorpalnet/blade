@@ -125,14 +125,33 @@ public class Transfer extends Callflow {
 	}
 
 	/**
-	 * Copies headers as defined in the settings.
+	 * Copies INVITE headers as defined in the settings. If the header already exists, it
+	 * will not copy over it.
 	 * 
 	 * @param copyFrom
 	 * @param copyTo
 	 */
-	public void preserveHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) {
+	public void preserveInviteHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) {
 		TransferSettings ts = TransferServlet.settingsManager.getCurrent();
 		for (String header : ts.getPreserveInviteHeaders()) {
+			String value = copyFrom.getHeader(header);
+			if (value != null && null == copyTo.getHeader(header)) {
+				this.copyHeader(header, copyFrom, copyTo);
+			}
+		}
+	}
+	
+	
+	/**
+	 * Copies REFER headers as defined in the settings. If the header already exists, it
+	 * will not copy over it.
+	 * 
+	 * @param copyFrom
+	 * @param copyTo
+	 */
+	public void preserveReferHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) {
+		TransferSettings ts = TransferServlet.settingsManager.getCurrent();
+		for (String header : ts.getPreserveReferHeaders()) {
 			String value = copyFrom.getHeader(header);
 			if (value != null && null == copyTo.getHeader(header)) {
 				this.copyHeader(header, copyFrom, copyTo);
