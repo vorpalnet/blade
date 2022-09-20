@@ -100,12 +100,18 @@ public class BlindTransfer extends Transfer {
 
 			createRequests(request);
 
+			// First copy any specified INVITE headers
 			SipServletRequest intialInvite = (SipServletRequest) request.getApplicationSession()
 					.getAttribute("INITIAL_INVITE");
 			if (intialInvite != null) {
 				preserveHeaders(intialInvite, this.targetRequest);
 			}
 
+			// Second, copy any specified REFER headers (for this request)
+			preserveHeaders(request, this.targetRequest);
+
+			// Third, copy any specified REFER headers (for the original REFER which may or
+			// may not be the same thing as #2)
 			SipServletRequest intialRefer = (SipServletRequest) request.getApplicationSession()
 					.getAttribute("INITIAL_REFER");
 			if (intialRefer != null) {
