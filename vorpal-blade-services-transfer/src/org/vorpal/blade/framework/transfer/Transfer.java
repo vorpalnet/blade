@@ -121,12 +121,15 @@ public class Transfer extends Callflow {
 		Address target = request.getAddressHeader(REFER_TO);
 
 		targetRequest = sipFactory.createRequest(appSession, INVITE, transferee, target);
+		targetRequest.setHeader("Allow", TransferServlet.getSettingsManager().getCurrent().getAllow());
+
 		transfereeRequest = this.getLinkedSession(request.getSession()).createRequest(INVITE);
+		transfereeRequest.setHeader("Allow", TransferServlet.getSettingsManager().getCurrent().getAllow());
 	}
 
 	/**
-	 * Copies INVITE headers as defined in the settings. If the header already exists, it
-	 * will not copy over it.
+	 * Copies INVITE headers as defined in the settings. If the header already
+	 * exists, it will not copy over it.
 	 * 
 	 * @param copyFrom
 	 * @param copyTo
@@ -140,11 +143,10 @@ public class Transfer extends Callflow {
 			}
 		}
 	}
-	
-	
+
 	/**
-	 * Copies REFER headers as defined in the settings. If the header already exists, it
-	 * will not copy over it.
+	 * Copies REFER headers as defined in the settings. If the header already
+	 * exists, it will not copy over it.
 	 * 
 	 * @param copyFrom
 	 * @param copyTo

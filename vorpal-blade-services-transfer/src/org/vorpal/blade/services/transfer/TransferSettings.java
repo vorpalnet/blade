@@ -77,4 +77,12 @@ public class TransferSettings implements Serializable {
 		this.transferConditions = transferConditions;
 	}
 
+	public String getAllow() {
+		return Allow;
+	}
+
+	public void setAllow(String allow) {
+		Allow = allow;
+	}
+
 }
