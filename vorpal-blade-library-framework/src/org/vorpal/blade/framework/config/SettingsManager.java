@@ -102,8 +102,8 @@ public class SettingsManager<T> {
 		return sipLogger;
 	}
 
-	public static void setSipLogger(Logger sipLogger) {
-		SettingsManager.sipLogger = sipLogger;
+	public void setSipLogger(Logger sipLogger) {
+		this.sipLogger = sipLogger;
 	}
 
 	public String getDomainJson() throws JsonProcessingException {
@@ -315,8 +315,6 @@ public class SettingsManager<T> {
 			mergeCurrentFromJson();
 		}
 
-		
-		
 		sipLogger.info("Loading configuration...\n" + getCurrentAsJson());
 	}
 
