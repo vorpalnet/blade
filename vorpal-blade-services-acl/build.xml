@@ -61,14 +61,16 @@
 	</target>
 
 	<target name="package" depends="init">
+		<mkdir dir="build/lib" />
+		<copy file="${framework}" todir="build/lib" />
 		<manifest file="build/MANIFEST.MF">
 			<attribute name="Built-By" value="${user.name}" />
 			<attribute name="Weblogic-Application-Version" value="${implementation}" />
 		</manifest>
 		<war destfile="build/${ant.project.name}.war"
-			 webxml="${webapp}/WEB-INF/web.xml"
 		     manifest="build/MANIFEST.MF"
 		     basedir="${webapp}">
+			<lib dir="build/lib" />
 			<classes dir="build/classes" />
 		</war>
 		<copy file="build/${ant.project.name}.war" todir="${dist}" />

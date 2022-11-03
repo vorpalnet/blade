@@ -2,11 +2,12 @@
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-test-b2bua">
     <import file="../libraries.xml" />
-	<property name="target" value="1.8" />
-	<property name="source" value="1.8" />
+    <property name="src" location="src/main/java" />
+    <property name="webapp" location="src/main/webapp" />
+
 
     <path id="Web App Libraries.libraryclasspath">
-		<fileset dir="src/main/webapp/WEB-INF/lib">
+		<fileset dir="${webapp}/WEB-INF/lib">
 			<filename name="**/*.jar" />
 		</fileset>
 	</path>
@@ -21,10 +22,10 @@
 	</path>
 	<target name="init">
 		<mkdir dir="build/classes" />
-		<mkdir dir="src/main/webapp/WEB-INF/lib" />
+		<mkdir dir="${webapp}/WEB-INF/lib" />
 
 		<copy includeemptydirs="false" todir="build/classes">
-			<fileset dir="src/main/java">
+			<fileset dir="${src}">
 				<exclude name="**/*.launch" />
 				<exclude name="**/*.java" />
 			</fileset>
@@ -52,24 +53,27 @@
 		       includeantruntime="false"
 		       source="${source}"
 		       target="${target}">
-			<src path="src/main/java" />
+			<src path="${src}" />
 			<src path=".apt_src" />
 			<classpath refid="project.classpath" />
 		</javac>
 	</target>
 
-	<target name="package" depends="init">
-		<manifest file="build/MANIFEST.MF">
-			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}" />
-		</manifest>
-		<war destfile="build/${ant.project.name}.war"
-		     manifest="build/MANIFEST.MF"
-		     basedir="src/main/webapp">
-			<classes dir="build/classes" />
-		</war>
-		<copy file="build/${ant.project.name}.war" todir="${dist}" />
-	</target>
+    <target name="package" depends="init">
+        <mkdir dir="build/lib" />
+        <copy file="${framework}" todir="build/lib" />
+        <manifest file="build/MANIFEST.MF">
+            <attribute name="Built-By" value="${user.name}" />
+            <attribute name="Weblogic-Application-Version" value="${implementation}" />
+        </manifest>
+        <war destfile="build/${ant.project.name}.war"
+             manifest="build/MANIFEST.MF"
+             basedir="${webapp}">
+            <lib dir="build/lib" />
+            <classes dir="build/classes" />
+        </war>
+        <copy file="build/${ant.project.name}.war" todir="${dist}" />
+    </target>
 
 	<target description="Build all projects which reference this project. Useful to propagate changes."
 	        name="build-refprojects" />
@@ -80,7 +84,7 @@
 		         splitindex="true"
 		         access="protected"
 		         packagenames="org.vorpal.*"
-		         sourcepath="src/main/java"
+		         sourcepath="${src}"
 		         destdir="${docs}/${ant.project.name}"
 		         author="true"
 		         version="true"

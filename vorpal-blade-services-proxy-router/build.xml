@@ -59,18 +59,21 @@
 		</javac>
 	</target>
 
-	<target name="package" depends="init">
-		<manifest file="build/MANIFEST.MF">
-			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}" />
-		</manifest>
-		<war destfile="build/${ant.project.name}.war"
-		     manifest="build/MANIFEST.MF"
-		     basedir="${webapp}">
-			<classes dir="build/classes" />
-		</war>
-		<copy file="build/${ant.project.name}.war" todir="${dist}" />
-	</target>
+    <target name="package" depends="init">
+        <mkdir dir="build/lib" />
+        <copy file="${framework}" todir="build/lib" />
+        <manifest file="build/MANIFEST.MF">
+            <attribute name="Built-By" value="${user.name}" />
+            <attribute name="Weblogic-Application-Version" value="${implementation}" />
+        </manifest>
+        <war destfile="build/${ant.project.name}.war"
+             manifest="build/MANIFEST.MF"
+             basedir="${webapp}">
+            <lib dir="build/lib" />
+            <classes dir="build/classes" />
+        </war>
+        <copy file="build/${ant.project.name}.war" todir="${dist}" />
+    </target>
 
 
 	<target description="Build all projects which reference this project. Useful to propagate changes."

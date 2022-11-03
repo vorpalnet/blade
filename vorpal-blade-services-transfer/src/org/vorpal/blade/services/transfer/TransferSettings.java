@@ -19,6 +19,7 @@ public class TransferSettings implements Serializable {
 	protected LoggingLevel loggingLevel = LoggingLevel.INFO;
 	protected Boolean transferAllRequests;
 	protected TransferStyle defaultTransferStyle;
+	protected String Allow = "MESSAGE, REFER, NOTIFY, CANCEL, ACK, UPDATE, PRACK, OPTIONS, INVITE, INFO, SUBSCRIBE, BYE";
 	protected ArrayList<String> preserveInviteHeaders = new ArrayList<>();
 	protected ArrayList<String> preserveReferHeaders = new ArrayList<>();
 

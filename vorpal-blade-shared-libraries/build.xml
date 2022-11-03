@@ -66,15 +66,19 @@
 			<attribute name="Extension-Name" value="vorpal-blade" />
 		</manifest>
 
+<!--		
 		<fileset dir="../vorpal-blade-library-framework/build" id="vorpal-blade-library-framework">
 			<filename name="vorpal-blade-library-framework.jar" />
 		</fileset>
-
+-->
+		
 		<war destfile="build/${ant.project.name}.war"
 		     basedir="src/main/webapp"
 		     needxmlfile="false"
 		     manifest="build/MANIFEST.MF">
+			<!--
 			<lib refid="vorpal-blade-library-framework" />
+			-->
 			<classes dir="build/classes" />
 		</war>
 

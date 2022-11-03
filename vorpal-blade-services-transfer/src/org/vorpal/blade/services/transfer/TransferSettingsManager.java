@@ -18,31 +18,31 @@ public class TransferSettingsManager extends SettingsManager<TransferSettings> {
 	public void initialize(TransferSettings config) throws ServletParseException {
 		sipLogger.info("Initializng configuration logging level to: " + config.getLoggingLevel());
 
-		SettingsManager.getSipLogger().warning("Setting logging level to: " + config.getLoggingLevel());
+		this.getSipLogger().warning("Setting logging level to: " + config.getLoggingLevel());
 		switch (config.getLoggingLevel()) {
 		case OFF:
-			SettingsManager.getSipLogger().setLevel(Level.OFF);
+			this.getSipLogger().setLevel(Level.OFF);
 			break;
 		case FINEST:
-			SettingsManager.getSipLogger().setLevel(Level.FINEST);
+			this.getSipLogger().setLevel(Level.FINEST);
 			break;
 		case FINER:
-			SettingsManager.getSipLogger().setLevel(Level.FINER);
+			this.getSipLogger().setLevel(Level.FINER);
 			break;
 		case FINE:
-			SettingsManager.getSipLogger().setLevel(Level.FINE);
+			this.getSipLogger().setLevel(Level.FINE);
 			break;
 		case INFO:
-			SettingsManager.getSipLogger().setLevel(Level.INFO);
+			this.getSipLogger().setLevel(Level.INFO);
 			break;
 		case WARNING:
-			SettingsManager.getSipLogger().setLevel(Level.WARNING);
+			this.getSipLogger().setLevel(Level.WARNING);
 			break;
 		case SEVERE:
-			SettingsManager.getSipLogger().setLevel(Level.SEVERE);
+			this.getSipLogger().setLevel(Level.SEVERE);
 			break;
 		case ALL:
-			SettingsManager.getSipLogger().setLevel(Level.ALL);
+			this.getSipLogger().setLevel(Level.ALL);
 			break;
 		}
 

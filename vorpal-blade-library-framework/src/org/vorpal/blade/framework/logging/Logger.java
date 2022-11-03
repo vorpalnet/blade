@@ -416,6 +416,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								}
 							} else if (request.getMethod().equals("REFER")) {
 								note = "Refer-To: " + request.getHeader("Refer-To");
+							} else if (request.getMethod().equals("REGISTER")) {
+								String expires = request.getHeader("Expires");
+								if (expires == null) {
+									expires = request.getParameterableHeader("Contact").getParameter("expires");
+								}
+								note = "Expires: " + expires;
 							}
 
 							String alice = String.format("%-17s", shorten(from(request), 17)).replace(' ', '-');
@@ -445,8 +451,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								if (request.getContentType().equals("message/sipfrag")) {
 									note = new String((byte[]) request.getContent());
 								}
-							}else if (request.getMethod().equals("INVITE")) {
-								note = "From: "+request.getHeader("From");
+							} else if (request.getMethod().equals("INVITE")) {
+								note = "From: " + request.getHeader("From");
 							}
 
 							String alice = String.format("%-18s", shorten(to(request), 17) + "<").replace(' ', '-');

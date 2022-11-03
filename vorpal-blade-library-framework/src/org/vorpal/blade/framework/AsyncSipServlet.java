@@ -5,6 +5,7 @@ import java.io.IOException;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
+import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
@@ -15,8 +16,10 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSessionsUtil;
+import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerListener;
 import javax.servlet.sip.TimerService;
+import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
@@ -101,12 +104,12 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	@Override
-	public void contextInitialized(ServletContextEvent sce) {
+	final public void contextInitialized(ServletContextEvent sce) {
 		// do nothing;
 	}
 
 	@Override
-	public void contextDestroyed(ServletContextEvent sce) {
+	final public void contextDestroyed(ServletContextEvent sce) {
 		try {
 			servletDestroyed(event);
 		} catch (Exception e) {
@@ -171,7 +174,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public void timeout(ServletTimer timer) {
+	final public void timeout(ServletTimer timer) {
 		try {
 			Callback<ServletTimer> callback;
 			callback = (Callback<ServletTimer>) timer.getInfo();
@@ -184,33 +187,33 @@ public abstract class AsyncSipServlet extends SipServlet
 	/**
 	 * @return the sipLogger
 	 */
-	public static Logger getSipLogger() {
+	final public static Logger getSipLogger() {
 		return sipLogger;
 	}
 
 	/**
 	 * @return the sipFactory
 	 */
-	public static SipFactory getSipFactory() {
+	final public static SipFactory getSipFactory() {
 		return sipFactory;
 	}
 
 	/**
 	 * @return the sipUtil
 	 */
-	public static SipSessionsUtil getSipUtil() {
+	final public static SipSessionsUtil getSipUtil() {
 		return sipUtil;
 	}
 
 	/**
 	 * @return the timerService
 	 */
-	public static TimerService getTimerService() {
+	final public static TimerService getTimerService() {
 		return timerService;
 	}
 
 	/**
-	 * This is an alternate hashing algorithm that can be used during 
+	 * This is an alternate hashing algorithm that can be used during
 	 * the @SipApplicationKey method.
 	 * 
 	 * @param string
@@ -225,6 +228,25 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 
 		return Long.toHexString(h);
+	}
+
+	public static String getAccountName(Address address) {
+		return getAccountName(address.getURI());
+	}
+
+	public static String getAccountName(URI _uri) {
+		SipURI sipUri = (SipURI) _uri;
+		return sipUri.getUser().toLowerCase() + "@" + sipUri.getHost().toLowerCase();
+	}
+
+	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
+		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+		try {
+			response.send();
+		} catch (Exception e) {
+			sipLogger.logStackTrace(e);
+			throw e;
+		}
 	}
 
 }
