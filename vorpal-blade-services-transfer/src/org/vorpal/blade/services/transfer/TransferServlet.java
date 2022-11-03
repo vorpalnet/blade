@@ -156,4 +156,12 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 
 	}
 
+	public static TransferSettingsManager getSettingsManager() {
+		return settingsManager;
+	}
+
+	public static void setSettingsManager(TransferSettingsManager settingsManager) {
+		TransferServlet.settingsManager = settingsManager;
+	}
+
 }
