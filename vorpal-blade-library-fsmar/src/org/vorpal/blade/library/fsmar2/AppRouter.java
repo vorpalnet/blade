@@ -166,12 +166,13 @@ public class AppRouter implements SipApplicationRouter {
 
 			}
 
-			if (null == nextApp.getNextApplicationName()) {
-				if (request.isInitial()) {
-					sipLogger.fine("Using defaultApplication: " + config.getDefaultApplication());
-					nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null,
-							null, SipRouteModifier.NO_ROUTE, config);
-				}
+			// Use the default application if necessary
+			if (previous.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
+					|| nextApp.getNextApplicationName().equals("null"))) {
+				sipLogger.warning("Using defaultApplication: " + config.getDefaultApplication() + //
+						" for " + request.getMethod() + " " + request.getRequestURI());
+				nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null, null,
+						SipRouteModifier.NO_ROUTE, config);
 			}
 
 			if (sipLogger.isLoggable(Level.FINE)) {
@@ -192,7 +193,9 @@ public class AppRouter implements SipApplicationRouter {
 				}
 			}
 
-		} catch (Exception e) {
+		} catch (
+
+		Exception e) {
 			sipLogger.logStackTrace(e);
 		}
 
