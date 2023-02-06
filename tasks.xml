@@ -1,6 +1,52 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
 <project basedir="." default="build" name="tasks">
+    
+    
+    <target name="build-javadocs" depends="build-jar">
+        <!-- Cool, keep for future reference
+        <pathconvert property="classpathInName" refid="vorpal-blade.classpath" />
+        <echo>Classpath is ${classpathInName}</echo>
+        -->
+        <delete dir="${docs}/${ant.project.name}" />
+        <mkdir dir="${docs}/${ant.project.name}" />
+        <javadoc useexternalfile="true"
+                 splitindex="true"
+                 access="protected"
+                 packagenames="org.vorpal.*"
+                 sourcepath="src"
+                 destdir="${docs}/${ant.project.name}"
+                 author="true"
+                 version="true"
+                 use="true"
+                 windowtitle="${ant.project.name}">
+            <classpath refid="vorpal-blade.classpath" />
+            <classpath refid="WebLogic System Libraries.libraryclasspath" />
+            <doclet name="org.umlgraph.markdown.doclet.UmlGraphDoc" path="../lib/MarkdownDoclet-3.0.jar">
+                <param name="-inferrel" />
+                <param name="-inferdep" />
+                <param name="-operations" />
+                <param name="-hide" value="java.*" />
+                <param name="-collpackages" value="java.util.*" />
+                <param name="-qualify" />
+                <param name="-postfixpackage" />
+                <param name="-nodefontsize" value="9" />
+                <param name="-nodefontpackagesize" value="7" />
+            </doclet>
+            <doctitle>
+                <![CDATA[${ant.project.name}]]>
+            </doctitle>
+            <bottom>
+                <![CDATA[${copyright}</br>${license}]]>
+            </bottom>
+            <link href="https://vorpalnet.github.io/jsr359/" />
+            <link href="https://docs.oracle.com/javaee/7/api/" />
+            <link href="https://docs.oracle.com/javase/8/docs/api/" />
+            <link href="https://vorpalnet.github.io/jsr309/" />
+        </javadoc>
+    </target>
+    
+    
 	<!--
 	<property environment="env" />
 	<property name="debuglevel" value="source,lines,vars" />
