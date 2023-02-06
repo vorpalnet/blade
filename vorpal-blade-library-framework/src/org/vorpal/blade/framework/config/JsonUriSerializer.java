@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 public class JsonUriSerializer extends StdSerializer<URI> {
 
+	private static final long serialVersionUID = 1L;
+
 	public JsonUriSerializer() {
 		this(null);
 	}

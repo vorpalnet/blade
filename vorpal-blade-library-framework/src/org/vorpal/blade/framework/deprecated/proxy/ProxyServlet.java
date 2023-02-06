@@ -12,6 +12,8 @@ public abstract class ProxyServlet extends AsyncSipServlet implements ProxyListe
 
 
 
+	private static final long serialVersionUID = 1L;
+
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow;

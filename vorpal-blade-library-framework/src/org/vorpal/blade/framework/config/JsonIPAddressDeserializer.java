@@ -2,8 +2,6 @@ package org.vorpal.blade.framework.config;
 
 import java.io.IOException;
 
-import javax.servlet.sip.ServletParseException;
-
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;

@@ -31,7 +31,6 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 
-import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
 
 public class Reinvite extends Callflow {

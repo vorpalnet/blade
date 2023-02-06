@@ -1,16 +1,10 @@
 package org.vorpal.blade.framework.config;
 
-import java.util.Iterator;
-import java.util.Map.Entry;
-
 import javax.servlet.sip.SipServletRequest;
-
-import org.vorpal.blade.framework.config.SettingsManager;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
-import inet.ipaddr.Address;
 import inet.ipaddr.IPAddressString;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")

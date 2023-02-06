@@ -37,7 +37,6 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
-import javax.servlet.sip.SipSession.State;
 import javax.servlet.sip.SipURI;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -47,6 +46,8 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 public class Logger extends java.util.logging.Logger implements Serializable {
 //	private static Logger logger = null;
 //	private static String name;
+
+	private static final long serialVersionUID = 1L;
 
 	public static enum Direction {
 		SEND, RECEIVE
@@ -128,7 +129,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);
 			this.info(config.getClass().getSimpleName() + "=" + sw.toString());
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -204,7 +204,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void warning(SipServletMessage message, String comments) {
-		log(Level.WARNING, message, ConsoleColors.BLUE_BRIGHT + comments + ConsoleColors.RESET);
+		log(Level.WARNING, message, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
 	public void log(Level level, SipApplicationSession appSession, String comments) {
@@ -256,18 +256,18 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void warning(SipSession sipSession, String comments) {
-		log(Level.WARNING, sipSession, ConsoleColors.BLUE_BRIGHT + comments + ConsoleColors.RESET);
+		log(Level.WARNING, sipSession, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
 	public void warning(SipApplicationSession appSession, String comments) {
-		log(Level.WARNING, appSession, ConsoleColors.BLUE_BRIGHT + comments + ConsoleColors.RESET);
+		log(Level.WARNING, appSession, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
 	public static String timeout(ServletTimer timer) {
 		String str;
 
-		SipApplicationSession appSession = timer.getApplicationSession();
-		String id = timer.getId();
+//		SipApplicationSession appSession = timer.getApplicationSession();
+//		String id = timer.getId();
 		long timeRemaining = timer.getTimeRemaining();
 
 		if (timeRemaining > 0) {
@@ -362,17 +362,17 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				boolean leftSide = false;
 
-				String requestUri = "";
-				if (request != null) {
-					if (request.isInitial() || request.getSession().getState().equals(State.EARLY)) {
-						requestUri = request.getRequestURI().toString();
-					}
-
-//					if (request.getSession().getState().equals(State.INITIAL)) {
+//				String requestUri = "";
+//				if (request != null) {
+//					if (request.isInitial() || request.getSession().getState().equals(State.EARLY)) {
 //						requestUri = request.getRequestURI().toString();
 //					}
-
-				}
+//
+////					if (request.getSession().getState().equals(State.INITIAL)) {
+////						requestUri = request.getRequestURI().toString();
+////					}
+//
+//				}
 
 				if (request != null && request.isInitial() && direction.equals(Direction.RECEIVE)) {
 					request.getSession().setAttribute("DIAGRAM_SIDE", "LEFT");

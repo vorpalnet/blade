@@ -102,8 +102,8 @@ public class SettingsManager<T> {
 		return sipLogger;
 	}
 
-	public void setSipLogger(Logger sipLogger) {
-		this.sipLogger = sipLogger;
+	public void setSipLogger(Logger _sipLogger) {
+		sipLogger = _sipLogger;
 	}
 
 	public String getDomainJson() throws JsonProcessingException {
@@ -150,19 +150,19 @@ public class SettingsManager<T> {
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
-		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		this.mapper = mapper;
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, mapper);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) {
-		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample) {
 		this.sample = sample;
-		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 

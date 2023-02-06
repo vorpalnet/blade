@@ -6,23 +6,6 @@ import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.config.InetAddressKeyDeserializer;
-import org.vorpal.blade.framework.config.JsonAddressDeserializer;
-import org.vorpal.blade.framework.config.JsonAddressSerializer;
-import org.vorpal.blade.framework.config.JsonIPAddressDeserializer;
-import org.vorpal.blade.framework.config.JsonIPAddressSerializer;
-import org.vorpal.blade.framework.config.JsonUriDeserializer;
-import org.vorpal.blade.framework.config.JsonUriSerializer;
-import org.vorpal.blade.framework.config.SettingsManager;
-
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-
-import inet.ipaddr.IPAddress;
-import inet.ipaddr.IPAddressString;
-
 public class RouterSettings {
 
 	public LinkedList<Selector> selectors = new LinkedList<>();
@@ -121,8 +104,8 @@ public class RouterSettings {
 			}
 		}
 
-		if (t == null && this.defaultRoute.requestUri != null) {
-			URI uri = SettingsManager.getSipFactory().createURI(defaultRoute.requestUri);
+		if (t == null && this.defaultRoute.getRequestUri() != null) {
+			URI uri = SettingsManager.getSipFactory().createURI(defaultRoute.getRequestUri());
 
 			// copy all SIP URI parameters (if not present in new request uri)
 			for (String name : outboundRequest.getRequestURI().getParameterNameSet()) {

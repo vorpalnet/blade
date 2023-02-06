@@ -4,7 +4,6 @@ import java.io.IOException;
 
 import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
-import javax.servlet.sip.URI;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;

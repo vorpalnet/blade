@@ -4,8 +4,6 @@ import java.util.HashMap;
 
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.config.SettingsManager;
-
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 //@JsonTypeInfo(use=JsonTypeInfo.Id.NAME, include=JsonTypeInfo.As.PROPERTY, property="@type")

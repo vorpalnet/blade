@@ -1,21 +1,23 @@
 package org.vorpal.blade.framework.config;
 
+import java.util.HashMap;
 import java.util.LinkedList;
-
-import javax.servlet.sip.SipServletRequest;
+import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Translation {
-	public String id;
-	public String description;
-	public LinkedList<TranslationsMap> list;
-	public String requestUri;
-	public String[] route;
-	public String[] routeBack;
-	public String[] routeFinal;
+	private String id;
+	private String description;
+	private LinkedList<TranslationsMap> list;
+	private String requestUri;
+	private String[] route;
+	private String[] routeBack;
+	private String[] routeFinal;
+	private Map<String, Object> attributes;
 
 	public String getDescription() {
 		return description;
@@ -78,6 +80,26 @@ public class Translation {
 	public Translation setRouteFinal(String[] routeFinal) {
 		this.routeFinal = routeFinal;
 		return this;
+	}
+
+	public Map<String, Object> getAttributes() {
+		return attributes;
+	}
+
+	public void setAttributes(Map<String, Object> attributes) {
+		this.attributes = attributes;
+	}
+
+	@JsonIgnore
+	public Map setAttribute(String key, Object value) {
+		attributes = (null != attributes) ? attributes : new HashMap<>();
+		attributes.put(key, value);
+		return attributes;
+	}
+
+	@JsonIgnore
+	public Object getAttribute(String key) {
+		return (null != attributes) ? attributes.get(key) : null;
 	}
 
 }

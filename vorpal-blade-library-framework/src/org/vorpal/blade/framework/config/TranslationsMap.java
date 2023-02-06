@@ -3,8 +3,6 @@ package org.vorpal.blade.framework.config;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.config.SettingsManager;
-
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -43,8 +41,8 @@ public abstract class TranslationsMap {
 
 				if (translation != null) {
 
-					if (translation.requestUri != null) {
-						strRequestUri = regexRoute.matcher.replaceAll(translation.requestUri);
+					if (translation.getRequestUri() != null) {
+						strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
 
 						uri = SettingsManager.getSipFactory().createURI(strRequestUri);
 
@@ -61,10 +59,10 @@ public abstract class TranslationsMap {
 					}
 
 					// now check for additional translations
-					if (translation.list != null) {
+					if (translation.getList() != null) {
 						Translation t = null;
-						for (TranslationsMap map : translation.list) {
-							t = applyTranslations(request);
+						for (TranslationsMap map : translation.getList()) {
+							t = map.applyTranslations(request);
 							if (t != null) {
 								break;
 							}

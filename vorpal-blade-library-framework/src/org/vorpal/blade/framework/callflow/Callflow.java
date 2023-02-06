@@ -49,8 +49,7 @@ import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.logging.Logger;
 import org.vorpal.blade.framework.logging.Logger.Direction;
-import org.vorpal.blade.framework.proxy.ProxyEndpoint;
-import org.vorpal.blade.framework.proxy.ProxyRule;
+import org.vorpal.blade.framework.proxy.ProxyPlan;
 import org.vorpal.blade.framework.proxy.ProxyTier;
 import org.vorpal.blade.framework.proxy.ProxyTier.Mode;
 
@@ -222,7 +221,7 @@ public abstract class Callflow implements Serializable {
 		ServletTimer timer = null;
 		long delay = seconds * 1000;
 		boolean isPersistent = false;
-		String timerId = null;
+//		String timerId = null;
 
 		timer = timerService.createTimer(appSession, delay, isPersistent, lambdaFunction);
 		return timer.getId();
@@ -307,12 +306,12 @@ public abstract class Callflow implements Serializable {
 			Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
 			try {
-				response.getSession().setAttribute(this.REQUEST_CALLBACK_ + ACK, lambdaFunction);
+				response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
 
 				if (provisional(response)) {
 
 					if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
-						response.getSession().setAttribute(this.REQUEST_CALLBACK_ + PRACK, lambdaFunction);
+						response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
 						response.sendReliably();
 					} else {
 						response.send();
@@ -715,25 +714,25 @@ public abstract class Callflow implements Serializable {
 		return to;
 	}
 
-	public void proxyRequest(SipServletRequest inboundRequest, ProxyRule proxyRule,
+	public void proxyRequest(SipServletRequest inboundRequest, ProxyPlan ProxyPlan,
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
-		if (proxyRule.isEmpty()) {
-			throw new ServletException("Invalid ProxyRule. No ProxyTiers defined.");
+		if (ProxyPlan.isEmpty()) {
+			throw new ServletException("Invalid ProxyPlan. No ProxyTiers defined.");
 		}
 
 		try {
 			Proxy proxy = inboundRequest.getProxy();
 
-			ProxyTier proxyTier = proxyRule.getTiers().remove(0);
+			ProxyTier proxyTier = ProxyPlan.getTiers().remove(0);
 
 			proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
 			// proxy.setRecordRoute(false);
 			// proxy.setSupervised(true);
 
 			List<URI> endpoints = new LinkedList<URI>();
-			for (ProxyEndpoint endpoint : proxyTier.getEndpoints()) {
-				endpoints.add(endpoint.getUri());
+			for (URI endpoint : proxyTier.getEndpoints()) {
+				endpoints.add(endpoint);
 			}
 			List<ProxyBranch> proxyBranches = proxy.createProxyBranches(endpoints);
 
@@ -741,6 +740,8 @@ public abstract class Callflow implements Serializable {
 			if (timeout != null && timeout > 0) {
 				proxy.setProxyTimeout(timeout);
 
+				
+				//TODO More work needed on ProxyBranch support
 				for (ProxyBranch proxyBranch : proxyBranches) {
 //					proxyBranch.setProxyBranchTimeout(proxyTier.getTimeout());
 					inboundRequest.getSession().setAttribute("DIAGRAM_SIDE", "RIGHT");
@@ -752,9 +753,12 @@ public abstract class Callflow implements Serializable {
 			inboundRequest.getSession().setAttribute("RESPONSE_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
 
 //			inboundRequest.getSession().setAttribute("PROXY_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
-//			inboundRequest.getSession().setAttribute("PROXY_RULE", proxyRule);
+//			inboundRequest.getSession().setAttribute("PROXY_RULE", ProxyPlan);
 
 			proxy.startProxy();
+			
+			
+
 
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);

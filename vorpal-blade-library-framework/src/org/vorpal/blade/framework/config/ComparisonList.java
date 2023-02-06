@@ -31,9 +31,9 @@ import java.util.LinkedList;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.logging.Logger;
-
 public class ComparisonList extends LinkedList<Comparison> implements Serializable, RequestCondition {
+
+	private static final long serialVersionUID = 1L;
 
 	@Override
 	public boolean check(String id, String headerName, SipServletRequest request) throws ServletParseException {

@@ -27,13 +27,13 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 		Iterator<Entry<String, Translation>> itr = map.entrySet().iterator();
 		Entry<String, Translation> entry = null;
-		Entry<String, Translation> previous = null;
+//		Entry<String, Translation> previous = null;
 
 		try {
 			RegExRoute regexRoute = this.selector.findKey(request);
 
 			while (itr.hasNext()) {
-				previous = entry;
+//				previous = entry;
 				entry = itr.next();
 
 				if (regexRoute.key.startsWith(entry.getKey())) {

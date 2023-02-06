@@ -26,26 +26,12 @@ package org.vorpal.blade.framework.b2bua;
 
 import java.io.IOException;
 
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
-import javax.servlet.sip.ServletTimer;
-import javax.servlet.sip.SipFactory;
-import javax.servlet.sip.SipServletContextEvent;
-import javax.servlet.sip.SipServletListener;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.SipSessionsUtil;
-import javax.servlet.sip.TimerListener;
-import javax.servlet.sip.TimerService;
 
 import org.vorpal.blade.framework.AsyncSipServlet;
-import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.logging.LogManager;
-import org.vorpal.blade.framework.logging.Logger;
-import org.vorpal.blade.framework.logging.Logger.Direction;
 
 /**
  * This class implements a simple back-to-back user agent. It accepts an

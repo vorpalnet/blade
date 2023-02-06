@@ -19,6 +19,7 @@ import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.deprecated.proxy.ProxyTier.Mode;
 
 public class ProxyInvite extends Callflow {
+	private static final long serialVersionUID = 1L;
 	private ProxyListener listener;
 	private SipServletRequest aliceRequest;
 	private SipServletResponse aliceResponse;
@@ -121,7 +122,7 @@ public class ProxyInvite extends Callflow {
 					}
 
 					aliceResponse = aliceRequest.createResponse(proxyResponse.getStatus());
-					this.copyContentAndHeaders(proxyResponse, aliceResponse);
+					copyContentAndHeaders(proxyResponse, aliceResponse);
 					listener.proxyResponse(aliceResponse); // successful proxy, do not attempt to proxy again
 
 					linkSessions(proxyResponse.getSession(), aliceResponse.getSession());
@@ -156,7 +157,7 @@ public class ProxyInvite extends Callflow {
 
 						} else {
 							aliceResponse = aliceRequest.createResponse(proxyResponse.getStatus());
-							this.copyContentAndHeaders(proxyResponse, aliceResponse);
+							copyContentAndHeaders(proxyResponse, aliceResponse);
 							sendResponse(aliceResponse);
 						}
 
@@ -238,7 +239,7 @@ public class ProxyInvite extends Callflow {
 						sendRequest(tmpBobAck);
 					});
 				} else {
-					if (this.failure(proxyResponse)) {
+					if (failure(proxyResponse)) {
 						// try the next endpoint, using regression
 						proxySerial(timeout, endpoints);
 					}

@@ -25,12 +25,10 @@
 package org.vorpal.blade.framework.b2bua;
 
 import java.io.IOException;
-import java.util.Collection;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
-import javax.servlet.sip.SipSession.State;
 import javax.servlet.sip.UAMode;
 
 import org.vorpal.blade.framework.callflow.Callflow;

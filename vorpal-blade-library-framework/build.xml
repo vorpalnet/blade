@@ -96,10 +96,10 @@
 			<bottom>
 				<![CDATA[${copyright}</br>${license}]]>
             </bottom>
-			<link href="https://vorpalnet.github.io/javadocs/jsr359/" />
+			<link href="https://vorpalnet.github.io/jsr359/" />
 			<link href="https://docs.oracle.com/javaee/7/api/" />
 			<link href="https://docs.oracle.com/javase/8/docs/api/" />			
-			<link href="https://vorpalnet.github.io/javadocs/jsr309/" />
+			<link href="https://vorpalnet.github.io/jsr309/" />
 		</javadoc>
 	</target>
 
