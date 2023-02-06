@@ -10,6 +10,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonPropertyOrder({ "mode", "timeout", "endpoints" })
 public class ProxyTier implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	public enum Mode {
 		parallel, serial
 	}

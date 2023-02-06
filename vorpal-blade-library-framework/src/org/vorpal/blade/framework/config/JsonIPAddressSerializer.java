@@ -2,8 +2,6 @@ package org.vorpal.blade.framework.config;
 
 import java.io.IOException;
 
-import javax.servlet.sip.Address;
-
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
@@ -11,6 +9,8 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import inet.ipaddr.IPAddress;
 
 public class JsonIPAddressSerializer extends StdSerializer<IPAddress> {
+
+	private static final long serialVersionUID = 1L;
 
 	public JsonIPAddressSerializer() {
 		this(null);

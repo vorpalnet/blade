@@ -6,25 +6,26 @@ import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-public class ProxyRule implements Serializable {
+public class ProxyPlan implements Serializable {
 
+	private static final long serialVersionUID = 1L;
 	private String id;
 	private String description;
 	private Object context;
 	private ArrayList<ProxyTier> tiers = new ArrayList<>();
 
-	public ProxyRule() {
+	public ProxyPlan() {
 	}
 
-	public ProxyRule(String id) {
+	public ProxyPlan(String id) {
 		this.id = id;
 	}
 
-	public ProxyRule(ProxyRule that) {
+	public ProxyPlan(ProxyPlan that) {
 		copy(that);
 	}
 
-	public ProxyRule copy(ProxyRule that) {
+	public ProxyPlan copy(ProxyPlan that) {
 		this.id = that.id;
 		this.description = that.description;
 		tiers = new ArrayList<>(that.tiers);

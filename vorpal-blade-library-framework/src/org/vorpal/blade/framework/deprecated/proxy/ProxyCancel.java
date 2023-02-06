@@ -25,7 +25,6 @@
 package org.vorpal.blade.framework.deprecated.proxy;
 
 import java.io.IOException;
-import java.util.Collection;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;

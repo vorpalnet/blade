@@ -38,6 +38,8 @@ import org.vorpal.blade.framework.logging.Logger;
 
 public class Comparison extends HashMap<String, String> implements RequestCondition, Serializable {
 
+	private static final long serialVersionUID = 1L;
+
 	public Comparison() {
 	}
 
@@ -216,7 +218,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				if (value != null) {
 					hasValue = value.equalsIgnoreCase(expression);
 				} else {
-					Parameterable p;
+//					Parameterable p;
 					Iterator<? extends Parameterable> pItr = request.getParameterableHeaders(name);
 					while (pItr.hasNext()) {
 						value = pItr.next().getValue();

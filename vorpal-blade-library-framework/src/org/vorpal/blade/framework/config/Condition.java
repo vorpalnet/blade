@@ -29,11 +29,10 @@ import java.util.HashMap;
 
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.ar.SipApplicationRoutingDirective;
-
-import org.vorpal.blade.framework.logging.Logger;
 
 public class Condition extends HashMap<String, ComparisonList> implements Serializable {
+
+	private static final long serialVersionUID = 1L;
 
 	public Condition() {
 	}

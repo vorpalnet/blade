@@ -1,14 +1,12 @@
 package org.vorpal.blade.framework.config;
 
+import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.config.SettingsManager;
-
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
@@ -77,9 +75,28 @@ public class Selector {
 		String header = null;
 
 		switch (attribute) {
+		case "Content":
+			header = "";
+			try {
+				if (request.getContent() != null) {
+					if (request.getContent() instanceof String) {
+						header = (String) request.getContent();
+					} else {
+						byte[] content = (byte[]) request.getContent();
+						header = new String(content);
+					}
+				}
+			} catch (IOException e) {
+				SettingsManager.getSipLogger().severe(request,
+						"Invalid content type, unable to convert to Java String. This should never happen.");
+				SettingsManager.getSipLogger().severe(e);
+			}
+			break;
+
 		case "Request-URI":
 			header = request.getRequestURI().toString();
 			break;
+			
 		case "Remote-IP":
 			header = request.getRemoteAddr();
 
@@ -92,8 +109,6 @@ public class Selector {
 			header = request.getHeader(attribute);
 		}
 
-		
-		
 		Matcher matcher = pattern.matcher(header);
 
 		if (matcher.matches()) {
@@ -108,7 +123,8 @@ public class Selector {
 			regexRoute.selector = this;
 		}
 
-		SettingsManager.getSipLogger().finer(request, "Selector... attribute: "+attribute+", value: "+header+", key: "+key+", regexRoute: "+regexRoute);
+		SettingsManager.getSipLogger().finer(request, "Selector... attribute: " + attribute + ", value: " + header
+				+ ", key: " + key + ", regexRoute: " + regexRoute);
 
 		return regexRoute;
 	}

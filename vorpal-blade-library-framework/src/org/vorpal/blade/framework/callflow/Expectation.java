@@ -14,6 +14,7 @@ import javax.servlet.sip.SipSession;
  */
 public class Expectation implements Serializable {
 
+	private static final long serialVersionUID = 1L;
 	private SipApplicationSession appSession = null;
 	private SipSession sipSession = null;
 	private String method;

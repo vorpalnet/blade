@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 public class JsonAddressSerializer extends StdSerializer<Address> {
 
+	private static final long serialVersionUID = 1L;
+
 	public JsonAddressSerializer() {
 		this(null);
 	}

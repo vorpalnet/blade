@@ -9,8 +9,8 @@ import javax.servlet.sip.SipServletResponse;
 
 public interface ProxyListener {
 
-	public void proxyRequest(SipServletRequest request, ProxyRule proxyRule) throws ServletException, IOException;
+	public void proxyRequest(SipServletRequest request, ProxyPlan proxyPlan) throws ServletException, IOException;
 
-	public void proxyResponse(SipServletResponse response, ProxyRule proxyRule) throws ServletException, IOException;
+	public void proxyResponse(SipServletResponse response, ProxyPlan proxyPlan) throws ServletException, IOException;
 
 }

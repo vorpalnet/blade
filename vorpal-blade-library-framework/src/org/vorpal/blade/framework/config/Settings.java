@@ -24,7 +24,6 @@
 package org.vorpal.blade.framework.config;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 
 /**
  * @author Jeff McDonald
