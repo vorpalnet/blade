@@ -6,12 +6,7 @@
 	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.module.container"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/JSR-359 Libraries"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/vorpal-blade-library-framework"/>
-	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.system">
-		<attributes>
-			<attribute name="owner.project.facets" value="jst.appclient"/>
-		</attributes>
-	</classpathentry>
-	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.launching.macosx.MacOSXType/Java SE 8 [1.8.0_301]">
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8">
 		<attributes>
 			<attribute name="owner.project.facets" value="java"/>
 		</attributes>
@@ -53,5 +48,10 @@
 	<classpathentry kind="lib" path="/Users/jeff/weblogic/occas71/wlserver/sip/server/lib/wlss.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/5"/>
 	<classpathentry kind="lib" path="/vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib/commons-collections4-4.4.jar"/>
+	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.system">
+		<attributes>
+			<attribute name="owner.project.facets" value="jst.appclient"/>
+		</attributes>
+	</classpathentry>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

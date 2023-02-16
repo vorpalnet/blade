@@ -51,7 +51,7 @@ public class Configuration implements Serializable {
 	 * Creates a default configuration used to generate the FSMAR2.SAMPLE file.
 	 */
 	public Configuration() {
-/*		
+		
 		this.setDefaultApplication("b2bua");
 
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
@@ -79,7 +79,7 @@ public class Configuration implements Serializable {
 
 		this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("b2bua").setId("INV-3");
 		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("proxy-registrar");
-*/
+
 	}
 
 	public String getDefaultApplication() {
