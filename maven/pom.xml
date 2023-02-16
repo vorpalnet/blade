@@ -12,15 +12,16 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<java.version>1.8</java.version>
+
+<!--
 		<maven.compiler.source>${java.version}</maven.compiler.source>
 		<maven.compiler.target>${java.version}</maven.compiler.target>
-
 		<maven-plugin-version>1.0.0</maven-plugin-version>
+-->
 
 		<swagger-core-version>2.1.11</swagger-core-version>
 		<swagger-parser-version>2.0.28</swagger-parser-version>
 		<swagger-inflector-version>2.0.5</swagger-inflector-version>
-
 		<jackson-version>2.12.5</jackson-version>
 		<jetty-version>9.4.9.v20180320</jetty-version>
 		<logback-version>1.0.1</logback-version>
@@ -99,6 +100,16 @@
 			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
 			<version>${swagger-core-version}</version>
 		</dependency>
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
 
 		<!-- <dependency> <groupId>io.swagger</groupId> <artifactId>swagger-inflector</artifactId> 
 			<version>${swagger-inflector-version}</version> </dependency> <dependency> 

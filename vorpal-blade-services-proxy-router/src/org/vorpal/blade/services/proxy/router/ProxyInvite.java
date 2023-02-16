@@ -7,39 +7,39 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.proxy.ProxyListener;
-import org.vorpal.blade.framework.proxy.ProxyRule;
+import org.vorpal.blade.framework.proxy.ProxyPlan;
 
 public class ProxyInvite extends Callflow {
 	private ProxyListener proxyListener;
-	private ProxyRule proxyRule;
+	private ProxyPlan proxyPlan;
 	private SipServletRequest inboundRequest;
 
-	public ProxyInvite(ProxyRule proxyRule, ProxyListener proxyListener) {
-		this.proxyRule = new ProxyRule(proxyRule); // need a deep copy to manipulate
+	public ProxyInvite(ProxyPlan ProxyPlan, ProxyListener proxyListener) {
+		this.proxyPlan = new ProxyPlan(ProxyPlan); // need a deep copy to manipulate
 		this.proxyListener = proxyListener;
 	}
 
-	public ProxyInvite(ProxyRule proxyRule) {
-		this.proxyRule = new ProxyRule(proxyRule); // need a deep copy to manipulate
+	public ProxyInvite(ProxyPlan ProxyPlan) {
+		this.proxyPlan = new ProxyPlan(ProxyPlan); // need a deep copy to manipulate
 	}
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
 		try {
-			sipLogger.fine("proxyRule id: " + this.proxyRule.getId());
+			sipLogger.fine("ProxyPlan id: " + this.proxyPlan.getId());
 
 			this.inboundRequest = request;
 
 			// SipServletRequest templateRequest = this.createRequest(request);
-			this.proxyListener.proxyRequest(inboundRequest, proxyRule);
+			this.proxyListener.proxyRequest(inboundRequest, proxyPlan);
 
-			this.proxyRequest(inboundRequest, proxyRule, (response) -> {
+			this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
 				sipLogger.fine(request, "Got proxy response... " + response.getStatus());
 
 				if (!provisional(response) && !successful(response)) {
 
-					if (!proxyRule.isEmpty()) {
+					if (!proxyPlan.isEmpty()) {
 						sipLogger.fine(response, "Calling process again...");
 						this.process(request);
 					}
@@ -48,8 +48,8 @@ public class ProxyInvite extends Callflow {
 
 			});
 
-//			if (proxyRule.getTiers().size() > 0) {
-//				ProxyTier proxyTier = proxyRule.getTiers().remove(0);
+//			if (ProxyPlan.getTiers().size() > 0) {
+//				ProxyTier proxyTier = ProxyPlan.getTiers().remove(0);
 //
 //				if (proxyTier.getMode().equals(Mode.serial)) {
 //					this.processSerial(templateRequest, proxyTier);
@@ -70,12 +70,12 @@ public class ProxyInvite extends Callflow {
 //
 //		sendParallel(aliceRequest, proxyTier, (bobResponse) -> {
 //
-//			// Give the user the chance to repopulate the ProxyRule.
-//			if (proxyRule.isEmpty()) {
-//				proxyListener.proxyResponse(bobResponse, proxyRule);
+//			// Give the user the chance to repopulate the ProxyPlan.
+//			if (ProxyPlan.isEmpty()) {
+//				proxyListener.proxyResponse(bobResponse, ProxyPlan);
 //			}
 //
-//			if (proxyRule.isEmpty()) {
+//			if (ProxyPlan.isEmpty()) {
 //
 //				SipServletResponse aliceResponse = createResponse(inboundRequest, bobResponse);
 //
@@ -106,12 +106,12 @@ public class ProxyInvite extends Callflow {
 //
 //		sendSerial(aliceRequest, proxyTier, (bobResponse) -> {
 //
-//			// Give the user the chance to repopulate the ProxyRule.
-//			if (proxyRule.isEmpty()) {
-//				proxyListener.proxyResponse(bobResponse, proxyRule);
+//			// Give the user the chance to repopulate the ProxyPlan.
+//			if (ProxyPlan.isEmpty()) {
+//				proxyListener.proxyResponse(bobResponse, ProxyPlan);
 //			}
 //
-//			if (proxyRule.isEmpty()) {
+//			if (ProxyPlan.isEmpty()) {
 //				sendResponse(createResponse(aliceRequest, bobResponse), (aliceAckOrPrack) -> {
 //
 //					this.linkSessions(bobResponse.getSession(), aliceAckOrPrack.getSession());

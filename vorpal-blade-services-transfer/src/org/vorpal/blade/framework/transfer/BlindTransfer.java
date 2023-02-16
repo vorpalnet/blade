@@ -1,4 +1,4 @@
-/**
+/*
  *  MIT License
  *  
  *  Copyright (c) 2021 Vorpal Networks, LLC
@@ -22,8 +22,25 @@
  *  SOFTWARE.
  */
 
+package org.vorpal.blade.framework.transfer;
+
+import java.io.IOException;
+import java.util.ArrayList;
+
+import javax.servlet.ServletException;
+import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipSession.State;
+
+import org.vorpal.blade.framework.callflow.Callback;
+import org.vorpal.blade.framework.callflow.Expectation;
+import org.vorpal.blade.services.transfer.TransferServlet;
+import org.vorpal.blade.services.transfer.TransferSettings;
+
 /**
- *  Notes: https://www.dialogic.com/webhelp/BorderNet2020/2.2.0/WebHelp/sip_rfr_calltrans.htm
+ * This class implements a blind call transfer.
+ * 
+ * <pre>
+ * {@code
  * 
  *   ALICE              Transfer              BOB                CAROL
  * transferee                              transferor           target
@@ -69,21 +86,9 @@
  *     |                   |            200 OK |                   |
  *     |                   |<------------------|                   |
  *     |                   |                   |                   |
-*/
-
-package org.vorpal.blade.framework.transfer;
-
-import java.io.IOException;
-import java.util.ArrayList;
-
-import javax.servlet.ServletException;
-import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipSession.State;
-
-import org.vorpal.blade.framework.callflow.Callback;
-import org.vorpal.blade.framework.callflow.Expectation;
-import org.vorpal.blade.services.transfer.TransferServlet;
-import org.vorpal.blade.services.transfer.TransferSettings;
+ * }
+ * </pre>
+ */
 
 public class BlindTransfer extends Transfer {
 	static final long serialVersionUID = 1L;

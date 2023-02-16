@@ -15,13 +15,29 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.proxy.ProxyListener;
+import org.vorpal.blade.framework.proxy.ProxyPlan;
 
 public class ProxyCallflow extends Callflow {
 
-	private ProxyRegistrarSettings settings;
+	private ProxyListener proxyListener;
+	private ProxyPlan proxyPlan;
+	private Boolean proxyOnUnregistered = false;
 
-	public ProxyCallflow(ProxyRegistrarSettings settings) {
-		this.settings = settings;
+	public ProxyCallflow(ProxyListener proxyListener, ProxyPlan proxyPlan, Boolean proxyOnUnregistered) {
+
+		if (proxyPlan != null) {
+			// need a deep copy to manipulate the object without fouling up the settings
+			this.proxyPlan = new ProxyPlan(proxyPlan);
+		}
+
+		if (proxyListener != null) {
+			this.proxyListener = proxyListener;
+		}
+
+		if (proxyOnUnregistered != null) {
+			this.proxyOnUnregistered = proxyOnUnregistered;
+		}
 	}
 
 	@Override
@@ -36,10 +52,6 @@ public class ProxyCallflow extends Callflow {
 
 				ProxyRegistrar proxyRegistrar = (ProxyRegistrar) appSession.getAttribute("PROXY_REGISTRAR");
 
-//				if (proxyRegistrar == null) {
-//					sipLogger.severe(request, "No ProxyRegistrar found for appSession: " + appSession.getId());
-//				}
-
 				proxyRegistrar = (proxyRegistrar != null) ? proxyRegistrar : new ProxyRegistrar();
 
 				List<URI> contacts = proxyRegistrar.getURIContacts();
@@ -50,7 +62,7 @@ public class ProxyCallflow extends Callflow {
 
 				if (contacts.isEmpty()) {
 
-					if (settings.isProxyOnUnregistered()) {
+					if (this.proxyOnUnregistered == true) {
 
 						if (sipLogger.isLoggable(Level.FINER)) {
 							sipLogger.finer(request,
@@ -62,42 +74,18 @@ public class ProxyCallflow extends Callflow {
 					}
 
 				} else {
-
-//					LinkedList<URI> aors = new LinkedList<URI>();
-//					for (URI uri : contacts) {
-//						aors.add( copyParameters(request.getRequestURI(), uri) );
-//					}
-
-					Proxy proxy = request.getProxy();
-
-// defaults
-//					proxy.setAddToPath(false); // Whether the application adds a Path header to the REGISTER request.
-//					proxy.setRecurse(true); // Whether to automatically recurse or not.
-//					proxy.setRecordRoute(false); // Whether to record-route or not.
-//					proxy.setParallel(true); // Whether to proxy in parallel or sequentially.
-//					proxy.setStateful(true); // Whether to remain transaction stateful for the duration of the proxying operation.
-//					proxy.setSupervised(false); // Whether the application will be invoked on incoming responses related to this proxying.
-
-					
-					proxy.setRecordRoute(false); // Whether to record-route or not.
-					proxy.setSupervised(false); // Whether the application will be invoked on incoming responses related to this proxying.
-					
-					
-					
-//					proxy.setProxyTimeout(settings.getProxyTimeout());
-
 					sipLogger.warning(request, "Proxying to: " + Arrays.toString(contacts.toArray()));
 
-//					proxy.createProxyBranches(contacts);
-//					proxy.startProxy();
+					Proxy proxy = request.getProxy();
 					proxy.proxyTo(contacts);
-
 				}
 
 				appSession.setAttribute("PROXY_REGISTRAR", proxyRegistrar);
 
 			} else {
-				sipLogger.severe(request, "Logical error... INVITE not marked at 'initial'.");
+				sipLogger.severe(request, "What's going on here?");
+				sipLogger.severe(request, request.toString());
+				
 			}
 
 		} catch (Exception e) {

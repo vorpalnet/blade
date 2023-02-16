@@ -1,70 +1,85 @@
 package org.vorpal.blade.services.proxy.router;
 
 import java.io.Serializable;
-import java.util.LinkedList;
 
-import org.vorpal.blade.framework.config.ConfigAddressMap;
-import org.vorpal.blade.framework.config.ConfigHashMap;
 import org.vorpal.blade.framework.config.ConfigPrefixMap;
+import org.vorpal.blade.framework.config.RouterConfig;
 import org.vorpal.blade.framework.config.Selector;
-import org.vorpal.blade.framework.config.Translation;
 import org.vorpal.blade.framework.config.TranslationsMap;
 
-public class ProxyRouterConfigSample extends ProxyRouterConfig implements Serializable {
+public class ProxyRouterConfigSample extends RouterConfig implements Serializable {
 
-	
-	public ProxyRouterConfigSample(){
+	public ProxyRouterConfigSample() {
+
+		defaultRoute.setId("default");
+		defaultRoute.setDescription("If no translation found, apply this default route.");
+		defaultRoute.setRequestUri("sip:hold");
+
 		
-		defaultRoute.id = "default";
-		defaultRoute.description = "If no translation found, apply this default route.";
-		defaultRoute.requestUri = "sip:hold";		
+
 		
 		
 		
-		Selector dialed = new Selector("dialed", "To", "^(sips?):([^@]+)(?:@(.+))?$", "$2");
+		
+//		Selector recorddn = new Selector("recorddn", "Content", "recorddn=(?<recorddn>[0-9]+)", "${recorddn}");
+//		recorddn.setDescription("SIPREC Record Dialed Number");
+//		this.selectors.add(recorddn);
+
+		Selector dialed = new Selector("dialed", "To",
+				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)",
+				"${user}");
 		dialed.setDescription("dialed phone number");
 		this.selectors.add(dialed);
 
-		Selector caller = new Selector("caller", "From", "^(sips?):([^@]+)(?:@(.+))?$", "$2");
-		caller.setDescription("caller's phone number");
-		this.selectors.add(caller);
-		
-		Selector origin = new Selector("origin", "Remote-IP", "^(.*)$", "$1");
-		origin.setDescription("IP address of the upstream client");
-		this.selectors.add(origin);
-		
-		Selector destination = new Selector("destination", "Request-URI", "^(sips?):([^@]+)(?:@(.+))?$", "$3");
-		destination.setDescription("Host or IP Address of the downstream server");
-		this.selectors.add(destination);
+//		Selector caller = new Selector("caller", "From",
+//				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)",
+//				"${user}");
+//		caller.setDescription("caller's phone number");
+//		this.selectors.add(caller);
 
-		// Create a selector and Translations Hashmap for user accounts.
-		Selector account = new Selector("dialed", "To", "^(sips?):([^@]+)(?:@(.+))?$", "$2@$3");
-		account.setDescription("User's account name. i.e.: bob@vorpal.net");
-		this.selectors.add(account);
-		TranslationsMap accountMap = new ConfigHashMap();
-		accountMap.id = "account-map";
-		accountMap.description = "Translations map for user accounts";
-		accountMap.selector = account;
-		this.maps.add(accountMap);
-		accountMap.createTranslation("transferor@vorpal.net").setRequestUri("sip:test1");
-		
-		
-		
-		
-		
-		
+//		Selector origin = new Selector("origin", "Remote-IP", "(?<remote>.*)", "${remote}");
+//		origin.setDescription("IP address of the upstream client");
+//		this.selectors.add(origin);
 
-		TranslationsMap addressMap = new ConfigAddressMap();
-		addressMap.id = "address-map-1";
-		addressMap.description = "Translations Map for Remote IP addresses";
-		addressMap.selector = origin;
+//		Selector destination = new Selector("destination", "Request-URI",
+//				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)",
+//				"${host}");
+//		destination.setDescription("Host or IP Address of the downstream server");
+//		this.selectors.add(destination);
+
+//		// Create a selector and Translations Hashmap for user accounts.
+//		Selector account = new Selector("account", "To",
+//				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)",
+//				"${user}@${host}");
+//		account.setDescription("User's account name. i.e.: bob@vorpal.net");
+//		this.selectors.add(account);
+//		TranslationsMap accountMap = new ConfigHashMap();
+//		accountMap.id = "account-map";
+//		accountMap.description = "Translations map for user accounts";
+//		accountMap.selector = account;
+//		this.maps.add(accountMap);
+//		accountMap.createTranslation("transferor@vorpal.net").setRequestUri("sip:test1");
+
+//		TranslationsMap addressMap = new ConfigAddressMap();
+//		addressMap.id = "address-map-1";
+//		addressMap.description = "Translations Map for Remote IP addresses";
+//		addressMap.selector = origin;
 
 		TranslationsMap prefixMap = new ConfigPrefixMap();
 		prefixMap.id = "prefix-map-1";
 		prefixMap.selector = dialed;
 		prefixMap.description = "Translations map for dialed number prefixes";
+		prefixMap.createTranslation("1997").setRequestUri("sip:10.11.200.39:5060");
+		prefixMap.createTranslation("19974388687").setRequestUri("sip:10.11.200.40:5060");
+		
+		
+//		TranslationsMap prefixMapRecorddn = new ConfigPrefixMap();
+//		prefixMapRecorddn.id = "prefix-map-recorddn";
+//		prefixMapRecorddn.selector = dialed;
+//		prefixMapRecorddn.description = "Translations map for SIPREC Record Dialed Number.";
+		
 
-		this.maps.add(addressMap);
+//		this.maps.add(addressMap);
 		this.maps.add(prefixMap);
 
 //		addressMap.createTranslation("127.0.0.1").setRequestUri("sip:localhost:5060");
@@ -111,14 +126,10 @@ public class ProxyRouterConfigSample extends ProxyRouterConfig implements Serial
 //		tt.list = new LinkedList<TranslationsMap>();
 //		tt.list.add(addressMap);
 
-		this.plan.add(accountMap);
-		this.plan.add(addressMap);
+//		this.plan.add(accountMap);
+//		this.plan.add(addressMap);
 		this.plan.add(prefixMap);
-		
-	}
-	
-	
 
-	
+	}
 
 }
