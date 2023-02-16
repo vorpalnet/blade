@@ -94,15 +94,15 @@ public class SettingsManager<T> {
 		return sipFactory;
 	}
 
-	public static void setSipFactory(SipFactory sipFactory) {
-		SettingsManager.sipFactory = sipFactory;
+	public static void setSipFactory(SipFactory _sipFactory) {
+		sipFactory = _sipFactory;
 	}
 
 	public static Logger getSipLogger() {
 		return sipLogger;
 	}
 
-	public void setSipLogger(Logger _sipLogger) {
+	public static void setSipLogger(Logger _sipLogger) {
 		sipLogger = _sipLogger;
 	}
 
