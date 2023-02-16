@@ -3,18 +3,63 @@ package org.vorpal.blade.services.proxy.balancer;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import org.vorpal.blade.framework.proxy.ProxyRule;
+import org.vorpal.blade.framework.proxy.ProxyPlan;
+import org.vorpal.blade.framework.proxy.ProxyTier;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public class ProxyBalancerConfig implements Serializable {
+	
+	public enum EndpointStatus{
+		up, down
+	}
+	
+	public enum TierStatus{
+		available, degraded, unavailable
+	}
+	
+	public enum PlanStatus{
+		optimized, impaired, faulty
+	}	
+	
+	@JsonIgnore
+	public HashMap<String, EndpointStatus> endpointStatus = new HashMap<>();
 
-	private HashMap<String, ProxyRule> rules = new HashMap<>();
+	@JsonIgnore
+	public HashMap<String, TierStatus> tierStatus = new HashMap<>();
 
-	public HashMap<String, ProxyRule> getRules() {
-		return rules;
+	@JsonIgnore
+	public HashMap<String, PlanStatus> planStatus = new HashMap<>();
+
+	public Integer pingInterval = 60;
+	
+	private HashMap<String,	ProxyPlan> plans = new HashMap<>();
+
+	public HashMap<String, ProxyPlan> getPlans() {
+		return plans;
 	}
 
-	public void setRules(HashMap<String, ProxyRule> rules) {
-		this.rules = rules;
+	public void setPlans(HashMap<String, ProxyPlan> plans) {
+		this.plans = plans;
 	}
+	
+	public ProxyPlan addPlan(String key, ProxyPlan value) {
+		return this.plans.put(key, value);
+	}
+	
+	public ProxyPlan removePlan(String key) {
+		return this.plans.remove(key);
+	}
+
+	public Integer getPingInterval() {
+		return pingInterval;
+	}
+
+	public void setPingInterval(Integer pingInterval) {
+		this.pingInterval = pingInterval;
+	}
+	
+	
+	
 
 }
