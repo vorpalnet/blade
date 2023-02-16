@@ -103,7 +103,9 @@ public class AppRouter implements SipApplicationRouter {
 
 			// Is the request intended for a deployed app? i.e. "sip:hold"
 			if (nextApp == null) {
-				SipURI sipUri = (SipURI) request.getTo().getURI();
+//				SipURI sipUri = (SipURI) request.getTo().getURI(); // no, it should be the Request-URI
+				SipURI sipUri = (SipURI) request.getRequestURI();
+				
 				if (null == sipUri.getUser()) {
 					String app = getDeployedApp(sipUri.getHost());
 					if (app != null) {
