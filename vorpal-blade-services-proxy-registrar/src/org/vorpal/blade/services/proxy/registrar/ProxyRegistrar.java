@@ -72,7 +72,12 @@ public class ProxyRegistrar implements Serializable {
 	}
 
 	public SipServletMessage copyAllow(SipServletMessage msg) {
-		allow = new ArrayList(msg.getHeaderList("Allow"));
+		List<String> allowHeader = msg.getHeaderList("Allow");
+		if (allowHeader != null) {
+			allow = new ArrayList(allowHeader);
+		} else {
+			allow = ProxyRegistrarServlet.settingsManager.getCurrent().defaultAllow;
+		}
 		return msg;
 	}
 
