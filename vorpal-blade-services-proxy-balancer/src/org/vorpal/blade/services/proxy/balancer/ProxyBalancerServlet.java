@@ -15,8 +15,9 @@ import javax.servlet.sip.SipURI;
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.deprecated.proxy.ProxyRule;
 import org.vorpal.blade.framework.logging.Logger.Direction;
-import org.vorpal.blade.framework.proxy.ProxyRule;
+import org.vorpal.blade.framework.proxy.ProxyPlan;
 import org.vorpal.blade.framework.proxy.ProxyServlet;
 
 @WebListener
@@ -26,11 +27,19 @@ import org.vorpal.blade.framework.proxy.ProxyServlet;
 public class ProxyBalancerServlet extends ProxyServlet {
 
 	public static SettingsManager<ProxyBalancerConfig> settingsManager;
+	public static String servletContextName;
+	
+	
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
 		try {
+			
+			servletContextName = "sip:" + event.getServletContext().getServletContextName();
+			
+			
 			settingsManager = new SettingsManager<>(event, ProxyBalancerConfig.class, new ProxyBalancerConfigSample());
+
 		} catch (ServletParseException e) {
 			SettingsManager.sipLogger.logStackTrace(e);
 		}
@@ -46,20 +55,20 @@ public class ProxyBalancerServlet extends ProxyServlet {
 	}
 
 	@Override
-	public void proxyRequest(SipServletRequest request, ProxyRule proxyRule) throws ServletException, IOException {
+	public void proxyRequest(SipServletRequest request, ProxyPlan proxyPlan) throws ServletException, IOException {
 		sipLogger.fine("proxyRequest... " + request.getRequestURI());
 
 		String key = ((SipURI) request.getRequestURI()).getHost();
-		ProxyRule rule = settingsManager.getCurrent().getRules().get(key);
+		ProxyPlan plan = settingsManager.getCurrent().getPlans().get(key);
 
-		if (rule != null) {
-			proxyRule.copy(rule);
+		if (plan != null) {
+			proxyPlan.copy(plan);
 		}
 
 	}
 
 	@Override
-	public void proxyResponse(SipServletResponse response, ProxyRule proxyRule) throws ServletException, IOException {
+	public void proxyResponse(SipServletResponse response, ProxyPlan proxyPlan) throws ServletException, IOException {
 		sipLogger.fine("proxyResponse... " + response.getStatus());
 
 	}
