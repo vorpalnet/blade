@@ -91,10 +91,10 @@ public class Translation {
 	}
 
 	@JsonIgnore
-	public Map setAttribute(String key, Object value) {
+	public Translation addAttribute(String key, Object value) {
 		attributes = (null != attributes) ? attributes : new HashMap<>();
 		attributes.put(key, value);
-		return attributes;
+		return this;
 	}
 
 	@JsonIgnore

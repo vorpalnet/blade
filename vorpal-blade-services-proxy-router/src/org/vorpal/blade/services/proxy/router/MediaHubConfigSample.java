@@ -58,7 +58,7 @@ public class MediaHubConfigSample extends RouterConfig implements Serializable {
 		prefixMap.selector = dialed;
 		prefixMap.description = "Translations map for dialed number prefixes";
 		prefixMap.createTranslation("1997").setRequestUri("sip:10.11.200.39:5060")
-				.setDescription("Phone numbers starting with 1997").setAttribute("stripXML", true);
+				.setDescription("Phone numbers starting with 1997").addAttribute("stripXML", true);
 		;
 		Translation t87 = prefixMap.createTranslation("19974388687").setRequestUri("sip:10.11.200.40:5060");
 		//
@@ -70,7 +70,7 @@ public class MediaHubConfigSample extends RouterConfig implements Serializable {
 		prefixMapRecorddn.createTranslation("1998").setId("1998").setDescription("Phone numbers starting with 1998")
 				.setRequestUri("sip:10.11.200.98:5060");
 		prefixMapRecorddn.createTranslation("19984380001").setId("19984380001").setRequestUri("sip:10.11.200.99:5060")
-				.setAttribute("stripXML", true);
+				.addAttribute("stripXML", true);
 
 		this.maps.add(prefixMapRecorddn);
 		this.maps.add(prefixMap);
