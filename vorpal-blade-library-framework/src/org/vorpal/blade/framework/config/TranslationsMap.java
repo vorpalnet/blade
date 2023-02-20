@@ -10,15 +10,12 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
-@JsonSubTypes({
-//
+@JsonSubTypes({ //
 		@JsonSubTypes.Type(value = ConfigAddressMap.class, name = "address"),
 		@JsonSubTypes.Type(value = ConfigPrefixMap.class, name = "prefix"),
 		@JsonSubTypes.Type(value = ConfigHashMap.class, name = "hash"),
 		@JsonSubTypes.Type(value = ConfigLinkedHashMap.class, name = "linked"),
-		@JsonSubTypes.Type(value = ConfigTreeMap.class, name = "tree")
-//
-})
+		@JsonSubTypes.Type(value = ConfigTreeMap.class, name = "tree") })
 public abstract class TranslationsMap {
 	public String id;
 	public String description;
