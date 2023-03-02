@@ -18,7 +18,7 @@
 			<wls:package-name>javax.validation.*</wls:package-name>		
 			<wls:package-name>javax.xml.bind.*</wls:package-name>		
 			<wls:package-name>nonapi.io.github.classgraph.*</wls:package-name>		
-			<wls:package-name>org.apache.commons.lang3.*</wls:package-name>		
+			<wls:package-name>org.apache.commons.*</wls:package-name>		
 			<wls:package-name>org.codehaus.stax2.*</wls:package-name>		
 			<wls:package-name>org.joda.time.*</wls:package-name>		
 			<wls:package-name>org.slf4j.*</wls:package-name>		
