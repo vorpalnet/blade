@@ -81,6 +81,7 @@ public class SettingsManager<T> {
 	protected Path clusterPath;
 	protected Path serverPath;
 	protected Path schemaPath;
+	protected Path samplePath;
 
 	public static SipFactory sipFactory;
 	public static Logger sipLogger;
@@ -188,6 +189,8 @@ public class SettingsManager<T> {
 			Files.createDirectories(domainPath);
 			schemaPath = Paths.get(configPath + "schemas/");
 			Files.createDirectories(schemaPath);
+			samplePath = Paths.get(configPath + "samples/");
+			Files.createDirectories(samplePath);
 			server = ManagementFactory.getPlatformMBeanServer();
 			serverName = System.getProperty("weblogic.Name");
 			serverPath = Paths.get(configPath + "server/" + serverName);
@@ -214,7 +217,7 @@ public class SettingsManager<T> {
 			this.mapper.registerModule(
 					new SimpleModule().addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
 
-			// Don't both to save attributes set to null.
+			// Don't bother to save attributes set to null.
 			this.mapper.setSerializationInclusion(Include.NON_NULL);
 
 			if (clusterName != null) {
@@ -267,6 +270,9 @@ public class SettingsManager<T> {
 			tmp = sample;
 		}
 
+		// always save the current schema and sample config file
+		saveConfigFile(tmp);
+
 		File domainFile = new File(domainPath.toString() + "/" + servletContextName + ".json");
 		// sipLogger.fine("Attempting to load... " + domainFile.getAbsolutePath());
 		try {
@@ -309,7 +315,6 @@ public class SettingsManager<T> {
 
 		if (noConfigFiles) {
 			current = tmp;
-			saveConfigFile(domainFile, current);
 		} else {
 			// sipLogger.fine("Calling mergeCurrentFromJson...");
 			mergeCurrentFromJson();
@@ -318,31 +323,16 @@ public class SettingsManager<T> {
 		sipLogger.info("Loading configuration...\n" + getCurrentAsJson());
 	}
 
-	private void saveSchema() throws JsonGenerationException, JsonMappingException, IOException {
+	private void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
+		File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json");
+		sipLogger.fine("Saving config to: " + configFile.getCanonicalPath());
+		mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
+
+		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
+		sipLogger.fine("Saving schema to: " + schemaFile.getCanonicalPath());
 		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper);
 		JsonSchema schema = schemaGen.generateSchema(current.getClass());
-
-		// add title here
-		mapper.writerWithDefaultPrettyPrinter()
-				.writeValue(new File(schemaPath.toString() + "/" + servletContextName + ".jschema"), schema);
-
-	}
-
-	private void saveConfigFile(File file, T t) throws JsonGenerationException, JsonMappingException, IOException {
-
-		// Never overwrite a .json file, use .SAMPLE instead
-		String path = file.getPath();
-		if (path.endsWith(".json")) {
-			file = new File(path.replace(".json", ".SAMPLE"));
-		}
-
-		sipLogger.fine("Saving config to: " + file.getCanonicalPath());
-
-		// save current config to file
-		mapper.writerWithDefaultPrettyPrinter().writeValue(file, t);
-
-		// save matching schema to file
-		this.saveSchema();
+		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, schema);
 	}
 
 	/**
