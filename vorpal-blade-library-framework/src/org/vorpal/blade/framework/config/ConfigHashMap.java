@@ -10,9 +10,9 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@type")
 
 public class ConfigHashMap extends TranslationsMap {
-	
+
 	public HashMap<String, Translation> map = new HashMap<>();
-	
+
 	@Override
 	public Translation lookup(SipServletRequest request) {
 		Translation value = null;
@@ -39,4 +39,3 @@ public class ConfigHashMap extends TranslationsMap {
 	}
 
 }
-
