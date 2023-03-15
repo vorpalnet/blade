@@ -269,17 +269,9 @@ public class SettingsManager<T> {
 		} else {
 			tmp = sample;
 		}
-		
-		
-		System.out.println("1. sample = "+sample);
-		System.out.println("2. tmp = "+tmp);
-		System.out.println("3. savingConfigFile...");
 
 		// always save the current schema and sample config file
 		saveConfigFile(tmp);
-
-		System.out.println("4. sample = "+sample);
-		System.out.println("5. tmp = "+tmp);
 
 		File domainFile = new File(domainPath.toString() + "/" + servletContextName + ".json");
 		// sipLogger.fine("Attempting to load... " + domainFile.getAbsolutePath());
@@ -321,12 +313,6 @@ public class SettingsManager<T> {
 			sipLogger.severe(e);
 		}
 
-		
-		System.out.println("6. noConfigFiles: "+noConfigFiles);
-		System.out.println("7. tmp: "+tmp);
-		
-		
-		
 		if (noConfigFiles) {
 			current = tmp;
 		} else {
@@ -334,10 +320,6 @@ public class SettingsManager<T> {
 			mergeCurrentFromJson();
 		}
 
-		System.out.println("8. current: "+tmp);
-
-		
-		
 		sipLogger.info("Loading configuration...\n" + getCurrentAsJson());
 	}
 
@@ -345,7 +327,7 @@ public class SettingsManager<T> {
 		File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");
 		sipLogger.fine("Saving config to: " + configFile.getCanonicalPath());
 		mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
-		
+
 		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
 		sipLogger.fine("Saving schema to: " + schemaFile.getCanonicalPath());
 		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper);
