@@ -59,25 +59,30 @@ public class Reinvite extends Callflow {
 			}
 
 			sendRequest(bobRequest, (bobResponse) -> {
-				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-				copyContentAndHeaders(bobResponse, aliceResponse);
-				if (b2buaListener != null) {
-					b2buaListener.callEvent(aliceResponse);
-				}
 
-				sendResponse(aliceResponse, (aliceAck) -> {
-					if (aliceAck.getMethod().equals(ACK)) {
-						SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-						if (b2buaListener != null) {
-							b2buaListener.callEvent(bobAck);
-						}
-						sendRequest(bobAck);
+				if (false==aliceRequest.isCommitted()) { // It may have been CANCELed			
+					SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+					copyContentAndHeaders(bobResponse, aliceResponse);
+					if (b2buaListener != null) {
+						b2buaListener.callEvent(aliceResponse);
 					}
-				});
+
+					sendResponse(aliceResponse, (aliceAck) -> {
+						if (aliceAck.getMethod().equals(ACK)) {
+							SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+							if (b2buaListener != null) {
+								b2buaListener.callEvent(bobAck);
+							}
+							sendRequest(bobAck);
+						}
+					});
+				}
 
 			});
 
-		} catch (Exception e) {
+		}catch (java.lang.IllegalStateException e) {
+			// eat the exception; do not log it
+		}catch (Exception e) {
 			sipLogger.logStackTrace(request, e);
 			throw e;
 		}
