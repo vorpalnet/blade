@@ -33,35 +33,46 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
 //public class Configuration extends HashMap<String, State> implements Serializable {
-public class Configuration implements Serializable {
+public class ConfigurationSample extends Configuration implements Serializable {
 
-	public String defaultApplication = null;
-	public HashMap<String, State> previous = new HashMap<>();
+	/**
+	 * Creates a default configuration used to generate the FSMAR2.SAMPLE file.
+	 */
+	public ConfigurationSample() {
 
-	public State getPrevious(String name) {
-		State previousState = previous.get(name);
-		if (previousState == null) {
-			previousState = new State();
-			previous.put(name, previousState);
-		}
-		return previousState;
-	}
+		this.setDefaultApplication("b2bua");
 
-	public Configuration() {
-		// do nothing;
-	}
+		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
+		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
+		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
+		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("keep-alive").setId("INV-1")
+				.setOriginating("From");
 
-	public String getDefaultApplication() {
-		return defaultApplication;
-	}
+		Transition t1 = this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("b2bua").setId("INV-2");
+		t1.addComparison("Directive", "equals", "CONTINUE");
+		t1.addComparison("Region", "equals", "ORIGINATING");
+		t1.addComparison("Region-Label", "equals", "ORIGINATING");
+		t1.addComparison("Request-URI", "uri", "^(sips?):([^@]+)(?:@(.+))?$");
+		t1.addComparison("From", "address", "^.*<(sips?):([^@]+)(?:@(.+))?>.*$");
+		t1.addComparison("To", "user", "bob");
+		t1.addComparison("To", "host", "vorpal.net");
+		t1.addComparison("To", "equals", "<sip:bob@vorpal.net>");
+		t1.addComparison("Allow", "contains", "INV");
+		t1.addComparison("Allow", "includes", "INVITE");
+		t1.addComparison("Session-Expires", "value", "3600");
+		t1.addComparison("Session-Expires", "refresher", "uac");
+		t1.setOriginating("From");
+		t1.setRoute(new String[] { "sip:proxy1", "sip:proxy2" });
 
-	public void setDefaultApplication(String defaultApplication) {
-		this.defaultApplication = defaultApplication;
+		this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("b2bua").setId("INV-3");
+		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("proxy-registrar");
+
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {
 
-		Configuration configuration = new Configuration();
+		ConfigurationSample configuration = new ConfigurationSample();
 
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setSerializationInclusion(Include.NON_NULL);

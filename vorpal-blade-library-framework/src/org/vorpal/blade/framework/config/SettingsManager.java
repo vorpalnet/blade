@@ -143,34 +143,42 @@ public class SettingsManager<T> {
 
 	public SettingsManager(String name, Class<T> clazz, ObjectMapper mapper) {
 		this.mapper = mapper;
-		this.build(name, clazz, mapper);
+		this.build(name, clazz, null, mapper);
 	}
 
 	public SettingsManager(String name, Class<T> clazz) {
-		this.build(name, clazz, null);
+		this.build(name, clazz, null, null);
+	}
+
+	public SettingsManager(String name, Class<T> clazz, T sample) {
+		this.build(name, clazz, sample, null);
+	}
+
+	public SettingsManager(String name, Class<T> clazz, T sample, ObjectMapper mapper) {
+		this.build(name, clazz, sample, mapper);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		this.mapper = mapper;
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, mapper);
+		this.build(basename(event.getServletContext().getServletContextName()), clazz, null, mapper);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
+		this.build(basename(event.getServletContext().getServletContextName()), clazz, null, null);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample) {
-		this.sample = sample;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
+		this.build(basename(event.getServletContext().getServletContextName()), clazz, sample, null);
 	}
 
-	public void build(String name, Class<T> clazz, ObjectMapper _mapper) {
+	public void build(String name, Class<T> clazz, T sample, ObjectMapper _mapper) {
 
 		this.servletContextName = basename(name);
 		this.clazz = clazz;
+		this.sample = sample;
 
 		try {
 

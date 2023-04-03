@@ -337,19 +337,26 @@ public abstract class Callflow implements Serializable {
 	 * @throws ServletException
 	 * @throws IOException
 	 */
+
 	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
-		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
-
-			Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
-
-			try {
-				response.send();
-			} catch (Exception e) {
-				sipLogger.logStackTrace(e);
-				throw e;
-			}
-		}
+		sendResponse(response, (ackOrPrack) -> {
+			// do nothing;
+		});
 	}
+
+//	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
+//		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
+//
+//			Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+//
+//			try {
+//				response.send();
+//			} catch (Exception e) {
+//				sipLogger.logStackTrace(e);
+//				throw e;
+//			}
+//		}
+//	}
 
 	public static void setSipFactory(SipFactory sipFactory) {
 		Callflow.sipFactory = sipFactory;
@@ -740,8 +747,7 @@ public abstract class Callflow implements Serializable {
 			if (timeout != null && timeout > 0) {
 				proxy.setProxyTimeout(timeout);
 
-				
-				//TODO More work needed on ProxyBranch support
+				// TODO More work needed on ProxyBranch support
 				for (ProxyBranch proxyBranch : proxyBranches) {
 //					proxyBranch.setProxyBranchTimeout(proxyTier.getTimeout());
 					inboundRequest.getSession().setAttribute("DIAGRAM_SIDE", "RIGHT");
@@ -756,9 +762,6 @@ public abstract class Callflow implements Serializable {
 //			inboundRequest.getSession().setAttribute("PROXY_RULE", ProxyPlan);
 
 			proxy.startProxy();
-			
-			
-
 
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
