@@ -58,7 +58,7 @@ public class AppRouter implements SipApplicationRouter {
 
 	@Override
 	public void init() {
-		settingsManager = new SettingsManager<Configuration>(FSMAR, Configuration.class);		
+		settingsManager = new SettingsManager<Configuration>(FSMAR, Configuration.class, new ConfigurationSample());		
 		sipLogger = settingsManager.getSipLogger();
 		sipLogger.logConfiguration(settingsManager.getCurrent());
 	}

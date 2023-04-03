@@ -8,17 +8,14 @@
 	<version>0.0.1-SNAPSHOT</version>
 	<name>maven Maven Webapp</name>
 	<url>http://maven.apache.org</url>
-
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<java.version>1.8</java.version>
-
-<!--
+		<!--
 		<maven.compiler.source>${java.version}</maven.compiler.source>
 		<maven.compiler.target>${java.version}</maven.compiler.target>
 		<maven-plugin-version>1.0.0</maven-plugin-version>
 -->
-
 		<swagger-core-version>2.1.11</swagger-core-version>
 		<swagger-parser-version>2.0.28</swagger-parser-version>
 		<swagger-inflector-version>2.0.5</swagger-inflector-version>
@@ -26,43 +23,31 @@
 		<jetty-version>9.4.9.v20180320</jetty-version>
 		<logback-version>1.0.1</logback-version>
 		<junit-version>4.8.2</junit-version>
-		<slf4j-version>1.6.3</slf4j-version>
-
+		<slf4j-version>1.7.25</slf4j-version>
 	</properties>
-
-
 	<dependencies>
-	
-<!-- 	
 		<dependency>
-			<groupId>com.microsoft.sqlserver</groupId>
-			<artifactId>mssql-jdbc</artifactId>
-			<version>10.2.1.jre8</version>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>${slf4j-version}</version>
 		</dependency>
-		
-<dependency>
-    <groupId>com.microsoft.sqlserver</groupId>
-    <artifactId>sqljdbc4</artifactId>
-    <version>4.2</version>
-</dependency>
--->
-
-	
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>${slf4j-version}</version>
+		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
 			<version>3.8.1</version>
 			<scope>test</scope>
 		</dependency>
-
 		<!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.module/jackson-module-jsonSchema -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.module</groupId>
 			<artifactId>jackson-module-jsonSchema</artifactId>
 			<version>${jackson-version}</version>
 		</dependency>
-
-
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
@@ -88,35 +73,20 @@
 			<artifactId>jackson-datatype-joda</artifactId>
 			<version>${jackson-version}</version>
 		</dependency>
-
 		<dependency>
 			<groupId>io.swagger.core.v3</groupId>
 			<artifactId>swagger-jaxrs2</artifactId>
 			<version>${swagger-core-version}</version>
 		</dependency>
-
 		<dependency>
 			<groupId>io.swagger.core.v3</groupId>
 			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
 			<version>${swagger-core-version}</version>
 		</dependency>
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-
 		<!-- <dependency> <groupId>io.swagger</groupId> <artifactId>swagger-inflector</artifactId> 
 			<version>${swagger-inflector-version}</version> </dependency> <dependency> 
 			<groupId>io.swagger.parser.v3</groupId> <artifactId>swagger-parser</artifactId> 
 			<version>${swagger-parser-version}</version> </dependency> -->
-
-
 	</dependencies>
 	<build>
 		<finalName>maven</finalName>

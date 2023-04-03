@@ -96,7 +96,7 @@ public class Selector {
 		case "Request-URI":
 			header = request.getRequestURI().toString();
 			break;
-			
+
 		case "Remote-IP":
 			header = request.getRemoteAddr();
 
@@ -123,8 +123,8 @@ public class Selector {
 			regexRoute.selector = this;
 		}
 
-		SettingsManager.getSipLogger().finer(request, "Selector... attribute: " + attribute + ", value: " + header
-				+ ", key: " + key + ", regexRoute: " + regexRoute);
+		SettingsManager.getSipLogger().finer(request, "Selector... attribute: " + attribute + "; value: " + header
+				+ "; pattern: " + this.getPattern() + "; key: " + key + "; regexRoute: " + regexRoute);
 
 		return regexRoute;
 	}

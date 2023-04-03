@@ -33,6 +33,7 @@ import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.UAMode;
 
@@ -72,7 +73,10 @@ public class TestInvite extends InitialInvite {
 				if (delay > 0) {
 					Thread.sleep(delay * 1000);
 				}
-				sendResponse(this.aliceRequest.createResponse(status));
+
+				SipServletResponse response = request.createResponse(status);
+				sendResponse(response);
+
 			} else {
 				super.process(request);
 			}
