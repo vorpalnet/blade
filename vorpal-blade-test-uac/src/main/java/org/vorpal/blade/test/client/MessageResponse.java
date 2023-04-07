@@ -6,8 +6,6 @@ import java.util.List;
 
 public class MessageResponse implements Serializable{
 	public String id;
-	public int status;
-	public List<Header> headers = new LinkedList<>();
-	public String body;
-
+	public int finalStatus;
+	public List<String> responses = new LinkedList<>();
 }

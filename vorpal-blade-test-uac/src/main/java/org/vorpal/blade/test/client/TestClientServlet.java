@@ -29,11 +29,11 @@ import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.tpcc.TestReinvite;
 
 /**
  * @author Jeff McDonald
@@ -76,10 +76,15 @@ public class TestClientServlet extends AsyncSipServlet {
 		}
 	}
 
-
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
-		return null;
+		Callflow callflow = null;
+
+		if (request.getMethod().equals("INVITE")) {
+			callflow = new TestReinvite();
+		}
+
+		return callflow;
 	}
 
 }

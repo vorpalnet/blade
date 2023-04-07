@@ -3,8 +3,10 @@ package org.vorpal.blade.test.client;
 import java.util.List;
 
 public class MessageRequest {
-	public String from;
-	public String to;
+	public String requestURI;
+	public String fromAddress;
+	public String toAddress;
 	public List<Header> headers;
-	public String body;
+	public String contentType;
+	public String content;
 }

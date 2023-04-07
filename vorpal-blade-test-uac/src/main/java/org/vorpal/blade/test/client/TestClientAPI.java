@@ -40,31 +40,18 @@ public class TestClientAPI extends Callflow {
 
 //	private Map<String, MessageSession> sessions = new HashMap<>();
 
-	@GET
-	@Path("/insert")
-	public Response insert( //
-			@QueryParam("sessionKey") String sessionKey, //
-			@QueryParam("endpoint") String endpoint, //
-			@QueryParam("agentId") String agentId, //
-			@QueryParam("uuid") String uuid) {
-		Response insertResponse;
-		SettingsManager.sipLogger.info("insert sessionKey: " + sessionKey //
-				+ ", endpoint: " + endpoint //
-				+ ", agentId: " + agentId //
-				+ ", uuid: " + uuid);
+//	private static transient AsyncResponse asyncResponse;
 
-		insertResponse = Response.status(Response.Status.ACCEPTED).build();
-		return insertResponse;
-	}
+	private static Map<String, AsyncResponse> asyncResponses = new HashMap<>();
 
 	@POST
 	@Path("/connect")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Open a connection.")
-	public Response connect( //
-//	public void connect( //
-//			@Suspended AsyncResponse asyncResponse, //
+//	public Response connect( //
+	public void connect( //
+			@Suspended AsyncResponse asyncResponse, //
 			@Context UriInfo uriInfo, //
 			@RequestBody(content = @Content(schema = @Schema(implementation = org.vorpal.blade.test.client.MessageRequest.class)), //
 					description = "Message content", //
@@ -72,82 +59,54 @@ public class TestClientAPI extends Callflow {
 			throws ServletException, IOException //
 	{
 
+//		TestClientAPI.asyncResponse = asyncResponse;
+
 		URI location = URI.create(uriInfo.getPath());
 
 		// Create the SIP request
 		SipFactory sipFactory = SettingsManager.getSipFactory();
 		SipApplicationSession appSession = sipFactory.createApplicationSession();
 
-		SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, message.from, message.to);
-
-		sipLogger.fine(bobRequest.getSession(), "message.to: = " + message.to);
-		sipLogger.fine(bobRequest.getSession(), "To:         = " + bobRequest.getTo().toString());
-		sipLogger.fine(bobRequest.getSession(), "requestURI: = " + bobRequest.getRequestURI().toString());
-		bobRequest.setRequestURI(bobRequest.getTo().getURI());
-		sipLogger.fine(bobRequest.getSession(), "requestURI: = " + bobRequest.getRequestURI().toString());
+		SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, message.fromAddress,
+				message.toAddress);
+		if (message.requestURI != null && message.requestURI.length() > 0) {
+			bobRequest.setRequestURI(sipFactory.createURI(message.requestURI));
+		}
 
 		for (Header header : message.headers) {
 			bobRequest.setHeader(header.name, header.value);
 		}
+
 //		bobRequest.setContent(message.body, "application/sdp");
-		bobRequest.setContent(message.body, "multipart/mixed");
+//		bobRequest.setContent(message.body, "multipart/mixed");
+
+		if (message.content != null && message.content.length() > 0) {
+			bobRequest.setContent(message.content, message.contentType);
+		}
 
 		MessageSession msgSession = new MessageSession(bobRequest.getApplicationSession(), bobRequest.getSession());
-//		msgResponse.id = msgSession.getId();
-//		msgSession.setAsyncResponse(asyncResponse);
-//		sessions.put(msgSession.getId(), msgSession);
-
-		// Send the SIP request
-
 		MessageResponse msgResponse = new MessageResponse();
 
-		
+		// Save the 'transient' AsyncResponse for later HTTP Response
+		asyncResponses.put(appSession.getId(), asyncResponse);
+
+		// Send the SIP request
 		sendRequest(bobRequest, (bobResponse) -> {
+
+			msgResponse.responses.add(bobResponse.toString());
+
 			if (!provisional(bobResponse)) {
 				sendRequest(bobResponse.createAck());
 
-				msgResponse.status = bobResponse.getStatus();
+				msgResponse.finalStatus = bobResponse.getStatus();
 
-				for (String headerName : bobResponse.getHeaderNameList()) {
-					Header h = new Header();
-					ListIterator<String> itr = bobResponse.getHeaders(headerName);
+				Response httpResponse = Response.created(location).entity(msgResponse).build();
 
-					StringBuilder headerValue = new StringBuilder();
-					int count = 0;
-					while (itr.hasNext()) {
-						if (count > 0) {
-							headerValue.append(", ");
-						}
-						headerValue.append(itr.next());
-						count++;
-					}
-
-					h.name = headerName;
-					h.value = headerValue.toString();
-
-					msgResponse.headers.add(h);
-				}
-
-				if (bobResponse.getContent() != null) {
-					msgResponse.body = new String(bobResponse.getRawContent());
-				}
-
-				// Build the async response
-				// Response httpResponse;
-
-//				Response httpResponse = Response.created(location).entity(msgResponse).build();
-
-				// asyncResponse.resume(httpResponse);
-
-//				sessions.get(msgSession.getId()).getAsyncResponse().resume(httpResponse);
+				asyncResponses.remove(appSession.getId()).resume(httpResponse);
 
 			}
 
 		});
-
-//		Response httpResponse = Response.created(location).entity(msgResponse).build();
-		Response httpResponse = Response.created(location).build();
-		return httpResponse;
 
 	}
 
