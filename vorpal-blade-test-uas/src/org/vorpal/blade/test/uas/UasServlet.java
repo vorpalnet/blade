@@ -13,6 +13,7 @@ import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.test.uas.callflows.TestInvite;
+import org.vorpal.blade.test.uas.callflows.TestRefer;
 import org.vorpal.blade.test.uas.config.TestUasConfig;
 
 @WebListener
@@ -28,7 +29,13 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 		Callflow callflow = null;
 
 		if (request.isInitial()) {
-			callflow = new TestInvite();
+
+			if (request.getRequestURI().getParameter("refer") != null) {
+				callflow = new TestRefer();
+			} else {
+				callflow = new TestInvite();
+			}
+
 		} else {
 			callflow = super.chooseCallflow(request);
 		}

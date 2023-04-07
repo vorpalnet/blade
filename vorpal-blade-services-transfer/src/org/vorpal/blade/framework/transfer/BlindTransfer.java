@@ -178,15 +178,19 @@ public class BlindTransfer extends Transfer {
 
 					copyContent(targetResponse, transfereeRequest);
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
-						linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
 
-						// Expect a BYE from the transferor
-						expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-							sendResponse(bye.createResponse(200));
-						});
+						if (this.successful(transfereeResponse)) { //should always be the case
+							linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
 
-						sendRequest(transfereeResponse.createAck());
-						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
+							// Expect a BYE from the transferor
+							expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
+								sendResponse(bye.createResponse(200));
+							});
+
+							sendRequest(transfereeResponse.createAck());
+							sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
+						}
+
 					});
 
 				} else if (failure(targetResponse)) {
