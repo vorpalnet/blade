@@ -465,7 +465,7 @@ public class SettingsManager<T> {
 	 * an application with the name 'b2bua#2.1.0' would simply be 'b2bua'.
 	 * 
 	 * @param name
-	 * @return
+	 * @return the base name of the application
 	 */
 	public static String basename(String name) {
 		int i = name.indexOf('#');

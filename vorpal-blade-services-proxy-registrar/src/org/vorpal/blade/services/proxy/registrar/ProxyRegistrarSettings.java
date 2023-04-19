@@ -133,7 +133,7 @@ public class ProxyRegistrarSettings implements Serializable {
 	 * 'recurse' and 'supervised'.
 	 * 
 	 * @param proxy
-	 * @return
+	 * @return the update proxy object
 	 */
 	public Proxy apply(Proxy proxy) {
 

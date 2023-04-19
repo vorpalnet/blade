@@ -269,8 +269,8 @@ public abstract class Callflow implements Serializable {
 	 * Marks the response to be sent 'reliably', meaning you should expect at PRACK
 	 * request.
 	 * 
-	 * @param response
-	 * @return
+	 * @param response a SipServletResponse object
+	 * @return the same response as the input parameter
 	 */
 	public SipServletResponse makeReliable(SipServletResponse response) {
 		response.setAttribute(RELIABLE, true);
@@ -705,7 +705,7 @@ public abstract class Callflow implements Serializable {
 	 * 
 	 * @param from
 	 * @param to
-	 * @return
+	 * @return the update URI
 	 * @throws ServletParseException
 	 */
 	public static URI copyParameters(URI from, URI to) throws ServletParseException {
