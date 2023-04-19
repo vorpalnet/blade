@@ -17,7 +17,6 @@
 			<attribute name="owner.project.facets" value="jst.appclient"/>
 		</attributes>
 	</classpathentry>
-	<classpathentry kind="lib" path="/Users/jeff/weblogic/occas-8.0/wlserver/sip/server/lib/wlssapi.jar"/>
-	<classpathentry kind="lib" path="/Users/jeff/weblogic/occas-8.0/wlserver/sip/server/lib/wlss.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/OCCAS"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
