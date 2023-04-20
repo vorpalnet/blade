@@ -3,7 +3,6 @@ package org.vorpal.blade.services.keepalive;
 import java.io.IOException;
 
 import javax.servlet.ServletException;
-import javax.servlet.sip.SessionKeepAlive;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 

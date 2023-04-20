@@ -30,9 +30,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
  *
  */
 public class Settings implements SettingsMXBean {
-	private SettingsManager settingsManager;
+	private SettingsManager<?> settingsManager;
 
-	public Settings(SettingsManager settingsManager) {
+	public Settings(SettingsManager<?> settingsManager) {
 		this.settingsManager = settingsManager;
 	}
 

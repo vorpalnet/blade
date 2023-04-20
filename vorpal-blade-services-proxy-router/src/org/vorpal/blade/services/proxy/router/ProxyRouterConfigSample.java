@@ -9,6 +9,8 @@ import org.vorpal.blade.framework.config.TranslationsMap;
 
 public class ProxyRouterConfigSample extends RouterConfig implements Serializable {
 
+	private static final long serialVersionUID = 1L;
+
 	public ProxyRouterConfigSample() {
 
 		defaultRoute.setId("default");

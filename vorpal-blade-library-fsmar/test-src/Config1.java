@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 public class Config1 extends Configuration {
 
+	private static final long serialVersionUID = 1L;
+
 	public Config1() {
 
 		this.setDefaultApplication("mediarouter");

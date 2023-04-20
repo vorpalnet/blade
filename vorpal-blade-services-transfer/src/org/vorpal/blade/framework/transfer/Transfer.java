@@ -69,10 +69,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.services.transfer.TransferServlet;
 import org.vorpal.blade.services.transfer.TransferSettings;
@@ -117,13 +114,12 @@ public class Transfer extends Callflow {
 		SipApplicationSession appSession = request.getApplicationSession();
 
 		Address transferee = request.getTo();
-		Address transferor = request.getAddressHeader(REFERRED_BY);
 		Address target = request.getAddressHeader(REFER_TO);
 
 		targetRequest = sipFactory.createRequest(appSession, INVITE, transferee, target);
 		targetRequest.setHeader("Allow", TransferServlet.getSettingsManager().getCurrent().getAllow());
 
-		transfereeRequest = this.getLinkedSession(request.getSession()).createRequest(INVITE);
+		transfereeRequest = getLinkedSession(request.getSession()).createRequest(INVITE);
 		transfereeRequest.setHeader("Allow", TransferServlet.getSettingsManager().getCurrent().getAllow());
 	}
 
@@ -139,7 +135,7 @@ public class Transfer extends Callflow {
 		for (String header : ts.getPreserveInviteHeaders()) {
 			String value = copyFrom.getHeader(header);
 			if (value != null && null == copyTo.getHeader(header)) {
-				this.copyHeader(header, copyFrom, copyTo);
+				copyHeader(header, copyFrom, copyTo);
 			}
 		}
 	}
@@ -156,7 +152,7 @@ public class Transfer extends Callflow {
 		for (String header : ts.getPreserveReferHeaders()) {
 			String value = copyFrom.getHeader(header);
 			if (value != null && null == copyTo.getHeader(header)) {
-				this.copyHeader(header, copyFrom, copyTo);
+				copyHeader(header, copyFrom, copyTo);
 			}
 		}
 	}

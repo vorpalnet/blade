@@ -25,17 +25,10 @@
 package org.vorpal.blade.test.uas.callflows;
 
 import java.io.IOException;
-import java.util.Iterator;
 
 import javax.servlet.ServletException;
-import javax.servlet.sip.Parameterable;
-import javax.servlet.sip.ServletParseException;
-import javax.servlet.sip.SipApplicationSession;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.SipSession;
-import javax.servlet.sip.UAMode;
 
 import org.vorpal.blade.framework.b2bua.B2buaListener;
 import org.vorpal.blade.framework.b2bua.InitialInvite;

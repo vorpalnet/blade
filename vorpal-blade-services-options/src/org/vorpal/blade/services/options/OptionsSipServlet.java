@@ -35,7 +35,6 @@ import javax.servlet.sip.annotation.SipApplicationKey;
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.logging.LogManager;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
@@ -61,7 +60,6 @@ public class OptionsSipServlet extends AsyncSipServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
-		this.sipLogger = LogManager.getLogger(event);
 		settingsManager = new SettingsManager<>(event, OptionsSettings.class);
 	}
 

@@ -1,12 +1,10 @@
 package org.vorpal.blade.services.transfer;
 
-import org.vorpal.blade.framework.config.ConfigHashMap;
-import org.vorpal.blade.framework.config.ConfigPrefixMap;
-import org.vorpal.blade.framework.config.Selector;
-import org.vorpal.blade.framework.config.TranslationsMap;
 import org.vorpal.blade.framework.transfer.TransferCondition;
 
 public class TransferSettingsSample extends TransferSettings {
+
+	private static final long serialVersionUID = 1L;
 
 	public TransferSettingsSample() {
 

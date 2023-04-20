@@ -29,11 +29,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.logging.Level;
 
-import javax.servlet.ServletContext;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.ar.SipApplicationRouter;
@@ -59,7 +57,7 @@ public class AppRouter implements SipApplicationRouter {
 	@Override
 	public void init() {
 		settingsManager = new SettingsManager<Configuration>(FSMAR, Configuration.class, new ConfigurationSample());		
-		sipLogger = settingsManager.getSipLogger();
+		sipLogger = SettingsManager.getSipLogger();
 		sipLogger.logConfiguration(settingsManager.getCurrent());
 	}
 
@@ -75,7 +73,6 @@ public class AppRouter implements SipApplicationRouter {
 
 		try {
 
-			ServletContext context = request.getServletContext();
 			Configuration config = (saved != null) ? (Configuration) saved : settingsManager.getCurrent();
 
 			// Did the request originate from an app?

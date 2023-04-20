@@ -27,7 +27,8 @@ import org.vorpal.blade.framework.transfer.TransferListener;
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
 public class TransferServlet extends B2buaServlet implements TransferListener {
-//public class TransferServlet extends B2buaServlet {
+private static final long serialVersionUID = 1L;
+	//public class TransferServlet extends B2buaServlet {
 	public static TransferSettingsManager settingsManager;
 
 	@Override

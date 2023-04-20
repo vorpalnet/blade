@@ -11,6 +11,7 @@ import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.services.proxy.balancer.ProxyBalancerConfig.EndpointStatus;
 
 public class OptionsPingCallflow extends Callflow {
+	private static final long serialVersionUID = 1L;
 	private String timerId;
 	private ProxyBalancerConfig config;
 

@@ -14,6 +14,8 @@ import javax.servlet.sip.SipSession;
  */
 public class KeepAliveUpdate extends KeepAliveCallflow {
 
+	private static final long serialVersionUID = 1L;
+
 	/**
 	 * This method likes to keep the tea party going by going around the table and
 	 * giving everyone an UPDATE. If for some reason the UPDATE fails (which it
@@ -25,6 +27,7 @@ public class KeepAliveUpdate extends KeepAliveCallflow {
 	public void handle(SipSession sipSession) {
 
 		try {
+			@SuppressWarnings("unchecked")
 			Iterator<SipSession> itr = (Iterator<SipSession>) sipSession.getApplicationSession().getSessions();
 			SipSession ss;
 			SipServletRequest update;

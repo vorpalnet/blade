@@ -271,6 +271,7 @@ public class ProxyInvite extends Callflow {
 			throws ServletException, IOException {
 		SipSession sipSession;
 		String tid;
+		@SuppressWarnings("unchecked")
 		Iterator<SipSession> itr = (Iterator<SipSession>) appSession.getSessions();
 		while (itr.hasNext()) {
 			sipSession = itr.next();

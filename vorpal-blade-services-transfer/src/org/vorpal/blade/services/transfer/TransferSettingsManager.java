@@ -6,11 +6,11 @@ import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletContextEvent;
 
 import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.services.transfer.TransferSettings.LoggingLevel;
 
 public class TransferSettingsManager extends SettingsManager<TransferSettings> {
 
-	public TransferSettingsManager(SipServletContextEvent event, Class clazz, TransferSettings sample) {
+	@SuppressWarnings("unchecked")
+	public TransferSettingsManager(SipServletContextEvent event,  @SuppressWarnings("rawtypes") Class clazz, TransferSettings sample) {
 		super(event, clazz, sample);
 	}
 
@@ -18,31 +18,36 @@ public class TransferSettingsManager extends SettingsManager<TransferSettings> {
 	public void initialize(TransferSettings config) throws ServletParseException {
 		sipLogger.info("Initializng configuration logging level to: " + config.getLoggingLevel());
 
-		this.getSipLogger().warning("Setting logging level to: " + config.getLoggingLevel());
+		SettingsManager.getSipLogger().warning("Setting logging level to: " + config.getLoggingLevel());
 		switch (config.getLoggingLevel()) {
 		case OFF:
-			this.getSipLogger().setLevel(Level.OFF);
+			SettingsManager.getSipLogger().setLevel(Level.OFF);
 			break;
 		case FINEST:
-			this.getSipLogger().setLevel(Level.FINEST);
+			SettingsManager.getSipLogger().setLevel(Level.FINEST);
 			break;
 		case FINER:
-			this.getSipLogger().setLevel(Level.FINER);
+			SettingsManager.getSipLogger().setLevel(Level.FINER);
 			break;
 		case FINE:
-			this.getSipLogger().setLevel(Level.FINE);
+			SettingsManager.getSipLogger().setLevel(Level.FINE);
 			break;
 		case INFO:
-			this.getSipLogger().setLevel(Level.INFO);
+			SettingsManager.getSipLogger().setLevel(Level.INFO);
 			break;
 		case WARNING:
-			this.getSipLogger().setLevel(Level.WARNING);
+			SettingsManager.getSipLogger().setLevel(Level.WARNING);
 			break;
 		case SEVERE:
-			this.getSipLogger().setLevel(Level.SEVERE);
+			SettingsManager.getSipLogger().setLevel(Level.SEVERE);
 			break;
 		case ALL:
-			this.getSipLogger().setLevel(Level.ALL);
+			SettingsManager.getSipLogger().setLevel(Level.ALL);
+			break;
+		case CONFIG:
+			SettingsManager.getSipLogger().setLevel(Level.CONFIG);
+			break;
+		default:
 			break;
 		}
 

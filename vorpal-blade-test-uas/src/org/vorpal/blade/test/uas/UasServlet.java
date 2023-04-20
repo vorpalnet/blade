@@ -22,6 +22,7 @@ import org.vorpal.blade.test.uas.config.TestUasConfig;
 @javax.servlet.sip.annotation.SipListener
 public class UasServlet extends B2buaServlet implements B2buaListener {
 
+	private static final long serialVersionUID = 1L;
 	public static SettingsManager<TestUasConfig> settingsManager;
 
 	@Override

@@ -23,6 +23,7 @@ import org.vorpal.blade.framework.proxy.ProxyTier;
 @javax.servlet.sip.annotation.SipListener
 public class ProxyRouterSipServlet extends ProxyServlet {
 
+	private static final long serialVersionUID = 1L;
 	public static SettingsManager<RouterConfig> settingsManager;
 
 	@Override
@@ -36,7 +37,7 @@ public class ProxyRouterSipServlet extends ProxyServlet {
 //			sipLogger.logConfiguration((new ProxyRouterConfigTest()).test02());
 			
 			MediaHubConfigSample sample = new MediaHubConfigSample();
-			settingsManager.getSipLogger().logConfiguration(sample);
+			SettingsManager.getSipLogger().logConfiguration(sample);
 			
 			
 			

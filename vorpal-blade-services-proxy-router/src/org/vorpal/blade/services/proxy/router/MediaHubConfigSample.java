@@ -6,7 +6,6 @@ import org.vorpal.blade.framework.config.ConfigHashMap;
 import org.vorpal.blade.framework.config.ConfigPrefixMap;
 import org.vorpal.blade.framework.config.RouterConfig;
 import org.vorpal.blade.framework.config.Selector;
-import org.vorpal.blade.framework.config.Translation;
 import org.vorpal.blade.framework.config.TranslationsMap;
 
 /**
@@ -20,6 +19,8 @@ import org.vorpal.blade.framework.config.TranslationsMap;
  * @author Jeff McDonald
  */
 public class MediaHubConfigSample extends RouterConfig implements Serializable {
+
+	private static final long serialVersionUID = 1L;
 
 	public MediaHubConfigSample() {
 
@@ -60,7 +61,7 @@ public class MediaHubConfigSample extends RouterConfig implements Serializable {
 		prefixMap.createTranslation("1997").setRequestUri("sip:10.11.200.39:5060")
 				.setDescription("Phone numbers starting with 1997").addAttribute("stripXML", true);
 		;
-		Translation t87 = prefixMap.createTranslation("19974388687").setRequestUri("sip:10.11.200.40:5060");
+//		Translation t87 = prefixMap.createTranslation("19974388687").setRequestUri("sip:10.11.200.40:5060");
 		//
 
 		TranslationsMap prefixMapRecorddn = new ConfigPrefixMap();

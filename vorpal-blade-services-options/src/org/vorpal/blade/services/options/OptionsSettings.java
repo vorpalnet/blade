@@ -28,6 +28,7 @@ import java.io.Serializable;
 
 public class OptionsSettings implements Serializable {
 
+	private static final long serialVersionUID = 1L;
 	private String accept = "application/sdp";
 	private String acceptLanguage = "en";
 	private String allow = "INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, PRACK, SUBSCRIBE, NOTIFY, PUBLISH, INFO, REFER, MESSAGE, UPDATE";

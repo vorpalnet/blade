@@ -68,6 +68,7 @@ import org.vorpal.blade.test.client.Header;
  * }</pre>
  */
 public class Simple extends Callflow {
+	private static final long serialVersionUID = 1L;
 	private Address alice;
 	private Address bob;
 	private URI requestURI;
@@ -91,10 +92,10 @@ public class Simple extends Callflow {
 	}
 
 	public void process() throws ServletException, IOException {
-		SipApplicationSession appSession = this.sipFactory.createApplicationSession();
+		SipApplicationSession appSession = sipFactory.createApplicationSession();
 
-		SipServletRequest aliceRequest = this.sipFactory.createRequest(appSession, INVITE, bob, alice);
-		SipServletRequest bobRequest = this.sipFactory.createRequest(appSession, INVITE, alice, bob);
+		SipServletRequest aliceRequest = sipFactory.createRequest(appSession, INVITE, bob, alice);
+		SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, alice, bob);
 		
 		sendRequest(aliceRequest, (aliceResponse)->{
 			

@@ -30,6 +30,7 @@ import org.vorpal.blade.framework.config.Condition;
 
 public class Transition implements Serializable {
 
+	private static final long serialVersionUID = 1L;
 	public String id;
 	public String next;
 	public Condition condition;

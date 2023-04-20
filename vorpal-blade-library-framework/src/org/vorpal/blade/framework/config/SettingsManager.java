@@ -265,6 +265,7 @@ public class SettingsManager<T> {
 		server.unregisterMBean(objectName);
 	}
 
+	@SuppressWarnings("unchecked")
 	private void loadConfigFile(Class<?> clazz) throws InstantiationException, IllegalAccessException,
 			JsonGenerationException, JsonMappingException, IOException, ServletParseException {
 

@@ -1,9 +1,7 @@
 package org.vorpal.blade.services.proxy.balancer;
 
 import javax.servlet.sip.ServletParseException;
-import javax.servlet.sip.SipFactory;
 
-import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.proxy.ProxyPlan;
 import org.vorpal.blade.framework.proxy.ProxyServlet;
 import org.vorpal.blade.framework.proxy.ProxyTier;
@@ -11,9 +9,9 @@ import org.vorpal.blade.framework.proxy.ProxyTier.Mode;
 
 public class ProxyBalancerConfigSample extends ProxyBalancerConfig {
 
-	public ProxyBalancerConfigSample() throws ServletParseException {
-		SipFactory sipFactory = SettingsManager.getSipFactory();
+	private static final long serialVersionUID = 1L;
 
+	public ProxyBalancerConfigSample() throws ServletParseException {
 		ProxyPlan plan1 = new ProxyPlan();
 
 		ProxyTier proxyTier1 = new ProxyTier();
