@@ -30,15 +30,23 @@ public class ConfigPrefixMap extends TranslationsMap {
 //		Entry<String, Translation> previous = null;
 
 		try {
-			RegExRoute regexRoute = this.selector.findKey(request);
 
-			while (itr.hasNext()) {
-//				previous = entry;
-				entry = itr.next();
+			// jwm - multiple selectors
+			for (Selector selector : this.selectors) {
 
-				if (regexRoute.key.startsWith(entry.getKey())) {
-					value = entry.getValue();
+				RegExRoute regexRoute = selector.findKey(request);
+
+				while (itr.hasNext()) {
+					entry = itr.next();
+
+					if (regexRoute.key.startsWith(entry.getKey())) {
+						value = entry.getValue();
+					}
 				}
+
+				if (value != null)
+					break;
+
 			}
 
 		} catch (Exception e) {

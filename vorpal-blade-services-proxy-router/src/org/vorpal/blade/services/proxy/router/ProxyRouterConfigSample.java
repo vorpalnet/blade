@@ -15,12 +15,6 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		defaultRoute.setDescription("If no translation found, apply this default route.");
 		defaultRoute.setRequestUri("sip:hold");
 
-		
-
-		
-		
-		
-		
 //		Selector recorddn = new Selector("recorddn", "Content", "recorddn=(?<recorddn>[0-9]+)", "${recorddn}");
 //		recorddn.setDescription("SIPREC Record Dialed Number");
 //		this.selectors.add(recorddn);
@@ -67,17 +61,15 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 
 		TranslationsMap prefixMap = new ConfigPrefixMap();
 		prefixMap.id = "prefix-map-1";
-		prefixMap.selector = dialed;
+		prefixMap.addSelector(dialed);
 		prefixMap.description = "Translations map for dialed number prefixes";
 		prefixMap.createTranslation("1997").setRequestUri("sip:10.11.200.39:5060");
 		prefixMap.createTranslation("19974388687").setRequestUri("sip:10.11.200.40:5060");
-		
-		
+
 //		TranslationsMap prefixMapRecorddn = new ConfigPrefixMap();
 //		prefixMapRecorddn.id = "prefix-map-recorddn";
 //		prefixMapRecorddn.selector = dialed;
 //		prefixMapRecorddn.description = "Translations map for SIPREC Record Dialed Number.";
-		
 
 //		this.maps.add(addressMap);
 		this.maps.add(prefixMap);

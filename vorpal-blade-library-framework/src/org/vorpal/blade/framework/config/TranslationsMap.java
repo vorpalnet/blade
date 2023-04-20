@@ -1,5 +1,8 @@
 package org.vorpal.blade.framework.config;
 
+import java.util.LinkedList;
+import java.util.List;
+
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
@@ -19,7 +22,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 public abstract class TranslationsMap {
 	public String id;
 	public String description;
-	public Selector selector;
+	public List<Selector> selectors = new LinkedList<>();
 
 	public abstract Translation createTranslation(String key);
 
@@ -32,45 +35,54 @@ public abstract class TranslationsMap {
 		RegExRoute regexRoute = null;
 
 		try {
-			regexRoute = selector.findKey(request);
-			if (regexRoute != null) {
-				translation = this.lookup(request);
 
-				if (translation != null) {
+			for (Selector selector : selectors) {
 
-					if (translation.getRequestUri() != null) {
-						strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
+				regexRoute = selector.findKey(request);
+				if (regexRoute != null) {
+					translation = this.lookup(request);
 
-						uri = SettingsManager.getSipFactory().createURI(strRequestUri);
+					if (translation != null) {
 
-						// copy all SIP URI parameters (if not present in new request uri)
-						for (String name : request.getRequestURI().getParameterNameSet()) {
-							if (uri.getParameter(name) == null) {
-								uri.setParameter(name, uri.getParameter(name));
+						if (translation.getRequestUri() != null) {
+							strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
+
+							uri = SettingsManager.getSipFactory().createURI(strRequestUri);
+
+							// copy all SIP URI parameters (if not present in new request uri)
+							for (String name : request.getRequestURI().getParameterNameSet()) {
+								if (uri.getParameter(name) == null) {
+									uri.setParameter(name, uri.getParameter(name));
+								}
 							}
+
+							// jwm - use proxy instead
+							// request.setRequestURI(uri);
+
 						}
 
-						// jwm - use proxy instead
-						// request.setRequestURI(uri);
-
-					}
-
-					// now check for additional translations
-					if (translation.getList() != null) {
-						Translation t = null;
-						for (TranslationsMap map : translation.getList()) {
-							t = map.applyTranslations(request);
+						// now check for additional translations
+						if (translation.getList() != null) {
+							Translation t = null;
+							for (TranslationsMap map : translation.getList()) {
+								t = map.applyTranslations(request);
+								if (t != null) {
+									break;
+								}
+							}
 							if (t != null) {
-								break;
+								translation = t;
 							}
 						}
-						if (t != null) {
-							translation = t;
-						}
-					}
 
+					}
 				}
+
+				if (translation != null)
+					break;
+
 			}
+
 		} catch (Exception e) {
 			if (SettingsManager.getSipLogger() != null) {
 				SettingsManager.getSipLogger().logStackTrace(request, e);
@@ -99,12 +111,17 @@ public abstract class TranslationsMap {
 		this.description = description;
 	}
 
-	public Selector getSelector() {
-		return selector;
+	public List<Selector> getSelectors() {
+		return selectors;
 	}
 
-	public void setSelector(Selector selector) {
-		this.selector = selector;
+	public void setSelectors(List<Selector> selectors) {
+		this.selectors = selectors;
+	}
+
+	public Selector addSelector(Selector selector) {
+		this.selectors.add(selector);
+		return selector;
 	}
 
 }
