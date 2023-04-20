@@ -25,7 +25,6 @@
 package org.vorpal.blade.framework.transfer;
 
 import java.io.IOException;
-import java.util.ArrayList;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
@@ -33,8 +32,6 @@ import javax.servlet.sip.SipSession.State;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Expectation;
-import org.vorpal.blade.services.transfer.TransferServlet;
-import org.vorpal.blade.services.transfer.TransferSettings;
 
 /**
  * This class implements a blind call transfer.

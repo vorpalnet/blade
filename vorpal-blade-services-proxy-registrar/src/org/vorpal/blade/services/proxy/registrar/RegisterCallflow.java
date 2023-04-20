@@ -5,17 +5,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 
-import javax.inject.Inject;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callflow;
 
 public class RegisterCallflow extends Callflow {
+	private static final long serialVersionUID = 1L;
+
 	ProxyRegistrar proxyRegistrar;
 
 	private ProxyRegistrarSettings settings;

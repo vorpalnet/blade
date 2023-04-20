@@ -151,7 +151,7 @@ public class MediaTransfer extends Transfer {
 							sendResponse(bye.createResponse(200));
 						});
 
-					} else if (this.failure(targetResponse)) {
+					} else if (failure(targetResponse)) {
 						// User is notified that the transfer target did not answer
 						transferListener.transferDeclined(targetResponse);
 

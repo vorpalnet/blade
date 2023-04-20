@@ -19,10 +19,10 @@ public class TestTrieConfig {
 
 		Iterator<Entry<String, String>> itr = trie.entrySet().iterator();
 		Entry<String, String> entry = null;
-		Entry<String, String> previous = null;
+//		Entry<String, String> previous = null;
 
 		while (itr.hasNext()) {
-			previous = entry;
+//			previous = entry;
 			entry = itr.next();
 
 			if (user.startsWith(entry.getKey())) {

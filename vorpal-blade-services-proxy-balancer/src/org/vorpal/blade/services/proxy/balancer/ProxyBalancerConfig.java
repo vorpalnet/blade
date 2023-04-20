@@ -4,12 +4,13 @@ import java.io.Serializable;
 import java.util.HashMap;
 
 import org.vorpal.blade.framework.proxy.ProxyPlan;
-import org.vorpal.blade.framework.proxy.ProxyTier;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public class ProxyBalancerConfig implements Serializable {
 	
+	private static final long serialVersionUID = 1L;
+
 	public enum EndpointStatus{
 		up, down
 	}

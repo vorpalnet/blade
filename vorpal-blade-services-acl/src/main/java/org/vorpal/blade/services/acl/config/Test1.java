@@ -139,10 +139,12 @@ public class Test1 {
 
 	}
 
+	@SuppressWarnings("unchecked")
 	public static void test4() {
 
 		try {
 
+			@SuppressWarnings("rawtypes")
 			IPv4AddressAssociativeTrie ipv4aat = new IPv4AddressAssociativeTrie();
 			AddressTrieMap<Address, String> trieMap = new AddressTrieMap<Address, String>(ipv4aat);
 

@@ -10,6 +10,7 @@ import org.vorpal.blade.framework.callflow.Callflow;
 
 public class UasCallflow extends Callflow {
 
+	private static final long serialVersionUID = 1L;
 	private Integer status;
 
 	public UasCallflow(Integer status) {

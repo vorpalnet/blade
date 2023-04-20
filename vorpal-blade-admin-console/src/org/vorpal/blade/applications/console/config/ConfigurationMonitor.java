@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.WatchEvent;
+import java.nio.file.WatchEvent.Kind;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -121,7 +122,7 @@ public class ConfigurationMonitor extends Thread {
 			}
 
 			for (WatchEvent<?> event : key.pollEvents()) {
-				WatchEvent.Kind kind = event.kind();
+				Kind<?> kind = event.kind();
 
 				// TBD - provide example of how OVERFLOW event is handled
 				if (kind == OVERFLOW) {
@@ -156,8 +157,6 @@ public class ConfigurationMonitor extends Thread {
 
 					if (filename.endsWith(".json")) {
 
-						String appName = filename.substring(0, filename.indexOf(".json"));
-
 						String json = null;
 						try {
 							json = new String(Files.readAllBytes(child));
@@ -166,7 +165,6 @@ public class ConfigurationMonitor extends Thread {
 							e.printStackTrace();
 						}
 
-//						updateManagedMBeans(appName, json);
 						updateManagedMBeans(child, json);
 
 					}
@@ -220,7 +218,7 @@ public class ConfigurationMonitor extends Thread {
 
 			for (ObjectInstance mbean : mbeans) {
 				ObjectName name = mbean.getObjectName();
-				System.out.println("Found... "+name.toString());
+				System.out.println("Found... " + name.toString());
 
 				SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
 

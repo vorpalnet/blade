@@ -2,7 +2,6 @@ package org.vorpal.blade.test.config;
 
 import java.util.ArrayList;
 
-import org.vorpal.blade.framework.config.ComparisonList;
 import org.vorpal.blade.framework.config.Condition;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;

@@ -15,7 +15,6 @@ import javax.servlet.sip.SipURI;
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.deprecated.proxy.ProxyRule;
 import org.vorpal.blade.framework.logging.Logger.Direction;
 import org.vorpal.blade.framework.proxy.ProxyPlan;
 import org.vorpal.blade.framework.proxy.ProxyServlet;
@@ -26,6 +25,7 @@ import org.vorpal.blade.framework.proxy.ProxyServlet;
 @javax.servlet.sip.annotation.SipListener
 public class ProxyBalancerServlet extends ProxyServlet {
 
+	private static final long serialVersionUID = 1L;
 	public static SettingsManager<ProxyBalancerConfig> settingsManager;
 	public static String servletContextName;
 	

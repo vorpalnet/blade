@@ -10,6 +10,8 @@ import org.vorpal.blade.framework.callflow.Callflow;
 
 public abstract class KeepAliveCallflow extends Callflow implements javax.servlet.sip.SessionKeepAlive.Callback{
 
+	private static final long serialVersionUID = 1L;
+
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		

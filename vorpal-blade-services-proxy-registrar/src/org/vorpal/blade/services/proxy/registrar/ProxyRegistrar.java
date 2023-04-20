@@ -49,6 +49,7 @@ import org.vorpal.blade.framework.config.SettingsManager;
 public class ProxyRegistrar implements Serializable {
 
 	private class ContactInfo implements Serializable {
+		private static final long serialVersionUID = 1L;
 		public Address address;
 		public Long timestamp;
 
@@ -147,7 +148,7 @@ public class ProxyRegistrar implements Serializable {
 		Iterator<Entry<URI, ContactInfo>> itr = contactsMap.entrySet().iterator();
 		while (itr.hasNext()) {
 			Entry<URI, ContactInfo> entry = itr.next();
-			URI uri = entry.getKey();
+			entry.getKey();
 			ContactInfo contactInfo = entry.getValue();
 			Long timestamp = entry.getValue().timestamp;
 			int expires = calculateExpires(timestamp);
@@ -169,8 +170,6 @@ public class ProxyRegistrar implements Serializable {
 
 	public List<URI> getURIContacts() throws ServletParseException {
 		LinkedList<URI> contacts = new LinkedList<URI>();
-		SipFactory sipFactory = SettingsManager.sipFactory;
-
 		Iterator<Entry<URI, ContactInfo>> itr = contactsMap.entrySet().iterator();
 		while (itr.hasNext()) {
 			Entry<URI, ContactInfo> entry = itr.next();

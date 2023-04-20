@@ -2,7 +2,6 @@ package org.vorpal.blade.test.config;
 
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;

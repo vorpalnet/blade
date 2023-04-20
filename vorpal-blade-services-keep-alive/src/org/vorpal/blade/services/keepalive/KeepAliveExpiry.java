@@ -9,9 +9,12 @@ import javax.servlet.sip.SipSession;
 
 public class KeepAliveExpiry extends KeepAliveCallflow {
 
+	private static final long serialVersionUID = 1L;
+
 	@Override
 	public void handle(SipSession sipSession) {
 
+		@SuppressWarnings("unchecked")
 		Iterator<SipSession> itr = (Iterator<SipSession>) sipSession.getApplicationSession().getSessions();
 
 		SipSession ss;

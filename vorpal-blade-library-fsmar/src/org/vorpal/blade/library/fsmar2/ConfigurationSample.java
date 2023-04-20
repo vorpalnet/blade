@@ -25,7 +25,6 @@
 package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
-import java.util.HashMap;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -34,6 +33,8 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 //public class Configuration extends HashMap<String, State> implements Serializable {
 public class ConfigurationSample extends Configuration implements Serializable {
+
+	private static final long serialVersionUID = -7178380203877638527L;
 
 	/**
 	 * Creates a default configuration used to generate the FSMAR2.SAMPLE file.

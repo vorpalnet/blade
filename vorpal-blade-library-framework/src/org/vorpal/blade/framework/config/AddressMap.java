@@ -7,6 +7,7 @@ import inet.ipaddr.ipv4.IPv4AddressAssociativeTrie;
 public class AddressMap extends AddressTrieMap<Address, Translation> {
 	private static final long serialVersionUID = 1L;
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public AddressMap() {
 		super(new IPv4AddressAssociativeTrie());
 	}

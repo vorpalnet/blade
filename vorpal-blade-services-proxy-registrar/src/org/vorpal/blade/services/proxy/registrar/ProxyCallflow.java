@@ -2,16 +2,13 @@ package org.vorpal.blade.services.proxy.registrar;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 
-import javax.inject.Inject;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Proxy;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callflow;
@@ -20,6 +17,7 @@ import org.vorpal.blade.framework.proxy.ProxyPlan;
 
 public class ProxyCallflow extends Callflow {
 
+	private static final long serialVersionUID = -7048001724524467716L;
 	private ProxyListener proxyListener;
 	private ProxyPlan proxyPlan;
 	private Boolean proxyOnUnregistered = false;

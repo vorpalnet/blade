@@ -77,7 +77,6 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.callflow.Callback;
 
@@ -131,7 +130,7 @@ public class AssistedTransfer extends Transfer {
 						sendResponse(bye.createResponse(200));
 					});
 
-				} else if (this.failure(targetResponse)) {
+				} else if (failure(targetResponse)) {
 					// TODO add failure code
 					
 					// User is notified that the transfer target did not answer

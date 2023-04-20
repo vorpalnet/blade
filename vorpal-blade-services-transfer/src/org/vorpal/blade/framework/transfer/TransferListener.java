@@ -28,8 +28,6 @@ import java.io.IOException;
 import java.io.Serializable;
 
 import javax.servlet.ServletException;
-import javax.servlet.sip.SipServletContextEvent;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 

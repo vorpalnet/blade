@@ -36,6 +36,7 @@ import org.vorpal.blade.framework.proxy.ProxyTier;
 public class ProxyRegistrarServlet extends ProxyServlet
 		implements ProxyListener, SipServletListener, SipApplicationSessionListener {
 
+	private static final long serialVersionUID = 1L;
 	public static SettingsManager<ProxyRegistrarSettings> settingsManager;
 	public static Logger sipLogger;
 
@@ -52,8 +53,8 @@ public class ProxyRegistrarServlet extends ProxyServlet
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
-		settingsManager = new SettingsManager(event, ProxyRegistrarSettings.class, new ProxyRegistrarSettings());
-		sipLogger = settingsManager.getSipLogger();
+		settingsManager = new SettingsManager<ProxyRegistrarSettings>(event, ProxyRegistrarSettings.class, new ProxyRegistrarSettings());
+		sipLogger = SettingsManager.getSipLogger();
 
 		if (sipLogger.isLoggable(Level.FINER)) {
 			sipLogger.finer(
@@ -95,7 +96,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 		sipLogger.finer(request, "Begin ProxyRegistrarServlet.proxyRequest... ProxyPlan tiers: "+proxyPlan.getTiers().size());
 
 		// Get the default config
-		ProxyRegistrarSettings config = this.settingsManager.getCurrent();
+		ProxyRegistrarSettings config = ProxyRegistrarServlet.settingsManager.getCurrent();
 		
 		// Apply config values to 'proxy' object
 		config.apply(request.getProxy());

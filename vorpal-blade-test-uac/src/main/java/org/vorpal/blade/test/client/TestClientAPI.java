@@ -3,7 +3,6 @@ package org.vorpal.blade.test.client;
 import java.io.IOException;
 import java.net.URI;
 import java.util.HashMap;
-import java.util.ListIterator;
 import java.util.Map;
 
 import javax.servlet.ServletException;
@@ -11,11 +10,9 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletRequest;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
@@ -37,19 +34,15 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 @Path("api/v1")
 
 public class TestClientAPI extends Callflow {
-
-//	private Map<String, MessageSession> sessions = new HashMap<>();
-
-//	private static transient AsyncResponse asyncResponse;
-
+	private static final long serialVersionUID = 1L;
 	private static Map<String, AsyncResponse> asyncResponses = new HashMap<>();
 
+	
 	@POST
 	@Path("/connect")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Open a connection.")
-//	public Response connect( //
 	public void connect( //
 			@Suspended AsyncResponse asyncResponse, //
 			@Context UriInfo uriInfo, //
@@ -84,7 +77,6 @@ public class TestClientAPI extends Callflow {
 			bobRequest.setContent(message.content, message.contentType);
 		}
 
-		MessageSession msgSession = new MessageSession(bobRequest.getApplicationSession(), bobRequest.getSession());
 		MessageResponse msgResponse = new MessageResponse();
 
 		// Save the 'transient' AsyncResponse for later HTTP Response

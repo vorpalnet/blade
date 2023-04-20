@@ -35,6 +35,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 //public class Configuration extends HashMap<String, State> implements Serializable {
 public class Configuration implements Serializable {
 
+	private static final long serialVersionUID = 1L;
 	public String defaultApplication = null;
 	public HashMap<String, State> previous = new HashMap<>();
 

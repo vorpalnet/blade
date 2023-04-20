@@ -29,6 +29,7 @@ import java.util.ArrayList;
 
 public class Trigger implements Serializable {
 
+	private static final long serialVersionUID = 1L;
 	public ArrayList<Transition> transitions = new ArrayList<>();
 
 	public Transition createTransition(String next) {

@@ -7,7 +7,6 @@ import javax.servlet.sip.Address;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.callflow.Expectation;
 
 /**
  * This is a simple Third-Party Call-Control callflow.
@@ -53,6 +52,7 @@ import org.vorpal.blade.framework.callflow.Expectation;
  */
 public class TestRefer extends Callflow {
 
+	private static final long serialVersionUID = 1L;
 	String referTo;
 
 	@Override

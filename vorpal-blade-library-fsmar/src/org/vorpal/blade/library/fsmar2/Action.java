@@ -32,9 +32,9 @@ import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 import javax.servlet.sip.ar.SipRouteModifier;
 
 import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.logging.Logger;
 
 public class Action implements Serializable {
+	private static final long serialVersionUID = 1L;
 	public String terminating;
 	public String originating;
 
@@ -43,8 +43,6 @@ public class Action implements Serializable {
 	public String[] route_final;
 
 	public SipApplicationRouterInfo createRouterInfo(String next, Configuration config, SipServletRequest request) {
-		Logger sipLogger = SettingsManager.getSipLogger();
-
 		String subscriberURI = null;
 		SipApplicationRoutingRegion region;
 		region = SipApplicationRoutingRegion.NEUTRAL_REGION;

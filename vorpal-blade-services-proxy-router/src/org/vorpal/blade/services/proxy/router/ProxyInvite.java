@@ -10,6 +10,7 @@ import org.vorpal.blade.framework.proxy.ProxyListener;
 import org.vorpal.blade.framework.proxy.ProxyPlan;
 
 public class ProxyInvite extends Callflow {
+	private static final long serialVersionUID = 1L;
 	private ProxyListener proxyListener;
 	private ProxyPlan proxyPlan;
 	private SipServletRequest inboundRequest;

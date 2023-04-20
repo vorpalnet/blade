@@ -45,6 +45,8 @@ import org.vorpal.blade.framework.logging.Logger;
 @javax.servlet.sip.annotation.SipListener
 public class AclSipServlet extends SipServlet implements SipServletListener {
 
+	private static final long serialVersionUID = 1L;
+
 	private Logger sipLogger;
 
 	public AclConfigManager configManager;

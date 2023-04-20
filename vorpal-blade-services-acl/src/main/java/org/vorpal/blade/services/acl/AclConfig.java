@@ -50,6 +50,7 @@ public class AclConfig {
 		remoteAddresses.add(new AclRule("192.168.2.136", Permission.deny));
 	}
 
+	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public void initialize() {
 
 		trieMap = new AddressTrieMap<Address, AclRule.Permission>(new IPv4AddressAssociativeTrie());

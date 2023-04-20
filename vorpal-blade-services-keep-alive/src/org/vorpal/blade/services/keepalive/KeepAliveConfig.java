@@ -3,6 +3,7 @@ package org.vorpal.blade.services.keepalive;
 import java.io.Serializable;
 
 public class KeepAliveConfig implements Serializable {
+	private static final long serialVersionUID = 1L;
 	private int sessionExpires = 1800; // 30 minutes
 	private int minSE = 90; // 1.5 minutes
 

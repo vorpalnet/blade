@@ -28,6 +28,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 
 public class State implements Serializable {
+	private static final long serialVersionUID = 1L;
 	public HashMap<String, Trigger> triggers = new HashMap<>();
 
 	public Trigger getTrigger(String name) {

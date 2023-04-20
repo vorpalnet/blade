@@ -29,7 +29,6 @@ import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SessionKeepAlive;
 import javax.servlet.sip.SessionKeepAlive.Preference;
-import javax.servlet.sip.SessionKeepAlive.Refresher;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipApplicationSessionEvent;
 import javax.servlet.sip.SipApplicationSessionListener;
