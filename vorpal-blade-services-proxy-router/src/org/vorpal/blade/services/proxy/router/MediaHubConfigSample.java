@@ -45,7 +45,7 @@ public class MediaHubConfigSample extends RouterConfig implements Serializable {
 
 		TranslationsMap hashMap = new ConfigHashMap();
 		hashMap.id="user-hash-map";
-		hashMap.selector=user;
+		hashMap.addSelector(user);
 		hashMap.description="Translations map for usernames, not phone numbers";
 		hashMap.createTranslation("alice").setRequestUri("sip:10.11.200.55:5060").setDescription("matches any user named 'alice'.");
 		hashMap.createTranslation("bob").setRequestUri("sip:10.11.200.56:5060").setDescription("matches any user named 'bob'.");
@@ -55,7 +55,7 @@ public class MediaHubConfigSample extends RouterConfig implements Serializable {
 		
 		TranslationsMap prefixMap = new ConfigPrefixMap();
 		prefixMap.id = "prefix-map-dialed";
-		prefixMap.selector = dialed;
+		prefixMap.addSelector(dialed);
 		prefixMap.description = "Translations map for dialed number prefixes";
 		prefixMap.createTranslation("1997").setRequestUri("sip:10.11.200.39:5060")
 				.setDescription("Phone numbers starting with 1997").addAttribute("stripXML", true);
@@ -65,7 +65,7 @@ public class MediaHubConfigSample extends RouterConfig implements Serializable {
 
 		TranslationsMap prefixMapRecorddn = new ConfigPrefixMap();
 		prefixMapRecorddn.id = "prefix-map-recorddn";
-		prefixMapRecorddn.selector = recorddn;
+		prefixMapRecorddn.addSelector(recorddn);
 		prefixMapRecorddn.description = "Translations map for SIPREC Record Dialed Number.";
 		prefixMapRecorddn.createTranslation("1998").setId("1998").setDescription("Phone numbers starting with 1998")
 				.setRequestUri("sip:10.11.200.98:5060");

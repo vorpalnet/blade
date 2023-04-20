@@ -30,3 +30,18 @@ It also features prebuilt applications to handle your most common needs:
 * Testing Tools
 * Admin Console
 
+#Compiling
+
+##ANT
+
+To build / compile Vorpal:BLADE, simply type 'ant'.
+
+On your first attempt, the build will fail. However it will generate a properties file named: <hostname>.properties
+
+Edit that file, not the original "build.properties" file.
+
+##Eclipse Support
+
+Vorpal:BLADE can also be imported into Eclipse. To get a clean environment, you need to perform a few steps:
+
+

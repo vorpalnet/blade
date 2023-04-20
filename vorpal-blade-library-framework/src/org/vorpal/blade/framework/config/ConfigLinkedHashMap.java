@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public  class ConfigLinkedHashMap extends TranslationsMap {
+public class ConfigLinkedHashMap extends TranslationsMap {
 	public LinkedHashMap<String, Translation> map = new LinkedHashMap<>();
 
 	@Override
@@ -17,9 +17,17 @@ public  class ConfigLinkedHashMap extends TranslationsMap {
 
 		try {
 
-			RegExRoute regexRoute = this.selector.findKey(request);
-			if (regexRoute != null) {
-				value = map.get(regexRoute.key);
+			// jwm - multiple selectors
+			for (Selector selector : this.selectors) {
+
+				RegExRoute regexRoute = selector.findKey(request);
+				if (regexRoute != null) {
+					value = map.get(regexRoute.key);
+				}
+
+				if (value != null)
+					break;
+
 			}
 
 		} catch (Exception e) {
