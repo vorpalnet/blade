@@ -7,6 +7,8 @@ import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.logging.Logger;
+
 public class RouterConfig implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public LinkedList<Selector> selectors = new LinkedList<>();
@@ -32,6 +34,7 @@ public class RouterConfig implements Serializable {
 	}
 
 	public Translation findTranslation(SipServletRequest request) throws ServletParseException {
+		Logger sipLogger = SettingsManager.getSipLogger();
 		Translation t = null;
 
 		for (TranslationsMap map : plan) {
@@ -39,6 +42,12 @@ public class RouterConfig implements Serializable {
 			if (t != null) {
 				break;
 			}
+		}
+
+		if (t != null) {
+			sipLogger.finer(request, "Found Translation (id): " + t.getId());
+		} else {
+			sipLogger.finer(request, "No match found, using Translation (id): " + defaultRoute.getId());
 		}
 
 		return (null != t) ? t : defaultRoute;

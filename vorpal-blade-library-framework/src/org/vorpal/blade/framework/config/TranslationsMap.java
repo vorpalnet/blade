@@ -6,6 +6,8 @@ import java.util.List;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.logging.Logger;
+
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -29,6 +31,8 @@ public abstract class TranslationsMap {
 	protected abstract Translation lookup(SipServletRequest request);
 
 	public Translation applyTranslations(SipServletRequest request) {
+		Logger sipLogger = SettingsManager.getSipLogger();
+
 		String strRequestUri;
 		URI uri;
 		Translation translation = null;
@@ -37,15 +41,21 @@ public abstract class TranslationsMap {
 		try {
 
 			for (Selector selector : selectors) {
+				sipLogger.finer(request, "Using Selector (id): " + selector.getId());
 
 				regexRoute = selector.findKey(request);
+				sipLogger.finer(request, "Selector found RegExRoute (key): " + regexRoute.key);
+
 				if (regexRoute != null) {
 					translation = this.lookup(request);
+					sipLogger.finer(request, "RegExRoute found Translation (id): " + translation.getId());
 
 					if (translation != null) {
 
 						if (translation.getRequestUri() != null) {
 							strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
+
+							sipLogger.finer(request, "Translation found RequestURI: " + strRequestUri);
 
 							uri = SettingsManager.getSipFactory().createURI(strRequestUri);
 
@@ -65,6 +75,7 @@ public abstract class TranslationsMap {
 						if (translation.getList() != null) {
 							Translation t = null;
 							for (TranslationsMap map : translation.getList()) {
+								sipLogger.finer(request, "Checking further TranslationMaps (id): " + map.getId());
 								t = map.applyTranslations(request);
 								if (t != null) {
 									break;
@@ -80,7 +91,6 @@ public abstract class TranslationsMap {
 
 				if (translation != null)
 					break;
-
 			}
 
 		} catch (Exception e) {
@@ -89,6 +99,12 @@ public abstract class TranslationsMap {
 			} else {
 				e.printStackTrace();
 			}
+		}
+
+		if (translation != null) {
+			sipLogger.finer(request, "The final Translation is: " + translation.getId());
+		} else {
+			sipLogger.finer(request, "The final Translation is null. No match! ");
 		}
 
 		return translation;
