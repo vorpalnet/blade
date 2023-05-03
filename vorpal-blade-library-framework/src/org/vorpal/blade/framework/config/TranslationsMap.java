@@ -44,11 +44,21 @@ public abstract class TranslationsMap {
 				sipLogger.finer(request, "Using Selector (id): " + selector.getId());
 
 				regexRoute = selector.findKey(request);
-				sipLogger.finer(request, "Selector found RegExRoute (key): " + regexRoute.key);
+				if (regexRoute != null) {
+					sipLogger.finer(request, "Selector found RegexRoute key: " + regexRoute.key);
+				} else {
+					sipLogger.finer(request, "Selector found no RegexRoute key.");
+
+				}
 
 				if (regexRoute != null) {
 					translation = this.lookup(request);
-					sipLogger.finer(request, "RegExRoute found Translation (id): " + translation.getId());
+					if (translation != null) {
+						sipLogger.finer(request,
+								this.getClass().getName() + " found Translation (id): " + translation.getId());
+					} else {
+						sipLogger.finer(request, this.getClass().getName() + " found no Translation.");
+					}
 
 					if (translation != null) {
 
