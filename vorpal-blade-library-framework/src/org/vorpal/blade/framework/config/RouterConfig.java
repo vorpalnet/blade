@@ -45,9 +45,9 @@ public class RouterConfig implements Serializable {
 		}
 
 		if (t != null) {
-			sipLogger.finer(request, "Found Translation (id): " + t.getId());
+			sipLogger.fine(request, "Found Translation (id): " + t.getId());
 		} else {
-			sipLogger.finer(request, "No match found, using Translation (id): " + defaultRoute.getId());
+			sipLogger.fine(request, "No match found, using Translation (id): " + defaultRoute.getId());
 		}
 
 		return (null != t) ? t : defaultRoute;

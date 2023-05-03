@@ -41,23 +41,23 @@ public abstract class TranslationsMap {
 		try {
 
 			for (Selector selector : selectors) {
-				sipLogger.finer(request, "Using Selector (id): " + selector.getId());
+				sipLogger.fine(request, "Using Selector (id): " + selector.getId());
 
 				regexRoute = selector.findKey(request);
 				if (regexRoute != null) {
-					sipLogger.finer(request, "Selector found RegexRoute key: " + regexRoute.key);
+					sipLogger.fine(request, "Selector found RegexRoute key: " + regexRoute.key);
 				} else {
-					sipLogger.finer(request, "Selector found no RegexRoute key.");
+					sipLogger.fine(request, "Selector found no RegexRoute key.");
 
 				}
 
 				if (regexRoute != null) {
 					translation = this.lookup(request);
 					if (translation != null) {
-						sipLogger.finer(request,
+						sipLogger.fine(request,
 								this.getClass().getName() + " found Translation (id): " + translation.getId());
 					} else {
-						sipLogger.finer(request, this.getClass().getName() + " found no Translation.");
+						sipLogger.fine(request, this.getClass().getName() + " found no Translation.");
 					}
 
 					if (translation != null) {
@@ -65,7 +65,7 @@ public abstract class TranslationsMap {
 						if (translation.getRequestUri() != null) {
 							strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
 
-							sipLogger.finer(request, "Translation found RequestURI: " + strRequestUri);
+							sipLogger.fine(request, "Translation found RequestURI: " + strRequestUri);
 
 							uri = SettingsManager.getSipFactory().createURI(strRequestUri);
 
@@ -85,7 +85,7 @@ public abstract class TranslationsMap {
 						if (translation.getList() != null) {
 							Translation t = null;
 							for (TranslationsMap map : translation.getList()) {
-								sipLogger.finer(request, "Checking further TranslationMaps (id): " + map.getId());
+								sipLogger.fine(request, "Checking further TranslationMaps (id): " + map.getId());
 								t = map.applyTranslations(request);
 								if (t != null) {
 									break;
@@ -112,9 +112,9 @@ public abstract class TranslationsMap {
 		}
 
 		if (translation != null) {
-			sipLogger.finer(request, "The final Translation is: " + translation.getId());
+			sipLogger.fine(request, "The final Translation is: " + translation.getId());
 		} else {
-			sipLogger.finer(request, "The final Translation is null. No match! ");
+			sipLogger.fine(request, "The final Translation is null. No match! ");
 		}
 
 		return translation;
