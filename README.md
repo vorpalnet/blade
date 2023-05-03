@@ -44,4 +44,7 @@ Edit that file, not the original "build.properties" file.
 
 Vorpal:BLADE can also be imported into Eclipse. To get a clean environment, you need to perform a few steps:
 
+1. Clone Vorpal:BLADE from Git: 
+1. Import a Git project.
+
 
