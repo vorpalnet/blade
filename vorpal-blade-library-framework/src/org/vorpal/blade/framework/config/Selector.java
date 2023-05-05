@@ -67,7 +67,7 @@ public class Selector {
 	}
 
 	public void setPattern(String pattern) {
-		this.pattern = Pattern.compile(pattern);
+		this.pattern = Pattern.compile(pattern, Pattern.DOTALL);
 	}
 
 	//jwm - delme
