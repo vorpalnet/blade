@@ -1,6 +1,9 @@
 package org.vorpal.blade.services.proxy.registrar;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Map.Entry;
+import java.util.Properties;
 import java.util.logging.Level;
 
 import javax.servlet.ServletException;
@@ -53,7 +56,31 @@ public class ProxyRegistrarServlet extends ProxyServlet
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
-		settingsManager = new SettingsManager<ProxyRegistrarSettings>(event, ProxyRegistrarSettings.class, new ProxyRegistrarSettings());
+
+		String value;
+
+		System.out.println("Attributes: ");
+		for (String name : Collections.list(event.getServletContext().getAttributeNames())) {
+			System.out.println("name=" + name + ", value=" + event.getServletContext().getAttribute(name));
+		}
+
+		System.out.println("Init Parameters: ");
+		for (String name : Collections.list(event.getServletContext().getInitParameterNames())) {
+			System.out.println("name=" + name + ", value=" + event.getServletContext().getAttribute(name));
+		}
+
+		System.out.println("System Environment: ");
+		for (Entry<String, String> entry : System.getenv().entrySet()) {
+			System.out.println("name=" + entry.getKey() + ", value=" + entry.getValue());
+		}
+
+		System.out.println("System Properties: ");
+		for (String name : System.getProperties().stringPropertyNames()) {
+			System.out.println("name=" + name + ", value=" + System.getProperties().getProperty(name));
+		}
+
+		settingsManager = new SettingsManager<ProxyRegistrarSettings>(event, ProxyRegistrarSettings.class,
+				new ProxyRegistrarSettingsDefault());
 		sipLogger = SettingsManager.getSipLogger();
 
 		if (sipLogger.isLoggable(Level.FINER)) {
@@ -72,7 +99,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
-		sipLogger.warning(request, "ProxyRegistrarServlet.chooseCallflow... "+request.getMethod());
+		sipLogger.warning(request, "ProxyRegistrarServlet.chooseCallflow... " + request.getMethod());
 
 		Callflow callflow = null;
 		ProxyRegistrarSettings settings = settingsManager.getCurrent();
@@ -93,14 +120,15 @@ public class ProxyRegistrarServlet extends ProxyServlet
 
 	@Override
 	public void proxyRequest(SipServletRequest request, ProxyPlan proxyPlan) throws ServletException, IOException {
-		sipLogger.finer(request, "Begin ProxyRegistrarServlet.proxyRequest... ProxyPlan tiers: "+proxyPlan.getTiers().size());
+		sipLogger.finer(request,
+				"Begin ProxyRegistrarServlet.proxyRequest... ProxyPlan tiers: " + proxyPlan.getTiers().size());
 
 		// Get the default config
 		ProxyRegistrarSettings config = ProxyRegistrarServlet.settingsManager.getCurrent();
-		
+
 		// Apply config values to 'proxy' object
 		config.apply(request.getProxy());
-		
+
 		SipApplicationSession appSession = request.getApplicationSession();
 		ProxyRegistrar proxyRegistrar = (ProxyRegistrar) appSession.getAttribute("PROXY_REGISTRAR");
 
@@ -118,7 +146,8 @@ public class ProxyRegistrarServlet extends ProxyServlet
 			proxyTier.setEndpoints(proxyRegistrar.getURIContacts());
 			proxyPlan.getTiers().add(proxyTier);
 		}
-		sipLogger.finer(request, "End ProxyRegistrarServlet.proxyRequest... ProxyPlan tiers: "+proxyPlan.getTiers().size());
+		sipLogger.finer(request,
+				"End ProxyRegistrarServlet.proxyRequest... ProxyPlan tiers: " + proxyPlan.getTiers().size());
 	}
 
 	@Override

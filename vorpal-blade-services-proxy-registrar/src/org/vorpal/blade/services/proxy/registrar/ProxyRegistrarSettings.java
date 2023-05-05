@@ -33,7 +33,9 @@ import java.util.List;
 import javax.servlet.sip.Flow;
 import javax.servlet.sip.Proxy;
 
-public class ProxyRegistrarSettings implements Serializable {
+import org.vorpal.blade.framework.config.Configuration;
+
+public class ProxyRegistrarSettings extends Configuration implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
@@ -42,53 +44,53 @@ public class ProxyRegistrarSettings implements Serializable {
 	 * 'Allow' for the 200 OK. Otherwise, echo back the 'Allow' header values.
 	 */
 
-	public List<String> defaultAllow;
+	protected List<String> defaultAllow;
 
 	/**
 	 * Proxy the request to the 'To' header instead of issuing a 404 Not Found
 	 * error.
 	 */
-	public Boolean proxyOnUnregistered = false;
+	protected Boolean proxyOnUnregistered = false;
 
 	/**
 	 * Specifies whether branches initiated in this proxy operation should include a
 	 * Path header for the REGISTER request for this servlet container or not.
 	 */
-	public Boolean addToPath = false;
+	protected Boolean addToPath = false;
 
 	/**
 	 * Indicate that the specified flow be used while sending messages on this
 	 * Proxy.
 	 */
-	public Flow flow = null;
+	protected Flow flow = null;
 
 	/**
 	 * Specifies whether the proxy should, or should not cancel outstanding branches
 	 * upon receiving the first 2xx INVITE response as defined in RFC 3841.
 	 */
-	public Boolean noCancel = false;
+	protected Boolean noCancel = false;
 
 	/**
 	 * In multi-homed environment this method can be used to select the outbound
 	 * interface to use when sending requests for proxy branches.
 	 */
-	public InetAddress outboundInterfaceAddress = null;
+	protected InetAddress outboundInterfaceAddress = null;
 
 	/**
 	 * In multi-homed environment this method can be used to select the outbound
 	 * interface and port number to use for proxy branches.
 	 */
-	public InetSocketAddress outboundInterfaceSocketAddress = null;
+	protected InetSocketAddress outboundInterfaceSocketAddress = null;
 
 	/**
 	 * Specifies whether to proxy in parallel or sequentially.
 	 */
-	public Boolean parallel = true;
+	protected Boolean parallel = true;
 
 	/**
 	 * Sets the overall proxy timeout in seconds.
 	 */
-	public Integer proxyTimeout = null;
+	protected Integer proxyTimeout = null;
 
 	/**
 	 * Specifies whether branches initiated in this proxy operation should include a
@@ -96,7 +98,7 @@ public class ProxyRegistrarSettings implements Serializable {
 	 * branches created after its invocation. Record-routing is used to specify that
 	 * this servlet engine must stay on the signaling path of subsequent requests.
 	 */
-	public Boolean recordRoute = true;
+	protected Boolean recordRoute = true;
 
 	/**
 	 * Specifies whether the servlet engine will automatically recurse or not. If
@@ -105,13 +107,13 @@ public class ProxyRegistrarSettings implements Serializable {
 	 * disabled and no better response is received, a redirect response will be
 	 * passed to the application and will be passed upstream towards the client.
 	 */
-	public Boolean recurse = true;
+	protected Boolean recurse = true;
 
 	/**
 	 * Specifies whether the controlling servlet is to be invoked for incoming
 	 * responses relating to this proxying.
 	 */
-	public Boolean supervised = true;
+	protected Boolean supervised = true;
 
 	public ProxyRegistrarSettings() {
 		defaultAllow = new LinkedList<>();
@@ -178,6 +180,102 @@ public class ProxyRegistrarSettings implements Serializable {
 		}
 
 		return proxy;
+	}
+
+	public List<String> getDefaultAllow() {
+		return defaultAllow;
+	}
+
+	public void setDefaultAllow(List<String> defaultAllow) {
+		this.defaultAllow = defaultAllow;
+	}
+
+	public Boolean getProxyOnUnregistered() {
+		return proxyOnUnregistered;
+	}
+
+	public void setProxyOnUnregistered(Boolean proxyOnUnregistered) {
+		this.proxyOnUnregistered = proxyOnUnregistered;
+	}
+
+	public Boolean getAddToPath() {
+		return addToPath;
+	}
+
+	public void setAddToPath(Boolean addToPath) {
+		this.addToPath = addToPath;
+	}
+
+	public Flow getFlow() {
+		return flow;
+	}
+
+	public void setFlow(Flow flow) {
+		this.flow = flow;
+	}
+
+	public Boolean getNoCancel() {
+		return noCancel;
+	}
+
+	public void setNoCancel(Boolean noCancel) {
+		this.noCancel = noCancel;
+	}
+
+	public InetAddress getOutboundInterfaceAddress() {
+		return outboundInterfaceAddress;
+	}
+
+	public void setOutboundInterfaceAddress(InetAddress outboundInterfaceAddress) {
+		this.outboundInterfaceAddress = outboundInterfaceAddress;
+	}
+
+	public InetSocketAddress getOutboundInterfaceSocketAddress() {
+		return outboundInterfaceSocketAddress;
+	}
+
+	public void setOutboundInterfaceSocketAddress(InetSocketAddress outboundInterfaceSocketAddress) {
+		this.outboundInterfaceSocketAddress = outboundInterfaceSocketAddress;
+	}
+
+	public Boolean getParallel() {
+		return parallel;
+	}
+
+	public void setParallel(Boolean parallel) {
+		this.parallel = parallel;
+	}
+
+	public Integer getProxyTimeout() {
+		return proxyTimeout;
+	}
+
+	public void setProxyTimeout(Integer proxyTimeout) {
+		this.proxyTimeout = proxyTimeout;
+	}
+
+	public Boolean getRecordRoute() {
+		return recordRoute;
+	}
+
+	public void setRecordRoute(Boolean recordRoute) {
+		this.recordRoute = recordRoute;
+	}
+
+	public Boolean getRecurse() {
+		return recurse;
+	}
+
+	public void setRecurse(Boolean recurse) {
+		this.recurse = recurse;
+	}
+
+	public Boolean getSupervised() {
+		return supervised;
+	}
+
+	public void setSupervised(Boolean supervised) {
+		this.supervised = supervised;
 	}
 
 }

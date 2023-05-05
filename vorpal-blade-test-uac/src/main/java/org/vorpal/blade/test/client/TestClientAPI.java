@@ -37,7 +37,6 @@ public class TestClientAPI extends Callflow {
 	private static final long serialVersionUID = 1L;
 	private static Map<String, AsyncResponse> asyncResponses = new HashMap<>();
 
-	
 	@POST
 	@Path("/connect")
 	@Consumes(MediaType.APPLICATION_JSON)
@@ -87,15 +86,13 @@ public class TestClientAPI extends Callflow {
 
 			msgResponse.responses.add(bobResponse.toString());
 
-			if (!provisional(bobResponse)) {
+			if (successful(bobResponse)) {
 				sendRequest(bobResponse.createAck());
-
+			}
+			if(!provisional(bobResponse)) {
 				msgResponse.finalStatus = bobResponse.getStatus();
-
 				Response httpResponse = Response.created(location).entity(msgResponse).build();
-
 				asyncResponses.remove(appSession.getId()).resume(httpResponse);
-
 			}
 
 		});
