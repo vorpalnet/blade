@@ -91,9 +91,14 @@ public class Selector {
 				if (request.getContent() != null) {
 					if (request.getContent() instanceof String) {
 						header = (String) request.getContent();
+						
+						sipLogger.fine(request, "This message body is a String... Looks like this: \n "+header);
+						
 					} else {
 						byte[] content = (byte[]) request.getContent();
 						header = new String(content);
+
+						sipLogger.fine(request, "This message body is a byte[]... Looks like this: \n "+header);
 					}
 				} else {
 					sipLogger.warning(request, "No content in message body. Check configuration.");
