@@ -25,6 +25,8 @@
 package org.vorpal.blade.framework.logging;
 
 import java.io.File;
+import java.util.Collections;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.FileHandler;
 import java.util.logging.Formatter;
@@ -36,6 +38,7 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 
+import org.vorpal.blade.framework.config.Configuration;
 import org.vorpal.blade.framework.config.SettingsManager;
 
 import weblogic.kernel.KernelLogManager;
@@ -88,6 +91,77 @@ public class LogManager implements ServletContextListener {
 
 		return logger;
 	}
+
+	private static String getAttribute(ServletContext servletContext, Configuration config, String key) {
+		String value;
+
+		value = System.getenv().get(key);
+		value = (value != null) ? value : System.getProperties().getProperty(key);
+		value = (value != null) ? value : servletContext.getInitParameter(key);
+
+		return value;
+	}
+
+	private static String replaceAttributes(ServletContext servletContext, Configuration config, String inputString) {
+		int index;
+		String variable;
+		String key;
+		String value;
+		String outputString = new String(inputString);
+		while ((index = outputString.indexOf("${")) >= 0) {
+			variable = outputString.substring(index, outputString.indexOf("}"));
+			key = outputString.substring(2, outputString.length() - 2);
+			value = getAttribute(servletContext, config, key);
+			value = (value != null) ? value : "null";
+			outputString = outputString.replace(variable, value);
+		}
+
+		return outputString;
+	}
+
+	/*
+	public static Logger getLogger(ServletContext servletContext, Configuration config) {
+		try {
+			LogParameters logParameters = (config != null && config.getLogging() != null) ? config.getLogging()
+					: new LogParametersDefault();
+
+			String name = SettingsManager.basename(replaceAttributes(servletContext, config, inputString){
+				
+			}
+			
+			
+//		name = SettingsManager.basename(name);
+//		Logger logger = logMap.get(name);
+
+			// String directory = "./servers/" + System.getProperty("weblogic.Name") + "/logs/vorpal";
+			
+			
+			File file = new File(directory);
+			file.mkdirs();
+			String filepath = directory + "/" + name + ".%g.log";
+
+			Formatter formatter = new LogFormatter();
+			Handler handler = new FileHandler(filepath, 10 * 1024 * 1024, 10, true);
+
+			handler.setFormatter(formatter);
+
+			logger = new Logger(name, null);
+
+			logger.addHandler(handler);
+			logger.setParent(KernelLogManager.getLogger());
+			logger.setUseParentHandlers(false);
+
+			logMap.put(name, logger);
+
+		} catch (Exception ex) {
+			System.out.println("Unable to create new logger for ServletContext: " + name);
+			ex.printStackTrace();
+		}
+
+		return logger;
+	}
+*/	
+	
 
 	public void closeLogger(ServletContextEvent event) {
 		if (event != null && event.getServletContext() != null

@@ -104,15 +104,4 @@ public class Settings implements SettingsMXBean {
 		}
 	}
 
-//	
-//	@Override
-//	public String getJson() {
-//		return settingsManager.getCurrentAsJson();
-//	}
-//
-//	@Override
-//	public void setJson(String json) {
-//		settingsManager.setCurrentFromJson(json);
-//	}
-
 }

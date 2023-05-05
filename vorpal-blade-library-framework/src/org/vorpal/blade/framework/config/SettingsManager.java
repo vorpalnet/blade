@@ -430,6 +430,15 @@ public class SettingsManager<T> {
 
 			// sipLogger.fine("Starting to convert...");
 			T tmp = (T) mapper.convertValue(mergedNode, clazz);
+			
+			
+			//jwm
+//			if(tmp instanceof Configuration) {
+//				configureLogging(tmp);
+//			}else {
+//				configureLogging(null);				
+//			}
+			
 			// sipLogger.fine("Starting to initialize...");
 			initialize(tmp);
 			// sipLogger.fine("Assigning current...");

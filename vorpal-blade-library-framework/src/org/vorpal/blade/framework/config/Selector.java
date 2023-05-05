@@ -6,6 +6,8 @@ import java.util.regex.Pattern;
 
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.logging.Logger;
+
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
@@ -68,7 +70,15 @@ public class Selector {
 		this.pattern = Pattern.compile(pattern);
 	}
 
+	//jwm - delme
+	static int count = 0;
+
 	public RegExRoute findKey(SipServletRequest request) {
+		Logger sipLogger = SettingsManager.getSipLogger();
+
+		//jwm - delme
+		count++;
+		sipLogger.fine(request, "Calling findKey " + count + " times.");
 
 		RegExRoute regexRoute = null;
 		String key = null;
@@ -85,11 +95,14 @@ public class Selector {
 						byte[] content = (byte[]) request.getContent();
 						header = new String(content);
 					}
+				} else {
+					sipLogger.warning(request, "No content in message body. Check configuration.");
 				}
-			} catch (IOException e) {
+			} catch (IOException e) { // this should never happen
 				SettingsManager.getSipLogger().severe(request,
-						"Invalid content type, unable to convert to Java String. This should never happen.");
+						"Invalid Content-Type, unable to convert to Java String.");
 				SettingsManager.getSipLogger().severe(e);
+				return null;
 			}
 			break;
 
@@ -111,7 +124,10 @@ public class Selector {
 
 		Matcher matcher = pattern.matcher(header);
 
+		boolean matchResult = false;
+		String value = (attribute.matches("Content")) ? "[...]" : header;
 		if (matcher.matches()) {
+			matchResult = true;
 			key = matcher.replaceAll(expression);
 		}
 
@@ -123,8 +139,14 @@ public class Selector {
 			regexRoute.selector = this;
 		}
 
-		SettingsManager.getSipLogger().finer(request, "Selector... attribute: " + attribute + "; value: " + header
-				+ "; pattern: " + this.getPattern() + "; key: " + key + "; regexRoute: " + regexRoute);
+		sipLogger.fine(request, //
+				"selector: " + this.getId() + //
+						", match: " + matchResult + //
+						", pattern: " + this.getPattern() + //
+						", expression: " + this.getExpression() + //
+						", attribute: " + this.getAttribute() + //
+						", value: " + value + //
+						", key: " + key);
 
 		return regexRoute;
 	}

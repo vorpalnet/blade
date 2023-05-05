@@ -25,27 +25,35 @@ public class ConfigPrefixMap extends TranslationsMap {
 	public Translation lookup(SipServletRequest request) {
 		Translation value = null;
 
-		Iterator<Entry<String, Translation>> itr = map.entrySet().iterator();
 		Entry<String, Translation> entry = null;
 //		Entry<String, Translation> previous = null;
 
 		try {
 
-			// jwm - multiple selectors
+			// jwm - multiple selectors - bad
 			for (Selector selector : this.selectors) {
+				Iterator<Entry<String, Translation>> itr = map.entrySet().iterator();
 
+				SettingsManager.sipLogger.fine(request, "ConfigPrefixMap.lookup()... Calling findKey()");
 				RegExRoute regexRoute = selector.findKey(request);
 
-				while (itr.hasNext()) {
-					entry = itr.next();
+				if (regexRoute != null) {
 
-					if (regexRoute.key.startsWith(entry.getKey())) {
-						value = entry.getValue();
+					while (itr.hasNext()) {
+						entry = itr.next();
+
+						if (regexRoute.key.startsWith(entry.getKey())) {
+							value = entry.getValue();
+						}
+					}
+
+					if (value != null) {
+						SettingsManager.sipLogger.fine(request, "ConfigPrefixMap.lookup()... Found value: " + value);
+						break;
+					} else {
+						SettingsManager.sipLogger.fine(request, "ConfigPrefixMap.lookup()... No value found.");
 					}
 				}
-
-				if (value != null)
-					break;
 
 			}
 
