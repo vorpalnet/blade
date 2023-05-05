@@ -40,33 +40,27 @@ public abstract class TranslationsMap {
 
 		try {
 
-			for (Selector selector : selectors) {
-				sipLogger.fine(request, "Using Selector (id): " + selector.getId());
+//			for (Selector selector : selectors) {
+//				sipLogger.fine(request, "Using selector: " + selector.getId());
 
-				regexRoute = selector.findKey(request);
-				if (regexRoute != null) {
-					sipLogger.fine(request, "Selector found RegexRoute key: " + regexRoute.key);
-				} else {
-					sipLogger.fine(request, "Selector found no RegexRoute key.");
+//				SettingsManager.sipLogger.fine(request, "Translation.applyTranslations()... Calling findKey().");					
+//				regexRoute = selector.findKey(request);
 
-				}
-
-				if (regexRoute != null) {
+//				if (regexRoute != null) {
 					translation = this.lookup(request);
+					
+					
 					if (translation != null) {
-						sipLogger.fine(request,
-								this.getClass().getName() + " found Translation (id): " + translation.getId());
+						sipLogger.fine(request, this.getClass().getSimpleName() + " found translation id: "
+								+ translation.getId() + ", description: " + translation.getDescription());
 					} else {
-						sipLogger.fine(request, this.getClass().getName() + " found no Translation.");
+						sipLogger.fine(request, this.getClass().getName() + " found no translation.");
 					}
 
 					if (translation != null) {
 
 						if (translation.getRequestUri() != null) {
 							strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
-
-							sipLogger.fine(request, "Translation found RequestURI: " + strRequestUri);
-
 							uri = SettingsManager.getSipFactory().createURI(strRequestUri);
 
 							// copy all SIP URI parameters (if not present in new request uri)
@@ -75,10 +69,6 @@ public abstract class TranslationsMap {
 									uri.setParameter(name, uri.getParameter(name));
 								}
 							}
-
-							// jwm - use proxy instead
-							// request.setRequestURI(uri);
-
 						}
 
 						// now check for additional translations
@@ -97,11 +87,16 @@ public abstract class TranslationsMap {
 						}
 
 					}
-				}
+//				}
 
-				if (translation != null)
-					break;
-			}
+//				if (translation != null) {
+//					sipLogger.fine(request, "translation found, breaking for loop.");
+//					break;
+//				} else {
+//					sipLogger.fine(request, "translation not found, continuing for loop.");
+//				}
+
+//			}
 
 		} catch (Exception e) {
 			if (SettingsManager.getSipLogger() != null) {
@@ -112,9 +107,10 @@ public abstract class TranslationsMap {
 		}
 
 		if (translation != null) {
-			sipLogger.fine(request, "The final Translation is: " + translation.getId());
+			sipLogger.fine(request, "The final translation is: " + translation.getId() + ", description: "
+					+ translation.getDescription());
 		} else {
-			sipLogger.fine(request, "The final Translation is null. No match! ");
+			sipLogger.fine(request, "The final translation is null. No match! ");
 		}
 
 		return translation;
