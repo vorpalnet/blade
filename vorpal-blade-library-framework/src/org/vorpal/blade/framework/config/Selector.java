@@ -130,7 +130,7 @@ public class Selector {
 			regexRoute.selector = this;
 		}
 
-		sipLogger.finer(request, //
+		sipLogger.fine(request, //
 				"selector: " + this.getId() + //
 						", match: " + matchResult + //
 						", pattern: " + this.getPattern() + //
