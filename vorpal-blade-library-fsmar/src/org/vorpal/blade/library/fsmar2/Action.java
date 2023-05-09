@@ -42,7 +42,7 @@ public class Action implements Serializable {
 	public String[] route_back;
 	public String[] route_final;
 
-	public SipApplicationRouterInfo createRouterInfo(String next, Configuration config, SipServletRequest request) {
+	public SipApplicationRouterInfo createRouterInfo(String next, AppRouterConfiguration config, SipServletRequest request) {
 		String subscriberURI = null;
 		SipApplicationRoutingRegion region;
 		region = SipApplicationRoutingRegion.NEUTRAL_REGION;

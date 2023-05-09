@@ -43,7 +43,10 @@ import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.AsyncSipServlet;
+import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.logging.LogManager;
+import org.vorpal.blade.framework.logging.LogParameters;
 import org.vorpal.blade.framework.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -72,6 +75,7 @@ public class SettingsManager<T> {
 	private Class<T> clazz;
 	private ObjectInstance oi;
 	private Settings settings;
+	private String name;
 
 	private static String serverName;
 	private static String clusterName;
@@ -108,75 +112,82 @@ public class SettingsManager<T> {
 	}
 
 	public String getDomainJson() throws JsonProcessingException {
-		// sipLogger.fine("getDomainlJson...");
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode);
 	}
 
 	public void setDomainJson(String domainJson) throws JsonMappingException, JsonProcessingException {
-		// sipLogger.fine("setDomainJson...");
 		domainNode = mapper.readTree(domainJson);
-		// sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode));
 	}
 
 	public String getServerJson() throws JsonProcessingException {
-		// sipLogger.fine("getServerJson...");
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode);
 	}
 
 	public void setServerJson(String serverJson) throws JsonMappingException, JsonProcessingException {
-		// sipLogger.fine("setServerJson...");
 		serverNode = mapper.readTree(serverJson);
-		// sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode));
 	}
 
 	public String getClusterJson() throws JsonProcessingException {
-		// sipLogger.fine("getServerJson...");
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode);
 	}
 
 	public void setClusterJson(String clusterJson) throws JsonMappingException, JsonProcessingException {
-		// sipLogger.fine("setClusterJson...");
 		clusterNode = mapper.readTree(clusterJson);
-		// sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode));
 
 	}
 
 	public SettingsManager(String name, Class<T> clazz, ObjectMapper mapper) {
 		this.mapper = mapper;
-		this.build(name, clazz, null, mapper);
+		this.name = name;
+
+		this.build(null, clazz, null, mapper);
 	}
 
 	public SettingsManager(String name, Class<T> clazz) {
-		this.build(name, clazz, null, null);
+		this.name = name;
+		this.build(null, clazz, null, null);
 	}
 
 	public SettingsManager(String name, Class<T> clazz, T sample) {
-		this.build(name, clazz, sample, null);
+		this.name = name;
+		this.build(null, clazz, sample, null);
 	}
 
 	public SettingsManager(String name, Class<T> clazz, T sample, ObjectMapper mapper) {
-		this.build(name, clazz, sample, mapper);
+		this.name = name;
+		this.build(null, clazz, sample, mapper);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		this.mapper = mapper;
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, null, mapper);
+		this.build(event, clazz, null, mapper);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, null, null);
+		this.build(event, clazz, null, null);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample) {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, sample, null);
+		this.build(event, clazz, sample, null);
 	}
 
-	public void build(String name, Class<T> clazz, T sample, ObjectMapper _mapper) {
+	public void build(SipServletContextEvent event, Class<T> clazz, T sample, ObjectMapper _mapper) {
 
-		this.servletContextName = basename(name);
+		if (this.name != null) {
+			this.servletContextName = basename(this.name);
+		} else {
+			if (event != null) {
+				this.servletContextName = basename(event.getServletContext().getServletContextName());
+			} else {
+				System.out.println("SettingsManager is unable to determine 'name'. Using default.");
+				this.servletContextName = "DEFAULT";
+			}
+
+		}
+
 		this.clazz = clazz;
 		this.sample = sample;
 
@@ -188,7 +199,6 @@ public class SettingsManager<T> {
 				this.mapper = _mapper;
 			}
 
-			sipLogger = LogManager.getLogger(name);
 			settings = new Settings(this);
 
 			// Get the managed server & cluster names
@@ -235,8 +245,22 @@ public class SettingsManager<T> {
 				objectName = new ObjectName("vorpal.blade:Name=" + servletContextName + ",Type=Configuration");
 			}
 			register();
+
+			// Last and final step is to build the Logger
+			if (current instanceof Configuration) {
+				sipLogger = LogManager.getLogger(event.getServletContext(), ((Configuration) current).getLogging());
+			} else {
+				if (event != null) {
+					sipLogger = LogManager.getLogger(event.getServletContext(), new LogParameters());
+				} else {
+					sipLogger = LogManager.getLogger(this.servletContextName);
+				}
+			}
+			AsyncSipServlet.setSipLogger(sipLogger);
+			Callflow.setLogger(sipLogger);
+
 		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
+			e.printStackTrace();
 		}
 
 	}
@@ -283,62 +307,51 @@ public class SettingsManager<T> {
 		saveConfigFile(tmp);
 
 		File domainFile = new File(domainPath.toString() + "/" + servletContextName + ".json");
-		// sipLogger.fine("Attempting to load... " + domainFile.getAbsolutePath());
 		try {
 			if (domainFile.exists()) {
-				// sipLogger.fine("Loading... " + domainFile.getAbsolutePath());
 				domainNode = mapper.readTree(domainFile);
-				// sipLogger.fine("domainNode: " + domainNode);
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
-			sipLogger.severe("Error loading config file: " + domainFile.getCanonicalPath());
-			sipLogger.severe(e);
+			System.out.println("Error loading config file: " + domainFile.getCanonicalPath());
+			e.printStackTrace();
 		}
 
 		File clusterFile = new File(clusterPath.toString() + "/" + servletContextName + ".json");
-		// sipLogger.fine("Attempting to load... " + clusterFile.getAbsolutePath());
 		try {
 			if (clusterFile.exists()) {
-				// sipLogger.fine("Loading... " + clusterFile.getAbsolutePath());
 				clusterNode = mapper.readTree(clusterFile);
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
-			sipLogger.severe("Error loading config file: " + clusterFile.getCanonicalPath());
-			sipLogger.severe(e);
+			System.out.println("Error loading config file: " + clusterFile.getCanonicalPath());
+			e.printStackTrace();
 		}
 
 		File serverFile = new File(serverPath.toString() + "/" + servletContextName + ".json");
-		// sipLogger.fine("Attempting to load... " + serverFile.getAbsolutePath());
 		try {
 			if (serverFile.exists()) {
-				// sipLogger.fine("Loading... " + serverFile.getAbsolutePath());
 				serverNode = mapper.readTree(serverFile);
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
-			sipLogger.severe("Error loading config file: " + serverFile.getCanonicalPath());
-			sipLogger.severe(e);
+			System.out.println("Error loading config file: " + serverFile.getCanonicalPath());
+			e.printStackTrace();
 		}
 
 		if (noConfigFiles) {
 			current = tmp;
 		} else {
-			// sipLogger.fine("Calling mergeCurrentFromJson...");
 			mergeCurrentFromJson();
 		}
 
-		sipLogger.info("Loading configuration...\n" + getCurrentAsJson());
 	}
 
 	private void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
 		File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");
-		sipLogger.fine("Saving config to: " + configFile.getCanonicalPath());
 		mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
 
 		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
-		sipLogger.fine("Saving schema to: " + schemaFile.getCanonicalPath());
 		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper);
 		JsonSchema schema = schemaGen.generateSchema(t.getClass());
 		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, schema);
@@ -372,15 +385,12 @@ public class SettingsManager<T> {
 
 	public void setCurrentFromJson(String json) {
 		try {
-//			sipLogger.info("Configuration changed...");
-//			sipLogger.info(json);
-
 			T tmp = mapper.readValue(json, clazz);
 			initialize(tmp);
 			current = tmp;
 
 		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
+			e.printStackTrace();
 		}
 	}
 
@@ -393,7 +403,7 @@ public class SettingsManager<T> {
 			// add title here
 			strSchema = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
 		} catch (JsonProcessingException e) {
-			sipLogger.logStackTrace(e);
+			e.printStackTrace();
 		}
 
 		return strSchema;
@@ -423,29 +433,14 @@ public class SettingsManager<T> {
 	 */
 	public void mergeCurrentFromJson() throws ServletParseException {
 		try {
-			// sipLogger.fine("Starting to merge...");
 			mergedNode = merge(merge(domainNode, clusterNode), serverNode);
 
-			// sipLogger.fine("Merged Node:\n" + mergedNode);
-
-			// sipLogger.fine("Starting to convert...");
 			T tmp = (T) mapper.convertValue(mergedNode, clazz);
-			
-			
-			//jwm
-//			if(tmp instanceof Configuration) {
-//				configureLogging(tmp);
-//			}else {
-//				configureLogging(null);				
-//			}
-			
-			// sipLogger.fine("Starting to initialize...");
+
 			initialize(tmp);
-			// sipLogger.fine("Assigning current...");
 			current = tmp;
-			// sipLogger.fine("Current: " + current);
 		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
+			e.printStackTrace();
 		}
 
 	}
@@ -467,7 +462,11 @@ public class SettingsManager<T> {
 	}
 
 	public void logCurrent() {
-		sipLogger.info("Configuration has changed...\n" + getCurrentAsJson());
+		if (sipLogger != null) {
+			sipLogger.info("Configuration has changed...\n" + getCurrentAsJson());
+		} else {
+			System.out.println("Configuration has changed...\n" + getCurrentAsJson());
+		}
 	}
 
 	/**

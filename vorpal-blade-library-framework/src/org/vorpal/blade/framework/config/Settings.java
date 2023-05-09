@@ -23,6 +23,8 @@
  */
 package org.vorpal.blade.framework.config;
 
+import org.vorpal.blade.framework.logging.Logger;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 /**
@@ -56,7 +58,18 @@ public class Settings implements SettingsMXBean {
 		try {
 			settingsManager.setDomainJson(json);
 			settingsManager.mergeCurrentFromJson();
-			settingsManager.logCurrent();
+
+			Logger sipLogger = SettingsManager.getSipLogger();
+			if (sipLogger != null) {
+				if (settingsManager.getCurrent() instanceof Configuration) {
+					Configuration config = (Configuration) settingsManager.getCurrent();
+					sipLogger.setLevel(config.getLogging().resolveLevel());
+					sipLogger.log(config.getLogging().resolveLevel(),
+							"Setting logging level to: " + config.getLogging().resolveLevel());
+				}
+				settingsManager.logCurrent();
+			}
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -77,7 +90,18 @@ public class Settings implements SettingsMXBean {
 		try {
 			settingsManager.setClusterJson(json);
 			settingsManager.mergeCurrentFromJson();
-			settingsManager.logCurrent();
+
+			Logger sipLogger = SettingsManager.getSipLogger();
+			if (sipLogger != null) {
+				if (settingsManager.getCurrent() instanceof Configuration) {
+					Configuration config = (Configuration) settingsManager.getCurrent();
+					sipLogger.setLevel(config.getLogging().resolveLevel());
+					sipLogger.log(config.getLogging().resolveLevel(),
+							"Setting logging level to: " + config.getLogging().resolveLevel());
+				}
+				settingsManager.logCurrent();
+			}
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -98,7 +122,18 @@ public class Settings implements SettingsMXBean {
 		try {
 			settingsManager.setServerJson(json);
 			settingsManager.mergeCurrentFromJson();
-			settingsManager.logCurrent();
+
+			Logger sipLogger = SettingsManager.getSipLogger();
+			if (sipLogger != null) {
+				if (settingsManager.getCurrent() instanceof Configuration) {
+					Configuration config = (Configuration) settingsManager.getCurrent();
+					sipLogger.setLevel(config.getLogging().resolveLevel());
+					sipLogger.log(config.getLogging().resolveLevel(),
+							"Setting logging level to: " + config.getLogging().resolveLevel());
+				}
+				settingsManager.logCurrent();
+			}
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

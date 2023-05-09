@@ -51,12 +51,12 @@ import com.bea.wcp.sip.engine.server.SipApplicationSessionImpl;
 public class AppRouter implements SipApplicationRouter {
 	protected static String FSMAR = "fsmar2";
 	public static Logger sipLogger;
-	private static SettingsManager<Configuration> settingsManager;
+	private static SettingsManager<AppRouterConfiguration> settingsManager;
 	protected static HashMap<String, String> deployed = new HashMap<>();
 
 	@Override
 	public void init() {
-		settingsManager = new SettingsManager<Configuration>(FSMAR, Configuration.class, new ConfigurationSample());		
+		settingsManager = new SettingsManager<AppRouterConfiguration>(FSMAR, AppRouterConfiguration.class, new AppRouterConfigurationSample());		
 		sipLogger = SettingsManager.getSipLogger();
 		sipLogger.logConfiguration(settingsManager.getCurrent());
 	}
@@ -73,7 +73,7 @@ public class AppRouter implements SipApplicationRouter {
 
 		try {
 
-			Configuration config = (saved != null) ? (Configuration) saved : settingsManager.getCurrent();
+			AppRouterConfiguration config = (saved != null) ? (AppRouterConfiguration) saved : settingsManager.getCurrent();
 
 			// Did the request originate from an app?
 			SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request).getImpl()

@@ -9,7 +9,7 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.logging.Logger;
 
-public class RouterConfig implements Serializable {
+public class RouterConfig extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public LinkedList<Selector> selectors = new LinkedList<>();
 	public LinkedList<TranslationsMap> maps = new LinkedList<>();
@@ -45,11 +45,11 @@ public class RouterConfig implements Serializable {
 		}
 
 		if (t != null) {
-			sipLogger.fine(request, "Found translation id: " + t.getId() + //
+			sipLogger.finer(request, "Found translation id: " + t.getId() + //
 					", desc: " + t.getDescription() + //
 					", route-group: " + t.getAttribute("route-group"));
 		} else {
-			sipLogger.fine(request, "No match found, using default.");
+			sipLogger.finer(request, "No match found, using default.");
 		}
 
 		return (null != t) ? t : defaultRoute;

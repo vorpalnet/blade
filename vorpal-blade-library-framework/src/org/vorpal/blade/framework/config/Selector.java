@@ -84,22 +84,15 @@ public class Selector {
 				if (request.getContent() != null) {
 					if (request.getContent() instanceof String) {
 						header = (String) request.getContent();
-
-						sipLogger.fine(request, "This message body is a String... Looks like this: \n " + header);
-
 					} else {
 						byte[] content = (byte[]) request.getContent();
 						header = new String(content);
-
-						sipLogger.fine(request, "This message body is a byte[]... Looks like this: \n " + header);
 					}
 				} else {
 					sipLogger.warning(request, "No content in message body. Check configuration.");
 				}
 			} catch (IOException e) { // this should never happen
-				SettingsManager.getSipLogger().severe(request,
-						"Invalid Content-Type, unable to convert to Java String.");
-				SettingsManager.getSipLogger().severe(e);
+				SettingsManager.getSipLogger().logStackTrace(e);
 				return null;
 			}
 			break;
@@ -137,7 +130,7 @@ public class Selector {
 			regexRoute.selector = this;
 		}
 
-		sipLogger.fine(request, //
+		sipLogger.finer(request, //
 				"selector: " + this.getId() + //
 						", match: " + matchResult + //
 						", pattern: " + this.getPattern() + //
@@ -147,6 +140,51 @@ public class Selector {
 						", key: " + key);
 
 		return regexRoute;
+	}
+
+	public static void main(String args[]) {
+
+		// "pattern": ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*",
+		// "expression": "${recorddn}"
+
+		String strPattern = ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*";
+		String strExpression = "${recorddn}";
+		String key = null;
+
+		String strBody = //
+				"\n" + // A newline (line feed) character
+						"\r\n" + // A carriage-return character followed immediately by a newline character
+						"\r" + // A standalone carriage-return character
+						"\u0085" + // A next-line character
+						"\u2028" + // A line-separator character
+						"\u2029" + // A paragraph-separator character
+						"yarp;booyah;recorddn=+18164388687;boonah;narp" + // actual text
+						"\u2029" + // A paragraph-separator character
+						"\u2028" + // A line-separator character
+						"\u0085" + // A next-line character
+						"\r" + // A standalone carriage-return character
+						"\r\n" + // A carriage-return character followed immediately by a newline character
+						"\n" // A newline (line feed) character
+		;
+
+//		Pattern pattern = Pattern.compile(strPattern); // Doesn't work;
+		Pattern pattern = Pattern.compile(strPattern, //
+				Pattern.CASE_INSENSITIVE | //
+						Pattern.MULTILINE | //
+						Pattern.DOTALL | //
+						Pattern.UNICODE_CASE | //
+						Pattern.CANON_EQ | //
+						Pattern.UNIX_LINES | //
+//						Pattern.LITERAL | // --This one is bad
+						Pattern.UNICODE_CHARACTER_CLASS | //
+						Pattern.COMMENTS);
+		Matcher matcher = pattern.matcher(strBody);
+		if (matcher.matches()) {
+			key = matcher.replaceAll(strExpression);
+		}
+
+		System.out.println("Key: " + key);
+
 	}
 
 }

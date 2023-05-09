@@ -266,8 +266,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	public static String timeout(ServletTimer timer) {
 		String str;
 
-//		SipApplicationSession appSession = timer.getApplicationSession();
-//		String id = timer.getId();
 		long timeRemaining = timer.getTimeRemaining();
 
 		if (timeRemaining > 0) {

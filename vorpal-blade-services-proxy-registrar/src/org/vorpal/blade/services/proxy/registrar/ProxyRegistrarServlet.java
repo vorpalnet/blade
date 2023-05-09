@@ -57,44 +57,16 @@ public class ProxyRegistrarServlet extends ProxyServlet
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
 
-		String value;
-
-		System.out.println("Attributes: ");
-		for (String name : Collections.list(event.getServletContext().getAttributeNames())) {
-			System.out.println("name=" + name + ", value=" + event.getServletContext().getAttribute(name));
-		}
-
-		System.out.println("Init Parameters: ");
-		for (String name : Collections.list(event.getServletContext().getInitParameterNames())) {
-			System.out.println("name=" + name + ", value=" + event.getServletContext().getAttribute(name));
-		}
-
-		System.out.println("System Environment: ");
-		for (Entry<String, String> entry : System.getenv().entrySet()) {
-			System.out.println("name=" + entry.getKey() + ", value=" + entry.getValue());
-		}
-
-		System.out.println("System Properties: ");
-		for (String name : System.getProperties().stringPropertyNames()) {
-			System.out.println("name=" + name + ", value=" + System.getProperties().getProperty(name));
-		}
-
 		settingsManager = new SettingsManager<ProxyRegistrarSettings>(event, ProxyRegistrarSettings.class,
 				new ProxyRegistrarSettingsDefault());
 		sipLogger = SettingsManager.getSipLogger();
 
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(
-					"ProxyRegistrarServlet.servletCreated... " + event.getServletContext().getServletContextName());
-		}
+		sipLogger.fine("ProxyRegistrarServlet.servletCreated... ");
 	}
 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) {
-		if (sipLogger != null && sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(
-					"ProxyRegistrarServlet.servletDestroyed... " + event.getServletContext().getServletContextName());
-		}
+		sipLogger.fine("ProxyRegistrarServlet.servletDestroyed... ");
 	}
 
 	@Override

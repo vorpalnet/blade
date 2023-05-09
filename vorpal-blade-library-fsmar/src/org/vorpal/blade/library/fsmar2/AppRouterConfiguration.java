@@ -33,7 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
 //public class Configuration extends HashMap<String, State> implements Serializable {
-public class Configuration implements Serializable {
+public class AppRouterConfiguration implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 	public String defaultApplication = null;
@@ -48,7 +48,7 @@ public class Configuration implements Serializable {
 		return previousState;
 	}
 
-	public Configuration() {
+	public AppRouterConfiguration() {
 		// do nothing;
 	}
 
@@ -62,7 +62,7 @@ public class Configuration implements Serializable {
 
 	public static void main(String[] args) throws JsonProcessingException {
 
-		Configuration configuration = new Configuration();
+		AppRouterConfiguration configuration = new AppRouterConfiguration();
 
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setSerializationInclusion(Include.NON_NULL);

@@ -32,14 +32,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
 //public class Configuration extends HashMap<String, State> implements Serializable {
-public class ConfigurationSample extends Configuration implements Serializable {
+public class AppRouterConfigurationSample extends AppRouterConfiguration implements Serializable {
 
 	private static final long serialVersionUID = -7178380203877638527L;
 
 	/**
 	 * Creates a default configuration used to generate the FSMAR2.SAMPLE file.
 	 */
-	public ConfigurationSample() {
+	public AppRouterConfigurationSample() {
 
 		this.setDefaultApplication("b2bua");
 
@@ -73,7 +73,7 @@ public class ConfigurationSample extends Configuration implements Serializable {
 
 	public static void main(String[] args) throws JsonProcessingException {
 
-		ConfigurationSample configuration = new ConfigurationSample();
+		AppRouterConfigurationSample configuration = new AppRouterConfigurationSample();
 
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setSerializationInclusion(Include.NON_NULL);
