@@ -51,10 +51,10 @@ public abstract class TranslationsMap {
 					
 					
 					if (translation != null) {
-						sipLogger.fine(request, this.getClass().getSimpleName() + " found translation id: "
+						sipLogger.finest(request, this.getClass().getSimpleName() + " found translation id: "
 								+ translation.getId() + ", description: " + translation.getDescription());
 					} else {
-						sipLogger.fine(request, this.getClass().getName() + " found no translation.");
+						sipLogger.finest(request, this.getClass().getName() + " found no translation.");
 					}
 
 					if (translation != null) {
@@ -75,7 +75,7 @@ public abstract class TranslationsMap {
 						if (translation.getList() != null) {
 							Translation t = null;
 							for (TranslationsMap map : translation.getList()) {
-								sipLogger.fine(request, "Checking further TranslationMaps (id): " + map.getId());
+								sipLogger.finest(request, "Checking further TranslationMaps (id): " + map.getId());
 								t = map.applyTranslations(request);
 								if (t != null) {
 									break;
@@ -107,10 +107,10 @@ public abstract class TranslationsMap {
 		}
 
 		if (translation != null) {
-			sipLogger.fine(request, "The final translation is: " + translation.getId() + ", description: "
+			sipLogger.finer(request, "The final translation is: " + translation.getId() + ", description: "
 					+ translation.getDescription());
 		} else {
-			sipLogger.fine(request, "The final translation is null. No match! ");
+			sipLogger.finer(request, "The final translation is null. No match! ");
 		}
 
 		return translation;

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-public class Config1 extends Configuration {
+public class Config1 extends AppRouterConfiguration {
 
 	private static final long serialVersionUID = 1L;
 
@@ -29,7 +29,7 @@ public class Config1 extends Configuration {
 
 	public static void main(String[] args) throws JsonProcessingException {
 
-		Configuration configuration = new Config1();
+		AppRouterConfiguration configuration = new Config1();
 
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setSerializationInclusion(Include.NON_NULL);

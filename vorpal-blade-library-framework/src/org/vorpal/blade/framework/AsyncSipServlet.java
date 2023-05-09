@@ -72,7 +72,6 @@ public abstract class AsyncSipServlet extends SipServlet
 	@Override
 	final public void servletInitialized(SipServletContextEvent event) {
 		this.event = event;
-		sipLogger = LogManager.getLogger(event);
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		timerService = (TimerService) event.getServletContext().getAttribute("javax.servlet.sip.TimerService");
@@ -84,8 +83,15 @@ public abstract class AsyncSipServlet extends SipServlet
 
 		try {
 			servletCreated(event);
+			sipLogger = LogManager.getLogger(event);
 		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(e);
+
+			if (null != sipLogger) {
+				sipLogger.logStackTrace(e);
+			} else {
+				e.printStackTrace();
+			}
+
 		}
 
 	}
@@ -190,6 +196,10 @@ public abstract class AsyncSipServlet extends SipServlet
 		return sipLogger;
 	}
 
+	final public static void setSipLogger(Logger _sipLogger) {
+		sipLogger = _sipLogger;
+	}
+
 	/**
 	 * @return the sipFactory
 	 */
@@ -197,11 +207,19 @@ public abstract class AsyncSipServlet extends SipServlet
 		return sipFactory;
 	}
 
+	final public static void setSipFactory(SipFactory _sipFactory) {
+		sipFactory = _sipFactory;
+	}
+
 	/**
 	 * @return the sipUtil
 	 */
 	final public static SipSessionsUtil getSipUtil() {
 		return sipUtil;
+	}
+
+	final public static void setSipUtil(SipSessionsUtil _sipUtil) {
+		sipUtil = _sipUtil;
 	}
 
 	/**

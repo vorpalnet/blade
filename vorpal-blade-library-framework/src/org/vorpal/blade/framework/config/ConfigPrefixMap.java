@@ -30,11 +30,10 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 		try {
 
-			// jwm - multiple selectors - bad
 			for (Selector selector : this.selectors) {
 				Iterator<Entry<String, Translation>> itr = map.entrySet().iterator();
 
-				SettingsManager.sipLogger.fine(request, "ConfigPrefixMap.lookup()... Calling findKey()");
+				SettingsManager.sipLogger.finest(request, "ConfigPrefixMap.lookup()... Calling findKey()");
 				RegExRoute regexRoute = selector.findKey(request);
 
 				if (regexRoute != null) {
@@ -48,10 +47,10 @@ public class ConfigPrefixMap extends TranslationsMap {
 					}
 
 					if (value != null) {
-						SettingsManager.sipLogger.fine(request, "ConfigPrefixMap.lookup()... Found value: " + value);
+						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap.lookup()... Found value: " + value);
 						break;
 					} else {
-						SettingsManager.sipLogger.fine(request, "ConfigPrefixMap.lookup()... No value found.");
+						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap.lookup()... No value found.");
 					}
 				}
 

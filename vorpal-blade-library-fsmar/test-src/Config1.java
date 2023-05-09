@@ -1,4 +1,4 @@
-import org.vorpal.blade.library.fsmar2.Configuration;
+import org.vorpal.blade.library.fsmar2.AppRouterConfiguration;
 import org.vorpal.blade.library.fsmar2.Transition;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -6,7 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-public class Config1 extends Configuration {
+public class Config1 extends AppRouterConfiguration {
 
 	private static final long serialVersionUID = 1L;
 
@@ -35,7 +35,7 @@ public class Config1 extends Configuration {
 
 	public static void main(String[] args) throws JsonProcessingException {
 
-		Configuration configuration = new Config1();
+		AppRouterConfiguration configuration = new Config1();
 
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setSerializationInclusion(Include.NON_NULL);

@@ -53,12 +53,21 @@ public class TestClientServlet extends AsyncSipServlet {
 	@Override
 	public void servletCreated(SipServletContextEvent event) {
 		try {
+			settingsManager = new SettingsManager<TestClientConfig>(event, TestClientConfig.class,
+					new TestClientConfigDefault());
 
+			System.out.println("+++++++ sipLogger.getLevel(): "+sipLogger.getLevel());
+//			sipLogger.log(sipLogger.getLevel(), "b2buaCreated...");
+//			sipLogger.log(sipLogger.getLevel(), "Logging level set to: " + sipLogger.getLevel());
 			sipLogger.info("b2buaCreated...");
-			settingsManager = new SettingsManager<>(event, TestClientConfig.class);
+			sipLogger.info("Logging level set to: " + sipLogger.getLevel());
 
 		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
+			if (sipLogger != null) {
+				sipLogger.logStackTrace(e);
+			} else {
+				e.printStackTrace();
+			}
 		}
 
 	}
@@ -68,11 +77,25 @@ public class TestClientServlet extends AsyncSipServlet {
 	 */
 	@Override
 	public void servletDestroyed(SipServletContextEvent event) {
+
 		try {
-			sipLogger.info("b2buaDestroyed...");
+			if (sipLogger != null) {
+
+//				sipLogger.log(sipLogger.getLevel(), "b2buaDestroyed...");
+				sipLogger.severe("b2buaDestroyed...");
+
+			} else {
+				System.out.println("TestClientServlet.b2buaDestroyed... sipLogger not defined!");
+			}
+
 			settingsManager.unregister();
+
 		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
+			if (sipLogger != null) {
+				sipLogger.logStackTrace(e);
+			} else {
+				e.printStackTrace();
+			}
 		}
 	}
 
