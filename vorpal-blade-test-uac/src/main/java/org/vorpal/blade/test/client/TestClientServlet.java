@@ -55,8 +55,9 @@ public class TestClientServlet extends AsyncSipServlet {
 		try {
 			settingsManager = new SettingsManager<TestClientConfig>(event, TestClientConfig.class,
 					new TestClientConfigDefault());
+			this.sipLogger = SettingsManager.getSipLogger();
 
-			System.out.println("+++++++ sipLogger.getLevel(): "+sipLogger.getLevel());
+			System.out.println("+++++++ sipLogger.getLevel(): " + sipLogger.getLevel());
 //			sipLogger.log(sipLogger.getLevel(), "b2buaCreated...");
 //			sipLogger.log(sipLogger.getLevel(), "Logging level set to: " + sipLogger.getLevel());
 			sipLogger.info("b2buaCreated...");

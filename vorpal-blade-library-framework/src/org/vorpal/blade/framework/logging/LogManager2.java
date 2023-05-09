@@ -36,14 +36,13 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 
-import org.vorpal.blade.framework.AsyncSipServlet;
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.config.Configuration;
 import org.vorpal.blade.framework.config.SettingsManager;
 
 import weblogic.kernel.KernelLogManager;
 
 @WebListener
-public class LogManager implements ServletContextListener {
+public class LogManager2 implements ServletContextListener {
 	private static ConcurrentHashMap<String, Logger> logMap = new ConcurrentHashMap<String, Logger>();
 
 	public static Logger getLogger(SipServletContextEvent event) {
@@ -70,7 +69,7 @@ public class LogManager implements ServletContextListener {
 				String filepath = directory + "/" + name + ".%g.log";
 
 				Formatter formatter = new LogFormatter();
-				Handler handler = new FileHandler(filepath, 10 * 1024 * 1024, 10, true);
+				Handler handler = new FileHandler(filepath, 50 * 1024 * 1024, 20, true);
 
 				handler.setFormatter(formatter);
 
@@ -81,7 +80,53 @@ public class LogManager implements ServletContextListener {
 				logger.setUseParentHandlers(false);
 
 				logMap.put(name, logger);
+			}
 
+		} catch (Exception ex) {
+			System.out.println("Unable to create new logger for ServletContext: " + name);
+			ex.printStackTrace();
+		}
+
+		return logger;
+	}
+
+	public static Logger getLogger(ServletContext servletContext, LogParameters logging) {
+		Logger logger = null;
+		String name = null;
+
+		if (logging == null) {
+			logging = new LogParametersDefault();
+		}
+
+		try {
+			name = SettingsManager.basename(logging.resolveName(servletContext));
+			logger = logMap.get(name);
+
+			if (logger == null) {
+
+				String directory = logging.resolveDirectory(servletContext);
+				File file = new File(directory);
+				file.mkdirs();
+				String filepath = directory + "/" + name + ".%g.log";
+
+//				Handler handler = new FileHandler(filepath, logging.resolveLimit(), logging.resolveCount(),
+//						logging.resolveAppend());
+				Handler handler = new FileHandler(filepath, logging.resolveLimit(), logging.resolveCount(), true);
+				handler.setFormatter(new LogFormatter());
+
+				logger = new Logger(name, null);
+				logger.addHandler(handler);
+				logger.setParent(KernelLogManager.getLogger());
+//				logger.setUseParentHandlers(logging.resolveUseParentHandlers());
+				logger.setUseParentHandlers(false);
+
+//				System.out.println(name+" LogManager logger config level: " + logging.getLevel());
+				if (logging.getLevel() != null) {
+					logger.setLevel(logging.resolveLevel());
+//					System.out.println(name+" LogManager set logging level to: " + logger.getLevel());
+				}
+
+				logMap.put(name, logger);
 			}
 		} catch (Exception ex) {
 			System.out.println("Unable to create new logger for ServletContext: " + name);
@@ -90,6 +135,47 @@ public class LogManager implements ServletContextListener {
 
 		return logger;
 	}
+
+	/*
+	 * public static Logger getLogger(ServletContext servletContext, Configuration
+	 * config) { try { LogParameters logParameters = (config != null &&
+	 * config.getLogging() != null) ? config.getLogging() : new
+	 * LogParametersDefault();
+	 * 
+	 * String name = SettingsManager.basename(replaceAttributes(servletContext,
+	 * config, inputString){
+	 * 
+	 * }
+	 * 
+	 * 
+	 * // name = SettingsManager.basename(name); // Logger logger =
+	 * logMap.get(name);
+	 * 
+	 * // String directory = "./servers/" + System.getProperty("weblogic.Name") +
+	 * "/logs/vorpal";
+	 * 
+	 * 
+	 * File file = new File(directory); file.mkdirs(); String filepath = directory +
+	 * "/" + name + ".%g.log";
+	 * 
+	 * Formatter formatter = new LogFormatter(); Handler handler = new
+	 * FileHandler(filepath, 10 * 1024 * 1024, 10, true);
+	 * 
+	 * handler.setFormatter(formatter);
+	 * 
+	 * logger = new Logger(name, null);
+	 * 
+	 * logger.addHandler(handler); logger.setParent(KernelLogManager.getLogger());
+	 * logger.setUseParentHandlers(false);
+	 * 
+	 * logMap.put(name, logger);
+	 * 
+	 * } catch (Exception ex) {
+	 * System.out.println("Unable to create new logger for ServletContext: " +
+	 * name); ex.printStackTrace(); }
+	 * 
+	 * return logger; }
+	 */
 
 	public void closeLogger(ServletContextEvent event) {
 		if (event != null && event.getServletContext() != null
@@ -103,7 +189,7 @@ public class LogManager implements ServletContextListener {
 	public static void closeLogger(String name) {
 		Logger logger = logMap.remove(name);
 		if (logger != null) {
-			logger.info("LogManager destroying logger for " + name);
+//			logger.info("LogManager destroying logger for " + name);
 			for (Handler handler : logger.getHandlers()) {
 				handler.close();
 			}
@@ -117,16 +203,18 @@ public class LogManager implements ServletContextListener {
 
 	@Override
 	public void contextInitialized(ServletContextEvent event) {
-		Logger logger;
+		// SettingsManager is now used to initialize the Logger.
 
-		if (event != null && event.getServletContext() != null
-				&& event.getServletContext().getServletContextName() != null) {
-			logger = getLogger(event.getServletContext());
-			logger.info("LogManager creating new logger for " + event.getServletContext().getServletContextName());
-		} else {
-			logger = getLogger("vorpal");
-			System.out.println("No ServletContext found, creating logger for vorpal.log");
-		}
+//		Logger logger;
+//
+//		if (event != null && event.getServletContext() != null
+//				&& event.getServletContext().getServletContextName() != null) {
+//			logger = getLogger(event.getServletContext());
+//			logger.info("LogManager creating new logger for " + event.getServletContext().getServletContextName());
+//		} else {
+//			logger = getLogger("vorpal");
+//			System.out.println("No ServletContext found, creating logger for vorpal.log");
+//		}
 	}
 
 }
