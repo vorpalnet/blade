@@ -151,6 +151,11 @@ public class SettingsManager<T> {
 		this.build(name, clazz, null);
 	}
 
+	public SettingsManager(String name, Class<T> clazz, T sample) {
+		this.sample = sample;
+		this.build(name, clazz, null);
+	}
+
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
 		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		this.mapper = mapper;
@@ -229,10 +234,7 @@ public class SettingsManager<T> {
 				objectName = new ObjectName("vorpal.blade:Name=" + servletContextName + ",Type=Configuration");
 			}
 			register();
-			
 
-			
-			
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
 		}
@@ -324,8 +326,6 @@ public class SettingsManager<T> {
 			mergeCurrentFromJson();
 		}
 
-		
-		
 		sipLogger.info("Loading configuration...\n" + getCurrentAsJson());
 	}
 
