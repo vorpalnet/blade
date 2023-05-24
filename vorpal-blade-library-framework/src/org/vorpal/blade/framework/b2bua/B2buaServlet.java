@@ -29,6 +29,8 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.SipSession;
+import javax.servlet.sip.UAMode;
 
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
@@ -83,5 +85,64 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 
 	@Override
 	public abstract void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException;
+
+	/**
+	 * Tells the B2buaServlet not to send the outbound request. You are responsible
+	 * for sending a reply back to the upstream server.
+	 * 
+	 * @param outboundRequest
+	 */
+	public void doNotProcess(SipServletRequest outboundRequest) {
+		outboundRequest.setAttribute("doNotProcess", true);
+	}
+
+	/**
+	 * Tells the B2buaServlet not to send the outbound request and send a reply back
+	 * upstream with the supplied status code.
+	 * 
+	 * @param outboundRequest
+	 * @param statusCode
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public void doNotProcess(SipServletRequest outboundRequest, int statusCode) throws ServletException, IOException {
+		outboundRequest.setAttribute("doNotProcess", true);
+		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
+		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
+		SipServletResponse errorResponse = incomingRequest.createResponse(statusCode);
+		sendResponse(errorResponse);
+	}
+
+	/**
+	 * Tells the B2buaServlet not to send the outbound request and send a reply back
+	 * upstream with the supplied status code and custom reason phrase.
+	 * 
+	 * @param outboundRequest
+	 * @param statusCode
+	 * @param reasonPhrase
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public void doNotProcess(SipServletRequest outboundRequest, int statusCode, String reasonPhrase)
+			throws ServletException, IOException {
+		outboundRequest.setAttribute("doNotProcess", true);
+		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
+		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
+		SipServletResponse errorResponse = incomingRequest.createResponse(statusCode, reasonPhrase);
+		sendResponse(errorResponse);
+	}
+
+	/**
+	 * Returns the original incoming request which initiated the callStarted method.
+	 * Useful when used in conjunction with 'doNotProcess'.
+	 * 
+	 * @param outboundRequest
+	 * @return incoming request
+	 */
+	public SipServletRequest getIncomingRequest(SipServletRequest outboundRequest) {
+		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
+		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
+		return incomingRequest;
+	}
 
 }

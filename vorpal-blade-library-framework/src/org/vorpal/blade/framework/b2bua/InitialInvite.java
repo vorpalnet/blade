@@ -92,48 +92,53 @@ public class InitialInvite extends Callflow {
 				b2buaListener.callStarted(bobRequest);
 			}
 
-			sendRequest(bobRequest, (bobResponse) -> {
+			Boolean doNotProcess = (Boolean) bobRequest.getAttribute("doNotProcess");
+			if (null == doNotProcess || false == doNotProcess) {
 
-				if (false == aliceRequest.isCommitted()) {
+				sendRequest(bobRequest, (bobResponse) -> {
 
-					setSessionExpiration(bobResponse);
+					if (false == aliceRequest.isCommitted()) {
 
-					SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-					copyContentAndHeaders(bobResponse, aliceResponse);
+						setSessionExpiration(bobResponse);
 
-					if (successful(bobResponse)) {
-						if (b2buaListener != null) {
-							b2buaListener.callAnswered(aliceResponse);
+						SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+						copyContentAndHeaders(bobResponse, aliceResponse);
+
+						if (successful(bobResponse)) {
+							if (b2buaListener != null) {
+								b2buaListener.callAnswered(aliceResponse);
+							}
+						} else if (failure(bobResponse)) {
+							if (b2buaListener != null) {
+								b2buaListener.callDeclined(aliceResponse);
+							}
 						}
-					} else if (failure(bobResponse)) {
-						if (b2buaListener != null) {
-							b2buaListener.callDeclined(aliceResponse);
-						}
-					}
 
-					sendResponse(aliceResponse, (aliceAck) -> {
-						if (aliceAck.getMethod().equals(PRACK)) {
-							SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
+						sendResponse(aliceResponse, (aliceAck) -> {
+							if (aliceAck.getMethod().equals(PRACK)) {
+								SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
 //							if (b2buaListener != null) {
 //								b2buaListener.callEvent(bobPrack);
 //							}
-							sendRequest(bobPrack, (prackResponse) -> {
-								sendResponse(aliceAck.createResponse(prackResponse.getStatus()));
-							});
-						} else if (aliceAck.getMethod().equals(ACK)) {
-							SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-							if (b2buaListener != null) {
-								b2buaListener.callConnected(bobAck);
+								sendRequest(bobPrack, (prackResponse) -> {
+									sendResponse(aliceAck.createResponse(prackResponse.getStatus()));
+								});
+							} else if (aliceAck.getMethod().equals(ACK)) {
+								SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+								if (b2buaListener != null) {
+									b2buaListener.callConnected(bobAck);
+								}
+								sendRequest(bobAck);
+							} else {
+								// implement GLARE here?
 							}
-							sendRequest(bobAck);
-						} else {
-							// implement GLARE here?
-						}
 
-					});
+						});
 
-				}
-			});
+					}
+				});
+
+			}
 
 		} catch (Exception e) {
 			sipLogger.logStackTrace(request, e);
