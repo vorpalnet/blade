@@ -1,12 +1,15 @@
 package org.vorpal.blade.framework;
 
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletTimer;
+import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
 import javax.servlet.sip.SipServletContextEvent;
@@ -19,6 +22,7 @@ import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerListener;
 import javax.servlet.sip.TimerService;
 import javax.servlet.sip.URI;
+import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
@@ -229,23 +233,154 @@ public abstract class AsyncSipServlet extends SipServlet
 		return timerService;
 	}
 
-	/**
-	 * This is an alternate hashing algorithm that can be used during
-	 * the @SipApplicationKey method.
-	 * 
-	 * @param string
-	 * @return a long number written as a hexadecimal string
-	 */
-	public static String hash(String string) {
-		long h = 1125899906842597L; // prime
-		int len = string.length();
+//	/**
+//	 * This is an alternate hashing algorithm that can be used during
+//	 * the @SipApplicationKey method.
+//	 * 
+//	 * @param string
+//	 * @return a long number written as a hexadecimal string
+//	 */
+//	public static String hash(String string) {
+//		long h = 1125899906842597L; // prime
+//		int len = string.length();
+//
+//		for (int i = 0; i < len; i++) {
+//			h = 31 * h + string.charAt(i);
+//		}
+//
+//		return Long.toHexString(h);
+//	}
 
-		for (int i = 0; i < len; i++) {
-			h = 31 * h + string.charAt(i);
+	private static String byteArray2Text(byte[] bytes) {
+		final char[] alphanum = { // 63 characters for randomish pattern distribution
+				'0', '1', '2', '3', '4', '5', '6', '7', //
+				'8', '9', 'a', 'b', 'c', 'd', 'e', 'f', //
+				'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', //
+				'o', 'p', 'q', 'r', 's', 't', 'u', 'v', //
+				'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', //
+				'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', //
+				'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', //
+				'U', 'V', 'W', 'X', 'Y', 'Z', '#' };
+		StringBuffer sb = new StringBuffer();
+		for (final byte b : bytes) {
+			sb.append(alphanum[Byte.toUnsignedInt(b) % alphanum.length]);
+		}
+		return sb.toString();
+	}
+
+	private static String hexEncode(byte[] bytes) {
+		StringBuilder sb = new StringBuilder();
+		for (byte b : bytes) {
+			sb.append(Integer.toHexString(Byte.toUnsignedInt(b)));
+		}
+		return sb.toString();
+	}
+
+	public static String hash(String stringToHash) {
+		String stringHash = null;
+
+		MessageDigest messageDigest;
+		try {
+//			messageDigest = MessageDigest.getInstance("SHA-256");
+			messageDigest = MessageDigest.getInstance("MD5");
+			messageDigest.update(stringToHash.getBytes());
+//			stringHash = byteArray2Text(messageDigest.digest());
+			stringHash = hexEncode(messageDigest.digest());
+
+		} catch (NoSuchAlgorithmException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
 
-		return Long.toHexString(h);
+		return stringHash;
 	}
+
+	public static String getAppSessionHashKey(String stringToHash) {
+		SipApplicationSession appSession = null;
+		String hashedString = hash(stringToHash);
+		appSession = sipUtil.getApplicationSessionByKey(hashedString, true);
+
+		String existingHashKey = (String) appSession.getAttribute("HASHKEY");
+
+		if (null == existingHashKey) {
+			// this is good because the AppSession did not previously exist
+			appSession.setAttribute("HASHKEY", hashedString);
+		} else {
+			if (false == existingHashKey.equals(hashedString)) {
+				// this is bad because the hash keys collide;
+				sipLogger.severe("@SipApplicationKey hash key collision. SipApplicationSession.id: "
+						+ appSession.getId() + " collides with " + existingHashKey + " and " + hashedString);
+				appSession.setAttribute("HASHKEY_COLLISION", true);
+			}
+		}
+
+		return hashedString;
+	}
+
+//	public static String uuencode(String stringToHash) {
+//		String stringHash = null;
+//		String encodedString = null;
+//
+//		MessageDigest messageDigest;
+//		try {
+//			messageDigest = MessageDigest.getInstance("MD5");
+//			messageDigest.update(stringToHash.getBytes());
+//			stringHash = new String(messageDigest.digest());
+//			Base64.Encoder encoder = Base64.getEncoder();
+//			encodedString = encoder.encodeToString(stringHash.getBytes(StandardCharsets.UTF_8));
+//			encodedString = encodedString.replaceAll("=", "");
+//			encodedString = encodedString.replaceAll("-", "~");
+//			encodedString = encodedString.replaceAll("_", "?");
+//		} catch (NoSuchAlgorithmException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//
+//		return encodedString;
+//	}
+
+//	public static String hash2(String str) {
+//		String result;
+//
+//		sipLogger.warning("Attempt to hash: " + str);
+//
+////		SipApplicationSession appSession = AsyncSipServlet.sipUtil.getApplicationSessionByKey(str, false);
+//		SipApplicationSession appSession = AsyncSipServlet.sipUtil.getApplicationSessionByKey(str, true);
+//
+//		sipLogger.warning("SipApplicationSession by that key: " + Boolean.toString(appSession != null));
+//
+//		String key = (String) appSession.getAttribute("SipApplicationKey");
+//		sipLogger.warning("SipApplicationKey: " + key);
+//
+//		if (key == null) {
+//			sipLogger.warning("Saving SipApplicationKey: " + str);
+//			appSession.setAttribute("SipApplicationKey", str);
+//			result = key;
+//		} else if (key.equals(str)) {
+//			sipLogger.warning("SipApplicationSession found and keys match!");
+//			result = key;
+//		} else {
+//			sipLogger.warning("SipApplicationSession found but keys do not match, trying again!");
+//			result = hash2("#" + str);
+//		}
+//
+////		if (appSession == null) {
+////			result = str;
+////		} else {
+////			
+////			sipLogger.warning("SipApplicationSession found: "+appSession.getId());			
+////			if(appSession.getId().contains("-"+str+"_")){
+////				sipLogger.warning("Correct SipApplicationSession found: true");			
+////				result = str;
+////			} else {
+////				sipLogger.warning("Correct SipApplicationSession found: false, recursively calling hash2 again...");			
+////				result = hash2("0" + str);
+////			}
+////		}
+//
+//		sipLogger.warning("Returning SipApplicationKey: " + result);
+//		return result;
+//	}
 
 	public static String getAccountName(Address address) {
 		return getAccountName(address.getURI());
@@ -264,6 +399,28 @@ public abstract class AsyncSipServlet extends SipServlet
 			sipLogger.logStackTrace(e);
 			throw e;
 		}
+	}
+
+	public static void main(String[] args) {
+
+//		INFO 2023-05-12 11:01:54.553 - [------:--] Media ID: 01DMGK65M8A5B4IV7131Q2LAES007M4O
+//		FINE 2023-05-12 11:01:54.553 - [------:--] @SipApplicationKey: 5045722f1ee4053d
+//
+//		INFO 2023-05-12 11:03:10.615 - [------:--] Media ID: 01DMGK65M8A5B4IV7131Q2LAES007M50
+//		FINE 2023-05-12 11:03:10.615 - [------:--] @SipApplicationKey: 5045722f1ee4053d
+
+		String[] strArray = { //
+				"01DMGK65M8A5B4IV7131Q2LAES007M4OHGYUIJHYUJGFR%YUUHGFERTYUHFERYTDSERTYGFDERTYGFSWRTYHFDRTYTDR", //
+				"01DMGK65M8A5B4IV7131Q2LAES007M50", //
+				"18164388687", //
+				"18164388688" };
+
+		for (String m1 : strArray) {
+			System.out.println(m1 + " hash: '" + hash(m1) + "'");
+//			System.out.println(m1 + " hash: '" + uuencode(m1) + "'");
+
+		}
+
 	}
 
 }

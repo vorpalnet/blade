@@ -33,7 +33,7 @@ public class ConfigPrefixMap extends TranslationsMap {
 			for (Selector selector : this.selectors) {
 				Iterator<Entry<String, Translation>> itr = map.entrySet().iterator();
 
-				SettingsManager.sipLogger.finest(request, "ConfigPrefixMap.lookup()... Calling findKey()");
+//				SettingsManager.sipLogger.fine(request, "ConfigPrefixMap.lookup()... Calling findKey()");
 				RegExRoute regexRoute = selector.findKey(request);
 
 				if (regexRoute != null) {
@@ -47,10 +47,10 @@ public class ConfigPrefixMap extends TranslationsMap {
 					}
 
 					if (value != null) {
-						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap.lookup()... Found value: " + value);
+						SettingsManager.sipLogger.fine(request, "Route found id: " + value.getId()+", description="+value.getDescription());
 						break;
 					} else {
-						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap.lookup()... No value found.");
+						SettingsManager.sipLogger.fine(request, "Route not found");
 					}
 				}
 

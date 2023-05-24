@@ -51,10 +51,10 @@ public abstract class TranslationsMap {
 					
 					
 					if (translation != null) {
-						sipLogger.finest(request, this.getClass().getSimpleName() + " found translation id: "
+						sipLogger.fine(request, this.getClass().getSimpleName() + " found translation id: "
 								+ translation.getId() + ", description: " + translation.getDescription());
 					} else {
-						sipLogger.finest(request, this.getClass().getName() + " found no translation.");
+						sipLogger.fine(request, this.getClass().getName() + " found no translation.");
 					}
 
 					if (translation != null) {
