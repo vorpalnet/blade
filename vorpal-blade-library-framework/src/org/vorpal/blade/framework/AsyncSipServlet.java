@@ -401,6 +401,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
+/*	
 	public static void main(String[] args) {
 
 //		INFO 2023-05-12 11:01:54.553 - [------:--] Media ID: 01DMGK65M8A5B4IV7131Q2LAES007M4O
@@ -422,5 +423,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 
 	}
+*/
 
 }
