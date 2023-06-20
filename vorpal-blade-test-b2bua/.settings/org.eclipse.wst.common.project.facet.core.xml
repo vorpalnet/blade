@@ -8,11 +8,11 @@
   <fixed facet="wls.web"/>
   <fixed facet="wst.jsdt.web"/>
   <fixed facet="oracle.weblogic.webservices"/>
-  <installed facet="java" version="1.8"/>
   <installed facet="java.apt" version="5.0"/>
   <installed facet="jst.web" version="3.1"/>
   <installed facet="oracle.weblogic.webservice.clients" version="2.1"/>
   <installed facet="wls.web" version="12.2.1.3"/>
   <installed facet="oracle.weblogic.webservices" version="2.1"/>
   <installed facet="wst.jsdt.web" version="1.0"/>
+  <installed facet="java" version="11"/>
 </faceted-project>
