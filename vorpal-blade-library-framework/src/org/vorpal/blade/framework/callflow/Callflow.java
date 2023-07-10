@@ -44,6 +44,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.TimerService;
+import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
@@ -212,19 +213,18 @@ public abstract class Callflow implements Serializable {
 		long period = seconds * 1000;
 		boolean fixedDelay = false;
 		boolean isPersistent = false;
-		timer = timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction);
-		return timer.getId();
+		return timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction).getId();
 	}
 
 	public String scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction)
 			throws ServletException, IOException {
-		ServletTimer timer = null;
 		long delay = seconds * 1000;
 		boolean isPersistent = false;
-//		String timerId = null;
+		return timerService.createTimer(appSession, delay, isPersistent, lambdaFunction).getId();
+	}
 
-		timer = timerService.createTimer(appSession, delay, isPersistent, lambdaFunction);
-		return timer.getId();
+	public void cancelTimer(SipApplicationSession appSession, String timerId) {
+		appSession.getTimer(timerId).cancel();
 	}
 
 	public Expectation expectRequest(SipSession sipSession, String method, Callback<SipServletRequest> callback) {

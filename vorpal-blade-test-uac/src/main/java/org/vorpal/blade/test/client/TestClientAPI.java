@@ -89,7 +89,7 @@ public class TestClientAPI extends Callflow {
 			if (successful(bobResponse)) {
 				sendRequest(bobResponse.createAck());
 			}
-			if(!provisional(bobResponse)) {
+			if (!provisional(bobResponse)) {
 				msgResponse.finalStatus = bobResponse.getStatus();
 				Response httpResponse = Response.created(location).entity(msgResponse).build();
 				asyncResponses.remove(appSession.getId()).resume(httpResponse);

@@ -25,6 +25,7 @@
 package org.vorpal.blade.test.uas.callflows;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
@@ -33,12 +34,20 @@ import javax.servlet.sip.SipServletResponse;
 import org.vorpal.blade.framework.b2bua.B2buaListener;
 import org.vorpal.blade.framework.b2bua.InitialInvite;
 
+import com.bea.wcp.sip.engine.SipServletResponseAdapter;
+import com.bea.wcp.sip.engine.server.InviteClientTransaction;
+import com.bea.wcp.sip.engine.server.ServerTransaction;
+import com.bea.wcp.sip.engine.server.SipService;
+import com.bea.wcp.sip.engine.server.SipServletResponseImpl;
+
 public class TestInvite extends InitialInvite {
 	static final long serialVersionUID = 1L;
-	private SipServletRequest aliceRequest;
 	private B2buaListener b2buaListener = null;
-	int delay = 0;
+//	int delay = 0;
 	int status = 0;
+//	int duration = 0;
+	String durationTimerId = null;
+	SipServletResponse delayedResponse = null;
 
 	public TestInvite() {
 	}
@@ -47,37 +56,72 @@ public class TestInvite extends InitialInvite {
 		this.b2buaListener = b2buaListener;
 	}
 
+	public static int inSeconds(String strDuration) {
+		int duration = 0;
+
+		try {
+			if (strDuration != null) {
+				if (strDuration.contains("s")) { // seconds
+					duration = Integer.parseInt(strDuration.replace("s", ""));
+				} else if (strDuration.contains("m")) { // minutes
+					duration = Integer.parseInt(strDuration.replace("m", "")) * 60;
+				} else if (strDuration.contains("h")) { // hours
+					duration = Integer.parseInt(strDuration.replace("h", "")) * 60 * 60;
+				} else if (strDuration.contains("d")) { // days
+					duration = Integer.parseInt(strDuration.replace("d", "")) * 60 * 60 * 24;
+				} else if (strDuration.contains("y")) { // years
+					duration = Integer.parseInt(strDuration.replace("y", "")) * 60 * 60 * 24 * 365;
+				} else {
+					duration = Integer.parseInt(strDuration); // seconds
+				}
+			}
+		} catch (Exception e) {
+			sipLogger.logStackTrace(e);
+		}
+
+		return duration;
+	}
+
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		try {
-			this.aliceRequest = request;
 
 			String strStatus = request.getRequestURI().getParameter("status");
+
 			if (strStatus != null) {
+
 				status = Integer.parseInt(strStatus);
-			}
 
-			String strDelay = request.getRequestURI().getParameter("delay");
-			if (strDelay != null) {
-				delay = Integer.parseInt(strDelay);
-			}
-
-			if (status > 0) {
-				if (delay > 0) {
-					Thread.sleep(delay * 1000);
+				if (status == 200) {
+					String strDuration = request.getRequestURI().getParameter("duration");
+					if (strDuration == null) {
+						strDuration = "30s";
+					}
+					durationTimerId = scheduleTimer(request.getApplicationSession(), inSeconds(strDuration),
+							(timer) -> {
+								sendRequest(request.getSession().createRequest("BYE"));
+							});
 				}
 
-				SipServletResponse response = request.createResponse(status);
-				sendResponse(response);
+				String strDelay = request.getRequestURI().getParameter("delay");
+				if (strDelay != null) {
 
+					delayedResponse = request.createResponse(status);
+
+					scheduleTimer(request.getApplicationSession(), inSeconds(strDelay), (timer) -> {
+						if (durationTimerId != null) {
+							request.getApplicationSession().getTimer(durationTimerId).cancel();
+						}
+
+						sendResponse(delayedResponse);
+					});
+
+				} else {
+					sendResponse(request.createResponse(status));
+				}
 			} else {
 				super.process(request);
 			}
-
-//			// Why doesn't this work!?
-//			this.scheduleTimer(request.getApplicationSession(), delay, (timer) -> {
-//				sendResponse(this.aliceRequest.createResponse(status));
-//			});
 
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);

@@ -104,8 +104,13 @@ public class TestClientServlet extends AsyncSipServlet {
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow = null;
 
-		if (request.getMethod().equals("INVITE")) {
+		switch (request.getMethod()) {
+		case "INVITE":
 			callflow = new TestReinvite();
+			break;
+		case "BYE":
+			callflow = new TestClientBye();
+			break;
 		}
 
 		return callflow;
