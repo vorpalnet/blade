@@ -48,7 +48,6 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 	protected void servletCreated(SipServletContextEvent event) {
 		settingsManager = new SettingsManager<TestUasConfig>(event, TestUasConfig.class);
 		sipLogger.logConfiguration(settingsManager.getCurrent());
-
 	}
 
 	@Override
