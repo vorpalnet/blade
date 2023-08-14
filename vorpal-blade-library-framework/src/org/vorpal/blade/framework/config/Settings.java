@@ -56,6 +56,9 @@ public class Settings implements SettingsMXBean {
 	@Override
 	public void setDomainJson(String json) {
 		try {
+
+			System.out.println("setDomainJson begin...");
+
 			settingsManager.setDomainJson(json);
 			settingsManager.mergeCurrentFromJson();
 
@@ -63,16 +66,25 @@ public class Settings implements SettingsMXBean {
 			if (sipLogger != null) {
 				if (settingsManager.getCurrent() instanceof Configuration) {
 					Configuration config = (Configuration) settingsManager.getCurrent();
-					sipLogger.setLevel(config.getLogging().resolveLevel());
-					sipLogger.log(config.getLogging().resolveLevel(),
-							"Setting logging level to: " + config.getLogging().resolveLevel());
+
+					if (config.getLogging() != null && config.getLogging().resolveLevel() != null) {
+						sipLogger.setLevel(config.getLogging().resolveLevel());
+						sipLogger.log(config.getLogging().resolveLevel(),
+								"Setting logging level to: " + config.getLogging().resolveLevel());
+					}
+
 				}
 				settingsManager.logCurrent();
 			}
 
 		} catch (Exception e) {
+			System.out.println("setDomainJson exception...");
+
 			e.printStackTrace();
 		}
+
+		System.out.println("setDomainJson end...");
+
 	}
 
 	@Override
@@ -95,9 +107,11 @@ public class Settings implements SettingsMXBean {
 			if (sipLogger != null) {
 				if (settingsManager.getCurrent() instanceof Configuration) {
 					Configuration config = (Configuration) settingsManager.getCurrent();
-					sipLogger.setLevel(config.getLogging().resolveLevel());
-					sipLogger.log(config.getLogging().resolveLevel(),
-							"Setting logging level to: " + config.getLogging().resolveLevel());
+					if (config.getLogging() != null && config.getLogging().resolveLevel() != null) {
+						sipLogger.setLevel(config.getLogging().resolveLevel());
+						sipLogger.log(config.getLogging().resolveLevel(),
+								"Setting logging level to: " + config.getLogging().resolveLevel());
+					}
 				}
 				settingsManager.logCurrent();
 			}
@@ -127,9 +141,11 @@ public class Settings implements SettingsMXBean {
 			if (sipLogger != null) {
 				if (settingsManager.getCurrent() instanceof Configuration) {
 					Configuration config = (Configuration) settingsManager.getCurrent();
-					sipLogger.setLevel(config.getLogging().resolveLevel());
-					sipLogger.log(config.getLogging().resolveLevel(),
-							"Setting logging level to: " + config.getLogging().resolveLevel());
+					if (config.getLogging() != null && config.getLogging().resolveLevel() != null) {
+						sipLogger.setLevel(config.getLogging().resolveLevel());
+						sipLogger.log(config.getLogging().resolveLevel(),
+								"Setting logging level to: " + config.getLogging().resolveLevel());
+					}
 				}
 				settingsManager.logCurrent();
 			}

@@ -11,6 +11,10 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 public class ConfigLinkedHashMap extends TranslationsMap {
 	public LinkedHashMap<String, Translation> map = new LinkedHashMap<>();
 
+	public int size() {
+		return map.size();
+	}
+
 	@Override
 	public Translation lookup(SipServletRequest request) {
 		Translation value = null;

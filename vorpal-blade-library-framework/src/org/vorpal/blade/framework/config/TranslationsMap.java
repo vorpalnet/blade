@@ -30,6 +30,8 @@ public abstract class TranslationsMap {
 
 	protected abstract Translation lookup(SipServletRequest request);
 
+	public abstract int size();
+
 	public Translation applyTranslations(SipServletRequest request) {
 		Logger sipLogger = SettingsManager.getSipLogger();
 
@@ -47,46 +49,45 @@ public abstract class TranslationsMap {
 //				regexRoute = selector.findKey(request);
 
 //				if (regexRoute != null) {
-					translation = this.lookup(request);
-					
-					
-					if (translation != null) {
-						sipLogger.fine(request, this.getClass().getSimpleName() + " found translation id: "
-								+ translation.getId() + ", description: " + translation.getDescription());
-					} else {
-						sipLogger.fine(request, this.getClass().getName() + " found no translation.");
-					}
+			translation = this.lookup(request);
 
-					if (translation != null) {
+			if (translation != null) {
+				sipLogger.fine(request, this.getClass().getSimpleName() + " found translation id: "
+						+ translation.getId() + ", description: " + translation.getDescription());
+			} else {
+				sipLogger.fine(request, this.getClass().getName() + " found no translation.");
+			}
 
-						if (translation.getRequestUri() != null) {
-							strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
-							uri = SettingsManager.getSipFactory().createURI(strRequestUri);
+			if (translation != null) {
 
-							// copy all SIP URI parameters (if not present in new request uri)
-							for (String name : request.getRequestURI().getParameterNameSet()) {
-								if (uri.getParameter(name) == null) {
-									uri.setParameter(name, uri.getParameter(name));
-								}
-							}
+				if (translation.getRequestUri() != null) {
+					strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
+					uri = SettingsManager.getSipFactory().createURI(strRequestUri);
+
+					// copy all SIP URI parameters (if not present in new request uri)
+					for (String name : request.getRequestURI().getParameterNameSet()) {
+						if (uri.getParameter(name) == null) {
+							uri.setParameter(name, uri.getParameter(name));
 						}
-
-						// now check for additional translations
-						if (translation.getList() != null) {
-							Translation t = null;
-							for (TranslationsMap map : translation.getList()) {
-								sipLogger.finest(request, "Checking further TranslationMaps (id): " + map.getId());
-								t = map.applyTranslations(request);
-								if (t != null) {
-									break;
-								}
-							}
-							if (t != null) {
-								translation = t;
-							}
-						}
-
 					}
+				}
+
+				// now check for additional translations
+				if (translation.getList() != null) {
+					Translation t = null;
+					for (TranslationsMap map : translation.getList()) {
+						sipLogger.finest(request, "Checking further TranslationMaps (id): " + map.getId());
+						t = map.applyTranslations(request);
+						if (t != null) {
+							break;
+						}
+					}
+					if (t != null) {
+						translation = t;
+					}
+				}
+
+			}
 //				}
 
 //				if (translation != null) {

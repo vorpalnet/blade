@@ -13,6 +13,10 @@ public class ConfigHashMap extends TranslationsMap {
 
 	public HashMap<String, Translation> map = new HashMap<>();
 
+	public int size() {
+		return map.size();
+	}
+
 	@Override
 	public Translation lookup(SipServletRequest request) {
 		Translation value = null;

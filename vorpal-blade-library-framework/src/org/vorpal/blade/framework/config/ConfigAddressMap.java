@@ -11,6 +11,10 @@ import inet.ipaddr.IPAddressString;
 public class ConfigAddressMap extends TranslationsMap {
 	public AddressMap map = new AddressMap();
 
+	public int size() {
+		return map.size();
+	}
+
 	public Translation createTranslation(String key) {
 		Translation t = new Translation();
 		map.put(new IPAddressString(key).getAddress(), t);

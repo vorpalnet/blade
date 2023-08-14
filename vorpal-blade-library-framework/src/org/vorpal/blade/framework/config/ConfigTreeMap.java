@@ -11,6 +11,10 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 public class ConfigTreeMap extends TranslationsMap {
 	public TreeMap<String, Translation> map = new TreeMap<>();
 
+	public int size() {
+		return map.size();
+	}
+
 	@Override
 	public Translation lookup(SipServletRequest request) {
 		Translation value = null;
