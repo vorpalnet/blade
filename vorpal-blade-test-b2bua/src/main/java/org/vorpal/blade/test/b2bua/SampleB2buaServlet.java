@@ -33,7 +33,6 @@ import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.test.config.SampleConfig;
 
 /**
  * @author Jeff McDonald
@@ -45,29 +44,24 @@ import org.vorpal.blade.test.config.SampleConfig;
 @javax.servlet.sip.annotation.SipListener
 public class SampleB2buaServlet extends B2buaServlet {
 	private static final long serialVersionUID = 1L;
-	private static SettingsManager<SampleConfig> settingsManager;
+	private static SettingsManager<SampleB2buaConfig> settingsManager;
 
 	/*
 	 * This is invoked when the servlet starts up.
 	 */
 
-//	@Override
-//	public void servletCreated(SipServletContextEvent event) {
-//		sipLogger.info("Strarted...");
-//	}
-
 	@Override
 	public void servletCreated(SipServletContextEvent event) {
 		try {
-
-			sipLogger.info("b2buaCreated...");
-			settingsManager = new SettingsManager<>(event, SampleConfig.class);
-
-			SampleConfig sampleConfig = settingsManager.getCurrent();
+			settingsManager = new SettingsManager<>(event, SampleB2buaConfig.class);
+			sipLogger.info("servletCreated...");
+			
+			SampleB2buaConfig sampleConfig = settingsManager.getCurrent();
 			sipLogger.logConfiguration(sampleConfig);
 
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
+			throw e;
 		}
 
 	}

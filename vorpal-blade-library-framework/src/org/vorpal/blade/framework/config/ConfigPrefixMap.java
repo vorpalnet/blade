@@ -15,6 +15,10 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 	public PatriciaTrie<Translation> map = new PatriciaTrie<>();
 
+	public int size() {
+		return map.size();
+	}
+
 	public Translation createTranslation(String key) {
 		Translation t = new Translation();
 		map.put(key, t);
@@ -47,7 +51,8 @@ public class ConfigPrefixMap extends TranslationsMap {
 					}
 
 					if (value != null) {
-						SettingsManager.sipLogger.fine(request, "Route found id: " + value.getId()+", description="+value.getDescription());
+						SettingsManager.sipLogger.fine(request,
+								"Route found id: " + value.getId() + ", description=" + value.getDescription());
 						break;
 					} else {
 						SettingsManager.sipLogger.fine(request, "Route not found");

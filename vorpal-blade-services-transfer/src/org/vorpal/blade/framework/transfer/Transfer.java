@@ -107,6 +107,8 @@ public class Transfer extends Callflow {
 	 * Call this method to construct the various request objects.
 	 * 
 	 * @param request
+	 * @throws ServletException 
+	 * @throws IOException 
 	 */
 	protected void createRequests(SipServletRequest request) throws ServletException, IOException {
 		transferorRequest = request;

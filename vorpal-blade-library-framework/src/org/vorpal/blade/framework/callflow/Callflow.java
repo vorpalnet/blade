@@ -216,9 +216,26 @@ public abstract class Callflow implements Serializable {
 		return timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction).getId();
 	}
 
+	public String schedulePeriodicTimerInMilliseconds(SipApplicationSession appSession, long milliseconds,
+			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
+		ServletTimer timer = null;
+		long delay = milliseconds;
+		long period = milliseconds;
+		boolean fixedDelay = false;
+		boolean isPersistent = false;
+		return timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction).getId();
+	}
+
 	public String scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction)
 			throws ServletException, IOException {
 		long delay = seconds * 1000;
+		boolean isPersistent = false;
+		return timerService.createTimer(appSession, delay, isPersistent, lambdaFunction).getId();
+	}
+
+	public String scheduleTimerInMilliseconds(SipApplicationSession appSession, long milliseconds,
+			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
+		long delay = milliseconds;
 		boolean isPersistent = false;
 		return timerService.createTimer(appSession, delay, isPersistent, lambdaFunction).getId();
 	}
@@ -238,6 +255,15 @@ public abstract class Callflow implements Serializable {
 		return new Expectation(appSession, method);
 	}
 
+	/**
+	 * Sends a SipServletRequest object. Supplies a SipServletResponse object to the
+	 * user as part of the lambda function.
+	 * 
+	 * @param request
+	 * @param lambdaFunction
+	 * @throws ServletException
+	 * @throws IOException
+	 */
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
 			throws ServletException, IOException {
 		Callflow.sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
@@ -251,6 +277,15 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
+	/**
+	 * Sends a SipServletRequest object. This method does not supply a
+	 * SipServletResponse object to the user. (Useful for messages like ACK or
+	 * INFO.)
+	 * 
+	 * @param request
+	 * @throws ServletException
+	 * @throws IOException
+	 */
 	public void sendRequest(SipServletRequest request) throws ServletException, IOException {
 		Callflow.sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
@@ -263,6 +298,90 @@ public abstract class Callflow implements Serializable {
 			sipLogger.logStackTrace(e);
 			throw e;
 		}
+	}
+
+	/**
+	 * Sends multiple requests (INVITE) in serial.
+	 * 
+	 * @param milliseconds   timer duration in milliseconds for each request
+	 * @param requests       a list of SipServletRequest objects
+	 * @param lambdaFunction supplies a SipServletResponse object
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
+
+		Iterator<SipServletRequest> itr = requests.iterator();
+		while (itr.hasNext()) {
+
+			SipServletRequest request = itr.next();
+
+			String timerId = schedulePeriodicTimerInMilliseconds(request.getApplicationSession(), //
+					milliseconds, (timeout) -> {
+						sendRequest(request.createCancel(), (cancelResponse) -> {
+							sipLogger.fine("Got cancel response... Who cares?");
+						});
+
+						if (false == itr.hasNext()) {
+							// all requests timed out, create a dummy response and pass it to the user
+							lambdaFunction.accept(request.createResponse(408));
+						}
+					});
+
+			sendRequest(request, (response) -> {
+				cancelTimer(request.getApplicationSession(), timerId);
+				lambdaFunction.accept(response);
+			});
+
+		}
+	}
+
+	/**
+	 * Sends multiple requests (INVITE) in parallel.
+	 * 
+	 * @param milliseconds   timer duration in milliseconds for all requests
+	 * @param requests       a list of SipServletRequest objects
+	 * @param lambdaFunction supplies a SipServletResponse object
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public void sendRequestsInParallel(long milliseconds, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
+
+		SipApplicationSession appSession = requests.get(0).getApplicationSession();
+
+		String timerId = schedulePeriodicTimerInMilliseconds(appSession, milliseconds, (timeout) -> {
+			// all requests timed out, time to cancel them
+			for (SipServletRequest request : requests) {
+				if (false == request.isCommitted()) {
+					sendRequest(request.createCancel());
+				}
+			}
+
+			// give the user a dummy response
+			lambdaFunction.accept(requests.get(0).createResponse(408));
+		});
+
+		for (SipServletRequest request : requests) {
+			sendRequest(request, (response) -> {
+
+				// cancel that pesky timer
+				this.cancelTimer(appSession, timerId);
+
+				// cancel the outstanding requests
+				for (SipServletRequest outstandingRequest : requests) {
+					if (outstandingRequest != request) {
+						request.getSession().removeAttribute("RESPONSE_CALLBACK_INVITE");
+						sendRequest(outstandingRequest.createCancel());
+					}
+				}
+
+				// give the response to the user
+				lambdaFunction.accept(response);
+			});
+		}
+
 	}
 
 	/**
@@ -641,30 +760,58 @@ public abstract class Callflow implements Serializable {
 		return bobAckOrPrack;
 	}
 
+	/**
+	 * Creates a new request by copying the content and headers from an initial
+	 * request.
+	 * 
+	 * @param endpoint
+	 * @param directive
+	 * @param initialRequest
+	 * @return copy of initial request
+	 * @throws ServletParseException
+	 */
 	public static SipServletRequest createInitialRequest(URI endpoint, SipApplicationRoutingDirective directive,
-			SipServletRequest aliceRequest) throws ServletParseException {
+			SipServletRequest initialRequest) throws ServletParseException {
 		SipServletRequest bobRequest;
 
 		bobRequest = sipFactory.createRequest( //
-				aliceRequest.getApplicationSession(), //
-				aliceRequest.getMethod(), //
-				aliceRequest.getFrom(), //
-				aliceRequest.getTo());
+				initialRequest.getApplicationSession(), //
+				initialRequest.getMethod(), //
+				initialRequest.getFrom(), //
+				initialRequest.getTo());
 
-		copyHeaders(aliceRequest, bobRequest);
-		bobRequest.setRequestURI(copyParameters(aliceRequest.getRequestURI(), endpoint));
-		bobRequest.setRoutingDirective(directive, aliceRequest);
+		copyHeaders(initialRequest, bobRequest);
+		bobRequest.setRequestURI(copyParameters(initialRequest.getRequestURI(), endpoint));
+		bobRequest.setRoutingDirective(directive, initialRequest);
 		return bobRequest;
 	}
 
-	public static SipServletRequest createNewInitialRequest(URI endpoint, SipServletRequest aliceRequest)
+	/**
+	 * Creates a new request with the NEW routing directive by copying the content
+	 * and headers from an initial request.
+	 * 
+	 * @param endpoint
+	 * @param initialRequest
+	 * @return copy of initial request with the NEW routing directive
+	 * @throws ServletParseException
+	 */
+	public static SipServletRequest createNewInitialRequest(URI endpoint, SipServletRequest initialRequest)
 			throws ServletParseException {
-		return createInitialRequest(endpoint, SipApplicationRoutingDirective.NEW, aliceRequest);
+		return createInitialRequest(endpoint, SipApplicationRoutingDirective.NEW, initialRequest);
 	}
 
-	public static SipServletRequest createContinueInitialRequest(URI endpoint, SipServletRequest aliceRequest)
+	/**
+	 * Creates a new request with the CONTINUE routing directive by copying the
+	 * content and headers from an initial request.
+	 * 
+	 * @param endpoint
+	 * @param initialRequest
+	 * @return copy of initial request with the CONTINUE routing directive
+	 * @throws ServletParseException
+	 */
+	public static SipServletRequest createContinueInitialRequest(URI endpoint, SipServletRequest initialRequest)
 			throws ServletParseException {
-		return createInitialRequest(endpoint, SipApplicationRoutingDirective.CONTINUE, aliceRequest);
+		return createInitialRequest(endpoint, SipApplicationRoutingDirective.CONTINUE, initialRequest);
 	}
 
 	public static SipServletRequest createContinueInitialRequest(URI endpoint, SipServletRequest template,

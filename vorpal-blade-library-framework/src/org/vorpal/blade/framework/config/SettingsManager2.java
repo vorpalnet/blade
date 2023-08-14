@@ -64,6 +64,7 @@ import inet.ipaddr.IPAddress;
 
 /**
  * @author Jeff McDonald
+ * @param <T> 
  *
  */
 public class SettingsManager2<T> {
@@ -275,6 +276,7 @@ public class SettingsManager2<T> {
 	 * This method is intended to be overridden to allow configurations that require
 	 * additional work before they are ready to use.
 	 * 
+	 * @param config 
 	 * @throws ServletParseException
 	 */
 	public void initialize(T config) throws ServletParseException {
