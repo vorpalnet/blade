@@ -95,6 +95,7 @@ public class SettingsManager<T> {
 	protected Path clusterPath;
 	protected Path serverPath;
 	protected Path schemaPath;
+	protected Path samplePath;
 
 	public static SipFactory sipFactory;
 	public static Logger sipLogger;
@@ -210,6 +211,8 @@ public class SettingsManager<T> {
 			Files.createDirectories(domainPath);
 			schemaPath = Paths.get(configPath + "schemas/");
 			Files.createDirectories(schemaPath);
+			samplePath = Paths.get(configPath + "_samples/");
+			Files.createDirectories(samplePath);
 			server = ManagementFactory.getPlatformMBeanServer();
 			serverName = System.getProperty("weblogic.Name");
 			serverPath = Paths.get(configPath + "server/" + serverName);
@@ -281,6 +284,73 @@ public class SettingsManager<T> {
 		server.unregisterMBean(objectName);
 	}
 
+//	private void loadConfigFile(Class<?> clazz) throws InstantiationException, IllegalAccessException,
+//			JsonGenerationException, JsonMappingException, IOException, ServletParseException {
+//
+//		// start with the default
+//		boolean noConfigFiles = true;
+//
+//		T tmp;
+//		if (sample == null) {
+//			tmp = (T) clazz.newInstance();
+//		} else {
+//			tmp = sample;
+//		}
+//
+//		File domainFile = new File(domainPath.toString() + "/" + servletContextName + ".json");
+//		sipLogger.fine("Attempting to load... " + domainFile.getAbsolutePath());
+//		try {
+//			if (domainFile.exists()) {
+//				sipLogger.fine("Loading... " + domainFile.getAbsolutePath());
+//				domainNode = mapper.readTree(domainFile);
+////				sipLogger.fine("domainNode: " + domainNode);
+//				noConfigFiles = false;
+//			}
+//		} catch (Exception e) {
+//			sipLogger.severe("Error loading config file: " + domainFile.getCanonicalPath());
+//			sipLogger.severe(e);
+//		}
+//
+//		File clusterFile = new File(clusterPath.toString() + "/" + servletContextName + ".json");
+//		sipLogger.fine("Attempting to load... " + clusterFile.getAbsolutePath());
+//		try {
+//			if (clusterFile.exists()) {
+//				sipLogger.fine("Loading... " + clusterFile.getAbsolutePath());
+//				clusterNode = mapper.readTree(clusterFile);
+//				noConfigFiles = false;
+//			}
+//		} catch (Exception e) {
+//			sipLogger.severe("Error loading config file: " + clusterFile.getCanonicalPath());
+//			sipLogger.severe(e);
+//		}
+//
+//		File serverFile = new File(serverPath.toString() + "/" + servletContextName + ".json");
+//		sipLogger.fine("Attempting to load... " + serverFile.getAbsolutePath());
+//		try {
+//			if (serverFile.exists()) {
+//				sipLogger.fine("Loading... " + serverFile.getAbsolutePath());
+//				serverNode = mapper.readTree(serverFile);
+//				noConfigFiles = false;
+//			}
+//		} catch (Exception e) {
+//			sipLogger.severe("Error loading config file: " + serverFile.getCanonicalPath());
+//			sipLogger.severe(e);
+//		}
+//
+//		if (noConfigFiles) {
+//			current = tmp;
+//			saveConfigFile(domainFile, current);
+//		} else {
+//			sipLogger.fine("Calling mergeCurrentFromJson...");
+//			mergeCurrentFromJson();
+//		}
+//
+////		sipLogger.info("Loading configuration...\n" + getCurrentAsJson());
+//		sipLogger.info("Loading configuration...");
+//	}
+	
+	
+	@SuppressWarnings("unchecked")
 	private void loadConfigFile(Class<?> clazz) throws InstantiationException, IllegalAccessException,
 			JsonGenerationException, JsonMappingException, IOException, ServletParseException {
 
@@ -294,57 +364,50 @@ public class SettingsManager<T> {
 			tmp = sample;
 		}
 
+		// always save the current schema and sample config file
+		saveConfigFile(tmp);
+
 		File domainFile = new File(domainPath.toString() + "/" + servletContextName + ".json");
-		sipLogger.fine("Attempting to load... " + domainFile.getAbsolutePath());
 		try {
 			if (domainFile.exists()) {
-				sipLogger.fine("Loading... " + domainFile.getAbsolutePath());
 				domainNode = mapper.readTree(domainFile);
-//				sipLogger.fine("domainNode: " + domainNode);
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
-			sipLogger.severe("Error loading config file: " + domainFile.getCanonicalPath());
-			sipLogger.severe(e);
+			System.out.println("Error loading config file: " + domainFile.getCanonicalPath());
+			e.printStackTrace();
 		}
 
 		File clusterFile = new File(clusterPath.toString() + "/" + servletContextName + ".json");
-		sipLogger.fine("Attempting to load... " + clusterFile.getAbsolutePath());
 		try {
 			if (clusterFile.exists()) {
-				sipLogger.fine("Loading... " + clusterFile.getAbsolutePath());
 				clusterNode = mapper.readTree(clusterFile);
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
-			sipLogger.severe("Error loading config file: " + clusterFile.getCanonicalPath());
-			sipLogger.severe(e);
+			System.out.println("Error loading config file: " + clusterFile.getCanonicalPath());
+			e.printStackTrace();
 		}
 
 		File serverFile = new File(serverPath.toString() + "/" + servletContextName + ".json");
-		sipLogger.fine("Attempting to load... " + serverFile.getAbsolutePath());
 		try {
 			if (serverFile.exists()) {
-				sipLogger.fine("Loading... " + serverFile.getAbsolutePath());
 				serverNode = mapper.readTree(serverFile);
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
-			sipLogger.severe("Error loading config file: " + serverFile.getCanonicalPath());
-			sipLogger.severe(e);
+			System.out.println("Error loading config file: " + serverFile.getCanonicalPath());
+			e.printStackTrace();
 		}
 
 		if (noConfigFiles) {
 			current = tmp;
-			saveConfigFile(domainFile, current);
 		} else {
-			sipLogger.fine("Calling mergeCurrentFromJson...");
 			mergeCurrentFromJson();
 		}
 
-//		sipLogger.info("Loading configuration...\n" + getCurrentAsJson());
-		sipLogger.info("Loading configuration...");
-	}
+	}	
+	
 
 	private void saveSchema() throws JsonGenerationException, JsonMappingException, IOException {
 		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper);
@@ -356,21 +419,32 @@ public class SettingsManager<T> {
 
 	}
 
-	private void saveConfigFile(File file, T t) throws JsonGenerationException, JsonMappingException, IOException {
+//	private void saveConfigFile(File file, T t) throws JsonGenerationException, JsonMappingException, IOException {
+//
+//		// Never overwrite a .json file, use .SAMPLE instead
+//		String path = file.getPath();
+//		if (path.endsWith(".json")) {
+//			file = new File(path.replace(".json", ".SAMPLE"));
+//		}
+//
+//		sipLogger.fine("Saving config to: " + file.getCanonicalPath());
+//
+//		// save current config to file
+//		mapper.writerWithDefaultPrettyPrinter().writeValue(file, t);
+//
+//		// save matching schema to file
+//		this.saveSchema();
+//	}
+	
+	
+	private void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
+		File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");
+		mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
 
-		// Never overwrite a .json file, use .SAMPLE instead
-		String path = file.getPath();
-		if (path.endsWith(".json")) {
-			file = new File(path.replace(".json", ".SAMPLE"));
-		}
-
-		sipLogger.fine("Saving config to: " + file.getCanonicalPath());
-
-		// save current config to file
-		mapper.writerWithDefaultPrettyPrinter().writeValue(file, t);
-
-		// save matching schema to file
-		this.saveSchema();
+		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
+		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper);
+		JsonSchema schema = schemaGen.generateSchema(t.getClass());
+		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, schema);
 	}
 
 	/**

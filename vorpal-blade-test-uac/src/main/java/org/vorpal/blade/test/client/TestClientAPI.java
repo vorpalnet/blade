@@ -69,12 +69,27 @@ public class TestClientAPI extends Callflow {
 			bobRequest.setHeader(header.name, header.value);
 		}
 
+		bobRequest.setHeader("MIME-Version", "1.0");
+		bobRequest.setHeader("X-Acme-Call-ID", "");
+		bobRequest.setHeader("Require", "siprec");
+		bobRequest.setHeader("User-to-User",
+				"04FA08003918F5615DEFC4C8143030303537303633383931363333353436313830;encoding=hex");
+		bobRequest.setHeader("Cisco-Gucid", "00057063891633546180");
+		
+		
+//		bobRequest.getParameterableHeader("To").setParameter("recorddn", "1992665105");
+		
+
+		bobRequest.setContent(content, contentType);
+		
+		
+		
 //		bobRequest.setContent(message.body, "application/sdp");
 //		bobRequest.setContent(message.body, "multipart/mixed");
 
-		if (message.content != null && message.content.length() > 0) {
-			bobRequest.setContent(message.content, message.contentType);
-		}
+//		if (message.content != null && message.content.length() > 0) {
+//			bobRequest.setContent(message.content, message.contentType);
+//		}
 
 		MessageResponse msgResponse = new MessageResponse();
 
@@ -104,5 +119,76 @@ public class TestClientAPI extends Callflow {
 		// TODO Auto-generated method stub
 
 	}
+
+	private static final String contentType = "multipart/mixed;boundary=unique-boundary-1";
+	private static final String content = "--unique-boundary-1\n" + //
+			"Content-Type: application/sdp\n" + //
+			"\n" + //
+			"v=0\n" + //
+			"o=- 1274751 131744 IN IP4 10.173.164.254\n" + //
+			"s=-\n" + //
+			"c=IN IP4 10.173.164.220\n" + //
+			"t=0 0\n" + //
+			"m=audio 29028 RTP/AVP 18 101\n" + //
+			"a=rtpmap:18 G729/8000\n" + //
+			"a=fmtp:18 annexb=no\n" + //
+			"a=rtpmap:101 telephone-event/8000\n" + //
+			"a=fmtp:101 0-15\n" + //
+			"a=maxptime:20\n" + //
+			"a=label:369607687\n" + //
+			"a=sendonly\n" + //
+			"m=audio 42196 RTP/AVP 18 101\n" + //
+			"a=fmtp:18 annexb=no\n" + //
+			"a=rtpmap:101 telephone-event/8000\n" + //
+			"a=ptime:20\n" + //
+			"a=label:369607688\n" + //
+			"a=sendonly\n" + //
+			"\n" + //
+			"--unique-boundary-1\n" + //
+			"Content-Type: application/rs-metadata+xml\n" + //
+			"Content-Disposition: recording-session\n" + //
+			"\n" + //
+			"<?xml version='1.0' encoding='UTF-8'?>\n" + //
+			"<recording xmlns='urn:ietf:params:xml:ns:recording'>\n" + //
+			"	<datamode>complete</datamode>\n" + //
+			"	<session id=\"OegxHzZJT/5/85BANX/cAQ==\">\n" + //
+			"		<associate-time>2021-10-06T13:48:53</associate-time>\n" + //
+			"		<extensiondata xmlns:apkt=\"http:/acmepacket.com/siprec/extensiondata\">\n" + //
+			"			<apkt:ucid>00391770615DEF95</apkt:ucid>\n" + //
+			"			<apkt:callerOrig>false</apkt:callerOrig>\n" + //
+			"		</extensiondata>\n" + //
+			"	</session>\n" + //
+			"	<participant id=\"WPoWZiYFREpVXNr/fkiliQ==\" session=\"OegxHzZJT/5/85BANX/cAQ==\">\n" + //
+			"		<nameID aor=\"sip:5047022756@att.int\">\n" + //
+			"			<name>5047022756</name>\n" + //
+			"		</nameID>\n" + //
+			"		<send>yf0uCNZyTGxuYHX16kS6ug==</send>\n" + //
+			"		<associate-time>2021-10-06T13:48:53</associate-time>\n" + //
+			"		<extensiondata xmlns:apkt=\"http://acmepacket.com/siprec/extensiondata\">\n" + //
+			"			<apkt:callingParty>true</apkt:callingParty>\n" + //
+			"		</extensiondata>\n" + //
+			"	</participant>\n" + //
+			"	<participant id=\"DP3FOVQ/SDRrBfZmMg6bSQ==\" session=\"OegxHzZJT/5/85BANX/cAQ==\">\n" + //
+			"		<nameID aor=\"sip:1993620429@10.23.60.13\">\n" + //
+			"			<name>1993620429</name>\n" + //
+			"		</nameID>\n" + //
+			"		<send>8K6cfVekRxdptkO9DWiBvQ==</send>\n" + //
+			"		<associate-time>2021-10-06T13:49:39</associate-time>\n" + //
+			"		<extensiondata xmlns:apkt=\"http://acmepacket.com/siprec/extensiondata\">\n" + //
+			"			<apkt:callingParty>false</apkt:callingParty>\n" + //
+			"		</extensiondata>\n" + //
+			"	</participant>\n" + //
+			"	<stream id=\"yf0uCNZyTGxuYHX16kS6ug==\" session=\"OegxHzZJT/5/85BANX/cAQ==\">\n" + //
+			"		<label>369607687</label>\n" + //
+			"		<mode>separate</mode>\n" + //
+			"		<associate-time>2021-10-06T13:49:39</associate-time>\n" + //
+			"	</stream>\n" + //
+			"	<stream id=\"8K6cfVekRxdptkO9DWiBvQ==\" session=\"OegxHzZJT/5/85BANX/cAQ==\">\n" + //
+			"		<label>369607688</label>\n" + //
+			"		<mode>separate</mode>\n" + //
+			"		<associate-time>2021-10-06T13:49:39</associate-time>\n" + //
+			"	</stream>\n" + //
+			"</recording>\n" + //
+			"--unique-boundary-1--\n";
 
 }
