@@ -449,6 +449,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								if (request.getContentType().equals("message/sipfrag")) {
 									note = new String((byte[]) request.getContent());
 								}
+							} else if (request.getMethod().equals("REFER")) {
+								note = "Refer-To: " + request.getHeader("Refer-To");
 							} else if (request.getMethod().equals("INVITE")) {
 								note = "From: " + request.getHeader("From");
 							}

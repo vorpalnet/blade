@@ -67,11 +67,12 @@ import inet.ipaddr.IPAddress;
  * CLUSTER, and MACHINE. All three files are merged together.
  * <p>
  * A fourth, SAMPLE, configuration file is automatically generated and saved for
- * ease of use. (You can find it in the 'config/custom/vorpal/samples' directory.
+ * ease of use. (You can find it in the 'config/custom/vorpal/samples'
+ * directory.
  * <p>
- * Any serializable class (POJO) can be used as a config file. Extending the class
- * from the Configuration class will provide extra benefits, like controlling the level
- * of logging.
+ * Any serializable class (POJO) can be used as a config file. Extending the
+ * class from the Configuration class will provide extra benefits, like
+ * controlling the level of logging.
  * 
  * @author Jeff McDonald
  * @param <T> any type of serializable class
@@ -264,10 +265,7 @@ public class SettingsManager<T> {
 	 * @throws ServletParseException
 	 */
 	public void initialize(T config) throws ServletParseException {
-
-		System.out.println("SettingsManager.initialize()");
-		sipLogger.fine("SettingsManager.initialize()");
-
+		// do nothing;
 	}
 
 	public void register() throws InstanceAlreadyExistsException, MBeanRegistrationException,
@@ -348,8 +346,7 @@ public class SettingsManager<T> {
 ////		sipLogger.info("Loading configuration...\n" + getCurrentAsJson());
 //		sipLogger.info("Loading configuration...");
 //	}
-	
-	
+
 	@SuppressWarnings("unchecked")
 	private void loadConfigFile(Class<?> clazz) throws InstantiationException, IllegalAccessException,
 			JsonGenerationException, JsonMappingException, IOException, ServletParseException {
@@ -374,7 +371,7 @@ public class SettingsManager<T> {
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
-			System.out.println("Error loading config file: " + domainFile.getCanonicalPath());
+			sipLogger.severe("Error loading config file: " + domainFile.getCanonicalPath());
 			e.printStackTrace();
 		}
 
@@ -385,7 +382,7 @@ public class SettingsManager<T> {
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
-			System.out.println("Error loading config file: " + clusterFile.getCanonicalPath());
+			sipLogger.severe("Error loading config file: " + clusterFile.getCanonicalPath());
 			e.printStackTrace();
 		}
 
@@ -396,7 +393,7 @@ public class SettingsManager<T> {
 				noConfigFiles = false;
 			}
 		} catch (Exception e) {
-			System.out.println("Error loading config file: " + serverFile.getCanonicalPath());
+			sipLogger.severe("Error loading config file: " + serverFile.getCanonicalPath());
 			e.printStackTrace();
 		}
 
@@ -406,8 +403,7 @@ public class SettingsManager<T> {
 			mergeCurrentFromJson();
 		}
 
-	}	
-	
+	}
 
 	private void saveSchema() throws JsonGenerationException, JsonMappingException, IOException {
 		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper);
@@ -435,8 +431,7 @@ public class SettingsManager<T> {
 //		// save matching schema to file
 //		this.saveSchema();
 //	}
-	
-	
+
 	private void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
 		File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");
 		mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
@@ -526,26 +521,13 @@ public class SettingsManager<T> {
 	 */
 	public void mergeCurrentFromJson() throws ServletParseException {
 		try {
-
-			System.out.println("SettingsManager.mergeCurrentFromJson() begin...");
-
-			sipLogger.fine("Starting to merge...");
 			mergedNode = merge(merge(domainNode, clusterNode), serverNode);
-
-//			sipLogger.fine("Merged Node:\n" + mergedNode);
-
-			sipLogger.fine("Starting to convert...");
 			T tmp = (T) mapper.convertValue(mergedNode, clazz);
-			sipLogger.fine("Starting to initialize...");
 			initialize(tmp);
-			sipLogger.fine("Assigning current...");
 			current = tmp;
-//			sipLogger.fine("Current: " + current);
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
 		}
-
-		System.out.println("SettingsManager.mergeCurrentFromJson() end...");
 
 	}
 
@@ -565,9 +547,9 @@ public class SettingsManager<T> {
 		SettingsManager.serverName = serverName;
 	}
 
+	@Deprecated
 	public void logCurrent() {
-//		sipLogger.info("Configuration has changed...\n" + getCurrentAsJson());
-		sipLogger.info("Configuration has changed...");
+		sipLogger.info("Configuration has changed.");
 	}
 
 	/**

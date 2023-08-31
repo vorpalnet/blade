@@ -25,29 +25,21 @@
 package org.vorpal.blade.test.uas.callflows;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.b2bua.B2buaListener;
 import org.vorpal.blade.framework.b2bua.InitialInvite;
-
-import com.bea.wcp.sip.engine.SipServletResponseAdapter;
-import com.bea.wcp.sip.engine.server.InviteClientTransaction;
-import com.bea.wcp.sip.engine.server.ServerTransaction;
-import com.bea.wcp.sip.engine.server.SipService;
-import com.bea.wcp.sip.engine.server.SipServletResponseImpl;
 
 public class TestInvite extends InitialInvite {
 	static final long serialVersionUID = 1L;
 	private B2buaListener b2buaListener = null;
 //	int delay = 0;
-	int status = 0;
+//	int status = 0;
 //	int duration = 0;
-	String durationTimerId = null;
-	SipServletResponse delayedResponse = null;
+//	String durationTimerId = null;
+//	SipServletResponse delayedResponse = null;
 
 	public TestInvite() {
 	}
@@ -82,45 +74,75 @@ public class TestInvite extends InitialInvite {
 		return duration;
 	}
 
+	public static int inMilliseconds(String strDuration) {
+
+		return inSeconds(strDuration) * 1000;
+	}
+
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		try {
 
 			String strStatus = request.getRequestURI().getParameter("status");
+			int status = (strStatus != null) ? Integer.parseInt(strStatus) : 200;
 
-			if (strStatus != null) {
+			String strDelay = request.getRequestURI().getParameter("delay");
+			int delay = (strDelay != null) ? inSeconds(strDelay) : 0;
 
-				status = Integer.parseInt(strStatus);
+			if (delay > 0) {
 
-				if (status == 200) {
-					String strDuration = request.getRequestURI().getParameter("duration");
-					if (strDuration == null) {
-						strDuration = "30s";
+				scheduleTimer(request.getApplicationSession(), delay, (timer) -> {
+
+//					sipLogger.severe("1. Is request null? " + (request == null));
+//					sipLogger.severe("1. Is request committed? " + request.isCommitted());
+//					sipLogger.severe("1. Is request session null? " + (request.getSession() == null));
+//					if (request.getSession() != null) {
+//						sipLogger.severe("1. Is request session ready to invalidate? "
+//								+ (request.getSession().isReadyToInvalidate()));
+//						sipLogger.severe("1. Is request session valid? " + (request.getSession().isValid()));
+//					}
+
+					if (request.isCommitted() == false) {
+						sendResponse(request.createResponse(status));
 					}
-					durationTimerId = scheduleTimer(request.getApplicationSession(), inSeconds(strDuration),
-							(timer) -> {
-								sendRequest(request.getSession().createRequest("BYE"));
-							});
-				}
 
-				String strDelay = request.getRequestURI().getParameter("delay");
-				if (strDelay != null) {
+				});
 
-					delayedResponse = request.createResponse(status);
-
-					scheduleTimer(request.getApplicationSession(), inSeconds(strDelay), (timer) -> {
-						if (durationTimerId != null) {
-							request.getApplicationSession().getTimer(durationTimerId).cancel();
-						}
-
-						sendResponse(delayedResponse);
-					});
-
-				} else {
-					sendResponse(request.createResponse(status));
-				}
 			} else {
-				super.process(request);
+
+//				sipLogger.severe("2. Is request null? " + (request == null));
+//				sipLogger.severe("2. Is request committed? " + request.isCommitted());
+//				sipLogger.severe("2. Is request session null? " + (request.getSession() == null));
+//				if (request.getSession() != null) {
+//					sipLogger.severe("2. Is request session ready to invalidate? "
+//							+ (request.getSession().isReadyToInvalidate()));
+//					sipLogger.severe("2. Is request session valid? " + (request.getSession().isValid()));
+//				}
+
+				sendResponse(request.createResponse(status));
+			}
+
+			if (status >= 200 && status < 300) {
+				String strDuration = request.getRequestURI().getParameter("duration");
+				int duration = (strDuration != null) ? inSeconds(strDuration) : 30;
+
+				String timerId = scheduleTimer(request.getApplicationSession(), duration, (timer) -> {
+
+//					sipLogger.severe("3. Is request null? " + (request == null));
+//					sipLogger.severe("3. Is request committed? " + request.isCommitted());
+//					sipLogger.severe("3. Is request session null? " + (request.getSession() == null));
+//					if (request.getSession() != null) {
+//						sipLogger.severe("3. Is request session ready to invalidate? "
+//								+ (request.getSession().isReadyToInvalidate()));
+//						sipLogger.severe("3. Is request session valid? " + (request.getSession().isValid()));
+//					}
+
+					if (request.getSession() != null) {
+						sendRequest(request.getSession().createRequest("BYE"));
+					}
+
+				});
+
 			}
 
 		} catch (Exception e) {

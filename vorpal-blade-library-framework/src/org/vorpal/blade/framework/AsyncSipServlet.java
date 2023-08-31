@@ -22,7 +22,6 @@ import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerListener;
 import javax.servlet.sip.TimerService;
 import javax.servlet.sip.URI;
-import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
@@ -185,9 +184,14 @@ public abstract class AsyncSipServlet extends SipServlet
 	@Override
 	final public void timeout(ServletTimer timer) {
 		try {
+
 			Callback<ServletTimer> callback;
 			callback = (Callback<ServletTimer>) timer.getInfo();
-			callback.accept(timer);
+
+			if (callback != null) {
+				callback.accept(timer);
+			}
+
 		} catch (Exception e) {
 			Callflow.getLogger().logStackTrace(e);
 		}
@@ -317,71 +321,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		return hashedString;
 	}
 
-//	public static String uuencode(String stringToHash) {
-//		String stringHash = null;
-//		String encodedString = null;
-//
-//		MessageDigest messageDigest;
-//		try {
-//			messageDigest = MessageDigest.getInstance("MD5");
-//			messageDigest.update(stringToHash.getBytes());
-//			stringHash = new String(messageDigest.digest());
-//			Base64.Encoder encoder = Base64.getEncoder();
-//			encodedString = encoder.encodeToString(stringHash.getBytes(StandardCharsets.UTF_8));
-//			encodedString = encodedString.replaceAll("=", "");
-//			encodedString = encodedString.replaceAll("-", "~");
-//			encodedString = encodedString.replaceAll("_", "?");
-//		} catch (NoSuchAlgorithmException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//
-//		return encodedString;
-//	}
-
-//	public static String hash2(String str) {
-//		String result;
-//
-//		sipLogger.warning("Attempt to hash: " + str);
-//
-////		SipApplicationSession appSession = AsyncSipServlet.sipUtil.getApplicationSessionByKey(str, false);
-//		SipApplicationSession appSession = AsyncSipServlet.sipUtil.getApplicationSessionByKey(str, true);
-//
-//		sipLogger.warning("SipApplicationSession by that key: " + Boolean.toString(appSession != null));
-//
-//		String key = (String) appSession.getAttribute("SipApplicationKey");
-//		sipLogger.warning("SipApplicationKey: " + key);
-//
-//		if (key == null) {
-//			sipLogger.warning("Saving SipApplicationKey: " + str);
-//			appSession.setAttribute("SipApplicationKey", str);
-//			result = key;
-//		} else if (key.equals(str)) {
-//			sipLogger.warning("SipApplicationSession found and keys match!");
-//			result = key;
-//		} else {
-//			sipLogger.warning("SipApplicationSession found but keys do not match, trying again!");
-//			result = hash2("#" + str);
-//		}
-//
-////		if (appSession == null) {
-////			result = str;
-////		} else {
-////			
-////			sipLogger.warning("SipApplicationSession found: "+appSession.getId());			
-////			if(appSession.getId().contains("-"+str+"_")){
-////				sipLogger.warning("Correct SipApplicationSession found: true");			
-////				result = str;
-////			} else {
-////				sipLogger.warning("Correct SipApplicationSession found: false, recursively calling hash2 again...");			
-////				result = hash2("0" + str);
-////			}
-////		}
-//
-//		sipLogger.warning("Returning SipApplicationKey: " + result);
-//		return result;
-//	}
-
 	public static String getAccountName(Address address) {
 		return getAccountName(address.getURI());
 	}
@@ -400,29 +339,5 @@ public abstract class AsyncSipServlet extends SipServlet
 			throw e;
 		}
 	}
-
-/*	
-	public static void main(String[] args) {
-
-//		INFO 2023-05-12 11:01:54.553 - [------:--] Media ID: 01DMGK65M8A5B4IV7131Q2LAES007M4O
-//		FINE 2023-05-12 11:01:54.553 - [------:--] @SipApplicationKey: 5045722f1ee4053d
-//
-//		INFO 2023-05-12 11:03:10.615 - [------:--] Media ID: 01DMGK65M8A5B4IV7131Q2LAES007M50
-//		FINE 2023-05-12 11:03:10.615 - [------:--] @SipApplicationKey: 5045722f1ee4053d
-
-		String[] strArray = { //
-				"01DMGK65M8A5B4IV7131Q2LAES007M4OHGYUIJHYUJGFR%YUUHGFERTYUHFERYTDSERTYGFDERTYGFSWRTYHFDRTYTDR", //
-				"01DMGK65M8A5B4IV7131Q2LAES007M50", //
-				"18164388687", //
-				"18164388688" };
-
-		for (String m1 : strArray) {
-			System.out.println(m1 + " hash: '" + hash(m1) + "'");
-//			System.out.println(m1 + " hash: '" + uuencode(m1) + "'");
-
-		}
-
-	}
-*/
 
 }

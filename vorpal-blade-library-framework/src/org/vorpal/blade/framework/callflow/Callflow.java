@@ -43,8 +43,8 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionsUtil;
+import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerService;
-import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
@@ -101,6 +101,15 @@ public abstract class Callflow implements Serializable {
 		return (response.getStatus() >= 400);
 	}
 
+	/**
+	 * Not to be called by the end user. This method finds the callback method
+	 * associated with either the SipSession or SipApplicationSession. Special logic
+	 * is in place to not clear the callback if the request is a NOTIFY with a
+	 * sipfrag of less that 200.
+	 * 
+	 * @param request
+	 * @return the callback method
+	 */
 	@SuppressWarnings("unchecked")
 	public static Callback<SipServletRequest> pullCallback(SipServletRequest request) {
 		Callback<SipServletRequest> callback = null;
@@ -108,7 +117,30 @@ public abstract class Callflow implements Serializable {
 		String attribute = REQUEST_CALLBACK_ + request.getMethod();
 		callback = (Callback<SipServletRequest>) sipSession.getAttribute(attribute);
 		if (callback != null) {
-			sipSession.removeAttribute(attribute);
+			boolean removeAttribute = true;
+
+			try {
+				if (request.getMethod().equals(NOTIFY) && request.getContentType().equals("message/sipfrag")) {
+					String sipfrag;
+					if (request.getContent() instanceof String) {
+						sipfrag = (String) request.getContent();
+					} else {
+						sipfrag = new String(request.getRawContent()).trim();
+					}
+
+					if (false == sipfrag.matches(".*[2-5][0-9][0-9].*")) {
+						removeAttribute = false;
+					}
+
+				}
+			} catch (Exception e) {
+				// do nothing;
+			}
+
+			if (removeAttribute) {
+				sipSession.removeAttribute(attribute);
+			}
+
 		} else {
 			SipApplicationSession appSession = request.getApplicationSession();
 			callback = (Callback<SipServletRequest>) appSession.getAttribute(attribute);
@@ -241,7 +273,14 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public void cancelTimer(SipApplicationSession appSession, String timerId) {
-		appSession.getTimer(timerId).cancel();
+
+		if (appSession != null && timerId != null) {
+			ServletTimer timer = appSession.getTimer(timerId);
+			if (timer != null) {
+				timer.cancel();
+			}
+		}
+
 	}
 
 	public Expectation expectRequest(SipSession sipSession, String method, Callback<SipServletRequest> callback) {
@@ -312,29 +351,38 @@ public abstract class Callflow implements Serializable {
 	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
 			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
 
-		Iterator<SipServletRequest> itr = requests.iterator();
-		while (itr.hasNext()) {
+		if (requests.size() > 0) {
+			SipServletRequest request = requests.remove(0);
 
-			SipServletRequest request = itr.next();
+			SipServletResponse dummyResponse = request.createResponse(408);
 
-			String timerId = schedulePeriodicTimerInMilliseconds(request.getApplicationSession(), //
-					milliseconds, (timeout) -> {
-						sendRequest(request.createCancel(), (cancelResponse) -> {
-							sipLogger.fine("Got cancel response... Who cares?");
-						});
+			String timerId = scheduleTimerInMilliseconds(request.getApplicationSession(), milliseconds, (timeout) -> {
 
-						if (false == itr.hasNext()) {
-							// all requests timed out, create a dummy response and pass it to the user
-							lambdaFunction.accept(request.createResponse(408));
-						}
-					});
+				sendRequest(request.createCancel());
 
-			sendRequest(request, (response) -> {
-				cancelTimer(request.getApplicationSession(), timerId);
-				lambdaFunction.accept(response);
+				sendRequestsInSerial(milliseconds, requests, lambdaFunction);
 			});
 
+			sendRequest(request, (response) -> {
+
+				cancelTimer(response.getApplicationSession(), timerId);
+
+				if (!failure(response)) {
+					lambdaFunction.accept(response);
+				} else {
+					if (requests.size() == 0) {
+						// no more attempts, create a dummy response
+						lambdaFunction.accept(dummyResponse);
+					} else {
+						sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+					}
+				}
+
+			});
+		} else {
+			sipLogger.severe("Callflow.sendRequestsInSerial... Empty request list.");
 		}
+
 	}
 
 	/**
@@ -420,31 +468,44 @@ public abstract class Callflow implements Serializable {
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
 
-		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
+		if (response != null && response.isCommitted() == false) {
 
-			Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+			SipSession sipSession = response.getSession();
 
-			try {
-				response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
+			if (sipSession != null && sipSession.isValid()) {
 
-				if (provisional(response)) {
+				if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
 
-					if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
-						response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
-						response.sendReliably();
-					} else {
-						response.send();
+					Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+
+					try {
+						response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
+
+						if (provisional(response)) {
+
+							if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
+								response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
+								response.sendReliably();
+							} else {
+								response.send();
+							}
+
+						} else {
+							response.send();
+						}
+
+					} catch (Exception e) {
+						sipLogger.logStackTrace(e);
+						throw e;
 					}
-
-				} else {
-					response.send();
 				}
-
-			} catch (Exception e) {
-				sipLogger.logStackTrace(e);
-				throw e;
 			}
 		}
+
+//		else {
+//			sipLogger.warning(response,
+//					"Response " + response.getStatus() + " failure. This transaction has been completed already.");
+//		}
 
 	}
 
@@ -462,20 +523,6 @@ public abstract class Callflow implements Serializable {
 			// do nothing;
 		});
 	}
-
-//	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
-//		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
-//
-//			Callflow.sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
-//
-//			try {
-//				response.send();
-//			} catch (Exception e) {
-//				sipLogger.logStackTrace(e);
-//				throw e;
-//			}
-//		}
-//	}
 
 	public static void setSipFactory(SipFactory sipFactory) {
 		Callflow.sipFactory = sipFactory;
@@ -574,9 +621,6 @@ public abstract class Callflow implements Serializable {
 
 		for (String header : copyFrom.getHeaderNameList()) {
 
-			// Walking the high-wire without a net;
-//			try {
-
 			switch (header.hashCode()) {
 			case 2715: // ------- To
 			case 2198474: // ---- From
@@ -596,10 +640,6 @@ public abstract class Callflow implements Serializable {
 			default:
 				copyHeader(header, copyFrom, copyTo);
 			}
-
-//			} catch (Exception e) {
-//				sipLogger.log(Level.WARNING, "Cannot copy header: " + header + " hash: " + header.hashCode());
-//			}
 
 		}
 	}
@@ -769,9 +809,11 @@ public abstract class Callflow implements Serializable {
 	 * @param initialRequest
 	 * @return copy of initial request
 	 * @throws ServletParseException
+	 * @throws IOException
+	 * @throws UnsupportedEncodingException
 	 */
 	public static SipServletRequest createInitialRequest(URI endpoint, SipApplicationRoutingDirective directive,
-			SipServletRequest initialRequest) throws ServletParseException {
+			SipServletRequest initialRequest) throws ServletParseException, UnsupportedEncodingException, IOException {
 		SipServletRequest bobRequest;
 
 		bobRequest = sipFactory.createRequest( //
@@ -780,9 +822,11 @@ public abstract class Callflow implements Serializable {
 				initialRequest.getFrom(), //
 				initialRequest.getTo());
 
-		copyHeaders(initialRequest, bobRequest);
+		copyContentAndHeaders(initialRequest, bobRequest);
+
 		bobRequest.setRequestURI(copyParameters(initialRequest.getRequestURI(), endpoint));
 		bobRequest.setRoutingDirective(directive, initialRequest);
+
 		return bobRequest;
 	}
 
@@ -794,9 +838,11 @@ public abstract class Callflow implements Serializable {
 	 * @param initialRequest
 	 * @return copy of initial request with the NEW routing directive
 	 * @throws ServletParseException
+	 * @throws IOException
+	 * @throws UnsupportedEncodingException
 	 */
 	public static SipServletRequest createNewInitialRequest(URI endpoint, SipServletRequest initialRequest)
-			throws ServletParseException {
+			throws ServletParseException, UnsupportedEncodingException, IOException {
 		return createInitialRequest(endpoint, SipApplicationRoutingDirective.NEW, initialRequest);
 	}
 
@@ -808,9 +854,11 @@ public abstract class Callflow implements Serializable {
 	 * @param initialRequest
 	 * @return copy of initial request with the CONTINUE routing directive
 	 * @throws ServletParseException
+	 * @throws IOException
+	 * @throws UnsupportedEncodingException
 	 */
 	public static SipServletRequest createContinueInitialRequest(URI endpoint, SipServletRequest initialRequest)
-			throws ServletParseException {
+			throws ServletParseException, UnsupportedEncodingException, IOException {
 		return createInitialRequest(endpoint, SipApplicationRoutingDirective.CONTINUE, initialRequest);
 	}
 
@@ -848,7 +896,8 @@ public abstract class Callflow implements Serializable {
 	}
 
 	/**
-	 * Copy any parameters (that do not already exist) from one URI to another.
+	 * Copies user and parameters (that do not already exist) from one URI to
+	 * another.
 	 * 
 	 * @param from
 	 * @param to
@@ -856,11 +905,17 @@ public abstract class Callflow implements Serializable {
 	 * @throws ServletParseException
 	 */
 	public static URI copyParameters(URI from, URI to) throws ServletParseException {
+		SipURI sipFrom = (SipURI) from;
+		SipURI sipTo = (SipURI) to;
 
-		String value;
+		// copy user
+		if (sipFrom.getUser() != null && sipTo.getUser() == null) {
+			sipTo.setUser(sipFrom.getUser());
+		}
+
+		// copy parameters
 		for (String name : from.getParameterNameSet()) {
-			value = to.getParameter(name);
-			if (null == value) {
+			if (null == to.getParameter(name)) {
 				to.setParameter(name, from.getParameter(name));
 			}
 		}
