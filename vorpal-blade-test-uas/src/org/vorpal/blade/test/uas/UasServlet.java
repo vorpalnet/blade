@@ -13,7 +13,9 @@ import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.test.uas.callflows.TestInvite;
-import org.vorpal.blade.test.uas.callflows.TestRefer;
+import org.vorpal.blade.test.uas.callflows.TestNotImplemented;
+import org.vorpal.blade.test.uas.callflows.TestOkayResponse;
+import org.vorpal.blade.test.uas.callflows.TestReinvite;
 import org.vorpal.blade.test.uas.config.TestUasConfig;
 
 @WebListener
@@ -29,16 +31,26 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow = null;
 
-		if (request.isInitial()) {
+		switch (request.getMethod()) {
+		case "INVITE":
 
-			if (request.getRequestURI().getParameter("refer") != null) {
-				callflow = new TestRefer();
-			} else {
+			if (request.isInitial()) {
 				callflow = new TestInvite();
+			} else {
+				callflow = new TestReinvite();
 			}
+			break;
 
-		} else {
-			callflow = super.chooseCallflow(request);
+		case "CANCEL":
+		case "INFO":
+		case "BYE":
+
+			callflow = new TestOkayResponse();
+			break;
+			
+		default:
+			callflow = new TestNotImplemented();
+
 		}
 
 		return callflow;

@@ -34,10 +34,25 @@ public class Condition extends HashMap<String, ComparisonList> implements Serial
 
 	private static final long serialVersionUID = 1L;
 
+	private String id;
+
 	public Condition() {
 	}
 
-	public void addComparison(String header, String operator, String expression) {
+	public Condition(String id) {
+		this.id = id;
+	}
+
+	public String getId() {
+		return id;
+	}
+
+	public Condition setId(String id) {
+		this.id = id;
+		return this;
+	}
+
+	public Comparison addComparison(String header, String operator, String expression) {
 		Comparison comparison;
 		ComparisonList list;
 
@@ -49,6 +64,7 @@ public class Condition extends HashMap<String, ComparisonList> implements Serial
 
 		comparison = new Comparison(operator, expression);
 		list.add(comparison);
+		return comparison;
 	}
 
 	public boolean checkAll(SipServletRequest request) throws ServletParseException {

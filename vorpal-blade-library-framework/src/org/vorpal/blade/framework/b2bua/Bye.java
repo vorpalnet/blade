@@ -55,7 +55,7 @@ public class Bye extends Callflow {
 			aliceRequest = request;
 			SipSession sipSession = getLinkedSession(aliceRequest.getSession());
 
-			if (sipSession != null) {
+			if (sipSession != null && sipSession.isValid()) {
 
 				bobRequest = sipSession.createRequest(request.getMethod());
 				copyContentAndHeaders(aliceRequest, bobRequest);
@@ -75,17 +75,15 @@ public class Bye extends Callflow {
 
 			} else {
 				// In case a BYE comes in before sessions can be established.
-				// Should probably send a CANCEL in addition.
-				sipLogger.warning(request, "BYE received before session could be established.");
 				sendResponse(request.createResponse(200));
 			}
 
 		} catch (Exception e) {
 			try {
-				sipLogger.warning(request, "Exception sending BYE request: "+e.getMessage());
+				sipLogger.warning(request, "Exception sending BYE request: " + e.getMessage());
 				sendResponse(request.createResponse(200));
-			}catch(Exception e2) {
-				sipLogger.warning(request, "Exception sending BYE response: "+e.getMessage());
+			} catch (Exception e2) {
+				sipLogger.warning(request, "Exception sending BYE response: " + e.getMessage());
 			}
 		}
 	}
