@@ -256,7 +256,7 @@ public abstract class AsyncSipServlet extends SipServlet
 //	}
 
 	private static String byteArray2Text(byte[] bytes) {
-		final char[] alphanum = { // 63 characters for randomish pattern distribution
+		final char[] alphanum = { // 62 characters for randomish pattern distribution
 				'0', '1', '2', '3', '4', '5', '6', '7', //
 				'8', '9', 'a', 'b', 'c', 'd', 'e', 'f', //
 				'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', //
@@ -264,7 +264,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', //
 				'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', //
 				'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', //
-				'U', 'V', 'W', 'X', 'Y', 'Z', '#' };
+				'U', 'V', 'W', 'X', 'Y', 'Z' };
 		StringBuffer sb = new StringBuffer();
 		for (final byte b : bytes) {
 			sb.append(alphanum[Byte.toUnsignedInt(b) % alphanum.length]);
@@ -280,6 +280,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		return sb.toString();
 	}
 
+	
 	public static String hash(String stringToHash) {
 		String stringHash = null;
 
@@ -288,8 +289,8 @@ public abstract class AsyncSipServlet extends SipServlet
 //			messageDigest = MessageDigest.getInstance("SHA-256");
 			messageDigest = MessageDigest.getInstance("MD5");
 			messageDigest.update(stringToHash.getBytes());
-//			stringHash = byteArray2Text(messageDigest.digest());
-			stringHash = hexEncode(messageDigest.digest());
+			stringHash = byteArray2Text(messageDigest.digest());
+//			stringHash = hexEncode(messageDigest.digest());
 
 		} catch (NoSuchAlgorithmException e) {
 			// TODO Auto-generated catch block
