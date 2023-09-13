@@ -1,2 +1,4 @@
 /.apt_src/
 /bin/
+/target/
+/.apt_generated_tests/

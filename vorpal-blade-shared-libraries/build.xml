@@ -36,22 +36,43 @@
 
 	<target name="clean-all" depends="clean" />
 
-	<target name="build" depends="init,build-project,package"  />
+	<!-- target name="build" depends="init,build-project"  /-->
+
 	<target name="build-project" depends="init" >
 		<echo message="${ant.project.name}: ${ant.file}" />
-<!--
-		<javac debug="true"
-		       debuglevel="${debuglevel}"
-		       destdir="build/classes"
-		       includeantruntime="false"
-		       source="${source}"
-		       target="${target}">
-			<src path="src/main/java" />
-			<classpath refid="vorpal-blade-shared-libraries.classpath" />
-		</javac>
--->		
-		
 	</target>
+	
+	
+	<condition property="isWindows">
+	    <os family="windows" />
+	</condition>
+
+	<condition property="isUnix">
+	    <os family="unix" />
+	</condition>
+
+	<target name="build" depends="init, build-project, mvn_windows, mvn_unix"/>
+
+	<target name="mvn_windows" if="isWindows">
+	    <exec dir="." executable="cmd">
+	        <arg line="/c mvn clean package" />
+	    </exec>
+		<copy file="build/${ant.project.name}.war" todir="${dist}" />
+	</target>
+
+	<target name="mvn_unix" if="isUnix">
+	    <exec dir="." executable="sh">
+	        <arg line="-c 'mvn clean package'" />
+	    </exec>
+		<copy file="build/${ant.project.name}.war" todir="${dist}" />
+	</target>
+	
+	
+
+	
+	
+	
+	
 
 	<target name="package" depends="init">
 

@@ -210,7 +210,7 @@ public class SettingsManager<T> {
 			String configPath = "config/custom/vorpal/";
 			domainPath = Paths.get(configPath);
 			Files.createDirectories(domainPath);
-			schemaPath = Paths.get(configPath + "schemas/");
+			schemaPath = Paths.get(configPath + "_schemas/");
 			Files.createDirectories(schemaPath);
 			samplePath = Paths.get(configPath + "_samples/");
 			Files.createDirectories(samplePath);
