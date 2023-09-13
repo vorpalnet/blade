@@ -72,8 +72,8 @@
 	</target>
 	
 	<path id="subprojects">
-		<pathelement location="vorpal-blade-library-framework" />
 		<pathelement location="vorpal-blade-shared-libraries" />
+		<pathelement location="vorpal-blade-library-framework" />
 		<dirset dir=".">
 			<include name="vorpal-*" />
 			<exclude name="vorpal-blade-library-framework" />
