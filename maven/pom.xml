@@ -22,8 +22,18 @@
 		<logback-version>1.0.1</logback-version>
 		<junit-version>4.8.2</junit-version>
 		<slf4j-version>1.7.25</slf4j-version>
+		
+    <failOnMissingWebXml>false</failOnMissingWebXml>   
+		
 	</properties>
 	<dependencies>
+		
+		<dependency>
+    <groupId>javax.servlet</groupId>
+    <artifactId>javax.servlet-api</artifactId>
+    <version>3.0.1</version>
+</dependency>
+		
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
@@ -39,8 +49,23 @@
 			<artifactId>junit</artifactId>
 			<version>3.8.1</version>
 			<scope>test</scope>
+		</dependency>	
+		
+		<!-- https://mvnrepository.com/artifact/com.github.seancfoley/ipaddress -->
+		<dependency>
+    		<groupId>com.github.seancfoley</groupId>
+    		<artifactId>ipaddress</artifactId>
+    		<version>5.4.0</version>
 		</dependency>
-		<!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.module/jackson-module-jsonSchema -->
+		
+		<!-- https://mvnrepository.com/artifact/com.kjetland/mbknor-jackson-jsonschema -->
+		<dependency>
+    		<groupId>com.kjetland</groupId>
+    		<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
+    		<version>1.0.39</version>
+		</dependency>
+
+		
 		<dependency>
 			<groupId>com.fasterxml.jackson.module</groupId>
 			<artifactId>jackson-module-jsonSchema</artifactId>
@@ -89,11 +114,51 @@
 	<build>
 		<finalName>maven</finalName>
 		<plugins>
+			
+                
+                
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-war-plugin</artifactId>
+            <version>2.3</version>
+        </plugin>
+			
+<!--			
+                <plugin>
+                    <artifactId>maven-war-plugin</artifactId>
+                    <version>3.3.2</version>
+                </plugin>
+
+
         <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-war-plugin</artifactId>
             <version>3.3.1</version>
+            <configuration>
+				<failOnMissingWebXml>false</failOnMissingWebXml>
+			</configuration>
         </plugin>
+
+        <plugin>
+			<groupId>org.apache.maven.plugins</groupId>
+			<artifactId>maven-war-plugin</artifactId>
+			<version>2.6</version>
+			<configuration>
+				<failOnMissingWebXml>false</failOnMissingWebXml>
+				<archive>
+					<compress>true</compress>
+					<manifestEntries>
+						<Specification-Title>${sharedlib.name}</Specification-Title>
+						<Specification-Version>${sharedlib.spec.version}</Specification-Version>
+						<Implementation-Title>${sharedlib.name}</Implementation-Title>
+						<Implementation-Version>${sharedlib.impl.version}</Implementation-Version>
+						<Implementation-Vendor>${sharedlib.vendor}</Implementation-Vendor>
+						<Extension-Name>${sharedlib.name}</Extension-Name>
+					</manifestEntries>
+				</archive>
+			</configuration>
+		</plugin>
+-->     
     </plugins>
 	</build>
 </project>
