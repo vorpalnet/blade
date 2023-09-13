@@ -19,7 +19,7 @@
     </tstamp>
     
     <path id="vorpal-blade.classpath">
-        <fileset dir="../vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib">
+        <fileset dir="../vorpal-blade-shared-libraries/target/vorpal-blade-shared-libraries/WEB-INF/lib">
           <include name="**/*.jar" />
         </fileset>
         <pathelement location="${dist}/vorpal-blade-library-framework.jar" />

@@ -11,12 +11,12 @@
 	</classpathentry>
 	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.module.container"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/5"/>
-	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.web.container/vorpal-blade-shared-libraries"/>
 	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.system">
 		<attributes>
 			<attribute name="owner.project.facets" value="jst.appclient"/>
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/OCCAS8"/>
+	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.shared/vorpal-blade/allow-newer/2.0"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

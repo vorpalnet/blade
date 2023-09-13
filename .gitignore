@@ -4,3 +4,4 @@ build
 build.number
 bin
 .apt_src
+target
