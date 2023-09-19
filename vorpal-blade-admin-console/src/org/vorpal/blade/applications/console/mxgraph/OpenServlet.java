@@ -187,6 +187,8 @@ public class OpenServlet extends HttpServlet {
 
 	/**
 	 * URI encodes the given string for JavaScript.
+	 * @param s 
+	 * @return result
 	 */
 	protected String encodeString(String s) {
 //		return StringEscapeUtils.escapeEcmaScript(Utils.encodeURIComponent(s, Utils.CHARSET_FOR_URL_ENCODING));
@@ -195,6 +197,8 @@ public class OpenServlet extends HttpServlet {
 
 	/**
 	 * Writes the given string as a script in a HTML page to the given print writer.
+	 * @param writer 
+	 * @param js 
 	 */
 	protected void writeScript(PrintWriter writer, String js) {
 		writer.println("<html>");
@@ -215,6 +219,8 @@ public class OpenServlet extends HttpServlet {
 
 	/**
 	 * Decodes the zTXt chunk of the given PNG image stream.
+	 * @param stream 
+	 * @return result
 	 */
 	public static Map<String, String> decodeCompressedText(InputStream stream) {
 		Map<String, String> result = new Hashtable<String, String>();
