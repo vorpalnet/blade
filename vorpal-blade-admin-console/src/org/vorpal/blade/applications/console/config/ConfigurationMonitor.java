@@ -82,6 +82,9 @@ public class ConfigurationMonitor extends Thread {
 
 	/**
 	 * Creates a WatchService and registers the given directory
+	 * @param dir 
+	 * @param recursive 
+	 * @throws IOException 
 	 */
 	public void initialize(Path dir, boolean recursive) throws IOException {
 
