@@ -5,6 +5,10 @@ public class NameValuePair<Name, Value> {
 	private Name name;
 	private Value value;
 
+	public NameValuePair() {
+		// do nothing;
+	}
+
 	public NameValuePair(Name name, Value value) {
 		this.name = name;
 		this.value = value;
