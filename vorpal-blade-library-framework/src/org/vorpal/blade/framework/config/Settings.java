@@ -67,14 +67,16 @@ public class Settings implements SettingsMXBean {
 				if (settingsManager.getCurrent() instanceof Configuration) {
 					Configuration config = (Configuration) settingsManager.getCurrent();
 
-					if (config.getLogging() != null && config.getLogging().resolveLevel() != null) {
-						sipLogger.setLevel(config.getLogging().resolveLevel());
-						sipLogger.log(config.getLogging().resolveLevel(),
-								"Setting logging level to: " + config.getLogging().resolveLevel());
+					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
+						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
+						sipLogger.log(config.getLogging().resolveLoggingLevel(),
+								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
 					}
 
 				}
 				settingsManager.logCurrent();
+			}else {
+				System.out.println("Settings.setDomainJson could not get sipLogger.");
 			}
 
 		} catch (Exception e) {
@@ -107,13 +109,15 @@ public class Settings implements SettingsMXBean {
 			if (sipLogger != null) {
 				if (settingsManager.getCurrent() instanceof Configuration) {
 					Configuration config = (Configuration) settingsManager.getCurrent();
-					if (config.getLogging() != null && config.getLogging().resolveLevel() != null) {
-						sipLogger.setLevel(config.getLogging().resolveLevel());
-						sipLogger.log(config.getLogging().resolveLevel(),
-								"Setting logging level to: " + config.getLogging().resolveLevel());
+					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
+						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
+						sipLogger.log(config.getLogging().resolveLoggingLevel(),
+								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
 					}
 				}
 				settingsManager.logCurrent();
+			}else {
+				System.out.println("Settings.setClusterJson could not get sipLogger.");
 			}
 
 		} catch (Exception e) {
@@ -141,13 +145,15 @@ public class Settings implements SettingsMXBean {
 			if (sipLogger != null) {
 				if (settingsManager.getCurrent() instanceof Configuration) {
 					Configuration config = (Configuration) settingsManager.getCurrent();
-					if (config.getLogging() != null && config.getLogging().resolveLevel() != null) {
-						sipLogger.setLevel(config.getLogging().resolveLevel());
-						sipLogger.log(config.getLogging().resolveLevel(),
-								"Setting logging level to: " + config.getLogging().resolveLevel());
+					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
+						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
+						sipLogger.log(config.getLogging().resolveLoggingLevel(),
+								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
 					}
 				}
 				settingsManager.logCurrent();
+			}else {
+				System.out.println("Settings.setServerJson could not get sipLogger.");
 			}
 
 		} catch (Exception e) {

@@ -12,6 +12,10 @@ public class LogParameters {
 		OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL
 	};
 
+	public enum Unit {
+		KB, KiB, MB, MiB, GB, GiB
+	}
+
 	private final static long KB_FACTOR = 1000;
 	private final static long KIB_FACTOR = 1024;
 	private final static long MB_FACTOR = 1000 * KB_FACTOR;
@@ -19,86 +23,225 @@ public class LogParameters {
 	private final static long GB_FACTOR = 1000 * MB_FACTOR;
 	private final static long GIB_FACTOR = 1024 * MIB_FACTOR;
 
-	protected Boolean useParentHandlers = null;
-	protected String name = null;
+	protected Boolean useParentLogging = null;
 	protected String directory = null;
-	protected Integer limit = null;
-	protected Integer count = null;
-	protected Boolean append = null;
-	protected LoggingLevel level = null;
+	protected String filename = null;
+	protected String fileSize = null;
+	protected Integer fileCount = null;
+	protected Boolean appendFile = null;
+	protected LoggingLevel loggingLevel = null;
+	protected LoggingLevel sequenceDiagramLoggingLevel = null;
+	protected LoggingLevel configurationLoggingLevel = null;
 
-	public String getName() {
-		return name;
+	public LogParameters() {
+
 	}
 
-	public void setName(String name) {
-		this.name = name;
+	public LogParameters(LogParameters that) {
+		this.useParentLogging = that.useParentLogging;
+		this.directory = that.directory;
+		this.filename = that.filename;
+		this.fileSize = that.fileSize;
+		this.fileCount = that.fileCount;
+		this.appendFile = that.appendFile;
+		this.loggingLevel = that.loggingLevel;
+		this.sequenceDiagramLoggingLevel = that.sequenceDiagramLoggingLevel;
+		this.configurationLoggingLevel = that.configurationLoggingLevel;
 	}
 
-	public void setUseParentHandlers(Boolean useParentHandlers) {
-		this.useParentHandlers = useParentHandlers;
+	public LoggingLevel getLoggingLevel() {
+		return loggingLevel;
 	}
 
-	public Boolean getUseParentHandlers() {
-		return useParentHandlers;
+	/**
+	 * If true, statements will appear in the standard WebLogic log files. If false,
+	 * statements will appear in custom application specific log files.
+	 * 
+	 * @return the useParentLogging
+	 */
+	public Boolean getUseParentLogging() {
+		return useParentLogging;
 	}
 
-	public void setUseParent(Boolean useParentHandlers) {
-		this.useParentHandlers = useParentHandlers;
+	/**
+	 * If true, statements will appear in the standard WebLogic log files. If false,
+	 * statements will appear in custom application specific log files.
+	 * 
+	 * @param useParentLogging the useParentLogging value
+	 * @return instance of self
+	 */
+	public LogParameters setUseParentLogging(Boolean useParentLogging) {
+		this.useParentLogging = useParentLogging;
+		return this;
 	}
 
+	/**
+	 * @return the directory
+	 */
 	public String getDirectory() {
 		return directory;
 	}
 
-	public void setDirectory(String directory) {
+	/**
+	 * @param directory the directory to set
+	 * @return instance of self
+	 */
+	public LogParameters setDirectory(String directory) {
 		this.directory = directory;
+		return this;
 	}
 
-	public Integer getLimit() {
-		return limit;
+	/**
+	 * @return the fileName
+	 */
+	public String getFileName() {
+		return filename;
 	}
 
-	public void setLimit(Integer limit) {
-		this.limit = limit;
+	/**
+	 * @param fileName the fileName to set
+	 * @return instance of self
+	 */
+	public LogParameters setFileName(String fileName) {
+		this.filename = fileName;
+		return this;
 	}
 
-	public Integer getCount() {
-		return count;
+	/**
+	 * @return the fileSize
+	 */
+	public String getFileSize() {
+		return fileSize;
 	}
 
-	public void setCount(Integer count) {
-		this.count = count;
+	/**
+	 * @param fileSize the fileSize to set
+	 * @return instance of self
+	 */
+	public LogParameters setFileSize(String fileSize) {
+		this.fileSize = fileSize;
+		return this;
 	}
 
-	public Boolean getAppend() {
-		return append;
+	/**
+	 * @return the fileCount
+	 */
+	public Integer getFileCount() {
+		return fileCount;
 	}
 
-	public void setAppend(Boolean append) {
-		this.append = append;
+	/**
+	 * @param fileCount the fileCount to set
+	 * @return instance of self
+	 */
+	public LogParameters setFileCount(Integer fileCount) {
+		this.fileCount = fileCount;
+		return this;
 	}
 
-	public void setLevel(LoggingLevel level) {
-		this.level = level;
+	/**
+	 * @return the appendFile
+	 */
+	public Boolean getAppendFile() {
+		return appendFile;
 	}
 
-	public LoggingLevel getLevel() {
-		return level;
+	/**
+	 * @param appendFile the appendFile to set
+	 * @return instance of self
+	 */
+	public LogParameters setAppendFile(Boolean appendFile) {
+		this.appendFile = appendFile;
+		return this;
 	}
 
-	public void LoggingLevel(LoggingLevel level) {
-		this.level = level;
+	/**
+	 * @return the sequenceDiagramLoggingLevel
+	 */
+	public LoggingLevel getSequenceDiagramLoggingLevel() {
+		return sequenceDiagramLoggingLevel;
 	}
 
-	private static int parseHRNumberAsInt(String arg0) throws ParseException {
+	/**
+	 * @param sequenceDiagramLoggingLevel the sequenceDiagramLoggingLevel to set
+	 * @return instance of self
+	 */
+	public LogParameters setSequenceDiagramLoggingLevel(LoggingLevel sequenceDiagramLoggingLevel) {
+		this.sequenceDiagramLoggingLevel = sequenceDiagramLoggingLevel;
+		return this;
+	}
+
+	public Level resolveSequenceDiagramLoggingLevel() {
+		return parseLoggingLevel(this.getSequenceDiagramLoggingLevel());
+	}
+
+	public Level parseLoggingLevel(LoggingLevel level) {
+		if (level == null) {
+			return Level.FINE;
+		}
+
+		switch (level) {
+		case OFF:
+			return Level.OFF;
+		case SEVERE:
+			return Level.SEVERE;
+		case WARNING:
+			return Level.WARNING;
+		case INFO:
+			return Level.INFO;
+		case CONFIG:
+			return Level.CONFIG;
+		case FINE:
+			return Level.FINE;
+		case FINER:
+			return Level.FINER;
+		case FINEST:
+			return Level.FINEST;
+		case ALL:
+			return Level.ALL;
+		default:
+			return Level.INFO;
+		}
+
+	}
+
+	/**
+	 * @return the configurationLoggingLevel
+	 */
+	public LoggingLevel getConfigurationLoggingLevel() {
+		return configurationLoggingLevel;
+	}
+
+	/**
+	 * @param configurationLoggingLevel the configurationLoggingLevel to set
+	 * @return instance of self
+	 */
+	public LogParameters setConfigurationLoggingLevel(LoggingLevel configurationLoggingLevel) {
+		this.configurationLoggingLevel = configurationLoggingLevel;
+		return this;
+	}
+
+	public Level resolveConfigurationLoggingLevel() {
+		return parseLoggingLevel(this.getConfigurationLoggingLevel());
+	}
+
+	/**
+	 * @param loggingLevel the loggingLevel to set
+	 * @return instance of self
+	 */
+	public LogParameters setLoggingLevel(LoggingLevel loggingLevel) {
+		this.loggingLevel = loggingLevel;
+		return this;
+	}
+
+	private static int parseHRNumberAsInt(String humanReadable) throws ParseException {
 		float value, ret;
 		String factor;
 
 		try {
 
 			Pattern pattern = Pattern.compile("([0-9\\.]+)(([KMG])i?B)*");
-			Matcher match = pattern.matcher(arg0);
+			Matcher match = pattern.matcher(humanReadable);
 
 			if (!match.matches() || match.groupCount() != 3) {
 				throw new ParseException("Wrong format", 0);
@@ -157,7 +300,7 @@ public class LogParameters {
 		return value;
 	}
 
-	private static String resolveVariables(ServletContext servletContext, String inputString) {
+	public static String resolveVariables(ServletContext servletContext, String inputString) {
 		int index;
 		String variable;
 		String key;
@@ -180,55 +323,30 @@ public class LogParameters {
 				: resolveVariables(servletContext, defaultDirectory);
 	}
 
-	public String resolveName(ServletContext servletContext) {
-		final String defaultName = "${sip.application.name}";
-		return (name != null) ? resolveVariables(servletContext, name) : resolveVariables(servletContext, defaultName);
+	public String resolveFilename(ServletContext servletContext) {
+		final String defaultName = "${sip.application.name}.%g.log";
+		return (filename != null) ? resolveVariables(servletContext, filename)
+				: resolveVariables(servletContext, defaultName);
 	}
 
-	public Boolean resolveUseParentHandlers() {
-		return (useParentHandlers != null) ? useParentHandlers : false;
+	public Boolean resolveUseParentLogging() {
+		return (useParentLogging != null) ? useParentLogging : false;
 	}
 
-	public Integer resolveLimit() {
-		return (limit != null) ? limit : 50 * 1024 * 1024;
+	public Integer resolveFileSize() throws ParseException {
+		return (this.fileSize != null) ? parseHRNumberAsInt(this.fileSize) : parseHRNumberAsInt("100MiB");
 	}
 
-	public Integer resolveCount() {
-		return (count != null) ? count : 20;
+	public Integer resolveFileCount() {
+		return (this.fileCount != null) ? this.fileCount : 25;
 	}
 
-	public Boolean resolveAppend() {
-		return (append != null) ? append : true;
+	public Boolean resolveFileAppend() {
+		return (this.appendFile != null) ? this.appendFile : true;
 	}
 
-	public Level resolveLevel() {
-		if (level == null) {
-			return null;
-		}
-
-		switch (level) {
-		case OFF:
-			return Level.OFF;
-		case SEVERE:
-			return Level.SEVERE;
-		case WARNING:
-			return Level.WARNING;
-		case INFO:
-			return Level.INFO;
-		case CONFIG:
-			return Level.CONFIG;
-		case FINE:
-			return Level.FINE;
-		case FINER:
-			return Level.FINER;
-		case FINEST:
-			return Level.FINEST;
-		case ALL:
-			return Level.ALL;
-		default:
-			return Level.INFO;
-		}
-
+	public Level resolveLoggingLevel() {
+		return parseLoggingLevel(this.getLoggingLevel());
 	}
 
 	public static void main(String args[]) throws ParseException {

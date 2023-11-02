@@ -56,7 +56,8 @@ public class AppRouter implements SipApplicationRouter {
 
 	@Override
 	public void init() {
-		settingsManager = new SettingsManager<AppRouterConfiguration>(FSMAR, AppRouterConfiguration.class, new AppRouterConfigurationSample());		
+		settingsManager = new SettingsManager<>(FSMAR, AppRouterConfiguration.class,
+				new AppRouterConfigurationSample());
 		sipLogger = SettingsManager.getSipLogger();
 		sipLogger.logConfiguration(settingsManager.getCurrent());
 	}
@@ -73,7 +74,8 @@ public class AppRouter implements SipApplicationRouter {
 
 		try {
 
-			AppRouterConfiguration config = (saved != null) ? (AppRouterConfiguration) saved : settingsManager.getCurrent();
+			AppRouterConfiguration config = (saved != null) ? (AppRouterConfiguration) saved
+					: settingsManager.getCurrent();
 
 			// Did the request originate from an app?
 			SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request).getImpl()
@@ -94,19 +96,28 @@ public class AppRouter implements SipApplicationRouter {
 			// For targeted sessions, skip all this nonsense and route to that app
 			if (requestInfo != null) {
 				String deployedApp = getDeployedApp(requestInfo.getApplicationName());
-				nextApp = new SipApplicationRouterInfo(deployedApp, region, null, null, SipRouteModifier.NO_ROUTE,
+				nextApp = new SipApplicationRouterInfo( //
+						deployedApp, //
+						region, //
+						null, //
+						null, //
+						SipRouteModifier.NO_ROUTE, //
 						config);
 			}
 
 			// Is the request intended for a deployed app? i.e. "sip:hold"
 			if (nextApp == null) {
-//				SipURI sipUri = (SipURI) request.getTo().getURI(); // no, it should be the Request-URI
 				SipURI sipUri = (SipURI) request.getRequestURI();
-				
+
 				if (null == sipUri.getUser()) {
 					String app = getDeployedApp(sipUri.getHost());
 					if (app != null) {
-						nextApp = new SipApplicationRouterInfo(app, region, null, null, SipRouteModifier.NO_ROUTE,
+						nextApp = new SipApplicationRouterInfo( //
+								app, //
+								region, //
+								null, //
+								null, //
+								SipRouteModifier.NO_ROUTE, //
 								config);
 					}
 				}
@@ -222,10 +233,6 @@ public class AppRouter implements SipApplicationRouter {
 
 	public static String getDeployedApp(String appName) {
 		String deployedApp = deployed.get(SettingsManager.basename(appName));
-		if (deployedApp == null) {
-			sipLogger.severe("Application " + appName + " is not deployed. Check configuration.");
-		}
-
 		return deployedApp;
 	}
 

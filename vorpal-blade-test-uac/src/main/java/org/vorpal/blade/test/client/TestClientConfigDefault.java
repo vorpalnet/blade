@@ -9,6 +9,6 @@ import org.vorpal.blade.framework.logging.LogParametersDefault;
 public class TestClientConfigDefault extends TestClientConfig implements Serializable {
 	public TestClientConfigDefault() {
 		logging = new LogParametersDefault();
-		logging.setLevel(LoggingLevel.FINE);
+		logging.setLoggingLevel(LoggingLevel.FINE);
 	}
 }

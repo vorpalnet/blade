@@ -39,6 +39,8 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
+import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
+
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -48,6 +50,33 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //	private static String name;
 
 	private static final long serialVersionUID = 1L;
+	private Level sequenceDiagramLoggingLevel = null;
+	private Level configurationLoggingLevel = null;
+
+	@Override
+	public Level getLevel() {
+		Level level = super.getLevel();
+		if (level == null) {
+			level = this.getParent().getLevel();
+		}
+		return level;
+	}
+
+	public Level getSequenceDiagramLoggingLevel() {
+		return sequenceDiagramLoggingLevel;
+	}
+
+	public void setSequenceDiagramLoggingLevel(Level sequenceDiagramLoggingLevel) {
+		this.sequenceDiagramLoggingLevel = sequenceDiagramLoggingLevel;
+	}
+
+	public Level getConfigurationLoggingLevel() {
+		return configurationLoggingLevel;
+	}
+
+	public void setConfigurationLoggingLevel(Level configurationLoggingLevel) {
+		this.configurationLoggingLevel = configurationLoggingLevel;
+	}
 
 	public static enum Direction {
 		SEND, RECEIVE
@@ -127,7 +156,17 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			StringWriter sw = new StringWriter();
 			PrintWriter pw = new PrintWriter(sw);
 			mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);
-			this.info(config.getClass().getSimpleName() + "=" + sw.toString());
+
+			if (this.configurationLoggingLevel != null) {
+				if (this.isLoggable(configurationLoggingLevel)) {
+					this.log(this.configurationLoggingLevel, config.getClass().getSimpleName() + "=" + sw.toString());
+				}
+			} else {
+				if (this.isLoggable(Level.FINE)) {
+					this.info(config.getClass().getSimpleName() + "=" + sw.toString());
+				}
+			}
+
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -160,7 +199,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void log(Level level, ServletTimer timer) {
-		log(level, timer, null);
+		if (this.isLoggable(level)) {
+			log(level, timer, null);
+		}
 	}
 
 	public void log(Level level, ServletTimer timer, String comments) {

@@ -25,14 +25,18 @@ package org.vorpal.blade.test.b2bua;
 
 import java.io.IOException;
 
+import javax.annotation.Resource;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.config.SettingsManager;
+
+import inet.ipaddr.IPAddressString;
 
 /**
  * @author Jeff McDonald
@@ -44,7 +48,10 @@ import org.vorpal.blade.framework.config.SettingsManager;
 @javax.servlet.sip.annotation.SipListener
 public class SampleB2buaServlet extends B2buaServlet {
 	private static final long serialVersionUID = 1L;
-	private static SettingsManager<SampleB2buaConfig> settingsManager;
+	public static SettingsManager<SampleB2buaConfig> settingsManager;
+
+	@Resource
+	private SipFactory sipFactory;
 
 	/*
 	 * This is invoked when the servlet starts up.
@@ -52,16 +59,31 @@ public class SampleB2buaServlet extends B2buaServlet {
 
 	@Override
 	public void servletCreated(SipServletContextEvent event) {
+
 		try {
-			settingsManager = new SettingsManager<>(event, SampleB2buaConfig.class);
-			sipLogger.info("servletCreated...");
-			
+
+			SampleB2buaConfig configSample = new ConfigSample();
+			configSample.address = sipFactory.createAddress("Alice <sip:alice@vorpal.net>");
+			configSample.ipv4Address = new IPAddressString("192.168.1.1").getAddress();
+			configSample.ipv6Address = new IPAddressString("2605:a601:aeba:6500:468:ceac:53f1:5854").getAddress();
+			configSample.uri = sipFactory.createURI("sip:bob@vorpal.net");
+			configSample.value1 = "value #1";
+
+			settingsManager = new SettingsManager<SampleB2buaConfig>(event, SampleB2buaConfig.class, configSample);
+			sipLogger.fine("servletCreated...");
+
 			SampleB2buaConfig sampleConfig = settingsManager.getCurrent();
+			sipLogger.fine("Address: " + sampleConfig.address);
+			sipLogger.fine("Value1: " + sampleConfig.value1);
+
+			sipLogger.info(sampleConfig.value1);
+			sipLogger.info("Level: " + SettingsManager.getSipLogger().getLevel());
+
 			sipLogger.logConfiguration(sampleConfig);
 
 		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
-			throw e;
+			// sipLogger.logStackTrace(e);
+			e.printStackTrace();
 		}
 
 	}
@@ -72,7 +94,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	@Override
 	public void servletDestroyed(SipServletContextEvent event) {
 		try {
-			sipLogger.info("b2buaDestroyed...");
+			sipLogger.info("servletDestroyed...");
 			settingsManager.unregister();
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);

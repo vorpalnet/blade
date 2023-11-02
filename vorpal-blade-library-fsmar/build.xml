@@ -1,20 +1,40 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-fsmar">
-    <include file="../libraries.xml" />
+	<include file="../libraries.xml" />
 
-    <property name="lib" location="../vorpal-blade-shared-libraries/target/vorpal-blade-shared-libraries/WEB-INF/lib" />
+	<property name="lib" location="../vorpal-blade-shared-libraries/target/vorpal-blade-shared-libraries/WEB-INF/lib" />
 
 	<target depends="init,build-project,build-jar" name="build" />
 
 	<target name="init">
 		<mkdir dir="build/classes" />
 
+		<!--		
 		<unzip src="${lib}/jackson-core-2.12.5.jar" dest="build/classes" />
 		<unzip src="${lib}/jackson-annotations-2.12.5.jar" dest="build/classes" />
 		<unzip src="${lib}/jackson-databind-2.12.5.jar" dest="build/classes" />
 		<unzip src="${lib}/jackson-module-jsonSchema-2.12.5.jar" dest="build/classes" />
 		<unzip src="${lib}/ipaddress-5.4.0.jar" dest="build/classes" />
+		<unzip src="${lib}/mbknor-jackson-jsonschema_2.13-1.0.39.jar" dest="build/classes" />
+		<unzip src="${lib}/scala-library-2.13.1.jar" dest="build/classes" />
+-->
+
+		<!--
+		It's easier to add all the classes to the fsmar.jar than
+		it is to get the classpaths configured correctly.
+		-->
+		<unzip dest="build/classes">
+			<fileset dir="${lib}">
+				<include name="**/*jackson*.jar" />
+				<include name="**/ipaddress*.jar" />
+				<include name="**/scala-library*.jar" />
+				<include name="**/slf4j*.jar" />
+			</fileset>
+		</unzip>
+
+
+
 
 		<copy includeemptydirs="false" todir="build/classes">
 			<fileset dir="src">
@@ -34,12 +54,7 @@
 
 	<target depends="init" name="build-project">
 		<echo message="${ant.project.name}: ${ant.file}" />
-		<javac debug="true"
-		       debuglevel="${debuglevel}"
-		       destdir="build/classes"
-		       includeantruntime="false"
-		       source="${source}"
-		       target="${target}">
+		<javac debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" source="${source}" target="${target}">
 			<src path="src" />
 			<src path="../vorpal-blade-library-framework/src" />
 			<classpath refid="vorpal-blade.classpath" />
@@ -54,10 +69,7 @@
 			<attribute name="Weblogic-Application-Version" value="${implementation}-${build.number}" />
 		</manifest>
 
-		<jar destfile="build/${ant.project.name}.jar" 
-                     basedir="build/classes"
-                     manifest="build/MANIFEST.MF"
-                />
+		<jar destfile="build/${ant.project.name}.jar" basedir="build/classes" manifest="build/MANIFEST.MF" />
 
 		<copy file="build/${ant.project.name}.jar" todir="${dist}" />
 
@@ -70,16 +82,7 @@
 	    -->
 		<delete dir="${docs}/${ant.project.name}" />
 		<mkdir dir="${docs}/${ant.project.name}" />
-		<javadoc useexternalfile="true"
-		         splitindex="true"
-		         access="protected"
-		         packagenames="org.vorpal.*"
-		         sourcepath="src"
-		         destdir="${docs}/${ant.project.name}"
-		         author="true"
-		         version="true"
-		         use="true"
-		         windowtitle="${ant.project.name}">
+		<javadoc useexternalfile="true" splitindex="true" access="protected" packagenames="org.vorpal.*" sourcepath="src" destdir="${docs}/${ant.project.name}" author="true" version="true" use="true" windowtitle="${ant.project.name}">
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 			<doclet name="org.umlgraph.markdown.doclet.UmlGraphDoc" path="../lib/MarkdownDoclet-3.0.jar">
@@ -96,15 +99,14 @@
 			<doctitle>
 				<![CDATA[${ant.project.name}]]>
 			</doctitle>
-            <bottom>
-                <![CDATA[${copyright}]]>
-            </bottom>
-		<link href="http://docs.oracle.com/javaee/6/api/" />
-	</javadoc>
-</target>
+			<bottom>
+				<![CDATA[${copyright}]]>
+			</bottom>
+			<link href="http://docs.oracle.com/javaee/6/api/" />
+		</javadoc>
+	</target>
 
 
-<target description="Build all projects which reference this project. Useful to propagate changes."
-        name="build-refprojects" />
+	<target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects" />
 
 </project>
