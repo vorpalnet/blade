@@ -60,9 +60,9 @@
 	</target>
 
     <target name="package" depends="init">
-        <mkdir dir="build/lib" />
-        <copy file="${framework}" todir="build/lib" />
-        <manifest file="build/MANIFEST.MF">
+        <mkdir dir="build/lib" />    
+    	<copy file="${framework}" todir="build/lib" />
+    	<manifest file="build/MANIFEST.MF">
             <attribute name="Built-By" value="${user.name}" />
             <attribute name="Weblogic-Application-Version" value="${implementation}" />
         </manifest>

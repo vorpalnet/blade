@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.FileHandler;
 import java.util.logging.Formatter;
 import java.util.logging.Handler;
+import java.util.logging.Level;
 
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
@@ -36,96 +37,123 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 
-import org.vorpal.blade.framework.AsyncSipServlet;
-import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
 
 import weblogic.kernel.KernelLogManager;
 
 @WebListener
 public class LogManager implements ServletContextListener {
+	private static String basename;
+//	private LogParameters logParameters;
+
+	@Override
+	final public void contextInitialized(ServletContextEvent sce) {
+		basename = sce.getServletContext().getServletContextName();
+	}
+
+	@Override
+	final public void contextDestroyed(ServletContextEvent sce) {
+		closeLogger(sce);
+	}
+
 	private static ConcurrentHashMap<String, Logger> logMap = new ConcurrentHashMap<String, Logger>();
 
-	public static Logger getLogger(SipServletContextEvent event) {
-		String basename = SettingsManager.basename(event.getServletContext().getServletContextName());
-		return getLogger(basename);
-	}
+	public static Logger getLogger(String basename, ServletContext context, LogParameters logParameters) {
+		Logger logger;
 
-	public static Logger getLogger(ServletContext context) {
-		String basename = SettingsManager.basename(context.getServletContextName());
-		return getLogger(basename);
-	}
+		// If absolutely nothing is known, give up and use the parent logger
+		if (basename == null && context == null && logParameters == null) {
+			logger = new Logger(null, null);
+			logger.setParent(KernelLogManager.getLogger());
+			return logger;
+		}
 
-	public static Logger getLogger(String name) {
-		name = SettingsManager.basename(name);
-		Logger logger = null;
+		// Without basename (typical), use servlet context name
+		if (basename == null && context != null) {
+			basename = SettingsManager.basename(context.getServletContextName());
+		}
 
+		// If the logger already exists, use it
+		logger = logMap.get(basename);
+		if (logger != null) {
+			return logger;
+		}
+
+		// If no logParameters, use default values
+		if (logParameters == null) {
+			logParameters = new LogParametersDefault();
+		}
+
+		// Okay, we've made it this far, time to build the custom logger
 		try {
-			logger = logMap.get(name);
 
-			if (logger == null) {
-				String directory = "./servers/" + System.getProperty("weblogic.Name") + "/logs/vorpal";
-				File file = new File(directory);
-				file.mkdirs();
-				String filepath = directory + "/" + name + ".%g.log";
-
-				Formatter formatter = new LogFormatter();
-				Handler handler = new FileHandler(filepath, 10 * 1024 * 1024, 10, true);
-
-				handler.setFormatter(formatter);
-
-				logger = new Logger(name, null);
-
-				logger.addHandler(handler);
-				logger.setParent(KernelLogManager.getLogger());
-				logger.setUseParentHandlers(false);
-
-				logMap.put(name, logger);
-
+			String filename;
+			if (basename == null) {
+				filename = logParameters.resolveFilename(context);
+			} else {
+				filename = basename + ".%g.log";
 			}
-		} catch (Exception ex) {
-			System.out.println("Unable to create new logger for ServletContext: " + name);
-			ex.printStackTrace();
+
+			String directory = logParameters.resolveDirectory(context);
+			int fileCount = logParameters.resolveFileCount();
+			int fileSize = logParameters.resolveFileSize();
+			boolean fileAppend = logParameters.resolveFileAppend();
+			boolean useParentLogging = logParameters.resolveUseParentLogging();
+			Level loggingLevel = logParameters.resolveLoggingLevel();
+
+			File file = new File(directory);
+			file.mkdirs();
+			String filepath = directory + "/" + filename;
+			Formatter formatter = new LogFormatter();
+			Handler handler = new FileHandler(filepath, fileSize, fileCount, fileAppend);
+			handler.setFormatter(formatter);
+
+			logger = new Logger(basename, null);
+
+			logger.addHandler(handler);
+			logger.setParent(KernelLogManager.getLogger());
+			logger.setUseParentHandlers(useParentLogging);
+			logger.setLevel(loggingLevel); // may be null, but that okay. will use parent's level
+
+			logMap.put(basename, logger);
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 
 		return logger;
 	}
 
-	public void closeLogger(ServletContextEvent event) {
-		if (event != null && event.getServletContext() != null
-				&& event.getServletContext().getServletContextName() != null) {
-			closeLogger(event.getServletContext().getServletContextName());
-		} else {
-			closeLogger("vorpal");
-		}
+	public static Logger getLogger(String basename) {
+		return getLogger(basename, null, null);
+
 	}
 
-	public static void closeLogger(String name) {
-		Logger logger = logMap.remove(name);
+	public static Logger getLogger(SipServletContextEvent event) {
+		return getLogger(null, event.getServletContext(), null);
+	}
+
+	public static Logger getLogger(ServletContext context) {
+		return getLogger(null, context, null);
+	}
+
+	public static Logger getLogger() {
+		return getLogger(null, null, null);
+	}
+
+	public static void closeLogger(ServletContextEvent event) {
+		closeLogger(SettingsManager.basename(event.getServletContext().getServletContextName()));
+	}
+
+	public static void closeLogger(SipServletContextEvent event) {
+		closeLogger(SettingsManager.basename(event.getServletContext().getServletContextName()));
+	}
+
+	public static void closeLogger(String basename) {
+		Logger logger = logMap.remove(basename);
 		if (logger != null) {
-			logger.info("LogManager destroying logger for " + name);
 			for (Handler handler : logger.getHandlers()) {
 				handler.close();
 			}
-		}
-	}
-
-	@Override
-	public void contextDestroyed(ServletContextEvent event) {
-		closeLogger(event);
-	}
-
-	@Override
-	public void contextInitialized(ServletContextEvent event) {
-		Logger logger;
-
-		if (event != null && event.getServletContext() != null
-				&& event.getServletContext().getServletContextName() != null) {
-			logger = getLogger(event.getServletContext());
-			logger.info("LogManager creating new logger for " + event.getServletContext().getServletContextName());
-		} else {
-			logger = getLogger("vorpal");
-			System.out.println("No ServletContext found, creating logger for vorpal.log");
 		}
 	}
 
