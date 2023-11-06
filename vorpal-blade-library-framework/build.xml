@@ -27,9 +27,9 @@
 
 
 
-	<target depends="init" name="build-project">
-		<echo message="${ant.project.name}: ${ant.file}" />
-
+	<target name="build-project" depends="init" >
+		<echo message="${ant.project.name}: ${ant.file}" />		
+		
 		<javac debug="true"
 		       debuglevel="${debuglevel}"
 		       destdir="build/classes"

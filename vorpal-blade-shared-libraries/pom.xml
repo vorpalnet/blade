@@ -7,7 +7,7 @@
 	<packaging>war</packaging>
 	<version>2.0</version>
 	<name>Vorpal:Blade WebLogic Shared Libraries</name>
-	<url>http://vorpalnet.github.io</url>
+	<url>https://vorpalnet.github.io</url>
 	
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
