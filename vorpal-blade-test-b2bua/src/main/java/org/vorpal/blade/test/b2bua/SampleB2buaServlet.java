@@ -64,8 +64,9 @@ public class SampleB2buaServlet extends B2buaServlet {
 
 			SampleB2buaConfig configSample = new ConfigSample();
 			configSample.address = sipFactory.createAddress("Alice <sip:alice@vorpal.net>");
-			configSample.ipv4Address = new IPAddressString("192.168.1.1").getAddress();
-			configSample.ipv6Address = new IPAddressString("2605:a601:aeba:6500:468:ceac:53f1:5854").getAddress();
+			configSample.ipv4Address = new IPAddressString("192.168.1.1").getAddress().toIPv4();
+			configSample.ipv6Address = new IPAddressString("2605:a601:aeba:6500:468:ceac:53f1:5854").getAddress()
+					.toIPv6();
 			configSample.uri = sipFactory.createURI("sip:bob@vorpal.net");
 			configSample.value1 = "value #1";
 
@@ -73,16 +74,9 @@ public class SampleB2buaServlet extends B2buaServlet {
 			sipLogger.fine("servletCreated...");
 
 			SampleB2buaConfig sampleConfig = settingsManager.getCurrent();
-			sipLogger.fine("Address: " + sampleConfig.address);
-			sipLogger.fine("Value1: " + sampleConfig.value1);
-
-			sipLogger.info(sampleConfig.value1);
-			sipLogger.info("Level: " + SettingsManager.getSipLogger().getLevel());
-
 			sipLogger.logConfiguration(sampleConfig);
 
 		} catch (Exception e) {
-			// sipLogger.logStackTrace(e);
 			e.printStackTrace();
 		}
 
@@ -105,7 +99,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	 * This is the outbound INVITE request to Bob, it can be modified.
 	 */
 	@Override
-	public void callStarted(SipServletRequest request) {
+	public void callStarted(SipServletRequest request) throws ServletException, IOException {
 		sipLogger.info(request, "callStarted...");
 
 	}

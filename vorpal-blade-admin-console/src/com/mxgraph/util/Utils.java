@@ -41,6 +41,7 @@ public class Utils {
 	 * 
 	 * @param binary the byte array to inflate
 	 * @return the inflated String
+	 * @throws IOException 
 	 * 
 	 */
 	public static String inflate(byte[] binary) throws IOException {
@@ -68,6 +69,7 @@ public class Utils {
 	 * 
 	 * @param inString the String to deflate
 	 * @return the deflated byte array
+	 * @throws IOException 
 	 * 
 	 */
 	public static byte[] deflate(String inString) throws IOException {
@@ -169,6 +171,11 @@ public class Utils {
 
 	/**
 	 * Rotates the given point by the given cos and sin.
+	 * @param pt 
+	 * @param cos 
+	 * @param sin 
+	 * @param c 
+	 * @return mxPoint
 	 */
 	public static mxPoint getRotatedPoint(mxPoint pt, double cos, double sin, mxPoint c) {
 		double x = pt.getX() - c.getX();
@@ -182,6 +189,10 @@ public class Utils {
 
 	/**
 	 * Rotates the given geometry (in place) by the given rotation (in degrees).
+	 * @param geo 
+	 * @param rotation 
+	 * @param cx 
+	 * @param cy 
 	 */
 	public static void rotatedGeometry(mxGeometry geo, double rotation, double cx, double cy) {
 		rotation = Math.toRadians(rotation);

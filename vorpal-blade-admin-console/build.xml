@@ -47,9 +47,10 @@
 		<echo message="${ant.project.name}: ${ant.file}" />
 		
         <!-- Cool, keep for future reference -->
-        <pathconvert property="classpathInName" refid="project.classpath" />
+<!--
+		<pathconvert property="classpathInName" refid="project.classpath" />
         <echo>Classpath is ${classpathInName}</echo>
-
+-->
 		
 		<javac debug="true"
 		       debuglevel="${debuglevel}"
