@@ -51,15 +51,19 @@ public abstract class AsyncSipServlet extends SipServlet
 	 * Called when the SipServlet has been created.
 	 * 
 	 * @param event
+	 * @throws ServletException 
+	 * @throws IOException 
 	 */
-	protected abstract void servletCreated(SipServletContextEvent event);
+	protected abstract void servletCreated(SipServletContextEvent event) throws ServletException, IOException;
 
 	/**
 	 * Called when the SipServlet has been destroyed.
 	 * 
 	 * @param event
+	 * @throws ServletException 
+	 * @throws IOException 
 	 */
-	protected abstract void servletDestroyed(SipServletContextEvent event);
+	protected abstract void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException;
 
 	/**
 	 * Implement this method to choose various Callflow objects for incoming

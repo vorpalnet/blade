@@ -34,13 +34,16 @@ import javax.management.InstanceAlreadyExistsException;
 import javax.management.InstanceNotFoundException;
 import javax.management.MBeanRegistrationException;
 import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
+import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletContextEvent;
+import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.AsyncSipServlet;
@@ -54,12 +57,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
 import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
 
 import inet.ipaddr.IPAddress;
+import inet.ipaddr.ipv4.IPv4Address;
+import inet.ipaddr.ipv6.IPv6Address;
 
 /**
  * The SettingsManager class automatically reads a JSON formated configuration
@@ -241,20 +247,49 @@ public class SettingsManager<T> {
 
 			// Support for SipFactory classes
 
-			this.mapper.registerModule(new SimpleModule().addDeserializer(URI.class, new JsonUriDeserializer()));
-			this.mapper
-					.registerModule(new SimpleModule().addDeserializer(Address.class, new JsonAddressDeserializer()));
-			this.mapper.registerModule(
-					new SimpleModule().addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
-			this.mapper.registerModule(new SimpleModule().addSerializer(URI.class, new JsonUriSerializer()));
-			this.mapper.registerModule(new SimpleModule().addSerializer(Address.class, new JsonAddressSerializer()));
-			this.mapper
-					.registerModule(new SimpleModule().addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
-			this.mapper.registerModule(
-					new SimpleModule().addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
+			// URI
+			this.mapper.registerModule(new SimpleModule()//
+					.addSerializer(URI.class, new JsonUriSerializer()));
+			this.mapper.registerModule(new SimpleModule()//
+					.addDeserializer(URI.class, new JsonUriDeserializer()));
+
+			// SipURI
+			this.mapper.registerModule(new SimpleModule()//
+					.addSerializer(SipURI.class, new JsonSipUriSerializer()));
+			this.mapper.registerModule(new SimpleModule()//
+					.addDeserializer(SipURI.class, new JsonSipUriDeserializer()));
+
+			// Address
+			this.mapper.registerModule(new SimpleModule()//
+					.addSerializer(Address.class, new JsonAddressSerializer()));
+			this.mapper.registerModule(new SimpleModule()//
+					.addDeserializer(Address.class, new JsonAddressDeserializer()));
+
+			// IPAddress
+			this.mapper.registerModule(new SimpleModule()//
+					.addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
+			this.mapper.registerModule(new SimpleModule()//
+					.addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
+
+			// IPv4Address
+			this.mapper.registerModule(new SimpleModule()//
+					.addSerializer(IPv4Address.class, new JsonIPv4AddressSerializer()));
+			this.mapper.registerModule(new SimpleModule()//
+					.addDeserializer(IPv4Address.class, new JsonIPv4AddressDeserializer()));
+
+			// IPv6Address
+			this.mapper.registerModule(new SimpleModule()//
+					.addSerializer(IPv6Address.class, new JsonIPv6AddressSerializer()));
+			this.mapper.registerModule(new SimpleModule()//
+					.addDeserializer(IPv6Address.class, new JsonIPv6AddressDeserializer()));
+
+			this.mapper.registerModule(new SimpleModule()//
+					.addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
 
 			// Don't both to save attributes set to null.
 			this.mapper.setSerializationInclusion(Include.NON_NULL);
+
+			this.mapper.configure(SerializationFeature.FAIL_ON_SELF_REFERENCES, false);
 
 			if (clusterName != null) {
 				objectName = new ObjectName(
@@ -346,25 +381,24 @@ public class SettingsManager<T> {
 		}
 
 		if (noConfigFiles) {
-			
+
 			if (this.sample != null) {
 				sipLogger.fine("using sample...");
-			
+
 				current = this.sample;
-			
+
 			} else {
 				sipLogger.fine("using default...");
 				current = tmp;
-			
+
 			}
-			
+
 			this.logCurrent(); // show 'em what you got
-			
+
 		} else {
 			sipLogger.fine("using config...");
-			mergeCurrentFromJson(); //logs the config file
+			mergeCurrentFromJson(); // logs the config file
 		}
-		
 
 	}
 
@@ -532,10 +566,10 @@ public class SettingsManager<T> {
 		try {
 //			sipLogger.log(this.getSipLogger().getConfigurationLoggingLevel(), "Configuration has changed:\n"
 //					+ mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this.getCurrent()));
-			
+
 			sipLogger.log(this.getSipLogger().getLevel(), "Configuration has changed:\n"
-					+ mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this.getCurrent()));			
-			
+					+ mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this.getCurrent()));
+
 		} catch (JsonProcessingException e) {
 			sipLogger.severe(e);
 		}

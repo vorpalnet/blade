@@ -47,8 +47,8 @@ public class SaveServlet extends HttpServlet {
 
 	/**
 	 * 
-	 * @param request
-	 * @param response
+	 * @param filename 
+	 * @return string
 	 * @throws ServletException
 	 * @throws IOException
 	 */

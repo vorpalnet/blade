@@ -47,7 +47,7 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 
 			callflow = new TestOkayResponse();
 			break;
-			
+
 		default:
 			callflow = new TestNotImplemented();
 
@@ -57,13 +57,13 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 	}
 
 	@Override
-	protected void servletCreated(SipServletContextEvent event) {
+	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		settingsManager = new SettingsManager<TestUasConfig>(event, TestUasConfig.class);
 		sipLogger.logConfiguration(settingsManager.getCurrent());
 	}
 
 	@Override
-	protected void servletDestroyed(SipServletContextEvent event) {
+	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		// do nothing;
 	}
 
