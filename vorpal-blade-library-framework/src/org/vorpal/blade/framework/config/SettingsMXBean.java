@@ -45,4 +45,7 @@ public interface SettingsMXBean {
 	public String getServerJson();
 
 	public void setServerJson(String json);
+
+	public void reloadConfiguration();
+
 }

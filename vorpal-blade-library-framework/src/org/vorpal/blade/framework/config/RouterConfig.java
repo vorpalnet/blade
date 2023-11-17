@@ -37,7 +37,11 @@ public class RouterConfig extends Configuration implements Serializable {
 		Logger sipLogger = SettingsManager.getSipLogger();
 		Translation t = null;
 
+		sipLogger.finer(request,"Translation.findTranslation() searching maps size: "+plan.size());
+		
+		
 		for (TranslationsMap map : plan) {
+			sipLogger.finer(request,"Translation.findTranslation() searching map: "+map.getId());
 			t = map.applyTranslations(request);
 			if (t != null) {
 				break;

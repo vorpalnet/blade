@@ -51,8 +51,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	 * Called when the SipServlet has been created.
 	 * 
 	 * @param event
-	 * @throws ServletException 
-	 * @throws IOException 
+	 * @throws ServletException
+	 * @throws IOException
 	 */
 	protected abstract void servletCreated(SipServletContextEvent event) throws ServletException, IOException;
 
@@ -60,8 +60,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	 * Called when the SipServlet has been destroyed.
 	 * 
 	 * @param event
-	 * @throws ServletException 
-	 * @throws IOException 
+	 * @throws ServletException
+	 * @throws IOException
 	 */
 	protected abstract void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException;
 
@@ -188,12 +188,12 @@ public abstract class AsyncSipServlet extends SipServlet
 	@Override
 	final public void timeout(ServletTimer timer) {
 		try {
-
 			Callback<ServletTimer> callback;
 			callback = (Callback<ServletTimer>) timer.getInfo();
 
 			if (callback != null) {
-				callback.accept(timer);
+				// callback.accept(timer);
+				callback.acceptThrows(timer);
 			}
 
 		} catch (Exception e) {
@@ -284,7 +284,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		return sb.toString();
 	}
 
-	
 	public static String hash(String stringToHash) {
 		String stringHash = null;
 
