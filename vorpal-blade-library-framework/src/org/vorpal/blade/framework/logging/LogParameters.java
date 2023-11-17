@@ -2,10 +2,12 @@ package org.vorpal.blade.framework.logging;
 
 import java.text.ParseException;
 import java.util.logging.Level;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.servlet.ServletContext;
+
+import org.vorpal.blade.framework.config.Configuration;
+
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 public class LogParameters {
 	public enum LoggingLevel {
@@ -16,21 +18,31 @@ public class LogParameters {
 		KB, KiB, MB, MiB, GB, GiB
 	}
 
-	private final static long KB_FACTOR = 1000;
-	private final static long KIB_FACTOR = 1024;
-	private final static long MB_FACTOR = 1000 * KB_FACTOR;
-	private final static long MIB_FACTOR = 1024 * KIB_FACTOR;
-	private final static long GB_FACTOR = 1000 * MB_FACTOR;
-	private final static long GIB_FACTOR = 1024 * MIB_FACTOR;
-
+	@JsonPropertyDescription("Write to parent logger, i.e. the WebLogic engine log file. Default: false")
 	protected Boolean useParentLogging = null;
+
+	@JsonPropertyDescription("Location of log files. Supports environment and servlet context variables. Default: ./servers/${weblogic.Name}/logs/vorpal")
 	protected String directory = null;
+
+	@JsonPropertyDescription("Name of the log file. Supports environment and servlet context variables. Default: ${sip.application.name}.%g.log")
 	protected String filename = null;
+
+	@JsonPropertyDescription("Maximum file size written in human readable form. Default: 100MiB")
 	protected String fileSize = null;
+
+	@JsonPropertyDescription("Maximum number of log files. Default: 25")
 	protected Integer fileCount = null;
+
+	@JsonPropertyDescription("Continue to use the same log file after reboot. Default: true")
 	protected Boolean appendFile = null;
+
+	@JsonPropertyDescription("Logging level. Levels include: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL. Default: FINE")
 	protected LoggingLevel loggingLevel = null;
+
+	@JsonPropertyDescription("Level at which sequence diagrams will be logged. Default: FINE")
 	protected LoggingLevel sequenceDiagramLoggingLevel = null;
+
+	@JsonPropertyDescription("Level at which configuration changes will be logged. Default: FINE")
 	protected LoggingLevel configurationLoggingLevel = null;
 
 	public LogParameters() {
@@ -234,61 +246,6 @@ public class LogParameters {
 		return this;
 	}
 
-	private static int parseHRNumberAsInt(String humanReadable) throws ParseException {
-		float value, ret;
-		String factor;
-
-		try {
-
-			Pattern pattern = Pattern.compile("([0-9\\.]+)(([KMG])i?B)*");
-			Matcher match = pattern.matcher(humanReadable);
-
-			if (!match.matches() || match.groupCount() != 3) {
-				throw new ParseException("Wrong format", 0);
-			} else {
-
-				ret = Float.parseFloat(match.group(1));
-				factor = match.group(2);
-				if (factor == null) {
-					value = ret;
-				} else {
-					switch (factor) {
-					case "GB":
-						value = ret * GB_FACTOR;
-						break;
-					case "GiB":
-						value = ret * GIB_FACTOR;
-						break;
-					case "MB":
-						value = ret * MB_FACTOR;
-						break;
-					case "MiB":
-						value = ret * MIB_FACTOR;
-						break;
-					case "KB":
-						value = ret * KB_FACTOR;
-						break;
-					case "KiB":
-						value = ret * KIB_FACTOR;
-						break;
-					default:
-						value = ret;
-						break;
-
-					}
-				}
-			}
-
-			return Math.round(value);
-		} catch (Exception e) {
-			e.printStackTrace();
-			throw new ParseException(
-					"Wrong number format in configuration. Example formats include: 1, 2KiB, 3KB, 4MiB, 5MB, 6GiB, or 7.5GB",
-					0);
-		}
-
-	}
-
 	private static String getAttribute(ServletContext servletContext, String key) {
 		String value;
 
@@ -334,7 +291,8 @@ public class LogParameters {
 	}
 
 	public Integer resolveFileSize() throws ParseException {
-		return (this.fileSize != null) ? parseHRNumberAsInt(this.fileSize) : parseHRNumberAsInt("100MiB");
+		return (this.fileSize != null) ? Configuration.parseHRNumberAsInt(this.fileSize)
+				: Configuration.parseHRNumberAsInt("100MiB");
 	}
 
 	public Integer resolveFileCount() {
@@ -350,14 +308,14 @@ public class LogParameters {
 	}
 
 	public static void main(String args[]) throws ParseException {
-		System.out.println("1 = " + LogParameters.parseHRNumberAsInt("1"));
-		System.out.println("1KiB = " + LogParameters.parseHRNumberAsInt("1KiB"));
-		System.out.println("1KB = " + LogParameters.parseHRNumberAsInt("1KB"));
-		System.out.println("1MiB = " + LogParameters.parseHRNumberAsInt("1MiB"));
-		System.out.println("1MB = " + LogParameters.parseHRNumberAsInt("1MB"));
-		System.out.println("1GiB = " + LogParameters.parseHRNumberAsInt("1GiB"));
-		System.out.println("1GB = " + LogParameters.parseHRNumberAsInt("1GB"));
-		System.out.println("1.5GB = " + LogParameters.parseHRNumberAsInt("1.5GB"));
+		System.out.println("1 = " + Configuration.parseHRNumberAsInt("1"));
+		System.out.println("1KiB = " + Configuration.parseHRNumberAsInt("1KiB"));
+		System.out.println("1KB = " + Configuration.parseHRNumberAsInt("1KB"));
+		System.out.println("1MiB = " + Configuration.parseHRNumberAsInt("1MiB"));
+		System.out.println("1MB = " + Configuration.parseHRNumberAsInt("1MB"));
+		System.out.println("1GiB = " + Configuration.parseHRNumberAsInt("1GiB"));
+		System.out.println("1GB = " + Configuration.parseHRNumberAsInt("1GB"));
+		System.out.println("1.5GB = " + Configuration.parseHRNumberAsInt("1.5GB"));
 
 	}
 

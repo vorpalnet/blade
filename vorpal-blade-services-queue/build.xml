@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE project>
+<project basedir="." default="build" name="vorpal-blade-services-queue">
+    <import file="../libraries.xml" />
+    <property name="src" location="src/main/java" />
+    <property name="webapp" location="src/main/webapp" />
+
+
+    <path id="Web App Libraries.libraryclasspath">
+		<fileset dir="${webapp}/WEB-INF/lib">
+			<filename name="**/*.jar" />
+		</fileset>
+	</path>
+	<path id="EAR Libraries.libraryclasspath" />
+
+	<path id="project.classpath">
+		<pathelement location="build/classes" />
+		<path refid="Web App Libraries.libraryclasspath" />
+		<path refid="EAR Libraries.libraryclasspath" />
+		<path refid="WebLogic System Libraries.libraryclasspath" />
+		<path refid="vorpal-blade.classpath" />
+	</path>
+	<target name="init">
+		<mkdir dir="build/classes" />
+		<mkdir dir="${webapp}/WEB-INF/lib" />
+
+		<copy includeemptydirs="false" todir="build/classes">
+			<fileset dir="${src}">
+				<exclude name="**/*.launch" />
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+		<mkdir dir=".apt_src" />
+		<copy includeemptydirs="false" todir="build/classes">
+			<fileset dir=".apt_src">
+				<exclude name="**/*.launch" />
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+	</target>
+	<target name="clean">
+		<delete dir="build" />
+	</target>
+	<target depends="clean" name="clean-all" />
+	<target depends="build-subprojects,build-project,package" name="build" />
+	<target name="build-subprojects" />
+
+	<target depends="init" name="build-project">
+		<echo message="${ant.project.name}: ${ant.file}" />
+		<javac debug="true"
+		       debuglevel="${debuglevel}"
+		       destdir="build/classes"
+		       includeantruntime="false"
+		       source="${source}"
+		       target="${target}">
+			<src path="${src}" />
+			<src path=".apt_src" />
+			<classpath refid="project.classpath" />
+		</javac>
+	</target>
+
+    <target name="package" depends="init">
+        <mkdir dir="build/lib" />    
+    	<copy file="${framework}" todir="build/lib" />
+    	<manifest file="build/MANIFEST.MF">
+            <attribute name="Built-By" value="${user.name}" />
+            <attribute name="Weblogic-Application-Version" value="${implementation}" />
+        </manifest>
+        <war destfile="build/${ant.project.name}.war"
+             manifest="build/MANIFEST.MF"
+             basedir="${webapp}">
+            <lib dir="build/lib" />
+            <classes dir="build/classes" />
+        </war>
+        <copy file="build/${ant.project.name}.war" todir="${dist}" />
+    </target>
+
+	<target description="Build all projects which reference this project. Useful to propagate changes."
+	        name="build-refprojects" />
+
+	<target name="build-javadocs" depends="build">
+		<delete dir="${docs}/${ant.project.name}" />
+		<javadoc useexternalfile="true"
+		         splitindex="true"
+		         access="protected"
+		         packagenames="org.vorpal.*"
+		         sourcepath="${src}"
+		         destdir="${docs}/${ant.project.name}"
+		         author="true"
+		         version="true"
+		         use="true"
+		         windowtitle="${ant.project.name}">
+			<classpath refid="vorpal-blade.classpath" />
+			<classpath refid="WebLogic System Libraries.libraryclasspath" />
+			<classpath refid="project.classpath" />
+			<doclet name="org.umlgraph.markdown.doclet.UmlGraphDoc" path="../lib/MarkdownDoclet-3.0.jar">
+				<param name="-inferrel" />
+				<param name="-inferdep" />
+				<param name="-operations" />
+				<param name="-hide" value="java.*" />
+				<param name="-collpackages" value="java.util.*" />
+				<param name="-qualify" />
+				<param name="-postfixpackage" />
+				<param name="-nodefontsize" value="9" />
+				<param name="-nodefontpackagesize" value="7" />
+			</doclet>
+			<doctitle>
+				<![CDATA[${ant.project.name}]]>
+			</doctitle>
+            <bottom>
+                <![CDATA[${copyright}]]>
+            </bottom>
+            <link href="http://docs.oracle.com/javaee/6/api/" />
+		</javadoc>
+	</target>
+
+
+
+
+
+</project>

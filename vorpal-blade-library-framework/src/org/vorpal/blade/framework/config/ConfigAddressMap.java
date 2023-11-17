@@ -28,11 +28,23 @@ public class ConfigAddressMap extends TranslationsMap {
 		try {
 
 			// jwm - multiple selectors
+
+			SettingsManager.sipLogger.finer(request,
+					"ConfigAddressMap.lookup() selectors size: " + this.selectors.size());
+
 			for (Selector selector : this.selectors) {
 
 				RegExRoute regexRoute = selector.findKey(request);
+
+				SettingsManager.sipLogger.finer(request, "ConfigAddressMap.lookup() regexRoute: " + regexRoute);
+
 				if (regexRoute != null) {
+					SettingsManager.sipLogger.finer(request,
+							"ConfigAddressMap.lookup() regexRoute.key: " + regexRoute.key);
+
 					value = map.get(new IPAddressString(regexRoute.key).getAddress());
+
+					SettingsManager.sipLogger.finer(request, "ConfigAddressMap.lookup() value: " + value);
 				}
 
 				if (value != null)

@@ -49,8 +49,16 @@ public abstract class TranslationsMap {
 //				regexRoute = selector.findKey(request);
 
 //				if (regexRoute != null) {
+			
+			
+			sipLogger.finer(request,"Translation.applyTranslations()...");
+
+			
 			translation = this.lookup(request);
 
+			sipLogger.finer(request,"Translation translation: "+translation);
+
+			
 			if (translation != null) {
 				sipLogger.fine(request, this.getClass().getSimpleName() + " found translation id: "
 						+ translation.getId() + ", description: " + translation.getDescription());

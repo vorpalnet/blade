@@ -45,19 +45,25 @@ public class Settings implements SettingsMXBean {
 
 	@Override
 	public String getDomainJson() {
+
+		SettingsManager.sipLogger.warning("Settings.getDomainJson() no longer supported.");
+//		return "";
+
 		try {
 			return settingsManager.getDomainJson();
 		} catch (JsonProcessingException e) {
 			e.printStackTrace();
 			return null;
 		}
+
 	}
 
 	@Override
 	public void setDomainJson(String json) {
-		try {
+		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		return ;
 
-			System.out.println("setDomainJson begin...");
+		try {
 
 			settingsManager.setDomainJson(json);
 			settingsManager.mergeCurrentFromJson();
@@ -75,7 +81,7 @@ public class Settings implements SettingsMXBean {
 
 				}
 				settingsManager.logCurrent();
-			}else {
+			} else {
 				System.out.println("Settings.setDomainJson could not get sipLogger.");
 			}
 
@@ -85,12 +91,14 @@ public class Settings implements SettingsMXBean {
 			e.printStackTrace();
 		}
 
-		System.out.println("setDomainJson end...");
-
 	}
 
 	@Override
 	public String getClusterJson() {
+
+		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		return "";
+
 		try {
 			return settingsManager.getClusterJson();
 		} catch (JsonProcessingException e) {
@@ -101,6 +109,10 @@ public class Settings implements SettingsMXBean {
 
 	@Override
 	public void setClusterJson(String json) {
+
+		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		return;
+
 		try {
 			settingsManager.setClusterJson(json);
 			settingsManager.mergeCurrentFromJson();
@@ -116,27 +128,37 @@ public class Settings implements SettingsMXBean {
 					}
 				}
 				settingsManager.logCurrent();
-			}else {
+			} else {
 				System.out.println("Settings.setClusterJson could not get sipLogger.");
 			}
 
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+
 	}
 
 	@Override
 	public String getServerJson() {
+
+		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		return "";
+
 		try {
 			return settingsManager.getServerJson();
 		} catch (JsonProcessingException e) {
 			e.printStackTrace();
 			return null;
 		}
+
 	}
 
 	@Override
 	public void setServerJson(String json) {
+
+		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		return;
+
 		try {
 			settingsManager.setServerJson(json);
 			settingsManager.mergeCurrentFromJson();
@@ -152,13 +174,27 @@ public class Settings implements SettingsMXBean {
 					}
 				}
 				settingsManager.logCurrent();
-			}else {
+			} else {
 				System.out.println("Settings.setServerJson could not get sipLogger.");
 			}
 
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+	}
+
+	@Override
+	public void reloadConfiguration() {
+
+		try {
+			settingsManager.reloadConfigFiles();
+		} catch (Exception e) {
+			e.printStackTrace();
+			if (SettingsManager.sipLogger != null) {
+				SettingsManager.sipLogger.severe(e);
+			}
+		}
+
 	}
 
 }

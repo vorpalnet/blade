@@ -766,6 +766,18 @@ public abstract class Callflow implements Serializable {
 		return (SipSession) ss.getAttribute(LINKED_SESSION);
 	}
 
+	/**
+	 * This method is designed to be overloaded by the developer. It is the natural
+	 * continuation of calling 'doNotProcess';
+	 * 
+	 * @param request
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public void processContinue() throws ServletException, IOException {
+		// Must be overloaded
+	}
+
 	public void processLater(SipServletRequest request, long delay_in_milliseconds) {
 		request.getApplicationSession().setAttribute(DELAYED_REQUEST, request);
 		timerService.createTimer(request.getApplicationSession(), delay_in_milliseconds, false, this);

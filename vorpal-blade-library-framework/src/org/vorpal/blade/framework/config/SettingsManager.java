@@ -60,8 +60,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.NullNode;
-import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
-import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
+//import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
+//import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
 
 import inet.ipaddr.IPAddress;
 import inet.ipaddr.ipv4.IPv4Address;
@@ -319,6 +319,7 @@ public class SettingsManager<T> {
 	public void register() throws InstanceAlreadyExistsException, MBeanRegistrationException,
 			NotCompliantMBeanException, JsonGenerationException, JsonMappingException, InstantiationException,
 			IllegalAccessException, IOException, ServletParseException {
+
 		loadConfigFile(clazz);
 
 		oi = server.registerMBean(this.settings, objectName);
@@ -328,6 +329,13 @@ public class SettingsManager<T> {
 
 	public void unregister() throws MBeanRegistrationException, InstanceNotFoundException {
 		server.unregisterMBean(objectName);
+	}
+
+	public void reloadConfigFiles() throws InstantiationException, IllegalAccessException, JsonGenerationException,
+			JsonMappingException, IOException, ServletParseException {
+
+		loadConfigFile(clazz);
+
 	}
 
 	@SuppressWarnings("unchecked")
@@ -393,6 +401,8 @@ public class SettingsManager<T> {
 
 			}
 
+			this.initialize(current);
+
 			this.logCurrent(); // show 'em what you got
 
 		} else {
@@ -403,24 +413,26 @@ public class SettingsManager<T> {
 	}
 
 	private void saveSchema() throws JsonGenerationException, JsonMappingException, IOException {
-		JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4().html5EnabledSchema();
-		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper, config);
-		JsonNode jsonSchema = schemaGen.generateJsonSchema(current.getClass());
 
-		// add title here
-		mapper.writerWithDefaultPrettyPrinter()
-				.writeValue(new File(schemaPath.toString() + "/" + servletContextName + ".jschema"), jsonSchema);
+//		JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4().html5EnabledSchema();
+//		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper, config);
+//		JsonNode jsonSchema = schemaGen.generateJsonSchema(current.getClass());
+//
+//		// add title here
+//		mapper.writerWithDefaultPrettyPrinter()
+//				.writeValue(new File(schemaPath.toString() + "/" + servletContextName + ".jschema"), jsonSchema);
+
 	}
 
 	private void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
 		File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");
 		mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
 
-		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
-		JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4().html5EnabledSchema();
-		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper, config);
-		JsonNode schema = schemaGen.generateJsonSchema(t.getClass());
-		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, schema);
+//		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
+//		JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4().html5EnabledSchema();
+//		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper, config);
+//		JsonNode schema = schemaGen.generateJsonSchema(t.getClass());
+//		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, schema);
 	}
 
 	/**
@@ -467,15 +479,15 @@ public class SettingsManager<T> {
 	public String getJSchema() {
 		String strSchema = null;
 
-		try {
-			JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4().html5EnabledSchema();
-			JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper, config);
-			JsonNode schema = schemaGen.generateJsonSchema(current.getClass());
-			// add title here
-			strSchema = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
-		} catch (JsonProcessingException e) {
-			sipLogger.logStackTrace(e);
-		}
+//		try {
+//			JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4().html5EnabledSchema();
+//			JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper, config);
+//			JsonNode schema = schemaGen.generateJsonSchema(current.getClass());
+//			// add title here
+//			strSchema = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
+//		} catch (JsonProcessingException e) {
+//			sipLogger.logStackTrace(e);
+//		}
 
 		return strSchema;
 	}
