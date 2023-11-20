@@ -113,31 +113,36 @@ public class Selector {
 			header = request.getHeader(attribute);
 		}
 
-		Matcher matcher = pattern.matcher(header);
+		if (header != null) {
 
-		boolean matchResult = false;
-		String value = (attribute.matches("Content")) ? "[...]" : header;
-		if (matcher.matches()) {
-			matchResult = true;
-			key = matcher.replaceAll(expression);
+			Matcher matcher = pattern.matcher(header);
+
+			boolean matchResult = false;
+			String value = (attribute.matches("Content")) ? "[...]" : header;
+			if (matcher.matches()) {
+				matchResult = true;
+				key = matcher.replaceAll(expression);
+			}
+
+			if (key != null) {
+				regexRoute = new RegExRoute();
+				regexRoute.header = header;
+				regexRoute.key = key;
+				regexRoute.matcher = matcher;
+				regexRoute.selector = this;
+			}
+
+			sipLogger.fine(request, //
+					"selector: " + this.getId() + //
+							", match: " + matchResult + //
+							", pattern: " + this.getPattern() + //
+							", expression: " + this.getExpression() + //
+							", attribute: " + this.getAttribute() + //
+							", value: " + value + //
+							", key: " + key);
+		} else {
+			sipLogger.severe(request, "No header found: " + attribute);
 		}
-
-		if (key != null) {
-			regexRoute = new RegExRoute();
-			regexRoute.header = header;
-			regexRoute.key = key;
-			regexRoute.matcher = matcher;
-			regexRoute.selector = this;
-		}
-
-		sipLogger.fine(request, //
-				"selector: " + this.getId() + //
-						", match: " + matchResult + //
-						", pattern: " + this.getPattern() + //
-						", expression: " + this.getExpression() + //
-						", attribute: " + this.getAttribute() + //
-						", value: " + value + //
-						", key: " + key);
 
 		return regexRoute;
 	}
