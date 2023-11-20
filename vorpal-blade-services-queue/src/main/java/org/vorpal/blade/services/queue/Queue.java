@@ -11,7 +11,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 public class Queue {
 
 	@JsonProperty(required = true)
-	@JsonPropertyDescription("The name / id of the queue.")
+	@JsonPropertyDescription("The id of the queue.")
 	private String id;
 
 	@JsonProperty(required = true)

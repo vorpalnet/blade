@@ -1,7 +1,7 @@
 package org.vorpal.blade.services.queue;
 
 import java.io.IOException;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletContextEvent;
@@ -13,7 +13,8 @@ import org.vorpal.blade.framework.config.SettingsManager;
  */
 public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 
-	private static ConcurrentHashMap<String, CallflowQueue> queues = new ConcurrentHashMap<>();
+//	private static ConcurrentHashMap<String, CallflowQueue> queues = new ConcurrentHashMap<>();
+	private static HashMap<String, CallflowQueue> queues = new HashMap<>();
 
 	/**
 	 * Create a custom SettingsManager with a sample config file.
@@ -35,7 +36,7 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	public static CallflowQueue getQueue(String id) {
 
 		return queues.get(id);
-		
+
 //		CallflowQueue queue = queues.get(id);
 //
 //		sipLogger.severe("QueueSettingsManager.getQueue... id:" + id + ", queue: " + queue);

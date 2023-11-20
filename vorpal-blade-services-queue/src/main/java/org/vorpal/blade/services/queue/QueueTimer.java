@@ -41,7 +41,8 @@ public class QueueTimer extends Callflow {
 
 //		sipLogger.warning("QueueTimer() name=" + name + ", queue: " + queue);
 
-		appSession = sipFactory.createApplicationSessionByKey(name);
+//		appSession = sipFactory.createApplicationSessionByKey(name);
+		appSession = sipUtil.getApplicationSessionByKey(name, true);
 //		startTimer();
 	}
 

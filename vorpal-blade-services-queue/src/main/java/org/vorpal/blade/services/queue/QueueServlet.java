@@ -84,27 +84,29 @@ public class QueueServlet extends B2buaServlet {
 	public void callStarted(SipServletRequest request) throws ServletException, IOException {
 		sipLogger.fine(request, "callStarted...");
 
-		// Find the callflow. This is a bit of an API kludge, sorry!
-		InitialInvite callflow = (InitialInvite) request.getAttribute("callflow");
+		if (request.getMethod().equals("INVITE")) {
+
+			// Find the callflow. This is a bit of an API kludge, sorry!
+			InitialInvite callflow = (InitialInvite) request.getAttribute("callflow");
 //		sipLogger.severe(request, "QueueServlet.callStarted... callflow: " + callflow);
 
-		SipServletRequest inboundRequest = callflow.getInboundRequest();
+			SipServletRequest inboundRequest = callflow.getInboundRequest();
 
 //		sipLogger.fine(request, "Inbound Request: \n" + inboundRequest.toString());
 
-		// Find a translation for the request (don't forget about the default)
-		Translation t = settingsManager.getCurrent().findTranslation(inboundRequest);
+			// Find a translation for the request (don't forget about the default)
+			Translation t = settingsManager.getCurrent().findTranslation(inboundRequest);
 
-		String queueName = (String) t.getAttribute("queue");
-		if (queueName != null) {
-			sipLogger.fine(request, "Found matching translation! ");
+			String queueName = (String) t.getAttribute("queue");
+			if (queueName != null) {
+				sipLogger.fine(request, "Found matching translation! ");
 
-			// Send 180 Ringing, do not send outbound INVITE (yet)
-			this.doNotProcess(request, 180);
+				// Send 180 Ringing, do not send outbound INVITE (yet)
+				this.doNotProcess(request, 180);
 
-			// Place the callflow in the queue to be processed later
+				// Place the callflow in the queue to be processed later
 
-			settingsManager.getQueue(queueName).getCallflows().addFirst(callflow);
+				settingsManager.getQueue(queueName).getCallflows().addFirst(callflow);
 
 //			sipLogger.severe(request, "QueueServlet.callStarted... queueName: " + queueName);
 //			CallflowQueue callflowQueue = settingsManager.getQueue(queueName);
@@ -117,8 +119,11 @@ public class QueueServlet extends B2buaServlet {
 //				}
 //			}
 
-		} else {
-			sipLogger.warning(request, "No matching translation found. :-(");
+			} else {
+				sipLogger.warning(request, "No matching translation found. :-(");
+			}
+		}else {
+			
 		}
 
 	}
