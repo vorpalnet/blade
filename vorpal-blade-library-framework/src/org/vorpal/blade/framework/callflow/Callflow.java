@@ -196,9 +196,7 @@ public abstract class Callflow implements Serializable {
 
 	@SuppressWarnings("unchecked")
 	public static Callback<ServletTimer> pullCallback(ServletTimer timer) {
-		Callback<ServletTimer> callback = null;
-		callback = (Callback<ServletTimer>) timer.getInfo();
-		return callback;
+		return (Callback<ServletTimer>) timer.getInfo();
 	}
 
 	public static Logger getLogger() {
@@ -238,6 +236,7 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
+	@Deprecated
 	public String schedulePeriodicTimer(SipApplicationSession appSession, int seconds,
 			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
 		ServletTimer timer = null;
@@ -248,6 +247,7 @@ public abstract class Callflow implements Serializable {
 		return timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction).getId();
 	}
 
+	@Deprecated
 	public String schedulePeriodicTimerInMilliseconds(SipApplicationSession appSession, long milliseconds,
 			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
 		ServletTimer timer = null;
@@ -258,6 +258,7 @@ public abstract class Callflow implements Serializable {
 		return timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction).getId();
 	}
 
+	@Deprecated
 	public String scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction)
 			throws ServletException, IOException {
 		long delay = seconds * 1000;
@@ -265,6 +266,7 @@ public abstract class Callflow implements Serializable {
 		return timerService.createTimer(appSession, delay, isPersistent, lambdaFunction).getId();
 	}
 
+	@Deprecated
 	public String scheduleTimerInMilliseconds(SipApplicationSession appSession, long milliseconds,
 			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
 		long delay = milliseconds;
@@ -272,6 +274,7 @@ public abstract class Callflow implements Serializable {
 		return timerService.createTimer(appSession, delay, isPersistent, lambdaFunction).getId();
 	}
 
+	@Deprecated
 	public void cancelTimer(SipApplicationSession appSession, String timerId) {
 
 		if (appSession != null && timerId != null) {
@@ -282,6 +285,84 @@ public abstract class Callflow implements Serializable {
 		}
 
 	}
+
+	/**
+	 * Creates a one-time ServletTimer and schedules it to expire after the
+	 * specified delay.
+	 * 
+	 * @param appSession     the application session with which the new ServletTimer
+	 *                       is to be associated
+	 * @param delay          delay in milliseconds before timer is to expire
+	 * @param isPersistent   if true, the ServletTimer will be reinstated after a
+	 *                       shutdown be it due to complete failure or operator
+	 *                       shutdown
+	 * @param lambdaFunction
+	 * @return the newly created ServletTimer's id
+	 */
+	public static String startTimer(SipApplicationSession appSession, //
+			long delay, //
+			boolean isPersistent, //
+			Callback<ServletTimer> lambdaFunction) {
+		return timerService.createTimer(appSession, delay, isPersistent, lambdaFunction).getId();
+	}
+
+	/**
+	 * @param appSession     the application session with which the new ServletTimer
+	 *                       is to be associated
+	 * @param delay          delay in milliseconds before timer is to expire
+	 * @param period         time in milliseconds between successive timer
+	 *                       expirations
+	 * @param fixedDelay     if true, the repeating timer is scheduled in a
+	 *                       fixed-delay mode, otherwise in a fixed-rate mode
+	 * @param isPersistent   if true, the ServletTimer will be reinstated after a
+	 *                       shutdown be it due to complete failure or operator
+	 *                       shutdown
+	 * @param lambdaFunction
+	 * @return the newly created ServletTimer's id
+	 */
+	public static String startTimer(SipApplicationSession appSession, //
+			long delay, //
+			long period, //
+			boolean fixedDelay, //
+			boolean isPersistent, //
+			Callback<ServletTimer> lambdaFunction) {
+
+		return timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction).getId();
+	}
+
+	/**
+	 * Cancels the timer.
+	 * 
+	 * @param appSession
+	 * @param timerId
+	 */
+	public static void stopTimer(SipApplicationSession appSession, String timerId) {
+
+		if (appSession != null && timerId != null) {
+			ServletTimer timer = appSession.getTimer(timerId);
+			if (timer != null) {
+				timer.cancel();
+			}
+		}
+	}
+
+	/**
+	 * Stops all timers for the application session.
+	 * 
+	 * @param appSession
+	 */
+	public static void stopTimers(SipApplicationSession appSession) {
+		if (appSession != null) {
+			for (ServletTimer timer : appSession.getTimers()) {
+				timer.cancel();
+			}
+		}
+	}
+
+	/*
+	 * ServletTimer createTimer(SipApplicationSession appSession, long delay, long
+	 * period, boolean fixedDelay, boolean isPersistent, Serializable info)
+	 */
 
 	public Expectation expectRequest(SipSession sipSession, String method, Callback<SipServletRequest> callback) {
 		sipSession.setAttribute(REQUEST_CALLBACK_ + method, callback);
