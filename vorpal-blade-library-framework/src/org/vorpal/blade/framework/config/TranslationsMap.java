@@ -1,7 +1,9 @@
 package org.vorpal.blade.framework.config;
 
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.logging.Level;
 
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
@@ -49,21 +51,26 @@ public abstract class TranslationsMap {
 //				regexRoute = selector.findKey(request);
 
 //				if (regexRoute != null) {
-			
-			
-			sipLogger.finer(request,"Translation.applyTranslations()...");
 
-			
+			sipLogger.finer(request, "Translation.applyTranslations()...");
+
 			translation = this.lookup(request);
 
-			sipLogger.finer(request,"Translation translation: "+translation);
-
-			
 			if (translation != null) {
-				sipLogger.fine(request, this.getClass().getSimpleName() + " found translation id: "
-						+ translation.getId() + ", description: " + translation.getDescription());
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+
+					sipLogger.fine(request, this.getClass().getSimpleName() + //
+							" found translation id: " + translation.getId() +
+							//
+							", description: " + translation.getDescription() + //
+							", attributes=" + Arrays.asList(translation.getAttributes()));
+				}
+
 			} else {
-				sipLogger.fine(request, this.getClass().getName() + " found no translation.");
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.fine(request, this.getClass().getName() + " found no translation.");
+				}
 			}
 
 			if (translation != null) {

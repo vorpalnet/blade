@@ -17,9 +17,8 @@ public class CallflowQueue {
 
 	private SipApplicationSession appSession;
 	private String timerId;
-	
-	private Statistics statistics=null;
-	
+
+	private Statistics statistics = null;
 
 	/**
 	 * Constructs a new object from the Queue parameters in the config file.
@@ -32,11 +31,15 @@ public class CallflowQueue {
 		callflows = new ConcurrentLinkedDeque<>();
 	}
 
-//	public CallflowQueue startTimer() {
+//	public CallflowQueue startTimer() throws ServletException, IOException {
+//		timer.startTimer();
 //		return this;
 //	}
 //
 //	public CallflowQueue stopTimer() {
+//		if (timer != null) {
+//			timer.stopTimer();
+//		}
 //		return null;
 //	}
 

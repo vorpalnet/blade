@@ -520,9 +520,6 @@ public class SettingsManager<T> {
 			T tmp = (T) mapper.convertValue(mergedNode, clazz);
 			initialize(tmp);
 
-			System.out.println("This is where you update the logging settings.");
-			sipLogger.severe("This is where you update the logging settings.");
-
 			if (sipLogger != null) {
 				if (tmp instanceof Configuration) {
 					Configuration config = (Configuration) tmp;
@@ -541,13 +538,12 @@ public class SettingsManager<T> {
 
 				}
 
-				this.logCurrent();
-
 			} else {
 				System.out.println("Settings.setDomainJson could not get sipLogger.");
 			}
 
 			current = tmp;
+			this.logCurrent();
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
 		}

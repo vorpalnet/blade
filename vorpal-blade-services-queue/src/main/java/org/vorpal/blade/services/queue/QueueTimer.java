@@ -41,29 +41,27 @@ public class QueueTimer extends Callflow {
 
 //		sipLogger.warning("QueueTimer() name=" + name + ", queue: " + queue);
 
-//		appSession = sipFactory.createApplicationSessionByKey(name);
-		appSession = sipUtil.getApplicationSessionByKey(name, true);
+		appSession = sipFactory.createApplicationSession();
 //		startTimer();
 	}
 
 	public QueueTimer startTimer() throws ServletException, IOException {
 
-		sipLogger.warning("Calling startTimer...");
+		sipLogger.warning("QueueTimer.startTimer()...");
 
 		// Create a periodic timer that checks the queue for any work to be done.
 		timerId = schedulePeriodicTimerInMilliseconds(appSession, frequency, (timer) -> {
 
-//			sipLogger.warning("Periodic timer... " + timer.getId());
+//			sipLogger.warning(timer.getApplicationSession(), "Periodic timer... " + timer.getId());
 
 			CallflowQueue queue = QueueSettingsManager.getQueue(name);
-//			sipLogger.warning("QueueTimer.startTimer()... queue" + queue);
 
 			Callflow callflow;
 			for (int i = 0; i < rate; i++) {
 				callflow = queue.getCallflows().pollLast();
 				if (callflow != null) {
 
-					sipLogger.warning("Continuing callflow... " + callflow);
+					sipLogger.fine("Continuing callflow... " + callflow);
 					callflow.processContinue();
 				} else {
 //					sipLogger.warning("No callflow in the queue...");

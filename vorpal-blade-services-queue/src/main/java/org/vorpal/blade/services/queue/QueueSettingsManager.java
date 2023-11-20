@@ -34,17 +34,7 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	 * @return the queue
 	 */
 	public static CallflowQueue getQueue(String id) {
-
 		return queues.get(id);
-
-//		CallflowQueue queue = queues.get(id);
-//
-//		sipLogger.severe("QueueSettingsManager.getQueue... id:" + id + ", queue: " + queue);
-//		if (queues != null) {
-//			sipLogger.severe("QueueSettingsManager.getQueue... queues.size:" + queues.size());
-//		}
-//
-//		return queue;
 	}
 
 	/**
@@ -59,33 +49,17 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	 */
 	@Override
 	public void initialize(QueueConfig config) {
-
 		try {
-
-//			if (queues == null) {
-//				sipLogger.severe("Instantiating the 'queues'...");
-//				queues = new ConcurrentHashMap<>();
-//			}
 
 			CallflowQueue callflowQueue;
 
 			for (Queue settings : config.getQueues()) {
 
-				sipLogger.severe("Queue Settings...");
-				sipLogger.severe("id: " + settings.getId());
-				sipLogger.severe("limit: " + settings.getLimit());
-				sipLogger.severe("period: " + settings.getPeriod());
-				sipLogger.severe("rate: " + settings.getRate());
-				sipLogger.severe("duration: " + settings.getRingDuration());
-				sipLogger.severe("media: " + settings.getBlackholeMedia());
-
 				callflowQueue = this.getQueue(settings.getId());
 				if (callflowQueue == null) {
 					callflowQueue = new CallflowQueue(settings);
 
-					sipLogger.warning("I'm putting a callflowQueue in queues: " + callflowQueue);
 					this.queues.put(settings.getId(), callflowQueue);
-					sipLogger.warning("I'm getting a callflowQueue in queues: " + this.queues.get(settings.getId()));
 
 					callflowQueue.initialize(settings);
 
