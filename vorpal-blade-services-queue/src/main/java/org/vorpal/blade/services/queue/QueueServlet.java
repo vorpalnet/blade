@@ -82,7 +82,6 @@ public class QueueServlet extends B2buaServlet {
 	 */
 	@Override
 	public void callStarted(SipServletRequest request) throws ServletException, IOException {
-		sipLogger.fine(request, "callStarted...");
 
 		if (request.getMethod().equals("INVITE")) {
 
@@ -106,7 +105,9 @@ public class QueueServlet extends B2buaServlet {
 
 				// Place the callflow in the queue to be processed later
 
-				settingsManager.getQueue(queueName).getCallflows().addFirst(callflow);
+				CallflowQueue queue = settingsManager.getQueue(queueName);
+				ConcurrentLinkedDeque<Callflow> deque = queue.getCallflows();
+				deque.addFirst(callflow);
 
 //			sipLogger.severe(request, "QueueServlet.callStarted... queueName: " + queueName);
 //			CallflowQueue callflowQueue = settingsManager.getQueue(queueName);
@@ -122,55 +123,32 @@ public class QueueServlet extends B2buaServlet {
 			} else {
 				sipLogger.warning(request, "No matching translation found. :-(");
 			}
-		}else {
-			
+		} else {
+
 		}
 
 	}
 
-	/*
-	 * This is the final response to Alice, it can be modified.
-	 */
 	@Override
 	public void callAnswered(SipServletResponse response) throws ServletException, IOException {
-		sipLogger.info(response, "callAnswered...");
 	}
 
-	/*
-	 * This is the ACK sent to Alice.
-	 */
 	@Override
 	public void callConnected(SipServletRequest request) throws ServletException, IOException {
-		sipLogger.info(request, "callConnected...");
 	}
 
-	/*
-	 * This should be a BYE request from either Alice or Bob.
-	 */
 	@Override
 	public void callCompleted(SipServletRequest request) throws ServletException, IOException {
-		sipLogger.info(request, "callCompleted...");
 	}
 
-	/*
-	 * This should be the error code from Bob, the destination.
-	 */
 	@Override
 	public void callDeclined(SipServletResponse response) throws ServletException, IOException {
-		sipLogger.info(response, "callDeclined...");
 	}
 
-	/*
-	 * This should be a CANCEL from Alice.
-	 */
 	@Override
 	public void callAbandoned(SipServletRequest request) throws ServletException, IOException {
-		sipLogger.info(request, "callAbandoned...");
 	}
 
-	/*
-	 * This is invoked when the servlet shuts down.
-	 */
 	@Override
 	public void servletDestroyed(SipServletContextEvent event) {
 		try {

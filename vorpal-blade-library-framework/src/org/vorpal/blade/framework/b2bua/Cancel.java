@@ -105,10 +105,11 @@ public class Cancel extends Callflow {
 				});
 			} else {
 				// Ugh! complicated to find outstanding unlinked request.
-				sipLogger.warning(request, "CANCEL received, but no linked session. Ignoring request.");
+				sipLogger.fine(request, "CANCEL received, but no linked session. Ignoring request.");
 			}
 		} catch (Exception e) {
-			sipLogger.warning(request, "CANCEL received, error during processing: " + e.getMessage());
+			sipLogger.warning(request, "CANCEL received, but unable to process...");
+			sipLogger.severe(e);
 		}
 	}
 
