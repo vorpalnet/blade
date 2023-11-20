@@ -14,7 +14,7 @@ public class QueueConfigSample extends QueueConfig {
 
 		// Add sample logging parameters
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINE);
+		this.logging.setLoggingLevel(LoggingLevel.FINER);
 
 		// Create some new queues
 

@@ -7,6 +7,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
 
 import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.services.queue.callflows.Statistics;
 
 public class CallflowQueue {
 	private ConcurrentLinkedDeque<Callflow> callflows;
@@ -16,6 +17,9 @@ public class CallflowQueue {
 
 	private SipApplicationSession appSession;
 	private String timerId;
+	
+	private Statistics statistics=null;
+	
 
 	/**
 	 * Constructs a new object from the Queue parameters in the config file.
