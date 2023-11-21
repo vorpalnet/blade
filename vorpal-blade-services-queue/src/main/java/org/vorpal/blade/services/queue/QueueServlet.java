@@ -85,20 +85,20 @@ public class QueueServlet extends B2buaServlet {
 
 		if (request.getMethod().equals("INVITE")) {
 
+			// TODO: Make this configurable
+			request.getApplicationSession().setExpires(900);
+
 			// Find the callflow. This is a bit of an API kludge, sorry!
 			InitialInvite callflow = (InitialInvite) request.getAttribute("callflow");
-//		sipLogger.severe(request, "QueueServlet.callStarted... callflow: " + callflow);
 
 			SipServletRequest inboundRequest = callflow.getInboundRequest();
-
-//		sipLogger.fine(request, "Inbound Request: \n" + inboundRequest.toString());
 
 			// Find a translation for the request (don't forget about the default)
 			Translation t = settingsManager.getCurrent().findTranslation(inboundRequest);
 
 			String queueName = (String) t.getAttribute("queue");
 			if (queueName != null) {
-				sipLogger.fine(request, "Found matching translation! ");
+				sipLogger.finer(request, "Found matching translation! ");
 
 				// Send 180 Ringing, do not send outbound INVITE (yet)
 				this.doNotProcess(request, 180);
@@ -108,20 +108,12 @@ public class QueueServlet extends B2buaServlet {
 				CallflowQueue queue = settingsManager.getQueue(queueName);
 				ConcurrentLinkedDeque<Callflow> deque = queue.getCallflows();
 				deque.addFirst(callflow);
-
-//			sipLogger.severe(request, "QueueServlet.callStarted... queueName: " + queueName);
-//			CallflowQueue callflowQueue = settingsManager.getQueue(queueName);
-//			sipLogger.severe(request, "QueueServlet.callStarted... callflowQueue: " + callflowQueue);
-//			if (callflowQueue != null) {
-//				ConcurrentLinkedDeque<Callflow> deque = callflowQueue.getCallflows();
-//				sipLogger.severe(request, "QueueServlet.callStarted... deque: " + deque);
-//				if (deque != null) {
-//					deque.addFirst(callflow);
-//				}
-//			}
+				if (queue.getTimer().getTimerId() == null) {
+					queue.getTimer().startTimer(); // only starts if not already started
+				}
 
 			} else {
-				sipLogger.warning(request, "No matching translation found. :-(");
+//				sipLogger.warning(request, "No matching translation found. :-(");
 			}
 		} else {
 

@@ -132,7 +132,7 @@ public class Selector {
 				regexRoute.selector = this;
 			}
 
-			sipLogger.fine(request, //
+			sipLogger.finer(request, //
 					"selector: " + this.getId() + //
 							", match: " + matchResult + //
 							", pattern: " + this.getPattern() + //

@@ -20,6 +20,24 @@ public class CallflowQueue {
 
 	private Statistics statistics = null;
 
+	public int intervalHigh = 0;
+	public int intervalLow = 0;
+
+	public String minuteTimer;
+	public int minuteHigh = 0;
+	public int minuteLow = 0;
+
+	public String hourlyTimer;
+	public int hourlyHigh = 0;
+	public int hourlyLow = 0;
+
+	public String dailyTimer;
+	public int dailyHigh = 0;
+	public int dailyLow = 0;
+
+	public int weeklyHigh = 0;
+	public int weeklyLow = 0;
+
 	/**
 	 * Constructs a new object from the Queue parameters in the config file.
 	 * 
@@ -29,6 +47,10 @@ public class CallflowQueue {
 	 */
 	public CallflowQueue(Queue settings) throws ServletException, IOException {
 		callflows = new ConcurrentLinkedDeque<>();
+
+		statistics = new Statistics(settings);
+		statistics.startTimers();
+
 	}
 
 //	public CallflowQueue startTimer() throws ServletException, IOException {
@@ -134,6 +156,24 @@ public class CallflowQueue {
 		this.timerId = timerId;
 		return this;
 
+	}
+
+	public QueueTimer getTimer() {
+		return timer;
+	}
+
+	public CallflowQueue setTimer(QueueTimer timer) {
+		this.timer = timer;
+		return this;
+	}
+
+	public Statistics getStatistics() {
+		return statistics;
+	}
+
+	public CallflowQueue setStatistics(Statistics statistics) {
+		this.statistics = statistics;
+		return this;
 	}
 
 }

@@ -52,7 +52,7 @@ public abstract class TranslationsMap {
 
 //				if (regexRoute != null) {
 
-			sipLogger.finer(request, "Translation.applyTranslations()...");
+			sipLogger.finer(request, "TranslationsMap.applyTranslations() ...");
 
 			translation = this.lookup(request);
 
@@ -60,16 +60,14 @@ public abstract class TranslationsMap {
 
 				if (sipLogger.isLoggable(Level.FINER)) {
 
-					sipLogger.fine(request, this.getClass().getSimpleName() + //
-							" found translation id: " + translation.getId() +
-							//
-							", description: " + translation.getDescription() + //
-							", attributes=" + Arrays.asList(translation.getAttributes()));
+					sipLogger.finer(request, this.getClass().getSimpleName() + //
+							" found translation id: " + translation.getId() + //
+							", attributes: " + Arrays.asList(translation.getAttributes()));
 				}
 
 			} else {
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.fine(request, this.getClass().getName() + " found no translation.");
+					sipLogger.finer(request, this.getClass().getName() + " found no translation.");
 				}
 			}
 
@@ -91,7 +89,7 @@ public abstract class TranslationsMap {
 				if (translation.getList() != null) {
 					Translation t = null;
 					for (TranslationsMap map : translation.getList()) {
-						sipLogger.finest(request, "Checking further TranslationMaps (id): " + map.getId());
+						sipLogger.finest(request, "Checking further TranslationMaps id: " + map.getId());
 						t = map.applyTranslations(request);
 						if (t != null) {
 							break;
@@ -103,16 +101,6 @@ public abstract class TranslationsMap {
 				}
 
 			}
-//				}
-
-//				if (translation != null) {
-//					sipLogger.fine(request, "translation found, breaking for loop.");
-//					break;
-//				} else {
-//					sipLogger.fine(request, "translation not found, continuing for loop.");
-//				}
-
-//			}
 
 		} catch (Exception e) {
 			if (SettingsManager.getSipLogger() != null) {
@@ -123,8 +111,8 @@ public abstract class TranslationsMap {
 		}
 
 		if (translation != null) {
-			sipLogger.finer(request, "The final translation is: " + translation.getId() + ", description: "
-					+ translation.getDescription());
+			sipLogger.finer(request, "The final translation is... id: " + translation.getId() + //
+					", attributes: " + Arrays.asList(translation.getAttributes()));
 		} else {
 			sipLogger.finer(request, "The final translation is null. No match! ");
 		}

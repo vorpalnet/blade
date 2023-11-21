@@ -337,11 +337,11 @@ public abstract class Callflow implements Serializable {
 	 * @param timerId
 	 */
 	public static void stopTimer(SipApplicationSession appSession, String timerId) {
-
 		if (appSession != null && timerId != null) {
 			ServletTimer timer = appSession.getTimer(timerId);
 			if (timer != null) {
 				timer.cancel();
+
 			}
 		}
 	}
