@@ -1,8 +1,10 @@
 package org.vorpal.blade.services.queue.callflows;
 
 import java.io.IOException;
+import java.util.concurrent.ThreadLocalRandom;
 
 import javax.servlet.ServletException;
+import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 
@@ -20,26 +22,7 @@ public class Statistics extends Callflow {
 
 	private SipApplicationSession appSession;
 
-	private int intervalHigh = 0;
-	private int intervalLow = 0;
-	private int intervalMean = 0;
-
-	private String minuteTimer;
-	private int minuteHigh = 0;
-	private int minuteLow = 0;
-	private long minuteMean = 0;
-
-	private String hourlyTimer;
-	private int hourlyHigh = 0;
-	private int hourlyLow = 0;
-	private long hourlyMean = 0;
-
-	private String dailyTimer;
-	private int dailyHigh = 0;
-	private int dailyLow = 0;
-	private int dailyMean = 0;
-
-	Statistics(Queue settings) {
+	public Statistics(Queue settings) {
 		this.settings = settings;
 	}
 
@@ -51,36 +34,45 @@ public class Statistics extends Callflow {
 	public void startTimers() throws ServletException, IOException {
 
 		if (appSession == null) {
-			this.appSession = sipUtil.getApplicationSessionByKey(this.settings.getId(), true);
+			appSession = sipFactory.createApplicationSession();
+			appSession.setExpires(0);
 
 			// minute timer
-			this.schedulePeriodicTimer(appSession, 60, (timer) -> {
+
+			startTimer(appSession, RANDOM(60000), 60000, false, false, (timer) -> {
 
 				CallflowQueue queue = QueueSettingsManager.getQueue(settings.getId());
 				if (queue == null) { // Config changed, queue no longer exists
 					this.stopTimers();
 				} else {
-					int queueSize = queue.getCallflows().size();
+//					int queueSize = queue.getCallflows().size();
 
-					this.minuteHigh = Math.max(minuteHigh, queueSize);
-					this.minuteLow = Math.min(minuteLow, queueSize);
-					this.minuteMean = (minuteMean + queueSize) / 2;
+					// Zero values may mean the counter was reset
+
+					queue.hourlyHigh = Math.max(queue.hourlyHigh, queue.minuteHigh);
+					queue.hourlyLow = Math.min(queue.hourlyLow, queue.minuteLow);
+
+//					this.minuteHigh = Math.max(minuteHigh, intervalHigh);
+//					this.minuteLow = Math.min(minuteLow, intervalLow);
+//					this.minuteMean = (0 == minuteMean) ? intervalMean : (minuteMean + intervalMean) / 2;
 
 					sipLogger.info(appSession, "statistics minute report: queue=" + settings.getId() + //
-							", high: " + intervalHigh + //
-							", low: " + intervalLow + //
-							", mean: " + intervalMean);
+							", high: " + queue.minuteHigh + //
+							", low: " + queue.minuteLow);
 
-					// reset interval statistics
-					this.intervalHigh = 0;
-					this.intervalLow = 0;
-					this.dailyMean = 0;
+					queue.minuteHigh = 0;
+					queue.minuteLow = 0;
+
+//					// reset interval statistics
+//					this.intervalHigh = 0;
+//					this.intervalLow = 0;
+//					this.dailyMean = 0;
 				}
 
 			});
 
 			// hourly timer
-			this.schedulePeriodicTimer(appSession, 60 * 60, (timer) -> {
+			startTimer(appSession, RANDOM(60000), 1000 * 60 * 60, false, false, (timer) -> {
 
 				CallflowQueue queue = QueueSettingsManager.getQueue(settings.getId());
 				if (queue == null) { // Config changed, queue no longer exists
@@ -88,24 +80,21 @@ public class Statistics extends Callflow {
 				} else {
 					int queueSize = queue.getCallflows().size();
 
-					this.hourlyHigh = Math.max(hourlyHigh, queueSize);
-					this.hourlyLow = Math.min(hourlyLow, queueSize);
-					this.hourlyMean = (minuteMean + queueSize) / 2;
+					queue.dailyHigh = Math.max(queue.dailyHigh, queue.hourlyHigh);
+					queue.dailyLow = Math.min(queue.dailyLow, queue.hourlyLow);
 
 					sipLogger.info(appSession, "statistics hourly report: queue=" + settings.getId() + //
-							", high: " + minuteHigh + //
-							", low: " + minuteLow + //
-							", mean: " + minuteMean);
+							", high: " + queue.hourlyHigh + //
+							", low: " + queue.hourlyLow);
 
 					// reset interval statistics
-					this.minuteHigh = 0;
-					this.minuteLow = 0;
-					this.minuteMean = 0;
+					queue.hourlyHigh = 0;
+					queue.hourlyLow = 0;
 				}
 			});
 
 			// daily timer
-			this.schedulePeriodicTimer(appSession, 60 * 60 * 24, (timer) -> {
+			startTimer(appSession, RANDOM(60000), 1000 * 60 * 60 * 24, false, false, (timer) -> {
 
 				CallflowQueue queue = QueueSettingsManager.getQueue(settings.getId());
 				if (queue == null) { // Config changed, queue no longer exists
@@ -113,24 +102,21 @@ public class Statistics extends Callflow {
 				} else {
 					int queueSize = queue.getCallflows().size();
 
-					this.dailyHigh = Math.max(dailyHigh, queueSize);
-					this.dailyLow = Math.min(dailyLow, queueSize);
-					this.dailyMean = (dailyMean + queueSize) / 2;
+					queue.weeklyHigh = Math.max(queue.weeklyHigh, queue.dailyHigh);
+					queue.weeklyLow = Math.min(queue.weeklyLow, queue.dailyLow);
 
 					sipLogger.info(appSession, "statistics daily report: queue=" + settings.getId() + //
-							", high: " + hourlyHigh + //
-							", low: " + hourlyLow + //
-							", mean: " + hourlyMean);
+							", high: " + queue.dailyHigh + //
+							", low: " + queue.dailyLow);
 
 					// reset interval statistics
-					this.hourlyHigh = 0;
-					this.hourlyLow = 0;
-					this.hourlyMean = 0;
+					queue.hourlyHigh = 0;
+					queue.hourlyLow = 0;
 				}
 			});
 
 			// weekly timer
-			this.schedulePeriodicTimer(appSession, 60 * 60 * 24 * 7, (timer) -> {
+			startTimer(appSession, RANDOM(60000), 1000 * 60 * 60 * 24 * 7, false, false, (timer) -> {
 
 				CallflowQueue queue = QueueSettingsManager.getQueue(settings.getId());
 				if (queue == null) { // Config changed, queue no longer exists
@@ -139,14 +125,12 @@ public class Statistics extends Callflow {
 					int queueSize = queue.getCallflows().size();
 
 					sipLogger.info(appSession, "statistics weekly report: queue=" + settings.getId() + //
-							", high: " + dailyHigh + //
-							", low: " + dailyLow + //
-							", mean: " + dailyMean);
+							", high: " + queue.weeklyHigh + //
+							", low: " + queue.weeklyLow);
 
 					// reset interval statistics
-					this.dailyHigh = 0;
-					this.dailyLow = 0;
-					this.dailyMean = 0;
+					queue.weeklyHigh = 0;
+					queue.weeklyLow = 0;
 				}
 			});
 
@@ -156,6 +140,18 @@ public class Statistics extends Callflow {
 
 	public void stopTimers() {
 
+		if (this.appSession != null) {
+			for (ServletTimer timer : appSession.getTimers()) {
+				timer.cancel();
+			}
+			appSession.invalidate();
+			appSession = null;
+		}
+
+	}
+
+	public static long RANDOM(long high) {
+		return ThreadLocalRandom.current().nextLong(high);
 	}
 
 }

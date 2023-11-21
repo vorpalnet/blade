@@ -1,5 +1,7 @@
 package org.vorpal.blade.services.queue;
 
+import java.io.Serializable;
+
 import javax.servlet.sip.URI;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -8,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /**
  * Class to be used in the configuration file to define the traits of the queue.
  */
-public class Queue {
+public class Queue implements Serializable {
 
 	@JsonProperty(required = true)
 	@JsonPropertyDescription("The id of the queue.")
