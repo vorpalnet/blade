@@ -82,9 +82,10 @@ public class ConfigurationMonitor extends Thread {
 
 	/**
 	 * Creates a WatchService and registers the given directory
-	 * @param dir 
-	 * @param recursive 
-	 * @throws IOException 
+	 * 
+	 * @param dir
+	 * @param recursive
+	 * @throws IOException
 	 */
 	public void initialize(Path dir, boolean recursive) throws IOException {
 
@@ -250,43 +251,6 @@ public class ConfigurationMonitor extends Thread {
 		}
 
 	}
-
-//	public void updateManagedMBeans(String appName, String json) {
-//
-//		try {
-//			InitialContext ctx = new InitialContext();
-//			MBeanServer server = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
-//
-//			ObjectName objectName = new ObjectName("vorpal.blade:Name=" + appName + ",Type=Configuration,*");
-//			System.out.println("Configuration changed...");
-//			System.out.println("looking for " + objectName.toString());
-//
-//			Set<ObjectInstance> mbeans = server.queryMBeans(objectName, null);
-//
-//			for (ObjectInstance mbean : mbeans) {
-//				ObjectName name = mbean.getObjectName();
-//
-//				System.out.println("Getting Settings MBean...");
-//				SettingsMXBean settings = JMX.newMXBeanProxy(server, name, SettingsMXBean.class);
-//
-//				System.out.println("Updating JSON...");
-//				settings.setJson(json);
-//
-//			}
-//
-//			ctx.close();
-//
-//		} catch (NameNotFoundException e) {
-//			System.out.println(e.getMessage());
-//			System.out.println(
-//					"Please verify that this application is running in the AdminServer (and not in a managed engine tier node).");
-//		} catch (NamingException e) {
-//			e.printStackTrace();
-//		} catch (MalformedObjectNameException e) {
-//			e.printStackTrace();
-//		}
-//
-//	}
 
 	@Override
 	public void run() {

@@ -14,8 +14,7 @@ import io.swagger.v3.oas.annotations.info.Info;
 
 @Path("api/v1")
 public class RestAPI {
-	
-	
+
 	@GET
 	@Path("{app}/reload")
 //	@Produces({ "application/json" })
@@ -24,15 +23,9 @@ public class RestAPI {
 			@Parameter(required = true, example = "transfer", description = "Reload the configuration") @PathParam("app") String app) {
 		Response response;
 
-		System.out.println("Invoking reload... app="+app);
-		
-		
-		
-		
-		
-		
+		System.out.println("Invoking reload... app=" + app);
 
-		response = Response.status(Response.Status.OK).build();		
+		response = Response.status(Response.Status.OK).build();
 		return response;
 	}
 
