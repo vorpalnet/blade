@@ -26,10 +26,11 @@
 		-->
 		<unzip dest="build/classes">
 			<fileset dir="${lib}">
-				<include name="**/*jackson*.jar" />
-				<include name="**/ipaddress*.jar" />
-				<include name="**/scala-library*.jar" />
-				<include name="**/slf4j*.jar" />
+				<include name="*jackson*.jar" />
+				<include name="ipaddress*.jar" />
+				<include name="scala-library*.jar" />
+				<include name="slf4j*.jar" />
+				<include name="classgraph*.jar" />
 			</fileset>
 		</unzip>
 
