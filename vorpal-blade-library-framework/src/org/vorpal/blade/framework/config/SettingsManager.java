@@ -29,16 +29,15 @@ import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 
 import javax.management.InstanceAlreadyExistsException;
 import javax.management.InstanceNotFoundException;
 import javax.management.MBeanRegistrationException;
 import javax.management.MBeanServer;
-import javax.management.MalformedObjectNameException;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
-import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipFactory;
@@ -60,8 +59,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.NullNode;
-//import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
-//import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
+import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
+import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
+import com.kjetland.jackson.jsonSchema.SubclassesResolver;
+import com.kjetland.jackson.jsonSchema.SubclassesResolverImpl;
 
 import inet.ipaddr.IPAddress;
 import inet.ipaddr.ipv4.IPv4Address;
@@ -286,7 +287,7 @@ public class SettingsManager<T> {
 			this.mapper.registerModule(new SimpleModule()//
 					.addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
 
-			// Don't both to save attributes set to null.
+			// Don't bother to save attributes set to null.
 			this.mapper.setSerializationInclusion(Include.NON_NULL);
 
 			this.mapper.configure(SerializationFeature.FAIL_ON_SELF_REFERENCES, false);
@@ -354,6 +355,7 @@ public class SettingsManager<T> {
 
 		// always save the current schema and sample config file
 		saveConfigFile(tmp);
+		saveSchema(tmp);
 
 		File domainFile = new File(domainPath.toString() + "/" + servletContextName + ".json");
 		try {
@@ -412,16 +414,22 @@ public class SettingsManager<T> {
 
 	}
 
-	private void saveSchema() throws JsonGenerationException, JsonMappingException, IOException {
-
-//		JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4().html5EnabledSchema();
-//		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper, config);
-//		JsonNode jsonSchema = schemaGen.generateJsonSchema(current.getClass());
+//	private void saveSchemaz(T t) throws JsonGenerationException, JsonMappingException, IOException {
 //
-//		// add title here
-//		mapper.writerWithDefaultPrettyPrinter()
-//				.writeValue(new File(schemaPath.toString() + "/" + servletContextName + ".jschema"), jsonSchema);
+//		final SubclassesResolver resolver = new SubclassesResolverImpl()
+//				.withPackagesToScan(Arrays.asList("org.vorpal.blade.framework.config"))
+//				.withClassesToScan(Arrays.asList(t.getClass().getName()));
+//
+//		System.out.println("Subclasses: " + resolver.getSubclasses(clazz));
+//	}
 
+	private void saveSchema(T t) throws JsonGenerationException, JsonMappingException, IOException {
+		SubclassesResolver resolver = new SubclassesResolverImpl().withClassesToScan(Arrays.asList(clazz.getName()));
+		JsonSchemaConfig config = JsonSchemaConfig.html5EnabledSchema().withSubclassesResolver(resolver);
+		JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(mapper, config);
+		JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(t.getClass());
+		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
+		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, jsonSchema);
 	}
 
 	private void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {

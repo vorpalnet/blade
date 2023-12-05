@@ -36,6 +36,7 @@ import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.b2bua.InitialInvite;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.Translation;
+import org.vorpal.blade.services.queue.config.QueueConfigSample;
 
 /**
  * @author Jeff McDonald

@@ -163,7 +163,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				}
 			} else {
 				if (this.isLoggable(Level.FINE)) {
-					this.info(config.getClass().getSimpleName() + "=" + sw.toString());
+					this.fine(config.getClass().getSimpleName() + "=" + sw.toString());
 				}
 			}
 

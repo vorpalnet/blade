@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.queue;
+package org.vorpal.blade.services.queue.config;
 
 import org.vorpal.blade.framework.config.ConfigAddressMap;
 import org.vorpal.blade.framework.config.ConfigHashMap;
@@ -6,6 +6,7 @@ import org.vorpal.blade.framework.config.ConfigPrefixMap;
 import org.vorpal.blade.framework.config.Selector;
 import org.vorpal.blade.framework.config.TranslationsMap;
 import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
+import org.vorpal.blade.services.queue.Queue;
 import org.vorpal.blade.framework.logging.LogParametersDefault;
 
 public class QueueConfigSample extends QueueConfig {

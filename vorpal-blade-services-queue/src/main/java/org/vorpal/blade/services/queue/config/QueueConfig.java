@@ -1,8 +1,9 @@
-package org.vorpal.blade.services.queue;
+package org.vorpal.blade.services.queue.config;
 
 import java.util.LinkedList;
 
 import org.vorpal.blade.framework.config.RouterConfig;
+import org.vorpal.blade.services.queue.Queue;
 
 /**
  * Extends RouterConfig to provide a Selector to identify which queue (if any)
