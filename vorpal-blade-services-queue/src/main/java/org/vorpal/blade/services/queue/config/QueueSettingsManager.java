@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.queue;
+package org.vorpal.blade.services.queue.config;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -7,15 +7,16 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletContextEvent;
 
 import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.services.queue.config.QueueConfig;
+import org.vorpal.blade.services.queue.Queue;
+import org.vorpal.blade.services.queue.QueueCallflow;
+import org.vorpal.blade.services.queue.QueueServlet;
 
 /**
  * 
  */
 public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 
-//	private static ConcurrentHashMap<String, CallflowQueue> queues = new ConcurrentHashMap<>();
-	private static HashMap<String, CallflowQueue> queues = new HashMap<>();
+	private static HashMap<String, QueueCallflow> queues = new HashMap<>();
 
 	/**
 	 * Create a custom SettingsManager with a sample config file.
@@ -25,7 +26,6 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	 */
 	public QueueSettingsManager(SipServletContextEvent event, QueueConfig sample) {
 		super(event, QueueConfig.class, sample);
-
 	}
 
 	/**
@@ -34,7 +34,7 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	 * @param id name of the queue
 	 * @return the queue
 	 */
-	public static CallflowQueue getQueue(String id) {
+	public static QueueCallflow getQueue(String id) {
 		return queues.get(id);
 	}
 
@@ -51,24 +51,18 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	@Override
 	public void initialize(QueueConfig config) {
 		try {
-
-			CallflowQueue callflowQueue;
-
-			for (Queue settings : config.getQueues()) {
-
-				callflowQueue = this.getQueue(settings.getId());
-				if (callflowQueue == null) {
-					callflowQueue = new CallflowQueue(settings);
-
-					this.queues.put(settings.getId(), callflowQueue);
-
-					callflowQueue.initialize(settings);
-
-				} else {
-					callflowQueue.initialize(settings);
+			QueueAttributes qa;
+			Queue queue;
+			for (String queueName : config.getQueues().keySet()) {
+				qa = config.getQueues().get(queueName);
+				queue = QueueServlet.queues.get(queueName);
+				if (queue == null) {
+					queue = new Queue(queueName);
+					QueueServlet.queues.put(queueName, queue);
 				}
-
+				queue.initialize(qa);
 			}
+
 		} catch (Exception e) {
 			if (sipLogger != null) {
 				sipLogger.severe("Queue application failed to initialize. Check config file.");

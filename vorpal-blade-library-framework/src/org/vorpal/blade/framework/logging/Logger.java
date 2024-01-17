@@ -39,6 +39,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
+import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -46,9 +47,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
 public class Logger extends java.util.logging.Logger implements Serializable {
-//	private static Logger logger = null;
-//	private static String name;
-
 	private static final long serialVersionUID = 1L;
 	private Level sequenceDiagramLoggingLevel = null;
 	private Level configurationLoggingLevel = null;
@@ -91,7 +89,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //		return logger;
 //	}
 
-	private static final String NOSESS = "[------:--] ";
+	private static final String NOSESS = "[--------:----] ";
 
 	@Override
 	public void severe(String msg) {
@@ -345,15 +343,36 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return name;
 	}
 
+//	public static String hexHash(SipApplicationSession appSession) {
+//		int hash = Math.abs(appSession.getId().hashCode()) % 0xFFFF;
+//		return "[" + String.format("%04X", hash) + ":----]";
+//	}
+
 	public static String hexHash(SipApplicationSession appSession) {
-		int hash = Math.abs(appSession.getId().hashCode()) % 0xFFFF;
-		return "[" + String.format("%04X", hash) + ":----]";
+		String hashValue = NOSESS;
+		if (appSession != null) {
+			String hash1 = Callflow.getVorpalSessionId(appSession);
+			hashValue = "[" + hash1 + ":----]";
+		}
+
+		return hashValue;
 	}
 
+//	public static String hexHash(SipSession sipSession) {
+//		int hash1 = Math.abs(sipSession.getApplicationSession().getId().hashCode()) % 0xFFFFFF;
+//		int hash2 = Math.abs(sipSession.getId().hashCode()) % 0xFF;
+//		return "[" + String.format("%06X", hash1) + ":" + String.format("%02X", hash2) + "]";
+//	}
+
 	public static String hexHash(SipSession sipSession) {
-		int hash1 = Math.abs(sipSession.getApplicationSession().getId().hashCode()) % 0xFFFFFF;
-		int hash2 = Math.abs(sipSession.getId().hashCode()) % 0xFF;
-		return "[" + String.format("%06X", hash1) + ":" + String.format("%02X", hash2) + "]";
+		String hashValue = NOSESS;
+
+		if (sipSession != null) {
+			String hash1 = Callflow.getVorpalSessionId(sipSession.getApplicationSession());
+			String hash2 = Callflow.getVorpalDialogId(sipSession);
+			hashValue = "[" + hash1 + ":" + hash2 + "]";
+		}
+		return hashValue;
 	}
 
 	public String shorten(String value, int length) {
@@ -401,21 +420,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				boolean leftSide = false;
 
-//				String requestUri = "";
-//				if (request != null) {
-//					if (request.isInitial() || request.getSession().getState().equals(State.EARLY)) {
-//						requestUri = request.getRequestURI().toString();
-//					}
-//
-////					if (request.getSession().getState().equals(State.INITIAL)) {
-////						requestUri = request.getRequestURI().toString();
-////					}
-//
-//				}
-
 				if (request != null && request.isInitial() && direction.equals(Direction.RECEIVE)) {
 					request.getSession().setAttribute("DIAGRAM_SIDE", "LEFT");
 					String line = String.format("%87s", "").replace(' ', '=');
+
+//					String indexKey = Callflow.getVorpalSessionId(request.getApplicationSession());
+//					log(Level.FINE, hexHash(request.getSession()) + (" ") + line + "; X-Vorpal-Session: " + indexKey);
+
 					log(Level.FINE, hexHash(request.getSession()) + (" ") + line);
 				}
 
@@ -468,8 +479,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String middle = String.format("%-17s", shorten(name, 17));
 							String comment = String.format("%36s", ";") + " " + String.format("%-32s", note);
 
-							str.append(hexHash(request.getSession())).append("{1}");
-//							str.append(hexHash(request.getSession())).append(" ");
+//							str.append(hexHash(request.getSession())).append("{1}");
+							str.append(hexHash(request.getSession())).append(" ");
 
 							str.append(alice).append(arrow).append(middle).append(comment);
 						} else { // #2
@@ -479,8 +490,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
 									+ response.getMethod() + ")";
 
-							str.append(hexHash(response.getSession())).append("{2}");
-//							str.append(hexHash(response.getSession())).append(" ");
+//							str.append(hexHash(response.getSession())).append("{2}");
+							str.append(hexHash(response.getSession())).append(" ");
 							str.append(alice).append(arrow).append(middle).append(comment);
 						}
 					} else {
@@ -501,8 +512,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String middle = String.format("%-17s", shorten(name, 17));
 							String comment = String.format("%36s", ";") + " " + String.format("%-32s", note);
 
-							str.append(hexHash(request.getSession())).append("{3}");
-//							str.append(hexHash(request.getSession())).append(" ");
+//							str.append(hexHash(request.getSession())).append("{3}");
+							str.append(hexHash(request.getSession())).append(" ");
 
 							str.append(alice).append(arrow).append(middle).append(comment);
 
@@ -513,8 +524,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
 									+ response.getMethod() + ")";
 
-							str.append(hexHash(response.getSession())).append("{4}");
-//							str.append(hexHash(response.getSession())).append(" ");
+//							str.append(hexHash(response.getSession())).append("{4}");
+							str.append(hexHash(response.getSession())).append(" ");
 
 							str.append(alice).append(arrow).append(middle).append(comment);
 						}
@@ -540,8 +551,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String bob = String.format("%-17s", shorten(from(request), 17));
 							String comment = " ; " + String.format("%-32s", note);
 
-							str.append(hexHash(request.getSession())).append("{5}");
-//							str.append(hexHash(request.getSession())).append(" ");
+//							str.append(hexHash(request.getSession())).append("{5}");
+							str.append(hexHash(request.getSession())).append(" ");
 
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 						} else { // #6
@@ -551,8 +562,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String bob = String.format("%-17s", shorten(to(response), 17));
 							String comment = " ; " + response.getReasonPhrase() + " (" + response.getMethod() + ")";
 
-							str.append(hexHash(response.getSession())).append("{6}");
-//							str.append(hexHash(response.getSession())).append(" ");
+//							str.append(hexHash(response.getSession())).append("{6}");
+							str.append(hexHash(response.getSession())).append(" ");
 
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 						}
@@ -579,8 +590,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String bob = String.format("%-17s", shorten(to(request), 17));
 							String comment = " ; " + String.format("%-32s", note);
 
-							str.append(hexHash(request.getSession())).append("{7}");
-//							str.append(hexHash(request.getSession())).append(" ");
+//							str.append(hexHash(request.getSession())).append("{7}");
+							str.append(hexHash(request.getSession())).append(" ");
 
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 
@@ -591,8 +602,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String bob = String.format("%-17s", shorten(from(response), 17));
 							String comment = " ; " + response.getReasonPhrase() + " (" + response.getMethod() + ")";
 
-							str.append(hexHash(response.getSession())).append("{8}");
-//							str.append(hexHash(response.getSession())).append(" ");
+//							str.append(hexHash(response.getSession())).append("{8}");
+							str.append(hexHash(response.getSession())).append(" ");
 
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 						}

@@ -24,7 +24,8 @@
 package org.vorpal.blade.services.queue;
 
 import java.io.IOException;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
@@ -33,10 +34,12 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
-import org.vorpal.blade.framework.b2bua.InitialInvite;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.Translation;
+import org.vorpal.blade.services.queue.config.QueueAttributes;
+import org.vorpal.blade.services.queue.config.QueueConfig;
 import org.vorpal.blade.services.queue.config.QueueConfigSample;
+import org.vorpal.blade.services.queue.config.QueueSettingsManager;
 
 /**
  * @author Jeff McDonald
@@ -49,25 +52,14 @@ import org.vorpal.blade.services.queue.config.QueueConfigSample;
 public class QueueServlet extends B2buaServlet {
 	private static final long serialVersionUID = 1L;
 
-	/**
-	 * Contains the latest configuration and queues.
-	 */
+	public static Map<String, Queue> queues = new HashMap<>();
 	public static QueueSettingsManager settingsManager;
-
-	/*
-	 * This is invoked when the servlet starts up.
-	 */
 
 	@Override
 	public void servletCreated(SipServletContextEvent event) {
 
 		try {
-
-			// Overloaded initialize on QueueSettingsManager method will construct the
-			// queues
 			settingsManager = new QueueSettingsManager(event, new QueueConfigSample());
-			sipLogger.fine("servletCreated...");
-
 		} catch (Exception e) {
 			if (sipLogger != null) {
 				sipLogger.severe(e);
@@ -78,74 +70,15 @@ public class QueueServlet extends B2buaServlet {
 
 	}
 
-	/*
-	 * This is the outbound INVITE request to Bob, it can be modified.
-	 */
-	@Override
-	public void callStarted(SipServletRequest request) throws ServletException, IOException {
-
-		if (request.getMethod().equals("INVITE")) {
-
-			// TODO: Make this configurable
-			request.getApplicationSession().setExpires(900);
-
-			// Find the callflow. This is a bit of an API kludge, sorry!
-			InitialInvite callflow = (InitialInvite) request.getAttribute("callflow");
-
-			SipServletRequest inboundRequest = callflow.getInboundRequest();
-
-			// Find a translation for the request (don't forget about the default)
-			Translation t = settingsManager.getCurrent().findTranslation(inboundRequest);
-
-			String queueName = (String) t.getAttribute("queue");
-			if (queueName != null) {
-				sipLogger.finer(request, "Found matching translation! ");
-
-				// Send 180 Ringing, do not send outbound INVITE (yet)
-				this.doNotProcess(request, 180);
-
-				// Place the callflow in the queue to be processed later
-
-				CallflowQueue queue = settingsManager.getQueue(queueName);
-				ConcurrentLinkedDeque<Callflow> deque = queue.getCallflows();
-				deque.addFirst(callflow);
-				if (queue.getTimer().getTimerId() == null) {
-					queue.getTimer().startTimer(); // only starts if not already started
-				}
-
-			} else {
-//				sipLogger.warning(request, "No matching translation found. :-(");
-			}
-		} else {
-
-		}
-
-	}
-
-	@Override
-	public void callAnswered(SipServletResponse response) throws ServletException, IOException {
-	}
-
-	@Override
-	public void callConnected(SipServletRequest request) throws ServletException, IOException {
-	}
-
-	@Override
-	public void callCompleted(SipServletRequest request) throws ServletException, IOException {
-	}
-
-	@Override
-	public void callDeclined(SipServletResponse response) throws ServletException, IOException {
-	}
-
-	@Override
-	public void callAbandoned(SipServletRequest request) throws ServletException, IOException {
-	}
-
 	@Override
 	public void servletDestroyed(SipServletContextEvent event) {
 		try {
 			sipLogger.info("servletDestroyed...");
+
+			for (String key : this.queues.keySet()) {
+				this.queues.get(key).stopTimers();
+			}
+
 			settingsManager.unregister();
 		} catch (Exception e) {
 			if (sipLogger != null) {
@@ -154,6 +87,58 @@ public class QueueServlet extends B2buaServlet {
 				e.printStackTrace();
 			}
 		}
+	}
+
+	@Override
+	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
+		Callflow callflow = null;
+
+		QueueConfig config = settingsManager.getCurrent();
+
+		if (request.getMethod().equals("INVITE") && request.isInitial()) {
+			Translation t = config.findTranslation(request);
+			String queueName = (String) t.getAttribute("queue");
+
+			if (queueName != null) {
+				sipLogger.finer(request, "Found matching translation... queue=" + queueName);
+				Queue queue = queues.get(queueName);
+				QueueAttributes queueAttributes = queue.attributes;
+				QueueCallflow queueCallflow = new QueueCallflow(queueName, queueAttributes);
+				queue.callflows.add(queueCallflow);
+				queue.statistics.intervalTask();
+				callflow = queueCallflow;
+			}
+		}
+
+		if (null == callflow) {
+			callflow = super.chooseCallflow(request);
+		}
+
+		return callflow;
+	}
+
+	@Override
+	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
+	}
+
+	@Override
+	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
 	}
 
 }

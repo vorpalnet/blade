@@ -46,11 +46,6 @@ public class ProxyRegistrarServlet extends ProxyServlet
 	@SipApplicationKey
 	public static String sessionKey(SipServletRequest req) {
 		String key = getAccountName(req.getTo());
-
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer("Returning sessionKey: " + key);
-		}
-
 		return key;
 	}
 

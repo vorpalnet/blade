@@ -28,7 +28,7 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipSession.State;
+import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Expectation;
@@ -134,10 +134,8 @@ public class BlindTransfer extends Transfer {
 					sipLogger.finer(bye, "transferee disconnected before transfer completed");
 					sendResponse(bye.createResponse(200));
 
-					if (false == bye.getSession().getState().equals(State.TERMINATED)) {
-						sendRequest(targetRequest.createCancel());
-						sendRequest(transferorRequest.getSession().createRequest(BYE));
-					}
+					sendRequest(targetRequest.createCancel());
+
 				} catch (Exception e) {
 					sipLogger.warning(bye,
 							"BYE received from transferee, CANCEL target session isValid: "
@@ -162,6 +160,7 @@ public class BlindTransfer extends Transfer {
 			sendRequest(targetRequest, (targetResponse) -> {
 
 				if (successful(targetResponse)) {
+
 					expectation.clear();
 
 					SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
@@ -176,7 +175,7 @@ public class BlindTransfer extends Transfer {
 					copyContent(targetResponse, transfereeRequest);
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
 
-						if (this.successful(transfereeResponse)) { //should always be the case
+						if (successful(transfereeResponse)) { // should always be the case
 							linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
 
 							// Expect a BYE from the transferor
@@ -201,10 +200,13 @@ public class BlindTransfer extends Transfer {
 					SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
 					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
 					notifyFailure.setHeader(EVENT, "refer");
-//					notifyFailure.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
 					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated");
 					notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
-					sendRequest(notifyFailure);
+
+					// Do we need to send a BYE? Yes, we do!
+					sendRequest(notifyFailure, (notifyFailureResponse) -> {
+						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"));
+					});
 
 				}
 

@@ -10,15 +10,27 @@ public class SessionParameters {
 	};
 
 	@JsonPropertyDescription("Set Application Session expiration in minutes.")
-	protected Boolean expiration = null;
+	protected Integer expiration = null;
 
-	@JsonPropertyDescription("Set keep alive style of DISABLED, UPDATE, OPTIONS, REINVITE")
-	protected KeepAliveStyle keepalive = null;
+	@JsonPropertyDescription("Set Keep-Alive parameters.")
+	protected KeepAliveParameters keepAlive = null;
 
-	@JsonPropertyDescription("Sets Min-SE header, in seconds")
-	protected Integer minSE = null;
+	public Integer getExpiration() {
+		return expiration;
+	}
 
-	@JsonPropertyDescription("Sets Session-Expires header, in seconds")
-	protected Integer sessionExpires = null;
+	public SessionParameters setExpiration(Integer expiration) {
+		this.expiration = expiration;
+		return this;
+	}
+
+	public KeepAliveParameters getKeepAlive() {
+		return keepAlive;
+	}
+
+	public SessionParameters setKeepAlive(KeepAliveParameters keepAlive) {
+		this.keepAlive = keepAlive;
+		return this;
+	}
 
 }

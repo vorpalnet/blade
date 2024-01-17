@@ -42,6 +42,7 @@ import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletContextEvent;
+import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
@@ -108,6 +109,7 @@ public class SettingsManager<T> {
 	protected Path samplePath;
 
 	public static SipFactory sipFactory;
+	public static SipSessionsUtil sipUtil;
 	public static Logger sipLogger;
 
 	private JsonNode domainNode = NullNode.getInstance();
@@ -141,18 +143,22 @@ public class SettingsManager<T> {
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
 		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		this.sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+
 		this.mapper = mapper;
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, mapper);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) {
 		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		this.sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample) {
 		this.sample = sample;
 		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		this.sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
@@ -160,8 +166,8 @@ public class SettingsManager<T> {
 		return sipFactory;
 	}
 
-	public static void setSipFactory(SipFactory sipFactory) {
-		SettingsManager.sipFactory = sipFactory;
+	public static SipSessionsUtil getSipUtil() {
+		return sipUtil;
 	}
 
 	public static Logger getSipLogger() {
@@ -544,6 +550,11 @@ public class SettingsManager<T> {
 								config.getLogging().resolveSequenceDiagramLoggingLevel());
 					}
 
+					if (config.getSession() != null) {
+						Callflow.setSessionParameters(config.getSession());
+						AsyncSipServlet.setSessionParameters(config.getSession());
+					}
+
 				}
 
 			} else {
@@ -580,12 +591,8 @@ public class SettingsManager<T> {
 	public void logCurrent() {
 
 		try {
-//			sipLogger.log(this.getSipLogger().getConfigurationLoggingLevel(), "Configuration has changed:\n"
-//					+ mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this.getCurrent()));
-
 			sipLogger.log(this.getSipLogger().getLevel(), "Configuration has changed:\n"
 					+ mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this.getCurrent()));
-
 		} catch (JsonProcessingException e) {
 			sipLogger.severe(e);
 		}

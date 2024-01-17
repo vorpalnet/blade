@@ -17,6 +17,7 @@ import javax.servlet.sip.SipServletListener;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerListener;
@@ -25,6 +26,7 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.config.SessionParameters;
 import org.vorpal.blade.framework.logging.LogManager;
 import org.vorpal.blade.framework.logging.Logger;
 import org.vorpal.blade.framework.logging.Logger.Direction;
@@ -46,6 +48,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	protected static SipFactory sipFactory;
 	protected static SipSessionsUtil sipUtil;
 	protected static TimerService timerService;
+	protected static SessionParameters sessionParameters;
 
 	/**
 	 * Called when the SipServlet has been created.
@@ -129,12 +132,58 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
+	/**
+	 * This function creates a header called X-Vorpal-Session, which contains a
+	 * SipApplicationSession index key if one does not already exist. This session
+	 * key can be used to in the future via
+	 * SipApplicationSession.getApplicationSessionByKey() for creating web service
+	 * requests or other types of functions.
+	 * 
+	 * @param request
+	 */
+	public static void generateIndexKey(SipServletRequest request) {
+		String session, indexKey, dialog;
+		SipApplicationSession appSession = request.getApplicationSession();
+		SipSession sipSession = request.getSession();
+
+		indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+
+		if (null == indexKey) {
+			session = request.getHeader("X-Vorpal-Session");
+			if (null != session) {
+				int colonIndex = session.indexOf(':');
+				indexKey = session.substring(0, colonIndex);
+				dialog = session.substring(colonIndex);
+			} else {
+				indexKey = Callflow.getVorpalSessionId(appSession);
+				dialog = Callflow.getVorpalDialogId(sipSession);
+			}
+
+			appSession.setAttribute("X-Vorpal-Session", indexKey);
+			sipSession.setAttribute("X-Vorpal-Dialog", dialog);
+			appSession.addIndexKey(indexKey);
+		}
+	}
+
 	@Override
 	protected void doRequest(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow;
 		Callback<SipServletRequest> requestLambda;
 
 		try {
+
+			// creates a session tracking key, if one doesn't already exist
+			generateIndexKey(request);
+
+			if (request.isInitial() && Callflow.getSessionParameters() != null) {
+				if (Callflow.getSessionParameters().getExpiration() != null) {
+					request.getApplicationSession().setExpires(Callflow.getSessionParameters().getExpiration());
+				}
+
+				// put the keep alive logic here
+
+			}
+
 			requestLambda = Callflow.pullCallback(request);
 			if (requestLambda != null) {
 				String name = requestLambda.getClass().getSimpleName();
@@ -159,7 +208,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 			}
 		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(e);
+			Callflow.getLogger().logStackTrace(request, e);
 			throw e;
 		}
 	}
@@ -168,17 +217,18 @@ public abstract class AsyncSipServlet extends SipServlet
 	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
 		Callback<SipServletResponse> callback;
 		try {
-
-			callback = Callflow.pullCallback(response);
-			if (callback != null) {
-				Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, callback.getClass().getSimpleName());
-				callback.accept(response);
-			} else {
-				Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
+			if (response.getSession().isValid()) {
+				callback = Callflow.pullCallback(response);
+				if (callback != null) {
+					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+							callback.getClass().getSimpleName());
+					callback.accept(response);
+				} else {
+					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
+				}
 			}
-
 		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(e);
+			Callflow.getLogger().logStackTrace(response, e);
 			throw e;
 		}
 
@@ -342,6 +392,14 @@ public abstract class AsyncSipServlet extends SipServlet
 			sipLogger.logStackTrace(e);
 			throw e;
 		}
+	}
+
+	public static SessionParameters getSessionParameters() {
+		return sessionParameters;
+	}
+
+	public static void setSessionParameters(SessionParameters sessionParameters) {
+		AsyncSipServlet.sessionParameters = sessionParameters;
 	}
 
 }

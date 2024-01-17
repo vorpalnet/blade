@@ -55,7 +55,8 @@ public class InitialInvite extends Callflow {
 	/**
 	 * This method looks for the "Session-Expires" header on either a request or
 	 * response object. If it exists, it sets the SipApplicationSession to be the
-	 * same (plus one minute for cleanup).
+	 * same (plus one minute for cleanup). If no header is found, use the expiration
+	 * value in the configuration file.
 	 * 
 	 * @param msg
 	 * @throws ServletParseException
@@ -70,6 +71,15 @@ public class InitialInvite extends Callflow {
 			if (sessionExpires != null) {
 				appSession.setExpires((Integer.parseInt(sessionExpires) / 60) + 1);
 			}
+		} else {
+			// Use configuration file instead
+			// moving this to the AsyncSipServlet
+//			if (Callflow.getSessionParameters() != null) {
+//				if (Callflow.getSessionParameters().getExpiration() != null) {
+//					appSession.setExpires(Callflow.getSessionParameters().getExpiration());
+//				}
+//			}
+
 		}
 	}
 

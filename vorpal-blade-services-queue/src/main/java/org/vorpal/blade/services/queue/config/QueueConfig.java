@@ -1,22 +1,22 @@
 package org.vorpal.blade.services.queue.config;
 
-import java.util.LinkedList;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.vorpal.blade.framework.config.RouterConfig;
-import org.vorpal.blade.services.queue.Queue;
 
 /**
- * Extends RouterConfig to provide a Selector to identify which queue (if any)
- * is used in processing the call.
+ * Defines how the Queue application is configured.
  */
 public class QueueConfig extends RouterConfig {
 	private static final long serialVersionUID = 1L;
-	private LinkedList<Queue> queues = new LinkedList<>();
+
+	public Map<String, QueueAttributes> queues = new HashMap<>();
 
 	/**
 	 * @return the queues
 	 */
-	public LinkedList<Queue> getQueues() {
+	public Map<String, QueueAttributes> getQueues() {
 		return queues;
 	}
 
@@ -24,17 +24,18 @@ public class QueueConfig extends RouterConfig {
 	 * @param queues the queues to set
 	 * @return this
 	 */
-	public QueueConfig setQueues(LinkedList<Queue> queues) {
+	public QueueConfig setQueues(Map<String, QueueAttributes> queues) {
 		this.queues = queues;
 		return this;
 	}
 
 	/**
-	 * @param queue
+	 * @param id 
+	 * @param queueAttributes 
 	 * @return this
 	 */
-	public QueueConfig addQueue(Queue queue) {
-		queues.add(queue);
+	public QueueConfig addQueue(String id, QueueAttributes queueAttributes) {
+		queues.put(id, queueAttributes);
 		return this;
 	}
 

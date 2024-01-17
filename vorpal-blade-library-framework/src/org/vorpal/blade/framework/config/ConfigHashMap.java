@@ -22,11 +22,10 @@ public class ConfigHashMap extends TranslationsMap {
 		Translation value = null;
 
 		try {
-
-			// jwm - multiple selectors
 			for (Selector selector : this.selectors) {
 
 				RegExRoute regexRoute = selector.findKey(request);
+				
 				if (regexRoute != null) {
 					value = map.get(regexRoute.key);
 				}
