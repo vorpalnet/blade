@@ -51,11 +51,11 @@ public class ConfigPrefixMap extends TranslationsMap {
 					}
 
 					if (value != null) {
-						SettingsManager.sipLogger.fine(request,
-								"Route found id: " + value.getId() + ", description=" + value.getDescription());
+						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap Route found id: " + value.getId()
+								+ ", description=" + value.getDescription());
 						break;
 					} else {
-						SettingsManager.sipLogger.fine(request, "Route not found");
+						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap Route not found");
 					}
 				}
 

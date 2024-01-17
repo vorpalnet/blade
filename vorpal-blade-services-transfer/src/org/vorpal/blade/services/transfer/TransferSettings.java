@@ -2,26 +2,20 @@ package org.vorpal.blade.services.transfer;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.LinkedList;
 
-import org.vorpal.blade.framework.transfer.TransferCondition;
+import org.vorpal.blade.framework.config.RouterConfig;
 
-public class TransferSettings implements Serializable {
-
-	private static final long serialVersionUID = 1L;
+public class TransferSettings extends RouterConfig implements Serializable {
+	private static final long serialVersionUID = 2L;
 
 	public enum TransferStyle {
-		blind, assisted, media
+		none, blind, attended, conference
 	};
 
-	public enum LoggingLevel {
-		OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL
-	}
-	
-	protected LoggingLevel loggingLevel = LoggingLevel.INFO;
-	protected Boolean transferAllRequests;
-	protected TransferStyle defaultTransferStyle;
-	protected String Allow = "MESSAGE, REFER, NOTIFY, CANCEL, ACK, UPDATE, PRACK, OPTIONS, INVITE, INFO, SUBSCRIBE, BYE";
+//	protected Boolean transferAllRequests;
+//	protected TransferStyle defaultStyle;
+
+	protected String allow = "MESSAGE, REFER, NOTIFY, CANCEL, ACK, UPDATE, PRACK, OPTIONS, INVITE, INFO, SUBSCRIBE, BYE";
 	protected ArrayList<String> preserveInviteHeaders = new ArrayList<>();
 	protected ArrayList<String> preserveReferHeaders = new ArrayList<>();
 
@@ -33,27 +27,17 @@ public class TransferSettings implements Serializable {
 		this.preserveReferHeaders = preserveReferHeaders;
 	}
 
-	protected LinkedList<TransferCondition> transferConditions = new LinkedList<>();
-
 	public TransferSettings() {
 
 	}
 
-	public LoggingLevel getLoggingLevel() {
-		return loggingLevel;
-	}
-
-	public void setLoggingLevel(LoggingLevel loggingLevel) {
-		this.loggingLevel = loggingLevel;
-	}
-
-	public Boolean getTransferAllRequests() {
-		return transferAllRequests;
-	}
-
-	public void setTransferAllRequests(Boolean transferAllRequests) {
-		this.transferAllRequests = transferAllRequests;
-	}
+//	public Boolean getTransferAllRequests() {
+//		return transferAllRequests;
+//	}
+//
+//	public void setTransferAllRequests(Boolean transferAllRequests) {
+//		this.transferAllRequests = transferAllRequests;
+//	}
 
 	public ArrayList<String> getPreserveInviteHeaders() {
 		return preserveInviteHeaders;
@@ -63,28 +47,22 @@ public class TransferSettings implements Serializable {
 		this.preserveInviteHeaders = preserveInviteHeaders;
 	}
 
-	public TransferStyle getDefaultTransferStyle() {
-		return defaultTransferStyle;
-	}
-
-	public void setDefaultTransferStyle(TransferStyle defaultTransferStyle) {
-		this.defaultTransferStyle = defaultTransferStyle;
-	}
-
-	public LinkedList<TransferCondition> getTransferConditions() {
-		return transferConditions;
-	}
-
-	public void setTransferConditions(LinkedList<TransferCondition> transferConditions) {
-		this.transferConditions = transferConditions;
-	}
-
 	public String getAllow() {
-		return Allow;
+		return allow;
 	}
 
-	public void setAllow(String allow) {
-		Allow = allow;
+	public TransferSettings setAllow(String allow) {
+		this.allow = allow;
+		return this;
 	}
+
+//	public TransferStyle getDefaultStyle() {
+//		return defaultStyle;
+//	}
+//
+//	public TransferSettings setDefaultStyle(TransferStyle defaultStyle) {
+//		this.defaultStyle = defaultStyle;
+//		return this;
+//	}
 
 }

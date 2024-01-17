@@ -80,66 +80,17 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.callflow.Callback;
 
-public class AssistedTransfer extends Transfer {
+public class AttendedTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
 	private Callback<SipServletRequest> loopOnPrack;
 
-	public AssistedTransfer(TransferListener referListener) {
+	public AttendedTransfer(TransferListener referListener) {
 		super(referListener);
 	}
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-
-		createRequests(request);
-
-		sendResponse(request.createResponse(202));
-
-		SipServletRequest notify100 = request.getSession().createRequest(NOTIFY);
-		notify100.setHeader(EVENT, "refer");
-		notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=3600");
-		notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
-		sendRequest(notify100);
-
-		sendRequest(this.transfereeRequest, (transfereeResponse) -> {
-
-			copyContent(transfereeResponse, targetRequest);
-
-			// User can override the targetRequest parameters before sending
-			transferListener.transferInitiated(targetRequest);
-
-			sendRequest(targetRequest, (targetResponse) -> {
-
-				if (successful(targetResponse)) {
-					linkSessions(transfereeResponse.getSession(), targetResponse.getSession());
-
-					// User is notified of a successful transfer
-					transferListener.transferCompleted(targetResponse);
-
-					SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
-					notify200.setHeader(EVENT, "refer");
-					notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
-					notify200.setContent(OK_200.getBytes(), SIPFRAG);
-					sendRequest(notify200);
-
-					sendRequest(copyContent(targetResponse, transfereeResponse.createAck()));
-					sendRequest(targetResponse.createAck());
-
-					expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-						sendResponse(bye.createResponse(200));
-					});
-
-				} else if (failure(targetResponse)) {
-					// TODO add failure code
-					
-					// User is notified that the transfer target did not answer
-					transferListener.transferDeclined(targetResponse);
-				}
-
-			});
-
-		});
 
 	}
 

@@ -81,100 +81,21 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.callflow.Callback;
 
 /**
- * This class is a placeholder for future functionality. It currently only
- * implements the "blind" transfer.
  * 
  * @author jeff
  *
  */
-public class MediaTransfer extends Transfer {
+public class ConferenceTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
 	private Callback<SipServletRequest> loopOnPrack;
 
-	public MediaTransfer(TransferListener referListener) {
+	public ConferenceTransfer(TransferListener referListener) {
 		super(referListener);
 	}
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-		try {
-
-			createRequests(request);
-
-			sendResponse(request.createResponse(202));
-
-			SipServletRequest notify100 = request.getSession().createRequest(NOTIFY);
-			notify100.setHeader(EVENT, "refer");
-			notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=3600");
-			notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
-			sendRequest(notify100);
-
-			// in the event the transferee hangs up before the transfer completes
-			expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
-				sendRequest(targetRequest.createCancel());
-
-				sendRequest(transferorRequest.getSession().createRequest(BYE), (byeResponse) -> {
-					sendResponse(bye.createResponse(byeResponse.getStatus()));
-				});
-			});
-
-			sendRequest(transfereeRequest, (transfereeResponse) -> {
-				// Copy any headers that might be useful, but remove obvious REFER only headers
-				copyHeaders(request, targetRequest);
-				targetRequest.removeHeader(REFER_TO);
-				targetRequest.removeHeader(REFERRED_BY);
-				copyContent(transfereeResponse, targetRequest);
-
-				// User can override the targetRequest parameters before sending
-				transferListener.transferInitiated(targetRequest);
-
-				sendRequest(targetRequest, (targetResponse) -> {
-
-					if (successful(targetResponse)) {
-						linkSessions(transfereeResponse.getSession(), targetResponse.getSession());
-
-						// User is notified of a successful transfer
-						transferListener.transferCompleted(targetResponse);
-
-						SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
-						notify200.setHeader(EVENT, "refer");
-						notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
-						notify200.setContent(OK_200.getBytes(), SIPFRAG);
-						sendRequest(notify200);
-
-						sendRequest(copyContent(targetResponse, transfereeResponse.createAck()));
-						sendRequest(targetResponse.createAck());
-
-						// Is this needed?
-						expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-							sendResponse(bye.createResponse(200));
-						});
-
-					} else if (failure(targetResponse)) {
-						// User is notified that the transfer target did not answer
-						transferListener.transferDeclined(targetResponse);
-
-						if (targetResponse.getStatus() != 487) { // No point if canceled
-							SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
-							String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
-									+ targetResponse.getReasonPhrase();
-							notifyFailure.setHeader(EVENT, "refer");
-							notifyFailure.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
-							notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
-							sendRequest(notifyFailure);
-						}
-
-					}
-
-				});
-
-			});
-
-		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
-			throw e;
-		}
 
 	}
 

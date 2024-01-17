@@ -76,16 +76,14 @@ public class Configuration implements Serializable {
 			throw new ParseException("Wrong number format in configuration. Example formats include: 1, 2s, 3m, 4h", 0);
 		}
 	}
-	
-	
-	
+
 	private final static long KB_FACTOR = 1000;
 	private final static long KIB_FACTOR = 1024;
 	private final static long MB_FACTOR = 1000 * KB_FACTOR;
 	private final static long MIB_FACTOR = 1024 * KIB_FACTOR;
 	private final static long GB_FACTOR = 1000 * MB_FACTOR;
 	private final static long GIB_FACTOR = 1024 * MIB_FACTOR;
-	
+
 	public static int parseHRNumberAsInt(String humanReadable) throws ParseException {
 		float value, ret;
 		String factor;
@@ -141,14 +139,22 @@ public class Configuration implements Serializable {
 
 	}
 
-	
-
 	public LogParameters getLogging() {
 		return logging;
 	}
 
-	public void setLogging(LogParameters logging) {
+	public Configuration setLogging(LogParameters logging) {
 		this.logging = logging;
+		return this;
+	}
+
+	public SessionParameters getSession() {
+		return session;
+	}
+
+	public Configuration setSession(SessionParameters session) {
+		this.session = session;
+		return this;
 	}
 
 }

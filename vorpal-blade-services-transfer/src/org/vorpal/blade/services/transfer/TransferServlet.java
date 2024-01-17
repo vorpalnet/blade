@@ -1,7 +1,11 @@
 package org.vorpal.blade.services.transfer;
 
 import java.io.IOException;
+import java.util.Iterator;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import javax.naming.InitialContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
@@ -9,13 +13,18 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.b2bua.Passthru;
 import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.transfer.AssistedTransfer;
+import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.config.Translation;
+import org.vorpal.blade.framework.transfer.AttendedTransfer;
 import org.vorpal.blade.framework.transfer.BlindTransfer;
-import org.vorpal.blade.framework.transfer.MediaTransfer;
-import org.vorpal.blade.framework.transfer.TransferCondition;
+import org.vorpal.blade.framework.transfer.ConferenceTransfer;
 import org.vorpal.blade.framework.transfer.TransferInitialInvite;
 import org.vorpal.blade.framework.transfer.TransferListener;
+import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
+
+import weblogic.management.mbeanservers.runtime.RuntimeServiceMBean;
 
 /**
  * This class implements an example B2BUA with transfer capabilities.
@@ -27,13 +36,59 @@ import org.vorpal.blade.framework.transfer.TransferListener;
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
 public class TransferServlet extends B2buaServlet implements TransferListener {
-private static final long serialVersionUID = 1L;
-	//public class TransferServlet extends B2buaServlet {
-	public static TransferSettingsManager settingsManager;
+	private static final long serialVersionUID = 1L;
+	// public class TransferServlet extends B2buaServlet {
+	public static SettingsManager<TransferSettings> settingsManager;
+
+	public void showProperties(SipServletContextEvent event) {
+		String key, value;
+
+		sipLogger.info("System.getenv().get():");
+		for (String name : System.getenv().keySet()) {
+			sipLogger.info("\t" + name + "=" + System.getenv().get(name));
+		}
+
+		sipLogger.info("servletContext.getInitParameter():");
+
+		Iterator<String> itr = event.getServletContext().getInitParameterNames().asIterator();
+		while (itr.hasNext()) {
+			key = itr.next();
+			value = event.getServletContext().getInitParameter(key);
+			sipLogger.info("\t" + key + "=" + value);
+		}
+
+		sipLogger.info("servletContext.getAttribute():");
+		itr = event.getServletContext().getAttributeNames().asIterator();
+		while (itr.hasNext()) {
+			key = itr.next();
+			value = event.getServletContext().getAttribute(key).toString();
+			sipLogger.info("\t" + key + "=" + value);
+		}
+
+		try {
+			// Get ServerConfiguration
+
+			
+//			InitialContext ctx = new InitialContext();
+//			MBeanServer mBeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/runtime");
+//			ObjectName ServerConfiguration = (ObjectName) mBeanServer
+//					.getAttribute(new ObjectName(RuntimeServiceMBean.OBJECT_NAME), "ServerConfiguration");
+//			String port = mBeanServer.getAttribute(ServerConfiguration, "ListenPort").toString();
+//			sipLogger.severe("ListenPort=" + port);
+			
+			
+			
+
+		} catch (Exception e) {
+			sipLogger.severe(e);
+		}
+
+	}
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
-		settingsManager = new TransferSettingsManager(event, TransferSettings.class, new TransferSettingsSample());
+		settingsManager = new SettingsManager<>(event, TransferSettings.class, new TransferSettingsSample());
+//		this.showProperties(event);
 	}
 
 	@Override
@@ -41,19 +96,41 @@ private static final long serialVersionUID = 1L;
 		// TODO Auto-generated method stub
 	}
 
-	private Callflow chooseCallflowStyle(TransferSettings.TransferStyle transferStyle) {
-		Callflow callflow = null;
+	private Callflow chooseCallflowStyle(TransferSettings.TransferStyle ts) {
+		Callflow callflow;
 
-		switch (transferStyle) {
-		case media:
-			callflow = new MediaTransfer(this);
+		switch ((ts != null) ? ts : TransferStyle.none) {
+		case conference:
+			callflow = new ConferenceTransfer(this);
 			break;
-		case assisted:
-			callflow = new AssistedTransfer(this);
+		case attended:
+			callflow = new AttendedTransfer(this);
 			break;
 		case blind:
-		default:
 			callflow = new BlindTransfer(this);
+			break;
+		default: // null & none
+			callflow = new Passthru(this);
+		}
+
+		return callflow;
+	}
+
+	private Callflow chooseCallflowStyle(String ts) {
+		Callflow callflow;
+
+		switch ((ts != null) ? ts : "none") {
+		case "conference":
+			callflow = new ConferenceTransfer(this);
+			break;
+		case "attended":
+			callflow = new AttendedTransfer(this);
+			break;
+		case "blind":
+			callflow = new BlindTransfer(this);
+			break;
+		default: // null & none
+			callflow = new Passthru(this);
 		}
 
 		return callflow;
@@ -62,7 +139,7 @@ private static final long serialVersionUID = 1L;
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow = null;
-		TransferSettings ts = settingsManager.getCurrent();
+		TransferSettings settings = settingsManager.getCurrent();
 
 		if (request.getMethod().equals("INVITE") && request.isInitial()) {
 			callflow = new TransferInitialInvite();
@@ -72,22 +149,18 @@ private static final long serialVersionUID = 1L;
 				request.getApplicationSession().setAttribute("INITIAL_REFER", request);
 			}
 
-			if (ts.getTransferAllRequests() == true) {
-				sipLogger.finer(request, "Transferring all requests...");
-				callflow = this.chooseCallflowStyle(ts.getDefaultTransferStyle());
-			} else {
-				for (TransferCondition tc : ts.getTransferConditions()) {
+			// find matching translation, assume passthru if no match and no default is
+			// defined
+			Translation t = settings.findTranslation(request);
+//			TransferStyle ts = (TransferStyle) t.getAttribute("style");
+//			callflow = this.chooseCallflowStyle(ts);
 
-					if (true == tc.getCondition().checkAll(request)) {
-						if (null != tc.getStyle()) {
-							callflow = this.chooseCallflowStyle(tc.getStyle());
-						} else {
-							callflow = this.chooseCallflowStyle(ts.getDefaultTransferStyle());
-						}
-						break;
-					}
-				}
-			}
+			String ts = (String) t.getAttribute("style");
+			callflow = this.chooseCallflowStyle(ts);
+
+			sipLogger.finer(request, "translation, id=" + t.getId() + ", style=" + ts + ", callflow="
+					+ callflow.getClass().getSimpleName());
+
 		}
 
 		if (callflow == null) {
@@ -157,11 +230,11 @@ private static final long serialVersionUID = 1L;
 
 	}
 
-	public static TransferSettingsManager getSettingsManager() {
+	public static SettingsManager<TransferSettings> getSettingsManager() {
 		return settingsManager;
 	}
 
-	public static void setSettingsManager(TransferSettingsManager settingsManager) {
+	public static void setSettingsManager(SettingsManager<TransferSettings> settingsManager) {
 		TransferServlet.settingsManager = settingsManager;
 	}
 

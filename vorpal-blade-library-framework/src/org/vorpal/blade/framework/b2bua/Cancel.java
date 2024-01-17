@@ -96,13 +96,15 @@ public class Cancel extends Callflow {
 			SipSession linkedSession = getLinkedSession(aliceCancel.getSession());
 			if (linkedSession != null) {
 				bobInvite = linkedSession.getActiveInvite(UAMode.UAC);
-				SipServletRequest bobCancel = bobInvite.createCancel();
-				if (b2buaListener != null) {
-					b2buaListener.callAbandoned(bobCancel);
+				if (bobInvite != null) {
+					SipServletRequest bobCancel = bobInvite.createCancel();
+					if (b2buaListener != null) {
+						b2buaListener.callAbandoned(bobCancel);
+					}
+					sendRequest(bobCancel, (bobCancelResponse) -> {
+						// do nothing;
+					});
 				}
-				sendRequest(bobCancel, (bobCancelResponse) -> {
-					// do nothing;
-				});
 			} else {
 				// Ugh! complicated to find outstanding unlinked request.
 				sipLogger.fine(request, "CANCEL received, but no linked session. Ignoring request.");
