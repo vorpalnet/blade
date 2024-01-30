@@ -1,11 +1,8 @@
 package org.vorpal.blade.services.queue;
 
-import java.io.IOException;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentLinkedDeque;
-
-import javax.servlet.ServletException;
 
 import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.logging.Logger;
@@ -23,7 +20,7 @@ public class Queue {
 	public Queue(String id) {
 		this.id = id;
 		sipLogger = SettingsManager.getSipLogger();
-		statistics = new Statistics(id);
+		statistics = new Statistics(this);
 		callflows = new ConcurrentLinkedDeque<>();
 	}
 
@@ -35,7 +32,11 @@ public class Queue {
 		}
 
 		timer = new Timer(id);
+
+		// jwm - testing timers
 		timer.schedule(queueTask, attributes.period, attributes.period);
+		// timer.schedule(queueTask, attributes.period);
+
 	}
 
 	public void stopTimers() {
@@ -44,23 +45,19 @@ public class Queue {
 	}
 
 	public TimerTask queueTask = new TimerTask() {
+
 		public void run() {
+
+//			sipLogger.fine("timer fired... queue=" + id + ", count=" + callflows.size());
 
 			QueueCallflow callflow;
 			for (int i = 0; i < attributes.rate; i++) {
 				callflow = callflows.pollLast();
 				if (callflow != null) {
-					SettingsManager.sipLogger.finer("Continuing callflow... ");
+//					SettingsManager.sipLogger.finer("Continuing callflow... ");
 
 					try {
-
-//						if (callflow.aliceRequest.isCommitted()) {
-							callflow.complete();
-//						} else {
-//							sipLogger.warning(callflow.aliceRequest.getApplicationSession(),
-//									"Media session connection in progress, try again");
-//						}
-
+						callflow.complete();
 					} catch (Exception e) {
 						sipLogger.severe(e);
 					}
@@ -69,6 +66,9 @@ public class Queue {
 					break;
 				}
 			}
+
+			// jmw - testing timers
+			// timer.schedule(queueTask, attributes.period);
 
 		}
 	};

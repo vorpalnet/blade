@@ -9,7 +9,8 @@ import org.vorpal.blade.framework.logging.Logger;
 
 public class Statistics {
 
-	public String id;
+//	public String id;
+	public Queue queue;
 
 	public String minuteTimer;
 	public int minuteHigh = 0;
@@ -23,25 +24,36 @@ public class Statistics {
 	public int dailyHigh = 0;
 	public int dailyLow = 0;
 
-	private Logger sipLogger;
+	private static Logger sipLogger;
 
 	private Timer minute, hourly, daily;
 
-	public Statistics(String id) {
-		this.id = id;
-		sipLogger = AsyncSipServlet.getSipLogger();
+	public Statistics(Queue queue) {
+
+		if (sipLogger == null) {
+			sipLogger = AsyncSipServlet.getSipLogger();
+		}
+
+		this.queue = queue;
 
 		minute = new Timer();
+
+		// jwm - disabled for testing
 		minute.schedule(minuteTask, RANDOM(60000), 1000 * 60);
 
 		hourly = new Timer();
+
+		// jwm - disabled for testing
 		hourly.schedule(hourlyTask, RANDOM(60000), 1000 * 60 * 60);
 
 		daily = new Timer();
+
+		// jwm - disabled for testing
 		daily.schedule(dailyTask, RANDOM(60000), 1000 * 60 * 60 * 24);
 	}
 
 	public void stopTimers() {
+		// jwm - disabled for testing
 		minute.cancel();
 		hourly.cancel();
 		daily.cancel();
@@ -52,7 +64,7 @@ public class Statistics {
 	}
 
 	public void intervalTask() {
-		int size = QueueServlet.queues.get(id).callflows.size();
+		int size = queue.callflows.size();
 
 		minuteLow = Math.min(size, minuteLow);
 		minuteHigh = Math.max(size, minuteHigh);
@@ -65,7 +77,7 @@ public class Statistics {
 			hourlyHigh = Math.max(minuteHigh, hourlyHigh);
 
 			if (minuteHigh > 0) {
-				sipLogger.info("minute report:\t queue=" + id + ", low=" + minuteLow + ", high=" + minuteHigh);
+				sipLogger.info("minute report:\t queue=" + queue.id + ", low=" + minuteLow + ", high=" + minuteHigh);
 			}
 
 			minuteLow = 0;
@@ -80,7 +92,7 @@ public class Statistics {
 			dailyHigh = Math.max(hourlyHigh, dailyHigh);
 
 			if (hourlyHigh > 0) {
-				sipLogger.info("hourly report: queue=" + id + ", low=" + hourlyLow + ", high=" + hourlyHigh);
+				sipLogger.info("hourly report: queue=" + queue.id + ", low=" + hourlyLow + ", high=" + hourlyHigh);
 			}
 
 			hourlyLow = 0;
@@ -92,7 +104,7 @@ public class Statistics {
 		public void run() {
 
 			if (dailyHigh > 0) {
-				sipLogger.info("daily  report: queue=" + id + ", low=" + dailyLow + ", high=" + dailyHigh);
+				sipLogger.info("daily  report: queue=" + queue.id + ", low=" + dailyLow + ", high=" + dailyHigh);
 			}
 
 			dailyLow = 0;

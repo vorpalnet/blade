@@ -155,10 +155,6 @@ public class ConfigurationMonitor extends Thread {
 
 					String filename = child.getFileName().toString();
 
-					// jwm-test
-					System.out.println("child.getParent: " + child.getParent());
-					System.out.println("child.getParent.getParent: " + child.getParent().getParent());
-
 					if (filename.endsWith(".json")) {
 
 						String json = null;

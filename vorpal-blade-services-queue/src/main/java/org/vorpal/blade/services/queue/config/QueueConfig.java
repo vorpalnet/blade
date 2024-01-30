@@ -10,8 +10,11 @@ import org.vorpal.blade.framework.config.RouterConfig;
  */
 public class QueueConfig extends RouterConfig {
 	private static final long serialVersionUID = 1L;
-
 	public Map<String, QueueAttributes> queues = new HashMap<>();
+
+	public QueueConfig() {
+		// default constructor
+	}
 
 	/**
 	 * @return the queues
@@ -30,8 +33,8 @@ public class QueueConfig extends RouterConfig {
 	}
 
 	/**
-	 * @param id 
-	 * @param queueAttributes 
+	 * @param id
+	 * @param queueAttributes
 	 * @return this
 	 */
 	public QueueConfig addQueue(String id, QueueAttributes queueAttributes) {

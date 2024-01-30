@@ -5,6 +5,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class QueueAttributes implements Serializable {
+	private static final long serialVersionUID = 1L;
 
 	public Integer period;
 	public Integer rate;

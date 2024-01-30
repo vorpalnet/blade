@@ -30,6 +30,11 @@ import java.util.HashMap;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 
+/**
+ * Contains a collection (list) of 'Comparisons' associated with a Header (or
+ * other Message) attribute. All comparisons are ANDed together. Use separate
+ * Conditions if you would like to OR comparisons.
+ */
 public class Condition extends HashMap<String, ComparisonList> implements Serializable {
 
 	private static final long serialVersionUID = 1L;
