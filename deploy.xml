@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+<project name="blade" default="build" basedir=".">
+	<property file="version.properties" />
+	<property name="dist" location="./dist" />
+	<include file="libraries.xml" />
+	<property environment="envvar" />
+	<exec executable="hostname" outputproperty="computer.hostname" />
+	<property file="${computer.hostname}.properties" />
+	<property file="build.properties" />
+	
+	
+	<property name="targets"  value="BEA_ENGINE_TIER_CLUST" />
+	<property name="adminurl" value="t3://${computer.hostname}:7001" />
+	<property name="user" value="weblogic" />
+	<property name="password" value="Pa55w0rD" />
+	<property name="remote" value="false" />
+	<property name="verbose" value="true" />
+	<property name="debug" value="true" />
+	<property name="name" value="vorpal-blade-services-queue" />
+	<property name="source" value="${dist}/${name}.war" />
+	
+	<!-- To deploy applications to WebLogic. -->
+	<taskdef name="wldeploy" classname="weblogic.ant.taskdefs.management.WLDeploy"/>
+
+	<!-- Valid actions are deploy, cancel, undeploy, redeploy, distribute, start, and stop -->
+	
+	
+
+	<target name="deploy">
+		<wldeploy 
+			action="deploy"
+			adminurl="${adminUrl}" user="${user}" password="${password}" 
+		    targets="${targets}" remote="${remote}"
+			name="${name}" source="${source}" 
+		/>
+	</target>
+	
+	<target name="redeploy">
+		<wldeploy 
+			action="redeploy"
+			adminurl="${adminUrl}" user="${user}" password="${password}" 
+			name="${name}" deltaFiles="${source}"
+    	/>
+  </target>
+
+	<target name="undeploy">
+		<wldeploy 
+			action="undeploy"
+			adminurl="${adminUrl}" user="${user}" password="${password}" 
+			name="${name}" 
+		/>
+	</target>
+
+	<target name="distribute">
+		<wldeploy 
+			action="distribute"
+			adminurl="${adminUrl}" user="${user}" password="${password}" 
+		    targets="${targets}" remote="${remote}"
+			name="${name}" source="${source}" 
+		/>
+	</target>
+	
+	<target name="start">
+		<wldeploy 
+			action="start"
+			adminurl="${adminUrl}" user="${user}" password="${password}" 
+			name="${name}"
+    	/>
+	</target>
+	
+	<target name="stop">
+		<wldeploy 
+			action="stop"
+			adminurl="${adminUrl}" user="${user}" password="${password}" 
+			name="${name}" 
+		/>
+	</target>
+
+
+	<target name="build" depends="">
+		<echo>Instructions...</echo>
+	</target>
+
+</project>
+

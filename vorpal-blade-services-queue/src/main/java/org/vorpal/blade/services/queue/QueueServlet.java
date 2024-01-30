@@ -100,8 +100,9 @@ public class QueueServlet extends B2buaServlet {
 			String queueName = (String) t.getAttribute("queue");
 
 			if (queueName != null) {
-				sipLogger.finer(request, "Found matching translation... queue=" + queueName);
+				sipLogger.fine(request, "Found matching translation... queue=" + queueName);
 				Queue queue = queues.get(queueName);
+
 				QueueAttributes queueAttributes = queue.attributes;
 				QueueCallflow queueCallflow = new QueueCallflow(queueName, queueAttributes);
 				queue.callflows.add(queueCallflow);

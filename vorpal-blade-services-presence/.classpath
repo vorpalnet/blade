@@ -18,7 +18,7 @@
 	</classpathentry>
 	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.web.container"/>
 	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.module.container"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/OCCAS"/>
-	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.shared/vorpal-blade/exact/2.0"/>
+	<classpathentry kind="var" path="OCCAS_LIBS/sipservlet-api.jar"/>
+	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.shared/vorpal-blade/allow-newer/2.0"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

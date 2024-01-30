@@ -25,20 +25,12 @@
 package org.vorpal.blade.test.uas.callflows;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.b2bua.B2buaListener;
 import org.vorpal.blade.framework.b2bua.InitialInvite;
-
-import com.bea.wcp.sip.engine.SipServletResponseAdapter;
-import com.bea.wcp.sip.engine.server.InviteClientTransaction;
-import com.bea.wcp.sip.engine.server.ServerTransaction;
-import com.bea.wcp.sip.engine.server.SipService;
-import com.bea.wcp.sip.engine.server.SipServletResponseImpl;
 
 public class TestOkayResponse extends InitialInvite {
 	static final long serialVersionUID = 1L;

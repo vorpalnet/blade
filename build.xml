@@ -1,22 +1,47 @@
 <?xml version="1.0"?>
 <project name="blade" default="build" basedir=".">
-    
-    <property name="dist" location="./dist" />
-    <property name="docs" location="../vorpalnet.github.io/blade" />
 
-    <include file="libraries.xml" />
-
+	<!-- Load environment variables -->
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="${computer.hostname}.properties" />
 	<property file="build.properties" />
 
+	<!-- If they haven't already been created, define these variables -->
+	<property name="dist" location="./dist" />
+	<property name="docs" location="${dist}/docs" />
+
+	
+<!--	
+	<include file="libraries.xml" />
+-->
+	
+	
+	
+	
+	
+	
+	<!-- For the Wldeploy tasks-->
+	<property name="targets"  value="BEA_ENGINE_TIER_CLUST" />
+	<property name="adminurl" value="t3://${computer.hostname}:7001" />
+	<property name="user" value="weblogic" />
+	<property name="password" value="Pa55w0rD" />
+	<property name="remote" value="false" />
+	<property name="verbose" value="true" />
+	<property name="debug" value="true" />
+	<property name="name" value="vorpal-blade-services-queue" />
+	<property name="file" value="${dist}/${name}.war" />
+	
 	<!-- Required for the 'foreach' command. -->
 	<taskdef resource="net/sf/antcontrib/antlib.xml">
 		<classpath>
 			<pathelement location="./lib/ant-contrib-1.0b3.jar" />
 		</classpath>
 	</taskdef>
+	
+	<!-- To deploy applications to WebLogic. -->
+	<taskdef name="wldeploy" classname="weblogic.ant.taskdefs.management.WLDeploy"/>
+
 
 	<target name="init" depends="">
 		<if>
@@ -33,11 +58,11 @@
 
 	<target name="build" depends="init">
 
-		<manifest file="dist/_version-${implementation}">
-                        <attribute name="Copyright" value="${copyright}" />
-                        <attribute name="License" value="${license}" />
+		<manifest file="${dist}/MANIFEST.MF">
+			<attribute name="Copyright" value="${copyright}" />
+			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
 		</manifest>
 
 		<foreach target="build-all" param="var">
@@ -61,16 +86,17 @@
 		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="clean" />
 	</target>
 
+	
 	<target name="javadocs" depends="">
-		<foreach target="javadocs-all" param="var">
+		<foreach target="javadoc" param="var">
 			<path refid="subprojects" />
 		</foreach>
 	</target>
 
 	<target name="javadocs-all" depends="">
-		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="build-javadocs" />
+		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="javadoc" />
 	</target>
-	
+
 	<path id="subprojects">
 		<pathelement location="vorpal-blade-shared-libraries" />
 		<pathelement location="vorpal-blade-library-framework" />
@@ -80,6 +106,57 @@
 			<exclude name="vorpal-blade-shared-libraries" />
 		</dirset>
 	</path>
+	
+	
+	<target name="deploy">
+		<wldeploy 
+			action="deploy"
+			adminurl="${adminurl}" user="${user}" password="${password}" 
+		    targets="${targets}" remote="${remote}"
+			name="${name}" source="${file}" 
+		/>
+	</target>
+	
+	<target name="redeploy">
+		<wldeploy 
+			action="redeploy"
+			adminurl="${adminurl}" user="${user}" password="${password}" 
+			name="${name}" deltaFiles="${file}"
+    	/>
+  </target>
+
+	<target name="undeploy">
+		<wldeploy 
+			action="undeploy"
+			adminurl="${adminurl}" user="${user}" password="${password}" 
+			name="${name}" 
+		/>
+	</target>
+
+	<target name="distribute">
+		<wldeploy 
+			action="distribute"
+			adminurl="${adminurl}" user="${user}" password="${password}" 
+		    targets="${targets}" remote="${remote}"
+			name="${name}" source="${file}" 
+		/>
+	</target>
+	
+	<target name="start">
+		<wldeploy 
+			action="start"
+			adminurl="${adminurl}" user="${user}" password="${password}" 
+			name="${name}"
+    	/>
+	</target>
+	
+	<target name="stop">
+		<wldeploy 
+			action="stop"
+			adminUrl="${adminurl}" user="${user}" password="${password}" 
+			name="${name}" 
+		/>
+	</target>
 
 </project>
 

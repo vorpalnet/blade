@@ -45,14 +45,14 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	 * clobber any existing queues.
 	 * 
 	 * @param config
-	 * @throws IOException
-	 * @throws ServletException
 	 */
 	@Override
 	public void initialize(QueueConfig config) {
+
 		try {
 			QueueAttributes qa;
 			Queue queue;
+
 			for (String queueName : config.getQueues().keySet()) {
 				qa = config.getQueues().get(queueName);
 				queue = QueueServlet.queues.get(queueName);

@@ -1,34 +1,31 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project basedir="." default="build" name="vorpal-blade-shared-libraries">
-    <import file="../libraries.xml" />
+	<import file="../libraries.xml" />
+	<property name="src" location="src/main/java" />
+	<property name="webapp" location="src/main/webapp" />
 
+
+	<path id="Web App Libraries.libraryclasspath">
+		<fileset dir="${webapp}/WEB-INF/lib">
+			<filename name="**/*.jar" />
+		</fileset>
+	</path>
 	<path id="EAR Libraries.libraryclasspath" />
 
-	<path id="vorpal-blade-shared-libraries.classpath">
+	<path id="project.classpath">
 		<pathelement location="build/classes" />
 		<path refid="Web App Libraries.libraryclasspath" />
 		<path refid="EAR Libraries.libraryclasspath" />
 		<path refid="WebLogic System Libraries.libraryclasspath" />
+		<path refid="vorpal-blade.classpath" />
 	</path>
+
+	<target name="build" depends="init, build-project, mvn_windows, mvn_unix, package" />
+
 	<target name="init">
 		<mkdir dir="build" />
 		<mkdir dir="build/classes" />
 
-<!--		
-		<copy includeemptydirs="false" todir="build/classes">
-			<fileset dir="src/main/java">
-				<exclude name="**/*.launch" />
-				<exclude name="**/*.java" />
-			</fileset>
-		</copy>
-		<mkdir dir=".apt_src" />
-		<copy includeemptydirs="false" todir="build/classes">
-			<fileset dir=".apt_src">
-				<exclude name="**/*.launch" />
-				<exclude name="**/*.java" />
-			</fileset>
-		</copy>
--->		
 	</target>
 	<target name="clean">
 		<delete dir="build" />
@@ -36,43 +33,33 @@
 
 	<target name="clean-all" depends="clean" />
 
-	<!-- target name="build" depends="init,build-project"  /-->
-
-	<target name="build-project" depends="init" >
+	<target name="build-project" depends="init">
 		<echo message="${ant.project.name}: ${ant.file}" />
 	</target>
-	
-	
+
 	<condition property="isWindows">
-	    <os family="windows" />
+		<os family="windows" />
 	</condition>
 
 	<condition property="isUnix">
-	    <os family="unix" />
+		<os family="unix" />
 	</condition>
 
-	<target name="build" depends="init, build-project, mvn_windows, mvn_unix"/>
 
 	<target name="mvn_windows" if="isWindows">
-	    <exec dir="." executable="cmd">
-	        <arg line="/c mvn clean package" />
-	    </exec>
+		<exec dir="." executable="cmd">
+			<arg line="/c mvn clean package" />
+		</exec>
 		<copy file="build/${ant.project.name}.war" todir="${dist}" />
 	</target>
 
 	<target name="mvn_unix" if="isUnix">
-	    <exec dir="." executable="sh">
-	        <arg line="-c 'mvn clean package'" />
-	    </exec>
+		<exec dir="." executable="sh">
+			<arg line="-c 'mvn clean package'" />
+		</exec>
 		<copy file="build/${ant.project.name}.war" todir="${dist}" />
 	</target>
-	
-	
 
-	
-	
-	
-	
 
 	<target name="package" depends="init">
 
@@ -87,16 +74,7 @@
 			<attribute name="Extension-Name" value="vorpal-blade" />
 		</manifest>
 
-<!--		
-		<fileset dir="../vorpal-blade-library-framework/build" id="vorpal-blade-library-framework">
-			<filename name="vorpal-blade-library-framework.jar" />
-		</fileset>
--->
-		
-		<war destfile="build/${ant.project.name}.war"
-		     basedir="src/main/webapp"
-		     needxmlfile="false"
-		     manifest="build/MANIFEST.MF">
+		<war destfile="build/${ant.project.name}.war" basedir="src/main/webapp" needxmlfile="false" manifest="build/MANIFEST.MF">
 			<!--
 			<lib refid="vorpal-blade-library-framework" />
 			-->
@@ -106,9 +84,6 @@
 		<copy file="build/${ant.project.name}.war" todir="${dist}" />
 
 	</target>
-	
-	<target name="build-javadocs" depends="">
-		<!-- Do nothing. -->
-    </target>
+
 
 </project>
