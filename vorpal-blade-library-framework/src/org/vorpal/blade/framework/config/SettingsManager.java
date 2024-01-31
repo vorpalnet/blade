@@ -179,36 +179,36 @@ public class SettingsManager<T> {
 	}
 
 	public String getDomainJson() throws JsonProcessingException {
-		sipLogger.fine("getDomainlJson...");
+//		sipLogger.fine("getDomainlJson...");
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode);
 	}
 
 	public void setDomainJson(String domainJson) throws JsonMappingException, JsonProcessingException {
-		sipLogger.fine("setDomainJson...");
+//		sipLogger.fine("setDomainJson...");
 		domainNode = mapper.readTree(domainJson);
-		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode));
+//		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode));
 	}
 
 	public String getServerJson() throws JsonProcessingException {
-		sipLogger.fine("getServerJson...");
+//		sipLogger.fine("getServerJson...");
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode);
 	}
 
 	public void setServerJson(String serverJson) throws JsonMappingException, JsonProcessingException {
-		sipLogger.fine("setServerJson...");
+//		sipLogger.fine("setServerJson...");
 		serverNode = mapper.readTree(serverJson);
-		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode));
+//		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode));
 	}
 
 	public String getClusterJson() throws JsonProcessingException {
-		sipLogger.fine("getServerJson...");
+//		sipLogger.fine("getServerJson...");
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode);
 	}
 
 	public void setClusterJson(String clusterJson) throws JsonMappingException, JsonProcessingException {
-		sipLogger.fine("setClusterJson...");
+//		sipLogger.fine("setClusterJson...");
 		clusterNode = mapper.readTree(clusterJson);
-		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode));
+//		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode));
 
 	}
 
@@ -242,13 +242,13 @@ public class SettingsManager<T> {
 			Files.createDirectories(samplePath);
 			server = ManagementFactory.getPlatformMBeanServer();
 			serverName = System.getProperty("weblogic.Name");
-			serverPath = Paths.get(configPath + "server/" + serverName);
+			serverPath = Paths.get(configPath + "_servers/" + serverName);
 			Files.createDirectories(serverPath);
 			ObjectName managedServerName = new ObjectName("com.bea:Name=" + serverName + ",Type=Server");
 			ObjectName clusterObjectName = (ObjectName) server.getAttribute(managedServerName, "Cluster");
 			if (clusterObjectName != null) {
 				clusterName = (String) server.getAttribute(clusterObjectName, "Name");
-				clusterPath = Paths.get(configPath + "cluster/" + clusterName);
+				clusterPath = Paths.get(configPath + "_clusters/" + clusterName);
 				Files.createDirectories(clusterPath);
 			}
 
@@ -399,25 +399,24 @@ public class SettingsManager<T> {
 		if (noConfigFiles) {
 
 			if (this.sample != null) {
-				sipLogger.fine("using sample...");
+				sipLogger.fine("using sample configuration...");
 
 				current = this.sample;
 
 			} else {
-				sipLogger.fine("using default...");
+				sipLogger.fine("using default configuration...");
 				current = tmp;
 
 			}
 
 			this.initialize(current);
 
-			this.logCurrent(); // show 'em what you got
-
 		} else {
-			sipLogger.fine("using config...");
+			// sipLogger.fine("using config...");
 			mergeCurrentFromJson(); // logs the config file
 		}
 
+//		this.logCurrent(); // show 'em what you got
 	}
 
 //	private void saveSchemaz(T t) throws JsonGenerationException, JsonMappingException, IOException {
@@ -477,9 +476,9 @@ public class SettingsManager<T> {
 
 	public void setCurrentFromJson(String json) {
 		try {
-			sipLogger.info("setCurrentFromJson...");
-			sipLogger.info("Configuration changed...");
-			sipLogger.info(json);
+//			sipLogger.info("setCurrentFromJson...");
+//			sipLogger.info("Configuration changed...");
+//			sipLogger.info(json);
 
 			T tmp = mapper.readValue(json, clazz);
 			initialize(tmp);
@@ -542,8 +541,8 @@ public class SettingsManager<T> {
 							&& config.getLogging().resolveUseParentLogging() == false //
 							&& config.getLogging().resolveLoggingLevel() != null) {
 						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
-						sipLogger.log(config.getLogging().resolveLoggingLevel(),
-								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
+//						sipLogger.log(config.getLogging().resolveLoggingLevel(),
+//								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
 
 						sipLogger.setConfigurationLoggingLevel(config.getLogging().resolveConfigurationLoggingLevel());
 						sipLogger.setSequenceDiagramLoggingLevel(
@@ -589,14 +588,21 @@ public class SettingsManager<T> {
 	 * Logs the current configuration.
 	 */
 	public void logCurrent() {
-
 		try {
-			sipLogger.log(this.getSipLogger().getLevel(), "Configuration has changed:\n"
-					+ mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this.getCurrent()));
+			sipLogger.log(this.getSipLogger().getLevel(),
+					mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this.getCurrent()));
+
+//			sipLogger.severe("Logging severe...");
+//			sipLogger.warning("logging warning...");
+//			sipLogger.info("logging info...");
+//			sipLogger.config("logging config...");
+//			sipLogger.fine("logging fine...");
+//			sipLogger.finer("logging finer...");
+//			sipLogger.finest("logging finest...");
+
 		} catch (JsonProcessingException e) {
 			sipLogger.severe(e);
 		}
-
 	}
 
 	/**

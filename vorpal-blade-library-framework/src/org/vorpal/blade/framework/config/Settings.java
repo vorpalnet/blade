@@ -46,7 +46,7 @@ public class Settings implements SettingsMXBean {
 	@Override
 	public String getDomainJson() {
 
-		SettingsManager.sipLogger.warning("Settings.getDomainJson() no longer supported.");
+//		SettingsManager.sipLogger.warning("Settings.getDomainJson() no longer supported.");
 //		return "";
 
 		try {
@@ -60,30 +60,31 @@ public class Settings implements SettingsMXBean {
 
 	@Override
 	public void setDomainJson(String json) {
-		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
 //		return ;
 
 		try {
 
 			settingsManager.setDomainJson(json);
 			settingsManager.mergeCurrentFromJson();
+//			settingsManager.logCurrent();
 
-			Logger sipLogger = SettingsManager.getSipLogger();
-			if (sipLogger != null) {
-				if (settingsManager.getCurrent() instanceof Configuration) {
-					Configuration config = (Configuration) settingsManager.getCurrent();
-
-					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
-						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
-						sipLogger.log(config.getLogging().resolveLoggingLevel(),
-								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
-					}
-
-				}
-				settingsManager.logCurrent();
-			} else {
-				System.out.println("Settings.setDomainJson could not get sipLogger.");
-			}
+//			Logger sipLogger = SettingsManager.getSipLogger();
+//			if (sipLogger != null) {
+//				if (settingsManager.getCurrent() instanceof Configuration) {
+//					Configuration config = (Configuration) settingsManager.getCurrent();
+//
+//					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
+//						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
+//						sipLogger.log(config.getLogging().resolveLoggingLevel(),
+//								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
+//					}
+//
+//				}
+//				settingsManager.logCurrent();
+//			} else {
+//				System.out.println("Settings.setDomainJson could not get sipLogger.");
+//			}
 
 		} catch (Exception e) {
 			System.out.println("setDomainJson exception...");
@@ -96,7 +97,7 @@ public class Settings implements SettingsMXBean {
 	@Override
 	public String getClusterJson() {
 
-		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
 //		return "";
 
 		try {
@@ -110,27 +111,28 @@ public class Settings implements SettingsMXBean {
 	@Override
 	public void setClusterJson(String json) {
 
-		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
 //		return;
 
 		try {
 			settingsManager.setClusterJson(json);
 			settingsManager.mergeCurrentFromJson();
+//			settingsManager.logCurrent();
 
-			Logger sipLogger = SettingsManager.getSipLogger();
-			if (sipLogger != null) {
-				if (settingsManager.getCurrent() instanceof Configuration) {
-					Configuration config = (Configuration) settingsManager.getCurrent();
-					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
-						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
-						sipLogger.log(config.getLogging().resolveLoggingLevel(),
-								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
-					}
-				}
-				settingsManager.logCurrent();
-			} else {
-				System.out.println("Settings.setClusterJson could not get sipLogger.");
-			}
+//			Logger sipLogger = SettingsManager.getSipLogger();
+//			if (sipLogger != null) {
+//				if (settingsManager.getCurrent() instanceof Configuration) {
+//					Configuration config = (Configuration) settingsManager.getCurrent();
+//					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
+//						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
+//						sipLogger.log(config.getLogging().resolveLoggingLevel(),
+//								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
+//					}
+//				}
+//				settingsManager.logCurrent();
+//			} else {
+//				System.out.println("Settings.setClusterJson could not get sipLogger.");
+//			}
 
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -141,7 +143,7 @@ public class Settings implements SettingsMXBean {
 	@Override
 	public String getServerJson() {
 
-		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
 //		return "";
 
 		try {
@@ -156,27 +158,28 @@ public class Settings implements SettingsMXBean {
 	@Override
 	public void setServerJson(String json) {
 
-		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
+//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
 //		return;
 
 		try {
 			settingsManager.setServerJson(json);
 			settingsManager.mergeCurrentFromJson();
+//			settingsManager.logCurrent();
 
-			Logger sipLogger = SettingsManager.getSipLogger();
-			if (sipLogger != null) {
-				if (settingsManager.getCurrent() instanceof Configuration) {
-					Configuration config = (Configuration) settingsManager.getCurrent();
-					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
-						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
-						sipLogger.log(config.getLogging().resolveLoggingLevel(),
-								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
-					}
-				}
-				settingsManager.logCurrent();
-			} else {
-				System.out.println("Settings.setServerJson could not get sipLogger.");
-			}
+//			Logger sipLogger = SettingsManager.getSipLogger();
+//			if (sipLogger != null) {
+//				if (settingsManager.getCurrent() instanceof Configuration) {
+//					Configuration config = (Configuration) settingsManager.getCurrent();
+//					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
+//						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
+//						sipLogger.log(config.getLogging().resolveLoggingLevel(),
+//								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
+//					}
+//				}
+//				settingsManager.logCurrent();
+//			} else {
+//				System.out.println("Settings.setServerJson could not get sipLogger.");
+//			}
 
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -3,6 +3,8 @@ package org.vorpal.blade.services.transfer;
 import java.io.IOException;
 import java.util.Iterator;
 
+import javax.management.InstanceNotFoundException;
+import javax.management.MBeanRegistrationException;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import javax.naming.InitialContext;
@@ -68,16 +70,12 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 		try {
 			// Get ServerConfiguration
 
-			
 //			InitialContext ctx = new InitialContext();
 //			MBeanServer mBeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/runtime");
 //			ObjectName ServerConfiguration = (ObjectName) mBeanServer
 //					.getAttribute(new ObjectName(RuntimeServiceMBean.OBJECT_NAME), "ServerConfiguration");
 //			String port = mBeanServer.getAttribute(ServerConfiguration, "ListenPort").toString();
 //			sipLogger.severe("ListenPort=" + port);
-			
-			
-			
 
 		} catch (Exception e) {
 			sipLogger.severe(e);
@@ -88,12 +86,19 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
 		settingsManager = new SettingsManager<>(event, TransferSettings.class, new TransferSettingsSample());
+		sipLogger.info("servletCreated...");
+		
 //		this.showProperties(event);
 	}
 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) {
-		// TODO Auto-generated method stub
+		try {
+			sipLogger.info("servletDestroyed...");
+			settingsManager.unregister();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	private Callflow chooseCallflowStyle(TransferSettings.TransferStyle ts) {
