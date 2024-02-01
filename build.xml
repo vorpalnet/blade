@@ -1,25 +1,19 @@
 <?xml version="1.0"?>
 <project name="blade" default="build" basedir=".">
+	<buildnumber/>
+	
+	<!-- If they haven't already been created, define these variables -->
+	<property name="BLADE" location="./" />
+	<property name="dist" location="./dist" />
+	<property name="docs" location="${dist}/docs" />
 
 	<!-- Load environment variables -->
+	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="${computer.hostname}.properties" />
 	<property file="build.properties" />
-
-	<!-- If they haven't already been created, define these variables -->
-	<property name="dist" location="./dist" />
-	<property name="docs" location="${dist}/docs" />
-
-	
-<!--	
-	<include file="libraries.xml" />
--->
-	
-	
-	
-	
-	
+	<property file="version.properties" />
 	
 	<!-- For the Wldeploy tasks-->
 	<property name="targets"  value="BEA_ENGINE_TIER_CLUST" />
@@ -39,8 +33,6 @@
 		</classpath>
 	</taskdef>
 	
-	<!-- To deploy applications to WebLogic. -->
-	<taskdef name="wldeploy" classname="weblogic.ant.taskdefs.management.WLDeploy"/>
 
 
 	<target name="init" depends="">
@@ -62,12 +54,13 @@
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}-b${build.number}" />
 		</manifest>
-
+	
 		<foreach target="build-all" param="var">
 			<path refid="subprojects" />
 		</foreach>
+	
 	</target>
 
 	<target name="build-all" depends="">
@@ -88,7 +81,7 @@
 
 	
 	<target name="javadocs" depends="">
-		<foreach target="javadoc" param="var">
+		<foreach target="javadocs-all" param="var">
 			<path refid="subprojects" />
 		</foreach>
 	</target>
@@ -108,6 +101,10 @@
 	</path>
 	
 	
+	
+	<!-- To deploy applications to WebLogic. -->
+	<taskdef name="wldeploy" classname="weblogic.ant.taskdefs.management.WLDeploy"/>
+
 	<target name="deploy">
 		<wldeploy 
 			action="deploy"

@@ -1,32 +1,48 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<project basedir="." default="build" name="common-libraries">
-	<property file="version.properties" />
+<project basedir="." name="common-libraries">
 	<buildnumber />
+	
+<!--	
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="../${computer.hostname}.properties" />
 	<property file="../build.properties" />
-
+	<property file="../version.properties" />
+-->
+	
 	<property name="debuglevel" value="source,lines,vars" />
 	<property name="target" value="11" />
 	<property name="source" value="11" />
+	<property name="build" location="./build" />
+	<property name="classes" location="${build}/classes" />
 	<property name="dist" location="../dist" />
+	<property name="docs" location="${dist}/docs" />
+	<property name="src" location="src/main/java" />
+
+	<property name="packagenames" value="org.vorpal.*" />
+	<property name="BLADE" location="../" />
+
+
+
+	<property name="webapp" location="src/main/webapp" />
 	<property name="framework" location="${dist}/vorpal-blade-library-framework.jar" />
 
-	<!-- Copyright, License -->
-	<property name="copyright" value="Copyright &#169; 2013-2024 &lt;a href=&quot;https://vorpal.net&quot;&gt;Vorpal Networks, LLC.&lt;/a&gt; All Rights Reserved." />
-	<property name="license" value="MIT License; Provided &quot;as is&quot; without warranty or liability of any kind." />
-	
 	<tstamp>
 		<format property="YEAR" pattern="yyyy" locale="en,GB" />
 	</tstamp>
 
+	<path id="Web App Libraries.libraryclasspath">
+		<fileset dir="${webapp}/WEB-INF/lib">
+			<filename name="**/*.jar" />
+		</fileset>
+	</path>
+
 	<path id="vorpal-blade.classpath">
-		<fileset dir="../vorpal-blade-shared-libraries/target/vorpal-blade-shared-libraries/WEB-INF/lib">
+		<fileset dir="${BLADE}/vorpal-blade-shared-libraries/target/vorpal-blade-shared-libraries/WEB-INF/lib">
 			<include name="**/*.jar" />
 		</fileset>
-		<pathelement location="${dist}/vorpal-blade-library-framework.jar" />
+		<pathelement location="${BLADE}/dist/vorpal-blade-library-framework.jar" />
 	</path>
 
 	<path id="WebLogic System Libraries.libraryclasspath">
@@ -649,37 +665,123 @@
 		<pathelement location="${OCCAS}/wlserver/sip/server/lib/wlssapi.jar" />
 	</path>
 
-	<target name="build" />
+	<!--target name="build" /-->
 
-	<target name="package" depends="">
+	<path id="Web App Libraries.libraryclasspath">
+		<fileset dir="${webapp}/WEB-INF/lib">
+			<filename name="**/*.jar" />
+		</fileset>
+	</path>
+
+	<path id="EAR Libraries.libraryclasspath" />
+
+	<path id="project.classpath">
+		<pathelement location="${classes}" />
+		<path refid="Web App Libraries.libraryclasspath" />
+		<path refid="EAR Libraries.libraryclasspath" />
+		<path refid="WebLogic System Libraries.libraryclasspath" />
+		<path refid="vorpal-blade.classpath" />
+	</path>
+
+	<target name="build" depends="init,compile,war">
+		<echo message="${ant.project.name} v${implementation}-b${build.number}" />
+	</target>
+
+	<target name="init">
+		<mkdir dir="${classes}" />
+		<mkdir dir="${webapp}/WEB-INF/lib" />
+
+		<copy includeemptydirs="false" todir="${classes}">
+			<fileset dir="${src}">
+				<exclude name="**/*.launch" />
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+		<mkdir dir=".apt_src" />
+		<copy includeemptydirs="false" todir="${classes}">
+			<fileset dir=".apt_src">
+				<exclude name="**/*.launch" />
+				<exclude name="**/*.java" />
+			</fileset>
+		</copy>
+	</target>
+
+	<target name="clean">
+		<delete dir="${build}" />
+	</target>
+
+	<target depends="clean" name="clean-all" />
+
+
+	<target name="compile" depends="init">
+		<echo message="${ant.project.name}: ${ant.file}" />
+		<javac debug="true" debuglevel="${debuglevel}" destdir="${classes}" includeantruntime="false" source="${source}" target="${target}">
+			<src path="${src}" />
+			<src path=".apt_src" />
+			<classpath refid="project.classpath" />
+		</javac>
+	</target>
+
+	<target name="jar">
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}-b${build.number}" />
 		</manifest>
-		<jar destfile="${build}/${ant.project.name}.jar" basedir="${build}/classes" manifest="${build}/MANIFEST.MF" />
+		<jar destfile="${build}/${ant.project.name}.jar" manifest="${build}/MANIFEST.MF">
+			<fileset dir="${classes}" />
+			<fileset dir="${src}" includes="**/*.java" />
+		</jar>
 		<copy file="${build}/${ant.project.name}.jar" todir="${dist}" />
 	</target>
 	
-	<target name="javadoc" depends="">
+	<target name="war" depends="init">
+		<mkdir dir="${build}/lib" />
+		<copy file="${framework}" todir="${build}/lib" />
+		<manifest file="${build}/MANIFEST.MF">
+			<attribute name="Copyright" value="${copyright}" />
+			<attribute name="License" value="${license}" />
+			<attribute name="Built-By" value="${user.name}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}-b${build.number}" />
+		</manifest>
+		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}">
+			<lib dir="${build}/lib" />
+			<classes dir="${classes}" />
+		</war>
+		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
+	</target>
+
+	<target name="javadoc">
 		<delete dir="${docs}/${ant.project.name}" />
 		<mkdir dir="${docs}/${ant.project.name}" />
-		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" packagenames="org.vorpal.*" private="true" additionalparam="-Xdoclint:none" >
+		
+		<echo>packagenames=${packagenames}</echo>
+		<echo>sourcepath=${src}</echo>
+		
+		<javadoc 
+			sourcepath="${src}" 
+			destdir="${docs}/${ant.project.name}" 
+			packagenames="${packagenames}" 
+			private="true" 
+			additionalparam="-Xdoclint:none">
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 			<classpath refid="project.classpath" />
 			<doctitle>
 				<![CDATA[<div>${ant.project.name} - v${implementation}</div>]]>
 			</doctitle>
-			<bottom>
-				<![CDATA[<div style="display: block; text-align: center"><div>${copyright}</div><div>${license}</div></div>]]>
+		<bottom>
+			<![CDATA[<div style="display: block; text-align: center">
+			<div>${copyright}</div>
+			<div>${license}</div>
+		</div>]]>
 			</bottom>
-			<link href="https://docs.oracle.com/en/java/javase/11/docs/api" />
-			<link href="https://javaee.github.io/javaee-spec/javadocs/" />
-			<link href="https://vorpalnet.github.io/jsr359/" />
-			<link href="https://vorpalnet.github.io/vorpal-blade-library-framework" />
-		</javadoc>
-	</target>
+	<link href="https://docs.oracle.com/en/java/javase/11/docs/api" />
+	<link href="https://javaee.github.io/javaee-spec/javadocs/" />
+	<link href="https://vorpalnet.github.io/jsr359/" />
+	<link href="https://vorpalnet.github.io/vorpal-blade-library-framework" />
+</javadoc>
+</target>
 
 </project>

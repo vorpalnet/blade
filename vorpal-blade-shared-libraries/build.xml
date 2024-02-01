@@ -1,41 +1,19 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project basedir="." default="build" name="vorpal-blade-shared-libraries">
-	<import file="../libraries.xml" />
-	<property name="src" location="src/main/java" />
-	<property name="webapp" location="src/main/webapp" />
+	<!-- Define unique locations first -->
 
+	<!-- Load environment variables -->
+	<property environment="env" />
+	<property environment="envvar" />
+	<exec executable="hostname" outputproperty="computer.hostname" />
+	<property file="../${computer.hostname}.properties" />
+	<property file="../build.properties" />
+	<property file="../version.properties" />
 
-	<path id="Web App Libraries.libraryclasspath">
-		<fileset dir="${webapp}/WEB-INF/lib">
-			<filename name="**/*.jar" />
-		</fileset>
-	</path>
-	<path id="EAR Libraries.libraryclasspath" />
+	<!-- Import default locations and tasks -->
+	<import file="${BLADE}/libraries.xml" />
 
-	<path id="project.classpath">
-		<pathelement location="build/classes" />
-		<path refid="Web App Libraries.libraryclasspath" />
-		<path refid="EAR Libraries.libraryclasspath" />
-		<path refid="WebLogic System Libraries.libraryclasspath" />
-		<path refid="vorpal-blade.classpath" />
-	</path>
-
-	<target name="build" depends="init, build-project, mvn_windows, mvn_unix, package" />
-
-	<target name="init">
-		<mkdir dir="build" />
-		<mkdir dir="build/classes" />
-
-	</target>
-	<target name="clean">
-		<delete dir="build" />
-	</target>
-
-	<target name="clean-all" depends="clean" />
-
-	<target name="build-project" depends="init">
-		<echo message="${ant.project.name}: ${ant.file}" />
-	</target>
+	<target name="build" depends="init, compile, mvn_windows, mvn_unix, package" />
 
 	<condition property="isWindows">
 		<os family="windows" />
@@ -45,25 +23,24 @@
 		<os family="unix" />
 	</condition>
 
-
 	<target name="mvn_windows" if="isWindows">
 		<exec dir="." executable="cmd">
 			<arg line="/c mvn clean package" />
 		</exec>
-		<copy file="build/${ant.project.name}.war" todir="${dist}" />
+		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>
 
 	<target name="mvn_unix" if="isUnix">
 		<exec dir="." executable="sh">
 			<arg line="-c 'mvn clean package'" />
 		</exec>
-		<copy file="build/${ant.project.name}.war" todir="${dist}" />
+		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>
 
 
 	<target name="package" depends="init">
 
-		<manifest file="build/MANIFEST.MF">
+		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Built-By" value="${user.name}" />
 			<attribute name="Specification-Title" value="Vorpal:BLADE Framework" />
 			<attribute name="Specification-Version" value="${specification}" />
@@ -74,14 +51,11 @@
 			<attribute name="Extension-Name" value="vorpal-blade" />
 		</manifest>
 
-		<war destfile="build/${ant.project.name}.war" basedir="src/main/webapp" needxmlfile="false" manifest="build/MANIFEST.MF">
-			<!--
-			<lib refid="vorpal-blade-library-framework" />
-			-->
-			<classes dir="build/classes" />
+		<war destfile="${build}/${ant.project.name}.war" basedir="src/main/webapp" needxmlfile="false" manifest="build/MANIFEST.MF">
+			<classes dir="${classes}" />
 		</war>
 
-		<copy file="build/${ant.project.name}.war" todir="${dist}" />
+		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 
 	</target>
 

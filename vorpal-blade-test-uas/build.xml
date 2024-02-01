@@ -1,76 +1,21 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-test-uas">
-	<import file="../libraries.xml" />
+	
+	<!-- Define unique locations first -->
+	<property name="BLADE" location="../" />
 	<property name="src" location="src" />
 	<property name="webapp" location="WebContent" />
 
-	<path id="Web App Libraries.libraryclasspath">
-		<fileset dir="${webapp}/WEB-INF/lib">
-			<filename name="**/*.jar" />
-		</fileset>
-	</path>
-	<path id="EAR Libraries.libraryclasspath" />
+	<!-- Load environment variables -->
+	<property environment="env" />
+	<property environment="envvar" />
+	<exec executable="hostname" outputproperty="computer.hostname" />
+	<property file="../${computer.hostname}.properties" />
+	<property file="../build.properties" />
+	<property file="../version.properties" />
 
-	<path id="project.classpath">
-		<pathelement location="build/classes" />
-		<path refid="Web App Libraries.libraryclasspath" />
-		<path refid="EAR Libraries.libraryclasspath" />
-		<path refid="WebLogic System Libraries.libraryclasspath" />
-		<path refid="vorpal-blade.classpath" />
-	</path>
-
-	<target name="build" depends="init,compile,package">
-		<echo message="${ant.project.name}: ${ant.file}" />
-	</target>
-
-	<target name="init">
-		<mkdir dir="build/classes" />
-		<mkdir dir="${webapp}/WEB-INF/lib" />
-
-		<copy includeemptydirs="false" todir="build/classes">
-			<fileset dir="${src}">
-				<exclude name="**/*.launch" />
-				<exclude name="**/*.java" />
-			</fileset>
-		</copy>
-		<mkdir dir=".apt_src" />
-		<copy includeemptydirs="false" todir="build/classes">
-			<fileset dir=".apt_src">
-				<exclude name="**/*.launch" />
-				<exclude name="**/*.java" />
-			</fileset>
-		</copy>
-	</target>
-	<target name="clean">
-		<delete dir="build" />
-	</target>
-	<target depends="clean" name="clean-all" />
-
-	<target name="compile" depends="init">
-		<echo message="${ant.project.name}: ${ant.file}" />
-		<javac debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" source="${source}" target="${target}">
-			<src path="${src}" />
-			<src path=".apt_src" />
-			<classpath refid="project.classpath" />
-		</javac>
-	</target>
-
-	<target name="package" depends="compile">
-		<mkdir dir="build/lib" />
-		<copy file="${framework}" todir="build/lib" />
-		<manifest file="build/MANIFEST.MF">
-			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}" />
-		</manifest>
-		<war destfile="build/${ant.project.name}.war" manifest="build/MANIFEST.MF" basedir="${webapp}">
-			<lib dir="build/lib" />
-			<classes dir="build/classes" />
-		</war>
-		<copy file="build/${ant.project.name}.war" todir="${dist}" />
-	</target>
-
-
-	<target description="Build all projects which reference this project. Useful to propagate changes." name="build-refprojects" />
-
+	<!-- Import default locations and tasks -->
+	<import file="${BLADE}/libraries.xml" />
+	
 </project>
