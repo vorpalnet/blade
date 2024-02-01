@@ -1,34 +1,29 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-library-fsmar">
-	<import file="../libraries.xml" />
-	<property name="src" location="src" />
-
-	<path id="project.classpath">
-		<pathelement location="build/classes" />
-		<path refid="WebLogic System Libraries.libraryclasspath" />
-		<path refid="vorpal-blade.classpath" />
-	</path>
-
+	
+	<!-- Define unique locations first -->
+	<property name="BLADE" location="../" />
+	<property name="src" location="./src" />
 	<property name="lib" location="../vorpal-blade-shared-libraries/target/vorpal-blade-shared-libraries/WEB-INF/lib" />
 
+
+	<!-- Load environment variables -->
+	<property environment="env" />
+	<property environment="envvar" />
+	<exec executable="hostname" outputproperty="computer.hostname" />
+	<property file="../${computer.hostname}.properties" />
+	<property file="../build.properties" />
+	<property file="../version.properties" />
+
+	<!-- Import default locations and tasks -->
+	<import file="${BLADE}/libraries.xml" />
+	
 	<target name="build" depends="init,compile,package">
-		<echo message="${ant.project.name}: ${ant.file}" />
+		<echo message="${ant.project.name} v${implementation}-b${build.number}" />
 	</target>
-
-	<target name="init">
-		<mkdir dir="build/classes" />
-
-	</target>
-
-	<target name="clean">
-		<delete dir="build" />
-	</target>
-
-	<target name="clean-all" depends="clean" />
 
 	<target name="compile" depends="init">
-		<echo message="${ant.project.name}: ${ant.file}" />
 		<javac debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" source="${source}" target="${target}">
 			<src path="src" />
 			<src path="../vorpal-blade-library-framework/src" />
@@ -38,7 +33,6 @@
 	</target>
 
 	<target name="package" depends="compile">
-
 		<!--
 		It's easier to add all the classes to the fsmar.jar than
 		it is to get the classpaths configured correctly within WebLogic startup scripts.
@@ -58,7 +52,6 @@
 				<exclude name="**/*.java" />
 			</fileset>
 		</copy>
-
 
 		<manifest file="build/MANIFEST.MF">
 			<attribute name="Built-By" value="${user.name}" />
