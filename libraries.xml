@@ -3,7 +3,7 @@
 	<buildnumber />
 
 	<!-- Use a different build directory than Eclipse. -->
-	<property name="build" location="./buildANT" />
+	<property name="build" location="./build" />
 
 	<property name="debuglevel" value="source,lines,vars" />
 	<property name="target" value="11" />
