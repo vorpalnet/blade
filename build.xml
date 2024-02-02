@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <project name="blade" default="build" basedir=".">
-	<buildnumber/>
-	
+	<buildnumber />
+
 	<!-- If they haven't already been created, define these variables -->
 	<property name="BLADE" location="./" />
 	<property name="dist" location="./dist" />
@@ -14,9 +14,9 @@
 	<property file="${computer.hostname}.properties" />
 	<property file="build.properties" />
 	<property file="version.properties" />
-	
+
 	<!-- For the Wldeploy tasks-->
-	<property name="targets"  value="BEA_ENGINE_TIER_CLUST" />
+	<property name="targets" value="BEA_ENGINE_TIER_CLUST" />
 	<property name="adminurl" value="t3://${computer.hostname}:7001" />
 	<property name="user" value="weblogic" />
 	<property name="password" value="Pa55w0rD" />
@@ -25,14 +25,14 @@
 	<property name="debug" value="true" />
 	<property name="name" value="vorpal-blade-services-queue" />
 	<property name="file" value="${dist}/${name}.war" />
-	
+
 	<!-- Required for the 'foreach' command. -->
 	<taskdef resource="net/sf/antcontrib/antlib.xml">
 		<classpath>
 			<pathelement location="./lib/ant-contrib-1.0b3.jar" />
 		</classpath>
 	</taskdef>
-	
+
 
 
 	<target name="init" depends="">
@@ -56,11 +56,11 @@
 			<attribute name="Built-By" value="${user.name}" />
 			<attribute name="Weblogic-Application-Version" value="${implementation}-b${build.number}" />
 		</manifest>
-	
+
 		<foreach target="build-all" param="var">
 			<path refid="subprojects" />
 		</foreach>
-	
+
 	</target>
 
 	<target name="build-all" depends="">
@@ -79,7 +79,7 @@
 		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="clean" />
 	</target>
 
-	
+
 	<target name="javadocs" depends="">
 		<foreach target="javadocs-all" param="var">
 			<path refid="subprojects" />
@@ -99,60 +99,34 @@
 			<exclude name="vorpal-blade-shared-libraries" />
 		</dirset>
 	</path>
-	
-	
-	
+
+
+
 	<!-- To deploy applications to WebLogic. -->
-	<taskdef name="wldeploy" classname="weblogic.ant.taskdefs.management.WLDeploy"/>
+	<taskdef name="wldeploy" classname="weblogic.ant.taskdefs.management.WLDeploy" />
 
 	<target name="deploy">
-		<wldeploy 
-			action="deploy"
-			adminurl="${adminurl}" user="${user}" password="${password}" 
-		    targets="${targets}" remote="${remote}"
-			name="${name}" source="${file}" 
-		/>
+		<wldeploy action="deploy" adminurl="${adminurl}" user="${user}" password="${password}" targets="${targets}" remote="${remote}" name="${name}" source="${file}" />
 	</target>
-	
+
 	<target name="redeploy">
-		<wldeploy 
-			action="redeploy"
-			adminurl="${adminurl}" user="${user}" password="${password}" 
-			name="${name}" deltaFiles="${file}"
-    	/>
-  </target>
+		<wldeploy action="redeploy" adminurl="${adminurl}" user="${user}" password="${password}" name="${name}" deltaFiles="${file}" />
+	</target>
 
 	<target name="undeploy">
-		<wldeploy 
-			action="undeploy"
-			adminurl="${adminurl}" user="${user}" password="${password}" 
-			name="${name}" 
-		/>
+		<wldeploy action="undeploy" adminurl="${adminurl}" user="${user}" password="${password}" name="${name}" />
 	</target>
 
 	<target name="distribute">
-		<wldeploy 
-			action="distribute"
-			adminurl="${adminurl}" user="${user}" password="${password}" 
-		    targets="${targets}" remote="${remote}"
-			name="${name}" source="${file}" 
-		/>
+		<wldeploy action="distribute" adminurl="${adminurl}" user="${user}" password="${password}" targets="${targets}" remote="${remote}" name="${name}" source="${file}" />
 	</target>
-	
+
 	<target name="start">
-		<wldeploy 
-			action="start"
-			adminurl="${adminurl}" user="${user}" password="${password}" 
-			name="${name}"
-    	/>
+		<wldeploy action="start" adminurl="${adminurl}" user="${user}" password="${password}" name="${name}" />
 	</target>
-	
+
 	<target name="stop">
-		<wldeploy 
-			action="stop"
-			adminUrl="${adminurl}" user="${user}" password="${password}" 
-			name="${name}" 
-		/>
+		<wldeploy action="stop" adminUrl="${adminurl}" user="${user}" password="${password}" name="${name}" />
 	</target>
 
 </project>

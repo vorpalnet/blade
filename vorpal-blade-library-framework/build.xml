@@ -6,16 +6,16 @@
 	<property name="BLADE" location="../" />
 	<property name="src" location="./src" />
 
-	<!-- Load environment variables -->
+	<!-- Load environment variables -->	
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="../${computer.hostname}.properties" />
 	<property file="../build.properties" />
 	<property file="../version.properties" />
-
+	
 	<!-- Import default locations and tasks -->
-	<import file="${BLADE}/libraries.xml" />
+	<import file="../libraries.xml" />
 	
 	<target name="build" depends="init,compile,jar">
 		<echo message="${ant.project.name} v${implementation}-b${build.number}" />

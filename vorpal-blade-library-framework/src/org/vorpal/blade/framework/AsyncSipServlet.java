@@ -153,7 +153,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			if (null != session) {
 				int colonIndex = session.indexOf(':');
 				indexKey = session.substring(0, colonIndex);
-				dialog = session.substring(colonIndex);
+				dialog = session.substring(colonIndex + 1);
 			} else {
 				indexKey = Callflow.getVorpalSessionId(appSession);
 				dialog = Callflow.getVorpalDialogId(sipSession);

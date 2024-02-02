@@ -7,7 +7,7 @@
 	<property name="src" location="./src" />
 	<property name="webapp" location="WebContent" />
 
-	<!-- Load environment variables -->
+	<!-- Load environment variables -->	
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
@@ -16,6 +16,6 @@
 	<property file="../version.properties" />
 
 	<!-- Import default locations and tasks -->
-	<import file="${BLADE}/libraries.xml" />	
+	<import file="../libraries.xml" />
 
 </project>
