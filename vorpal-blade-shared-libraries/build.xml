@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project basedir="." default="build" name="vorpal-blade-shared-libraries">
 	<!-- Define unique locations first -->
-
-	<!-- Load environment variables -->
+	<property name="webapp" location="./target/${ant.project.name}" />
+	
+	<!-- Load environment variables -->	
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
@@ -11,9 +12,10 @@
 	<property file="../version.properties" />
 
 	<!-- Import default locations and tasks -->
-	<import file="${BLADE}/libraries.xml" />
+	<import file="../libraries.xml" />
 
-	<target name="build" depends="init, compile, mvn_windows, mvn_unix, package" />
+	<!--target name="build" depends="init, compile, mvn_windows, mvn_unix, package" /-->
+	<target name="build" depends="init, mvn_windows, mvn_unix, package" />
 
 	<condition property="isWindows">
 		<os family="windows" />
@@ -23,22 +25,26 @@
 		<os family="unix" />
 	</condition>
 
-	<target name="mvn_windows" if="isWindows">
+	<target name="mvn_windows" if="isWindows" depends="init">
 		<exec dir="." executable="cmd">
 			<arg line="/c mvn clean package" />
 		</exec>
-		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>
 
-	<target name="mvn_unix" if="isUnix">
+	<target name="mvn_unix" if="isUnix" depends="init">
 		<exec dir="." executable="sh">
 			<arg line="-c 'mvn clean package'" />
 		</exec>
-		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>
 
 
 	<target name="package" depends="init">
+
+		<echo message="build=${build}" />
+		<echo message="BLADE=${BLADE}" />
+		<echo message="specification=${specification}" />
+		<echo message="implementation=${implementation}" />
+		<echo message="MANIFEST=${build}/MANIFEST.MF" />
 
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Built-By" value="${user.name}" />
@@ -51,11 +57,14 @@
 			<attribute name="Extension-Name" value="vorpal-blade" />
 		</manifest>
 
-		<war destfile="${build}/${ant.project.name}.war" basedir="src/main/webapp" needxmlfile="false" manifest="build/MANIFEST.MF">
+
+		<war destfile="${build}/${ant.project.name}.war" basedir="${webapp}" needxmlfile="false" manifest="${build}/MANIFEST.MF">
 			<classes dir="${classes}" />
 		</war>
 
+
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
+
 
 	</target>
 
