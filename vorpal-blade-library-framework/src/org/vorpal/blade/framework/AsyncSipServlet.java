@@ -216,8 +216,9 @@ public abstract class AsyncSipServlet extends SipServlet
 	@Override
 	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
 		Callback<SipServletResponse> callback;
+		SipSession sipSession = response.getSession();
 		try {
-			if (response.getSession().isValid()) {
+			if (sipSession != null && sipSession.isValid()) {
 				callback = Callflow.pullCallback(response);
 				if (callback != null) {
 					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
@@ -231,7 +232,6 @@ public abstract class AsyncSipServlet extends SipServlet
 			Callflow.getLogger().logStackTrace(response, e);
 			throw e;
 		}
-
 	}
 
 	@SuppressWarnings("unchecked")
