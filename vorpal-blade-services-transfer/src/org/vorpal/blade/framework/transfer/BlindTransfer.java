@@ -131,11 +131,10 @@ public class BlindTransfer extends Transfer {
 			// in the event the transferee hangs up before the transfer completes
 			Expectation expectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
 				try {
-					sipLogger.finer(bye, "transferee disconnected before transfer completed");
+					sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
 					sendResponse(bye.createResponse(200));
-
 					sendRequest(targetRequest.createCancel());
-
+					sendRequest(this.transferorRequest.getSession().createRequest(BYE));
 				} catch (Exception e) {
 					sipLogger.warning(bye,
 							"BYE received from transferee, CANCEL target session isValid: "
@@ -159,9 +158,9 @@ public class BlindTransfer extends Transfer {
 
 			sendRequest(targetRequest, (targetResponse) -> {
 
-				if (successful(targetResponse)) {
+				expectation.clear(); //no longer expect BYE from transferee
 
-					expectation.clear();
+				if (successful(targetResponse)) {
 
 					SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
 					notify200.setHeader(EVENT, "refer");
@@ -190,9 +189,6 @@ public class BlindTransfer extends Transfer {
 					});
 
 				} else if (failure(targetResponse)) {
-
-					// Clear the BYE expectation
-					expectation.clear();
 
 					// User is notified that the transfer target did not answer
 					transferListener.transferDeclined(targetResponse);
