@@ -2,8 +2,8 @@
 <project basedir="." default="build" name="vorpal-blade-shared-libraries">
 	<!-- Define unique locations first -->
 	<property name="webapp" location="./target/${ant.project.name}" />
-	
-	<!-- Load environment variables -->	
+
+	<!-- Load environment variables -->
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
@@ -14,7 +14,6 @@
 	<!-- Import default locations and tasks -->
 	<import file="../libraries.xml" />
 
-	<!--target name="build" depends="init, compile, mvn_windows, mvn_unix, package" /-->
 	<target name="build" depends="init, mvn_windows, mvn_unix, package" />
 
 	<condition property="isWindows">
@@ -40,6 +39,7 @@
 
 	<target name="package" depends="init">
 
+		<!-- MAVEN will do this	
 		<echo message="build=${build}" />
 		<echo message="BLADE=${BLADE}" />
 		<echo message="specification=${specification}" />
@@ -57,11 +57,10 @@
 			<attribute name="Extension-Name" value="vorpal-blade" />
 		</manifest>
 
-
 		<war destfile="${build}/${ant.project.name}.war" basedir="${webapp}" needxmlfile="false" manifest="${build}/MANIFEST.MF">
 			<classes dir="${classes}" />
 		</war>
-
+-->
 
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 
