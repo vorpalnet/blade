@@ -771,7 +771,7 @@
 	<link href="https://docs.oracle.com/en/java/javase/11/docs/api" />
 	<link href="https://javaee.github.io/javaee-spec/javadocs/" />
 	<link href="https://vorpalnet.github.io/jsr359/" />
-	<link href="https://vorpalnet.github.io/vorpal-blade-library-framework" />
+	<link href="https://vorpalnet.github.io/blade/vorpal-blade-library-framework" />
 </javadoc>
 </target>
 

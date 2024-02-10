@@ -134,7 +134,7 @@ public class BlindTransfer extends Transfer {
 					sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
 					sendResponse(bye.createResponse(200));
 					sendRequest(targetRequest.createCancel());
-					sendRequest(this.transferorRequest.getSession().createRequest(BYE));
+					sendRequest(transferorRequest.getSession().createRequest(BYE));
 				} catch (Exception e) {
 					sipLogger.warning(bye,
 							"BYE received from transferee, CANCEL target session isValid: "
