@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <faceted-project>
+  <runtime name="Oracle WebLogic Server 14.1.1.0"/>
   <fixed facet="oracle.weblogic.webservice.clients"/>
   <fixed facet="jst.web"/>
   <fixed facet="wls.web"/>
