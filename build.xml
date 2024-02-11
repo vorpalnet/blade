@@ -84,6 +84,7 @@
 			<include name="vorpal-*" />
 			<exclude name="vorpal-blade-library-framework" />
 			<exclude name="vorpal-blade-shared-libraries" />
+			<exclude name="vorpal-blade-test-config" />			
 		</dirset>
 	</path>
 
