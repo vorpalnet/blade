@@ -4,8 +4,6 @@
 
 	<!-- If they haven't already been created, define these variables -->
 	<property name="BLADE" location="./" />
-	<property name="dist" location="./dist" />
-	<property name="docs" location="${dist}/docs" />
 
 	<!-- Load environment variables -->
 	<property environment="env" />
@@ -14,17 +12,8 @@
 	<property file="${computer.hostname}.properties" />
 	<property file="build.properties" />
 	<property file="version.properties" />
-
-	<!-- For the Wldeploy tasks-->
-	<property name="targets" value="BEA_ENGINE_TIER_CLUST" />
-	<property name="adminurl" value="t3://${computer.hostname}:7001" />
-	<property name="user" value="weblogic" />
-	<property name="password" value="Pa55w0rD" />
-	<property name="remote" value="false" />
-	<property name="verbose" value="true" />
-	<property name="debug" value="true" />
-	<property name="name" value="vorpal-blade-services-queue" />
-	<property name="file" value="${dist}/${name}.war" />
+	<property name="dist" location="./dist" />
+	<property name="docs" location="${dist}/docs" />
 
 	<!-- Required for the 'foreach' command. -->
 	<taskdef resource="net/sf/antcontrib/antlib.xml">
@@ -32,8 +21,6 @@
 			<pathelement location="./lib/ant-contrib-1.0b3.jar" />
 		</classpath>
 	</taskdef>
-
-
 
 	<target name="init" depends="">
 		<if>
@@ -99,35 +86,6 @@
 			<exclude name="vorpal-blade-shared-libraries" />
 		</dirset>
 	</path>
-
-
-
-	<!-- To deploy applications to WebLogic. -->
-	<taskdef name="wldeploy" classname="weblogic.ant.taskdefs.management.WLDeploy" />
-
-	<target name="deploy">
-		<wldeploy action="deploy" adminurl="${adminurl}" user="${user}" password="${password}" targets="${targets}" remote="${remote}" name="${name}" source="${file}" />
-	</target>
-
-	<target name="redeploy">
-		<wldeploy action="redeploy" adminurl="${adminurl}" user="${user}" password="${password}" name="${name}" deltaFiles="${file}" />
-	</target>
-
-	<target name="undeploy">
-		<wldeploy action="undeploy" adminurl="${adminurl}" user="${user}" password="${password}" name="${name}" />
-	</target>
-
-	<target name="distribute">
-		<wldeploy action="distribute" adminurl="${adminurl}" user="${user}" password="${password}" targets="${targets}" remote="${remote}" name="${name}" source="${file}" />
-	</target>
-
-	<target name="start">
-		<wldeploy action="start" adminurl="${adminurl}" user="${user}" password="${password}" name="${name}" />
-	</target>
-
-	<target name="stop">
-		<wldeploy action="stop" adminUrl="${adminurl}" user="${user}" password="${password}" name="${name}" />
-	</target>
 
 </project>
 
