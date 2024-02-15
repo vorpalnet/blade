@@ -1,6 +1,7 @@
 package org.vorpal.blade.services.crud;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -14,7 +15,7 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class RuleSet {
+public class RuleSet implements Serializable{
 	public String id;
 
 	public Map<String, String> map = new HashMap<>();
