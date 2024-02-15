@@ -5,9 +5,12 @@ import java.util.List;
 
 import org.vorpal.blade.framework.config.RouterConfig;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
+@JsonPropertyOrder({ "logging", "ruleSets", "defaultRoute", "selectors", "maps", "plan" })
 public class CrudConfiguration extends RouterConfig {
 
-	List<RuleSet> ruleSets = new LinkedList<>();
+	public List<RuleSet> ruleSets = new LinkedList<>();
 
 	public CrudConfiguration() {
 

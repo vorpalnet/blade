@@ -46,12 +46,14 @@ public class CrudServlet extends B2buaServlet {
 		if (inboundRequest.getMethod().equals("INVITE") && inboundRequest.isInitial()) {
 			Translation t = settings.findTranslation(inboundRequest);
 			if (t != null) {
-				RuleSet ruleSet = (RuleSet) t.getAttributes().get("ruleSet");
+
+				RuleSet ruleSet = (RuleSet) t.getAttribute("ruleSet");
 
 				if (ruleSet != null) {
 					ruleSet.process(inboundRequest);
 					callflow = new CrudInitialInvite(this, ruleSet.output);
 				}
+
 			}
 		}
 
