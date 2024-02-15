@@ -9,6 +9,11 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.b2bua.Bye;
+import org.vorpal.blade.framework.b2bua.Cancel;
+import org.vorpal.blade.framework.b2bua.InitialInvite;
+import org.vorpal.blade.framework.b2bua.Passthru;
+import org.vorpal.blade.framework.b2bua.Reinvite;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.config.Translation;
@@ -72,7 +77,7 @@ public class CrudServlet extends B2buaServlet {
 							sipLogger.severe(inboundRequest, "To: " + ruleSet.output.get("To"));
 							sipLogger.severe(inboundRequest, "Request-URI: " + ruleSet.output.get("Request-URI"));
 
-							callflow = new CrudInitialInvite(this, ruleSet.output);
+							callflow = new CrudInitialInvite(null, ruleSet.output);
 						} else {
 							sipLogger.severe(inboundRequest, "No ruleSet found.");
 
@@ -86,7 +91,23 @@ public class CrudServlet extends B2buaServlet {
 		}
 
 		if (callflow == null) {
-			callflow = super.chooseCallflow(inboundRequest);
+		//	callflow = super.chooseCallflow(inboundRequest);
+			
+			
+			if (inboundRequest.getMethod().equals("INVITE")) {
+				if (inboundRequest.isInitial()) {
+					callflow = new InitialInvite(null);
+				} else {
+					callflow = new Reinvite(null);
+				}
+			} else if (inboundRequest.getMethod().equals("BYE")) {
+				callflow = new Bye(null);
+			} else if (inboundRequest.getMethod().equals("CANCEL")) {
+				callflow = new Cancel(null);
+			} else {
+				callflow = new Passthru(null);
+			}
+			
 		}
 
 		return callflow;
