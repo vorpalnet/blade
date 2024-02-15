@@ -51,21 +51,35 @@ public class CrudServlet extends B2buaServlet {
 			if (t != null) {
 				sipLogger.severe(inboundRequest, "found t! ");
 
-				RuleSet ruleSet = (RuleSet) t.getAttribute("ruleSet");
+				String ruleSetId = (String) t.getAttribute("ruleSet");
+				sipLogger.severe(inboundRequest, "ruleSet.id " + ruleSetId);
 
-				sipLogger.severe(inboundRequest, "ruleSet " + ruleSet);
+				if (ruleSetId != null) {
 
-				if (ruleSet != null) {
-					sipLogger.severe(inboundRequest, "found ruleSet!");
+					RuleSet ruleSet = settings.ruleSets.get(ruleSetId);
 
-					ruleSet.process(inboundRequest);
+					if (ruleSet != null) {
 
-					sipLogger.severe(inboundRequest, "done processing ruleset");
+						sipLogger.severe(inboundRequest, "ruleSet: " + ruleSet);
 
-					sipLogger.severe(inboundRequest, "To: " + ruleSet.output.get("To"));
-					sipLogger.severe(inboundRequest, "Request-URI: " + ruleSet.output.get("Request-URI"));
+						if (ruleSet != null) {
+							sipLogger.severe(inboundRequest, "found ruleSet.");
 
-					callflow = new CrudInitialInvite(this, ruleSet.output);
+							ruleSet.process(inboundRequest);
+
+							sipLogger.severe(inboundRequest, "done processing ruleset");
+
+							sipLogger.severe(inboundRequest, "To: " + ruleSet.output.get("To"));
+							sipLogger.severe(inboundRequest, "Request-URI: " + ruleSet.output.get("Request-URI"));
+
+							callflow = new CrudInitialInvite(this, ruleSet.output);
+						} else {
+							sipLogger.severe(inboundRequest, "No ruleSet found.");
+
+						}
+
+					}
+
 				}
 
 			}
