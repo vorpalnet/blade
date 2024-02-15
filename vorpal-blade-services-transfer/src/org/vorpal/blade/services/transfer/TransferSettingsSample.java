@@ -22,9 +22,10 @@ public class TransferSettingsSample extends TransferSettings {
 		this.preserveReferHeaders.add("Referred-By");
 
 		Selector dialed = new Selector("dialed", "From",
-				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)",
+				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)",
 				"${user}");
-		dialed.setDescription("The user (dialed number) part of the To header");
+
+		dialed.setDescription("The user (dialed number) part of the From header");
 		this.selectors.add(dialed);
 
 		TranslationsMap prefixMap = new ConfigPrefixMap();
