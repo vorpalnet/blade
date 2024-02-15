@@ -48,7 +48,10 @@ public class CrudInitialInvite extends Callflow {
 	private B2buaListener b2buaListener = null;
 	private boolean doNotProcess = false;
 //	private RuleSet ruleSet;
-	private Map<String, String> output;
+	
+	
+	
+	private transient Map<String, String> output;
 
 	public CrudInitialInvite() {
 	}

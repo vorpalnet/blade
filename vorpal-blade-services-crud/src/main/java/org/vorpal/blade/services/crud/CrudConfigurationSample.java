@@ -27,12 +27,12 @@ public class CrudConfigurationSample extends CrudConfiguration {
 		Rule rule = new Rule();
 		Update update = new Update("Request-URI",
 				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)",
-				"${proto}:8001234567@${host}:5060;${uriparams}");
+				"${proto}:carol@${host}:5060;${uriparams}");
 		rule.update.add(update);
 
 		Update toHeader = new Update("To",
 				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)",
-				"${proto}:8001234567@${host}:5060;${uriparams}");
+				"<${proto}:carol@${host}:5060;${uriparams}>");
 		rule.update.add(toHeader);
 
 		ruleSet.rules.add(rule);
