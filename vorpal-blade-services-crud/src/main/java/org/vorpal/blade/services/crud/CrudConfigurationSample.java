@@ -36,7 +36,7 @@ public class CrudConfigurationSample extends CrudConfiguration {
 		rule.update.add(toHeader);
 
 		ruleSet.rules.add(rule);
-		this.ruleSets.add(ruleSet);
+		this.ruleSets.put(ruleSet.id, ruleSet);
 
 		TranslationsMap prefixMap = new ConfigPrefixMap();
 		prefixMap.id = "prefix-map";
@@ -44,7 +44,7 @@ public class CrudConfigurationSample extends CrudConfiguration {
 		prefixMap.description = "Translations map for dialed number prefixes";
 		prefixMap.createTranslation("19974388689").addAttribute("ruleSet", ruleSet);
 
-		prefixMap.createTranslation("alice").addAttribute("ruleSet", ruleSet);
+		prefixMap.createTranslation("alice").addAttribute("ruleSet", ruleSet.id);
 
 		this.maps.add(prefixMap);
 		this.plan.add(prefixMap);
