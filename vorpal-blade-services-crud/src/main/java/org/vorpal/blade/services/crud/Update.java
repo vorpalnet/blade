@@ -1,6 +1,7 @@
 package org.vorpal.blade.services.crud;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -14,12 +15,11 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.config.SettingsManager;
 
-import com.bea.wcp.sip.engine.SipServletRequestAdapter;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Update {
+public class Update implements Serializable{
 	private Pattern _pattern, _p;
 
 	public String id;
