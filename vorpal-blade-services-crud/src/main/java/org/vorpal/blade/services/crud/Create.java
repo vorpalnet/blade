@@ -1,17 +1,15 @@
 package org.vorpal.blade.services.crud;
 
-import java.util.LinkedList;
-import java.util.List;
+import java.io.Serializable;
 import java.util.Map;
 
-import javax.servlet.ServletContext;
 import javax.servlet.sip.SipServletMessage;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Create {
+public class Create implements Serializable{
 	public String id;
 	public String attribute = null; // aka header, body, etc.
 	public String value = null; // may contain ${variables}
