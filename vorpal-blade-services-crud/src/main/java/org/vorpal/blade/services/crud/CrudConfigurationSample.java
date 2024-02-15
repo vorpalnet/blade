@@ -23,6 +23,7 @@ public class CrudConfigurationSample extends CrudConfiguration {
 		// RuleSets, Rules
 
 		RuleSet ruleSet = new RuleSet();
+		ruleSet.id = "rule1";
 		Rule rule = new Rule();
 		Update update = new Update("Request-URI",
 				"(?:\\\"(?<name>.*)\\\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)",
