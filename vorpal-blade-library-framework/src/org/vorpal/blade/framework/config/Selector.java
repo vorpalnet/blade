@@ -1,6 +1,10 @@
 package org.vorpal.blade.framework.config;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -9,6 +13,7 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
@@ -17,8 +22,14 @@ public class Selector {
 	private String id; // optional for JSON references
 	private String description; // optional for human readable descriptions
 	private String attribute; // location of the key data, like in the 'To' header
-	private Pattern pattern; // regular expression using capturing groups to parse the key data
+	private Pattern _pattern; // regular expression using capturing groups to parse the key data
 	private String expression; // replacement pattern, like $1 to format the key data
+
+	@JsonIgnore
+	private Pattern _p = Pattern.compile("\\<(?<name>[a-zA-Z0-9]+)\\>");
+
+	@JsonIgnore
+	private String _strPattern;
 
 	public Selector() {
 	}
@@ -63,15 +74,19 @@ public class Selector {
 	}
 
 	public String getPattern() {
-		return pattern.toString();
+		return _pattern.toString();
 	}
 
 	public void setPattern(String pattern) {
-		this.pattern = Pattern.compile(pattern, Pattern.DOTALL);
+		this._strPattern = pattern;
+		this._pattern = Pattern.compile(pattern, Pattern.DOTALL);
 	}
 
 	public RegExRoute findKey(SipServletRequest request) {
 		Logger sipLogger = SettingsManager.getSipLogger();
+
+		// jwm - find named groups, useful later
+		Map<String, String> namedGroups = new HashMap<>();
 
 		RegExRoute regexRoute = null;
 		String key = null;
@@ -115,7 +130,7 @@ public class Selector {
 
 		if (header != null) {
 
-			Matcher matcher = pattern.matcher(header);
+			Matcher matcher = _pattern.matcher(header);
 
 			boolean matchResult = false;
 			String value = (attribute.matches("Content")) ? "[...]" : header;
@@ -130,6 +145,34 @@ public class Selector {
 				regexRoute.key = key;
 				regexRoute.matcher = matcher;
 				regexRoute.selector = this;
+
+				LinkedList<String> groups = new LinkedList<>();
+				Matcher m = _p.matcher(this._strPattern);
+				String __name;
+
+				while (m.find()) {
+					__name = m.group("name");
+					if (__name != null) {
+						groups.add(__name);
+					}
+				}
+
+				// a__ variables. yucky! clean this up later.
+				// This builds regex named group pairs for use later
+				Matcher a__matcher = _pattern.matcher(header);
+				boolean a__matchFound = a__matcher.find();
+				if (a__matchFound) {
+					String a__name, a__value;
+					Iterator<String> a__itr = groups.iterator();
+					while (a__itr.hasNext()) {
+						a__name = a__itr.next();
+						a__value = a__matcher.group(a__name);
+						if (a__value != null && a__value.length() > 0) {
+							regexRoute.attributes.put(a__name, a__value);
+						}
+					}
+				}
+
 			}
 
 			sipLogger.finer(request, //

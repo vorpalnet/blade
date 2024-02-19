@@ -26,7 +26,10 @@ public class ConfigTreeMap extends TranslationsMap {
 
 				RegExRoute regexRoute = selector.findKey(request);
 				if (regexRoute != null) {
-					value = map.get(regexRoute.key);
+					value = new Translation(map.get(regexRoute.key));
+
+					// populate attributes for later
+					value.getAttributes().putAll(regexRoute.attributes);
 				}
 
 				if (value != null)

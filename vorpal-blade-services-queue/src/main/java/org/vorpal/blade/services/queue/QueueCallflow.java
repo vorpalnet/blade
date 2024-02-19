@@ -37,32 +37,6 @@ public class QueueCallflow extends Callflow {
 		SipSession sipSession = inboundRequest.getSession();
 		this.aliceRequest = inboundRequest;
 
-		// What happens if a CANCEL comes in?
-//		this.expectRequest(sipSession, CANCEL, (cancel) -> {
-//			try {
-////				this.setState(QueueState.CANCELED);
-//				stopTimers();
-//
-//				Iterator<SipSession> itr = (Iterator<SipSession>) sipSession.getApplicationSession().getSessions(SIP);
-//				SipSession session;
-//				while (itr.hasNext()) {
-//					session = itr.next();
-//					if (session != sipSession) {
-//						for (SipServletRequest outbound : session.getActiveRequests(UAMode.UAC)) {
-//							if (0 == outbound.getSession().getState().compareTo(State.EARLY)) {
-//								sendRequest(outbound.createCancel());
-//							}
-//						}
-//					}
-//				}
-//			} catch (Exception e) {
-//				sipLogger.severe(inboundRequest, e.getMessage());
-//				sipLogger.logStackTrace(e);
-//			}
-//		});
-
-//		if (false == stateEquals(QueueState.CANCELED)) {
-
 		Expectation cancelWhileRinging = this.expectRequest(aliceRequest.getSession(), CANCEL, (cancel) -> {
 			sipLogger.finer(aliceRequest.getSession(), "Expectation cancelWhileRinging invoked...");
 			stopTimers();
@@ -137,7 +111,7 @@ public class QueueCallflow extends Callflow {
 								setState(QueueState.RINGING);
 								cancelWhileCallingMedia.clear();
 								cancelWhileRinging.reset();
-								
+
 //								Expectation cancelWhileRinging2 = this.expectRequest(aliceRequest.getSession(), CANCEL,
 //										(cancel) -> {
 //											sipLogger.warning(aliceRequest.getSession(),

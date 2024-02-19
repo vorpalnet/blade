@@ -36,8 +36,6 @@ import javax.servlet.sip.SipServletResponse;
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.config.SettingsManager;
 
-import inet.ipaddr.IPAddressString;
-
 /**
  * @author Jeff McDonald
  *
@@ -61,20 +59,15 @@ public class SampleB2buaServlet extends B2buaServlet {
 	public void servletCreated(SipServletContextEvent event) {
 
 		try {
+			// Normally, the SettingsManager will set the sipFactory, but in this example,
+			// we need it already set to create some SIP Address and URI values in the
+			// sample config file.
+			this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 
-			SampleB2buaConfig configSample = new ConfigSample();
-			configSample.address = sipFactory.createAddress("Alice <sip:alice@vorpal.net>");
-			configSample.ipv4Address = new IPAddressString("192.168.1.1").getAddress().toIPv4();
-			configSample.ipv6Address = new IPAddressString("2605:a601:aeba:6500:468:ceac:53f1:5854").getAddress()
-					.toIPv6();
-			configSample.uri = sipFactory.createURI("sip:bob@vorpal.net");
-			configSample.value1 = "value #1";
+			settingsManager = new SettingsManager<SampleB2buaConfig>(event, SampleB2buaConfig.class,
+					new ConfigSample());
 
-			settingsManager = new SettingsManager<SampleB2buaConfig>(event, SampleB2buaConfig.class, configSample);
-			sipLogger.fine("servletCreated...");
-
-			SampleB2buaConfig sampleConfig = settingsManager.getCurrent();
-			sipLogger.logConfiguration(sampleConfig);
+			sipLogger.info("servletCreated...");
 
 		} catch (Exception e) {
 			e.printStackTrace();

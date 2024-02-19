@@ -30,14 +30,12 @@ public class ConfigPrefixMap extends TranslationsMap {
 		Translation value = null;
 
 		Entry<String, Translation> entry = null;
-//		Entry<String, Translation> previous = null;
 
 		try {
 
 			for (Selector selector : this.selectors) {
 				Iterator<Entry<String, Translation>> itr = map.entrySet().iterator();
 
-//				SettingsManager.sipLogger.fine(request, "ConfigPrefixMap.lookup()... Calling findKey()");
 				RegExRoute regexRoute = selector.findKey(request);
 
 				if (regexRoute != null) {
@@ -46,7 +44,11 @@ public class ConfigPrefixMap extends TranslationsMap {
 						entry = itr.next();
 
 						if (regexRoute.key.startsWith(entry.getKey())) {
-							value = entry.getValue();
+							
+							value = new Translation(entry.getValue());
+							
+							//populate attributes for later
+							value.getAttributes().putAll(regexRoute.attributes);
 						}
 					}
 

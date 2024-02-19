@@ -48,17 +48,15 @@ public class CrudInitialInvite extends Callflow {
 	private B2buaListener b2buaListener = null;
 	private boolean doNotProcess = false;
 //	private RuleSet ruleSet;
-	
-	
-	
-	private transient Map<String, String> output;
+
+	private transient Map<String, String> attributes;
 
 	public CrudInitialInvite() {
 	}
 
-	public CrudInitialInvite(B2buaListener b2buaListener, Map<String, String> output) {
+	public CrudInitialInvite(B2buaListener b2buaListener, Map<String, String> attributes) {
 		this.b2buaListener = b2buaListener;
-		this.output = output;
+		this.attributes = attributes;
 	}
 
 	/**
@@ -151,24 +149,42 @@ public class CrudInitialInvite extends Callflow {
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		try {
 
-			aliceRequest = request;
 
+			aliceRequest = request;
 			SipApplicationSession appSession = aliceRequest.getApplicationSession();
 
-//			Address to = aliceRequest.getTo();
-			Address from = aliceRequest.getFrom();
+			Address from, to;
 
-			// bobRequest = sipFactory.createRequest(appSession, INVITE, from, to);
+			sipLogger.finer(request, "CrudInitialRequest.process...");
+			attributes.forEach((key, value) -> sipLogger.warning(request, "   key: " + key + ", value: " + value));
 
-			Address to = sipFactory.createAddress(output.get("To"));
+			String strTo = attributes.get("To");
+			if (strTo != null) {
+				to = sipFactory.createAddress(strTo);
+			} else {
+				to = request.getTo();
+			}
+
+			String strFrom = attributes.get("From");
+			if (strFrom != null) {
+				from = sipFactory.createAddress(strFrom);
+			} else {
+				from = request.getFrom();
+			}
 
 			bobRequest = sipFactory.createRequest(appSession, INVITE, from, to);
 
 			bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
 			copyContentAndHeaders(aliceRequest, bobRequest);
-//			bobRequest.setRequestURI(aliceRequest.getRequestURI());
 
-			URI requestUri = sipFactory.createURI(output.get("Request-URI"));
+			URI requestUri;
+			String strRequestUri = attributes.get("Request-URI");
+			if (strFrom != null) {
+				requestUri = sipFactory.createURI(strRequestUri);
+			} else {
+				requestUri = request.getRequestURI();
+			}
+
 			bobRequest.setRequestURI(requestUri);
 
 			linkSessions(aliceRequest.getSession(), bobRequest.getSession());

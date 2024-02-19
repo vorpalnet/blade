@@ -219,11 +219,21 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void log(Level level, SipServletMessage message, String comments) {
-		log(level, hexHash(message.getSession()) + " " + comments);
+
+		if (message.getSession().isValid()) {
+			log(level, hexHash(message.getSession()) + " " + comments);
+		} else {
+			log(level, comments);
+		}
+
 	}
 
 	public void fine(SipServletMessage message, String comments) {
-		log(Level.FINE, message, comments);
+		if (message.getSession().isValid()) {
+			log(Level.FINE, message, comments);
+		} else {
+			log(Level.FINE, comments);
+		}
 	}
 
 	public void finer(SipServletMessage message, String comments) {
@@ -239,7 +249,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void severe(SipServletMessage message, String comments) {
-		log(Level.SEVERE, message, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+		if (message.getSession().isValid()) {
+			log(Level.SEVERE, message, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+		} else {
+			log(Level.SEVERE, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+		}
 	}
 
 	public void warning(SipServletMessage message, String comments) {
@@ -409,12 +423,16 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //#7                                    [BigLonedCall]-----------INVITE-->[255.255.255.255]   ; SDP
 //#8                                    [BigLon*amedCall]-----------200-->[255.255.255.255]   ; OK (INVITE)
 
+//	public void logCancelResponse(SipServletRequest request, String name) {
+//		
+//	}
+
 	public void superArrow(Direction direction, SipServletRequest request, SipServletResponse response, String name)
 			throws ServletParseException {
 
 		try {
 
-			if (isLoggable(Level.FINE)) {
+			if (isLoggable(Level.FINE)) { // TODO: This seems like a problem with the Configuration file settings.
 
 				StringBuilder str = new StringBuilder();
 
@@ -613,6 +631,20 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				}
 
 				log(Level.FINE, str.toString());
+
+				// Put CANCEL / 487 logging here. <---487, you get it.
+				if (request != null && request.getMethod().equals("CANCEL")) {
+					StringBuilder str2 = new StringBuilder();
+					String line = String.format("%87s", "").replace(' ', '=');
+					String alice = String.format("%-18s", shorten(from(response), 17) + "<").replace(' ', '-');
+					String arrow = String.format("%16s", "" + status + "---").replace(' ', '-');
+					String middle = String.format("%-17s", shorten(name, 17));
+					String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
+							+ response.getMethod() + ")";
+					str2.append(hexHash(response.getSession())).append(" ");
+					str2.append(alice).append(arrow).append(middle).append(comment);
+					log(Level.FINE, str.toString());
+				}
 
 				if (isLoggable(Level.FINEST)) {
 					if (request != null) {

@@ -33,9 +33,6 @@ public class JsonIPv4AddressSerializer extends StdSerializer<IPAddress> {
 	@Override
 	public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint)
 			throws JsonMappingException {
-
-		System.out.println("calling... " + this.getClass().getName() + ".acceptJsonFormatVisitor()");
-
 	}
 
 }

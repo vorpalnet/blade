@@ -15,7 +15,7 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Rule implements Serializable{
+public class Rule implements Serializable {
 	public enum MessageType {
 		REQUEST, RESPONSE
 	};
@@ -64,21 +64,23 @@ public class Rule implements Serializable{
 ////		}
 //
 //	}
-	
-	
-	public void process(Map<String, String> map, SipServletMessage msg, Map<String, String> output)
+
+//	public void process(Map<String, String> map, SipServletMessage msg, Map<String, String> output)
+//			throws UnsupportedEncodingException, IOException, ServletParseException {
+
+	public void process(Map<String, String> map, SipServletMessage msg)
 			throws UnsupportedEncodingException, IOException, ServletParseException {
 
-//		for (Read _read : read) {
-//			_read.process(map, msg, output);
-//		}
-//
+		for (Read _read : read) {
+			_read.process(map, msg);
+		}
+
 //		for (Create _create : create) {
 //			_create.process(map, msg, output);
 //		}
 
 		for (Update _update : update) {
-			_update.process(map, msg, output);
+			_update.process(map, msg);
 		}
 
 //		for (Delete _delete : delete) {
