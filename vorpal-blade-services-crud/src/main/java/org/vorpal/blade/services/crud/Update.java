@@ -19,7 +19,7 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Update implements Serializable{
+public class Update implements Serializable {
 	private Pattern _pattern, _p;
 
 	public String id;
@@ -39,13 +39,14 @@ public class Update implements Serializable{
 
 	}
 
-	public void process(Map<String, String> map, SipServletMessage msg, Map<String, String> output)
+//	public void process(Map<String, String> map, SipServletMessage msg, Map<String, String> output)
+//			throws UnsupportedEncodingException, IOException, ServletParseException {
+
+	public void process(Map<String, String> map, SipServletMessage msg)
 			throws UnsupportedEncodingException, IOException, ServletParseException {
 
 		_pattern = Pattern.compile(pattern);
 		_p = Pattern.compile("\\<(?<name>[a-zA-Z0-9]+)\\>");
-
-		SettingsManager.sipLogger.warning(msg, "Update.process...");
 
 		String header = null;
 
@@ -70,10 +71,7 @@ public class Update implements Serializable{
 
 		}
 
-		SettingsManager.sipLogger.warning(msg, "header=" + header);
-
 		LinkedList<String> groups = new LinkedList<>();
-
 		Matcher m = _p.matcher(this.pattern);
 		String __name;
 
@@ -81,21 +79,18 @@ public class Update implements Serializable{
 			__name = m.group("name");
 
 			if (__name != null) {
-				SettingsManager.sipLogger.warning(msg, "adding group=" + __name);
 				groups.add(__name);
-			} else {
-				SettingsManager.sipLogger.severe(msg, "group name is NULL!");
 			}
 
 		}
 
-		SettingsManager.sipLogger.fine(msg, "port was: '" + map.get("port") + "'");
-
-		if (null == map.get("port") || map.get("port").length() == 0) {
-			map.put("port", "5060");
-		} else {
-			SettingsManager.sipLogger.fine(msg, "port is now: " + map.get("port"));
-		}
+//		// fix the port problem
+//		SettingsManager.sipLogger.fine(msg, "port was: '" + map.get("port") + "'");
+//		if (null == map.get("port") || map.get("port").length() == 0) {
+//			map.put("port", "5060");
+//		} else {
+//			SettingsManager.sipLogger.fine(msg, "port is now: " + map.get("port"));
+//		}
 
 		Matcher matcher = _pattern.matcher(header);
 		boolean matchFound = matcher.find();
@@ -105,25 +100,29 @@ public class Update implements Serializable{
 			while (itr.hasNext()) {
 				name = itr.next();
 
-				SettingsManager.sipLogger.warning(msg, "matching on group=" + name);
-
 				value = matcher.group(name);
-
-				map.put(name, value);
+				if (value != null && value.length() > 0) {
+					map.put(name, value);
+				}
 			}
-
-		} else {
-
-			SettingsManager.sipLogger.severe(msg, "No match found for header value: " + header);
 		}
 
 		// now we have the map
 
 		String update = Create.resolveVariables(map, replacement);
 
-		SettingsManager.sipLogger.warning(msg, "RequestURI: " + update);
+		// output.put(attribute, update);
+		map.put(attribute, update);
 
-		output.put(attribute, update);
+//		SettingsManager.sipLogger.warning(msg, "\nUpdate final map...");
+//		for (String key : map.keySet()) {
+//			SettingsManager.sipLogger.warning(msg, "key: " + key + ", value: " + map.get(key));
+//		}
+
+//		SettingsManager.sipLogger.warning(msg, "\nUpdate final output...");
+//		for (String key : output.keySet()) {
+//			SettingsManager.sipLogger.warning(msg, "key: " + key + ", value: " + map.get(key));
+//		}
 
 	}
 

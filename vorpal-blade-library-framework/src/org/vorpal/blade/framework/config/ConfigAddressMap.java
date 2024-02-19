@@ -42,7 +42,10 @@ public class ConfigAddressMap extends TranslationsMap {
 					SettingsManager.sipLogger.finer(request,
 							"ConfigAddressMap.lookup() regexRoute.key: " + regexRoute.key);
 
-					value = map.get(new IPAddressString(regexRoute.key).getAddress());
+					value = new Translation(map.get(new IPAddressString(regexRoute.key).getAddress()));
+					
+					//populate attributes for later
+					value.getAttributes().putAll(regexRoute.attributes);
 
 					SettingsManager.sipLogger.finer(request, "ConfigAddressMap.lookup() value: " + value);
 				}

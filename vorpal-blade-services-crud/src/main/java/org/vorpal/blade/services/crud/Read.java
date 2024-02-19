@@ -16,17 +16,45 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Read implements Serializable{
+public class Read implements Serializable {
 
 	public String id;
 
 	private Pattern pattern;
 
 	public String attribute;
-	public String expression;
+	private String expression;
+
+	public String getId() {
+		return id;
+	}
+
+	public Read setId(String id) {
+		this.id = id;
+		return this;
+	}
+
+	public String getAttribute() {
+		return attribute;
+	}
+
+	public Read setAttribute(String attribute) {
+		this.attribute = attribute;
+		return this;
+	}
+
+	public String getExpression() {
+		return expression;
+	}
+
+	public Read setExpression(String expression) {
+		this.expression = expression;
+		pattern = Pattern.compile(expression);
+		return this;
+	}
 
 	public Read() {
-
+		// do nothing;
 	}
 
 	public Read(String attribute, String expression) {
@@ -37,7 +65,7 @@ public class Read implements Serializable{
 
 	}
 
-	public void process(Map<String, String> map, SipServletMessage msg, Map<String, String> output)
+	public void process(Map<String, String> map, SipServletMessage msg)
 			throws UnsupportedEncodingException, IOException {
 
 		String header = null;
@@ -76,13 +104,9 @@ public class Read implements Serializable{
 			String name, value;
 			Iterator<String> itr = groups.iterator();
 			while (itr.hasNext()) {
-
 				name = itr.next();
 				value = matcher.group(name);
 				map.put(name, value);
-
-//				sipLogger.finer(msg,"name=" + name + ", value='" + value + "'");
-
 			}
 
 		}

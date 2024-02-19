@@ -32,7 +32,10 @@ public class ConfigIPv4Map extends TranslationsMap {
 
 				RegExRoute regexRoute = selector.findKey(request);
 				if (regexRoute != null) {
-					value = map.get(new IPAddressString(regexRoute.key).getAddress().toIPv4());
+					value = new Translation(map.get(new IPAddressString(regexRoute.key).getAddress().toIPv4()));
+					
+					//populate attributes for later
+					value.getAttributes().putAll(regexRoute.attributes);
 				}
 
 				if (value != null)

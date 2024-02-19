@@ -26,7 +26,7 @@ public class Statistics {
 
 	private static Logger sipLogger;
 
-	private Timer minute, hourly, daily;
+	private static Timer minute, hourly, daily;
 
 	public Statistics(Queue queue) {
 
@@ -53,7 +53,7 @@ public class Statistics {
 	}
 
 	public void stopTimers() {
-		// jwm - disabled for testing
+		sipLogger.fine("Statistics.stopTimers...");
 		minute.cancel();
 		hourly.cancel();
 		daily.cancel();
@@ -71,6 +71,7 @@ public class Statistics {
 	}
 
 	public TimerTask minuteTask = new TimerTask() {
+//	public TimerTask minuteTask = new TimerTask() {
 		public void run() {
 
 			hourlyLow = Math.min(minuteLow, hourlyLow);

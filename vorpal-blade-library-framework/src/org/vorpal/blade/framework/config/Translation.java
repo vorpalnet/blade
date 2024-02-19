@@ -10,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Translation implements Serializable{
+public class Translation implements Serializable {
 	private String id;
 	private String description;
 	private LinkedList<TranslationsMap> list;
@@ -19,6 +19,26 @@ public class Translation implements Serializable{
 	private String[] routeBack;
 	private String[] routeFinal;
 	private Map<String, Object> attributes;
+
+	public Translation() {
+	}
+
+	public Translation(String id) {
+		this.id = id;
+	}
+
+	public Translation(Translation that) {
+
+		this.id = that.id;
+		this.description = that.description;
+		this.list = that.list;
+		this.requestUri = that.requestUri;
+		this.route = that.route;
+		this.routeBack = that.routeBack;
+		this.routeFinal = that.routeFinal;
+		this.attributes = new HashMap<>(that.attributes);
+
+	}
 
 	public String getDescription() {
 		return description;
@@ -87,8 +107,8 @@ public class Translation implements Serializable{
 		return attributes;
 	}
 
-	public void setAttributes(Map<String, Object> attributes) {
-		this.attributes = attributes;
+	public void setAttributes(Map<String, String> attributes) {
+		this.attributes = new HashMap<>(attributes);
 	}
 
 	@JsonIgnore

@@ -22,7 +22,9 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 		@JsonSubTypes.Type(value = ConfigPrefixMap.class, name = "prefix"),
 		@JsonSubTypes.Type(value = ConfigHashMap.class, name = "hash"),
 		@JsonSubTypes.Type(value = ConfigLinkedHashMap.class, name = "linked"),
-		@JsonSubTypes.Type(value = ConfigTreeMap.class, name = "tree") })
+		@JsonSubTypes.Type(value = ConfigTreeMap.class, name = "tree"),
+		@JsonSubTypes.Type(value = ConfigIPv4Map.class, name = "ipv4")
+})
 public abstract class TranslationsMap {
 	public String id;
 	public String description;
@@ -43,14 +45,6 @@ public abstract class TranslationsMap {
 		RegExRoute regexRoute = null;
 
 		try {
-
-//			for (Selector selector : selectors) {
-//				sipLogger.fine(request, "Using selector: " + selector.getId());
-
-//				SettingsManager.sipLogger.fine(request, "Translation.applyTranslations()... Calling findKey().");					
-//				regexRoute = selector.findKey(request);
-
-//				if (regexRoute != null) {
 
 			sipLogger.finer(request, "TranslationsMap.applyTranslations() ...");
 

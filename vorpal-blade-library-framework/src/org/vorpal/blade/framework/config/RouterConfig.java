@@ -14,7 +14,10 @@ public class RouterConfig extends Configuration implements Serializable {
 	public LinkedList<Selector> selectors = new LinkedList<>();
 	public LinkedList<TranslationsMap> maps = new LinkedList<>();
 	public LinkedList<TranslationsMap> plan = new LinkedList<>();
-	public Translation defaultRoute = new Translation();
+
+	// jwm - don't create a blank default route? simpler, i think.
+	// public Translation defaultRoute = new Translation("defaultRoute");
+	public Translation defaultRoute = null;
 
 	public static URI applyParameters(Translation t, SipServletRequest request) throws ServletParseException {
 		URI uri = null;
@@ -37,11 +40,10 @@ public class RouterConfig extends Configuration implements Serializable {
 		Logger sipLogger = SettingsManager.getSipLogger();
 		Translation t = null;
 
-		sipLogger.finer(request,"Translation.findTranslation() searching maps size: "+plan.size());
-		
-		
+		sipLogger.finer(request, "Translation.findTranslation() searching maps size: " + plan.size());
+
 		for (TranslationsMap map : plan) {
-			sipLogger.finer(request,"Translation.findTranslation() searching map: "+map.getId());
+			sipLogger.finer(request, "Translation.findTranslation() searching map: " + map.getId());
 			t = map.applyTranslations(request);
 			if (t != null) {
 				break;

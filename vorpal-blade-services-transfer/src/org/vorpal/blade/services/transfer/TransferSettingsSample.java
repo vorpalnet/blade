@@ -12,10 +12,8 @@ public class TransferSettingsSample extends TransferSettings {
 	private static final long serialVersionUID = 1L;
 
 	public TransferSettingsSample() {
-
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINEST);
-		this.defaultRoute.setId("default-route");
+		this.logging.setLoggingLevel(LoggingLevel.FINE);
 
 		this.preserveInviteHeaders.add("Cisco-Gucid");
 		this.preserveInviteHeaders.add("User-to-User");
@@ -32,15 +30,18 @@ public class TransferSettingsSample extends TransferSettings {
 		prefixMap.id = "prefix-map";
 		prefixMap.addSelector(dialed);
 		prefixMap.description = "Translations map for dialed number prefixes";
-		prefixMap.createTranslation("1997").addAttribute("style", TransferSettings.TransferStyle.blind);
-		prefixMap.createTranslation("19974388687").addAttribute("style", TransferSettings.TransferStyle.attended);
-		prefixMap.createTranslation("19974388689").addAttribute("style", TransferSettings.TransferStyle.conference);
+		prefixMap.createTranslation("1997").setId("t1").addAttribute("style",
+				TransferSettings.TransferStyle.blind.toString());
+		prefixMap.createTranslation("19974388687").setId("t2").addAttribute("style",
+				TransferSettings.TransferStyle.attended.toString());
+		prefixMap.createTranslation("19974388689").setId("t3").addAttribute("style",
+				TransferSettings.TransferStyle.conference.toString());
 
 		TranslationsMap hashMap = new ConfigHashMap();
 		hashMap.id = "hash-map";
 		hashMap.addSelector(dialed);
 		hashMap.description = "Translations map for account names";
-		hashMap.createTranslation("bob").addAttribute("style", TransferSettings.TransferStyle.blind);
+		hashMap.createTranslation("bob").addAttribute("style", TransferSettings.TransferStyle.blind.toString());
 
 		this.maps.add(prefixMap);
 		this.maps.add(hashMap);
