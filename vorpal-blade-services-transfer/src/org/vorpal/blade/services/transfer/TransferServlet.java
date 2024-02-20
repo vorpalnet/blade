@@ -3,11 +3,6 @@ package org.vorpal.blade.services.transfer;
 import java.io.IOException;
 import java.util.Iterator;
 
-import javax.management.InstanceNotFoundException;
-import javax.management.MBeanRegistrationException;
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
-import javax.naming.InitialContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
@@ -22,11 +17,10 @@ import org.vorpal.blade.framework.config.Translation;
 import org.vorpal.blade.framework.transfer.AttendedTransfer;
 import org.vorpal.blade.framework.transfer.BlindTransfer;
 import org.vorpal.blade.framework.transfer.ConferenceTransfer;
+import org.vorpal.blade.framework.transfer.TransferCancel;
 import org.vorpal.blade.framework.transfer.TransferInitialInvite;
 import org.vorpal.blade.framework.transfer.TransferListener;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
-
-import weblogic.management.mbeanservers.runtime.RuntimeServiceMBean;
 
 /**
  * This class implements an example B2BUA with transfer capabilities.
@@ -87,7 +81,7 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 	protected void servletCreated(SipServletContextEvent event) {
 		settingsManager = new SettingsManager<>(event, TransferSettings.class, new TransferSettingsSample());
 		sipLogger.info("servletCreated...");
-		
+
 //		this.showProperties(event);
 	}
 
@@ -157,15 +151,14 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 			// find matching translation, assume passthru if no match and no default is
 			// defined
 			Translation t = settings.findTranslation(request);
-//			TransferStyle ts = (TransferStyle) t.getAttribute("style");
-//			callflow = this.chooseCallflowStyle(ts);
-
 			String ts = (String) t.getAttribute("style");
 			callflow = this.chooseCallflowStyle(ts);
 
 			sipLogger.finer(request, "translation, id=" + t.getId() + ", style=" + ts + ", callflow="
 					+ callflow.getClass().getSimpleName());
 
+		} else if (request.getMethod().equals("CANCEL")) {
+			callflow = new TransferCancel();
 		}
 
 		if (callflow == null) {
