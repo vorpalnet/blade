@@ -140,30 +140,31 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 		Callflow callflow = null;
 		TransferSettings settings = settingsManager.getCurrent();
 
-		if (request.getMethod().equals("INVITE") && request.isInitial()) {
-			callflow = new TransferInitialInvite();
-		} else if (request.getMethod().equals("REFER")) {
+		switch (request.getMethod()) {
+		case "INVITE":
+			if (request.isInitial()) {
+				callflow = new TransferInitialInvite();
+			}
+			break;
 
+		case "REFER":
 			if (request.getApplicationSession().getAttribute("INITIAL_REFER") == null) {
 				request.getApplicationSession().setAttribute("INITIAL_REFER", request);
 			}
-
-			// find matching translation, assume passthru if no match and no default is
-			// defined
+			// find matching translation, if defined
 			Translation t = settings.findTranslation(request);
 			String ts = (String) t.getAttribute("style");
 			callflow = this.chooseCallflowStyle(ts);
-
 			sipLogger.finer(request, "translation, id=" + t.getId() + ", style=" + ts + ", callflow="
 					+ callflow.getClass().getSimpleName());
+			break;
 
-		} else if (request.getMethod().equals("CANCEL")) {
+		case "BYE":
+		case "CANCEL":
 			callflow = new TransferCancel();
 		}
 
-		if (callflow == null) {
-			callflow = super.chooseCallflow(request);
-		}
+		callflow = (callflow != null) ? callflow : super.chooseCallflow(request);
 
 		return callflow;
 	}

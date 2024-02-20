@@ -29,11 +29,22 @@ public class TransferCancel extends Callflow {
 				// do nothing;
 			} else {
 
-				if (0 == ss.getState().compareTo(State.CONFIRMED)) {
-					sendRequest(ss.createRequest(BYE));
-				} else {
-					sendRequest(ss.createRequest(CANCEL));
+				if (ss.isValid()) {
+
+					try {
+					
+					if (0 == ss.getState().compareTo(State.CONFIRMED)) {
+						sendRequest(ss.createRequest(BYE));
+					} else {
+						sendRequest(ss.createRequest(CANCEL));
+					}
+
+					}catch(Exception e) {
+						sipLogger.warning(request, "Problems sending CANCEL/BYE: "+e.getMessage());
+					}
+					
 				}
+
 			}
 		}
 
