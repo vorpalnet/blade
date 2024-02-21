@@ -16,10 +16,8 @@ public abstract class ProxyServlet extends AsyncSipServlet implements ProxyListe
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow = null;
 
-		switch (request.getMethod()) {
-		case "INVITE":
+		if (request.getMethod().equals("INVITE") && request.isInitial()) {
 			callflow = new ProxyInvite(this, null);
-			break;
 		}
 
 		return callflow;
