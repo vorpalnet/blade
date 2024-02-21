@@ -128,23 +128,26 @@ public class BlindTransfer extends Transfer {
 			notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
 			sendRequest(notify100);
 
-			// in the event the transferee hangs up before the transfer completes
+//			// in the event the transferee hangs up before the transfer completes
 			Expectation expectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
-				try {
+//				try {
 					sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
 					sendResponse(bye.createResponse(200));
 					sendRequest(targetRequest.createCancel());
-					sendRequest(transferorRequest.getSession().createRequest(BYE));
-				} catch (Exception e) {
-					sipLogger.warning(bye,
-							"BYE received from transferee, CANCEL target session isValid: "
-									+ targetRequest.getSession().isValid() + ", state: "
-									+ targetRequest.getSession().getState());
-					sipLogger.warning(bye,
-							"BYE received from transferee, BYE transferor session isValid: "
-									+ transferorRequest.getSession().isValid() + ", state: "
-									+ transferorRequest.getSession().getState());
-				}
+
+					// jwm - is this the problem?
+					// sendRequest(transferorRequest.getSession().createRequest(BYE));
+
+//				} catch (Exception e) {
+//					sipLogger.warning(bye,
+//							"BYE received from transferee, CANCEL target session isValid: "
+//									+ targetRequest.getSession().isValid() + ", state: "
+//									+ targetRequest.getSession().getState());
+//					sipLogger.warning(bye,
+//							"BYE received from transferee, BYE transferor session isValid: "
+//									+ transferorRequest.getSession().isValid() + ", state: "
+//									+ transferorRequest.getSession().getState());
+//				}
 			});
 
 			// Expect the transferor to hang up after the NOTIFY that the transfer succeeded
@@ -158,9 +161,12 @@ public class BlindTransfer extends Transfer {
 
 			sendRequest(targetRequest, (targetResponse) -> {
 
-				expectation.clear(); //no longer expect BYE from transferee
+				// jwm - is this the problem?
+				// expectation.clear(); //no longer expect BYE from transferee
 
 				if (successful(targetResponse)) {
+
+					expectation.clear(); // no longer expect BYE from transferee
 
 					SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
 					notify200.setHeader(EVENT, "refer");
@@ -177,10 +183,10 @@ public class BlindTransfer extends Transfer {
 						if (successful(transfereeResponse)) { // should always be the case
 							linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
 
-							// Expect a BYE from the transferor
-							expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-								sendResponse(bye.createResponse(200));
-							});
+//							// Expect a BYE from the transferor
+//							expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
+//								sendResponse(bye.createResponse(200));
+//							});
 
 							sendRequest(transfereeResponse.createAck());
 							sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
@@ -201,7 +207,8 @@ public class BlindTransfer extends Transfer {
 
 					// Do we need to send a BYE? Yes, we do!
 					sendRequest(notifyFailure, (notifyFailureResponse) -> {
-						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"));
+						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"), (byeResponse) -> {
+						});
 					});
 
 				}
