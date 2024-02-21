@@ -411,6 +411,15 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return sb.toString();
 	}
 
+//	private String addState(SipServletMessage msg, String note) {
+//		if (note.length() > 0) {
+//			note += ", state=" + msg.getSession().getState().toString();
+//		} else {
+//			note += "state=" + msg.getSession().getState().toString();
+//		}
+//		return note;
+//	}
+
 //    |-------17------||-------17------||-------17------||-------17------||-------17------||-------17------|
 //    0                   10                  20                  30                  40                  50		
 //    012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890  
@@ -495,11 +504,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String alice = String.format("%-17s", shorten(from(request), 17)).replace(' ', '-');
 							String arrow = String.format("%17s", method + "-->").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
+
 							String comment = String.format("%36s", ";") + " " + String.format("%-32s", note);
 
 //							str.append(hexHash(request.getSession())).append("{1}");
 							str.append(hexHash(request.getSession())).append(" ");
 
+//							comment = addState(request, comment);
 							str.append(alice).append(arrow).append(middle).append(comment);
 						} else { // #2
 							String alice = String.format("%-17s", shorten(to(response), 17)).replace(' ', '-');
@@ -510,6 +521,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 //							str.append(hexHash(response.getSession())).append("{2}");
 							str.append(hexHash(response.getSession())).append(" ");
+
+//							comment = addState(response, comment);
+
 							str.append(alice).append(arrow).append(middle).append(comment);
 						}
 					} else {
@@ -533,6 +547,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //							str.append(hexHash(request.getSession())).append("{3}");
 							str.append(hexHash(request.getSession())).append(" ");
 
+//							comment = addState(request, comment);
+
 							str.append(alice).append(arrow).append(middle).append(comment);
 
 						} else { // #4
@@ -544,6 +560,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 //							str.append(hexHash(response.getSession())).append("{4}");
 							str.append(hexHash(response.getSession())).append(" ");
+
+//							comment = addState(response, comment);
 
 							str.append(alice).append(arrow).append(middle).append(comment);
 						}
@@ -572,6 +590,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //							str.append(hexHash(request.getSession())).append("{5}");
 							str.append(hexHash(request.getSession())).append(" ");
 
+//							comment = addState(request, comment);
+
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 						} else { // #6
 							String left = String.format("%34s", "");
@@ -582,6 +602,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 //							str.append(hexHash(response.getSession())).append("{6}");
 							str.append(hexHash(response.getSession())).append(" ");
+
+//							comment = addState(response, comment);
 
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 						}
@@ -611,6 +633,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //							str.append(hexHash(request.getSession())).append("{7}");
 							str.append(hexHash(request.getSession())).append(" ");
 
+//							comment = addState(request, comment);
+
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 
 						} else { // #8
@@ -622,6 +646,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 //							str.append(hexHash(response.getSession())).append("{8}");
 							str.append(hexHash(response.getSession())).append(" ");
+
+//							comment = addState(response, comment);
 
 							str.append(left).append(middle).append(arrow).append(bob).append(comment);
 						}

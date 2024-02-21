@@ -17,7 +17,6 @@ import org.vorpal.blade.framework.config.Translation;
 import org.vorpal.blade.framework.transfer.AttendedTransfer;
 import org.vorpal.blade.framework.transfer.BlindTransfer;
 import org.vorpal.blade.framework.transfer.ConferenceTransfer;
-import org.vorpal.blade.framework.transfer.TransferCancel;
 import org.vorpal.blade.framework.transfer.TransferInitialInvite;
 import org.vorpal.blade.framework.transfer.TransferListener;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
@@ -158,10 +157,6 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 			sipLogger.finer(request, "translation, id=" + t.getId() + ", style=" + ts + ", callflow="
 					+ callflow.getClass().getSimpleName());
 			break;
-
-		case "BYE":
-		case "CANCEL":
-			callflow = new TransferCancel();
 		}
 
 		callflow = (callflow != null) ? callflow : super.chooseCallflow(request);
