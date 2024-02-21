@@ -131,12 +131,12 @@ public class BlindTransfer extends Transfer {
 //			// in the event the transferee hangs up before the transfer completes
 			Expectation expectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
 //				try {
-					sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
-					sendResponse(bye.createResponse(200));
-					sendRequest(targetRequest.createCancel());
+				sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
+				sendResponse(bye.createResponse(200));
+				sendRequest(targetRequest.createCancel());
 
-					// jwm - is this the problem?
-					// sendRequest(transferorRequest.getSession().createRequest(BYE));
+				// jwm - is this the problem?
+				// sendRequest(transferorRequest.getSession().createRequest(BYE));
 
 //				} catch (Exception e) {
 //					sipLogger.warning(bye,
@@ -154,6 +154,9 @@ public class BlindTransfer extends Transfer {
 			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
 				sipLogger.finer(bye, "transferor disconnected as expected");
 				sendResponse(bye.createResponse(200));
+				
+				// why won't this invalidate on its own?
+				bye.getSession().invalidate();
 			});
 
 			// User is notified that transfer is initiated
@@ -208,6 +211,9 @@ public class BlindTransfer extends Transfer {
 					// Do we need to send a BYE? Yes, we do!
 					sendRequest(notifyFailure, (notifyFailureResponse) -> {
 						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"), (byeResponse) -> {
+
+							// sessions are not automatically invalidating, why?
+							// byeResponse.getApplicationSession().invalidate();
 						});
 					});
 
