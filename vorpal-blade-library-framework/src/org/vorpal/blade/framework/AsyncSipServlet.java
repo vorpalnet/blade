@@ -227,10 +227,16 @@ public abstract class AsyncSipServlet extends SipServlet
 				} else {
 					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
 				}
+
 			}
 		} catch (Exception e) {
 			Callflow.getLogger().logStackTrace(response, e);
 			throw e;
+		} finally {
+			if (response.getMethod().equals("BYE") && sipSession != null && sipSession.isValid()) {
+				// sometimes the sipSession does not automatically invalidate, no idea why.
+				sipSession.invalidate();
+			}
 		}
 	}
 

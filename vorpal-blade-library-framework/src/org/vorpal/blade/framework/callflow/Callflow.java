@@ -421,7 +421,7 @@ public abstract class Callflow implements Serializable {
 
 		appSession.setAttribute("X-Vorpal-Session", indexKey);
 		appSession.addIndexKey(indexKey);
-		
+
 		return indexKey;
 	}
 
@@ -676,6 +676,11 @@ public abstract class Callflow implements Serializable {
 					} catch (Exception e) {
 						sipLogger.logStackTrace(e);
 						throw e;
+					} finally {
+						if (response.getMethod().equals("BYE") && sipSession != null && sipSession.isValid()) {
+							// sometimes the sipSession does not automatically invalidate, no idea why.
+							sipSession.invalidate();
+						}
 					}
 				}
 			}
