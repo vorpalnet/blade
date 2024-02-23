@@ -90,7 +90,6 @@ import org.vorpal.blade.framework.callflow.Expectation;
 public class BlindTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-	private Callback<SipServletRequest> loopOnPrack;
 
 	public BlindTransfer(TransferListener referListener) {
 		super(referListener);
@@ -130,31 +129,16 @@ public class BlindTransfer extends Transfer {
 
 //			// in the event the transferee hangs up before the transfer completes
 			Expectation expectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
-//				try {
 				sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
 				sendResponse(bye.createResponse(200));
 				sendRequest(targetRequest.createCancel());
-
-				// jwm - is this the problem?
-				// sendRequest(transferorRequest.getSession().createRequest(BYE));
-
-//				} catch (Exception e) {
-//					sipLogger.warning(bye,
-//							"BYE received from transferee, CANCEL target session isValid: "
-//									+ targetRequest.getSession().isValid() + ", state: "
-//									+ targetRequest.getSession().getState());
-//					sipLogger.warning(bye,
-//							"BYE received from transferee, BYE transferor session isValid: "
-//									+ transferorRequest.getSession().isValid() + ", state: "
-//									+ transferorRequest.getSession().getState());
-//				}
 			});
 
 			// Expect the transferor to hang up after the NOTIFY that the transfer succeeded
 			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-				sipLogger.finer(bye, "transferor disconnected as expected");
+				sipLogger.finer(bye, "transferor (bob) disconnected as expected");
 				sendResponse(bye.createResponse(200));
-				
+
 				// why won't this invalidate on its own?
 				bye.getSession().invalidate();
 			});
@@ -164,15 +148,16 @@ public class BlindTransfer extends Transfer {
 
 			sendRequest(targetRequest, (targetResponse) -> {
 
-				// jwm - is this the problem?
-				// expectation.clear(); //no longer expect BYE from transferee
-
 				if (successful(targetResponse)) {
 
 					expectation.clear(); // no longer expect BYE from transferee
 
 					SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
 					notify200.setHeader(EVENT, "refer");
+					//
+					// https://www.dialogic.com/webhelp/csp1010/8.4.1_ipn3/sip_software_chap_-_sip_notify_subscription_state.htm
+
+//					notify200.setHeader(SUBSCRIPTION_STATE, "active");
 					notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
 					notify200.setContent(OK_200.getBytes(), SIPFRAG);
 					sendRequest(notify200);
@@ -185,12 +170,6 @@ public class BlindTransfer extends Transfer {
 
 						if (successful(transfereeResponse)) { // should always be the case
 							linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
-
-//							// Expect a BYE from the transferor
-//							expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-//								sendResponse(bye.createResponse(200));
-//							});
-
 							sendRequest(transfereeResponse.createAck());
 							sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
 						}
@@ -198,6 +177,7 @@ public class BlindTransfer extends Transfer {
 					});
 
 				} else if (failure(targetResponse)) {
+					sipLogger.finer(targetResponse, "target (carol) refused the call");
 
 					// User is notified that the transfer target did not answer
 					transferListener.transferDeclined(targetResponse);
@@ -205,17 +185,18 @@ public class BlindTransfer extends Transfer {
 					SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
 					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
 					notifyFailure.setHeader(EVENT, "refer");
-					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated");
+//					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated");
+					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
 					notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
 
-					// Do we need to send a BYE? Yes, we do!
-					sendRequest(notifyFailure, (notifyFailureResponse) -> {
-						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"), (byeResponse) -> {
-
-							// sessions are not automatically invalidating, why?
-							// byeResponse.getApplicationSession().invalidate();
-						});
-					});
+//					// Do we need to send a BYE? No, let the transferor try again.
+//					sendRequest(notifyFailure, (notifyFailureResponse) -> {
+//						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"), (byeResponse) -> {
+//
+//							// sessions are not automatically invalidating, why?
+//							// byeResponse.getApplicationSession().invalidate();
+//						});
+//					});
 
 				}
 

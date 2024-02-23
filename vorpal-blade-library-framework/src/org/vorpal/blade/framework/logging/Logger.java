@@ -530,8 +530,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 						if (request != null) { // #3
 
 							if (request.getMethod().equals("NOTIFY")) {
+								note += "Event: " + request.getHeader("Event");
+								note += ", Subscription-State: " + request.getHeader("Subscription-State");
 								if (request.getContentType().equals("message/sipfrag")) {
-									note = new String((byte[]) request.getContent());
+									if (note.length() > 0) {
+										note += ", ";
+									}
+									note += new String((byte[]) request.getContent());
 								}
 							} else if (request.getMethod().equals("REFER")) {
 								note = "Refer-To: " + request.getHeader("Refer-To");
@@ -619,8 +624,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 									note = "From: " + request.getFrom();
 								}
 							} else if (request.getMethod().equals("NOTIFY")) {
+								note += "Event: " + request.getHeader("Event");
+								note += ", Subscription-State: " + request.getHeader("Subscription-State");
 								if (request.getContentType().equals("message/sipfrag")) {
-									note = new String((byte[]) request.getContent());
+									if (note.length() > 0) {
+										note += ", ";
+									}
+									note += new String((byte[]) request.getContent());
 								}
 							}
 
