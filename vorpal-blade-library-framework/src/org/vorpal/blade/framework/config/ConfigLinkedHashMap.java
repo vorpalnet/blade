@@ -25,7 +25,7 @@ public class ConfigLinkedHashMap extends TranslationsMap {
 			for (Selector selector : this.selectors) {
 
 				RegExRoute regexRoute = selector.findKey(request);
-				if (regexRoute != null) {
+				if (regexRoute != null && regexRoute.key != null) {
 					value = new Translation(map.get(regexRoute.key));
 
 					// populate attributes for later

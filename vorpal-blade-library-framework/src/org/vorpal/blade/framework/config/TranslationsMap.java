@@ -22,9 +22,11 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 		@JsonSubTypes.Type(value = ConfigPrefixMap.class, name = "prefix"),
 		@JsonSubTypes.Type(value = ConfigHashMap.class, name = "hash"),
 		@JsonSubTypes.Type(value = ConfigLinkedHashMap.class, name = "linked"),
-		@JsonSubTypes.Type(value = ConfigTreeMap.class, name = "tree"),
-		@JsonSubTypes.Type(value = ConfigIPv4Map.class, name = "ipv4")
-})
+		@JsonSubTypes.Type(value = ConfigTreeMap.class, name = "tree")})
+// ConfigAddressMap supports both types -- Delete ConfigIPv4Map in the future
+//		@JsonSubTypes.Type(value = ConfigIPv4Map.class, name = "ipv4"),
+//		@JsonSubTypes.Type(value = ConfigIPv6Map.class, name = "ipv6")
+
 public abstract class TranslationsMap {
 	public String id;
 	public String description;

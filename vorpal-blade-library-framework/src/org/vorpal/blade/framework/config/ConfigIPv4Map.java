@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 import inet.ipaddr.IPAddressString;
 
+@Deprecated
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigIPv4Map extends TranslationsMap {
 	public AddressMap map = new AddressMap();
@@ -31,7 +32,7 @@ public class ConfigIPv4Map extends TranslationsMap {
 			for (Selector selector : this.selectors) {
 
 				RegExRoute regexRoute = selector.findKey(request);
-				if (regexRoute != null) {
+				if (regexRoute != null && regexRoute.key !=null) {
 					value = new Translation(map.get(new IPAddressString(regexRoute.key).getAddress().toIPv4()));
 					
 					//populate attributes for later
