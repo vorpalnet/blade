@@ -38,13 +38,14 @@ public class ConfigAddressMap extends TranslationsMap {
 
 				SettingsManager.sipLogger.finer(request, "ConfigAddressMap.lookup() regexRoute: " + regexRoute);
 
-				if (regexRoute != null) {
+				if (regexRoute != null && regexRoute.key != null) {
+
 					SettingsManager.sipLogger.finer(request,
 							"ConfigAddressMap.lookup() regexRoute.key: " + regexRoute.key);
 
 					value = new Translation(map.get(new IPAddressString(regexRoute.key).getAddress()));
-					
-					//populate attributes for later
+
+					// populate attributes for later
 					value.getAttributes().putAll(regexRoute.attributes);
 
 					SettingsManager.sipLogger.finer(request, "ConfigAddressMap.lookup() value: " + value);

@@ -38,7 +38,7 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 				RegExRoute regexRoute = selector.findKey(request);
 
-				if (regexRoute != null) {
+				if (regexRoute != null && regexRoute.key !=null) {
 
 					while (itr.hasNext()) {
 						entry = itr.next();

@@ -28,16 +28,16 @@ public class Translation implements Serializable {
 	}
 
 	public Translation(Translation that) {
-
-		this.id = that.id;
-		this.description = that.description;
-		this.list = that.list;
-		this.requestUri = that.requestUri;
-		this.route = that.route;
-		this.routeBack = that.routeBack;
-		this.routeFinal = that.routeFinal;
-		this.attributes = new HashMap<>(that.attributes);
-
+		if (that != null) {
+			this.id = that.id;
+			this.description = that.description;
+			this.list = that.list;
+			this.requestUri = that.requestUri;
+			this.route = that.route;
+			this.routeBack = that.routeBack;
+			this.routeFinal = that.routeFinal;
+			this.attributes = new HashMap<>(that.attributes);
+		}
 	}
 
 	public String getDescription() {

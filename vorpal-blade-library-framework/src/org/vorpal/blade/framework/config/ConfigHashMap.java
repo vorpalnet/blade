@@ -26,7 +26,7 @@ public class ConfigHashMap extends TranslationsMap {
 
 				RegExRoute regexRoute = selector.findKey(request);
 				
-				if (regexRoute != null) {
+				if (regexRoute != null && regexRoute.key !=null) {
 					value = new Translation(map.get(regexRoute.key));
 					
 					//populate attributes for later
