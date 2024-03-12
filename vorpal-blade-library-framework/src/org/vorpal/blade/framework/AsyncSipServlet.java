@@ -3,6 +3,7 @@ package org.vorpal.blade.framework;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Set;
 
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
@@ -14,7 +15,6 @@ import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletListener;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
@@ -22,6 +22,7 @@ import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerListener;
 import javax.servlet.sip.TimerService;
+import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callback;
@@ -110,11 +111,23 @@ public abstract class AsyncSipServlet extends SipServlet
 	 * Override this method to handle call events that may fall outside the scope of
 	 * your defined callflows.
 	 * 
-	 * @param message a modifiable message object, either a request or response
+	 * @param request a modifiable message object to be sent
 	 * @throws ServletException an exception
 	 * @throws IOException      an exception
 	 */
-	public void callEvent(SipServletMessage message) throws ServletException, IOException {
+	public void requestEvent(SipServletRequest request) throws ServletException, IOException {
+		// override this method
+	}
+
+	/**
+	 * Override this method to handle call events that may fall outside the scope of
+	 * your defined callflows.
+	 * 
+	 * @param response a modifiable message object to be sent
+	 * @throws ServletException an exception
+	 * @throws IOException      an exception
+	 */
+	public void responseEvent(SipServletResponse response) throws ServletException, IOException {
 		// override this method
 	}
 
@@ -213,6 +226,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
 	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
 		Callback<SipServletResponse> callback;
@@ -225,9 +239,68 @@ public abstract class AsyncSipServlet extends SipServlet
 							callback.getClass().getSimpleName());
 					callback.accept(response);
 				} else {
-					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
-				}
+					// Sometimes a 180 Ringing comes back on a brand new SipSession
+					// because the tag on the To header changed due to a failure downstream.
+					if (response.getMethod().equals("INVITE")) {
+						sipLogger.finer(response, "No callback for response to INVITE... Curious!");
+						SipServletRequest rqst;
+						SipApplicationSession appSession = response.getApplicationSession();
+						Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
+						Callback<SipServletResponse> cb2 = null;
+						for (SipSession session : sessions) {
+							if (session != response.getSession()) {
+								rqst = session.getActiveInvite(UAMode.UAC);
+								if (rqst.isCommitted() == false) {
+									sipLogger.finer(response, "Found an active INVITE... Does it match?");
 
+									String requestToUser = ((SipURI) rqst.getTo().getURI()).getUser();
+									String responseToUser = ((SipURI) response.getTo().getURI()).getUser();
+									if (requestToUser.equals(responseToUser)) {
+										sipLogger.finer(response, "The To users match.");
+
+										String requestFromUser = ((SipURI) rqst.getFrom().getURI()).getUser();
+										String responseFromUser = ((SipURI) response.getFrom().getURI()).getUser();
+										if (requestFromUser.equals(responseFromUser)) {
+											sipLogger.finer(response, "The From users match.");
+
+											String attribute = "RESPONSE_CALLBACK_INVITE";
+											cb2 = (Callback<SipServletResponse>) sipSession.getAttribute(attribute);
+
+											if (cb2 != null) {
+												// Caught a bat!
+												sipLogger.finer(response, "A callback is defined... Let's use it!");
+											}
+
+											break;
+										}
+
+									}
+
+								}
+
+							} else {
+								// Dinah, my dear, I wish you were down here with me! There are no mice in the
+								// air, I'm afraid, but you might catch a bat, and that's very like a mouse, you
+								// know. But do cats eat bats, I wonder?”
+								sipLogger.finer(response, "Invalidating rogue SipSession");
+								session.invalidate();
+							}
+						}
+
+						if (cb2 != null) {
+							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+									cb2.getClass().getSimpleName());
+							cb2.accept(response);
+						} else {
+							sipLogger.warning(response, "No callback for INVITE found, curiouser and curiouser! ");
+							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "????");
+						}
+
+					} else {
+						// This is to be expected
+						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
+					}
+				}
 			}
 		} catch (Exception e) {
 			Callflow.getLogger().logStackTrace(response, e);

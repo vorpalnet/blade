@@ -189,9 +189,8 @@ public abstract class Callflow implements Serializable {
 			}
 
 			// If this is the final response, remove the callback attribute to prevent weird
-			// echos.
-			// It is unnecessary to delete it for proxy requests since this will never be
-			// call again.
+			// echos. It is unnecessary to delete it for proxy requests since this will
+			// never be called again.
 			if (response.getProxyBranch() == null && response.getStatus() >= 200) {
 				sipSession.removeAttribute(attribute);
 			}
@@ -199,7 +198,7 @@ public abstract class Callflow implements Serializable {
 		}
 		return callback;
 	}
-
+	
 	@SuppressWarnings("unchecked")
 	public static Callback<ServletTimer> pullCallback(ServletTimer timer) {
 		return (Callback<ServletTimer>) timer.getInfo();
@@ -990,7 +989,6 @@ public abstract class Callflow implements Serializable {
 	 * This method is designed to be overloaded by the developer. It is the natural
 	 * continuation of calling 'doNotProcess';
 	 * 
-	 * @param request
 	 * @throws ServletException
 	 * @throws IOException
 	 */

@@ -14,6 +14,7 @@
 	<property file="version.properties" />
 	<property name="dist" location="./dist" />
 	<property name="docs" location="${dist}/docs" />
+	<property name="umldoclet" location="./lib/umldoclet-2.1.2.jar" />
 
 	<!-- Required for the 'foreach' command. -->
 	<taskdef resource="net/sf/antcontrib/antlib.xml">
