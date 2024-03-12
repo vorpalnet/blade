@@ -12,6 +12,9 @@
 	<property name="dist" location="../dist" />
 	<property name="docs" location="${dist}/docs" />
 	<property name="src" location="src/main/java" />
+	
+	<property name="umldoclet" location="../lib/umldoclet-2.1.2.jar" />
+	
 
 	<property name="packagenames" value="org.vorpal.*" />
 	<property name="BLADE" location="../" />
@@ -755,18 +758,40 @@
 		<echo>packagenames=${packagenames}</echo>
 		<echo>sourcepath=${src}</echo>
 
+		<!--
+		<javadoc destdir="target/javadoc" sourcepath="src">
+		    <doclet name="nl.talsmasoftware.umldoclet.UMLDoclet" pathref="umlDoclet.classpath">
+		        <param name="additionalParamName" value="additionalParamValue"/>
+		    </doclet>
+		</javadoc>
+		-->
+		
+		
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
+		    <doclet name="nl.talsmasoftware.umldoclet.UMLDoclet" path="${umldoclet}">
+		        <param name="-failOnCyclicPackageDependencies" value="false"/>
+		    </doclet>
+			
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 			<classpath refid="project.classpath" />
 			<doctitle>
 				<![CDATA[<div>${ant.project.name} - v${implementation}</div>]]>
 			</doctitle>
-		<bottom>
-			<![CDATA[<div style="display: block; text-align: center">
-			<div>${copyright}</div>
-			<div>${license}</div>
-		</div>]]>
+			<header>
+				<![CDATA[<!--
+				---
+				layout: post
+				title: ${ant.project.name} - v${implementation}				
+				---
+				-->]]>
+			</header>
+			
+			<bottom>
+				<![CDATA[<div style="display: block; text-align: center">
+				<div>${copyright}</div>
+				<div>${license}</div>
+				</div>]]>
 			</bottom>
 	<link href="https://docs.oracle.com/en/java/javase/11/docs/api" />
 	<link href="https://javaee.github.io/javaee-spec/javadocs/" />

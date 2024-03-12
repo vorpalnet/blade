@@ -65,13 +65,13 @@ public class Passthru extends Callflow {
 
 			copyContentAndHeaders(aliceRequest, bobRequest);
 			if (b2buaListener != null) {
-				b2buaListener.callEvent(bobRequest);
+				b2buaListener.requestEvent(bobRequest);
 			}
 			sendRequest(bobRequest, (bobResponse) -> {
 				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 				copyContentAndHeaders(bobResponse, aliceResponse);
 				if (b2buaListener != null) {
-					b2buaListener.callEvent(aliceResponse);
+					b2buaListener.responseEvent(aliceResponse);
 				}
 				sendResponse(aliceResponse);
 			});

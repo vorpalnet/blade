@@ -16,6 +16,7 @@
 		<maven.compiler.target>${java.version}</maven.compiler.target>
 		<maven-plugin-version>1.0.0</maven-plugin-version>
 		<jackson-version>2.12.7</jackson-version>
+		<slf4j-version>2.0.12</slf4j-version>
 
 
 		<!-- Latest		
@@ -26,6 +27,42 @@
 	</properties>
 
 	<dependencies>
+		
+		
+		<!-- https://mvnrepository.com/artifact/nl.talsmasoftware/umldoclet -->
+		<!--
+		<dependency>
+    		<groupId>nl.talsmasoftware</groupId>
+    		<artifactId>umldoclet</artifactId>
+    		<version>2.1.2</version>
+    		<scope>provided</scope>
+		</dependency>
+		-->
+
+		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>${slf4j-version}</version>
+		</dependency>
+		
+		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-jdk14 -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-jdk14</artifactId>
+			<version>${slf4j-version}</version>
+		</dependency>
+
+
+
+		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-simple 
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>2.0.12</version>
+			<scope>test</scope>
+		</dependency>
+		-->
 
 		<!-- https://mvnrepository.com/artifact/javax.sdp/nist-sdp -->
 		<dependency>
@@ -50,20 +87,7 @@
 			<version>4.4</version>
 		</dependency>
 
-		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-api</artifactId>
-			<version>2.0.12</version>
-		</dependency>
 
-		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-simple -->
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-simple</artifactId>
-			<version>2.0.12</version>
-			<scope>test</scope>
-		</dependency>
 
 
 		<!-- https://mvnrepository.com/artifact/junit/junit -->

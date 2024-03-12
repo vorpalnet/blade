@@ -68,7 +68,7 @@ public class Bye extends Callflow {
 					SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 					copyContentAndHeaders(bobResponse, aliceResponse);
 					if (b2buaListener != null) {
-						b2buaListener.callEvent(aliceResponse);
+						b2buaListener.responseEvent(aliceResponse);
 					}
 					sendResponse(aliceResponse);
 				});

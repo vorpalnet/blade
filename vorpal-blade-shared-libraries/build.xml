@@ -37,7 +37,7 @@
 	</target>
 
 
-	<target name="package" depends="init">
+	<target name="package" depends="init, mvn_windows, mvn_unix">
 
 		<!-- MAVEN will do this	
 		<echo message="build=${build}" />

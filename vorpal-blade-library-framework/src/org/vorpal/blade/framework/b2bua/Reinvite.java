@@ -55,7 +55,7 @@ public class Reinvite extends Callflow {
 			copyContentAndHeaders(aliceRequest, bobRequest);
 
 			if (b2buaListener != null) {
-				b2buaListener.callEvent(bobRequest);
+				b2buaListener.requestEvent(bobRequest);
 			}
 
 			sendRequest(bobRequest, (bobResponse) -> {
@@ -64,14 +64,14 @@ public class Reinvite extends Callflow {
 					SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 					copyContentAndHeaders(bobResponse, aliceResponse);
 					if (b2buaListener != null) {
-						b2buaListener.callEvent(aliceResponse);
+						b2buaListener.responseEvent(aliceResponse);
 					}
 
 					sendResponse(aliceResponse, (aliceAck) -> {
 						if (aliceAck.getMethod().equals(ACK)) {
 							SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
 							if (b2buaListener != null) {
-								b2buaListener.callEvent(bobAck);
+								b2buaListener.requestEvent(bobAck);
 							}
 							sendRequest(bobAck);
 						}
