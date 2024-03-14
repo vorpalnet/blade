@@ -97,18 +97,27 @@ public class QueueServlet extends B2buaServlet {
 
 		if (request.getMethod().equals("INVITE") && request.isInitial()) {
 			Translation t = config.findTranslation(request);
-			String queueName = (String) t.getAttribute("queue");
 
-			if (queueName != null) {
-				sipLogger.fine(request, "Found matching translation... queue=" + queueName);
-				Queue queue = queues.get(queueName);
+			if (t != null) {
+				String queueName = (String) t.getAttribute("queue");
 
-				QueueAttributes queueAttributes = queue.attributes;
-				QueueCallflow queueCallflow = new QueueCallflow(queueName, queueAttributes);
-				queue.callflows.add(queueCallflow);
-				queue.statistics.intervalTask();
-				callflow = queueCallflow;
+				if (queueName != null) {
+					sipLogger.fine(request, "Found matching translation... queue=" + queueName);
+					Queue queue = queues.get(queueName);
+
+					if (queue != null) {
+						QueueAttributes queueAttributes = queue.attributes;
+						QueueCallflow queueCallflow = new QueueCallflow(queueName, queueAttributes);
+						queue.callflows.add(queueCallflow);
+						queue.statistics.intervalTask();
+						callflow = queueCallflow;
+					} else {
+						sipLogger.severe(request, "No queue defined for: " + queueName);
+					}
+
+				}
 			}
+
 		}
 
 		if (null == callflow) {

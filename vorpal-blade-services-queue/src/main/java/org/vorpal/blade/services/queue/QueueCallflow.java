@@ -51,7 +51,6 @@ public class QueueCallflow extends Callflow {
 		// necessary)
 		String mediaUri = this.attributes.getAnnouncement();
 		if (mediaUri != null) {
-//			this.mediaRequest = this.createNewRequest(inboundRequest, sipFactory.createAddress(mediaUri));
 			this.mediaRequest = sipFactory.createRequest(appSession, INVITE, aliceRequest.getFrom(),
 					sipFactory.createAddress(mediaUri));
 			copyContent(aliceRequest, mediaRequest);
@@ -76,7 +75,7 @@ public class QueueCallflow extends Callflow {
 		}
 
 		// Set a ringing duration timer
-		if (attributes.ringDuration != null && attributes.ringDuration > 0) {
+		if (attributes.ringDuration != null && attributes.ringDuration > 0 && mediaRequest != null) {
 
 			startTimer(inboundRequest.getApplicationSession(), attributes.ringDuration * 1000, false, (timer) -> {
 				if (attributes.announcement != null) {
