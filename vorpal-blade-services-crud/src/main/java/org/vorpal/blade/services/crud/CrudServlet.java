@@ -54,14 +54,6 @@ public class CrudServlet extends B2buaServlet {
 						
 						
 						
-						
-						//TODO: FIX THIS LATER!
-						
-					// 	ruleSet.map.putAll(t.getAttributes());
-						
-						
-						
-						
 						ruleSet.process(inboundRequest);
 						callflow = new CrudInitialInvite(this, ruleSet.map);
 					}
