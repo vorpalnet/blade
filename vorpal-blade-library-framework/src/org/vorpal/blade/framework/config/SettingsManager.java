@@ -293,6 +293,13 @@ public class SettingsManager<T> {
 			this.mapper.registerModule(new SimpleModule()//
 					.addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
 
+			// Trying to get rid of
+			// WARNING: Not able to generate jsonSchema-info for type: [simple type, class
+			// java.lang.Object] - probably using custom serializer which does not override
+			// acceptJsonFormatVisitor
+			this.mapper.registerModule(new SimpleModule()//
+					.addSerializer(Object.class, new JsonObjectSerializer()));
+
 			// Don't bother to save attributes set to null.
 			this.mapper.setSerializationInclusion(Include.NON_NULL);
 

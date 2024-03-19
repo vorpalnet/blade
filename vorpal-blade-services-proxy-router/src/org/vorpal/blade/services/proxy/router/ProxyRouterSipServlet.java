@@ -28,27 +28,7 @@ public class ProxyRouterSipServlet extends ProxyServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
-		try {
-			settingsManager = new SettingsManager<>(event, RouterConfig.class, new MediaHubConfigSample());
-
-			sipLogger.severe("BEGIN TESTS...");
-
-//			sipLogger.logConfiguration((new ProxyRouterConfigTest()).test01());
-//			sipLogger.logConfiguration((new ProxyRouterConfigTest()).test02());
-			
-			MediaHubConfigSample sample = new MediaHubConfigSample();
-			SettingsManager.getSipLogger().logConfiguration(sample);
-			
-			
-			
-//			settingsManager.getSipLogger().logConfiguration(settingsManager.getCurrent());
-			
-
-			sipLogger.severe(".....END TESTS");
-
-		} catch (Exception e) {
-			SettingsManager.sipLogger.logStackTrace(e);
-		}
+		settingsManager = new SettingsManager<RouterConfig>(event, RouterConfig.class, new ProxyRouterConfigSample());
 	}
 
 	@Override
