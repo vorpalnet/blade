@@ -4,7 +4,7 @@ Created-By: Maven Integration for Eclipse
 Extension-Name: vorpal-blade
 Implementation-Title: Vorpal:BLADE Framework
 Implementation-Vendor: Vorpal Networks, LLC
-Implementation-Version: 2.4.1
+Implementation-Version: 2.4.2
 Specification-Title: Vorpal:BLADE Framework
 Specification-Vendor: VORPAL.ORG
 Specification-Version: 2.0

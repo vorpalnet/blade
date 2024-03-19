@@ -24,8 +24,16 @@
 package org.vorpal.blade.test.b2bua;
 
 import java.io.IOException;
+import java.util.Hashtable;
+import java.util.Set;
 
 import javax.annotation.Resource;
+import javax.management.JMX;
+import javax.management.MBeanServer;
+import javax.management.ObjectInstance;
+import javax.management.ObjectName;
+import javax.naming.Context;
+import javax.naming.InitialContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipFactory;
@@ -33,8 +41,12 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
+import org.vorpal.blade.applications.console.config.test.BladeConsoleMXBean;
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.config.SettingsMXBean;
 import org.vorpal.blade.framework.config.SettingsManager;
+
+import weblogic.jndi.Environment;
 
 /**
  * @author Jeff McDonald
@@ -66,7 +78,6 @@ public class SampleB2buaServlet extends B2buaServlet {
 
 			settingsManager = new SettingsManager<SampleB2buaConfig>(event, SampleB2buaConfig.class,
 					new ConfigSample());
-
 			sipLogger.info("servletCreated...");
 
 		} catch (Exception e) {

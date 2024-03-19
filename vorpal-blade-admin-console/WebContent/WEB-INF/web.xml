@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd"
 	id="WebApp_ID" version="3.1">
 	<display-name>blade</display-name>
@@ -21,10 +22,13 @@
 
 
 
-	<!-- <servlet> <description /> <display-name>SaveServlet</display-name> <servlet-name>SaveServlet</servlet-name> <servlet-class>org.vorpal.blade.applications.console.mxgraph.SaveServlet</servlet-class> 
-		</servlet> <servlet-mapping> <servlet-name>SaveServlet</servlet-name> <url-pattern>/fsmar/save</url-pattern> </servlet-mapping> 
-		<servlet> <description /> <display-name>OpenServlet</display-name> <servlet-name>OpenServlet</servlet-name> <servlet-class>org.vorpal.blade.applications.console.mxgraph.OpenServlet</servlet-class> 
-		</servlet> <servlet-mapping> <servlet-name>OpenServlet</servlet-name> <url-pattern>/fsmar/open</url-pattern> </servlet-mapping> -->
+	<!-- <servlet> <description /> <display-name>SaveServlet</display-name> 
+		<servlet-name>SaveServlet</servlet-name> <servlet-class>org.vorpal.blade.applications.console.mxgraph.SaveServlet</servlet-class> 
+		</servlet> <servlet-mapping> <servlet-name>SaveServlet</servlet-name> <url-pattern>/fsmar/save</url-pattern> 
+		</servlet-mapping> <servlet> <description /> <display-name>OpenServlet</display-name> 
+		<servlet-name>OpenServlet</servlet-name> <servlet-class>org.vorpal.blade.applications.console.mxgraph.OpenServlet</servlet-class> 
+		</servlet> <servlet-mapping> <servlet-name>OpenServlet</servlet-name> <url-pattern>/fsmar/open</url-pattern> 
+		</servlet-mapping> -->
 
 	<!-- no security required -->
 

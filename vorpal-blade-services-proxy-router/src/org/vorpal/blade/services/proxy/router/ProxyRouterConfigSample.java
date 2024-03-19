@@ -5,6 +5,7 @@ import java.io.Serializable;
 import org.vorpal.blade.framework.config.ConfigPrefixMap;
 import org.vorpal.blade.framework.config.RouterConfig;
 import org.vorpal.blade.framework.config.Selector;
+import org.vorpal.blade.framework.config.Translation;
 import org.vorpal.blade.framework.config.TranslationsMap;
 
 public class ProxyRouterConfigSample extends RouterConfig implements Serializable {
@@ -13,6 +14,8 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 
 	public ProxyRouterConfigSample() {
 
+		this.defaultRoute = new Translation();
+		
 		defaultRoute.setId("default");
 		defaultRoute.setDescription("If no translation found, apply this default route.");
 		defaultRoute.setRequestUri("sip:hold");
