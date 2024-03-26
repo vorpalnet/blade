@@ -21,10 +21,10 @@ public class FsmarSample4 extends AppRouterConfiguration {
 //		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("mediahub2");
 //		this.getPrevious("mediahub2").getTrigger("INVITE").createTransition("test-uas");
 		
-		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("genrec2");
-		this.getPrevious("genrec2").getTrigger("INVITE").createTransition("test-uas");
-		
-		this.getPrevious("proxy-registrar").getTrigger("INVITE").createTransition("failover");
+//		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("genrec2");
+//		this.getPrevious("genrec2").getTrigger("INVITE").createTransition("test-uas");
+//		
+//		this.getPrevious("proxy-registrar").getTrigger("INVITE").createTransition("failover");
 		
 		
 //		this.getPrevious("onnet").getTrigger("INVITE").createTransition("transfer");		

@@ -17,8 +17,11 @@ public class FsmarQueue extends AppRouterConfiguration {
 		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
 
-		this.getPrevious("null").getTrigger("INVITE").createTransition("transfer");
-		this.getPrevious("queue").getTrigger("INVITE").createTransition("proxy-registrar");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("proxy-registrar");
+		this.getPrevious("proxy-registrar").getTrigger("INVITE").createTransition("queue");
+
+		
+		//		this.getPrevious("queue").getTrigger("INVITE").createTransition("proxy-registrar");
 
 //		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("queue");
 //		this.getPrevious("queue").getTrigger("INVITE").createTransition("test-uas");
