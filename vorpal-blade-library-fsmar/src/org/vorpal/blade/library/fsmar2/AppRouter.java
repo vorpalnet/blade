@@ -164,9 +164,14 @@ public class AppRouter implements SipApplicationRouter {
 						if (t.action == null) {
 							t.action = new Action();
 						} else {
-							sipLogger.fine("Action:" + "\n\toriginating=" + t.action.originating + "\n\tterminating="
-									+ t.action.terminating + "\n\troute=" + t.action.route + "\n\troute_back="
-									+ t.action.route_back + "\n\troute_final=" + t.action.route_final);
+							if (sipLogger.isLoggable(Level.FINE)) {
+								sipLogger.fine("Action:" + "\n\t originating=" + t.action.originating //
+										+ "\n\t terminating=" + t.action.terminating //
+										+ "\n\t route=" + t.action.route //
+										+ "\n\t route_back=" + t.action.route_back //
+										+ "\n\troute_final=" + t.action.route_final);
+							}
+
 						}
 
 						nextApp = t.action.createRouterInfo(deployed.get(t.next), config, request);

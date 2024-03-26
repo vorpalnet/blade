@@ -12,7 +12,7 @@ public class CrudConfigurationSample extends CrudConfiguration {
 
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LoggingLevel.FINER);
-		this.defaultRoute.setId("default-route");
+//		this.defaultRoute.setId("default-route");
 
 		Selector dialed = new Selector("ani", "From",
 				"(?:\"(?<name>.*)\" )*[<]*(?<fromProto>sips?):(?:(?<fromUser>.*)@)*(?<fromHost>[^:;>]*)(?:[:](?<fromPort>[0-9]+))*[;]*(?<fromUriparams>[^>]*)[>;]*(?<fromAddrparams>.*)",
