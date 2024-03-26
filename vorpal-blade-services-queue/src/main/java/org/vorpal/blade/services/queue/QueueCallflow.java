@@ -58,7 +58,8 @@ public class QueueCallflow extends Callflow {
 		}
 
 		// set a ringing period timer to ring every 30 seconds (if needed)
-		if (attributes.ringDuration != null && attributes.ringDuration > attributes.ringPeriod) {
+//		if (attributes.ringDuration != null && attributes.ringDuration > attributes.ringPeriod) {
+		if (null != attributes.ringPeriod) {
 
 			setState(QueueState.RINGING);
 
@@ -172,6 +173,11 @@ public class QueueCallflow extends Callflow {
 							aliceRequest.getTo());
 					bobRequest.setRequestURI(aliceRequest.getRequestURI());
 
+					// For testing... DELME!
+					if (null == getState()) {
+						sipLogger.severe(appSession, "State is NULL! How can this be?");
+					}
+
 					switch (getState()) {
 					case MEDIA_CONNECTED:
 						Expectation byeExpectation = this.expectRequest(aliceRequest.getSession(), BYE, (bye) -> {
@@ -256,6 +262,9 @@ public class QueueCallflow extends Callflow {
 	}
 
 	public void setState(QueueState state) {
+		// jwm-delme
+		sipLogger.severe("Setting state: " + state);
+
 		SipApplicationSession appSession = aliceRequest.getApplicationSession();
 		appSession.setAttribute("STATE", state);
 	}

@@ -32,7 +32,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-//public class Configuration extends HashMap<String, State> implements Serializable {
 public class AppRouterConfiguration implements Serializable {
 
 	private static final long serialVersionUID = 1L;
