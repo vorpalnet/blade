@@ -262,9 +262,6 @@ public class QueueCallflow extends Callflow {
 	}
 
 	public void setState(QueueState state) {
-		// jwm-delme
-		sipLogger.severe("Setting state: " + state);
-
 		SipApplicationSession appSession = aliceRequest.getApplicationSession();
 		appSession.setAttribute("STATE", state);
 	}
