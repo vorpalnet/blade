@@ -55,7 +55,7 @@ public class Queue {
 				for (int i = 0; i < attributes.rate; i++) {
 					callflow = callflows.pollLast();
 					if (callflow != null) {
-						SettingsManager.sipLogger.finer("Continuing callflow... ");
+//						SettingsManager.sipLogger.finer("Continuing callflow... ");
 						try {
 							callflow.complete();
 						} catch (Exception e) {

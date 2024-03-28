@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.config;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
 
@@ -38,17 +39,19 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 				RegExRoute regexRoute = selector.findKey(request);
 
-				if (regexRoute != null && regexRoute.key !=null) {
+				if (regexRoute != null && regexRoute.key != null && regexRoute.attributes != null) {
 
 					while (itr.hasNext()) {
 						entry = itr.next();
 
-						if (regexRoute.key.startsWith(entry.getKey())) {
-							
-							value = new Translation(entry.getValue());
-							
-							//populate attributes for later
-							value.getAttributes().putAll(regexRoute.attributes);
+						if (regexRoute != null && regexRoute.key != null) {
+							value = new Translation(map.get(regexRoute.key));
+							if (value.getAttributes() == null) {
+								value.setAttributes(new HashMap<>());
+							}
+							if (value != null && regexRoute.attributes != null) {
+								value.getAttributes().putAll(regexRoute.attributes);
+							}
 						}
 					}
 

@@ -753,7 +753,7 @@
 
 	<target name="javadoc">
 
-	
+
 		<delete dir="${docs}/${ant.project.name}" />
 		<mkdir dir="${docs}/${ant.project.name}" />
 
@@ -800,10 +800,10 @@ title: ${ant.project.name} - v${implementation}
 
 			</replacefilter>
 		</replace>
--->		
-		
+-->
 
 
-	</target>
+
+</target>
 
 </project>
