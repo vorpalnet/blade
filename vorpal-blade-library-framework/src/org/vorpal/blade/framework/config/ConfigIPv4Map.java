@@ -1,5 +1,7 @@
 package org.vorpal.blade.framework.config;
 
+import java.util.HashMap;
+
 import javax.servlet.sip.SipServletRequest;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -28,15 +30,16 @@ public class ConfigIPv4Map extends TranslationsMap {
 
 		try {
 
-			// jwm - multiple selectors
 			for (Selector selector : this.selectors) {
-
 				RegExRoute regexRoute = selector.findKey(request);
-				if (regexRoute != null && regexRoute.key !=null) {
-					value = new Translation(map.get(new IPAddressString(regexRoute.key).getAddress().toIPv4()));
-					
-					//populate attributes for later
-					value.getAttributes().putAll(regexRoute.attributes);
+				if (regexRoute != null && regexRoute.key != null) {
+					value = new Translation(map.get(regexRoute.key));
+					if (value.getAttributes() == null) {
+						value.setAttributes(new HashMap<>());
+					}
+					if (value != null && regexRoute.attributes != null) {
+						value.getAttributes().putAll(regexRoute.attributes);
+					}
 				}
 
 				if (value != null)
