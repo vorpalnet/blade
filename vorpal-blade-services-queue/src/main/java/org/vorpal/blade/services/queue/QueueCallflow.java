@@ -43,9 +43,7 @@ public class QueueCallflow extends Callflow {
 			setState(QueueState.CANCELED);
 		});
 
-		if (attributes.ringDuration != null && attributes.ringDuration > 0) {
-			sendResponse(inboundRequest.createResponse(180));
-		}
+		sendResponse(inboundRequest.createResponse(180));
 
 		// Create media request object, so it can be used in future timers (if
 		// necessary)
@@ -57,10 +55,7 @@ public class QueueCallflow extends Callflow {
 
 		}
 
-		// set a ringing period timer to ring every 30 seconds (if needed)
-//		if (attributes.ringDuration != null && attributes.ringDuration > attributes.ringPeriod) {
 		if (null != attributes.ringPeriod) {
-
 			setState(QueueState.RINGING);
 
 			ringingPeriodTimer = startTimer(aliceRequest.getApplicationSession(), attributes.ringPeriod * 1000,
@@ -97,7 +92,6 @@ public class QueueCallflow extends Callflow {
 						setState(QueueState.MEDIA_RINGING);
 						sendRequest(mediaRequest, (mediaResponse) -> {
 							if (successful(mediaResponse)) {
-								sipLogger.severe(mediaResponse, "Setting queue state to MEDIA");
 								setState(QueueState.MEDIA_CONNECTED);
 								sendResponse(createResponse(aliceRequest, mediaResponse), (aliceAckOrPrack) -> {
 									cancelWhileCallingMedia.clear();
@@ -155,15 +149,15 @@ public class QueueCallflow extends Callflow {
 
 			SipApplicationSession appSession = aliceRequest.getApplicationSession();
 
-			sipLogger.finer(appSession, "is the app session null? " + ((appSession == null) ? true : false));
+//			sipLogger.finer(appSession, "is the app session null? " + ((appSession == null) ? true : false));
 
 			if (appSession != null) {
 
-				sipLogger.finer(appSession, "is the queue state canceled? " + this.stateEquals(QueueState.CANCELED));
-				sipLogger.finer(appSession, "is the app session valid? " + appSession.isValid());
-				sipLogger.finer(appSession, "is the sip session valid? " + aliceRequest.getSession().isValid());
-				sipLogger.finer(appSession, "What is the sip session state? " + aliceRequest.getSession().getState());
-				sipLogger.finer(appSession, "What is the queue state? " + getState());
+//				sipLogger.finer(appSession, "is the queue state canceled? " + this.stateEquals(QueueState.CANCELED));
+//				sipLogger.finer(appSession, "is the app session valid? " + appSession.isValid());
+//				sipLogger.finer(appSession, "is the sip session valid? " + aliceRequest.getSession().isValid());
+//				sipLogger.finer(appSession, "What is the sip session state? " + aliceRequest.getSession().getState());
+//				sipLogger.finer(appSession, "What is the queue state? " + getState());
 
 				if (false == this.stateEquals(QueueState.CANCELED)) {
 					stopTimers();
@@ -172,11 +166,6 @@ public class QueueCallflow extends Callflow {
 							aliceRequest.getFrom(), //
 							aliceRequest.getTo());
 					bobRequest.setRequestURI(aliceRequest.getRequestURI());
-
-					// For testing... DELME!
-					if (null == getState()) {
-						sipLogger.severe(appSession, "State is NULL! How can this be?");
-					}
 
 					switch (getState()) {
 					case MEDIA_CONNECTED:
@@ -194,7 +183,7 @@ public class QueueCallflow extends Callflow {
 									linkSessions(bobResponse.getSession(), aliceAck.getSession());
 									sendRequest(copyContent(aliceAck, bobResponse.createAck()));
 									sendRequest(mediaRequest.getSession().createRequest(BYE));
-									sipLogger.finer(aliceAck, "Expectation byeExpectation cleared...");
+//									sipLogger.finer(aliceAck, "Expectation byeExpectation cleared...");
 									byeExpectation.clear();
 								});
 							}
@@ -229,7 +218,7 @@ public class QueueCallflow extends Callflow {
 									break;
 								case ACK:
 									sendRequest(copyContent(ackOrPrack, bobResponse.createAck()));
-									sipLogger.finer(ackOrPrack, "Expectation cancelWhileCalingBob cleared...");
+//									sipLogger.finer(ackOrPrack, "Expectation cancelWhileCalingBob cleared...");
 									cancelWhileCalingBob.clear();
 									break;
 								}

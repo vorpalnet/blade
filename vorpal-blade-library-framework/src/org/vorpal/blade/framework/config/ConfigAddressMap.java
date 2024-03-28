@@ -1,5 +1,7 @@
 package org.vorpal.blade.framework.config;
 
+import java.util.HashMap;
+
 import javax.servlet.sip.SipServletRequest;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -27,28 +29,18 @@ public class ConfigAddressMap extends TranslationsMap {
 
 		try {
 
-			// jwm - multiple selectors
-
-			SettingsManager.sipLogger.finer(request,
-					"ConfigAddressMap.lookup() selectors size: " + this.selectors.size());
-
 			for (Selector selector : this.selectors) {
 
 				RegExRoute regexRoute = selector.findKey(request);
 
-				SettingsManager.sipLogger.finer(request, "ConfigAddressMap.lookup() regexRoute: " + regexRoute);
-
 				if (regexRoute != null && regexRoute.key != null) {
-
-					SettingsManager.sipLogger.finer(request,
-							"ConfigAddressMap.lookup() regexRoute.key: " + regexRoute.key);
-
-					value = new Translation(map.get(new IPAddressString(regexRoute.key).getAddress()));
-
-					// populate attributes for later
-					value.getAttributes().putAll(regexRoute.attributes);
-
-					SettingsManager.sipLogger.finer(request, "ConfigAddressMap.lookup() value: " + value);
+					value = new Translation(map.get(regexRoute.key));
+					if (value.getAttributes() == null) {
+						value.setAttributes(new HashMap<>());
+					}
+					if (value != null && regexRoute.attributes != null) {
+						value.getAttributes().putAll(regexRoute.attributes);
+					}
 				}
 
 				if (value != null)
