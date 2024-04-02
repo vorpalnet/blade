@@ -177,6 +177,7 @@ public class Selector {
 
 			sipLogger.finer(request, //
 					"selector: " + this.getId() + //
+//							", header: " + header + //
 							", match: " + matchResult + //
 							", pattern: " + this.getPattern() + //
 							", expression: " + this.getExpression() + //
