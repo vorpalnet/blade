@@ -357,33 +357,35 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return name;
 	}
 
-//	public static String hexHash(SipApplicationSession appSession) {
-//		int hash = Math.abs(appSession.getId().hashCode()) % 0xFFFF;
-//		return "[" + String.format("%04X", hash) + ":----]";
-//	}
-
 	public static String hexHash(SipApplicationSession appSession) {
 		String hashValue = NOSESS;
+
 		if (appSession != null) {
 			String hash1 = Callflow.getVorpalSessionId(appSession);
+			if (hash1 == null) {
+				hash1 = "--------";
+			}
 			hashValue = "[" + hash1 + ":----]";
 		}
 
 		return hashValue;
 	}
 
-//	public static String hexHash(SipSession sipSession) {
-//		int hash1 = Math.abs(sipSession.getApplicationSession().getId().hashCode()) % 0xFFFFFF;
-//		int hash2 = Math.abs(sipSession.getId().hashCode()) % 0xFF;
-//		return "[" + String.format("%06X", hash1) + ":" + String.format("%02X", hash2) + "]";
-//	}
-
 	public static String hexHash(SipSession sipSession) {
 		String hashValue = NOSESS;
 
 		if (sipSession != null) {
+
 			String hash1 = Callflow.getVorpalSessionId(sipSession.getApplicationSession());
+			if (hash1 == null) {
+				hash1 = "--------";
+			}
+
 			String hash2 = Callflow.getVorpalDialogId(sipSession);
+			if (hash2 == null) {
+				hash2 = "----";
+			}
+
 			hashValue = "[" + hash1 + ":" + hash2 + "]";
 		}
 		return hashValue;
@@ -491,7 +493,20 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								} else {
 									note = "To: " + request.getTo();
 								}
-							} else if (request.getMethod().equals("REFER")) {
+							}
+
+							else if (request.getMethod().equals("NOTIFY")) {
+								note += "Event: " + request.getHeader("Event");
+								note += ", Subscription-State: " + request.getHeader("Subscription-State");
+								if (request.getContentType().equals("message/sipfrag")) {
+									if (note.length() > 0) {
+										note += ", ";
+									}
+									note += new String((byte[]) request.getContent());
+								}
+							}
+
+							else if (request.getMethod().equals("REFER")) {
 								note = "Refer-To: " + request.getHeader("Refer-To");
 							} else if (request.getMethod().equals("REGISTER")) {
 								String expires = request.getHeader("Expires");
@@ -500,6 +515,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								}
 								note = "Expires: " + expires;
 							}
+
+							note = note.trim();
 
 							String alice = String.format("%-17s", shorten(from(request), 17)).replace(' ', '-');
 							String arrow = String.format("%17s", method + "-->").replace(' ', '-');
@@ -544,6 +561,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								note = "From: " + request.getHeader("From");
 							}
 
+							note = note.trim();
+
 							String alice = String.format("%-18s", shorten(to(request), 17) + "<").replace(' ', '-');
 							String arrow = String.format("%16s", "" + method + "---").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
@@ -582,9 +601,24 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								} else {
 									note = "To: " + request.getTo();
 								}
-							} else if (request.getMethod().equals("REFER")) {
+							}
+
+							else if (request.getMethod().equals("NOTIFY")) {
+								note += "Event: " + request.getHeader("Event");
+								note += ", Subscription-State: " + request.getHeader("Subscription-State");
+								if (request.getContentType().equals("message/sipfrag")) {
+									if (note.length() > 0) {
+										note += ", ";
+									}
+									note += new String((byte[]) request.getContent()).trim();
+								}
+							}
+
+							else if (request.getMethod().equals("REFER")) {
 								note = "Refer-To: " + request.getHeader("Refer-To");
 							}
+
+							note = note.trim();
 
 							String left = String.format("%34s", "");
 							String middle = String.format("%-18s", shorten(name, 17) + "<").replace(' ', '-');
@@ -633,6 +667,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 									note += new String((byte[]) request.getContent());
 								}
 							}
+
+							note = note.trim();
 
 							String left = String.format("%34s", "");
 							String middle = String.format("%-17s", shorten(name, 17)).replace(' ', '-');

@@ -27,12 +27,15 @@ public class ConfigLinkedHashMap extends TranslationsMap {
 				RegExRoute regexRoute = selector.findKey(request);
 				if (regexRoute != null && regexRoute.key != null) {
 					value = new Translation(map.get(regexRoute.key));
-					if (value.getAttributes() == null) {
-						value.setAttributes(new HashMap<>());
-					}
-					if (value != null && regexRoute.attributes != null) {
-						value.getAttributes().putAll(regexRoute.attributes);
-					}
+
+// Skip this nonsense for now...							
+//					if (value.getAttributes() == null) {
+//						value.setAttributes(new HashMap<>());
+//					}
+//					if (value != null && regexRoute.attributes != null) {
+//						value.getAttributes().putAll(regexRoute.attributes);
+//					}
+
 				}
 
 				if (value != null)

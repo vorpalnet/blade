@@ -24,33 +24,24 @@
 package org.vorpal.blade.test.b2bua;
 
 import java.io.IOException;
-import java.util.Hashtable;
-import java.util.Set;
+import java.util.logging.Level;
 
 import javax.annotation.Resource;
-import javax.management.JMX;
-import javax.management.MBeanServer;
-import javax.management.ObjectInstance;
-import javax.management.ObjectName;
-import javax.naming.Context;
-import javax.naming.InitialContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipApplicationSessionEvent;
 import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionEvent;
 import javax.servlet.sip.SipSessionListener;
 
-import org.vorpal.blade.applications.console.config.test.BladeConsoleMXBean;
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
-import org.vorpal.blade.framework.config.SettingsMXBean;
 import org.vorpal.blade.framework.config.SettingsManager;
-
-import weblogic.jndi.Environment;
 
 /**
  * @author Jeff McDonald
@@ -155,44 +146,78 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 
 	@Override
 	public void sessionCreated(SipApplicationSessionEvent event) {
-		sipLogger.finer(event.getApplicationSession(), "sessionCreated.");
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finer(event.getApplicationSession(), "SipApplicationSession created..." + appSession.getId());
+			String indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+			sipLogger.finer(event.getApplicationSession(), //
+					"appSession.isValid=" + appSession.isValid() + //
+							", appSession.isReadyToInvalidate=" + appSession.isReadyToInvalidate() + //
+							", X-Vorpal-Session=" + indexKey);
+		}
+
 	}
 
 	@Override
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
-		sipLogger.finer(event.getApplicationSession(),
-				"sessionDestroyed, sessionCount=" + event.getApplicationSession().getSessionSet().size());
-
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finer(event.getApplicationSession(), "SipApplicationSession destroyed... " + appSession.getId());
+		}
 	}
 
 	@Override
 	public void sessionExpired(SipApplicationSessionEvent event) {
-		sipLogger.finer(event.getApplicationSession(),
-				"sessionExpired, sessionCount=" + event.getApplicationSession().getSessionSet().size());
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finer("SipApplication expired... " + appSession.getId());
+		}
 	}
 
 	@Override
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
-		sipLogger.finer(event.getApplicationSession(),
-				"sessionReadyToInvalidate, sessionCount=" + event.getApplicationSession().getSessionSet().size());
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finer(appSession, "SipApplication readyToInvalidate... " + appSession.getId());
+		}
 	}
 
 	@Override
 	public void sessionCreated(SipSessionEvent event) {
-		sipLogger.finer(event.getSession(),
-				"sessionCreated, sessionCount=" + event.getSession().getApplicationSession().getSessionSet().size());
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipSession sipSession = event.getSession();
+			SipApplicationSession appSession = sipSession.getApplicationSession();
+
+			sipLogger.finer(sipSession, "SipSession created... " + sipSession.getId());
+
+			String indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+			sipLogger.finer(sipSession, //
+					"appSession.isValid=" + appSession.isValid() + //
+							", appSession.isReadyToInvalidate=" + appSession.isReadyToInvalidate() + //
+							", X-Vorpal-Session=" + indexKey + //
+							", sipSession.isValid=" + sipSession.isValid() + //
+							", sipSession.isReadyToInvalidate" + sipSession.isReadyToInvalidate() //
+			);
+		}
+
 	}
 
 	@Override
 	public void sessionDestroyed(SipSessionEvent event) {
-		sipLogger.finer(event.getSession(),
-				"sessionDestroyed, sessionCount=" + event.getSession().getApplicationSession().getSessionSet().size());
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipSession sipSession = event.getSession();
+			sipLogger.finer(event.getSession(), "SipSession destroyed... " + sipSession.getId());
+		}
 	}
 
 	@Override
 	public void sessionReadyToInvalidate(SipSessionEvent event) {
-		sipLogger.finer(event.getSession(), "sessionReadyToInvalidate, sessionCount="
-				+ event.getSession().getApplicationSession().getSessionSet().size());
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipSession sipSession = event.getSession();
+			sipLogger.finer(event.getSession(), "SipSession readyToInvalidate... " + sipSession.getId());
+		}
 	}
 
 }
