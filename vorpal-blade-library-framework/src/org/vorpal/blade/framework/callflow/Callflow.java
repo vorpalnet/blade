@@ -678,7 +678,12 @@ public abstract class Callflow implements Serializable {
 					} finally {
 						if (response.getMethod().equals("BYE") && sipSession != null && sipSession.isValid()) {
 							// sometimes the sipSession does not automatically invalidate, no idea why.
-							sipSession.invalidate();
+
+							// Is it because there's an open subscription?
+							// sipSession.invalidate();
+
+						
+						
 						}
 					}
 				}

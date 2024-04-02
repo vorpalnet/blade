@@ -140,7 +140,7 @@ public class BlindTransfer extends Transfer {
 				sendResponse(bye.createResponse(200));
 
 				// why won't this invalidate on its own?
-				bye.getSession().invalidate();
+//				bye.getSession().invalidate();
 			});
 
 			// User is notified that transfer is initiated
@@ -185,18 +185,23 @@ public class BlindTransfer extends Transfer {
 					SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
 					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
 					notifyFailure.setHeader(EVENT, "refer");
-//					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated");
 					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
 					notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
 
 //					// Do we need to send a BYE? No, let the transferor try again.
-//					sendRequest(notifyFailure, (notifyFailureResponse) -> {
+					sendRequest(notifyFailure, (notifyFailureResponse) -> {
+
+						
+						
 //						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"), (byeResponse) -> {
 //
 //							// sessions are not automatically invalidating, why?
 //							// byeResponse.getApplicationSession().invalidate();
 //						});
-//					});
+
+					
+					
+					});
 
 				}
 
