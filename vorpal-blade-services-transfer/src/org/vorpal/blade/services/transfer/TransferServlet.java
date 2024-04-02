@@ -1,6 +1,7 @@
 package org.vorpal.blade.services.transfer;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.logging.Level;
 
@@ -160,10 +161,18 @@ public class TransferServlet extends B2buaServlet
 			}
 			// find matching translation, if defined
 			Translation t = settings.findTranslation(request);
-			String ts = (String) t.getAttribute("style");
-			callflow = this.chooseCallflowStyle(ts);
-			sipLogger.finer(request, "translation, id=" + t.getId() + ", style=" + ts + ", callflow="
-					+ callflow.getClass().getSimpleName());
+			if (t != null) {
+				String ts = (String) t.getAttribute("style");
+				callflow = this.chooseCallflowStyle(ts);
+
+				sipLogger.finer(request, "Found translation, id=" + t.getId() + //
+						", description=" + t.getDescription() + //
+						", attributes=" + Arrays.asList(t.getAttributes()) + //
+						", style=" + ts + //
+						", callflow=" + callflow.getClass().getSimpleName());
+			} else {
+				sipLogger.finer(request, "No translation found.");
+			}
 			break;
 		}
 
@@ -259,7 +268,7 @@ public class TransferServlet extends B2buaServlet
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(event.getApplicationSession(), "SipApplicationSession destroyed... " + appSession.getId());
+			sipLogger.finer("SipApplicationSession destroyed... " + appSession.getId());
 		}
 	}
 

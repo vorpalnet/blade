@@ -694,7 +694,6 @@ public abstract class Callflow implements Serializable {
 
 						if (response.getMethod().equals("BYE") && sipSession != null && sipSession.isValid()) {
 							// sometimes the sipSession does not automatically invalidate, no idea why.
-
 							// Is it because there's an open subscription?
 
 							sipLogger.finer(response, "Got BYE " + response.getStatus() + ", activeRequests="
@@ -702,31 +701,14 @@ public abstract class Callflow implements Serializable {
 
 							Boolean invalidate = (Boolean) response.getSession().getAttribute("ShouldInvalidate");
 							sipLogger.finer(sipSession, "BYE ShouldInvalidate=" + invalidate);
+							response.getSession().setAttribute("BYE_RECEIVED", true);
 
-							if (invalidate != null && invalidate == true) {
+						}
 
-								if (activeRequests == 0) {
-									sipLogger.finer(sipSession, "manually invalidating session...");
-									sipSession.invalidate();
-								}
-
-							}
-
-						} else if (response.getMethod().equals("NOTIFY") && sipSession != null
-								&& sipSession.isValid()) {
-
-							Boolean invalidate = (Boolean) response.getSession().getAttribute("ShouldInvalidate");
-							sipLogger.finer(sipSession, "NOTIFY ShouldInvalidate=" + invalidate);
-
-							if (invalidate != null && invalidate == true) {
-
-								if (activeRequests == 0) {
-									sipLogger.finer(sipSession, "manually invalidating session...");
-									sipSession.invalidate();
-								}
-
-							}
-
+						Boolean byeReceived = (Boolean) response.getSession().getAttribute("BYE_RECEIVED");
+						if (byeReceived != null && byeReceived == true && activeRequests == 0) {
+							sipLogger.finer(sipSession, "manually invalidating session...");
+							sipSession.invalidate();
 						}
 
 					}

@@ -22,7 +22,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 		@JsonSubTypes.Type(value = ConfigPrefixMap.class, name = "prefix"),
 		@JsonSubTypes.Type(value = ConfigHashMap.class, name = "hash"),
 		@JsonSubTypes.Type(value = ConfigLinkedHashMap.class, name = "linked"),
-		@JsonSubTypes.Type(value = ConfigTreeMap.class, name = "tree")})
+		@JsonSubTypes.Type(value = ConfigTreeMap.class, name = "tree") })
 // ConfigAddressMap supports both types -- Delete ConfigIPv4Map in the future
 //		@JsonSubTypes.Type(value = ConfigIPv4Map.class, name = "ipv4"),
 //		@JsonSubTypes.Type(value = ConfigIPv6Map.class, name = "ipv6")
@@ -55,10 +55,11 @@ public abstract class TranslationsMap {
 			if (translation != null) {
 
 				if (sipLogger.isLoggable(Level.FINER)) {
-
 					sipLogger.finer(request, this.getClass().getSimpleName() + //
-							" found translation id: " + translation.getId() + //
-							", attributes: " + Arrays.asList(translation.getAttributes()));
+							" id=" + this.getId() + //
+							" found translation id=" + translation.getId() + //
+							", description=" + translation.getDescription() + //
+							", attributes=" + Arrays.asList(translation.getAttributes()));
 				}
 
 			} else {
@@ -106,12 +107,12 @@ public abstract class TranslationsMap {
 			}
 		}
 
-		if (translation != null) {
-			sipLogger.finer(request, "The final translation is... id: " + translation.getId() + //
-					", attributes: " + Arrays.asList(translation.getAttributes()));
-		} else {
-			sipLogger.finer(request, "The final translation is null. No match! ");
-		}
+//		if (translation != null) {
+//			sipLogger.finer(request, "The final translation is... id: " + translation.getId() + //
+//					", attributes: " + Arrays.asList(translation.getAttributes()));
+//		} else {
+//			sipLogger.finer(request, "The final translation is null. No match! ");
+//		}
 
 		return translation;
 

@@ -46,7 +46,7 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 						if (regexRoute != null && regexRoute.key != null) {
 							value = new Translation(map.get(regexRoute.key));
-							
+
 // Skip this nonsense for now...							
 //							if (value.getAttributes() == null) {
 //								value.setAttributes(new HashMap<>());
@@ -54,18 +54,17 @@ public class ConfigPrefixMap extends TranslationsMap {
 //							if (value != null && regexRoute.attributes != null) {
 //								value.getAttributes().putAll(regexRoute.attributes);
 //							}
-							
-							
+
 						}
 					}
 
-					if (value != null) {
-						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap Route found id: " + value.getId()
-								+ ", description=" + value.getDescription());
-						break;
-					} else {
-						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap Route not found");
-					}
+//					if (value != null) {
+//						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap Route found id: " + value.getId()
+//								+ ", description=" + value.getDescription());
+//						break;
+//					} else {
+//						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap Route not found");
+//					}
 				}
 
 			}

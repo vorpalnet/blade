@@ -199,7 +199,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			}
 
 			if (request.getMethod().equals("REFER")) {
-				sipLogger.finer(request, "REFER Setting ShouldInvalidate to true");
+				sipLogger.finer(request, "REFER Setting ShouldInvalidate to true...");
 				request.getSession().setAttribute("ShouldInvalidate", true);
 			}
 
