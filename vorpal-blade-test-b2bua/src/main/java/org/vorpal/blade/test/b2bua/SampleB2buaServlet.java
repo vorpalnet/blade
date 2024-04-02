@@ -36,10 +36,14 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.SipApplicationSessionEvent;
+import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.SipSessionEvent;
+import javax.servlet.sip.SipSessionListener;
 
 import org.vorpal.blade.applications.console.config.test.BladeConsoleMXBean;
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
@@ -56,7 +60,7 @@ import weblogic.jndi.Environment;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-public class SampleB2buaServlet extends B2buaServlet {
+public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSessionListener, SipSessionListener {
 	private static final long serialVersionUID = 1L;
 	public static SettingsManager<SampleB2buaConfig> settingsManager;
 
@@ -147,6 +151,48 @@ public class SampleB2buaServlet extends B2buaServlet {
 	@Override
 	public void callAbandoned(SipServletRequest request) throws ServletException, IOException {
 		sipLogger.info(request, "callAbandoned...");
+	}
+
+	@Override
+	public void sessionCreated(SipApplicationSessionEvent event) {
+		sipLogger.finer(event.getApplicationSession(), "sessionCreated.");
+	}
+
+	@Override
+	public void sessionDestroyed(SipApplicationSessionEvent event) {
+		sipLogger.finer(event.getApplicationSession(),
+				"sessionDestroyed, sessionCount=" + event.getApplicationSession().getSessionSet().size());
+
+	}
+
+	@Override
+	public void sessionExpired(SipApplicationSessionEvent event) {
+		sipLogger.finer(event.getApplicationSession(),
+				"sessionExpired, sessionCount=" + event.getApplicationSession().getSessionSet().size());
+	}
+
+	@Override
+	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+		sipLogger.finer(event.getApplicationSession(),
+				"sessionReadyToInvalidate, sessionCount=" + event.getApplicationSession().getSessionSet().size());
+	}
+
+	@Override
+	public void sessionCreated(SipSessionEvent event) {
+		sipLogger.finer(event.getSession(),
+				"sessionCreated, sessionCount=" + event.getSession().getApplicationSession().getSessionSet().size());
+	}
+
+	@Override
+	public void sessionDestroyed(SipSessionEvent event) {
+		sipLogger.finer(event.getSession(),
+				"sessionDestroyed, sessionCount=" + event.getSession().getApplicationSession().getSessionSet().size());
+	}
+
+	@Override
+	public void sessionReadyToInvalidate(SipSessionEvent event) {
+		sipLogger.finer(event.getSession(), "sessionReadyToInvalidate, sessionCount="
+				+ event.getSession().getApplicationSession().getSessionSet().size());
 	}
 
 }

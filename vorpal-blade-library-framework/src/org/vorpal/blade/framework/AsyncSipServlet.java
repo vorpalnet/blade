@@ -243,14 +243,14 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					// Is this a response to 'proxy'?
 
-					Proxy proxy = response.getProxy();
-					sipLogger.warning(response, "proxy...? " + (proxy != null));
-					if (proxy != null) {
-						sipLogger.warning(response, "getProxy? " + (response.getProxy() != null));
-						sipLogger.warning(response, "supervised? " + response.getProxy().getSupervised());
-						sipLogger.warning(response, "stateful? " + response.getProxy().getStateful());
-						sipLogger.warning(response, "supervised? " + response.getProxy().getSupervised());
-					}
+//					Proxy proxy = response.getProxy();
+//					sipLogger.warning(response, "proxy...? " + (proxy != null));
+//					if (proxy != null) {
+//						sipLogger.warning(response, "getProxy? " + (response.getProxy() != null));
+//						sipLogger.warning(response, "supervised? " + response.getProxy().getSupervised());
+//						sipLogger.warning(response, "stateful? " + response.getProxy().getStateful());
+//						sipLogger.warning(response, "supervised? " + response.getProxy().getSupervised());
+//					}
 
 					// Sometimes a 180 Ringing comes back on a brand new SipSession
 					// because the tag on the To header changed due to a failure downstream.
