@@ -30,6 +30,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
@@ -38,7 +40,6 @@ import javax.servlet.sip.ProxyBranch;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
-import javax.servlet.sip.SipApplicationSession.Protocol;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
@@ -47,17 +48,17 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerService;
+import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.config.SessionParameters;
+import org.vorpal.blade.framework.logging.ConsoleColors;
 import org.vorpal.blade.framework.logging.Logger;
 import org.vorpal.blade.framework.logging.Logger.Direction;
 import org.vorpal.blade.framework.proxy.ProxyPlan;
 import org.vorpal.blade.framework.proxy.ProxyTier;
 import org.vorpal.blade.framework.proxy.ProxyTier.Mode;
-
-import jsr166e.ThreadLocalRandom;
 
 public abstract class Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -198,7 +199,7 @@ public abstract class Callflow implements Serializable {
 		}
 		return callback;
 	}
-	
+
 	@SuppressWarnings("unchecked")
 	public static Callback<ServletTimer> pullCallback(ServletTimer timer) {
 		return (Callback<ServletTimer>) timer.getInfo();
@@ -404,22 +405,32 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public static String getVorpalSessionId(SipApplicationSession appSession) {
-
 		String indexKey = null;
 
-		indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+		if (appSession != null) {
+			indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
 
-		if (null == indexKey) {
-			do {
-				indexKey = //
-						String.format("%08X", //
-								Math.abs(ThreadLocalRandom.current().nextLong(0, 0xFFFFFFFFL)) //
-						).toUpperCase();
-			} while (null != getSipUtil().getApplicationSessionByKey(indexKey, false));
+			if (appSession.isReadyToInvalidate() == false) {
+				if (null == indexKey) {
+					do {
+						indexKey = //
+								String.format("%08X", //
+										Math.abs(ThreadLocalRandom.current().nextLong(0, 0xFFFFFFFFL)) //
+								).toUpperCase();
+					} while (null != getSipUtil().getApplicationSessionByKey(indexKey, false));
+
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.fine(ConsoleColors.GREEN + //
+								"Created new X-Vorpal-Session: " + indexKey + //
+								ConsoleColors.RESET);
+					}
+				}
+
+				appSession.setAttribute("X-Vorpal-Session", indexKey);
+				appSession.addIndexKey(indexKey);
+			}
+
 		}
-
-		appSession.setAttribute("X-Vorpal-Session", indexKey);
-		appSession.addIndexKey(indexKey);
 
 		return indexKey;
 	}
@@ -429,8 +440,10 @@ public abstract class Callflow implements Serializable {
 
 		if (null == dialog) {
 			dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
-			sipSession.setAttribute("X-Vorpal-Dialog", dialog);
-//			sipLogger.warning("Created dialog: " + dialog);
+
+			if (sipSession.isReadyToInvalidate() == false) {
+				sipSession.setAttribute("X-Vorpal-Dialog", dialog);
+			}
 		}
 
 		return dialog;
@@ -676,15 +689,46 @@ public abstract class Callflow implements Serializable {
 						sipLogger.logStackTrace(e);
 						throw e;
 					} finally {
+
+						int activeRequests = sipSession.getActiveRequests(UAMode.UAC).size();
+
 						if (response.getMethod().equals("BYE") && sipSession != null && sipSession.isValid()) {
 							// sometimes the sipSession does not automatically invalidate, no idea why.
 
 							// Is it because there's an open subscription?
-							// sipSession.invalidate();
 
-						
-						
+							sipLogger.finer(response, "Got BYE " + response.getStatus() + ", activeRequests="
+									+ sipSession.getActiveRequests(UAMode.UAC).size());
+
+							Boolean invalidate = (Boolean) response.getSession().getAttribute("ShouldInvalidate");
+							sipLogger.finer(sipSession, "BYE ShouldInvalidate=" + invalidate);
+
+							if (invalidate != null && invalidate == true) {
+
+								if (activeRequests == 0) {
+									sipLogger.finer(sipSession, "manually invalidating session...");
+									sipSession.invalidate();
+								}
+
+							}
+
+						} else if (response.getMethod().equals("NOTIFY") && sipSession != null
+								&& sipSession.isValid()) {
+
+							Boolean invalidate = (Boolean) response.getSession().getAttribute("ShouldInvalidate");
+							sipLogger.finer(sipSession, "NOTIFY ShouldInvalidate=" + invalidate);
+
+							if (invalidate != null && invalidate == true) {
+
+								if (activeRequests == 0) {
+									sipLogger.finer(sipSession, "manually invalidating session...");
+									sipSession.invalidate();
+								}
+
+							}
+
 						}
+
 					}
 				}
 			}

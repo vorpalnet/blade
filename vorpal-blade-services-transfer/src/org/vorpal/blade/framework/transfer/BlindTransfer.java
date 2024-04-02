@@ -190,8 +190,6 @@ public class BlindTransfer extends Transfer {
 
 //					// Do we need to send a BYE? No, let the transferor try again.
 					sendRequest(notifyFailure, (notifyFailureResponse) -> {
-
-						
 						
 //						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"), (byeResponse) -> {
 //

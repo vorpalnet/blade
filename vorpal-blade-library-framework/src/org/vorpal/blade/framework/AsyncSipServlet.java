@@ -198,6 +198,11 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			}
 
+			if (request.getMethod().equals("REFER")) {
+				sipLogger.finer(request, "REFER Setting ShouldInvalidate to true");
+				request.getSession().setAttribute("ShouldInvalidate", true);
+			}
+
 			requestLambda = Callflow.pullCallback(request);
 			if (requestLambda != null) {
 				String name = requestLambda.getClass().getSimpleName();

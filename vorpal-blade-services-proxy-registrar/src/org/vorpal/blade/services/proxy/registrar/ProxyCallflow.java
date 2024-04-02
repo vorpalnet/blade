@@ -80,10 +80,8 @@ public class ProxyCallflow extends Callflow {
 
 				appSession.setAttribute("PROXY_REGISTRAR", proxyRegistrar);
 
-			} else {
-				sipLogger.severe(request, "What's going on here?");
-				sipLogger.severe(request, request.toString());
-				
+			} else { // not initial
+				sipLogger.warning(request, "INVITE, but not initial, what shall we do with it? Nothing?");
 			}
 
 		} catch (Exception e) {
