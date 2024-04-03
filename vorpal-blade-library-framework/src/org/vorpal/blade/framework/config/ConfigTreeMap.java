@@ -21,26 +21,23 @@ public class ConfigTreeMap extends TranslationsMap {
 		Translation value = null;
 
 		try {
-
 			for (Selector selector : this.selectors) {
-
 				RegExRoute regexRoute = selector.findKey(request);
-				if (regexRoute != null && regexRoute.key != null) {
-					value = new Translation(map.get(regexRoute.key));
 
-// Skip this nonsense for now...							
-//					if (value.getAttributes() == null) {
-//						value.setAttributes(new HashMap<>());
-//					}
-//					if (value != null && regexRoute.attributes != null) {
-//						value.getAttributes().putAll(regexRoute.attributes);
-//					}
-
+				if (regexRoute != null) {
+					value = map.get(regexRoute.key);
 				}
 
-				if (value != null)
+				if (value != null) {
+					value = new Translation(value);
+					if (value.getAttributes() == null) {
+						value.setAttributes(new HashMap<>());
+					}
+					if (regexRoute.attributes != null) {
+						value.getAttributes().putAll(regexRoute.attributes);
+					}
 					break;
-
+				}
 			}
 
 		} catch (Exception e) {

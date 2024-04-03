@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -84,108 +85,133 @@ public class Selector {
 
 	public RegExRoute findKey(SipServletRequest request) {
 		Logger sipLogger = SettingsManager.getSipLogger();
-
-		// jwm - find named groups, useful later
-		Map<String, String> namedGroups = new HashMap<>();
-
 		RegExRoute regexRoute = null;
 		String key = null;
 		String header = null;
+		boolean matchResult = false;
+		String value = null;
 
-		switch (attribute) {
-		case "Content":
-			header = "";
-			try {
-				if (request.getContent() != null) {
-					if (request.getContent() instanceof String) {
-						header = (String) request.getContent();
+		try {
+
+			// jwm - find named groups, useful later
+			Map<String, String> namedGroups = new HashMap<>();
+
+			switch (attribute) {
+			case "Content":
+				header = "";
+				try {
+					if (request.getContent() != null) {
+						if (request.getContent() instanceof String) {
+							header = (String) request.getContent();
+						} else {
+							byte[] content = (byte[]) request.getContent();
+							header = new String(content);
+						}
 					} else {
-						byte[] content = (byte[]) request.getContent();
-						header = new String(content);
+						sipLogger.warning(request, "No content in message body. Check configuration.");
 					}
-				} else {
-					sipLogger.warning(request, "No content in message body. Check configuration.");
+				} catch (IOException e) { // this should never happen
+					SettingsManager.getSipLogger().logStackTrace(e);
+					return null;
 				}
-			} catch (IOException e) { // this should never happen
-				SettingsManager.getSipLogger().logStackTrace(e);
-				return null;
-			}
-			break;
+				break;
 
-		case "Request-URI":
-			header = request.getRequestURI().toString();
-			break;
+			case "Request-URI":
+				header = request.getRequestURI().toString();
+				break;
 
-		case "Remote-IP":
-			header = request.getRemoteAddr();
+			case "Remote-IP":
+				header = request.getRemoteAddr();
 
-			if (header == null) { // test case only
-				header = "127.0.0.1";
-			}
-
-			break;
-		default:
-			header = request.getHeader(attribute);
-		}
-
-		if (header != null) {
-
-			Matcher matcher = _pattern.matcher(header);
-
-			boolean matchResult = false;
-			String value = (attribute.matches("Content")) ? "[...]" : header;
-			if (matcher.matches()) {
-				matchResult = true;
-				key = matcher.replaceAll(expression);
-			}
-
-			if (key != null) {
-				regexRoute = new RegExRoute();
-				regexRoute.header = header;
-				regexRoute.key = key;
-				regexRoute.matcher = matcher;
-				regexRoute.selector = this;
-
-				LinkedList<String> groups = new LinkedList<>();
-				Matcher m = _p.matcher(this._strPattern);
-				String __name;
-
-				while (m.find()) {
-					__name = m.group("name");
-					if (__name != null) {
-						groups.add(__name);
-					}
+				if (header == null) { // test case only
+					header = "127.0.0.1";
 				}
 
-				// a__ variables. yucky! clean this up later.
-				// This builds regex named group pairs for use later
-				Matcher a__matcher = _pattern.matcher(header);
-				boolean a__matchFound = a__matcher.find();
-				if (a__matchFound) {
-					String a__name, a__value;
-					Iterator<String> a__itr = groups.iterator();
-					while (a__itr.hasNext()) {
-						a__name = a__itr.next();
-						a__value = a__matcher.group(a__name);
-						if (a__value != null && a__value.length() > 0) {
-							regexRoute.attributes.put(a__name, a__value);
+				break;
+			default:
+				header = request.getHeader(attribute);
+			}
+
+			if (header != null) {
+
+				Matcher matcher = _pattern.matcher(header);
+
+				value = (attribute.matches("Content")) ? "[...]" : header;
+				if (matcher.matches()) {
+					matchResult = true;
+					key = matcher.replaceAll(expression);
+				}
+
+				if (key != null) {
+					regexRoute = new RegExRoute();
+					regexRoute.header = header;
+					regexRoute.key = key;
+					regexRoute.matcher = matcher;
+					regexRoute.selector = this;
+
+					LinkedList<String> groups = new LinkedList<>();
+					Matcher m = _p.matcher(this._strPattern);
+					String __name;
+
+					while (m.find()) {
+						__name = m.group("name");
+						if (__name != null) {
+							groups.add(__name);
 						}
 					}
+
+					// a__ variables. yucky! clean this up later.
+					// This builds regex named group pairs for use later
+					Matcher a__matcher = _pattern.matcher(header);
+					boolean a__matchFound = a__matcher.find();
+					if (a__matchFound) {
+						String a__name, a__value;
+						Iterator<String> a__itr = groups.iterator();
+						while (a__itr.hasNext()) {
+							a__name = a__itr.next();
+							a__value = a__matcher.group(a__name);
+							if (a__value != null && a__value.length() > 0) {
+								regexRoute.attributes.put(a__name, a__value);
+							}
+						}
+					}
+
 				}
 
+				if (sipLogger.isLoggable(Level.FINER)) {
+					if (matchResult == true) {
+						sipLogger.finer(request, "Selector id=" + this.getId() + //
+								", attribute=" + this.getAttribute() + //
+								", value=" + value + //
+								", matchResult=" + matchResult + //
+								", key=" + key);
+					} else {
+						sipLogger.severe(request, "Configuration error... No pattern match found.");
+						sipLogger.finer(request, "Selector id=" + this.getId() + //
+								", attribute=" + this.getAttribute() + //
+								", value=" + value + //
+								", matchResult=" + matchResult + //
+								", key=" + key + //
+								", pattern=" + this.getPattern() + //
+								", expression=" + this.getExpression());
+					}
+				}
+
+			} else {
+				sipLogger.severe(request, "No header found: " + attribute);
 			}
 
-			sipLogger.finer(request, //
-					"selector: " + this.getId() + //
-//							", header: " + header + //
-							", match: " + matchResult + //
-							", pattern: " + this.getPattern() + //
-							", expression: " + this.getExpression() + //
-							", attribute: " + this.getAttribute() + //
-							", value: " + value + //
-							", key: " + key);
-		} else {
-			sipLogger.severe(request, "No header found: " + attribute);
+		} catch (Exception e) {
+			sipLogger.severe(request, "Unknown error for Selector.findKey()");
+			sipLogger.severe(request, "Selector id=" + this.getId() + //
+					", attribute=" + this.getAttribute() + //
+					", value=" + value + //
+					", matchResult=" + matchResult + //
+					", key=" + key + //
+					", pattern=" + this.getPattern() + //
+					", expression=" + this.getExpression());
+			sipLogger.severe(request, request.toString());
+			sipLogger.logStackTrace(e);
 		}
 
 		return regexRoute;
