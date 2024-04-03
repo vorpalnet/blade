@@ -9,7 +9,5 @@ public class RegExRoute {
 	public Matcher matcher;
 	public String header;
 	public Selector selector;
-	
 	public Map<String, String> attributes = new HashMap<>();
-	
 }
