@@ -32,8 +32,7 @@ public class Queue {
 
 	public void initialize(QueueAttributes attributes) {
 
-		sipLogger.fine("Queue.initialize, period=" + attributes.getPeriod() + ", rate=" + attributes.getRate()
-				+ ", limit=" + attributes.getLimit());
+		sipLogger.fine("Queue.initialize, period=" + attributes.getPeriod() + ", rate=" + attributes.getRate());
 
 		this.attributes = attributes;
 

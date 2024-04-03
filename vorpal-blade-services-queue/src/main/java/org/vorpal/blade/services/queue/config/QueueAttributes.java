@@ -9,7 +9,7 @@ public class QueueAttributes implements Serializable {
 
 	public Integer period;
 	public Integer rate;
-	public Integer limit;
+//	public Integer limit;
 	public Integer ringDuration;
 	public Integer ringPeriod;
 	public String announcement;
@@ -20,7 +20,7 @@ public class QueueAttributes implements Serializable {
 	public QueueAttributes(QueueAttributes that) {
 		this.period = that.period;
 		this.rate = that.rate;
-		this.limit = that.limit;
+//		this.limit = that.limit;
 		this.ringDuration = that.ringDuration;
 		this.announcement = that.announcement;
 	}
@@ -29,6 +29,12 @@ public class QueueAttributes implements Serializable {
 		return period;
 	}
 
+	/**
+	 * Set number of milliseconds between polling the queue.
+	 * 
+	 * @param period
+	 * @return
+	 */
 	public QueueAttributes setPeriod(Integer period) {
 		this.period = period;
 		return this;
@@ -38,19 +44,25 @@ public class QueueAttributes implements Serializable {
 		return rate;
 	}
 
+	/**
+	 * Set number transactions processed per polling cycle.
+	 * 
+	 * @param rate
+	 * @return
+	 */
 	public QueueAttributes setRate(Integer rate) {
 		this.rate = rate;
 		return this;
 	}
 
-	public Integer getLimit() {
-		return limit;
-	}
-
-	public QueueAttributes setLimit(Integer limit) {
-		this.limit = limit;
-		return this;
-	}
+//	public Integer getLimit() {
+//		return limit;
+//	}
+//
+//	public QueueAttributes setLimit(Integer limit) {
+//		this.limit = limit;
+//		return this;
+//	}
 
 	public Integer getRingPeriod() {
 		return ringPeriod;
@@ -65,6 +77,13 @@ public class QueueAttributes implements Serializable {
 		return ringDuration;
 	}
 
+	/**
+	 * Sets the number of milliseconds to wait for an announcement or agent response
+	 * before placing the call back in the queue.
+	 * 
+	 * @param ringDuration
+	 * @return
+	 */
 	public QueueAttributes setRingDuration(Integer ringDuration) {
 		this.ringDuration = ringDuration;
 		return this;

@@ -22,26 +22,25 @@ public class QueueConfigSample extends QueueConfig {
 		this.defaultRoute = new Translation();
 		this.defaultRoute.setId("default").setDescription("no queue defined, simply passthru");
 
-//		this.addQueue("fast", new QueueAttributes() //
-//				.setPeriod(500) //
-//				.setRate(10) //
-//				.setRingDuration(15) //
-//				.addAnnouncement("sip:ann1@192.168.1.227"));
-//
-//		this.addQueue("medium", new QueueAttributes() //
-//				.setPeriod(1000) //
-//				.setRate(5) //
-//				.setRingDuration(20) //
-//				.addAnnouncement("sip:ann1@192.168.1.227") //
-//				.addAnnouncement("sip:ann2@192.168.1.227"));
+		this.addQueue("fast", new QueueAttributes() //
+				.setPeriod(5 * 1000) // number of milliseconds
+				.setRate(10) //
+				.setRingPeriod(90) //
+				.setRingDuration(60 * 1000) //
+				.setAnnouncement("sip:ann1@192.168.1.227"));
+
+		this.addQueue("medium", new QueueAttributes() //
+				.setPeriod(15 * 1000) //
+				.setRate(5) //
+				.setRingPeriod(90) //
+				.setRingDuration(60 * 1000) //
+				.setAnnouncement("sip:ann1@192.168.1.227"));
 
 		this.addQueue("slow", new QueueAttributes() //
 				.setPeriod(30 * 1000) //
 				.setRate(1) //
-				.setRingPeriod(1) //
-				.setRingDuration(5) //
-				.setAnnouncement("sip:carol@vorpal.net")
-		);
+				.setRingPeriod(90) //
+				.setRingDuration(60 * 1000));
 
 		Selector toSelector = new Selector("toSelector", "To",
 				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)",
@@ -59,7 +58,7 @@ public class QueueConfigSample extends QueueConfig {
 		prefixMap.id = "prefixMap";
 		prefixMap.addSelector(toSelector);
 		prefixMap.description = "Translations map using PrefixMap for dialed numbers";
-		botMap.createTranslation("1997").addAttribute("queue", "slow");
+		prefixMap.createTranslation("19977").addAttribute("queue", "slow");
 
 		this.maps.add(prefixMap);
 		this.maps.add(botMap);

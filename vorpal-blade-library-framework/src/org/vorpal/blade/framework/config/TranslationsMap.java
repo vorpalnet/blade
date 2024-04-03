@@ -53,10 +53,9 @@ public abstract class TranslationsMap {
 			translation = this.lookup(request);
 
 			if (translation != null) {
-
 				if (sipLogger.isLoggable(Level.FINER)) {
 					sipLogger.finer(request, this.getClass().getSimpleName() + //
-							" id=" + this.getId() + //
+							" " + this.getId() + //
 							" found translation id=" + translation.getId() + //
 							", description=" + translation.getDescription() + //
 							", attributes=" + Arrays.asList(translation.getAttributes()));
@@ -86,7 +85,7 @@ public abstract class TranslationsMap {
 				if (translation.getList() != null) {
 					Translation t = null;
 					for (TranslationsMap map : translation.getList()) {
-						sipLogger.finest(request, "Checking further TranslationMaps id: " + map.getId());
+						sipLogger.finer(request, "Checking further TranslationMaps id: " + map.getId());
 						t = map.applyTranslations(request);
 						if (t != null) {
 							break;
@@ -100,19 +99,10 @@ public abstract class TranslationsMap {
 			}
 
 		} catch (Exception e) {
-			if (SettingsManager.getSipLogger() != null) {
-				SettingsManager.getSipLogger().logStackTrace(request, e);
-			} else {
-				e.printStackTrace();
-			}
+			sipLogger.severe(request, "Unknown error for " + this.getClass().getSimpleName() + ".applyTranslations()");
+			sipLogger.severe(request, request.toString());
+			sipLogger.logStackTrace(e);
 		}
-
-//		if (translation != null) {
-//			sipLogger.finer(request, "The final translation is... id: " + translation.getId() + //
-//					", attributes: " + Arrays.asList(translation.getAttributes()));
-//		} else {
-//			sipLogger.finer(request, "The final translation is null. No match! ");
-//		}
 
 		return translation;
 

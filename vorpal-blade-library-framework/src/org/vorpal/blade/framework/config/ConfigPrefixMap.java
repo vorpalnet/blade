@@ -7,12 +7,15 @@ import java.util.Map.Entry;
 import javax.servlet.sip.SipServletRequest;
 
 import org.apache.commons.collections4.trie.PatriciaTrie;
+import org.vorpal.blade.framework.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigPrefixMap extends TranslationsMap {
+
+	Logger sipLogger = SettingsManager.getSipLogger();
 
 	public PatriciaTrie<Translation> map = new PatriciaTrie<>();
 
@@ -39,40 +42,30 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 				RegExRoute regexRoute = selector.findKey(request);
 
-				if (regexRoute != null && regexRoute.key != null && regexRoute.attributes != null) {
-
+				if (regexRoute != null) {
 					while (itr.hasNext()) {
 						entry = itr.next();
 
-						if (regexRoute != null && regexRoute.key != null) {
-							value = new Translation(map.get(regexRoute.key));
+						if (regexRoute.key.startsWith(entry.getKey())) {
+							value = entry.getValue();
+						}
 
-// Skip this nonsense for now...							
-//							if (value.getAttributes() == null) {
-//								value.setAttributes(new HashMap<>());
-//							}
-//							if (value != null && regexRoute.attributes != null) {
-//								value.getAttributes().putAll(regexRoute.attributes);
-//							}
-
+						if (value != null) {
+							value = new Translation(value);
+							if (value.getAttributes() == null) {
+								value.setAttributes(new HashMap<>());
+							}
+							if (regexRoute.attributes != null) {
+								value.getAttributes().putAll(regexRoute.attributes);
+							}
+							break;
 						}
 					}
-
-//					if (value != null) {
-//						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap Route found id: " + value.getId()
-//								+ ", description=" + value.getDescription());
-//						break;
-//					} else {
-//						SettingsManager.sipLogger.finer(request, "ConfigPrefixMap Route not found");
-//					}
 				}
-
 			}
 
 		} catch (Exception e) {
-			if (SettingsManager.getSipLogger() != null) {
-				SettingsManager.getSipLogger().logStackTrace(e);
-			}
+			sipLogger.logStackTrace(e);
 		}
 
 		return value;
