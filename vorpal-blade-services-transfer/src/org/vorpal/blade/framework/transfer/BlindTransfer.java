@@ -163,7 +163,7 @@ public class BlindTransfer extends Transfer {
 					notify200.setHeader(EVENT, "refer");
 					notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
 					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
-					notify200.setContent(sipFrag, SIPFRAG);
+					notify200.setContent(sipFrag.getBytes(), SIPFRAG);
 					sendRequest(notify200);
 
 					// User is notified of a successful transfer
