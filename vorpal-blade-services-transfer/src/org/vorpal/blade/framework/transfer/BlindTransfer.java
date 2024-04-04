@@ -158,7 +158,10 @@ public class BlindTransfer extends Transfer {
 					// https://www.dialogic.com/webhelp/csp1010/8.4.1_ipn3/sip_software_chap_-_sip_notify_subscription_state.htm
 
 //					notify200.setHeader(SUBSCRIPTION_STATE, "active");
-					notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
+//					notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
+
+					notify200.setHeader(EVENT, "refer");
+					notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
 					notify200.setContent(OK_200.getBytes(), SIPFRAG);
 					sendRequest(notify200);
 
@@ -190,15 +193,13 @@ public class BlindTransfer extends Transfer {
 
 //					// Do we need to send a BYE? No, let the transferor try again.
 					sendRequest(notifyFailure, (notifyFailureResponse) -> {
-						
+
 //						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"), (byeResponse) -> {
 //
 //							// sessions are not automatically invalidating, why?
 //							// byeResponse.getApplicationSession().invalidate();
 //						});
 
-					
-					
 					});
 
 				}
