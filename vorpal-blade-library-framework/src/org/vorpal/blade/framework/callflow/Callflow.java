@@ -489,13 +489,11 @@ public abstract class Callflow implements Serializable {
 			}
 
 			String xvs = indexKey + ":" + dialog;
-//			sipLogger.finer(sipSession, "setting header X-Vorpal-Session: " + xvs);
 			request.setHeader("X-Vorpal-Session", xvs);
 		}
 
 		sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 		request.send();
-
 	}
 
 	/**
@@ -639,36 +637,36 @@ public abstract class Callflow implements Serializable {
 
 //					try {
 
-						switch (response.getMethod()) {
-						case INVITE:
-						case REGISTER:
-						case SUBSCRIBE:
-						case NOTIFY:
-						case PUBLISH:
-						case REFER:
-							String indexKey = getVorpalSessionId(response.getApplicationSession());
-							String dialog = getVorpalDialogId(response.getSession());
-							response.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
-						}
+					switch (response.getMethod()) {
+					case INVITE:
+					case REGISTER:
+					case SUBSCRIBE:
+					case NOTIFY:
+					case PUBLISH:
+					case REFER:
+						String indexKey = getVorpalSessionId(response.getApplicationSession());
+						String dialog = getVorpalDialogId(response.getSession());
+						response.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
+					}
 
-						response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
+					response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
 
-						if (provisional(response)) {
+					if (provisional(response)) {
 
-							if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
+						if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
 
-								if (response.getSession().isValid()) {
-									response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
-									response.sendReliably();
-								}
-
-							} else {
-								response.send();
+							if (response.getSession().isValid()) {
+								response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
+								response.sendReliably();
 							}
 
 						} else {
 							response.send();
 						}
+
+					} else {
+						response.send();
+					}
 
 //					} catch (Exception e) {
 //						sipLogger.logStackTrace(e);
@@ -1162,33 +1160,33 @@ public abstract class Callflow implements Serializable {
 		}
 
 //		try {
-			Proxy proxy = inboundRequest.getProxy();
+		Proxy proxy = inboundRequest.getProxy();
 
-			ProxyTier proxyTier = ProxyPlan.getTiers().remove(0);
+		ProxyTier proxyTier = ProxyPlan.getTiers().remove(0);
 
-			proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
-			// proxy.setRecordRoute(false);
-			// proxy.setSupervised(true);
+		proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
+		// proxy.setRecordRoute(false);
+		// proxy.setSupervised(true);
 
-			List<URI> endpoints = new LinkedList<URI>();
-			for (URI endpoint : proxyTier.getEndpoints()) {
-				endpoints.add(endpoint);
-			}
-			List<ProxyBranch> proxyBranches = proxy.createProxyBranches(endpoints);
+		List<URI> endpoints = new LinkedList<URI>();
+		for (URI endpoint : proxyTier.getEndpoints()) {
+			endpoints.add(endpoint);
+		}
+		List<ProxyBranch> proxyBranches = proxy.createProxyBranches(endpoints);
 
-			Integer timeout = proxyTier.getTimeout();
-			if (timeout != null && timeout > 0) {
-				proxy.setProxyTimeout(timeout);
-			}
+		Integer timeout = proxyTier.getTimeout();
+		if (timeout != null && timeout > 0) {
+			proxy.setProxyTimeout(timeout);
+		}
 
-			inboundRequest.getSession().setAttribute("RESPONSE_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
+		inboundRequest.getSession().setAttribute("RESPONSE_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
 
-			proxy.startProxy();
+		proxy.startProxy();
 
-			for (ProxyBranch proxyBranch : proxy.getProxyBranches()) {
-				sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null,
-						this.getClass().getSimpleName(), null);
-			}
+		for (ProxyBranch proxyBranch : proxy.getProxyBranches()) {
+			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, this.getClass().getSimpleName(),
+					null);
+		}
 
 //		} catch (Exception e) {
 //			sipLogger.logStackTrace(e);
