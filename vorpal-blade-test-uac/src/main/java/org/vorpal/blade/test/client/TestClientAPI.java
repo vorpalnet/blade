@@ -111,31 +111,19 @@ public class TestClientAPI extends Callflow {
 
 			MimeMessageParser parser = new MimeMessageParser(msg);
 			parser.parse();
+			List<DataSource> list = parser.getAttachmentList();
+			sipLogger.severe("list.size(): " + list.size());
+
+			
 			
 			MimeMultipart mm2 = (MimeMultipart) msg.getContent();
-
 			ByteArrayOutputStream bout = new ByteArrayOutputStream();
 			mm2.writeTo(bout);
-			System.out.println(bout.toString());
-			
-			
-//			MimeMultipart mm2 = (MimeMultipart) msg.getContent();
-//			mm2.writeTo(System.out);
-			
+			bobRequest.setContent(bout.toString(), mm2.getContentType());
 
+			sipLogger.info("bobRequest.getContentType(): "+bobRequest.getContentType());
+			sipLogger.info("bobRequest.getContent(): \n"+bobRequest.getContent());
 			
-			
-			
-			List<DataSource> list = parser.getAttachmentList();
-			System.out.println("list.size(): " + list.size());
-			
-
-			
-			sipLogger.warning(   parser.getPlainContent() );
-			
-			
-			
-			bobRequest.setContent(content.getBytes(), contentType);
 			
 			
 			
@@ -152,8 +140,18 @@ public class TestClientAPI extends Callflow {
 		// Save the 'transient' AsyncResponse for later HTTP Response
 		asyncResponses.put(appSession.getId(), asyncResponse);
 
+		
+		
+		
+		sipLogger.warning(bobRequest, "Sending this...\n"+bobRequest.toString());
+		
+		
+		
+		
 		// Send the SIP request
 		sendRequest(bobRequest, (bobResponse) -> {
+
+			sipLogger.severe(bobResponse, "Received this...\n"+bobResponse.toString());
 
 			msgResponse.responses.add(bobResponse.toString());
 

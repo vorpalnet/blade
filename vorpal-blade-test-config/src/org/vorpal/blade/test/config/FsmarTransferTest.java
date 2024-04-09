@@ -16,6 +16,7 @@ public class FsmarTransferTest extends AppRouterConfiguration {
 		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
 		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
+		this.getPrevious("null").getTrigger("REFER").createTransition("transfer");
 
 		this.getPrevious("null").getTrigger("INVITE").createTransition("transfer");
 		this.getPrevious("transfer").getTrigger("INVITE").createTransition("b2bua");
@@ -23,7 +24,6 @@ public class FsmarTransferTest extends AppRouterConfiguration {
 
 		// this.getPrevious("proxy-registrar").getTrigger("INVITE").createTransition("queue");
 
-		this.getPrevious("null").getTrigger("REFER").createTransition("transfer");
 //		this.getPrevious("transfer").getTrigger("REFER").createTransition("b2bua");
 //		this.getPrevious("b2bua").getTrigger("REFER").createTransition("proxy-registrar");
 

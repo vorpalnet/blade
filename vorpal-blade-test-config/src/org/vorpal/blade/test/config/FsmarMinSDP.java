@@ -11,17 +11,20 @@ public class FsmarMinSDP extends AppRouterConfiguration {
 
 	public FsmarMinSDP() {
 		this.setDefaultApplication("proxy-goober");
-
+		
 		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
 		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
 		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
+		this.getPrevious("null").getTrigger("REFER").createTransition("transfer");
 
-		this.getPrevious("null").getTrigger("INVITE").createTransition("minsdp");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("transfer");
+		this.getPrevious("transfer").getTrigger("INVITE").createTransition("b2bua");
+		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("proxy-registrar");
+		
 		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("minsdp");	
 		this.getPrevious("minsdp").getTrigger("INVITE").createTransition("test-uas");
 
-		
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {
