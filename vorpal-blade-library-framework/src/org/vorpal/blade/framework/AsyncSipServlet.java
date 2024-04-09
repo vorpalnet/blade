@@ -227,22 +227,18 @@ public abstract class AsyncSipServlet extends SipServlet
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
 					} else {
 
-						SipServletRequest originalProxyRequest = request.getProxy().getOriginalRequest();
-						if (originalProxyRequest != null) {
-//							Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "proxy");
-//							Callflow.getLogger().superArrow(Direction.SEND, false, request, null, "proxy", null);
-
-							Callflow.getLogger().superArrow(Direction.RECEIVE, false, request, null, "proxy", null);
-							Callflow.getLogger().superArrow(Direction.SEND, request, null, "proxy");
-
-						} else {
+//						SipServletRequest originalProxyRequest = request.getProxy().getOriginalRequest();
+//						if (originalProxyRequest != null) {
+//							Callflow.getLogger().superArrow(Direction.RECEIVE, false, request, null, "proxy", null);
+//							Callflow.getLogger().superArrow(Direction.SEND, request, null, "proxy");
+//						} else {
 							Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
 							SipServletResponse response = request.createResponse(501);
 							Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
 							Callflow.getLogger().warning("No registered callflow for request method "
 									+ request.getMethod() + ", consider modifying the 'chooseCallflow' method.");
 							response.send();
-						}
+//						}
 
 					}
 				} else {
@@ -269,25 +265,25 @@ public abstract class AsyncSipServlet extends SipServlet
 				callback = Callflow.pullCallback(response);
 				if (callback != null) {
 
-					if (response.getProxyBranch() != null) {
+//					if (response.getProxyBranch() != null) {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, false, null, response,
 								callback.getClass().getSimpleName(), null);
 
-					} else {
-						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-								callback.getClass().getSimpleName());
-					}
+//					} else {
+//						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+//								callback.getClass().getSimpleName());
+//					}
 
 					callback.accept(response);
 
 					// For printing arrow for proxy messages
-					if (response.getProxy() != null && response.getProxy().getOriginalRequest() != null) {
-						SipServletRequest proxyOrginalRequest = response.getProxy().getOriginalRequest();
-						if (proxyOrginalRequest != null) {
-							Callflow.getLogger().superArrow(Direction.SEND, true, null, response,
-									callback.getClass().getSimpleName(), Logger.from(response));
-						}
-					}
+//					if (response.getProxy() != null && response.getProxy().getOriginalRequest() != null) {
+//						SipServletRequest proxyOrginalRequest = response.getProxy().getOriginalRequest();
+//						if (proxyOrginalRequest != null) {
+//							Callflow.getLogger().superArrow(Direction.SEND, true, null, response,
+//									callback.getClass().getSimpleName(), Logger.from(response));
+//						}
+//					}
 
 				} else {
 					// Sometimes a 180 Ringing comes back on a brand new SipSession
@@ -349,13 +345,19 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					} else {
 
-						SipServletRequest originalProxyRequest = response.getProxy().getOriginalRequest();
-						if (originalProxyRequest != null) {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
-							Callflow.getLogger().superArrow(Direction.SEND, false, null, response, "proxy", null);
-						} else {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
-						}
+						
+						
+// Gotta fix this... 						
+//						SipServletRequest originalProxyRequest = response.getProxy().getOriginalRequest();
+//						if (originalProxyRequest != null) {
+//							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
+//							Callflow.getLogger().superArrow(Direction.SEND, false, null, response, "proxy", null);
+//						} else {
+//							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
+//						}
+						
+						
+						
 
 					}
 				}
