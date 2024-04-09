@@ -32,15 +32,15 @@ public class RegisterCallflow extends Callflow {
 			SipApplicationSession appSession = request.getApplicationSession();
 			ProxyRegistrar proxyRegistrar = (ProxyRegistrar) appSession.getAttribute("PROXY_REGISTRAR");
 			if (proxyRegistrar == null) {
-				sipLogger.warning(request, "Creating new ProxyRegistrar object...");
+				sipLogger.finer(request, "Creating new ProxyRegistrar object...");
 			}
 			proxyRegistrar = (proxyRegistrar != null) ? proxyRegistrar : new ProxyRegistrar();
 
 			SipServletResponse resp = request.createResponse(200);
 
 			// Echo back the Allow header
-			 proxyRegistrar.copyAllow(request);
-			 proxyRegistrar.pasteAllow(resp);
+			proxyRegistrar.copyAllow(request);
+			proxyRegistrar.pasteAllow(resp);
 //			resp.setHeader("Allow",
 //					"OPTIONS, INVITE, ACK, CANCEL, BYE, REFER, INFO, NOTIFY, UPDATE, MESSAGE, SUBSCRIBE"); // No PRACK
 
@@ -78,6 +78,7 @@ public class RegisterCallflow extends Callflow {
 			appSession.setAttribute("PROXY_REGISTRAR", proxyRegistrar);
 
 		} catch (Exception e) {
+			sipLogger.severe(request, "Unable to process SIP message:\n" + request.toString());
 			sipLogger.logStackTrace(request, e);
 			throw e;
 		}

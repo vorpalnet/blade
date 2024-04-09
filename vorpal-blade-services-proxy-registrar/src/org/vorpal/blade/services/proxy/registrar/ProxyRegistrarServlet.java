@@ -1,9 +1,6 @@
 package org.vorpal.blade.services.proxy.registrar;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.Map.Entry;
-import java.util.Properties;
 import java.util.logging.Level;
 
 import javax.servlet.ServletException;
@@ -20,6 +17,7 @@ import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.logging.Color;
 import org.vorpal.blade.framework.logging.Logger;
 import org.vorpal.blade.framework.proxy.ProxyInvite;
 import org.vorpal.blade.framework.proxy.ProxyListener;
@@ -44,8 +42,18 @@ public class ProxyRegistrarServlet extends ProxyServlet
 	public static Logger sipLogger;
 
 	@SipApplicationKey
-	public static String sessionKey(SipServletRequest req) {
-		String key = getAccountName(req.getTo());
+	public static String sessionKey(SipServletRequest request) {
+		String key = null;
+
+		switch (request.getMethod()) {
+		case "REGISTER":
+			key = getAccountName(request.getFrom());
+			break;
+		case "INVITE":
+			key = getAccountName(request.getTo());
+			break;
+		}
+
 		return key;
 	}
 
@@ -55,18 +63,16 @@ public class ProxyRegistrarServlet extends ProxyServlet
 		settingsManager = new SettingsManager<ProxyRegistrarSettings>(event, ProxyRegistrarSettings.class,
 				new ProxyRegistrarSettingsDefault());
 		sipLogger = SettingsManager.getSipLogger();
-
-		sipLogger.fine("ProxyRegistrarServlet.servletCreated... ");
+		sipLogger.finer("servletCreated... ");
 	}
 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) {
-		sipLogger.fine("ProxyRegistrarServlet.servletDestroyed... ");
+		sipLogger.finer("servletDestroyed... ");
 	}
 
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
-		sipLogger.warning(request, "ProxyRegistrarServlet.chooseCallflow... " + request.getMethod());
 
 		Callflow callflow = null;
 		ProxyRegistrarSettings settings = settingsManager.getCurrent();
@@ -78,8 +84,6 @@ public class ProxyRegistrarServlet extends ProxyServlet
 		case "INVITE":
 			callflow = new ProxyInvite(this, null);
 			break;
-		default:
-			callflow = new ProxyCallflow(this, null, false);
 		}
 
 		return callflow;
@@ -125,22 +129,36 @@ public class ProxyRegistrarServlet extends ProxyServlet
 
 	@Override
 	public void sessionCreated(SipApplicationSessionEvent event) {
-		sipLogger.finer(event.getApplicationSession(), "ProxyRegistrarServlet.sessionCreated... ");
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finer(event.getApplicationSession(), Color.green("appSession created... " + appSession.getId()));
+		}
+
 	}
 
 	@Override
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
-		sipLogger.finer(event.getApplicationSession(), "ProxyRegistrarServlet.sessionDestroyed...");
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finer(appSession, Color.red("appSession destroyed... " + appSession.getId()));
+		}
 	}
 
 	@Override
 	public void sessionExpired(SipApplicationSessionEvent event) {
-		sipLogger.finer(event.getApplicationSession(), "ProxyRegistrarServlet.sessionExpired...");
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finer(appSession, Color.red("appSession expired... " + appSession.getId()));
+		}
 	}
 
 	@Override
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
-		sipLogger.finer(event.getApplicationSession(), "ProxyRegistrarServlet.sessionReadyToInvalidate...");
+		if (sipLogger.isLoggable(Level.FINER)) {
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finer(appSession, Color.green("appSession readyToInvalidate... " + appSession.getId()));
+		}
 	}
 
 }

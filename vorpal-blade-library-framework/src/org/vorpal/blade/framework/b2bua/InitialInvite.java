@@ -155,6 +155,11 @@ public class InitialInvite extends Callflow {
 			bobRequest.setRequestURI(aliceRequest.getRequestURI());
 			linkSessions(aliceRequest.getSession(), bobRequest.getSession());
 
+			// Set the outgoing X-Vorpal-Session header
+			String indexKey = this.getVorpalSessionId(bobRequest.getApplicationSession());
+			String dialog = this.createVorpalDialogId(bobRequest.getSession());
+			bobRequest.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
+
 			// This is an API kludge to let the user know what callflow was used
 			bobRequest.setAttribute("callflow", this);
 

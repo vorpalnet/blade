@@ -114,7 +114,6 @@ public class ProxyRegistrar implements Serializable {
 	}
 
 	public void updateContacts(SipServletRequest register) throws ServletParseException {
-		ProxyRegistrarServlet.sipLogger.warning(register, "updateContacts begin...");
 
 		ListIterator<Address> contactsIterator = register.getAddressHeaders("Contact");
 
@@ -122,18 +121,17 @@ public class ProxyRegistrar implements Serializable {
 			Address contact = contactsIterator.next();
 
 			int expires = (contact.getExpires() >= 0) ? contact.getExpires() : register.getExpires();
-			ProxyRegistrarServlet.sipLogger.warning(register, "calculated expires: " + expires);
+			ProxyRegistrarServlet.sipLogger.finer(register, "calculated expires: " + expires);
 
 			if (expires > 0) { // add contact
-				ProxyRegistrarServlet.sipLogger.warning(register, "adding contact: " + contact.toString());
+				ProxyRegistrarServlet.sipLogger.finer(register, "adding contact: " + contact.toString());
 				contactsMap.put(contact.getURI(),
 						new ContactInfo(contact, System.currentTimeMillis() + (expires * 1000)));
 			} else { // remove contact
-				ProxyRegistrarServlet.sipLogger.severe(register, "removing contact: " + contact.getURI());
+				ProxyRegistrarServlet.sipLogger.finer(register, "removing contact: " + contact.getURI());
 				contactsMap.remove(contact.getURI());
 			}
 		}
-		ProxyRegistrarServlet.sipLogger.warning(register, "...updateContacts end.");
 
 	}
 

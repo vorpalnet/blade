@@ -23,13 +23,20 @@
  */
 package org.vorpal.blade.test.client;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Properties;
 
+import javax.mail.Session;
+import javax.mail.internet.MimeMessage;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 
+import org.apache.commons.mail.util.MimeMessageParser;
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
@@ -65,6 +72,20 @@ public class TestClientServlet extends AsyncSipServlet {
 //			sipLogger.log(sipLogger.getLevel(), "Logging level set to: " + sipLogger.getLevel());
 			sipLogger.info("b2buaCreated...");
 //			sipLogger.info("Logging level set to: " + sipLogger.getLevel());
+			
+			
+//			Session session = Session.getDefaultInstance(new Properties());
+//			MimeMessage msg = new MimeMessage(session, new ByteArrayInputStream(
+//					Files.readAllBytes(Paths.get(this.getClass().getResource("request.txt").toURI()))));
+//
+////			MimeMessageParser parser = new MimeMessageParser(msg);
+////			parser.parse();
+//			
+//			sipLogger.info( "msg.getContentType(): " +  msg.getContentType()  );
+//			sipLogger.info( "msg.getContent():\n" +  msg.getContent()  );
+
+			
+			
 
 		} catch (Exception e) {
 			if (sipLogger != null) {

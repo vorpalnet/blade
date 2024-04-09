@@ -47,9 +47,6 @@ public abstract class TranslationsMap {
 		RegExRoute regexRoute = null;
 
 		try {
-
-			sipLogger.finer(request, "TranslationsMap.applyTranslations() ...");
-
 			translation = this.lookup(request);
 
 			if (translation != null) {

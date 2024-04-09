@@ -52,7 +52,7 @@ import org.vorpal.blade.framework.callflow.Expectation;
  *     |                   |                   |                   |   
  *     |                   | 202 Accepted      |                   |   
  *     |                   |------------------>|                   |
- *     |                   | NOTIFY            |                   |   Subscription-State: pending
+ *     |                   | NOTIFY            |                   |   Subscription-State: pending;expires=3600
  *     |                   |------------------>|                   |   Event: refer
  *     |                   |            200 OK |                   |   Content-Type: message/sipfrag
  *     |                   |<------------------|                   |   Content: SIP/2.0 100 Trying
@@ -63,7 +63,7 @@ import org.vorpal.blade.framework.callflow.Expectation;
  *     |                   |<--------------------------------------|
  *     |                   |                   |            200 OK |
  *     |                   |<-------------------------------(sdp)--|
- *     |                   | NOTIFY            |                   |   Subscription-State: active
+ *     |                   | NOTIFY            |                   |   Subscription-State: terminated;reason=noresource
  *     |                   |------------------>|                   |   Event:              refer
  *     |                   |            200 OK |                   |   Content-Type:       message/sipfrag
  *     |                   |<------------------|                   |   Content:            SIP/2.0 200 OK
@@ -157,10 +157,8 @@ public class BlindTransfer extends Transfer {
 					//
 					// https://www.dialogic.com/webhelp/csp1010/8.4.1_ipn3/sip_software_chap_-_sip_notify_subscription_state.htm
 
-//					notify200.setHeader(SUBSCRIPTION_STATE, "active");
-//					notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
-
 					notify200.setHeader(EVENT, "refer");
+// bad					notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
 					notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
 					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
 					notify200.setContent(sipFrag.getBytes(), SIPFRAG);
@@ -192,15 +190,7 @@ public class BlindTransfer extends Transfer {
 					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
 					notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
 
-//					// Do we need to send a BYE? No, let the transferor try again.
 					sendRequest(notifyFailure, (notifyFailureResponse) -> {
-
-//						sendRequest(notifyFailureResponse.getSession().createRequest("BYE"), (byeResponse) -> {
-//
-//							// sessions are not automatically invalidating, why?
-//							// byeResponse.getApplicationSession().invalidate();
-//						});
-
 					});
 
 				}

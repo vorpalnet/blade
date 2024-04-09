@@ -78,139 +78,141 @@ public class AppRouter implements SipApplicationRouter {
 					: settingsManager.getCurrent();
 
 			// Did the request originate from an app?
-			SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request).getImpl()
-					.getSipApplicationSessionImpl();
+			SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request) //
+					.getImpl().getSipApplicationSessionImpl();
+
 			String previous = (sasi != null) ? SettingsManager.basename(sasi.getApplicationName()) : "null";
 
-			if (sipLogger.isLoggable(Level.FINE)) {
-				String str = "getNextApplication... " + request.getMethod() + " " + request.getRequestURI();
-				str += ", previous: " + previous;
-				str += (region != null) ? ", region: " + region.getLabel() + " " + region.getType() : "";
-				str += (directive != null) ? ", directive: " + directive : "";
-				str += (requestInfo != null)
-						? ", requestInfo" + requestInfo.getType() + " " + requestInfo.getApplicationName()
-						: "";
-				sipLogger.fine(str);
-			}
+			if (sasi == null) {
 
-			// For targeted sessions, skip all this nonsense and route to that app
-			if (requestInfo != null) {
-				String deployedApp = getDeployedApp(requestInfo.getApplicationName());
-				nextApp = new SipApplicationRouterInfo( //
-						deployedApp, //
-						region, //
-						null, //
-						null, //
-						SipRouteModifier.NO_ROUTE, //
-						config);
-			}
+				if (sipLogger.isLoggable(Level.FINE)) {
+					String str = "getNextApplication... " + request.getMethod() + " " + request.getRequestURI();
+					str += ", previous: " + previous;
+					str += (region != null) ? ", region: " + region.getLabel() + " " + region.getType() : "";
+					str += (directive != null) ? ", directive: " + directive : "";
+					str += (requestInfo != null)
+							? ", requestInfo" + requestInfo.getType() + " " + requestInfo.getApplicationName()
+							: "";
+					sipLogger.fine(str);
+				}
 
-			// Is the request intended for a deployed app? i.e. "sip:hold"
-			if (nextApp == null) {
-				SipURI sipUri = (SipURI) request.getRequestURI();
+				// For targeted sessions, skip all this nonsense and route to that app
+				if (requestInfo != null) {
+					String deployedApp = getDeployedApp(requestInfo.getApplicationName());
+					nextApp = new SipApplicationRouterInfo( //
+							deployedApp, //
+							region, //
+							null, //
+							null, //
+							SipRouteModifier.NO_ROUTE, //
+							config);
+				}
 
-				if (null == sipUri.getUser()) {
-					String app = getDeployedApp(sipUri.getHost());
-					if (app != null) {
-						nextApp = new SipApplicationRouterInfo( //
-								app, //
-								region, //
-								null, //
-								null, //
-								SipRouteModifier.NO_ROUTE, //
-								config);
+				// Is the request intended for a deployed app? i.e. "sip:hold"
+				if (nextApp == null) {
+					SipURI sipUri = (SipURI) request.getRequestURI();
+
+					if (null == sipUri.getUser()) {
+						String app = getDeployedApp(sipUri.getHost());
+						if (app != null) {
+							nextApp = new SipApplicationRouterInfo( //
+									app, //
+									region, //
+									null, //
+									null, //
+									SipRouteModifier.NO_ROUTE, //
+									config);
+						}
 					}
 				}
-			}
 
-			// Iterate through all possible transitions
-			if (nextApp == null) {
-				State state = config.getPrevious(previous);
+				// Iterate through all possible transitions
+				if (nextApp == null) {
+					State state = config.getPrevious(previous);
 
-				Trigger trigger = state.getTrigger(request.getMethod()); // invite
+					Trigger trigger = state.getTrigger(request.getMethod()); // invite
 
-				if (trigger != null) {
+					if (trigger != null) {
 
-					boolean conditionMatches = false;
-					Transition t = null;
+						boolean conditionMatches = false;
+						Transition t = null;
 
-					Iterator<Transition> itr = trigger.transitions.iterator();
-					if (itr.hasNext()) {
-						while (conditionMatches == false && itr.hasNext()) {
-							t = itr.next();
+						Iterator<Transition> itr = trigger.transitions.iterator();
+						if (itr.hasNext()) {
+							while (conditionMatches == false && itr.hasNext()) {
+								t = itr.next();
 
-							if (t.condition == null) {
-								sipLogger.fine("null condition, implicit match!");
-								conditionMatches = true;
-							} else {
-								conditionMatches = t.condition.checkAll(t.id, request);
-								sipLogger.fine("Condition matches: " + conditionMatches);
-							}
+								if (t.condition == null) {
+									sipLogger.fine("null condition, implicit match!");
+									conditionMatches = true;
+								} else {
+									conditionMatches = t.condition.checkAll(t.id, request);
+									sipLogger.fine("condition matches: " + conditionMatches);
+								}
 
-							if (conditionMatches) {
-								sipLogger.fine("conditionMatches... break!");
-								break;
-							}
+								if (conditionMatches) {
+									sipLogger.fine("conditionMatches... break!");
+									break;
+								}
 
-						} // while
-					} else {
-						sipLogger.fine("null transition, implicit match!");
-						t = new Transition();
-						conditionMatches = true;
-					}
-
-					if (conditionMatches) {
-
-						if (t.action == null) {
-							t.action = new Action();
+							} // while
 						} else {
-							if (sipLogger.isLoggable(Level.FINE)) {
-								sipLogger.fine("Action:" + "\n\t originating=" + t.action.originating //
-										+ "\n\t terminating=" + t.action.terminating //
-										+ "\n\t route=" + t.action.route //
-										+ "\n\t route_back=" + t.action.route_back //
-										+ "\n\troute_final=" + t.action.route_final);
-							}
-
+							sipLogger.fine("null transition, implicit match!");
+							t = new Transition();
+							conditionMatches = true;
 						}
 
-						nextApp = t.action.createRouterInfo(deployed.get(t.next), config, request);
+						if (conditionMatches) {
+
+							if (t.action == null) {
+								t.action = new Action();
+							} else {
+								if (sipLogger.isLoggable(Level.FINE)) {
+									sipLogger.fine("Action:" + "\n\t originating=" + t.action.originating //
+											+ "\n\t terminating=" + t.action.terminating //
+											+ "\n\t route=" + t.action.route //
+											+ "\n\t route_back=" + t.action.route_back //
+											+ "\n\troute_final=" + t.action.route_final);
+								}
+
+							}
+
+							nextApp = t.action.createRouterInfo(deployed.get(t.next), config, request);
+						}
+
 					}
 
 				}
 
-			}
+				// Use the default application if necessary
+				if (previous.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
+						|| nextApp.getNextApplicationName().equals("null"))) {
+					sipLogger.warning("Using defaultApplication: " + config.getDefaultApplication() + //
+							" for " + request.getMethod() + " " + request.getRequestURI());
+					nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null,
+							null, SipRouteModifier.NO_ROUTE, config);
+				}
 
-			// Use the default application if necessary
-			if (previous.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
-					|| nextApp.getNextApplicationName().equals("null"))) {
-				sipLogger.warning("Using defaultApplication: " + config.getDefaultApplication() + //
-						" for " + request.getMethod() + " " + request.getRequestURI());
-				nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null, null,
-						SipRouteModifier.NO_ROUTE, config);
-			}
-
-			if (sipLogger.isLoggable(Level.FINE)) {
-				if (nextApp != null) {
-					String str = "RouterInfo... " + nextApp.getNextApplicationName();
-					str += ", getSubscriberURI: " + nextApp.getSubscriberURI();
-					if (nextApp.getRoutingRegion() != null) {
-						str += ", getRoutingRegion().getLabel: " + nextApp.getRoutingRegion().getLabel();
+				if (sipLogger.isLoggable(Level.FINE)) {
+					if (nextApp != null) {
+						String str = "RouterInfo... " + nextApp.getNextApplicationName();
+						str += ", getSubscriberURI: " + nextApp.getSubscriberURI();
+						if (nextApp.getRoutingRegion() != null) {
+							str += ", getRoutingRegion().getLabel: " + nextApp.getRoutingRegion().getLabel();
+						}
+						if (nextApp.getRoutingRegion() != null) {
+							str += ", getRoutingRegion().getType: " + nextApp.getRoutingRegion().getType();
+						}
+						str += ", getRouteModifier: " + nextApp.getRouteModifier();
+						str += ", getRoutes: " + Arrays.toString(nextApp.getRoutes());
+						sipLogger.fine(str);
+					} else {
+						sipLogger.fine("No match. Setting router info to null.");
 					}
-					if (nextApp.getRoutingRegion() != null) {
-						str += ", getRoutingRegion().getType: " + nextApp.getRoutingRegion().getType();
-					}
-					str += ", getRouteModifier: " + nextApp.getRouteModifier();
-					str += ", getRoutes: " + Arrays.toString(nextApp.getRoutes());
-					sipLogger.fine(str);
-				} else {
-					sipLogger.fine("No match. Setting router info to null.");
 				}
 			}
-
-		} catch (
-
-		Exception e) {
+		} catch (Exception e) {
+			sipLogger.severe("Error processing request:\n" + request.toString());
 			sipLogger.logStackTrace(e);
 		}
 
