@@ -19,7 +19,7 @@ public class FsmarMinSDP extends AppRouterConfiguration {
 
 		this.getPrevious("null").getTrigger("INVITE").createTransition("minsdp");
 		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("minsdp");	
-		this.getPrevious("minsdp").getTrigger("INVITE").createTransition("proxy-registrar");
+		this.getPrevious("minsdp").getTrigger("INVITE").createTransition("test-uas");
 
 		
 	}
