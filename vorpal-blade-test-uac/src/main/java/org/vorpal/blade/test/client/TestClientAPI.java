@@ -1,10 +1,16 @@
 package org.vorpal.blade.test.client;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
+import javax.mail.Session;
+import javax.mail.internet.MimeMessage;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
@@ -20,6 +26,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 
+import org.apache.commons.mail.util.MimeMessageParser;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
 
@@ -69,27 +76,34 @@ public class TestClientAPI extends Callflow {
 			bobRequest.setHeader(header.name, header.value);
 		}
 
-		bobRequest.setHeader("MIME-Version", "1.0");
-		bobRequest.setHeader("X-Acme-Call-ID", "");
-		bobRequest.setHeader("Require", "siprec");
-		bobRequest.setHeader("User-to-User",
-				"04FA08003918F5615DEFC4C8143030303537303633383931363333353436313830;encoding=hex");
-		bobRequest.setHeader("Cisco-Gucid", "00057063891633546180");
-		
-		
-//		bobRequest.getParameterableHeader("To").setParameter("recorddn", "1992665105");
-		
+//		bobRequest.setHeader("MIME-Version", "1.0");
+//		bobRequest.setHeader("X-Acme-Call-ID", "");
+//		bobRequest.setHeader("Require", "siprec");
+//		bobRequest.setHeader("User-to-User",
+//				"04FA08003918F5615DEFC4C8143030303537303633383931363333353436313830;encoding=hex");
+//		bobRequest.setHeader("Cisco-Gucid", "00057063891633546180");
+//		bobRequest.setContent(content, contentType);
 
-		bobRequest.setContent(content, contentType);
-		
-		
-		
-//		bobRequest.setContent(message.body, "application/sdp");
-//		bobRequest.setContent(message.body, "multipart/mixed");
+		try {
 
-//		if (message.content != null && message.content.length() > 0) {
-//			bobRequest.setContent(message.content, message.contentType);
-//		}
+//			Session session = Session.getDefaultInstance(new Properties());
+//			MimeMessage msg = new MimeMessage(session, new ByteArrayInputStream(
+//					Files.readAllBytes(Paths.get(this.getClass().getResource("request.txt").toURI()))));
+//
+//			MimeMessageParser parser = new MimeMessageParser(msg);
+//			parser.parse();
+//
+//			sipLogger.info("msg.getContentType(): " + msg.getContentType());
+//			sipLogger.info("msg.getContent():\n" + msg.getContent().toString());
+
+//			bobRequest.setContent(parser.getMimeMessage().getContent().toString(),
+//					parser.getMimeMessage().getContentType());
+
+			bobRequest.setContent(content.getBytes(), contentType);
+
+		} catch (Exception e) {
+			sipLogger.severe(e);
+		}
 
 		MessageResponse msgResponse = new MessageResponse();
 

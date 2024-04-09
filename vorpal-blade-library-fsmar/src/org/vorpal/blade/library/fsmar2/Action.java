@@ -55,8 +55,9 @@ public class Action implements Serializable {
 			} catch (Exception e) {
 				region = SipApplicationRoutingRegion.NEUTRAL_REGION;
 				subscriberURI = null;
-				SettingsManager.getSipLogger().severe(request,
-						"Invalid address header: " + originating + ", setting routing region to neutral.");
+				SettingsManager.getSipLogger()
+						.severe("Invalid address header: " + originating + ", setting routing region to neutral.");
+				SettingsManager.getSipLogger().severe("Error processing request:\n" + request.toString());
 				SettingsManager.getSipLogger().logStackTrace(e);
 			}
 		} else if (terminating != null) {
@@ -67,7 +68,7 @@ public class Action implements Serializable {
 				region = SipApplicationRoutingRegion.NEUTRAL_REGION;
 				subscriberURI = null;
 				SettingsManager.getSipLogger()
-						.severe(request, "Invalid address header: " + terminating + ", setting routing region to neutral.");
+						.severe("Invalid address header: " + terminating + ", setting routing region to neutral.");
 				SettingsManager.getSipLogger().logStackTrace(e);
 			}
 		} else {

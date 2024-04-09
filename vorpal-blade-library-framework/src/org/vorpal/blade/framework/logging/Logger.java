@@ -40,6 +40,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -333,7 +334,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	}
 
-	private String from(SipServletMessage msg) throws ServletParseException {
+	public static String from(SipServletMessage msg) throws ServletParseException {
 		String name = null;
 		SipURI uri = (SipURI) msg.getFrom().getURI();
 		name = uri.getUser();
@@ -345,7 +346,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return name;
 	}
 
-	private String to(SipServletMessage msg) throws ServletParseException {
+	public static String to(SipServletMessage msg) throws ServletParseException {
 		String name = null;
 		SipURI uri = (SipURI) msg.getTo().getURI();
 		name = uri.getUser();
@@ -442,20 +443,18 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			throws ServletParseException {
 
 		try {
+			boolean leftSide = false;
 
 			if (isLoggable(Level.FINE)) { // TODO: This seems like a problem with the Configuration file settings.
 
-				StringBuilder str = new StringBuilder();
+				if (request != null //
+						&& request.isInitial() //
+						&& direction.equals(Direction.RECEIVE)) {
 
-				boolean leftSide = false;
-
-				if (request != null && request.isInitial() && direction.equals(Direction.RECEIVE)) {
 					request.getSession().setAttribute("DIAGRAM_SIDE", "LEFT");
 					String line = String.format("%87s", "").replace(' ', '=');
 
-//					String indexKey = Callflow.getVorpalSessionId(request.getApplicationSession());
-//					log(Level.FINE, hexHash(request.getSession()) + (" ") + line + "; X-Vorpal-Session: " + indexKey);
-
+					// This is the new session =========== line
 					log(Level.FINE, hexHash(request.getSession()) + (" ") + line);
 				}
 
@@ -464,6 +463,24 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				} else {
 					leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
 				}
+
+			}
+
+			superArrow(direction, leftSide, request, response, name, null);
+
+		} catch (Exception ex) {
+			log(Level.WARNING, ex.getMessage());
+		}
+	}
+
+	public void superArrow(Direction direction, boolean leftSide, SipServletRequest request,
+			SipServletResponse response, String name, String user) throws ServletParseException {
+
+		try {
+
+			if (isLoggable(Level.FINE)) { // TODO: This seems like a problem with the Configuration file settings.
+
+				StringBuilder str = new StringBuilder();
 
 				String method = "";
 				if (request != null) {
@@ -518,7 +535,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							note = note.trim();
 
-							String alice = String.format("%-17s", shorten(from(request), 17)).replace(' ', '-');
+							String alice;
+							if (user == null) {
+								alice = String.format("%-17s", shorten(from(request), 17)).replace(' ', '-');
+							} else {
+								alice = String.format("%-17s", shorten(user, 17)).replace(' ', '-');
+							}
+
 							String arrow = String.format("%17s", method + "-->").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
 
@@ -530,7 +553,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //							comment = addState(request, comment);
 							str.append(alice).append(arrow).append(middle).append(comment);
 						} else { // #2
-							String alice = String.format("%-17s", shorten(to(response), 17)).replace(' ', '-');
+
+							String alice;
+							if (user == null) {
+								alice = String.format("%-17s", shorten(to(response), 17)).replace(' ', '-');
+							} else {
+								alice = String.format("%-17s", shorten(user, 17)).replace(' ', '-');
+							}
+
 							String arrow = String.format("%17s", "" + status + "-->").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
 							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
@@ -563,7 +593,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							note = note.trim();
 
-							String alice = String.format("%-18s", shorten(to(request), 17) + "<").replace(' ', '-');
+							String alice;
+							if (user == null) {
+								alice = String.format("%-18s", shorten(to(request), 17) + "<").replace(' ', '-');
+							} else {
+								alice = String.format("%-18s", shorten(user, 17) + "<").replace(' ', '-');
+							}
 							String arrow = String.format("%16s", "" + method + "---").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
 							String comment = String.format("%36s", ";") + " " + String.format("%-32s", note);
@@ -576,7 +611,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							str.append(alice).append(arrow).append(middle).append(comment);
 
 						} else { // #4
-							String alice = String.format("%-18s", shorten(from(response), 17) + "<").replace(' ', '-');
+
+							String alice;
+							if (user == null) {
+								alice = String.format("%-18s", shorten(from(response), 17) + "<").replace(' ', '-');
+							} else {
+								alice = String.format("%-18s", shorten(user, 17) + "<").replace(' ', '-');
+							}
+
 							String arrow = String.format("%16s", "" + status + "---").replace(' ', '-');
 							String middle = String.format("%-17s", shorten(name, 17));
 							String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
@@ -623,7 +665,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String left = String.format("%34s", "");
 							String middle = String.format("%-18s", shorten(name, 17) + "<").replace(' ', '-');
 							String arrow = String.format("%16s", "" + method + "---").replace(' ', '-');
-							String bob = String.format("%-17s", shorten(from(request), 17));
+
+							String bob;
+							if (user == null) {
+								bob = String.format("%-17s", shorten(from(request), 17));
+							} else {
+								bob = String.format("%-17s", shorten(user, 17));
+							}
+
 							String comment = " ; " + String.format("%-32s", note);
 
 //							str.append(hexHash(request.getSession())).append("{5}");
@@ -636,7 +685,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String left = String.format("%34s", "");
 							String middle = String.format("%-18s", shorten(name, 17) + "<").replace(' ', '-');
 							String arrow = String.format("%16s", "" + status + "---").replace(' ', '-');
-							String bob = String.format("%-17s", shorten(to(response), 17));
+
+							String bob;
+							if (user == null) {
+								bob = String.format("%-17s", shorten(to(response), 17));
+							} else {
+								bob = String.format("%-17s", shorten(user, 17));
+							}
+
 							String comment = " ; " + response.getReasonPhrase() + " (" + response.getMethod() + ")";
 
 //							str.append(hexHash(response.getSession())).append("{6}");
@@ -673,7 +729,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String left = String.format("%34s", "");
 							String middle = String.format("%-17s", shorten(name, 17)).replace(' ', '-');
 							String arrow = String.format("%17s", method + "-->").replace(' ', '-');
-							String bob = String.format("%-17s", shorten(to(request), 17));
+
+							String bob;
+							if (user == null) {
+								bob = String.format("%-17s", shorten(to(request), 17));
+							} else {
+								bob = String.format("%-17s", shorten(user, 17));
+							}
+
 							String comment = " ; " + String.format("%-32s", note);
 
 //							str.append(hexHash(request.getSession())).append("{7}");
