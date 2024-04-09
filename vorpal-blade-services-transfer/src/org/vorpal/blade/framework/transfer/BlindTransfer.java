@@ -136,11 +136,7 @@ public class BlindTransfer extends Transfer {
 
 			// Expect the transferor to hang up after the NOTIFY that the transfer succeeded
 			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-				sipLogger.finer(bye, "transferor (bob) disconnected as expected");
 				sendResponse(bye.createResponse(200));
-
-				// why won't this invalidate on its own?
-//				bye.getSession().invalidate();
 			});
 
 			// User is notified that transfer is initiated

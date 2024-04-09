@@ -83,8 +83,14 @@ public class TestInvite extends InitialInvite {
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
+		sipLogger.warning(request, "recieved this: \n"+request.toString());
+		
+		
 		SipServletResponse response = request.createResponse(200);
 		response.setContent(qfinitiResponse.getBytes(), "application/sdp");
+
+		
+		sipLogger.severe(request, "sending this: \n"+request.toString());
 
 		sendResponse(response);
 

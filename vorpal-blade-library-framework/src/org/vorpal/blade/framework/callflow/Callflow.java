@@ -421,7 +421,15 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public static String getVorpalSessionId(SipApplicationSession appSession) {
-		return (String) appSession.getAttribute("X-Vorpal-Session");
+		String indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+
+//		if (indexKey == null) {
+//			sipLogger.severe("getVorpalSessionId indexKey is really null");
+//		} else if (indexKey.equals("null")) {
+//			sipLogger.severe("getVorpalSessionId indexKey is the string 'null'. Weird!");
+//		}
+
+		return indexKey;
 	}
 
 	public static String createVorpalDialogId(SipSession sipSession) {
@@ -481,7 +489,7 @@ public abstract class Callflow implements Serializable {
 		if (request.isInitial()) {
 			String indexKey = getVorpalSessionId(appSession);
 			if (indexKey == null) {
-				AsyncSipServlet.generateIndexKey(request);
+				indexKey = AsyncSipServlet.generateIndexKey(request);
 			}
 			String dialog = getVorpalDialogId(sipSession);
 			if (dialog == null) {
@@ -1155,6 +1163,17 @@ public abstract class Callflow implements Serializable {
 	public void proxyRequest(SipServletRequest inboundRequest, ProxyPlan ProxyPlan,
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
+		SipSession sipSession = inboundRequest.getSession();
+		Boolean isProxy = (Boolean) sipSession.getAttribute("isProxy");
+		if (isProxy == null) {
+			isProxy = false;
+		}
+
+		if (isProxy) {
+			// Should NOT explicitly proxy subsequent request INVITE
+			return;
+		}
+
 		if (ProxyPlan.isEmpty()) {
 			throw new ServletException("Invalid ProxyPlan. No ProxyTiers defined.");
 		}
@@ -1180,6 +1199,7 @@ public abstract class Callflow implements Serializable {
 		}
 
 		inboundRequest.getSession().setAttribute("RESPONSE_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
+		inboundRequest.getSession().setAttribute("isProxy", Boolean.TRUE);
 
 		proxy.startProxy();
 
