@@ -1,0 +1,109 @@
+INVITE sip:10.178.60.190:5060 SIP/2.0
+Via:  SIP/2.0/TCP 10.173.186.96:5060;branch=z9hG4bKu5opvh00agugm02opbg0
+From:  sip:acmeSrc@10.173.186.96;tag=672c8ccd3cdefb59d7d58d58c014ac46
+To:  <sip:10.178.60.190:5060;transport=tcp>
+Call-ID: 13b4b541dc1b6078eaaa4ab84f52d094040@10.178.60.190
+CSeq:  111167 INVITE
+Contact:  <sip:acmeSrc@10.173.186.96:5060;transport=tcp>;+sip.src
+Max-Forwards:  70
+Require:  siprec
+Content-Type:  multipart/mixed; boundary=unique-boundary-1
+Content-Length:  3533
+MIME-Version:  1.0
+Cisco-Gucid:  00071136261712321959
+User-to-User:  04FA080047353A660FF5A7C8143030303731313336323631373132333231393539;encoding=hex
+
+--unique-boundary-1
+Content-Type:  application/sdp
+
+v=0
+o=- 3169224 683914 IN IP4 10.173.186.4
+s=-
+c=IN IP4 10.173.186.101
+t=0 0
+m=audio 43810 RTP/AVP 0 101
+a=rtpmap:0 pcmu/8000
+a=ptime:20
+a=maxptime:20
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-15
+a=sendonly
+a=label:1006644281
+m=audio 43814 RTP/AVP 0 8 18 4 9 100 101
+a=label:1006644282
+a=inactive
+m=audio 43818 RTP/AVP 0 101
+a=rtpmap:0 pcmu/8000
+a=ptime:20
+a=maxptime:20
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-15
+a=sendonly
+a=label:1006644283
+m=audio 43822 RTP/AVP 0 8 18 4 9 100 101
+a=label:1006644284
+a=inactive
+
+--unique-boundary-1
+Content-Type:  application/rs-metadata+xml
+Content-Disposition:  recording-session
+
+<?xml version='1.0' encoding='UTF-8'?>
+<recording xmlns='urn:ietf:params:xml:ns:recording'>
+                <datamode>complete</datamode>
+                <session id="Vu4qFY9ESUlyq9aGK4UvmA==">
+                                <associate-time>2024-04-05T07:59:19</associate-time>
+                                <extensiondata xmlns:apkt="http:/acmepacket.com/siprec/extensiondata">
+                                                <apkt:ucid>00473539660FF5A7</apkt:ucid>
+                                                <apkt:callerOrig>true</apkt:callerOrig>
+                                </extensiondata>
+                </session>
+                <participant id="0iRXlXtJRdNycO2aF5l4+w==" session="Vu4qFY9ESUlyq9aGK4UvmA==">
+                                <nameID aor="sip:Genesys@10.28.70.121">
+                                                <name>Genesys</name>
+                                </nameID>
+                                <send>tpwxAA8BSlRaWJiLzzki8g==</send>
+                                <send>HeDWGS5sQIt+Zmy2G+blOA==</send>
+                                <associate-time>2024-04-05T07:59:19</associate-time>
+                                <extensiondata xmlns:apkt="http://acmepacket.com/siprec/extensiondata">
+                                                <apkt:callingParty>true</apkt:callingParty>
+                                                <apkt:request-uri><sip:record=01PEP83ES8B0FC7QD151Q2LAES00022M_2024-04-05_12-59-19@10.173.186.80:5060;calluuid=01PEP83ES8B0FC7QD151Q2LAES00022M;dn=6325883654;otherdn=1992999001;ani=6325883654;connid=02c203701171b854;datetime=2024-04-05T12:59:19Z;dnis=8663738232;gvp-tenant-id=[Environment].record;recorddn=6325883654;sipsappname=cl2-sips-CTC_1a;media-id=01PEP83ES8B0FC7QD151Q2LAES00022M></apkt:request-uri>
+                                                <apkt:realm>OMNI_MH_Ingress</apkt:realm>
+                                                <apkt:header label="Call-ID">
+                                                                <value>wlss-9df06dac-AC565000-947B-5BFE-1ECF-88D28E4B0995-7094@10.28.70.121</value>
+                                                </apkt:header>
+                                </extensiondata>
+                </participant>
+                <participant id="N+fijXBkQjFgPM5FhZLI9A==" session="Vu4qFY9ESUlyq9aGK4UvmA==">
+                                <nameID aor="sip:record=01PEP83ES8B0FC7QD151Q2LAES00022M_2024-04-05_12-59-19@127.0.0.1">
+                                                <name>record=01PEP83ES8B0FC7QD151Q2LAES00022M_2024-04-05_12-59-19</name>
+                                </nameID>
+                                <send>H+WEkzCGTb9BMm4XEmdjsA==</send>
+                                <send>QvmqA0b9Q99rKdRE9H7XDw==</send>
+                                <associate-time>2024-04-05T07:59:19</associate-time>
+                                <extensiondata xmlns:apkt="http://acmepacket.com/siprec/extensiondata">
+                                                <apkt:callingParty>false</apkt:callingParty>
+                                </extensiondata>
+                </participant>
+                <stream id="tpwxAA8BSlRaWJiLzzki8g==" session="Vu4qFY9ESUlyq9aGK4UvmA==">
+                                <label>1006644281</label>
+                                <mode>separate</mode>
+                                <associate-time>2024-04-05T07:59:19</associate-time>
+                </stream>
+                <stream id="HeDWGS5sQIt+Zmy2G+blOA==" session="Vu4qFY9ESUlyq9aGK4UvmA==">
+                                <label>1006644283</label>
+                                <mode>separate</mode>
+                                <associate-time>2024-04-05T07:59:19</associate-time>
+                </stream>
+                <stream id="H+WEkzCGTb9BMm4XEmdjsA==" session="Vu4qFY9ESUlyq9aGK4UvmA==">
+                                <label>1006644282</label>
+                                <mode>separate</mode>
+                                <associate-time>2024-04-05T07:59:19</associate-time>
+                </stream>
+                <stream id="QvmqA0b9Q99rKdRE9H7XDw==" session="Vu4qFY9ESUlyq9aGK4UvmA==">
+                                <label>1006644284</label>
+                                <mode>separate</mode>
+                                <associate-time>2024-04-05T07:59:19</associate-time>
+                </stream>
+</recording>
+--unique-boundary-1--

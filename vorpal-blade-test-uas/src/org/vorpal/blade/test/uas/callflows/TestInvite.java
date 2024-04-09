@@ -28,6 +28,7 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.b2bua.B2buaListener;
 import org.vorpal.blade.framework.b2bua.InitialInvite;
@@ -81,6 +82,16 @@ public class TestInvite extends InitialInvite {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
+
+		SipServletResponse response = request.createResponse(200);
+		response.setContent(qfinitiResponse.getBytes(), "application/sdp");
+
+		sendResponse(response);
+
+	}
+
+//		@Override
+	public void processXX(SipServletRequest request) throws ServletException, IOException {
 		try {
 
 			String strStatus = request.getRequestURI().getParameter("status");
@@ -163,5 +174,26 @@ public class TestInvite extends InitialInvite {
 			"a=rtpmap:0 pcmu/8000\r\n" + //
 			"a=ptime:20\r\n" + //
 			"a=inactive\r\n";
+
+	public final static String qfinitiResponse = "" + //
+			"v=0\r\n" + //
+			"o=Qfiniti 4058038202 4058038202 IN IP4 10.204.66.204\r\n" + //
+			"s=Qfiniti SIPREC Session\r\n" + //
+			"c=IN IP4 10.204.66.204\r\n" + //
+			"t=4058038202 0\r\n" + //
+			"m=audio 40188 RTP/AVP 101 0 8 18\r\n" + //
+			"a=rtpmap:0 PCMU/8000\r\n" + //
+			"a=rtpmap:8 PCMA/8000\r\n" + //
+			"a=rtpmap:18 G729/8000\r\n" + //
+			"a=rtpmap:101 telephone-event/8000\r\n" + //
+			"a=ptime:20\r\n" + //
+			"a=label\r\n" + //
+			"m=audio 40190 RTP/AVP 101 0 8 18\r\n" + //
+			"a=rtpmap:0 PCMU/8000\r\n" + //
+			"a=rtpmap:8 PCMA/8000\r\n" + //
+			"a=rtpmap:18 G729/8000\r\n" + //
+			"a=rtpmap:101 telephone-event/8000\r\n" + //
+			"a=ptime:20\r\n" + //
+			"a=label\r\n";
 
 }

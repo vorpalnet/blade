@@ -1,16 +1,20 @@
 package org.vorpal.blade.test.client;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import javax.activation.DataSource;
 import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
+import javax.mail.internet.MimeMultipart;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
@@ -99,7 +103,45 @@ public class TestClientAPI extends Callflow {
 //			bobRequest.setContent(parser.getMimeMessage().getContent().toString(),
 //					parser.getMimeMessage().getContentType());
 
+			
+			
+			Session session = Session.getDefaultInstance(new Properties());
+			MimeMessage msg = new MimeMessage(session, new ByteArrayInputStream(
+					Files.readAllBytes(Paths.get(this.getClass().getResource("siprecInvite.txt").toURI()))));
+
+			MimeMessageParser parser = new MimeMessageParser(msg);
+			parser.parse();
+			
+			MimeMultipart mm2 = (MimeMultipart) msg.getContent();
+
+			ByteArrayOutputStream bout = new ByteArrayOutputStream();
+			mm2.writeTo(bout);
+			System.out.println(bout.toString());
+			
+			
+//			MimeMultipart mm2 = (MimeMultipart) msg.getContent();
+//			mm2.writeTo(System.out);
+			
+
+			
+			
+			
+			List<DataSource> list = parser.getAttachmentList();
+			System.out.println("list.size(): " + list.size());
+			
+
+			
+			sipLogger.warning(   parser.getPlainContent() );
+			
+			
+			
 			bobRequest.setContent(content.getBytes(), contentType);
+			
+			
+			
+			
+			
+			
 
 		} catch (Exception e) {
 			sipLogger.severe(e);
