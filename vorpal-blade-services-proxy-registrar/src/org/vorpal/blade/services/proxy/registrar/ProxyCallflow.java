@@ -12,6 +12,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.logging.Logger.Direction;
 import org.vorpal.blade.framework.proxy.ProxyListener;
 import org.vorpal.blade.framework.proxy.ProxyPlan;
 
@@ -81,10 +82,17 @@ public class ProxyCallflow extends Callflow {
 				appSession.setAttribute("PROXY_REGISTRAR", proxyRegistrar);
 
 			} else { // not initial
-				sipLogger.warning(request, "INVITE, but not initial, what shall we do with it? Nothing?");
+
+				// for proxy
+				if (request.getProxy().getProxyBranches().size() > 0) {
+					Callflow.getLogger().superArrow(Direction.SEND, false, request, null,
+							this.getClass().getSimpleName(), null);
+				}
+
 			}
 
 		} catch (Exception e) {
+			sipLogger.severe(request, "Unable to process SIP message: \n" + request.toString());
 			sipLogger.logStackTrace(request, e);
 			throw e;
 		}

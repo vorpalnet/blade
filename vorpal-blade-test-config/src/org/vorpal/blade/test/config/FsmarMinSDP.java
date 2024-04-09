@@ -7,9 +7,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-public class FsmarTransferTest extends AppRouterConfiguration {
+public class FsmarMinSDP extends AppRouterConfiguration {
 
-	public FsmarTransferTest() {
+	public FsmarMinSDP() {
 		this.setDefaultApplication("proxy-goober");
 
 		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
@@ -17,21 +17,15 @@ public class FsmarTransferTest extends AppRouterConfiguration {
 		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
 
-		this.getPrevious("null").getTrigger("INVITE").createTransition("transfer");
-		this.getPrevious("transfer").getTrigger("INVITE").createTransition("b2bua");
-		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("proxy-registrar");
-		
-		//this.getPrevious("proxy-registrar").getTrigger("INVITE").createTransition("queue");
-
-		this.getPrevious("null").getTrigger("REFER").createTransition("transfer");
-//		this.getPrevious("transfer").getTrigger("REFER").createTransition("b2bua");
-//		this.getPrevious("b2bua").getTrigger("REFER").createTransition("proxy-registrar");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("minsdp");
+		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("minsdp");	
+		this.getPrevious("minsdp").getTrigger("INVITE").createTransition("proxy-registrar");
 
 		
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {
-		AppRouterConfiguration configuration = new FsmarTransferTest();
+		AppRouterConfiguration configuration = new FsmarMinSDP();
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setSerializationInclusion(Include.NON_NULL);
 		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);

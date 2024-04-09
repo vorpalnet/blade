@@ -103,7 +103,6 @@ public abstract class AsyncSipServlet extends SipServlet
 			} else {
 				e.printStackTrace();
 			}
-
 		}
 
 	}
@@ -160,23 +159,27 @@ public abstract class AsyncSipServlet extends SipServlet
 		SipApplicationSession appSession = request.getApplicationSession();
 		SipSession sipSession = request.getSession();
 
-		indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+		session = request.getHeader("X-Vorpal-Session");
 
-		if (null == indexKey) {
-			session = request.getHeader("X-Vorpal-Session");
-			if (null != session) {
-				int colonIndex = session.indexOf(':');
-				indexKey = session.substring(0, colonIndex);
-				dialog = session.substring(colonIndex + 1);
-			} else {
-				indexKey = Callflow.getVorpalSessionId(appSession);
-				dialog = Callflow.getVorpalDialogId(sipSession);
+		if (null != session) {
+			int colonIndex = session.indexOf(':');
+			indexKey = session.substring(0, colonIndex);
+			appSession.setAttribute("X-Vorpal-Session", indexKey);
+			dialog = session.substring(colonIndex + 1);
+			sipSession.setAttribute("X-Vorpal-Dialog", dialog);
+		} else {
+
+			indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+			if (indexKey == null) {
+				indexKey = Callflow.createVorpalSessionId(appSession);
 			}
 
-			appSession.setAttribute("X-Vorpal-Session", indexKey);
-			sipSession.setAttribute("X-Vorpal-Dialog", dialog);
-			appSession.addIndexKey(indexKey);
+			dialog = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+			if (dialog == null) {
+				dialog = Callflow.createVorpalDialogId(sipSession);
+			}
 		}
+
 	}
 
 	@Override
@@ -187,7 +190,9 @@ public abstract class AsyncSipServlet extends SipServlet
 		try {
 
 			// creates a session tracking key, if one doesn't already exist
-			generateIndexKey(request);
+			if (request.isInitial()) {
+				generateIndexKey(request);
+			}
 
 			if (request.isInitial() && Callflow.getSessionParameters() != null) {
 				if (Callflow.getSessionParameters().getExpiration() != null) {
@@ -198,16 +203,19 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			}
 
-			if (request.getMethod().equals("REFER")) {
-				sipLogger.finer(request, "REFER Setting ShouldInvalidate to true...");
-				request.getSession().setAttribute("ShouldInvalidate", true);
-			}
-
 			requestLambda = Callflow.pullCallback(request);
 			if (requestLambda != null) {
 				String name = requestLambda.getClass().getSimpleName();
 				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, name);
+
 				requestLambda.accept(request);
+
+				// For printing arrow for proxy messages
+				SipServletRequest rqst = request.getProxy().getOriginalRequest();
+				if (rqst != null) {
+					Callflow.getLogger().superArrow(Direction.SEND, false, rqst, null, name, null);
+				}
+
 			} else {
 				callflow = chooseCallflow(request);
 
@@ -215,19 +223,35 @@ public abstract class AsyncSipServlet extends SipServlet
 					if (request.getMethod().equals("ACK")) {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
 					} else {
-						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
-						SipServletResponse response = request.createResponse(501);
-						response.send();
-						Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
-						Callflow.getLogger().warning("No registered callflow for request method " + request.getMethod()
-								+ ", consider modifying the 'chooseCallflow' method.");
+
+						SipServletRequest originalProxyRequest = request.getProxy().getOriginalRequest();
+						if (originalProxyRequest != null) {
+//							Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "proxy");
+//							Callflow.getLogger().superArrow(Direction.SEND, false, request, null, "proxy", null);
+
+							Callflow.getLogger().superArrow(Direction.RECEIVE, false, request, null, "proxy", null);
+							Callflow.getLogger().superArrow(Direction.SEND, request, null, "proxy");
+
+						} else {
+							Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
+							SipServletResponse response = request.createResponse(501);
+							Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
+							Callflow.getLogger().warning("No registered callflow for request method "
+									+ request.getMethod() + ", consider modifying the 'chooseCallflow' method.");
+							response.send();
+						}
+
 					}
 				} else {
-					callflow.processWrapper(request);
+
+					sipLogger.superArrow(Direction.RECEIVE, request, null, this.getClass().getSimpleName());
+					callflow.process(request);
+
 				}
 			}
 		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(request, e);
+			sipLogger.severe(request, "Exception on SIP request: \n" + request.toString());
+			sipLogger.logStackTrace(request, e);
 			throw e;
 		}
 	}
@@ -241,22 +265,28 @@ public abstract class AsyncSipServlet extends SipServlet
 			if (sipSession != null && sipSession.isValid()) {
 				callback = Callflow.pullCallback(response);
 				if (callback != null) {
-					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-							callback.getClass().getSimpleName());
+
+					if (response.getProxyBranch() != null) {
+						Callflow.getLogger().superArrow(Direction.RECEIVE, false, null, response,
+								callback.getClass().getSimpleName(), null);
+
+					} else {
+						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+								callback.getClass().getSimpleName());
+					}
+
 					callback.accept(response);
+
+					// For printing arrow for proxy messages
+					if (response.getProxy() != null && response.getProxy().getOriginalRequest() != null) {
+						SipServletRequest proxyOrginalRequest = response.getProxy().getOriginalRequest();
+						if (proxyOrginalRequest != null) {
+							Callflow.getLogger().superArrow(Direction.SEND, true, null, response,
+									callback.getClass().getSimpleName(), Logger.from(response));
+						}
+					}
+
 				} else {
-
-					// Is this a response to 'proxy'?
-
-//					Proxy proxy = response.getProxy();
-//					sipLogger.warning(response, "proxy...? " + (proxy != null));
-//					if (proxy != null) {
-//						sipLogger.warning(response, "getProxy? " + (response.getProxy() != null));
-//						sipLogger.warning(response, "supervised? " + response.getProxy().getSupervised());
-//						sipLogger.warning(response, "stateful? " + response.getProxy().getStateful());
-//						sipLogger.warning(response, "supervised? " + response.getProxy().getSupervised());
-//					}
-
 					// Sometimes a 180 Ringing comes back on a brand new SipSession
 					// because the tag on the To header changed due to a failure downstream.
 					if (response.getMethod().equals("INVITE")) {
@@ -315,19 +345,22 @@ public abstract class AsyncSipServlet extends SipServlet
 						}
 
 					} else {
-						// This is to be expected
-						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
+
+						SipServletRequest originalProxyRequest = response.getProxy().getOriginalRequest();
+						if (originalProxyRequest != null) {
+							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
+							Callflow.getLogger().superArrow(Direction.SEND, false, null, response, "proxy", null);
+						} else {
+							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
+						}
+
 					}
 				}
 			}
 		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(response, e);
+			sipLogger.severe(response, "Exception on SIP response: \n" + response.toString());
+			sipLogger.logStackTrace(response, e);
 			throw e;
-		} finally {
-			if (response.getMethod().equals("BYE") && sipSession != null && sipSession.isValid()) {
-				// sometimes the sipSession does not automatically invalidate, no idea why.
-				sipSession.invalidate();
-			}
 		}
 	}
 
@@ -476,9 +509,9 @@ public abstract class AsyncSipServlet extends SipServlet
 		return getAccountName(address.getURI());
 	}
 
-	public static String getAccountName(URI _uri) {
-		SipURI sipUri = (SipURI) _uri;
-		return sipUri.getUser().toLowerCase() + "@" + sipUri.getHost().toLowerCase();
+	public static String getAccountName(URI uri) {
+		SipURI sipUri = (SipURI) uri;
+		return (sipUri.getUser() + "@" + sipUri.getHost()).toLowerCase();
 	}
 
 	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
