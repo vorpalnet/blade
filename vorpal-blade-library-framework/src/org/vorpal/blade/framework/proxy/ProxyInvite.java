@@ -48,7 +48,6 @@ public class ProxyInvite extends Callflow {
 				// this should probably go in 'proxyRequest'
 				this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack)->{
 					
-					sipLogger.warning("Found my knack on blueberry ACK");
 					
 					
 					//do nothing;

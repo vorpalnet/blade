@@ -42,6 +42,7 @@ import javax.servlet.sip.SipSessionListener;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.logging.ConsoleColors;
 
 /**
  * @author Jeff McDonald
@@ -149,9 +150,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(event.getApplicationSession(), "SipApplicationSession created..." + appSession.getId());
-			String indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
-			sipLogger.finer(appSession, "appSession created... ");
+			sipLogger.finer(appSession, ConsoleColors.GREEN_BRIGHT + "appSession created..." + ConsoleColors.RESET);
 		}
 
 	}
@@ -160,9 +159,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-
-			// jwm - testing
-			sipLogger.finer(appSession, "appSession destroyed...");
+			sipLogger.finer(appSession, ConsoleColors.RED_BRIGHT + "appSession destroyed..." + ConsoleColors.RESET);
 		}
 	}
 
@@ -170,8 +167,6 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void sessionExpired(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-
-			// jwm - testing
 			sipLogger.finer(appSession, "appSession expired...");
 		}
 	}
@@ -186,23 +181,16 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 
 	@Override
 	public void sessionCreated(SipSessionEvent event) {
-
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			SipApplicationSession appSession = sipSession.getApplicationSession();
-
-			String indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
-
 			sipLogger.finer(sipSession, "sipSession created...");
 		}
-
 	}
 
 	@Override
 	public void sessionDestroyed(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-
 			sipLogger.finer(sipSession, "sipSession destroyed...");
 
 		}
@@ -212,9 +200,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void sessionReadyToInvalidate(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-
 			sipLogger.finer(sipSession, "sipSession readyToInvalidate...");
-
 		}
 	}
 
