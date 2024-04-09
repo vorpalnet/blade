@@ -211,10 +211,13 @@ public abstract class AsyncSipServlet extends SipServlet
 				requestLambda.accept(request);
 
 				// For printing arrow for proxy messages
-				SipServletRequest rqst = request.getProxy().getOriginalRequest();
-				if (rqst != null) {
-					Callflow.getLogger().superArrow(Direction.SEND, false, rqst, null, name, null);
-				}
+				// TODO: Need to figure out what's up with this...				
+//				if (request.getProxy() != null && request.getProxy().getOriginalRequest() != null) {
+//					SipServletRequest rqst = request.getProxy().getOriginalRequest();
+//					if (rqst != null) {
+//						Callflow.getLogger().superArrow(Direction.SEND, false, rqst, null, name, null);
+//					}
+//				}
 
 			} else {
 				callflow = chooseCallflow(request);
