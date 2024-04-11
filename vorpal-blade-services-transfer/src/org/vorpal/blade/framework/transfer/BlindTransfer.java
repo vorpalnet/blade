@@ -124,18 +124,30 @@ public class BlindTransfer extends Transfer {
 			SipServletRequest notify100 = request.getSession().createRequest(NOTIFY);
 			notify100.setHeader(EVENT, "refer");
 			notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=3600");
+//			notify100.setHeader(SUBSCRIPTION_STATE, "active;expires=60");
+//			notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=60");
 			notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
 			sendRequest(notify100);
 
-//			// in the event the transferee hangs up before the transfer completes
+			// in the event the transferee hangs up before the transfer completes
 			Expectation expectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
 				sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
 				sendResponse(bye.createResponse(200));
 				sendRequest(targetRequest.createCancel());
+				
+				//jwm
+				// sendRequest(transferorRequest.getSession().createRequest(BYE), (ok)->{});
+				
+//				SipServletRequest notify = targetRequest.getSession().createRequest(NOTIFY);
+//				String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
+//				notify1xx.setContent(sipFrag.getBytes(), SIPFRAG);
+
+				
+				
 			});
 
-			// Expect the transferor to hang up after the NOTIFY that the transfer succeeded
 			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
+				sipLogger.finer(transferorRequest, "transferor (bob) hangs up");
 				sendResponse(bye.createResponse(200));
 			});
 
@@ -144,7 +156,17 @@ public class BlindTransfer extends Transfer {
 
 			sendRequest(targetRequest, (targetResponse) -> {
 
-				if (successful(targetResponse)) {
+				if (provisional(targetResponse)) {
+					SipServletRequest notify1xx = request.getSession().createRequest(NOTIFY);
+					notify1xx.setHeader(EVENT, "refer");
+//					notify1xx.setHeader(SUBSCRIPTION_STATE, "active;expires=60");
+//					notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=3600");
+					notify100.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
+					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
+					notify1xx.setContent(sipFrag.getBytes(), SIPFRAG);
+					sendRequest(notify1xx);
+
+				} else if (successful(targetResponse)) {
 
 					expectation.clear(); // no longer expect BYE from transferee
 
@@ -153,8 +175,9 @@ public class BlindTransfer extends Transfer {
 					//
 					// https://www.dialogic.com/webhelp/csp1010/8.4.1_ipn3/sip_software_chap_-_sip_notify_subscription_state.htm
 
-					notify200.setHeader(EVENT, "refer");
 // bad					notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
+//					notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=timeout");
+//					notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=timeout;expires=0");
 					notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
 					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
 					notify200.setContent(sipFrag.getBytes(), SIPFRAG);
@@ -181,7 +204,8 @@ public class BlindTransfer extends Transfer {
 					transferListener.transferDeclined(targetResponse);
 
 					SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
-					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
+//					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
+					String sipFrag = "SIP/2.0 200 OK";
 					notifyFailure.setHeader(EVENT, "refer");
 					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
 					notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
