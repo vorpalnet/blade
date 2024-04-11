@@ -30,7 +30,10 @@
 			<wls:package-name>javassist.*</wls:package-name>
 			<wls:package-name>javax.activation.*</wls:package-name>
 			<wls:package-name>javax.mail.*</wls:package-name>
-			<wls:package-name>javax.sdp.*</wls:package-name>
+			
+			
+			<!-- wls:package-name>javax.sdp.*</wls:package-name -->
+			
 			<wls:package-name>javax.validation.*</wls:package-name>
 			<!-- wls:package-name>javax.xml.*</wls:package-name -->
 			<wls:package-name>kotlin.*</wls:package-name>
