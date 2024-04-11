@@ -11,16 +11,19 @@
 
 
 			<!-- wls:package-name>org.vorpal.blade.framework.*</wls:package-name -->
-	
+
 			<wls:package-name>com.ctc.*</wls:package-name>
 			<wls:package-name>com.fasterxml.*</wls:package-name>
 			<wls:package-name>com.kjetland.*</wls:package-name>
-			
+
 			<!-- wls:package-name>com.sun.*</wls:package-name -->
 			<wls:package-name>com.sun.activation.*</wls:package-name>
 			<wls:package-name>com.sun.mail.*</wls:package-name>
-			
+
+
 			<wls:package-name>gov.nist.*</wls:package-name>
+
+
 			<wls:package-name>inet.ipaddr.*</wls:package-name>
 			<wls:package-name>io.github.*</wls:package-name>
 			<wls:package-name>io.swagger.*</wls:package-name>
@@ -34,11 +37,9 @@
 			<wls:package-name>kotlinx.*</wls:package-name>
 			<wls:package-name>nonapi.*</wls:package-name>
 			<wls:package-name>org.apache.*</wls:package-name>
-			
-			<!-- 
-			<wls:package-name>org.codehaus.*</wls:package-name>
-			 -->
-			
+
+			<!-- <wls:package-name>org.codehaus.*</wls:package-name> -->
+
 			<wls:package-name>org.intellij.*</wls:package-name>
 			<wls:package-name>org.jetbrains.*</wls:package-name>
 			<wls:package-name>org.joda.*</wls:package-name>
