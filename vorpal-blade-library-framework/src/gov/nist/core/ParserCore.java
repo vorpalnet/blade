@@ -23,131 +23,101 @@
 * .
 *
 */
+/*
+ * 2024-04-17 Modified to removed excessive logging. --J. McDonald
+ */
 package gov.nist.core;
 
 import java.text.ParseException;
 
-/** Generic parser class.
-* All parsers inherit this class.
-*
-*@version 1.2
-*
-*@author M. Ranganathan   <br/>
-*
-*
-*
-*/
+/**
+ * Generic parser class. All parsers inherit this class.
+ *
+ * @version 1.2
+ *
+ * @author M. Ranganathan <br/>
+ *
+ *
+ *
+ */
 public abstract class ParserCore {
-    public static final boolean debug = Debug.parserDebug;
+	static int nesting_level;
 
-    static int nesting_level;
+	protected LexerCore lexer;
 
-    protected LexerCore lexer;
+	protected NameValue nameValue(char separator) throws ParseException {
+		lexer.match(LexerCore.ID);
+		Token name = lexer.getNextToken();
+		// eat white space.
+		lexer.SPorHT();
+		try {
 
+			boolean quoted = false;
 
-    protected NameValue nameValue(char separator) throws ParseException  {
-        if (debug) dbg_enter("nameValue");
-        try {
+			char la = lexer.lookAhead(0);
 
-        lexer.match(LexerCore.ID);
-        Token name = lexer.getNextToken();
-        // eat white space.
-        lexer.SPorHT();
-        try {
+			if (la == separator) {
+				lexer.consume(1);
+				lexer.SPorHT();
+				String str = null;
+				boolean isFlag = false;
+				char c = lexer.lookAhead(0);
+				if (c == '\"') {
+					str = lexer.quotedString();
+					quoted = true;
+				} else if (c == '[') {
+					lexer.match(LexerCore.IPV6);
+					Token value = lexer.getNextToken();
+					str = value.tokenValue;
 
+					// JvB: flag parameters must be empty string!
+					if (str == null) {
+						str = "";
+						isFlag = true;
+					}
+				} else {
+					lexer.match(LexerCore.ID);
+					Token value = lexer.getNextToken();
+					str = value.tokenValue;
 
-                boolean quoted = false;
+					// JvB: flag parameters must be empty string!
+					if (str == null) {
+						str = "";
+						isFlag = true;
+					}
+				}
+				NameValue nv = new NameValue(name.tokenValue, str, isFlag);
+				if (quoted)
+					nv.setQuotedValue();
+				return nv;
+			} else {
+				// JvB: flag parameters must be empty string!
+				return new NameValue(name.tokenValue, "", true);
+			}
+		} catch (ParseException ex) {
+			return new NameValue(name.tokenValue, null, false);
+		}
 
-            char la = lexer.lookAhead(0);
+	}
 
-            if (la == separator ) {
-                lexer.consume(1);
-                lexer.SPorHT();
-                String str = null;
-                boolean isFlag = false;
-                char c = lexer.lookAhead(0);
-                if (c == '\"')  {
-                     str = lexer.quotedString();
-                     quoted = true;
-                } else if (c == '['){
-                    lexer.match(LexerCore.IPV6);
-                    Token value = lexer.getNextToken();
-                    str = value.tokenValue;
+	protected void dbg_enter(String rule) {
+		StringBuilder stringBuilder = new StringBuilder();
+		for (int i = 0; i < nesting_level; i++)
+			stringBuilder.append(">");
 
-                    // JvB: flag parameters must be empty string!
-                    if (str==null) {
-                        str = "";
-                        isFlag = true;
-                    }
-                }else {
-                   lexer.match(LexerCore.ID);
-                   Token value = lexer.getNextToken();
-                   str = value.tokenValue;
+		nesting_level++;
+	}
 
-                   // JvB: flag parameters must be empty string!
-                   if (str==null) {
-                       str = "";
-                       isFlag = true;
-                   }
-                }
-                NameValue nv = new NameValue(name.tokenValue,str,isFlag);
-                if (quoted) nv.setQuotedValue();
-                return nv;
-            }  else {
-                // JvB: flag parameters must be empty string!
-                return new NameValue(name.tokenValue,"",true);
-            }
-        } catch (ParseException ex) {
-            return new NameValue(name.tokenValue,null,false);
-        }
+	protected void dbg_leave(String rule) {
+		StringBuilder stringBuilder = new StringBuilder();
+		for (int i = 0; i < nesting_level; i++)
+			stringBuilder.append("<");
 
-        } finally {
-            if (debug) dbg_leave("nameValue");
-        }
+		nesting_level--;
+	}
 
+	protected NameValue nameValue() throws ParseException {
+		return nameValue('=');
+	}
 
-    }
-
-    protected  void dbg_enter(String rule) {
-        StringBuilder stringBuilder = new StringBuilder();
-        for (int i = 0; i < nesting_level ; i++)
-            stringBuilder.append(">");
-
-        if (debug)  {
-            System.out.println(
-                stringBuilder + rule +
-                "\nlexer buffer = \n" +
-                lexer.getRest());
-        }
-        nesting_level++;
-    }
-
-    protected void dbg_leave(String rule) {
-        StringBuilder stringBuilder = new StringBuilder();
-        for (int i = 0; i < nesting_level ; i++)
-            stringBuilder.append("<");
-
-        if (debug)  {
-            System.out.println(
-                stringBuilder +
-                rule +
-                "\nlexer buffer = \n" +
-                lexer.getRest());
-        }
-        nesting_level --;
-    }
-
-    protected NameValue nameValue() throws ParseException  {
-        return nameValue('=');
-    }
-
-
-
-    protected void peekLine(String rule) {
-        if (debug) {
-            Debug.println(rule +" " + lexer.peekLine());
-        }
-    }
 }
-
-
