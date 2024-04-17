@@ -25,10 +25,25 @@
  */
 package gov.nist.javax.sdp;
 
-import javax.sdp.*;
-import gov.nist.javax.sdp.fields.*;
-import java.util.*;
-import gov.nist.core.*;
+import java.util.Vector;
+
+import javax.sdp.Connection;
+import javax.sdp.Info;
+import javax.sdp.Key;
+import javax.sdp.Media;
+import javax.sdp.SdpConstants;
+import javax.sdp.SdpException;
+import javax.sdp.SdpParseException;
+
+import gov.nist.core.NameValue;
+import gov.nist.javax.sdp.fields.AttributeField;
+import gov.nist.javax.sdp.fields.BandwidthField;
+import gov.nist.javax.sdp.fields.ConnectionField;
+import gov.nist.javax.sdp.fields.InformationField;
+import gov.nist.javax.sdp.fields.KeyField;
+import gov.nist.javax.sdp.fields.MediaField;
+import gov.nist.javax.sdp.fields.PreconditionFields;
+import gov.nist.javax.sdp.fields.SDPField;
 
 /*
  * Includes code contributed by
