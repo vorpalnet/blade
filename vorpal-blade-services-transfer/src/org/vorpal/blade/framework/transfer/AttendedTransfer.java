@@ -80,6 +80,11 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.callflow.Callback;
 
+
+// Notes: 
+// https://www.dialogic.com/webhelp/csp1010/8.4.1_ipn3/sip_software_chap_-_sip_notify_subscription_state.htm
+
+
 public class AttendedTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
