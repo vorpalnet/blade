@@ -1,10 +1,11 @@
-package org.vorpal.blade.services.crud;
+package org.vorpal.blade.services.crud.config;
 
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.vorpal.blade.framework.config.RouterConfig;
+import org.vorpal.blade.services.crud.RuleSet;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 

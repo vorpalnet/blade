@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.crud;
+package org.vorpal.blade.services.crud.rules;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -19,7 +19,7 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Update implements Serializable {
+public class Update extends Rule implements Serializable {
 	private Pattern _pattern, _p;
 
 	public String id;

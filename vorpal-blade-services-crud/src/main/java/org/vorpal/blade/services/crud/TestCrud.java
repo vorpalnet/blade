@@ -19,6 +19,7 @@ import org.vorpal.blade.framework.config.JsonSipUriDeserializer;
 import org.vorpal.blade.framework.config.JsonSipUriSerializer;
 import org.vorpal.blade.framework.config.JsonUriDeserializer;
 import org.vorpal.blade.framework.config.JsonUriSerializer;
+import org.vorpal.blade.services.crud.config.CrudConfigurationSample;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;

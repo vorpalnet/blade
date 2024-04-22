@@ -4,6 +4,7 @@ import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletContextEvent;
 
 import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.services.crud.config.CrudConfiguration;
 
 public class CrudSettingsManager extends SettingsManager<CrudConfiguration> {
 
