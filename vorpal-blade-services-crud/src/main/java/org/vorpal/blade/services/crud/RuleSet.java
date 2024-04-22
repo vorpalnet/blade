@@ -13,6 +13,7 @@ import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.services.crud.rules.Rule;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
