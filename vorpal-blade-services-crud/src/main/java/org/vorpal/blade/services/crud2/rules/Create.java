@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.crud.rules;
+package org.vorpal.blade.services.crud2.rules;
 
 import java.io.IOException;
 import java.io.Serializable;

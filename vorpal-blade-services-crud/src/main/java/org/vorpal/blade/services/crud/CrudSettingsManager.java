@@ -2,21 +2,15 @@ package org.vorpal.blade.services.crud;
 
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletContextEvent;
-
 import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.services.crud.config.CrudConfiguration;
 
-public class CrudSettingsManager extends SettingsManager<CrudConfiguration> {
+public class CrudSettingsManager extends SettingsManager {
+   public RuleSet rules;
 
-	public RuleSet rules;
+   public CrudSettingsManager(SipServletContextEvent event, Class clazz, CrudConfiguration sample) {
+      super((SipServletContextEvent)event, clazz, (Object)sample);
+   }
 
-	public CrudSettingsManager(SipServletContextEvent event, Class<CrudConfiguration> clazz, CrudConfiguration sample) {
-		super(event, clazz, sample);
-	}
-
-	@Override
-	public void initialize(CrudConfiguration config) throws ServletParseException {
-
-	}
-
+   public void initialize(CrudConfiguration config) throws ServletParseException {
+   }
 }

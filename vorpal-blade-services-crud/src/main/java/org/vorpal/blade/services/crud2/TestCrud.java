@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.crud;
+package org.vorpal.blade.services.crud2;
 
 import java.util.Arrays;
 
@@ -19,7 +19,7 @@ import org.vorpal.blade.framework.config.JsonSipUriDeserializer;
 import org.vorpal.blade.framework.config.JsonSipUriSerializer;
 import org.vorpal.blade.framework.config.JsonUriDeserializer;
 import org.vorpal.blade.framework.config.JsonUriSerializer;
-import org.vorpal.blade.services.crud.config.CrudConfigurationSample;
+import org.vorpal.blade.services.crud2.config.CrudConfigurationSample;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;
