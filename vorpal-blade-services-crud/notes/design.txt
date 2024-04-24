@@ -5,13 +5,35 @@ Read
 Update
 Delete
 
-Can all four Rules be derived from the same base class?
+Terms
+
+Same as RouterConfig.
+Once a Translation is found...
+Need a Condition, for matching on things like "initialInvite" or "INFO", etc.
+RuleSet contains a list of rules to be executed in order, ".processAll()"
+Rule, abstract base class, ".process()"
+AVP: Map<String, List<String, String>> Attribute Value Pair where the value is a list of results.
+Result may include ${variables}
+
+Use RegEx, where "attribute" is the SIP header (etc.),
+"pattern" is the regex itself, may used named groups,
+"expression" is the result with possible ${variables}
 
 
-Create( attribute, value ) may use ${variables}
-Read( attribute, expression ) expression uses RegEx named groups
-Update( attribute, expression, value ) -- a combination of Read and Create
+Create( attribute, expression[] ) may use ${variables}
+Read( attribute, pattern ) expression uses RegEx named groups
+Update( attribute, pattern, expression[] ) -- a combination of Read and Create
 Delete( attribute )
+
+Note, expression[] is a list of results (aka the value list), so that means...
+Both CREATE and UPDATE must iterate through the list performing multiple operations
+
+I think this works well enough for SIP Headers...
+
+More thought needs to go into operating on Text, SDP and XML payloads...
+
+
+--Gibberish thoughts below--
 
 Use Cases...
 
