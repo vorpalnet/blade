@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.crud.config;
+package org.vorpal.blade.services.crud2.config;
 
 import java.io.Serializable;
 import java.util.HashMap;

@@ -414,15 +414,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return sb.toString();
 	}
 
-//	private String addState(SipServletMessage msg, String note) {
-//		if (note.length() > 0) {
-//			note += ", state=" + msg.getSession().getState().toString();
-//		} else {
-//			note += "state=" + msg.getSession().getState().toString();
-//		}
-//		return note;
-//	}
-
 //    |-------17------||-------17------||-------17------||-------17------||-------17------||-------17------|
 //    0                   10                  20                  30                  40                  50		
 //    012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890  
@@ -434,10 +425,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //#6                                    [BigLon*amedCall]<----------200---[255.255.255.255]   ; OK (INVITE)
 //#7                                    [BigLonedCall]-----------INVITE-->[255.255.255.255]   ; SDP
 //#8                                    [BigLon*amedCall]-----------200-->[255.255.255.255]   ; OK (INVITE)
-
-//	public void logCancelResponse(SipServletRequest request, String name) {
-//		
-//	}
 
 	public void superArrow(Direction direction, SipServletRequest request, SipServletResponse response, String name)
 			throws ServletParseException {
@@ -475,6 +462,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	public void superArrow(Direction direction, boolean leftSide, SipServletRequest request,
 			SipServletResponse response, String name, String user) throws ServletParseException {
+
+		if (request == null && response == null) {
+			// Has to be one or the other, never both
+			return;
+		}
 
 		try {
 

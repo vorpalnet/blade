@@ -1,0 +1,1 @@
+package org.vorpal.blade.services.crud2.rules;

@@ -1,107 +1,114 @@
 package org.vorpal.blade.services.crud;
 
 import java.io.IOException;
-import java.util.HashMap;
-
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
+import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-
+import javax.servlet.sip.annotation.SipApplication;
+import javax.servlet.sip.annotation.SipListener;
+import javax.servlet.sip.annotation.SipServlet;
+import org.vorpal.blade.framework.b2bua.B2buaListener;
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.b2bua.Bye;
+import org.vorpal.blade.framework.b2bua.Cancel;
+import org.vorpal.blade.framework.b2bua.InitialInvite;
+import org.vorpal.blade.framework.b2bua.Passthru;
+import org.vorpal.blade.framework.b2bua.Reinvite;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.config.Translation;
-import org.vorpal.blade.services.crud.config.CrudConfiguration;
-import org.vorpal.blade.services.crud.config.CrudConfigurationSample;
 
 @WebListener
-@javax.servlet.sip.annotation.SipApplication(distributable = true)
-@javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
-@javax.servlet.sip.annotation.SipListener
+@SipApplication(
+   distributable = true
+)
+@SipServlet(
+   loadOnStartup = 1
+)
+@SipListener
 public class CrudServlet extends B2buaServlet {
+   public SettingsManager settingsManager;
 
-	public static SettingsManager<CrudConfiguration> settingsManager;
+   protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
+      this.settingsManager = new SettingsManager(event, CrudConfiguration.class, new CrudConfigurationSample());
+   }
 
-	@Override
-	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, CrudConfiguration.class, new CrudConfigurationSample());
+   protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
+      try {
+         this.settingsManager.unregister();
+      } catch (Exception var3) {
+         var3.printStackTrace();
+      }
 
-	}
+   }
 
-	@Override
-	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
-		try {
-			settingsManager.unregister();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+   protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
+      Callflow callflow = null;
+      CrudConfiguration settings = (CrudConfiguration)this.settingsManager.getCurrent();
+      if (inboundRequest.getMethod().equals("INVITE") && inboundRequest.isInitial()) {
+         Translation t = settings.findTranslation(inboundRequest);
+         sipLogger.severe((SipServletMessage)inboundRequest, "is t null " + t);
+         if (t != null) {
+            sipLogger.severe((SipServletMessage)inboundRequest, "found t! ");
+            String ruleSetId = (String)t.getAttribute("ruleSet");
+            sipLogger.severe((SipServletMessage)inboundRequest, "ruleSet.id " + ruleSetId);
+            if (ruleSetId != null) {
+               RuleSet ruleSet = (RuleSet)settings.ruleSets.get(ruleSetId);
+               if (ruleSet != null) {
+                  sipLogger.severe((SipServletMessage)inboundRequest, "ruleSet: " + ruleSet);
+                  if (ruleSet != null) {
+                     sipLogger.severe((SipServletMessage)inboundRequest, "found ruleSet.");
+                     ruleSet.process(inboundRequest);
+                     sipLogger.severe((SipServletMessage)inboundRequest, "done processing ruleset");
+                     sipLogger.severe((SipServletMessage)inboundRequest, "To: " + (String)ruleSet.output.get("To"));
+                     sipLogger.severe((SipServletMessage)inboundRequest, "Request-URI: " + (String)ruleSet.output.get("Request-URI"));
+                     callflow = new CrudInitialInvite((B2buaListener)null, ruleSet.output);
+                  } else {
+                     sipLogger.severe((SipServletMessage)inboundRequest, "No ruleSet found.");
+                  }
+               }
+            }
+         }
+      }
 
-	}
+      if (callflow == null) {
+         if (inboundRequest.getMethod().equals("INVITE")) {
+            if (inboundRequest.isInitial()) {
+               callflow = new InitialInvite((B2buaListener)null);
+            } else {
+               callflow = new Reinvite((B2buaServlet)null);
+            }
+         } else if (inboundRequest.getMethod().equals("BYE")) {
+            callflow = new Bye((B2buaServlet)null);
+         } else if (inboundRequest.getMethod().equals("CANCEL")) {
+            callflow = new Cancel((B2buaServlet)null);
+         } else {
+            callflow = new Passthru((B2buaServlet)null);
+         }
+      }
 
-	@Override
-	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
-		Callflow callflow = null;
+      return (Callflow)callflow;
+   }
 
-		CrudConfiguration settings = settingsManager.getCurrent();
+   public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
+      SettingsManager.sipLogger.warning((SipServletMessage)outboundRequest, "Sending INVITE...\n" + outboundRequest.toString());
+   }
 
-		if (inboundRequest.getMethod().equals("INVITE") && inboundRequest.isInitial()) {
-			Translation t = settings.findTranslation(inboundRequest);
-			if (t != null) {
-				String ruleSetId = (String) t.getAttribute("ruleSet");
-				if (ruleSetId != null) {
-					RuleSet ruleSet = settings.ruleSets.get(ruleSetId);
-					if (ruleSet != null) {
-						
-						
-						
-						ruleSet.process(inboundRequest);
-						callflow = new CrudInitialInvite(this, ruleSet.map);
-					}
-				}
-			}
-		}
+   public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
+   }
 
-		if (callflow == null) {
-			callflow = super.chooseCallflow(inboundRequest);
-		}
+   public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
+   }
 
-		return callflow;
-	}
+   public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
+   }
 
-	@Override
-	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
-//		sipLogger.warning(outboundRequest, "callStarted... \n" + outboundRequest);
-	}
+   public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
+   }
 
-	@Override
-	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
-
-	}
-
-	@Override
-	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
+   public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
+   }
 }

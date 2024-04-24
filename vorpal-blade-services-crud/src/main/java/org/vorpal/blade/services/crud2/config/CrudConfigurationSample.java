@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.crud.config;
+package org.vorpal.blade.services.crud2.config;
 
 import org.vorpal.blade.framework.config.ConfigPrefixMap;
 import org.vorpal.blade.framework.config.Selector;
@@ -6,8 +6,8 @@ import org.vorpal.blade.framework.config.TranslationsMap;
 import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.logging.LogParametersDefault;
 import org.vorpal.blade.services.crud.RuleSet;
-import org.vorpal.blade.services.crud.rules.Create;
-import org.vorpal.blade.services.crud.rules.Rule;
+import org.vorpal.blade.services.crud2.rules.Create;
+import org.vorpal.blade.services.crud2.rules.Rule;
 
 public class CrudConfigurationSample extends CrudConfiguration {
 

@@ -22,7 +22,7 @@
  *  SOFTWARE.
  */
 
-package org.vorpal.blade.services.crud;
+package org.vorpal.blade.services.crud2;
 
 import java.io.IOException;
 import java.util.Map;

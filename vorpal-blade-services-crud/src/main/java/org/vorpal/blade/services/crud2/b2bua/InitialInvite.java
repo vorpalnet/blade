@@ -22,10 +22,9 @@
  *  SOFTWARE.
  */
 
-package org.vorpal.blade.services.crud;
+package org.vorpal.blade.services.crud2.b2bua;
 
 import java.io.IOException;
-import java.util.Map;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
@@ -35,28 +34,23 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.b2bua.B2buaListener;
 import org.vorpal.blade.framework.callflow.Callflow;
 
-public class CrudInitialInvite extends Callflow {
+public class InitialInvite extends Callflow implements CallflowListener {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
 	private SipServletRequest bobRequest;
 	private B2buaListener b2buaListener = null;
 	private boolean doNotProcess = false;
-//	private RuleSet ruleSet;
 
-	private transient Map<String, String> attributes;
-
-	public CrudInitialInvite() {
+	public InitialInvite() {
 	}
 
-	public CrudInitialInvite(B2buaListener b2buaListener, Map<String, String> attributes) {
+	public InitialInvite(B2buaListener b2buaListener) {
 		this.b2buaListener = b2buaListener;
-		this.attributes = attributes;
 	}
 
 	/**
@@ -149,45 +143,18 @@ public class CrudInitialInvite extends Callflow {
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		try {
 
-
 			aliceRequest = request;
-			SipApplicationSession appSession = aliceRequest.getApplicationSession();
 
-			Address from, to;
+//			SipApplicationSession appSession = aliceRequest.getApplicationSession();
 
-			sipLogger.finer(request, "CrudInitialRequest.process...");
-			attributes.forEach((key, value) -> sipLogger.warning(request, "   key: " + key + ", value: " + value));
-
-			String strTo = attributes.get("To");
-			if (strTo != null) {
-				to = sipFactory.createAddress(strTo);
-			} else {
-				to = request.getTo();
-			}
-
-			String strFrom = attributes.get("From");
-			if (strFrom != null) {
-				from = sipFactory.createAddress(strFrom);
-			} else {
-				from = request.getFrom();
-			}
-
-			bobRequest = sipFactory.createRequest(appSession, INVITE, from, to);
-
-			bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
-			copyContentAndHeaders(aliceRequest, bobRequest);
-
-			URI requestUri;
-			String strRequestUri = attributes.get("Request-URI");
-			if (strFrom != null) {
-				requestUri = sipFactory.createURI(strRequestUri);
-			} else {
-				requestUri = request.getRequestURI();
-			}
-
-			bobRequest.setRequestURI(requestUri);
-
+			// CallflowListener API
+			bobRequest = this.zzCreateInitialRequest(aliceRequest);
 			linkSessions(aliceRequest.getSession(), bobRequest.getSession());
+
+			// Set the outgoing X-Vorpal-Session header
+			String indexKey = getVorpalSessionId(bobRequest.getApplicationSession());
+			String dialog = createVorpalDialogId(bobRequest.getSession());
+			bobRequest.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
 
 			// This is an API kludge to let the user know what callflow was used
 			bobRequest.setAttribute("callflow", this);
@@ -220,7 +187,7 @@ public class CrudInitialInvite extends Callflow {
 		return aliceRequest;
 	}
 
-	public CrudInitialInvite setInboundRequest(SipServletRequest aliceRequest) {
+	public InitialInvite setInboundRequest(SipServletRequest aliceRequest) {
 		this.aliceRequest = aliceRequest;
 		return this;
 	}
@@ -229,7 +196,7 @@ public class CrudInitialInvite extends Callflow {
 		return bobRequest;
 	}
 
-	public CrudInitialInvite setOutboundRequest(SipServletRequest bobRequest) {
+	public InitialInvite setOutboundRequest(SipServletRequest bobRequest) {
 		this.bobRequest = bobRequest;
 		return this;
 	}
@@ -248,6 +215,13 @@ public class CrudInitialInvite extends Callflow {
 
 	public void setDoNotProcess(boolean doNotProcess) {
 		this.doNotProcess = doNotProcess;
+	}
+
+	// CallflowListener API
+	@Override
+	public SipServletRequest zzCreateInitialRequest(SipServletRequest origin)
+			throws IOException, ServletParseException {
+		return createContinueRequest(origin);
 	}
 
 }

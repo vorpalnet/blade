@@ -411,37 +411,17 @@ public abstract class Callflow implements Serializable {
 		appSession.setAttribute("X-Vorpal-Session", indexKey);
 		appSession.addIndexKey(indexKey);
 
-//		if (sipLogger.isLoggable(Level.FINER)) {
-//			sipLogger.finer(appSession, ConsoleColors.GREEN + //
-//					"Created X-Vorpal-Session indexKey: " + indexKey + //
-//					ConsoleColors.RESET);
-//		}
-
 		return indexKey;
 	}
 
 	public static String getVorpalSessionId(SipApplicationSession appSession) {
 		String indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
-
-//		if (indexKey == null) {
-//			sipLogger.severe("getVorpalSessionId indexKey is really null");
-//		} else if (indexKey.equals("null")) {
-//			sipLogger.severe("getVorpalSessionId indexKey is the string 'null'. Weird!");
-//		}
-
 		return indexKey;
 	}
 
 	public static String createVorpalDialogId(SipSession sipSession) {
 		String dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
 		sipSession.setAttribute("X-Vorpal-Dialog", dialog);
-
-//		if (sipLogger.isLoggable(Level.FINER)) {
-//			sipLogger.finer(sipSession, ConsoleColors.GREEN + //
-//					"Created X-Vorpal-Session dialog: " + dialog + //
-//					ConsoleColors.RESET);
-//		}
-
 		return dialog;
 	}
 
@@ -643,8 +623,6 @@ public abstract class Callflow implements Serializable {
 
 					sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
-//					try {
-
 					switch (response.getMethod()) {
 					case INVITE:
 					case REGISTER:
@@ -676,18 +654,9 @@ public abstract class Callflow implements Serializable {
 						response.send();
 					}
 
-//					} catch (Exception e) {
-//						sipLogger.logStackTrace(e);
-//						throw e;
-//					}
 				}
 			}
 		}
-
-//		else {
-//			sipLogger.warning(response,
-//					"Response " + response.getStatus() + " failure. This transaction has been completed already.");
-//		}
 
 	}
 
@@ -1178,7 +1147,6 @@ public abstract class Callflow implements Serializable {
 			throw new ServletException("Invalid ProxyPlan. No ProxyTiers defined.");
 		}
 
-//		try {
 		Proxy proxy = inboundRequest.getProxy();
 
 		ProxyTier proxyTier = ProxyPlan.getTiers().remove(0);
@@ -1207,11 +1175,6 @@ public abstract class Callflow implements Serializable {
 			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, this.getClass().getSimpleName(),
 					null);
 		}
-
-//		} catch (Exception e) {
-//			sipLogger.logStackTrace(e);
-//			throw e;
-//		}
 
 	}
 
