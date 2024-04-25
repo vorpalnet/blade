@@ -1,8 +1,7 @@
 package org.vorpal.blade.framework.config;
 
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map.Entry;
+import java.util.SortedMap;
 
 import javax.servlet.sip.SipServletRequest;
 
@@ -33,43 +32,46 @@ public class ConfigPrefixMap extends TranslationsMap {
 	public Translation lookup(SipServletRequest request) {
 		Translation value = null;
 
-		Entry<String, Translation> entry = null;
-		Entry<String, Translation> previous = null;
-
 		try {
+			RegExRoute regexRoute = null;
 
-			RegExRoute regexRoute=null;
 			for (Selector selector : this.selectors) {
-				Iterator<Entry<String, Translation>> itr = map.entrySet().iterator();
 
 				regexRoute = selector.findKey(request);
 
 				if (regexRoute != null) {
-					while (itr.hasNext()) {
-						previous = entry;
-						entry = itr.next();
 
-						if (regexRoute.key.startsWith(entry.getKey())) {
-							value = entry.getValue();
+					String substring;
+					SortedMap<String, Translation> sortedMap;
+					for (int i = regexRoute.key.length(); i > 0; --i) {
+						substring = regexRoute.key.substring(0, i);
+
+						sipLogger.finer(request, "prefix=" + substring);
+
+						sortedMap = map.prefixMap(substring);
+
+						if (sortedMap.containsKey(substring)) {
+							value = sortedMap.get(substring);
+							break;
+						}
+					}
+
+					if (value != null) {
+						value = new Translation(value);
+						if (value.getAttributes() == null) {
+							value.setAttributes(new HashMap<>());
+						}
+						if (regexRoute.attributes != null) {
+							value.getAttributes().putAll(regexRoute.attributes);
 						}
 
-						
+						break;
 					}
+
 				}
+
 			}
 
-			
-			if (value != null) {
-				value = new Translation(value);
-				if (value.getAttributes() == null) {
-					value.setAttributes(new HashMap<>());
-				}
-				if (regexRoute.attributes != null) {
-					value.getAttributes().putAll(regexRoute.attributes);
-				}
-			}
-			
-			
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
 		}
