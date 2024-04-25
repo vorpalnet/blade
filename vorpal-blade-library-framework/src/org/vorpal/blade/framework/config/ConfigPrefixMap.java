@@ -49,6 +49,57 @@ public class ConfigPrefixMap extends TranslationsMap {
 						sipLogger.finer(request, "prefix=" + substring);
 
 						sortedMap = map.prefixMap(substring);
+						if (false == sortedMap.isEmpty()) {
+							value = sortedMap.get(substring);
+							break;
+						}
+
+					}
+
+					if (value != null) {
+						value = new Translation(value);
+						if (value.getAttributes() == null) {
+							value.setAttributes(new HashMap<>());
+						}
+						if (regexRoute.attributes != null) {
+							value.getAttributes().putAll(regexRoute.attributes);
+						}
+
+						break;
+					}
+
+				}
+
+			}
+
+		} catch (Exception e) {
+			sipLogger.logStackTrace(e);
+		}
+
+		return value;
+	}
+
+//	@Override
+	public Translation lookupWorks(SipServletRequest request) {
+		Translation value = null;
+
+		try {
+			RegExRoute regexRoute = null;
+
+			for (Selector selector : this.selectors) {
+
+				regexRoute = selector.findKey(request);
+
+				if (regexRoute != null) {
+
+					String substring;
+					SortedMap<String, Translation> sortedMap;
+					for (int i = regexRoute.key.length(); i > 0; --i) {
+						substring = regexRoute.key.substring(0, i);
+
+						sipLogger.finer(request, "prefix=" + substring);
+
+						sortedMap = map.prefixMap(substring);
 
 						if (sortedMap.containsKey(substring)) {
 							value = sortedMap.get(substring);
@@ -78,4 +129,5 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 		return value;
 	}
+
 }
