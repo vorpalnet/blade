@@ -11,6 +11,7 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.Proxy;
+import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
@@ -261,6 +262,11 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
+	private void invokeCallback(SipServletResponse response, Boolean isProxy, Callback<SipServletResponse> callback)
+			throws ServletParseException {
+
+	}
+
 	@SuppressWarnings("unchecked")
 	@Override
 	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
@@ -274,8 +280,73 @@ public abstract class AsyncSipServlet extends SipServlet
 		try {
 			if (sipSession != null && sipSession.isValid()) {
 				callback = Callflow.pullCallback(response);
-				if (callback != null) {
+				if (callback == null) {
+					// Sometimes a 180 Ringing comes back on a brand new SipSession
+					// because the tag on the To header changed due to a failure downstream.
+					if (response.getMethod().equals("INVITE")) {
+						// Falling down a hole
+						// sipLogger.finer(response, "No callback for response to INVITE... Curious!");
+						SipApplicationSession appSession = response.getApplicationSession();
+						Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
 
+						// sipLogger.finer(response, "Rogue session id=" +
+						// response.getSession().getId());
+						// sipLogger.finer(response, "Number of SipSessions: " + sessions.size());
+
+						for (SipSession session : sessions) {
+							// Do cats eat bats?
+
+							// sipLogger.finer(response, "Checking session id=" + session.getId());
+
+							if (session != response.getSession()) {
+
+								if (session.getCallId().equals(sipSession.getCallId())) {
+
+									String attribute = "RESPONSE_CALLBACK_INVITE";
+									callback = (Callback<SipServletResponse>) session.getAttribute(attribute);
+
+									if (callback != null) {
+										sipLogger.finer(session, "Early dialog session detected, merge in progress...");
+										session.removeAttribute(attribute);
+
+										// Caught a bat!
+										// sipLogger.finer(response, "A callback is defined... Let's use it!");
+
+										// link the sessions
+										sipLogger.finer(session, "Linking sessions...");
+										SipSession linkedSession = Callflow.getLinkedSession(session);
+										session.removeAttribute("LINKED_SESSION");
+										Callflow.linkSessions(linkedSession, sipSession);
+
+										for (String attr : session.getAttributeNameSet()) {
+											sipLogger.finer(session, "Copying session attribute: " + attr);
+											sipSession.setAttribute(attr, session.getAttribute(attr));
+										}
+
+										// invalidate the old session
+										sipLogger.finer(session, "Invalidating early session...");
+										session.invalidate();
+										sipLogger.finer(response, "Sessions merged.");
+									}
+									break;
+								}
+
+							}
+						}
+
+					} else {
+
+						if (isProxy) {
+							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
+							Callflow.getLogger().superArrow(Direction.SEND, false, null, response, "proxy", null);
+						} else {
+							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
+						}
+
+					}
+				}
+
+				if (callback != null) {
 					if (isProxy) {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, false, null, response,
 								callback.getClass().getSimpleName(), null);
@@ -296,75 +367,8 @@ public abstract class AsyncSipServlet extends SipServlet
 						}
 					}
 
-				} else {
-					// Sometimes a 180 Ringing comes back on a brand new SipSession
-					// because the tag on the To header changed due to a failure downstream.
-					if (response.getMethod().equals("INVITE")) {
-						sipLogger.finer(response, "No callback for response to INVITE... Curious!");
-						SipServletRequest rqst;
-						SipApplicationSession appSession = response.getApplicationSession();
-						Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
-						Callback<SipServletResponse> cb2 = null;
-						for (SipSession session : sessions) {
-							if (session != response.getSession()) {
-								rqst = session.getActiveInvite(UAMode.UAC);
-								if (rqst.isCommitted() == false) {
-									sipLogger.finer(response, "Found an active INVITE... Does it match?");
-
-									String requestToUser = ((SipURI) rqst.getTo().getURI()).getUser();
-									String responseToUser = ((SipURI) response.getTo().getURI()).getUser();
-									if (requestToUser.equals(responseToUser)) {
-										sipLogger.finer(response, "The To users match.");
-
-										String requestFromUser = ((SipURI) rqst.getFrom().getURI()).getUser();
-										String responseFromUser = ((SipURI) response.getFrom().getURI()).getUser();
-										if (requestFromUser.equals(responseFromUser)) {
-											sipLogger.finer(response, "The From users match.");
-
-											String attribute = "RESPONSE_CALLBACK_INVITE";
-											cb2 = (Callback<SipServletResponse>) sipSession.getAttribute(attribute);
-
-											if (cb2 != null) {
-												// Caught a bat!
-												sipLogger.finer(response, "A callback is defined... Let's use it!");
-											}
-
-											break;
-										}
-
-									}
-
-								}
-
-							} else {
-								// Dinah, my dear, I wish you were down here with me! There are no mice in the
-								// air, I'm afraid, but you might catch a bat, and that's very like a mouse, you
-								// know. But do cats eat bats, I wonder?”
-								sipLogger.finer(response, "Invalidating rogue SipSession");
-								session.invalidate();
-							}
-						}
-
-						if (cb2 != null) {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-									cb2.getClass().getSimpleName());
-							cb2.accept(response);
-						} else {
-							sipLogger.warning(response, "No callback for INVITE found, curiouser and curiouser! ");
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "????");
-						}
-
-					} else {
-
-						if (isProxy) {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
-							Callflow.getLogger().superArrow(Direction.SEND, false, null, response, "proxy", null);
-						} else {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
-						}
-
-					}
 				}
+
 			}
 		} catch (Exception e) {
 			sipLogger.severe(response, "Exception on SIP response: \n" + response.toString());
