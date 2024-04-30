@@ -448,7 +448,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				if (request != null) {
 					leftSide = (null != request.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
 				} else {
-					leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
+
+//					try {
+						leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
+//					} catch (IllegalStateException e1) {
+//						leftSide = false;
+//					}
+
 				}
 
 			}
@@ -456,7 +462,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			superArrow(direction, leftSide, request, response, name, null);
 
 		} catch (Exception ex) {
-			log(Level.WARNING, ex.getMessage());
+			log(Level.SEVERE, response, ex.getMessage());
+			this.severe(ex);
 		}
 	}
 
@@ -784,7 +791,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			}
 
 		} catch (Exception ex) {
-			log(Level.WARNING, ex.getMessage());
+			log(Level.SEVERE, response, ex.getMessage());
+			this.severe(ex);
 		}
 	}
 
