@@ -95,6 +95,8 @@ public class InitialInvite extends Callflow {
 
 		sendRequest(bobRequest, (bobResponse) -> {
 
+			sipLogger.finer("InitialInvite is aliceRequest committed? " + aliceRequest.isCommitted());
+
 			if (false == aliceRequest.isCommitted()) {
 
 				setSessionExpiration(bobResponse);

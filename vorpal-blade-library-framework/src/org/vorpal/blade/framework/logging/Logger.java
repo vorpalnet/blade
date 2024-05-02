@@ -40,8 +40,6 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -221,10 +219,18 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	public void log(Level level, SipServletMessage message, String comments) {
 
-		if (message.getSession().isValid()) {
-			log(level, hexHash(message.getSession()) + " " + comments);
-		} else {
-			log(level, comments);
+		try {
+
+			if (message != null && message.getSession() != null && message.getSession().isValid()) {
+				log(level, hexHash(message.getSession()) + " " + comments);
+			} else if (comments != null) {
+				log(level, comments);
+			} else {
+				log(level, "Something weird in the logging is happening. Throwing stack trace to find it...");
+				throw new Exception("Weird logging error. Here's a stack trace for you.");
+			}
+		} catch (Exception e) {
+			this.logStackTrace(e);
 		}
 
 	}
@@ -450,7 +456,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				} else {
 
 //					try {
-						leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
+					leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
 //					} catch (IllegalStateException e1) {
 //						leftSide = false;
 //					}
@@ -462,7 +468,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			superArrow(direction, leftSide, request, response, name, null);
 
 		} catch (Exception ex) {
-			log(Level.SEVERE, response, ex.getMessage());
+//			if (request != null) {
+//				log(Level.SEVERE, request, ex.getMessage());
+//			} else {
+//				log(Level.SEVERE, response, ex.getMessage());
+//			}
 			this.severe(ex);
 		}
 	}
@@ -766,19 +776,25 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				log(Level.FINE, str.toString());
 
-				// Put CANCEL / 487 logging here. <---487, you get it.
-				if (request != null && request.getMethod().equals("CANCEL")) {
-					StringBuilder str2 = new StringBuilder();
-					String line = String.format("%87s", "").replace(' ', '=');
-					String alice = String.format("%-18s", shorten(from(response), 17) + "<").replace(' ', '-');
-					String arrow = String.format("%16s", "" + status + "---").replace(' ', '-');
-					String middle = String.format("%-17s", shorten(name, 17));
-					String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
-							+ response.getMethod() + ")";
-					str2.append(hexHash(response.getSession())).append(" ");
-					str2.append(alice).append(arrow).append(middle).append(comment);
-					log(Level.FINE, str.toString());
-				}
+// jwm - testing - this thing is busted!				
+//				// Put CANCEL / 487 logging here. <---487, you get it.
+//				if (request != null && request.getMethod().equals("CANCEL")) {
+//					StringBuilder str2 = new StringBuilder();
+//					String line = String.format("%87s", "").replace(' ', '=');
+//
+////					String alice = String.format("%-18s", shorten(from(response), 17) + "<").replace(' ', '-');
+//					String alice = String.format("%-18s", shorten(from(request), 17) + "<").replace(' ', '-');
+//
+//					String arrow = String.format("%16s", "" + status + "---").replace(' ', '-');
+//					String middle = String.format("%-17s", shorten(name, 17));
+//
+////					String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
+////							+ response.getMethod() + ")";
+//
+//					str2.append(hexHash(request.getSession())).append(" ");
+////					str2.append(alice).append(arrow).append(middle).append(comment);
+//					log(Level.FINE, str.toString());
+//				}
 
 				if (isLoggable(Level.FINEST)) {
 					if (request != null) {
@@ -789,10 +805,36 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				}
 
 			}
+//			// jwm - testing - DELME!
+//			if (request != null & request.getMethod().equals("CANCEL")) {
+//				throw new Exception("CANCEL printed twice, why?");
+//			}
 
 		} catch (Exception ex) {
-			log(Level.SEVERE, response, ex.getMessage());
-			this.severe(ex);
+//			log(Level.SEVERE, response, ex.getMessage());
+//			this.severe(ex);
+
+			if (request != null) {
+				this.fine(request, "Logging error, set logging to FINEST to see stack trace.");
+				if (this.isLoggable(Level.FINEST)) {
+					try {
+						throw new Exception("Logging error");
+					} catch (Exception e99) {
+						this.logStackTrace(e99);
+					}
+				}
+			} else {
+				this.fine(response, "Logging error, set logging to FINEST to see stack trace.");
+				if (this.isLoggable(Level.FINEST)) {
+					try {
+						throw new Exception("Logging error");
+					} catch (Exception e99) {
+						this.logStackTrace(e99);
+					}
+				}
+
+			}
+
 		}
 	}
 
