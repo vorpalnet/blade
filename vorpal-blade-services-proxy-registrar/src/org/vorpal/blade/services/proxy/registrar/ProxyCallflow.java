@@ -12,6 +12,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.logging.ConsoleColors;
 import org.vorpal.blade.framework.logging.Logger.Direction;
 import org.vorpal.blade.framework.proxy.ProxyListener;
 import org.vorpal.blade.framework.proxy.ProxyPlan;
@@ -85,8 +86,10 @@ public class ProxyCallflow extends Callflow {
 
 				// for proxy
 				if (request.getProxy().getProxyBranches().size() > 0) {
+					sipLogger.warning(ConsoleColors.RED+"ProxyCallflow, line 88.");
 					Callflow.getLogger().superArrow(Direction.SEND, false, request, null,
 							this.getClass().getSimpleName(), null);
+					sipLogger.warning(ConsoleColors.RESET);
 				}
 
 			}

@@ -85,6 +85,9 @@ public class ProxyRegistrarServlet extends ProxyServlet
 		case "INVITE":
 			callflow = new ProxyInvite(this, null);
 			break;
+
+		default:
+			callflow = new SupervisedCallflow();
 		}
 
 		return callflow;
@@ -133,7 +136,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(event.getApplicationSession(), Color.green("appSession created... " + appSession.getId()));
+			sipLogger.finer(event.getApplicationSession(), Color.GREEN("appSession created... " + appSession.getId()));
 		}
 
 	}
@@ -142,7 +145,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, Color.red("appSession destroyed... " + appSession.getId()));
+			sipLogger.finer(appSession, Color.RED_BRIGHT("appSession destroyed... " + appSession.getId()));
 		}
 	}
 
@@ -150,7 +153,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 	public void sessionExpired(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, Color.red("appSession expired... " + appSession.getId()));
+			sipLogger.finer(appSession, Color.RED_BRIGHT("appSession expired... " + appSession.getId()));
 		}
 	}
 
@@ -158,7 +161,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, Color.green("appSession readyToInvalidate... " + appSession.getId()));
+			sipLogger.finer(appSession, "appSession readyToInvalidate... " + appSession.getId());
 		}
 	}
 

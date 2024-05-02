@@ -42,6 +42,7 @@ import javax.servlet.sip.SipSessionListener;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.logging.Color;
 import org.vorpal.blade.framework.logging.ConsoleColors;
 
 /**
@@ -150,7 +151,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, ConsoleColors.GREEN_BRIGHT + "appSession created..." + ConsoleColors.RESET);
+			sipLogger.finer(appSession, Color.GREEN_BRIGHT("appSession created... " + appSession.getId()));
 		}
 
 	}
@@ -159,7 +160,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, ConsoleColors.RED_BRIGHT + "appSession destroyed..." + ConsoleColors.RESET);
+			sipLogger.finer(appSession, Color.RED_BRIGHT("appSession destroyed... " + appSession.getId()));
 		}
 	}
 
@@ -167,7 +168,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void sessionExpired(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "appSession expired...");
+			sipLogger.finer(appSession, "appSession expired... " + appSession.getId());
 		}
 	}
 
@@ -175,7 +176,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "appSession readyToInvalidate...");
+			sipLogger.finer(appSession, "appSession readyToInvalidate... " + appSession.getId());
 		}
 	}
 
@@ -183,7 +184,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void sessionCreated(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession created...");
+			sipLogger.finer(sipSession, "sipSession created... " + sipSession.getId());
 		}
 	}
 
@@ -191,7 +192,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void sessionDestroyed(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession destroyed...");
+			sipLogger.finer(sipSession, "sipSession destroyed... " + sipSession.getId());
 
 		}
 	}
@@ -200,7 +201,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void sessionReadyToInvalidate(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession readyToInvalidate...");
+			sipLogger.finer(sipSession, "sipSession readyToInvalidate... " + sipSession.getId());
 		}
 	}
 

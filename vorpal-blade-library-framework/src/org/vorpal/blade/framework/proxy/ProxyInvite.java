@@ -29,6 +29,8 @@ public class ProxyInvite extends Callflow {
 
 		try {
 
+			sipLogger.severe(request, "Invoking ProxyInvite.process()");
+
 			this.inboundRequest = request;
 
 			// Call the listener's method to build the ProxyPlan
@@ -41,28 +43,20 @@ public class ProxyInvite extends Callflow {
 			sipLogger.fine("ProxyPlan tiers: " + proxyPlan.getTiers().size());
 
 			this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
-				sipLogger.fine(request, "*Got proxy response... status: " + response.getStatus() + ", isBranchResponse: "
+				sipLogger.fine(request, "Got proxy response... status: " + response.getStatus() + ", isBranchResponse: "
 						+ response.isBranchResponse());
-				
 
 				// this should probably go in 'proxyRequest'
-				this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack)->{
-					
-					
-					
-					//do nothing;
+				this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack) -> {
+					// do nothing;
 				});
-				
-				
 
 				if (!successful(response) && !response.isBranchResponse()) {
-
 					if (false == proxyPlan.isEmpty()) {
 						sipLogger.fine(response,
 								"Calling process again... ProxyPlan tiers: " + proxyPlan.getTiers().size());
 						this.process(request);
 					}
-
 				}
 
 			});

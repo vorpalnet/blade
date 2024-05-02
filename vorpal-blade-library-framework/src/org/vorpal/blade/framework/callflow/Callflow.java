@@ -446,10 +446,8 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
 			throws ServletException, IOException {
-
 		request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
 		sendRequest(request);
-
 	}
 
 	/**
