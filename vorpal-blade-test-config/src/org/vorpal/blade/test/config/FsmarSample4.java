@@ -16,20 +16,16 @@ public class FsmarSample4 extends AppRouterConfiguration {
 		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
 		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
-		this.getPrevious("null").getTrigger("INVITE").createTransition("proxy-registrar");
 
-//		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("mediahub2");
-//		this.getPrevious("mediahub2").getTrigger("INVITE").createTransition("test-uas");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("b2bua");
+		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("transfer");		
+		this.getPrevious("transfer").getTrigger("INVITE").createTransition("proxy-registrar");
+
 		
-//		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("genrec2");
-//		this.getPrevious("genrec2").getTrigger("INVITE").createTransition("test-uas");
-//		
-//		this.getPrevious("proxy-registrar").getTrigger("INVITE").createTransition("failover");
-		
-		
-//		this.getPrevious("onnet").getTrigger("INVITE").createTransition("transfer");		
-//		this.getPrevious("transfer").getTrigger("INVITE").createTransition("test-uas");
-		
+		//		this.getPrevious("mediahub2").getTrigger("INVITE").createTransition("proxy-registrar");
+
+
+	
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {

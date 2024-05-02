@@ -4,20 +4,18 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Set;
-import java.util.logging.Level;
 
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
-import javax.servlet.sip.Proxy;
-import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletListener;
+import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
@@ -25,7 +23,7 @@ import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerListener;
 import javax.servlet.sip.TimerService;
-import javax.servlet.sip.UAMode;
+import javax.servlet.sip.TooManyHopsException;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callback;
@@ -188,7 +186,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	@Override
 	protected void doRequest(SipServletRequest request) throws ServletException, IOException {
-		Callflow callflow;
+		Callflow callflow = null;
 		Callback<SipServletRequest> requestLambda;
 		SipSession sipSession = request.getSession();
 		Boolean isProxy = (Boolean) sipSession.getAttribute("isProxy");
@@ -249,12 +247,25 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					}
 				} else {
-
-					sipLogger.superArrow(Direction.RECEIVE, request, null, this.getClass().getSimpleName());
+					sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
 					callflow.process(request);
-
 				}
 			}
+
+// We no longer support the concept of 'proxy'.
+//			if (!request.isInitial() && isProxy(request) && !request.getMethod().equals("ACK")) {
+//				// logging the outgoing proxy message, like BYE
+//				boolean leftSide = (request.getSession().getAttribute("DIAGRAM_SIDE") != null);
+//				// opposite side of the diagram as receiving
+//				if (callflow != null) {
+//					sipLogger.superArrow(Direction.SEND, !leftSide, request, null, callflow.getClass().getSimpleName(),
+//							null);
+//				} else {
+//					sipLogger.superArrow(Direction.SEND, !leftSide, request, null, this.getClass().getSimpleName(),
+//							null);
+//				}
+//			}
+
 		} catch (Exception e) {
 			sipLogger.severe(request, "Exception on SIP request: \n" + request.toString());
 			sipLogger.logStackTrace(request, e);
@@ -262,9 +273,13 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
-	private void invokeCallback(SipServletResponse response, Boolean isProxy, Callback<SipServletResponse> callback)
-			throws ServletParseException {
+	private boolean isProxy(SipServletRequest request) throws TooManyHopsException {
+		return request.getProxy(false) != null;
+	}
 
+	private boolean isProxy(SipServletResponse response) {
+//		return response.getProxyBranch() != null;
+		return response.getProxy() != null;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -272,20 +287,16 @@ public abstract class AsyncSipServlet extends SipServlet
 	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
 		Callback<SipServletResponse> callback;
 		SipSession sipSession = response.getSession();
-		Boolean isProxy = (Boolean) sipSession.getAttribute("isProxy");
-		if (isProxy == null) {
-			isProxy = false;
-		}
 
 		try {
 			if (sipSession != null && sipSession.isValid()) {
 				callback = Callflow.pullCallback(response);
+//				if (callback == null && isProxy(response) == false) {
 				if (callback == null) {
 					// Sometimes a 180 Ringing comes back on a brand new SipSession
 					// because the tag on the To header changed due to a failure downstream.
 					if (response.getMethod().equals("INVITE")) {
 						// Falling down a hole
-						// sipLogger.finer(response, "No callback for response to INVITE... Curious!");
 						SipApplicationSession appSession = response.getApplicationSession();
 						Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
 
@@ -336,7 +347,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					} else {
 
-						if (isProxy) {
+						if (isProxy(response)) {
 							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
 							Callflow.getLogger().superArrow(Direction.SEND, false, null, response, "proxy", null);
 						} else {
@@ -347,7 +358,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 
 				if (callback != null) {
-					if (isProxy) {
+					if (isProxy(response)) {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, false, null, response,
 								callback.getClass().getSimpleName(), null);
 
@@ -359,7 +370,7 @@ public abstract class AsyncSipServlet extends SipServlet
 					callback.accept(response);
 
 					// For printing arrow for proxy messages
-					if (isProxy) {
+					if (isProxy(response)) {
 						SipServletRequest proxyOrginalRequest = response.getProxy().getOriginalRequest();
 						if (proxyOrginalRequest != null) {
 							Callflow.getLogger().superArrow(Direction.SEND, true, null, response,
