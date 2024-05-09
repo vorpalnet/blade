@@ -4,7 +4,7 @@ import java.rmi.RemoteException;
 
 import javax.ejb.Remote;
 
-@Remote
+// @Remote
 public interface HelloWorld {
     String getHelloWorld() throws RemoteException;;
 }

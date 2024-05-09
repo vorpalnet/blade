@@ -28,9 +28,6 @@ public class ProxyInvite extends Callflow {
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
 		try {
-
-			sipLogger.severe(request, "Invoking ProxyInvite.process()");
-
 			this.inboundRequest = request;
 
 			// Call the listener's method to build the ProxyPlan
@@ -40,10 +37,10 @@ public class ProxyInvite extends Callflow {
 				sipLogger.severe(request, "No ProxyListener defined.");
 			}
 
-			sipLogger.fine("ProxyPlan tiers: " + proxyPlan.getTiers().size());
+			sipLogger.finer("ProxyPlan tiers: " + proxyPlan.getTiers().size());
 
 			this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
-				sipLogger.fine(request, "Got proxy response... status: " + response.getStatus() + ", isBranchResponse: "
+				sipLogger.finer(request, "Got proxy response... status: " + response.getStatus() + ", isBranchResponse: "
 						+ response.isBranchResponse());
 
 				// this should probably go in 'proxyRequest'
@@ -53,7 +50,7 @@ public class ProxyInvite extends Callflow {
 
 				if (!successful(response) && !response.isBranchResponse()) {
 					if (false == proxyPlan.isEmpty()) {
-						sipLogger.fine(response,
+						sipLogger.finer(response,
 								"Calling process again... ProxyPlan tiers: " + proxyPlan.getTiers().size());
 						this.process(request);
 					}
