@@ -29,7 +29,7 @@ import javax.management.MXBean;
  * @author Jeff McDonald
  *
  */
-@MXBean
+// @MXBean
 public interface BladeConsoleMXBean {
 
 	public String getJson(String contextName);

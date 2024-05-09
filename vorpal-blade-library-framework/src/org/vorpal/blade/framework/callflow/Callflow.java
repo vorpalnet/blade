@@ -48,6 +48,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerService;
+import javax.servlet.sip.TooManyHopsException;
 import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
@@ -93,6 +94,14 @@ public abstract class Callflow implements Serializable {
 	protected static final String DELAYED_REQUEST = "DELAYED_REQUEST";
 	protected static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
 
+//	public static boolean isProxy(SipServletRequest request) throws TooManyHopsException {
+//		return AsyncSipServlet.isProxy(request);
+//	}
+
+//	public static boolean isProxy(SipServletResponse response) {
+//		return AsyncSipServlet.isProxy(response);
+//	}
+
 	public static boolean provisional(SipServletResponse response) {
 		return (response.getStatus() >= 100 && response.getStatus() < 200);
 	}
@@ -108,6 +117,21 @@ public abstract class Callflow implements Serializable {
 	public static boolean failure(SipServletResponse response) {
 		return (response.getStatus() >= 400);
 	}
+
+	public static String superclass(Class _class) {
+		Class _superclass = _class;
+		return _superclass.getSimpleName();
+	}
+
+//	public static String superclass(Class _class) {
+//		Class _superclass = _class;
+//
+//		while (_superclass.getSuperclass() != null) {
+//			_superclass = _superclass.getSuperclass();
+//		}
+//
+//		return _superclass.getSimpleName();
+//	}
 
 	/**
 	 * Not to be called by the end user. This method finds the callback method
@@ -142,7 +166,7 @@ public abstract class Callflow implements Serializable {
 
 				}
 			} catch (Exception e) {
-				// do nothing;
+				sipLogger.logStackTrace(request, e);
 			}
 
 			if (removeAttribute) {
@@ -478,7 +502,9 @@ public abstract class Callflow implements Serializable {
 			request.setHeader("X-Vorpal-Session", xvs);
 		}
 
-		sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
+//		sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
+		sipLogger.superArrow(Direction.SEND, request, null, superclass(this.getClass()));
+
 		request.send();
 	}
 
@@ -619,7 +645,8 @@ public abstract class Callflow implements Serializable {
 
 				if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
 
-					sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+//					sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+					sipLogger.superArrow(Direction.SEND, null, response, superclass(this.getClass()));
 
 					switch (response.getMethod()) {
 					case INVITE:
@@ -1170,7 +1197,9 @@ public abstract class Callflow implements Serializable {
 		proxy.startProxy();
 
 		for (ProxyBranch proxyBranch : proxy.getProxyBranches()) {
-			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, this.getClass().getSimpleName(),
+//			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, this.getClass().getSimpleName(),
+//					null);
+			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, superclass(this.getClass()),
 					null);
 		}
 

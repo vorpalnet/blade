@@ -9,7 +9,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-@WebListener
+// @WebListener
 public class BladeConsoleListener implements ServletContextListener {
 	private ObjectInstance oi;
 	private MBeanServer server;
@@ -32,18 +32,18 @@ public class BladeConsoleListener implements ServletContextListener {
 
 		try {
 
-			System.out.println("Creating objectName...");
-
-			objectName = new ObjectName("vorpal.blade:Name=blade,Type=Configuration");
-
-			System.out.println("Getting server...");
-			server = ManagementFactory.getPlatformMBeanServer();
-
-			System.out.println("registerMBean...");
-
-			oi = server.registerMBean(bladeConsole, objectName);
-
-			System.out.println("All good!");
+//			System.out.println("Creating objectName...");
+//
+//			objectName = new ObjectName("vorpal.blade:Name=blade,Type=Configuration");
+//
+//			System.out.println("Getting server...");
+//			server = ManagementFactory.getPlatformMBeanServer();
+//
+//			System.out.println("registerMBean...");
+//
+//			oi = server.registerMBean(bladeConsole, objectName);
+//
+//			System.out.println("All good!");
 
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -28,63 +28,69 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipURI;
+import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Expectation;
 
 /**
- * This class implements a blind call transfer.
+ * This class implements a blind transfer.
  * 
- * <pre>
- * {@code
+ * <pre>{@code
  * 
- *   ALICE              Transfer              BOB                CAROL
- * transferee                              transferor           target
- * ----------           --------              ---               ------
- *     |                   |                   |                   |
- *     | RTP               |                   |                   |
- *     |<=====================================>|                   |
- *     |                   |                   |                   |
- *     |                   |             REFER |                   |   To:          transferee
- *     |                   |<------------------|                   |   Refer-To:    target
- *     |                   |                   |                   |   Referred-By: transferor
- *     |                   |                   |                   |   
- *     |                   | 202 Accepted      |                   |   
- *     |                   |------------------>|                   |
- *     |                   | NOTIFY            |                   |   Subscription-State: pending;expires=3600
- *     |                   |------------------>|                   |   Event: refer
- *     |                   |            200 OK |                   |   Content-Type: message/sipfrag
- *     |                   |<------------------|                   |   Content: SIP/2.0 100 Trying
- *     |                   |                   |                   |   
- *     |                   | INVITE            |                   |
- *     |                   |-------------------------------------->|   empty INVITE to get SDP
- *     |                   |                   |       180 Ringing |
- *     |                   |<--------------------------------------|
- *     |                   |                   |            200 OK |
- *     |                   |<-------------------------------(sdp)--|
- *     |                   | NOTIFY            |                   |   Subscription-State: terminated;reason=noresource
- *     |                   |------------------>|                   |   Event:              refer
- *     |                   |            200 OK |                   |   Content-Type:       message/sipfrag
- *     |                   |<------------------|                   |   Content:            SIP/2.0 200 OK
- *     |                   |                   |                   |   
- *     |          INVITE   |                   |                   |   
- *     |<-----------(sdp)--|                   |                   |   
- *     | 200 OK            |                   |                   |
- *     |--(sdp)----------->|                   |                   |
- *     |               ACK |                   |                   |
- *     |<------------------|                   |                   |
- *     |                   | ACK               |                   |
- *     |                   |--(sdp)------------------------------->|
- *     | RTP               |                   |                   |
- *     |<=========================================================>|
- *     |                   | BYE               |                   |
- *     |                   |------------------>|                   |
- *     |                   |            200 OK |                   |
- *     |                   |<------------------|                   |
- *     |                   |                   |                   |
- * }
- * </pre>
+ * Success: Bob transfers Alice to Carol
+ * =======================================================================================                               
+ *                                   [BlindTransfer]<----------REFER---[bob]             ; Refer-To: <sip:carol@vorpal.net>
+ *                                   [BlindTransfer]-------------202-->[bob]             ; Accepted (REFER)
+ *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: pending;expires=3600, SIP/2.0 100 Trying
+ *                                   [BlindTransfer]----------INVITE-->[carol]           ; sip:carol@vorpal.net            
+ *                                   [Callflow]<-----------------200---[bob]             ; OK (NOTIFY)
+ *                                   [BlindTransfer]<------------180---[carol]           ; Ringing (INVITE)
+ *                                   [BlindTransfer]<------200-(sdp)---[carol]           ; OK (INVITE)
+ * [alice]<-----------INVITE-(sdp)---[BlindTransfer]                                     ; From: <sip:bob@vorpal.net>;tag=35ea0865
+ * [alice]---------------200-(sdp)-->[BlindTransfer]                                     ; OK (INVITE)
+ * [alice]<--------------------ACK---[BlindTransfer]                                     ;                                 
+ *                                   [BlindTransfer]-------ACK-(sdp)-->[carol]           ;                                 
+ *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: terminated;reason=noresource, SIP/2.0 200 OK
+ *                                   [BlindTransfer]<------------200---[bob]             ; OK (NOTIFY)
+ *                                   [BlindTransfer]<------------BYE---[bob]             ;                                 
+ *                                   [BlindTransfer]-------------200-->[bob]             ; OK (BYE)
+ * 
+ * Failure: Carol rejects the call, Bob reinvites Alice
+ * =======================================================================================
+ *                                   [BlindTransfer]<----------REFER---[bob]             ; Refer-To: <sip:carol@vorpal.net>
+ *                                   [BlindTransfer]-------------202-->[bob]             ; Accepted (REFER)
+ *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: pending;expires=3600, SIP/2.0 100 Trying
+ *                                   [BlindTransfer]----------INVITE-->[carol]           ; sip:carol@vorpal.net            
+ *                                   [Callflow]<-----------------200---[bob]             ; OK (NOTIFY)
+ *                                   [BlindTransfer]<------------486---[carol]           ; Busy Here (INVITE)
+ *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: terminated;reason=rejected, SIP/2.0 486 Busy Here
+ *                                   [BlindTransfer]<------------200---[bob]             ; OK (NOTIFY)
+ *                                   [Reinvite]<--------INVITE-(sdp)---[bob]             ; To: "Alice" <sip:alice@vorpal.net>;tag=2bbbce8c
+ * [alice]<-----------INVITE-(sdp)---[Reinvite]                                          ; From: <sip:bob@vorpal.net>;tag=e78dc7cf
+ * [alice]---------------200-(sdp)-->[Reinvite]                                          ; OK (INVITE)
+ *                                   [Reinvite]------------200-(sdp)-->[bob]             ; OK (INVITE)
+ *                                   [Reinvite]<-----------------ACK---[bob]             ;                                 
+ * [alice]<--------------------ACK---[Reinvite]                                          ;                                 
+ * 
+ * 
+ * Failure: Alice gives up. Bob and Carol hangup.
+ * =======================================================================================
+ *                                   [BlindTransfer]<----------REFER---[bob]             ; Refer-To: <sip:carol@vorpal.net>
+ *                                   [BlindTransfer]-------------202-->[bob]             ; Accepted (REFER)
+ *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: pending;expires=3600, SIP/2.0 100 Trying
+ *                                   [BlindTransfer]----------INVITE-->[carol]           ; sip:carol@vorpal.net            
+ *                                   [Callflow]<-----------------200---[bob]             ; OK (NOTIFY)
+ *                                   [BlindTransfer]<------------180---[carol]           ; Ringing (INVITE)
+ * [alice]---------------------BYE-->[BlindTransfer]                                     ;                                 
+ * [alice]<--------------------200---[BlindTransfer]                                     ; OK (BYE)
+ *                                   [BlindTransfer]----------CANCEL-->[carol]           ;                                 
+ *                                   [BlindTransfer]<------------487---[carol]           ; Request Terminated (INVITE)
+ *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: terminated;reason=giveup, SIP/2.0 200 OK
+ *                                   [BlindTransfer]<------------200---[bob]             ; OK (NOTIFY)
+ *                                   [BlindTransfer]<------------BYE---[bob]             ;                                 
+ *                                   [BlindTransfer]-------------200-->[bob]             ; OK (BYE)
+ *
+ * }</pre>
  */
 
 public class BlindTransfer extends Transfer {
@@ -98,7 +104,8 @@ public class BlindTransfer extends Transfer {
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		try {
-
+			// request is REFER from transferor (bob)
+			
 			createRequests(request);
 
 			// First copy any specified INVITE headers
@@ -124,29 +131,17 @@ public class BlindTransfer extends Transfer {
 			SipServletRequest notify100 = request.getSession().createRequest(NOTIFY);
 			notify100.setHeader(EVENT, "refer");
 			notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=3600");
-//			notify100.setHeader(SUBSCRIPTION_STATE, "active;expires=60");
-//			notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=60");
 			notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
 			sendRequest(notify100);
 
 			// in the event the transferee hangs up before the transfer completes
-			Expectation expectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
+			Expectation aliceExpectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
 				sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
 				sendResponse(bye.createResponse(200));
 				sendRequest(targetRequest.createCancel());
-				
-				//jwm
-				// sendRequest(transferorRequest.getSession().createRequest(BYE), (ok)->{});
-				
-//				SipServletRequest notify = targetRequest.getSession().createRequest(NOTIFY);
-//				String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
-//				notify1xx.setContent(sipFrag.getBytes(), SIPFRAG);
-
-				
-				
 			});
 
-			expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
+			Expectation bobExpectation = expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
 				sipLogger.finer(transferorRequest, "transferor (bob) hangs up");
 				sendResponse(bye.createResponse(200));
 			});
@@ -155,71 +150,81 @@ public class BlindTransfer extends Transfer {
 			transferListener.transferInitiated(targetRequest);
 
 			sendRequest(targetRequest, (targetResponse) -> {
-
+				
 				if (provisional(targetResponse)) {
-					SipServletRequest notify1xx = request.getSession().createRequest(NOTIFY);
-					notify1xx.setHeader(EVENT, "refer");
-//					notify1xx.setHeader(SUBSCRIPTION_STATE, "active;expires=60");
-//					notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=3600");
-					notify100.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
-					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
-					notify1xx.setContent(sipFrag.getBytes(), SIPFRAG);
-					sendRequest(notify1xx);
+					sipLogger.finer(targetResponse, "target (carol) sends provisional response "+targetResponse.getStatus()+" "+targetResponse.getReasonPhrase() );
 
 				} else if (successful(targetResponse)) {
+					sipLogger.finer(targetResponse, "target (carol) sends successful response "+targetResponse.getStatus()+" "+targetResponse.getReasonPhrase() );
 
-					expectation.clear(); // no longer expect BYE from transferee
-
-					SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
-					notify200.setHeader(EVENT, "refer");
-					//
-					// https://www.dialogic.com/webhelp/csp1010/8.4.1_ipn3/sip_software_chap_-_sip_notify_subscription_state.htm
-
-// bad					notify200.setHeader(SUBSCRIPTION_STATE, "active;expires=3600");
-//					notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=timeout");
-//					notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=timeout;expires=0");
-					notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
-					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
-					notify200.setContent(sipFrag.getBytes(), SIPFRAG);
-					sendRequest(notify200);
-
-					// User is notified of a successful transfer
-					transferListener.transferCompleted(targetResponse);
+					// Alice will no longer hangup, expect a BYE from Bob
+					aliceExpectation.clear(); 
 
 					copyContent(targetResponse, transfereeRequest);
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
 
-						if (successful(transfereeResponse)) { // should always be the case
-							linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
-							sendRequest(transfereeResponse.createAck());
-							sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
-						}
+						linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
+						sendRequest(transfereeResponse.createAck());
+						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
+								
+						// Send the SIP/2.0 200 OK to the transferor (bob)
+						SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
+						notify200.setHeader(EVENT, "refer");
+						notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
+						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
+						notify200.setContent(sipFrag.getBytes(), SIPFRAG);
+						sendRequest(notify200);
+		
+						// User is notified of a successful transfer
+						transferListener.transferCompleted(targetResponse);
 
 					});
 
 				} else if (failure(targetResponse)) {
-					sipLogger.finer(targetResponse, "target (carol) refused the call");
+					sipLogger.finer(targetResponse, "target (carol) sends failure response "+targetResponse.getStatus()+" "+targetResponse.getReasonPhrase() );
+					
+					if(targetResponse.getStatus()==487) {
+					sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
+						transferListener.transferAbandoned(request);
+						
+						// Instead of sending the failure notice, we pretend everything is successful so Bob will hang up
+						SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
 
-					// User is notified that the transfer target did not answer
-					transferListener.transferDeclined(targetResponse);
+						String sipFrag = "SIP/2.0 200 OK";
+						notifyFailure.setHeader(EVENT, "refer");
 
-					SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
-//					String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
-					String sipFrag = "SIP/2.0 200 OK";
-					notifyFailure.setHeader(EVENT, "refer");
-					notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
-					notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
+						notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=giveup");
+						notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
+						
+						sendRequest(notifyFailure);
 
-					sendRequest(notifyFailure, (notifyFailureResponse) -> {
-					});
+					}else {
+						sipLogger.finer(targetResponse, "target (carol) has 'rejected' the call");
+
+						// User is notified that the transfer target did not answer
+						transferListener.transferDeclined(targetResponse);
+
+						// Bob won't send a BYE, but instead reINVITE.
+						bobExpectation.clear();
+						
+						// If Alice hangs up, let some other callflow handle it
+						aliceExpectation.clear();
+
+						SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
+						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
+						notifyFailure.setHeader(EVENT, "refer");
+						notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=rejected");
+						notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
+					
+						sendRequest(notifyFailure);						
+					}
 
 				}
 
 			});
 
 		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
-			throw e;
+			sipLogger.logStackTrace(request, e);
 		}
 
 	}

@@ -28,6 +28,7 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callback;
 import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.callflow.Callflow481;
 import org.vorpal.blade.framework.config.SessionParameters;
 import org.vorpal.blade.framework.logging.LogManager;
 import org.vorpal.blade.framework.logging.Logger;
@@ -189,10 +190,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		Callflow callflow = null;
 		Callback<SipServletRequest> requestLambda;
 		SipSession sipSession = request.getSession();
-		Boolean isProxy = (Boolean) sipSession.getAttribute("isProxy");
-		if (isProxy == null) {
-			isProxy = false;
-		}
 
 		try {
 
@@ -212,42 +209,64 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			requestLambda = Callflow.pullCallback(request);
 			if (requestLambda != null) {
-				String name = requestLambda.getClass().getSimpleName();
-				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, name);
+
+// jwm - testing				
+//				String name = requestLambda.getClass().getSimpleName();
+//				String name = requestLambda.getClass().getSuperclass().getSimpleName();
+
+//				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, requestLambda.getClass().getSimpleName());
+				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null,
+						Callflow.superclass(requestLambda.getClass()));
 
 				requestLambda.accept(request);
 
 				// For printing arrow for proxy messages
-				if (isProxy == true) {
-					Callflow.getLogger().superArrow(Direction.SEND, false, request.getProxy().getOriginalRequest(),
-							null, name, null);
-				}
+//				if (isProxy(request) == true) {
+////					Callflow.getLogger().superArrow(Direction.SEND, false, request.getProxy().getOriginalRequest(),
+////							null, requestLambda.getClass().getSimpleName(), null);
+//
+//					Callflow.getLogger().superArrow(Direction.SEND, false, request.getProxy().getOriginalRequest(),
+//							null, Callflow.superclass(requestLambda.getClass()), null);
+//				}
 
 			} else {
-				callflow = chooseCallflow(request);
+
+				// Send 481 for ReINVITEs with failed linked sessions
+				if (request.getMethod().equals("INVITE") && false == request.isInitial()) {
+					SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
+					if (linkedSession == null || false == linkedSession.isValid()) {
+						callflow = new Callflow481();
+					}
+				}
 
 				if (callflow == null) {
+					callflow = chooseCallflow(request);
+				}
+
+				if (callflow == null) {
+
 					if (request.getMethod().equals("ACK")) {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
 					} else {
 
-						if (isProxy) {
-//							SipServletRequest originalProxyRequest = request.getProxy().getOriginalRequest();
-							Callflow.getLogger().superArrow(Direction.RECEIVE, false, request, null, "proxy", null);
-							Callflow.getLogger().superArrow(Direction.SEND, request, null, "proxy");
-
-						} else {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
-							SipServletResponse response = request.createResponse(501);
-							Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
-							Callflow.getLogger().warning("No registered callflow for request method "
-									+ request.getMethod() + ", consider modifying the 'chooseCallflow' method.");
-							response.send();
-						}
+//						if (isProxy(request)) {
+////							SipServletRequest originalProxyRequest = request.getProxy().getOriginalRequest();
+//							Callflow.getLogger().superArrow(Direction.RECEIVE, false, request, null, "proxy", null);
+//							Callflow.getLogger().superArrow(Direction.SEND, request, null, "proxy");
+//
+//						} else {
+						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
+						SipServletResponse response = request.createResponse(501);
+						Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
+						Callflow.getLogger().warning("No registered callflow for request method " + request.getMethod()
+								+ ", consider modifying the 'chooseCallflow' method.");
+						response.send();
+//						}
 
 					}
 				} else {
-					sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
+//					sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
+					sipLogger.superArrow(Direction.RECEIVE, request, null, Callflow.superclass(callflow.getClass()));
 					callflow.process(request);
 				}
 			}
@@ -273,14 +292,19 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
-	private boolean isProxy(SipServletRequest request) throws TooManyHopsException {
-		return request.getProxy(false) != null;
-	}
+//	public static boolean isProxy(SipServletRequest request) throws TooManyHopsException {
+//		boolean isProxy = request.getProxy(false) != null;
+////		sipLogger.finer(request, "isProxy: " + isProxy);
+//		return isProxy;
+//	}
 
-	private boolean isProxy(SipServletResponse response) {
-//		return response.getProxyBranch() != null;
-		return response.getProxy() != null;
-	}
+//	public static boolean isProxy(SipServletResponse response) {
+//		boolean isProxy = response.getProxyBranch() != null;
+////      Doesn't work		
+////		boolean isProxy = response.getProxy() != null;
+////		sipLogger.finer(response, "isProxy: " + isProxy);
+//		return isProxy;
+//	}
 
 	@SuppressWarnings("unchecked")
 	@Override
@@ -347,36 +371,45 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					} else {
 
-						if (isProxy(response)) {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
-							Callflow.getLogger().superArrow(Direction.SEND, false, null, response, "proxy", null);
-						} else {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
-						}
+// This evidently doesn't work well						
+//						if (isProxy(response)) {
+//							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
+//							Callflow.getLogger().superArrow(Direction.SEND, false, null, response, "proxy", null);
+//						} else {
+//							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "null");
+						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+								this.getClass().getSimpleName());
+//						}
 
 					}
 				}
 
 				if (callback != null) {
-					if (isProxy(response)) {
-						Callflow.getLogger().superArrow(Direction.RECEIVE, false, null, response,
-								callback.getClass().getSimpleName(), null);
-
-					} else {
-						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-								callback.getClass().getSimpleName());
-					}
+//					if (isProxy(response)) {
+////						Callflow.getLogger().superArrow(Direction.RECEIVE, false, null, response,
+////								callback.getClass().getSimpleName(), null);
+//						Callflow.getLogger().superArrow(Direction.RECEIVE, false, null, response,
+//								Callflow.superclass(callback.getClass()), null);
+//
+//					} else {
+//						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+//								callback.getClass().getSimpleName());
+					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+							Callflow.superclass(callback.getClass()));
+//					}
 
 					callback.accept(response);
 
 					// For printing arrow for proxy messages
-					if (isProxy(response)) {
-						SipServletRequest proxyOrginalRequest = response.getProxy().getOriginalRequest();
-						if (proxyOrginalRequest != null) {
-							Callflow.getLogger().superArrow(Direction.SEND, true, null, response,
-									callback.getClass().getSimpleName(), Logger.from(response));
-						}
-					}
+//					if (isProxy(response)) {
+//						SipServletRequest proxyOrginalRequest = response.getProxy().getOriginalRequest();
+//						if (proxyOrginalRequest != null) {
+////							Callflow.getLogger().superArrow(Direction.SEND, true, null, response,
+////									callback.getClass().getSimpleName(), Logger.from(response));
+//							Callflow.getLogger().superArrow(Direction.SEND, true, null, response,
+//									Callflow.superclass(callback.getClass()), Logger.from(response));
+//						}
+//					}
 
 				}
 
@@ -539,7 +572,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
-		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+//		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+		Callflow.getLogger().superArrow(Direction.SEND, null, response, Callflow.superclass(this.getClass()));
 		try {
 			response.send();
 		} catch (Exception e) {

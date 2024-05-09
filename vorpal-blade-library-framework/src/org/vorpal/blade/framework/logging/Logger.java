@@ -398,7 +398,16 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return hashValue;
 	}
 
-	public String shorten(String value, int length) {
+	public String shorten(String _value, int length) {
+		String value = null;
+		int dollarIndex = _value.indexOf('$');
+
+		if (dollarIndex >= 0) {
+			value = _value.substring(0, dollarIndex);
+		} else {
+			value = _value;
+		}
+
 		StringBuilder sb = new StringBuilder();
 
 		if (length >= 2) {
@@ -408,17 +417,38 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		if (value.length() <= length) {
 			sb.append("[").append(value).append("]");
 		} else {
-			String left = value.substring(0, (length / 2)) + "*";
-			String right = value.substring(value.length() - (length - left.length()), value.length());
 
+			String name = value.substring(0, length);
 			sb.append("[");
-			sb.append(left);
-			sb.append(right);
+			sb.append(name);
 			sb.append("]");
 		}
 
 		return sb.toString();
 	}
+
+//  Not very readable, people prefer truncated name	
+//	public String shorten(String value, int length) {
+//		StringBuilder sb = new StringBuilder();
+//
+//		if (length >= 2) {
+//			length = length - 2;
+//		}
+//
+//		if (value.length() <= length) {
+//			sb.append("[").append(value).append("]");
+//		} else {
+//			String left = value.substring(0, (length / 2)) + "*";
+//			String right = value.substring(value.length() - (length - left.length()), value.length());
+//
+//			sb.append("[");
+//			sb.append(left);
+//			sb.append(right);
+//			sb.append("]");
+//		}
+//
+//		return sb.toString();
+//	}
 
 //    |-------17------||-------17------||-------17------||-------17------||-------17------||-------17------|
 //    0                   10                  20                  30                  40                  50		
@@ -454,12 +484,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				if (request != null) {
 					leftSide = (null != request.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
 				} else {
-
-//					try {
 					leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
-//					} catch (IllegalStateException e1) {
-//						leftSide = false;
-//					}
 
 				}
 
@@ -468,11 +493,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			superArrow(direction, leftSide, request, response, name, null);
 
 		} catch (Exception ex) {
-//			if (request != null) {
-//				log(Level.SEVERE, request, ex.getMessage());
-//			} else {
-//				log(Level.SEVERE, response, ex.getMessage());
-//			}
 			this.severe(ex);
 		}
 	}

@@ -54,7 +54,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 			break;
 		}
 
-		sipLogger.severe("sessionKey method=" + request.getMethod() + ", key=" + key);
+		sipLogger.finer("sessionKey method=" + request.getMethod() + ", key=" + key);
 		return key;
 	}
 
