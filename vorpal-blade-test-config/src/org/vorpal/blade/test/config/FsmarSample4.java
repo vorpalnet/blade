@@ -18,7 +18,8 @@ public class FsmarSample4 extends AppRouterConfiguration {
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
 
 		this.getPrevious("null").getTrigger("INVITE").createTransition("b2bua");
-		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("transfer");		
+		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("mediahub2");
+		this.getPrevious("mediahub2").getTrigger("INVITE").createTransition("transfer");
 		this.getPrevious("transfer").getTrigger("INVITE").createTransition("proxy-registrar");
 
 		

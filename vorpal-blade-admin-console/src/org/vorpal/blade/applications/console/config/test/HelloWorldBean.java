@@ -4,7 +4,7 @@ import javax.annotation.Resource;
 import javax.ejb.SessionContext;
 import javax.ejb.Stateless;
 
-@Stateless(name = "HelloWorld", mappedName = "HelloWorld")
+//@Stateless(name = "HelloWorld", mappedName = "HelloWorld")
 public class HelloWorldBean implements HelloWorld {
 
 //	@Resource
