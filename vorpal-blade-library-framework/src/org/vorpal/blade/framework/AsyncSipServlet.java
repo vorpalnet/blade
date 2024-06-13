@@ -97,6 +97,13 @@ public abstract class AsyncSipServlet extends SipServlet
 		try {
 			servletCreated(event);
 			sipLogger = LogManager.getLogger(event);
+
+			Package pkg = AsyncSipServlet.class.getPackage();
+			String title = pkg.getSpecificationTitle();
+			String version = pkg.getImplementationVersion();
+			String application = event.getServletContext().getServletContextName();
+			sipLogger.info(application + " compiled using " + title + " version " + version);
+
 		} catch (Exception e) {
 
 			if (null != sipLogger) {
@@ -398,6 +405,8 @@ public abstract class AsyncSipServlet extends SipServlet
 							Callflow.superclass(callback.getClass()));
 //					}
 
+//					sipLogger.severe(response, "AsyncSipServlet.doResponse callback=" + callback);
+
 					callback.accept(response);
 
 					// For printing arrow for proxy messages
@@ -411,6 +420,8 @@ public abstract class AsyncSipServlet extends SipServlet
 //						}
 //					}
 
+				} else {
+					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, this.getClass().getSimpleName());
 				}
 
 			}

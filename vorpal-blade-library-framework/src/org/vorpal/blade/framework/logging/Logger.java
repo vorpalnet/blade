@@ -189,10 +189,18 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void severe(Exception e) {
+		severe(null, e);
+	}
+	
+	public void severe(SipServletMessage message, Exception e) {
 		StringWriter sw = new StringWriter();
 		PrintWriter pw = new PrintWriter(sw);
 		e.printStackTrace(pw);
-		log(Level.SEVERE, sw.toString());
+		if(message!=null) {
+		log(Level.SEVERE, message, sw.toString());
+		}else {
+			log(Level.SEVERE, sw.toString());
+		}
 	}
 
 	public void log(Level level, ServletTimer timer) {
