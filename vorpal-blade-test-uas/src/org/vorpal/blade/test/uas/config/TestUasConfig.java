@@ -2,14 +2,14 @@ package org.vorpal.blade.test.uas.config;
 
 import java.util.HashMap;
 
-public class TestUasConfig {
+import org.vorpal.blade.framework.config.Configuration;
 
-	private HashMap<String, Integer> errorMap = new HashMap<String, Integer>();
+public class TestUasConfig extends Configuration {
+
+	public HashMap<String, Integer> errorMap = new HashMap<String, Integer>();
 
 	public TestUasConfig() {
-		errorMap.put("18165550404", 404);
-		errorMap.put("18165550503", 503);
-		errorMap.put("18165550607", 607);
+
 	}
 
 	public HashMap<String, Integer> getErrorMap() {

@@ -1,8 +1,10 @@
 package org.vorpal.blade.services.transfer;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.jar.Manifest;
 import java.util.logging.Level;
 
 import javax.servlet.ServletException;
@@ -91,8 +93,6 @@ public class TransferServlet extends B2buaServlet //
 	protected void servletCreated(SipServletContextEvent event) {
 		settingsManager = new SettingsManager<>(event, TransferSettings.class, new TransferSettingsSample());
 		sipLogger.info("servletCreated...");
-
-//		this.showProperties(event);
 	}
 
 	@Override
@@ -309,6 +309,5 @@ public class TransferServlet extends B2buaServlet //
 			sipLogger.finer(sipSession, "sipSession readyToInvalidate...");
 		}
 	}
-
 
 }
