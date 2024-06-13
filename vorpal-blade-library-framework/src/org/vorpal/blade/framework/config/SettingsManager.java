@@ -297,9 +297,9 @@ public class SettingsManager<T> {
 			// WARNING: Not able to generate jsonSchema-info for type: [simple type, class
 			// java.lang.Object] - probably using custom serializer which does not override
 			// acceptJsonFormatVisitor
-			
-			//this.mapper.registerModule(new SimpleModule()//
-			//		.addSerializer(Object.class, new JsonObjectSerializer()));
+
+			// this.mapper.registerModule(new SimpleModule()//
+			// .addSerializer(Object.class, new JsonObjectSerializer()));
 
 			// Don't bother to save attributes set to null.
 			this.mapper.setSerializationInclusion(Include.NON_NULL);
