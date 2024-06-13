@@ -2,10 +2,8 @@ Manifest-Version: 1.0
 Build-Jdk-Spec: 17
 Created-By: Maven Integration for Eclipse
 Extension-Name: vorpal-blade
-Implementation-Title: Vorpal:BLADE Framework
-Implementation-Vendor: Vorpal Networks, LLC
-Implementation-Version: 2.4.9
-Specification-Title: Vorpal:BLADE Framework
-Specification-Vendor: VORPAL.ORG
+Implementation-Title: vorpal-blade-shared-libraries.war
+Implementation-Version: 2.5.0
+Specification-Title: BLADE Shared Libraries
 Specification-Version: 2.0
 

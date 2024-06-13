@@ -103,8 +103,6 @@ public class TestClientAPI extends Callflow {
 //			bobRequest.setContent(parser.getMimeMessage().getContent().toString(),
 //					parser.getMimeMessage().getContentType());
 
-			
-			
 			Session session = Session.getDefaultInstance(new Properties());
 			MimeMessage msg = new MimeMessage(session, new ByteArrayInputStream(
 					Files.readAllBytes(Paths.get(this.getClass().getResource("siprecInvite.txt").toURI()))));
@@ -112,24 +110,15 @@ public class TestClientAPI extends Callflow {
 			MimeMessageParser parser = new MimeMessageParser(msg);
 			parser.parse();
 			List<DataSource> list = parser.getAttachmentList();
-			sipLogger.severe("list.size(): " + list.size());
+			sipLogger.finer("list.size(): " + list.size());
 
-			
-			
 			MimeMultipart mm2 = (MimeMultipart) msg.getContent();
 			ByteArrayOutputStream bout = new ByteArrayOutputStream();
 			mm2.writeTo(bout);
 			bobRequest.setContent(bout.toString(), mm2.getContentType());
 
-			sipLogger.info("bobRequest.getContentType(): "+bobRequest.getContentType());
-			sipLogger.info("bobRequest.getContent(): \n"+bobRequest.getContent());
-			
-			
-			
-			
-			
-			
-			
+			sipLogger.finer("bobRequest.getContentType(): " + bobRequest.getContentType());
+			sipLogger.finer("bobRequest.getContent(): \n" + bobRequest.getContent());
 
 		} catch (Exception e) {
 			sipLogger.severe(e);
@@ -140,25 +129,22 @@ public class TestClientAPI extends Callflow {
 		// Save the 'transient' AsyncResponse for later HTTP Response
 		asyncResponses.put(appSession.getId(), asyncResponse);
 
-		
-		
-		
-		sipLogger.warning(bobRequest, "Sending this...\n"+bobRequest.toString());
-		
-		
-		
-		
+		sipLogger.finer(bobRequest, "Sending this...\n" + bobRequest.toString());
+
 		// Send the SIP request
 		sendRequest(bobRequest, (bobResponse) -> {
 
-			sipLogger.severe(bobResponse, "Received this...\n"+bobResponse.toString());
+			sipLogger.finer(bobResponse, "Received this...\n" + bobResponse.toString());
 
 			msgResponse.responses.add(bobResponse.toString());
 
 			if (successful(bobResponse)) {
 				sendRequest(bobResponse.createAck());
 			}
+
 			if (!provisional(bobResponse)) {
+				System.out.println("Final response: " + bobResponse.getStatus());
+				sipLogger.finer(bobResponse, "Final response: " + bobResponse.getStatus());
 				msgResponse.finalStatus = bobResponse.getStatus();
 				Response httpResponse = Response.created(location).entity(msgResponse).build();
 				asyncResponses.remove(appSession.getId()).resume(httpResponse);

@@ -233,7 +233,7 @@
 						<configuration>
 							<files>
 								<file>
-									${basedir}/../version.properties</file>
+									${basedir}/version.properties</file>
 							</files>
 						</configuration>
 					</execution>
@@ -250,12 +250,10 @@
 					<archive>
 						<compress>true</compress>
 						<manifestEntries>
-							<Specification-Title>Vorpal:BLADE Framework</Specification-Title>
+							<Specification-Title>${title}</Specification-Title>
 							<Specification-Version>${specification}</Specification-Version>
-							<Specification-Vendor>VORPAL.ORG</Specification-Vendor>
-							<Implementation-Title>Vorpal:BLADE Framework</Implementation-Title>
+							<Implementation-Title>vorpal-blade-shared-libraries.war</Implementation-Title>
 							<Implementation-Version>${implementation}</Implementation-Version>
-							<Implementation-Vendor>Vorpal Networks, LLC</Implementation-Vendor>
 							<Extension-Name>vorpal-blade</Extension-Name>
 						</manifestEntries>
 					</archive>

@@ -17,6 +17,7 @@ import org.vorpal.blade.test.uas.callflows.TestNotImplemented;
 import org.vorpal.blade.test.uas.callflows.TestOkayResponse;
 import org.vorpal.blade.test.uas.callflows.TestReinvite;
 import org.vorpal.blade.test.uas.config.TestUasConfig;
+import org.vorpal.blade.test.uas.config.TestUasConfigSample;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
@@ -58,7 +59,7 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<TestUasConfig>(event, TestUasConfig.class);
+		settingsManager = new SettingsManager<TestUasConfig>(event, TestUasConfig.class, new TestUasConfigSample());
 		sipLogger.logConfiguration(settingsManager.getCurrent());
 	}
 
