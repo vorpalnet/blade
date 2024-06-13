@@ -12,21 +12,43 @@ public class FsmarSample4 extends AppRouterConfiguration {
 	public FsmarSample4() {
 		this.setDefaultApplication("proxy-goober");
 
+//		OPT01: null, OPTIONS, NO_ROUTE, options 
+//		INV02: null, INVITE|From(.*sip:acmeSrc.*)|Contact(.*10.173.172.24.*), TERMINATING(To), siprec
+//		INV03: null, INVITE|From(.*sip:Genesys.*)|Contact(.*10.173.172.24.*), TERMINATING(To), genrec
+//		INV04: null, INVITE|Contact(.*10.173.172.6.*), TERMINATING(To), mediahub
+//		INV05: siprec, INVITE(sip:nice), TERMINATING(To), nice
+//		INV06: siprec, INVITE(sip:qfiniti), TERMINATING(To), qfiniti
+//		INV07: siprec, INVITE(sip:hold), TERMINATING(To), hold
+//		INV08: null, INVITE|Contact(.*10.173.187.199.*), TERMINATING(To), mediahub
+//		INV09: null, INVITE|From(.*sip:acmeSrc.*)|Contact(.*10.173.187.47.*), TERMINATING(To), siprec
+
+//		String header, operator, condition;
+
 		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
-		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
-		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
-		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
 
-		this.getPrevious("null").getTrigger("INVITE").createTransition("b2bua");
-		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("mediahub2");
-		this.getPrevious("mediahub2").getTrigger("INVITE").createTransition("transfer");
-		this.getPrevious("transfer").getTrigger("INVITE").createTransition("proxy-registrar");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("siprec2") //
+				.condition.addComparison("From", "address", ".*sip:acmeSrc.*");
 
+		this.getPrevious("null").getTrigger("INVITE").createTransition("genrec2") //
+				.condition.addComparison("From", "address", ".*sip:Genesys.*");
 		
-		//		this.getPrevious("mediahub2").getTrigger("INVITE").createTransition("proxy-registrar");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("genrec2") //
+		.condition.addComparison("Contact", "host", "10.173.172.6");	
+		
+		this.getPrevious("siprec").getTrigger("INVITE").createTransition("nice") //
+		.condition.addComparison("Request-URI", "user", "nice");
+		
+		this.getPrevious("siprec").getTrigger("INVITE").createTransition("qfiniti") //
+		.condition.addComparison("Request-URI", "user", "qfiniti");
+		
+		this.getPrevious("siprec").getTrigger("INVITE").createTransition("hold") //
+		.condition.addComparison("Request-URI", "user", "hold");
+		
+		this.getPrevious("null").getTrigger("INVITE").createTransition("genrec2") //
+		.condition.addComparison("Contact", "host", "10.173.172.6");
+		
 
 
-	
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {
