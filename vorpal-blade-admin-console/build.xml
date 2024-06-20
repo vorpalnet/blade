@@ -1,13 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-admin-console">
-	
 	<!-- Define unique locations first -->
-	<property name="BLADE" location="../" />
-	<property name="src" location="./src" />
-	<property name="webapp" location="WebContent" />
+	<property name="webapp" location="./target/${ant.project.name}" />
 
-	<!-- Load environment variables -->	
+	<!-- Load environment variables -->
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
@@ -18,5 +14,35 @@
 
 	<!-- Import default locations and tasks -->
 	<import file="../libraries.xml" />
+
+	<target name="build" depends="init, mvn_windows, mvn_unix, package" />
+
+	<condition property="isWindows">
+		<os family="windows" />
+	</condition>
+
+	<condition property="isUnix">
+		<os family="unix" />
+	</condition>
+
+	<target name="mvn_windows" if="isWindows" depends="init">
+		<exec dir="." executable="cmd">
+			<arg line="/c mvn clean package" />
+		</exec>
+	</target>
+
+	<target name="mvn_unix" if="isUnix" depends="init">
+		<exec dir="." executable="sh">
+			<arg line="-c 'mvn clean package'" />
+		</exec>
+	</target>
+
+
+	<target name="package" depends="init, mvn_windows, mvn_unix">
+
+		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
+		
+	</target>
+
 
 </project>
