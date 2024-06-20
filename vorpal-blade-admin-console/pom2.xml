@@ -2,11 +2,11 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>vorpal.blade.shared.libraries</groupId>
-	<artifactId>vorpal-blade-shared-libraries</artifactId>
+	<groupId>vorpal.blade.admin.console</groupId>
+	<artifactId>vorpal-blade-admin-console</artifactId>
 	<packaging>war</packaging>
 	<version>2.0</version>
-	<name>Vorpal:Blade WebLogic Shared Libraries</name>
+	<name>Blade Admin Console</name>
 	<url>https://vorpalnet.github.io</url>
 
 	<properties>
@@ -47,15 +47,6 @@
 			<scope>runtime</scope>
 		</dependency>
 
-
-		<!-- https://mvnrepository.com/artifact/javax.servlet/jstl -->
-		<dependency>
-			<groupId>javax.servlet</groupId>
-			<artifactId>jstl</artifactId>
-			<version>1.2</version>
-		</dependency>
-
-
 		<!-- https://mvnrepository.com/artifact/org.apache.commons/commons-email -->
 		<dependency>
 			<groupId>org.apache.commons</groupId>
@@ -69,6 +60,13 @@
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-collections4</artifactId>
 			<version>4.5.0-M1</version>
+		</dependency>
+
+
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-text</artifactId>
+			<version>1.10.0</version>
 		</dependency>
 
 		<!-- https://mvnrepository.com/artifact/commons-io/commons-io -->
@@ -171,10 +169,19 @@
 		</dependency>
 
 
+		<!-- https://mvnrepository.com/artifact/org.hsqldb/hsqldb -->
+		<dependency>
+			<groupId>org.hsqldb</groupId>
+			<artifactId>hsqldb</artifactId>
+			<version>2.7.3</version>
+			<scope>test</scope>
+		</dependency>
+
+
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-shared-libraries</finalName>
+		<finalName>vorpal-blade-admin-console</finalName>
 		<plugins>
 
 			<plugin>
@@ -259,12 +266,15 @@
 					<archive>
 						<compress>true</compress>
 						<manifestEntries>
+							<!--		
 							<Specification-Title>${title}</Specification-Title>
 							<Specification-Version>${specification}</Specification-Version>
-							<Implementation-Title>
-								vorpal-blade-shared-libraries.war</Implementation-Title>
+							-->
+							<Implementation-Title>${title}</Implementation-Title>
 							<Implementation-Version>${implementation}</Implementation-Version>
+							<!--							
 							<Extension-Name>vorpal-blade</Extension-Name>
+							-->
 						</manifestEntries>
 					</archive>
 				</configuration>

@@ -47,6 +47,15 @@
 			<scope>runtime</scope>
 		</dependency>
 
+
+		<!-- https://mvnrepository.com/artifact/javax.servlet/jstl -->
+		<dependency>
+			<groupId>javax.servlet</groupId>
+			<artifactId>jstl</artifactId>
+			<version>1.2</version>
+		</dependency>
+
+
 		<!-- https://mvnrepository.com/artifact/org.apache.commons/commons-email -->
 		<dependency>
 			<groupId>org.apache.commons</groupId>
@@ -252,7 +261,8 @@
 						<manifestEntries>
 							<Specification-Title>${title}</Specification-Title>
 							<Specification-Version>${specification}</Specification-Version>
-							<Implementation-Title>vorpal-blade-shared-libraries.war</Implementation-Title>
+							<Implementation-Title>
+								vorpal-blade-shared-libraries.war</Implementation-Title>
 							<Implementation-Version>${implementation}</Implementation-Version>
 							<Extension-Name>vorpal-blade</Extension-Name>
 						</manifestEntries>

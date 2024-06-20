@@ -32,12 +32,13 @@ public class BladeConsoleListener implements ServletContextListener {
 
 		try {
 			
-			System.out.println("Starting HSQLDB at location: file:~/.xwiki/data/xwiki.db");
-			Server server = new Server();
-			server.setDatabaseName(0, "test");
-			server.setDatabasePath(0, "file:~/.xwiki/data/xwiki.db");
-			server.start();
-			System.out.println("HSQLDB started successfully.");
+// Save this for Analytics
+//			System.out.println("Starting HSQLDB at location: file:~/.xwiki/data/xwiki.db");
+//			Server server = new Server();
+//			server.setDatabaseName(0, "test");
+//			server.setDatabasePath(0, "file:~/.xwiki/data/xwiki.db");
+//			server.start();
+//			System.out.println("HSQLDB started successfully.");
 			
 			
 			

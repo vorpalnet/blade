@@ -15,6 +15,9 @@ public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	@JsonPropertyDescription("Optional logging parameters")
+	public String version = "2.1";
+
+	@JsonPropertyDescription("Optional logging parameters")
 	protected LogParameters logging;
 
 	@JsonPropertyDescription("Optional session parameters")
