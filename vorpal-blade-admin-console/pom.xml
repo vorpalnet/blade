@@ -18,8 +18,14 @@
 		<jackson-version>2.12.7</jackson-version>
 		<slf4j-version>2.0.12</slf4j-version>
 		<swagger-version>2.2.20</swagger-version>
+		<!--
 		<occas>/Users/jeff/Oracle/occas-8.1</occas>
+-->
+		<occas>${OCCAS}</occas>
+		<hostname>${HOSTNAME}</hostname>
 		<occas-version>8.1</occas-version>
+
+
 
 	</properties>
 
@@ -34,7 +40,13 @@
 
 	<dependencies>
 
-
+		<dependency>
+			<groupId>oracle.communications.converged.application.server</groupId>
+			<artifactId>occas</artifactId>
+			<version>${occas-version}</version>
+			<scope>system</scope>
+			<systemPath>${occas}/wlserver/server/lib/weblogic.jar</systemPath>
+		</dependency>
 
 
 		<dependency>
@@ -63,19 +75,11 @@
 			<groupId>org.hsqldb</groupId>
 			<artifactId>hsqldb</artifactId>
 			<version>2.7.3</version>
-			
+
 			<!--
 			<scope>test</scope>
 			-->
-			
-		</dependency>
 
-		<dependency>
-			<groupId>oracle.communications.converged.application.server</groupId>
-			<artifactId>occas</artifactId>
-			<version>${occas-version}</version>
-			<scope>system</scope>
-			<systemPath>${occas}/wlserver/server/lib/weblogic.jar</systemPath>
 		</dependency>
 
 
@@ -236,27 +240,6 @@
 				<version>3.4.1</version>
 				<executions>
 
-					<!--
-          <execution>
-            <id>enforce-versions</id>
-            <goals>
-              <goal>enforce</goal>
-            </goals>
-            <configuration>
-              <rules>
-                <requireMavenVersion>
-                  <version>2.0.6</version>
-                </requireMavenVersion>
-                <requireJavaVersion>
-                  <version>1.5</version>
-                </requireJavaVersion>
-                <requireOS>
-                  <family>unix</family>
-                </requireOS>
-              </rules>
-            </configuration>
-          </execution>
--->
 					<execution>
 						<id>enforce-bytecode-version</id>
 						<goals>
@@ -294,8 +277,12 @@
 						</goals>
 						<configuration>
 							<files>
-								<file>
-									${basedir}/version.properties</file>
+								<file>${basedir}/../${hostname}.properties</file>
+								<file>${basedir}/../version.properties</file>
+								<!--	
+								<file>${basedir}/../${hostname}.properties</file>
+								<file>${basedir}/../${computername}.properties</file>
+							-->
 							</files>
 						</configuration>
 					</execution>
@@ -324,6 +311,27 @@
 						</manifestEntries>
 					</archive>
 				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>1.1</version>
+				<executions>
+					<execution>
+						<phase>validate</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<tasks>
+								<echo>Displaying value of 'testproperty' property</echo>
+								<echo>[testproperty] ${hostname}</echo>
+								<echo>[testproperty] ${OCCAS}</echo>
+							</tasks>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 
 		</plugins>
