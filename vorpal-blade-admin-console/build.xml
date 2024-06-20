@@ -33,7 +33,7 @@
 
 	<target name="mvn_unix" if="isUnix" depends="init">
 		<exec dir="." executable="sh">
-			<arg line="-c 'mvn clean package'" />
+			<arg line="-c 'mvn clean package -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
 		</exec>
 	</target>
 
