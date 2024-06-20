@@ -89,17 +89,17 @@ import inet.ipaddr.ipv6.IPv6Address;
 // @WebListener
 // public class SettingsManager<T> implements ServletContextListener {
 public class SettingsManager<T> {
-	private T sample = null;
-	private T current;
-	private ObjectName objectName;
-	private MBeanServer server;
-	private ObjectMapper mapper;
-	private Class<T> clazz;
-	private ObjectInstance oi;
-	private Settings settings;
+	protected T sample = null;
+	protected T current;
+	protected ObjectName objectName;
+	protected MBeanServer server;
+	protected ObjectMapper mapper;
+	protected Class<T> clazz;
+	protected ObjectInstance oi;
+	protected Settings settings;
 
-	private static String serverName;
-	private static String clusterName;
+	protected static String serverName;
+	protected static String clusterName;
 
 	protected String servletContextName;
 	protected Path domainPath;
@@ -112,20 +112,10 @@ public class SettingsManager<T> {
 	public static SipSessionsUtil sipUtil;
 	public static Logger sipLogger;
 
-	private JsonNode domainNode = NullNode.getInstance();
-	private JsonNode clusterNode = NullNode.getInstance();
-	private JsonNode serverNode = NullNode.getInstance();
-	private JsonNode mergedNode = NullNode.getInstance();
-
-//	@Override
-//	public void contextInitialized(ServletContextEvent event) {
-////		sipLogger = LogManager.getLogger(event.getServletContext());
-//	}
-//
-//	@Override
-//	public void contextDestroyed(ServletContextEvent event) {
-//		LogManager.closeLogger(event);
-//	}
+	protected JsonNode domainNode = NullNode.getInstance();
+	protected JsonNode clusterNode = NullNode.getInstance();
+	protected JsonNode serverNode = NullNode.getInstance();
+	protected JsonNode mergedNode = NullNode.getInstance();
 
 	public SettingsManager(String name, Class<T> clazz, ObjectMapper mapper) {
 		this.mapper = mapper;
@@ -436,7 +426,7 @@ public class SettingsManager<T> {
 //		System.out.println("Subclasses: " + resolver.getSubclasses(clazz));
 //	}
 
-	private void saveSchema(T t) throws JsonGenerationException, JsonMappingException, IOException {
+	public void saveSchema(T t) throws JsonGenerationException, JsonMappingException, IOException {
 		SubclassesResolver resolver = new SubclassesResolverImpl().withClassesToScan(Arrays.asList(clazz.getName()));
 		JsonSchemaConfig config = JsonSchemaConfig.html5EnabledSchema().withSubclassesResolver(resolver);
 		JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(mapper, config);
@@ -445,15 +435,9 @@ public class SettingsManager<T> {
 		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, jsonSchema);
 	}
 
-	private void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
+	public void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
 		File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");
 		mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
-
-//		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
-//		JsonSchemaConfig config = JsonSchemaConfig.nullableJsonSchemaDraft4().html5EnabledSchema();
-//		JsonSchemaGenerator schemaGen = new JsonSchemaGenerator(mapper, config);
-//		JsonNode schema = schemaGen.generateJsonSchema(t.getClass());
-//		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, schema);
 	}
 
 	/**

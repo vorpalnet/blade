@@ -19,3 +19,17 @@ Could we use features in Jackson to merge JSON files?
 I worry about lists or sets of data. Need to merge the lists and not just replace.
 
 Let's see if it can be done...?
+
+
+Compilation
+
+For Eclipse, execute
+
+mvn eclipse:clean
+
+followed by
+
+mvn eclipse:eclipse
+
+if will prepare the eclipse .classpath file for you. That is, these commands are run against maven from the command line i.e. outside of eclipse.
+

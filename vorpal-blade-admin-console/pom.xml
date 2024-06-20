@@ -3,7 +3,7 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>vorpal.blade.admin.console</groupId>
-	<artifactId>vorpal-blade-shared-libraries</artifactId>
+	<artifactId>vorpal-blade-admin-console</artifactId>
 	<packaging>war</packaging>
 	<version>2.0</version>
 	<name>Blade Admin Console</name>
@@ -18,10 +18,66 @@
 		<jackson-version>2.12.7</jackson-version>
 		<slf4j-version>2.0.12</slf4j-version>
 		<swagger-version>2.2.20</swagger-version>
+		<occas>/Users/jeff/Oracle/occas-8.1</occas>
+		<occas-version>8.1</occas-version>
 
 	</properties>
 
+	<!--
+	<repositories>
+		<repository>
+			<id>icm</id>
+			<url>http://maven.icm.edu.pl/artifactory/repo/</url>
+		</repository>
+	</repositories>
+-->
+
 	<dependencies>
+
+
+
+
+		<dependency>
+			<groupId>org.apache.xmlgraphics</groupId>
+			<artifactId>fop</artifactId>
+			<version>0.95</version>
+
+			<exclusions>
+				<exclusion>
+					<groupId>xml-apis</groupId>
+					<artifactId>xml-apis</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+
+
+		<!-- https://mvnrepository.com/artifact/com.github.vlsi.mxgraph/jgraphx -->
+		<dependency>
+			<groupId>com.github.vlsi.mxgraph</groupId>
+			<artifactId>jgraphx</artifactId>
+			<version>4.2.2</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/org.hsqldb/hsqldb -->
+		<dependency>
+			<groupId>org.hsqldb</groupId>
+			<artifactId>hsqldb</artifactId>
+			<version>2.7.3</version>
+			
+			<!--
+			<scope>test</scope>
+			-->
+			
+		</dependency>
+
+		<dependency>
+			<groupId>oracle.communications.converged.application.server</groupId>
+			<artifactId>occas</artifactId>
+			<version>${occas-version}</version>
+			<scope>system</scope>
+			<systemPath>${occas}/wlserver/server/lib/weblogic.jar</systemPath>
+		</dependency>
+
 
 		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-api -->
 		<dependency>
@@ -60,6 +116,13 @@
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-collections4</artifactId>
 			<version>4.5.0-M1</version>
+		</dependency>
+
+
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-text</artifactId>
+			<version>1.10.0</version>
 		</dependency>
 
 		<!-- https://mvnrepository.com/artifact/commons-io/commons-io -->
@@ -161,16 +224,6 @@
 			<version>${swagger-version}</version>
 		</dependency>
 
-
-		<!-- https://mvnrepository.com/artifact/org.hsqldb/hsqldb -->
-		<dependency>
-			<groupId>org.hsqldb</groupId>
-			<artifactId>hsqldb</artifactId>
-			<version>2.7.3</version>
-			<scope>test</scope>
-		</dependency>
-
-
 	</dependencies>
 
 	<build>
@@ -259,14 +312,15 @@
 					<archive>
 						<compress>true</compress>
 						<manifestEntries>
+							<!--		
 							<Specification-Title>${title}</Specification-Title>
 							<Specification-Version>${specification}</Specification-Version>
-							<Implementation-Title>
-								vorpal-blade-shared-libraries.war</Implementation-Title>
+							-->
+							<Implementation-Title>${title}</Implementation-Title>
 							<Implementation-Version>${implementation}</Implementation-Version>
 							<!--							
 							<Extension-Name>vorpal-blade</Extension-Name>
--->
+							-->
 						</manifestEntries>
 					</archive>
 				</configuration>
