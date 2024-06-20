@@ -40,32 +40,8 @@
 
 	<target name="package" depends="init, mvn_windows, mvn_unix">
 
-		<!-- MAVEN will do this	
-		<echo message="build=${build}" />
-		<echo message="BLADE=${BLADE}" />
-		<echo message="specification=${specification}" />
-		<echo message="implementation=${implementation}" />
-		<echo message="MANIFEST=${build}/MANIFEST.MF" />
-
-		<manifest file="${build}/MANIFEST.MF">
-			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Specification-Title" value="Vorpal:BLADE Framework" />
-			<attribute name="Specification-Version" value="${specification}" />
-			<attribute name="Specification-Vendor" value="VORPAL.ORG" />
-			<attribute name="Implementation-Title" value="Vorpal:BLADE Framework Implementation" />
-			<attribute name="Implementation-Version" value="${implementation}" />
-			<attribute name="Implementation-Vendor" value="Vorpal Networks, LLC" />
-			<attribute name="Extension-Name" value="vorpal-blade" />
-		</manifest>
-
-		<war destfile="${build}/${ant.project.name}.war" basedir="${webapp}" needxmlfile="false" manifest="${build}/MANIFEST.MF">
-			<classes dir="${classes}" />
-		</war>
--->
-
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
-
-
+		
 	</target>
 
 
