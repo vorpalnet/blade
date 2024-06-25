@@ -173,7 +173,7 @@ public class SettingsManager<T> {
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode);
 	}
 
-	public void setDomainJson(String domainJson) throws JsonMappingException, JsonProcessingException {
+	public void setDomainJson(String domainJson) throws JsonMappingException, JsonProcessingException, IOException {
 //		sipLogger.fine("setDomainJson...");
 		domainNode = mapper.readTree(domainJson);
 //		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(domainNode));
@@ -184,7 +184,7 @@ public class SettingsManager<T> {
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode);
 	}
 
-	public void setServerJson(String serverJson) throws JsonMappingException, JsonProcessingException {
+	public void setServerJson(String serverJson) throws JsonMappingException, JsonProcessingException, IOException {
 //		sipLogger.fine("setServerJson...");
 		serverNode = mapper.readTree(serverJson);
 //		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(serverNode));
@@ -195,7 +195,7 @@ public class SettingsManager<T> {
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode);
 	}
 
-	public void setClusterJson(String clusterJson) throws JsonMappingException, JsonProcessingException {
+	public void setClusterJson(String clusterJson) throws JsonMappingException, JsonProcessingException, IOException {
 //		sipLogger.fine("setClusterJson...");
 		clusterNode = mapper.readTree(clusterJson);
 //		sipLogger.fine(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(clusterNode));
