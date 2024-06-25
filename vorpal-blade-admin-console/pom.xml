@@ -18,28 +18,17 @@
 		<jackson-version>2.12.7</jackson-version>
 		<slf4j-version>2.0.12</slf4j-version>
 		<swagger-version>2.2.20</swagger-version>
-		<!--
-		<occas>/Users/jeff/Oracle/occas-8.1</occas>
--->
 		<occas>${OCCAS}</occas>
 		<hostname>${HOSTNAME}</hostname>
 		<occas-version>8.1</occas-version>
-
-
-
 	</properties>
 
-	<!--
-	<repositories>
-		<repository>
-			<id>icm</id>
-			<url>http://maven.icm.edu.pl/artifactory/repo/</url>
-		</repository>
-	</repositories>
--->
+
+
+
+
 
 	<dependencies>
-
 		<dependency>
 			<groupId>oracle.communications.converged.application.server</groupId>
 			<artifactId>occas</artifactId>
@@ -47,6 +36,18 @@
 			<scope>system</scope>
 			<systemPath>${occas}/wlserver/server/lib/weblogic.jar</systemPath>
 		</dependency>
+
+		<!--
+		
+
+		<dependency>
+			<groupId>com.oracle.occas</groupId>
+			<artifactId>occas</artifactId>
+			<version>8.1</version>
+		</dependency>
+		
+-->
+
 
 
 		<dependency>
@@ -325,7 +326,8 @@
 						</goals>
 						<configuration>
 							<tasks>
-								<echo>Displaying value of 'testproperty' property</echo>
+								<echo>Displaying value of 'testproperty'
+									property</echo>
 								<echo>[testproperty] ${hostname}</echo>
 								<echo>[testproperty] ${OCCAS}</echo>
 							</tasks>
