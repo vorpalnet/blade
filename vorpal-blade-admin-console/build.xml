@@ -27,11 +27,16 @@
 
 	<target name="mvn_windows" if="isWindows" depends="init">
 		<exec dir="." executable="cmd">
-			<arg line="/c mvn clean package" />
+			<arg line="/c mvn clean package -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}" />
 		</exec>
 	</target>
 
 	<target name="mvn_unix" if="isUnix" depends="init">
+<!--
+		<exec dir="." executable="sh">
+			<arg line="-c 'mvn install:install-file -Dfile=${OCCAS}/wlserver/server/lib/weblogic.jar -DgroupId=com.oracle.occas -DartifactId=occas -Dversion=8.1 -Dpackaging=jar'" />
+		</exec>
+-->
 		<exec dir="." executable="sh">
 			<arg line="-c 'mvn clean package -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
 		</exec>
@@ -41,7 +46,7 @@
 	<target name="package" depends="init, mvn_windows, mvn_unix">
 
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
-		
+
 	</target>
 
 
