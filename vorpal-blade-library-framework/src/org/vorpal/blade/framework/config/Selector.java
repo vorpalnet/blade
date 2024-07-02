@@ -180,14 +180,13 @@ public class Selector {
 
 				if (sipLogger.isLoggable(Level.FINER)) {
 					if (matchResult == true) {
-						sipLogger.finer(request, "Selector id=" + this.getId() + //
+						sipLogger.finer(request, "Pattern match found, Selector id=" + this.getId() + //
 								", attribute=" + this.getAttribute() + //
 								", value=" + value + //
 								", matchResult=" + matchResult + //
 								", key=" + key);
 					} else {
-						sipLogger.severe(request, "Configuration error... No pattern match found.");
-						sipLogger.finer(request, "Selector id=" + this.getId() + //
+						sipLogger.finer(request, "No pattern match found, Selector id=" + this.getId() + //
 								", attribute=" + this.getAttribute() + //
 								", value=" + value + //
 								", matchResult=" + matchResult + //
