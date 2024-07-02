@@ -19,11 +19,11 @@ public class BladeConsoleListener implements ServletContextListener {
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
 		System.out.println(sce.getServletContext().getServletContextName() + " context destroyed...");
-		try {
-			server.unregisterMBean(objectName);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+//		try {
+//			server.unregisterMBean(objectName);
+//		} catch (Exception e) {
+//			e.printStackTrace();
+//		}
 	}
 
 	@Override

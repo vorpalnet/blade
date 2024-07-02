@@ -2,15 +2,13 @@
 <%@ page import="java.util.*"%>
 <%
 String exception = "No Exceptions.";
-
-	
 String app = request.getParameter("app");
 ConfigHelper cfgHelper = new ConfigHelper(app);
-String domainJson = cfgHelper.getDomainJson();
-String jsonSchema = cfgHelper.getJsonSchema();
-
-
+String domainJson = cfgHelper.loadDomainJson();
+String jsonSchema = cfgHelper.loadJsonSchema();
 Set<String> dirContents = cfgHelper.listFilesUsingFilesList("config/custom/vorpal/");
+
+System.out.println("domainJson="+domainJson);
 
 
 
@@ -55,6 +53,9 @@ img {
 <script lang="javascript">
 var schema = <%=jsonSchema%>;
 var json = <%=domainJson%>;
+
+console.log(json);
+
 </script>
 
 
@@ -74,8 +75,8 @@ var json = <%=domainJson%>;
             var demos = [
 
                 ["BLADE App",
-                    ${schema},
-                    ${json},
+                    schema,
+                    json,
                     null,
                     "Example showing that root object in the schema is not required to be an object"],
                 ["Dynamic schemas",
@@ -235,13 +236,12 @@ var json = <%=domainJson%>;
 
 </head>
 <body>
-	<p>App=<%=app%></p>
+	<p>
+		App=<%=app%></p>
 	<p><%=exception%></p>
-
-
-	<a href="https://github.com/brutusin/json-forms/tree/gh-pages"><img
-		style="position: absolute; top: 0; right: 0; border: 0; width: 149px; height: 149px;"
-		src="img/forkme.png" alt="Fork me on GitHub"></a>
+	<!-- 
+		<p><![CDATA[<%=domainJson%>]]></p>
+ -->
 	<div class="container">
 		<h1>
 			<img alt="Butusin"
