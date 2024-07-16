@@ -48,7 +48,7 @@ It also features prebuilt applications to handle your most common needs:
 
 To build / compile Vorpal:BLADE, simply type 'ant'.
 
-On your first attempt, the build will fail. However it will generate a properties file named: <hostname>.properties
+On your first attempt, the build will fail. However it will generate a properties file named: HOSTNAME.properties (where HOSTNAME is the hostname of your computer).
 
 Edit that file, not the original "build.properties" file.
 
