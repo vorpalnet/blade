@@ -23,7 +23,11 @@
  */
 package org.vorpal.blade.framework.config;
 
+import java.io.IOException;
+
 import javax.management.MXBean;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 /**
  * @author Jeff McDonald
@@ -32,20 +36,15 @@ import javax.management.MXBean;
 @MXBean
 public interface SettingsMXBean {
 
-	public String getJSchema();
+	public enum ConfigType {
+		DOMAIN, CLUSTER, SERVER
+	};
 
-	public String getDomainJson();
+	public void open(ConfigType configType) throws IOException;
 
-	public void setDomainJson(String json);
+	public void write(String line) throws IOException;
 
-	public String getClusterJson();
+	public void close() throws IOException;
 
-	public void setClusterJson(String json);
-
-	public String getServerJson();
-
-	public void setServerJson(String json);
-
-	public void reloadConfiguration();
-
+	public void reload() throws JsonProcessingException, IOException;
 }
