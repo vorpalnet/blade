@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<project basedir="." default="build" name="vorpal-blade-proxy-registrar">
+<project basedir="." default="build" name="vorpal-blade-services-proxy-registrar">
 
 	<!-- Define unique locations first -->
 	<property name="src" location="src" />
