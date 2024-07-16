@@ -5,9 +5,6 @@ import java.text.ParseException;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 public class SessionParameters {
-	public enum KeepAliveStyle {
-		DISABLED, UPDATE, INVITE
-	};
 
 	@JsonPropertyDescription("Set Application Session expiration in minutes.")
 	protected Integer expiration = null;

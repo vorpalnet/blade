@@ -70,7 +70,7 @@
 
 	<target name="javadocs" depends="">
 		<foreach target="javadocs-all" param="var">
-			<path refid="subprojects" />
+			<path refid="javadoc-subprojects" />
 		</foreach>
 	</target>
 
@@ -80,6 +80,16 @@
 
 	<path id="subprojects">
 		<pathelement location="vorpal-blade-shared-libraries" />
+		<pathelement location="vorpal-blade-library-framework" />
+		<dirset dir=".">
+			<include name="vorpal-*" />
+			<exclude name="vorpal-blade-library-framework" />
+			<exclude name="vorpal-blade-shared-libraries" />
+			<exclude name="vorpal-blade-test-config" />			
+		</dirset>
+	</path>
+	
+	<path id="javadoc-subprojects">
 		<pathelement location="vorpal-blade-library-framework" />
 		<dirset dir=".">
 			<include name="vorpal-*" />

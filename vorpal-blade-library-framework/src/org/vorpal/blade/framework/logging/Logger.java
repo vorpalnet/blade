@@ -47,8 +47,8 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 public class Logger extends java.util.logging.Logger implements Serializable {
 	private static final long serialVersionUID = 1L;
-	private Level sequenceDiagramLoggingLevel = null;
-	private Level configurationLoggingLevel = null;
+	private Level sequenceDiagramLoggingLevel = Level.FINE;
+	private Level configurationLoggingLevel = Level.FINE;
 
 	@Override
 	public Level getLevel() {
@@ -78,15 +78,10 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	public static enum Direction {
 		SEND, RECEIVE
 	};
-	// Level{OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL};
 
 	protected Logger(String name, String resourceBundleName) {
 		super(name, resourceBundleName);
 	}
-
-//	public static Logger getLogger() {
-//		return logger;
-//	}
 
 	private static final String NOSESS = "[--------:----] ";
 
@@ -146,22 +141,17 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	public void logConfiguration(Object config) {
 		try {
-			ObjectMapper mapper = new ObjectMapper();
-			mapper.setSerializationInclusion(Include.NON_NULL);
-			mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+			if (this.isLoggable(configurationLoggingLevel)) {
 
-			StringWriter sw = new StringWriter();
-			PrintWriter pw = new PrintWriter(sw);
-			mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);
+				ObjectMapper mapper = new ObjectMapper();
+				mapper.setSerializationInclusion(Include.NON_NULL);
+				mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
 
-			if (this.configurationLoggingLevel != null) {
-				if (this.isLoggable(configurationLoggingLevel)) {
-					this.log(this.configurationLoggingLevel, config.getClass().getSimpleName() + "=" + sw.toString());
-				}
-			} else {
-				if (this.isLoggable(Level.FINE)) {
-					this.fine(config.getClass().getSimpleName() + "=" + sw.toString());
-				}
+				StringWriter sw = new StringWriter();
+				PrintWriter pw = new PrintWriter(sw);
+				mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);
+
+				this.log(this.configurationLoggingLevel, config.getClass().getSimpleName() + "=" + sw.toString());
 			}
 
 		} catch (IOException e) {
@@ -191,14 +181,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	public void severe(Exception e) {
 		severe(null, e);
 	}
-	
+
 	public void severe(SipServletMessage message, Exception e) {
 		StringWriter sw = new StringWriter();
 		PrintWriter pw = new PrintWriter(sw);
 		e.printStackTrace(pw);
-		if(message!=null) {
-		log(Level.SEVERE, message, sw.toString());
-		}else {
+		if (message != null) {
+			log(Level.SEVERE, message, sw.toString());
+		} else {
 			log(Level.SEVERE, sw.toString());
 		}
 	}
@@ -435,29 +425,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return sb.toString();
 	}
 
-//  Not very readable, people prefer truncated name	
-//	public String shorten(String value, int length) {
-//		StringBuilder sb = new StringBuilder();
-//
-//		if (length >= 2) {
-//			length = length - 2;
-//		}
-//
-//		if (value.length() <= length) {
-//			sb.append("[").append(value).append("]");
-//		} else {
-//			String left = value.substring(0, (length / 2)) + "*";
-//			String right = value.substring(value.length() - (length - left.length()), value.length());
-//
-//			sb.append("[");
-//			sb.append(left);
-//			sb.append(right);
-//			sb.append("]");
-//		}
-//
-//		return sb.toString();
-//	}
-
 //    |-------17------||-------17------||-------17------||-------17------||-------17------||-------17------|
 //    0                   10                  20                  30                  40                  50		
 //    012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890  
@@ -515,8 +482,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 		try {
 
-			if (isLoggable(Level.FINE)) { // TODO: This seems like a problem with the Configuration file settings.
-
+			if (isLoggable(this.getSequenceDiagramLoggingLevel())) {
 				StringBuilder str = new StringBuilder();
 
 				String method = "";
@@ -802,27 +768,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				}
 
-				log(Level.FINE, str.toString());
-
-// jwm - testing - this thing is busted!				
-//				// Put CANCEL / 487 logging here. <---487, you get it.
-//				if (request != null && request.getMethod().equals("CANCEL")) {
-//					StringBuilder str2 = new StringBuilder();
-//					String line = String.format("%87s", "").replace(' ', '=');
-//
-////					String alice = String.format("%-18s", shorten(from(response), 17) + "<").replace(' ', '-');
-//					String alice = String.format("%-18s", shorten(from(request), 17) + "<").replace(' ', '-');
-//
-//					String arrow = String.format("%16s", "" + status + "---").replace(' ', '-');
-//					String middle = String.format("%-17s", shorten(name, 17));
-//
-////					String comment = String.format("%36s", ";") + " " + response.getReasonPhrase() + " ("
-////							+ response.getMethod() + ")";
-//
-//					str2.append(hexHash(request.getSession())).append(" ");
-////					str2.append(alice).append(arrow).append(middle).append(comment);
-//					log(Level.FINE, str.toString());
-//				}
+				log(this.getSequenceDiagramLoggingLevel(), str.toString());
 
 				if (isLoggable(Level.FINEST)) {
 					if (request != null) {
@@ -833,14 +779,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				}
 
 			}
-//			// jwm - testing - DELME!
-//			if (request != null & request.getMethod().equals("CANCEL")) {
-//				throw new Exception("CANCEL printed twice, why?");
-//			}
 
 		} catch (Exception ex) {
-//			log(Level.SEVERE, response, ex.getMessage());
-//			this.severe(ex);
 
 			if (request != null) {
 				this.fine(request, "Logging error, set logging to FINEST to see stack trace.");
