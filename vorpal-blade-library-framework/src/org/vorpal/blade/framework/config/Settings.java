@@ -23,180 +23,145 @@
  */
 package org.vorpal.blade.framework.config;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+
+import org.vorpal.blade.framework.AsyncSipServlet;
+import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.logging.Logger;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 
 /**
  * @author Jeff McDonald
  *
  */
-public class Settings implements SettingsMXBean {
-	private SettingsManager<?> settingsManager;
+public class Settings<T> implements SettingsMXBean {
+	private Logger sipLogger;
+	private Class<T> clazz;
+	private T config;
 
-	public Settings(SettingsManager<?> settingsManager) {
-		this.settingsManager = settingsManager;
+	private ObjectMapper objectMapper;
+
+//	private String configName;
+	private Path domain;
+	private Path cluster;
+	private Path server;
+//	private Path sample;
+//	private Path schema;
+
+	private BufferedWriter bufferedWriter;
+
+	public Settings(Class<T> clazz, String configName, ObjectMapper objectMapper) {
+
+		this.sipLogger = SettingsManager.getSipLogger();
+
+		this.clazz = clazz;
+//		this.configName = configName;
+		this.objectMapper = objectMapper;
+
+		domain = Paths.get("./config/custom/vorpal/" + configName + ".json");
+		cluster = Paths.get("./config/custom/vorpal/_clusters" + configName + ".json");
+		server = Paths.get("./config/custom/vorpal/_servers" + configName + ".json");
+//		sample = Paths.get("./config/custom/vorpal/_samples" + configName + ".json");
+//		schema = Paths.get("./config/custom/vorpal/_schemas" + configName + ".jschema");
 	}
 
-	@Override
-	public String getJSchema() {
-		return settingsManager.getJSchema();
-	}
-
-	@Override
-	public String getDomainJson() {
-
-//		SettingsManager.sipLogger.warning("Settings.getDomainJson() no longer supported.");
-//		return "";
-
-		try {
-			return settingsManager.getDomainJson();
-		} catch (JsonProcessingException e) {
-			e.printStackTrace();
-			return null;
+	public T getConfiguration() throws JsonProcessingException, IOException {
+		if (config == null) {
+			reload();
 		}
 
+		return config;
 	}
 
 	@Override
-	public void setDomainJson(String json) {
-//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
-//		return ;
+	public void open(ConfigType configType) throws IOException {
+		sipLogger.fine("Opening " + configType.toString() + " configuration file for writing...");
 
-		try {
+		Path path = null;
 
-			settingsManager.setDomainJson(json);
-			settingsManager.mergeCurrentFromJson();
-//			settingsManager.logCurrent();
-
-//			Logger sipLogger = SettingsManager.getSipLogger();
-//			if (sipLogger != null) {
-//				if (settingsManager.getCurrent() instanceof Configuration) {
-//					Configuration config = (Configuration) settingsManager.getCurrent();
-//
-//					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
-//						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
-//						sipLogger.log(config.getLogging().resolveLoggingLevel(),
-//								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
-//					}
-//
-//				}
-//				settingsManager.logCurrent();
-//			} else {
-//				System.out.println("Settings.setDomainJson could not get sipLogger.");
-//			}
-
-		} catch (Exception e) {
-			System.out.println("setDomainJson exception...");
-
-			e.printStackTrace();
+		switch (configType) {
+		case DOMAIN:
+			path = domain;
+			break;
+		case CLUSTER:
+			path = cluster;
+			break;
+		case SERVER:
+			path = server;
+			break;
 		}
 
+		bufferedWriter = Files.newBufferedWriter(path, StandardOpenOption.TRUNCATE_EXISTING);
 	}
 
 	@Override
-	public String getClusterJson() {
-
-//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
-//		return "";
-
-		try {
-			return settingsManager.getClusterJson();
-		} catch (JsonProcessingException e) {
-			e.printStackTrace();
-			return null;
-		}
+	public void close() throws IOException {
+		sipLogger.fine("Closing configuration file...");
+		bufferedWriter.close();
 	}
 
 	@Override
-	public void setClusterJson(String json) {
+	public void write(String line) throws IOException {
+		bufferedWriter.write(line);
+	}
 
-//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
-//		return;
+	@Override
+	public void reload() throws JsonProcessingException, IOException {
+		sipLogger.fine("reloading configuration files...");
 
-		try {
-			settingsManager.setClusterJson(json);
-			settingsManager.mergeCurrentFromJson();
-//			settingsManager.logCurrent();
+		JsonNode jsonNode = NullNode.getInstance();
 
-//			Logger sipLogger = SettingsManager.getSipLogger();
-//			if (sipLogger != null) {
-//				if (settingsManager.getCurrent() instanceof Configuration) {
-//					Configuration config = (Configuration) settingsManager.getCurrent();
-//					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
-//						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
-//						sipLogger.log(config.getLogging().resolveLoggingLevel(),
-//								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
-//					}
-//				}
-//				settingsManager.logCurrent();
-//			} else {
-//				System.out.println("Settings.setClusterJson could not get sipLogger.");
-//			}
-
-		} catch (Exception e) {
-			e.printStackTrace();
+		File domainFile = domain.toFile();
+		if (domainFile.exists()) {
+			jsonNode = objectMapper.readTree(domainFile);
 		}
 
-	}
-
-	@Override
-	public String getServerJson() {
-
-//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
-//		return "";
-
-		try {
-			return settingsManager.getServerJson();
-		} catch (JsonProcessingException e) {
-			e.printStackTrace();
-			return null;
+		File clusterFile = cluster.toFile();
+		if (clusterFile.exists()) {
+			jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(clusterFile));
 		}
 
-	}
-
-	@Override
-	public void setServerJson(String json) {
-
-//		SettingsManager.sipLogger.warning("Settings.setDomainJson() no longer supported.");
-//		return;
-
-		try {
-			settingsManager.setServerJson(json);
-			settingsManager.mergeCurrentFromJson();
-//			settingsManager.logCurrent();
-
-//			Logger sipLogger = SettingsManager.getSipLogger();
-//			if (sipLogger != null) {
-//				if (settingsManager.getCurrent() instanceof Configuration) {
-//					Configuration config = (Configuration) settingsManager.getCurrent();
-//					if (config.getLogging() != null && config.getLogging().resolveLoggingLevel() != null) {
-//						sipLogger.setLevel(config.getLogging().resolveLoggingLevel());
-//						sipLogger.log(config.getLogging().resolveLoggingLevel(),
-//								"Setting logging level to: " + config.getLogging().resolveLoggingLevel());
-//					}
-//				}
-//				settingsManager.logCurrent();
-//			} else {
-//				System.out.println("Settings.setServerJson could not get sipLogger.");
-//			}
-
-		} catch (Exception e) {
-			e.printStackTrace();
+		File serverFile = server.toFile();
+		if (serverFile.exists()) {
+			jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(serverFile));
 		}
-	}
 
-	@Override
-	public void reloadConfiguration() {
+		config = (T) objectMapper.convertValue(jsonNode, clazz);
 
-		try {
-			settingsManager.reloadConfigFiles();
-		} catch (Exception e) {
-			e.printStackTrace();
-			if (SettingsManager.sipLogger != null) {
-				SettingsManager.sipLogger.severe(e);
+		if (config instanceof Configuration) {
+			Configuration cfg = (Configuration) config;
+
+			if (cfg.getLogging() != null //
+					&& cfg.getLogging().resolveUseParentLogging() == false //
+					&& cfg.getLogging().resolveLoggingLevel() != null) {
+				AsyncSipServlet.getSipLogger().setLevel(cfg.getLogging().resolveLoggingLevel());
+				AsyncSipServlet.getSipLogger()
+						.setConfigurationLoggingLevel(cfg.getLogging().resolveConfigurationLoggingLevel());
+				AsyncSipServlet.getSipLogger()
+						.setSequenceDiagramLoggingLevel(cfg.getLogging().resolveSequenceDiagramLoggingLevel());
 			}
+
+			if (cfg.getSession() != null) {
+				Callflow.setSessionParameters(cfg.getSession());
+				AsyncSipServlet.setSessionParameters(cfg.getSession());
+			}
+
 		}
+
+		sipLogger.info("What is the logging level? " + sipLogger.getLevel());
+		sipLogger.info("What is the configuration logging level? " + sipLogger.getConfigurationLoggingLevel());
+
+		sipLogger.logConfiguration(config);
 
 	}
 

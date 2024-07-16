@@ -11,6 +11,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchEvent.Kind;
@@ -19,18 +20,18 @@ import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.Set;
 
 import javax.management.JMX;
 import javax.management.MBeanServer;
-import javax.management.MalformedObjectNameException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import javax.naming.InitialContext;
 import javax.naming.NameNotFoundException;
-import javax.naming.NamingException;
 
 import org.vorpal.blade.framework.config.SettingsMXBean;
+import org.vorpal.blade.framework.config.SettingsMXBean.ConfigType;
 
 public class ConfigurationMonitor extends Thread {
 
@@ -186,15 +187,44 @@ public class ConfigurationMonitor extends Thread {
 		}
 	}
 
+	/**
+	 * This method attempts to determine if OCCAS is running on a shared filesystem.
+	 * It does that by looking in the 'servers' directory and counting the number of
+	 * directories found. If there are more than two directories (AdminServer and
+	 * domain_bak), then it must be a shared filesystem.
+	 * 
+	 * @return if OCCAS is running on a shared filesystem
+	 * @throws IOException
+	 */
+	public boolean isSharedFilesystem() throws IOException {
+		boolean value = false;
+
+		long count = Files.find(Paths.get("./servers/"), 1, // how deep do we want to descend
+				(path, attributes) -> attributes.isDirectory()).count() - 1; // '-1' because '/tmp' is also counted in
+
+		if (count > 2) {
+			value = true;
+		}
+
+		System.out.println("Is this a shared filesystem? " + value);
+
+		return value;
+	}
+
 	public void updateManagedMBeans(Path path, String json) {
 
 		String filename = path.getFileName().toString();
 		String appName = filename.substring(0, filename.indexOf(".json"));
 		String parent = path.getParent().toFile().getName();
-		String grandParent = path.getParent().getParent().toFile().getName();
-		boolean cluster = grandParent.equals("cluster");
-		boolean server = grandParent.equals("server");
+		String grandparent = path.getParent().getParent().toFile().getName();
+
+		System.out.println("Path grandparent: " + grandparent);
+
+		boolean cluster = grandparent.equals("_clusters");
+		boolean server = grandparent.equals("_servers");
 		boolean domain = !(server || cluster);
+
+		System.out.println("domain=" + domain + ", cluster=" + cluster + ", server=" + server);
 
 		try {
 			InitialContext ctx = new InitialContext();
@@ -222,16 +252,35 @@ public class ConfigurationMonitor extends Thread {
 
 				SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
 
-				if (domain) {
-					System.out.println("Updating Domain...");
-					settings.setDomainJson(json);
-				} else if (cluster) {
-					System.out.println("Updating Cluster...");
-					settings.setClusterJson(json);
-				} else if (server) {
-					System.out.println("Updating Server...");
-					settings.setServerJson(json);
+				if (false == this.isSharedFilesystem()) {
+					if (domain) {
+						System.out.println("Updating Domain...");
+						settings.open(ConfigType.DOMAIN);
+					} else if (cluster) {
+						System.out.println("Updating Cluster...");
+						settings.open(ConfigType.CLUSTER);
+					} else if (server) {
+						System.out.println("Updating Server...");
+						settings.open(ConfigType.SERVER);
+					}
+
+					String line;
+					int count = 0;
+					Scanner scanner = new Scanner(json);
+					while (scanner.hasNextLine()) {
+						line = scanner.nextLine();
+						settings.write(line);
+						count++;
+					}
+					System.out.println("Number of lines written: " + count);
+					scanner.close();
+					settings.close();
 				}
+
+				System.out.print("Sending command to reload the configuration... ");
+				settings.reload();
+				System.out.println("Success!");
+
 			}
 
 			ctx.close();
@@ -240,9 +289,7 @@ public class ConfigurationMonitor extends Thread {
 			System.out.println(e.getMessage());
 			System.out.println(
 					"Please verify that this application is running in the AdminServer (and not in a managed engine tier node).");
-		} catch (NamingException e) {
-			e.printStackTrace();
-		} catch (MalformedObjectNameException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
