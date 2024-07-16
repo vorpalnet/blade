@@ -30,6 +30,13 @@ It also features prebuilt applications to handle your most common needs:
 * Testing Tools
 * Admin Console
 
+
+| Syntax | Description |
+| ----------- | ----------- |
+| Header | Title |
+| Paragraph | Text |
+
+
 #Compiling
 
 ##ANT
