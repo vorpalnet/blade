@@ -20,21 +20,26 @@ It comes with a framework library that features:
 It also comes with a carrier-grade Finite State Machine Application Router, the FSMAR.
 
 It also features prebuilt applications to handle your most common needs:
-* Access Control Lists
-* Keep-Alive
-* Load-Balancer
-* Options
-* Proxy-Registrar
-* A Reductive Reasoning Router, R3
-* Call Transfer
-* Testing Tools
-* Admin Console
 
-
-| Syntax | Description |
+| Project | Description |
 | ----------- | ----------- |
-| Header | Title |
-| Paragraph | Text |
+| Blade Console | Configure application through and Admin Console |
+| Blade Framework | A collection of Java libraries that simplify the creation of SIP Servlets beyond what's provided in JSR-359. |
+| FSMAR | Finite State Machine Application Router; Chain apps together to build sophisticated services |
+| Proxy-Balancer | A simple load balancer |
+| Proxy-Registrar | A small, elegant SIP proxy-registrar |
+| R3 Router | The Reductive Reasoning Router; Supports various search algorithms for optimal performance |
+| ACL | Access Control List; Allow or deny calls through the system |
+| CRUD | Create, Read, Update & Delete; Transform any SIP message |
+| Keep-Alive | Prevent sessions from timing out |
+| Options | Control the behavior of options |
+| Presence | Maintains state of user endpoints |
+| Queue | Maintains state of user endpoints |
+| Transfer | Implements REFER for transfer applications |
+| Test B2BUA | An example B2BUA application |
+| Test UAC | A REST operated User Agent Client |
+| Test UAS | A test User Agent Server; Controllable through SIP Request-URI parameters |
+
 
 
 #Compiling
