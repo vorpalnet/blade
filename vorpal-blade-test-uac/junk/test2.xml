@@ -1,0 +1,69 @@
+<?xml version='1.0' encoding='UTF-8'?>
+
+<recording xmlns='urn:ietf:params:xml:ns:recording'>
+	<datamode>complete</datamode>
+	<session id="gxwzQvnlSSVhNe2DPctt4Q==">
+		<associate-time>2023-10-24T15:53:04</associate-time>
+		
+		
+		<extensiondata xmlns="http:/acmepacket.com/siprec/extensiondata">
+			<ucid>0090D1AD6537E860</ucid>
+			<callerOrig>true</callerOrig>
+		</extensiondata>
+		
+		
+		
+	</session>
+	<participant id="jQysQaOQQKN+GPqD9ucaNw=="
+		session="gxwzQvnlSSVhNe2DPctt4Q==">
+		<nameID aor="sip:Genesys@10.29.199.68">
+			<name>Genesys</name>
+		</nameID>
+		<send>IHIwATMzRW1O9AnNhRZNcQ==</send>
+		<send>53fDVL77T9BiPsF5zpz21A==</send>
+		<associate-time>2023-10-24T15:53:04</associate-time>
+		<extensiondata xmlns:apkt="http://acmepacket.com/siprec/extensiondata">
+			<apkt:callingParty>true</apkt:callingParty>
+			<apkt:request-uri><![CDATA[<sip:record=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT_2023-10-24_15-53-28@10.23.90.11:5060;calluuid=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT;dn=1992650688;otherdn=918008423210;agentid=001779572;ani=1992650688;connid=0c93035eb0bff2fd;datetime=2023-10-24T15:53:28Z;dnis=1992902490;gvp-tenant-id=[Environment].record;recorddn=1992650688;sipsappname=cl2-sips-CTC_7a;media-id=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT>]]>
+			</apkt:request-uri>
+			<apkt:realm>OMNI_MH_Ingress</apkt:realm>
+			<apkt:header label="Call-ID">
+				<value>
+					wlss-51879a67-9C565000-8D9C-2A83-9619-EA8320AF242A-7090@10.29.199.68</value>
+			</apkt:header>
+		</extensiondata>
+	</participant>
+	<participant id="UaWEAnypTXljTotoD5TX5w=="
+		session="gxwzQvnlSSVhNe2DPctt4Q==">
+		<nameID
+			aor="sip:record=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT_2023-10-24_15-53-28@127.0.0.1">
+			<name>record=00U2QRJBLKAF3CCSEDB1Q2LAES0188NT_2023-10-24_15-53-28</name>
+		</nameID>
+		<send>BO5/5qm0QUVuP0IXf8H31w==</send>
+		<send>jBun6OWoT2BvOz0rvB+koA==</send>
+		<associate-time>2023-10-24T15:53:04</associate-time>
+		<extensiondata xmlns:apkt="http://acmepacket.com/siprec/extensiondata">
+			<apkt:callingParty>false</apkt:callingParty>
+		</extensiondata>
+	</participant>
+	<stream id="IHIwATMzRW1O9AnNhRZNcQ==" session="gxwzQvnlSSVhNe2DPctt4Q==">
+		<label>268749245</label>
+		<mode>separate</mode>
+		<associate-time>2023-10-24T15:53:04</associate-time>
+	</stream>
+	<stream id="53fDVL77T9BiPsF5zpz21A==" session="gxwzQvnlSSVhNe2DPctt4Q==">
+		<label>268749247</label>
+		<mode>separate</mode>
+		<associate-time>2023-10-24T15:53:04</associate-time>
+	</stream>
+	<stream id="BO5/5qm0QUVuP0IXf8H31w==" session="gxwzQvnlSSVhNe2DPctt4Q==">
+		<label>268749246</label>
+		<mode>separate</mode>
+		<associate-time>2023-10-24T15:53:04</associate-time>
+	</stream>
+	<stream id="jBun6OWoT2BvOz0rvB+koA==" session="gxwzQvnlSSVhNe2DPctt4Q==">
+		<label>268749248</label>
+		<mode>separate</mode>
+		<associate-time>2023-10-24T15:53:04</associate-time>
+	</stream>
+</recording>

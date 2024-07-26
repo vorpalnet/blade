@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.TreeSet;
 
 import javax.management.JMX;
 import javax.management.MBeanServer;
@@ -29,6 +30,7 @@ import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import javax.naming.InitialContext;
 import javax.naming.NameNotFoundException;
+import javax.naming.NamingException;
 
 import org.vorpal.blade.framework.config.SettingsMXBean;
 import org.vorpal.blade.framework.config.SettingsMXBean.ConfigType;
@@ -292,6 +294,41 @@ public class ConfigurationMonitor extends Thread {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+
+	}
+
+	public static Set<String> queryApps() throws NamingException {
+		Set<String> apps = new TreeSet<>();
+
+		InitialContext ctx = new InitialContext();
+		try {
+			MBeanServer mbeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
+
+			ObjectName objectName = null;
+//			objectName = new ObjectName("vorpal.blade:Name=*,Type=Configuration,*");
+//			"vorpal.blade:Name=" + appName + ",Type=Configuration,Location=" + parent + ",*");
+//			"vorpal.blade:Name=" + appName + ",Type=Configuration,Location=*,Cluster=" + parent);
+			objectName = new ObjectName("vorpal.blade:Name=*,Type=Configuration,*");
+
+			Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(objectName, null);
+
+			for (ObjectInstance mbean : mbeans) {
+				ObjectName name = mbean.getObjectName();
+				System.out.println("Found... " + name.toString());
+				
+				apps.add( name.getKeyProperty("Name"));
+				
+//				apps.add(name.toString());
+//				SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
+
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		} finally {
+			ctx.close();
+		}
+
+		return apps;
 
 	}
 

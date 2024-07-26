@@ -726,11 +726,11 @@
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Implementation-Build-Date" value="${TODAY}" />		
+			<attribute name="Implementation-Build-Date" value="${TODAY}" />
 			<attribute name="Specification-Title" value="${title}" />
 			<attribute name="Implementation-Title" value="${ant.project.name}.jar" />
 			<attribute name="Specification-Version" value="${specification}" />
-			<attribute name="Implementation-Version" value="${implementation}" />			
+			<attribute name="Implementation-Version" value="${implementation}" />
 		</manifest>
 		<jar destfile="${build}/${ant.project.name}.jar" manifest="${build}/MANIFEST.MF">
 			<fileset dir="${classes}" />
@@ -767,7 +767,16 @@
 		<echo>packagenames=${packagenames}</echo>
 		<echo>sourcepath=${src}</echo>
 
-		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="../lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
+
+		<javadoc 
+			sourcepath="${src}" 
+			destdir="${docs}/${ant.project.name}" 
+			stylesheetfile="../lib/javadoc_custom_stylesheet.css" 
+			packagenames="${packagenames}" 
+			private="true" 
+			additionalparam="-Xdoclint:none"
+		>
+
 			<doclet name="nl.talsmasoftware.umldoclet.UMLDoclet" path="${umldoclet}">
 				<param name="-failOnCyclicPackageDependencies" value="false" />
 			</doclet>
@@ -775,6 +784,12 @@
 			<classpath refid="vorpal-blade.classpath" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 			<classpath refid="project.classpath" />
+			
+			<header>
+				<![CDATA[<a href="/index.html">
+				<img src="/assets/images/vorpal-logo.png" alt="Home" style="height:80px">
+				</a>]]></header>
+
 			<doctitle>
 				<![CDATA[<div>${ant.project.name} - v${implementation}</div>]]>
 			</doctitle>
@@ -784,6 +799,7 @@
 			<div>${license}</div>
 		</div>]]>
 			</bottom>
+
 	<link href="https://docs.oracle.com/en/java/javase/11/docs/api" />
 	<link href="https://javaee.github.io/javaee-spec/javadocs/" />
 	<link href="https://vorpalnet.github.io/jsr359/" />
@@ -796,18 +812,18 @@
 		<replace dir="${docs}/${ant.project.name}">
 			<include name="**/*.html" />
 
-			<replacefilter>				
+			<replacefilter>
 				<replacetoken><![CDATA[<!DOCTYPE HTML>]]></replacetoken>
-
-<replacevalue><![CDATA[...
+				<replacevalue><![CDATA[- - -
 layout: blank
 title: ${ant.project.name} - v${implementation}
-...
-<!DOCTYPE HTML>]]></replacevalue>
-
-			</replacefilter>
-		</replace>
+- - -
+<!DOCTYPE HTML>]]>
+				</replacevalue>
+	</replacefilter>
+</replace>
 -->
+
 
 
 
