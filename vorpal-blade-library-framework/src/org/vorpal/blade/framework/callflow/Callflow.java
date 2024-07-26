@@ -519,37 +519,91 @@ public abstract class Callflow implements Serializable {
 
 		if (requests.size() > 0) {
 			SipServletRequest request = requests.remove(0);
-
-			SipServletResponse dummyResponse = request.createResponse(408);
-
-			String timerId = scheduleTimerInMilliseconds(request.getApplicationSession(), milliseconds, (timeout) -> {
-
+			String timerId = startTimer(request.getApplicationSession(), milliseconds, false, (timeout) -> {
 				sendRequest(request.createCancel());
-
-				sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+				if (requests.size() > 0) {
+					sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+				} else {
+					// No valid responses, create a dummy one
+					lambdaFunction.accept(request.createResponse(408));
+				}
 			});
 
-			sendRequest(request, (response) -> {
+//			sipLogger.fine(request, "Starting timerId: " + timerId);
 
-				cancelTimer(response.getApplicationSession(), timerId);
+			try {
+				sendRequest(request, (response) -> {
 
-				if (!failure(response)) {
-					lambdaFunction.accept(response);
-				} else {
-					if (requests.size() == 0) {
-						// no more attempts, create a dummy response
-						lambdaFunction.accept(dummyResponse);
+//					sipLogger.fine(request, "Stopping timerId: " + timerId);
+					stopTimer(response.getApplicationSession(), timerId);
+
+					if (!failure(response) || requests.size() == 0) {
+						lambdaFunction.accept(response);
 					} else {
-						sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+						if (requests.size() > 0) {
+							sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+						} else {
+							// No valid responses, create a dummy one
+							lambdaFunction.accept(request.createResponse(408));
+						}
 					}
+
+				});
+			} catch (Exception e) {
+				sipLogger.severe(request, e.getMessage());
+				stopTimer(request.getApplicationSession(), timerId);
+
+				if (requests.size() > 0) {
+					sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+				} else {
+					// No valid responses, create a dummy one
+					lambdaFunction.accept(request.createResponse(408));
 				}
 
-			});
+			}
+
 		} else {
-			sipLogger.severe("Callflow.sendRequestsInSerial... Empty request list.");
+			sipLogger.warning("Callflow.sendRequestsInSerial... Empty request list.");
 		}
 
 	}
+
+//	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
+//			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
+//
+//		if (requests.size() > 0) {
+//			SipServletRequest request = requests.remove(0);
+//
+//			SipServletResponse dummyResponse = request.createResponse(408);
+//
+//			String timerId = scheduleTimerInMilliseconds(request.getApplicationSession(), milliseconds, (timeout) -> {
+//
+//				sendRequest(request.createCancel());
+//
+//				sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+//			});
+//
+//			sendRequest(request, (response) -> {
+//
+//				cancelTimer(response.getApplicationSession(), timerId);
+//
+//				if (!failure(response)) {
+//					lambdaFunction.accept(response);
+//				} else {
+//					if (requests.size() == 0) {
+//						// no more attempts, create a dummy response
+//						lambdaFunction.accept(dummyResponse);
+//					} else {
+//						sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+//					}
+//				}
+//
+//			});
+//		} else {
+//			sipLogger.severe("Callflow.sendRequestsInSerial... Empty request list.");
+//		}
+//
+//	}
 
 	/**
 	 * Sends multiple requests (INVITE) in parallel.
