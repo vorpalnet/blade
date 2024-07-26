@@ -297,6 +297,7 @@ public class SettingsManager<T> {
 
 			settings.reload();
 			this.current = (T) settings.getConfiguration();
+			this.initialize(current);
 			
 
 			this.logCurrent();

@@ -158,9 +158,6 @@ public class Settings<T> implements SettingsMXBean {
 
 		}
 
-		sipLogger.info("What is the logging level? " + sipLogger.getLevel());
-		sipLogger.info("What is the configuration logging level? " + sipLogger.getConfigurationLoggingLevel());
-
 		sipLogger.logConfiguration(config);
 
 	}

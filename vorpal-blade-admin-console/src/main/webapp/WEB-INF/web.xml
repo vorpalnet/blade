@@ -44,7 +44,7 @@
 		<display-name>Authorized</display-name>
 		<web-resource-collection>
 			<web-resource-name>allPages</web-resource-name>
-			<url-pattern>/limitless/*</url-pattern>
+			<url-pattern>/*</url-pattern>
 			<http-method>GET</http-method>
 			<http-method>POST</http-method>
 		</web-resource-collection>

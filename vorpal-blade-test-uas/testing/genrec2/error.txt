@@ -1,0 +1,88 @@
+
+SEVERE  2024-07-25 14:20:00.495 - [EAF4F696:393B] [0;91mException on SIP request: 
+INVITE sip:record=029TVUHRHKBA34546D51O2LAES0002JS_2024-07-25_19-19-59@occas8enginerpomnistgctc01.uhc.com.out:5060;calluuid=029TVUHRHKBA34546D51O2LAES0002JS;dn=1992177021;otherdn=7637176791;agentid=OptumCarePatientService_Test4;ani=7637176791;connid=01920379ada9ba7c;datetime=2024-07-25T19:19:59Z;dnis=8008987029;gvp-tenant-id=[Environment].record;recorddn=1992177021;sipsappname=cl2-sips-ELR_1a;media-id=029TVUHRHKBA34546D51O2LAES0002JS;transport=tcp SIP/2.0 
+Allow: INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, INFO 
+Content-Length: 399 
+X-Genesys-GVP-Session-Data: callsession=A8565000-5F6C-D09A-308B-72C19935A7E0;2;1;;;;Environment;record;;0;record 
+X-Genesys-GVP-Session-ID: A8565000-5F6C-D09A-308B-72C19935A7E0;gvp.rm.datanodes=2|1;gvp.rm.tenant-id=1_record 
+Session-Expires: 1800 
+Via: SIP/2.0/TCP 10.173.186.82:5060;branch=z9hG4bK9fhb5120bg8pu6o06jg0.1 
+X-Genesys-RM-Application-dbid: 108 
+CSeq: 1 INVITE 
+Contact: <sip:wlssuser@10.173.186.82:5060;wlsscid=20fd7d3b05d05e5b;sipappsessionid=app-1xvnv6l71njx7;wlssfcid=sip-g4rlg6vr0bua;transport=tcp> 
+Call-ID: SDragq801-b3ff0640fb73af0ab5e90064e26d1d93400@10.173.186.4 
+Max-Forwards: 69 
+User-to-User: 04FA08004704DE66A2A560C8143030303731303132343631373231393335323030;encoding=hex 
+From: <sip:Genesys@10.28.70.121:7094>;tag=SDragq801-be2927da 
+Content-Type: application/sdp 
+To: <sip:record=029TVUHRHKBA34546D51O2LAES0002JS_2024-07-25_19-19-59@127.0.0.1:5060>;calluuid=029TVUHRHKBA34546D51O2LAES0002JS;recorddn=1992177021;sipsappname=cl2-sips-ELR_1a;ani=7637176791;dnis=8008987029;datetime="2024-07-25T19:19:59Z";connid=01920379ada9ba7c;agentid=OptumCarePatientService_Test4;dn=1992177021;otherdn=7637176791 
+Cisco-Gucid: 00071012461721935200 
+Supported: timer, uui 
+v=0 
+o=- 0272161759 0 IN IP4 10.173.186.83 
+s=phone-call 
+c=IN IP4 10.173.186.83 
+t=0 0 
+m=audio 43912 RTP/AVP 0 101 
+a=rtpmap:0 pcmu/8000 
+a=ptime:20 
+a=maxptime:30 
+a=rtpmap:101 telephone-event/8000 
+a=fmtp:101 0-15 
+a=sendonly 
+a=record:on 
+m=audio 43914 RTP/AVP 0 101 
+a=rtpmap:0 pcmu/8000 
+a=ptime:20 
+a=maxptime:30 
+a=rtpmap:101 telephone-event/8000 
+a=fmtp:101 0-15 
+a=sendonly 
+a=record:on 
+[0m
+SEVERE  2024-07-25 14:20:00.495 - [EAF4F696:393B] [0;91mjava.lang.NullPointerException
+	at com.optum.omnichannel.genrec2.GenrecServlet.chooseCallflow(GenrecServlet.java:112)
+	at org.vorpal.blade.framework.AsyncSipServlet.doRequest(AsyncSipServlet.java:251)
+	at javax.servlet.sip.SipServlet.service(SipServlet.java:204)
+	at com.bea.wcp.sip.engine.server.CanaryServlet.forwardFromSip(CanaryServlet.java:636)
+	at com.bea.wcp.sip.engine.server.CanaryServlet.access$500(CanaryServlet.java:100)
+	at com.bea.wcp.sip.engine.server.CanaryServlet$PrivilegedForwardAction.run(CanaryServlet.java:905)
+	at weblogic.security.acl.internal.AuthenticatedSubject.doAs(AuthenticatedSubject.java:386)
+	at weblogic.security.service.SecurityManager.runAs(SecurityManager.java:163)
+	at com.bea.wcp.sip.engine.server.CanaryServlet.forward(CanaryServlet.java:842)
+	at com.bea.wcp.sip.engine.server.ServletMappingManager.receiveInitialRequest(ServletMappingManager.java:541)
+	at com.bea.wcp.sip.engine.server.ServletMappingManager.dispatchRequest(ServletMappingManager.java:506)
+	at com.bea.wcp.sip.engine.server.FilterContextImpl.dispatchMessage(FilterContextImpl.java:135)
+	at com.bea.wcp.sip.engine.server.FilterContextImpl.filter(FilterContextImpl.java:176)
+	at com.bea.wcp.sip.engine.server.FilterContextImpl.filterNext(FilterContextImpl.java:205)
+	at com.bea.wcp.sip.security.internal.SecurityManagerFilter$RunAsAction.run(SecurityManagerFilter.java:150)
+	at weblogic.security.acl.internal.AuthenticatedSubject.doAs(AuthenticatedSubject.java:386)
+	at weblogic.security.service.SecurityManager.runAs(SecurityManager.java:163)
+	at com.bea.wcp.sip.security.internal.SecurityManagerFilter.filter(SecurityManagerFilter.java:95)
+	at com.bea.wcp.sip.engine.server.FilterContextImpl.filter(FilterContextImpl.java:184)
+	at com.bea.wcp.sip.engine.server.TransactionManager.filterMessage(TransactionManager.java:770)
+	at com.bea.wcp.sip.engine.server.TransactionManager.filterRequest(TransactionManager.java:1682)
+	at com.bea.wcp.sip.engine.server.TransactionManager.receiveNewTransactionRequest(TransactionManager.java:1307)
+	at com.bea.wcp.sip.engine.server.TransactionManager.receiveRequest(TransactionManager.java:816)
+	at com.bea.wcp.sip.engine.server.TransactionManager.receiveMessage(TransactionManager.java:778)
+	at com.bea.wcp.sip.engine.server.MessageHandler$MessageQueue$MessageWork.process(MessageHandler.java:596)
+	at com.bea.wcp.sip.engine.server.MessageHandler$MessageQueue.processMessagesDefault(MessageHandler.java:835)
+	at com.bea.wcp.sip.engine.server.MessageHandler$MessageQueue.processMessages(MessageHandler.java:854)
+	at com.bea.wcp.sip.engine.server.MessageHandler$MessageQueue.processMessages(MessageHandler.java:763)
+	at com.bea.wcp.sip.engine.server.MessageHandler$MessageQueue.checkMessages(MessageHandler.java:727)
+	at com.bea.wcp.sip.engine.server.MessageHandler$MessageQueue.addMessage(MessageHandler.java:664)
+	at com.bea.wcp.sip.engine.server.MessageHandler.receiveMessage(MessageHandler.java:150)
+	at com.bea.wcp.sip.engine.connector.transport.AbstractTransport.dispatch(AbstractTransport.java:151)
+	at com.bea.wcp.sip.engine.connector.transport.MuxableSocketSIP$SIPRequestHandler.validateAndDispatchMessage(MuxableSocketSIP.java:1375)
+	at com.bea.wcp.sip.engine.connector.transport.MuxableSocketSIP$SIPRequestHandler.dispatch(MuxableSocketSIP.java:1264)
+	at com.bea.wcp.sip.engine.connector.transport.MuxableSocketSIP$SIPMessageChunkDataWorker.run(MuxableSocketSIP.java:1198)
+	at weblogic.work.SelfTuningWorkManagerImpl$WorkAdapterImpl.run(SelfTuningWorkManagerImpl.java:677)
+	at weblogic.invocation.ComponentInvocationContextManager._runAs(ComponentInvocationContextManager.java:352)
+	at weblogic.invocation.ComponentInvocationContextManager.runAs(ComponentInvocationContextManager.java:337)
+	at weblogic.work.LivePartitionUtility.doRunWorkUnderContext(LivePartitionUtility.java:57)
+	at weblogic.work.PartitionUtility.runWorkUnderContext(PartitionUtility.java:41)
+	at weblogic.work.SelfTuningWorkManagerImpl.runWorkUnderContext(SelfTuningWorkManagerImpl.java:651)
+	at weblogic.work.ExecuteThread.execute(ExecuteThread.java:420)
+	at weblogic.work.ExecuteThread.run
+
+

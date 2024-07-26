@@ -3,33 +3,35 @@
 <%
 String exception = "No Exceptions.";
 String app = request.getParameter("app");
-ConfigHelper cfgHelper = new ConfigHelper(app);
-String domainJson = cfgHelper.loadDomainJson();
+String configType = request.getParameter("configType");
+
+ConfigHelper cfgHelper = new ConfigHelper(app, configType);
+
+String jsonData = cfgHelper.loadJson();
 String jsonSchema = cfgHelper.loadJsonSchema();
+
+/* 
+String domainJson = cfgHelper.loadDomainJson();
+String clusterJson = cfgHelper.loadClusterJson();
+String serverJson = cfgHelper.loadServerJson();
+ */ 
+ 
 Set<String> dirContents = cfgHelper.listFilesUsingFilesList("config/custom/vorpal/");
-
-System.out.println("domainJson="+domainJson);
-
-
-
 %>
 <!DOCTYPE html>
 <html>
 <head>
 <meta name=viewport content='width=560'>
+
 <link rel="stylesheet" href='lib/bootstrap/css/bootstrap.min.css' />
 <link rel="stylesheet" href="lib/codemirror/codemirror.css">
 <link rel="stylesheet"
-	href="lib/bootstrap-select/css/bootstrap-select.min.css">
+	href="lib/bootstrap-select-v1.13.14/css/bootstrap-select.min.css">
 <link rel="stylesheet" href="lib/octicons/octicons.css">
 <link rel="stylesheet"
 	href='http://rawgit.com/brutusin/json-forms/master/dist/css/brutusin-json-forms.min.css' />
 
 <style>
-img {
-	max-width: 100%
-}
-
 .CodeMirror {
 	height: 400px;
 }
@@ -40,8 +42,9 @@ img {
 <script src="lib/codemirror/codemirror.js"></script>
 <script src="lib/codemirror/codemirror-javascript.js"></script>
 <script src="lib/markdown.min.js"></script>
-<script src="lib/bootstrap-select/js/bootstrap-select.min.js"></script>
-<script src="lib/bootstrap-select/js/i18n/defaults-en_US.min.js"></script>
+<script src="lib/bootstrap-select-v1.13.14/js/bootstrap-select.min.js"></script>
+<script
+	src="lib/bootstrap-select-v1.13.14/js/i18n/defaults-en_US.min.js"></script>
 <!--
         <script src="//rawgit.com/brutusin/json-forms/master/dist/js/brutusin-json-forms.min.js"></script>
          -->
@@ -50,16 +53,69 @@ img {
 <script
 	src="http://rawgit.com/brutusin/json-forms/master/dist/js/brutusin-json-forms-bootstrap.min.js"></script>
 
-<script lang="javascript">
-var schema = <%=jsonSchema%>;
-var json = <%=domainJson%>;
 
-console.log(json);
+
+
+<script lang="javascript">
+
+/*
+async function saveData(app, configType, data){
+	// Construct a FormData instance
+	  const formData = new FormData();
+
+	  // Add a text field
+	  formData.append("app", app);
+	  formData.append("configType", configType);
+	  formData.append("data", data);
+
+	  try {
+
+	  } catch (e) {
+	    console.error(e);
+	  }
+	
+}*/
+
+
+function chgAction(){
+	var configType = $("#examples :selected").text();
+
+	console.log("configType: "+configType);
+	
+	var action = '?app={0}&configType={1}'; 
+	action = action.replace('{0}', app);
+	action = action.replace('{1}', configType);
+    document.forms.bladeForm.action = action;
+}
+
 
 </script>
 
 
 <script lang="javascript">
+
+		const currentUrl = window.location.href;
+
+
+
+		
+		const queryString = window.location.search;
+		const urlParams = new URLSearchParams(queryString);
+		const app = urlParams.get('app');
+
+        var schema = <%=jsonSchema %>;
+		var jsonData = <%=jsonData %>;
+
+        
+<%--         
+        var domainJson = <%=domainJson%>;
+        var clusterJson = <%=clusterJson%>;
+        var serverJson = <%=serverJson%>;
+		var configType = "domain";
+ --%>        
+
+
+        
             var BrutusinForms = brutusin["json-forms"];
             BrutusinForms.bootstrap.addFormatDecorator("inputstream", "file", "glyphicon-search", function (element) {
                 alert("user callback on element " + element)
@@ -73,88 +129,40 @@ console.log(json);
             var desc;
             var selectedDemo;
             var demos = [
-
-                ["BLADE App",
+                ["Domain",
                     schema,
-                    json,
+                    jsonData,
                     null,
-                    "Example showing that root object in the schema is not required to be an object"],
-                ["Dynamic schemas",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"species": {"title": "Species supported", "description": "Changes in this property (`$.species`) trigger the resolution of the actual (depending on the values being selected) schema of a dependent property (`$.subspecies`)", "type": "string", "enum": ["human", "dog", "cat"], "required": true}, "subspecies": {"dependsOn": ["species"]}}},
+                    "Domain-wide configuration (typical)"],
+                ["Cluster",
+                    schema,
+                    jsonData,
                     null,
-                    "function (names, data, cb) {\n    var schemas = new Object();\n    var schema = new Object();\n    if (data.species === \"human\") {\n        schema.type = \"null\"; // no such property for humans\n    } else {\n        schema.type = \"string\";\n        if (data.species === \"dog\") {\n            schema.title = \"Dog breed\";\n            schema.enum = [\"bulldog\", \"labrador\"]\n        } else {\n            schema.title = \"Cat breed\";\n            schema.enum = [\"siamese\", \"persian\"]\n        }\n    }\n    schemas[\"$.subspecies\"] = schema;\n    setTimeout(function(){cb(schemas)},500); // in order to show asynchrony\n}",
-                    "Example of [dynamic schemas](https://github.com/brutusin/json-forms#dynamic-schemas) in action. Notice the usage of `dependsOn` (*Schema* tab), and the specific implementation of `bf.schemaResolver` (*Schema resolver* tab). See a real application of this feature at [http://demo.rpc.brutusin.org/rpc/repo/#http-services/logo](http://demo.rpc.brutusin.org/rpc/repo/#http-services/logo)"],
-                ["Simple",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "title": "A boolean", "description": "A simple boolean data type as schema root", "type": "boolean"},
+                    "Cluster-specific configuration"],
+                ["Server",
+                    schema,
+                    jsonData,
                     null,
-                    null,
-                    "Example showing that root object in the schema is not required to be an object"],
-                ["Objects, arrays, enums, default, required, minItems, uniqueItems",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"pageNum": {"type": "integer", "title": "Page number", "description": "Page number to be queried, `1-based`. See [Pagination](https://en.wikipedia.org/wiki/Pagination) for more details", "default": 1, "required": true}, "pageSize": {"type": "integer", "title": "Page size", "description": "Number of records per page", "required": true, "default": 50, "enum": [10, 25, 50, 100]}, "selectedFacetValues": {"type": "array", "title": "Query terms", "minItems": 2, "uniqueItems":true, "items": {"description": "Query item", "type": "object", "properties": {"facetName": {"type": "string", "title": "Field name", "description": "Indexed field name", "required": true}, "matchAllNull": {"type": "boolean", "title": "Match nulls"}, "matchAllNotNull": {"type": "boolean", "title": "Match not nulls"}, "facetValues": {"type": "array", "title": "Field values", "items": {"type": "object", "properties": {"value": {"type": "string", "title": "Value"}}}}, "included": {"type": "boolean", "title": "Included"}}}}, "sorts": {"type": "array", "title": "Sorting", "items": {"type": "object", "properties": {"fieldName": {"type": "string", "title": "Field name"}, "ascending": {"type": "boolean", "title": "Ascending"}}}}}},
-                    null,
-                    null,
-                    "Example covering several common features"],
-                ["Initial data",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"pageNum": {"type": "integer", "title": "Page number", "description": "Page number to be queried, `1-based`. See [Pagination](https://en.wikipedia.org/wiki/Pagination) for more details", "default": 1, "required": true}, "pageSize": {"type": "integer", "title": "Page size", "description": "Number of records per page", "required": true, "default": 50, "enum": [10, 25, 50, 100]}, "selectedFacetValues": {"type": "array", "title": "Query terms", "minItems": 2, "items": {"description": "Query item", "type": "object", "properties": {"facetName": {"type": "string", "title": "Field name", "description": "Indexed field name", "required": true}, "matchAllNull": {"type": "boolean", "title": "Match nulls"}, "matchAllNotNull": {"type": "boolean", "title": "Match not nulls"}, "facetValues": {"type": "array", "title": "Field values", "items": {"type": "object", "properties": {"value": {"type": "string", "title": "Value"}}}}, "included": {"type": "boolean", "title": "Included"}}}}, "sorts": {"type": "array", "title": "Sorting", "items": {"type": "object", "properties": {"fieldName": {"type": "string", "title": "Field name"}, "ascending": {"type": "boolean", "title": "Ascending"}}}}}},
-                    {"pageNum": 1, "pageSize": 50, "selectedFacetValues": [{"facetName": "id", "matchAllNull": false, "matchAllNotNull": true, "facetValues": [{"value": "1223"}], "included": false}], "sorts": [{"fieldName": "name", "ascending": true}]},
-                    null,
-                    "Example of a form created with initial data preloaded. Same schema as the previous example."],
-                ["String validation",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"s1": {"type": "string", "title": "A validated string", "minLength": 1, "maxLength": 2, "pattern": "a", "description": "A string of length `1` or `2` characters long and containing `'a'`"}}},
-                    null,
-                    null,
-                    "[String validation](http://json-schema.org/latest/json-schema-validation.html#anchor25) supporting `minLength`, `maxLength`, and `pattern`"],
-                ["Numeric validation",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"num1": {"type": "integer", "title": "A number", "minimum": 1, "maximum": 10, "multipleOf": 3, "description": "An integer multiple of `3`, between `1` and `10` (inclusive)"}, "num2": {"type": "integer", "title": "Other number", "minimum": 1, "exclusiveMinimum": true, "maximum": 10, "exclusiveMaximum": true, "description": "A integer between `2` and `9` (inclusive). This example makes use of `exclusiveMinimum` and `exclusiveMaximum` schema keywords"}}},
-                    null,
-                    null,
-                    "[Numeric validation](http://json-schema.org/latest/json-schema-validation.html#anchor13) supporting `multipleOf`, `minimum`, `maximum` and `exclusiveMinimum`, `exclusiveMaximum` "],
-                ["Additional properties",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"fixed": {"description": "Object supporting schema-fixed additional properties", "type": "object", "maxProperties": 2, "additionalProperties": {"description": "Fixed-schema additional property", "type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "integer"}}}}, "free": {"description": "Object supporting schema-free additional properties", "type": "object", "maxProperties": 3, "additionalProperties": true}}},
-                    null,
-                    null,
-                    "Both object and boolean typed [additionalProperties](http://json-schema.org/latest/json-schema-validation.html#anchor64) are supported. Also, notice the support of the validation keywords `minProperties` and `maxProperties`"],
-                ["oneOf example",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "oneOf": [{"type": "number", "required": true, "multipleOf": 3, "title": "A multiple of 3"}, {"title": "An object", "type": "object", "properties": {"p1": {"type": "string", "required": true, "title": "A required string"}, "p2": {"type": "boolean", "title": "A boolean"}}}]},
-                    null,
-                    null,
-                    "`oneOf` types support in schemas"],
-                ["Textarea example",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"prop1": {"type": "string", "title": "A short string", "description": "A short string property whose input is rendered as `input`"}, "prop2": {"type": "string", "title": "A long text", "format": "text", "description": "A long text property whose input is rendered as `textarea`"}}},
-                    null,
-                    null,
-                    "`textarea` rendering for `string` schemas"],
-                ["Custom string formats",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"file": {"type": "string", "format": "inputstream", "description": "Using a custom format decorator with **glyphicon** via `addFormatDecorator(...)` of the bootstrap extension script"}, "color": {"type": "string", "format": "color", "description": "Using a custom format decorator via `addFormatDecorator(...)` of the bootstrap extension script"}, "date": {"type": "string", "format": "date", "description": "Using a custom format decorator with glyphicon via `addFormatDecorator(...)` of the bootstrap extension script"}}},
-                    null,
-                    null,
-                    "Input types can be chosen for custom `string` schema formats via `BrutusinForms.bootstrap.addFormatDecorator(...)`. See current registered decorators at this page source code."],
-                ["Pattern Properties",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"s1": {"type": "string", "title": "A  string", "description": "A string"}}, "patternProperties": {"^ref_.*": {"type": "number"}}},
-                    null,
-                    null,
-                    "[Pattern Properties](http://json-schema.org/latest/json-schema-validation.html#rfc.section.5.17) Supporting additional properties with names constrained by a regular expression pattern."],
-                ["Definitions ($ref)",
-                    {"$schema":"http://json-schema.org/draft-03/schema#","type":"object","definitions":{"d1":{"type":"string","title":"Definition title","description":"Definition description"}},"properties":{"s1":{"description":"Overwritten description","$ref":"#/definitions/d1"},"s2":{"title":"Overwritten title","$ref":"#/definitions/d1"}}},
-                    null,
-                    null,
-                    "[Definitions](http://json-schema.org/latest/json-schema-validation.html) Supporting internal references to definitions. `title` and `description` can be overwritten by the pointing instance."],
-                ["ReadOnly",
-                    {"$schema": "http://json-schema.org/draft-03/schema#", "type": "object", "properties": {"s1": {"type": "string"}, "s2": {"type": "string", "readOnly": true}, "a1": {"type": "array", "items": {"type": "string"}}, "a2": {"type": "array", "items": {"type": "string"}, "readOnly": true}}},
-                    {"s1": "foo", "s2": "bar", "a1": ["foo", "bar"], "a2": ["baz", "corge"]},
-                    null,
-                    "[Read Only](http://json-schema.org/latest/json-schema-validation.html) Supporting greyed-out display of read-only elements"],
-                 ["Required v3, v4+",
-                    {"type":"object","properties":{"prop1":{"type":"integer"},"prop2":{"type":"integer","required":true},"prop3":{"type":"integer","required":true},"composite1":{"type":"object","properties":{"nested1":{"type":"number","required":true},"nested2":{"type":"number","required":true}},"required":["nested1","nested2"]},"composite2":{"type":"object","properties":{"nested1":{"type":"number","required":true},"nested2":{"type":"number","required":true}},"required":["nested1","nested2"]}},"required":["prop1","prop2","composite1"]},
-                    null,
-                    null,
-                    "Required properties supported in both v3 and v4+ spec formats. Last one format takes preference. More info [here](https://github.com/brutusin/json-forms/issues/56)"]
+                    "Server-specific configuration"]                        
             ];
-
+            
             var selectedTab = "schema";
             var bf;
 
             function selectExample(selectedExampleIndex) {
+
+				switch(selectedExampleIndex){
+				case 0:
+					configType = "domain";
+					break;
+				case 1:
+					configType = "cluster";
+					break;
+				case 2:
+					configType = "server";
+					break;
+				}
+                
                 document.getElementById("examples").selectedIndex = selectedExampleIndex;
                 input.schema = demos[selectedExampleIndex][1];
                 input.data = demos[selectedExampleIndex][2];
@@ -213,12 +221,16 @@ console.log(json);
                     $("#jsonAlert").show();
                     return;
                 }
-                $('#formLink').click();
+                
+
+                // $('#formLink').click();
+
+
                 bf = BrutusinForms.create(schema);
                 if (resolver) {
                     bf.schemaResolver = resolver;
                 }
-                var container = document.getElementById('container');
+                var container = document.getElementById('form-container');
                 while (container.firstChild) {
                     container.removeChild(container.firstChild);
                 }
@@ -235,121 +247,183 @@ console.log(json);
         </script>
 
 </head>
-<body>
-	<p>
-		App=<%=app%></p>
-	<p><%=exception%></p>
-	<!-- 
-		<p><![CDATA[<%=domainJson%>]]></p>
- -->
+<body onload="generateForm()">
+
+
 	<div class="container">
 		<h1>
-			<img alt="Butusin"
-				src="https://avatars0.githubusercontent.com/u/10341159?v=3&s=200"
-				style="border: 0; width: 50px; height: 50px;" />
-			<code>brutusin:json-forms</code>
-			demo
+			<img alt="vorpal-logo" src="./vorpal-logo-small.png"
+				style="padding: 5px 5px 5px 5px; border: 0; height: 80px;" />
+			<code>BLADE</code>
+			Configurator
 		</h1>
 
 		<blockquote>
 			<p>
 				<b>JSON Schema to HTML form generator</b>, supporting dynamic
 				subschemas (on the fly resolution). Extensible and customizable
-				library with zero dependencies. Bootstrap add-ons provided.
+				library with zero dependencies.
 			</p>
 			<p>
 				Source code and documentation available at <a
-					href="https://github.com/brutusin/json-forms"><span
+					href="https://github.com/vorpalnet/blade"><span
 					class="octicon octicon-logo-github"></span></a>
-			</p>
-			<p>
-				Originally created for <a href="http://rpc.brutusin.org">Brutusin-RPC</a>.
-				See who else is using it <a
-					href="https://github.com/brutusin/json-forms/blob/master/WHO-IS-USING.md">here</a>.
 			</p>
 		</blockquote>
 		<div class="panel-group" id="accordion" role="tablist"
 			aria-multiselectable="true">
-			<div class="panel panel-primary">
-				<div class="panel-heading" role="tab" id="headingOne">
-					<h4 class="panel-title">
-						<a role="button" data-toggle="collapse" data-parent="#accordion"
+
+			<form name="bladeForm" method="post" action="?app=<%=app%>">
+
+				<div class="panel panel-primary">
+					<div class="panel-heading" role="tab" id="headingOne">
+						<h4 class="panel-title">
+							<p><%=app%></p>
+							<!--a role="button" data-toggle="collapse" data-parent="#accordion"
 							href="index.html#collapseInput" aria-expanded="true"
-							aria-controls="collapseInput"> Input </a>
-					</h4>
-				</div>
-				<div id="collapseInput" class="panel-collapse collapse in"
-					role="tabpanel" aria-labelledby="headingOne">
-					<div class="panel-body">
-						<label for="examples">Predefined examples:</label> <select
+							aria-controls="collapseInput"> <%=app%>
+						</a-->
+						</h4>
+					</div>
+					<div id="collapseInput" class="panel-collapse collapse in"
+						role="tabpanel" aria-labelledby="headingOne">
+
+
+						<div class="panel-body">
+							<label for="examples">Configuration type:</label>
+
+							<!--select
 							class="form-control" id="examples"
 							onchange="document.location.hash = this.selectedIndex;">
-							<script>
+							<script type="text/javascript">
                                     for (var i = 0; i < demos.length; i++) {
                                         document.write("<option " + (selectedDemo === i ? "selected=true" : "") + ">" + demos[i][0] + "</option>");
                                     }
-                                </script>
-						</select> <br>
-						<ul class="nav nav-tabs" role="tablist">
-							<li role="presentation" class="active"><a
-								href="index.html#schema" aria-controls="schema" role="tab"
-								data-toggle="tab">Schema</a></li>
-							<li role="presentation"><a href="index.html#data"
-								aria-controls="data" role="tab" data-toggle="tab">Initial
-									data</a></li>
+                            </script>
+						</select-->
+
+							<select class="form-control" id="examples"
+								onchange="chgAction();this.form.submit()">
+								<script type="text/javascript">
+                                    for (var i = 0; i < demos.length; i++) {
+                                        document.write("<option " + (selectedDemo === i ? "selected=true" : "") + ">" + demos[i][0] + "</option>");
+                                    }
+                            </script>
+							</select> <br>
+
+							<ul class="nav nav-tabs" role="tablist">
+
+								<li role="presentation" class="active"><a
+									href="index.html#form" aria-controls="schema" role="tab"
+									data-toggle="tab">Form</a></li>
+
+								<li role="presentation"><a href="index.html#data"
+									aria-controls="data" role="tab" data-toggle="tab">JSON</a></li>
+
+								<li role="presentation" class=""><a
+									href="index.html#schema" aria-controls="schema" role="tab"
+									data-toggle="tab">Schema</a></li>
+
+								<!-- 
 							<li role="presentation"><a href="index.html#resolver"
 								aria-controls="resolver" role="tab" data-toggle="tab">Schema
 									resolver</a></li>
-						</ul>
-						<!-- Tab panes -->
-						<div class="tab-content">
-							<div role="tabpanel" class="tab-pane active" id="schema"></div>
-							<div role="tabpanel" class="tab-pane" id="data"></div>
-							<div role="tabpanel" class="tab-pane" id="resolver"></div>
-						</div>
-						<div class="alert alert-danger in" role="alert" id="jsonAlert"
-							style="display: none">
-							<a href="index.html#" onclick='$("#jsonAlert").hide();'
-								class="close">&times;</a> <strong>Error!</strong> <span
-								id="error-message"></span>
-						</div>
+ -->
 
-					</div>
+							</ul>
+							<!-- Tab panes -->
+							<div class="tab-content">
+								<div role="tabpanel" class="tab-pane active" id="form">
 
-					<div class="panel-footer">
+									<div id='form-container'
+										style="padding-left: 6px; padding-right: 6px; padding-top: 6px; padding-bottom: 6px;"></div>
+
+								</div>
+								<div role="tabpanel" class="tab-pane" id="data"></div>
+								<div role="tabpanel" class="tab-pane" id="schema"></div>
+								<!--div role="tabpanel" class="tab-pane" id="resolver"></div-->
+							</div>
+							<div class="alert alert-danger in" role="alert" id="jsonAlert"
+								style="display: none">
+								<a href="index.html#" onclick='$("#jsonAlert").hide();'
+									class="close">&times;</a> <strong>Error!</strong> <span
+									id="error-message"></span>
+							</div>
+
+						</div>
+						<!-- panel-body -->
+
+
+						<div class="panel-footer">
+
+							<!-- 
 						<button class="btn btn-primary" onclick="generateForm()">Create
 							form</button>
-					</div>
-				</div>
-			</div>
-			<div class="panel panel-primary">
-				<div class="panel-heading" role="tab" id="headingTwo">
-					<h4 class="panel-title">
-						<a class="collapsed" id="formLink" role="button"
-							data-toggle="collapse" data-parent="#accordion"
-							href="index.html#collapseForm" aria-expanded="false"
-							aria-controls="collapseForm"> Generated form </a>
-					</h4>
-				</div>
-				<div id="collapseForm" class="panel-collapse collapse"
-					role="tabpanel" aria-labelledby="headingTwo">
-					<div class="alert alert-info" role="alert">
-						<strong id="example-title"></strong>
-						<div id="example-desc"></div>
-					</div>
-					<div id='container'
-						style="padding-left: 12px; padding-right: 12px; padding-bottom: 12px;"></div>
-					<div class="panel-footer">
-						<button class="btn btn-primary"
-							onclick="alert(JSON.stringify(bf.getData(), null, 4))">getData()</button>
-						&nbsp;
-						<button class="btn btn-primary"
-							onclick="if (bf.validate()) {
+							
+					-->
+
+							<button class="btn btn-primary"
+								onclick="saveData( app, configType, JSON.stringify(bf.getData(), null, 4))">Save</button>
+							&nbsp;
+
+							<button class="btn btn-primary"
+								onclick="alert(JSON.stringify(bf.getData(), null, 4))">Display</button>
+							&nbsp;
+
+							<button class="btn btn-primary"
+								onclick="if (bf.validate()) {
                                         alert('Validation succeeded')
-                                    }">validate()</button>
+                                    }">Validate</button>
+
+
+						</div>
+
+
+
 					</div>
 				</div>
-			</div>
+
+
+				<div class="panel panel-primary">
+					<div class="panel-heading" role="tab" id="headingTwo">
+						<h4 class="panel-title">
+							<a class="collapsed" id="formLink" role="button"
+								data-toggle="collapse" data-parent="#accordion"
+								href="index.html#collapseForm" aria-expanded="false"
+								aria-controls="collapseForm"> Generated form </a>
+						</h4>
+					</div>
+					<div id="collapseForm" class="panel-collapse collapse"
+						role="tabpanel" aria-labelledby="headingTwo">
+						<div class="alert alert-info" role="alert">
+							<strong id="example-title"></strong>
+							<div id="example-desc"></div>
+						</div>
+
+
+						<div id='container'
+							style="padding-left: 12px; padding-right: 12px; padding-bottom: 12px;"></div>
+
+
+						<div class="panel-footer">
+							<button class="btn btn-primary"
+								onclick="saveData( app, configType, JSON.stringify(bf.getData(), null, 4))">Save</button>
+							&nbsp;
+
+							<button class="btn btn-primary"
+								onclick="alert(JSON.stringify(bf.getData(), null, 4))">Display</button>
+							&nbsp;
+
+							<button class="btn btn-primary"
+								onclick="if (bf.validate()) {
+                                        alert('Validation succeeded')
+                                    }">Validate</button>
+						</div>
+					</div>
+				</div>
+
+			</form>
+
 		</div>
 	</div>
 
@@ -380,6 +454,5 @@ console.log(json);
             );
 
         </script>
-	</div>
 </body>
 </html>
