@@ -1,6 +1,7 @@
 #!/bin/bash
 
-export SERVICE=record=029TVUHRHKBA34546D51O2LAES0002JS_2024-07-25_19-19-59
+export SERVICE=1983217114
+export DURATION=5000
+export OCCAS=192.168.1.107
 
-
-sipp -rsa 192.168.1.247 -m 1 -s ${SERVICE} -sn uac occas8enginerpomnistgctc01.uhc.com.out:5099
+sipp -d ${DURATION} -rsa ${OCCAS} -m 1 -s ${SERVICE} -sf uac.xml 192.168.1.107:5099
