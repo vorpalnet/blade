@@ -30,6 +30,7 @@ import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.logging.Level;
 
+import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
@@ -38,6 +39,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
+import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callflow;
 
@@ -210,35 +212,33 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			}
 
 			log(level, timeout(timer) + msg);
-
 		}
 
 	}
 
 	public void log(Level level, SipServletMessage message, String comments) {
 
-		try {
+		if (this.isLoggable(level)) {
+			try {
 
-			if (message != null && message.getSession() != null && message.getSession().isValid()) {
-				log(level, hexHash(message.getSession()) + " " + comments);
-			} else if (comments != null) {
-				log(level, comments);
-			} else {
-				log(level, "Something weird in the logging is happening. Throwing stack trace to find it...");
-				throw new Exception("Weird logging error. Here's a stack trace for you.");
+				if (message != null && message.getSession() != null && message.getSession().isValid()) {
+					log(level, hexHash(message.getSession()) + " " + comments);
+				} else if (comments != null) {
+					log(level, comments);
+				} else {
+					log(level, "Something weird in the logging is happening. Throwing stack trace to find it...");
+					throw new Exception("Weird logging error. Here's a stack trace for you.");
+				}
+
+			} catch (Exception e) {
+				this.logStackTrace(e);
 			}
-		} catch (Exception e) {
-			this.logStackTrace(e);
 		}
 
 	}
 
 	public void fine(SipServletMessage message, String comments) {
-		if (message.getSession().isValid()) {
-			log(Level.FINE, message, comments);
-		} else {
-			log(Level.FINE, comments);
-		}
+		log(Level.FINE, message, comments);
 	}
 
 	public void finer(SipServletMessage message, String comments) {
@@ -254,11 +254,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void severe(SipServletMessage message, String comments) {
-		if (message.getSession().isValid()) {
-			log(Level.SEVERE, message, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
-		} else {
-			log(Level.SEVERE, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
-		}
+		log(Level.SEVERE, message, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
 	public void warning(SipServletMessage message, String comments) {
@@ -425,6 +421,22 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return sb.toString();
 	}
 
+	public static String minimum(Address address) {
+		return minimum(address.getURI());
+	}
+
+	public static String minimum(URI uri) {
+		StringBuilder strBuilder = new StringBuilder();
+		strBuilder.append(((SipURI) uri).getScheme());
+		strBuilder.append(":");
+		strBuilder.append(((SipURI) uri).getUser());
+		strBuilder.append("@");
+		strBuilder.append(((SipURI) uri).getHost());
+		strBuilder.append(":");
+		strBuilder.append(((SipURI) uri).getPort());
+		return strBuilder.toString();
+	}
+
 //    |-------17------||-------17------||-------17------||-------17------||-------17------||-------17------|
 //    0                   10                  20                  30                  40                  50		
 //    012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890  
@@ -509,9 +521,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							if (request.getMethod().equals("INVITE")) {
 								if (request.isInitial()) {
-									note = request.getRequestURI().toString();
+									note = minimum(request.getRequestURI());
 								} else {
-									note = "To: " + request.getTo();
+									note = "To: " + minimum(request.getTo());
 								}
 							}
 
@@ -527,7 +539,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							}
 
 							else if (request.getMethod().equals("REFER")) {
-								note = "Refer-To: " + request.getHeader("Refer-To");
+								note = "Refer-To: " + minimum(request.getAddressHeader("Refer-To"));
 							} else if (request.getMethod().equals("REGISTER")) {
 								String expires = request.getHeader("Expires");
 								if (expires == null) {
@@ -589,9 +601,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 									note += new String((byte[]) request.getContent());
 								}
 							} else if (request.getMethod().equals("REFER")) {
-								note = "Refer-To: " + request.getHeader("Refer-To");
+								note = "Refer-To: " + minimum(request.getAddressHeader("Refer-To"));
 							} else if (request.getMethod().equals("INVITE")) {
-								note = "From: " + request.getHeader("From");
+								note = "From: " + minimum(request.getFrom());
 							}
 
 							note = note.trim();
@@ -642,9 +654,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							if (request.getMethod().equals("INVITE")) {
 								if (request.isInitial()) {
-									note = request.getRequestURI().toString();
+									note = minimum(request.getRequestURI());
 								} else {
-									note = "To: " + request.getTo();
+									note = "To: " + minimum(request.getTo());
 								}
 							}
 
@@ -660,7 +672,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							}
 
 							else if (request.getMethod().equals("REFER")) {
-								note = "Refer-To: " + request.getHeader("Refer-To");
+								note = "Refer-To: " + minimum(request.getAddressHeader("Refer-To"));
 							}
 
 							note = note.trim();
@@ -712,9 +724,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							if (request.getMethod().equals("INVITE")) {
 								if (request.isInitial()) {
-									note = request.getRequestURI().toString();
+									note = minimum(request.getRequestURI());
 								} else {
-									note = "From: " + request.getFrom();
+									note = "From: " + minimum(request.getFrom());
 								}
 							} else if (request.getMethod().equals("NOTIFY")) {
 								note += "Event: " + request.getHeader("Event");
