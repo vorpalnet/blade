@@ -50,6 +50,7 @@ public class Settings<T> implements SettingsMXBean {
 	private T config;
 
 	private ObjectMapper objectMapper;
+	private SettingsManager<T> settingsManager;
 
 //	private String configName;
 	private Path domain;
@@ -60,9 +61,11 @@ public class Settings<T> implements SettingsMXBean {
 
 	private BufferedWriter bufferedWriter;
 
-	public Settings(Class<T> clazz, String configName, ObjectMapper objectMapper) {
+	public Settings(Class<T> clazz, SettingsManager<T> settingsManager, String configName, ObjectMapper objectMapper) {
 
 		this.sipLogger = SettingsManager.getSipLogger();
+
+		this.settingsManager = settingsManager;
 
 		this.clazz = clazz;
 //		this.configName = configName;
@@ -84,81 +87,103 @@ public class Settings<T> implements SettingsMXBean {
 	}
 
 	@Override
-	public void open(ConfigType configType) throws IOException {
-		sipLogger.fine("Opening " + configType.toString() + " configuration file for writing...");
+	public void open(String configType) {
 
-		Path path = null;
+		try {
+			sipLogger.fine("Opening " + configType.toString() + " configuration file for writing...");
 
-		switch (configType) {
-		case DOMAIN:
-			path = domain;
-			break;
-		case CLUSTER:
-			path = cluster;
-			break;
-		case SERVER:
-			path = server;
-			break;
-		}
+			Path path = null;
 
-		bufferedWriter = Files.newBufferedWriter(path, StandardOpenOption.TRUNCATE_EXISTING);
-	}
-
-	@Override
-	public void close() throws IOException {
-		sipLogger.fine("Closing configuration file...");
-		bufferedWriter.close();
-	}
-
-	@Override
-	public void write(String line) throws IOException {
-		bufferedWriter.write(line);
-	}
-
-	@Override
-	public void reload() throws JsonProcessingException, IOException {
-		sipLogger.fine("reloading configuration files...");
-
-		JsonNode jsonNode = NullNode.getInstance();
-
-		File domainFile = domain.toFile();
-		if (domainFile.exists()) {
-			jsonNode = objectMapper.readTree(domainFile);
-		}
-
-		File clusterFile = cluster.toFile();
-		if (clusterFile.exists()) {
-			jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(clusterFile));
-		}
-
-		File serverFile = server.toFile();
-		if (serverFile.exists()) {
-			jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(serverFile));
-		}
-
-		config = (T) objectMapper.convertValue(jsonNode, clazz);
-
-		if (config instanceof Configuration) {
-			Configuration cfg = (Configuration) config;
-
-			if (cfg.getLogging() != null //
-					&& cfg.getLogging().resolveUseParentLogging() == false //
-					&& cfg.getLogging().resolveLoggingLevel() != null) {
-				AsyncSipServlet.getSipLogger().setLevel(cfg.getLogging().resolveLoggingLevel());
-				AsyncSipServlet.getSipLogger()
-						.setConfigurationLoggingLevel(cfg.getLogging().resolveConfigurationLoggingLevel());
-				AsyncSipServlet.getSipLogger()
-						.setSequenceDiagramLoggingLevel(cfg.getLogging().resolveSequenceDiagramLoggingLevel());
+			switch (configType) {
+			case "DOMAIN":
+				path = domain;
+				break;
+			case "CLUSTER":
+				path = cluster;
+				break;
+			case "SERVER":
+				path = server;
+				break;
 			}
 
-			if (cfg.getSession() != null) {
-				Callflow.setSessionParameters(cfg.getSession());
-				AsyncSipServlet.setSessionParameters(cfg.getSession());
+			bufferedWriter = Files.newBufferedWriter(path, StandardOpenOption.TRUNCATE_EXISTING);
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public void close() {
+		try {
+			sipLogger.fine("Closing configuration file...");
+			bufferedWriter.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public void write(String line){
+		try {
+			bufferedWriter.write(line);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public void reload() {
+		sipLogger.info("reloading configuration files...");
+
+		try {
+
+			JsonNode jsonNode = NullNode.getInstance();
+
+			File domainFile = domain.toFile();
+			if (domainFile.exists()) {
+				jsonNode = objectMapper.readTree(domainFile);
 			}
 
-		}
+			File clusterFile = cluster.toFile();
+			if (clusterFile.exists()) {
+				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(clusterFile));
+			}
 
-		sipLogger.logConfiguration(config);
+			File serverFile = server.toFile();
+			if (serverFile.exists()) {
+				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(serverFile));
+			}
+
+			config = (T) objectMapper.convertValue(jsonNode, clazz);
+
+			if (config instanceof Configuration) {
+				Configuration cfg = (Configuration) config;
+
+				if (cfg.getLogging() != null //
+						&& cfg.getLogging().resolveUseParentLogging() == false //
+						&& cfg.getLogging().resolveLoggingLevel() != null) {
+					AsyncSipServlet.getSipLogger().setLevel(cfg.getLogging().resolveLoggingLevel());
+					AsyncSipServlet.getSipLogger()
+							.setConfigurationLoggingLevel(cfg.getLogging().resolveConfigurationLoggingLevel());
+					AsyncSipServlet.getSipLogger()
+							.setSequenceDiagramLoggingLevel(cfg.getLogging().resolveSequenceDiagramLoggingLevel());
+				}
+
+				if (cfg.getSession() != null) {
+					Callflow.setSessionParameters(cfg.getSession());
+					AsyncSipServlet.setSessionParameters(cfg.getSession());
+				}
+
+			}
+
+			settingsManager.initialize(config);
+
+			sipLogger.logConfiguration(config);
+
+		} catch (Exception e) {
+			sipLogger.severe(e);
+		}
 
 	}
 

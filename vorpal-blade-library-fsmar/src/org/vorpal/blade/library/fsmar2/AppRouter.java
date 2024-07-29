@@ -25,6 +25,7 @@
 package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -45,10 +46,14 @@ import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.logging.LogManager;
 import org.vorpal.blade.framework.logging.Logger;
 
+import com.bea.wcp.sip.engine.SipServletMessageAdapter;
 import com.bea.wcp.sip.engine.SipServletRequestAdapter;
 import com.bea.wcp.sip.engine.server.SipApplicationSessionImpl;
+import com.bea.wcp.sip.engine.server.SipServletMessageImpl;
+import com.bea.wcp.sip.engine.server.header.HeaderUtils;
 
 public class AppRouter implements SipApplicationRouter {
+	
 	protected static String FSMAR = "fsmar2";
 	public static Logger sipLogger;
 	private static SettingsManager<AppRouterConfiguration> settingsManager;
@@ -71,6 +76,16 @@ public class AppRouter implements SipApplicationRouter {
 	public SipApplicationRouterInfo getNextApplication(SipServletRequest request, SipApplicationRoutingRegion region,
 			SipApplicationRoutingDirective directive, SipTargetedRequestInfo requestInfo, Serializable saved) {
 		SipApplicationRouterInfo nextApp = null;
+
+// jwm - this is how you hack headers
+//		try {			
+//        	Method getMessageImpl =  SipServletMessageAdapter.class.getDeclaredMethod("getMessageImpl");
+//        	getMessageImpl.setAccessible(true);
+//        	SipServletMessageImpl impl = (SipServletMessageImpl) getMessageImpl.invoke(request);
+//        	impl.setHeaderFromAdapter("X-Jeff", "is_cool", false); //true if address header
+//		} catch (Exception e) {
+//			e.printStackTrace();
+//		}
 
 		try {
 			AppRouterConfiguration config = (saved != null) ? (AppRouterConfiguration) saved
