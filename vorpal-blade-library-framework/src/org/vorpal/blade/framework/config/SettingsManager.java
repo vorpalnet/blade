@@ -39,6 +39,9 @@ import javax.management.MBeanServer;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
+import javax.servlet.ServletContextEvent;
+import javax.servlet.ServletContextListener;
+import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipFactory;
@@ -88,7 +91,7 @@ import inet.ipaddr.ipv6.IPv6Address;
  *
  */
 // @WebListener
-// public class SettingsManager<T> implements ServletContextListener {
+//public class SettingsManager<T> implements ServletContextListener {
 public class SettingsManager<T> {
 	protected T sample = null;
 	protected T current;
@@ -97,7 +100,7 @@ public class SettingsManager<T> {
 	protected ObjectMapper mapper;
 	protected Class<T> clazz;
 	protected ObjectInstance oi;
-	protected Settings settings;
+	protected Settings<T> settings;
 
 	protected static String serverName;
 	protected static String clusterName;
@@ -118,6 +121,10 @@ public class SettingsManager<T> {
 	protected JsonNode serverNode = NullNode.getInstance();
 	protected JsonNode mergedNode = NullNode.getInstance();
 
+	public SettingsManager() {
+		System.out.println("SettingsManager() invoked...");
+	}
+
 	public SettingsManager(String name, Class<T> clazz, ObjectMapper mapper) {
 		this.mapper = mapper;
 		this.build(name, clazz, mapper);
@@ -133,23 +140,23 @@ public class SettingsManager<T> {
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
-		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		this.sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 
 		this.mapper = mapper;
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, mapper);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) {
-		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		this.sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample) {
 		this.sample = sample;
-		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		this.sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
+		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
@@ -211,7 +218,7 @@ public class SettingsManager<T> {
 			AsyncSipServlet.setSipLogger(sipLogger);
 			Callflow.setLogger(sipLogger);
 
-			settings = new Settings<T>(clazz, name, mapper);
+			settings = new Settings<T>(clazz, this, name, mapper);
 
 			// Get the managed server & cluster names
 			String configPath = "config/custom/vorpal/";
@@ -297,9 +304,7 @@ public class SettingsManager<T> {
 
 			settings.reload();
 			this.current = (T) settings.getConfiguration();
-			this.initialize(current);
 			
-
 			this.logCurrent();
 
 		} catch (Exception e) {
@@ -322,8 +327,13 @@ public class SettingsManager<T> {
 	public void register() throws InstanceAlreadyExistsException, MBeanRegistrationException,
 			NotCompliantMBeanException, JsonGenerationException, JsonMappingException, InstantiationException,
 			IllegalAccessException, IOException, ServletParseException {
-		oi = server.registerMBean(this.settings, objectName);
+
+		sipLogger.fine("Registering MBean: " + objectName.toString());
+		oi = server.registerMBean(settings, objectName);
+		// what is this for?
 		objectName = oi.getObjectName();
+		sipLogger.fine("object name is now: " + objectName.toString());
+
 	}
 
 	public void unregister() throws MBeanRegistrationException, InstanceNotFoundException {
@@ -489,5 +499,26 @@ public class SettingsManager<T> {
 		int i = name.indexOf('#');
 		return (i >= 0) ? name.substring(0, i) : name;
 	}
+
+//	@Override
+//	public void contextInitialized(ServletContextEvent sce) {
+//		System.out.println("SettingsManager.contextInitialized() invoked...");
+//
+//		ServletContextListener.super.contextInitialized(sce);
+//	}
+//
+//	@Override
+//	public void contextDestroyed(ServletContextEvent sce) {
+//
+//		try {
+//			System.out.println("SettingsManager.contextDestroyed() invoked...");
+//			sipLogger.info("Unregistering MBean...");
+//			this.unregister();
+//			ServletContextListener.super.contextDestroyed(sce);
+//		} catch (Exception e) {
+//			e.printStackTrace();
+//		}
+//
+//	}
 
 }

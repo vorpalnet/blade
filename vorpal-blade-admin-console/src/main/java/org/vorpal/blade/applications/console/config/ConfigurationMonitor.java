@@ -33,7 +33,6 @@ import javax.naming.NameNotFoundException;
 import javax.naming.NamingException;
 
 import org.vorpal.blade.framework.config.SettingsMXBean;
-import org.vorpal.blade.framework.config.SettingsMXBean.ConfigType;
 
 public class ConfigurationMonitor extends Thread {
 
@@ -257,13 +256,16 @@ public class ConfigurationMonitor extends Thread {
 				if (false == this.isSharedFilesystem()) {
 					if (domain) {
 						System.out.println("Updating Domain...");
-						settings.open(ConfigType.DOMAIN);
+//						settings.open(ConfigType.DOMAIN);
+						settings.open("DOMAIN");
 					} else if (cluster) {
 						System.out.println("Updating Cluster...");
-						settings.open(ConfigType.CLUSTER);
+//						settings.open(ConfigType.CLUSTER);
+						settings.open("CLUSTER");
 					} else if (server) {
 						System.out.println("Updating Server...");
-						settings.open(ConfigType.SERVER);
+//						settings.open(ConfigType.SERVER);
+						settings.open("SERVER");
 					}
 
 					String line;
@@ -271,12 +273,12 @@ public class ConfigurationMonitor extends Thread {
 					Scanner scanner = new Scanner(json);
 					while (scanner.hasNextLine()) {
 						line = scanner.nextLine();
-						settings.write(line);
+//						settings.write(line);
 						count++;
 					}
 					System.out.println("Number of lines written: " + count);
 					scanner.close();
-					settings.close();
+//					settings.close();
 				}
 
 				System.out.print("Sending command to reload the configuration... ");
