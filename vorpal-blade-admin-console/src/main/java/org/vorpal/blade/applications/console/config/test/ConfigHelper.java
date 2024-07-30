@@ -42,17 +42,20 @@ public class ConfigHelper {
 
 		switch (configType) {
 		case "Domain":
+		case "domain":
 			if (Files.exists(domainPath)) {
 				value = Files.readString(domainPath);
 			}
 			break;
 		case "Cluster":
+		case "cluster":
 			if (Files.exists(clusterPath)) {
 				value = Files.readString(clusterPath);
 			}
 			break;
 
 		case "Server":
+		case "server":
 			if (Files.exists(serverPath)) {
 				value = Files.readString(domainPath);
 			}

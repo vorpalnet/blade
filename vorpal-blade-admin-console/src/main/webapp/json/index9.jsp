@@ -5,16 +5,6 @@ String exception = "No Exceptions.";
 String app = request.getParameter("app");
 String configType = request.getParameter("configType");
 
-
-String submittedFormData = request.getParameter("data");
-
-System.out.println("app="+app);
-System.out.println("configType="+configType);
-System.out.println("data="+submittedFormData);
-
-
-
-
 ConfigHelper cfgHelper = new ConfigHelper(app, configType);
 
 String jsonData = cfgHelper.loadJson();
@@ -35,9 +25,11 @@ Set<String> dirContents = cfgHelper.listFilesUsingFilesList("config/custom/vorpa
 
 <link rel="stylesheet" href='lib/bootstrap/css/bootstrap.min.css' />
 <link rel="stylesheet" href="lib/codemirror/codemirror.css">
-<link rel="stylesheet" href="lib/bootstrap-select-v1.13.14/css/bootstrap-select.min.css">
+<link rel="stylesheet"
+	href="lib/bootstrap-select-v1.13.14/css/bootstrap-select.min.css">
 <link rel="stylesheet" href="lib/octicons/octicons.css">
-<link rel="stylesheet" href='http://rawgit.com/brutusin/json-forms/master/dist/css/brutusin-json-forms.min.css' />
+<link rel="stylesheet"
+	href='http://rawgit.com/brutusin/json-forms/master/dist/css/brutusin-json-forms.min.css' />
 
 <style>
 .CodeMirror {
@@ -51,27 +43,24 @@ Set<String> dirContents = cfgHelper.listFilesUsingFilesList("config/custom/vorpa
 <script src="lib/codemirror/codemirror-javascript.js"></script>
 <script src="lib/markdown.min.js"></script>
 <script src="lib/bootstrap-select-v1.13.14/js/bootstrap-select.min.js"></script>
-<script src="lib/bootstrap-select-v1.13.14/js/i18n/defaults-en_US.min.js"></script>
+<script
+	src="lib/bootstrap-select-v1.13.14/js/i18n/defaults-en_US.min.js"></script>
 <!--
         <script src="//rawgit.com/brutusin/json-forms/master/dist/js/brutusin-json-forms.min.js"></script>
          -->
-
-
-<script src="http://rawgit.com/brutusin/json-forms/master/src/js/brutusin-json-forms.js"></script>
-<script src="http://rawgit.com/brutusin/json-forms/master/dist/js/brutusin-json-forms-bootstrap.min.js"></script>
+<script
+	src="http://rawgit.com/brutusin/json-forms/master/src/js/brutusin-json-forms.js"></script>
+<script
+	src="http://rawgit.com/brutusin/json-forms/master/dist/js/brutusin-json-forms-bootstrap.min.js"></script>
 
 
 
 
 <script lang="javascript">
 
-
-  function saveData(app, configType, data){
-		
-	try {
-	  console.log(data);
-		
-   // Construct a FormData instance
+/*
+async function saveData(app, configType, data){
+	// Construct a FormData instance
 	  const formData = new FormData();
 
 	  // Add a text field
@@ -79,14 +68,13 @@ Set<String> dirContents = cfgHelper.listFilesUsingFilesList("config/custom/vorpa
 	  formData.append("configType", configType);
 	  formData.append("data", data);
 
-	  // Modify the URL
-	  $('#bladeForm').attr('action', $('#bladeForm').attr('action')+'configType='+configType+"&app="+app);
+	  try {
 
 	  } catch (e) {
 	    console.error(e);
 	  }
 	
-}
+}*/
 
 
 function chgAction(){
@@ -99,9 +87,6 @@ function chgAction(){
 	action = action.replace('{1}', configType);
     document.forms.bladeForm.action = action;
 }
-
-
-
 
 
 </script>
@@ -121,16 +106,13 @@ function chgAction(){
         var schema = <%=jsonSchema %>;
 		var jsonData = <%=jsonData %>;
 
-
-
-
-
-
-
-
-
-		
-      
+        
+<%--         
+        var domainJson = <%=domainJson%>;
+        var clusterJson = <%=clusterJson%>;
+        var serverJson = <%=serverJson%>;
+		var configType = "domain";
+ --%>        
 
 
         
@@ -270,35 +252,41 @@ function chgAction(){
 
 	<div class="container">
 		<h1>
-			<img alt="vorpal-logo" src="./vorpal-logo-small.png" style="padding: 5px 5px 5px 5px; border: 0; height: 80px;" />
+			<img alt="vorpal-logo" src="./vorpal-logo-small.png"
+				style="padding: 5px 5px 5px 5px; border: 0; height: 80px;" />
 			<code>BLADE</code>
 			Configurator
 		</h1>
 
 		<blockquote>
 			<p>
-				<b>JSON Schema to HTML form generator</b>, supporting dynamic subschemas (on the fly resolution). Extensible and customizable library with zero
-				dependencies.
+				<b>JSON Schema to HTML form generator</b>, supporting dynamic
+				subschemas (on the fly resolution). Extensible and customizable
+				library with zero dependencies.
 			</p>
 			<p>
-				Source code and documentation available at <a href="https://github.com/vorpalnet/blade"><span class="octicon octicon-logo-github"></span></a>
+				Source code and documentation available at <a
+					href="https://github.com/vorpalnet/blade"><span
+					class="octicon octicon-logo-github"></span></a>
 			</p>
 		</blockquote>
-		<div class="panel-group" id="accordion" role="tablist" aria-multiselectable="true">
+		<div class="panel-group" id="accordion" role="tablist"
+			aria-multiselectable="true">
 
-			<form id="bladeForm" name="bladeForm" method="post" action="?">
+			<form name="bladeForm" method="post" action="?app=<%=app%>">
 
 				<div class="panel panel-primary">
 					<div class="panel-heading" role="tab" id="headingOne">
 						<h4 class="panel-title">
 							<p><%=app%></p>
 							<!--a role="button" data-toggle="collapse" data-parent="#accordion"
-							href="index.jsp#collapseInput" aria-expanded="true"
+							href="index.html#collapseInput" aria-expanded="true"
 							aria-controls="collapseInput"> <%=app%>
 						</a-->
 						</h4>
 					</div>
-					<div id="collapseInput" class="panel-collapse collapse in" role="tabpanel" aria-labelledby="headingOne">
+					<div id="collapseInput" class="panel-collapse collapse in"
+						role="tabpanel" aria-labelledby="headingOne">
 
 
 						<div class="panel-body">
@@ -314,7 +302,8 @@ function chgAction(){
                             </script>
 						</select-->
 
-							<select class="form-control" id="examples" onchange="chgAction();this.form.submit()">
+							<select class="form-control" id="examples"
+								onchange="chgAction();this.form.submit()">
 								<script type="text/javascript">
                                     for (var i = 0; i < demos.length; i++) {
                                         document.write("<option " + (selectedDemo === i ? "selected=true" : "") + ">" + demos[i][0] + "</option>");
@@ -324,14 +313,19 @@ function chgAction(){
 
 							<ul class="nav nav-tabs" role="tablist">
 
-								<li role="presentation" class="active"><a href="index.jsp#form" aria-controls="schema" role="tab" data-toggle="tab">Form</a></li>
+								<li role="presentation" class="active"><a
+									href="index.html#form" aria-controls="schema" role="tab"
+									data-toggle="tab">Form</a></li>
 
-								<li role="presentation"><a href="index.jsp#data" aria-controls="data" role="tab" data-toggle="tab">JSON</a></li>
+								<li role="presentation"><a href="index.html#data"
+									aria-controls="data" role="tab" data-toggle="tab">JSON</a></li>
 
-								<li role="presentation" class=""><a href="index.jsp#schema" aria-controls="schema" role="tab" data-toggle="tab">Schema</a></li>
+								<li role="presentation" class=""><a
+									href="index.html#schema" aria-controls="schema" role="tab"
+									data-toggle="tab">Schema</a></li>
 
 								<!-- 
-							<li role="presentation"><a href="index.jsp#resolver"
+							<li role="presentation"><a href="index.html#resolver"
 								aria-controls="resolver" role="tab" data-toggle="tab">Schema
 									resolver</a></li>
  -->
@@ -341,15 +335,19 @@ function chgAction(){
 							<div class="tab-content">
 								<div role="tabpanel" class="tab-pane active" id="form">
 
-									<div id='form-container' style="padding-left: 6px; padding-right: 6px; padding-top: 6px; padding-bottom: 6px;"></div>
+									<div id='form-container'
+										style="padding-left: 6px; padding-right: 6px; padding-top: 6px; padding-bottom: 6px;"></div>
 
 								</div>
 								<div role="tabpanel" class="tab-pane" id="data"></div>
 								<div role="tabpanel" class="tab-pane" id="schema"></div>
 								<!--div role="tabpanel" class="tab-pane" id="resolver"></div-->
 							</div>
-							<div class="alert alert-danger in" role="alert" id="jsonAlert" style="display: none">
-								<a href="index.jsp#" onclick='$("#jsonAlert").hide();' class="close">&times;</a> <strong>Error!</strong> <span id="error-message"></span>
+							<div class="alert alert-danger in" role="alert" id="jsonAlert"
+								style="display: none">
+								<a href="index.html#" onclick='$("#jsonAlert").hide();'
+									class="close">&times;</a> <strong>Error!</strong> <span
+									id="error-message"></span>
 							</div>
 
 						</div>
@@ -364,10 +362,12 @@ function chgAction(){
 							
 					-->
 
-							<button class="btn btn-primary" onclick="saveData( app, configType, JSON.stringify(bf.getData(), null, 4))">Save</button>
+							<button class="btn btn-primary"
+								onclick="saveData( app, configType, JSON.stringify(bf.getData(), null, 4))">Save</button>
 							&nbsp;
 
-							<button class="btn btn-primary" onclick="alert(JSON.stringify(bf.getData(), null, 4))">Display</button>
+							<button class="btn btn-primary"
+								onclick="alert(JSON.stringify(bf.getData(), null, 4))">Display</button>
 							&nbsp;
 
 							<button class="btn btn-primary"
@@ -387,25 +387,31 @@ function chgAction(){
 				<div class="panel panel-primary">
 					<div class="panel-heading" role="tab" id="headingTwo">
 						<h4 class="panel-title">
-							<a class="collapsed" id="formLink" role="button" data-toggle="collapse" data-parent="#accordion" href="index.jsp#collapseForm" aria-expanded="false"
+							<a class="collapsed" id="formLink" role="button"
+								data-toggle="collapse" data-parent="#accordion"
+								href="index.html#collapseForm" aria-expanded="false"
 								aria-controls="collapseForm"> Generated form </a>
 						</h4>
 					</div>
-					<div id="collapseForm" class="panel-collapse collapse" role="tabpanel" aria-labelledby="headingTwo">
+					<div id="collapseForm" class="panel-collapse collapse"
+						role="tabpanel" aria-labelledby="headingTwo">
 						<div class="alert alert-info" role="alert">
 							<strong id="example-title"></strong>
 							<div id="example-desc"></div>
 						</div>
 
 
-						<div id='container' style="padding-left: 12px; padding-right: 12px; padding-bottom: 12px;"></div>
+						<div id='container'
+							style="padding-left: 12px; padding-right: 12px; padding-bottom: 12px;"></div>
 
 
 						<div class="panel-footer">
-							<button class="btn btn-primary" onclick="saveData( app, configType, JSON.stringify(bf.getData(), null, 4))">Save</button>
+							<button class="btn btn-primary"
+								onclick="saveData( app, configType, JSON.stringify(bf.getData(), null, 4))">Save</button>
 							&nbsp;
 
-							<button class="btn btn-primary" onclick="alert(JSON.stringify(bf.getData(), null, 4))">Display</button>
+							<button class="btn btn-primary"
+								onclick="alert(JSON.stringify(bf.getData(), null, 4))">Display</button>
 							&nbsp;
 
 							<button class="btn btn-primary"

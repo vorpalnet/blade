@@ -27,12 +27,14 @@ package org.vorpal.blade.library.fsmar2;
 import java.io.Serializable;
 import java.util.HashMap;
 
+import org.vorpal.blade.framework.config.Configuration;
+
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-public class AppRouterConfiguration implements Serializable {
+public class AppRouterConfiguration extends Configuration implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 	public String defaultApplication = null;
