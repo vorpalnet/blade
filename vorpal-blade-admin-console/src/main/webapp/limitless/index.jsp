@@ -8,7 +8,7 @@ Set<String> apps = ConfigurationMonitor.queryApps();
 for (String app : apps) {
 	System.out.println("Running app: " + app);
 
-	appsHtml.append("<li class=\"nav-item\"><a href=\"../json/index.jsp?app=" + app
+	appsHtml.append("<li class=\"nav-item\"><a href=\"../json/index.jsp?configType=Domain&app=" + app
 	+ "\" class=\"nav-link\" target=\"content_iframe\">" + app + "</a></li>\n");
 
 }
@@ -58,7 +58,7 @@ for (String app : apps) {
 		</div>
 
 		<div class="navbar-brand text-center text-lg-left">
-			<a href="index.html" class="d-inline-block"> <img
+			<a href="index.jsp" class="d-inline-block"> <img
 				src="global_assets/images/logo_light.png" class="d-none d-sm-block"
 				alt=""> <img src="global_assets/images/logo_icon_light.png"
 				class="d-sm-none" alt="">
@@ -285,7 +285,7 @@ for (String app : apps) {
 							<ul class="nav nav-group-sub" data-submenu-title="Tools">
 								<li class="nav-item"><a href="../mxgraph/index.html"
 									class="nav-link" target="content_iframe">FSMAR</a></li>
-								<li class="nav-item"><a href="../json/index.jsp?app=b2bua"
+								<li class="nav-item"><a href="../json/index.jsp?configType=Domian&app=b2bua"
 									class="nav-link" target="content_iframe">Configurator</a></li>
 								<li class="nav-item"><a href="../easyui/index.html"
 									class="nav-link" target="content_iframe">Media Tester</a></li>

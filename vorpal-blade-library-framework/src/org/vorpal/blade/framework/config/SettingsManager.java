@@ -122,7 +122,7 @@ public class SettingsManager<T> {
 	protected JsonNode mergedNode = NullNode.getInstance();
 
 	public SettingsManager() {
-		System.out.println("SettingsManager() invoked...");
+
 	}
 
 	public SettingsManager(String name, Class<T> clazz, ObjectMapper mapper) {
@@ -136,7 +136,15 @@ public class SettingsManager<T> {
 
 	public SettingsManager(String name, Class<T> clazz, T sample) {
 		this.sample = sample;
+
 		this.build(name, clazz, null);
+
+		try {
+			this.saveConfigFile(sample);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
@@ -300,12 +308,20 @@ public class SettingsManager<T> {
 			} else {
 				objectName = new ObjectName("vorpal.blade:Name=" + servletContextName + ",Type=Configuration");
 			}
+
 			register();
 
 			settings.reload();
+
 			this.current = (T) settings.getConfiguration();
-			
-			this.logCurrent();
+
+			if (current != null) {
+				this.saveSchema(current);
+			} else {
+				if (sample != null) {
+					this.saveSchema(sample);
+				}
+			}
 
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);

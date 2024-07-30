@@ -26,6 +26,8 @@ package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
 
+import org.vorpal.blade.framework.logging.LogParametersDefault;
+
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,6 +42,7 @@ public class AppRouterConfigurationSample extends AppRouterConfiguration impleme
 	 * Creates a default configuration used to generate the FSMAR2.SAMPLE file.
 	 */
 	public AppRouterConfigurationSample() {
+		this.logging = new LogParametersDefault();
 
 		this.setDefaultApplication("b2bua");
 
