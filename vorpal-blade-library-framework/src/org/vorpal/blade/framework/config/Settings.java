@@ -48,6 +48,7 @@ public class Settings<T> implements SettingsMXBean {
 	private Logger sipLogger;
 	private Class<T> clazz;
 	private T config;
+	private T sampleConfig;
 
 	private ObjectMapper objectMapper;
 	private SettingsManager<T> settingsManager;
@@ -61,7 +62,10 @@ public class Settings<T> implements SettingsMXBean {
 
 	private BufferedWriter bufferedWriter;
 
-	public Settings(Class<T> clazz, SettingsManager<T> settingsManager, String configName, ObjectMapper objectMapper) {
+	public Settings(Class<T> clazz, SettingsManager<T> settingsManager, String configName, ObjectMapper objectMapper,
+			T sampleConfig) {
+
+		this.sampleConfig = sampleConfig;
 
 		this.sipLogger = SettingsManager.getSipLogger();
 
@@ -124,7 +128,7 @@ public class Settings<T> implements SettingsMXBean {
 	}
 
 	@Override
-	public void write(String line){
+	public void write(String line) {
 		try {
 			bufferedWriter.write(line);
 		} catch (Exception e) {
@@ -135,6 +139,7 @@ public class Settings<T> implements SettingsMXBean {
 	@Override
 	public void reload() {
 		sipLogger.info("reloading configuration files...");
+		boolean useSampleConfig = true;
 
 		try {
 
@@ -142,20 +147,36 @@ public class Settings<T> implements SettingsMXBean {
 
 			File domainFile = domain.toFile();
 			if (domainFile.exists()) {
+				useSampleConfig = false;
 				jsonNode = objectMapper.readTree(domainFile);
 			}
 
 			File clusterFile = cluster.toFile();
 			if (clusterFile.exists()) {
+				useSampleConfig = false;
 				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(clusterFile));
 			}
 
 			File serverFile = server.toFile();
 			if (serverFile.exists()) {
+				useSampleConfig = false;
 				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(serverFile));
 			}
 
-			config = (T) objectMapper.convertValue(jsonNode, clazz);
+			if (useSampleConfig) {
+
+				if (this.sampleConfig != null) {
+					sipLogger.warning("Using sample configuration.");
+					config = this.sampleConfig;
+				} else {
+					sipLogger.warning("Using default configuration.");
+					config = clazz.newInstance();
+					this.settingsManager.saveConfigFile(config);
+				}
+
+			} else {
+				config = (T) objectMapper.convertValue(jsonNode, clazz);
+			}
 
 			if (config instanceof Configuration) {
 				Configuration cfg = (Configuration) config;
