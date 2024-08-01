@@ -136,15 +136,7 @@ public class SettingsManager<T> {
 
 	public SettingsManager(String name, Class<T> clazz, T sample) {
 		this.sample = sample;
-
 		this.build(name, clazz, null);
-
-		try {
-			this.saveConfigFile(sample);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
@@ -234,8 +226,12 @@ public class SettingsManager<T> {
 			Files.createDirectories(domainPath);
 			schemaPath = Paths.get(configPath + "_schemas/");
 			Files.createDirectories(schemaPath);
+
+			System.out.println("Setting samplePath...");
 			samplePath = Paths.get(configPath + "_samples/");
 			Files.createDirectories(samplePath);
+			System.out.println("samplePath=" + samplePath.toString());
+
 			server = ManagementFactory.getPlatformMBeanServer();
 			serverName = System.getProperty("weblogic.Name");
 			serverPath = Paths.get(configPath + "_servers/" + serverName);
@@ -317,13 +313,16 @@ public class SettingsManager<T> {
 
 			if (current != null) {
 				this.saveSchema(current);
+			}
+
+			if (sample != null) {
+				this.saveConfigFile(sample);
 			} else {
-				if (sample != null) {
-					this.saveSchema(sample);
-				}
+				this.saveConfigFile(current);
 			}
 
 		} catch (Exception e) {
+			e.printStackTrace();
 			sipLogger.logStackTrace(e);
 		}
 
@@ -366,8 +365,17 @@ public class SettingsManager<T> {
 	}
 
 	public void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
-		File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");
-		mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
+		
+		System.out.println("saveConfigFile... jwm-test #1");
+		
+		if (t != null) {
+			File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");
+			mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
+		} else {
+			System.out.println("Sample config file is null!");
+			throw new JsonGenerationException("Sample config file is null!");
+		}
+
 	}
 
 	/**

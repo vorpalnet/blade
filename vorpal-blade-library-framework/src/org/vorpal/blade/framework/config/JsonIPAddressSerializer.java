@@ -19,22 +19,20 @@ public class JsonIPAddressSerializer extends StdSerializer<IPAddress> {
 	public JsonIPAddressSerializer() {
 		this(null);
 	}
-	
+
 	protected JsonIPAddressSerializer(Class<IPAddress> t) {
 		super(t);
 	}
 
 	@Override
-	public void serialize(IPAddress ipAddress, JsonGenerator generator, SerializerProvider provider) throws IOException {
+	public void serialize(IPAddress ipAddress, JsonGenerator generator, SerializerProvider provider)
+			throws IOException {
 		generator.writeString(ipAddress.toString());
 	}
-	
+
 	@Override
 	public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint)
 			throws JsonMappingException {
-		
-		System.out.println("calling... "+this.getClass().getName() + ".acceptJsonFormatVisitor()");
-
 	}
 
 }
