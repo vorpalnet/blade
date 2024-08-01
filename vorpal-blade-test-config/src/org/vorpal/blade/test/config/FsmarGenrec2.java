@@ -20,8 +20,12 @@ public class FsmarGenrec2 extends AppRouterConfiguration {
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
 		this.getPrevious("null").getTrigger("REFER").createTransition("transfer");
 
-		this.getPrevious("null").getTrigger("INVITE").createTransition("genrec2");
-		this.getPrevious("genrec2").getTrigger("INVITE").createTransition("proxy-registrar");
+//		this.getPrevious("null").getTrigger("INVITE").createTransition("genrec2");
+//		this.getPrevious("genrec2").getTrigger("INVITE").createTransition("proxy-registrar");
+		
+		this.getPrevious("null").getTrigger("INVITE").createTransition("genrec2").addComparison("From", "user", "01983217113");
+		
+		
 
 	}
 
