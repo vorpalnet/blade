@@ -226,7 +226,7 @@ public class SettingsManager<T> {
 			AsyncSipServlet.setSipLogger(sipLogger);
 			Callflow.setLogger(sipLogger);
 
-			settings = new Settings<T>(clazz, this, name, mapper);
+			settings = new Settings<T>(clazz, this, name, mapper, sample);
 
 			// Get the managed server & cluster names
 			String configPath = "config/custom/vorpal/";
