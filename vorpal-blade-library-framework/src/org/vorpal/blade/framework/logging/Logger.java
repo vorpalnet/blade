@@ -143,17 +143,27 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	public void logConfiguration(Object config) {
 		try {
-			if (this.isLoggable(configurationLoggingLevel)) {
 
-				ObjectMapper mapper = new ObjectMapper();
-				mapper.setSerializationInclusion(Include.NON_NULL);
-				mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+			if (config != null) {
 
-				StringWriter sw = new StringWriter();
-				PrintWriter pw = new PrintWriter(sw);
-				mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);
+				if (this.isLoggable(configurationLoggingLevel)) {
 
-				this.log(this.configurationLoggingLevel, config.getClass().getSimpleName() + "=" + sw.toString());
+					ObjectMapper mapper = new ObjectMapper();
+					mapper.setSerializationInclusion(Include.NON_NULL);
+					mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+
+					StringWriter sw = new StringWriter();
+					PrintWriter pw = new PrintWriter(sw);
+					mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);
+
+					if (this.configurationLoggingLevel != null) {
+						this.log(this.configurationLoggingLevel,
+								config.getClass().getSimpleName() + "=" + sw.toString());
+					} else {
+						this.log(Level.FINE, config.getClass().getSimpleName() + "=" + sw.toString());
+					}
+
+				}
 			}
 
 		} catch (IOException e) {
