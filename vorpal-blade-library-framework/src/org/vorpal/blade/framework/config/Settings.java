@@ -170,8 +170,7 @@ public class Settings<T> implements SettingsMXBean {
 					config = this.sampleConfig;
 				} else {
 					sipLogger.warning("Using default configuration.");
-					config = clazz.newInstance();
-					this.settingsManager.saveConfigFile(config);
+					config = clazz.getDeclaredConstructor().newInstance();
 				}
 
 			} else {
