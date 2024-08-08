@@ -344,7 +344,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	}
 
-	public static String from(SipServletMessage msg) throws ServletParseException {
+	public static String from(SipServletMessage msg) {
 		String name = null;
 		SipURI uri = (SipURI) msg.getFrom().getURI();
 		name = uri.getUser();
@@ -356,7 +356,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return name;
 	}
 
-	public static String to(SipServletMessage msg) throws ServletParseException {
+	public static String to(SipServletMessage msg) {
 		String name = null;
 		SipURI uri = (SipURI) msg.getTo().getURI();
 		name = uri.getUser();
@@ -439,11 +439,20 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		StringBuilder strBuilder = new StringBuilder();
 		strBuilder.append(((SipURI) uri).getScheme());
 		strBuilder.append(":");
-		strBuilder.append(((SipURI) uri).getUser());
-		strBuilder.append("@");
+
+		String user = ((SipURI) uri).getUser();
+		if (user != null) {
+			strBuilder.append(user);
+			strBuilder.append("@");
+		}
+
 		strBuilder.append(((SipURI) uri).getHost());
-		strBuilder.append(":");
-		strBuilder.append(((SipURI) uri).getPort());
+
+		int port = ((SipURI) uri).getPort();
+		if (port > 0) {
+			strBuilder.append(":");
+			strBuilder.append(Integer.toString(port));
+		}
 		return strBuilder.toString();
 	}
 
@@ -459,8 +468,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //#7                                    [BigLonedCall]-----------INVITE-->[255.255.255.255]   ; SDP
 //#8                                    [BigLon*amedCall]-----------200-->[255.255.255.255]   ; OK (INVITE)
 
-	public void superArrow(Direction direction, SipServletRequest request, SipServletResponse response, String name)
-			throws ServletParseException {
+	public void superArrow(Direction direction, SipServletRequest request, SipServletResponse response, String name) {
 
 		try {
 			boolean leftSide = false;
@@ -495,7 +503,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void superArrow(Direction direction, boolean leftSide, SipServletRequest request,
-			SipServletResponse response, String name, String user) throws ServletParseException {
+			SipServletResponse response, String name, String user) {
 
 		if (request == null && response == null) {
 			// Has to be one or the other, never both
@@ -805,7 +813,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		} catch (Exception ex) {
 
 			if (request != null) {
-				this.fine(request, "Logging error, set logging to FINEST to see stack trace.");
+				this.warning(request, ex.getMessage());
+				this.warning(request, "Logging error, set logging to FINEST to see stack trace.");
 				if (this.isLoggable(Level.FINEST)) {
 					try {
 						throw new Exception("Logging error");
@@ -814,6 +823,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					}
 				}
 			} else {
+				this.warning(response, ex.getMessage());
 				this.fine(response, "Logging error, set logging to FINEST to see stack trace.");
 				if (this.isLoggable(Level.FINEST)) {
 					try {
