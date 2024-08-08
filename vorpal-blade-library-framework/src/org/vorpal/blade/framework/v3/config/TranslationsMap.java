@@ -74,18 +74,6 @@ public abstract class TranslationsMap<T> {
 
 			if (translation != null) {
 
-				if (translation.getRequestUri() != null) {
-					strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
-					uri = SettingsManager.getSipFactory().createURI(strRequestUri);
-
-					// copy all SIP URI parameters (if not present in new request uri)
-					for (String name : request.getRequestURI().getParameterNameSet()) {
-						if (uri.getParameter(name) == null) {
-							uri.setParameter(name, uri.getParameter(name));
-						}
-					}
-				}
-
 				// now check for additional translations
 				if (translation.getList() != null) {
 					Translation<T> t = null;
