@@ -441,17 +441,25 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public static String createVorpalDialogId(SipSession sipSession) {
-		String dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
-		sipSession.setAttribute("X-Vorpal-Dialog", dialog);
+		String dialog = null;
+
+		try {
+			dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
+			sipSession.setAttribute("X-Vorpal-Dialog", dialog);
+		} catch (Exception e) {
+			// OU812;
+		}
+
 		return dialog;
 	}
 
 	public static String getVorpalDialogId(SipSession sipSession) {
 		String dialog = (String) sipSession.getAttribute("X-Vorpal-Dialog");
 
-//		if (dialog == null && sipSession.isValid() == true && sipSession.isReadyToInvalidate() == false) {
-//			dialog = createVorpalDialogId(sipSession);
-//		}
+		// jwm - When not using the full framework
+		if (dialog == null) {
+			dialog = createVorpalDialogId(sipSession);
+		}
 
 		return dialog;
 	}
