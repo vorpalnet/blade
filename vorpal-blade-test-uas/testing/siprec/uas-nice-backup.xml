@@ -43,7 +43,7 @@
   <send retrans="500">
     <![CDATA[
 
-      SIP/2.0 503 Service Unavailable
+      SIP/2.0 200 OK
       [last_Via:]
       [last_Record-Route:]
       [last_From:]
@@ -61,6 +61,7 @@
       t=0 0
       m=audio [media_port] RTP/AVP 0
       a=rtpmap:0 PCMU/8000
+      a=inactive
 
     ]]>
   </send>
