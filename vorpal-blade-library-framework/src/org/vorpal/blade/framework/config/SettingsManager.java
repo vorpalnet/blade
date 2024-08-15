@@ -222,11 +222,8 @@ public class SettingsManager<T> {
 	}
 
 	public void build(String name, Class<T> clazz, ObjectMapper _mapper) {
-
 		this.servletContextName = basename(name);
 		sipLogger = LogManager.getLogger(servletContextName);
-
-		System.out.println("SettingsManager.build Is sipLogger null? " + (sipLogger == null));
 
 		this.clazz = clazz;
 
@@ -382,7 +379,6 @@ public class SettingsManager<T> {
 		JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(mapper, config);
 		JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(t.getClass());
 		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
-		System.out.println("SettingsManager.saveSchema... " + schemaFile.getAbsolutePath());
 		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, jsonSchema);
 	}
 
@@ -390,10 +386,8 @@ public class SettingsManager<T> {
 
 		if (t != null) {
 			File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");
-			System.out.println("SettingsManager.saveConfigFile... " + configFile.getAbsolutePath());
 			mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, t);
 		} else {
-			System.out.println("Sample config file is null! How did this happen!?");
 			throw new IOException("Sample config file is null! How did this happen!?");
 		}
 
