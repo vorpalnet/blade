@@ -27,10 +27,12 @@ package org.vorpal.blade.framework.callflow;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 import javax.servlet.ServletException;
@@ -576,85 +578,115 @@ public abstract class Callflow implements Serializable {
 
 	}
 
-//	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
-//			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
-//
-//		if (requests.size() > 0) {
-//			SipServletRequest request = requests.remove(0);
-//
-//			SipServletResponse dummyResponse = request.createResponse(408);
-//
-//			String timerId = scheduleTimerInMilliseconds(request.getApplicationSession(), milliseconds, (timeout) -> {
-//
-//				sendRequest(request.createCancel());
-//
-//				sendRequestsInSerial(milliseconds, requests, lambdaFunction);
-//			});
-//
-//			sendRequest(request, (response) -> {
-//
-//				cancelTimer(response.getApplicationSession(), timerId);
-//
-//				if (!failure(response)) {
-//					lambdaFunction.accept(response);
-//				} else {
-//					if (requests.size() == 0) {
-//						// no more attempts, create a dummy response
-//						lambdaFunction.accept(dummyResponse);
-//					} else {
-//						sendRequestsInSerial(milliseconds, requests, lambdaFunction);
-//					}
-//				}
-//
-//			});
-//		} else {
-//			sipLogger.severe("Callflow.sendRequestsInSerial... Empty request list.");
-//		}
-//
-//	}
-
 	/**
 	 * Sends multiple requests (INVITE) in parallel.
 	 * 
-	 * @param milliseconds   timer duration in milliseconds for all requests
 	 * @param requests       a list of SipServletRequest objects
 	 * @param lambdaFunction supplies a SipServletResponse object
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public void sendRequestsInParallel(long milliseconds, List<SipServletRequest> requests,
+	public void sendRequestsInParallel(List<SipServletRequest> requests, Callback<SipServletResponse> lambdaFunction)
+			throws ServletException, IOException {
+		sendRequestsInParallel(0, requests, lambdaFunction);
+	}
+
+	/**
+	 * Sends multiple requests (INVITE) in parallel, with a timeout.
+	 * 
+	 * @param timeout        timer duration in milliseconds for all requests
+	 * @param requests       a list of SipServletRequest objects
+	 * @param lambdaFunction supplies a SipServletResponse object
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public void sendRequestsInParallel(long timeout, List<SipServletRequest> requests,
 			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
 
-		SipApplicationSession appSession = requests.get(0).getApplicationSession();
+		// Save requests in appSession memory.
+		// Use a unique identifier to prevent simultaneous invocations of
+		// 'sendRequests' from clobbering each other.
 
-		String timerId = schedulePeriodicTimerInMilliseconds(appSession, milliseconds, (timeout) -> {
-			// all requests timed out, time to cancel them
-			for (SipServletRequest request : requests) {
-				if (false == request.isCommitted()) {
-					sendRequest(request.createCancel());
-				}
-			}
+		SipServletRequest firstRequest = requests.iterator().next();
+		SipApplicationSession appSession = firstRequest.getApplicationSession();
 
-			// give the user a dummy response
-			lambdaFunction.accept(requests.get(0).createResponse(408));
-		});
+		String id = "SEND_REQUESTS_" + Math.abs(ThreadLocalRandom.current().nextInt());
 
+		// create a hash map for outstanding requests, use the SipSession id as the key
+		Map<String, SipServletRequest> requestMap = new HashMap<>();
 		for (SipServletRequest request : requests) {
-			sendRequest(request, (response) -> {
+			requestMap.put(request.getSession().getId(), request);
+		}
 
-				// cancel that pesky timer
-				this.cancelTimer(appSession, timerId);
+		appSession.setAttribute(id, requestMap);
 
-				// cancel the outstanding requests
-				for (SipServletRequest outstandingRequest : requests) {
-					if (outstandingRequest != request) {
-						request.getSession().removeAttribute("RESPONSE_CALLBACK_INVITE");
-						sendRequest(outstandingRequest.createCancel());
+		// create a timer for canceling requests, if needed
+		// using a little syntactical magic for lambda expressions
+		final String timerId = (timeout > 0) ? startTimer(appSession, timeout, false, (timer) -> {
+			// get the requests from appSession memory
+			@SuppressWarnings("unchecked")
+			Map<String, SipServletRequest> savedRequests = (Map<String, SipServletRequest>) appSession.getAttribute(id);
+
+			if (savedRequests != null && false == savedRequests.isEmpty()) {
+				appSession.removeAttribute(id);
+
+				// cancel outstanding messages
+				for (SipServletRequest rqst : savedRequests.values()) {
+					try {
+						sendRequest(rqst.createCancel());
+					} catch (Exception e) {
+						// do nothing;
 					}
 				}
 
-				// give the response to the user
-				lambdaFunction.accept(response);
+				// create a dummy response and give it to the user
+				lambdaFunction.accept(firstRequest.createResponse(408));
+			}
+		}) : null;
+
+		// Now send all the requests
+		for (SipServletRequest request : requests) {
+
+			sendRequest(request, (response) -> {
+
+				if (!provisional(response)) {
+
+					// get the requests saved in the appSession. It is the only reliable source.
+					@SuppressWarnings("unchecked")
+					Map<String, SipServletRequest> savedRequests = (Map<String, SipServletRequest>) appSession
+							.getAttribute(id);
+
+					if (successful(response)) {
+						stopTimer(appSession, timerId);
+						appSession.removeAttribute(id);
+
+						// cancel outstanding messages
+						for (SipServletRequest rqst : savedRequests.values()) {
+							try {
+								sendRequest(rqst.createCancel());
+							} catch (Exception e) {
+								// do nothing;
+							}
+						}
+
+						// give the successful response to the user
+						lambdaFunction.accept(response);
+					} else {
+
+						if (savedRequests.isEmpty()) {
+							stopTimer(appSession, timerId);
+
+							// give the error response to the user
+							lambdaFunction.accept(response);
+						} else {
+							// save the outstanding requests and await for future responses
+							appSession.setAttribute(id, savedRequests);
+						}
+
+					}
+
+				}
+
 			});
 		}
 
