@@ -33,7 +33,7 @@ public class OptionsSettings implements Serializable {
 	private String acceptLanguage = "en";
 	private String allow = "INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, PRACK, SUBSCRIBE, NOTIFY, PUBLISH, INFO, REFER, MESSAGE, UPDATE";
 	private String supported = "replaces";
-	private String userAgent = "OCCAS 7.1";
+	private String userAgent = "OCCAS";
 	private String allowEvents = "talk, hold";
 
 	public String getAllow() {
