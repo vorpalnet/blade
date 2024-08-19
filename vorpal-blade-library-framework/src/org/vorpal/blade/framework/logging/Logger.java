@@ -404,40 +404,38 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	public String shorten(String _value, int length) {
 
-// this is a bad concept		
-//		String value = null;
-//		int dollarIndex = _value.indexOf('$');
-//
-//		if (dollarIndex >= 0) {
-//			value = _value.substring(0, dollarIndex);
-//		} else {
-//			value = _value;
-//		}
-//
-//		StringBuilder sb = new StringBuilder();
-//
-//		if (length >= 2) {
-//			length = length - 2;
-//		}
-//
-//		if (value.length() <= length) {
-//			sb.append("[").append(value).append("]");
-//		} else {
-//
-//			String name = value.substring(0, length);
-//			sb.append("[");
-//			sb.append(name);
-//			sb.append("]");
-//		}
-//
-//		return sb.toString();
+		String value = null;
+		int dollarIndex = _value.indexOf('$');
 
-		return _value;
+		if (dollarIndex >= 0) {
+			value = _value.substring(0, dollarIndex);
+		} else {
+			value = _value;
+		}
 
+		StringBuilder sb = new StringBuilder();
+
+		if (length >= 2) {
+			length = length - 2;
+		}
+
+		if (value.length() <= length) {
+			sb.append("[").append(value).append("]");
+		} else {
+
+			String name = value.substring(0, length);
+			sb.append("[");
+			sb.append(name);
+			sb.append("]");
+		}
+
+		return sb.toString();
 	}
 
 	public static String minimum(Address address) {
-		return minimum(address.getURI());
+//		return minimum(address.getURI());
+		return address.toString();
+
 	}
 
 	public static String minimum(URI uri) {
