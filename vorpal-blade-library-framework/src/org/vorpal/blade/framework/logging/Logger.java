@@ -432,33 +432,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return sb.toString();
 	}
 
-	public static String minimum(Address address) {
-//		return minimum(address.getURI());
-		return address.toString();
-
-	}
-
-	public static String minimum(URI uri) {
-		StringBuilder strBuilder = new StringBuilder();
-		strBuilder.append(((SipURI) uri).getScheme());
-		strBuilder.append(":");
-
-		String user = ((SipURI) uri).getUser();
-		if (user != null) {
-			strBuilder.append(user);
-			strBuilder.append("@");
-		}
-
-		strBuilder.append(((SipURI) uri).getHost());
-
-		int port = ((SipURI) uri).getPort();
-		if (port > 0) {
-			strBuilder.append(":");
-			strBuilder.append(Integer.toString(port));
-		}
-		return strBuilder.toString();
-	}
-
 //    |-------17------||-------17------||-------17------||-------17------||-------17------||-------17------|
 //    0                   10                  20                  30                  40                  50		
 //    012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890  
@@ -542,9 +515,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							if (request.getMethod().equals("INVITE")) {
 								if (request.isInitial()) {
-									note = minimum(request.getRequestURI());
+									note = request.getRequestURI().toString();
 								} else {
-									note = "To: " + minimum(request.getTo());
+									note = "To: " + request.getTo();
 								}
 							}
 
@@ -560,7 +533,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							}
 
 							else if (request.getMethod().equals("REFER")) {
-								note = "Refer-To: " + minimum(request.getAddressHeader("Refer-To"));
+								note = "Refer-To: " + request.getAddressHeader("Refer-To");
 							} else if (request.getMethod().equals("REGISTER")) {
 								String expires = request.getHeader("Expires");
 								if (expires == null) {
@@ -622,9 +595,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 									note += new String((byte[]) request.getContent());
 								}
 							} else if (request.getMethod().equals("REFER")) {
-								note = "Refer-To: " + minimum(request.getAddressHeader("Refer-To"));
+								note = "Refer-To: " + request.getAddressHeader("Refer-To");
 							} else if (request.getMethod().equals("INVITE")) {
-								note = "From: " + minimum(request.getFrom());
+								note = "From: " + request.getFrom();
 							}
 
 							note = note.trim();
@@ -675,9 +648,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							if (request.getMethod().equals("INVITE")) {
 								if (request.isInitial()) {
-									note = minimum(request.getRequestURI());
+									note = request.getRequestURI().toString();
 								} else {
-									note = "To: " + minimum(request.getTo());
+									note = "To: " + request.getTo();
 								}
 							}
 
@@ -693,7 +666,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							}
 
 							else if (request.getMethod().equals("REFER")) {
-								note = "Refer-To: " + minimum(request.getAddressHeader("Refer-To"));
+								note = "Refer-To: " + request.getAddressHeader("Refer-To");
 							}
 
 							note = note.trim();
@@ -745,9 +718,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							if (request.getMethod().equals("INVITE")) {
 								if (request.isInitial()) {
-									note = minimum(request.getRequestURI());
+									note = request.getRequestURI().toString();
 								} else {
-									note = "From: " + minimum(request.getFrom());
+									note = "From: " + request.getFrom();
 								}
 							} else if (request.getMethod().equals("NOTIFY")) {
 								note += "Event: " + request.getHeader("Event");
