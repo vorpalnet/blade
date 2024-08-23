@@ -673,14 +673,18 @@ public abstract class Callflow implements Serializable {
 						lambdaFunction.accept(response);
 					} else {
 
-						if (savedRequests.isEmpty()) {
-							stopTimer(appSession, timerId);
+						if (savedRequests != null) {
 
-							// give the error response to the user
-							lambdaFunction.accept(response);
-						} else {
-							// save the outstanding requests and await for future responses
-							appSession.setAttribute(id, savedRequests);
+							if (savedRequests.isEmpty()) {
+								stopTimer(appSession, timerId);
+
+								// give the error response to the user
+								lambdaFunction.accept(response);
+							} else {
+								// save the outstanding requests and await for future responses
+								appSession.setAttribute(id, savedRequests);
+							}
+
 						}
 
 					}
