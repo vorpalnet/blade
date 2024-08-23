@@ -714,7 +714,7 @@
 		<echo message="OCCAS=${OCCAS}" />
 		<echo message="BLADE=${BLADE}" />
 		<javac debug="${debug}" debuglevel="${debuglevel}" destdir="${classes}" includeantruntime="${includeantruntime}" release="${release}">
-			<compilerarg value="-proc:full" />
+			<!--compilerarg value="-proc:full" /-->
 			<src path="${src}" />
 			<src path=".apt_src" />
 			<classpath refid="project.classpath" />
