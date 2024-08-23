@@ -36,11 +36,13 @@ import javax.management.InstanceAlreadyExistsException;
 import javax.management.InstanceNotFoundException;
 import javax.management.MBeanRegistrationException;
 import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
+import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
@@ -125,21 +127,22 @@ public class SettingsManager<T> {
 
 	}
 
-	public SettingsManager(String name, Class<T> clazz, ObjectMapper mapper) {
+	public SettingsManager(String name, Class<T> clazz, ObjectMapper mapper) throws ServletException, IOException {
 		this.mapper = mapper;
 		this.build(name, clazz, mapper);
 	}
 
-	public SettingsManager(String name, Class<T> clazz) {
+	public SettingsManager(String name, Class<T> clazz) throws ServletException, IOException {
 		this.build(name, clazz, null);
 	}
 
-	public SettingsManager(String name, Class<T> clazz, T sample) {
+	public SettingsManager(String name, Class<T> clazz, T sample) throws ServletException, IOException {
 		this.sample = sample;
 		this.build(name, clazz, null);
 	}
 
-	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
+	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
+			throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 
@@ -147,7 +150,8 @@ public class SettingsManager<T> {
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, mapper);
 	}
 
-	public SettingsManager(ServletContextEvent event, Class<T> clazz, ObjectMapper mapper) {
+	public SettingsManager(ServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
+			throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 
@@ -155,26 +159,27 @@ public class SettingsManager<T> {
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, mapper);
 	}
 
-	public SettingsManager(SipServletContextEvent event, Class<T> clazz) {
+	public SettingsManager(SipServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
-	public SettingsManager(ServletContextEvent event, Class<T> clazz) {
+	public SettingsManager(ServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
-	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample) {
+	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample)
+			throws ServletException, IOException {
 		this.sample = sample;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
 	}
 
-	public SettingsManager(ServletContextEvent event, Class<T> clazz, T sample) {
+	public SettingsManager(ServletContextEvent event, Class<T> clazz, T sample) throws ServletException, IOException {
 		this.sample = sample;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
@@ -221,7 +226,7 @@ public class SettingsManager<T> {
 		clusterNode = mapper.readTree(clusterJson);
 	}
 
-	public void build(String name, Class<T> clazz, ObjectMapper _mapper) {
+	public void build(String name, Class<T> clazz, ObjectMapper _mapper) throws ServletException, IOException {
 		this.servletContextName = basename(name);
 		sipLogger = LogManager.getLogger(servletContextName);
 
@@ -340,8 +345,8 @@ public class SettingsManager<T> {
 			}
 
 		} catch (Exception e) {
-			e.printStackTrace();
-			sipLogger.logStackTrace(e);
+			sipLogger.severe(e);
+			throw new ServletException(e);
 		}
 
 	}
@@ -369,8 +374,12 @@ public class SettingsManager<T> {
 
 	}
 
-	public void unregister() throws MBeanRegistrationException, InstanceNotFoundException {
-		server.unregisterMBean(objectName);
+	public void unregister() throws ServletException, IOException {
+		try {
+			server.unregisterMBean(objectName);
+		} catch (Exception e) {
+			throw new IOException(e);
+		}
 	}
 
 	public void saveSchema(T t) throws JsonGenerationException, JsonMappingException, IOException {

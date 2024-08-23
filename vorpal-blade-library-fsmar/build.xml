@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-library-fsmar">
-	
+
 	<!-- Define unique locations first -->
 	<property name="src" location="./src" />
 	<property name="lib" location="../vorpal-blade-shared-libraries/target/vorpal-blade-shared-libraries/WEB-INF/lib" />
 
-	<!-- Load environment variables -->	
+	<!-- Load environment variables -->
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
@@ -14,16 +14,16 @@
 	<property file="../build.properties" />
 	<property file="version.properties" />
 	<property file="../version.properties" />
-	
+
 	<!-- Import default locations and tasks -->
 	<import file="../libraries.xml" />
-	
+
 	<target name="build" depends="init,compile,package">
 		<echo message="${ant.project.name} v${implementation}-b${build.number}" />
 	</target>
 
 	<target name="compile" depends="init">
-		<javac debug="true" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="false" source="${source}" target="${target}">
+		<javac debug="${debug}" debuglevel="${debuglevel}" destdir="build/classes" includeantruntime="${includeantruntime}" release="${release}">
 			<src path="src" />
 			<src path="../vorpal-blade-library-framework/src" />
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />

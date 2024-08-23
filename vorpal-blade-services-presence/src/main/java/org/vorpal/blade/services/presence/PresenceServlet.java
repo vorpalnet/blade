@@ -2,6 +2,8 @@ package org.vorpal.blade.services.presence;
 
 import java.io.IOException;
 
+import javax.management.InstanceNotFoundException;
+import javax.management.MBeanRegistrationException;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
@@ -25,13 +27,14 @@ public class PresenceServlet extends AsyncSipServlet {
 	}
 
 	@Override
-	protected void servletCreated(SipServletContextEvent event) {
+	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		settingsManager = new SettingsManager<>(event, PresenceSettings.class);
 	}
 
 	@Override
-	protected void servletDestroyed(SipServletContextEvent event) {
+	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		// TODO Auto-generated method stub
+		settingsManager.unregister();
 
 	}
 

@@ -59,7 +59,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 	}
 
 	@Override
-	protected void servletCreated(SipServletContextEvent event) {
+	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 
 		settingsManager = new SettingsManager<ProxyRegistrarSettings>(event, ProxyRegistrarSettings.class,
 				new ProxyRegistrarSettingsDefault());
@@ -68,7 +68,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 	}
 
 	@Override
-	protected void servletDestroyed(SipServletContextEvent event) {
+	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		sipLogger.finer("servletDestroyed... ");
 	}
 

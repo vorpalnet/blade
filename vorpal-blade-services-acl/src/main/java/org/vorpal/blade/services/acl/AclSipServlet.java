@@ -120,11 +120,18 @@ public class AclSipServlet extends SipServlet implements SipServletListener {
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
 
-		sipLogger = LogManager.getLogger(event.getServletContext());
-		Callflow.setLogger(sipLogger);
+		try {
 
-		configManager = new AclConfigManager(event);
-		sipLogger.logConfiguration(configManager.getCurrent());
+			sipLogger = LogManager.getLogger(event.getServletContext());
+			Callflow.setLogger(sipLogger);
+
+			configManager = new AclConfigManager(event);
+			sipLogger.logConfiguration(configManager.getCurrent());
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			sipLogger.severe(e);
+		}
 
 	}
 
