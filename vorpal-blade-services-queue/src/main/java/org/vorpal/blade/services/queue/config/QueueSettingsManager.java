@@ -1,12 +1,12 @@
 package org.vorpal.blade.services.queue.config;
 
-import java.util.HashMap;
+import java.io.IOException;
 
+import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletContextEvent;
 
 import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.services.queue.Queue;
-import org.vorpal.blade.services.queue.QueueCallflow;
 import org.vorpal.blade.services.queue.QueueServlet;
 
 /**
@@ -26,7 +26,7 @@ public class QueueSettingsManager extends SettingsManager<QueueConfig> {
 	 * @param event
 	 * @param sample
 	 */
-	public QueueSettingsManager(SipServletContextEvent event, QueueConfig sample) {
+	public QueueSettingsManager(SipServletContextEvent event, QueueConfig sample) throws ServletException, IOException{
 		super(event, QueueConfig.class, sample);
 	}
 

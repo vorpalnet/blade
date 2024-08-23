@@ -59,12 +59,12 @@ public class OptionsSipServlet extends AsyncSipServlet {
 	}
 
 	@Override
-	protected void servletCreated(SipServletContextEvent event) {
+	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		settingsManager = new SettingsManager<>(event, OptionsSettings.class);
 	}
 
 	@Override
-	protected void servletDestroyed(SipServletContextEvent event) {
+	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		// do nothing;
 	}
 

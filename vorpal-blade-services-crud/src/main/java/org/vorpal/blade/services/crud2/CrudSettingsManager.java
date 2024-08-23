@@ -1,5 +1,8 @@
 package org.vorpal.blade.services.crud2;
 
+import java.io.IOException;
+
+import javax.servlet.ServletException;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletContextEvent;
 
@@ -10,7 +13,8 @@ public class CrudSettingsManager extends SettingsManager<CrudConfiguration> {
 
 	public RuleSet rules;
 
-	public CrudSettingsManager(SipServletContextEvent event, Class<CrudConfiguration> clazz, CrudConfiguration sample) {
+	public CrudSettingsManager(SipServletContextEvent event, Class<CrudConfiguration> clazz, CrudConfiguration sample)
+			throws ServletException, IOException {
 		super(event, clazz, sample);
 	}
 

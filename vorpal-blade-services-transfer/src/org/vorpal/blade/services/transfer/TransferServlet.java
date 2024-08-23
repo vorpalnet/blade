@@ -90,7 +90,7 @@ public class TransferServlet extends B2buaServlet //
 	}
 
 	@Override
-	protected void servletCreated(SipServletContextEvent event) {
+	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException{
 		settingsManager = new SettingsManager<>(event, TransferSettings.class, new TransferSettingsSample());
 		sipLogger.info("servletCreated...");
 	}

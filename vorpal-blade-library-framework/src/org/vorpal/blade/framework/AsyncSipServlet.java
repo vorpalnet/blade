@@ -1,6 +1,7 @@
 package org.vorpal.blade.framework;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Set;
@@ -15,7 +16,6 @@ import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletListener;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
@@ -23,7 +23,6 @@ import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerListener;
 import javax.servlet.sip.TimerService;
-import javax.servlet.sip.TooManyHopsException;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.callflow.Callback;
@@ -96,6 +95,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		Callflow.setTimerService(timerService);
 
 		try {
+
 			servletCreated(event);
 			sipLogger = LogManager.getLogger(event);
 
@@ -105,13 +105,20 @@ public abstract class AsyncSipServlet extends SipServlet
 			String application = event.getServletContext().getServletContextName();
 			sipLogger.info(application + " compiled using " + title + " version " + version);
 
-		} catch (Exception e) {
+		} catch (ServletException se) {
 
 			if (null != sipLogger) {
-				sipLogger.logStackTrace(e);
-			} else {
-				e.printStackTrace();
+				sipLogger.severe(se);
 			}
+
+			throw new UncheckedIOException(new IOException(se));
+
+		} catch (IOException ioe) {
+			if (null != sipLogger) {
+				sipLogger.severe(ioe);
+			}
+
+			throw new UncheckedIOException(ioe);
 		}
 
 	}
@@ -148,9 +155,23 @@ public abstract class AsyncSipServlet extends SipServlet
 	@Override
 	final public void contextDestroyed(ServletContextEvent sce) {
 		try {
+
 			servletDestroyed(event);
-		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
+
+		} catch (ServletException se) {
+
+			if (null != sipLogger) {
+				sipLogger.severe(se);
+			}
+
+			throw new UncheckedIOException(new IOException(se));
+
+		} catch (IOException ioe) {
+			if (null != sipLogger) {
+				sipLogger.severe(ioe);
+			}
+
+			throw new UncheckedIOException(ioe);
 		}
 	}
 

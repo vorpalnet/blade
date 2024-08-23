@@ -28,30 +28,16 @@ public class ProxyBalancerServlet extends ProxyServlet {
 	private static final long serialVersionUID = 1L;
 	public static SettingsManager<ProxyBalancerConfig> settingsManager;
 	public static String servletContextName;
-	
-	
 
 	@Override
-	protected void servletCreated(SipServletContextEvent event) {
-		try {
-			
-			servletContextName = "sip:" + event.getServletContext().getServletContextName();
-			
-			
-			settingsManager = new SettingsManager<>(event, ProxyBalancerConfig.class, new ProxyBalancerConfigSample());
-
-		} catch (ServletParseException e) {
-			SettingsManager.sipLogger.logStackTrace(e);
-		}
+	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
+		servletContextName = "sip:" + event.getServletContext().getServletContextName();
+		settingsManager = new SettingsManager<>(event, ProxyBalancerConfig.class, new ProxyBalancerConfigSample());
 	}
 
 	@Override
-	protected void servletDestroyed(SipServletContextEvent event) {
-		try {
-			settingsManager.unregister();
-		} catch (MBeanRegistrationException | InstanceNotFoundException e) {
-			SettingsManager.sipLogger.logStackTrace(e);
-		}
+	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
+		settingsManager.unregister();
 	}
 
 	@Override

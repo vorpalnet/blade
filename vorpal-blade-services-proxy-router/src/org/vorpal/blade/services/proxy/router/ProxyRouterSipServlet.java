@@ -27,17 +27,13 @@ public class ProxyRouterSipServlet extends ProxyServlet {
 	public static SettingsManager<RouterConfig> settingsManager;
 
 	@Override
-	protected void servletCreated(SipServletContextEvent event) {
+	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		settingsManager = new SettingsManager<RouterConfig>(event, RouterConfig.class, new ProxyRouterConfigSample());
 	}
 
 	@Override
-	protected void servletDestroyed(SipServletContextEvent event) {
-		try {
-			settingsManager.unregister();
-		} catch (MBeanRegistrationException | InstanceNotFoundException e) {
-			e.printStackTrace();
-		}
+	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
+		settingsManager.unregister();
 	}
 
 	@Override

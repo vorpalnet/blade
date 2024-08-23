@@ -1,7 +1,9 @@
 package org.vorpal.blade.services.proxy.balancer;
 
+import java.io.IOException;
 import java.util.Map.Entry;
 
+import javax.servlet.ServletException;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipURI;
@@ -20,7 +22,8 @@ import org.vorpal.blade.framework.proxy.ProxyTier;
  */
 public class ProxyBalancerSettingsManager extends SettingsManager<ProxyBalancerConfig> {
 
-	public ProxyBalancerSettingsManager(SipServletContextEvent event, Class<ProxyBalancerConfig> clazz) {
+	public ProxyBalancerSettingsManager(SipServletContextEvent event, Class<ProxyBalancerConfig> clazz)
+			throws ServletException, IOException {
 		super(event, clazz);
 	}
 

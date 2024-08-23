@@ -53,7 +53,7 @@ import com.bea.wcp.sip.engine.server.SipServletMessageImpl;
 import com.bea.wcp.sip.engine.server.header.HeaderUtils;
 
 public class AppRouter implements SipApplicationRouter {
-	
+
 	protected static String FSMAR = "fsmar2";
 	public static Logger sipLogger;
 	private static SettingsManager<AppRouterConfiguration> settingsManager;
@@ -61,10 +61,18 @@ public class AppRouter implements SipApplicationRouter {
 
 	@Override
 	public void init() {
-		settingsManager = new SettingsManager<>(FSMAR, AppRouterConfiguration.class,
-				new AppRouterConfigurationSample());
-		sipLogger = SettingsManager.getSipLogger();
-		// sipLogger.logConfiguration(settingsManager.getCurrent());
+
+		try {
+			
+			settingsManager = new SettingsManager<>(FSMAR, AppRouterConfiguration.class,
+					new AppRouterConfigurationSample());
+			sipLogger = SettingsManager.getSipLogger();
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			sipLogger.severe(e);
+		}
+
 	}
 
 	@Override
