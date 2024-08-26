@@ -243,9 +243,8 @@ public abstract class AsyncSipServlet extends SipServlet
 //				String name = requestLambda.getClass().getSimpleName();
 //				String name = requestLambda.getClass().getSuperclass().getSimpleName();
 
-//				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, requestLambda.getClass().getSimpleName());
 				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null,
-						Callflow.superclass(requestLambda.getClass()));
+						requestLambda.getClass().getSimpleName());
 
 				requestLambda.accept(request);
 
@@ -294,8 +293,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					}
 				} else {
-//					sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
-					sipLogger.superArrow(Direction.RECEIVE, request, null, Callflow.superclass(callflow.getClass()));
+					sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
 					callflow.process(request);
 				}
 			}
@@ -394,13 +392,10 @@ public abstract class AsyncSipServlet extends SipServlet
 						}
 					}
 
+					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+							callback.getClass().getSimpleName());
 					if (callback != null) {
-						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-								Callflow.superclass(callback.getClass()));
 						callback.accept(response);
-					} else {
-						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-								this.getClass().getSimpleName());
 					}
 
 				} else {
@@ -568,8 +563,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
-//		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
-		Callflow.getLogger().superArrow(Direction.SEND, null, response, Callflow.superclass(this.getClass()));
+		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 		try {
 			response.send();
 		} catch (Exception e) {
