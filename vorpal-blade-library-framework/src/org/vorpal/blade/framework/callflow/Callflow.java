@@ -54,6 +54,7 @@ import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.AsyncSipServlet;
+import org.vorpal.blade.framework.DummyResponse;
 import org.vorpal.blade.framework.config.SessionParameters;
 import org.vorpal.blade.framework.logging.Logger;
 import org.vorpal.blade.framework.logging.Logger.Direction;
@@ -117,10 +118,10 @@ public abstract class Callflow implements Serializable {
 		return (response.getStatus() >= 400);
 	}
 
-	public static String superclass(Class _class) {
-		Class _superclass = _class;
-		return _superclass.getSimpleName();
-	}
+//	public static String superclass(Class _class) {
+//		Class _superclass = _class;
+//		return _superclass.getSimpleName();
+//	}
 
 //	public static String superclass(Class _class) {
 //		Class _superclass = _class;
@@ -509,10 +510,30 @@ public abstract class Callflow implements Serializable {
 			request.setHeader("X-Vorpal-Session", xvs);
 		}
 
-//		sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
-		sipLogger.superArrow(Direction.SEND, request, null, superclass(this.getClass()));
+		sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
-		request.send();
+		try {
+
+			request.send();
+
+		} catch (Exception e) {
+
+			// It's too maddening to write callflows where you have to worry about both
+			// error responses and exceptions. Let's create a dummy error response.
+			SipServletResponse errorResponse = new DummyResponse(request, 502);
+
+			Callback<SipServletResponse> callback = Callflow.pullCallback(errorResponse);
+
+			if (callback != null) {
+				Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
+						callback.getClass().getSimpleName());
+				callback.accept(errorResponse);
+			} else {
+				Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
+						this.getClass().getSimpleName());
+			}
+		}
+
 	}
 
 	/**
@@ -628,6 +649,7 @@ public abstract class Callflow implements Serializable {
 			Map<String, SipServletRequest> savedRequests = (Map<String, SipServletRequest>) appSession.getAttribute(id);
 
 			if (savedRequests != null && false == savedRequests.isEmpty()) {
+
 				appSession.removeAttribute(id);
 
 				// cancel outstanding messages
@@ -674,6 +696,8 @@ public abstract class Callflow implements Serializable {
 					} else {
 
 						if (savedRequests != null) {
+
+							savedRequests.remove(response.getSession().getId());
 
 							if (savedRequests.isEmpty()) {
 								stopTimer(appSession, timerId);
@@ -740,8 +764,7 @@ public abstract class Callflow implements Serializable {
 
 				if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
 
-//					sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
-					sipLogger.superArrow(Direction.SEND, null, response, superclass(this.getClass()));
+					sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
 					switch (response.getMethod()) {
 					case INVITE:
@@ -1292,9 +1315,7 @@ public abstract class Callflow implements Serializable {
 		proxy.startProxy();
 
 		for (ProxyBranch proxyBranch : proxy.getProxyBranches()) {
-//			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, this.getClass().getSimpleName(),
-//					null);
-			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, superclass(this.getClass()),
+			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, this.getClass().getSimpleName(),
 					null);
 		}
 
