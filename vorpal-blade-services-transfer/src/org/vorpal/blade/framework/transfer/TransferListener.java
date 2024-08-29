@@ -34,10 +34,19 @@ import javax.servlet.sip.SipServletResponse;
 public interface TransferListener extends Serializable {
 
 	/**
+	 * This method is invoked when a REFER request is received.
+	 * 
+	 * @param inboundRefer
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public void transferRequested(SipServletRequest inboundRefer) throws ServletException, IOException;
+
+	/**
 	 * This method is invoked by one of the Transfer callflows to indicate an INVITE
 	 * is being sent to the transfer target. You may modify the intended destination
 	 * of the INVITE by modifying the request URI or the 'To' header. To modify the
-	 * 'To' header, use a syntax similar to:
+	 * 'To' header, use a syntax similar to: <br/>
 	 * 
 	 * request.getAddressHeader("To").setURI(sipFactory.createURI("sip:target2@vorpal.net"));
 	 * 

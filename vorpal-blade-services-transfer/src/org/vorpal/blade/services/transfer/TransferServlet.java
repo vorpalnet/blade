@@ -1,14 +1,13 @@
 package org.vorpal.blade.services.transfer;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.jar.Manifest;
 import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipApplicationSessionEvent;
 import javax.servlet.sip.SipApplicationSessionListener;
@@ -18,6 +17,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionEvent;
 import javax.servlet.sip.SipSessionListener;
+import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.b2bua.Passthru;
@@ -90,7 +90,7 @@ public class TransferServlet extends B2buaServlet //
 	}
 
 	@Override
-	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException{
+	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		settingsManager = new SettingsManager<>(event, TransferSettings.class, new TransferSettingsSample());
 		sipLogger.info("servletCreated...");
 	}
@@ -184,9 +184,43 @@ public class TransferServlet extends B2buaServlet //
 	}
 
 	@Override
-	public void transferInitiated(SipServletRequest request) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
+		SipApplicationSession appSession = outboundRequest.getApplicationSession();
 
+		// save X-Original-DN to memory
+		URI xOriginalDN = outboundRequest.getTo().getURI();
+		appSession.setAttribute("X-Original-DN", xOriginalDN);
+		
+		// save X-Previous-DN to memory
+		URI xPreviousDN = outboundRequest.getRequestURI();
+		appSession.setAttribute("X-Previous-DN", xPreviousDN);
+		
+	}
+
+	@Override
+	public void transferRequested(SipServletRequest inboundRefer) throws ServletException, IOException {
+		SipApplicationSession appSession = inboundRefer.getApplicationSession();
+		
+		// save X-Previous-DN-Tmp for use later
+		URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
+		appSession.setAttribute("Refer-To", referTo);
+	}
+
+	@Override
+	public void transferInitiated(SipServletRequest outboundInvite) throws ServletException, IOException {
+		SipApplicationSession appSession = outboundInvite.getApplicationSession();
+
+		// Set Header X-Original-DN
+		Address xOriginalDN = (Address) appSession.getAttribute("X-Original-DN");
+		outboundInvite.setAddressHeader("X-Original-DN", xOriginalDN);
+
+		// Set Header X-Previous-DN
+		Address xPreviousDN = (Address) appSession.getAttribute("X-Previous-DN");
+		outboundInvite.setAddressHeader("X-Previous-DN", xPreviousDN);
+		
+		// now update X-Previous-DN for future use
+		URI referTo = (URI) appSession.getAttribute("Refer-To");
+		appSession.setAttribute("X-Previous-DN", referTo);
 	}
 
 	@Override
@@ -203,12 +237,6 @@ public class TransferServlet extends B2buaServlet //
 
 	@Override
 	public void transferAbandoned(SipServletRequest request) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
 		// TODO Auto-generated method stub
 
 	}
