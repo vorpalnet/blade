@@ -102,33 +102,36 @@ public class BlindTransfer extends Transfer {
 	}
 
 	@Override
-	public void process(SipServletRequest request) throws ServletException, IOException {
+	public void process(SipServletRequest referRequest) throws ServletException, IOException {
 		try {
 			// request is REFER from transferor (bob)
 			
-			createRequests(request);
+			transferListener.transferRequested(referRequest);
+			
+			
+			createRequests(referRequest);
 
 			// First copy any specified INVITE headers
-			SipServletRequest intialInvite = (SipServletRequest) request.getApplicationSession()
+			SipServletRequest intialInvite = (SipServletRequest) referRequest.getApplicationSession()
 					.getAttribute("INITIAL_INVITE");
 			if (intialInvite != null) {
 				preserveInviteHeaders(intialInvite, this.targetRequest);
 			}
 
 			// Second, copy any specified REFER headers (for this request)
-			preserveReferHeaders(request, this.targetRequest);
+			preserveReferHeaders(referRequest, this.targetRequest);
 
 			// Third, copy any specified REFER headers (for the original REFER which may or
 			// may not be the same thing as #2)
-			SipServletRequest intialRefer = (SipServletRequest) request.getApplicationSession()
+			SipServletRequest intialRefer = (SipServletRequest) referRequest.getApplicationSession()
 					.getAttribute("INITIAL_REFER");
 			if (intialRefer != null) {
 				preserveReferHeaders(intialRefer, this.targetRequest);
 			}
 
-			sendResponse(request.createResponse(202));
+			sendResponse(referRequest.createResponse(202));
 
-			SipServletRequest notify100 = request.getSession().createRequest(NOTIFY);
+			SipServletRequest notify100 = referRequest.getSession().createRequest(NOTIFY);
 			notify100.setHeader(EVENT, "refer");
 			notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=3600");
 			notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
@@ -168,7 +171,7 @@ public class BlindTransfer extends Transfer {
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
 								
 						// Send the SIP/2.0 200 OK to the transferor (bob)
-						SipServletRequest notify200 = request.getSession().createRequest(NOTIFY);
+						SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
 						notify200.setHeader(EVENT, "refer");
 						notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
 						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
@@ -185,10 +188,10 @@ public class BlindTransfer extends Transfer {
 					
 					if(targetResponse.getStatus()==487) {
 					sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
-						transferListener.transferAbandoned(request);
+						transferListener.transferAbandoned(referRequest);
 						
 						// Instead of sending the failure notice, we pretend everything is successful so Bob will hang up
-						SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
+						SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
 
 						String sipFrag = "SIP/2.0 200 OK";
 						notifyFailure.setHeader(EVENT, "refer");
@@ -210,7 +213,7 @@ public class BlindTransfer extends Transfer {
 						// If Alice hangs up, let some other callflow handle it
 						aliceExpectation.clear();
 
-						SipServletRequest notifyFailure = request.getSession().createRequest(NOTIFY);
+						SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
 						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
 						notifyFailure.setHeader(EVENT, "refer");
 						notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=rejected");
@@ -224,7 +227,7 @@ public class BlindTransfer extends Transfer {
 			});
 
 		} catch (Exception e) {
-			sipLogger.logStackTrace(request, e);
+			sipLogger.logStackTrace(referRequest, e);
 		}
 
 	}
