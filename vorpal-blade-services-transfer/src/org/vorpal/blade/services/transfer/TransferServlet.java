@@ -211,12 +211,12 @@ public class TransferServlet extends B2buaServlet //
 		SipApplicationSession appSession = outboundInvite.getApplicationSession();
 
 		// Set Header X-Original-DN
-		Address xOriginalDN = (Address) appSession.getAttribute("X-Original-DN");
-		outboundInvite.setAddressHeader("X-Original-DN", xOriginalDN);
+		URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
+		outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
 
 		// Set Header X-Previous-DN
-		Address xPreviousDN = (Address) appSession.getAttribute("X-Previous-DN");
-		outboundInvite.setAddressHeader("X-Previous-DN", xPreviousDN);
+		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
+		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
 		
 		// now update X-Previous-DN for future use
 		URI referTo = (URI) appSession.getAttribute("Refer-To");
