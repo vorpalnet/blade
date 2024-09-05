@@ -36,7 +36,7 @@
 	</path>
 
 	<path id="vorpal-blade.classpath">
-		<fileset dir="${BLADE}/vorpal-blade-shared-libraries/target/vorpal-blade-shared-libraries/WEB-INF/lib">
+		<fileset dir="${BLADE}/vorpal-blade-shared-libraries/target/dependency">
 			<include name="**/*.jar" />
 		</fileset>
 		<pathelement location="${BLADE}/dist/vorpal-blade-library-framework.jar" />
@@ -705,6 +705,7 @@
 
 	<target name="clean">
 		<delete dir="${build}" />
+		<delete dir="target" />
 	</target>
 
 	<target depends="clean" name="clean-all" />

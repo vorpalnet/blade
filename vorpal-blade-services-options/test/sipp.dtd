@@ -67,9 +67,32 @@
 <!ELEMENT CallLengthRepartition EMPTY >
 <!ATTLIST CallLengthRepartition value CDATA #REQUIRED >
 
+
 <!ELEMENT action ( add | assign | assignstr | closecon | divide | ereg | error | exec | gettimeofday | index | insert | jump | log | lookup | multiply | pauserestore | replace | rtp_echo | sample | setdest | strcmp | subtract | test | todouble | trim | urldecode | urlencode | verifyauth | warning )+ >
 
 <!-- BEGIN actions -->
+
+<!-- jwm added this to validate the DTD -->
+<!ELEMENT pauserestore EMPTY >
+<!ELEMENT setdest EMPTY >
+<!ELEMENT divide EMPTY >
+<!ELEMENT replace EMPTY >
+<!ELEMENT subtract EMPTY >
+<!ELEMENT todouble EMPTY >
+<!ELEMENT sample EMPTY >
+<!ELEMENT index EMPTY >
+<!ELEMENT lookup EMPTY >
+<!ELEMENT jump EMPTY >
+<!ELEMENT verifyauth EMPTY >
+<!ELEMENT trim EMPTY >
+<!ELEMENT add EMPTY >
+<!ELEMENT closecon EMPTY >
+<!ELEMENT assignstr EMPTY >
+<!ELEMENT gettimeofday EMPTY >
+<!ELEMENT multiply EMPTY >
+<!ELEMENT error EMPTY >
+<!ELEMENT insert EMPTY >
+
 
 <!ELEMENT ereg EMPTY >
 <!ATTLIST ereg assign_to CDATA #REQUIRED >

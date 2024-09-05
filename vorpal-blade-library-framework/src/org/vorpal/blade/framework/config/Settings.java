@@ -30,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 
 import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.callflow.Callflow;
@@ -88,6 +89,43 @@ public class Settings<T> implements SettingsMXBean {
 		}
 
 		return config;
+	}
+
+	@Override
+	public long getLastModified(String configType) {
+
+		long timestamp = 0;
+
+		try {
+			sipLogger.fine("Checking LastModified " + configType.toString() + " configuration...");
+
+			Path path = null;
+
+			switch (configType) {
+			case "DOMAIN":
+				path = domain;
+				break;
+			case "CLUSTER":
+				path = cluster;
+				break;
+			case "SERVER":
+				path = server;
+				break;
+			}
+
+			BasicFileAttributes attr = Files.readAttributes(path, BasicFileAttributes.class);
+
+			System.out.println("creationTime: " + attr.creationTime());
+			System.out.println("lastAccessTime: " + attr.lastAccessTime());
+			System.out.println("lastModifiedTime: " + attr.lastModifiedTime());
+
+			timestamp = attr.lastModifiedTime().toMillis();
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return timestamp;
 	}
 
 	@Override

@@ -33,18 +33,6 @@
 			<systemPath>${occas}/wlserver/server/lib/weblogic.jar</systemPath>
 		</dependency>
 
-		<!--
-		
-
-		<dependency>
-			<groupId>com.oracle.occas</groupId>
-			<artifactId>occas</artifactId>
-			<version>8.1</version>
-		</dependency>
-		
--->
-
-
 		<dependency>
 			<groupId>org.apache.xmlgraphics</groupId>
 			<artifactId>fop</artifactId>
@@ -290,10 +278,6 @@
 							<files>
 								<file>${basedir}/../${hostname}.properties</file>
 								<file>${basedir}/../version.properties</file>
-								<!--	
-								<file>${basedir}/../${hostname}.properties</file>
-								<file>${basedir}/../${computername}.properties</file>
-							-->
 							</files>
 						</configuration>
 					</execution>
@@ -310,15 +294,9 @@
 					<archive>
 						<compress>true</compress>
 						<manifestEntries>
-							<!--		
-							<Specification-Title>${title}</Specification-Title>
-							<Specification-Version>${specification}</Specification-Version>
-							-->
-							<Implementation-Title>${title}</Implementation-Title>
-							<Implementation-Version>${implementation}</Implementation-Version>
-							<!--							
-							<Extension-Name>vorpal-blade</Extension-Name>
-							-->
+							<Copyright>${copyright}</Copyright>
+							<License>${license}</License>
+							<Weblogic-Application-Version>${implementation}</Weblogic-Application-Version>
 						</manifestEntries>
 					</archive>
 				</configuration>

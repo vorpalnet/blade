@@ -72,6 +72,12 @@ public class ConfigurationMonitor extends Thread {
 	 * WatchService.
 	 */
 	private void registerAll(final Path start) throws IOException {
+
+		// create sub-directories if they do not exist
+		String configPath = "./config/custom/vorpal/";
+		Path domainPath = Paths.get(configPath);
+		Files.createDirectories(domainPath);
+
 		// register directory and sub-directories
 		Files.walkFileTree(start, new SimpleFileVisitor<Path>() {
 			@Override
@@ -212,7 +218,16 @@ public class ConfigurationMonitor extends Thread {
 		return value;
 	}
 
+	public boolean isSharedFilesystem(String configType, Path file) throws IOException {
+		boolean value = false;
+
+		System.out.println("Is this a shared filesystem? " + value);
+
+		return value;
+	}
+
 	public void updateManagedMBeans(Path path, String json) {
+		boolean isSharedFileSystem = true;
 
 		String filename = path.getFileName().toString();
 		String appName = filename.substring(0, filename.indexOf(".json"));
@@ -253,7 +268,35 @@ public class ConfigurationMonitor extends Thread {
 
 				SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
 
-				if (false == this.isSharedFilesystem()) {
+				long localTimestamp = 0;
+				long timestamp = 0;
+				if (domain) {
+					System.out.println("Checking Last Modified Domain...");
+					timestamp = settings.getLastModified("DOMAIN");
+				} else if (cluster) {
+					System.out.println("Checking Last Modified Cluster...");
+					timestamp = settings.getLastModified("CLUSTER");
+				} else if (server) {
+					System.out.println("Checking Last Modified Server...");
+					timestamp = settings.getLastModified("SERVER");
+				}
+
+				if (timestamp != 0) {
+					BasicFileAttributes attr = Files.readAttributes(path, BasicFileAttributes.class);
+					localTimestamp = attr.lastModifiedTime().toMillis();
+					if (timestamp != localTimestamp) {
+						// timestamps do not match, not a shared filesystem
+						isSharedFileSystem = false;
+					}
+				} else {
+					// no file found, need to download it
+					isSharedFileSystem = false;
+				}
+
+				System.out.println("ConfigurationMonitor... isSharedFileSystem=" + isSharedFileSystem
+						+ ", localTimestamp=" + localTimestamp + ", timestamp=" + timestamp);
+
+				if (false == isSharedFileSystem) {
 					if (domain) {
 						System.out.println("Updating Domain...");
 						settings.open("DOMAIN");
@@ -314,9 +357,9 @@ public class ConfigurationMonitor extends Thread {
 			for (ObjectInstance mbean : mbeans) {
 				ObjectName name = mbean.getObjectName();
 				System.out.println("Found... " + name.toString());
-				
-				apps.add( name.getKeyProperty("Name"));
-				
+
+				apps.add(name.getKeyProperty("Name"));
+
 //				apps.add(name.toString());
 //				SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
 
