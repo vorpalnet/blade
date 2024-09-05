@@ -37,6 +37,9 @@ public interface SettingsMXBean {
 //	};
 
 //	public void open(ConfigType configType) throws IOException;
+	
+	public long getLastModified(String configType);
+	
 	public void open(String configType);
 
 	public void write(String line);
