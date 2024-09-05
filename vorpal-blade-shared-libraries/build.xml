@@ -32,17 +32,55 @@
 	</target>
 
 	<target name="mvn_unix" if="isUnix" depends="init">
+		
+		<echo>jwm - Executing mvn_unix</echo>
+		
 		<exec dir="." executable="sh">
-			<arg line="-c 'mvn clean package'" />
+			<arg line="-c 'mvn dependency:copy-dependencies'" />
 		</exec>
-	</target>
+
+		<exec dir="." executable="sh">
+			<arg line="-c 'zip -d target/dependency/jackson-core-2.17.2.jar META-INF/versions/17/\*' " />
+		</exec>
+		
+		<exec dir="." executable="sh">
+			<arg line="-c 'zip -d target/dependency/jackson-core-2.17.2.jar META-INF/versions/21/\*' " />
+		</exec>
+		
+		<echo>Building Manifest</echo>
+
+		<manifest file="${build}/MANIFEST.MF">
+			<attribute name="Specification-Title" value="${title}" />
+			<attribute name="Specification-Version" value="${specification}" />
+			<attribute name="Implementation-Title" value="vorpal-blade-shared-libraries.war" />
+			<attribute name="Implementation-Version" value="${implementation}" />
+			<attribute name="Extension-Name" value="vorpal-blade" />
+			<attribute name="Copyright" value="${copyright}" />
+			<attribute name="License" value="${license}" />
+			<attribute name="Built-By" value="${user.name}" />
+			<attribute name="Implementation-Build-Date" value="${TODAY}" />
+		</manifest>
 
 
-	<target name="package" depends="init, mvn_windows, mvn_unix">
+		<war needxmlfile='false' destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}">
+			<lib dir="target/dependency" />
+			<classes dir="${classes}" />
+			<classes dir="${src}" />
+		</war>
 
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
-		
+
 	</target>
 
+	<target name="package" depends="init, mvn_windows, mvn_unix">
+<!--
+		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
+-->
+	</target>
+<!--	
+	<target name="clean">
+		<delete dir="${build}" />		
+	</target>
+-->
 
 </project>

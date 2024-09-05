@@ -15,9 +15,9 @@
 		<maven.compiler.source>${java.version}</maven.compiler.source>
 		<maven.compiler.target>${java.version}</maven.compiler.target>
 		<maven-plugin-version>1.0.0</maven-plugin-version>
-		<jackson-version>2.12.7</jackson-version>
-		<slf4j-version>2.0.12</slf4j-version>
-		<swagger-version>2.2.20</swagger-version>
+		<jackson-version>2.16.2</jackson-version> <!-- last version to support Java 11 -->
+		<slf4j-version>2.0.16</slf4j-version>
+		<swagger-version>2.2.22</swagger-version>
 
 	</properties>
 
@@ -30,15 +30,6 @@
 			<version>${slf4j-version}</version>
 		</dependency>
 
-		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-jdk14 -->
-		<!--
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-jdk14</artifactId>
-			<version>${slf4j-version}</version>
-		</dependency>
-		-->
-
 		<!-- https://mvnrepository.com/artifact/org.slf4j/slf4j-simple -->
 		<dependency>
 			<groupId>org.slf4j</groupId>
@@ -49,11 +40,13 @@
 
 
 		<!-- https://mvnrepository.com/artifact/javax.servlet/jstl -->
+		<!-- what is this for?
 		<dependency>
 			<groupId>javax.servlet</groupId>
 			<artifactId>jstl</artifactId>
 			<version>1.2</version>
 		</dependency>
+		-->
 
 
 		<!-- https://mvnrepository.com/artifact/org.apache.commons/commons-email -->
@@ -68,7 +61,7 @@
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-collections4</artifactId>
-			<version>4.5.0-M1</version>
+			<version>4.5.0-M2</version>
 		</dependency>
 
 		<!-- https://mvnrepository.com/artifact/commons-io/commons-io -->
@@ -91,7 +84,7 @@
 		<dependency>
 			<groupId>com.github.seancfoley</groupId>
 			<artifactId>ipaddress</artifactId>
-			<version>5.4.2</version>
+			<version>5.5.1</version>
 		</dependency>
 
 		<!--
@@ -180,30 +173,8 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-enforcer-plugin</artifactId>
-				<version>3.4.1</version>
+				<version>3.5.0</version>
 				<executions>
-
-					<!--
-          <execution>
-            <id>enforce-versions</id>
-            <goals>
-              <goal>enforce</goal>
-            </goals>
-            <configuration>
-              <rules>
-                <requireMavenVersion>
-                  <version>2.0.6</version>
-                </requireMavenVersion>
-                <requireJavaVersion>
-                  <version>1.5</version>
-                </requireJavaVersion>
-                <requireOS>
-                  <family>unix</family>
-                </requireOS>
-              </rules>
-            </configuration>
-          </execution>
--->
 					<execution>
 						<id>enforce-bytecode-version</id>
 						<goals>
@@ -223,7 +194,7 @@
 					<dependency>
 						<groupId>org.codehaus.mojo</groupId>
 						<artifactId>extra-enforcer-rules</artifactId>
-						<version>1.7.0</version>
+						<version>1.8.0</version>
 					</dependency>
 				</dependencies>
 			</plugin>
@@ -242,7 +213,7 @@
 						<configuration>
 							<files>
 								<file>
-									${basedir}/version.properties</file>
+									${basedir}/../version.properties</file>
 							</files>
 						</configuration>
 					</execution>
@@ -252,7 +223,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-war-plugin</artifactId>
-				<version>3.3.2</version>
+				<version>3.4.0</version>
 				<configuration>
 					<outputDirectory>build</outputDirectory>
 					<failOnMissingWebXml>false</failOnMissingWebXml>
