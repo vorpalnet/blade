@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 public class FsmarTransferTest extends AppRouterConfiguration {
 
 	public FsmarTransferTest() {
-		this.setDefaultApplication("proxy-goober");
+		this.setDefaultApplication("proxy-goober2");
 
 		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
 		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
@@ -21,8 +21,7 @@ public class FsmarTransferTest extends AppRouterConfiguration {
 //		this.getPrevious("null").getTrigger("INVITE").createTransition("proxy-registrar");
 		
 		
-		this.getPrevious("null").getTrigger("INVITE").createTransition("b2bua");
-		this.getPrevious("b2bua").getTrigger("INVITE").createTransition("transfer");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("transfer");
 		this.getPrevious("transfer").getTrigger("INVITE").createTransition("proxy-registrar");
 
 
