@@ -105,10 +105,9 @@ public class BlindTransfer extends Transfer {
 	public void process(SipServletRequest referRequest) throws ServletException, IOException {
 		try {
 			// request is REFER from transferor (bob)
-			
+
 			transferListener.transferRequested(referRequest);
-			
-			
+
 			createRequests(referRequest);
 
 			// First copy any specified INVITE headers
@@ -153,7 +152,7 @@ public class BlindTransfer extends Transfer {
 			transferListener.transferInitiated(targetRequest);
 
 			sendRequest(targetRequest, (targetResponse) -> {
-				
+
 				if (provisional(targetResponse)) {
 					sipLogger.finer(targetResponse, "target (carol) sends provisional response "+targetResponse.getStatus()+" "+targetResponse.getReasonPhrase() );
 
@@ -161,7 +160,7 @@ public class BlindTransfer extends Transfer {
 					sipLogger.finer(targetResponse, "target (carol) sends successful response "+targetResponse.getStatus()+" "+targetResponse.getReasonPhrase() );
 
 					// Alice will no longer hangup, expect a BYE from Bob
-					aliceExpectation.clear(); 
+					aliceExpectation.clear();
 
 					copyContent(targetResponse, transfereeRequest);
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
@@ -169,15 +168,16 @@ public class BlindTransfer extends Transfer {
 						linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
 						sendRequest(transfereeResponse.createAck());
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
-								
+
 						// Send the SIP/2.0 200 OK to the transferor (bob)
 						SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
 						notify200.setHeader(EVENT, "refer");
 						notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
-						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
+						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
+								+ targetResponse.getReasonPhrase();
 						notify200.setContent(sipFrag.getBytes(), SIPFRAG);
 						sendRequest(notify200);
-		
+
 						// User is notified of a successful transfer
 						transferListener.transferCompleted(targetResponse);
 
@@ -185,12 +185,13 @@ public class BlindTransfer extends Transfer {
 
 				} else if (failure(targetResponse)) {
 					sipLogger.finer(targetResponse, "target (carol) sends failure response "+targetResponse.getStatus()+" "+targetResponse.getReasonPhrase() );
-					
-					if(targetResponse.getStatus()==487) {
-					sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
+
+					if (targetResponse.getStatus() == 487) {
+						sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
 						transferListener.transferAbandoned(referRequest);
-						
-						// Instead of sending the failure notice, we pretend everything is successful so Bob will hang up
+
+						// Instead of sending the failure notice, we pretend everything is successful so
+						// Bob will hang up
 						SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
 
 						String sipFrag = "SIP/2.0 200 OK";
@@ -198,10 +199,10 @@ public class BlindTransfer extends Transfer {
 
 						notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=giveup");
 						notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
-						
+
 						sendRequest(notifyFailure);
 
-					}else {
+					} else {
 						sipLogger.finer(targetResponse, "target (carol) has 'rejected' the call");
 
 						// User is notified that the transfer target did not answer
@@ -209,17 +210,18 @@ public class BlindTransfer extends Transfer {
 
 						// Bob won't send a BYE, but instead reINVITE.
 						bobExpectation.clear();
-						
+
 						// If Alice hangs up, let some other callflow handle it
 						aliceExpectation.clear();
 
 						SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
-						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " " + targetResponse.getReasonPhrase();
+						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
+								+ targetResponse.getReasonPhrase();
 						notifyFailure.setHeader(EVENT, "refer");
 						notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=rejected");
 						notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
-					
-						sendRequest(notifyFailure);						
+
+						sendRequest(notifyFailure);
 					}
 
 				}
