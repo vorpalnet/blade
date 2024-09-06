@@ -235,6 +235,8 @@ public class Settings<T> implements SettingsMXBean {
 
 			}
 
+			settingsManager.current = (T) this.getConfiguration();
+			
 			settingsManager.initialize(config);
 
 			sipLogger.logConfiguration(config);
