@@ -4,7 +4,7 @@
 
 	<!-- Define unique locations first -->
 	<property name="src" location="./src" />
-	<property name="lib" location="../vorpal-blade-shared-libraries/target/vorpal-blade-shared-libraries/WEB-INF/lib" />
+	<property name="lib" location="../vorpal-blade-shared-libraries/target/dependency" />
 
 	<!-- Load environment variables -->
 	<property environment="env" />

@@ -41,9 +41,10 @@ import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-//public class TransferServlet extends B2buaServlet implements TransferListener {
-public class TransferServlet extends B2buaServlet //
-		implements TransferListener, SipApplicationSessionListener, SipSessionListener {
+public class TransferServlet extends B2buaServlet implements TransferListener {
+//public class TransferServlet extends B2buaServlet //
+//		implements TransferListener, SipApplicationSessionListener, SipSessionListener {
+
 	private static final long serialVersionUID = 1L;
 	// public class TransferServlet extends B2buaServlet {
 	public static SettingsManager<TransferSettings> settingsManager;
@@ -185,89 +186,128 @@ public class TransferServlet extends B2buaServlet //
 
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
-		SipApplicationSession appSession = outboundRequest.getApplicationSession();
 
-		// save X-Original-DN to memory
-		URI xOriginalDN = outboundRequest.getTo().getURI();
-		appSession.setAttribute("X-Original-DN", xOriginalDN);
-		
-		// save X-Previous-DN to memory
-		URI xPreviousDN = outboundRequest.getRequestURI();
-		appSession.setAttribute("X-Previous-DN", xPreviousDN);
-		
+		try {
+			sipLogger.finer(outboundRequest, "callStarted...");
+
+			SipApplicationSession appSession = outboundRequest.getApplicationSession();
+
+			// save X-Original-DN to memory
+			URI xOriginalDN = outboundRequest.getTo().getURI();
+			sipLogger.finer(outboundRequest,
+					"callStarted... setting appSession attribute: X-Original-DN=" + xOriginalDN);
+			appSession.setAttribute("X-Original-DN", xOriginalDN);
+
+			// save X-Previous-DN to memory
+			URI xPreviousDN = outboundRequest.getRequestURI();
+			sipLogger.finer(outboundRequest,
+					"callStarted... setting appSession attribute: X-Previous-DN=" + xPreviousDN);
+			appSession.setAttribute("X-Previous-DN", xPreviousDN);
+
+		} catch (Exception e) {
+			sipLogger.severe(outboundRequest, e);
+		}
+
 	}
 
 	@Override
 	public void transferRequested(SipServletRequest inboundRefer) throws ServletException, IOException {
-		SipApplicationSession appSession = inboundRefer.getApplicationSession();
-		
-		// save X-Previous-DN-Tmp for use later
-		URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
-		appSession.setAttribute("Refer-To", referTo);
+
+		try {
+			sipLogger.finer(inboundRefer, "transferRequested...");
+
+			SipApplicationSession appSession = inboundRefer.getApplicationSession();
+
+			// save X-Previous-DN-Tmp for use later
+			URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
+
+			sipLogger.finer(inboundRefer, "transferRequested... setting appSession attribute: Refer-To=" + referTo);
+
+			appSession.setAttribute("Refer-To", referTo);
+
+		} catch (Exception e) {
+			sipLogger.severe(inboundRefer, e);
+		}
+
 	}
 
 	@Override
 	public void transferInitiated(SipServletRequest outboundInvite) throws ServletException, IOException {
-		SipApplicationSession appSession = outboundInvite.getApplicationSession();
 
-		// Set Header X-Original-DN
-		URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
-		outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
+		try {
 
-		// Set Header X-Previous-DN
-		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
-		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
-		
-		// now update X-Previous-DN for future use
-		URI referTo = (URI) appSession.getAttribute("Refer-To");
-		appSession.setAttribute("X-Previous-DN", referTo);
+			sipLogger.finer(outboundInvite, "transferInitiated...");
+
+			SipApplicationSession appSession = outboundInvite.getApplicationSession();
+
+			// Set Header X-Original-DN
+			URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
+			sipLogger.finer(outboundInvite,
+					"transferInitiated... setting header: X-Original-DN=" + xOriginalDN.toString());
+			outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
+
+			// Set Header X-Previous-DN
+			URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
+			sipLogger.finer(outboundInvite,
+					"transferInitiated... setting header: X-Previous-DN=" + xPreviousDN.toString());
+			outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
+
+			// now update X-Previous-DN for future use
+			URI referTo = (URI) appSession.getAttribute("Refer-To");
+			sipLogger.finer(outboundInvite, "transferInitiated... appSession attribute: X-Previous-DN=" + referTo);
+			appSession.setAttribute("X-Previous-DN", referTo);
+
+		} catch (Exception e) {
+			sipLogger.severe(outboundInvite, e);
+		}
+
 	}
 
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+		sipLogger.finer(response, "transferCompleted...");
 
 	}
 
 	@Override
 	public void transferDeclined(SipServletResponse response) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+		sipLogger.finer(response, "transferDeclined...");
 
 	}
 
 	@Override
 	public void transferAbandoned(SipServletRequest request) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+		sipLogger.finer(request, "transferAbandoned...");
 
 	}
 
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+		sipLogger.finer(outboundResponse, "callAnswered...");
 
 	}
 
 	@Override
 	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+		sipLogger.finer(outboundRequest, "callConnected...");
 
 	}
 
 	@Override
 	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+		sipLogger.finer(outboundRequest, "callCompleted...");
 
 	}
 
 	@Override
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+		sipLogger.finer(outboundResponse, "callDeclined...");
 
 	}
 
 	@Override
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
+		sipLogger.finer(outboundRequest, "callAbandoned...");
 
 	}
 
@@ -279,63 +319,63 @@ public class TransferServlet extends B2buaServlet //
 		TransferServlet.settingsManager = settingsManager;
 	}
 
-	@Override
-	public void sessionCreated(SipApplicationSessionEvent event) {
-
-		if (sipLogger.isLoggable(Level.FINER)) {
-			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, ConsoleColors.GREEN_BRIGHT + "appSession created..." + ConsoleColors.RESET);
-		}
-
-	}
-
-	@Override
-	public void sessionDestroyed(SipApplicationSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINER)) {
-			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, ConsoleColors.RED_BRIGHT + "appSession destroyed..." + ConsoleColors.RESET);
-		}
-	}
-
-	@Override
-	public void sessionExpired(SipApplicationSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINER)) {
-			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "appSession expired...");
-		}
-	}
-
-	@Override
-	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINER)) {
-			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "appSession readyToInvalidate...");
-		}
-	}
-
-	@Override
-	public void sessionCreated(SipSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINER)) {
-			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession created...");
-		}
-	}
-
-	@Override
-	public void sessionDestroyed(SipSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINER)) {
-			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession destroyed...");
-
-		}
-	}
-
-	@Override
-	public void sessionReadyToInvalidate(SipSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINER)) {
-			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession readyToInvalidate...");
-		}
-	}
+//	@Override
+//	public void sessionCreated(SipApplicationSessionEvent event) {
+//
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipApplicationSession appSession = event.getApplicationSession();
+//			sipLogger.finer(appSession, ConsoleColors.GREEN_BRIGHT + "appSession created..." + ConsoleColors.RESET);
+//		}
+//
+//	}
+//
+//	@Override
+//	public void sessionDestroyed(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipApplicationSession appSession = event.getApplicationSession();
+//			sipLogger.finer(appSession, ConsoleColors.RED_BRIGHT + "appSession destroyed..." + ConsoleColors.RESET);
+//		}
+//	}
+//
+//	@Override
+//	public void sessionExpired(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipApplicationSession appSession = event.getApplicationSession();
+//			sipLogger.finer(appSession, "appSession expired...");
+//		}
+//	}
+//
+//	@Override
+//	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipApplicationSession appSession = event.getApplicationSession();
+//			sipLogger.finer(appSession, "appSession readyToInvalidate...");
+//		}
+//	}
+//
+//	@Override
+//	public void sessionCreated(SipSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipSession sipSession = event.getSession();
+//			sipLogger.finer(sipSession, "sipSession created...");
+//		}
+//	}
+//
+//	@Override
+//	public void sessionDestroyed(SipSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipSession sipSession = event.getSession();
+//			sipLogger.finer(sipSession, "sipSession destroyed...");
+//
+//		}
+//	}
+//
+//	@Override
+//	public void sessionReadyToInvalidate(SipSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipSession sipSession = event.getSession();
+//			sipLogger.finer(sipSession, "sipSession readyToInvalidate...");
+//		}
+//	}
 
 }
