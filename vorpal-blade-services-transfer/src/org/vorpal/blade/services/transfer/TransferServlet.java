@@ -154,7 +154,7 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 		switch (request.getMethod()) {
 		case "INVITE":
 			if (request.isInitial()) {
-				callflow = new TransferInitialInvite();
+				callflow = new TransferInitialInvite(this);
 			}
 			break;
 
@@ -187,128 +187,117 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
 
-		try {
-			sipLogger.finer(outboundRequest, "callStarted...");
+//		try {
+//			sipLogger.finer(outboundRequest, "callStarted...");
 
 			SipApplicationSession appSession = outboundRequest.getApplicationSession();
 
 			// save X-Original-DN to memory
 			URI xOriginalDN = outboundRequest.getTo().getURI();
-			sipLogger.finer(outboundRequest,
-					"callStarted... setting appSession attribute: X-Original-DN=" + xOriginalDN);
+//			sipLogger.finer(outboundRequest,
+//					"callStarted... setting appSession attribute: X-Original-DN=" + xOriginalDN);
 			appSession.setAttribute("X-Original-DN", xOriginalDN);
 
 			// save X-Previous-DN to memory
 			URI xPreviousDN = outboundRequest.getRequestURI();
-			sipLogger.finer(outboundRequest,
-					"callStarted... setting appSession attribute: X-Previous-DN=" + xPreviousDN);
+//			sipLogger.finer(outboundRequest,
+//					"callStarted... setting appSession attribute: X-Previous-DN=" + xPreviousDN);
 			appSession.setAttribute("X-Previous-DN", xPreviousDN);
 
-		} catch (Exception e) {
-			sipLogger.severe(outboundRequest, e);
-		}
+//		} catch (Exception e) {
+//			sipLogger.severe(outboundRequest, e);
+//		}
 
 	}
 
 	@Override
 	public void transferRequested(SipServletRequest inboundRefer) throws ServletException, IOException {
 
-		try {
-			sipLogger.finer(inboundRefer, "transferRequested...");
+//		try {
+//			sipLogger.finer(inboundRefer, "transferRequested...");
 
 			SipApplicationSession appSession = inboundRefer.getApplicationSession();
 
 			// save X-Previous-DN-Tmp for use later
 			URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
-
-			sipLogger.finer(inboundRefer, "transferRequested... setting appSession attribute: Refer-To=" + referTo);
-
+//			sipLogger.finer(inboundRefer, "transferRequested... setting appSession attribute: Refer-To=" + referTo);
 			appSession.setAttribute("Refer-To", referTo);
 
-		} catch (Exception e) {
-			sipLogger.severe(inboundRefer, e);
-		}
+//		} catch (Exception e) {
+//			sipLogger.severe(inboundRefer, e);
+//		}
 
 	}
 
 	@Override
 	public void transferInitiated(SipServletRequest outboundInvite) throws ServletException, IOException {
 
-		try {
-
-			sipLogger.finer(outboundInvite, "transferInitiated...");
+//		try {
+//			sipLogger.finer(outboundInvite, "transferInitiated...");
 
 			SipApplicationSession appSession = outboundInvite.getApplicationSession();
 
 			// Set Header X-Original-DN
 			URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
-			sipLogger.finer(outboundInvite,
-					"transferInitiated... setting header: X-Original-DN=" + xOriginalDN.toString());
+//			sipLogger.finer(outboundInvite,
+//					"transferInitiated... setting header: X-Original-DN=" + xOriginalDN.toString());
 			outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
 
 			// Set Header X-Previous-DN
 			URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
-			sipLogger.finer(outboundInvite,
-					"transferInitiated... setting header: X-Previous-DN=" + xPreviousDN.toString());
+//			sipLogger.finer(outboundInvite,
+//					"transferInitiated... setting header: X-Previous-DN=" + xPreviousDN.toString());
 			outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
 
 			// now update X-Previous-DN for future use
 			URI referTo = (URI) appSession.getAttribute("Refer-To");
-			sipLogger.finer(outboundInvite, "transferInitiated... appSession attribute: X-Previous-DN=" + referTo);
+//			sipLogger.finer(outboundInvite, "transferInitiated... appSession attribute: X-Previous-DN=" + referTo);
 			appSession.setAttribute("X-Previous-DN", referTo);
 
-		} catch (Exception e) {
-			sipLogger.severe(outboundInvite, e);
-		}
+//		} catch (Exception e) {
+//			sipLogger.severe(outboundInvite, e);
+//		}
 
 	}
 
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
-		sipLogger.finer(response, "transferCompleted...");
-
+//		sipLogger.finer(response, "transferCompleted...");
 	}
 
 	@Override
 	public void transferDeclined(SipServletResponse response) throws ServletException, IOException {
-		sipLogger.finer(response, "transferDeclined...");
-
+//		sipLogger.finer(response, "transferDeclined...");
 	}
 
 	@Override
 	public void transferAbandoned(SipServletRequest request) throws ServletException, IOException {
-		sipLogger.finer(request, "transferAbandoned...");
-
+//		sipLogger.finer(request, "transferAbandoned...");
 	}
 
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
-		sipLogger.finer(outboundResponse, "callAnswered...");
-
+//		sipLogger.finer(outboundResponse, "callAnswered...");
 	}
 
 	@Override
 	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
-		sipLogger.finer(outboundRequest, "callConnected...");
-
+//		sipLogger.finer(outboundRequest, "callConnected...");
 	}
 
 	@Override
 	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
-		sipLogger.finer(outboundRequest, "callCompleted...");
-
+//		sipLogger.finer(outboundRequest, "callCompleted...");
 	}
 
 	@Override
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
-		sipLogger.finer(outboundResponse, "callDeclined...");
-
+//		sipLogger.finer(outboundResponse, "callDeclined...");
 	}
 
 	@Override
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
-		sipLogger.finer(outboundRequest, "callAbandoned...");
-
+//		sipLogger.finer(outboundRequest, "callAbandoned...");
 	}
 
 	public static SettingsManager<TransferSettings> getSettingsManager() {

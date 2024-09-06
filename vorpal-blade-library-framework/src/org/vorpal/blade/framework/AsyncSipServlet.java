@@ -392,10 +392,13 @@ public abstract class AsyncSipServlet extends SipServlet
 						}
 					}
 
-					Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-							callback.getClass().getSimpleName());
 					if (callback != null) {
+						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+								callback.getClass().getSimpleName());
 						callback.accept(response);
+					} else {
+						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+								this.getClass().getSimpleName());
 					}
 
 				} else {
