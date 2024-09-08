@@ -212,14 +212,16 @@
 						</goals>
 						<configuration>
 							<files>
-								<file>
-									${basedir}/../version.properties</file>
+								<file>${basedir}/../${hostname}.properties</file>
+								<file>${basedir}/../version.properties</file>
+								<file>${basedir}/build.number</file>
 							</files>
 						</configuration>
 					</execution>
 				</executions>
 			</plugin>
 
+<!--
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-war-plugin</artifactId>
@@ -230,18 +232,19 @@
 					<archive>
 						<compress>true</compress>
 						<manifestEntries>
-							<Specification-Title>${title}</Specification-Title>
+							<Specification-Title>vorpal-blade-shared-libraries</Specification-Title>
 							<Specification-Version>${specification}</Specification-Version>
 							<Implementation-Title>
 								vorpal-blade-shared-libraries.war</Implementation-Title>
-							<Implementation-Version>${implementation}</Implementation-Version>
+							<Implementation-Version>
+								${implementation}-${build.number}</Implementation-Version>
 							<Extension-Name>vorpal-blade</Extension-Name>
 						</manifestEntries>
 					</archive>
 				</configuration>
 			</plugin>
-
-<!--
+-->
+			<!--
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
