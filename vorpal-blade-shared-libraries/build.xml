@@ -52,7 +52,7 @@
 			<attribute name="Specification-Title" value="${ant.project.name}" />
 			<attribute name="Specification-Version" value="${specification}" />
 			<attribute name="Implementation-Title" value="${ant.project.name}.war" />
-			<attribute name="Implementation-Version" value="${implementation}-b${build.number}" />
+			<attribute name="Implementation-Version" value="${implementation}" />
 			<attribute name="Extension-Name" value="vorpal-blade" />
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
