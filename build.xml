@@ -42,7 +42,8 @@
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}-b${build.number}" />
+			<attribute name="Implementation-Build-Date" value="${TODAY}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}-${build.number}" />
 		</manifest>
 
 		<foreach target="build-all" param="var">

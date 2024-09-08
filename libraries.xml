@@ -748,8 +748,7 @@
 			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
-			<!--attribute name="Weblogic-Application-Version" value="${implementation}-b${build.number}" /-->
-			<attribute name="Weblogic-Application-Version" value="${implementation}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}-${build.number}" />
 		</manifest>
 		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}">
 			<lib dir="${build}/lib" />

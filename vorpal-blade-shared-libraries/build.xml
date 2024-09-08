@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project basedir="." default="build" name="vorpal-blade-shared-libraries">
 	<!-- Define unique locations first -->
-	<property name="webapp" location="./target/${ant.project.name}" />
+	<property name="webapp" location="src/main/webapp" />
 
 	<!-- Load environment variables -->
 	<property environment="env" />
@@ -9,7 +9,6 @@
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="../${computer.hostname}.properties" />
 	<property file="../build.properties" />
-	<property file="version.properties" />
 	<property file="../version.properties" />
 
 	<!-- Import default locations and tasks -->
@@ -50,10 +49,10 @@
 		<echo>Building Manifest</echo>
 
 		<manifest file="${build}/MANIFEST.MF">
-			<attribute name="Specification-Title" value="${title}" />
+			<attribute name="Specification-Title" value="${ant.project.name}" />
 			<attribute name="Specification-Version" value="${specification}" />
-			<attribute name="Implementation-Title" value="vorpal-blade-shared-libraries.war" />
-			<attribute name="Implementation-Version" value="${implementation}" />
+			<attribute name="Implementation-Title" value="${ant.project.name}.war" />
+			<attribute name="Implementation-Version" value="${implementation}-b${build.number}" />
 			<attribute name="Extension-Name" value="vorpal-blade" />
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />

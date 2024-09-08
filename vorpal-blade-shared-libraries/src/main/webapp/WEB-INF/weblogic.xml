@@ -12,7 +12,7 @@
 
 			<wls:package-name>com.ctc.*</wls:package-name>
 			<wls:package-name>com.fasterxml.*</wls:package-name>
-			<wls:package-name>com.kjetland.*</wls:package-name>
+			<wls:package-name>com.kjetland.jackson.*</wls:package-name>
 			<wls:package-name>com.sun.activation.*</wls:package-name>
 			<wls:package-name>com.sun.mail.*</wls:package-name>
 			<wls:package-name>inet.ipaddr.*</wls:package-name>
