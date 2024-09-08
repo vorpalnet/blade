@@ -297,7 +297,7 @@
 						<manifestEntries>
 							<Copyright>${copyright}</Copyright>
 							<License>${license}</License>
-							<Weblogic-Application-Version>${implementation}-${build.number}</Weblogic-Application-Version>
+							<Weblogic-Application-Version>${implementation}</Weblogic-Application-Version>
 						</manifestEntries>
 					</archive>
 				</configuration>

@@ -213,8 +213,7 @@
 						<configuration>
 							<files>
 								<file>${basedir}/../${hostname}.properties</file>
-								<file>${basedir}/../version.properties</file>
-								<file>${basedir}/build.number</file>
+								<file>${basedir}/../version.properties</file>e>
 							</files>
 						</configuration>
 					</execution>

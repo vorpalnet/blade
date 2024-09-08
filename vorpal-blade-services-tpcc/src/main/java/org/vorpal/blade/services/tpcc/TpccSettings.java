@@ -1,5 +1,10 @@
 package org.vorpal.blade.services.tpcc;
 
-public class TpccSettings {
+import org.vorpal.blade.framework.config.Configuration;
+
+public class TpccSettings extends Configuration{
+	
+	
+
 
 }
