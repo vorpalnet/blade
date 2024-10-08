@@ -512,7 +512,10 @@ public abstract class Callflow implements Serializable {
 
 			String xvs = indexKey + ":" + dialog;
 			request.setHeader("X-Vorpal-Session", xvs);
-
+			String xvt = (String) appSession.getAttribute("X-Vorpal-Timestamp");
+			if (xvt == null) {
+				xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
+			}
 			request.setHeader("X-Vorpal-Timestamp", (String) appSession.getAttribute("X-Vorpal-Timestamp"));
 
 		}
