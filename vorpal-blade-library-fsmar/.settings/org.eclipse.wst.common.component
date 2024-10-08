@@ -1,32 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?><project-modules id="moduleCoreId" project-version="1.5.0">
-                
+                    
+    
     
     
     <wb-module deploy-name="vorpal-blade-library-fsmar">
-                                
+                                        
+        
         
         
         <wb-resource deploy-path="/" source-path="/src" tag="defaultRootSource"/>
-                                
+                                        
+        
         
         
         <wb-resource deploy-path="/" source-path="/framework-src"/>
-                                
-        
-        
-        <wb-resource deploy-path="/" source-path="/test-src"/>
+                
         <dependent-module archiveName="vorpal-blade-library-framework.jar" deploy-path="/" handle="module:/resource/vorpal-blade-library-framework/vorpal-blade-library-framework">
+                        
             <dependency-type>uses</dependency-type>
+                    
         </dependent-module>
-                                
+                                        
+        
         
         
         <property name="java-output-path" value="/vorpal-blade-library-fsmar/build/classes"/>
-                            
+                                    
+    
     
     
     </wb-module>
-            
+                
+
 
 
 </project-modules>

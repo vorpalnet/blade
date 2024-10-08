@@ -322,6 +322,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	@SuppressWarnings("unchecked")
 	@Override
 	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
+
 		Callback<SipServletResponse> callback;
 		SipSession sipSession = response.getSession();
 

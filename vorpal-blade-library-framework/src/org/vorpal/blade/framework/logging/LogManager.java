@@ -48,12 +48,12 @@ public class LogManager implements ServletContextListener {
 
 	@Override
 	final public void contextInitialized(ServletContextEvent sce) {
-		basename = sce.getServletContext().getServletContextName();
+		basename = SettingsManager.basename(sce.getServletContext().getServletContextName());
 	}
 
 	@Override
 	final public void contextDestroyed(ServletContextEvent sce) {
-		closeLogger(sce);
+		closeLogger(basename);
 	}
 
 	private static ConcurrentHashMap<String, Logger> logMap = new ConcurrentHashMap<String, Logger>();
@@ -149,6 +149,7 @@ public class LogManager implements ServletContextListener {
 	}
 
 	public static void closeLogger(String basename) {
+
 		Logger logger = logMap.remove(basename);
 		if (logger != null) {
 			for (Handler handler : logger.getHandlers()) {
