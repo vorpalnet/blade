@@ -213,14 +213,14 @@
 						<configuration>
 							<files>
 								<file>${basedir}/../${hostname}.properties</file>
-								<file>${basedir}/../version.properties</file>e>
+								<file>${basedir}/../version.properties</file>
 							</files>
 						</configuration>
 					</execution>
 				</executions>
 			</plugin>
 
-<!--
+			<!--
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-war-plugin</artifactId>

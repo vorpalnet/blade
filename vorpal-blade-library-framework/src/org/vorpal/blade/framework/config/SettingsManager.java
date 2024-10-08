@@ -459,6 +459,16 @@ public class SettingsManager<T> {
 			sipLogger.severe(e);
 		}
 	}
+	
+	
+	public ObjectMapper getMapper() {
+		return mapper;
+	}
+
+	public void setMapper(ObjectMapper mapper) {
+		this.mapper = mapper;
+	}
+
 
 	/**
 	 * Removes the version number from the deployed application name. For instance

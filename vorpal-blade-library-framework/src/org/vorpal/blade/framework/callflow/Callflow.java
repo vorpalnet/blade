@@ -435,6 +435,10 @@ public abstract class Callflow implements Serializable {
 		appSession.setAttribute("X-Vorpal-Session", indexKey);
 		appSession.addIndexKey(indexKey);
 
+		// X-Vorpal-Session + X-Vorpal-Timestamp will be unique.
+		// Use this for a database primary key in future designs.
+		appSession.setAttribute("X-Vorpal-Timestamp", Long.toHexString(System.currentTimeMillis()).toUpperCase());
+
 		return indexKey;
 	}
 
@@ -508,6 +512,9 @@ public abstract class Callflow implements Serializable {
 
 			String xvs = indexKey + ":" + dialog;
 			request.setHeader("X-Vorpal-Session", xvs);
+
+			request.setHeader("X-Vorpal-Timestamp", (String) appSession.getAttribute("X-Vorpal-Timestamp"));
+
 		}
 
 		sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
@@ -776,6 +783,8 @@ public abstract class Callflow implements Serializable {
 						String indexKey = getVorpalSessionId(response.getApplicationSession());
 						String dialog = getVorpalDialogId(response.getSession());
 						response.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
+						response.setHeader("X-Vorpal-Timestamp",
+								(String) response.getApplicationSession().getAttribute("X-Vorpal-Timestamp"));
 					}
 
 					response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
