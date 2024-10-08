@@ -22,9 +22,6 @@
 	<property name="webapp" location="src/main/webapp" />
 	<property name="framework" location="${dist}/vorpal-blade-library-framework.jar" />
 
-
-
-
 	<tstamp>
 		<format property="YEAR" pattern="yyyy" locale="en,GB" />
 	</tstamp>
