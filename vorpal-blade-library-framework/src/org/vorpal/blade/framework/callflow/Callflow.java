@@ -516,7 +516,7 @@ public abstract class Callflow implements Serializable {
 			if (xvt == null) {
 				xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
 			}
-			request.setHeader("X-Vorpal-Timestamp", (String) appSession.getAttribute("X-Vorpal-Timestamp"));
+			request.setHeader("X-Vorpal-Timestamp", xvt);
 
 		}
 
