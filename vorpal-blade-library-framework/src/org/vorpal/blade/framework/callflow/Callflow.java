@@ -396,7 +396,7 @@ public abstract class Callflow implements Serializable {
 	 */
 	public Expectation expectRequest(SipSession sipSession, String method, Callback<SipServletRequest> callback) {
 
-		if (sipSession.isValid()) {
+		if (callback != null && sipSession.isValid()) {
 			sipSession.setAttribute(REQUEST_CALLBACK_ + method, callback);
 		}
 
