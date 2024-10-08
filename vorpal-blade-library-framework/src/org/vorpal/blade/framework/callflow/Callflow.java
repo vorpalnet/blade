@@ -786,8 +786,13 @@ public abstract class Callflow implements Serializable {
 						String indexKey = getVorpalSessionId(response.getApplicationSession());
 						String dialog = getVorpalDialogId(response.getSession());
 						response.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
-						response.setHeader("X-Vorpal-Timestamp",
-								(String) response.getApplicationSession().getAttribute("X-Vorpal-Timestamp"));
+
+						String xvt = (String) response.getApplicationSession().getAttribute("X-Vorpal-Timestamp");
+						if (xvt == null) {
+							xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
+						}
+						response.setHeader("X-Vorpal-Timestamp", xvt);
+
 					}
 
 					response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
