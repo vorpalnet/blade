@@ -7,7 +7,7 @@
 <meta charset="UTF-8" />
 <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Vorpal BLADE Administration Console" />
+<meta name="description" content="BLADE" />
 <link rel="stylesheet" type="text/css" href="./style.css" />
 <style>
 @import url(http://fonts.googleapis.com/css?family=Ubuntu:400,700);
@@ -32,8 +32,7 @@ body {
 			<c:set var="loginAttempts" scope="session" value="0" />
 		</c:when>
 		<c:when test="${sessionScope.loginAttempts != null}">
-			<c:set var="loginAttempts" scope="session"
-				value="${sessionScope.loginAttempts + 1}" />
+			<c:set var="loginAttempts" scope="session" value="${sessionScope.loginAttempts + 1}" />
 		</c:when>
 	</c:choose>
 
@@ -41,26 +40,24 @@ body {
 
 		<header>
 			<h1>
-				Vorpal <strong>BLADE</strong> Console
+				Vorpal <strong>BLADE</strong>
 			</h1>
 			<h2>Blended Layer Application Development Environment</h2>
 		</header>
 
 		<section class="main">
-			<form class="form-3" action="j_security_check" method="post"
-				enctype="application/x-www-form-urlencoded">
+			<form class="form-3" action="j_security_check" method="post" enctype="application/x-www-form-urlencoded">
 				<p class="clearfix">
-					<label for="login">Username</label> <input type="text"
-						name="j_username" id="j_username" autocomplete="on"
-						placeholder="Username">
+					<label for="login">Username</label>
+					<input type="text" name="j_username" id="j_username" autocomplete="on" placeholder="Username">
 				</p>
 				<p class="clearfix">
-					<label for="password">Password</label> <input type="password"
-						name="j_password" id="j_password" placeholder="Password">
+					<label for="password">Password</label>
+					<input type="password" name="j_password" id="j_password" placeholder="Password">
 				</p>
 				<p class="clearfix">
-					<input type="checkbox" name="remember" id="remember"> <label
-						for="remember">Remember me</label>
+					<input type="checkbox" name="remember" id="remember">
+					<label for="remember">Remember me</label>
 				</p>
 				<p class="clearfix">
 					<input type="submit" name="submit" value="Sign in"
