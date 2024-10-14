@@ -104,13 +104,16 @@ for (String app : apps) {
 				</a>
 
 					<div class="dropdown-menu dropdown-menu-right">
-						<a href="#" class="dropdown-item">Menu item 1</a> <a href="#"
+						<a href="../logout" class="dropdown-item">Logout</a>
+<!-- 					
+						<a href="#"
 							class="dropdown-item">Menu item 2</a> <a href="#"
 							class="dropdown-item"> Menu item 3 <span
 							class="badge badge-primary badge-pill ml-auto">2</span>
 						</a>
 						<div class="dropdown-divider"></div>
 						<a href="#" class="dropdown-item">Menu item 4</a>
+ -->					
 					</div>
 				</li>
 			</ul>
@@ -289,6 +292,9 @@ for (String app : apps) {
 									class="nav-link" target="content_iframe">Configurator</a></li>
 								<li class="nav-item"><a href="../easyui/index.html"
 									class="nav-link" target="content_iframe">Media Tester</a></li>
+								<li class="nav-item"><a href="../swagger/index.html"
+									class="nav-link" target="content_iframe">Swagger</a></li>
+							<!-- 	
 								<li class="nav-item"><a href="layout_navbar_fixed.html"
 									class="nav-link" target="content_iframe">Fixed navbar</a></li>
 								<li class="nav-item"><a href="layout_navbar_hideable.html"
@@ -315,8 +321,11 @@ for (String app : apps) {
 								<li class="nav-item"><a href="layout_boxed_content.html"
 									class="nav-link active" target="content_iframe">Boxed
 										content</a></li>
+							-->
 							</ul>
 						</li>
+						
+<!-- 						
 						<li class="nav-item nav-item-submenu"><a href="#"
 							class="nav-link"><i class="icon-tree5"></i> <span>Menu
 									levels</span></a>
@@ -344,6 +353,8 @@ for (String app : apps) {
 								<li class="nav-item"><a href="#" class="nav-link"><i
 										class="icon-chrome"></i> Second level</a></li>
 							</ul></li>
+ -->							
+							
 						<!-- /layout -->
 
 					</ul>
