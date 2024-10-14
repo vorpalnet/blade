@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.ejb.Asynchronous;
 import javax.servlet.ServletException;
@@ -30,19 +31,14 @@ import javax.ws.rs.core.UriInfo;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.services.tpcc.TpccServlet;
 import org.vorpal.blade.services.tpcc.callflows.CreateDialog;
-import org.vorpal.blade.services.tpcc.v1.DialogAPI.ResponseStuff;
 import org.vorpal.blade.services.tpcc.v1.dialog.Dialog;
 import org.vorpal.blade.services.tpcc.v1.dialog.DialogProperties;
 import org.vorpal.blade.services.tpcc.v1.dialog.DialogPutAttributes;
-
-import com.oracle.coherence.common.collections.ConcurrentHashMap;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.info.Info;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
