@@ -2,6 +2,8 @@ package org.vorpal.blade.services.proxy.balancer;
 
 import javax.servlet.sip.ServletParseException;
 
+import org.vorpal.blade.framework.config.SessionParametersDefault;
+import org.vorpal.blade.framework.logging.LogParametersDefault;
 import org.vorpal.blade.framework.proxy.ProxyPlan;
 import org.vorpal.blade.framework.proxy.ProxyServlet;
 import org.vorpal.blade.framework.proxy.ProxyTier;
@@ -12,6 +14,9 @@ public class ProxyBalancerConfigSample extends ProxyBalancerConfig {
 	private static final long serialVersionUID = 1L;
 
 	public ProxyBalancerConfigSample() throws ServletParseException {
+		this.logging = new LogParametersDefault();
+		this.session = new SessionParametersDefault();
+
 		ProxyPlan plan1 = new ProxyPlan();
 
 		ProxyTier proxyTier1 = new ProxyTier();

@@ -19,9 +19,7 @@ public class TransferSettingsSample extends TransferSettings {
 		this.preserveInviteHeaders.add("User-to-User");
 		this.preserveReferHeaders.add("Referred-By");
 
-		Selector dialed = new Selector("dialed", "From",
-				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)",
-				"${user}");
+		Selector dialed = new Selector("dialed", "From", SIP_ADDRESS_PATTERN, "${user}");
 
 		dialed.setDescription("The user (dialed number) part of the From header");
 		this.selectors.add(dialed);

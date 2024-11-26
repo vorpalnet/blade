@@ -42,9 +42,7 @@ public class QueueConfigSample extends QueueConfig {
 				.setRingPeriod(90) //
 				.setRingDuration(60 * 1000));
 
-		Selector toSelector = new Selector("toSelector", "To",
-				"(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)",
-				"${user}");
+		Selector toSelector = new Selector("toSelector", "To", SIP_ADDRESS_PATTERN, "${user}");
 		toSelector.setDescription("The user part of the From header");
 		this.selectors.add(toSelector);
 

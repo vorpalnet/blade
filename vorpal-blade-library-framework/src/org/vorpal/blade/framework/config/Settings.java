@@ -97,7 +97,7 @@ public class Settings<T> implements SettingsMXBean {
 		long timestamp = 0;
 
 		try {
-			sipLogger.fine("Checking LastModified " + configType.toString() + " configuration...");
+//			sipLogger.fine("Checking LastModified " + configType.toString() + " configuration...");
 
 			Path path = null;
 
@@ -176,7 +176,7 @@ public class Settings<T> implements SettingsMXBean {
 
 	@Override
 	public void reload() {
-		sipLogger.info("reloading configuration files...");
+		sipLogger.info("Reloading configuration file.");
 		boolean useSampleConfig = true;
 
 		try {
