@@ -19,7 +19,6 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Selector {
-
 	private String id; // optional for JSON references
 	private String description; // optional for human readable descriptions
 	private String attribute; // location of the key data, like in the 'To' header
@@ -216,42 +215,13 @@ public class Selector {
 		return regexRoute;
 	}
 
-	
 	public static void main(String args[]) {
-		
-		/*
-		 *     "id" : "Referred-By",
-    "description" : "The user@host part of the Referred-By header",
-    "attribute" : "Referred-By",
-    "expression" : "${user}@${host}",
-    "pattern" : "(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)"
-		 */
-		
-		
-		/*
-		 *   "id" : "Refer-To",
-    "description" : "The user part of the Refer-To header",
-    "attribute" : "Refer-To",
-    "expression" : "${user}",
-    "pattern" : "(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)"
-		 */
-		
-		
-		
 		String strPattern = ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*";
 		String strExpression = "${recorddn}";
 		String key = null;
-		
-//		<sip:19977011234@vorpal.net>
-//		<sip:bob@vorpal.net>
-		
 	}
-	
+
 	public static void main2(String args[]) {
-
-		// "pattern": ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*",
-		// "expression": "${recorddn}"
-
 		String strPattern = ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*";
 		String strExpression = "${recorddn}";
 		String key = null;

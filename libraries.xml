@@ -711,6 +711,11 @@
 	<target name="compile" depends="init">
 		<echo message="OCCAS=${OCCAS}" />
 		<echo message="BLADE=${BLADE}" />
+
+		<!-- this is useful fro debugging
+		<echo message="vorpal-blade.classpath is ${toString:vorpal-blade.classpath}" />
+		-->
+
 		<javac debug="${debug}" debuglevel="${debuglevel}" destdir="${classes}" includeantruntime="${includeantruntime}" release="${release}">
 			<!--compilerarg value="-proc:full" /-->
 			<src path="${src}" />
@@ -725,7 +730,7 @@
 			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
-			<attribute name="Specification-Title" value="${title}" />
+			<attribute name="Specification-Title" value="${ant.project.name}" />
 			<attribute name="Implementation-Title" value="${ant.project.name}.jar" />
 			<attribute name="Specification-Version" value="${specification}" />
 			<attribute name="Implementation-Version" value="${implementation}" />

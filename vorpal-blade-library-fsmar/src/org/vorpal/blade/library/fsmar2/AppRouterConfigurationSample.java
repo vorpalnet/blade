@@ -26,6 +26,7 @@ package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
 
+import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.logging.LogParametersDefault;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -43,6 +44,9 @@ public class AppRouterConfigurationSample extends AppRouterConfiguration impleme
 	 */
 	public AppRouterConfigurationSample() {
 		this.logging = new LogParametersDefault();
+		this.logging.setLoggingLevel(LoggingLevel.WARNING);
+		
+		
 
 		this.setDefaultApplication("b2bua");
 

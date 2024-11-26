@@ -258,13 +258,15 @@ public class LogParameters {
 	}
 
 	public static String resolveVariables(ServletContext servletContext, String inputString) {
-		int index;
+		int openIndex;
+		int closeIndex;
 		String variable;
 		String key;
 		String value;
 		String outputString = new String(inputString);
-		while ((index = outputString.indexOf("${")) >= 0) {
-			variable = outputString.substring(index, outputString.indexOf("}") + 1);
+		while ((openIndex = outputString.indexOf("${")) >= 0) {
+			closeIndex = outputString.indexOf("}", openIndex);
+			variable = outputString.substring(openIndex, closeIndex + 1);
 			key = variable.substring(2, variable.length() - 1);
 			value = getAttribute(servletContext, key);
 			value = (value != null) ? value : "null";

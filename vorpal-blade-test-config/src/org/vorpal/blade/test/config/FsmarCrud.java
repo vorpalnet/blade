@@ -16,15 +16,10 @@ public class FsmarCrud extends AppRouterConfiguration {
 		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
 		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
-		
-		
-		this.getPrevious("null").getTrigger("INVITE").createTransition("crud");		
-		this.getPrevious("crud").getTrigger("INVITE").createTransition("proxy-registrar");
-		
-		
-//		this.getPrevious("onnet").getTrigger("INVITE").createTransition("transfer");		
-//		this.getPrevious("transfer").getTrigger("INVITE").createTransition("test-uas");
-		
+
+		this.getPrevious("test-uac").getTrigger("INVITE").createTransition("keep-alive");
+		this.getPrevious("keep-alive").getTrigger("INVITE").createTransition("test-uas");
+
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {

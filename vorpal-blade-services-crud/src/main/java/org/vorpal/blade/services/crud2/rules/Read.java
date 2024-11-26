@@ -12,6 +12,8 @@ import java.util.regex.Pattern;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.config.Configuration;
+
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
@@ -118,7 +120,7 @@ public class Read extends Rule implements Serializable {
 		String z = "\\<(?<name>[a-zA-Z0-9]+)\\>";
 
 		// good
-		String strPattern = "(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)";
+		String strPattern = Configuration.SIP_ADDRESS_PATTERN;
 
 		String[] urls = { //
 				"sip:alice@vorpal.org", //

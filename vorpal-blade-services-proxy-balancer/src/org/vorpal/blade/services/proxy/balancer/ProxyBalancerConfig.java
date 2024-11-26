@@ -3,11 +3,12 @@ package org.vorpal.blade.services.proxy.balancer;
 import java.io.Serializable;
 import java.util.HashMap;
 
+import org.vorpal.blade.framework.config.Configuration;
 import org.vorpal.blade.framework.proxy.ProxyPlan;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-public class ProxyBalancerConfig implements Serializable {
+public class ProxyBalancerConfig extends Configuration implements Serializable {
 	
 	private static final long serialVersionUID = 1L;
 
