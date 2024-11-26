@@ -1,7 +1,5 @@
 package org.vorpal.blade.services.crud;
 
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
@@ -10,10 +8,16 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
+
+import org.vorpal.blade.framework.config.Configuration;
 import org.vorpal.blade.framework.config.SettingsManager;
+
+import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(
    generator = ObjectIdGenerators.PropertyGenerator.class,
@@ -97,7 +101,7 @@ public class Update implements Serializable {
          SettingsManager.sipLogger.severe(msg, "No match found for header value: " + header);
       }
 
-      name = Create.resolveVariables(map, this.replacement);
+      name = Configuration.resolveVariables(map, this.replacement);
       SettingsManager.sipLogger.warning(msg, "RequestURI: " + name);
       output.put(this.attribute, name);
    }
