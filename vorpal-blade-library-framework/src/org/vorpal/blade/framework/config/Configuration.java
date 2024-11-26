@@ -2,6 +2,7 @@ package org.vorpal.blade.framework.config;
 
 import java.io.Serializable;
 import java.text.ParseException;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -13,6 +14,9 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
+	
+	public final static String SIP_ADDRESS_PATTERN = "(?:[\"]*(?<name>.*)[\"*] )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)";
+
 
 //	@JsonPropertyDescription("Optional logging parameters")
 //	public String version = "2.1";
@@ -159,5 +163,27 @@ public class Configuration implements Serializable {
 		this.session = session;
 		return this;
 	}
+	
+	public static String resolveVariables(Map<String, String> attributes, String expression) {
+		int openIndex;
+		int closeIndex;
+		String variable;
+		String key;
+		String value;
+		String outputString = new String(expression);
+
+		while ((openIndex = outputString.indexOf("${")) >= 0) {
+			closeIndex = outputString.indexOf("}", openIndex);
+			variable = outputString.substring(openIndex, closeIndex + 1);
+			key = variable.substring(2, variable.length() - 1);
+			value = (String) attributes.get(key);
+			value = (value != null) ? value : "null";
+			outputString = outputString.replace(variable, value);
+		}
+
+		return outputString;
+	}
+	
+	
 
 }

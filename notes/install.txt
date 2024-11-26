@@ -1,0 +1,295 @@
+These are some temporary notes used in building an installer...
+
+jeff@gamera bin % pwd
+/Users/jeff/oracle/occas-8.1/oracle_common/common/bin
+jeff@gamera bin % ./config.sh
+
+Create Domain
+[o] Create a new domain
+Domain Location: /Users/jeff/Oracle/occas-8.1/user_projects/domains/blade
+
+Templates
+[o] Create Domain Using Product Templates:
+[x] Basic WebLogic Server Domain - 14.1.1.0.0 [wlserver]*
+[x] WebLogic Advanced Web Services for JAX-RPC Extension - 14.1.1.0.0 [oracle_common]
+[x] WebLogic Advanced Web Services for JAX-WS Extension - 14.1.1.0.0 [oracle_common]
+[x] WebLogic JAX-WS SOAP/JMS Extension - 14.1.1.0.0 [oracle_common]
+[x] Converged Application Server - Dynamic Cluster Replicated Domain - 8.1.0.0 [wlserver]
+[x] WebLogic Coherence Cluster Extension - 14.1.1.0.0 [wlserver]
+
+Administrator Account
+Name: weblogic
+Password: *******
+Confirm Password: ******
+
+Domain Mode and JDK
+Domain Mode (Choose either)
+[o] Development
+[ ] Production
+JDK
+[o] Oracle HotSpot 11.0.22 /Library/Java/JavaVirtualMachines/jdk-11.jdk/Contents/Home
+
+Advanced Configuration
+[x] Administration Server
+[x] Node Manager
+[x] Topology
+[x] Deployments and Services
+[x] File Store
+
+Administration Server
+Server Name: AdminServer
+Listen Address: All Local Addresses
+Listen Port: 7001
+Enable SSL [x]
+SSL Listen Port[7002]
+
+---
+
+Need to copy fsmar to approuter
+boot.properties
+install blade libraries
+
+
+
+--MOP--
+
+Enterprise Manager Cloud Control 13.5.0.0.0
+Enterprise Manager Base Platform - OMS 13.5.0.0.0 for Linux x86-64
+		V1007079-01(V1007079-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for Linux x86-64 (1 of 5), 1.5 GB
+		V1007080-01(V1007080-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for Linux x86-64 (2 of 5), 1.8 GB
+		V1007081-01(V1007081-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for Linux x86-64 (3 of 5), 2.0 GB
+		V1007082-01(V1007082-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for Linux x86-64 (4 of 5), 1.4 GB
+		V1007083-01(V1007083-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for Linux x86-64 (5 of 5), 1.4 GB
+Enterprise Manager Base Platform - OMS - Extraction Instructions by platform 13.5.0.0.0
+		V1007105-01(V1007105-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for Linux x86-64 - Extraction Instructions (START HERE), 0.77 KB
+		V1007106-01(V1007106-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for IBM AIX on POWER Systems (64-bit) - Extraction Instructions (START HERE), 0.78 KB
+		V1007107-01(V1007107-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for Microsoft Windows x64 (64-bit) - Extraction Instructions (START HERE), 0.77 KB
+		V1007108-01(V1007108-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for Oracle Solaris on SPARC (64-bit) - Extraction Instructions (START HERE), 0.79 KB
+		V1007109-01(V1007109-01.zip)		Oracle Enterprise Manager Cloud Control 13c Release 5 (13.5.0.0) for Oracle Solaris on x86-64 (64-bit) - Extraction Instructions (START HERE), 0.78 KB
+Oracle Database 19.3.0.0.0 - Long Term Release for Linux x86-64
+		V982063-01(V982063-01.zip)		Oracle Database 19.3.0.0.0 for Linux x86-64, 2.8 GB
+Oracle Database Client 19.3.0.0.0 for Linux x86-64
+		V982064-01(V982064-01.zip)		Oracle Database Client 19.3.0.0.0 for Linux x86-64, 1.1 GB
+		V982065-01(V982065-01.zip)		Oracle Database Client 19.3.0.0.0 for Linux x86-64 - Gold Image, 941.5 MB
+Oracle Real User Experience Insight 13.4.1.0.0 for x86 64 bit
+		V997926-01(V997926-01.zip)		Oracle Real User Experience Insight 13c Release 4 (13.4.1.0.0), 307.3 MB
+Oracle WebLogic Server 12.2.1.4.0 for Linux x86-64
+		V983356-01(V983356-01.zip)		Oracle VM Virtual Appliance for Oracle Fusion Middleware 12c (12.2.1.4.0) WebLogic Server and Coherence, 1.8 GB
+		V983365-01(V983365-01.zip)		Oracle Fusion Middleware 12c (12.2.1.4.0) WebLogic Server Slim Installer, 182.0 MB
+		V983364-01(V983364-01.zip)		Oracle Fusion Middleware 12c (12.2.1.4.0) WebLogic Server and Coherence, 826.4 MB
+		V1034090-01(V1034090-01.zip)		Oracle Fusion Middleware 12c (12.2.1.4.0) WebLogic Server and Coherence Lite, 579.0 MB
+
+Total 18 distinct files		Total Size 16.5 GB
+
+NOTE: Some downloaded parts may be split into more than one file.
+
+Back
+View Digest DetailsWGET Options
+Restore
+
+Download
+	
+vi $ORACLE_HOME/cv/admin/cvu_config
+CV_ASSUME_DISTID=OEL8.1
+
+
+
+
+#file: dbca.rsp
+
+responseFileVersion=/oracle/assistants/rspfmt_dbca_response_schema_v12.2.0
+gdbName=oemccdb
+sid=oemccdb
+createAsContainerDatabase=false
+templateName=/opt/oracle/product/database-19.3/assistants/dbca/templates/New_Database.dbt
+sysPassword=
+systemPassword=
+serviceUserPassword=
+datafileJarLocation={ORACLE_HOME}/assistants/dbca/templates/
+datafileDestination={ORACLE_BASE}/oradata/{DB_UNIQUE_NAME}/
+recoveryAreaDestination={ORACLE_BASE}/fast_recovery_area/{DB_UNIQUE_NAME}
+storageType=FS
+characterSet=AL32UTF8
+nationalCharacterSet=AL16UTF16
+variables=ORACLE_BASE_HOME=/opt/oracle/product/database-19.3,DB_UNIQUE_NAME=oemccdb,ORACLE_BASE=/opt/oracle/product,PDB_NAME=,DB_NAME=oemccdb,ORACLE_HOME=/opt/oracle/product/database-19.3,SID=oemccdb
+initParams=undo_tablespace=UNDOTBS1,sga_target=8040MB,db_block_size=8192BYTES,nls_language=AMERICAN,dispatchers=(PROTOCOL=TCP) (SERVICE=oemccdbXDB),diagnostic_dest={ORACLE_BASE},remote_login_passwordfile=EXCLUSIVE,db_create_file_dest={ORACLE_BASE}/oradata/{DB_UNIQUE_NAME}/,audit_file_dest={ORACLE_BASE}/admin/{DB_UNIQUE_NAME}/adump,processes=320,pga_aggregate_target=2680MB,nls_territory=AMERICA,local_listener=LISTENER_OEMCCDB,db_recovery_file_dest_size=7851MB,open_cursors=300,compatible=19.0.0,db_name=oemccdb,db_recovery_file_dest={ORACLE_BASE}/fast_recovery_area/{DB_UNIQUE_NAME},audit_trail=db
+memoryPercentage=40
+databaseType=MULTIPURPOSE
+automaticMemoryManagement=false
+
+
+
+
+2024/11/01 21:55:54 [error] 118594#118594: *26 NAXSI_FMT: ip=136.35.189.27&server=vorpal.net&uri=%2Fwebjars%2Fwiki%3Axwiki%2Fxwiki-platform-ckeditor-webjar%2F16.6.0%2Fplugins%2Ftableselection%2Fstyles%2Ftableselection.css&config=learning&rid=0677e50ecee7ee6f492172757aa37aa2&cscore0=$SQL&score0=16&
+
+zone0=URL&
+id0=1000&
+var_name0=
+GET /webjars/wiki%3Axwiki/xwiki-platform-ckeditor-webjar/16.6.0/plugins/tableselection/styles/tableselection.css?t=O6TE
+
+BasicRule wl:1000 "mz:$URL:/webjars/wiki%3Axwiki/xwiki-platform-ckeditor-webjar/16.6.0/plugins/tableselection/styles/tableselection.css|URL";
+
+
+
+2024/11/01 21:55:54 [error] 118594#118594: *30 NAXSI_FMT: ip=136.35.189.27&server=vorpal.net&uri=%2Fwebjars%2Fwiki%3Axwiki%2Fxwiki-platform-ckeditor-webjar%2F16.6.0%2Fplugins%2Ftableselection%2Fstyles%2Ftableselection.css&config=learning&rid=7d5db2994b182fef1ee01727066f4e29&cscore0=$SQL&score0=16&
+
+zone0=URL
+&id0=1000&
+var_name0=, client: 136.35.189.27, server: vorpal.net, request: "GET 
+/webjars/wiki%3Axwiki/xwiki-platform-ckeditor-webjar/16.6.0/plugins/tableselection/styles/tableselection.css HTTP/1.1", host: "vorpal.net"
+
+2024/11/01 22:00:26 [error] 118594#118594: *223 NAXSI_FMT: ip=136.35.189.27&server=vorpal.net&uri=%2Fbin%2Fpreview%2FBLADE%2FInstallation%2FWebHome&config=learning&rid=fe729a0c03b7067e105ec96cdde5fbe0&cscore0=$XSS&score0=40&
+
+zone0=BODY&
+id0=1315&
+var_name0=content
+POST /bin/preview/BLADE/Installation/WebHome 
+
+BasicRule wl:1315 "mz:$BODY_VAR:content";
+
+
+
+2024/11/01 22:04:13 [error] 118594#118594: *277 NAXSI_FMT: ip=136.35.189.27&server=vorpal.net&uri=%2Fbin%2Fpreview%2FBLADE%2FInstallation%2FWebHome&config=learning&rid=13da7a0e7352729ae6ae8bc1e06b03b3&cscore0=$XSS&score0=40&
+
+zone0=BODY&
+id0=1315&
+var_name0=content, client: 136.35.189.27, server: vorpal.net, request: "
+POST /bin/preview/BLADE/Installation/WebHome HTTP/1.1", host: "vorpal.net", referrer: "https://vorpal.net/bin/edit/BLADE/Installation/WebHome?template=&parent=BLADE.WebHome&title=Installation&form_token=po5pMHh5etKlKvoCUAmBvg"
+
+2024/11/01 22:04:43 [error] 118594#118594: *277 NAXSI_FMT: ip=136.35.189.27&server=vorpal.net&uri=%2Fbin%2Fpreview%2FBLADE%2FInstallation%2FWebHome&config=learning&rid=5c692900cbc9549856b57280a56dc6a1&cscore0=$XSS&score0=40&
+
+zone0=BODY&
+id0=1315&
+var_name0=content, client: 136.35.189.27, server: vorpal.net, request: "
+POST /bin/preview/BLADE/Installation/WebHome HTTP/1.1", host: "vorpal.net", referrer: "https://vorpal.net/bin/edit/BLADE/Installation/WebHome?template=&parent=BLADE.WebHome&title=Installation&form_token=po5pMHh5etKlKvoCUAmBvg"
+
+
+
+# file: /etc/oratab
+
+oemccdb:/opt/oracle/product/database-19.3:Y
+
+
+
+
+#!/bin/bash
+# chkconfig: 345 99 10
+# description: Oracle auto start-stop script.
+
+ORACLE_BASE="/opt/oracle/product"
+ORACLE_HOME="$ORACLE_BASE/database-19.3"
+ORACLE_HOME_LISTNER=$ORACLE_HOME
+ORACLE_OWNER=oracle
+
+if [ ! -f $ORACLE_HOME/bin/dbstart ]
+then 
+   echo "Oracle startup: cannot start"
+   exit
+fi
+
+case "$1" in
+   'start')
+      su - $ORACLE_OWNER -c "nohup $ORACLE_HOME/bin/dbstart $ORACLE_HOME > /tmp/startup.log 2>&1 &"
+      touch /var/lock/subsys/oracle19c
+      ;;
+   'stop')
+      su - $ORACLE_OWNER -c "nohup $ORACLE_HOME/bin/dbshut $ORACLE_HOME > /tmp/shutdown.log 2>&1 &"
+      rm -f /var/lock/subsys/oracle19c
+      ;;
+esac
+
+
+
+
+alter system reset "_optimizer_nlj_hj_adaptive_join" scope=both sid='*';
+alter system reset "_optimizer_strans_adaptive_pruning" scope=both sid='*';
+alter system reset "_px_adaptive_dist_method" scope=both sid='*';
+alter system reset "_sql_plan_directive_mgmt_control" scope=both sid='*';
+alter system reset "_optimizer_dsdir_usage_control" scope=both sid='*';
+alter system reset "_optimizer_use_feedback" scope=both sid='*';
+alter system reset "_optimizer_gather_feedback" scope=both sid='*';
+alter system reset "_optimizer_performance_feedback" scope=both sid='*';
+
+
+
+
+
+
+alter system set "_allow_insert_with_update_check"=true scope=both;
+alter system set session_cached_cursors=200 scope=spfile;
+alter system set sga_target=800M scope=both;
+alter system set pga_aggregate_target=450M scope=both;
+alter system set "_optimizer_nlj_hj_adaptive_join"= FALSE scope=both sid='*';
+alter system set "_optimizer_strans_adaptive_pruning" = FALSE scope=both sid='*';
+alter system set "_px_adaptive_dist_method" = OFF scope=both sid='*';
+alter system set "_sql_plan_directive_mgmt_control" = 0 scope=both sid='*';
+alter system set "_optimizer_dsdir_usage_control" = 0 scope=both sid='*';
+alter system set "_optimizer_use_feedback" = FALSE scope=both sid='*';
+alter system set "_optimizer_gather_feedback" = FALSE scope=both sid='*';
+alter system set "_optimizer_performance_feedback" = OFF scope=both sid='*';
+
+
+alter system reset "_optimizer_nlj_hj_adaptive_join" scope=both sid='*';
+alter system reset "_optimizer_strans_adaptive_pruning" scope=both sid='*';
+alter system reset "_px_adaptive_dist_method" scope=both sid='*';
+alter system reset "_sql_plan_directive_mgmt_control" scope=both sid='*';
+alter system reset "_optimizer_dsdir_usage_control" scope=both sid='*';
+alter system reset "_optimizer_use_feedback" scope=both sid='*';
+alter system reset "_optimizer_gather_feedback" scope=both sid='*';
+alter system reset "_optimizer_performance_feedback" scope=both sid='*';
+
+
+alter system set "optimizer_adaptive_plans"=false scope=both sid='*';
+
+
+alter system reset "_optimizer_performance_feedback" scope=both sid='*';
+
+SQL> show parameter optimizer;
+
+NAME				     TYPE	 VALUE
+------------------------------------ ----------- ------------------------------
+optimizer_adaptive_plans	     boolean	 FALSE
+optimizer_adaptive_reporting_only    boolean	 FALSE
+optimizer_adaptive_statistics	     boolean	 FALSE
+optimizer_capture_sql_plan_baselines boolean	 FALSE
+optimizer_capture_sql_quarantine     boolean	 FALSE
+optimizer_cross_shard_resiliency     boolean	 FALSE
+optimizer_dynamic_sampling	     integer	 2
+optimizer_features_enable	     string	 21.1.0
+optimizer_ignore_hints		     boolean	 FALSE
+optimizer_ignore_parallel_hints      boolean	 FALSE
+optimizer_index_caching 	     integer	 0
+
+NAME				     TYPE	 VALUE
+------------------------------------ ----------- ------------------------------
+optimizer_index_cost_adj	     integer	 100
+optimizer_inmemory_aware	     boolean	 TRUE
+optimizer_mode			     string	 ALL_ROWS
+optimizer_real_time_statistics	     boolean	 FALSE
+optimizer_secure_view_merging	     boolean	 TRUE
+optimizer_session_type		     string	 NORMAL
+optimizer_use_invisible_indexes      boolean	 FALSE
+optimizer_use_pending_statistics     boolean	 FALSE
+optimizer_use_sql_plan_baselines     boolean	 TRUE
+optimizer_use_sql_quarantine	     boolean	 TRUE
+SQL> 
+
+
+alter system reset optimizer_inmemory_aware=false;
+
+alter system set "_optimizer_inmemory_aware"=false scope=both sid='*';
+
+alter system reset optimizer_inmemory_aware scope=both sid='*';
+alter system reset optimizer_secure_view_merging scope=both sid='*';
+alter system reset optimizer_use_sql_plan_baselines scope=both sid='*';
+alter system reset optimizer_use_sql_quarantine scope=both sid='*';
+
+
+alter system set optimizer_inmemory_aware=false scope=both sid='*';
+alter system set optimizer_secure_view_merging=false scope=both sid='*';
+alter system set optimizer_use_sql_plan_baselines=false scope=both sid='*';
+alter system set optimizer_use_sql_quarantine=false scope=both sid='*';
+
+
+
+

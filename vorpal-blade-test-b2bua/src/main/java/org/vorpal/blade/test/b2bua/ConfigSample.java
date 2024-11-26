@@ -6,6 +6,7 @@ import java.util.HashMap;
 import org.vorpal.blade.framework.callflow.Callflow;
 import org.vorpal.blade.framework.config.KeepAliveParameters;
 import org.vorpal.blade.framework.config.SessionParameters;
+import org.vorpal.blade.framework.config.SessionParametersDefault;
 import org.vorpal.blade.framework.logging.LogParametersDefault;
 
 public class ConfigSample extends SampleB2buaConfig implements Serializable {
@@ -13,6 +14,8 @@ public class ConfigSample extends SampleB2buaConfig implements Serializable {
 	public ConfigSample() {
 
 		try {
+			this.logging = new LogParametersDefault();
+			this.session = new SessionParametersDefault();
 
 			this.address = Callflow.getSipFactory().createAddress("Alice <sip:alice@vorpal.net>");
 //			this.ipv4Address = new IPAddressString("192.168.1.1").getAddress().toIPv4();

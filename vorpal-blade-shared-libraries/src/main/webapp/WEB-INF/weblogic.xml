@@ -1,36 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<wls:weblogic-web-app
-	xmlns:wls="http://xmlns.oracle.com/weblogic/weblogic-web-app"
+<wls:weblogic-web-app xmlns:wls="http://xmlns.oracle.com/weblogic/weblogic-web-app"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd">
+	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd"
+>
 	<wls:weblogic-version>12.2.1.3</wls:weblogic-version>
 
 	<wls:container-descriptor>
 		<wls:prefer-application-packages>
-
 			<!-- wls:package-name>org.vorpal.blade.framework.*</wls:package-name -->
-
-			<wls:package-name>com.ctc.*</wls:package-name>
-			<wls:package-name>com.fasterxml.*</wls:package-name>
+			<wls:package-name>com.ctc.wstx.*</wls:package-name>
+			<wls:package-name>com.fasterxml.jackson.*</wls:package-name>
 			<wls:package-name>com.kjetland.jackson.*</wls:package-name>
 			<wls:package-name>com.sun.activation.*</wls:package-name>
 			<wls:package-name>com.sun.mail.*</wls:package-name>
 			<wls:package-name>inet.ipaddr.*</wls:package-name>
-			<wls:package-name>io.github.*</wls:package-name>
-			<wls:package-name>io.swagger.*</wls:package-name>
+			<wls:package-name>io.github.classgraph.*</wls:package-name>
+			<wls:package-name>io.swagger.v3.*</wls:package-name>
 			<wls:package-name>javassist.*</wls:package-name>
 			<wls:package-name>javax.activation.*</wls:package-name>
 			<wls:package-name>javax.mail.*</wls:package-name>
 			<wls:package-name>javax.validation.*</wls:package-name>
+			<wls:package-name>javax.xml.*</wls:package-name>
+			<wls:package-name>junit.extensions.*</wls:package-name>
+			<wls:package-name>junit.framework.*</wls:package-name>
+			<wls:package-name>junit.runner.*</wls:package-name>
+			<wls:package-name>junit.textui.*</wls:package-name>
 			<wls:package-name>kotlin.*</wls:package-name>
-			<wls:package-name>kotlinx.*</wls:package-name>
-			<wls:package-name>nonapi.*</wls:package-name>
-			<wls:package-name>org.apache.*</wls:package-name>
-			<wls:package-name>org.intellij.*</wls:package-name>
-			<wls:package-name>org.jetbrains.*</wls:package-name>
-			<wls:package-name>org.joda.*</wls:package-name>
+			<wls:package-name>kotlinx.coroutines*</wls:package-name>
+			<wls:package-name>nonapi.io.github.classgraph*</wls:package-name>
+			<wls:package-name>org.apache.commons.collections4.*</wls:package-name>
+			<wls:package-name>org.apache.commons.io.*</wls:package-name>
+			<wls:package-name>org.apache.commons.lang3.*</wls:package-name>
+			<wls:package-name>org.apache.commons.mail.*</wls:package-name>
+			<wls:package-name>org.codehaus.stax2.*</wls:package-name>
+			<wls:package-name>org.hamcrest.*</wls:package-name>
+			<wls:package-name>org.intellij.lang.annotations.*</wls:package-name>
+			<wls:package-name>org.jetbrains.annotations.*</wls:package-name>
+			<wls:package-name>org.jetbrains.kotlin.scripting.*</wls:package-name>
+			<wls:package-name>org.joda.time.*</wls:package-name>
+			<wls:package-name>org.junit.*</wls:package-name>
 			<wls:package-name>org.slf4j.*</wls:package-name>
-			<wls:package-name>org.yaml.*</wls:package-name>
+			<wls:package-name>org.yaml.snakeyaml*</wls:package-name>
 			<wls:package-name>scala.*</wls:package-name>
 		</wls:prefer-application-packages>
 	</wls:container-descriptor>

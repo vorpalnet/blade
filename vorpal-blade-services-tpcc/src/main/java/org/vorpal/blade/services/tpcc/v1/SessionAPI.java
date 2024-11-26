@@ -7,6 +7,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.ThreadLocalRandom;
 
 import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.ws.rs.Consumes;
@@ -57,6 +58,80 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 @Path("api/v1")
 public class SessionAPI extends Callflow {
 	private static final long serialVersionUID = 1L;
+
+	@POST
+	@Path("test")
+	@Operation(summary = "Create a new session.")
+	@Produces({ "application/json" })
+	public Response test(@Context UriInfo uriInfo) {
+		System.out.println("invoking token test...");
+		String accessToken = "{\"access_token\":\"eyJraWQiOiJHakJ2c2NVZlZ5dlF4dWhuazVRNllwUnZLSkxBS05BYUJjREtTSVlwd3hVIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ.eyJhdWQiOiJodHRwczovL2FwaS51aGcuY29tIiwic3ViIjoiNDk1ODQ5MWUtY2I5MC00ZDk5LTljM2YtZDNiYmUyY2RjZTc4IiwiYXpwIjoiNDk1ODQ5MWUtY2I5MC00ZDk5LTljM2YtZDNiYmUyY2RjZTc4Iiwic2NvcGUiOiJodHRwczovL2FwaS51aGcuY29tLy5kZWZhdWx0IiwiaXNzIjoiaHR0cHM6Ly9ub25wcm9kLmlkZW50aXR5LnVoZy5jb20iLCJ0eXAiOiJCZWFyZXIiLCJvaWQiOiI0OTU4NDkxZS1jYjkwLTRkOTktOWMzZi1kM2JiZTJjZGNlNzgiLCJleHAiOjE3MzA5ODU2NzQsImlhdCI6MTczMDk4MjA3NCwianRpIjoiM2M3ZDFhMzMtNDc0Ni00ZGYyLWFlZTAtZTE1Mzc3NWU4YWMwIn0.F7DImVRMsrq2PM6z0XctX8GaTLUE92sOcx-U75fYNvOycdBhZp3m7rrfIMiTPt8BZPVcO6RkopG39U3jPLHNfn73iL33YypRSNbjKFpcJxJRqiv38hDFIZ_KlixVVwsN6pJZXADsrNOlDIUle55n70LW8HvARJALJkp9L7DkHC6USj4T-qg6WSxTGAtjqvM9QDUHd26NCeUXpJbAOvivhQlpthKpoim0tDmD3opbViuH4o446V4S4lom8LHoEoqJpghCahCvUrillJGrQRpsZolMIBX1r0li7lOoLs_dVa4GDXzMJPCx4RiZw0nVnXs7hVNIITqvr3ASZRwmuAhSxA\",\"expires_in\":3594,\"refresh_expires_in\":0,\"token_type\":\"Bearer\",\"not-before-policy\":0,\"scope\":\"https://api.uhg.com/.default\"}";
+
+		Response response = null;
+
+		try {
+			response = Response.ok().entity(accessToken).build();
+
+		} catch (Exception e) {
+			response = Response.status(500, e.getMessage()).build();
+			sipLogger.severe(e);
+		}
+
+		return response;
+
+	}
+	
+	
+	@POST
+	@Path("test/routeRequest")
+	@Operation(summary = "invoke a thing")
+	@Produces({ "application/json" })
+	public Response test2(@Context UriInfo uriInfo) {
+		System.out.println("invoking test/routeRequest...");
+		
+
+		String gibberish = "{\n"
+			    + "    \"responseCode\": 201,"
+				+ "    \"data\": {\n"
+				+ "        \"attachedData\": {\n"
+				+ "            \"treatmentArray\": [\n"
+				+ "                \"musicOnHold1.wav\",\n"
+				+ "                \"musicOnHold2.wav\",\n"
+				+ "                \"disconnect\"\n"
+				+ "            ],\n"
+				+ "            \"cacheANI\": false,\n"
+				+ "            \"defaultDestination\": \"199223322\",\n"
+				+ "            \"emergencyMessage\": \"emergency.wav\",\n"
+				+ "            \"useCacheasPrimary\": true\n"
+				+ "        },\n"
+				+ "        \"ContextAttributes\": {\n"
+				+ "            \"ENT_TFN_Name\": \"RegressionTest1\",\n"
+				+ "            \"ENT_Action\": \"Continue\",\n"
+				+ "            \"ENT_Unit\": \"OPT\",\n"
+				+ "            \"ENT_Segment\": \"RegressionTest\",\n"
+				+ "            \"ENT_Function\": \"Demo\",\n"
+				+ "            \"ENT_Language\": \"English\",\n"
+				+ "            \"ENT_CallType\": \"CT_RegressionTest_Initial_IVR\"\n"
+				+ "        }\n"
+				+ "    }\n"
+				+ "}\n"
+				+ "";
+		
+		
+		Response response = null;
+
+		try {
+			response = Response.status(201).entity(gibberish).build();
+
+		} catch (Exception e) {
+			response = Response.status(500, e.getMessage()).build();
+			sipLogger.severe(e);
+		}
+
+		return response;
+
+	}
+	
 
 	@GET
 	@Path("session")

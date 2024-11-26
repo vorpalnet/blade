@@ -5,6 +5,7 @@ import java.util.LinkedList;
 
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.logging.Logger;
@@ -19,11 +20,36 @@ public class RouterConfig extends Configuration implements Serializable {
 	// public Translation defaultRoute = new Translation("defaultRoute");
 	public Translation defaultRoute = null;
 
+//	public static URI applyParameters(Translation t, SipServletRequest request) throws ServletParseException {
+//		URI uri = null;
+//
+//		if (t != null) {
+//			uri = SettingsManager.sipFactory.createURI(t.getRequestUri());
+//
+//			// copy all SIP URI parameters (if not already present in new request URI)
+//			for (String name : request.getRequestURI().getParameterNameSet()) {
+//				if (uri.getParameter(name) == null) {
+//					uri.setParameter(name, uri.getParameter(name));
+//				}
+//			}
+//
+//		}
+//		return uri;
+//	}
+
 	public static URI applyParameters(Translation t, SipServletRequest request) throws ServletParseException {
 		URI uri = null;
 
 		if (t != null) {
+
 			uri = SettingsManager.sipFactory.createURI(t.getRequestUri());
+
+			// copy the 'user' if necessary
+			SipURI tSipUri = (SipURI) uri;
+			SipURI rSipUri = (SipURI) request.getRequestURI();
+			if (tSipUri.getUser() == null && rSipUri.getUser() != null) {
+				tSipUri.setUser(rSipUri.getUser());
+			}
 
 			// copy all SIP URI parameters (if not already present in new request URI)
 			for (String name : request.getRequestURI().getParameterNameSet()) {
@@ -33,6 +59,7 @@ public class RouterConfig extends Configuration implements Serializable {
 			}
 
 		}
+
 		return uri;
 	}
 
