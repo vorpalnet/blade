@@ -2,6 +2,7 @@ package org.vorpal.blade.framework;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.security.Principal;
 import java.util.Enumeration;
@@ -40,7 +41,7 @@ import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 
-public class DummyRequest extends DummyMessage implements SipServletRequest {
+public class DummyRequest extends DummyMessage implements SipServletRequest, Serializable {
 
 //	private String method;
 //	private String from;
