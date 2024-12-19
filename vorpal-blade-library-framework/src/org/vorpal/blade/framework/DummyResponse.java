@@ -2,6 +2,7 @@ package org.vorpal.blade.framework;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.security.Principal;
 import java.util.Enumeration;
@@ -25,9 +26,8 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipWebSocketContext;
-import javax.servlet.sip.TooManyHopsException;
 
-public class DummyResponse implements SipServletResponse {
+public class DummyResponse implements SipServletResponse, Serializable {
 
 	SipServletRequest request;
 

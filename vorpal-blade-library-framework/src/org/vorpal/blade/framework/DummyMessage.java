@@ -1,6 +1,7 @@
 package org.vorpal.blade.framework;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.security.Principal;
 import java.util.ArrayList;
@@ -22,7 +23,7 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipWebSocketContext;
 
-public class DummyMessage implements SipServletMessage {
+public class DummyMessage implements SipServletMessage, Serializable {
 	protected Map<String, Object> attributes = new HashMap<>();
 	protected Locale locale;
 	protected Map<String, String> headers = new HashMap<>();
