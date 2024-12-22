@@ -778,6 +778,9 @@ public abstract class Callflow implements Serializable {
 
 					switch (response.getMethod()) {
 					case INVITE:
+						// glare handling;
+						sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
+						// do not break; flow through
 					case REGISTER:
 					case SUBSCRIBE:
 					case NOTIFY:

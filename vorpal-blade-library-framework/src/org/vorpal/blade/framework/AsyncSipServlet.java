@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.Set;
 
 import javax.servlet.ServletContextEvent;
@@ -214,11 +216,34 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
 	protected void doRequest(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow = null;
 		Callback<SipServletRequest> requestLambda;
 		SipSession sipSession = request.getSession();
+		String method = request.getMethod();
+
+		Queue<SipServletRequest> glareQueue = null;
+		Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
+
+		// glare handling; when expecting ack and you don't get one,
+		// jam the message in a queue and process it later
+
+		if (false == method.equals("ACK")) {
+			if (expectAck != null && expectAck == true) {
+				sipLogger.warning(request,
+						"GLARE! " + method + " received while awaiting ACK. Queuing request for later processing...");
+				glareQueue = (Queue<SipServletRequest>) sipSession.getAttribute("GLARE_QUEUE");
+				glareQueue = (null != glareQueue) ? glareQueue : new LinkedList<>();
+				glareQueue.add(request);
+				sipSession.setAttribute("GLARE_QUEUE", glareQueue);
+				return;
+			}
+		} else {
+			expectAck = false;
+			sipSession.removeAttribute("EXPECT_ACK");
+		}
 
 		try {
 
@@ -260,7 +285,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			} else {
 
 				// Send 481 for ReINVITEs with failed linked sessions
-				if (request.getMethod().equals("INVITE") && false == request.isInitial()) {
+				if (method.equals("INVITE") && false == request.isInitial()) {
 					SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
 					if (linkedSession == null || false == linkedSession.isValid()) {
 						callflow = new Callflow481();
@@ -273,7 +298,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 				if (callflow == null) {
 
-					if (request.getMethod().equals("ACK")) {
+					if (method.equals("ACK")) {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
 					} else {
 
@@ -286,7 +311,7 @@ public abstract class AsyncSipServlet extends SipServlet
 						Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
 						SipServletResponse response = request.createResponse(501);
 						Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
-						Callflow.getLogger().warning("No registered callflow for request method " + request.getMethod()
+						Callflow.getLogger().warning("No registered callflow for request method " + method
 								+ ", consider modifying the 'chooseCallflow' method.");
 						response.send();
 //						}
@@ -317,6 +342,21 @@ public abstract class AsyncSipServlet extends SipServlet
 			sipLogger.logStackTrace(request, e);
 			throw e;
 		}
+
+		// process requests queued up from glare
+		if (expectAck != null && expectAck == false) {
+			glareQueue = (Queue<SipServletRequest>) sipSession.getAttribute("GLARE_QUEUE");
+			if (glareQueue != null) {
+				SipServletRequest glareRequest;
+				while (glareQueue.size() > 0) {
+					glareRequest = glareQueue.remove();
+					sipLogger.warning(glareRequest, "Processing queued " + glareRequest.getMethod() + " due to glare.");
+					doRequest(glareRequest);
+				}
+			}
+			sipSession.removeAttribute("GLARE_QUEUE");
+		}
+
 	}
 
 	@SuppressWarnings("unchecked")
