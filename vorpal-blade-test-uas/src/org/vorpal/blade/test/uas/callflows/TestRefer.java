@@ -6,7 +6,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 /**
  * This is a simple Third-Party Call-Control callflow.

@@ -4,7 +4,7 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipSession;
 import javax.ws.rs.container.AsyncResponse;
 
-import org.vorpal.blade.framework.AsyncSipServlet;
+import org.vorpal.blade.framework.v2.AsyncSipServlet;
 
 public class MessageSession {
 

@@ -26,9 +26,9 @@ for (String app : apps) {
 <link
 	href="https://fonts.googleapis.com/css?family=Roboto:400,300,100,500,700,900"
 	rel="stylesheet" type="text/css">
-<link href="global_assets/css/icons/icomoon/styles.min.css"
+<link href="./global_assets/css/icons/icomoon/styles.min.css"
 	rel="stylesheet" type="text/css">
-<link href="assets/css/all.min.css" rel="stylesheet" type="text/css">
+<link href="./assets/css/all.min.css" rel="stylesheet" type="text/css">
 <!-- /global stylesheets -->
 
 <!-- Core JS files -->
@@ -59,8 +59,8 @@ for (String app : apps) {
 
 		<div class="navbar-brand text-center text-lg-left">
 			<a href="index.jsp" class="d-inline-block"> <img
-				src="global_assets/images/logo_light.png" class="d-none d-sm-block"
-				alt=""> <img src="global_assets/images/logo_icon_light.png"
+				src="./global_assets/images/logo_light.png" class="d-none d-sm-block"
+				alt=""> <img src="./global_assets/images/logo_icon_light.png"
 				class="d-sm-none" alt="">
 			</a>
 		</div>
@@ -98,7 +98,7 @@ for (String app : apps) {
 					<a href="#"
 					class="navbar-nav-link navbar-nav-link-toggler dropdown-toggle d-inline-flex align-items-center h-100"
 					data-toggle="dropdown"> <img
-						src="global_assets/images/placeholders/placeholder.jpg"
+						src="./global_assets/images/placeholders/placeholder.jpg"
 						class="rounded-pill mr-lg-2" height="34" alt=""> <span
 						class="d-none d-lg-inline-block">User</span>
 				</a>
@@ -207,7 +207,7 @@ for (String app : apps) {
 				<div class="sidebar-section sidebar-user">
 					<div class="sidebar-section-body d-flex justify-content-center">
 						<a href="#"> <img
-							src="global_assets/images/placeholders/placeholder.jpg"
+							src="./global_assets/images/placeholders/placeholder.jpg"
 							class="rounded-circle" alt="">
 						</a>
 

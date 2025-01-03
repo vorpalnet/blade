@@ -31,8 +31,8 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 
 import org.apache.commons.mail.util.MimeMessageParser;
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;

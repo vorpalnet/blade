@@ -1,31 +1,43 @@
 <%@ page import="org.vorpal.blade.applications.console.config.test.*"%>
 <%@ page import="java.util.*"%>
+<%@ page import="java.nio.file.*"%>
 <%
+
+System.out.println("Test #2");
+
 String exception = "No Exceptions.";
 String app = request.getParameter("app");
 String configType = request.getParameter("configType");
+System.out.println("app=" + app +", configType="+ configType);
 
-
-String submittedFormData = request.getParameter("data");
-
-System.out.println("app="+app);
-System.out.println("configType="+configType);
-System.out.println("data="+submittedFormData);
-
-
-
+String jsonData = request.getParameter("jsonData");
 
 ConfigHelper cfgHelper = new ConfigHelper(app, configType);
+cfgHelper.getSettings();
 
-String jsonData = cfgHelper.loadJson();
-String jsonSchema = cfgHelper.loadJsonSchema();
+String jsonSchema = cfgHelper.loadFile("SCHEMA");
+String jsonSample = cfgHelper.loadFile("SAMPLE");
 
-/* 
-String domainJson = cfgHelper.loadDomainJson();
-String clusterJson = cfgHelper.loadClusterJson();
-String serverJson = cfgHelper.loadServerJson();
- */ 
- 
+if (jsonData != null && jsonData.length() > 0) {
+	System.out.println("Saving submitted form data locally..." + jsonData.length());
+	System.out.println(jsonData);
+	cfgHelper.saveFileLocally(configType, jsonData);
+} else {
+
+	System.out.println("Loading json data for type " + configType);
+	jsonData = cfgHelper.loadFile(configType);
+
+	if (jsonData == null || jsonData.length() == 0) {
+		System.out.println("No json data found...");
+		jsonData = "{}";
+	} else {
+		System.out.println("Loading json data for type " + configType);
+		System.out.println("bytes: " + jsonData.length());
+	}
+}
+
+cfgHelper.closeSettings();
+
 Set<String> dirContents = cfgHelper.listFilesUsingFilesList("config/custom/vorpal/");
 %>
 <!DOCTYPE html>
@@ -33,11 +45,11 @@ Set<String> dirContents = cfgHelper.listFilesUsingFilesList("config/custom/vorpa
 <head>
 <meta name=viewport content='width=560'>
 
-<link rel="stylesheet" href='lib/bootstrap/css/bootstrap.min.css' />
+<link rel="stylesheet" href='lib/bootstrap-3.4.1-dist/css/bootstrap.min.css' />
 <link rel="stylesheet" href="lib/codemirror/codemirror.css">
 <link rel="stylesheet" href="lib/bootstrap-select-v1.13.14/css/bootstrap-select.min.css">
 <link rel="stylesheet" href="lib/octicons/octicons.css">
-<link rel="stylesheet" href='http://rawgit.com/brutusin/json-forms/master/dist/css/brutusin-json-forms.min.css' />
+<link rel="stylesheet" href='lib/brutusin-json-forms.min.css' />
 
 <style>
 .CodeMirror {
@@ -46,46 +58,32 @@ Set<String> dirContents = cfgHelper.listFilesUsingFilesList("config/custom/vorpa
 </style>
 
 <script src='lib/jquery-1.11.3.min.js'></script>
-<script src='lib/bootstrap/js/bootstrap.min.js'></script>
+<script src='lib/bootstrap-3.4.1-dist/js/bootstrap.min.js'></script>
 <script src="lib/codemirror/codemirror.js"></script>
 <script src="lib/codemirror/codemirror-javascript.js"></script>
 <script src="lib/markdown.min.js"></script>
 <script src="lib/bootstrap-select-v1.13.14/js/bootstrap-select.min.js"></script>
 <script src="lib/bootstrap-select-v1.13.14/js/i18n/defaults-en_US.min.js"></script>
-<!--
-        <script src="//rawgit.com/brutusin/json-forms/master/dist/js/brutusin-json-forms.min.js"></script>
-         -->
 
-
-<script src="http://rawgit.com/brutusin/json-forms/master/src/js/brutusin-json-forms.js"></script>
-<script src="http://rawgit.com/brutusin/json-forms/master/dist/js/brutusin-json-forms-bootstrap.min.js"></script>
-
+<!-- script src="./lib/brutusin-json-forms.min.js"></script -->
+<script src="./lib/brutusin-json-forms.js"></script>
+<script src="./lib/brutusin-json-forms-bootstrap.min.js"></script>
 
 
 
 <script lang="javascript">
 
-
-  function saveData(app, configType, data){
-		
+function saveData(app, configType, data){
 	try {
-	  console.log(data);
-		
-   // Construct a FormData instance
-	  const formData = new FormData();
-
-	  // Add a text field
-	  formData.append("app", app);
-	  formData.append("configType", configType);
-	  formData.append("data", data);
-
+      // put the JSON 'data' in a hidden form field called 'jsonData'.
+ 	  $("#jsonData").val(data);
+ 	  
 	  // Modify the URL
-	  $('#bladeForm').attr('action', $('#bladeForm').attr('action')+'configType='+configType+"&app="+app);
+	  $('#bladeForm').attr('action', $('#bladeForm').attr('action')+'index.jsp?configType='+configType+"&app="+app);
 
-	  } catch (e) {
+	} catch (e) {
 	    console.error(e);
-	  }
-	
+	}
 }
 
 
@@ -108,30 +106,14 @@ function chgAction(){
 
 
 <script lang="javascript">
-
 		const currentUrl = window.location.href;
-
-
-
-		
 		const queryString = window.location.search;
 		const urlParams = new URLSearchParams(queryString);
 		const app = urlParams.get('app');
 
-        var schema = <%=jsonSchema %>;
-		var jsonData = <%=jsonData %>;
-
-
-
-
-
-
-
-
-
-		
-      
-
+        var schema = <%=jsonSchema%>;
+		var jsonData = <%=jsonData%>;
+		var jsonSample = <%=jsonSample%>;
 
         
             var BrutusinForms = brutusin["json-forms"];
@@ -150,17 +132,17 @@ function chgAction(){
                 ["Domain",
                     schema,
                     jsonData,
-                    null,
+                    jsonSample,
                     "Domain-wide configuration (typical)"],
                 ["Cluster",
                     schema,
                     jsonData,
-                    null,
+                    jsonSample,
                     "Cluster-specific configuration"],
                 ["Server",
                     schema,
                     jsonData,
-                    null,
+                    jsonSample,
                     "Server-specific configuration"]                        
             ];
             
@@ -184,10 +166,10 @@ function chgAction(){
                 document.getElementById("examples").selectedIndex = selectedExampleIndex;
                 input.schema = demos[selectedExampleIndex][1];
                 input.data = demos[selectedExampleIndex][2];
-                eval("input.resolver=" + demos[selectedExampleIndex][3]);
+                input.sample = demos[selectedExampleIndex][3];
                 inputString.schema = JSON.stringify(input.schema, null, 2);
                 inputString.data = input.data ? JSON.stringify(input.data, null, 2) : "";
-                inputString.resolver = demos[selectedExampleIndex][3] ? demos[selectedExampleIndex][3] : "";
+                inputString.sample = input.sample ? JSON.stringify(input.sample, null, 2) : "";
                 if (codeMirrors[selectedTab]) {
                     codeMirrors[selectedTab].setValue(inputString[selectedTab]);
                 }
@@ -210,7 +192,7 @@ function chgAction(){
                 var schema;
                 var data;
                 var message;
-                var resolver;
+                var sample;
                 var tabId;
                 inputString[selectedTab] = codeMirrors[selectedTab].getValue();
                 $("#jsonAlert").hide();
@@ -225,14 +207,25 @@ function chgAction(){
                     } else {
                         data = null;
                     }
-                    if (inputString.resolver) {
-                        tabId = "resolver";
+
+                    if (inputString.sample) {
+                        message = "The was a syntax error in the initial sample JSON";
+                        tabId = "sample";
+                        eval("sample=" + inputString.sample);
+                    } else {
+                        sample = null;
+                    }
+
+                    
+/*                     if (inputString.sample) {
+                        tabId = "sample";
                         message = "The was a syntax error in the resolver code";
-                        eval("resolver=" + inputString.resolver);
-                        if ("function" !== typeof resolver) {
-                            throw "Schema resolver does not evaluate to a function";
+                        eval("sample=" + inputString.sample);
+                        if ("function" !== typeof sample) {
+                            throw "Schema sample does not evaluate to a function";
                         }
                     }
+  */                   
                 } catch (err) {
                     document.getElementById('error-message').innerHTML = message + (err ? ". " + err : "");
                     $('[href=#' + tabId + ']').tab('show');
@@ -245,9 +238,11 @@ function chgAction(){
 
 
                 bf = BrutusinForms.create(schema);
-                if (resolver) {
+
+/*                 if (resolver) {
                     bf.schemaResolver = resolver;
                 }
+ */                
                 var container = document.getElementById('form-container');
                 while (container.firstChild) {
                     container.removeChild(container.firstChild);
@@ -286,17 +281,14 @@ function chgAction(){
 		</blockquote>
 		<div class="panel-group" id="accordion" role="tablist" aria-multiselectable="true">
 
-			<form id="bladeForm" name="bladeForm" method="post" action="?">
+			<form id="bladeForm" name="bladeForm" method="post" action="">
+
+				<input type="hidden" id="jsonData" name="jsonData">
+
 
 				<div class="panel panel-primary">
 					<div class="panel-heading" role="tab" id="headingOne">
-						<h4 class="panel-title">
-							<p><%=app%></p>
-							<!--a role="button" data-toggle="collapse" data-parent="#accordion"
-							href="index.jsp#collapseInput" aria-expanded="true"
-							aria-controls="collapseInput"> <%=app%>
-						</a-->
-						</h4>
+						<h4 class="panel-title"><%=app.toUpperCase()%></h4>
 					</div>
 					<div id="collapseInput" class="panel-collapse collapse in" role="tabpanel" aria-labelledby="headingOne">
 
@@ -323,19 +315,10 @@ function chgAction(){
 							</select> <br>
 
 							<ul class="nav nav-tabs" role="tablist">
-
 								<li role="presentation" class="active"><a href="index.jsp#form" aria-controls="schema" role="tab" data-toggle="tab">Form</a></li>
-
 								<li role="presentation"><a href="index.jsp#data" aria-controls="data" role="tab" data-toggle="tab">JSON</a></li>
-
+								<li role="presentation"><a href="index.jsp#sample" aria-controls="sample" role="tab" data-toggle="tab">Sample</a></li>
 								<li role="presentation" class=""><a href="index.jsp#schema" aria-controls="schema" role="tab" data-toggle="tab">Schema</a></li>
-
-								<!-- 
-							<li role="presentation"><a href="index.jsp#resolver"
-								aria-controls="resolver" role="tab" data-toggle="tab">Schema
-									resolver</a></li>
- -->
-
 							</ul>
 							<!-- Tab panes -->
 							<div class="tab-content">
@@ -345,6 +328,7 @@ function chgAction(){
 
 								</div>
 								<div role="tabpanel" class="tab-pane" id="data"></div>
+								<div role="tabpanel" class="tab-pane" id="sample"></div>
 								<div role="tabpanel" class="tab-pane" id="schema"></div>
 								<!--div role="tabpanel" class="tab-pane" id="resolver"></div-->
 							</div>
@@ -355,65 +339,34 @@ function chgAction(){
 						</div>
 						<!-- panel-body -->
 
-
-						<div class="panel-footer">
-
-							<!-- 
-						<button class="btn btn-primary" onclick="generateForm()">Create
-							form</button>
-							
-					-->
-
-							<button class="btn btn-primary" onclick="saveData( app, configType, JSON.stringify(bf.getData(), null, 4))">Save</button>
-							&nbsp;
-
-							<button class="btn btn-primary" onclick="alert(JSON.stringify(bf.getData(), null, 4))">Display</button>
-							&nbsp;
-
-							<button class="btn btn-primary"
-								onclick="if (bf.validate()) {
-                                        alert('Validation succeeded')
-                                    }">Validate</button>
-
-
-						</div>
-
-
-
 					</div>
 				</div>
 
 
 				<div class="panel panel-primary">
-					<div class="panel-heading" role="tab" id="headingTwo">
-						<h4 class="panel-title">
-							<a class="collapsed" id="formLink" role="button" data-toggle="collapse" data-parent="#accordion" href="index.jsp#collapseForm" aria-expanded="false"
-								aria-controls="collapseForm"> Generated form </a>
-						</h4>
-					</div>
-					<div id="collapseForm" class="panel-collapse collapse" role="tabpanel" aria-labelledby="headingTwo">
+
+					<div id="collapseForm" class="panel-collapse collapse" role="tabpanel">
+
 						<div class="alert alert-info" role="alert">
 							<strong id="example-title"></strong>
 							<div id="example-desc"></div>
 						</div>
 
-
 						<div id='container' style="padding-left: 12px; padding-right: 12px; padding-bottom: 12px;"></div>
 
+					</div>
 
-						<div class="panel-footer">
-							<button class="btn btn-primary" onclick="saveData( app, configType, JSON.stringify(bf.getData(), null, 4))">Save</button>
-							&nbsp;
-
-							<button class="btn btn-primary" onclick="alert(JSON.stringify(bf.getData(), null, 4))">Display</button>
-							&nbsp;
-
-							<button class="btn btn-primary"
-								onclick="if (bf.validate()) {
+					<div class="panel-footer">
+						<button class="btn btn-primary" onclick="saveData( app, configType, JSON.stringify(bf.getData(), null, 4))">Save</button>
+						&nbsp;
+						<button class="btn btn-primary" onclick="alert(JSON.stringify(bf.getData(), null, 4))">Display</button>
+						&nbsp;
+						<button class="btn btn-primary"
+							onclick="if (bf.validate()) {
                                         alert('Validation succeeded')
                                     }">Validate</button>
-						</div>
 					</div>
+
 				</div>
 
 			</form>
@@ -421,6 +374,37 @@ function chgAction(){
 		</div>
 	</div>
 
+
+	<!-- Footer -->
+	<div class="navbar navbar-expand-lg navbar-light border-bottom-0 border-top">
+		<div class="text-center d-lg-none w-100">
+			<button type="button" class="navbar-toggler dropdown-toggle" data-toggle="collapse" data-target="#navbar-third">
+				<i class="icon-menu mr-2"></i> Bottom navbar
+			</button>
+		</div>
+
+		<div class="navbar-collapse collapse" id="navbar-third">
+			<span class="navbar-text"> © 2015 - 2018. <a href="#">Limitless Web App Kit</a> by <a href="https://themeforest.net/user/Kopyov" target="_blank">Eugene
+					Kopyov</a>
+			</span>
+
+			<ul class="navbar-nav ml-lg-auto">
+				<li class="nav-item"><a href="#" class="navbar-nav-link">Help center</a></li>
+				<li class="nav-item"><a href="#" class="navbar-nav-link">Policy</a></li>
+				<li class="nav-item"><a href="#" class="navbar-nav-link font-weight-semibold">Upgrade your account</a></li>
+				<li class="nav-item dropup"><a href="#" class="navbar-nav-link" data-toggle="dropdown"> <i class="icon-share4 d-none d-lg-inline-block"></i> <span
+						class="d-lg-none">Share</span>
+				</a>
+
+					<div class="dropdown-menu dropdown-menu-right">
+						<a href="#" class="dropdown-item"><i class="icon-dribbble3"></i> Dribbble</a> <a href="#" class="dropdown-item"><i class="icon-pinterest2"></i>
+							Pinterest</a> <a href="#" class="dropdown-item"><i class="icon-github"></i> Github</a> <a href="#" class="dropdown-item"><i class="icon-stackoverflow"></i>
+							Stack Overflow</a>
+					</div></li>
+			</ul>
+		</div>
+	</div>
+	<!-- /footer -->
 
 	<script lang="javascript">
             route();

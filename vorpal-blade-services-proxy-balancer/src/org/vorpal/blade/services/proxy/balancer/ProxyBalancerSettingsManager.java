@@ -9,9 +9,9 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.proxy.ProxyPlan;
-import org.vorpal.blade.framework.proxy.ProxyTier;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
+import org.vorpal.blade.framework.v2.proxy.ProxyTier;
 
 /**
  * Extends the SettingsManager class to implement the initialize method. This is

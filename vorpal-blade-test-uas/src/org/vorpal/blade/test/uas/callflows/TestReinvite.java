@@ -30,7 +30,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.b2bua.InitialInvite;
+import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
 
 public class TestReinvite extends InitialInvite {
 	static final long serialVersionUID = 1L;

@@ -38,8 +38,8 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.b2bua.B2buaListener;
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 public class CrudInitialInvite extends Callflow {
 	static final long serialVersionUID = 1L;

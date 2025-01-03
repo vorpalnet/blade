@@ -43,7 +43,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.annotation.SipApplicationSessionScoped;
 
-import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 @SipApplicationSessionScoped
 public class ProxyRegistrar implements Serializable {

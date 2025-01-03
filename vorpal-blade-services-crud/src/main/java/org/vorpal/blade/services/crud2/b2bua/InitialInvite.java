@@ -27,17 +27,15 @@ package org.vorpal.blade.services.crud2.b2bua;
 import java.io.IOException;
 
 import javax.servlet.ServletException;
-import javax.servlet.sip.Address;
 import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.b2bua.B2buaListener;
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 public class InitialInvite extends Callflow implements CallflowListener {
 	static final long serialVersionUID = 1L;

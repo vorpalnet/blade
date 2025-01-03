@@ -40,10 +40,9 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionEvent;
 import javax.servlet.sip.SipSessionListener;
 
-import org.vorpal.blade.framework.b2bua.B2buaServlet;
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.logging.Color;
-import org.vorpal.blade.framework.logging.ConsoleColors;
+import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Color;
 
 /**
  * @author Jeff McDonald

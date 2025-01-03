@@ -2,12 +2,12 @@ package org.vorpal.blade.services.proxy.balancer;
 
 import javax.servlet.sip.ServletParseException;
 
-import org.vorpal.blade.framework.config.SessionParametersDefault;
-import org.vorpal.blade.framework.logging.LogParametersDefault;
-import org.vorpal.blade.framework.proxy.ProxyPlan;
-import org.vorpal.blade.framework.proxy.ProxyServlet;
-import org.vorpal.blade.framework.proxy.ProxyTier;
-import org.vorpal.blade.framework.proxy.ProxyTier.Mode;
+import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
+import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
+import org.vorpal.blade.framework.v2.proxy.ProxyServlet;
+import org.vorpal.blade.framework.v2.proxy.ProxyTier;
+import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
 
 public class ProxyBalancerConfigSample extends ProxyBalancerConfig {
 

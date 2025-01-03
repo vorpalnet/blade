@@ -28,7 +28,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.services.tpcc.TpccServlet;
 import org.vorpal.blade.services.tpcc.callflows.CreateDialog;
 import org.vorpal.blade.services.tpcc.v1.dialog.Dialog;

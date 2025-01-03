@@ -1,11 +1,11 @@
 package org.vorpal.blade.services.crud;
 
-import org.vorpal.blade.framework.config.ConfigPrefixMap;
-import org.vorpal.blade.framework.config.Selector;
-import org.vorpal.blade.framework.config.Translation;
-import org.vorpal.blade.framework.config.TranslationsMap;
-import org.vorpal.blade.framework.logging.LogParameters;
-import org.vorpal.blade.framework.logging.LogParametersDefault;
+import org.vorpal.blade.framework.v2.config.ConfigPrefixMap;
+import org.vorpal.blade.framework.v2.config.Selector;
+import org.vorpal.blade.framework.v2.config.Translation;
+import org.vorpal.blade.framework.v2.config.TranslationsMap;
+import org.vorpal.blade.framework.v2.logging.LogParameters;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 public class CrudConfigurationSample extends CrudConfiguration {
 	public CrudConfigurationSample() {

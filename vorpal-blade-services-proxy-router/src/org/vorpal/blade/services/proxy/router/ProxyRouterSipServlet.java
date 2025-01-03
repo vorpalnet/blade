@@ -2,8 +2,6 @@ package org.vorpal.blade.services.proxy.router;
 
 import java.io.IOException;
 
-import javax.management.InstanceNotFoundException;
-import javax.management.MBeanRegistrationException;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
@@ -11,11 +9,11 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.config.RouterConfig;
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.proxy.ProxyPlan;
-import org.vorpal.blade.framework.proxy.ProxyServlet;
-import org.vorpal.blade.framework.proxy.ProxyTier;
+import org.vorpal.blade.framework.v2.config.RouterConfig;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
+import org.vorpal.blade.framework.v2.proxy.ProxyServlet;
+import org.vorpal.blade.framework.v2.proxy.ProxyTier;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)

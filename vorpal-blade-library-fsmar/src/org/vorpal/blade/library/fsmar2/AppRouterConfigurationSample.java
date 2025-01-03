@@ -26,8 +26,8 @@ package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
 
-import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
-import org.vorpal.blade.framework.logging.LogParametersDefault;
+import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;

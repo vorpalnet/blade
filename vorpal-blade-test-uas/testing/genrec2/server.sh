@@ -1,5 +1,7 @@
 #!/bin/bash
 
-sipp -sf uas.xml -i 192.168.1.107 -p 5099
+export OCCAS=172.16.32.108
+
+sipp -sf uas.xml -i ${OCCAS} -p 5099
 
 

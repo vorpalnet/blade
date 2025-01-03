@@ -6,7 +6,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 public abstract class KeepAliveCallflow extends Callflow implements javax.servlet.sip.SessionKeepAlive.Callback{
 

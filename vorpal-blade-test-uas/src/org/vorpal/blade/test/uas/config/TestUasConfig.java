@@ -2,7 +2,7 @@ package org.vorpal.blade.test.uas.config;
 
 import java.util.HashMap;
 
-import org.vorpal.blade.framework.config.Configuration;
+import org.vorpal.blade.framework.v2.config.Configuration;
 
 public class TestUasConfig extends Configuration {
 

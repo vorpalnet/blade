@@ -5,9 +5,9 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.proxy.ProxyListener;
-import org.vorpal.blade.framework.proxy.ProxyPlan;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.proxy.ProxyListener;
+import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
 
 public class ProxyInvite extends Callflow {
 	private static final long serialVersionUID = 1L;

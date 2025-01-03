@@ -3,11 +3,11 @@ package org.vorpal.blade.test.b2bua;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.KeepAliveParameters;
-import org.vorpal.blade.framework.config.SessionParameters;
-import org.vorpal.blade.framework.config.SessionParametersDefault;
-import org.vorpal.blade.framework.logging.LogParametersDefault;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.KeepAliveParameters;
+import org.vorpal.blade.framework.v2.config.SessionParameters;
+import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 public class ConfigSample extends SampleB2buaConfig implements Serializable {
 

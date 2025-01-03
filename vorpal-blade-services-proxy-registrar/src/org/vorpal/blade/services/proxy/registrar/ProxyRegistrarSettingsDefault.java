@@ -26,7 +26,7 @@ package org.vorpal.blade.services.proxy.registrar;
 
 import java.io.Serializable;
 
-import org.vorpal.blade.framework.logging.LogParametersDefault;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 public class ProxyRegistrarSettingsDefault extends ProxyRegistrarSettings implements Serializable {
 

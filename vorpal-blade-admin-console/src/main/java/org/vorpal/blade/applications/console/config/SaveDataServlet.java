@@ -2,6 +2,7 @@ package org.vorpal.blade.applications.console.config;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.Path;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -27,16 +28,8 @@ public class SaveDataServlet extends HttpServlet {
 
 		ConfigHelper configHelper = new ConfigHelper(app);
 
-		switch (configType) {
-		case "domain":
-			configHelper.saveDomainJson(data);
-			break;
-		case "cluster":
-			configHelper.saveClusterJson(data);
-			break;
-		case "server":
-			configHelper.saveServerJson(data);
-		}
+		Path path = configHelper.getPath(configType);
+		configHelper.saveFileLocally(configType, data);
 
 		PrintWriter pw = res.getWriter();// get the stream to write the data
 		pw.println("<html><body>");

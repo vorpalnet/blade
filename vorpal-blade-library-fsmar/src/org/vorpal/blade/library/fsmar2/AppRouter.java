@@ -25,7 +25,6 @@
 package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -42,15 +41,12 @@ import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 import javax.servlet.sip.ar.SipRouteModifier;
 import javax.servlet.sip.ar.SipTargetedRequestInfo;
 
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.logging.LogManager;
-import org.vorpal.blade.framework.logging.Logger;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.LogManager;
+import org.vorpal.blade.framework.v2.logging.Logger;
 
-import com.bea.wcp.sip.engine.SipServletMessageAdapter;
 import com.bea.wcp.sip.engine.SipServletRequestAdapter;
 import com.bea.wcp.sip.engine.server.SipApplicationSessionImpl;
-import com.bea.wcp.sip.engine.server.SipServletMessageImpl;
-import com.bea.wcp.sip.engine.server.header.HeaderUtils;
 
 public class AppRouter implements SipApplicationRouter {
 

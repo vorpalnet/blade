@@ -4,10 +4,10 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.logging.Logger;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.services.queue.QueueCallflow.QueueState;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
-import org.vorpal.blade.services.queue.config.QueueSettingsManager;
 
 public class Queue {
 	public String id;
@@ -51,27 +51,39 @@ public class Queue {
 				// jwm testing, does this grow? no.
 				// QueueMemHog memHog = new QueueMemHog();
 				QueueCallflow callflow;
-				for (int i = 0; i < attributes.rate; i++) {
+
+				// for (int i = 0; i < attributes.rate; i++) {
+				int i = 0;
+				do {
 					callflow = callflows.pollLast();
 					if (callflow != null) {
-//						SettingsManager.sipLogger.finer("Continuing callflow... ");
+						SettingsManager.sipLogger
+								.fine("Continuing callflow... state=" + callflow.getState().toString());
+
 						try {
+
+							if (QueueState.RINGING == callflow.getState()) {
+								i++;
+							}
+
 							callflow.complete();
+
 						} catch (Exception e) {
 							sipLogger.severe(e);
 						}
 					} else {
 						break;
 					}
-				}
+				} while (i < attributes.rate);
+
 				callflow = null;
 			}
 		};
 
 		// jwm - testing timers
 		sipLogger.fine("Queue.initialize, creating new timer...");
-		timer.schedule(queueTask, attributes.period, attributes.period);
-		// timer.schedule(queueTask, attributes.period);
+//		timer.schedule(queueTask, attributes.period, attributes.period);
+		timer.scheduleAtFixedRate(queueTask, attributes.period, attributes.period);
 
 	}
 

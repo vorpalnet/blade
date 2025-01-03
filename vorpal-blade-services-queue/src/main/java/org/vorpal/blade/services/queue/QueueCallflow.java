@@ -10,11 +10,12 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSession.State;
 
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.callflow.Expectation;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
 
 public class QueueCallflow extends Callflow {
+	private static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
 	private SipServletRequest mediaRequest;
 	private String ringingPeriodTimer;

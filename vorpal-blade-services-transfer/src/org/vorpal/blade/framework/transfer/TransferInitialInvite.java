@@ -5,8 +5,8 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.b2bua.B2buaListener;
-import org.vorpal.blade.framework.b2bua.InitialInvite;
+import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
+import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
 
 public class TransferInitialInvite extends InitialInvite {
 

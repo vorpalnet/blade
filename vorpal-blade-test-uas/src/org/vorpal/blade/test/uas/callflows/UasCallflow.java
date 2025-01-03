@@ -6,7 +6,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 public class UasCallflow extends Callflow {
 

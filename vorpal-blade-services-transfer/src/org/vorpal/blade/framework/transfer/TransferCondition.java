@@ -1,6 +1,6 @@
 package org.vorpal.blade.framework.transfer;
 
-import org.vorpal.blade.framework.config.Condition;
+import org.vorpal.blade.framework.v2.config.Condition;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 
 public class TransferCondition {

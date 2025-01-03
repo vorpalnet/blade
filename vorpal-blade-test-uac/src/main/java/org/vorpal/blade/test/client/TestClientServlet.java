@@ -23,24 +23,17 @@
  */
 package org.vorpal.blade.test.client;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Properties;
 
-import javax.mail.Session;
-import javax.mail.internet.MimeMessage;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 
-import org.apache.commons.mail.util.MimeMessageParser;
-import org.vorpal.blade.framework.AsyncSipServlet;
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
 import org.vorpal.blade.framework.tpcc.TestReinvite;
+import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 /**
  * @author Jeff McDonald

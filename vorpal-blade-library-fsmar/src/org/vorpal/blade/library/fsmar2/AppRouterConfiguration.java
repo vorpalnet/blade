@@ -27,7 +27,7 @@ package org.vorpal.blade.library.fsmar2;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import org.vorpal.blade.framework.config.Configuration;
+import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;
