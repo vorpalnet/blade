@@ -26,7 +26,7 @@ package org.vorpal.blade.library.fsmar2;
 
 import java.io.Serializable;
 
-import org.vorpal.blade.framework.config.Condition;
+import org.vorpal.blade.framework.v2.config.Condition;
 
 public class Transition implements Serializable {
 

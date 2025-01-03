@@ -7,7 +7,6 @@ import java.util.Map.Entry;
 import java.util.concurrent.ThreadLocalRandom;
 
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.ws.rs.Consumes;
@@ -25,7 +24,7 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.services.tpcc.v1.session.SessionCreateRequest;
 import org.vorpal.blade.services.tpcc.v1.session.SessionGetResponse;
 

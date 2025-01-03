@@ -3,8 +3,8 @@ package org.vorpal.blade.services.proxy.balancer;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import org.vorpal.blade.framework.config.Configuration;
-import org.vorpal.blade.framework.proxy.ProxyPlan;
+import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 

@@ -8,10 +8,10 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.b2bua.B2buaListener;
-import org.vorpal.blade.framework.b2bua.B2buaServlet;
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
+import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.test.uas.callflows.TestInvite;
 import org.vorpal.blade.test.uas.callflows.TestNotImplemented;
 import org.vorpal.blade.test.uas.callflows.TestOkayResponse;

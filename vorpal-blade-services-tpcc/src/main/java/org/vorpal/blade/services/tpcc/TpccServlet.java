@@ -18,9 +18,9 @@ import javax.servlet.sip.SipSessionEvent;
 import javax.servlet.sip.SipSessionListener;
 import javax.ws.rs.container.AsyncResponse;
 
-import org.vorpal.blade.framework.b2bua.B2buaServlet;
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.logging.ConsoleColors;
+import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.ConsoleColors;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)

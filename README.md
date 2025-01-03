@@ -1,12 +1,9 @@
 # Vorpal:BLADE
 
-BLADE stands for Blended Layer Application Development Environment.
+**B**lended **L**ayer **A**pplication **D**evelopment **E**nvironment
 
-See the [Documentation](https://vorpalnet.github.io) website.
-
-It's purpose is to simplify the development of audio/video streaming applications. It
-attempts to follow SIP Servlet specifications, but currently only supports
-Oracle Communications Converged Application Server (OCCAS).
+BLADE is a development framework and collection of pre-built
+applications build on the Java EE JSR-359 (SIP Servlet) specification.
 
 What makes BLADE so great?
 

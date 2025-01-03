@@ -1,9 +1,8 @@
 package org.vorpal.blade.test.uas.config;
 
-import org.vorpal.blade.framework.config.Configuration;
-import org.vorpal.blade.framework.config.SessionParameters;
-import org.vorpal.blade.framework.logging.LogParametersDefault;
-import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
+import org.vorpal.blade.framework.v2.config.SessionParameters;
+import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 public class TestUasConfigSample extends TestUasConfig {
 

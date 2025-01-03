@@ -3,33 +3,25 @@ package org.vorpal.blade.services.transfer;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
-import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
-import javax.servlet.sip.SipApplicationSessionEvent;
-import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.SipSession;
-import javax.servlet.sip.SipSessionEvent;
-import javax.servlet.sip.SipSessionListener;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.b2bua.B2buaServlet;
-import org.vorpal.blade.framework.b2bua.Passthru;
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.config.Translation;
-import org.vorpal.blade.framework.logging.ConsoleColors;
 import org.vorpal.blade.framework.transfer.AttendedTransfer;
 import org.vorpal.blade.framework.transfer.BlindTransfer;
 import org.vorpal.blade.framework.transfer.ConferenceTransfer;
 import org.vorpal.blade.framework.transfer.TransferInitialInvite;
 import org.vorpal.blade.framework.transfer.TransferListener;
+import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v2.b2bua.Passthru;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 
 /**

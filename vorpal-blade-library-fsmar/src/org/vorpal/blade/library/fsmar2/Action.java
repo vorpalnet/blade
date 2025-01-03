@@ -31,7 +31,7 @@ import javax.servlet.sip.ar.SipApplicationRouterInfo;
 import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 import javax.servlet.sip.ar.SipRouteModifier;
 
-import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 public class Action implements Serializable {
 	private static final long serialVersionUID = 1L;

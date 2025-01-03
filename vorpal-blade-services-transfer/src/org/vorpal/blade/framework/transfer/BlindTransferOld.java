@@ -28,10 +28,8 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipURI;
 
-import org.vorpal.blade.framework.callflow.Callback;
-import org.vorpal.blade.framework.callflow.Expectation;
+import org.vorpal.blade.framework.v2.callflow.Expectation;
 
 /**
  * This class implements a blind call transfer.

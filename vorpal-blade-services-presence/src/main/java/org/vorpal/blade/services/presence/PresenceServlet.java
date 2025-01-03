@@ -2,17 +2,15 @@ package org.vorpal.blade.services.presence;
 
 import java.io.IOException;
 
-import javax.management.InstanceNotFoundException;
-import javax.management.MBeanRegistrationException;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
-import org.vorpal.blade.framework.AsyncSipServlet;
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)

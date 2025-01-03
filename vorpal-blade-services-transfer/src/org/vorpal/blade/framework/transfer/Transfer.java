@@ -70,7 +70,7 @@ import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.services.transfer.TransferServlet;
 import org.vorpal.blade.services.transfer.TransferSettings;
 

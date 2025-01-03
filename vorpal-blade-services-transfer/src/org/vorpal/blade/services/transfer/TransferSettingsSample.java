@@ -1,11 +1,11 @@
 package org.vorpal.blade.services.transfer;
 
-import org.vorpal.blade.framework.config.ConfigHashMap;
-import org.vorpal.blade.framework.config.ConfigPrefixMap;
-import org.vorpal.blade.framework.config.Selector;
-import org.vorpal.blade.framework.config.TranslationsMap;
-import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
-import org.vorpal.blade.framework.logging.LogParametersDefault;
+import org.vorpal.blade.framework.v2.config.ConfigHashMap;
+import org.vorpal.blade.framework.v2.config.ConfigPrefixMap;
+import org.vorpal.blade.framework.v2.config.Selector;
+import org.vorpal.blade.framework.v2.config.TranslationsMap;
+import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 public class TransferSettingsSample extends TransferSettings {
 

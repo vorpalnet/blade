@@ -13,8 +13,8 @@ import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.config.Configuration;
-import org.vorpal.blade.framework.config.SettingsManager;
+import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;

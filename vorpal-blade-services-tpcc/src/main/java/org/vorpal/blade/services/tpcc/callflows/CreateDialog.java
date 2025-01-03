@@ -4,11 +4,9 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipSession;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
 
-import org.vorpal.blade.framework.callflow.ClientCallflow;
+import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 import org.vorpal.blade.services.tpcc.v1.DialogAPI;
 import org.vorpal.blade.services.tpcc.v1.DialogAPI.ResponseStuff;
 

@@ -15,15 +15,15 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.logging.Color;
-import org.vorpal.blade.framework.logging.Logger;
-import org.vorpal.blade.framework.proxy.ProxyInvite;
-import org.vorpal.blade.framework.proxy.ProxyListener;
-import org.vorpal.blade.framework.proxy.ProxyPlan;
-import org.vorpal.blade.framework.proxy.ProxyServlet;
-import org.vorpal.blade.framework.proxy.ProxyTier;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Color;
+import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v2.proxy.ProxyInvite;
+import org.vorpal.blade.framework.v2.proxy.ProxyListener;
+import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
+import org.vorpal.blade.framework.v2.proxy.ProxyServlet;
+import org.vorpal.blade.framework.v2.proxy.ProxyTier;
 
 /**
  * This class implements an example B2BUA with transfer capabilities.

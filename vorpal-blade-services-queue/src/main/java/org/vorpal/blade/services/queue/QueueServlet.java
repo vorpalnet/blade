@@ -33,9 +33,9 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.b2bua.B2buaServlet;
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.Translation;
+import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
 import org.vorpal.blade.services.queue.config.QueueConfig;
 import org.vorpal.blade.services.queue.config.QueueConfigSample;

@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.vorpal.blade.framework.config.RouterConfig;
+import org.vorpal.blade.framework.v2.config.RouterConfig;
 import org.vorpal.blade.services.crud.RuleSet;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
