@@ -32,7 +32,7 @@ import javax.naming.InitialContext;
 import javax.naming.NameNotFoundException;
 import javax.naming.NamingException;
 
-import org.vorpal.blade.framework.config.SettingsMXBean;
+import org.vorpal.blade.framework.v2.config.SettingsMXBean;
 
 public class ConfigurationMonitor extends Thread {
 
@@ -299,13 +299,13 @@ public class ConfigurationMonitor extends Thread {
 				if (false == isSharedFileSystem) {
 					if (domain) {
 						System.out.println("Updating Domain...");
-						settings.open("DOMAIN");
+						settings.openForWrite("DOMAIN");
 					} else if (cluster) {
 						System.out.println("Updating Cluster...");
-						settings.open("CLUSTER");
+						settings.openForWrite("CLUSTER");
 					} else if (server) {
 						System.out.println("Updating Server...");
-						settings.open("SERVER");
+						settings.openForWrite("SERVER");
 					}
 
 					String line;

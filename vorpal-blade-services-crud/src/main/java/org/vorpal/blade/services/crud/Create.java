@@ -5,7 +5,7 @@ import java.util.Map;
 
 import javax.servlet.sip.SipServletMessage;
 
-import org.vorpal.blade.framework.config.Configuration;
+import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;

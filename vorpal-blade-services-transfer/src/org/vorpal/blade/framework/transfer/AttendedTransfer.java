@@ -78,7 +78,7 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.callflow.Callback;
+import org.vorpal.blade.framework.v2.callflow.Callback;
 
 
 // Notes: 

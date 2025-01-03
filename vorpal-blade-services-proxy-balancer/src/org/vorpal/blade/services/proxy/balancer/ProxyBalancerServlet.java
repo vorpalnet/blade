@@ -2,22 +2,19 @@ package org.vorpal.blade.services.proxy.balancer;
 
 import java.io.IOException;
 
-import javax.management.InstanceNotFoundException;
-import javax.management.MBeanRegistrationException;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
-import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipURI;
 
-import org.vorpal.blade.framework.callflow.Callback;
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.logging.Logger.Direction;
-import org.vorpal.blade.framework.proxy.ProxyPlan;
-import org.vorpal.blade.framework.proxy.ProxyServlet;
+import org.vorpal.blade.framework.v2.callflow.Callback;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Logger.Direction;
+import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
+import org.vorpal.blade.framework.v2.proxy.ProxyServlet;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)

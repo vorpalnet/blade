@@ -6,12 +6,9 @@ import java.util.HashMap;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.config.Configuration;
+import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-
-import inet.ipaddr.ipv4.IPv4Address;
-import inet.ipaddr.ipv6.IPv6Address;
 
 public class SampleB2buaConfig extends Configuration implements Serializable {
 	@JsonPropertyDescription("The version of the configuration file.")

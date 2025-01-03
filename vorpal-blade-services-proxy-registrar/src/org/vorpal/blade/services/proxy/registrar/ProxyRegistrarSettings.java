@@ -33,7 +33,7 @@ import java.util.List;
 import javax.servlet.sip.Flow;
 import javax.servlet.sip.Proxy;
 
-import org.vorpal.blade.framework.config.Configuration;
+import org.vorpal.blade.framework.v2.config.Configuration;
 
 public class ProxyRegistrarSettings extends Configuration implements Serializable {
 

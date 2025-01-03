@@ -1,133 +1,224 @@
 package org.vorpal.blade.applications.console.config.test;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import javax.management.JMX;
+import javax.management.MBeanServer;
+import javax.management.ObjectInstance;
+import javax.management.ObjectName;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+
+import org.vorpal.blade.framework.v2.config.SettingsMXBean;
+
 public class ConfigHelper {
 
+	private String app;
 	private String configType;
 
 	private Path schemaPath;
 	private Path domainPath;
 	private Path clusterPath;
 	private Path serverPath;
+	private Path samplePath;
+
+	private SettingsMXBean settings;
+	private InitialContext ctx = null;
 
 	public ConfigHelper(String app, String configType) {
 
-		this.configType = configType;
+		this.app = app;
+		this.configType = (configType != null) ? configType : "domain";
 
 		schemaPath = Paths.get("config/custom/vorpal/_schemas/" + app + ".jschema");
 		domainPath = Paths.get("config/custom/vorpal/" + app + ".json");
 		clusterPath = Paths.get("config/custom/vorpal/_clusters/" + app + ".json");
 		serverPath = Paths.get("config/custom/vorpal/_servers/" + app + ".json");
+		samplePath = Paths.get("config/custom/vorpal/_samples/" + app + ".json.SAMPLE");
 
 	}
 
 	public ConfigHelper(String app) {
-		schemaPath = Paths.get("config/custom/vorpal/_schemas/" + app + ".jschema");
-		domainPath = Paths.get("config/custom/vorpal/" + app + ".json");
-		clusterPath = Paths.get("config/custom/vorpal/_clusters/" + app + ".json");
-		serverPath = Paths.get("config/custom/vorpal/_servers/" + app + ".json");
-
+		this(app, null);
 	}
 
-	public String loadJson() throws IOException {
-		String value = null;
+	public Path getPath(String configType) {
+		Path path = null;
 
 		switch (configType) {
+		case "DOMAIN":
 		case "Domain":
 		case "domain":
-			if (Files.exists(domainPath)) {
-				value = Files.readString(domainPath);
-			}
+			path = domainPath;
 			break;
+		case "CLUSTER":
 		case "Cluster":
 		case "cluster":
-			if (Files.exists(clusterPath)) {
-				value = Files.readString(clusterPath);
-			}
+			path = clusterPath;
 			break;
 
+		case "SERVER":
 		case "Server":
 		case "server":
-			if (Files.exists(serverPath)) {
-				value = Files.readString(domainPath);
-			}
+			path = serverPath;
 			break;
+
+		case "SCHEMA":
+		case "Schema":
+		case "schema":
+			path = schemaPath;
+			break;
+
+		case "SAMPLE":
+		case "Sample":
+		case "sample":
+			path = samplePath;
+			break;
+
 		}
 
-		if (value == null) {
-			value = "{}";
-		}
-
-		return value;
-
+		return path;
 	}
 
-	public String loadDomainJson() throws IOException {
-		if (Files.exists(domainPath)) {
-			return Files.readString(domainPath);
-		} else {
-			return "{}";
-		}
-	}
+	public void saveFileLocally(String configType, String json) {
 
-	public void saveDomainJson(String json) {
 		try {
-			Files.writeString(domainPath, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+			Path path = getPath(configType);
+
+			System.out.println("Saving " + path.getFileName());
+			System.out.println(json);
+
+			if (json != null && json.length() > 0) {
+				Files.writeString(schemaPath, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+			}
+
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
-	public String loadClusterJson() throws IOException {
+	public void closeSettings() {
 
-		if (Files.exists(clusterPath)) {
-			return Files.readString(clusterPath);
-		} else {
-			return "{}";
+		if (ctx != null) {
+			try {
+				ctx.close();
+			} catch (NamingException e) {
+				// who cares?
+			}
 		}
 
 	}
 
-	public void saveClusterJson(String json) {
+	public void getSettings() {
+
+		InitialContext ctx = null;
 		try {
-			Files.writeString(clusterPath, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-		} catch (IOException e) {
+			ctx = new InitialContext();
+			MBeanServer mbeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
+			ObjectName objectName = null;
+			objectName = new ObjectName("vorpal.blade:Name=" + app + ",Type=Configuration,*");
+
+			Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(objectName, null);
+			if (mbeans != null) {
+				System.out.println("Found " + mbeans.size());
+			} else {
+				System.out.println("No app named " + app + " found.");
+			}
+
+			ObjectInstance mbean = mbeans.iterator().next();
+			ObjectName name = mbean.getObjectName();
+			this.settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
+
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
+
 	}
 
-	public String loadServerJson() throws IOException {
+	public String loadFile(String configType) throws IOException {
 
-		if (Files.exists(clusterPath)) {
-			return Files.readString(clusterPath);
-		} else {
-			return "{}";
+		long localTimestamp = 0;
+		long remoteTimestamp = 0;
+		StringBuffer strBuffer = new StringBuffer();
+		String line = null;
+		Path path = null;
+
+		path = getPath(configType);
+
+		if (path != null) {
+
+			if (Files.exists(path)) {
+				BasicFileAttributes attr = Files.readAttributes(path, BasicFileAttributes.class);
+				localTimestamp = attr.lastModifiedTime().toMillis();
+			}
+
+			try {
+				ctx = new InitialContext();
+				MBeanServer mbeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
+				ObjectName objectName = null;
+				objectName = new ObjectName("vorpal.blade:Name=" + app + ",Type=Configuration,*");
+
+				Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(objectName, null);
+				if (mbeans == null) {
+					System.out.println("No app named " + app + " found.");
+					return "";
+				}
+
+				ObjectInstance mbean = mbeans.iterator().next();
+				ObjectName name = mbean.getObjectName();
+				SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
+				remoteTimestamp = settings.getLastModified(configType);
+
+				System.out.println("testing begin...");
+				System.out.println("path.toFile().exists..? " + path.toFile().exists());
+				System.out.println("path.toFile().exists again..? " + path.toFile().exists());
+				System.out.println("testing end.");
+
+				if (false == path.toFile().exists() || (remoteTimestamp > localTimestamp)) {
+					// read the file remotely
+					settings.openForRead(configType);
+					while (null != (line = settings.read())) {
+						strBuffer.append(line);
+					}
+					settings.close();
+
+					if (strBuffer.length() > 0) {
+						System.out.println(
+								"Saving file " + path.getFileName() + " locally... bytes: " + strBuffer.length());
+						saveFileLocally(configType, strBuffer.toString());
+					}
+
+				} else {
+					// read the file locally
+
+					BufferedReader bufferedReader = Files.newBufferedReader(path);
+					while (null != (line = bufferedReader.readLine())) {
+						strBuffer.append(line);
+					}
+					bufferedReader.close();
+
+					System.out
+							.println("Loading file " + path.getFileName() + " locally... bytes: " + strBuffer.length());
+				}
+
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+
 		}
 
-	}
+		return strBuffer.toString();
 
-	public void saveServerJson(String json) {
-		try {
-			Files.writeString(serverPath, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-
-	public String loadJsonSchema() throws IOException {
-		return Files.readString(schemaPath);
-	}
-
-	public void saveJsonSchema(String jsonSchema) {
-//		this.jsonSchema = jsonSchema;
 	}
 
 	public Set<String> listFilesUsingFilesList(String dir) throws IOException {

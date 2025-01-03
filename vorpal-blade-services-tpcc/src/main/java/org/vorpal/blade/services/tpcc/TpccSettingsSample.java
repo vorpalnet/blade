@@ -1,8 +1,8 @@
 package org.vorpal.blade.services.tpcc;
 
-import org.vorpal.blade.framework.config.SessionParameters;
-import org.vorpal.blade.framework.logging.LogParameters.LoggingLevel;
-import org.vorpal.blade.framework.logging.LogParametersDefault;
+import org.vorpal.blade.framework.v2.config.SessionParameters;
+import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 public class TpccSettingsSample extends TpccSettings {
 

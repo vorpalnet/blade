@@ -11,11 +11,11 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.logging.ConsoleColors;
-import org.vorpal.blade.framework.logging.Logger.Direction;
-import org.vorpal.blade.framework.proxy.ProxyListener;
-import org.vorpal.blade.framework.proxy.ProxyPlan;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.logging.ConsoleColors;
+import org.vorpal.blade.framework.v2.logging.Logger.Direction;
+import org.vorpal.blade.framework.v2.proxy.ProxyListener;
+import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
 
 public class ProxyCallflow extends Callflow {
 

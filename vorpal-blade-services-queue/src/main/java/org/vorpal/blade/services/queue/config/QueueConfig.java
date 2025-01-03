@@ -3,7 +3,7 @@ package org.vorpal.blade.services.queue.config;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.vorpal.blade.framework.config.RouterConfig;
+import org.vorpal.blade.framework.v2.config.RouterConfig;
 
 /**
  * Defines how the Queue application is configured.

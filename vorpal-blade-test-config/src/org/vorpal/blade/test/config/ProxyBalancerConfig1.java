@@ -4,16 +4,16 @@ import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.config.InetAddressKeyDeserializer;
-import org.vorpal.blade.framework.config.JsonAddressDeserializer;
-import org.vorpal.blade.framework.config.JsonAddressSerializer;
-import org.vorpal.blade.framework.config.JsonIPAddressDeserializer;
-import org.vorpal.blade.framework.config.JsonIPAddressSerializer;
-import org.vorpal.blade.framework.config.JsonUriDeserializer;
-import org.vorpal.blade.framework.config.JsonUriSerializer;
-import org.vorpal.blade.framework.proxy.ProxyPlan;
-import org.vorpal.blade.framework.proxy.ProxyTier;
-import org.vorpal.blade.framework.proxy.ProxyTier.Mode;
+import org.vorpal.blade.framework.v2.config.InetAddressKeyDeserializer;
+import org.vorpal.blade.framework.v2.config.JsonAddressDeserializer;
+import org.vorpal.blade.framework.v2.config.JsonAddressSerializer;
+import org.vorpal.blade.framework.v2.config.JsonIPAddressDeserializer;
+import org.vorpal.blade.framework.v2.config.JsonIPAddressSerializer;
+import org.vorpal.blade.framework.v2.config.JsonUriDeserializer;
+import org.vorpal.blade.framework.v2.config.JsonUriSerializer;
+import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
+import org.vorpal.blade.framework.v2.proxy.ProxyTier;
+import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
 import org.vorpal.blade.services.proxy.balancer.ProxyBalancerConfig;
 
 import com.bea.wcp.sip.engine.server.SipFactoryImpl;

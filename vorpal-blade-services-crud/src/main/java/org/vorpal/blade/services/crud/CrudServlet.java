@@ -1,6 +1,7 @@
 package org.vorpal.blade.services.crud;
 
 import java.io.IOException;
+
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
@@ -10,16 +11,17 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.annotation.SipApplication;
 import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
-import org.vorpal.blade.framework.b2bua.B2buaListener;
-import org.vorpal.blade.framework.b2bua.B2buaServlet;
-import org.vorpal.blade.framework.b2bua.Bye;
-import org.vorpal.blade.framework.b2bua.Cancel;
-import org.vorpal.blade.framework.b2bua.InitialInvite;
-import org.vorpal.blade.framework.b2bua.Passthru;
-import org.vorpal.blade.framework.b2bua.Reinvite;
-import org.vorpal.blade.framework.callflow.Callflow;
-import org.vorpal.blade.framework.config.SettingsManager;
-import org.vorpal.blade.framework.config.Translation;
+
+import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
+import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v2.b2bua.Bye;
+import org.vorpal.blade.framework.v2.b2bua.Cancel;
+import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
+import org.vorpal.blade.framework.v2.b2bua.Passthru;
+import org.vorpal.blade.framework.v2.b2bua.Reinvite;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.config.Translation;
 
 @WebListener
 @SipApplication(
