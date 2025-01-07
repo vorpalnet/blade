@@ -3,7 +3,6 @@ package org.vorpal.blade.framework.v2.logging;
 import java.io.Serializable;
 
 public class LogParametersDefault extends LogParameters implements Serializable {
-
 	private static final long serialVersionUID = 1L;
 
 	public LogParametersDefault() {
