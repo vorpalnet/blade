@@ -53,10 +53,10 @@ public class OptionsSipServlet extends AsyncSipServlet {
 	 * @param request
 	 * @return the UAC's IP address
 	 */
-	@SipApplicationKey
-	public static String sessionKey(SipServletRequest request) {
-		return request.getRemoteAddr();
-	}
+//	@SipApplicationKey
+//	public static String sessionKey(SipServletRequest request) {
+//		return request.getRemoteAddr();
+//	}
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
