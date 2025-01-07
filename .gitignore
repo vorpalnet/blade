@@ -6,4 +6,5 @@ bin
 .apt_src
 target
 deps
+*.class
 
