@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v2.logging;
 
+import java.io.Serializable;
 import java.text.ParseException;
 import java.util.logging.Level;
 
@@ -9,7 +10,7 @@ import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
-public class LogParameters {
+public class LogParameters implements Serializable{
 	public enum LoggingLevel {
 		OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL
 	};
