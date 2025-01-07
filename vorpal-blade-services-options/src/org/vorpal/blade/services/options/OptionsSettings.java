@@ -29,14 +29,14 @@ import java.io.Serializable;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
 public class OptionsSettings extends Configuration implements Serializable {
-
 	private static final long serialVersionUID = 1L;
-	private String accept = "application/sdp";
-	private String acceptLanguage = "en";
-	private String allow = "INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, PRACK, SUBSCRIBE, NOTIFY, PUBLISH, INFO, REFER, MESSAGE, UPDATE";
-	private String supported = "replaces";
-	private String userAgent = "OCCAS";
-	private String allowEvents = "talk, hold";
+
+	protected String accept;
+	protected String acceptLanguage;
+	protected String allow;
+	protected String supported;
+	protected String userAgent;
+	protected String allowEvents;
 
 	public String getAllow() {
 		return allow;

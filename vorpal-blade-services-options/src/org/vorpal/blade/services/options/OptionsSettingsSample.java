@@ -36,6 +36,15 @@ public class OptionsSettingsSample extends OptionsSettings implements Serializab
 	public OptionsSettingsSample() {
 		this.logging = new LogParametersDefault();
 		this.session = new SessionParametersDefault();
+		
+		
+		accept = "application/sdp";
+		acceptLanguage = "en";
+		allow = "INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, PRACK, SUBSCRIBE, NOTIFY, PUBLISH, INFO, REFER, MESSAGE, UPDATE";
+		supported = "replaces";
+		userAgent = "OCCAS";
+		allowEvents = "talk, hold";
+
 	}
 
 }

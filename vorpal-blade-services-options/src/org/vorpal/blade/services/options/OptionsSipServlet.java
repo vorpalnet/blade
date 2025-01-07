@@ -60,7 +60,22 @@ public class OptionsSipServlet extends AsyncSipServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, OptionsSettings.class, new OptionsSettingsSample());
+
+		try {
+
+			settingsManager = new SettingsManager<>(event, OptionsSettings.class, new OptionsSettingsSample());
+
+		} catch (Exception ex) {
+			if (sipLogger != null) {
+				sipLogger.severe("Unable to load options.json configuration file.");
+				sipLogger.severe(ex);
+			} else {
+				System.out.println("Unable to load options.json configuration file.");
+				ex.printStackTrace();
+
+			}
+		}
+
 	}
 
 	@Override

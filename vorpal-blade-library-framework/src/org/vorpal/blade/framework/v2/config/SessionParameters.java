@@ -1,8 +1,11 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
+
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
-public class SessionParameters {
+public class SessionParameters implements Serializable{
+	private static final long serialVersionUID = 1L;
 
 	@JsonPropertyDescription("Set Application Session expiration in minutes.")
 	protected Integer expiration = null;
