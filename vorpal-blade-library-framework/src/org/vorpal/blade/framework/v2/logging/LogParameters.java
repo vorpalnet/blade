@@ -10,7 +10,9 @@ import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
-public class LogParameters implements Serializable{
+public class LogParameters implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	public enum LoggingLevel {
 		OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL
 	};
