@@ -60,7 +60,7 @@ public class OptionsSipServlet extends AsyncSipServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, OptionsSettings.class);
+		settingsManager = new SettingsManager<>(event, OptionsSettings.class, new OptionsSettingsSample());
 	}
 
 	@Override
