@@ -152,8 +152,10 @@ public class QueueCallflow extends Callflow {
 
 //			sipLogger.finer(appSession, "is the app session null? " + ((appSession == null) ? true : false));
 
-			if (appSession != null && appSession.isValid() && //
-					aliceRequest.getSession() != null && aliceRequest.getSession().isValid()) {
+//			if (appSession != null && appSession.isValid() && //
+//					aliceRequest.getSession() != null && aliceRequest.getSession().isValid()) {
+
+			if (appSession != null) {
 
 //				sipLogger.finer(appSession, "is the queue state canceled? " + this.stateEquals(QueueState.CANCELED));
 //				sipLogger.finer(appSession, "is the app session valid? " + appSession.isValid());
