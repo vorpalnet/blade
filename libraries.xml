@@ -1,42 +1,35 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project basedir="." name="common-libraries">
-	<buildnumber />
-
-	<property name="build" location="./build" />
-
+    <tstamp/>
+    <property file="../build.properties" />
+    <property file="../build.number" />
+    <property name="build" location="./build" />
 	<property name="debug" value="true" />
 	<property name="debuglevel" value="source,lines,vars" />
 	<property name="includeantruntime" value="false" />
 	<property name="release" value="11" />
 	<property name="classes" location="${build}/classes" />
-	<property name="dist" location="../dist" />
-	<property name="docs" location="${dist}/docs" />
 	<property name="src" location="src/main/java" />
-
 	<property name="umldoclet" location="../lib/umldoclet-2.1.2.jar" />
-
-
 	<property name="packagenames" value="org.vorpal.*" />
 	<property name="BLADE" location="../" />
-
+    <property name="dist" location="../dist/${implementation}.${build.number}" />
 	<property name="webapp" location="src/main/webapp" />
-	<property name="framework" location="${dist}/vorpal-blade-library-framework.jar" />
-
-	<tstamp>
-		<format property="YEAR" pattern="yyyy" locale="en,GB" />
-	</tstamp>
-
-	<path id="Web App Libraries.libraryclasspath">
+	<property name="framework" location="${BLADE}/vorpal-blade-library-framework/build/vorpal-blade-library-framework.jar" />
+    <property name="docs" location="${dist}/docs" />
+    
+    <path id="Web App Libraries.libraryclasspath">
 		<fileset dir="${webapp}/WEB-INF/lib">
 			<filename name="**/*.jar" />
 		</fileset>
 	</path>
 
+    <echo message="Looking for: ${framework}" />
 	<path id="vorpal-blade.classpath">
 		<fileset dir="${BLADE}/vorpal-blade-shared-libraries/target/dependency">
 			<include name="**/*.jar" />
 		</fileset>
-		<pathelement location="${BLADE}/dist/vorpal-blade-library-framework.jar" />
+		<pathelement location="${framework}" />
 	</path>
 
 	<path id="WebLogic System Libraries.libraryclasspath">
@@ -677,13 +670,15 @@
 		<path refid="vorpal-blade.classpath" />
 	</path>
 
-	<target name="build" depends="init,compile,war">
-		<echo message="${ant.project.name} v${implementation}-b${build.number}" />
+	<target name="build" depends="init,compile,war,javadoc">
+		<echo message="${ant.project.name} v${implementation}.${build.number}" />
 	</target>
 
 	<target name="init">
-		<mkdir dir="${classes}" />
+        <mkdir dir="${dist}" />
+        <mkdir dir="${classes}" />
 		<mkdir dir="${webapp}/WEB-INF/lib" />
+        <mkdir dir=".apt_src" />
 
 		<copy includeemptydirs="false" todir="${classes}">
 			<fileset dir="${src}">
@@ -691,7 +686,6 @@
 				<exclude name="**/*.java" />
 			</fileset>
 		</copy>
-		<mkdir dir=".apt_src" />
 		<copy includeemptydirs="false" todir="${classes}">
 			<fileset dir=".apt_src">
 				<exclude name="**/*.launch" />
@@ -724,7 +718,7 @@
 		</javac>
 	</target>
 
-	<target name="jar">
+	<target name="jar" depends="compile">
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
@@ -733,44 +727,45 @@
 			<attribute name="Specification-Title" value="${ant.project.name}" />
 			<attribute name="Implementation-Title" value="${ant.project.name}.jar" />
 			<attribute name="Specification-Version" value="${specification}" />
-			<attribute name="Implementation-Version" value="${implementation}" />
+			<attribute name="Implementation-Version" value="${implementation}.${build.number}" />
 		</manifest>
 		<jar destfile="${build}/${ant.project.name}.jar" manifest="${build}/MANIFEST.MF">
 			<fileset dir="${classes}" />
 			<fileset dir="${src}" includes="**/*.java" />
 		</jar>
+        <echo message="jar, copying ${build}/${ant.project.name}.jar to ${dist}" />
 		<copy file="${build}/${ant.project.name}.jar" todir="${dist}" />
 	</target>
 
-	<target name="war" depends="init">
+	<target name="war" depends="compile">
 		<mkdir dir="${build}/lib" />
+        <echo message="war, copying ${framework} to ${build}/lib" />
 		<copy file="${framework}" todir="${build}/lib" />
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
 		</manifest>
 		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}">
 			<lib dir="${build}/lib" />
 			<classes dir="${classes}" />
 			<classes dir="${src}" />
 		</war>
+        <echo message="war, copying ${build}/${ant.project.name}.war to ${dist}" />
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>
-
+	
 	<target name="javadoc">
-
-
-		<delete dir="${docs}/${ant.project.name}" />
+        <echo message="javadoc, creating directory: ${docs}/${ant.project.name}"/>
 		<mkdir dir="${docs}/${ant.project.name}" />
 
 		<echo>packagenames=${packagenames}</echo>
 		<echo>sourcepath=${src}</echo>
 
 
-		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="../lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
+		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="${BLADE}/lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
 
 			<doclet name="nl.talsmasoftware.umldoclet.UMLDoclet" path="${umldoclet}">
 				<param name="-failOnCyclicPackageDependencies" value="false" />
@@ -786,7 +781,7 @@
 				</a>]]></header>
 
 			<doctitle>
-				<![CDATA[<div>${ant.project.name} - v${implementation}</div>]]>
+				<![CDATA[<div>${ant.project.name} - v${implementation}.${build.number}</div>]]>
 			</doctitle>
 		<bottom>
 			<![CDATA[<div style="display: block; text-align: center">
@@ -811,7 +806,7 @@
 				<replacetoken><![CDATA[<!DOCTYPE HTML>]]></replacetoken>
 				<replacevalue><![CDATA[- - -
 layout: blank
-title: ${ant.project.name} - v${implementation}
+title: ${ant.project.name} - v${implementation}.${build.number}
 - - -
 <!DOCTYPE HTML>]]>
 				</replacevalue>

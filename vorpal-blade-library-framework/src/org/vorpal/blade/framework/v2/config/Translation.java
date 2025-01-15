@@ -11,6 +11,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Translation implements Serializable {
+	private static final long serialVersionUID = 1L;
 	private String id;
 	private String description;
 	private LinkedList<TranslationsMap> list;

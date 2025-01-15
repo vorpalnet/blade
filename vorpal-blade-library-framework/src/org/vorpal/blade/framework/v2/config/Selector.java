@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.v2.DummyRequest;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -95,7 +96,7 @@ public class Selector {
 			// jwm - find named groups, useful later
 			Map<String, String> namedGroups = new HashMap<>();
 
-			sipLogger.finest(request, "attribute=" + attribute);
+			sipLogger.finer(request, "attribute=" + attribute);
 
 			switch (attribute) {
 			case "Content":
@@ -133,7 +134,7 @@ public class Selector {
 				header = request.getHeader(attribute);
 			}
 
-			sipLogger.finest(request, "header=" + header);
+			sipLogger.finer(request, "header=" + header);
 
 			if (header != null) {
 
@@ -141,12 +142,12 @@ public class Selector {
 
 				value = (attribute.matches("Content")) ? "[...]" : header;
 
-				sipLogger.finest(request, "value=" + value);
+				sipLogger.finer(request, "value=" + value);
 
 				if (matcher.matches()) {
 					matchResult = true;
 					key = matcher.replaceAll(expression);
-					sipLogger.finest(request, "key=" + key);
+					sipLogger.finer(request, "key=" + key);
 				}
 
 				if (key != null) {
@@ -180,7 +181,7 @@ public class Selector {
 							if (a__value != null && a__value.length() > 0) {
 								regexRoute.attributes.put(a__name, a__value);
 
-								sipLogger.finest(request,
+								sipLogger.finer(request,
 										"regexRoute.attributes name=" + a__name + ", value=" + a__value);
 
 							}
@@ -208,7 +209,8 @@ public class Selector {
 				}
 
 			} else {
-				sipLogger.severe(request, "No header found: " + attribute);
+				// jwm - testing
+				// sipLogger.severe(request, "No header found: " + attribute);
 			}
 
 		} catch (Exception e) {
@@ -227,7 +229,17 @@ public class Selector {
 		return regexRoute;
 	}
 
-	public static void main(String args[]) {
+	public static void main4(String args[]) {
+
+		SipServletRequest dummyRequest = new DummyRequest("INVITE", "19137774321", "18165551234");
+
+		Selector toSelector = new Selector("toSelector", "To", Configuration.SIP_ADDRESS_PATTERN, "${user}");
+		toSelector.setDescription("The user part of the To header");
+		RegExRoute key = toSelector.findKey(dummyRequest);
+
+	}
+
+	public static void main3(String args[]) {
 		String strPattern = ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*";
 		String strExpression = "${recorddn}";
 		String key = null;
@@ -273,5 +285,83 @@ public class Selector {
 		System.out.println("Key: " + key);
 
 	}
+	
+	public static void main(String args[]) {
+// "(.*?)"
+// "([^"]*)"
+// (\"[\w\s]+\")		 
+//		String X_SIP_ADDRESS_PATTERN = "(?:[\"]*(?<name>.*)[\"*] )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)";
+//		String X_SIP_ADDRESS_PATTERN = "^(?:[\"]*(?<name>.*)[\"*] )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
+//		String X_SIP_ADDRESS_PATTERN = "^(?:[\"]?(?<name>[a-zA-Z0-9 ]*)[\"]? )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
+//		String X_SIP_ADDRESS_PATTERN = "^(?:[\"]?(?<name>.*)[\\\"\\s]*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
+		String X_SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
+
+		
+		
+		Map<String, String> attributes = new HashMap<>();
+
+		String _strPattern = X_SIP_ADDRESS_PATTERN;
+
+		System.out.println("Hello World!");
+
+		String header;
+		Boolean matchResult;
+		String key = null;
+		String expression;
+
+		Pattern _p = Pattern.compile("\\<(?<name>[a-zA-Z0-9]+)\\>");
+
+		Pattern _pattern = Pattern.compile(X_SIP_ADDRESS_PATTERN, Pattern.DOTALL);
+
+//		header = "\"18165551234\" <sip:18165551234@192.168.1.157:5099>";
+//		header = "18165551234 <sip:18165551234@192.168.1.157:5099>";
+//		header = "Jeff McDonald 123 <sip:18165551234@192.168.1.157:5099>";
+//		header = "\"Jeff & McDonald 123\" <sip:18165551234@192.168.1.157:5099>";
+//		header = "Jeff & McDonald 123 <sip:18165551234@192.168.1.157:5099>";
+//		header = "<sip:18165551234@192.168.1.157:5099>";
+		header = "sip:18165551234@192.168.1.157:5099";
+		expression = "${user}";
+		expression = "name=${name}, proto=${proto}, user=${user}, host=${host}, port=${port}, uriparams=${uriparams}, addrparams=${addrparams}";
+
+		LinkedList<String> groups = new LinkedList<>();
+		Matcher m = _p.matcher(_strPattern);
+		String __name;
+
+		while (m.find()) {
+			__name = m.group("name");
+			if (__name != null) {
+				groups.add(__name);
+				System.out.println("adding name to group: " + __name);
+			}
+		}
+
+		// a__ variables. yucky! clean this up later.
+		// This builds regex named group pairs for use later
+		Matcher a__matcher = _pattern.matcher(header);
+		boolean a__matchFound = a__matcher.find();
+		if (a__matchFound) {
+			String a__name, a__value;
+			Iterator<String> a__itr = groups.iterator();
+			while (a__itr.hasNext()) {
+				a__name = a__itr.next();
+				a__value = a__matcher.group(a__name);
+				if (a__value != null && a__value.length() > 0) {
+					attributes.put(a__name, a__value);
+
+					System.out.println("attributes name=" + a__name + ", value=" + a__value);
+				}
+			}
+		}
+
+		Matcher matcher = _pattern.matcher(header);
+
+		if (matcher.matches()) {
+			matchResult = true;
+			key = matcher.replaceAll(expression);
+		}
+		System.out.println(key);
+
+	}
+
 
 }

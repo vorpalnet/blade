@@ -321,6 +321,10 @@ public class LogParameters implements Serializable {
 		System.out.println("1GiB = " + Configuration.parseHRNumberAsInt("1GiB"));
 		System.out.println("1GB = " + Configuration.parseHRNumberAsInt("1GB"));
 		System.out.println("1.5GB = " + Configuration.parseHRNumberAsInt("1.5GB"));
+		
+		
+		
+		
 
 	}
 

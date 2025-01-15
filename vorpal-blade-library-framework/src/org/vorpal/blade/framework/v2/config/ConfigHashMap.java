@@ -29,14 +29,14 @@ public class ConfigHashMap extends TranslationsMap {
 		try {
 			for (Selector selector : this.selectors) {
 
-				sipLogger.finest("selector.id=" + selector.getId());
+				sipLogger.finer("selector.id=" + selector.getId());
 
 				RegExRoute regexRoute = selector.findKey(request);
 
 				if (regexRoute != null) {
-					sipLogger.finest("regexRoute header=" + regexRoute.header + ", key=" + regexRoute.key);
+					sipLogger.finer("regexRoute header=" + regexRoute.header + ", key=" + regexRoute.key);
 					value = map.get(regexRoute.key);
-					sipLogger.finest("value=" + value);
+					sipLogger.finer("value=" + value);
 				}
 
 				if (value != null) {

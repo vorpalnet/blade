@@ -9,93 +9,38 @@
 		<wls:prefer-application-packages>
 			<!-- wls:package-name>org.vorpal.blade.framework.*</wls:package-name -->
 			<wls:package-name>com.ctc.wstx.*</wls:package-name>
-			
-			<wls:package-name>com.fasterxml.jackson.annotation.*</wls:package-name>
-			<wls:package-name>com.fasterxml.jackson.core.*</wls:package-name>
-			<wls:package-name>com.fasterxml.jackson.databind.*</wls:package-name>
-			<wls:package-name>com.fasterxml.jackson.dataformat.*</wls:package-name>
-			<wls:package-name>com.fasterxml.jackson.datatype.*</wls:package-name>
-			<wls:package-name>com.fasterxml.jackson.jaxrs.*</wls:package-name>
-			<wls:package-name>com.fasterxml.jackson.module.*</wls:package-name>
-
-			<wls:package-name>com.google.errorprone.annotations.*</wls:package-name>
-			<wls:package-name>com.google.gson.*</wls:package-name>
-			
+			<wls:package-name>com.fasterxml.jackson.*</wls:package-name>
 			<wls:package-name>com.kjetland.jackson.*</wls:package-name>
-
 			<wls:package-name>com.sun.activation.*</wls:package-name>
 			<wls:package-name>com.sun.mail.*</wls:package-name>
-
 			<wls:package-name>inet.ipaddr.*</wls:package-name>
-			
 			<wls:package-name>io.github.classgraph.*</wls:package-name>
-			
 			<wls:package-name>io.swagger.v3.*</wls:package-name>
-
-			<wls:package-name>io.swagger.v3.*</wls:package-name>
-
-			<wls:package-name>java_cup.runtime.*</wls:package-name>
-			
 			<wls:package-name>javassist.*</wls:package-name>
-			
-			<wls:package-name>junit.*</wls:package-name>
-			
 			<wls:package-name>javax.activation.*</wls:package-name>
-			<wls:package-name>javax.activation.annotation</wls:package-name>
 			<wls:package-name>javax.mail.*</wls:package-name>
 			<wls:package-name>javax.validation.*</wls:package-name>
-			<wls:package-name>javax.ws.*</wls:package-name>
 			<wls:package-name>javax.xml.*</wls:package-name>
-			
 			<wls:package-name>junit.extensions.*</wls:package-name>
 			<wls:package-name>junit.framework.*</wls:package-name>
 			<wls:package-name>junit.runner.*</wls:package-name>
 			<wls:package-name>junit.textui.*</wls:package-name>
-						
 			<wls:package-name>kotlin.*</wls:package-name>
 			<wls:package-name>kotlinx.coroutines*</wls:package-name>
-			
-			<wls:package-name>nonapi.io.github.classgraph.*</wls:package-name>
-			
-			<wls:package-name>okhttp3.*</wls:package-name>
-
-			<wls:package-name>okio.*</wls:package-name>
-			
-			<wls:package-name>org.apache.bcel.*</wls:package-name>
-			<wls:package-name>org.apache.commons.codec.*</wls:package-name>
+			<wls:package-name>nonapi.io.github.classgraph*</wls:package-name>
 			<wls:package-name>org.apache.commons.collections4.*</wls:package-name>
 			<wls:package-name>org.apache.commons.io.*</wls:package-name>
 			<wls:package-name>org.apache.commons.lang3.*</wls:package-name>
 			<wls:package-name>org.apache.commons.mail.*</wls:package-name>
-
-			<wls:package-name>org.apache.oltu.*</wls:package-name>
-			<wls:package-name>org.apache.regexp.*</wls:package-name>
-			<wls:package-name>org.apache.taglibs.standard.*</wls:package-name>
-			<wls:package-name>org.apache.xalan.*</wls:package-name>
-			<wls:package-name>org.apache.xml.*</wls:package-name>
-			<wls:package-name>org.apache.xpath.*</wls:package-name>
-
-			<wls:package-name>org.apiguardian.api.*</wls:package-name>
-
 			<wls:package-name>org.codehaus.stax2.*</wls:package-name>
-
 			<wls:package-name>org.hamcrest.*</wls:package-name>
-
 			<wls:package-name>org.intellij.lang.annotations.*</wls:package-name>
-
 			<wls:package-name>org.jetbrains.annotations.*</wls:package-name>
 			<wls:package-name>org.jetbrains.kotlin.scripting.*</wls:package-name>
-
 			<wls:package-name>org.joda.time.*</wls:package-name>
-
 			<wls:package-name>org.junit.*</wls:package-name>
-
 			<wls:package-name>org.slf4j.*</wls:package-name>
-
 			<wls:package-name>org.yaml.snakeyaml*</wls:package-name>
-
-			<wls:package-name>trax.*</wls:package-name>
-			
 			<wls:package-name>scala.*</wls:package-name>
 		</wls:prefer-application-packages>
 	</wls:container-descriptor>

@@ -1,6 +1,5 @@
 <?xml version="1.0"?>
 <project name="blade" default="build" basedir=".">
-	<buildnumber />
 
 	<!-- If they haven't already been created, define these variables -->
 	<property name="BLADE" location="./" />
@@ -10,10 +9,8 @@
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="${computer.hostname}.properties" />
-	<property file="build.properties" />
+    <property file="build.properties" />
 	<property file="version.properties" />
-	<property name="dist" location="./dist" />
-	<property name="docs" location="${dist}/docs" />
 	<property name="umldoclet" location="./lib/umldoclet-2.1.2.jar" />
 
 	<!-- Required for the 'foreach' command. -->
@@ -27,29 +24,25 @@
 		<if>
 			<available file="${computer.hostname}.properties" />
 			<then>
-				<mkdir dir="${dist}" />
+                <buildnumber />
+                <property name="dist" location="./dist/${implementation}.${build.number}" />
+                <property name="docs" location="${dist}/docs" />
+                <echo message="Invoking build.xml buildnumber=${build.number}"/>
 			</then>
 			<else>
 				<copy file="build.properties" tofile="${computer.hostname}.properties" overwrite="false" />
 				<fail>WARNING! Please edit the newly created ${computer.hostname}.properties file, then run ANT again.</fail>
 			</else>
 		</if>
+        
+        <echo message="setting dist directory to: ${dist}" />
+        
 	</target>
 
 	<target name="build" depends="init">
-
-		<manifest file="${dist}/MANIFEST.MF">
-			<attribute name="Copyright" value="${copyright}" />
-			<attribute name="License" value="${license}" />
-			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Implementation-Build-Date" value="${TODAY}" />
-			<attribute name="Weblogic-Application-Version" value="${implementation}" />
-		</manifest>
-
 		<foreach target="build-all" param="var">
 			<path refid="subprojects" />
 		</foreach>
-
 	</target>
 
 	<target name="build-all" depends="">
@@ -58,7 +51,6 @@
 
 
 	<target name="clean" depends="">
-		<delete dir="${dist}" />
 		<foreach target="clean-all" param="var">
 			<path refid="subprojects" />
 		</foreach>
