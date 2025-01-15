@@ -278,7 +278,7 @@
 							<files>
 								<file>${basedir}/../${hostname}.properties</file>
 								<file>${basedir}/../version.properties</file>
-								<file>./build.number</file>
+								<file>../build.number</file>
 							</files>
 						</configuration>
 					</execution>
