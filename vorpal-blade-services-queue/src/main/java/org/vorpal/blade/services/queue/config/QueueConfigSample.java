@@ -43,7 +43,7 @@ public class QueueConfigSample extends QueueConfig {
 				.setRingDuration(60 * 1000));
 
 		Selector toSelector = new Selector("toSelector", "To", SIP_ADDRESS_PATTERN, "${user}");
-		toSelector.setDescription("The user part of the From header");
+		toSelector.setDescription("The user part of the To header");
 		this.selectors.add(toSelector);
 
 		TranslationsMap botMap = new ConfigHashMap();
@@ -51,15 +51,14 @@ public class QueueConfigSample extends QueueConfig {
 		botMap.addSelector(toSelector);
 		botMap.description = "Translations map using HashMap for text";
 		botMap.createTranslation("bob").addAttribute("queue", "slow");
+		this.maps.add(botMap);
 
 		TranslationsMap prefixMap = new ConfigPrefixMap();
 		prefixMap.id = "prefixMap";
 		prefixMap.addSelector(toSelector);
 		prefixMap.description = "Translations map using PrefixMap for dialed numbers";
-		prefixMap.createTranslation("19977").addAttribute("queue", "slow");
-
+		prefixMap.createTranslation("1816555").addAttribute("queue", "slow");
 		this.maps.add(prefixMap);
-		this.maps.add(botMap);
 
 		this.plan.add(prefixMap);
 		this.plan.add(botMap);
