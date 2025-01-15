@@ -105,7 +105,10 @@ public abstract class AsyncSipServlet extends SipServlet
 			String title = pkg.getSpecificationTitle();
 			String version = pkg.getImplementationVersion();
 			String application = event.getServletContext().getServletContextName();
-			sipLogger.info(application + " compiled using " + title + " version " + version);
+
+			if (title != null) {
+				sipLogger.info(application + " compiled using " + title + " version " + version);
+			}
 
 		} catch (ServletException se) {
 

@@ -12,10 +12,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
+	public final static String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 	
-	public final static String SIP_ADDRESS_PATTERN = "(?:[\"]*(?<name>.*)[\"*] )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)";
-
-
 //	@JsonPropertyDescription("Optional logging parameters")
 //	public String version = "2.1";
 
@@ -161,7 +159,7 @@ public class Configuration implements Serializable {
 		this.session = session;
 		return this;
 	}
-	
+
 	public static String resolveVariables(Map<String, String> attributes, String expression) {
 		int openIndex;
 		int closeIndex;
@@ -181,7 +179,6 @@ public class Configuration implements Serializable {
 
 		return outputString;
 	}
-	
-	
+
 
 }
