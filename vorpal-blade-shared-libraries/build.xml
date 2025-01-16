@@ -10,6 +10,7 @@
 	<property file="../${computer.hostname}.properties" />
 	<property file="../build.properties" />
 	<property file="../version.properties" />
+	<property file="../build.number" />
 
 	<!-- Import default locations and tasks -->
 	<import file="../libraries.xml" />
@@ -63,7 +64,7 @@
 			<attribute name="Specification-Title" value="${ant.project.name}" />
 			<attribute name="Specification-Version" value="${specification}" />
 			<attribute name="Implementation-Title" value="${ant.project.name}.war" />
-			<attribute name="Implementation-Version" value="${implementation}" />
+			<attribute name="Implementation-Version" value="${implementation}.${build.number}" />
 			<attribute name="Extension-Name" value="vorpal-blade" />
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
