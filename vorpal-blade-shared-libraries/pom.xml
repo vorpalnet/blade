@@ -18,13 +18,13 @@
 		
 		<!-- latest begin-->
 		<swagger-version>2.2.27</swagger-version>
-		<jackson-version>2.18.2</jackson-version>
+		<!-- jackson-version>2.18.2</jackson-version -->
 		<gson-version>2.11.0</gson-version>
 		<gson-fire-version>1.9.0</gson-fire-version>
 		<!-- latest end-->
 		
 		<!-- openapi-tools begin-->		
-		<!-- jackson-version>2.14.0-rc2</jackson-version -->
+		<jackson-version>2.14.0-rc2</jackson-version>
 		<!-- openapi-tools end-->
 		<!-- gson-version>2.10.1</gson-version -->
 		<!-- openapi-tools end-->
