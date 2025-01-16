@@ -25,6 +25,8 @@
 
 
 	<dependencies>
+	
+
 		<dependency>
 			<groupId>oracle.communications.converged.application.server</groupId>
 			<artifactId>occas</artifactId>
@@ -278,7 +280,7 @@
 							<files>
 								<file>${basedir}/../${hostname}.properties</file>
 								<file>${basedir}/../version.properties</file>
-								<file>../build.number</file>
+								<file>${basedir}/../build.number</file>
 							</files>
 						</configuration>
 					</execution>
@@ -297,7 +299,7 @@
 						<manifestEntries>
 							<Copyright>${copyright}</Copyright>
 							<License>${license}</License>
-							<Weblogic-Application-Version>${implementation}</Weblogic-Application-Version>
+							<Weblogic-Application-Version>${implementation}.${build.number}</Weblogic-Application-Version>
 						</manifestEntries>
 					</archive>
 				</configuration>

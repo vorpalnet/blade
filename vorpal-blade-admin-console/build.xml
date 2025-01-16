@@ -10,6 +10,7 @@
 	<property file="../${computer.hostname}.properties" />
 	<property file="../build.properties" />
 	<property file="../version.properties" />
+	<property file="../build.number" />
 
 	<!-- Import default locations and tasks -->
 	<import file="../libraries.xml" />
