@@ -336,9 +336,9 @@ public class SettingsManager<T> {
 			}
 
 			if (sample != null) {
-				this.saveConfigFile(sample);
+				this.saveSampleConfigFile(sample);
 			} else {
-				this.saveConfigFile(current);
+				this.saveSampleConfigFile(current);
 			}
 
 		} catch (Exception e) {
@@ -388,7 +388,7 @@ public class SettingsManager<T> {
 		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, jsonSchema);
 	}
 
-	public void saveConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
+	public void saveSampleConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {
 
 		if (t != null) {
 			File configFile = new File(samplePath.toString() + "/" + servletContextName + ".json.SAMPLE");

@@ -25,14 +25,12 @@
 
 
 	<dependencies>
-	
-
 		<dependency>
 			<groupId>oracle.communications.converged.application.server</groupId>
 			<artifactId>occas</artifactId>
 			<version>${occas-version}</version>
 			<scope>system</scope>
-			<systemPath>${occas}/wlserver/server/lib/weblogic.jar</systemPath>
+			<systemPath>${OCCAS}/wlserver/server/lib/weblogic.jar</systemPath>
 		</dependency>
 
 		<dependency>

@@ -96,9 +96,6 @@ public class Settings<T> implements SettingsMXBean {
 	@Override
 	public long getLastModified(String configType) {
 
-		System.out.println("getLastModified " + configType);
-		sipLogger.info("getLastModified " + configType);
-
 		long timestamp = 0;
 
 		try {
@@ -115,6 +112,8 @@ public class Settings<T> implements SettingsMXBean {
 			e.printStackTrace();
 		}
 
+		sipLogger.info("getLastModified: " + timestamp);
+
 		return timestamp;
 	}
 
@@ -124,7 +123,10 @@ public class Settings<T> implements SettingsMXBean {
 		try {
 			sipLogger.fine("Opening " + configType + " configuration file for writing...");
 			Path path = getPath(configType);
-			bufferedWriter = Files.newBufferedWriter(path, StandardOpenOption.TRUNCATE_EXISTING);
+			bufferedWriter = Files.newBufferedWriter(path, //
+					StandardOpenOption.CREATE, //
+//					StandardOpenOption.WRITE, //
+					StandardOpenOption.TRUNCATE_EXISTING);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -143,7 +145,6 @@ public class Settings<T> implements SettingsMXBean {
 			} else {
 				sipLogger.fine(path.getFileName() + " does not exist.");
 			}
-
 
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -190,7 +191,7 @@ public class Settings<T> implements SettingsMXBean {
 			if (bufferedReader != null) {
 				line = bufferedReader.readLine();
 			}
-			
+
 		} catch (IOException e) {
 			sipLogger.severe(e);
 		}
