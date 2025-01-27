@@ -18,12 +18,6 @@ import javax.servlet.sip.Address;
 import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SessionKeepAlive.Preference;
-
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
-
-
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
-
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipSession;
