@@ -1,7 +1,7 @@
 package org.vorpal.blade.test.config;
 
-import org.vorpal.blade.framework.transfer.TransferCondition;
 import org.vorpal.blade.services.transfer.TransferSettings;
+import org.vorpal.blade.services.transfer.callflows.TransferCondition;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;

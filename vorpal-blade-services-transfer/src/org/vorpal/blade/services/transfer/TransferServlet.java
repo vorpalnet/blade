@@ -12,17 +12,18 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.transfer.AttendedTransfer;
-import org.vorpal.blade.framework.transfer.BlindTransfer;
-import org.vorpal.blade.framework.transfer.ConferenceTransfer;
-import org.vorpal.blade.framework.transfer.TransferInitialInvite;
-import org.vorpal.blade.framework.transfer.TransferListener;
+import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.b2bua.Passthru;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
+import org.vorpal.blade.services.transfer.callflows.AttendedTransfer;
+import org.vorpal.blade.services.transfer.callflows.BlindTransfer;
+import org.vorpal.blade.services.transfer.callflows.ConferenceTransfer;
+import org.vorpal.blade.services.transfer.callflows.TransferInitialInvite;
+import org.vorpal.blade.services.transfer.callflows.TransferListener;
 
 /**
  * This class implements an example B2BUA with transfer capabilities.
@@ -33,7 +34,7 @@ import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-public class TransferServlet extends B2buaServlet implements TransferListener {
+public class TransferServlet extends B2buaServlet implements TransferListener, B2buaListener {
 //public class TransferServlet extends B2buaServlet //
 //		implements TransferListener, SipApplicationSessionListener, SipSessionListener {
 
@@ -156,8 +157,9 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 			}
 			// find matching translation, if defined
 			Translation t = settings.findTranslation(request);
+			String ts = null;
 			if (t != null) {
-				String ts = (String) t.getAttribute("style");
+				ts = (String) t.getAttribute("style");
 				callflow = this.chooseCallflowStyle(ts);
 
 				sipLogger.finer(request, "Found translation, id=" + t.getId() + //
@@ -166,7 +168,15 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 						", style=" + ts + //
 						", callflow=" + callflow.getClass().getSimpleName());
 			} else {
-				sipLogger.finer(request, "No translation found.");
+
+				if (true == settings.getTransferAllRequests()
+						&& null != (ts = settings.getDefaultTransferStyle().toString())) {
+					callflow = this.chooseCallflowStyle(ts);
+				} else {
+					sipLogger.finer(request,
+							"No translation defined in configuration file; will not process REFER requests.");
+				}
+
 			}
 			break;
 		}
@@ -179,77 +189,72 @@ public class TransferServlet extends B2buaServlet implements TransferListener {
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
 
-//		try {
-//			sipLogger.finer(outboundRequest, "callStarted...");
+		try {
+			sipLogger.finer(outboundRequest, "TransferServlet callStarted...");
 
 			SipApplicationSession appSession = outboundRequest.getApplicationSession();
+//			sipLogger.finer(outboundRequest, "appSession id=" + appSession.getId());
+//			sipLogger.finer(outboundRequest, "appSession indexKeys=" + appSession.getIndexKeys());
 
 			// save X-Original-DN to memory
 			URI xOriginalDN = outboundRequest.getTo().getURI();
-//			sipLogger.finer(outboundRequest,
-//					"callStarted... setting appSession attribute: X-Original-DN=" + xOriginalDN);
 			appSession.setAttribute("X-Original-DN", xOriginalDN);
 
 			// save X-Previous-DN to memory
 			URI xPreviousDN = outboundRequest.getRequestURI();
-//			sipLogger.finer(outboundRequest,
-//					"callStarted... setting appSession attribute: X-Previous-DN=" + xPreviousDN);
 			appSession.setAttribute("X-Previous-DN", xPreviousDN);
 
-//		} catch (Exception e) {
-//			sipLogger.severe(outboundRequest, e);
-//		}
+			// For Transfer REST API
+			// save outbound request for REST API Session/Dialog
+			outboundRequest.getSession().setAttribute("initial_invite", outboundRequest);			
+			SipServletRequest aliceRequest = this.getIncomingRequest(outboundRequest);
+			aliceRequest.getSession().setAttribute("identityAddress", aliceRequest.getFrom());
+			outboundRequest.getSession().setAttribute("identityAddress", outboundRequest.getTo());
+			
+			
+
+
+		} catch (Exception e) {
+			sipLogger.severe(outboundRequest, e);
+		}
 
 	}
 
 	@Override
 	public void transferRequested(SipServletRequest inboundRefer) throws ServletException, IOException {
 
-//		try {
-//			sipLogger.finer(inboundRefer, "transferRequested...");
+		try {
+			sipLogger.finer(inboundRefer, "transferRequested...");
 
-			SipApplicationSession appSession = inboundRefer.getApplicationSession();
+		SipApplicationSession appSession = inboundRefer.getApplicationSession();
 
-			// save X-Previous-DN-Tmp for use later
-			URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
+		// save X-Previous-DN-Tmp for use later
+		URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
 //			sipLogger.finer(inboundRefer, "transferRequested... setting appSession attribute: Refer-To=" + referTo);
-			appSession.setAttribute("Refer-To", referTo);
+		appSession.setAttribute("Refer-To", referTo);
 
-//		} catch (Exception e) {
-//			sipLogger.severe(inboundRefer, e);
-//		}
+		} catch (Exception e) {
+			sipLogger.severe(inboundRefer, e);
+		}
 
 	}
 
 	@Override
 	public void transferInitiated(SipServletRequest outboundInvite) throws ServletException, IOException {
 
-//		try {
-//			sipLogger.finer(outboundInvite, "transferInitiated...");
+		SipApplicationSession appSession = outboundInvite.getApplicationSession();
 
-			SipApplicationSession appSession = outboundInvite.getApplicationSession();
+		// Set Header X-Original-DN
+		URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
+		outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
 
-			// Set Header X-Original-DN
-			URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
-//			sipLogger.finer(outboundInvite,
-//					"transferInitiated... setting header: X-Original-DN=" + xOriginalDN.toString());
-			outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
+		// Set Header X-Previous-DN
+		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
+		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
 
-			// Set Header X-Previous-DN
-			URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
-//			sipLogger.finer(outboundInvite,
-//					"transferInitiated... setting header: X-Previous-DN=" + xPreviousDN.toString());
-			outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
-
-			// now update X-Previous-DN for future use
-			URI referTo = (URI) appSession.getAttribute("Refer-To");
-//			sipLogger.finer(outboundInvite, "transferInitiated... appSession attribute: X-Previous-DN=" + referTo);
-			appSession.setAttribute("X-Previous-DN", referTo);
-
-//		} catch (Exception e) {
-//			sipLogger.severe(outboundInvite, e);
-//		}
-
+		// now update X-Previous-DN for future use
+		URI referTo = (URI) appSession.getAttribute("Refer-To");
+		appSession.setAttribute("X-Previous-DN", referTo);
 	}
 
 	@Override
