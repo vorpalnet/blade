@@ -12,8 +12,8 @@ public class TransferSettings extends RouterConfig implements Serializable {
 		none, blind, attended, conference
 	};
 
-//	protected Boolean transferAllRequests;
-//	protected TransferStyle defaultStyle;
+	protected Boolean transferAllRequests;
+	protected TransferStyle defaultTransferStyle;
 
 	protected String allow = "MESSAGE, REFER, NOTIFY, CANCEL, ACK, UPDATE, PRACK, OPTIONS, INVITE, INFO, SUBSCRIBE, BYE";
 	protected ArrayList<String> preserveInviteHeaders = new ArrayList<>();
@@ -30,14 +30,6 @@ public class TransferSettings extends RouterConfig implements Serializable {
 	public TransferSettings() {
 
 	}
-
-//	public Boolean getTransferAllRequests() {
-//		return transferAllRequests;
-//	}
-//
-//	public void setTransferAllRequests(Boolean transferAllRequests) {
-//		this.transferAllRequests = transferAllRequests;
-//	}
 
 	public ArrayList<String> getPreserveInviteHeaders() {
 		return preserveInviteHeaders;
@@ -56,13 +48,19 @@ public class TransferSettings extends RouterConfig implements Serializable {
 		return this;
 	}
 
-//	public TransferStyle getDefaultStyle() {
-//		return defaultStyle;
-//	}
-//
-//	public TransferSettings setDefaultStyle(TransferStyle defaultStyle) {
-//		this.defaultStyle = defaultStyle;
-//		return this;
-//	}
+	public Boolean getTransferAllRequests() {
+		return transferAllRequests;
+	}
 
+	public void setTransferAllRequests(Boolean transferAllRequests) {
+		this.transferAllRequests = transferAllRequests;
+	}
+
+	public TransferStyle getDefaultTransferStyle() {
+		return defaultTransferStyle;
+	}
+
+	public void setDefaultTransferStyle(TransferStyle defaultTransferStyle) {
+		this.defaultTransferStyle = defaultTransferStyle;
+	}
 }

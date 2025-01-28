@@ -1,46 +1,56 @@
 package org.vorpal.blade.services.transfer.api.v1;
 
+import java.util.Base64;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
-import javax.servlet.http.HttpSession;
+import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+
 public class Dialog {
-	public String id;
-	public String remote;
-	public String state;
-	public String subscriber;
-	public String protocol;
-	public Map<String, String> attributes;
+	public String requestUri;
+	public String remoteParty;
+	public Map<String, List<String>> inviteHeaders = new HashMap<>();
+	public String content = null;
 
-	public Dialog(SipSession sipSession) {
-		protocol = "SIP";
-		id = sipSession.getId();
-		remote = sipSession.getRemoteParty().toString();
-		state = sipSession.getState().toString();
-		subscriber = sipSession.getSubscriberURI().toString();
-
-		attributes = new HashMap<>();
-		for (String name : sipSession.getAttributeNameSet()) {
-			attributes.put(name, sipSession.getAttribute(name).toString());
-		}
+	public Dialog() {
+		// do nothing;
 	}
 
-	public Dialog(HttpSession httpSession) {
-		protocol = "HTTP";
-		id = httpSession.getId();
+	public Dialog(SipSession sipSession) {
 
-		attributes = new HashMap<>();
+		SipServletRequest initialInvite = (SipServletRequest) sipSession.getAttribute("initial_invite");
 
-		String name, value;
-		Iterator<String> itr = httpSession.getAttributeNames().asIterator();
-		while (itr.hasNext()) {
-			name = itr.next();
-			value = httpSession.getAttribute(name).toString();
-			attributes.put(name, value);
+		for (String name : initialInvite.getHeaderNameList()) {
+			inviteHeaders.put(name, initialInvite.getHeaderList(name));
 		}
+
+		try {
+			Object objContent = initialInvite.getContent();
+
+			if (objContent != null) {
+
+				byte[] rawContent;
+
+				if (objContent instanceof String) {
+					rawContent = ((String)objContent).getBytes();
+				} else {
+					rawContent = (byte[]) objContent;
+				}
+				
+	            // System.setProperty("mail.mime.encodeeol.strict", "true");
+				
+				content = Base64.getMimeEncoder().encodeToString(rawContent);
+				Callflow.getSipLogger().finer(sipSession, "content = "+content);
+			}
+
+		} catch (Exception e) {
+			Callflow.getSipLogger().severe(e);
+		}
+
 	}
 
 }

@@ -36,6 +36,16 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	protected int expires;
 	protected HeaderForm headerForm;
 	protected String method;
+	protected SipApplicationSession sipApplicationSession;
+	protected SipSession session;
+
+	public void setApplicationSession(SipApplicationSession sipApplicationSession) {
+		this.sipApplicationSession = sipApplicationSession;
+	}
+
+	public void setSession(SipSession session) {
+		this.session = session;
+	}
 
 	@Override
 	public void clearAttributes() {
@@ -120,13 +130,13 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	@Override
 	public SipApplicationSession getApplicationSession() {
 		// TODO Auto-generated method stub
-		return null;
+		return this.sipApplicationSession;
 	}
 
 	@Override
 	public SipApplicationSession getApplicationSession(boolean arg0) {
 		// TODO Auto-generated method stub
-		return null;
+		return this.sipApplicationSession;
 	}
 
 	@Override
@@ -316,14 +326,12 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public SipSession getSession() {
-		// TODO Auto-generated method stub
-		return null;
+		return session;
 	}
 
 	@Override
 	public SipSession getSession(boolean arg0) {
-		// TODO Auto-generated method stub
-		return null;
+		return session;
 	}
 
 	@Override

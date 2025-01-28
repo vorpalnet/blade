@@ -22,7 +22,7 @@
  *  SOFTWARE.
  */
 
-package org.vorpal.blade.framework.transfer;
+package org.vorpal.blade.services.transfer.callflows;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -54,7 +54,7 @@ public interface TransferListener extends Serializable {
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public void transferInitiated(SipServletRequest request) throws ServletException, IOException;
+	public void transferInitiated(SipServletRequest outboundRequest) throws ServletException, IOException;
 
 	/**
 	 * This method is called after the transfer target has accepted the call.
@@ -84,6 +84,6 @@ public interface TransferListener extends Serializable {
 	 * @throws ServletException
 	 * @throws IOException
 	 */
-	public void transferAbandoned(SipServletRequest request) throws ServletException, IOException;
+	public void transferAbandoned(SipServletRequest cancelRequest) throws ServletException, IOException;
 
 }

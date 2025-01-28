@@ -15,6 +15,9 @@ public class TransferSettingsSample extends TransferSettings {
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LoggingLevel.FINE);
 
+		this.transferAllRequests = true;
+		this.defaultTransferStyle = TransferStyle.blind;
+
 		this.preserveInviteHeaders.add("Cisco-Gucid");
 		this.preserveInviteHeaders.add("User-to-User");
 		this.preserveReferHeaders.add("Referred-By");

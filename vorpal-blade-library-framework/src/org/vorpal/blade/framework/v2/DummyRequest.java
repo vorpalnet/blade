@@ -3,16 +3,9 @@ package org.vorpal.blade.framework.v2;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Serializable;
-import java.io.UnsupportedEncodingException;
-import java.security.Principal;
 import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 import javax.servlet.AsyncContext;
 import javax.servlet.DispatcherType;
@@ -25,38 +18,23 @@ import javax.servlet.sip.Address;
 import javax.servlet.sip.AuthInfo;
 import javax.servlet.sip.B2buaHelper;
 import javax.servlet.sip.InviteBranch;
-import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.Proxy;
-import javax.servlet.sip.ServletParseException;
-import javax.servlet.sip.SessionKeepAlive.Preference;
-import javax.servlet.sip.SipApplicationSession;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
-import javax.servlet.sip.SipWebSocketContext;
 import javax.servlet.sip.TooManyHopsException;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 
-import org.vorpal.blade.framework.v2.DummyMessage;
-
-import org.vorpal.blade.framework.v2.DummyMessage;
-
 public class DummyRequest extends DummyMessage implements SipServletRequest, Serializable {
 
-//	private String method;
-//	private String from;
-//	private String to;
-
-//	private Map<String, Object> attributes = new HashMap<>();
-//	private Map<String, String> headers = new HashMap<>();
+	private static final long serialVersionUID = 1L;
 	private String content;
 	private String contentType;
 
 	public DummyRequest(String method, String from, String to) {
+		this.method = method;
 		this.headers.put("From", from);
 		this.headers.put("To", to);
 	}
@@ -191,13 +169,13 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	@Override
 	public void addAuthHeader(SipServletResponse arg0, AuthInfo arg1) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void addAuthHeader(SipServletResponse arg0, String arg1, String arg2) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -335,38 +313,38 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	@Override
 	public void pushRoute(SipURI arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void pushRoute(Address arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void setMaxBreadth(int arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void setMaxForwards(int arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void setRequestURI(URI arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void setRoutingDirective(SipApplicationRoutingDirective arg0, SipServletRequest arg1)
 			throws IllegalStateException {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 }
