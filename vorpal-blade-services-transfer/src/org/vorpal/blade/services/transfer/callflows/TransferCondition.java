@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.transfer;
+package org.vorpal.blade.services.transfer.callflows;
 
 import org.vorpal.blade.framework.v2.config.Condition;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;

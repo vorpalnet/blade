@@ -164,38 +164,37 @@ public class InitialInvite extends Callflow {
 
 			// Code to X-Vorpal-Session AND X-VorpalTimestamp
 			if (bobRequest.isInitial() && null == bobRequest.getHeader("X-Vorpal-Session")) {
-				sipLogger.warning(bobRequest, "isInitial && no X-Vorpal-Sesson");
 				SipSession sipSession = bobRequest.getSession();
 				String indexKey = getVorpalSessionId(appSession);
-				sipLogger.warning(bobRequest, "indexKey="+indexKey);
 				if (indexKey == null) {
 					indexKey = AsyncSipServlet.generateIndexKey(bobRequest);
 				}
 				String dialog = getVorpalDialogId(sipSession);
-				sipLogger.warning(bobRequest, "dialog="+dialog);
 				if (dialog == null) {
 					dialog = createVorpalDialogId(sipSession);
 				}
 
 				String xvs = indexKey + ":" + dialog;
-				sipLogger.warning(bobRequest, "xvs="+xvs);
 				request.setHeader("X-Vorpal-Session", xvs);
 				String xvt = (String) appSession.getAttribute("X-Vorpal-Timestamp");
-				sipLogger.warning(bobRequest, "xvt="+xvt);
 				if (xvt == null) {
 					xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
 				}
 				request.setHeader("X-Vorpal-Timestamp", xvt);
-			}else {
-				sipLogger.warning(bobRequest, "X-Vorpal-Sesson was already there?");
+			} else {
+				// sipLogger.warning(bobRequest, "X-Vorpal-Sesson was already there?");
 			}
 
 			// This is an API kludge to let the user know what callflow was used
 			bobRequest.setAttribute("callflow", this);
 
 			if (b2buaListener != null) {
+//				sipLogger.warning(bobRequest, "invoking b2buaListener on " + b2buaListener.getClass().getName());
 				b2buaListener.callStarted(bobRequest);
 			}
+//			else {
+//				sipLogger.warning(bobRequest, "no b2buaListener defined");
+//			}
 
 			// Remove the callflow so it's not serialized
 			bobRequest.removeAttribute("callflow");

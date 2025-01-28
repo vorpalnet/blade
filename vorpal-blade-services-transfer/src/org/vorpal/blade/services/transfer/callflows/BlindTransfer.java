@@ -22,12 +22,14 @@
  *  SOFTWARE.
  */
 
-package org.vorpal.blade.framework.transfer;
+package org.vorpal.blade.services.transfer.callflows;
 
 import java.io.IOException;
 
 import javax.servlet.ServletException;
+import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 
@@ -153,10 +155,12 @@ public class BlindTransfer extends Transfer {
 			sendRequest(targetRequest, (targetResponse) -> {
 
 				if (provisional(targetResponse)) {
-					sipLogger.finer(targetResponse, "target (carol) sends provisional response "+targetResponse.getStatus()+" "+targetResponse.getReasonPhrase() );
+					sipLogger.finer(targetResponse, "target (carol) sends provisional response "
+							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 
 				} else if (successful(targetResponse)) {
-					sipLogger.finer(targetResponse, "target (carol) sends successful response "+targetResponse.getStatus()+" "+targetResponse.getReasonPhrase() );
+					sipLogger.finer(targetResponse, "target (carol) sends successful response "
+							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 
 					// Alice will no longer hangup, expect a BYE from Bob
 					aliceExpectation.clear();
@@ -183,7 +187,8 @@ public class BlindTransfer extends Transfer {
 					});
 
 				} else if (failure(targetResponse)) {
-					sipLogger.finer(targetResponse, "target (carol) sends failure response "+targetResponse.getStatus()+" "+targetResponse.getReasonPhrase() );
+					sipLogger.finer(targetResponse, "target (carol) sends failure response "
+							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 
 					if (targetResponse.getStatus() == 487) {
 						sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
