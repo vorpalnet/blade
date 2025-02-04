@@ -167,13 +167,14 @@ public class AttributeSelector {
 
 				sipLogger.finer(request, "value=" + value);
 
-				if (matcher.matches()) {
-					matchResult = true;
+				matchResult = matcher.matches();
+
+				if (matchResult && expression != null) {
 					key = matcher.replaceAll(expression);
 					sipLogger.finer(request, "key=" + key);
 				}
 
-				if (key != null) {
+				if (matchResult) {
 
 					attrsKey = new AttributesKey();
 					attrsKey.key = key;
