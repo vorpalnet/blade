@@ -97,16 +97,28 @@ import org.vorpal.blade.framework.v2.callflow.Expectation;
 public class BlindTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
+	private boolean sendNotify = true;
 
 	public BlindTransfer(TransferListener referListener) {
 		super(referListener);
+	}
+
+	public BlindTransfer(TransferListener referListener, boolean sendNotify) {
+		super(referListener);
+		this.sendNotify = sendNotify;
 	}
 
 	@Override
 	public void process(SipServletRequest referRequest) throws ServletException, IOException {
 		try {
 			// request is REFER from transferor (bob)
+			SipApplicationSession appSession = referRequest.getApplicationSession();
 
+			// save X-Previous-DN-Tmp for use later
+			URI referTo = referRequest.getAddressHeader("Refer-To").getURI();
+			appSession.setAttribute("Refer-To", referTo);
+
+			// User is notified a transfer is requested
 			transferListener.transferRequested(referRequest);
 
 			createRequests(referRequest);
@@ -131,11 +143,13 @@ public class BlindTransfer extends Transfer {
 
 			sendResponse(referRequest.createResponse(202));
 
-			SipServletRequest notify100 = referRequest.getSession().createRequest(NOTIFY);
-			notify100.setHeader(EVENT, "refer");
-			notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=3600");
-			notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
-			sendRequest(notify100);
+			if (sendNotify) {
+				SipServletRequest notify100 = referRequest.getSession().createRequest(NOTIFY);
+				notify100.setHeader(EVENT, "refer");
+				notify100.setHeader(SUBSCRIPTION_STATE, "pending;expires=3600");
+				notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
+				sendRequest(notify100);
+			}
 
 			// in the event the transferee hangs up before the transfer completes
 			Expectation aliceExpectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
@@ -148,6 +162,16 @@ public class BlindTransfer extends Transfer {
 				sipLogger.finer(transferorRequest, "transferor (bob) hangs up");
 				sendResponse(bye.createResponse(200));
 			});
+
+			// Set Header X-Original-DN
+			URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
+			targetRequest.setHeader("X-Original-DN", xOriginalDN.toString());
+			// Set Header X-Previous-DN
+			URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
+			targetRequest.setHeader("X-Previous-DN", xPreviousDN.toString());
+			// now update X-Previous-DN for future use
+			referTo = (URI) appSession.getAttribute("Refer-To");
+			appSession.setAttribute("X-Previous-DN", referTo);
 
 			// User is notified that transfer is initiated
 			transferListener.transferInitiated(targetRequest);
@@ -173,13 +197,18 @@ public class BlindTransfer extends Transfer {
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
 
 						// Send the SIP/2.0 200 OK to the transferor (bob)
-						SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
-						notify200.setHeader(EVENT, "refer");
-						notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
-						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
-								+ targetResponse.getReasonPhrase();
-						notify200.setContent(sipFrag.getBytes(), SIPFRAG);
-						sendRequest(notify200);
+						if (sendNotify) {
+							SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
+							notify200.setHeader(EVENT, "refer");
+							notify200.setHeader(SUBSCRIPTION_STATE, "terminated;reason=noresource");
+							String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
+									+ targetResponse.getReasonPhrase();
+							notify200.setContent(sipFrag.getBytes(), SIPFRAG);
+							sendRequest(notify200);
+						} else {
+							// Send a BYE to transferor (bob)
+							sendRequest(referRequest.getSession().createRequest(BYE));
+						}
 
 						// User is notified of a successful transfer
 						transferListener.transferCompleted(targetResponse);
@@ -196,15 +225,14 @@ public class BlindTransfer extends Transfer {
 
 						// Instead of sending the failure notice, we pretend everything is successful so
 						// Bob will hang up
-						SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
-
-						String sipFrag = "SIP/2.0 200 OK";
-						notifyFailure.setHeader(EVENT, "refer");
-
-						notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=giveup");
-						notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
-
-						sendRequest(notifyFailure);
+						if (sendNotify) {
+							SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
+							String sipFrag = "SIP/2.0 200 OK";
+							notifyFailure.setHeader(EVENT, "refer");
+							notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=giveup");
+							notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
+							sendRequest(notifyFailure);
+						}
 
 					} else {
 						sipLogger.finer(targetResponse, "target (carol) has 'rejected' the call");
@@ -218,14 +246,15 @@ public class BlindTransfer extends Transfer {
 						// If Alice hangs up, let some other callflow handle it
 						aliceExpectation.clear();
 
-						SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
-						String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
-								+ targetResponse.getReasonPhrase();
-						notifyFailure.setHeader(EVENT, "refer");
-						notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=rejected");
-						notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
-
-						sendRequest(notifyFailure);
+						if (sendNotify) {
+							SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
+							String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
+									+ targetResponse.getReasonPhrase();
+							notifyFailure.setHeader(EVENT, "refer");
+							notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=rejected");
+							notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
+							sendRequest(notifyFailure);
+						}
 					}
 
 				}

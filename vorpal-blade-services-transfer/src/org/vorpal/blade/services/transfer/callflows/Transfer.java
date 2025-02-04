@@ -107,8 +107,8 @@ public class Transfer extends Callflow {
 	 * Call this method to construct the various request objects.
 	 * 
 	 * @param request
-	 * @throws ServletException 
-	 * @throws IOException 
+	 * @throws ServletException
+	 * @throws IOException
 	 */
 	protected void createRequests(SipServletRequest request) throws ServletException, IOException {
 		transferorRequest = request;
@@ -117,6 +117,8 @@ public class Transfer extends Callflow {
 
 		Address transferee = request.getTo();
 		Address target = request.getAddressHeader(REFER_TO);
+
+		sipLogger.finer(request, "Transfer transferee=" + transferee + ", target=" + target);
 
 		targetRequest = sipFactory.createRequest(appSession, INVITE, transferee, target);
 		targetRequest.setHeader("Allow", TransferServlet.getSettingsManager().getCurrent().getAllow());

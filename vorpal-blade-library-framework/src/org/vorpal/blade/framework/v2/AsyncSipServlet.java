@@ -5,6 +5,8 @@ import java.io.UncheckedIOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedList;
+import java.util.List;
+import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
 
@@ -31,9 +33,13 @@ import org.vorpal.blade.framework.v2.callflow.Callback;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Callflow481;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
+import org.vorpal.blade.framework.v2.config.Translation;
+import org.vorpal.blade.framework.v2.config.TranslationsMap;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
+import org.vorpal.blade.framework.v3.config.AttributeSelector;
+import org.vorpal.blade.framework.v3.config.AttributesKey;
 
 /**
  * This abstract SipServlet is designed to implement the features of the BLADE
@@ -224,6 +230,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	protected void doRequest(SipServletRequest request) throws ServletException, IOException {
 		Callflow callflow = null;
 		Callback<SipServletRequest> requestLambda;
+		SipApplicationSession appSession = request.getApplicationSession();
 		SipSession sipSession = request.getSession();
 		String method = request.getMethod();
 
@@ -256,9 +263,69 @@ public abstract class AsyncSipServlet extends SipServlet
 			}
 
 			if (request.isInitial() && Callflow.getSessionParameters() != null) {
-				if (Callflow.getSessionParameters().getExpiration() != null) {
+				SessionParameters sessionParameters = Callflow.getSessionParameters();
+
+				if (sessionParameters.getExpiration() != null) {
 					request.getApplicationSession().setExpires(Callflow.getSessionParameters().getExpiration());
 				}
+
+				// create any index keys defined by selectors in the config file
+				List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
+				if (selectors != null) {
+
+					for (AttributeSelector selector : selectors) {
+
+						AttributesKey rr = selector.findKey(request);
+						if (rr != null) {
+							
+							sipLogger.warning(request, "AsyncSipServlet adding index key" + //
+									", selector=" + selector.getId() + //
+									", attribute=," + selector.getAttribute() + //
+									", expression=" + selector.getExpression()+ //
+									", value="+rr.key);
+
+							request.getApplicationSession().addIndexKey(rr.key);
+
+							for (Entry<String, String> entry : rr.attributes.entrySet()) {
+								sipLogger.warning(request, "AsyncSipServlet adding SipSession attributes key=" + entry.getKey()
+										+ ", value=" + entry.getValue());
+								sipSession.setAttribute(entry.getKey(), entry.getValue());
+							}
+						}
+
+					}
+
+				}
+
+// this sets any SipApplicationSession attributes as defined by the config file
+// not sure why this would be useful? but, you never know...
+//				if(sessionParameters.sessionVariables!=null) {
+//					Translation t;
+//					for(TranslationsMap map : sessionParameters.sessionVariables ) {
+//						t = map.applyTranslations(request);
+//						if(t!=null) {
+//							for( Entry<String, Object> entry:   t.getAttributes().entrySet()) {
+//								appSession.setAttribute(entry.getKey(), entry.getValue());
+//							}
+//						}
+//					}
+//				}
+
+//				// this sets any SipSession attributes as defined by the config file
+//				// useful for identifying SipSessions in apps like 'transfer'
+//				if(sessionParameters.dialogVariables!=null) {
+//					Translation t;
+//					for(TranslationsMap map : sessionParameters.dialogVariables ) {
+//						t = map.applyTranslations(request);
+//						if(t!=null) {
+//							for( Entry<String, Object> entry:   t.getAttributes().entrySet()) {
+//								sipSession.setAttribute(entry.getKey(), entry.getValue());
+//							}
+//						}
+//					}
+//				}				
+
+				//
 
 				// put the keep alive logic here
 
@@ -534,6 +601,7 @@ public abstract class AsyncSipServlet extends SipServlet
 //		return Long.toHexString(h);
 //	}
 
+// jwm - do we need this?	
 	private static String byteArray2Text(byte[] bytes) {
 		final char[] alphanum = { // 62 characters for randomish pattern distribution
 				'0', '1', '2', '3', '4', '5', '6', '7', //

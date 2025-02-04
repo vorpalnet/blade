@@ -38,6 +38,18 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 		this.headers.put("From", from);
 		this.headers.put("To", to);
 	}
+	
+	public DummyRequest(String method, URI from, URI to) {
+		this.method = method;
+		this.headers.put("From", from.toString());
+		this.headers.put("To", to.toString());
+	}
+	
+	public DummyRequest(String method, Address from, Address to) {
+		this.method = method;
+		this.headers.put("From", from.toString());
+		this.headers.put("To", to.toString());
+	}
 
 	@Override
 	public AsyncContext getAsyncContext() {
