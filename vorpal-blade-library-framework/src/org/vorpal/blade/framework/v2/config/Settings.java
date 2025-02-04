@@ -55,7 +55,6 @@ public class Settings<T> implements SettingsMXBean {
 	private ObjectMapper objectMapper;
 	private SettingsManager<T> settingsManager;
 
-//	private String configName;
 	private Path domain;
 	private Path cluster;
 	private Path server;
@@ -75,7 +74,6 @@ public class Settings<T> implements SettingsMXBean {
 		this.settingsManager = settingsManager;
 
 		this.clazz = clazz;
-//		this.configName = configName;
 		this.objectMapper = objectMapper;
 
 		domain = Paths.get("./config/custom/vorpal/" + configName + ".json");
@@ -125,7 +123,6 @@ public class Settings<T> implements SettingsMXBean {
 			Path path = getPath(configType);
 			bufferedWriter = Files.newBufferedWriter(path, //
 					StandardOpenOption.CREATE, //
-//					StandardOpenOption.WRITE, //
 					StandardOpenOption.TRUNCATE_EXISTING);
 		} catch (Exception e) {
 			e.printStackTrace();

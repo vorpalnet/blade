@@ -9,11 +9,12 @@ public class TransferSettings extends RouterConfig implements Serializable {
 	private static final long serialVersionUID = 2L;
 
 	public enum TransferStyle {
-		none, blind, attended, conference
+		blind, attended, conference
 	};
 
 	protected Boolean transferAllRequests;
 	protected TransferStyle defaultTransferStyle;
+	protected String conferenceApp;
 
 	protected String allow = "MESSAGE, REFER, NOTIFY, CANCEL, ACK, UPDATE, PRACK, OPTIONS, INVITE, INFO, SUBSCRIBE, BYE";
 	protected ArrayList<String> preserveInviteHeaders = new ArrayList<>();

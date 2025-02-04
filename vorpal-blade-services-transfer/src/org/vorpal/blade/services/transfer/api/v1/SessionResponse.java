@@ -1,5 +1,6 @@
 package org.vorpal.blade.services.transfer.api.v1;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -11,7 +12,7 @@ import javax.servlet.sip.SipSession;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-public class SessionResponse {
+public class SessionResponse implements Serializable {
 	private Integer expires = null;
 
 	public List<String> groups = new LinkedList<>();

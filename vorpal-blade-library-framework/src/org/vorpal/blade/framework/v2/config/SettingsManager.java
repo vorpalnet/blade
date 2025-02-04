@@ -328,9 +328,6 @@ public class SettingsManager<T> {
 
 			settings.reload();
 
-			// happens inside reload
-			// this.current = (T) settings.getConfiguration();
-
 			if (current != null) {
 				this.saveSchema(current);
 			}
