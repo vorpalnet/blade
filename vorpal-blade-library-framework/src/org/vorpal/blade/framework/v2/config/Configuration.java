@@ -37,7 +37,6 @@ public class Configuration implements Serializable {
 			Pattern pattern = Pattern.compile("([0-9\\.]+)[ ]*((?i)[smhd])*(.*)");
 			Matcher match = pattern.matcher(humanReadable);
 
-//			if (!match.matches() || match.groupCount() != 2) {
 			if (!match.matches()) {
 
 				throw new ParseException("Wrong format", 0);

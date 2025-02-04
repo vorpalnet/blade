@@ -1,5 +1,6 @@
 package org.vorpal.blade.services.transfer.api.v1;
 
+import java.io.Serializable;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -10,7 +11,7 @@ import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
-public class Dialog {
+public class Dialog implements Serializable {
 	public String requestUri;
 	public String remoteParty;
 	public Map<String, List<String>> inviteHeaders = new HashMap<>();
@@ -36,15 +37,15 @@ public class Dialog {
 				byte[] rawContent;
 
 				if (objContent instanceof String) {
-					rawContent = ((String)objContent).getBytes();
+					rawContent = ((String) objContent).getBytes();
 				} else {
 					rawContent = (byte[]) objContent;
 				}
-				
-	            // System.setProperty("mail.mime.encodeeol.strict", "true");
-				
+
+				// System.setProperty("mail.mime.encodeeol.strict", "true");
+
 				content = Base64.getMimeEncoder().encodeToString(rawContent);
-				Callflow.getSipLogger().finer(sipSession, "content = "+content);
+				Callflow.getSipLogger().finer(sipSession, "content = " + content);
 			}
 
 		} catch (Exception e) {

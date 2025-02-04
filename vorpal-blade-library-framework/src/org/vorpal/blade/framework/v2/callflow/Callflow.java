@@ -433,6 +433,8 @@ public abstract class Callflow implements Serializable {
 		} while (null != getSipUtil().getApplicationSessionByKey(indexKey, false));
 
 		appSession.setAttribute("X-Vorpal-Session", indexKey);
+
+		// jwm - instead, use the Configuration file to define index keys
 		appSession.addIndexKey(indexKey);
 
 		// X-Vorpal-Session + X-Vorpal-Timestamp will be unique.
@@ -500,7 +502,7 @@ public abstract class Callflow implements Serializable {
 		SipApplicationSession appSession = request.getApplicationSession();
 		SipSession sipSession = request.getSession();
 
-		if (request.isInitial() && null==request.getHeader("X-Vorpal-Session")) {
+		if (request.isInitial() && null == request.getHeader("X-Vorpal-Session")) {
 			String indexKey = getVorpalSessionId(appSession);
 			if (indexKey == null) {
 				indexKey = AsyncSipServlet.generateIndexKey(request);
@@ -523,6 +525,8 @@ public abstract class Callflow implements Serializable {
 		sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
 		try {
+			// useful for identifying sessions
+			sipSession.setAttribute("sipAddress", request.getTo());
 
 			request.send();
 
@@ -1277,15 +1281,39 @@ public abstract class Callflow implements Serializable {
 		SipURI sipFrom = (SipURI) from;
 		SipURI sipTo = (SipURI) to;
 
-		// copy user
+		// copy user (if it doesn't exist)
 		if (sipFrom.getUser() != null && sipTo.getUser() == null) {
 			sipTo.setUser(sipFrom.getUser());
 		}
 
-		// copy parameters
+		// copy URI parameters (if they don't exist)
+		String value;
 		for (String name : from.getParameterNameSet()) {
-			if (null == to.getParameter(name)) {
-				to.setParameter(name, from.getParameter(name));
+			if (null == (value = to.getParameter(name))) {
+				to.setParameter(name, value);
+			}
+		}
+
+		return to;
+	}
+
+	/**
+	 * Copies both Address and URI parameters that do not already exist. Will copy
+	 * the user-part of the URI if it doesn't exist.
+	 * 
+	 * @param from
+	 * @param to
+	 * @return
+	 * @throws ServletParseException
+	 */
+	public static Address copyParameters(Address from, Address to) throws ServletParseException {
+
+		copyParameters(from.getURI(), to.getURI());
+
+		String value;
+		for (String name : from.getParameterNameSet()) {
+			if (null == (value = to.getParameter(name))) {
+				to.setParameter(name, value);
 			}
 		}
 
