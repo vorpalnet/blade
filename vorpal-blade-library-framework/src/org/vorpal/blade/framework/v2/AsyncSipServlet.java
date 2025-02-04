@@ -277,18 +277,20 @@ public abstract class AsyncSipServlet extends SipServlet
 
 						AttributesKey rr = selector.findKey(request);
 						if (rr != null) {
-							
+
 							sipLogger.warning(request, "AsyncSipServlet adding index key" + //
 									", selector=" + selector.getId() + //
 									", attribute=," + selector.getAttribute() + //
-									", expression=" + selector.getExpression()+ //
-									", value="+rr.key);
+									", expression=" + selector.getExpression() + //
+									", value=" + rr.key);
 
-							request.getApplicationSession().addIndexKey(rr.key);
+							if (rr.key != null) {
+								request.getApplicationSession().addIndexKey(rr.key);
+							}
 
 							for (Entry<String, String> entry : rr.attributes.entrySet()) {
-								sipLogger.warning(request, "AsyncSipServlet adding SipSession attributes key=" + entry.getKey()
-										+ ", value=" + entry.getValue());
+								sipLogger.warning(request, "AsyncSipServlet adding SipSession attributes key="
+										+ entry.getKey() + ", value=" + entry.getValue());
 								sipSession.setAttribute(entry.getKey(), entry.getValue());
 							}
 						}

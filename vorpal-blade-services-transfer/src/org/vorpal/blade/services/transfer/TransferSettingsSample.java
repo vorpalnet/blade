@@ -41,13 +41,42 @@ public class TransferSettingsSample extends TransferSettings {
 
 		List<AttributeSelector> indexKeySelectors = this.getSession().getSessionSelectors();
 
-		AttributeSelector xVorpalSession = new AttributeSelector();
-		xVorpalSession.setId("xVorpalSession");
-		xVorpalSession.setDescription("Create a session key based on the session portion of X-Vorpal-Session");
-		xVorpalSession.setAttribute("X-Vorpal-Session");
-		xVorpalSession.setPattern("^(?<session>.*):(?<dialog>.*)$");
-		xVorpalSession.setExpression("${session}");
-		indexKeySelectors.add(xVorpalSession);
+//		AttributeSelector xVorpalSession = new AttributeSelector();
+//		xVorpalSession.setId("xVorpalSession");
+//		xVorpalSession.setDescription("Create a session key based on the session portion of X-Vorpal-Session");
+//		xVorpalSession.setAttribute("X-Vorpal-Session");
+//		xVorpalSession.setPattern("^(?<session>.*):(?<dialog>.*)$");
+//		xVorpalSession.setExpression("${session}");
+//		indexKeySelectors.add(xVorpalSession);
+
+//		AttributeSelector testInbound = new AttributeSelector();
+//		testInbound.setId("user-agent");
+//		testInbound.setDescription(
+//				"Mark the session as inbound based on OSM-Features; no expression means no session key");
+//		testInbound.setAttribute("User-Agent");
+//		testInbound.setPattern("^.*LinphoneiOS.*$");
+//		testInbound.setExpression(null);
+//		testInbound.addAdditionalExpression("direction", "inbound");
+//		indexKeySelectors.add(testInbound);
+
+		AttributeSelector inbound = new AttributeSelector();
+		inbound.setId("inbound");
+		inbound.setDescription("Mark the session as inbound based on OSM-Features. No expression means no session key");
+		inbound.setAttribute("OSM-Features");
+		inbound.setPattern("^.*shuffleib.*$");
+		inbound.setExpression(null);
+		inbound.addAdditionalExpression("direction", "inbound");
+		indexKeySelectors.add(inbound);
+
+		AttributeSelector outbound = new AttributeSelector();
+		outbound.setId("outbound");
+		outbound.setDescription(
+				"Mark the session as outbound based on OSM-Features. No expression means no session key");
+		outbound.setAttribute("OSM-Features");
+		outbound.setPattern("^.*(?<direction>shuffleob).*$");
+		outbound.setExpression(null);
+		outbound.addAdditionalExpression("direction", "outbound");
+		indexKeySelectors.add(outbound);
 
 		AttributeSelector gucidSelector = new AttributeSelector();
 		gucidSelector.setId("gucidSelector");
