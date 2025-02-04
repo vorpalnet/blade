@@ -39,6 +39,11 @@ public class AttributeSelector {
 	}
 
 	public AttributeSelector addAdditionalExpression(String attributeName, String attributeExpression) {
+
+		if (this.additionalExpressions == null) {
+			this.additionalExpressions = new HashMap<>();
+		}
+
 		additionalExpressions.put(attributeName, attributeExpression);
 		return this;
 	}
@@ -215,7 +220,7 @@ public class AttributeSelector {
 					if (additionalExpressions != null && additionalExpressions.size() > 0) {
 						Map<String, String> additionalAttributes = new HashMap<>();
 						for (Entry<String, String> entry : this.additionalExpressions.entrySet()) {
-							String attrValue = Configuration.resolveVariables(attrsKey.attributes, expression);
+							String attrValue = Configuration.resolveVariables(attrsKey.attributes, entry.getValue());
 							additionalAttributes.put(entry.getKey(), attrValue);
 						}
 						attrsKey.attributes.putAll(additionalAttributes);
