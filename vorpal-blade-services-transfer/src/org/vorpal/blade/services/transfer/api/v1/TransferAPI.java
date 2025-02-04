@@ -55,30 +55,30 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 	// static because you cannot serialize AsyncResponse
 	public static Map<String, AsyncResponse> responseMap = new ConcurrentHashMap<>();
 
-	@GET
-	@Path("session/{key}")
-	@Operation(summary = "Get a session.")
-	@Produces({ MediaType.APPLICATION_JSON })
-	public Response getSession(
-			@Parameter(required = true, example = "ABCD6789", description = "Session ID") @PathParam("key") String sessionKey) {
-		Response response;
-
-		try {
-			SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(sessionKey, false);
-			if (appSession != null) {
-				SessionResponse session = new SessionResponse(appSession);
-				response = Response.accepted().entity(session).build();
-			} else {
-				response = Response.status(Status.NOT_FOUND).build();
-			}
-
-		} catch (Exception e) {
-			response = Response.status(500, e.getMessage()).build();
-			sipLogger.severe(e);
-		}
-
-		return response;
-	}
+//	@GET
+//	@Path("session/{key}")
+//	@Operation(summary = "Get a session.")
+//	@Produces({ MediaType.APPLICATION_JSON })
+//	public Response getSession(
+//			@Parameter(required = true, example = "ABCD6789", description = "Session ID") @PathParam("key") String sessionKey) {
+//		Response response;
+//
+//		try {
+//			SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(sessionKey, false);
+//			if (appSession != null) {
+//				SessionResponse session = new SessionResponse(appSession);
+//				response = Response.accepted().entity(session).build();
+//			} else {
+//				response = Response.status(Status.NOT_FOUND).build();
+//			}
+//
+//		} catch (Exception e) {
+//			response = Response.status(500, e.getMessage()).build();
+//			sipLogger.severe(e);
+//		}
+//
+//		return response;
+//	}
 
 	@SuppressWarnings({ "unchecked" })
 	@POST
@@ -124,14 +124,18 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				SipSession transfereeSession = null;
 				Address sipAddress = null;
 
-				sipLogger.warning("TransferAPI iterating through sessions...");
+				sipLogger.warning(transfereeSession, "TransferAPI iterating through sessions... Looking for name="
+						+ transferRequest.dialogKey.name + ", value=" + transferRequest.dialogKey.value);
+
 				for (SipSession sipSession : (Set<SipSession>) appSession.getSessionSet("SIP")) {
+
 					String value = (String) sipSession.getAttribute(transferRequest.dialogKey.name);
 					if (transferRequest.dialogKey.value.equalsIgnoreCase(value)) {
 						transfereeSession = sipSession;
 						sipAddress = (Address) sipSession.getAttribute("sipAddress");
 						break;
 					}
+
 				}
 
 				sipLogger.warning("TransferAPI transfereeSession=" + transfereeSession);
@@ -165,7 +169,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						sipLogger.info(transferorSession,
 								"TransferAPI REST transfer request; transferee=" + transferee + ", target=" + target);
 						Address transferor = (Address) transferorSession.getAttribute("sipAddress");
-						
+
 						DummyRequest refer = new DummyRequest(INVITE, transferor, target);
 						refer.setApplicationSession(appSession);
 						refer.setSession(transferorSession);
@@ -206,12 +210,14 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 								transferRequest.notification.style == TransferRequest.Notification.Style.async) {
 							// Do not send response; Save response in static memory so it's not serialized
 							responseMap.put(appSession.getId(), asyncResponse);
-							sipLogger.warning(transfereeSession, "TransferAPI saving asyncResponse to static responseMap...");
+							sipLogger.warning(transfereeSession,
+									"TransferAPI saving asyncResponse to static responseMap...");
 						} else {
 							// must be none, callback or jms
 							TransferResponse transferResponse = new TransferResponse();
 							transferResponse.status = 202;
 							transferResponse.description = "Accepted, Fire and Forget";
+							transferResponse.request = transferRequest;
 							asyncResponse.resume(Response.status(Status.ACCEPTED).entity(transferResponse).build());
 							sipLogger.warning("TransferAPI location=2");
 						}
@@ -219,9 +225,18 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						TransferResponse transferResponse = new TransferResponse();
 						transferResponse.status = 500;
 						transferResponse.description = "Could not build target address";
+						transferResponse.request = transferRequest;
 						asyncResponse.resume(Response.status(Status.NOT_ACCEPTABLE).entity(transferResponse).build());
 						sipLogger.warning("TransferAPI location=3");
 					}
+
+				} else {
+					TransferResponse transferResponse = new TransferResponse();
+					transferResponse.status = 404;
+					transferResponse.description = "Dialog not found";
+					transferResponse.request = transferRequest;
+					asyncResponse.resume(Response.status(Status.NOT_ACCEPTABLE).entity(transferResponse).build());
+					sipLogger.warning("TransferAPI location=3");
 
 				}
 
@@ -246,8 +261,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
-		sipLogger.finer(response, "TransferAPI transferCompleted " + response.getMethod() + " " + response.getStatus() + " "
-				+ response.getReasonPhrase());
+		sipLogger.finer(response, "TransferAPI transferCompleted " + response.getMethod() + " " + response.getStatus()
+				+ " " + response.getReasonPhrase());
 
 		AsyncResponse asyncResponse = responseMap.remove(response.getApplicationSession().getId());
 		if (asyncResponse != null) {
