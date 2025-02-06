@@ -10,7 +10,7 @@
 	<property name="release" value="11" />
 	<property name="classes" location="${build}/classes" />
 	<property name="src" location="src/main/java" />
-	<property name="umldoclet" location="../lib/umldoclet-2.1.2.jar" />
+	<property name="umldoclet" location="${BLADE}/lib/umldoclet-2.1.2.jar" />
 	<property name="packagenames" value="org.vorpal.*" />
 	<property name="BLADE" location="../" />
     <property name="dist" location="../dist/${implementation}.${build.number}" />
