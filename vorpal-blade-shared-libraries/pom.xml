@@ -42,6 +42,7 @@
 		<findbugs>3.0.2</findbugs>
 		<collections4>4.5.0-M3</collections4>
 		<commons-email>1.6.0</commons-email>
+		<swagger-version>2.2.28</swagger-version>
 	</properties>
 
 	<dependencies>
@@ -82,6 +83,21 @@
 		    <groupId>io.swagger.parser.v3</groupId>
 		    <artifactId>swagger-parser-v3</artifactId>
 		    <version>${swagger-parser}</version>
+		</dependency>
+		
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-jaxrs2</artifactId>
+			<version>${swagger-version}</version>
+		</dependency>
+
+
+		<!--
+		https://mvnrepository.com/artifact/io.swagger.core.v3/swagger-jaxrs2-servlet-initializer-v2 -->
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
+			<version>${swagger-version}</version>
 		</dependency>
 
         <dependency>
