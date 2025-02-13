@@ -24,7 +24,9 @@ public class CrudConfigurationSample extends CrudConfiguration {
 		Update toHeader = new Update("To", SIP_ADDRESS_PATTERN, "<${proto}:carol@${host}:5060;${uriparams}>");
 		rule.update.add(toHeader);
 		ruleSet.rules.add(rule);
+
 		this.ruleSets.put(ruleSet.id, ruleSet);
+		
 		TranslationsMap prefixMap = new ConfigPrefixMap();
 		prefixMap.id = "prefix-map";
 		prefixMap.addSelector(dialed);

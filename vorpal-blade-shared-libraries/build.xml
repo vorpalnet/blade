@@ -39,22 +39,16 @@
 			<arg line="-c 'mvn dependency:copy-dependencies'" />
 		</exec>
 
-		<!--
-		<exec dir="." executable="sh">
-			<arg line="-c 'zip -d target/dependency/jackson-core-2.17.2.jar META-INF/versions/17/\*' " />
-		</exec>
-		
-		<exec dir="." executable="sh">
-			<arg line="-c 'zip -d target/dependency/jackson-core-2.17.2.jar META-INF/versions/21/\*' " />
-		</exec>
-		-->
-		
 		<exec dir="." executable="sh">
 			<arg line="-c 'zip -d target/dependency/jackson-core-*.jar META-INF/versions/17/\*' " />
 		</exec>
 		
 		<exec dir="." executable="sh">
 			<arg line="-c 'zip -d target/dependency/jackson-core-*.jar META-INF/versions/21/\*' " />
+		</exec>
+
+		<exec dir="." executable="sh">
+			<arg line="-c 'zip -d target/dependency/jackson-core-*.jar META-INF/versions/22/\*' " />
 		</exec>
 		
 		
