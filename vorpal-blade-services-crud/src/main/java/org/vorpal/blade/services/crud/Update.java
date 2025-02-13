@@ -71,10 +71,10 @@ public class Update implements Serializable {
       while(m.find()) {
          String __name = m.group("name");
          if (__name != null) {
-            SettingsManager.sipLogger.warning(msg, "adding group=" + __name);
+            SettingsManager.sipLogger.finer(msg, "adding group=" + __name);
             groups.add(__name);
          } else {
-            SettingsManager.sipLogger.severe(msg, "group name is NULL!");
+            SettingsManager.sipLogger.finer(msg, "group name is NULL!");
          }
       }
 

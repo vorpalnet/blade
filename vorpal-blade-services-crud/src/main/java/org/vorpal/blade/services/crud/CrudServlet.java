@@ -32,7 +32,7 @@ import org.vorpal.blade.framework.v2.config.Translation;
 )
 @SipListener
 public class CrudServlet extends B2buaServlet {
-   public SettingsManager settingsManager;
+   public SettingsManager<CrudConfiguration> settingsManager;
 
    protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
       this.settingsManager = new SettingsManager(event, CrudConfiguration.class, new CrudConfigurationSample());
@@ -47,53 +47,80 @@ public class CrudServlet extends B2buaServlet {
 
    }
 
-   protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
-      Callflow callflow = null;
-      CrudConfiguration settings = (CrudConfiguration)this.settingsManager.getCurrent();
-      if (inboundRequest.getMethod().equals("INVITE") && inboundRequest.isInitial()) {
-         Translation t = settings.findTranslation(inboundRequest);
-         sipLogger.severe((SipServletMessage)inboundRequest, "is t null " + t);
-         if (t != null) {
-            sipLogger.severe((SipServletMessage)inboundRequest, "found t! ");
-            String ruleSetId = (String)t.getAttribute("ruleSet");
-            sipLogger.severe((SipServletMessage)inboundRequest, "ruleSet.id " + ruleSetId);
-            if (ruleSetId != null) {
-               RuleSet ruleSet = (RuleSet)settings.ruleSets.get(ruleSetId);
-               if (ruleSet != null) {
-                  sipLogger.severe((SipServletMessage)inboundRequest, "ruleSet: " + ruleSet);
-                  if (ruleSet != null) {
-                     sipLogger.severe((SipServletMessage)inboundRequest, "found ruleSet.");
-                     ruleSet.process(inboundRequest);
-                     sipLogger.severe((SipServletMessage)inboundRequest, "done processing ruleset");
-                     sipLogger.severe((SipServletMessage)inboundRequest, "To: " + (String)ruleSet.output.get("To"));
-                     sipLogger.severe((SipServletMessage)inboundRequest, "Request-URI: " + (String)ruleSet.output.get("Request-URI"));
-                     callflow = new CrudInitialInvite((B2buaListener)null, ruleSet.output);
-                  } else {
-                     sipLogger.severe((SipServletMessage)inboundRequest, "No ruleSet found.");
-                  }
-               }
-            }
-         }
-      }
+   // jwm - restoring this to 'original' configuration style
+	@Override
+	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
+		Callflow callflow = null;
 
-      if (callflow == null) {
-         if (inboundRequest.getMethod().equals("INVITE")) {
-            if (inboundRequest.isInitial()) {
-               callflow = new InitialInvite((B2buaListener)null);
-            } else {
-               callflow = new Reinvite((B2buaServlet)null);
-            }
-         } else if (inboundRequest.getMethod().equals("BYE")) {
-            callflow = new Bye((B2buaServlet)null);
-         } else if (inboundRequest.getMethod().equals("CANCEL")) {
-            callflow = new Cancel((B2buaServlet)null);
-         } else {
-            callflow = new Passthru((B2buaServlet)null);
-         }
-      }
+		CrudConfiguration settings = settingsManager.getCurrent();
 
-      return (Callflow)callflow;
-   }
+		if (inboundRequest.getMethod().equals("INVITE") && inboundRequest.isInitial()) {
+			Translation t = settings.findTranslation(inboundRequest);
+			if (t != null) {
+				RuleSet ruleSet = (RuleSet) t.getAttributes().get("ruleSet");
+
+				if (ruleSet != null) {
+					ruleSet.process(inboundRequest);
+					callflow = new CrudInitialInvite(this, ruleSet.output);
+				}
+			}
+		}
+
+		if (callflow == null) {
+			callflow = super.chooseCallflow(inboundRequest);
+		}
+
+		return callflow;
+	}
+   
+   
+//   protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
+//      Callflow callflow = null;
+//      CrudConfiguration settings = (CrudConfiguration)this.settingsManager.getCurrent();
+//      if (inboundRequest.getMethod().equals("INVITE") && inboundRequest.isInitial()) {
+//         Translation t = settings.findTranslation(inboundRequest);
+//         sipLogger.finer((SipServletMessage)inboundRequest, "is t null " + t);
+//         if (t != null) {
+//            sipLogger.finer((SipServletMessage)inboundRequest, "found t! ");
+//            String ruleSetId = (String)t.getAttribute("ruleSet");
+//            sipLogger.finer((SipServletMessage)inboundRequest, "ruleSet.id " + ruleSetId);
+//            if (ruleSetId != null) {
+//            	RuleSet ruleSet = (RuleSet)settings.ruleSets.get(ruleSetId);
+//               if (ruleSet != null) {
+//                  sipLogger.finer((SipServletMessage)inboundRequest, "ruleSet: " + ruleSet);
+//                  if (ruleSet != null) {
+//                     sipLogger.finer((SipServletMessage)inboundRequest, "found ruleSet.");
+//                     ruleSet.process(inboundRequest);
+//                     sipLogger.finer((SipServletMessage)inboundRequest, "done processing ruleset");
+//                     sipLogger.finer((SipServletMessage)inboundRequest, "To: " + (String)ruleSet.output.get("To"));
+//                     sipLogger.finer((SipServletMessage)inboundRequest, "Request-URI: " + (String)ruleSet.output.get("Request-URI"));
+//                     callflow = new CrudInitialInvite((B2buaListener)null, ruleSet.output);
+//                  } else {
+//                     sipLogger.finer((SipServletMessage)inboundRequest, "No ruleSet found.");
+//                  }
+//               }
+//            }
+//         }
+//      }
+//
+//      if (callflow == null) {
+//         if (inboundRequest.getMethod().equals("INVITE")) {
+//            if (inboundRequest.isInitial()) {
+//               callflow = new InitialInvite((B2buaListener)null);
+//            } else {
+//               callflow = new Reinvite((B2buaServlet)null);
+//            }
+//         } else if (inboundRequest.getMethod().equals("BYE")) {
+//            callflow = new Bye((B2buaServlet)null);
+//         } else if (inboundRequest.getMethod().equals("CANCEL")) {
+//            callflow = new Cancel((B2buaServlet)null);
+//         } else {
+//            callflow = new Passthru((B2buaServlet)null);
+//         }
+//      }
+//
+//      return (Callflow)callflow;
+//   }
 
    public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
       SettingsManager.sipLogger.warning((SipServletMessage)outboundRequest, "Sending INVITE...\n" + outboundRequest.toString());
