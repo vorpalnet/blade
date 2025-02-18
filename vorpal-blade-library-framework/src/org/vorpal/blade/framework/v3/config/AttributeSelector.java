@@ -119,8 +119,6 @@ public class AttributeSelector {
 			// jwm - find named groups, useful later
 			Map<String, String> namedGroups = new HashMap<>();
 
-			sipLogger.finer(request, "attribute=" + attribute);
-
 			switch (attribute) {
 			case "Content":
 				header = "";
@@ -133,7 +131,8 @@ public class AttributeSelector {
 							header = new String(content);
 						}
 					} else {
-						sipLogger.warning(request, "No content in message body. Check configuration.");
+						sipLogger.severe(request,
+								"AttributeSelector - No content in message body. Check configuration.");
 					}
 				} catch (IOException e) { // this should never happen
 					SettingsManager.getSipLogger().logStackTrace(e);
@@ -162,21 +161,16 @@ public class AttributeSelector {
 
 			}
 
-			sipLogger.finer(request, "header name=" + attribute + ", value=" + header);
-
 			if (header != null) {
 
 				Matcher matcher = _pattern.matcher(header);
 
 				value = (attribute.matches("Content")) ? "[...]" : header;
 
-				sipLogger.finer(request, "value=" + value);
-
 				matchResult = matcher.matches();
 
 				if (matchResult && expression != null) {
 					key = matcher.replaceAll(expression);
-					sipLogger.finer(request, "key=" + key);
 				}
 
 				if (matchResult) {
@@ -206,12 +200,7 @@ public class AttributeSelector {
 							a__name = a__itr.next();
 							a__value = a__matcher.group(a__name);
 							if (a__value != null && a__value.length() > 0) {
-//								regexRoute.attributes.put(a__name, a__value);
 								attrsKey.attributes.put(a__name, a__value);
-
-								sipLogger.finer(request,
-										"regexRoute.attributes name=" + a__name + ", value=" + a__value);
-
 							}
 						}
 					}
@@ -229,39 +218,29 @@ public class AttributeSelector {
 				}
 
 				if (sipLogger.isLoggable(Level.FINER)) {
-					if (matchResult == true) {
-						sipLogger.finer(request, "Pattern match found, Selector id=" + this.getId() + //
-								", attribute=" + this.getAttribute() + //
-								", value=" + value + //
-								", matchResult=" + matchResult + //
-								", key=" + key);
-					} else {
-						sipLogger.finer(request, "No pattern match found, Selector id=" + this.getId() + //
-								", attribute=" + this.getAttribute() + //
-								", value=" + value + //
-								", matchResult=" + matchResult + //
-								", key=" + key + //
-								", pattern=" + this.getPattern() + //
-								", expression=" + this.getExpression());
-					}
+					sipLogger.finer(request, "AttributeSelector " + //
+							"- matchResult=" + matchResult + //
+							", selector id=" + this.getId() + //
+							", attribute=" + this.getAttribute() + //
+							", value=" + value + //
+							", pattern=" + _strPattern + //
+							", expression=" + expression + //
+							", key=" + key);
 				}
 
-			} else {
-				// jwm - testing
-				// sipLogger.severe(request, "No header found: " + attribute);
 			}
 
 		} catch (Exception e) {
-			sipLogger.severe(request, "Unknown error for Selector.findKey()");
-			sipLogger.severe(request, "Selector id=" + this.getId() + //
+			sipLogger.severe(request, "AttributeSelector; Unknown error; Check configuration file." + //
+					"; matchResult=" + matchResult + //
+					", selector id=" + this.getId() + //
 					", attribute=" + this.getAttribute() + //
 					", value=" + value + //
-					", matchResult=" + matchResult + //
-					", key=" + key + //
-					", pattern=" + this.getPattern() + //
-					", expression=" + this.getExpression());
+					", pattern=" + _strPattern + //
+					", expression=" + expression + //
+					", key=" + key);
 			sipLogger.severe(request, request.toString());
-			sipLogger.logStackTrace(e);
+			sipLogger.logStackTrace(request, e);
 		}
 
 		return attrsKey;

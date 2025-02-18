@@ -50,7 +50,7 @@ public interface TransferListener extends Serializable {
 	 * 
 	 * request.getAddressHeader("To").setURI(sipFactory.createURI("sip:target2@vorpal.net"));
 	 * 
-	 * @param request
+	 * @param outboundRequest
 	 * @throws ServletException
 	 * @throws IOException
 	 */
@@ -80,7 +80,7 @@ public interface TransferListener extends Serializable {
 	 * transfer process. The request may be either a BYE or CANCEL depending upon
 	 * the callflow.
 	 * 
-	 * @param request either a cancel or bye request
+	 * @param cancelRequest
 	 * @throws ServletException
 	 * @throws IOException
 	 */

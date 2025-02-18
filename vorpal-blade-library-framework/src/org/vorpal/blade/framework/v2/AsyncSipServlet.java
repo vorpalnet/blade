@@ -116,20 +116,17 @@ public abstract class AsyncSipServlet extends SipServlet
 				sipLogger.info(application + " compiled using " + title + " version " + version);
 			}
 
-		} catch (ServletException se) {
+		} catch (Exception ex) {
 
 			if (null != sipLogger) {
-				sipLogger.severe(se);
+				sipLogger.severe(ex);
+			} else {
+				ex.printStackTrace();
 			}
 
-			throw new UncheckedIOException(new IOException(se));
+			// what's the point?
+			// throw new UncheckedIOException(new IOException(se));
 
-		} catch (IOException ioe) {
-			if (null != sipLogger) {
-				sipLogger.severe(ioe);
-			}
-
-			throw new UncheckedIOException(ioe);
 		}
 
 	}
@@ -169,20 +166,17 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			servletDestroyed(event);
 
-		} catch (ServletException se) {
+		} catch (Exception ex) {
 
 			if (null != sipLogger) {
-				sipLogger.severe(se);
+				sipLogger.severe(ex);
+			} else {
+				ex.printStackTrace();
 			}
 
-			throw new UncheckedIOException(new IOException(se));
+			// what's the point?
+			// throw new UncheckedIOException(new IOException(se));
 
-		} catch (IOException ioe) {
-			if (null != sipLogger) {
-				sipLogger.severe(ioe);
-			}
-
-			throw new UncheckedIOException(ioe);
 		}
 	}
 
@@ -278,18 +272,14 @@ public abstract class AsyncSipServlet extends SipServlet
 						AttributesKey rr = selector.findKey(request);
 						if (rr != null) {
 
-							sipLogger.warning(request, "AsyncSipServlet adding index key" + //
-									", selector=" + selector.getId() + //
-									", attribute=," + selector.getAttribute() + //
-									", expression=" + selector.getExpression() + //
-									", value=" + rr.key);
-
 							if (rr.key != null) {
+								sipLogger.finer(request,
+										"AsyncSipServlet - adding ApplicationSession index key " + rr.key);
 								request.getApplicationSession().addIndexKey(rr.key);
 							}
 
 							for (Entry<String, String> entry : rr.attributes.entrySet()) {
-								sipLogger.warning(request, "AsyncSipServlet adding SipSession attributes key="
+								sipLogger.finer(request, "AsyncSipServlet - adding SipSession attribute name="
 										+ entry.getKey() + ", value=" + entry.getValue());
 								sipSession.setAttribute(entry.getKey(), entry.getValue());
 							}
@@ -410,9 +400,12 @@ public abstract class AsyncSipServlet extends SipServlet
 //			}
 
 		} catch (Exception e) {
-			sipLogger.severe(request, "Exception on SIP request: \n" + request.toString());
+			sipLogger.severe(request, "Exception on SIP request:" + request.toString());
+			sipLogger.severe(request, "request=" + request.toString());
 			sipLogger.logStackTrace(request, e);
-			throw e;
+
+			// what's the point?
+			// throw e;
 		}
 
 		// process requests queued up from glare
@@ -522,9 +515,12 @@ public abstract class AsyncSipServlet extends SipServlet
 				sipLogger.warning(response, "SipSession is null.");
 			}
 		} catch (Exception e) {
-			sipLogger.severe(response, "Exception on SIP response: \n" + response.toString());
+			sipLogger.severe(response, "Exception on SIP response:");
+			sipLogger.severe(response, "response=" + response.toString());
 			sipLogger.logStackTrace(response, e);
-			throw e;
+
+			// what's the point
+			// throw e;
 		}
 	}
 
@@ -685,7 +681,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			response.send();
 		} catch (Exception e) {
 			sipLogger.logStackTrace(e);
-			throw e;
+
+			// throw e;
 		}
 	}
 

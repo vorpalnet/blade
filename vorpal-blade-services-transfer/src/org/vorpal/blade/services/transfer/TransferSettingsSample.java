@@ -64,7 +64,7 @@ public class TransferSettingsSample extends TransferSettings {
 		inbound.setDescription("Mark the session as inbound based on OSM-Features. No expression means no session key");
 		inbound.setAttribute("OSM-Features");
 		inbound.setPattern("^.*shuffleib.*$");
-		inbound.setExpression(null);
+//		inbound.setExpression("inbound");
 		inbound.addAdditionalExpression("direction", "inbound");
 		indexKeySelectors.add(inbound);
 
@@ -73,8 +73,8 @@ public class TransferSettingsSample extends TransferSettings {
 		outbound.setDescription(
 				"Mark the session as outbound based on OSM-Features. No expression means no session key");
 		outbound.setAttribute("OSM-Features");
-		outbound.setPattern("^.*(?<direction>shuffleob).*$");
-		outbound.setExpression(null);
+		outbound.setPattern("^.*shuffleob.*$");
+//		outbound.setExpression("outbound");
 		outbound.addAdditionalExpression("direction", "outbound");
 		indexKeySelectors.add(outbound);
 
@@ -82,16 +82,16 @@ public class TransferSettingsSample extends TransferSettings {
 		gucidSelector.setId("gucidSelector");
 		gucidSelector.setDescription("Create index key based on the value of the Cisco-Gucid header");
 		gucidSelector.setAttribute("Cisco-Gucid");
-		gucidSelector.setPattern("^.*$");
-		gucidSelector.setExpression("${1}");
+		gucidSelector.setPattern("^(?<gucid>.*)$");
+		gucidSelector.setExpression("${gucid}");
 		indexKeySelectors.add(gucidSelector);
 
 		AttributeSelector guuid = new AttributeSelector();
 		guuid.setId("guuidSelector");
 		guuid.setDescription("Create index key based on the value of the X-Genesys-CallUUID header");
 		guuid.setAttribute("X-Genesys-CallUUID");
-		guuid.setPattern("^.*$");
-		guuid.setExpression("${1}");
+		guuid.setPattern("^(?<guuid>.*)$");
+		guuid.setExpression("${guuid}");
 		indexKeySelectors.add(guuid);
 
 		this.transferAllRequests = true;

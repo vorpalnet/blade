@@ -1,0 +1,38 @@
+Date: Fri, 14 Feb 2025 15:47:22 GMT 
+Allow: REFER, CANCEL, ACK, INVITE, OPTIONS, SUBSCRIBE, BYE 
+Content-Length: 238 
+Allow-Events: refer 
+Ncp-Prcd: ICT 
+Max-Breadth: 60 
+Via: SIP/2.0/TCP 10.86.40.119:5060;wlsscid=-58cf3d6df02ccf69;branch=z9hG4bK0c807c35bff6f876502ff2e08bf84a9d 
+X-Vorpal-Timestamp: 1950524A567 
+Contact: <sip:wlssuser@10.86.40.119:5060;transport=tcp;wlsscid=-58cf3d6df02ccf69;sipappsessionid=app-6zro1obs2r2e;wlssfcid=sip-jczg91n62dxd> 
+Min-SE: 90 
+Call-ID: wlss-ff771a81-9a06abab938c2eb76a1a965ac179b28e@10.86.40.119 
+Max-Forwards: 70 
+From: <sip:+18325150855@152.190.45.36:5060;user=phone>;tag=1b3f6f89 
+Content-Type: application/sdp 
+P-Asserted-Identity: TEXAS <sip:+18325150855@152.190.45.36;user=phone> 
+Cisco-Gucid: 00128025381739548042 
+X-Vorpal-Session: B3FE7B7E:134B 
+X-Semafone-URL: https://omni-sm-dev-elr-engine.uhc.com/shuffle/resources/api/v1/insert?sessionKey=00128025381739548042&endpoint=semafone 
+Accept-Language: en 
+Session-Expires: 1800;refresher=uac 
+Accept: application/sdp 
+CSeq: 1 INVITE 
+User-to-User: 04FA08008009EA67AF658AC8143030313238303235333831373339353438303432;encoding=hex 
+To: <sip:+18442820485@elr11.uhgvcc.globalipcom.com>;initialip=10.173.101.140 
+OSM-Features: shuffleib,transfer 
+Supported: timer, replaces 
+v=0 
+o=xmserver 3948536842 3948536843 IN IP4 10.173.101.140 
+s=xmserver 
+c=IN IP4 10.173.101.140 
+b=AS:80 
+t=0 0 
+m=audio 62448 RTP/AVP 0 101 
+b=AS:80 
+a=sendrecv 
+a=rtpmap:0 pcmu/8000 
+a=rtpmap:101 telephone-event/8000 
+a=fmtp:101 0-15
