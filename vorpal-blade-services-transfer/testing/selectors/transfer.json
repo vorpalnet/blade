@@ -1,0 +1,142 @@
+{
+  "logging" : {
+    "useParentLogging" : false,
+    "directory" : "./servers/${weblogic.Name}/logs/vorpal",
+    "fileSize" : "100MiB",
+    "fileCount" : 25,
+    "appendFile" : true,
+    "loggingLevel" : "FINEST",
+    "sequenceDiagramLoggingLevel" : "FINE",
+    "configurationLoggingLevel" : "FINE",
+    "fileName" : "${sip.application.name}.%g.log"
+  },
+  "session" : {
+    "expiration" : 900,
+    "keepAlive" : {
+      "style" : "DISABLED",
+      "sessionExpires" : 3600,
+      "minSE" : 1800
+    },
+    "sessionSelectors" : [ {
+      "id" : "inbound",
+      "description" : "Mark the session as inbound based on OSM-Features. No expression means no session key",
+      "attribute" : "OSM-Features",
+      "additionalExpressions" : {
+        "direction" : "inbound"
+      },
+      "pattern" : "^.*shuffleib.*$"
+    }, {
+      "id" : "outbound",
+      "description" : "Mark the session as outbound based on OSM-Features. No expression means no session key",
+      "attribute" : "OSM-Features",
+      "additionalExpressions" : {
+        "direction" : "outbound"
+      },
+      "pattern" : "^.*(?<direction>shuffleob).*$"
+    }, {
+      "id" : "gucidSelector",
+      "description" : "Create index key based on the value of the Cisco-Gucid header",
+      "attribute" : "Cisco-Gucid",
+      "expression" : "${1}",
+      "pattern" : "^.*$"
+    }, {
+      "id" : "guuidSelector",
+      "description" : "Create index key based on the value of the X-Genesys-CallUUID header",
+      "attribute" : "X-Genesys-CallUUID",
+      "expression" : "${1}",
+      "pattern" : "^.*$"
+    } ]
+  },
+  "selectors" : [ {
+    "id" : "Refer-To",
+    "description" : "The user part of the Refer-To header",
+    "attribute" : "Refer-To",
+    "expression" : "${user}",
+    "pattern" : "(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)"
+  }, {
+    "id" : "Referred-By",
+    "description" : "The user@host part of the Referred-By header",
+    "attribute" : "Referred-By",
+    "expression" : "${user}@${host}",
+    "pattern" : "(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)"
+  } ],
+  "maps" : [ {
+    "type" : "prefix",
+    "id" : "prefix-map",
+    "description" : "Translations map for Refer-To number prefixes",
+    "selectors" : [ "Refer-To" ],
+    "map" : {
+      "19951" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      },
+      "19974" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      },
+      "1960" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      },
+      "19971" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      },
+      "99910" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      },
+      "19804" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      },
+      "1969" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      },
+      "19933" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      },
+      "19977" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      },
+      "19954" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      }
+    }
+  }, {
+    "type" : "hash",
+    "id" : "hash-map",
+    "description" : "Translations map for Referred-By user@host",
+    "selectors" : [ "Referred-By" ],
+    "map" : {
+      "genesys@pure.cloud" : {
+        "attributes" : {
+          "style" : "blind"
+        }
+      }
+    }
+  } ],
+  "plan" : [ "prefix-map", "hash-map" ],
+  "defaultRoute" : {
+    "id" : "default-route"
+  },
+  "transferAllRequests" : false,
+  "defaultTransferStyle" : "blind",
+  "allow" : "MESSAGE, REFER, NOTIFY, CANCEL, ACK, UPDATE, PRACK, OPTIONS, INVITE, INFO, SUBSCRIBE, BYE",
+  "preserveInviteHeaders" : [ "Cisco-Gucid", "User-to-User", "OSM-Features", "Allow", "X-Genesys-CallUUID", "P-Asserted-Identity", "X-Semafone-URL" ],
+  "preserveReferHeaders" : [ "Cisco-Gucid", "User-to-User", "OSM-Features", "Referred-By", "X-Omni-DestinationNumber", "X-Genesys-CallUUID", "x-User-To-User" ]
+}

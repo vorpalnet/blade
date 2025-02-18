@@ -43,6 +43,7 @@
 		<collections4>4.5.0-M3</collections4>
 		<commons-email>1.6.0</commons-email>
 		<swagger-version>2.2.28</swagger-version>
+		<xalan>2.7.3</xalan>
 	</properties>
 
 	<dependencies>
@@ -123,6 +124,12 @@
             <artifactId>logging-interceptor</artifactId>
             <version>${okhttp-version}</version>
         </dependency>
+        
+ 		<dependency>
+		    <groupId>xalan</groupId>
+		    <artifactId>xalan</artifactId>
+		    <version>${xalan}</version>
+		</dependency>
 
 
 <!--	
