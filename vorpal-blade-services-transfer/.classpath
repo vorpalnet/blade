@@ -19,6 +19,6 @@
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.shared/vorpal-blade/allow-newer/2.0/2.5.0"/>
-	<classpathentry kind="var" path="OCCAS_LIBS/sipservlet-api.jar"/>
+	<classpathentry kind="var" path="WLSERVER/sip/server/lib/sipservlet-api.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>
