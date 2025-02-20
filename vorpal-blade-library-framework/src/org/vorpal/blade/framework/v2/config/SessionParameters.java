@@ -10,23 +10,35 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 public class SessionParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	public enum DialogType {
+		origin, destination
+	};
+
 	@JsonPropertyDescription("Set Application Session expiration in minutes.")
 	public Integer expiration = null;
 
 	@JsonPropertyDescription("Set Keep-Alive parameters.")
 	public KeepAliveParameters keepAlive = null;
 
+	@JsonPropertyDescription("Apply attributes to either origin or destination dialog. Default: origin")
+	public DialogType dialog;
+
 	@JsonPropertyDescription("List of selectors for creating session (SipApplicationSession) lookup keys.")
 	public List<AttributeSelector> sessionSelectors = null;
 
-//	@JsonPropertyDescription("List of selectors for creating dialog (SipSession) lookup keys")
-//	public List<AttributeSelector> dialogSelectors = null;
+	public DialogType getDialog() {
 
-//	@JsonPropertyDescription("Optional list of selectors for creating SipApplicationSession attributes. Use named groups in the regular expression")
-//	public List<TranslationsMap> sessionVariables = null;
+		if (dialog == null) {
+			return DialogType.origin;
+		} else {
+			return dialog;
+		}
+	}
 
-//	@JsonPropertyDescription("Optional list of selectors for creating SipSession attributes. Use named groups in the regular expression")
-//	public List<TranslationsMap> dialogVariables = null;
+	public SessionParameters setDialog(DialogType dialog) {
+		this.dialog = dialog;
+		return this;
+	}
 
 	public List<AttributeSelector> getSessionSelectors() {
 		return sessionSelectors;

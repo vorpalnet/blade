@@ -26,7 +26,7 @@ public class AttributeSelector {
 	private String description; // optional for human readable descriptions
 	private String attribute; // location of the key data, like in the 'To' header
 	private Pattern _pattern; // regular expression using capturing groups to parse the key data
-	private String expression; // replacement pattern, like $1 to format the key data
+	private String expression; // replacement pattern, like ${ucid} to format the key data
 	private Map<String, String> additionalExpressions;
 
 	public Map<String, String> getAdditionalExpressions() {
