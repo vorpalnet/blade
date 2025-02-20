@@ -227,6 +227,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		SipApplicationSession appSession = request.getApplicationSession();
 		SipSession sipSession = request.getSession();
 		String method = request.getMethod();
+		AttributesKey rr = null;
 
 		Queue<SipServletRequest> glareQueue = null;
 		Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
@@ -269,7 +270,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					for (AttributeSelector selector : selectors) {
 
-						AttributesKey rr = selector.findKey(request);
+						rr = selector.findKey(request);
 						if (rr != null) {
 
 							if (rr.key != null) {
@@ -278,46 +279,21 @@ public abstract class AsyncSipServlet extends SipServlet
 								request.getApplicationSession().addIndexKey(rr.key);
 							}
 
-							for (Entry<String, String> entry : rr.attributes.entrySet()) {
-								sipLogger.finer(request, "AsyncSipServlet - adding SipSession attribute name="
-										+ entry.getKey() + ", value=" + entry.getValue());
-								sipSession.setAttribute(entry.getKey(), entry.getValue());
+							// add any origin dialog session parameters from config file
+							if (sessionParameters.getDialog() == SessionParameters.DialogType.origin) {
+								for (Entry<String, String> entry : rr.attributes.entrySet()) {
+									sipLogger.finer(request,
+											"AsyncSipServlet - adding origin SipSession attribute name="
+													+ entry.getKey() + ", value=" + entry.getValue());
+									sipSession.setAttribute(entry.getKey(), entry.getValue());
+								}
 							}
+
 						}
 
 					}
 
 				}
-
-// this sets any SipApplicationSession attributes as defined by the config file
-// not sure why this would be useful? but, you never know...
-//				if(sessionParameters.sessionVariables!=null) {
-//					Translation t;
-//					for(TranslationsMap map : sessionParameters.sessionVariables ) {
-//						t = map.applyTranslations(request);
-//						if(t!=null) {
-//							for( Entry<String, Object> entry:   t.getAttributes().entrySet()) {
-//								appSession.setAttribute(entry.getKey(), entry.getValue());
-//							}
-//						}
-//					}
-//				}
-
-//				// this sets any SipSession attributes as defined by the config file
-//				// useful for identifying SipSessions in apps like 'transfer'
-//				if(sessionParameters.dialogVariables!=null) {
-//					Translation t;
-//					for(TranslationsMap map : sessionParameters.dialogVariables ) {
-//						t = map.applyTranslations(request);
-//						if(t!=null) {
-//							for( Entry<String, Object> entry:   t.getAttributes().entrySet()) {
-//								sipSession.setAttribute(entry.getKey(), entry.getValue());
-//							}
-//						}
-//					}
-//				}				
-
-				//
 
 				// put the keep alive logic here
 
@@ -325,10 +301,6 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			requestLambda = Callflow.pullCallback(request);
 			if (requestLambda != null) {
-
-// jwm - testing				
-//				String name = requestLambda.getClass().getSimpleName();
-//				String name = requestLambda.getClass().getSuperclass().getSimpleName();
 
 				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null,
 						requestLambda.getClass().getSimpleName());
@@ -381,7 +353,24 @@ public abstract class AsyncSipServlet extends SipServlet
 					}
 				} else {
 					sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
+
 					callflow.process(request);
+
+					// apply any destination sessionParameters from Configuration file
+					SipSession linkedSession = Callflow.getLinkedSession(sipSession);
+					if (sessionParameters != null //
+							&& rr != null //
+							&& linkedSession != null //
+							&& sessionParameters.getDialog() == SessionParameters.DialogType.destination) {
+
+						for (Entry<String, String> entry : rr.attributes.entrySet()) {
+							sipLogger.finer(request, "AsyncSipServlet - adding destination SipSession attribute name="
+									+ entry.getKey() + ", value=" + entry.getValue());
+							sipSession.setAttribute(entry.getKey(), entry.getValue());
+							linkedSession.setAttribute(entry.getKey(), entry.getValue());
+						}
+					}
+
 				}
 			}
 
