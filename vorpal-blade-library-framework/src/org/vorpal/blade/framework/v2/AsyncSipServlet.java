@@ -264,37 +264,6 @@ public abstract class AsyncSipServlet extends SipServlet
 					request.getApplicationSession().setExpires(Callflow.getSessionParameters().getExpiration());
 				}
 
-				// create any index keys defined by selectors in the config file
-				List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
-				if (selectors != null) {
-
-					for (AttributeSelector selector : selectors) {
-
-						rr = selector.findKey(request);
-						if (rr != null) {
-
-							if (rr.key != null) {
-								sipLogger.finer(request,
-										"AsyncSipServlet - adding ApplicationSession index key " + rr.key);
-								request.getApplicationSession().addIndexKey(rr.key);
-							}
-
-							// add any origin dialog session parameters from config file
-							if (sessionParameters.getDialog() == SessionParameters.DialogType.origin) {
-								for (Entry<String, String> entry : rr.attributes.entrySet()) {
-									sipLogger.finer(request,
-											"AsyncSipServlet - adding origin SipSession attribute name="
-													+ entry.getKey() + ", value=" + entry.getValue());
-									sipSession.setAttribute(entry.getKey(), entry.getValue());
-								}
-							}
-
-						}
-
-					}
-
-				}
-
 				// put the keep alive logic here
 
 			}
@@ -356,18 +325,42 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					callflow.process(request);
 
-					// apply any destination sessionParameters from Configuration file
-					SipSession linkedSession = Callflow.getLinkedSession(sipSession);
-					if (sessionParameters != null //
-							&& rr != null //
-							&& linkedSession != null //
-							&& sessionParameters.getDialog() == SessionParameters.DialogType.destination) {
+					// create any index keys defined by selectors in the config file
+					if (request.isInitial()) {
+						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
+						if (selectors != null) {
 
-						for (Entry<String, String> entry : rr.attributes.entrySet()) {
-							sipLogger.finer(request, "AsyncSipServlet - adding destination SipSession attribute name="
-									+ entry.getKey() + ", value=" + entry.getValue());
-							sipSession.setAttribute(entry.getKey(), entry.getValue());
-							linkedSession.setAttribute(entry.getKey(), entry.getValue());
+							for (AttributeSelector selector : selectors) {
+
+								rr = selector.findKey(request);
+								if (rr != null) {
+
+									if (rr.key != null) {
+										sipLogger.finer(request,
+												"AsyncSipServlet - adding ApplicationSession index key " + rr.key);
+										request.getApplicationSession().addIndexKey(rr.key);
+									}
+
+									// add any origin dialog session parameters from config file
+									SipSession linkedSession = Callflow.getLinkedSession(sipSession);
+									for (Entry<String, String> entry : rr.attributes.entrySet()) {
+										if (selector.getDialog() == AttributeSelector.DialogType.origin) {
+											sipLogger.finer(request,
+													"AsyncSipServlet - adding origin SipSession attribute name="
+															+ entry.getKey() + ", value=" + entry.getValue());
+											sipSession.setAttribute(entry.getKey(), entry.getValue());
+										} else if (linkedSession != null) {
+											sipLogger.finer(request,
+													"AsyncSipServlet - adding destination SipSession attribute name="
+															+ entry.getKey() + ", value=" + entry.getValue());
+											sipSession.setAttribute(entry.getKey(), entry.getValue());
+										}
+									}
+
+								}
+
+							}
+
 						}
 					}
 

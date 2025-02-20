@@ -18,16 +18,37 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class AttributeSelector {
+	public enum DialogType {origin, destination};
+	
+	
 	private String id; // optional for JSON references
 	private String description; // optional for human readable descriptions
 	private String attribute; // location of the key data, like in the 'To' header
 	private Pattern _pattern; // regular expression using capturing groups to parse the key data
 	private String expression; // replacement pattern, like ${ucid} to format the key data
+	private DialogType dialog; // apply attributes to either origin or destination dialog (SipSession)
 	private Map<String, String> additionalExpressions;
+	
+	public DialogType getDialog() {
+
+		if (dialog == null) {
+			return DialogType.origin;
+		} else {
+			return dialog;
+		}
+	}
+
+	@JsonPropertyDescription("apply SipSession attributes to either origin or destination dialog")
+	public AttributeSelector setDialog(DialogType dialog) {
+		this.dialog = dialog;
+		return this;
+	}
+	
 
 	public Map<String, String> getAdditionalExpressions() {
 		return additionalExpressions;

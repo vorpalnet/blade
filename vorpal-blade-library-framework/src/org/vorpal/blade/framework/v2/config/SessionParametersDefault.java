@@ -21,6 +21,7 @@ public class SessionParametersDefault extends SessionParameters implements Seria
 		fromSel.setPattern(Configuration.SIP_ADDRESS_PATTERN);
 		fromSel.setExpression("${user}");
 		fromSel.setDescription("Create index key based on the user-part of the From header");
+//		this.setDialog(DialogType.origin);
 		this.sessionSelectors.add(fromSel);
 	}
 
