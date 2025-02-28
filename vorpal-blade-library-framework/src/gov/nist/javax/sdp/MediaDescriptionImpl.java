@@ -62,17 +62,19 @@ import gov.nist.javax.sdp.fields.SDPField;
  */
 public class MediaDescriptionImpl implements javax.sdp.MediaDescription {
 
-    protected MediaField mediaField;
+	//jwm - change protected to public
+ 	
+	public MediaField mediaField;
 
-    protected InformationField informationField;
+	public InformationField informationField;
 
-    protected ConnectionField connectionField;
+	public ConnectionField connectionField;
 
-    protected Vector bandwidthFields;
+	public Vector bandwidthFields;
 
-    protected KeyField keyField;
+	public KeyField keyField;
 
-    protected Vector attributeFields;
+	public Vector attributeFields;
 
     /**
      * Encode to a canonical form.

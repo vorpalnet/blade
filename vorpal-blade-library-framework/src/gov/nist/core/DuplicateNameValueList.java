@@ -26,8 +26,6 @@ package gov.nist.core;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * 
