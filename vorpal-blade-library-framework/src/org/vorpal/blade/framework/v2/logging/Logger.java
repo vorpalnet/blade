@@ -48,6 +48,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	private static final long serialVersionUID = 1L;
 	private Level sequenceDiagramLoggingLevel = Level.FINE;
 	private Level configurationLoggingLevel = Level.FINE;
+	private static ObjectMapper mapper = null;
 
 	@Override
 	public Level getLevel() {
@@ -138,53 +139,99 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		severe(errors.toString());
 	}
 
+	/**
+	 * Serializes an object as JSON and logs it at the 'configurationLoggingLevel'
+	 * if it exists. If not, it logs it as FINE.
+	 * 
+	 * @param config
+	 */
 	public void logConfiguration(Object config) {
-		try {
-
-			if (config != null) {
-
-				if (this.isLoggable(configurationLoggingLevel)) {
-
-					ObjectMapper mapper = new ObjectMapper();
-					mapper.setSerializationInclusion(Include.NON_NULL);
-					mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
-
-					StringWriter sw = new StringWriter();
-					PrintWriter pw = new PrintWriter(sw);
-					mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);
-
-					if (this.configurationLoggingLevel != null) {
-						this.log(this.configurationLoggingLevel,
-								config.getClass().getSimpleName() + "=" + sw.toString());
-					} else {
-						this.log(Level.FINE, config.getClass().getSimpleName() + "=" + sw.toString());
-					}
-
-				}
-			}
-
-		} catch (IOException e) {
-			e.printStackTrace();
+		if (this.configurationLoggingLevel != null) {
+			this.log(this.configurationLoggingLevel, config.getClass().getSimpleName() + "=" + serializeObject(config));
+		} else {
+			this.log(Level.FINE, config.getClass().getSimpleName() + "=" + serializeObject(config));
 		}
 	}
 
-	public void logObjectAsJson(SipServletMessage message, Level level, Object config) {
-		try {
+	/**
+	 * Serializes an object as JSON and logs it at the specified level.
+	 * 
+	 * @param message
+	 * @param level
+	 * @param obj
+	 */
+	public void logObjectAsJson(SipServletMessage message, Level level, Object obj) {
+		if (isLoggable(level)) {
+			log(level, message, obj.getClass().getName() + "=" + serializeObject(obj));
+		}
+	}
 
-			if (this.isLoggable(level)) {
-				ObjectMapper mapper = new ObjectMapper();
+	/**
+	 * Serializes an object as JSON and logs it at the specified level.
+	 * 
+	 * @param sipSession
+	 * @param level
+	 * @param obj
+	 */
+	public void logObjectAsJson(SipSession sipSession, Level level, Object obj) {
+		if (isLoggable(level)) {
+			log(level, sipSession, obj.getClass().getName() + "=" + serializeObject(obj));
+		}
+	}
+
+	/**
+	 * Serializes an object as JSON and logs it at the specified level.
+	 * 
+	 * @param appSession
+	 * @param level
+	 * @param obj
+	 */
+	public void logObjectAsJson(SipApplicationSession appSession, Level level, Object obj) {
+		if (isLoggable(level)) {
+			log(level, appSession, obj.getClass().getName() + "=" + serializeObject(obj));
+		}
+	}
+
+	/**
+	 * Serializes an object as JSON and logs it at the specified level.
+	 * 
+	 * @param level
+	 * @param obj
+	 */
+	public void logObjectAsJson(Level level, Object obj) {
+		if (isLoggable(level)) {
+			log(level, obj.getClass().getName() + "=" + serializeObject(obj));
+		}
+	}
+
+	/**
+	 * Serializes an object as JSON and returns a string.
+	 * 
+	 * @param obj
+	 * @return
+	 */
+	public static String serializeObject(Object obj) {
+		String value = null;
+
+		if (obj != null) {
+			if (mapper == null) {
+				mapper = new ObjectMapper();
 				mapper.setSerializationInclusion(Include.NON_NULL);
 				mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
-
-				StringWriter sw = new StringWriter();
-				PrintWriter pw = new PrintWriter(sw);
-				mapper.writerWithDefaultPrettyPrinter().writeValue(pw, config);
-				log(Level.FINE, message, config.getClass().getSimpleName() + "=" + sw.toString());
 			}
 
-		} catch (IOException e) {
-			e.printStackTrace();
+			StringWriter sw = new StringWriter();
+			PrintWriter pw = new PrintWriter(sw);
+			try {
+				mapper.writerWithDefaultPrettyPrinter().writeValue(pw, obj);
+				value = sw.toString();
+			} catch (Exception ex) {
+				// cannot serialize, just give the pointer location
+				value = obj.toString();
+			}
 		}
+
+		return value;
 	}
 
 	public void severe(Exception e) {
