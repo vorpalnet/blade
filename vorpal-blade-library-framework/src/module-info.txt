@@ -1,29 +1,28 @@
 module blade.framework {
-
+	exports org.vorpal.blade.framework.v2;
+	exports org.vorpal.blade.framework.v2.proxy;
+	exports org.vorpal.blade.framework.v3;
+	exports org.vorpal.blade.framework.v2.config;
+	exports org.vorpal.blade.framework.v3.config;
+	exports org.vorpal.blade.framework.v2.logging;
+	exports org.vorpal.blade.framework.v2.b2bua;
+	exports org.vorpal.blade.framework.v2.callflow;
+	exports javax.sdp;
 	exports gov.nist.core;
 	exports gov.nist.javax.sdp;
 	exports gov.nist.javax.sdp.fields;
 	exports gov.nist.javax.sdp.parser;
-	exports org.vorpal.blade.framework.v2;
-	exports org.vorpal.blade.framework.v3;
 
-	requires java.xml;
-	requires java.logging;
-	requires inet.ipaddr;
 	requires com.fasterxml.jackson.annotation;
 	requires com.fasterxml.jackson.core;
 	requires com.fasterxml.jackson.databind;
+	requires com.oracle.weblogic.logging;
+	requires inet.ipaddr;
+	requires java.logging;
 	requires java.management;
 	requires mbknor.jackson.jsonschema;
 	requires org.apache.commons.collections4;
-
-	requires jakarta.servlet.jakarta.servlet.api;
+	requires scala.library;
 	requires sipservlet.api;
-	requires com.oracle.weblogic.management.config.api;
-//	requires com.bea.core.logging;
-	requires com.oracle.weblogic.logging;
-//	requires com.oracle.weblogic.logging;
-
-//	requires com.oracle.weblogic.logging;
-
+	requires javax.javaee.api;
 }
