@@ -12,6 +12,7 @@ import javax.servlet.sip.SipSession;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 public class Dialog implements Serializable {
+	public String id;
 	public String requestUri;
 	public String remoteParty;
 	public Map<String, List<String>> inviteHeaders = new HashMap<>();
@@ -22,18 +23,19 @@ public class Dialog implements Serializable {
 	}
 
 	public Dialog(SipSession sipSession) {
-
-		SipServletRequest initialInvite = (SipServletRequest) sipSession.getAttribute("initial_invite");
-
-		for (String name : initialInvite.getHeaderNameList()) {
-			inviteHeaders.put(name, initialInvite.getHeaderList(name));
-		}
-
 		try {
+
+			
+			id = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+
+			SipServletRequest initialInvite = (SipServletRequest) sipSession.getAttribute("initial_invite");
+
+			for (String name : initialInvite.getHeaderNameList()) {
+				inviteHeaders.put(name, initialInvite.getHeaderList(name));
+			}
+
 			Object objContent = initialInvite.getContent();
-
 			if (objContent != null) {
-
 				byte[] rawContent;
 
 				if (objContent instanceof String) {
@@ -42,11 +44,15 @@ public class Dialog implements Serializable {
 					rawContent = (byte[]) objContent;
 				}
 
-				// System.setProperty("mail.mime.encodeeol.strict", "true");
-
 				content = Base64.getMimeEncoder().encodeToString(rawContent);
-				Callflow.getSipLogger().finer(sipSession, "content = " + content);
 			}
+			
+//			Object obj;
+//			for(String name: sipSession.getAttributeNameSet()) {
+//				obj = sipSession.
+//			}
+			
+			
 
 		} catch (Exception e) {
 			Callflow.getSipLogger().severe(e);

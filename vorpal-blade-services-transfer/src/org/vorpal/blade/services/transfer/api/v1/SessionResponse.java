@@ -15,6 +15,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public class SessionResponse implements Serializable {
 	private Integer expires = null;
 
+	public String id = null;
 	public List<String> groups = new LinkedList<>();
 	public Map<String, String> attributes = new HashMap<>();
 	public Map<String, Dialog> dialogs = new HashMap<>();
@@ -24,16 +25,22 @@ public class SessionResponse implements Serializable {
 	}
 
 	public SessionResponse(SipApplicationSession appSession) {
-		String sessionId = (String) appSession.getAttribute("X-Vorpal-Session");
+		Object obj;
 
+		// set the session id
+		id = (String) appSession.getAttribute("X-Vorpal-Session");
+
+		// set any session variables (String)
 		for (String name : appSession.getAttributeNameSet()) {
-			if (name.startsWith("3pcc_")) {
-				attributes.put(name.replace("3pcc_", ""), (String) appSession.getAttribute(name));
+			obj = appSession.getAttribute(name);
+			if (obj instanceof String) {
+				attributes.put(name, (String) obj);
 			}
 		}
 
+		// set any groups (index keys) that are different than the id
 		for (String group : appSession.getIndexKeys()) {
-			if (group.equals(sessionId) == false) {
+			if (group.equals(id) == false) {
 				groups.add(group);
 			}
 		}
