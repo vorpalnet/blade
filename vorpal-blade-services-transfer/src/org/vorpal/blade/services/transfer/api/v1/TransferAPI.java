@@ -295,7 +295,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			txferResp.status = response.getStatus();
 			txferResp.description = response.getReasonPhrase();
 			txferResp.request = (TransferRequest) response.getApplicationSession().getAttribute(TXFER_REQUEST);
-			asyncResponse.resume(Response.status(Status.NOT_FOUND).entity(txferResp).build());
+			asyncResponse.resume(Response.status(Status.FORBIDDEN).entity(txferResp).build());
 		}
 	}
 
