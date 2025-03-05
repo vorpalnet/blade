@@ -15,8 +15,10 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
@@ -52,6 +54,25 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 	// static because you cannot serialize AsyncResponse
 	public static Map<String, AsyncResponse> responseMap = new ConcurrentHashMap<>();
+
+//	@SuppressWarnings({ "unchecked" })
+//	@GET
+//	@Path("inspect/{session}")
+//	@Produces({ MediaType.APPLICATION_JSON })
+//	@Operation(summary = "Examine session variables")
+//	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
+//			@ApiResponse(responseCode = "202", description = "Accepted"),
+//			@ApiResponse(responseCode = "404", description = "Not Found"),
+//			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
+//	public Response inspect(
+//			@RequestBody(description = "transfer request", required = true) TransferRequest transferRequest,
+//			@Context UriInfo uriInfo, @Suspended AsyncResponse asyncResponse) {
+//
+//		Response response = null;
+//
+//		return response;
+//
+//	}
 
 	@SuppressWarnings({ "unchecked" })
 	@POST
@@ -256,7 +277,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			txferResp.status = response.getStatus();
 			txferResp.description = response.getReasonPhrase();
 			txferResp.request = (TransferRequest) response.getApplicationSession().getAttribute(TXFER_REQUEST);
-			asyncResponse.resume(Response.status(Status.NOT_FOUND).entity(txferResp).build());
+			asyncResponse.resume(Response.status(Status.OK).entity(txferResp).build());
 		}
 
 	}
