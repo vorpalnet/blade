@@ -499,61 +499,90 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendRequest(SipServletRequest request) throws ServletException, IOException {
 
+		sipLogger.finer(request, "1");
+		
 		SipApplicationSession appSession = request.getApplicationSession();
+		sipLogger.finer(request, "2");
 		SipSession sipSession = request.getSession();
+		sipLogger.finer(request, "3");
 
 		if (request.isInitial() && null == request.getHeader("X-Vorpal-Session")) {
+			sipLogger.finer(request, "4");
 			String indexKey = getVorpalSessionId(appSession);
+			sipLogger.finer(request, "5");
 			if (indexKey == null) {
+				sipLogger.finer(request, "6");
 				indexKey = AsyncSipServlet.generateIndexKey(request);
 			}
+			sipLogger.finer(request, "7");
 			String dialog = getVorpalDialogId(sipSession);
+			sipLogger.finer(request, "8");
 			if (dialog == null) {
+				sipLogger.finer(request, "9");
 				dialog = createVorpalDialogId(sipSession);
 			}
 
 			String xvs = indexKey + ":" + dialog;
+			sipLogger.finer(request, "10");
 			request.setHeader("X-Vorpal-Session", xvs);
+			sipLogger.finer(request, "11");
 			String xvt = (String) appSession.getAttribute("X-Vorpal-Timestamp");
+			sipLogger.finer(request, "12");
 			if (xvt == null) {
+				sipLogger.finer(request, "13");
 				xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
 			}
+			sipLogger.finer(request, "14");
 			request.setHeader("X-Vorpal-Timestamp", xvt);
 
 		}
 
+		sipLogger.finer(request, "15");
 		sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
 		try {
 			// useful for identifying sessions
+			sipLogger.finer(request, "16");
 			sipSession.setAttribute("sipAddress", request.getTo());
 
+			sipLogger.finer(request, "17");
 			request.send();
 
 		} catch (Exception e) {
 
+			sipLogger.finer(request, "18");
 			sipLogger.severe(request, e);
 
 			if (  false==( request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))   ) {
+				sipLogger.finer(request, "19");
 
 				// It's too maddening to write callflows where you have to worry about both
 				// error responses and exceptions. Let's create a dummy error response.
 				SipServletResponse errorResponse = new DummyResponse(request, 502);
 
+				sipLogger.finer(request, "20");
 				Callback<SipServletResponse> callback = Callflow.pullCallback(errorResponse);
 
+				sipLogger.finer(request, "21");
 				if (callback != null) {
+					sipLogger.finer(request, "22");
 					Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
 							callback.getClass().getSimpleName());
+					sipLogger.finer(request, "23");
 					callback.accept(errorResponse);
 				} else {
+					sipLogger.finer(request, "24");
 					Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
 							this.getClass().getSimpleName());
+					sipLogger.finer(request, "25");
 				}
+				sipLogger.finer(request, "26");
 
 			}
+			sipLogger.finer(request, "27");
 
 		}
+		sipLogger.finer(request, "28");
 
 	}
 
