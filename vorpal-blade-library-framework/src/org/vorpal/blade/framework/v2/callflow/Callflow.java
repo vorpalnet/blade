@@ -532,20 +532,27 @@ public abstract class Callflow implements Serializable {
 
 		} catch (Exception e) {
 
-			// It's too maddening to write callflows where you have to worry about both
-			// error responses and exceptions. Let's create a dummy error response.
-			SipServletResponse errorResponse = new DummyResponse(request, 502);
+			sipLogger.severe(request, e);
 
-			Callback<SipServletResponse> callback = Callflow.pullCallback(errorResponse);
+			if (  false==( request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))   ) {
 
-			if (callback != null) {
-				Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
-						callback.getClass().getSimpleName());
-				callback.accept(errorResponse);
-			} else {
-				Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
-						this.getClass().getSimpleName());
+				// It's too maddening to write callflows where you have to worry about both
+				// error responses and exceptions. Let's create a dummy error response.
+				SipServletResponse errorResponse = new DummyResponse(request, 502);
+
+				Callback<SipServletResponse> callback = Callflow.pullCallback(errorResponse);
+
+				if (callback != null) {
+					Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
+							callback.getClass().getSimpleName());
+					callback.accept(errorResponse);
+				} else {
+					Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
+							this.getClass().getSimpleName());
+				}
+
 			}
+
 		}
 
 	}
