@@ -22,6 +22,95 @@
  *  SOFTWARE.
  */
 
+/* Visit https://plantuml.com/sequence-diagram for notes on how to draw.
+@startuml doc-files/blind_transfer_success.png
+title Blind Transfer Success: Bob transfers Alice to Carol
+hide footbox
+participant Alice as alice
+participant BlindTransfer as blade
+participant Bob as bob
+participant Carol as carol
+
+alice     <-->      bob         : RTP
+          blade <-  bob         : REFER
+                                  note right: Refer-To: <sip:carol@vorpal.net>\nMore Stuff                                   
+          blade --> bob         : 202 Accepted
+          blade ->  bob         : NOTIFY
+                                  note right: Event: refer \nSubscription-State: pending;expires=3600 \nSIP/2.0 100 Trying                                
+          blade <-- bob         : 200 OK            
+          blade ->        carol : INVITE                   
+          blade <--       carol : 180 Ringing                                  
+          blade <--       carol : 200 OK (SDP)                                   
+alice <-  blade                 : INVITE (SDP)                                                 
+alice --> blade                 : 200 OK (SDP)
+alice <-  blade                 : ACK
+          blade ->        carol : ACK (SDP)
+          blade ->  bob         : NOTIFY
+                                  note right: Event: refer \nSubscription-State: terminated;reason=noresource \nSIP/2.0 200 OK
+          blade <-- bob         : 200 OK
+          blade <-  bob         : BYE
+          blade --> bob         : 200 OK
+
+@enduml
+*/
+
+/* Visit https://plantuml.com/sequence-diagram for notes on how to draw. 
+@startuml doc-files/blind_transfer_486.png
+title Failure: Carol rejects the call
+hide footbox
+participant Alice as alice
+participant BlindTransfer as blade
+participant Bob as bob
+participant Carol as carol
+
+alice     <-->      bob         : RTP
+          blade <-  bob         : REFER
+                                  note right: Refer-To: <sip:carol@vorpal.net>\nMore Stuff                                   
+          blade --> bob         : 202 Accepted
+          blade ->  bob         : NOTIFY
+                                  note right: Event: refer \nSubscription-State: pending;expires=3600 \nSIP/2.0 100 Trying                                
+          blade <-- bob         : 200 OK            
+          blade ->        carol : INVITE                   
+          blade <--       carol : 180 Ringing                                  
+          blade <--       carol : 486 Busy Here                                  
+          blade ->  bob         : NOTIFY (SDP)
+                                  note right: Event: refer \nSubscription-State: terminated;reason=rejected \nSIP/2.0 486 Busy Here
+          blade <-- bob         : 200 OK            
+
+@enduml
+*/
+
+/* Visit https://plantuml.com/sequence-diagram for notes on how to draw.
+@startuml doc-files/blind_transfer_bye.png
+title Failure: Alice hangs up
+hide footbox
+participant Alice as alice
+participant BlindTransfer as blade
+participant Bob as bob
+participant Carol as carol
+
+alice     <-->      bob         : RTP
+          blade <-  bob         : REFER
+                                  note right: Refer-To: <sip:carol@vorpal.net>\nMore Stuff                                   
+          blade --> bob         : 202 Accepted
+          blade ->  bob         : NOTIFY
+                                  note right: Event: refer \nSubscription-State: pending;expires=3600 \nSIP/2.0 100 Trying                                
+          blade <-- bob         : 200 OK            
+          blade ->        carol : INVITE                   
+          blade <--       carol : 180 Ringing
+alice ->  blade                 : BYE
+alice <-- blade                 : 200 OK
+          blade ->        carol : CANCEL
+          blade <--       carol : 487 Request Terminated
+          blade ->  bob         : NOTIFY
+                                  note right: Event: refer \nSubscription-State: terminated;reason=giveup \nSIP/2.0 200 OK
+          blade <-- bob         : 200 OK
+          blade <-  bob         : BYE
+          blade --> bob         : 200 OK                                  
+
+@enduml
+*/
+
 package org.vorpal.blade.services.transfer.callflows;
 
 import java.io.IOException;
@@ -34,66 +123,14 @@ import javax.servlet.sip.URI;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 
 /**
- * This class implements a blind transfer.
- * 
- * <pre>{@code
- * 
- * Success: Bob transfers Alice to Carol
- * =======================================================================================                               
- *                                   [BlindTransfer]<----------REFER---[bob]             ; Refer-To: <sip:carol@vorpal.net>
- *                                   [BlindTransfer]-------------202-->[bob]             ; Accepted (REFER)
- *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: pending;expires=3600, SIP/2.0 100 Trying
- *                                   [BlindTransfer]----------INVITE-->[carol]           ; sip:carol@vorpal.net            
- *                                   [Callflow]<-----------------200---[bob]             ; OK (NOTIFY)
- *                                   [BlindTransfer]<------------180---[carol]           ; Ringing (INVITE)
- *                                   [BlindTransfer]<------200-(sdp)---[carol]           ; OK (INVITE)
- * [alice]<-----------INVITE-(sdp)---[BlindTransfer]                                     ; From: <sip:bob@vorpal.net>;tag=35ea0865
- * [alice]---------------200-(sdp)-->[BlindTransfer]                                     ; OK (INVITE)
- * [alice]<--------------------ACK---[BlindTransfer]                                     ;                                 
- *                                   [BlindTransfer]-------ACK-(sdp)-->[carol]           ;                                 
- *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: terminated;reason=noresource, SIP/2.0 200 OK
- *                                   [BlindTransfer]<------------200---[bob]             ; OK (NOTIFY)
- *                                   [BlindTransfer]<------------BYE---[bob]             ;                                 
- *                                   [BlindTransfer]-------------200-->[bob]             ; OK (BYE)
- * 
- * Failure: Carol rejects the call, Bob reinvites Alice
- * =======================================================================================
- *                                   [BlindTransfer]<----------REFER---[bob]             ; Refer-To: <sip:carol@vorpal.net>
- *                                   [BlindTransfer]-------------202-->[bob]             ; Accepted (REFER)
- *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: pending;expires=3600, SIP/2.0 100 Trying
- *                                   [BlindTransfer]----------INVITE-->[carol]           ; sip:carol@vorpal.net            
- *                                   [Callflow]<-----------------200---[bob]             ; OK (NOTIFY)
- *                                   [BlindTransfer]<------------486---[carol]           ; Busy Here (INVITE)
- *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: terminated;reason=rejected, SIP/2.0 486 Busy Here
- *                                   [BlindTransfer]<------------200---[bob]             ; OK (NOTIFY)
- *                                   [Reinvite]<--------INVITE-(sdp)---[bob]             ; To: "Alice" <sip:alice@vorpal.net>;tag=2bbbce8c
- * [alice]<-----------INVITE-(sdp)---[Reinvite]                                          ; From: <sip:bob@vorpal.net>;tag=e78dc7cf
- * [alice]---------------200-(sdp)-->[Reinvite]                                          ; OK (INVITE)
- *                                   [Reinvite]------------200-(sdp)-->[bob]             ; OK (INVITE)
- *                                   [Reinvite]<-----------------ACK---[bob]             ;                                 
- * [alice]<--------------------ACK---[Reinvite]                                          ;                                 
- * 
- * 
- * Failure: Alice gives up. Bob and Carol hangup.
- * =======================================================================================
- *                                   [BlindTransfer]<----------REFER---[bob]             ; Refer-To: <sip:carol@vorpal.net>
- *                                   [BlindTransfer]-------------202-->[bob]             ; Accepted (REFER)
- *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: pending;expires=3600, SIP/2.0 100 Trying
- *                                   [BlindTransfer]----------INVITE-->[carol]           ; sip:carol@vorpal.net            
- *                                   [Callflow]<-----------------200---[bob]             ; OK (NOTIFY)
- *                                   [BlindTransfer]<------------180---[carol]           ; Ringing (INVITE)
- * [alice]---------------------BYE-->[BlindTransfer]                                     ;                                 
- * [alice]<--------------------200---[BlindTransfer]                                     ; OK (BYE)
- *                                   [BlindTransfer]----------CANCEL-->[carol]           ;                                 
- *                                   [BlindTransfer]<------------487---[carol]           ; Request Terminated (INVITE)
- *                                   [BlindTransfer]----NOTIFY-(sdp)-->[bob]             ; Event: refer, Subscription-State: terminated;reason=giveup, SIP/2.0 200 OK
- *                                   [BlindTransfer]<------------200---[bob]             ; OK (NOTIFY)
- *                                   [BlindTransfer]<------------BYE---[bob]             ;                                 
- *                                   [BlindTransfer]-------------200-->[bob]             ; OK (BYE)
- *
- * }</pre>
+ * The BlindTransfer callflow performs an 'unattended' transfer operation.
+ * <p>
+ * <img src="doc-files/blind_transfer_success.png">
+ * <p>
+ * <img src="doc-files/blind_transfer_486.png">
+ * <p>
+ * <img src="doc-files/blind_transfer_bye.png">
  */
-
 public class BlindTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
