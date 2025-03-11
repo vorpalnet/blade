@@ -323,7 +323,7 @@ public abstract class AsyncSipServlet extends SipServlet
 					callflow.process(request);
 
 					// create any index keys defined by selectors in the config file
-					if (request.isInitial()) {
+					if (request.isInitial() && sessionParameters!=null ) {
 						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
 						if (selectors != null) {
 
