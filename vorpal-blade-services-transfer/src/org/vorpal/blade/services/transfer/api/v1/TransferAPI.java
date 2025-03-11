@@ -18,6 +18,7 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
@@ -55,30 +56,44 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 	// static because you cannot serialize AsyncResponse
 	public static Map<String, AsyncResponse> responseMap = new ConcurrentHashMap<>();
 
-//	@SuppressWarnings({ "unchecked" })
-//	@GET
-//	@Path("inspect/{session}")
-//	@Produces({ MediaType.APPLICATION_JSON })
-//	@Operation(summary = "Examine session variables")
-//	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
-//			@ApiResponse(responseCode = "202", description = "Accepted"),
-//			@ApiResponse(responseCode = "404", description = "Not Found"),
-//			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
-//	public Response inspect(
-//			@RequestBody(description = "transfer request", required = true) TransferRequest transferRequest,
-//			@Context UriInfo uriInfo, @Suspended AsyncResponse asyncResponse) {
-//
-//		Response response = null;
-//
-//		return response;
-//
-//	}
+	@SuppressWarnings({ "unchecked" })
+	@GET
+	@Path("session/{key}")
+	@Produces({ MediaType.APPLICATION_JSON })
+	@Operation(summary = "Examine session variables")
+	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
+			@ApiResponse(responseCode = "404", description = "Not Found"),
+			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
+	public Response inspect(@PathParam("key") String key) {
+
+		Response response = null;
+		SipApplicationSession appSession = null;
+		SessionResponse sessionResponse = null;
+
+		if (key != null) {
+			Set<String> appSessionIds = sipUtil.getSipApplicationSessionIds(key);
+			if (appSessionIds != null && appSessionIds.size() >= 1) {
+				String appSessionId = (String) appSessionIds.toArray()[0];
+				appSession = sipUtil.getApplicationSessionById(appSessionId);
+			}
+		}
+
+		if (appSession != null) { // 200
+			sessionResponse = new SessionResponse(appSession);
+			response = Response.ok().entity(sessionResponse).build();
+		} else { // 404
+			response = Response.status(404).build();
+		}
+
+		return response;
+	}
 
 	@SuppressWarnings({ "unchecked" })
 	@POST
 	@Asynchronous
 	@Path("transfer")
 	@Consumes({ MediaType.APPLICATION_JSON })
+	@Produces({ MediaType.APPLICATION_JSON })
 	@Operation(summary = "Transfer")
 	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
 			@ApiResponse(responseCode = "202", description = "Accepted"),

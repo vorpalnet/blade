@@ -12,6 +12,7 @@
 	<property name="src" location="src/main/java" />
 	<property name="BLADE" location="../" />
 	<property name="umldoclet" location="${BLADE}/lib/umldoclet-2.1.2.jar" />
+	<property name="plantuml" location="${BLADE}/lib/plantuml-1.2025.2.jar" />
 	<property name="packagenames" value="org.vorpal.*" />
     <property name="dist" location="../dist/${implementation}.${build.number}" />
 	<property name="webapp" location="src/main/webapp" />
@@ -757,15 +758,31 @@
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>
 	
+	
+	<taskdef name="plantuml" classname="net.sourceforge.plantuml.ant.PlantUmlTask" classpath="${plantuml}" />
+	
+
+	
 	<target name="javadoc">
         <echo message="javadoc, creating directory: ${docs}/${ant.project.name}"/>
-		<mkdir dir="${docs}/${ant.project.name}" />
+		
+		
+		<!-- mkdir dir="${docs}/${ant.project.name}" / -->
+		
+		<mkdir dir="${docs}/${ant.project.name}/images" />
 
-		<echo>packagenames=${packagenames}</echo>
-		<echo>sourcepath=${src}</echo>
-
-
+		<!-- plantuml dir="${src}" format="svg" output="${docs}/${ant.project.name}/images" /-->
+		<plantuml>
+			<fileset dir="${src}">
+				<filename name="**/*.java" />
+			</fileset>	
+		</plantuml>
+		
+		
+<!--
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="${BLADE}/lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
+-->
+		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
 
 			<doclet name="nl.talsmasoftware.umldoclet.UMLDoclet" path="${umldoclet}">
 				<param name="-failOnCyclicPackageDependencies" value="false" />
@@ -775,14 +792,17 @@
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 			<classpath refid="project.classpath" />
 
+<!--			
 			<header>
 				<![CDATA[<a href="/index.html">
 				<img src="/assets/images/vorpal-logo.png" alt="Home" style="height:80px">
 				</a>]]></header>
-
+-->
+			
 			<doctitle>
 				<![CDATA[<div>${ant.project.name} - v${implementation}.${build.number}</div>]]>
 			</doctitle>
+
 		<bottom>
 			<![CDATA[<div style="display: block; text-align: center">
 			<div>${copyright}</div>
