@@ -39,7 +39,7 @@
 			<wls:package-name>org.jetbrains.kotlin.scripting.*</wls:package-name>
 			<wls:package-name>org.joda.time.*</wls:package-name>
 			<wls:package-name>org.junit.*</wls:package-name>
-			<!-- wls:package-name>org.slf4j.*</wls:package-name -->
+			<wls:package-name>org.slf4j.*</wls:package-name>
 			<wls:package-name>org.yaml.snakeyaml*</wls:package-name>
 			<wls:package-name>scala.*</wls:package-name>
 		</wls:prefer-application-packages>

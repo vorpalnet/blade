@@ -84,10 +84,11 @@
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 -->
 	</target>
-<!--	
+	
 	<target name="clean">
-		<delete dir="${build}" />		
+		<delete dir="${build}" />
+		<delete dir="target" />
 	</target>
--->
+
 
 </project>
