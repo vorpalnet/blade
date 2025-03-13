@@ -20,6 +20,10 @@ public class RouterConfig extends Configuration implements Serializable {
 	// public Translation defaultRoute = new Translation("defaultRoute");
 	public Translation defaultRoute = null;
 
+	public RouterConfig() {
+
+	}
+
 //	public static URI applyParameters(Translation t, SipServletRequest request) throws ServletParseException {
 //		URI uri = null;
 //
