@@ -200,16 +200,6 @@ public class BlindTransfer extends Transfer {
 				sendResponse(bye.createResponse(200));
 			});
 
-			// Set Header X-Original-DN
-			URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
-			targetRequest.setHeader("X-Original-DN", xOriginalDN.toString());
-			// Set Header X-Previous-DN
-			URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
-			targetRequest.setHeader("X-Previous-DN", xPreviousDN.toString());
-			// now update X-Previous-DN for future use
-			referTo = (URI) appSession.getAttribute("Refer-To");
-			appSession.setAttribute("X-Previous-DN", referTo);
-
 			// User is notified that transfer is initiated
 			transferListener.transferInitiated(targetRequest);
 
