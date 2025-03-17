@@ -135,10 +135,8 @@ public class TransferServlet extends B2buaServlet //
 			callflow = new AttendedTransfer(this);
 			break;
 		case "blind":
-			callflow = new BlindTransfer(this);
-			break;
 		default: // null & none
-			callflow = new Passthru(this);
+			callflow = new BlindTransfer(this);
 		}
 
 		return callflow;
@@ -211,7 +209,7 @@ public class TransferServlet extends B2buaServlet //
 
 			// For Transfer REST API
 			// save outbound request for REST API Session/Dialog
-			outboundRequest.getSession().setAttribute("initial_invite", outboundRequest);			
+			outboundRequest.getSession().setAttribute("initial_invite", outboundRequest);
 			SipServletRequest aliceRequest = this.getIncomingRequest(outboundRequest);
 			aliceRequest.getSession().setAttribute("sipAddress", aliceRequest.getFrom());
 			outboundRequest.getSession().setAttribute("sipAddress", outboundRequest.getTo());
@@ -228,12 +226,12 @@ public class TransferServlet extends B2buaServlet //
 		try {
 			sipLogger.finer(inboundRefer, "transferRequested...");
 
-		SipApplicationSession appSession = inboundRefer.getApplicationSession();
+			SipApplicationSession appSession = inboundRefer.getApplicationSession();
 
-		// save X-Previous-DN-Tmp for use later
-		URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
+			// save X-Previous-DN-Tmp for use later
+			URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
 //			sipLogger.finer(inboundRefer, "transferRequested... setting appSession attribute: Refer-To=" + referTo);
-		appSession.setAttribute("Refer-To", referTo);
+			appSession.setAttribute("Refer-To", referTo);
 
 		} catch (Exception e) {
 			sipLogger.severe(inboundRefer, e);
