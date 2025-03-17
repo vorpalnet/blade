@@ -257,6 +257,8 @@ public class TransferServlet extends B2buaServlet //
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
 //		sipLogger.finer(response, "transferCompleted...");
+
+		SipApplicationSession appSession = outboundInvite.getApplicationSession();
 		
 		// now update X-Previous-DN for future use after success transfer
 		URI referTo = (URI) appSession.getAttribute("Refer-To");
