@@ -252,14 +252,15 @@ public class TransferServlet extends B2buaServlet //
 		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
 		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
 
-		// now update X-Previous-DN for future use
-		URI referTo = (URI) appSession.getAttribute("Refer-To");
-		appSession.setAttribute("X-Previous-DN", referTo);
 	}
 
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
 //		sipLogger.finer(response, "transferCompleted...");
+		
+		// now update X-Previous-DN for future use after success transfer
+		URI referTo = (URI) appSession.getAttribute("Refer-To");
+		appSession.setAttribute("X-Previous-DN", referTo);
 	}
 
 	@Override
