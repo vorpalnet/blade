@@ -64,7 +64,13 @@ public class LogManager implements ServletContextListener {
 		// If absolutely nothing is known, give up and use the parent logger
 		if (basename == null && context == null && logParameters == null) {
 			logger = new Logger(null, null);
-			logger.setParent(KernelLogManager.getLogger());
+
+			java.util.logging.Logger parentLogger = KernelLogManager.getLogger();
+			if (parentLogger == null) {
+				parentLogger = java.util.logging.Logger.getLogger("BLADE");
+			}
+			logger.setParent(parentLogger);
+
 			return logger;
 		}
 
@@ -111,7 +117,13 @@ public class LogManager implements ServletContextListener {
 			logger = new Logger(basename, null);
 
 			logger.addHandler(handler);
-			logger.setParent(KernelLogManager.getLogger());
+
+			java.util.logging.Logger parentLogger = KernelLogManager.getLogger();
+			if (parentLogger == null) {
+				parentLogger = java.util.logging.Logger.getLogger("BLADE");
+			}
+			logger.setParent(parentLogger);
+
 			logger.setUseParentHandlers(useParentLogging);
 			logger.setLevel(loggingLevel); // may be null, but that okay. will use parent's level
 

@@ -9,6 +9,7 @@ import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.DummyRequest;
@@ -229,7 +230,7 @@ public class Selector {
 		return regexRoute;
 	}
 
-	public static void main4(String args[]) {
+	public static void main4(String args[]) throws ServletParseException {
 
 		SipServletRequest dummyRequest = new DummyRequest("INVITE", "19137774321", "18165551234");
 

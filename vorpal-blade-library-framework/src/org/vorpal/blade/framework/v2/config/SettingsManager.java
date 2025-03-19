@@ -93,6 +93,14 @@ import inet.ipaddr.ipv6.IPv6Address;
 public class SettingsManager<T> {
 	protected T sample = null;
 	protected T current;
+	public static void setSipFactory(SipFactory sipFactory) {
+		SettingsManager.sipFactory = sipFactory;
+	}
+
+	public static void setSipUtil(SipSessionsUtil sipUtil) {
+		SettingsManager.sipUtil = sipUtil;
+	}
+
 	protected ObjectName objectName;
 	protected MBeanServer server;
 	protected ObjectMapper mapper;
