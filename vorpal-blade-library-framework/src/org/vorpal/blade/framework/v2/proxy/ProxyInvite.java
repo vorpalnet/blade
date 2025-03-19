@@ -1,6 +1,7 @@
 package org.vorpal.blade.framework.v2.proxy;
 
 import java.io.IOException;
+import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
@@ -27,41 +28,42 @@ public class ProxyInvite extends Callflow {
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
-		try {
-			this.inboundRequest = request;
+		this.inboundRequest = request;
 
-			// Call the listener's method to build the ProxyPlan
-			if (this.proxyListener != null) {
-				this.proxyListener.proxyRequest(inboundRequest, proxyPlan);
-			} else {
-				sipLogger.severe(request, "No ProxyListener defined.");
+		// Call the listener's method to build the ProxyPlan
+		if (this.proxyListener != null) {
+			this.proxyListener.proxyRequest(inboundRequest, proxyPlan);
+		} else {
+			sipLogger.severe(request, "No ProxyListener defined.");
+		}
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer("ProxyPlan tiers: " + proxyPlan.getTiers().size());
+		}
+		this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(request, "Got proxy response... status: " + response.getStatus()
+						+ ", isBranchResponse: " + response.isBranchResponse());
 			}
 
-			sipLogger.finer("ProxyPlan tiers: " + proxyPlan.getTiers().size());
-
-			this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
-				sipLogger.finer(request, "Got proxy response... status: " + response.getStatus() + ", isBranchResponse: "
-						+ response.isBranchResponse());
-
-				// this should probably go in 'proxyRequest'
-				this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack) -> {
-					// do nothing;
-				});
-
-				if (!successful(response) && !response.isBranchResponse()) {
-					if (false == proxyPlan.isEmpty()) {
-						sipLogger.finer(response,
-								"Calling process again... ProxyPlan tiers: " + proxyPlan.getTiers().size());
-						this.process(request);
-					}
+			// this should probably go in 'proxyRequest'
+			this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack) -> {
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(ack, "ProxyInvite.process, expectRequest received ACK, do nothing");
 				}
-
 			});
 
-		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
-			throw e;
-		}
+			if (!successful(response) && !response.isBranchResponse()) {
+				if (false == proxyPlan.isEmpty()) {
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(response,
+								"Calling process again... ProxyPlan tiers: " + proxyPlan.getTiers().size());
+					}
+					this.process(request);
+				}
+			}
+
+		});
 
 	}
 

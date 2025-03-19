@@ -8,6 +8,7 @@ import java.util.logging.Level;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -66,16 +67,10 @@ public abstract class TranslationsMap {
 
 			if (translation != null) {
 
-				if (translation.getRequestUri() != null) {
-					strRequestUri = regexRoute.matcher.replaceAll(translation.getRequestUri());
-					uri = SettingsManager.getSipFactory().createURI(strRequestUri);
-
-					// copy all SIP URI parameters (if not present in new request uri)
-					for (String name : request.getRequestURI().getParameterNameSet()) {
-						if (uri.getParameter(name) == null) {
-							uri.setParameter(name, uri.getParameter(name));
-						}
-					}
+				if (SettingsManager.getSipFactory() != null && translation.getRequestUri() != null) {
+					URI fromUri = request.getRequestURI();
+					URI toUri = SettingsManager.getSipFactory().createURI(translation.getRequestUri());
+					Callflow.copyParameters(fromUri, toUri);
 				}
 
 				// now check for additional translations

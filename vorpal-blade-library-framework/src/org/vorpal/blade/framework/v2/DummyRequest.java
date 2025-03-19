@@ -19,6 +19,7 @@ import javax.servlet.sip.AuthInfo;
 import javax.servlet.sip.B2buaHelper;
 import javax.servlet.sip.InviteBranch;
 import javax.servlet.sip.Proxy;
+import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipURI;
@@ -32,19 +33,22 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	private static final long serialVersionUID = 1L;
 	private String content;
 	private String contentType;
+	private URI requestUri;
 
-	public DummyRequest(String method, String from, String to) {
+	public DummyRequest(String method, String from, String to) throws ServletParseException {
 		this.method = method;
 		this.headers.put("From", from);
 		this.headers.put("To", to);
+//		this.requestUri = Callflow.getSipFactory().createURI(to);
 	}
-	
+
 	public DummyRequest(String method, URI from, URI to) {
 		this.method = method;
 		this.headers.put("From", from.toString());
 		this.headers.put("To", to.toString());
+		this.requestUri = to;
 	}
-	
+
 	public DummyRequest(String method, Address from, Address to) {
 		this.method = method;
 		this.headers.put("From", from.toString());
@@ -295,7 +299,7 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	@Override
 	public URI getRequestURI() {
 		// TODO Auto-generated method stub
-		return null;
+		return requestUri;
 	}
 
 	@Override
@@ -347,9 +351,8 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	}
 
 	@Override
-	public void setRequestURI(URI arg0) {
-		// TODO Auto-generated method stub
-
+	public void setRequestURI(URI requestUri) {
+		this.requestUri = requestUri;
 	}
 
 	@Override

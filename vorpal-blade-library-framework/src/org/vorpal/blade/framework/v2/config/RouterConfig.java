@@ -44,7 +44,7 @@ public class RouterConfig extends Configuration implements Serializable {
 	public static URI applyParameters(Translation t, SipServletRequest request) throws ServletParseException {
 		URI uri = null;
 
-		if (t != null) {
+		if (t != null && t.getRequestUri() != null) {
 
 			uri = SettingsManager.sipFactory.createURI(t.getRequestUri());
 
@@ -98,7 +98,11 @@ public class RouterConfig extends Configuration implements Serializable {
 		URI uri = null;
 
 		t = findTranslation(request);
-		uri = applyParameters(t, request);
+		if (t != null & t.getRequestUri() != null) {
+			uri = applyParameters(t, request);
+		} else {
+			uri = request.getRequestURI();
+		}
 
 		return uri;
 	}
