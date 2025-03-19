@@ -254,8 +254,11 @@ public class LogParameters implements Serializable {
 
 		value = System.getenv().get(key);
 		value = (value != null) ? value : System.getProperties().getProperty(key);
-		value = (value != null) ? value : servletContext.getInitParameter(key);
-		value = (value != null) ? value : (String) servletContext.getAttribute(key);
+
+		if (servletContext != null) {
+			value = (value != null) ? value : servletContext.getInitParameter(key);
+			value = (value != null) ? value : (String) servletContext.getAttribute(key);
+		}
 
 		return value;
 	}
@@ -321,10 +324,6 @@ public class LogParameters implements Serializable {
 		System.out.println("1GiB = " + Configuration.parseHRNumberAsInt("1GiB"));
 		System.out.println("1GB = " + Configuration.parseHRNumberAsInt("1GB"));
 		System.out.println("1.5GB = " + Configuration.parseHRNumberAsInt("1.5GB"));
-		
-		
-		
-		
 
 	}
 

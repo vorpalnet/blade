@@ -3,6 +3,7 @@ package org.vorpal.blade.framework.v2.config;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -14,7 +15,7 @@ public class Translation implements Serializable {
 	private static final long serialVersionUID = 1L;
 	private String id;
 	private String description;
-	private LinkedList<TranslationsMap> list;
+	private List<TranslationsMap> list;
 	private String requestUri;
 	private String[] route;
 	private String[] routeBack;
@@ -65,12 +66,12 @@ public class Translation implements Serializable {
 		return this;
 	}
 
-	public LinkedList<TranslationsMap> getList() {
+	public List<TranslationsMap> getList() {
 		return list;
 	}
 
-	public Translation setList(LinkedList<TranslationsMap> list) {
-		this.list = list;
+	public Translation setList(List<TranslationsMap> maps) {
+		this.list = maps;
 		return this;
 	}
 
