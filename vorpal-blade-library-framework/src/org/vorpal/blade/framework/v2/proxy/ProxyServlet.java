@@ -8,10 +8,7 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
-
-
 public abstract class ProxyServlet extends AsyncSipServlet implements ProxyListener {
-
 	private static final long serialVersionUID = 1L;
 
 	@Override

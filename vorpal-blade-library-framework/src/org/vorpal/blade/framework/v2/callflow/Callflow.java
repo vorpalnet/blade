@@ -499,7 +499,6 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendRequest(SipServletRequest request) throws ServletException, IOException {
 
-		
 		SipApplicationSession appSession = request.getApplicationSession();
 		SipSession sipSession = request.getSession();
 
@@ -533,7 +532,7 @@ public abstract class Callflow implements Serializable {
 
 			sipLogger.severe(request, e);
 
-			if (  false==( request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))   ) {
+			if (false == (request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))) {
 
 				// It's too maddening to write callflows where you have to worry about both
 				// error responses and exceptions. Let's create a dummy error response.
@@ -1325,14 +1324,13 @@ public abstract class Callflow implements Serializable {
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
 		SipSession sipSession = inboundRequest.getSession();
-		Boolean isProxy = (Boolean) sipSession.getAttribute("isProxy");
-		if (isProxy == null) {
-			isProxy = false;
-		}
-
+		SipApplicationSession appSession = inboundRequest.getApplicationSession();
+		Boolean isProxy = (Boolean) appSession.getAttribute("isProxy");
+		isProxy = (isProxy==null) ? false : isProxy;
+		
 		if (isProxy) {
 			// Should NOT explicitly proxy subsequent request INVITE
-			return;
+			throw new IOException("Callflow.proxyRequest should not be called twice.");
 		}
 
 		if (ProxyPlan.isEmpty()) {
@@ -1359,7 +1357,10 @@ public abstract class Callflow implements Serializable {
 		}
 
 		inboundRequest.getSession().setAttribute("RESPONSE_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
-		inboundRequest.getSession().setAttribute("isProxy", Boolean.TRUE);
+//		inboundRequest.getSession().setAttribute("isProxy", Boolean.TRUE);
+
+		// jwm - test proxy arrow - works!
+		inboundRequest.getApplicationSession().setAttribute("isProxy", Boolean.TRUE);
 
 		proxy.startProxy();
 

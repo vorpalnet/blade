@@ -114,16 +114,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			}
 
 		} catch (Exception ex) {
-
-			if (null != sipLogger) {
-				sipLogger.severe(ex);
-			} else {
-				ex.printStackTrace();
-			}
-
-			// what's the point?
-			// throw new UncheckedIOException(new IOException(se));
-
+			sipLogger.severe(ex);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
 		}
 
 	}
@@ -160,20 +152,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	@Override
 	final public void contextDestroyed(ServletContextEvent sce) {
 		try {
-
 			servletDestroyed(event);
-
 		} catch (Exception ex) {
-
-			if (null != sipLogger) {
-				sipLogger.severe(ex);
-			} else {
-				ex.printStackTrace();
-			}
-
-			// what's the point?
-			// throw new UncheckedIOException(new IOException(se));
-
+			sipLogger.severe(ex);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
 		}
 	}
 
@@ -376,13 +358,10 @@ public abstract class AsyncSipServlet extends SipServlet
 //				}
 //			}
 
-		} catch (Exception e) {
-			sipLogger.severe(request, "Exception on SIP request:" + request.toString());
-			sipLogger.severe(request, "request=" + request.toString());
-			sipLogger.logStackTrace(request, e);
-
-			// what's the point?
-			// throw e;
+		} catch (Exception ex) {
+			sipLogger.severe(request, "Exception on SIP request: \n" + request.toString());
+			sipLogger.severe(request, ex);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
 		}
 
 		// process requests queued up from glare
@@ -491,13 +470,10 @@ public abstract class AsyncSipServlet extends SipServlet
 			} else {
 				sipLogger.warning(response, "SipSession is null.");
 			}
-		} catch (Exception e) {
-			sipLogger.severe(response, "Exception on SIP response:");
-			sipLogger.severe(response, "response=" + response.toString());
-			sipLogger.logStackTrace(response, e);
-
-			// what's the point
-			// throw e;
+		} catch (Exception ex) {
+			sipLogger.severe(response, "Exception on SIP response: \n"+response.toString());
+			sipLogger.severe(response, ex);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
 		}
 	}
 
@@ -513,8 +489,10 @@ public abstract class AsyncSipServlet extends SipServlet
 				callback.acceptThrows(timer);
 			}
 
-		} catch (Exception e) {
-			Callflow.getLogger().logStackTrace(e);
+		} catch (Exception ex) {
+			sipLogger.severe("Exception on timer: "+timer.getId());
+			sipLogger.severe(ex);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
 		}
 	}
 
@@ -613,9 +591,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			stringHash = byteArray2Text(messageDigest.digest());
 //			stringHash = hexEncode(messageDigest.digest());
 
-		} catch (NoSuchAlgorithmException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		} catch (NoSuchAlgorithmException ex) {
+			sipLogger.severe(ex);
 		}
 
 		return stringHash;
@@ -656,10 +633,10 @@ public abstract class AsyncSipServlet extends SipServlet
 		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 		try {
 			response.send();
-		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
-
-			// throw e;
+		} catch (Exception ex) {
+			sipLogger.severe(response, "Exception on SIP response: \n" + response.toString());
+			sipLogger.severe(response, ex);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
 		}
 	}
 

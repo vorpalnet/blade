@@ -510,7 +510,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					leftSide = (null != request.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
 				} else {
 					leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
+				}
 
+				// jwm - testing proxy arrow - works!
+				if (response != null && null != response.getApplicationSession().getAttribute("isProxy")) {
+					leftSide = false;
 				}
 
 			}
