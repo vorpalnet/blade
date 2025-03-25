@@ -259,7 +259,12 @@ public class TransferServlet extends B2buaServlet //
 //		sipLogger.finer(response, "transferCompleted...");
 
 		SipApplicationSession appSession = response.getApplicationSession();
-		
+
+		SipSession callee = response.getSession();
+		callee.setAttribute("userAgent", "callee");
+		SipSession caller = Callflow.getLinkedSession(callee);
+		caller.setAttribute("userAgent", "caller");
+
 		// now update X-Previous-DN for future use after success transfer
 		URI referTo = (URI) appSession.getAttribute("Refer-To");
 		appSession.setAttribute("X-Previous-DN", referTo);
@@ -278,6 +283,10 @@ public class TransferServlet extends B2buaServlet //
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
 //		sipLogger.finer(outboundResponse, "callAnswered...");
+		SipSession callee = outboundResponse.getSession();
+		callee.setAttribute("userAgent", "callee");
+		SipSession caller = Callflow.getLinkedSession(callee);
+		caller.setAttribute("userAgent", "caller");
 	}
 
 	@Override
