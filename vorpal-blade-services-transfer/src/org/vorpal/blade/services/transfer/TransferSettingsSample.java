@@ -75,7 +75,7 @@ public class TransferSettingsSample extends TransferSettings {
 		outbound.setAttribute("OSM-Features");
 		outbound.setPattern("^.*shuffleob.*$");
 //		outbound.setExpression("outbound");
-		outbound.addAdditionalExpression("direction", "outbound");
+		outbound.addAdditionalExpression("direction", "outbound");	
 		indexKeySelectors.add(outbound);
 
 		AttributeSelector gucidSelector = new AttributeSelector();
