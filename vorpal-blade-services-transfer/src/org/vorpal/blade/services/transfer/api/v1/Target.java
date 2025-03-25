@@ -5,8 +5,8 @@ import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-public class Target implements Serializable{
-	@Schema(description = "Full target SIP address", defaultValue = "\"Carol\" <sip:carol@vorpal.net>", nullable = true)
+public class Target implements Serializable {
+	@Schema(description = "Full target SIP address", defaultValue = "Carol <sip:carol@vorpal.net>", nullable = true)
 	public String sipAddress;
 
 	@Schema(description = "Full target SIP URI", defaultValue = "sip:carol@vorpal.net", nullable = true)
