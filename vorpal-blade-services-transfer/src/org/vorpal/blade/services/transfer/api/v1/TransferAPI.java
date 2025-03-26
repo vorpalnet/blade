@@ -179,7 +179,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 								"TransferAPI REST transfer request; transferee=" + transferee + ", target=" + target);
 						Address transferor = (Address) transferorSession.getAttribute("sipAddress");
 
-						DummyRequest refer = new DummyRequest(INVITE, transferor, target);
+						DummyRequest refer = new DummyRequest(INVITE, transferee, target);
 						refer.setApplicationSession(appSession);
 						refer.setSession(transferorSession);
 						refer.setHeader("Refer-To", target.toString());
