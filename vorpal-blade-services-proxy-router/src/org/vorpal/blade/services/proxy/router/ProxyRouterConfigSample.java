@@ -16,7 +16,6 @@ import org.vorpal.blade.framework.v2.config.ConfigHashMap;
 import org.vorpal.blade.framework.v2.config.ConfigPrefixMap;
 import org.vorpal.blade.framework.v2.config.RouterConfig;
 import org.vorpal.blade.framework.v2.config.Selector;
-import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v2.config.TranslationsMap;
@@ -25,7 +24,6 @@ import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.bea.wcp.sip.engine.server.SipFactoryImpl;
-import com.bea.wcp.sip.engine.server.SipURIImpl;
 
 public class ProxyRouterConfigSample extends RouterConfig implements Serializable {
 
@@ -33,7 +31,7 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 
 	public ProxyRouterConfigSample() {
 		this.logging = new LogParametersDefault();
-		this.session = new SessionParametersDefault();
+		this.session = null;
 
 		Selector caller = new Selector("caller", "From", SIP_ADDRESS_PATTERN, "${user}");
 		caller.setDescription("caller's number");
@@ -47,8 +45,12 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		callers.setId("callers");
 		callers.addSelector(caller);
 		callers.setDescription("map of blocked callers");
+		
+		
+		Translation t_alice = callers.createTranslation("alice").setId("alice").setRequestUri("sip:carol@vorpal.net");
+		
 
-		// a right bastard from kansas city
+		// a real jerk from kansas city
 		Translation c1 = callers.createTranslation("18165551234");
 		c1.setId("18165551234"); // don't think this is needed.
 		c1.setRequestUri("sip:voicemail");
@@ -85,9 +87,6 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		SipFactory sipFactory = new SipFactoryImpl(null, null);
 		Callflow.setSipFactory(sipFactory);
 		SettingsManager.setSipFactory(sipFactory);
-
-		URI x = sipFactory.createURI("sip:jeff@vorpal.net");
-		System.out.println("x=" + x);
 
 		Logger logger = LogManager.getLogger("BLADE");
 		logger.setUseParentHandlers(false);
