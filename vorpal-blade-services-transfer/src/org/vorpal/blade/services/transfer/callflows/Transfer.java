@@ -115,7 +115,7 @@ public class Transfer extends Callflow {
 
 		SipApplicationSession appSession = request.getApplicationSession();
 
-		Address transferee = request.getTo();
+		Address transferee = request.getFrom();
 		Address target = request.getAddressHeader(REFER_TO);
 
 		sipLogger.finer(request, "Transfer transferee=" + transferee + ", target=" + target);
