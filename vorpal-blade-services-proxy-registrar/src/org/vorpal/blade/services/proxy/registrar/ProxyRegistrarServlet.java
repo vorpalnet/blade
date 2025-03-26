@@ -50,7 +50,8 @@ public class ProxyRegistrarServlet extends ProxyServlet
 			key = getAccountName(request.getFrom());
 			break;
 		case "INVITE":
-			key = getAccountName(request.getTo());
+//			key = getAccountName(request.getTo());
+			key = getAccountName(request.getRequestURI());
 			break;
 		}
 
@@ -87,6 +88,7 @@ public class ProxyRegistrarServlet extends ProxyServlet
 			break;
 
 		default:
+			sipLogger.warning(request, "chooseCallflow selected 'SupervisedCallflow'. Why?");
 			callflow = new SupervisedCallflow();
 		}
 
@@ -110,7 +112,8 @@ public class ProxyRegistrarServlet extends ProxyServlet
 		if (proxyRegistrar == null) {
 			if (true == config.proxyOnUnregistered) {
 				ProxyTier proxyTier = new ProxyTier();
-				URI to = request.getAddressHeader("To").getURI();
+//				URI to = request.getAddressHeader("To").getURI();
+				URI to = request.getRequestURI();
 				proxyTier.getEndpoints().add(to);
 				proxyPlan.getTiers().add(proxyTier);
 			} else {

@@ -34,6 +34,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
@@ -1320,8 +1321,11 @@ public abstract class Callflow implements Serializable {
 		return to;
 	}
 
-	public void proxyRequest(SipServletRequest inboundRequest, ProxyPlan ProxyPlan,
+	public void proxyRequest(SipServletRequest inboundRequest, ProxyPlan proxyPlan,
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
+		
+//		sipLogger.finer(inboundRequest, "Callflow.proxyRequest...");
+//		sipLogger.logObjectAsJson(Level.FINER, proxyPlan);
 
 		SipSession sipSession = inboundRequest.getSession();
 		SipApplicationSession appSession = inboundRequest.getApplicationSession();
@@ -1330,16 +1334,18 @@ public abstract class Callflow implements Serializable {
 		
 		if (isProxy) {
 			// Should NOT explicitly proxy subsequent request INVITE
-			throw new IOException("Callflow.proxyRequest should not be called twice.");
+			sipLogger.warning(inboundRequest, "Callflow.proxyRequest should not be called twice.");
+			return;
+			// throw new IOException("Callflow.proxyRequest should not be called twice.");
 		}
 
-		if (ProxyPlan.isEmpty()) {
+		if (proxyPlan.isEmpty()) {
 			throw new ServletException("Invalid ProxyPlan. No ProxyTiers defined.");
 		}
 
 		Proxy proxy = inboundRequest.getProxy();
 
-		ProxyTier proxyTier = ProxyPlan.getTiers().remove(0);
+		ProxyTier proxyTier = proxyPlan.getTiers().remove(0);
 
 		proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
 		// proxy.setRecordRoute(false);
