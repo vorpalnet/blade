@@ -283,10 +283,10 @@ public class TransferServlet extends B2buaServlet //
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
 //		sipLogger.finer(outboundResponse, "callAnswered...");
-		SipSession callee = outboundResponse.getSession();
-		callee.setAttribute("userAgent", "callee");
-		SipSession caller = Callflow.getLinkedSession(callee);
+		SipSession caller = outboundResponse.getSession();
 		caller.setAttribute("userAgent", "caller");
+		SipSession callee = Callflow.getLinkedSession(caller);
+		callee.setAttribute("userAgent", "callee");
 	}
 
 	@Override
