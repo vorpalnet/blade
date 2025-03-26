@@ -2,6 +2,21 @@
 
 **B**lended **L**ayer **A**pplication **D**evelopment **E**nvironment
 
+tl;dr...
+1) install Java 11 (from Oracle)
+2) download & install OCCAS
+2.1) install weblogic patches
+2.2) install occas patches
+3) type 'ant'. it will fail, but give you instructions on how to fix the configuration file
+4) install the shared libraries on OCCAS (it's required for all apps)
+5) install the blade console on OCCAS (it will update apps with configuration changes)
+6) install (and configure) the fsmar, it will allow you to string apps together during a callflow
+7) install the apps you want. there are many to choose from. transfer and proxy-router are good starting points
+8) nothing will work, everything will fail. check the logs in <domain>/servers/engine(?)/logs/vorpal/<app>.log
+
+If this sounds insane, yes, it is!
+You can find more instructions at https://vorpal.net
+
 BLADE is a development framework and collection of pre-built
 applications build on the Java EE JSR-359 (SIP Servlet) specification.
 
