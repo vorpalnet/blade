@@ -215,7 +215,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		// jam the message in a queue and process it later
 
 		if (false == method.equals("ACK")) {
-			if (expectAck != null && expectAck == true) {
+			if (expectAck != null && expectAck == true && false == method.equals("CANCEL")) {
 				sipLogger.warning(request,
 						"GLARE! " + method + " received while awaiting ACK. Queuing request for later processing...");
 				glareQueue = (Queue<SipServletRequest>) sipSession.getAttribute("GLARE_QUEUE");
@@ -231,9 +231,12 @@ public abstract class AsyncSipServlet extends SipServlet
 
 		try {
 
-			// creates a session tracking key, if one doesn't already exist
 			if (request.isInitial()) {
+				// creates a session tracking key, if one doesn't already exist
 				generateIndexKey(request);
+
+				// attempt to keep track of who called whom
+				request.getSession().setAttribute("userAgent", "caller");
 			}
 
 			if (request.isInitial() && Callflow.getSessionParameters() != null) {
@@ -471,7 +474,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				sipLogger.warning(response, "SipSession is null.");
 			}
 		} catch (Exception ex) {
-			sipLogger.severe(response, "Exception on SIP response: \n"+response.toString());
+			sipLogger.severe(response, "Exception on SIP response: \n" + response.toString());
 			sipLogger.severe(response, ex);
 			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
 		}
@@ -490,7 +493,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			}
 
 		} catch (Exception ex) {
-			sipLogger.severe("Exception on timer: "+timer.getId());
+			sipLogger.severe("Exception on timer: " + timer.getId());
 			sipLogger.severe(ex);
 			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
 		}

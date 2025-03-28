@@ -27,6 +27,7 @@ package org.vorpal.blade.framework.v2.b2bua;
 import java.io.IOException;
 
 import javax.servlet.ServletException;
+import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
@@ -34,8 +35,6 @@ import javax.servlet.sip.UAMode;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-
-
 
 /**
  * This class implements a simple back-to-back user agent. It accepts an
@@ -89,13 +88,13 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 	public abstract void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException;
 
 	/**
-	 * Tells the B2buaServlet not to send the outbound request. You are responsible
-	 * for sending a reply back to the upstream server.
+	 * Tells the B2buaServlet not to send the message (request or response). You are
+	 * now responsible for completing the callflow.
 	 * 
 	 * @param outboundRequest
 	 */
-	public void doNotProcess(SipServletRequest outboundRequest) {
-		outboundRequest.setAttribute("doNotProcess", true);
+	public void doNotProcess(SipServletMessage msg) {
+		msg.setAttribute("doNotProcess", true);
 	}
 
 	/**
