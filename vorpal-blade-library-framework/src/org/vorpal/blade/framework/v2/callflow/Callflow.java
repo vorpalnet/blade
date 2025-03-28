@@ -1105,6 +1105,18 @@ public abstract class Callflow implements Serializable {
 	public static void linkSessions(SipSession ss1, SipSession ss2) {
 		ss1.setAttribute(LINKED_SESSION, ss2);
 		ss2.setAttribute(LINKED_SESSION, ss1);
+
+		// attempt to keep track of who called whom
+		String ss1UserAgent = (String) ss1.getAttribute("userAgent");
+		if (ss1UserAgent != null && ss1UserAgent.equals("caller")) {
+			ss2.setAttribute("userAgent", "callee");
+		} else {
+			String ss2UserAgent = (String) ss2.getAttribute("userAgent");
+			if (ss2UserAgent != null && ss2UserAgent.equals("caller")) {
+				ss1.setAttribute("userAgent", "callee");
+			}
+		}
+
 	}
 
 	public static void unlinkSessions(SipSession ss1, SipSession ss2) {
@@ -1290,7 +1302,8 @@ public abstract class Callflow implements Serializable {
 		// copy URI parameters (if they don't exist)
 		String value;
 		for (String name : from.getParameterNameSet()) {
-			if (null == (value = to.getParameter(name))) {
+			value = to.getParameter(name);
+			if (value != null && false == value.equals("tag")) { // occas will take care of tag
 				to.setParameter(name, value);
 			}
 		}
@@ -1323,21 +1336,21 @@ public abstract class Callflow implements Serializable {
 
 	public void proxyRequest(SipServletRequest inboundRequest, ProxyPlan proxyPlan,
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
-		
+
 //		sipLogger.finer(inboundRequest, "Callflow.proxyRequest...");
 //		sipLogger.logObjectAsJson(Level.FINER, proxyPlan);
 
 		SipSession sipSession = inboundRequest.getSession();
 		SipApplicationSession appSession = inboundRequest.getApplicationSession();
 		Boolean isProxy = (Boolean) appSession.getAttribute("isProxy");
-		isProxy = (isProxy==null) ? false : isProxy;
-		
-		if (isProxy) {
-			// Should NOT explicitly proxy subsequent request INVITE
-			sipLogger.warning(inboundRequest, "Callflow.proxyRequest should not be called twice.");
-			return;
-			// throw new IOException("Callflow.proxyRequest should not be called twice.");
-		}
+		isProxy = (isProxy == null) ? false : isProxy;
+
+//		if (isProxy) {
+//			// Should NOT explicitly proxy subsequent request INVITE
+//			sipLogger.warning(inboundRequest, "Callflow.proxyRequest should not be called twice.");
+//			return;
+//			// throw new IOException("Callflow.proxyRequest should not be called twice.");
+//		}
 
 		if (proxyPlan.isEmpty()) {
 			throw new ServletException("Invalid ProxyPlan. No ProxyTiers defined.");
