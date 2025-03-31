@@ -107,18 +107,10 @@ public class TransferServlet extends B2buaServlet //
 	private Callflow chooseCallflowStyle(TransferSettings.TransferStyle ts) {
 		Callflow callflow;
 
-		switch ((ts != null) ? ts : TransferSettings.TransferStyle.blind) {
-		case conference:
-			callflow = new ConferenceTransfer(this);
-			break;
-		case attended:
-			callflow = new AttendedTransfer(this);
-			break;
-		case blind:
-			callflow = new BlindTransfer(this);
-			break;
-		default: // null & none
+		if (ts == null) {
 			callflow = new Passthru(this);
+		} else {
+			callflow = new BlindTransfer(this);
 		}
 
 		return callflow;
