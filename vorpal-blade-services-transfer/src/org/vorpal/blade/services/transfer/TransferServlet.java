@@ -104,17 +104,17 @@ public class TransferServlet extends B2buaServlet //
 		}
 	}
 
-	private Callflow chooseCallflowStyle(TransferSettings.TransferStyle ts) {
-		Callflow callflow;
-
-		if (ts == null) {
-			callflow = new Passthru(this);
-		} else {
-			callflow = new BlindTransfer(this);
-		}
-
-		return callflow;
-	}
+//	private Callflow chooseCallflowStyle(TransferSettings.TransferStyle ts) {
+//		Callflow callflow;
+//
+//		if (ts == null) {
+//			callflow = new Passthru(this);
+//		} else {
+//			callflow = new BlindTransfer(this);
+//		}
+//
+//		return callflow;
+//	}
 
 	private Callflow chooseCallflowStyle(String ts) {
 		Callflow callflow;
@@ -127,8 +127,10 @@ public class TransferServlet extends B2buaServlet //
 			callflow = new AttendedTransfer(this);
 			break;
 		case "blind":
-		default: // null & none
 			callflow = new BlindTransfer(this);
+			break;
+		default: // null & none
+			callflow = new Passthru(this);
 		}
 
 		return callflow;
