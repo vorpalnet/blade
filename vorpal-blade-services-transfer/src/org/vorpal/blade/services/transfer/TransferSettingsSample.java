@@ -75,7 +75,7 @@ public class TransferSettingsSample extends TransferSettings {
 		outbound.setAttribute("OSM-Features");
 		outbound.setPattern("^.*shuffleob.*$");
 //		outbound.setExpression("outbound");
-		outbound.addAdditionalExpression("direction", "outbound");	
+		outbound.addAdditionalExpression("direction", "outbound");
 		indexKeySelectors.add(outbound);
 
 		AttributeSelector gucidSelector = new AttributeSelector();
@@ -94,8 +94,9 @@ public class TransferSettingsSample extends TransferSettings {
 		guuid.setExpression("${guuid}");
 		indexKeySelectors.add(guuid);
 
-		this.transferAllRequests = true;
-		this.defaultTransferStyle = TransferStyle.blind;
+		this.transferAllRequests = false;
+
+		// this.defaultTransferStyle = TransferStyle.blind;
 
 		this.preserveInviteHeaders.add("Cisco-Gucid");
 		this.preserveInviteHeaders.add("User-to-User");
@@ -110,6 +111,9 @@ public class TransferSettingsSample extends TransferSettings {
 		prefixMap.id = "prefix-map";
 		prefixMap.addSelector(dialed);
 		prefixMap.description = "Translations map for dialed number prefixes";
+
+		prefixMap.createTranslation("bob").setId("bob").addAttribute("style", "blind");
+
 		prefixMap.createTranslation("1997").setId("t1").addAttribute("style",
 				TransferSettings.TransferStyle.blind.toString());
 		prefixMap.createTranslation("19974388687").setId("t2").addAttribute("style",

@@ -4,6 +4,8 @@ import java.util.HashMap;
 
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -12,7 +14,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigPrefixMap extends TranslationsMap {
 
-	Logger sipLogger = SettingsManager.getSipLogger();
+//	private static Logger sipLogger;
 
 	public HashMap<String, Translation> map = new HashMap<>();
 
@@ -45,8 +47,6 @@ public class ConfigPrefixMap extends TranslationsMap {
 					for (int i = regexRoute.key.length(); i > 0; --i) {
 						substring = regexRoute.key.substring(0, i);
 
-						sipLogger.finer(request, "prefix=" + substring);
-
 						value = map.get(substring);
 						if (value != null) {
 							break;
@@ -56,13 +56,9 @@ public class ConfigPrefixMap extends TranslationsMap {
 
 					if (value != null) {
 						value = new Translation(value);
-						if (value.getAttributes() == null) {
-							value.setAttributes(new HashMap<>());
-						}
-						if (regexRoute.attributes != null) {
+						if (regexRoute.attributes != null && regexRoute.attributes.size() > 0) {
 							value.getAttributes().putAll(regexRoute.attributes);
 						}
-
 						break;
 					}
 
@@ -71,7 +67,7 @@ public class ConfigPrefixMap extends TranslationsMap {
 			}
 
 		} catch (Exception e) {
-			sipLogger.logStackTrace(e);
+			Callflow.getSipLogger().logStackTrace(e);
 		}
 
 		return value;

@@ -1,6 +1,8 @@
 <%@ page language="java"%>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt"%>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"%>
+
+<!-- %@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt"% -->
+<!-- %@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"% -->
+
 <html lang="en">
 <head>
 <title>BLADE Console</title>
@@ -42,7 +44,7 @@ body {
 			<h1>
 				Vorpal <strong>BLADE</strong>
 			</h1>
-			<h2>Blended Layer Application Development Environment</h2>
+			<h2>Blended Layer, Appliance Development Environment</h2>
 		</header>
 
 		<section class="main">

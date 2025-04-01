@@ -99,7 +99,7 @@ public class ConfigHelper {
 			System.out.println(json);
 
 			if (json != null && json.length() > 0) {
-				Files.writeString(schemaPath, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+				Files.writeString(path, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 			}
 
 		} catch (IOException e) {
@@ -180,23 +180,24 @@ public class ConfigHelper {
 				remoteTimestamp = settings.getLastModified(configType);
 
 				System.out.println("testing begin...");
+				System.out.println("path exists? " + (path!=null));
+				System.out.println("path " + path );				
 				System.out.println("path.toFile().exists..? " + path.toFile().exists());
 				System.out.println("path.toFile().exists again..? " + path.toFile().exists());
 				System.out.println("testing end.");
 
 				if (false == path.toFile().exists() || (remoteTimestamp > localTimestamp)) {
 					// read the file remotely
-					settings.openForRead(configType);
-					while (null != (line = settings.read())) {
-						strBuffer.append(line);
-					}
-					settings.close();
-
-					if (strBuffer.length() > 0) {
-						System.out.println(
-								"Saving file " + path.getFileName() + " locally... bytes: " + strBuffer.length());
-						saveFileLocally(configType, strBuffer.toString());
-					}
+//					settings.openForRead(configType);
+//					while (null != (line = settings.read())) {
+//						strBuffer.append(line);
+//					}
+//					settings.close();					
+//					if (strBuffer.length() > 0) {
+//						System.out.println(
+//								"Saving file " + path.getFileName() + " locally... bytes: " + strBuffer.length());
+//						saveFileLocally(configType, strBuffer.toString());
+//					}
 
 				} else {
 					// read the file locally

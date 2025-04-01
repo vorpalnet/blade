@@ -51,6 +51,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerService;
+import javax.servlet.sip.TooManyHopsException;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
@@ -91,6 +92,7 @@ public abstract class Callflow implements Serializable {
 
 	protected static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
 	protected static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
+	protected static final String PROXY_CALLBACK_ = "PROXY_CALLBACK_";
 	protected static final String LINKED_SESSION = "LINKED_SESSION";
 	protected static final String DELAYED_REQUEST = "DELAYED_REQUEST";
 	protected static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
@@ -222,6 +224,21 @@ public abstract class Callflow implements Serializable {
 				sipSession.removeAttribute(attribute);
 			}
 
+		}
+		return callback;
+	}
+
+	@SuppressWarnings("unchecked")
+	public static Callback<SipServletResponse> pullProxyCallback(SipServletResponse response) {
+		Callback<SipServletResponse> callback = null;
+		SipApplicationSession appSession = response.getApplicationSession();
+		String attribute = PROXY_CALLBACK_ + response.getMethod();
+		callback = (Callback<SipServletResponse>) appSession.getAttribute(attribute);
+		if (callback != null) {
+			if (response.getProxyBranch() == null && response.getStatus() >= 200) {
+				sipLogger.finer(response, "removing " + attribute + " SipApplicationSession attribute.");
+				appSession.removeAttribute(attribute);
+			}
 		}
 		return callback;
 	}
@@ -1332,6 +1349,19 @@ public abstract class Callflow implements Serializable {
 		}
 
 		return to;
+	}
+
+	public void proxyRequest(Proxy proxy, List<URI> endpoints, Callback<SipServletResponse> lambdaFunction)
+			throws TooManyHopsException {
+		SipApplicationSession appSession = proxy.getOriginalRequest().getApplicationSession();
+		appSession.setAttribute("PROXY_CALLBACK_INVITE", lambdaFunction);
+		proxy.proxyTo(endpoints);
+	}
+
+	public void proxyRequest(Proxy proxy, List<URI> endpoints) throws TooManyHopsException {
+		proxyRequest(proxy, endpoints, (response) -> {
+			// do nothing;
+		});
 	}
 
 	public void proxyRequest(SipServletRequest inboundRequest, ProxyPlan proxyPlan,

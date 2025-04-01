@@ -3,6 +3,7 @@ package org.vorpal.blade.services.transfer;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 
 import javax.servlet.ServletException;
@@ -104,18 +105,6 @@ public class TransferServlet extends B2buaServlet //
 		}
 	}
 
-//	private Callflow chooseCallflowStyle(TransferSettings.TransferStyle ts) {
-//		Callflow callflow;
-//
-//		if (ts == null) {
-//			callflow = new Passthru(this);
-//		} else {
-//			callflow = new BlindTransfer(this);
-//		}
-//
-//		return callflow;
-//	}
-
 	private Callflow chooseCallflowStyle(String ts) {
 		Callflow callflow;
 
@@ -156,8 +145,21 @@ public class TransferServlet extends B2buaServlet //
 			Translation t = settings.findTranslation(request);
 			String ts = null;
 			if (t != null) {
+
+				sipLogger.finer(request, "translation found!");
+
+				for (Entry<String, String> entry : t.getAttributes().entrySet()) {
+					sipLogger.finer(request, "attributes, key=" + entry.getKey() + ", value=" + entry.getValue());
+
+				}
+
 				ts = (String) t.getAttribute("style");
+
+				sipLogger.finer(request, "style=" + ts);
+
 				callflow = this.chooseCallflowStyle(ts);
+
+				sipLogger.finer(request, "callflow=" + callflow.getClass().getName());
 
 				sipLogger.finer(request, "Found translation, id=" + t.getId() + //
 						", description=" + t.getDescription() + //

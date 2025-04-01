@@ -6,6 +6,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
@@ -17,10 +19,10 @@ public class Translation implements Serializable {
 	private String description;
 	private List<TranslationsMap> list;
 	private String requestUri;
-	private String[] route;
-	private String[] routeBack;
-	private String[] routeFinal;
-	private Map<String, Object> attributes;
+//	private String[] route;
+//	private String[] routeBack;
+//	private String[] routeFinal;
+	private Map<String, String> attributes;
 
 	public Translation() {
 	}
@@ -35,14 +37,10 @@ public class Translation implements Serializable {
 			this.description = that.description;
 			this.list = that.list;
 			this.requestUri = that.requestUri;
-			this.route = that.route;
-			this.routeBack = that.routeBack;
-			this.routeFinal = that.routeFinal;
 
-			if (attributes != null) {
-				this.attributes = new HashMap<>(that.attributes);
-			} else {
-				this.attributes = new HashMap<>();
+			this.attributes = new HashMap<>();
+			if (that.attributes != null && that.attributes.size() > 0) {
+				this.attributes.putAll(that.attributes);
 			}
 
 		}
@@ -52,8 +50,39 @@ public class Translation implements Serializable {
 		return description;
 	}
 
-	public Translation setDescription(String description) {
-		this.description = description;
+//	public String[] getRoute() {
+//		return route;
+//	}
+//
+//	public Translation2 setRoute(String[] route) {
+//		this.route = route;
+//		return this;
+//	}
+//
+//	public String[] getRouteBack() {
+//		return routeBack;
+//	}
+//
+//	public Translation2 setRouteBack(String[] routeBack) {
+//		this.routeBack = routeBack;
+//		return this;
+//	}
+//
+//	public String[] getRouteFinal() {
+//		return routeFinal;
+//	}
+//
+//	public Translation2 setRouteFinal(String[] routeFinal) {
+//		this.routeFinal = routeFinal;
+//		return this;
+//	}
+//
+//	public Map<String, Object> getAttributes() {
+//		return attributes;
+//	}
+
+	public Translation setAttributes(Map<String, String> attributes) {
+		this.attributes = new HashMap<>(attributes);
 		return this;
 	}
 
@@ -70,8 +99,8 @@ public class Translation implements Serializable {
 		return list;
 	}
 
-	public Translation setList(List<TranslationsMap> maps) {
-		this.list = maps;
+	public Translation setList(List<TranslationsMap> list) {
+		this.list = list;
 		return this;
 	}
 
@@ -84,50 +113,24 @@ public class Translation implements Serializable {
 		return this;
 	}
 
-	public String[] getRoute() {
-		return route;
-	}
-
-	public Translation setRoute(String[] route) {
-		this.route = route;
-		return this;
-	}
-
-	public String[] getRouteBack() {
-		return routeBack;
-	}
-
-	public Translation setRouteBack(String[] routeBack) {
-		this.routeBack = routeBack;
-		return this;
-	}
-
-	public String[] getRouteFinal() {
-		return routeFinal;
-	}
-
-	public Translation setRouteFinal(String[] routeFinal) {
-		this.routeFinal = routeFinal;
-		return this;
-	}
-
-	public Map<String, Object> getAttributes() {
+	public Map<String, String> getAttributes() {
 		return attributes;
 	}
 
-	public void setAttributes(Map<String, String> attributes) {
-		this.attributes = new HashMap<>(attributes);
+	public Translation setDescription(String description) {
+		this.description = description;
+		return this;
 	}
 
 	@JsonIgnore
-	public Translation addAttribute(String key, Object value) {
+	public Translation addAttribute(String key, String value) {
 		attributes = (null != attributes) ? attributes : new HashMap<>();
 		attributes.put(key, value);
 		return this;
 	}
 
 	@JsonIgnore
-	public Object getAttribute(String key) {
+	public String getAttribute(String key) {
 		return (null != attributes) ? attributes.get(key) : null;
 	}
 

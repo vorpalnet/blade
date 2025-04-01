@@ -13,6 +13,8 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
+import javax.servlet.sip.Proxy;
+import javax.servlet.sip.ProxyBranch;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
@@ -347,20 +349,6 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 			}
 
-// We no longer support the concept of 'proxy'.
-//			if (!request.isInitial() && isProxy(request) && !request.getMethod().equals("ACK")) {
-//				// logging the outgoing proxy message, like BYE
-//				boolean leftSide = (request.getSession().getAttribute("DIAGRAM_SIDE") != null);
-//				// opposite side of the diagram as receiving
-//				if (callflow != null) {
-//					sipLogger.superArrow(Direction.SEND, !leftSide, request, null, callflow.getClass().getSimpleName(),
-//							null);
-//				} else {
-//					sipLogger.superArrow(Direction.SEND, !leftSide, request, null, this.getClass().getSimpleName(),
-//							null);
-//				}
-//			}
-
 		} catch (Exception ex) {
 			sipLogger.severe(request, "Exception on SIP request: \n" + request.toString());
 			sipLogger.severe(request, ex);
@@ -386,9 +374,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	@SuppressWarnings("unchecked")
 	@Override
 	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
-
+		boolean isProxy = false;
 		Callback<SipServletResponse> callback;
 		SipSession sipSession = response.getSession();
+		SipApplicationSession appSession = response.getApplicationSession();
 
 		try {
 			if (sipSession != null) {
@@ -396,71 +385,84 @@ public abstract class AsyncSipServlet extends SipServlet
 				if (sipSession.isValid()) {
 
 					callback = Callflow.pullCallback(response);
+
 					if (callback == null) {
-						// Sometimes a 180 Ringing comes back on a brand new SipSession
-						// because the tag on the To header changed due to a failure downstream.
-						if (response.getMethod().equals("INVITE")) {
-							// Falling down a hole
-							SipApplicationSession appSession = response.getApplicationSession();
-							Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
+						callback = Callflow.pullProxyCallback(response);
 
-							sipLogger.finer(response, "Rogue session id=" + response.getSession().getId());
-							sipLogger.finer(response, "Number of SipSessions: " + sessions.size());
+						if (callback != null) {
+							isProxy = true;
+						} else {
+							// Sometimes a 180 Ringing comes back on a brand new SipSession
+							// because the tag on the To header changed due to a failure downstream.
+							if (response.getMethod().equals("INVITE")) {
+								// Falling down a hole
+								Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
 
-							for (SipSession session : sessions) {
+								sipLogger.finer(response, "Rogue session id=" + response.getSession().getId());
+								sipLogger.finer(response, "Number of SipSessions: " + sessions.size());
 
-								sipLogger.finer(response, "Checking session id=" + session.getId());
+								for (SipSession session : sessions) {
 
-								if (session != response.getSession()) {
+									sipLogger.finer(response, "Checking session id=" + session.getId());
 
-									if (session.getCallId().equals(sipSession.getCallId())) {
+									if (session != response.getSession()) {
 
-										callback = (Callback<SipServletResponse>) session
-												.getAttribute(RESPONSE_CALLBACK_INVITE);
+										if (session.getCallId().equals(sipSession.getCallId())) {
 
-										if (callback != null) {
-											sipLogger.finer(session,
-													"Early dialog session detected, merge in progress...");
+											callback = (Callback<SipServletResponse>) session
+													.getAttribute(RESPONSE_CALLBACK_INVITE);
 
-											sipLogger.finer(response,
-													"Setting RESPONSE_CALLBACK_INVITE on merged session...");
-											sipSession.setAttribute(RESPONSE_CALLBACK_INVITE, callback);
+											if (callback != null) {
+												sipLogger.finer(session,
+														"Early dialog session detected, merge in progress...");
 
-											sipLogger.finer(response,
-													"Removing RESPONSE_CALLBACK_INVITE from original session...");
-											session.removeAttribute(RESPONSE_CALLBACK_INVITE);
+												sipLogger.finer(response,
+														"Setting RESPONSE_CALLBACK_INVITE on merged session...");
+												sipSession.setAttribute(RESPONSE_CALLBACK_INVITE, callback);
 
-											// link the sessions
-											sipLogger.finer(session, "Linking sessions...");
-											SipSession linkedSession = Callflow.getLinkedSession(session);
-											session.removeAttribute("LINKED_SESSION");
-											Callflow.linkSessions(linkedSession, sipSession);
+												sipLogger.finer(response,
+														"Removing RESPONSE_CALLBACK_INVITE from original session...");
+												session.removeAttribute(RESPONSE_CALLBACK_INVITE);
 
-											for (String attr : session.getAttributeNameSet()) {
-												sipLogger.finer(session, "Copying session attribute: " + attr);
-												sipSession.setAttribute(attr, session.getAttribute(attr));
+												// link the sessions
+												sipLogger.finer(session, "Linking sessions...");
+												SipSession linkedSession = Callflow.getLinkedSession(session);
+												session.removeAttribute("LINKED_SESSION");
+												Callflow.linkSessions(linkedSession, sipSession);
+
+												for (String attr : session.getAttributeNameSet()) {
+													sipLogger.finer(session, "Copying session attribute: " + attr);
+													sipSession.setAttribute(attr, session.getAttribute(attr));
+												}
+
+												// invalidate the old session
+												sipLogger.finer(session, "Invalidating early session...");
+												session.invalidate();
+												sipLogger.finer(response, "Sessions successfully merged.");
 											}
-
-											// invalidate the old session
-											sipLogger.finer(session, "Invalidating early session...");
-											session.invalidate();
-											sipLogger.finer(response, "Sessions successfully merged.");
+											break;
 										}
-										break;
 									}
 								}
+							} else {
+								Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+										this.getClass().getSimpleName());
 							}
-
-						} else {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-									this.getClass().getSimpleName());
 						}
 					}
 
 					if (callback != null) {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
 								callback.getClass().getSimpleName());
-						callback.accept(response);
+
+						if (isProxy) {
+							if (!Callflow.provisional(response)) {
+								callback.accept(response);
+							}
+						} else {
+							callback.accept(response);
+						}
+
 					} else {
 						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
 								this.getClass().getSimpleName());
