@@ -12,9 +12,6 @@ System.out.println("app=" + app +", configType="+ configType);
 
 String jsonData = request.getParameter("jsonData");
 
-System.out.println("Form submitted jsonData: ");
-System.out.println(jsonData);
-
 ConfigHelper cfgHelper = new ConfigHelper(app, configType);
 cfgHelper.getSettings();
 
@@ -318,7 +315,7 @@ function chgAction(){
 							</select> <br>
 
 							<ul class="nav nav-tabs" role="tablist">
-								<li role="presentation" class="active"><a href="index.jsp#form" aria-controls="form" role="tab" data-toggle="tab">Form</a></li>
+								<li role="presentation" class="active"><a href="index.jsp#form" aria-controls="schema" role="tab" data-toggle="tab">Form</a></li>
 								<li role="presentation"><a href="index.jsp#data" aria-controls="data" role="tab" data-toggle="tab">JSON</a></li>
 								<li role="presentation"><a href="index.jsp#sample" aria-controls="sample" role="tab" data-toggle="tab">Sample</a></li>
 								<li role="presentation" class=""><a href="index.jsp#schema" aria-controls="schema" role="tab" data-toggle="tab">Schema</a></li>
@@ -326,7 +323,9 @@ function chgAction(){
 							<!-- Tab panes -->
 							<div class="tab-content">
 								<div role="tabpanel" class="tab-pane active" id="form">
+
 									<div id='form-container' style="padding-left: 6px; padding-right: 6px; padding-top: 6px; padding-bottom: 6px;"></div>
+
 								</div>
 								<div role="tabpanel" class="tab-pane" id="data"></div>
 								<div role="tabpanel" class="tab-pane" id="sample"></div>
@@ -385,12 +384,9 @@ function chgAction(){
 		</div>
 
 		<div class="navbar-collapse collapse" id="navbar-third">
-		
-<!-- 	
 			<span class="navbar-text"> © 2015 - 2018. <a href="#">Limitless Web App Kit</a> by <a href="https://themeforest.net/user/Kopyov" target="_blank">Eugene
 					Kopyov</a>
 			</span>
- -->	
 
 			<ul class="navbar-nav ml-lg-auto">
 				<li class="nav-item"><a href="#" class="navbar-nav-link">Help center</a></li>
@@ -417,18 +413,8 @@ function chgAction(){
                 mode: "javascript",
                 lineNumbers: true
             });
-
-            codeMirrors["data"] = CodeMirror(document.getElementById("data"), {
-                value: JSON.stringify(demos[selectedDemo][1], null, 4),
-                mode: "javascript",
-                lineNumbers: true
-            });
             $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
                 selectedTab = $(e.target).attr("aria-controls");
-
-                // jwm
-                console.log("selectedTab: "+selectedTab);
-                
                 var pt = $(e.relatedTarget);
                 var prevTab;
                 if (pt) {
@@ -445,7 +431,6 @@ function chgAction(){
             }
             );
 
-			
         </script>
 </body>
 </html>

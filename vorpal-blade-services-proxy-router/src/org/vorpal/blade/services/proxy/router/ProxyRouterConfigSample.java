@@ -20,6 +20,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v2.config.TranslationsMap;
 import org.vorpal.blade.framework.v2.logging.LogManager;
+import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
@@ -31,6 +32,7 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 
 	public ProxyRouterConfigSample() {
 		this.logging = new LogParametersDefault();
+		this.logging.setLoggingLevel(LoggingLevel.FINER);
 		this.session = null;
 
 		Selector caller = new Selector("caller", "From", SIP_ADDRESS_PATTERN, "${user}");
@@ -45,10 +47,22 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		callers.setId("callers");
 		callers.addSelector(caller);
 		callers.setDescription("map of blocked callers");
-		
-		
+
 		Translation t_alice = callers.createTranslation("alice").setId("alice").setRequestUri("sip:carol@vorpal.net");
-		
+
+		// if alice calls bob, shes get carol
+		// if alice calls carol, she gets bob
+		// if alice calls doug, it goes through
+		Translation a1 = callers.createTranslation("alice");
+		a1.setId("alice"); // don't think this is needed.
+//		c1.setDescription("generally abusive; send all calls to voicemail unless the below numbers are dialed");
+		List<TranslationsMap> a1Maps = new LinkedList<>();
+		TranslationsMap a1PrefixMap = new ConfigPrefixMap();
+		a1PrefixMap.addSelector(dialed);
+		a1PrefixMap.createTranslation("bob").setId("bob").setRequestUri("sip:carol@vorpal.net");
+		a1PrefixMap.createTranslation("carol").setId("carol").setRequestUri("sip:bob@vorpal.net");
+		a1Maps.add(a1PrefixMap);
+		a1.setList(a1Maps);
 
 		// a real jerk from kansas city
 		Translation c1 = callers.createTranslation("18165551234");
@@ -58,10 +72,10 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		List<TranslationsMap> c1Maps = new LinkedList<>();
 		TranslationsMap c1PrefixMap = new ConfigPrefixMap();
 		c1PrefixMap.addSelector(dialed);
-		c1PrefixMap.createTranslation("1913").setRequestUri("sip:voicemail913").setDescription("for (913) area code");
-		c1PrefixMap.createTranslation("1913555").setRequestUri("sip:voicemail913555")
+		c1PrefixMap.createTranslation("1913").setId("1913").setRequestUri("sip:voicemail913").setDescription("for (913) area code");
+		c1PrefixMap.createTranslation("1913555").setId("1913555").setRequestUri("sip:voicemail913555")
 				.setDescription("for (913) 555 NPA");
-		c1PrefixMap.createTranslation("19135550001").setRequestUri("sip:voicemail9130001")
+		c1PrefixMap.createTranslation("19135550001").setId("19135550001").setRequestUri("sip:voicemail9130001")
 				.setDescription("for (913)555-001 NXX");
 		c1Maps.add(c1PrefixMap);
 		c1.setList(c1Maps);
@@ -73,7 +87,7 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		List<TranslationsMap> c2Maps = new LinkedList<>();
 		TranslationsMap c2HashMap = new ConfigHashMap();
 		c2HashMap.addSelector(dialed);
-		c2HashMap.createTranslation("15305559876");
+		c2HashMap.createTranslation("15305559876").setId("15305559876");
 		c2Maps.add(c2HashMap);
 		c2.setList(c2Maps);
 
