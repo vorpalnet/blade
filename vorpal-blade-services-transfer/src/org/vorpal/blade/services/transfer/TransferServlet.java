@@ -2,6 +2,7 @@ package org.vorpal.blade.services.transfer;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map.Entry;
 import java.util.logging.Level;
@@ -147,6 +148,10 @@ public class TransferServlet extends B2buaServlet //
 			if (t != null) {
 
 				sipLogger.finer(request, "translation found!");
+
+				if (t.getAttributes() == null) {
+					t.setAttributes(new HashMap<String, String>());
+				}
 
 				for (Entry<String, String> entry : t.getAttributes().entrySet()) {
 					sipLogger.finer(request, "attributes, key=" + entry.getKey() + ", value=" + entry.getValue());
