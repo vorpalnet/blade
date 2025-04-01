@@ -114,11 +114,11 @@ public class TransferSettingsSample extends TransferSettings {
 
 		prefixMap.createTranslation("bob").setId("bob").addAttribute("style", "blind");
 
-		prefixMap.createTranslation("1997").setId("t1").addAttribute("style",
+		prefixMap.createTranslation("1897").setId("t1").addAttribute("style",
 				TransferSettings.TransferStyle.blind.toString());
-		prefixMap.createTranslation("19974388687").setId("t2").addAttribute("style",
+		prefixMap.createTranslation("18974388687").setId("t2").addAttribute("style",
 				TransferSettings.TransferStyle.attended.toString());
-		prefixMap.createTranslation("19974388689").setId("t3").addAttribute("style",
+		prefixMap.createTranslation("18974388689").setId("t3").addAttribute("style",
 				TransferSettings.TransferStyle.conference.toString());
 
 		TranslationsMap hashMap = new ConfigHashMap();
