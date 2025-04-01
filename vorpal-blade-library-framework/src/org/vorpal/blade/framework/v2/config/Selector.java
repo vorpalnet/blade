@@ -286,7 +286,7 @@ public class Selector {
 		System.out.println("Key: " + key);
 
 	}
-	
+
 	public static void main(String args[]) {
 // "(.*?)"
 // "([^"]*)"
@@ -297,8 +297,6 @@ public class Selector {
 //		String X_SIP_ADDRESS_PATTERN = "^(?:[\"]?(?<name>.*)[\\\"\\s]*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 		String X_SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 
-		
-		
 		Map<String, String> attributes = new HashMap<>();
 
 		String _strPattern = X_SIP_ADDRESS_PATTERN;
@@ -363,6 +361,5 @@ public class Selector {
 		System.out.println(key);
 
 	}
-
 
 }

@@ -18,8 +18,7 @@ public class FsmarTransferTest extends AppRouterConfiguration {
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
 		this.getPrevious("null").getTrigger("REFER").createTransition("transfer");
 		this.getPrevious("null").getTrigger("INVITE").createTransition("transfer");
-		this.getPrevious("transfer").getTrigger("INVITE").createTransition("proxy-router");
-		this.getPrevious("proxy-router").getTrigger("INVITE").createTransition("proxy-registrar");
+		this.getPrevious("transfer").getTrigger("INVITE").createTransition("proxy-registrar");
 
 	}
 

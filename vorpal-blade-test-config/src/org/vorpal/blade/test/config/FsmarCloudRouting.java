@@ -7,24 +7,24 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-public class FsmarProxyRouter extends AppRouterConfiguration {
+public class FsmarCloudRouting extends AppRouterConfiguration {
 
-	public FsmarProxyRouter() {
-		this.setDefaultApplication("proxy-goober");
+	public FsmarCloudRouting() {
+		// this.setDefaultApplication("none");
 
 		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
 		this.getPrevious("null").getTrigger("SUBSCRIBE").createTransition("presence");
 		this.getPrevious("null").getTrigger("PUBLISH").createTransition("presence");
 		this.getPrevious("null").getTrigger("REGISTER").createTransition("proxy-registrar");
+		this.getPrevious("null").getTrigger("REFER").createTransition("transfer");
+		this.getPrevious("null").getTrigger("INVITE").createTransition("cloud-routing");
+		this.getPrevious("cloud-routing").getTrigger("INVITE").createTransition("proxy-registrar");
 
-		this.getPrevious("null").getTrigger("INVITE").createTransition("transfer");
-		this.getPrevious("transfer").getTrigger("INVITE").createTransition("proxy-router");
-		this.getPrevious("proxy-router").getTrigger("INVITE").createTransition("proxy-registrar");
 
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {
-		AppRouterConfiguration configuration = new FsmarProxyRouter();
+		AppRouterConfiguration configuration = new FsmarCloudRouting();
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setSerializationInclusion(Include.NON_NULL);
 		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);

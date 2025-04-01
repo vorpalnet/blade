@@ -24,12 +24,12 @@
 
 package org.vorpal.blade.framework.v2.logging;
 
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.logging.Level;
 
+import javax.servlet.sip.Proxy;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletMessage;
@@ -512,9 +512,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
 				}
 
-				// jwm - testing proxy arrow - works!
-				if (response != null && null != response.getApplicationSession().getAttribute("isProxy")) {
-					leftSide = false;
+				if (response != null) {
+					Proxy proxy = response.getRequest().getProxy(false);
+					if (proxy != null) {
+						leftSide = false;
+					}
 				}
 
 			}

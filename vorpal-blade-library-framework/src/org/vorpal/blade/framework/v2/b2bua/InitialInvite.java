@@ -114,26 +114,36 @@ public class InitialInvite extends Callflow {
 					}
 				}
 
-				sendResponse(aliceResponse, (aliceAck) -> {
-					if (aliceAck.getMethod().equals(PRACK)) {
-						SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
+				// Sometimes you want to arrest the processing of the transaction.
+				// If either the callflow or the request are marked as 'doNotProcess', we won't
+				boolean _doNotProcess = (null == bobRequest.getAttribute("doNotProcess")) ? false
+						: (Boolean) bobRequest.getAttribute("doNotProcess");
+				this.doNotProcess = (this.doNotProcess || _doNotProcess);
+				if (false == this.doNotProcess) {
+
+					sendResponse(aliceResponse, (aliceAck) -> {
+						if (aliceAck.getMethod().equals(PRACK)) {
+							SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
+
 //					if (b2buaListener != null) {
 //						b2buaListener.callEvent(bobPrack);
 //					}
-						sendRequest(bobPrack, (prackResponse) -> {
-							sendResponse(aliceAck.createResponse(prackResponse.getStatus()));
-						});
-					} else if (aliceAck.getMethod().equals(ACK)) {
-						SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-						if (b2buaListener != null) {
-							b2buaListener.callConnected(bobAck);
+							sendRequest(bobPrack, (prackResponse) -> {
+								sendResponse(aliceAck.createResponse(prackResponse.getStatus()));
+							});
+						} else if (aliceAck.getMethod().equals(ACK)) {
+							SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+							if (b2buaListener != null) {
+								b2buaListener.callConnected(bobAck);
+							}
+							sendRequest(bobAck);
+						} else {
+							// implement GLARE here?
 						}
-						sendRequest(bobAck);
-					} else {
-						// implement GLARE here?
-					}
 
-				});
+					});
+
+				}
 
 			}
 		});
@@ -157,12 +167,7 @@ public class InitialInvite extends Callflow {
 			bobRequest.setRequestURI(aliceRequest.getRequestURI());
 			linkSessions(aliceRequest.getSession(), bobRequest.getSession());
 
-			// Set the outgoing X-Vorpal-Session header
-//			String indexKey = getVorpalSessionId(bobRequest.getApplicationSession());
-//			String dialog = createVorpalDialogId(bobRequest.getSession());
-//			bobRequest.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
-
-			// Code to X-Vorpal-Session AND X-VorpalTimestamp
+			// Code to X-Vorpal-Session AND X-Vorpal-Timestamp
 			if (bobRequest.isInitial() && null == bobRequest.getHeader("X-Vorpal-Session")) {
 				SipSession sipSession = bobRequest.getSession();
 				String indexKey = getVorpalSessionId(appSession);

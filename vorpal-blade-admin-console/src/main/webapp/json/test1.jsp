@@ -12,9 +12,6 @@ System.out.println("app=" + app +", configType="+ configType);
 
 String jsonData = request.getParameter("jsonData");
 
-System.out.println("Form submitted jsonData: ");
-System.out.println(jsonData);
-
 ConfigHelper cfgHelper = new ConfigHelper(app, configType);
 cfgHelper.getSettings();
 
@@ -326,8 +323,11 @@ function chgAction(){
 							<!-- Tab panes -->
 							<div class="tab-content">
 								<div role="tabpanel" class="tab-pane active" id="form">
+
 									<div id='form-container' style="padding-left: 6px; padding-right: 6px; padding-top: 6px; padding-bottom: 6px;"></div>
+
 								</div>
+								<div role="tabpanel" class="tab-pane" id="form"></div>
 								<div role="tabpanel" class="tab-pane" id="data"></div>
 								<div role="tabpanel" class="tab-pane" id="sample"></div>
 								<div role="tabpanel" class="tab-pane" id="schema"></div>
@@ -376,40 +376,6 @@ function chgAction(){
 	</div>
 
 
-	<!-- Footer -->
-	<div class="navbar navbar-expand-lg navbar-light border-bottom-0 border-top">
-		<div class="text-center d-lg-none w-100">
-			<button type="button" class="navbar-toggler dropdown-toggle" data-toggle="collapse" data-target="#navbar-third">
-				<i class="icon-menu mr-2"></i> Bottom navbar
-			</button>
-		</div>
-
-		<div class="navbar-collapse collapse" id="navbar-third">
-		
-<!-- 	
-			<span class="navbar-text"> © 2015 - 2018. <a href="#">Limitless Web App Kit</a> by <a href="https://themeforest.net/user/Kopyov" target="_blank">Eugene
-					Kopyov</a>
-			</span>
- -->	
-
-			<ul class="navbar-nav ml-lg-auto">
-				<li class="nav-item"><a href="#" class="navbar-nav-link">Help center</a></li>
-				<li class="nav-item"><a href="#" class="navbar-nav-link">Policy</a></li>
-				<li class="nav-item"><a href="#" class="navbar-nav-link font-weight-semibold">Upgrade your account</a></li>
-				<li class="nav-item dropup"><a href="#" class="navbar-nav-link" data-toggle="dropdown"> <i class="icon-share4 d-none d-lg-inline-block"></i> <span
-						class="d-lg-none">Share</span>
-				</a>
-
-					<div class="dropdown-menu dropdown-menu-right">
-						<a href="#" class="dropdown-item"><i class="icon-dribbble3"></i> Dribbble</a> <a href="#" class="dropdown-item"><i class="icon-pinterest2"></i>
-							Pinterest</a> <a href="#" class="dropdown-item"><i class="icon-github"></i> Github</a> <a href="#" class="dropdown-item"><i class="icon-stackoverflow"></i>
-							Stack Overflow</a>
-					</div></li>
-			</ul>
-		</div>
-	</div>
-	<!-- /footer -->
-
 	<script lang="javascript">
             route();
             codeMirrors["schema"] = CodeMirror(document.getElementById("schema"), {
@@ -423,12 +389,9 @@ function chgAction(){
                 mode: "javascript",
                 lineNumbers: true
             });
+            
             $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
                 selectedTab = $(e.target).attr("aria-controls");
-
-                // jwm
-                console.log("selectedTab: "+selectedTab);
-                
                 var pt = $(e.relatedTarget);
                 var prevTab;
                 if (pt) {
@@ -442,10 +405,15 @@ function chgAction(){
                     });
                 }
                 codeMirrors[selectedTab].setValue(inputString[selectedTab]);
+
+                // jwm
+                console.log("selectedTab: "+selectedTab);
+
+
+                
             }
             );
 
-			
         </script>
 </body>
 </html>
