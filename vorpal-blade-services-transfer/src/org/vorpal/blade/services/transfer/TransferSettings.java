@@ -3,7 +3,7 @@ package org.vorpal.blade.services.transfer;
 import java.io.Serializable;
 import java.util.ArrayList;
 
-import org.vorpal.blade.framework.v2.config.RouterConfig;
+import org.vorpal.blade.framework.v3.config.RouterConfig;
 
 public class TransferSettings extends RouterConfig implements Serializable {
 	private static final long serialVersionUID = 2L;
@@ -58,7 +58,11 @@ public class TransferSettings extends RouterConfig implements Serializable {
 	}
 
 	public TransferStyle getDefaultTransferStyle() {
-		return defaultTransferStyle;
+		if (defaultTransferStyle != null) {
+			return defaultTransferStyle;
+		} else {
+			return TransferStyle.blind;
+		}
 	}
 
 	public void setDefaultTransferStyle(TransferStyle defaultTransferStyle) {

@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Locale;
@@ -215,8 +216,9 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public List<String> getHeaderList(String key) {
-		// TODO Auto-generated method stub
-		return null;
+		List<String> headerList = new LinkedList<>();
+		headerList.addAll(headers.keySet());
+		return headerList;
 	}
 
 	@Override

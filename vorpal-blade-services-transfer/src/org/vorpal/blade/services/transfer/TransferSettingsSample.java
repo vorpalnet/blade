@@ -94,7 +94,7 @@ public class TransferSettingsSample extends TransferSettings {
 		guuid.setExpression("${guuid}");
 		indexKeySelectors.add(guuid);
 
-		this.transferAllRequests = false;
+		this.transferAllRequests = true;
 
 		// this.defaultTransferStyle = TransferStyle.blind;
 

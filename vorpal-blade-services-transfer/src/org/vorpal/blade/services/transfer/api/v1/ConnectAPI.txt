@@ -15,10 +15,8 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
@@ -29,26 +27,24 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
 import org.vorpal.blade.framework.v2.DummyRequest;
+import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 import org.vorpal.blade.services.transfer.TransferServlet;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 import org.vorpal.blade.services.transfer.callflows.BlindTransfer;
-import org.vorpal.blade.services.transfer.callflows.TransferListener;
 
-import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
-@OpenAPIDefinition(info = @Info( //
-		title = "BLADE - Transfer", //
-		version = "1", //
-		description = "Performs transfer operations"))
+//@OpenAPIDefinition(info = @Info( //
+//		title = "BLADE - Transfer", //
+//		version = "1", //
+//		description = "Performs transfer operations"))
 @Path("v1")
-public class TransferAPI extends ClientCallflow implements TransferListener {
+public class ConnectAPI extends ClientCallflow implements B2buaListener {
 	private static final long serialVersionUID = 1L;
 
 	private final static String TXFER_REQUEST = "TXFER_REQUEST";
@@ -56,37 +52,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 	// static because you cannot serialize AsyncResponse
 	public static Map<String, AsyncResponse> responseMap = new ConcurrentHashMap<>();
 
-	@SuppressWarnings({ "unchecked" })
-	@GET
-	@Path("session/{key}")
-	@Produces({ MediaType.APPLICATION_JSON })
-	@Operation(summary = "Examine session variables")
-	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
-			@ApiResponse(responseCode = "404", description = "Not Found"),
-			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
-	public Response inspect(@PathParam("key") String key) {
 
-		Response response = null;
-		SipApplicationSession appSession = null;
-		SessionResponse sessionResponse = null;
-
-		if (key != null) {
-			Set<String> appSessionIds = sipUtil.getSipApplicationSessionIds(key);
-			if (appSessionIds != null && appSessionIds.size() >= 1) {
-				String appSessionId = (String) appSessionIds.toArray()[0];
-				appSession = sipUtil.getApplicationSessionById(appSessionId);
-			}
-		}
-
-		if (appSession != null) { // 200
-			sessionResponse = new SessionResponse(appSession);
-			response = Response.ok().entity(sessionResponse).build();
-		} else { // 404
-			response = Response.status(404).build();
-		}
-
-		return response;
-	}
 
 	@SuppressWarnings({ "unchecked" })
 	@POST
@@ -99,12 +65,12 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			@ApiResponse(responseCode = "202", description = "Accepted"),
 			@ApiResponse(responseCode = "403", description = "Transfer Declined"),
 			@ApiResponse(responseCode = "404", description = "Not Found"),
-			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
-			@ApiResponse(responseCode = "410", description = "Transfer Abandoned"),
-			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
+//			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
+//			@ApiResponse(responseCode = "410", description = "Transfer Abandoned"),
+//			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
-	public void blindTransfer(
-			@RequestBody(description = "transfer request", required = true) TransferRequest transferRequest,
+	public void connect(
+			@RequestBody(description = "connect request", required = true) TransferRequest transferRequest,
 			@Context UriInfo uriInfo, @Suspended AsyncResponse asyncResponse) {
 
 		SipApplicationSession appSession = null;
@@ -179,14 +145,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 								"TransferAPI REST transfer request; transferee=" + transferee + ", target=" + target);
 						Address transferor = (Address) transferorSession.getAttribute("sipAddress");
 
-						// bob (transferee) is doing the 'transfer', to alice
-						DummyRequest refer = new DummyRequest(REFER, transferor, transferee);
+						DummyRequest refer = new DummyRequest(INVITE, transferee, target);
 						refer.setApplicationSession(appSession);
 						refer.setSession(transferorSession);
 						refer.setHeader("Refer-To", target.toString());
-
-						refer.setHeader("Referred-By", transferor.toString());
-						sipLogger.warning("Getting Referred-By: " + refer.getHeader("Referred-By"));
 
 						if (transferRequest.target.inviteHeaders != null) {
 							for (Header header : transferRequest.target.inviteHeaders) {
@@ -221,7 +183,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 						if (transferRequest.notification == null || //
 								transferRequest.notification.style == null || //
-								transferRequest.notification.style == Notification.Style.async) {
+								transferRequest.notification.style == TransferRequest.Notification.Style.async) {
 							// Do not send response; Save response in static memory so it's not serialized
 							responseMap.put(appSession.getId(), asyncResponse);
 						} else {
@@ -329,6 +291,42 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			txferResp.request = (TransferRequest) cancelRequest.getApplicationSession().getAttribute(TXFER_REQUEST);
 			asyncResponse.resume(Response.status(Status.GONE).entity(txferResp).build());
 		}
+	}
+
+	@Override
+	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
+		// TODO Auto-generated method stub
+		
 	}
 
 }

@@ -1,6 +1,7 @@
 package org.vorpal.blade.framework.v3.config;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -22,10 +23,19 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class AttributeSelector {
-	public enum DialogType {origin, destination};
-	
-	
+//public class AttributeSelector extends Selector{
+public class AttributeSelector implements Serializable {
+
+//	private String id; // optional for JSON references
+//	private String description; // optional for human readable descriptions
+//	private String attribute; // location of the key data, like in the 'To' header
+//	private Pattern _pattern; // regular expression using capturing groups to parse the key data
+//	private String expression; // replacement pattern, like $1 to format the key data
+
+	public enum DialogType {
+		origin, destination
+	};
+
 	private String id; // optional for JSON references
 	private String description; // optional for human readable descriptions
 	private String attribute; // location of the key data, like in the 'To' header
@@ -33,7 +43,7 @@ public class AttributeSelector {
 	private String expression; // replacement pattern, like ${ucid} to format the key data
 	private DialogType dialog; // apply attributes to either origin or destination dialog (SipSession)
 	private Map<String, String> additionalExpressions;
-	
+
 	public DialogType getDialog() {
 
 		if (dialog == null) {
@@ -48,7 +58,6 @@ public class AttributeSelector {
 		this.dialog = dialog;
 		return this;
 	}
-	
 
 	public Map<String, String> getAdditionalExpressions() {
 		return additionalExpressions;
