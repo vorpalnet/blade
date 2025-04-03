@@ -159,8 +159,11 @@ public class TransferServlet extends B2buaServlet //
 				}
 
 				ts = (String) t.getAttribute("style");
-
 				sipLogger.finer(request, "style=" + ts);
+
+				if (ts == null) {
+					ts = "blind";
+				}
 
 				callflow = this.chooseCallflowStyle(ts);
 
