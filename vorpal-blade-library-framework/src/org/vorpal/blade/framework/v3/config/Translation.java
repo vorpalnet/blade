@@ -18,6 +18,14 @@ public class Translation<T> implements Serializable {
 	private Map<String, String> attributes = new HashMap<>();
 	private T properties;
 
+	public TranslationsMap<T> addTranslationsMap(TranslationsMap<T> tm) {
+		if (list == null) {
+			list = new LinkedList<>();
+		}
+		list.add(tm);
+		return tm;
+	}
+
 	public Translation() {
 	}
 
@@ -44,8 +52,9 @@ public class Translation<T> implements Serializable {
 		return properties;
 	}
 
-	public void setProperties(T properties) {
+	public Translation<T> setProperties(T properties) {
 		this.properties = properties;
+		return this;
 	}
 
 	public String getDescription() {
@@ -79,6 +88,7 @@ public class Translation<T> implements Serializable {
 		return attributes;
 	}
 
+	@JsonIgnore
 	public void setAttributes(Map<String, String> attributes) {
 		this.attributes = new HashMap<>(attributes);
 	}

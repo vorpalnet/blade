@@ -13,25 +13,22 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Translation implements Serializable {
+public class Translation2 implements Serializable {
 	private static final long serialVersionUID = 1L;
 	private String id;
 	private String description;
 	private List<TranslationsMap> list;
 	private String requestUri;
-//	private String[] route;
-//	private String[] routeBack;
-//	private String[] routeFinal;
-	private Map<String, Object> attributes;
+	private Map<String, String> attributes;
 
-	public Translation() {
+	public Translation2() {
 	}
 
-	public Translation(String id) {
+	public Translation2(String id) {
 		this.id = id;
 	}
 
-	public Translation(Translation that) {
+	public Translation2(Translation2 that) {
 		if (that != null) {
 			this.id = that.id;
 			this.description = that.description;
@@ -50,7 +47,7 @@ public class Translation implements Serializable {
 		return description;
 	}
 
-	public Translation setAttributes(Map<String, String> attributes) {
+	public Translation2 setAttributes(Map<String, String> attributes) {
 		this.attributes = new HashMap<>(attributes);
 		return this;
 	}
@@ -59,7 +56,7 @@ public class Translation implements Serializable {
 		return id;
 	}
 
-	public Translation setId(String id) {
+	public Translation2 setId(String id) {
 		this.id = id;
 		return this;
 	}
@@ -68,7 +65,7 @@ public class Translation implements Serializable {
 		return list;
 	}
 
-	public Translation setList(List<TranslationsMap> list) {
+	public Translation2 setList(List<TranslationsMap> list) {
 		this.list = list;
 		return this;
 	}
@@ -77,29 +74,29 @@ public class Translation implements Serializable {
 		return requestUri;
 	}
 
-	public Translation setRequestUri(String requestUri) {
+	public Translation2 setRequestUri(String requestUri) {
 		this.requestUri = requestUri;
 		return this;
 	}
 
-	public Map<String, Object> getAttributes() {
+	public Map<String, String> getAttributes() {
 		return attributes;
 	}
 
-	public Translation setDescription(String description) {
+	public Translation2 setDescription(String description) {
 		this.description = description;
 		return this;
 	}
 
 	@JsonIgnore
-	public Translation addAttribute(String key, Object value) {
+	public Translation2 addAttribute(String key, String value) {
 		attributes = (null != attributes) ? attributes : new HashMap<>();
 		attributes.put(key, value);
 		return this;
 	}
 
 	@JsonIgnore
-	public Object getAttribute(String key) {
+	public String getAttribute(String key) {
 		return (null != attributes) ? attributes.get(key) : null;
 	}
 

@@ -153,11 +153,6 @@ public class TransferServlet extends B2buaServlet //
 					t.setAttributes(new HashMap<String, String>());
 				}
 
-				for (Entry<String, String> entry : t.getAttributes().entrySet()) {
-					sipLogger.finer(request, "attributes, key=" + entry.getKey() + ", value=" + entry.getValue());
-
-				}
-
 				ts = (String) t.getAttribute("style");
 				sipLogger.finer(request, "style=" + ts);
 

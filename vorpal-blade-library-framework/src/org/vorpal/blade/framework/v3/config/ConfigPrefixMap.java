@@ -1,6 +1,9 @@
 package org.vorpal.blade.framework.v3.config;
 
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 import javax.servlet.sip.SipServletRequest;
 
@@ -11,19 +14,25 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ConfigPrefixMap<T> extends TranslationsMap<T> {
+public class ConfigPrefixMap<T> extends HashMap<String, Translation<T>> implements TranslationsMap<T> {
+	private static final long serialVersionUID = 1L;
 
-	Logger sipLogger = SettingsManager.getSipLogger();
+	static Logger sipLogger = SettingsManager.getSipLogger();
 
-	public HashMap<String, Translation<T>> map = new HashMap<>();
-
-	public int size() {
-		return map.size();
+//	private List<String> selectors = new LinkedList<>();
+	private Map<String, AttributeSelector> selectorMap = new HashMap<>();
+	
+	@Override
+	public void addSelector(String id, AttributeSelector sel) {
+		selectors.add(id);
+		this.selectorMap.put(id, sel);
 	}
+	
+
 
 	public Translation<T> createTranslation(String key) {
 		Translation<T> t = new Translation<>();
-		map.put(key, t);
+		this.put(key, t);
 		return t;
 	}
 
@@ -31,10 +40,13 @@ public class ConfigPrefixMap<T> extends TranslationsMap<T> {
 	public Translation<T> lookup(SipServletRequest request) {
 		Translation<T> value = null;
 
+		if (sipLogger == null)
+			sipLogger = SettingsManager.getSipLogger();
+
 		try {
 			AttributesKey regexRoute = null;
 
-			for (AttributeSelector selector : this.selectors) {
+			for (AttributeSelector selector : selectorMap.values()) {
 
 				regexRoute = selector.findKey(request);
 
@@ -46,7 +58,7 @@ public class ConfigPrefixMap<T> extends TranslationsMap<T> {
 
 						sipLogger.finer(request, "prefix=" + substring);
 
-						value = map.get(substring);
+						value = this.get(substring);
 						if (value != null) {
 							break;
 						}
@@ -75,5 +87,7 @@ public class ConfigPrefixMap<T> extends TranslationsMap<T> {
 
 		return value;
 	}
+
+
 
 }
