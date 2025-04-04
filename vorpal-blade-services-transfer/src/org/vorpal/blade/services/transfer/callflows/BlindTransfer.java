@@ -204,12 +204,16 @@ public class BlindTransfer extends Transfer {
 			transferListener.transferInitiated(targetRequest);
 
 			// Force Referred-By, ignore preserveReferHeaders
+			this.targetRequest.removeHeader("Referred-By");
 			String referredBy = referRequest.getHeader("Referred-By");
+			
 			if (referredBy != null) {
 				this.targetRequest.setHeader("Referred-By", referredBy);
-			} else {
-				this.targetRequest.setHeader("Referred-By", intialInvite.getHeader("To"));
 			}
+			
+//			else {
+//				this.targetRequest.setHeader("Referred-By", intialInvite.getHeader("To"));
+//			}
 
 			sendRequest(targetRequest, (targetResponse) -> {
 
