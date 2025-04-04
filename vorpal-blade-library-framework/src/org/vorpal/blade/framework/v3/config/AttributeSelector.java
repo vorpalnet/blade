@@ -20,17 +20,14 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 //public class AttributeSelector extends Selector{
+@JsonPropertyOrder({ "id", "description", "attribute", "pattern", "expression", "dialog", "additionalExpressions" })
 public class AttributeSelector implements Serializable {
-
-//	private String id; // optional for JSON references
-//	private String description; // optional for human readable descriptions
-//	private String attribute; // location of the key data, like in the 'To' header
-//	private Pattern _pattern; // regular expression using capturing groups to parse the key data
-//	private String expression; // replacement pattern, like $1 to format the key data
+	private static final long serialVersionUID = 1L;
 
 	public enum DialogType {
 		origin, destination
@@ -45,12 +42,14 @@ public class AttributeSelector implements Serializable {
 	private Map<String, String> additionalExpressions;
 
 	public DialogType getDialog() {
+//
+//		if (dialog == null) {
+//			return DialogType.origin;
+//		} else {
+//			return dialog;
+//		}
 
-		if (dialog == null) {
-			return DialogType.origin;
-		} else {
-			return dialog;
-		}
+		return dialog;
 	}
 
 	@JsonPropertyDescription("apply SipSession attributes to either origin or destination dialog")
