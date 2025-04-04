@@ -206,11 +206,11 @@ public class BlindTransfer extends Transfer {
 			// Force Referred-By, ignore preserveReferHeaders
 			this.targetRequest.removeHeader("Referred-By");
 			String referredBy = referRequest.getHeader("Referred-By");
-			
+
 			if (referredBy != null) {
 				this.targetRequest.setHeader("Referred-By", referredBy);
 			}
-			
+
 //			else {
 //				this.targetRequest.setHeader("Referred-By", intialInvite.getHeader("To"));
 //			}
@@ -243,9 +243,10 @@ public class BlindTransfer extends Transfer {
 						sipLogger.finer(transfereeResponse, "sendRequest(transfereeResponse.createAck());");
 						sendRequest(transfereeResponse.createAck());
 
-						sipLogger.finer(transfereeResponse,
-								"sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));");
-						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
+						SipServletRequest targetAck = targetResponse.createAck();
+						copyContent(transfereeResponse, targetAck);
+						sipLogger.finer(targetAck, "Sending ACK with SDP\n" + targetAck.toString());
+						sendRequest(targetAck);
 
 						sipLogger.finer(transfereeResponse, "sendNotify=" + sendNotify);
 
