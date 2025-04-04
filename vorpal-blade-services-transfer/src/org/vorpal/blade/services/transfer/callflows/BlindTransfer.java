@@ -170,6 +170,13 @@ public class BlindTransfer extends Transfer {
 			// Second, copy any specified REFER headers (for this request)
 			preserveReferHeaders(referRequest, this.targetRequest);
 
+			String referredBy = referRequest.getHeader("Referred-By");
+			if (referredBy != null) {
+				this.targetRequest.setHeader("Referred-By", referredBy);
+			} else {
+				this.targetRequest.setHeader("Referred-By", intialInvite.getHeader("To"));
+			}
+
 			// Third, copy any specified REFER headers (for the original REFER which may or
 			// may not be the same thing as #2)
 			SipServletRequest intialRefer = (SipServletRequest) referRequest.getApplicationSession()
