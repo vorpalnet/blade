@@ -387,8 +387,26 @@ console.log("generateForm... selectedTab="+selectedTab);
 
 		<div class="navbar-collapse collapse" id="navbar-third">
 
-<!-- jwm, footer goes here -->
+			<!-- 	
+			<span class="navbar-text"> © 2015 - 2018. <a href="#">Limitless Web App Kit</a> by <a href="https://themeforest.net/user/Kopyov" target="_blank">Eugene
+					Kopyov</a>
+			</span>
+ -->
 
+			<ul class="navbar-nav ml-lg-auto">
+				<li class="nav-item"><a href="#" class="navbar-nav-link">Help center</a></li>
+				<li class="nav-item"><a href="#" class="navbar-nav-link">Policy</a></li>
+				<li class="nav-item"><a href="#" class="navbar-nav-link font-weight-semibold">Upgrade your account</a></li>
+				<li class="nav-item dropup"><a href="#" class="navbar-nav-link" data-toggle="dropdown"> <i class="icon-share4 d-none d-lg-inline-block"></i> <span
+						class="d-lg-none">Share</span>
+				</a>
+
+					<div class="dropdown-menu dropdown-menu-right">
+						<a href="#" class="dropdown-item"><i class="icon-dribbble3"></i> Dribbble</a> <a href="#" class="dropdown-item"><i class="icon-pinterest2"></i>
+							Pinterest</a> <a href="#" class="dropdown-item"><i class="icon-github"></i> Github</a> <a href="#" class="dropdown-item"><i class="icon-stackoverflow"></i>
+							Stack Overflow</a>
+					</div></li>
+			</ul>
 		</div>
 	</div>
 	<!-- /footer -->

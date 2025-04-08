@@ -315,16 +315,4 @@ public class LogParameters implements Serializable {
 		return parseLoggingLevel(this.getLoggingLevel());
 	}
 
-	public static void main(String args[]) throws ParseException {
-		System.out.println("1 = " + Configuration.parseHRNumberAsInt("1"));
-		System.out.println("1KiB = " + Configuration.parseHRNumberAsInt("1KiB"));
-		System.out.println("1KB = " + Configuration.parseHRNumberAsInt("1KB"));
-		System.out.println("1MiB = " + Configuration.parseHRNumberAsInt("1MiB"));
-		System.out.println("1MB = " + Configuration.parseHRNumberAsInt("1MB"));
-		System.out.println("1GiB = " + Configuration.parseHRNumberAsInt("1GiB"));
-		System.out.println("1GB = " + Configuration.parseHRNumberAsInt("1GB"));
-		System.out.println("1.5GB = " + Configuration.parseHRNumberAsInt("1.5GB"));
-
-	}
-
 }

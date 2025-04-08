@@ -13,8 +13,6 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
-import javax.servlet.sip.Proxy;
-import javax.servlet.sip.ProxyBranch;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
@@ -33,12 +31,12 @@ import javax.servlet.sip.URI;
 import org.vorpal.blade.framework.v2.callflow.Callback;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Callflow481;
+import org.vorpal.blade.framework.v2.config.AttributeSelector;
+import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
-import org.vorpal.blade.framework.v3.config.AttributeSelector;
-import org.vorpal.blade.framework.v3.config.AttributesKey;
 
 /**
  * This abstract SipServlet is designed to implement the features of the BLADE
