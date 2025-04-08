@@ -60,10 +60,10 @@ public class CRSTest extends ClientCallflow {
 				"\"attachedData\" : {" + //
 				"  \"treatmentArray\" : [ \"musicOnHold1.wav\", \"musicOnHold2.wav\" ]," + //
 				"  \"cacheANI\" : false," + //
-				"  \"defaultDestination\" : \"1969939702\"," + //
+				"  \"defaultDestination\" : \"1969939002\"," + //
 				"  \"emergencyMessage\" : \"emergency.wav\"" + //
 				"}," + //
-				"\"destination\" : \"1969939702\"," + //
+				"\"destination\" : \"1969939001\"," + //
 				"\"source\" : \"8558293911\"," + //
 				"\"statusMessage\" : \"Tfn classification completed...\"," + //
 				"\"useCacheasPrimary\" : false," + //
