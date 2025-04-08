@@ -1436,26 +1436,4 @@ public abstract class Callflow implements Serializable {
 		Callflow.sessionParameters = sessionParameters;
 	}
 
-	/**
-	 * Used for testing, this method prints the hash-codes system headers.
-	 * 
-	 * @param args none required
-	 */
-	public static void main(String[] args) {
-		System.out.println("Hashcodes of system headers include: ");
-		System.out.println("\tTo: " + "To".hashCode());
-		System.out.println("\tFrom: " + "From".hashCode());
-		System.out.println("\tVia: " + "Via".hashCode());
-		System.out.println("\tCall-ID: " + "Call-ID".hashCode());
-		System.out.println("\tContact: " + "Contact".hashCode());
-		System.out.println("\tContent-Length: " + "Content-Length".hashCode());
-		System.out.println("\tCSeq: " + "CSeq".hashCode());
-		System.out.println("\tMax-Forwards: " + "Max-Forwards".hashCode());
-		System.out.println("\tContent-Type: " + "Content-Type".hashCode());
-		System.out.println("\tRecord-Route: " + "Record-Route".hashCode());
-		System.out.println("\tRoute: " + "Route".hashCode());
-		System.out.println("\tRSeq: " + "RSeq".hashCode());
-		System.out.println("\tRAck: " + "RAck".hashCode());
-	}
-
 }

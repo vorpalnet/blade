@@ -3,8 +3,6 @@ package org.vorpal.blade.framework.v2.config;
 import java.io.Serializable;
 import java.util.LinkedList;
 
-import org.vorpal.blade.framework.v3.config.AttributeSelector;
-
 
 
 public class SessionParametersDefault extends SessionParameters implements Serializable {

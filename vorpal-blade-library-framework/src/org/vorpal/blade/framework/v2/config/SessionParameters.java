@@ -3,8 +3,6 @@ package org.vorpal.blade.framework.v2.config;
 import java.io.Serializable;
 import java.util.List;
 
-import org.vorpal.blade.framework.v3.config.AttributeSelector;
-
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 public class SessionParameters implements Serializable {
