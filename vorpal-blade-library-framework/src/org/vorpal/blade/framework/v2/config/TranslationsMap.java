@@ -61,7 +61,7 @@ public abstract class TranslationsMap {
 
 			} else {
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(request, this.getClass().getName() + " found no translation.");
+					sipLogger.finer(request, this.getClass().getSimpleName() + " found no translation.");
 				}
 			}
 

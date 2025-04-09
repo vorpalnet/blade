@@ -233,22 +233,16 @@ public class BlindTransfer extends Transfer {
 					copyContent(targetResponse, transfereeRequest);
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
 
-						sipLogger.finer(transfereeResponse,
-								"transfereeResponse status=" + transfereeResponse.getStatus());
+						// sipLogger.finer(transfereeResponse, "transfereeResponse status=" + transfereeResponse.getStatus());
 
-						sipLogger.finer(transfereeResponse,
-								"linkSessions(transfereeRequest.getSession(), targetResponse.getSession());");
+						// sipLogger.finer(transfereeResponse, "linkSessions(transfereeRequest.getSession(), targetResponse.getSession());");
 						linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
 
-						sipLogger.finer(transfereeResponse, "sendRequest(transfereeResponse.createAck());");
+						// sipLogger.finer(transfereeResponse, "sendRequest(transfereeResponse.createAck());");
 						sendRequest(transfereeResponse.createAck());
+						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
 
-						SipServletRequest targetAck = targetResponse.createAck();
-						copyContent(transfereeResponse, targetAck);
-						sipLogger.finer(targetAck, "Sending ACK with SDP\n" + targetAck.toString());
-						sendRequest(targetAck);
-
-						sipLogger.finer(transfereeResponse, "sendNotify=" + sendNotify);
+						// sipLogger.finer(transfereeResponse, "sendNotify=" + sendNotify);
 
 						// Send the SIP/2.0 200 OK to the transferor (bob)
 						if (sendNotify) {
@@ -259,19 +253,19 @@ public class BlindTransfer extends Transfer {
 									+ targetResponse.getReasonPhrase();
 							notify200.setContent(sipFrag.getBytes(), SIPFRAG);
 
-							sipLogger.finer(notify200, "sending notify... " + sipFrag);
+							// sipLogger.finer(notify200, "sending notify... " + sipFrag);
 
 							sendRequest(notify200);
 						} else {
-							sipLogger.finer(referRequest, "sending BYE... referRequest.getSession() is null? "
-									+ (referRequest.getSession() == null));
-							sipLogger.finer(referRequest,
-									"sending BYE... Using session id=" + referRequest.getSession().getId());
+//							sipLogger.finer(referRequest, "sending BYE... referRequest.getSession() is null? "
+//									+ (referRequest.getSession() == null));
+//							sipLogger.finer(referRequest,
+//									"sending BYE... Using session id=" + referRequest.getSession().getId());
 
-							sipLogger.finer(referRequest, "sending BYE...");
+							// sipLogger.finer(referRequest, "sending BYE...");
 							// Send a BYE to transferor (bob)
 							sendRequest(referRequest.getSession().createRequest(BYE));
-							sipLogger.finer(referRequest, "BYE Sent.");
+							// sipLogger.finer(referRequest, "BYE Sent.");
 						}
 
 						// User is notified of a successful transfer
