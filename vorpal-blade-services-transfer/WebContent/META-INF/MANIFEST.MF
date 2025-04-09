@@ -1,3 +1,8 @@
 Manifest-Version: 1.0
-Class-Path: 
-
+Ant-Version: Apache Ant 1.10.12
+Created-By: 11.0.25+9-LTS-256 (Oracle Corporation)
+Copyright: Copyright 2024 Vorpal Networks, LLC. All Rights Reserved.
+License: MIT License; Without warranty or liability of any kind.
+Built-By: jeff
+Implementation-Build-Date: April 8 2025
+Weblogic-Application-Version: 2.x-dev
