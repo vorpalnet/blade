@@ -2,6 +2,7 @@ package org.vorpal.blade.framework.v2.config;
 
 import java.io.Serializable;
 import java.util.LinkedList;
+import java.util.logging.Level;
 
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
@@ -71,10 +72,10 @@ public class RouterConfig extends Configuration implements Serializable {
 		Logger sipLogger = SettingsManager.getSipLogger();
 		Translation t = null;
 
-		sipLogger.finer(request, "Translation.findTranslation() searching maps size: " + plan.size());
+//		sipLogger.finer(request, "Translation.findTranslation() searching maps size: " + plan.size());
 
 		for (TranslationsMap map : plan) {
-			sipLogger.finer(request, "Translation.findTranslation() searching map: " + map.getId());
+//			sipLogger.finer(request, "Translation.findTranslation() searching map: " + map.getId());
 			t = map.applyTranslations(request);
 			if (t != null) {
 				break;
@@ -82,14 +83,32 @@ public class RouterConfig extends Configuration implements Serializable {
 		}
 
 		if (t != null) {
-			sipLogger.finer(request, "Found translation id: " + t.getId() + //
-					", desc: " + t.getDescription() + //
-					", route-group: " + t.getAttribute("route-group"));
+
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(request, "Found translation id=" + t.getId() + //
+						", desc=" + t.getDescription() + //
+						", ruri=" + t.getRequestUri() + //
+						", attributes=" + t.getAttributes());
+			}
+
 		} else {
-			sipLogger.finer(request, "No match found, using default.");
+			t = defaultRoute;
+			if (t != null) {
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request,
+							"No translation found, using defaultRoute in config file. id=" + t.getId() + //
+									", desc=" + t.getDescription() + //
+									", ruri=" + t.getRequestUri() + //
+									", attributes=" + t.getAttributes());
+				}
+			} else {
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "No translation found, returning null.");
+				}
+			}
 		}
 
-		return (null != t) ? t : defaultRoute;
+		return t;
 	}
 
 	public URI findRoute(SipServletRequest request) throws ServletParseException {

@@ -368,11 +368,11 @@ public class SettingsManager<T> {
 			NotCompliantMBeanException, JsonGenerationException, JsonMappingException, InstantiationException,
 			IllegalAccessException, IOException, ServletParseException {
 
-		sipLogger.fine("Registering MBean: " + objectName.toString());
+//		sipLogger.fine("Registering MBean: " + objectName.toString());
 		oi = server.registerMBean(settings, objectName);
 		// what is this for?
 		objectName = oi.getObjectName();
-		sipLogger.fine("object name is now: " + objectName.toString());
+//		sipLogger.fine("object name is now: " + objectName.toString());
 
 	}
 

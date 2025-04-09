@@ -4,12 +4,8 @@ import java.util.HashMap;
 
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.logging.Logger;
-
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-//@JsonTypeInfo(use=JsonTypeInfo.Id.NAME, include=JsonTypeInfo.As.PROPERTY, property="@type")
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@type")
 
 public class ConfigHashMap extends TranslationsMap {
@@ -24,19 +20,19 @@ public class ConfigHashMap extends TranslationsMap {
 	public Translation lookup(SipServletRequest request) {
 		Translation value = null;
 
-		Logger sipLogger = Callflow.getSipLogger();
+//		Logger sipLogger = Callflow.getSipLogger();
 
 		try {
 			for (Selector selector : this.selectors) {
 
-				sipLogger.finer("selector.id=" + selector.getId());
+//				sipLogger.finer("selector.id=" + selector.getId());
 
 				RegExRoute regexRoute = selector.findKey(request);
 
 				if (regexRoute != null) {
-					sipLogger.finer("regexRoute header=" + regexRoute.header + ", key=" + regexRoute.key);
+//					sipLogger.finer("regexRoute header=" + regexRoute.header + ", key=" + regexRoute.key);
 					value = map.get(regexRoute.key);
-					sipLogger.finer("value=" + value);
+//					sipLogger.finer("value=" + value);
 				}
 
 				if (value != null) {

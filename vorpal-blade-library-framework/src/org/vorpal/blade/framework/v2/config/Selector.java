@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
-@JsonPropertyOrder({"id", "description", "attribute", "pattern", "expression"})
+@JsonPropertyOrder({ "id", "description", "attribute", "pattern", "expression" })
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Selector {
 	protected String id; // optional for JSON references
@@ -99,10 +99,11 @@ public class Selector {
 			// jwm - find named groups, useful later
 			Map<String, String> namedGroups = new HashMap<>();
 
-			sipLogger.finer(request, "attribute=" + attribute);
+//			sipLogger.finer(request, "attribute=" + attribute);
 
 			switch (attribute) {
 			case "Content":
+			case "content":
 				header = "";
 				try {
 					if (request.getContent() != null) {
@@ -122,10 +123,12 @@ public class Selector {
 				break;
 
 			case "Request-URI":
+			case "requestURI":
 				header = request.getRequestURI().toString();
 				break;
 
 			case "Remote-IP":
+			case "remoteIP":
 				header = request.getRemoteAddr();
 
 				if (header == null) { // test case only
@@ -137,7 +140,7 @@ public class Selector {
 				header = request.getHeader(attribute);
 			}
 
-			sipLogger.finer(request, "header=" + header);
+//			sipLogger.finer(request, "header=" + header);
 
 			if (header != null) {
 
@@ -145,12 +148,12 @@ public class Selector {
 
 				value = (attribute.matches("Content")) ? "[...]" : header;
 
-				sipLogger.finer(request, "value=" + value);
+//				sipLogger.finer(request, "value=" + value);
 
 				if (matcher.matches()) {
 					matchResult = true;
 					key = matcher.replaceAll(expression);
-					sipLogger.finer(request, "key=" + key);
+//					sipLogger.finer(request, "key=" + key);
 				}
 
 				if (key != null) {
@@ -183,10 +186,6 @@ public class Selector {
 							a__value = a__matcher.group(a__name);
 							if (a__value != null && a__value.length() > 0) {
 								regexRoute.attributes.put(a__name, a__value);
-
-								sipLogger.finer(request,
-										"regexRoute.attributes name=" + a__name + ", value=" + a__value);
-
 							}
 						}
 					}
@@ -194,21 +193,11 @@ public class Selector {
 				}
 
 				if (sipLogger.isLoggable(Level.FINER)) {
-					if (matchResult == true) {
-						sipLogger.finer(request, "Pattern match found, Selector id=" + this.getId() + //
-								", attribute=" + this.getAttribute() + //
-								", value=" + value + //
-								", matchResult=" + matchResult + //
-								", key=" + key);
-					} else {
-						sipLogger.finer(request, "No pattern match found, Selector id=" + this.getId() + //
-								", attribute=" + this.getAttribute() + //
-								", value=" + value + //
-								", matchResult=" + matchResult + //
-								", key=" + key + //
-								", pattern=" + this.getPattern() + //
-								", expression=" + this.getExpression());
-					}
+					sipLogger.finer(request, "Selector id=" + this.getId() + //
+							", attribute=" + this.getAttribute() + //
+							", value=" + value + //
+							", matchResult=" + matchResult + //
+							", key=" + key);
 				}
 
 			} else {
