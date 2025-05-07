@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE project>
+<project basedir="." default="build" name="vorpal-blade-services-hold">
+
+	<!-- Define unique locations first -->
+	<property name="src" location="src/main/java" />
+	<property name="webapp" location="src/main/webapp" />
+	
+	<!-- Load environment variables -->	
+	<property environment="env" />
+	<property environment="envvar" />
+	<exec executable="hostname" outputproperty="computer.hostname" />
+	<property file="../${computer.hostname}.properties" />
+	<property file="../build.properties" />
+	<property file="../version.properties" />
+
+	<!-- Import default locations and tasks -->
+	<import file="../libraries.xml" />
+
+</project>
