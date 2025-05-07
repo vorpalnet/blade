@@ -25,6 +25,10 @@ import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.bea.wcp.sip.engine.server.SipFactoryImpl;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 
 public class ProxyRouterConfigSample extends RouterConfig implements Serializable {
 
@@ -34,6 +38,10 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LoggingLevel.FINER);
 		this.session = null;
+
+//		this.defaultRoute = new Translation();
+//		this.defaultRoute.setId("default");
+//		this.defaultRoute.setRequestUri("sips:+110006@cvsxm-stg-occas.byoc.mypurecloud.com:5061;transport=tls");
 
 		Selector caller = new Selector("caller", "From", SIP_ADDRESS_PATTERN, "${user}");
 		caller.setDescription("caller's number");
@@ -72,7 +80,8 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		List<TranslationsMap> c1Maps = new LinkedList<>();
 		TranslationsMap c1PrefixMap = new ConfigPrefixMap();
 		c1PrefixMap.addSelector(dialed);
-		c1PrefixMap.createTranslation("1913").setId("1913").setRequestUri("sip:voicemail913").setDescription("for (913) area code");
+		c1PrefixMap.createTranslation("1913").setId("1913").setRequestUri("sip:voicemail913")
+				.setDescription("for (913) area code");
 		c1PrefixMap.createTranslation("1913555").setId("1913555").setRequestUri("sip:voicemail913555")
 				.setDescription("for (913) 555 NPA");
 		c1PrefixMap.createTranslation("19135550001").setId("19135550001").setRequestUri("sip:voicemail9130001")
@@ -96,7 +105,18 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 
 	}
 
-	public static void main(String[] args) throws ServletParseException {
+	public static void main(String[] args) throws ServletParseException, JsonProcessingException {
+
+		RouterConfig configuration = new ProxyRouterConfigSample();
+		ObjectMapper mapper = new ObjectMapper();
+		mapper.setSerializationInclusion(Include.NON_NULL);
+		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+		String output = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(configuration);
+		System.out.println(output);
+
+	}
+
+	public static void main2(String[] args) throws ServletParseException {
 
 		SipFactory sipFactory = new SipFactoryImpl(null, null);
 		Callflow.setSipFactory(sipFactory);

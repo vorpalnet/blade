@@ -22,5 +22,5 @@
 	<classpathentry kind="var" path="WLSERVER/sip/server/lib/sipservlet-api.jar"/>
 	<classpathentry kind="var" path="WLSERVER/sip/server/lib/wlss.jar"/>
 	<classpathentry kind="var" path="WLSERVER/sip/server/lib/wlssapi.jar"/>
-	<classpathentry kind="output" path="build/classes"/>
+	<classpathentry kind="output" path="WebContent/WEB-INF/classes"/>
 </classpath>
