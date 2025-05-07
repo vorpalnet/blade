@@ -1,0 +1,1 @@
+package org.vorpal.blade.services.proxy.block.optimized;

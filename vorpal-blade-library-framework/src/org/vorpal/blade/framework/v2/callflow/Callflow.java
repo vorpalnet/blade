@@ -1307,6 +1307,7 @@ public abstract class Callflow implements Serializable {
 	 * @return the update URI
 	 * @throws ServletParseException
 	 */
+
 	public static URI copyParameters(URI from, URI to) throws ServletParseException {
 		SipURI sipFrom = (SipURI) from;
 		SipURI sipTo = (SipURI) to;
@@ -1319,8 +1320,8 @@ public abstract class Callflow implements Serializable {
 		// copy URI parameters (if they don't exist)
 		String value;
 		for (String name : from.getParameterNameSet()) {
-			value = to.getParameter(name);
-			if (value != null && false == value.equals("tag")) { // occas will take care of tag
+			value = from.getParameter(name);
+			if (value != null && to.getParameter(name) != null && name.equals("tag") == false) {
 				to.setParameter(name, value);
 			}
 		}
@@ -1343,7 +1344,8 @@ public abstract class Callflow implements Serializable {
 
 		String value;
 		for (String name : from.getParameterNameSet()) {
-			if (null == (value = to.getParameter(name))) {
+			value = from.getParameter(name);
+			if (value != null && to.getParameter(name) != null && name.equals("tag") == false) {
 				to.setParameter(name, value);
 			}
 		}
