@@ -6,9 +6,9 @@ import java.util.logging.Level;
 
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 public class RouterConfig extends Configuration implements Serializable {
@@ -43,29 +43,17 @@ public class RouterConfig extends Configuration implements Serializable {
 //	}
 
 	public static URI applyParameters(Translation t, SipServletRequest request) throws ServletParseException {
-		URI uri = null;
+		URI to = null;
+		URI from;
 
 		if (t != null && t.getRequestUri() != null) {
+			to = SettingsManager.sipFactory.createURI(t.getRequestUri());
+			from = request.getRequestURI();
 
-			uri = SettingsManager.sipFactory.createURI(t.getRequestUri());
-
-			// copy the 'user' if necessary
-			SipURI tSipUri = (SipURI) uri;
-			SipURI rSipUri = (SipURI) request.getRequestURI();
-			if (tSipUri.getUser() == null && rSipUri.getUser() != null) {
-				tSipUri.setUser(rSipUri.getUser());
-			}
-
-			// copy all SIP URI parameters (if not already present in new request URI)
-			for (String name : request.getRequestURI().getParameterNameSet()) {
-				if (uri.getParameter(name) == null) {
-					uri.setParameter(name, uri.getParameter(name));
-				}
-			}
-
+			Callflow.copyParameters(from, to);
 		}
 
-		return uri;
+		return to;
 	}
 
 	public Translation findTranslation(SipServletRequest request) throws ServletParseException {

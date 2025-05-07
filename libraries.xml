@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project basedir="." name="common-libraries">
-    <tstamp/>
-    <property file="../build.properties" />
-    <property file="../build.number" />
-    <property name="build" location="./build" />
+	<tstamp />
+	<property file="../build.properties" />
+	<property file="../build.number" />
+	<property name="build" location="./build" />
 	<property name="debug" value="true" />
 	<property name="debuglevel" value="source,lines,vars" />
 	<property name="includeantruntime" value="false" />
@@ -14,18 +14,18 @@
 	<property name="umldoclet" location="${BLADE}/lib/umldoclet-2.1.2.jar" />
 	<property name="plantuml" location="${BLADE}/lib/plantuml-1.2025.2.jar" />
 	<property name="packagenames" value="org.vorpal.*" />
-    <property name="dist" location="../dist/${implementation}.${build.number}" />
+	<property name="dist" location="../dist/${implementation}.${build.number}" />
 	<property name="webapp" location="src/main/webapp" />
 	<property name="framework" location="${BLADE}/vorpal-blade-library-framework/build/vorpal-blade-library-framework.jar" />
-    <property name="docs" location="${dist}/docs" />
-    
-    <path id="Web App Libraries.libraryclasspath">
+	<property name="docs" location="${dist}/docs" />
+
+	<path id="Web App Libraries.libraryclasspath">
 		<fileset dir="${webapp}/WEB-INF/lib">
 			<filename name="**/*.jar" />
 		</fileset>
 	</path>
 
-    <echo message="Looking for: ${framework}" />
+	<echo message="Looking for: ${framework}" />
 	<path id="vorpal-blade.classpath">
 		<fileset dir="${BLADE}/vorpal-blade-shared-libraries/target/dependency">
 			<include name="**/*.jar" />
@@ -676,10 +676,10 @@
 	</target>
 
 	<target name="init">
-        <mkdir dir="${dist}" />
-        <mkdir dir="${classes}" />
+		<mkdir dir="${dist}" />
+		<mkdir dir="${classes}" />
 		<mkdir dir="${webapp}/WEB-INF/lib" />
-        <mkdir dir=".apt_src" />
+		<mkdir dir=".apt_src" />
 
 		<copy includeemptydirs="false" todir="${classes}">
 			<fileset dir="${src}">
@@ -696,8 +696,12 @@
 	</target>
 
 	<target name="clean">
+		<!-- delete any ANT generated stuff -->
 		<delete dir="${build}" />
+		<!-- delete any Maven generated stuff -->
 		<delete dir="target" />
+		<!-- delete any Eclipse generated classes -->
+		<delete dir="${webapp}/WEB-INF/classes" />
 	</target>
 
 	<target depends="clean" name="clean-all" />
@@ -734,52 +738,55 @@
 			<fileset dir="${classes}" />
 			<fileset dir="${src}" includes="**/*.java" />
 		</jar>
-        <echo message="jar, copying ${build}/${ant.project.name}.jar to ${dist}" />
+		<echo message="jar, copying ${build}/${ant.project.name}.jar to ${dist}" />
 		<copy file="${build}/${ant.project.name}.jar" todir="${dist}" />
 	</target>
 
 	<target name="war" depends="compile">
 		<mkdir dir="${build}/lib" />
-        <echo message="war, copying ${framework} to ${build}/lib" />
+		<echo message="war, copying ${framework} to ${build}/lib" />
 		<copy file="${framework}" todir="${build}/lib" />
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
+
+			<!-- version number is important for upgrades -->
 			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
+			
 		</manifest>
 		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}">
 			<lib dir="${build}/lib" />
 			<classes dir="${classes}" />
 			<classes dir="${src}" />
 		</war>
-        <echo message="war, copying ${build}/${ant.project.name}.war to ${dist}" />
+		<echo message="war, copying ${build}/${ant.project.name}.war to ${dist}" />
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>
-	
-	
-	<taskdef name="plantuml" classname="net.sourceforge.plantuml.ant.PlantUmlTask" classpath="${plantuml}" />
-	
 
-	
+
+	<taskdef name="plantuml" classname="net.sourceforge.plantuml.ant.PlantUmlTask" classpath="${plantuml}" />
+
+
+
 	<target name="javadoc">
-        <echo message="javadoc, creating directory: ${docs}/${ant.project.name}"/>
-		
-		
+		<echo message="javadoc, creating directory: ${docs}/${ant.project.name}" />
+
+
 		<!-- mkdir dir="${docs}/${ant.project.name}" / -->
-		
+
 		<mkdir dir="${docs}/${ant.project.name}/images" />
 
 		<!-- plantuml dir="${src}" format="svg" output="${docs}/${ant.project.name}/images" /-->
 		<plantuml>
 			<fileset dir="${src}">
 				<filename name="**/*.java" />
-			</fileset>	
+			</fileset>
 		</plantuml>
-		
-		
-<!--
+
+
+		<!--
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="${BLADE}/lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
 -->
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
@@ -792,13 +799,13 @@
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 			<classpath refid="project.classpath" />
 
-<!--			
+			<!--			
 			<header>
 				<![CDATA[<a href="/index.html">
 				<img src="/assets/images/vorpal-logo.png" alt="Home" style="height:80px">
 				</a>]]></header>
 -->
-			
+
 			<doctitle>
 				<![CDATA[<div>${ant.project.name} - v${implementation}.${build.number}</div>]]>
 			</doctitle>
