@@ -233,12 +233,16 @@ public class BlindTransfer extends Transfer {
 					copyContent(targetResponse, transfereeRequest);
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
 
-						// sipLogger.finer(transfereeResponse, "transfereeResponse status=" + transfereeResponse.getStatus());
+						// sipLogger.finer(transfereeResponse, "transfereeResponse status=" +
+						// transfereeResponse.getStatus());
 
-						// sipLogger.finer(transfereeResponse, "linkSessions(transfereeRequest.getSession(), targetResponse.getSession());");
+						// sipLogger.finer(transfereeResponse,
+						// "linkSessions(transfereeRequest.getSession(),
+						// targetResponse.getSession());");
 						linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
 
-						// sipLogger.finer(transfereeResponse, "sendRequest(transfereeResponse.createAck());");
+						// sipLogger.finer(transfereeResponse,
+						// "sendRequest(transfereeResponse.createAck());");
 						sendRequest(transfereeResponse.createAck());
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
 
@@ -290,6 +294,11 @@ public class BlindTransfer extends Transfer {
 							notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=giveup");
 							notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
 							sendRequest(notifyFailure);
+						} else {
+							// jwm - 2025-05-14, we have to manually hang up on Bob.
+							sendRequest(transferorRequest.getSession().createRequest(BYE), (bobByeResponse) -> {
+								// do nothing;
+							});
 						}
 
 					} else {
