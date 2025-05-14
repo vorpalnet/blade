@@ -193,6 +193,11 @@ public class BlindTransfer extends Transfer {
 				sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
 				sendResponse(bye.createResponse(200));
 				sendRequest(targetRequest.createCancel());
+
+				if (!sendNotify) {
+					// jwm - 2025-05-14, we have to manually hang up on Bob.
+					sendRequest(transferorRequest.getSession().createRequest(BYE));
+				}
 			});
 
 			Expectation bobExpectation = expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
@@ -211,10 +216,6 @@ public class BlindTransfer extends Transfer {
 				this.targetRequest.setHeader("Referred-By", referredBy);
 			}
 
-//			else {
-//				this.targetRequest.setHeader("Referred-By", intialInvite.getHeader("To"));
-//			}
-
 			sendRequest(targetRequest, (targetResponse) -> {
 
 				sipLogger.finer(targetResponse, "targetResponse status=" + targetResponse.getStatus());
@@ -232,21 +233,9 @@ public class BlindTransfer extends Transfer {
 
 					copyContent(targetResponse, transfereeRequest);
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
-
-						// sipLogger.finer(transfereeResponse, "transfereeResponse status=" +
-						// transfereeResponse.getStatus());
-
-						// sipLogger.finer(transfereeResponse,
-						// "linkSessions(transfereeRequest.getSession(),
-						// targetResponse.getSession());");
 						linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
-
-						// sipLogger.finer(transfereeResponse,
-						// "sendRequest(transfereeResponse.createAck());");
 						sendRequest(transfereeResponse.createAck());
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
-
-						// sipLogger.finer(transfereeResponse, "sendNotify=" + sendNotify);
 
 						// Send the SIP/2.0 200 OK to the transferor (bob)
 						if (sendNotify) {
@@ -257,19 +246,10 @@ public class BlindTransfer extends Transfer {
 									+ targetResponse.getReasonPhrase();
 							notify200.setContent(sipFrag.getBytes(), SIPFRAG);
 
-							// sipLogger.finer(notify200, "sending notify... " + sipFrag);
-
 							sendRequest(notify200);
 						} else {
-//							sipLogger.finer(referRequest, "sending BYE... referRequest.getSession() is null? "
-//									+ (referRequest.getSession() == null));
-//							sipLogger.finer(referRequest,
-//									"sending BYE... Using session id=" + referRequest.getSession().getId());
-
-							// sipLogger.finer(referRequest, "sending BYE...");
 							// Send a BYE to transferor (bob)
 							sendRequest(referRequest.getSession().createRequest(BYE));
-							// sipLogger.finer(referRequest, "BYE Sent.");
 						}
 
 						// User is notified of a successful transfer
@@ -294,11 +274,6 @@ public class BlindTransfer extends Transfer {
 							notifyFailure.setHeader(SUBSCRIPTION_STATE, "terminated;reason=giveup");
 							notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
 							sendRequest(notifyFailure);
-						} else {
-							// jwm - 2025-05-14, we have to manually hang up on Bob.
-							sendRequest(transferorRequest.getSession().createRequest(BYE), (bobByeResponse) -> {
-								// do nothing;
-							});
 						}
 
 					} else {
