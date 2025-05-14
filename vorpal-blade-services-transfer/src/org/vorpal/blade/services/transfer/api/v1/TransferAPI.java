@@ -28,6 +28,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
+import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.DummyRequest;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
@@ -107,6 +108,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			@RequestBody(description = "transfer request", required = true) TransferRequest transferRequest,
 			@Context UriInfo uriInfo, @Suspended AsyncResponse asyncResponse) {
 
+		AsyncSipServlet.getSipLogger().logObjectAsJson(Level.FINEST, transferRequest);
+
 		SipApplicationSession appSession = null;
 		try {
 
@@ -120,7 +123,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				}
 			}
 
-//			sipLogger.warning("TransferAPI appSession=" + appSession);
+			sipLogger.finer("TransferAPI appSession=" + appSession);
 
 			if (appSession != null) {
 
@@ -130,8 +133,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				SipSession transfereeSession = null;
 				Address sipAddress = null;
 
-//				sipLogger.finer(transfereeSession, "TransferAPI iterating through sessions... Looking for name="
-//						+ transferRequest.dialogKey.name + ", value=" + transferRequest.dialogKey.value);
+				sipLogger.finer(transfereeSession, "TransferAPI iterating through sessions... Looking for name="
+						+ transferRequest.dialogKey.name + ", value=" + transferRequest.dialogKey.value);
 
 				for (SipSession sipSession : (Set<SipSession>) appSession.getSessionSet("SIP")) {
 
@@ -144,7 +147,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 				}
 
-//				sipLogger.warning("TransferAPI transfereeSession=" + transfereeSession);
+				sipLogger.finer("TransferAPI transfereeSession=" + transfereeSession);
 
 				if (transfereeSession != null) {
 
@@ -156,10 +159,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 					if (transferRequest.target.sipAddress != null) {
 						target = sipFactory.createAddress(transferRequest.target.sipAddress);
-//						copyParameters(transferor, target);
 					} else if (transferRequest.target.sipUri != null) {
 						target = sipFactory.createAddress("<" + transferRequest.target.sipUri + ">");
-//						copyParameters(transferee, target);
 					} else if (transferRequest.target.account != null) {
 						SipURI tmpTarget = (SipURI) sipFactory.createAddress("sip:" + transferRequest.target.account)
 								.getURI();
@@ -171,7 +172,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						((SipURI) target.getURI()).setUser(transferRequest.target.user);
 					}
 
-//					sipLogger.warning("TransferAPI target=" + target);
+					sipLogger.finer("TransferAPI target=" + target);
 
 					if (target != null) {
 						SipSession transferorSession = getLinkedSession(transfereeSession);
@@ -215,7 +216,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 							break;
 						}
 
-//						sipLogger.warning("TransferAPI callflow=" + callflow);
+						sipLogger.finest("TransferAPI callflow=" + callflow);
 
 						callflow.process(refer);
 
