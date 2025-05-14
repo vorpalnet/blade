@@ -124,9 +124,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					for (String id : appSessionIds) {
 						_appSession = sipUtil.getApplicationSessionById(id);
 						if (_appSession != null) {
-							sipLogger.finest(_appSession, "appSessionId=" + id + ", appSession=" + _appSession+", isValid="+_appSession.isValid());
-						}else {
-							sipLogger.finest("appSessionId=" + id + ", appSession=" + _appSession+", isValid=false");
+							sipLogger.finest(_appSession,
+									"appSessionId=" + id + "isNull=false, isValid=" + _appSession.isValid());
+						} else {
+							sipLogger.finest("appSessionId=" + id + "isNull=true, isValid=false");
 						}
 					}
 				}
@@ -165,8 +166,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				SipSession transfereeSession = null;
 //				Address sipAddress = null;
 
-				sipLogger.finer(appSession, "TransferAPI iterating through sessions... Looking for name="
-						+ transferRequest.dialogKey.name + ", value=" + transferRequest.dialogKey.value);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(appSession, "TransferAPI iterating through sessions... Looking for name="
+							+ transferRequest.dialogKey.name + ", value=" + transferRequest.dialogKey.value);
+				}
 
 				for (SipSession sipSession : (Set<SipSession>) appSession.getSessionSet("SIP")) {
 
@@ -178,7 +181,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 							obj = sipSession.getAttribute(name);
 							if (obj instanceof String) {
 								value = (String) obj;
-								sipLogger.finest(sipSession, "\n name=" + name + ", value=" + value);
+								sipLogger.finest(sipSession, "\t name=" + name + ", value=" + value);
 							}
 						}
 					}
