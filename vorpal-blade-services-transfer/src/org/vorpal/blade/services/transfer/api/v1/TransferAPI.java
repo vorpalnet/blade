@@ -117,10 +117,30 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 			if (transferRequest.sessionKey != null) {
 				Set<String> appSessionIds = sipUtil.getSipApplicationSessionIds(transferRequest.sessionKey);
+
+				sipLogger.finest("invoking sipUtil.getSipApplicationSessionIds(" + transferRequest.sessionKey + ");");
+				if (sipLogger.isLoggable(Level.FINEST)) {
+					SipApplicationSession _appSession;
+					for (String id : appSessionIds) {
+						_appSession = sipUtil.getApplicationSessionById(id);
+						if (_appSession != null) {
+							sipLogger.finest(_appSession, "appSessionId=" + id + ", appSession=" + _appSession+", isValid="+_appSession.isValid());
+						}else {
+							sipLogger.finest("appSessionId=" + id + ", appSession=" + _appSession+", isValid=false");
+						}
+					}
+				}
+
 				if (appSessionIds != null && appSessionIds.size() >= 1) {
 					String appSessionId = (String) appSessionIds.toArray()[0];
 					appSession = sipUtil.getApplicationSessionById(appSessionId);
-					sipLogger.finer(appSession, "TransferAPI appSession.id=" + appSession.getId());
+
+					if (appSession != null) {
+						sipLogger.finer(appSession, "TransferAPI appSession.id=" + appSession.getId());
+					} else {
+						sipLogger.warning(appSession, "TransferAPI appSession.id=" + appSession.getId());
+					}
+
 				}
 			}
 
@@ -151,7 +171,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				for (SipSession sipSession : (Set<SipSession>) appSession.getSessionSet("SIP")) {
 
 					if (sipLogger.isLoggable(Level.FINEST)) {
-						sipLogger.finest(sipSession, "sipSession.id="+sipSession.getId()+" attributes include:");
+						sipLogger.finest(sipSession, "sipSession.id=" + sipSession.getId() + " attributes include:");
 						String value;
 						Object obj;
 						for (String name : sipSession.getAttributeNameSet()) {
