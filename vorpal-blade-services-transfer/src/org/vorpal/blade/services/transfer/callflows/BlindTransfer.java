@@ -196,7 +196,10 @@ public class BlindTransfer extends Transfer {
 
 				if (!sendNotify) {
 					// jwm - 2025-05-14, we have to manually hang up on Bob.
-					sendRequest(transferorRequest.getSession().createRequest(BYE));
+					sipLogger.finest(transferorRequest, "Manually sending BYE to Bob");
+					sendRequest(transferorRequest.getSession().createRequest(BYE), (bobByeResponse) -> {
+						sipLogger.finest(bobByeResponse, "Received response from Bob for manual BYE request");
+					});
 				}
 			});
 
