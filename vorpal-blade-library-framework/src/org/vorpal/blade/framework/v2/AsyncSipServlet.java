@@ -323,8 +323,8 @@ public abstract class AsyncSipServlet extends SipServlet
 
 									// is this a repeat?
 									for (Entry<String, String> entry : rr.attributes.entrySet()) {
-										sipLogger.finest(request, "Setting sipSession attribute name="
-												+ entry.getKey() + ", value=" + entry.getValue());
+										sipLogger.finest(request, "Setting sipSession attribute name=" + entry.getKey()
+												+ ", value=" + entry.getValue());
 										appSession.setAttribute(entry.getKey(), entry.getValue());
 									}
 
@@ -358,8 +358,7 @@ public abstract class AsyncSipServlet extends SipServlet
 					}
 
 					callflow.process(request);
-					
-					
+
 					if (request.isInitial() && sessionParameters != null) {
 
 						sipLogger.finest(request, "request.isInitial() && sessionParameters != null");
@@ -375,9 +374,9 @@ public abstract class AsyncSipServlet extends SipServlet
 
 									// is this a repeat?
 									for (Entry<String, String> entry : rr.attributes.entrySet()) {
-										sipLogger.finest(request, "Setting sipSession attribute name="
-												+ entry.getKey() + ", value=" + entry.getValue());
-										sipSession.setAttribute(entry.getKey(), entry.getValue());
+										sipLogger.finest(request, "Setting appSession attribute name=" + entry.getKey()
+												+ ", value=" + entry.getValue());
+										appSession.setAttribute(entry.getKey(), entry.getValue());
 									}
 
 									if (rr.key != null) {
@@ -408,10 +407,6 @@ public abstract class AsyncSipServlet extends SipServlet
 
 						}
 					}
-
-					
-					
-					
 
 				}
 			}
