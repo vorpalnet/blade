@@ -313,7 +313,6 @@ public abstract class AsyncSipServlet extends SipServlet
 						sipLogger.finest(request, "request.isInitial() && sessionParameters != null");
 
 						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
-
 						sipLogger.finest(request, "Session AttributeSelectors list=" + selectors);
 
 						if (selectors != null) {
@@ -322,19 +321,17 @@ public abstract class AsyncSipServlet extends SipServlet
 								rr = selector.findKey(request);
 								if (rr != null) {
 
+									// is this a repeat?
+									for (Entry<String, String> entry : rr.attributes.entrySet()) {
+										sipLogger.finest(request, "Setting sipSession attribute name="
+												+ entry.getKey() + ", value=" + entry.getValue());
+										appSession.setAttribute(entry.getKey(), entry.getValue());
+									}
+
 									if (rr.key != null) {
 										sipLogger.finer(request,
 												"AsyncSipServlet - adding ApplicationSession index key " + rr.key);
 										request.getApplicationSession().addIndexKey(rr.key);
-
-										for (Entry<String, String> entry : rr.attributes.entrySet()) {
-
-											sipLogger.finest(request, "Setting sipSession attribute name="
-													+ entry.getKey() + ", value=" + entry.getValue());
-
-											sipSession.setAttribute(entry.getKey(), entry.getValue());
-										}
-
 									}
 
 									// add any origin dialog session parameters from config file
@@ -361,6 +358,60 @@ public abstract class AsyncSipServlet extends SipServlet
 					}
 
 					callflow.process(request);
+					
+					
+					if (request.isInitial() && sessionParameters != null) {
+
+						sipLogger.finest(request, "request.isInitial() && sessionParameters != null");
+
+						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
+						sipLogger.finest(request, "Session AttributeSelectors list=" + selectors);
+
+						if (selectors != null) {
+							sipLogger.finest(request, "Session AttributeSelectors list size=" + selectors.size());
+							for (AttributeSelector selector : selectors) {
+								rr = selector.findKey(request);
+								if (rr != null) {
+
+									// is this a repeat?
+									for (Entry<String, String> entry : rr.attributes.entrySet()) {
+										sipLogger.finest(request, "Setting sipSession attribute name="
+												+ entry.getKey() + ", value=" + entry.getValue());
+										sipSession.setAttribute(entry.getKey(), entry.getValue());
+									}
+
+									if (rr.key != null) {
+										sipLogger.finer(request,
+												"AsyncSipServlet - adding ApplicationSession index key " + rr.key);
+										request.getApplicationSession().addIndexKey(rr.key);
+									}
+
+									// add any origin dialog session parameters from config file
+									SipSession linkedSession = Callflow.getLinkedSession(sipSession);
+									for (Entry<String, String> entry : rr.attributes.entrySet()) {
+										if (selector.getDialog() == AttributeSelector.DialogType.origin) {
+											sipLogger.finer(request,
+													"AsyncSipServlet - adding origin SipSession attribute name="
+															+ entry.getKey() + ", value=" + entry.getValue());
+											sipSession.setAttribute(entry.getKey(), entry.getValue());
+										} else if (linkedSession != null) {
+											sipLogger.finer(request,
+													"AsyncSipServlet - adding destination SipSession attribute name="
+															+ entry.getKey() + ", value=" + entry.getValue());
+											sipSession.setAttribute(entry.getKey(), entry.getValue());
+										}
+									}
+
+								}
+
+							}
+
+						}
+					}
+
+					
+					
+					
 
 				}
 			}
