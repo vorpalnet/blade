@@ -76,7 +76,7 @@ public abstract class TranslationsMap {
 					HashMap<String, String> attrMap = new HashMap<>();
 					Object objValue;
 					for (String name : request.getApplicationSession().getAttributeNameSet()) {
-						objValue = request.getSession().getAttribute(name);
+						objValue = request.getApplicationSession().getAttribute(name);
 						if (objValue instanceof String) {
 							attrMap.put(name, (String) objValue);
 						}
