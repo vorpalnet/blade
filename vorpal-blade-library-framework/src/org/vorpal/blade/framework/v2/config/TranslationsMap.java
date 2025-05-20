@@ -78,6 +78,8 @@ public abstract class TranslationsMap {
 					for (String name : request.getApplicationSession().getAttributeNameSet()) {
 						objValue = request.getApplicationSession().getAttribute(name);
 						if (objValue instanceof String) {
+							Callflow.getSipLogger().finest(request,
+									"TranslationsMap setting attrMap name=" + name + ", value=" + objValue);
 							attrMap.put(name, (String) objValue);
 						}
 					}
