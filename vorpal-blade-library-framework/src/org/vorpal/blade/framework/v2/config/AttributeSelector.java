@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
@@ -243,13 +244,20 @@ public class AttributeSelector implements Serializable {
 					}
 
 					// use any additional attributes in the selector
+
+					Callflow.getSipLogger().finest(request, "attrsKey.attributes=" + attrsKey.attributes);
+					Callflow.getSipLogger().finest(request, "additionalExpressions=" + additionalExpressions);
+					
 //					System.out.println("attrsKey.attributes=" + attrsKey.attributes);
 //					System.out.println("additionalExpressions=" + additionalExpressions);
 					if (additionalExpressions != null && additionalExpressions.size() > 0) {
 						Map<String, String> additionalAttributes = new HashMap<>();
 //						System.out.println("additionalAttributes=" + additionalAttributes);
+						Callflow.getSipLogger().finest(request, "additionalAttributes=" + additionalAttributes);
 						for (Entry<String, String> entry : this.additionalExpressions.entrySet()) {
 //							System.out.println("entry=" + entry);
+							Callflow.getSipLogger().finest(request, "entry=" + entry);
+
 
 							// make sure not to overwrite existing attributes
 							if (false == attrsKey.attributes.containsKey(entry.getKey())) {
@@ -257,6 +265,7 @@ public class AttributeSelector implements Serializable {
 										entry.getValue());
 //								System.out.println(
 //										"adding entry.getKey()=" + entry.getKey() + ", attrValue=" + attrValue);
+								Callflow.getSipLogger().finest(request, "adding entry.getKey()=" + entry.getKey() + ", attrValue=" + attrValue);
 								additionalAttributes.put(entry.getKey(), attrValue);
 							}
 
@@ -264,6 +273,8 @@ public class AttributeSelector implements Serializable {
 
 						attrsKey.attributes.putAll(additionalAttributes);
 //						System.out.println("attrsKey.attributes=" + attrsKey.attributes);
+						Callflow.getSipLogger().finest(request, "attrsKey.attributes=" + attrsKey.attributes);
+
 					}
 
 				}

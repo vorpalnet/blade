@@ -326,6 +326,15 @@ public abstract class AsyncSipServlet extends SipServlet
 										sipLogger.finer(request,
 												"AsyncSipServlet - adding ApplicationSession index key " + rr.key);
 										request.getApplicationSession().addIndexKey(rr.key);
+
+										for (Entry<String, String> entry : rr.attributes.entrySet()) {
+
+											sipLogger.finest(request, "Setting sipSession attribute name="
+													+ entry.getKey() + ", value=" + entry.getValue());
+
+											sipSession.setAttribute(entry.getKey(), entry.getValue());
+										}
+
 									}
 
 									// add any origin dialog session parameters from config file
