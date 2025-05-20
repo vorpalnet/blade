@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -167,13 +168,20 @@ public class Configuration implements Serializable {
 		String value;
 		String outputString = new String(expression);
 
+		Callflow.getSipLogger().finest("Configuration.resolveVariables() attributes=" + attributes);
+
 		while ((openIndex = outputString.indexOf("${")) >= 0) {
 			closeIndex = outputString.indexOf("}", openIndex);
 			variable = outputString.substring(openIndex, closeIndex + 1);
 			key = variable.substring(2, variable.length() - 1);
 			value = (String) attributes.get(key);
-			value = (value != null) ? value : "";
-			outputString = outputString.replace(variable, value);
+
+			if (value != null) { // leave it alone in case we need to call this method again
+				Callflow.getSipLogger()
+						.finest("Configuration.resolveVariables() replacing variable=" + variable + ", value=" + value);
+				outputString = outputString.replace(variable, value);
+			}
+
 		}
 
 		return outputString;
