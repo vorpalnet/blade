@@ -305,20 +305,19 @@ public abstract class AsyncSipServlet extends SipServlet
 				} else {
 					sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
 
-					callflow.process(request);
+					// process AttributeSelectors here!
 
 					// create any index keys defined by selectors in the config file
 					if (request.isInitial() && sessionParameters != null) {
-						
+
 						sipLogger.finest(request, "request.isInitial() && sessionParameters != null");
-						
+
 						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
 
-						sipLogger.finest(request, "Session AttributeSelectors list="+selectors);
+						sipLogger.finest(request, "Session AttributeSelectors list=" + selectors);
 
-						
 						if (selectors != null) {
-							sipLogger.finest(request, "Session AttributeSelectors list size="+selectors.size());
+							sipLogger.finest(request, "Session AttributeSelectors list size=" + selectors.size());
 							for (AttributeSelector selector : selectors) {
 								rr = selector.findKey(request);
 								if (rr != null) {
@@ -351,6 +350,8 @@ public abstract class AsyncSipServlet extends SipServlet
 
 						}
 					}
+
+					callflow.process(request);
 
 				}
 			}
