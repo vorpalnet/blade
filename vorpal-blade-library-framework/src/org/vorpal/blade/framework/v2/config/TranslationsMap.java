@@ -1,6 +1,7 @@
 package org.vorpal.blade.framework.v2.config;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
@@ -69,7 +70,21 @@ public abstract class TranslationsMap {
 
 				if (SettingsManager.getSipFactory() != null && translation.getRequestUri() != null) {
 					URI fromUri = request.getRequestURI();
-					URI toUri = SettingsManager.getSipFactory().createURI(translation.getRequestUri());
+
+					String ruri = translation.getRequestUri();
+
+					HashMap<String, String> attrMap = new HashMap<>();
+					Object objValue;
+					for (String name : request.getSession().getAttributeNameSet()) {
+						objValue = request.getSession().getAttribute(name);
+						if (objValue instanceof String) {
+							attrMap.put(name, (String) objValue);
+						}
+					}
+
+					ruri = Configuration.resolveVariables(attrMap, ruri);
+
+					URI toUri = SettingsManager.getSipFactory().createURI(ruri);
 					Callflow.copyParameters(fromUri, toUri);
 				}
 
