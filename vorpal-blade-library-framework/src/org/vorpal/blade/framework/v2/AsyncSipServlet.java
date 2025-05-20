@@ -309,8 +309,16 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					// create any index keys defined by selectors in the config file
 					if (request.isInitial() && sessionParameters != null) {
+						
+						sipLogger.finest(request, "request.isInitial() && sessionParameters != null");
+						
 						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
+
+						sipLogger.finest(request, "Session AttributeSelectors list="+selectors);
+
+						
 						if (selectors != null) {
+							sipLogger.finest(request, "Session AttributeSelectors list size="+selectors.size());
 							for (AttributeSelector selector : selectors) {
 								rr = selector.findKey(request);
 								if (rr != null) {

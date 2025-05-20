@@ -47,8 +47,13 @@ public class ProxyRouterConfigVoxai extends RouterConfig implements Serializable
 		requestUriSelector.setPattern(SIP_ADDRESS_PATTERN);
 		requestUriSelector.setId("requestUriSelector");
 		requestUriSelector.setDescription("parse the SIP requestURI");
-
 		this.session.sessionSelectors.add(requestUriSelector);
+		
+		
+		
+		
+		
+		
 
 		Selector sbcLocation = new Selector("sbcLocation", "User-to-User",
 				"^.*SBCLocation=[ ]*(?<SBCLocation>[^;]*);.*$", "${SBCLocation}");
