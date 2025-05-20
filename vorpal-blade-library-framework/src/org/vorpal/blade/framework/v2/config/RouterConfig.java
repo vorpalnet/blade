@@ -1,6 +1,7 @@
 package org.vorpal.blade.framework.v2.config;
 
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.logging.Level;
 
@@ -47,7 +48,23 @@ public class RouterConfig extends Configuration implements Serializable {
 		URI from;
 
 		if (t != null && t.getRequestUri() != null) {
-			to = SettingsManager.sipFactory.createURI(t.getRequestUri());
+			
+			String ruri = t.getRequestUri();
+			
+			HashMap<String, String> attrMap = new HashMap<>();
+			Object objValue;
+			for (String name : request.getApplicationSession().getAttributeNameSet()) {
+				objValue = request.getApplicationSession().getAttribute(name);
+				if (objValue instanceof String) {
+					Callflow.getSipLogger().finest(request,
+							"TranslationsMap setting attrMap name=" + name + ", value=" + objValue);
+					attrMap.put(name, (String) objValue);
+				}
+			}
+			ruri = Configuration.resolveVariables(attrMap, ruri);
+			
+			
+			to = SettingsManager.sipFactory.createURI(ruri);
 			from = request.getRequestURI();
 
 			Callflow.copyParameters(from, to);

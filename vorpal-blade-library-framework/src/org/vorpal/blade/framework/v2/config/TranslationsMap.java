@@ -72,7 +72,6 @@ public abstract class TranslationsMap {
 					URI fromUri = request.getRequestURI();
 
 					String ruri = translation.getRequestUri();
-
 					HashMap<String, String> attrMap = new HashMap<>();
 					Object objValue;
 					for (String name : request.getApplicationSession().getAttributeNameSet()) {
@@ -83,7 +82,6 @@ public abstract class TranslationsMap {
 							attrMap.put(name, (String) objValue);
 						}
 					}
-
 					ruri = Configuration.resolveVariables(attrMap, ruri);
 
 					URI toUri = SettingsManager.getSipFactory().createURI(ruri);
