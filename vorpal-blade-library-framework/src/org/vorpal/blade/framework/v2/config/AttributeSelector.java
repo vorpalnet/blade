@@ -150,6 +150,9 @@ public class AttributeSelector implements Serializable {
 			Map<String, String> namedGroups = new HashMap<>();
 
 			switch (attribute) {
+			case "body":
+			case "Body":
+			case "content":
 			case "Content":
 				header = "";
 				try {
@@ -170,10 +173,14 @@ public class AttributeSelector implements Serializable {
 				}
 				break;
 
+			case "requestURI":
+			case "RequestURI":
 			case "Request-URI":
 				header = request.getRequestURI().toString();
 				break;
 
+			case "remoteIP":
+			case "RemoteIP":
 			case "Remote-IP":
 				header = request.getRemoteAddr();
 
