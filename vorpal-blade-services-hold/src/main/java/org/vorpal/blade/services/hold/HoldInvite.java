@@ -18,17 +18,18 @@ public class HoldInvite extends Callflow {
 		SipServletResponse response = request.createResponse(200);
 
 		Object obj = request.getContent();
-		if (obj instanceof String) {
-			body = new String((String) obj);
-		} else {
-			body = new String((byte[]) obj);
+		if (obj != null) {
+			if (obj instanceof String) {
+				body = new String((String) obj);
+			} else {
+				body = new String((byte[]) obj);
+			}
+
+			body = body.replace("a=sendrecv", "a=inactive");
+			response.setHeader("Allow", request.getHeader("Allow"));
+			response.setContent(body, request.getContentType());
+
 		}
-
-		body = body.replace("a=sendrecv", "a=inactive");
-
-		response.setHeader("Allow", request.getHeader("Allow"));
-
-		response.setContent(body, request.getContentType());
 
 		sendResponse(response, (ack) -> {
 			// do nothing;

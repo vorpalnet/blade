@@ -39,10 +39,6 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		this.logging.setLoggingLevel(LoggingLevel.FINER);
 		this.session = null;
 
-//		this.defaultRoute = new Translation();
-//		this.defaultRoute.setId("default");
-//		this.defaultRoute.setRequestUri("sips:+110006@cvsxm-stg-occas.byoc.mypurecloud.com:5061;transport=tls");
-
 		Selector caller = new Selector("caller", "From", SIP_ADDRESS_PATTERN, "${user}");
 		caller.setDescription("caller's number");
 		this.selectors.add(caller);
@@ -105,7 +101,7 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 
 	}
 
-	public static void main(String[] args) throws ServletParseException, JsonProcessingException {
+	public static void main0(String[] args) throws ServletParseException, JsonProcessingException {
 
 		RouterConfig configuration = new ProxyRouterConfigSample();
 		ObjectMapper mapper = new ObjectMapper();
@@ -169,5 +165,115 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 		System.out.println("uri = " + uri);
 
 	}
+	
+	public static void main(String[] args) throws ServletParseException {
+
+		SipFactory sipFactory = new SipFactoryImpl(null, null);
+		Callflow.setSipFactory(sipFactory);
+		SettingsManager.setSipFactory(sipFactory);
+
+		Logger logger = LogManager.getLogger("BLADE");
+		logger.setUseParentHandlers(false);
+		logger.addHandler(new ConsoleHandler() {
+			{
+				setOutputStream(System.out);
+			}
+		});
+		logger.setLevel(Level.FINEST);
+		SettingsManager.setSipLogger(logger);
+		Callflow.setLogger(logger);
+
+		RouterConfig config = new ProxyRouterConfigSample();
+		logger.logConfiguration(config);
+
+		URI from;
+		URI to;
+		DummyRequest request;
+		Translation t;
+
+		from = sipFactory.createURI("sip:18165551234@vorpal.net");
+		to = sipFactory.createURI("sip:19135559876@vorpal.net");
+		request = new DummyRequest("INVITE", from, to);
+		t = config.findTranslation(request);
+		System.out.println("from=" + from + ", to=" + to + ", requestUri=" + t.getRequestUri());
+
+		from = sipFactory.createURI("sip:18165551234@vorpal.net");
+		to = sipFactory.createURI("sip:19995559876@vorpal.net");
+		request = new DummyRequest("INVITE", from, to);
+		t = config.findTranslation(request);
+		System.out.println("from=" + from + ", to=" + to + ", requestUri=" + t.getRequestUri());
+
+		from = sipFactory.createURI("sip:12795555678@vorpal.net");
+		to = sipFactory.createURI("sip:19135559876@vorpal.net");
+		request = new DummyRequest("INVITE", from, to);
+		t = config.findTranslation(request);
+		System.out.println("from=" + from + ", to=" + to + ", requestUri=" + t.getRequestUri());
+
+		URI ruri = request.getRequestURI();
+		System.out.println("ruri=" + ruri);
+
+		String strUri = t.getRequestUri();
+//		URI uri = SettingsManager.sipFactory.createURI(t.getRequestUri());
+
+		URI uri = config.findRoute(request);
+		System.out.println("uri = " + uri);
+
+	}
+
+	
+	public static void main4(String[] args) throws ServletParseException {
+
+		SipFactory sipFactory = new SipFactoryImpl(null, null);
+		Callflow.setSipFactory(sipFactory);
+		SettingsManager.setSipFactory(sipFactory);
+
+		Logger logger = LogManager.getLogger("BLADE");
+		logger.setUseParentHandlers(false);
+		logger.addHandler(new ConsoleHandler() {
+			{
+				setOutputStream(System.out);
+			}
+		});
+		logger.setLevel(Level.FINEST);
+		SettingsManager.setSipLogger(logger);
+		Callflow.setLogger(logger);
+
+		RouterConfig config = new ProxyRouterConfigSample();
+		logger.logConfiguration(config);
+
+		URI from;
+		URI to;
+		DummyRequest request;
+		Translation t;
+
+		from = sipFactory.createURI("sip:18165551234@vorpal.net");
+		to = sipFactory.createURI("sip:19135559876@vorpal.net");
+		request = new DummyRequest("INVITE", from, to);
+		t = config.findTranslation(request);
+		System.out.println("from=" + from + ", to=" + to + ", requestUri=" + t.getRequestUri());
+
+		from = sipFactory.createURI("sip:18165551234@vorpal.net");
+		to = sipFactory.createURI("sip:19995559876@vorpal.net");
+		request = new DummyRequest("INVITE", from, to);
+		t = config.findTranslation(request);
+		System.out.println("from=" + from + ", to=" + to + ", requestUri=" + t.getRequestUri());
+
+		from = sipFactory.createURI("sip:12795555678@vorpal.net");
+		to = sipFactory.createURI("sip:19135559876@vorpal.net");
+		request = new DummyRequest("INVITE", from, to);
+		t = config.findTranslation(request);
+		System.out.println("from=" + from + ", to=" + to + ", requestUri=" + t.getRequestUri());
+
+		URI ruri = request.getRequestURI();
+		System.out.println("ruri=" + ruri);
+
+		String strUri = t.getRequestUri();
+//		URI uri = SettingsManager.sipFactory.createURI(t.getRequestUri());
+
+		URI uri = config.findRoute(request);
+		System.out.println("uri = " + uri);
+
+	}
+
 
 }

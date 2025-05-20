@@ -476,7 +476,8 @@ public abstract class AsyncSipServlet extends SipServlet
 		} catch (Exception ex) {
 			sipLogger.severe(response, "Exception on SIP response: \n" + response.toString());
 			sipLogger.severe(response, ex);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " "
+					+ ex.getClass().getName() + ": " + ex.getMessage());
 		}
 	}
 

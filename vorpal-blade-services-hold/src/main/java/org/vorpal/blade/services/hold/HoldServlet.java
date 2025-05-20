@@ -53,6 +53,7 @@ public class HoldServlet extends B2buaServlet {
 			}
 			break;
 
+		case "CANCEL":
 		case "BYE":
 			callflow = new HoldBye();
 			break;
