@@ -7,9 +7,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
-public class FsmarSXM extends AppRouterConfiguration {
+public class SXMFsmar extends AppRouterConfiguration {
 
-	public FsmarSXM() {
+	public SXMFsmar() {
 //		this.setDefaultApplication("goober");
 
 		this.getPrevious("null").getTrigger("OPTIONS").createTransition("options");
@@ -20,7 +20,7 @@ public class FsmarSXM extends AppRouterConfiguration {
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {
-		AppRouterConfiguration configuration = new FsmarSXM();
+		AppRouterConfiguration configuration = new SXMFsmar();
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setSerializationInclusion(Include.NON_NULL);
 		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);

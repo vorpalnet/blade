@@ -19,6 +19,7 @@ import org.vorpal.blade.framework.v2.config.RouterConfig;
 import org.vorpal.blade.framework.v2.config.Selector;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v2.config.TranslationsMap;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
@@ -27,13 +28,13 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.bea.wcp.sip.engine.server.SipFactoryImpl;
 
-public class ProxyRouterConfigVoxai extends RouterConfig implements Serializable {
+public class SXMProxyRouterConfig extends RouterConfig implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
 	public final static String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 
-	public ProxyRouterConfigVoxai() {
+	public SXMProxyRouterConfig() {
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LoggingLevel.FINEST);
 		this.session = new SessionParameters();
@@ -48,12 +49,6 @@ public class ProxyRouterConfigVoxai extends RouterConfig implements Serializable
 		requestUriSelector.setId("requestUriSelector");
 		requestUriSelector.setDescription("parse the SIP requestURI");
 		this.session.sessionSelectors.add(requestUriSelector);
-		
-		
-		
-		
-		
-		
 
 		Selector sbcLocation = new Selector("sbcLocation", "User-to-User",
 				"^.*SBCLocation=[ ]*(?<SBCLocation>[^;]*);.*$", "${SBCLocation}");
@@ -61,17 +56,38 @@ public class ProxyRouterConfigVoxai extends RouterConfig implements Serializable
 		this.selectors.add(sbcLocation);
 
 		TranslationsMap callers = new ConfigHashMap();
+		
+		
 		callers.setId("callers");
 		callers.addSelector(sbcLocation);
 		callers.setDescription("map of sbc locations");
 
-		callers.createTranslation("cvsxm-stg-tx")//
+		Translation tTX = callers.createTranslation("cvsxm-stg-tx")//
 				.setId("cvsxm-stg-tx") //
 				.setRequestUri("${proto}:${user}@10.119.127.147:${port};${uriparams}");
 
-		callers.createTranslation("cvsxm_stg_nj")//
+		
+//		Selector toSelector = new Selector();
+//		toSelector.setId("fromSelector");
+//		toSelector.setAttribute("From");
+//		toSelector.setDescription("the from selector");
+//		toSelector.setPattern(SIP_ADDRESS_PATTERN);
+//		toSelector.setExpression("${from}");
+		
+		TranslationsMap txCallers = new ConfigHashMap();
+		txCallers.setId("txCallers");
+//		txCallers.addSelector(sbcLocation)		
+//		tTX.setList(maps)
+		
+		
+		
+		Translation tNJ = callers.createTranslation("cvsxm-stg-nj")//
 				.setId("cvsxm-stg-nj") //
 				.setRequestUri("${proto}:${user}@10.113.63.35:${port};${uriparams}");
+		
+		
+		
+		
 
 		this.maps.add(callers);
 		this.plan.add(callers);
@@ -95,7 +111,7 @@ public class ProxyRouterConfigVoxai extends RouterConfig implements Serializable
 		SettingsManager.setSipLogger(logger);
 		Callflow.setLogger(logger);
 
-		RouterConfig config = new ProxyRouterConfigVoxai();
+		RouterConfig config = new SXMProxyRouterConfig();
 		logger.logConfiguration(config);
 
 		URI sipUri;
