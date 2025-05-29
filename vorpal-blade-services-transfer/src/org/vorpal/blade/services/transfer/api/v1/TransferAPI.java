@@ -208,16 +208,31 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					Address target = null;
 
 					if (transferRequest.target.sipAddress != null) {
+						// target.sipAddress looks like: "Carol" <sip:carol@vorpal.org>
+						if (false == transferRequest.target.sipAddress.matches("^.*sip[s]*.*$")) {
+							transferRequest.target.sipAddress = "sip:" + transferRequest.target.sipAddress;
+						}
+
 						target = sipFactory.createAddress(transferRequest.target.sipAddress);
+
 					} else if (transferRequest.target.sipUri != null) {
+						// target.sipUri looks like: sip:carol@vorpal.org
+						if (false == transferRequest.target.sipUri.matches("^.*sip[s]*.*$")) {
+							transferRequest.target.sipUri = "sip:" + transferRequest.target.sipUri;
+						}
+
 						target = sipFactory.createAddress("<" + transferRequest.target.sipUri + ">");
+
 					} else if (transferRequest.target.account != null) {
-						SipURI tmpTarget = (SipURI) sipFactory.createAddress("sip:" + transferRequest.target.account)
-								.getURI();
-						target = sipFactory.createAddress(transferee.toString());
-						((SipURI) target.getURI()).setUser(tmpTarget.getUser());
-						((SipURI) target.getURI()).setHost(tmpTarget.getHost());
+						// target.account looks like: carol@vorpal.org ;
+						if (false == transferRequest.target.account.matches("^.*sip[s]*.*$")) {
+							transferRequest.target.account = "sip:" + transferRequest.target.account;
+						}
+
+						target = sipFactory.createAddress(transferRequest.target.account);
+
 					} else if (transferRequest.target.user != null) {
+						// target.user looks like: carol ; we will guess the downstream proxy
 						target = sipFactory.createAddress(transferee.toString());
 						((SipURI) target.getURI()).setUser(transferRequest.target.user);
 					}
@@ -317,7 +332,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 			TransferResponse transferResponse = new TransferResponse();
 			transferResponse.status = 500;
-			transferResponse.description = "Internal Server Error";
+			transferResponse.description = e.getMessage();
 			transferResponse.request = transferRequest;
 			asyncResponse.resume(Response.status(Status.INTERNAL_SERVER_ERROR).entity(transferResponse).build());
 		}
