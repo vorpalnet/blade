@@ -10,4 +10,5 @@ deps
 *.class
 *.log
 *.log.lck
-
+*.jar
+openapi/gen

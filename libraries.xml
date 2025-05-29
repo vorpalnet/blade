@@ -704,7 +704,7 @@
 		<delete dir="${webapp}/WEB-INF/classes" />
 	</target>
 
-	<target depends="clean" name="clean-all" />
+	<target name="clean-all" depends="clean"  />
 
 
 	<target name="compile" depends="init">
