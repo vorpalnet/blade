@@ -314,10 +314,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					asyncResponse.resume(Response.status(Status.NOT_FOUND).entity(transferResponse).build());
 				}
 
-			} else {
+			} else { // no app session defined
 				TransferResponse transferResponse = new TransferResponse();
 				transferResponse.status = 404;
-				transferResponse.description = "Session not found";
+				transferResponse.description = "No appSession found for sessionKey=" + transferRequest.sessionKey;
 				transferResponse.request = transferRequest;
 				asyncResponse.resume(Response.status(Status.NOT_FOUND).entity(transferResponse).build());
 			}
