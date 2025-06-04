@@ -1398,6 +1398,7 @@ public abstract class Callflow implements Serializable {
 
 		List<URI> endpoints = new LinkedList<URI>();
 		for (URI endpoint : proxyTier.getEndpoints()) {
+			sipLogger.finer(inboundRequest, "proxying request, endpoint=" + endpoint);
 			endpoints.add(endpoint);
 		}
 		List<ProxyBranch> proxyBranches = proxy.createProxyBranches(endpoints);
@@ -1413,12 +1414,13 @@ public abstract class Callflow implements Serializable {
 		// jwm - test proxy arrow - works!
 		inboundRequest.getApplicationSession().setAttribute("isProxy", Boolean.TRUE);
 
-		proxy.startProxy();
-
-		for (ProxyBranch proxyBranch : proxy.getProxyBranches()) {
+		sipLogger.finer(inboundRequest, "proxying request, proxyBranches.size=" + proxyBranches.size());
+		for (ProxyBranch proxyBranch : proxyBranches) {
 			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, this.getClass().getSimpleName(),
 					null);
 		}
+
+		proxy.startProxy();
 
 	}
 
