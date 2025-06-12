@@ -1,6 +1,7 @@
 package org.vorpal.blade.services.proxy.registrar.v3;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.logging.Level;
 
 import javax.servlet.ServletException;
@@ -24,7 +25,7 @@ import org.vorpal.blade.framework.v2.logging.ConsoleColors;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener {
+public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener, Serializable {
 	private static final long serialVersionUID = 2804504496149776315L;
 	public static SettingsManager<Settings> settingsManager;
 

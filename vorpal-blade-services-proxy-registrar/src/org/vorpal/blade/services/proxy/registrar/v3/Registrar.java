@@ -20,10 +20,12 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.services.proxy.registrar.v3.junk.ContactInfo;
 
 public class Registrar implements Serializable {
-	private static final long serialVersionUID = -9141916534493575461L;
+	private static final long serialVersionUID = 1L;
 	public Map<String, ContactInfo> contactsMap = new HashMap<>();
-	private int maxExpires = 0;
-	private List<String> allowHeaders = null;
+	public int maxExpires = 0;
+
+	// this is the bad one? yes, why? it's null?
+	// public List<String> allowHeaders = null;
 
 	private int expires(SipServletRequest registerRequest, Address contact) {
 		String strExpires = null;
@@ -90,7 +92,6 @@ public class Registrar implements Serializable {
 			appSession.setInvalidateWhenReady(true);
 			appSession.setExpires(1);
 		} else {
-			allowHeaders = registerRequest.getHeaderList("Allow");
 			appSession.setExpires((int) Math.ceil(maxExpires / 60.0));
 			appSession.setInvalidateWhenReady(false);
 		}
@@ -98,15 +99,23 @@ public class Registrar implements Serializable {
 		// return an updated list of contacts
 		SipServletResponse response = registerRequest.createResponse(200);
 		Address contact;
+		int numOfContacts = contactsMap.size();
 		for (ContactInfo contactInfo : contactsMap.values()) {
 			contact = contactInfo.getAddress();
-			contact.setParameter("expires", this.calculateExpires(contactInfo.getExpiration()));
+			if (numOfContacts > 1) {
+				contact.setParameter("expires", this.calculateExpires(contactInfo.getExpiration()));
+			}
 			response.addAddressHeader("Contact", contact, false);
 		}
 
+		if (numOfContacts <= 1) {
+			response.setExpires(registerRequest.getExpires());
+		}
+
+		List<String> allowHeaders = registerRequest.getHeaderList("Allow");
 		if (allowHeaders != null) {
 			for (String allow : allowHeaders) {
-				response.setHeader("Allow", allow);
+				response.addHeader("Allow", allow);
 			}
 		}
 

@@ -245,18 +245,18 @@ public class AttributeSelector implements Serializable {
 
 					// use any additional attributes in the selector
 
-					Callflow.getSipLogger().finest(request, "attrsKey.attributes=" + attrsKey.attributes);
-					Callflow.getSipLogger().finest(request, "additionalExpressions=" + additionalExpressions);
+//					Callflow.getSipLogger().finest(request, "attrsKey.attributes=" + attrsKey.attributes);
+//					Callflow.getSipLogger().finest(request, "additionalExpressions=" + additionalExpressions);
 					
 //					System.out.println("attrsKey.attributes=" + attrsKey.attributes);
 //					System.out.println("additionalExpressions=" + additionalExpressions);
 					if (additionalExpressions != null && additionalExpressions.size() > 0) {
 						Map<String, String> additionalAttributes = new HashMap<>();
 //						System.out.println("additionalAttributes=" + additionalAttributes);
-						Callflow.getSipLogger().finest(request, "additionalAttributes=" + additionalAttributes);
+//						Callflow.getSipLogger().finest(request, "additionalAttributes=" + additionalAttributes);
 						for (Entry<String, String> entry : this.additionalExpressions.entrySet()) {
 //							System.out.println("entry=" + entry);
-							Callflow.getSipLogger().finest(request, "entry=" + entry);
+//							Callflow.getSipLogger().finest(request, "entry=" + entry);
 
 
 							// make sure not to overwrite existing attributes
@@ -265,7 +265,7 @@ public class AttributeSelector implements Serializable {
 										entry.getValue());
 //								System.out.println(
 //										"adding entry.getKey()=" + entry.getKey() + ", attrValue=" + attrValue);
-								Callflow.getSipLogger().finest(request, "adding entry.getKey()=" + entry.getKey() + ", attrValue=" + attrValue);
+//								Callflow.getSipLogger().finest(request, "adding entry.getKey()=" + entry.getKey() + ", attrValue=" + attrValue);
 								additionalAttributes.put(entry.getKey(), attrValue);
 							}
 
@@ -273,7 +273,7 @@ public class AttributeSelector implements Serializable {
 
 						attrsKey.attributes.putAll(additionalAttributes);
 //						System.out.println("attrsKey.attributes=" + attrsKey.attributes);
-						Callflow.getSipLogger().finest(request, "attrsKey.attributes=" + attrsKey.attributes);
+//						Callflow.getSipLogger().finest(request, "attrsKey.attributes=" + attrsKey.attributes);
 
 					}
 
@@ -293,7 +293,7 @@ public class AttributeSelector implements Serializable {
 			}
 
 		} catch (Exception e) {
-			sipLogger.severe(request, "AttributeSelector; Unknown error; Check configuration file." + //
+			sipLogger.severe(request, "AttributeSelector - Error; Check configuration file." + //
 					"; matchResult=" + matchResult + //
 					", selector id=" + this.getId() + //
 					", attribute=" + this.getAttribute() + //

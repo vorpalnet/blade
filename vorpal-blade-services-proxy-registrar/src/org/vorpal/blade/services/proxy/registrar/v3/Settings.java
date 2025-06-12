@@ -1,5 +1,6 @@
 package org.vorpal.blade.services.proxy.registrar.v3;
 
+import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
@@ -10,7 +11,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
 //public class PRegistrarSettings extends Configuration{
-public class Settings extends Configuration {
+public class Settings extends Configuration implements Serializable {
 	private static final long serialVersionUID = -3362129920431974760L;
 
 	/**

@@ -34,7 +34,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
@@ -868,6 +867,89 @@ public abstract class Callflow implements Serializable {
 		Callflow.sipUtil = sipUtil;
 	}
 
+	/**
+	 * Creates a SipServletRequest from a SipSession, copying the method, headers
+	 * and body content.
+	 * 
+	 * @param destSession
+	 * @param originRequest
+	 * @return
+	 * @throws ServletParseException
+	 * @throws UnsupportedEncodingException
+	 * @throws IOException
+	 */
+	public static SipServletRequest continueRequest(SipSession destSession, SipServletRequest originRequest)
+			throws ServletParseException, UnsupportedEncodingException, IOException {
+		SipServletRequest destRequest = destSession.createRequest(originRequest.getMethod());
+		copyContentAndHeaders(originRequest, destRequest);
+		return destRequest;
+	}
+
+	/**
+	 * Creates a SipServletRequest from SipFactory by copying the
+	 * SipApplicationSession, method, From and To. It also copies the headers, body
+	 * content and sets the routing directive to continue. Finally, it sets the
+	 * request URI as specified and links the two sessions.
+	 * 
+	 * @param uri           the SIP request URI
+	 * @param originRequest to be copied
+	 * @return request
+	 * @throws ServletParseException
+	 * @throws UnsupportedEncodingException
+	 * @throws IOException
+	 */
+	public static SipServletRequest continueRequest(URI uri, SipServletRequest originRequest)
+			throws ServletParseException, UnsupportedEncodingException, IOException {
+		SipServletRequest destRequest;
+
+		destRequest = sipFactory.createRequest(originRequest.getApplicationSession(), originRequest.getMethod(),
+				originRequest.getFrom(), originRequest.getTo());
+		destRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, originRequest);
+		copyContentAndHeaders(originRequest, destRequest);
+		destRequest.setRequestURI(uri);
+		linkSessions(destRequest.getSession(), originRequest.getSession());
+
+		return destRequest;
+	}
+
+	/**
+	 * Creates a SipServletRequest from SipFactory by copying the
+	 * SipApplicationSession, method, From and To. It also copies the headers, body
+	 * content and sets the routing directive to continue. Finally, it sets the
+	 * request URI from the specified String.
+	 * 
+	 * @param uri           as a Java String
+	 * @param originRequest to be copied
+	 * @return request
+	 * @throws ServletParseException
+	 * @throws UnsupportedEncodingException
+	 * @throws IOException
+	 */
+	public static SipServletRequest continueRequest(String strUri, SipServletRequest originRequest)
+			throws ServletParseException, UnsupportedEncodingException, IOException {
+		return continueRequest(sipFactory.createURI(strUri), originRequest);
+	}
+
+	/**
+	 * Creates a SipServletResponse from a SipServletRequest, copying the status
+	 * code, reason phrase, headers and body content.
+	 * 
+	 * @param destRequest
+	 * @param originResponse
+	 * @return
+	 * @throws ServletParseException
+	 * @throws UnsupportedEncodingException
+	 * @throws IOException
+	 */
+	public static SipServletResponse continueResponse(SipServletRequest destRequest, SipServletResponse originResponse)
+			throws ServletParseException, UnsupportedEncodingException, IOException {
+		SipServletResponse destResponse = null;
+		destResponse = destRequest.createResponse(originResponse.getStatus(), originResponse.getReasonPhrase());
+		copyContentAndHeaders(originResponse, destResponse);
+		return destResponse;
+	}
+
+	@Deprecated
 	public static SipServletRequest createContinueRequest(SipServletRequest origin)
 			throws IOException, ServletParseException {
 
