@@ -198,6 +198,9 @@ public abstract class AsyncSipServlet extends SipServlet
 			}
 		}
 
+		sipLogger.finer(request, "AsyncSipServlet - generateIndexKey, addingIndexKey: " + indexKey);
+		appSession.addIndexKey(indexKey);
+
 		return indexKey;
 
 	}
@@ -334,9 +337,7 @@ public abstract class AsyncSipServlet extends SipServlet
 										// Create an index key for the appSession
 										if (rr.key != null) {
 											if (sipLogger.isLoggable(Level.FINER)) {
-												sipLogger.finer(request,
-														"AsyncSipServlet - Adding application session index key: "
-																+ rr.key);
+												sipLogger.finer(request, "AsyncSipServlet - doRequest, addingIndexKey: " + rr.key);
 											}
 											request.getApplicationSession().addIndexKey(rr.key);
 										}

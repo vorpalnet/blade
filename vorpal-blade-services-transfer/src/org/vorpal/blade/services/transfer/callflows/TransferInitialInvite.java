@@ -24,9 +24,6 @@ public class TransferInitialInvite extends InitialInvite {
 		// saving first initial invite for placing in REST API Dialog object
 		request.getSession().setAttribute("initial_invite", request);
 
-		// jwm-test
-		Dialog dialog = new Dialog(request.getSession());
-
 		super.process(request);
 	}
 

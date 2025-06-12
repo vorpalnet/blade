@@ -451,8 +451,7 @@ public abstract class Callflow implements Serializable {
 
 		appSession.setAttribute("X-Vorpal-Session", indexKey);
 
-		// jwm - instead, use the Configuration file to define index keys
-		appSession.addIndexKey(indexKey);
+		// appSession.addIndexKey(indexKey);
 
 		// X-Vorpal-Session + X-Vorpal-Timestamp will be unique.
 		// Use this for a database primary key in future designs.
