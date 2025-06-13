@@ -332,6 +332,8 @@ public abstract class AsyncSipServlet extends SipServlet
 										|| false == selector.getDialog().equals(DialogType.destination)) {
 
 									rr = selector.findKey(request);
+									sipLogger.finest(request, "AsyncSipServlet.doRequest - selector.id="
+											+ selector.getId() + ", rr=" + rr);
 									if (rr != null) {
 
 										// Create an index key for the appSession
@@ -345,6 +347,9 @@ public abstract class AsyncSipServlet extends SipServlet
 
 										// Add named groups to SipSession
 										for (Entry<String, String> entry : rr.attributes.entrySet()) {
+											sipLogger.finer(request,
+													"AsyncSipServlet.doRequest - adding SipSession attribute key="
+															+ entry.getKey() + ", value=" + entry.getValue());
 											sipSession.setAttribute(entry.getKey(), entry.getValue());
 										}
 
