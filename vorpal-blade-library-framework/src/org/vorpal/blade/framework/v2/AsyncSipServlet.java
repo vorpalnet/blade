@@ -373,7 +373,7 @@ public abstract class AsyncSipServlet extends SipServlet
 							}
 						}
 						sipLogger.finer(sipSession, "AsyncSipServlet.doRequest - callflow="
-								+ callflow.getClass().getSimpleName() + "+, origin sipSession attributes: " + attrMap);
+								+ callflow.getClass().getSimpleName() + ", origin sipSession attributes: " + attrMap);
 					}
 
 					callflow.process(request);

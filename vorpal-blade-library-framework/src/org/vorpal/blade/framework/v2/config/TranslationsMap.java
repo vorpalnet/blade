@@ -76,11 +76,13 @@ public abstract class TranslationsMap {
 					String ruri = translation.getRequestUri();
 					HashMap<String, String> attrMap = new HashMap<>();
 					Object objValue;
+
 					for (String name : request.getApplicationSession().getAttributeNameSet()) {
 						objValue = request.getApplicationSession().getAttribute(name);
 						if (objValue instanceof String) {
-//							Callflow.getSipLogger().finest(request,
-//									"TranslationsMap setting attrMap - SipApplicationSession attrMp name=" + name + ", value=" + objValue);
+							Callflow.getSipLogger().finest(request,
+									"TranslationsMap.applyTranslations - SipApplicationSession attrMp name=" + name
+											+ ", value=" + objValue);
 							attrMap.put(name, (String) objValue);
 						}
 					}
@@ -88,8 +90,9 @@ public abstract class TranslationsMap {
 					for (String name : request.getSession().getAttributeNameSet()) {
 						objValue = request.getApplicationSession().getAttribute(name);
 						if (objValue instanceof String) {
-//							Callflow.getSipLogger().finest(request,
-//									"TranslationsMap.applyTranslations - SipSession attrMap name=" + name + ", value=" + objValue);
+							Callflow.getSipLogger().finest(request,
+									"TranslationsMap.applyTranslations - SipSession attrMap name=" + name + ", value="
+											+ objValue);
 							attrMap.put(name, (String) objValue);
 						}
 					}
