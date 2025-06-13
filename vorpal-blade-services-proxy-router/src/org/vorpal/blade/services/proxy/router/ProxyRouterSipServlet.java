@@ -39,16 +39,22 @@ public class ProxyRouterSipServlet extends ProxyServlet {
 		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, begin...");
 
 		RouterConfig config = settingsManager.getCurrent();
+		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, 1");
 
 		URI uri = config.findRoute(request);
+		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, 2");
 		if (uri == null) {
+			sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, 3");
 			uri = request.getRequestURI();
 		}
+		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, 4");
 
 		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest... requestUri=" + uri);
 
 		ProxyTier proxyTier = new ProxyTier();
+		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, 5");
 		proxyTier.addEndpoint(uri);
+		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, 6");
 		ProxyPlan.getTiers().add(proxyTier);
 
 		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, end.");
