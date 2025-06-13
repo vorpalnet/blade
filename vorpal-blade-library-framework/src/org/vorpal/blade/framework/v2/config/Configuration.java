@@ -165,6 +165,7 @@ public class Configuration implements Serializable {
 		return this;
 	}
 
+	@SuppressWarnings("el-syntax")
 	public static String resolveVariables(Map<String, String> attributes, String expression) {
 		int openIndex;
 		int closeIndex;
@@ -172,6 +173,9 @@ public class Configuration implements Serializable {
 		String key;
 		String value;
 		String outputString = new String(expression);
+
+		Callflow.getSipLogger().finer(
+				"Configuration.resolveVariables - begin... expression=" + expression + ", attributes=" + attributes);
 
 		try {
 
@@ -211,6 +215,9 @@ public class Configuration implements Serializable {
 		}
 
 		outputString = outputString.replace("?{", "${");
+
+		Callflow.getSipLogger().finer("Configuration.resolveVariables - end. outputString=" + outputString);
+
 		return outputString;
 	}
 
