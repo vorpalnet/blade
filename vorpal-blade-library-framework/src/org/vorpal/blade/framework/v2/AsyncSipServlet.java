@@ -348,9 +348,17 @@ public abstract class AsyncSipServlet extends SipServlet
 										// Add named groups to SipSession
 										for (Entry<String, String> entry : rr.attributes.entrySet()) {
 											sipLogger.finer(request,
-													"AsyncSipServlet.doRequest - adding SipSession attribute key="
-															+ entry.getKey() + ", value=" + entry.getValue());
+													"AsyncSipServlet.doRequest - adding SipSession attribute "
+															+ entry.getKey() + "=" + entry.getValue());
 											sipSession.setAttribute(entry.getKey(), entry.getValue());
+										}
+
+										// jwm - testing; this should only be for SipSession
+										for (Entry<String, String> entry : rr.attributes.entrySet()) {
+											sipLogger.finer(request,
+													"AsyncSipServlet.doRequest - adding SipApplicationSession attribute "
+															+ entry.getKey() + "=" + entry.getValue());
+											appSession.setAttribute(entry.getKey(), entry.getValue());
 										}
 
 									}
