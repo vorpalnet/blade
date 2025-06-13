@@ -114,7 +114,8 @@ public class Selector {
 							header = new String(content);
 						}
 					} else {
-						sipLogger.warning(request, "No content in message body. Check configuration.");
+						sipLogger.warning(request,
+								"Selector.findKey - No content in message body. Check configuration.");
 					}
 				} catch (IOException e) { // this should never happen
 					SettingsManager.getSipLogger().logStackTrace(e);
@@ -193,7 +194,7 @@ public class Selector {
 				}
 
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(request, "Selector id=" + this.getId() + //
+					sipLogger.finer(request, "Selector.findKey id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
 							", value=" + value + //
 							", matchResult=" + matchResult + //
@@ -206,7 +207,9 @@ public class Selector {
 			}
 
 		} catch (Exception e) {
-			sipLogger.severe(request, "Unknown error for Selector.findKey()");
+			sipLogger.getParent().severe("Selector.findKey Error: " + e.getMessage());
+			sipLogger.severe(request, request.toString());
+			sipLogger.logStackTrace(e);
 			sipLogger.severe(request, "Selector id=" + this.getId() + //
 					", attribute=" + this.getAttribute() + //
 					", value=" + value + //
@@ -214,8 +217,7 @@ public class Selector {
 					", key=" + key + //
 					", pattern=" + this.getPattern() + //
 					", expression=" + this.getExpression());
-			sipLogger.severe(request, request.toString());
-			sipLogger.logStackTrace(e);
+			throw e;
 		}
 
 		return regexRoute;

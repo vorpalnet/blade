@@ -60,6 +60,8 @@ public class RouterConfig extends Configuration implements Serializable {
 		Logger sipLogger = SettingsManager.getSipLogger();
 		Translation t = null;
 
+		sipLogger.finer(request, "RouterConfig.findTranslation - begin...");
+
 		sipLogger.finer(request, "RouterConfig.findTranslation - searching maps size: " + plan.size());
 
 		for (TranslationsMap map : plan) {
@@ -97,6 +99,7 @@ public class RouterConfig extends Configuration implements Serializable {
 			}
 		}
 
+		sipLogger.finer(request, "RouterConfig.findTranslation - end. t="+t);
 		return t;
 	}
 

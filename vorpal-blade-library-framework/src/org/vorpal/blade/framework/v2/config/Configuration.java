@@ -168,22 +168,32 @@ public class Configuration implements Serializable {
 		String value;
 		String outputString = new String(expression);
 
-		Callflow.getSipLogger().finest("Configuration.resolveVariables() attributes=" + attributes);
+		Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... attributes=" + attributes);
 
 		while ((openIndex = outputString.indexOf("${")) >= 0) {
+			Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... 1");
 			closeIndex = outputString.indexOf("}", openIndex);
+			Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... 2");
 			variable = outputString.substring(openIndex, closeIndex + 1);
+			Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... 3");
 			key = variable.substring(2, variable.length() - 1);
+			Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... 4");
 			value = (String) attributes.get(key);
+			Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... 5");
 
 			if (value != null) { // leave it alone in case we need to call this method again
+				Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... 6");
 				Callflow.getSipLogger()
-						.finest("Configuration.resolveVariables() replacing variable=" + variable + ", value=" + value);
+						.finest("Configuration.resolveVariables - replacing variable=" + variable + ", value=" + value);
 				outputString = outputString.replace(variable, value);
+				Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... 7");
 			}
+			Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... 8");
 
 		}
+		Callflow.getSipLogger().finest("Configuration.resolveVariables - begin... 9");
 
+		Callflow.getSipLogger().finest("Configuration.resolveVariables - end. outputString=" + outputString);
 		return outputString;
 	}
 

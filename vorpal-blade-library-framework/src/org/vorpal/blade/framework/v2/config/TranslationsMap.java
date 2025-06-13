@@ -43,6 +43,8 @@ public abstract class TranslationsMap {
 	public Translation applyTranslations(SipServletRequest request) {
 		Logger sipLogger = SettingsManager.getSipLogger();
 
+		sipLogger.finer(request, "Translation.applyTranslations - begin...");
+
 		String strRequestUri;
 		URI uri;
 		Translation translation = null;
@@ -110,6 +112,8 @@ public abstract class TranslationsMap {
 			sipLogger.severe(request, request.toString());
 			sipLogger.logStackTrace(e);
 		}
+
+		sipLogger.finer(request, "Translation.applyTranslations - end. translation=" + translation);
 
 		return translation;
 
