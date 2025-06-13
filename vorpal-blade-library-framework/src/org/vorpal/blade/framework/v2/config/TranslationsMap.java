@@ -84,7 +84,7 @@ public abstract class TranslationsMap {
 							attrMap.put(name, (String) objValue);
 						}
 					}
-					
+
 					for (String name : request.getSession().getAttributeNameSet()) {
 						objValue = request.getApplicationSession().getAttribute(name);
 						if (objValue instanceof String) {
@@ -92,8 +92,11 @@ public abstract class TranslationsMap {
 //									"TranslationsMap.applyTranslations - SipSession attrMap name=" + name + ", value=" + objValue);
 							attrMap.put(name, (String) objValue);
 						}
-					}					
-					
+					}
+
+					Callflow.getSipLogger().finest(request,
+							"TranslationsMap.applyTranslations - attempting to resolveVariables, attrMap=" + attrMap);
+
 					ruri = Configuration.resolveVariables(attrMap, ruri);
 
 					URI toUri = SettingsManager.getSipFactory().createURI(ruri);
