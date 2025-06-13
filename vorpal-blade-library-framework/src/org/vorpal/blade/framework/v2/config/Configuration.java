@@ -184,7 +184,6 @@ public class Configuration implements Serializable {
 				key = variable.substring(2, variable.length() - 1);
 				value = (String) attributes.get(key);
 
-
 				if (value != null) { // leave it alone in case we need to call this method again
 					outputString = outputString.replace(variable, value);
 				} else {
@@ -215,7 +214,7 @@ public class Configuration implements Serializable {
 		return outputString;
 	}
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 
 		Logger sipLogger = LogManager.getLogger("BLADE");
 		sipLogger.setUseParentHandlers(false);

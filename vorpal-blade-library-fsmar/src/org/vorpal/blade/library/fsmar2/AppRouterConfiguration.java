@@ -61,7 +61,7 @@ public class AppRouterConfiguration extends Configuration implements Serializabl
 		this.defaultApplication = defaultApplication;
 	}
 
-	public static void main(String[] args) throws JsonProcessingException {
+	public static void main(String[] args) throws JsonProcessingException{
 
 		AppRouterConfiguration configuration = new AppRouterConfiguration();
 
