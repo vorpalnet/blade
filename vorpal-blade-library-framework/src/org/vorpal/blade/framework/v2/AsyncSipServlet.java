@@ -337,7 +337,8 @@ public abstract class AsyncSipServlet extends SipServlet
 										// Create an index key for the appSession
 										if (rr.key != null) {
 											if (sipLogger.isLoggable(Level.FINER)) {
-												sipLogger.finer(request, "AsyncSipServlet - doRequest, addingIndexKey: " + rr.key);
+												sipLogger.finer(request,
+														"AsyncSipServlet - doRequest, addingIndexKey: " + rr.key);
 											}
 											request.getApplicationSession().addIndexKey(rr.key);
 										}
@@ -355,31 +356,29 @@ public abstract class AsyncSipServlet extends SipServlet
 
 						}
 
-						if (sipLogger.isLoggable(Level.FINER)) {
-							Map<String, String> attrMap = new HashMap<>();
-							Object value;
-							for (String name : sipSession.getAttributeNameSet()) {
-								value = sipSession.getAttribute(name);
-								if (value instanceof String) {
-									attrMap.put(name, (String) value);
-								}
-							}
-							sipLogger.finer(sipSession, "AsyncSipServlet - Origin session attributes: " + attrMap);
-						}
-
 					}
 
-					sipLogger.finer(request, "AysncSipServlet - Processing callflow: " + callflow.getClass().getName());
+					if (sipLogger.isLoggable(Level.FINER)) {
+						Map<String, String> attrMap = new HashMap<>();
+						Object value;
+						for (String name : sipSession.getAttributeNameSet()) {
+							value = sipSession.getAttribute(name);
+							if (value instanceof String) {
+								attrMap.put(name, (String) value);
+							}
+						}
+						sipLogger.finer(sipSession, "AsyncSipServlet.doRequest - callflow="
+								+ callflow.getClass().getSimpleName() + "+, origin sipSession attributes: " + attrMap);
+					}
+
 					callflow.process(request);
 
 					SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
 					if (request.isInitial() && linkedSession != null && sessionParameters != null) {
-						sipLogger.finest(request, "AsyncSipServlet - Processing outbound session attributes...");
 
 						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
 
 						if (selectors != null) {
-							sipLogger.finest(request, "Session AttributeSelectors list size=" + selectors.size());
 							for (AttributeSelector selector : selectors) {
 
 								if (selector.getDialog() != null
@@ -409,7 +408,8 @@ public abstract class AsyncSipServlet extends SipServlet
 									attrMap.put(name, (String) value);
 								}
 							}
-							sipLogger.finer(sipSession, "AsyncSipServlet - Destination session attributes: " + attrMap);
+							sipLogger.finer(sipSession,
+									"AsyncSipServlet.doRequest - Destination session attributes: " + attrMap);
 						}
 
 					}
