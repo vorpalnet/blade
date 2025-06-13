@@ -36,6 +36,7 @@ public class ProxyRouterSipServlet extends ProxyServlet {
 
 	@Override
 	public void proxyRequest(SipServletRequest request, ProxyPlan ProxyPlan) throws ServletException, IOException {
+		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, begin...");
 
 		RouterConfig config = settingsManager.getCurrent();
 
@@ -44,16 +45,18 @@ public class ProxyRouterSipServlet extends ProxyServlet {
 			uri = request.getRequestURI();
 		}
 
-		sipLogger.finer(request, "proxyRequest... " + uri);
+		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest... requestUri=" + uri);
 
 		ProxyTier proxyTier = new ProxyTier();
 		proxyTier.addEndpoint(uri);
 		ProxyPlan.getTiers().add(proxyTier);
+
+		sipLogger.finer(request, "ProxyRouterSipServlet - proxyRequest, end.");
 	}
 
 	@Override
 	public void proxyResponse(SipServletResponse response, ProxyPlan ProxyPlan) throws ServletException, IOException {
-		sipLogger.finer("proxyResponse... " + response.getStatus());
+		sipLogger.finer("ProxyRouterSipServlet - proxyResponse... " + response.getStatus());
 	}
 
 }
