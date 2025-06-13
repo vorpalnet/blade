@@ -79,11 +79,21 @@ public abstract class TranslationsMap {
 					for (String name : request.getApplicationSession().getAttributeNameSet()) {
 						objValue = request.getApplicationSession().getAttribute(name);
 						if (objValue instanceof String) {
-							Callflow.getSipLogger().finest(request,
-									"TranslationsMap setting attrMap name=" + name + ", value=" + objValue);
+//							Callflow.getSipLogger().finest(request,
+//									"TranslationsMap setting attrMap - SipApplicationSession attrMp name=" + name + ", value=" + objValue);
 							attrMap.put(name, (String) objValue);
 						}
 					}
+					
+					for (String name : request.getSession().getAttributeNameSet()) {
+						objValue = request.getApplicationSession().getAttribute(name);
+						if (objValue instanceof String) {
+//							Callflow.getSipLogger().finest(request,
+//									"TranslationsMap.applyTranslations - SipSession attrMap name=" + name + ", value=" + objValue);
+							attrMap.put(name, (String) objValue);
+						}
+					}					
+					
 					ruri = Configuration.resolveVariables(attrMap, ruri);
 
 					URI toUri = SettingsManager.getSipFactory().createURI(ruri);
