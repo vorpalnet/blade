@@ -1,0 +1,58 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<deployment-plan xmlns="http://xmlns.oracle.com/weblogic/deployment-plan" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://xmlns.oracle.com/weblogic/deployment-plan http://xmlns.oracle.com/weblogic/deployment-plan/1.0/deployment-plan.xsd">
+  <application-name>blade</application-name>
+  <variable-definition>
+    <variable>
+      <name>ServletDescriptor_logout_ServletName_17488085451070</name>
+      <value>logout</value>
+    </variable>
+    <variable>
+      <name>ServletDescriptor_org.vorpal.blade.applications.console.config.SaveDataServlet_ServletName_17488085451071</name>
+      <value>org.vorpal.blade.applications.console.config.SaveDataServlet</value>
+    </variable>
+    <variable>
+      <name>ServletDescriptor_JAX-RS/Jersey#1_ServletName_17488085451072</name>
+      <value>JAX-RS/Jersey#1</value>
+    </variable>
+    <variable>
+      <name>JspDescriptor_PageCheckSeconds_17488104455603</name>
+      <value>0</value>
+    </variable>
+  </variable-definition>
+  <module-override>
+    <module-name>blade</module-name>
+    <module-type>war</module-type>
+    <module-descriptor external="false">
+      <root-element>weblogic-web-app</root-element>
+      <uri>WEB-INF/weblogic.xml</uri>
+      <variable-assignment>
+        <name>ServletDescriptor_logout_ServletName_17488085451070</name>
+        <xpath>/weblogic-web-app/servlet-descriptor/[servlet-name="logout"]/servlet-name</xpath>
+        <origin>planbased</origin>
+      </variable-assignment>
+      <variable-assignment>
+        <name>ServletDescriptor_org.vorpal.blade.applications.console.config.SaveDataServlet_ServletName_17488085451071</name>
+        <xpath>/weblogic-web-app/servlet-descriptor/[servlet-name="org.vorpal.blade.applications.console.config.SaveDataServlet"]/servlet-name</xpath>
+        <origin>planbased</origin>
+      </variable-assignment>
+      <variable-assignment>
+        <name>ServletDescriptor_JAX-RS/Jersey#1_ServletName_17488085451072</name>
+        <xpath>/weblogic-web-app/servlet-descriptor/[servlet-name="JAX-RS/Jersey#1"]/servlet-name</xpath>
+        <origin>planbased</origin>
+      </variable-assignment>
+      <variable-assignment>
+        <name>JspDescriptor_PageCheckSeconds_17488104455603</name>
+        <xpath>/weblogic-web-app/jsp-descriptor/page-check-seconds</xpath>
+      </variable-assignment>
+    </module-descriptor>
+    <module-descriptor external="false">
+      <root-element>web-app</root-element>
+      <uri>WEB-INF/web.xml</uri>
+    </module-descriptor>
+    <module-descriptor external="true">
+      <root-element>wldf-resource</root-element>
+      <uri>META-INF/weblogic-diagnostics.xml</uri>
+    </module-descriptor>
+  </module-override>
+  <config-root>/Users/jeff/git/blade/vorpal-blade-admin-console/src/main/plan</config-root>
+</deployment-plan>

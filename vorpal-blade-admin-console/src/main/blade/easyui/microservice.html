@@ -1,0 +1,143 @@
+<html>
+
+<head>
+<title>ALICE - Microservice Broker</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+<link rel="stylesheet" href="./css/jquery-ui.modified.css">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css"
+	integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+
+	<script src="./js/aliceTasks.js" defer></script>
+
+
+<style>
+body {
+	font-family: Arial;
+	font-size: 12;
+	background-color: #eef;
+}
+
+#microservice-tabs {
+	margin-left: auto;
+	margin-right: auto;
+}
+</style>
+
+
+
+
+</head>
+
+<body>
+
+	<div id="microservice-view">
+		<form>
+
+			<div id="microservice-tabs" style="max-width: 300px">
+				<ul>
+					<li><a href="#microservice-tabs-1">Properties</a></li>
+					<li><a href="#microservice-tabs-2">Configuration</a></li>
+				</ul>
+				<div id="microservice-tabs-1">
+
+
+					<div class="ui-controlgroup">
+						<div class="ui-controlgroup-label">
+
+							<fieldset>
+
+								<legend>Microservice</legend>
+
+
+								<div>
+									<label style="width: 100%">Name</label>
+								</div>
+								<div>
+									<select id="microservice-name" name="name">
+										<option selected>Select name...</option>
+										<option>proxy-registrar</option>
+										<option>presence</option>
+										<option>router</option>
+									</select>
+								</div>
+
+								<div>
+									<label style="width: 100%">Settings</label>
+								</div>
+								<div>
+									<input id="checkboxCustom1" value="debug" class="checkbox-template" type="checkbox"> <label for="checkboxCustom1">Enable
+										Debug Logging</label>
+								</div>
+								<div>
+									<input id="checkboxCustom1" value="something" class="checkbox-template" type="checkbox"> <label for="checkboxCustom1">Something
+										else</label>
+								</div>
+								<div>
+									<input id="checkboxCustom1" value="other" class="checkbox-template" type="checkbox"> <label for="checkboxCustom1">The
+										other thing</label>
+								</div>
+
+
+							</fieldset>
+
+
+						</div>
+
+					</div>
+
+
+
+				</div>
+
+				<div id="microservice-tabs-2">
+
+
+					<div class="ui-controlgroup">
+						<div class="ui-controlgroup-label">
+							<fieldset>
+								<legend>Whater</legend>
+
+
+								<div>
+									<label style="width: 100%">Routing Region</label>
+								</div>
+								<div>
+									<select id="region">
+										<option>Neutral</option>
+										<option>Originating</option>
+										<option>Terminating</option>
+									</select>
+									<div>
+										<label style="width: 100%">URI Header</label>
+									</div>
+									<div>
+										<input style="width: 100%" id="subscriberUri" type="text" placeholder="Header">
+									</div>
+								</div>
+
+
+							</fieldset>
+						</div>
+
+					</div>
+
+
+				</div>
+
+
+
+			</div>
+
+
+		</form>
+	</div>
+
+
+
+</body>
+
+</html>
