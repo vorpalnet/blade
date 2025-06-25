@@ -26,44 +26,27 @@ public class RouterConfig extends Configuration implements Serializable {
 
 	}
 
-//	public static URI applyParameters(Translation t, SipServletRequest request) throws ServletParseException {
-//		URI uri = null;
-//
-//		if (t != null) {
-//			uri = SettingsManager.sipFactory.createURI(t.getRequestUri());
-//
-//			// copy all SIP URI parameters (if not already present in new request URI)
-//			for (String name : request.getRequestURI().getParameterNameSet()) {
-//				if (uri.getParameter(name) == null) {
-//					uri.setParameter(name, uri.getParameter(name));
-//				}
-//			}
-//
-//		}
-//		return uri;
-//	}
-
 	public static URI applyParameters(Translation t, SipServletRequest request) throws ServletParseException {
 		URI to = null;
 		URI from;
 
 		if (t != null && t.getRequestUri() != null) {
-			
+
 			String ruri = t.getRequestUri();
-			
+
 			HashMap<String, String> attrMap = new HashMap<>();
 			Object objValue;
 			for (String name : request.getApplicationSession().getAttributeNameSet()) {
 				objValue = request.getApplicationSession().getAttribute(name);
 				if (objValue instanceof String) {
 					Callflow.getSipLogger().finest(request,
-							"TranslationsMap setting attrMap name=" + name + ", value=" + objValue);
+							"RouterConfig.applyParameters - TranslationsMap setting attrMap name=" + name + ", value="
+									+ objValue);
 					attrMap.put(name, (String) objValue);
 				}
 			}
 			ruri = Configuration.resolveVariables(attrMap, ruri);
-			
-			
+
 			to = SettingsManager.sipFactory.createURI(ruri);
 			from = request.getRequestURI();
 
@@ -77,10 +60,12 @@ public class RouterConfig extends Configuration implements Serializable {
 		Logger sipLogger = SettingsManager.getSipLogger();
 		Translation t = null;
 
-//		sipLogger.finer(request, "Translation.findTranslation() searching maps size: " + plan.size());
+		sipLogger.finer(request, "RouterConfig.findTranslation - begin...");
+
+		sipLogger.finer(request, "RouterConfig.findTranslation - searching maps size: " + plan.size());
 
 		for (TranslationsMap map : plan) {
-//			sipLogger.finer(request, "Translation.findTranslation() searching map: " + map.getId());
+			sipLogger.finer(request, "RouterConfig.findTranslation -  searching map: " + map.getId());
 			t = map.applyTranslations(request);
 			if (t != null) {
 				break;
@@ -90,7 +75,7 @@ public class RouterConfig extends Configuration implements Serializable {
 		if (t != null) {
 
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(request, "Found translation id=" + t.getId() + //
+				sipLogger.finer(request, "RouterConfig.findTranslation - Found translation id=" + t.getId() + //
 						", desc=" + t.getDescription() + //
 						", ruri=" + t.getRequestUri() + //
 						", attributes=" + t.getAttributes());
@@ -101,33 +86,42 @@ public class RouterConfig extends Configuration implements Serializable {
 			if (t != null) {
 				if (sipLogger.isLoggable(Level.FINER)) {
 					sipLogger.finer(request,
-							"No translation found, using defaultRoute in config file. id=" + t.getId() + //
+							"RouterConfig.findTranslation - No translation found, using defaultRoute in config file. id="
+									+ t.getId() + //
 									", desc=" + t.getDescription() + //
 									", ruri=" + t.getRequestUri() + //
 									", attributes=" + t.getAttributes());
 				}
 			} else {
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(request, "No translation found, returning null.");
+					sipLogger.finer(request, "RouterConfig.findTranslation - No translation found, returning null.");
 				}
 			}
 		}
 
+		sipLogger.finer(request, "RouterConfig.findTranslation - end. t="+t);
 		return t;
 	}
 
 	public URI findRoute(SipServletRequest request) throws ServletParseException {
+		Logger sipLogger = SettingsManager.getSipLogger();
 
 		Translation t = null;
 		URI uri = null;
-
+		sipLogger.finer(request, "RouterConfig.findRoute - begin...");
 		t = findTranslation(request);
+		sipLogger.finer(request, "RouterConfig.findRoute - t=" + t);
 		if (t != null & t.getRequestUri() != null) {
+			sipLogger.finer(request, "RouterConfig.findRoute - applying parameters...");
 			uri = applyParameters(t, request);
+			sipLogger.finer(request, "RouterConfig.findRoute - parameters applied. uri=" + uri);
 		} else {
+			sipLogger.finer(request, "RouterConfig.findRoute - no translation found.");
 			uri = request.getRequestURI();
+			sipLogger.finer(request, "RouterConfig.findRoute - using requestURI, uri=" + uri);
 		}
 
+		sipLogger.finer(request, "RouterConfig.findRoute - end. uri=" + uri);
 		return uri;
 	}
 

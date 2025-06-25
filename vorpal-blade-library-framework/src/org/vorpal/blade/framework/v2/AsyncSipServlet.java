@@ -3,11 +3,14 @@ package org.vorpal.blade.framework.v2;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
+import java.util.logging.Level;
 
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
@@ -32,8 +35,10 @@ import org.vorpal.blade.framework.v2.callflow.Callback;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Callflow481;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
+import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
 import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
@@ -194,6 +199,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			}
 		}
 
+		appSession.addIndexKey(indexKey);
+		sipLogger.finer(request, "AsyncSipServlet - generateIndexKey, indexKeys=" + appSession.getIndexKeys());
 		return indexKey;
 
 	}
@@ -310,44 +317,50 @@ public abstract class AsyncSipServlet extends SipServlet
 					// create any index keys defined by selectors in the config file
 					if (request.isInitial() && sessionParameters != null) {
 
-						sipLogger.finest(request, "request.isInitial() && sessionParameters != null");
+						// sipLogger.finest(request, "request.isInitial() && sessionParameters !=
+						// null");
 
 						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
-						sipLogger.finest(request, "Session AttributeSelectors list=" + selectors);
+						// sipLogger.finest(request, "Session AttributeSelectors list=" + selectors);
 
 						if (selectors != null) {
-							sipLogger.finest(request, "Session AttributeSelectors list size=" + selectors.size());
+							// sipLogger.finest(request, "Session AttributeSelectors list size=" +
+							// selectors.size());
 							for (AttributeSelector selector : selectors) {
-								rr = selector.findKey(request);
-								if (rr != null) {
 
-									// is this a repeat?
-									for (Entry<String, String> entry : rr.attributes.entrySet()) {
-										sipLogger.finest(request, "Setting sipSession attribute name=" + entry.getKey()
-												+ ", value=" + entry.getValue());
-										appSession.setAttribute(entry.getKey(), entry.getValue());
-									}
+								if (selector.getDialog() == null
+										|| false == selector.getDialog().equals(DialogType.destination)) {
 
-									if (rr.key != null) {
-										sipLogger.finer(request,
-												"AsyncSipServlet - adding ApplicationSession index key " + rr.key);
-										request.getApplicationSession().addIndexKey(rr.key);
-									}
+									rr = selector.findKey(request);
+									sipLogger.finest(request, "AsyncSipServlet.doRequest - selector.id="
+											+ selector.getId() + ", rr=" + rr);
+									if (rr != null) {
 
-									// add any origin dialog session parameters from config file
-									SipSession linkedSession = Callflow.getLinkedSession(sipSession);
-									for (Entry<String, String> entry : rr.attributes.entrySet()) {
-										if (selector.getDialog() == AttributeSelector.DialogType.origin) {
+										// Create an index key for the appSession
+										if (rr.key != null) {
+											if (sipLogger.isLoggable(Level.FINER)) {
+												sipLogger.finer(request,
+														"AsyncSipServlet - doRequest, addingIndexKey: " + rr.key);
+											}
+											request.getApplicationSession().addIndexKey(rr.key);
+										}
+
+										// Add named groups to SipSession
+										for (Entry<String, String> entry : rr.attributes.entrySet()) {
 											sipLogger.finer(request,
-													"AsyncSipServlet - adding origin SipSession attribute name="
-															+ entry.getKey() + ", value=" + entry.getValue());
-											sipSession.setAttribute(entry.getKey(), entry.getValue());
-										} else if (linkedSession != null) {
-											sipLogger.finer(request,
-													"AsyncSipServlet - adding destination SipSession attribute name="
-															+ entry.getKey() + ", value=" + entry.getValue());
+													"AsyncSipServlet.doRequest - adding SipSession attribute "
+															+ entry.getKey() + "=" + entry.getValue());
 											sipSession.setAttribute(entry.getKey(), entry.getValue());
 										}
+
+										// jwm - testing; this should only be for SipSession
+										for (Entry<String, String> entry : rr.attributes.entrySet()) {
+											sipLogger.finer(request,
+													"AsyncSipServlet.doRequest - adding SipApplicationSession attribute "
+															+ entry.getKey() + "=" + entry.getValue());
+											appSession.setAttribute(entry.getKey(), entry.getValue());
+										}
+
 									}
 
 								}
@@ -355,49 +368,52 @@ public abstract class AsyncSipServlet extends SipServlet
 							}
 
 						}
+
+					}
+
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(request,
+								Color.YELLOW("AsyncSipServlet.doRequest - appSession id=" + appSession.getId() + //
+										", indexKeys=" + appSession.getIndexKeys() + //
+										", sessions=" + appSession.getSessionSet().size() + //
+										", timers=" + appSession.getTimers().size()));
+
+						Map<String, String> attrMap = new HashMap<>();
+						Object value;
+						for (String name : sipSession.getAttributeNameSet()) {
+							value = sipSession.getAttribute(name);
+							if (value instanceof String) {
+								attrMap.put(name, (String) value);
+							} else if (value instanceof Boolean) {
+								attrMap.put(name, Boolean.toString((Boolean) value));
+							} else if (value instanceof Integer) {
+								attrMap.put(name, Integer.toString((Integer) value));
+							} else {
+								attrMap.put(name, "?object");
+							}
+						}
+						sipLogger.finer(sipSession, "AsyncSipServlet.doRequest - callflow="
+								+ callflow.getClass().getSimpleName() + ", SipSession attributes: " + attrMap);
 					}
 
 					callflow.process(request);
 
-					if (request.isInitial() && sessionParameters != null) {
-
-						sipLogger.finest(request, "request.isInitial() && sessionParameters != null");
+					SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
+					if (request.isInitial() && linkedSession != null && sessionParameters != null) {
 
 						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
-						sipLogger.finest(request, "Session AttributeSelectors list=" + selectors);
 
 						if (selectors != null) {
-							sipLogger.finest(request, "Session AttributeSelectors list size=" + selectors.size());
 							for (AttributeSelector selector : selectors) {
-								rr = selector.findKey(request);
-								if (rr != null) {
 
-									// is this a repeat?
-									for (Entry<String, String> entry : rr.attributes.entrySet()) {
-										sipLogger.finest(request, "Setting appSession attribute name=" + entry.getKey()
-												+ ", value=" + entry.getValue());
-										appSession.setAttribute(entry.getKey(), entry.getValue());
-									}
+								if (selector.getDialog() != null
+										&& selector.getDialog().equals(DialogType.destination)) {
 
-									if (rr.key != null) {
-										sipLogger.finer(request,
-												"AsyncSipServlet - adding ApplicationSession index key " + rr.key);
-										request.getApplicationSession().addIndexKey(rr.key);
-									}
-
-									// add any origin dialog session parameters from config file
-									SipSession linkedSession = Callflow.getLinkedSession(sipSession);
-									for (Entry<String, String> entry : rr.attributes.entrySet()) {
-										if (selector.getDialog() == AttributeSelector.DialogType.origin) {
-											sipLogger.finer(request,
-													"AsyncSipServlet - adding origin SipSession attribute name="
-															+ entry.getKey() + ", value=" + entry.getValue());
-											sipSession.setAttribute(entry.getKey(), entry.getValue());
-										} else if (linkedSession != null) {
-											sipLogger.finer(request,
-													"AsyncSipServlet - adding destination SipSession attribute name="
-															+ entry.getKey() + ", value=" + entry.getValue());
-											sipSession.setAttribute(entry.getKey(), entry.getValue());
+									rr = selector.findKey(request);
+									if (rr != null) {
+										// add any origin dialog session parameters from config file
+										for (Entry<String, String> entry : rr.attributes.entrySet()) {
+											linkedSession.setAttribute(entry.getKey(), entry.getValue());
 										}
 									}
 
@@ -406,15 +422,32 @@ public abstract class AsyncSipServlet extends SipServlet
 							}
 
 						}
+
+						if (sipLogger.isLoggable(Level.FINER)) {
+							Map<String, String> attrMap = new HashMap<>();
+
+							Object value;
+							for (String name : linkedSession.getAttributeNameSet()) {
+								value = linkedSession.getAttribute(name);
+								if (value instanceof String) {
+									attrMap.put(name, (String) value);
+								}
+							}
+							sipLogger.finer(sipSession,
+									"AsyncSipServlet.doRequest - Destination session attributes: " + attrMap);
+						}
+
 					}
 
 				}
 			}
 
 		} catch (Exception ex) {
+			String error = event.getServletContext().getServletContextName() + " " + ex.getClass().getSimpleName()
+					+ ", " + ex.getMessage();
 			sipLogger.severe(request, "Exception on SIP request: \n" + request.toString());
 			sipLogger.severe(request, ex);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
+			sipLogger.getParent().severe(error);
 		}
 
 		// process requests queued up from glare

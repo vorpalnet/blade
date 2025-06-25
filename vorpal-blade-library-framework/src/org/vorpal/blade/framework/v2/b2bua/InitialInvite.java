@@ -167,6 +167,7 @@ public class InitialInvite extends Callflow {
 			bobRequest.setRequestURI(aliceRequest.getRequestURI());
 			linkSessions(aliceRequest.getSession(), bobRequest.getSession());
 
+			// jwm - I think this code should go in Callflow.sendRequest
 			// Code to X-Vorpal-Session AND X-Vorpal-Timestamp
 			if (bobRequest.isInitial() && null == bobRequest.getHeader("X-Vorpal-Session")) {
 				SipSession sipSession = bobRequest.getSession();

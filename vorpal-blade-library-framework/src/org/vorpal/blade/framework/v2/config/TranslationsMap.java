@@ -43,6 +43,8 @@ public abstract class TranslationsMap {
 	public Translation applyTranslations(SipServletRequest request) {
 		Logger sipLogger = SettingsManager.getSipLogger();
 
+		sipLogger.finer(request, "Translation.applyTranslations - begin...");
+
 		String strRequestUri;
 		URI uri;
 		Translation translation = null;
@@ -74,14 +76,30 @@ public abstract class TranslationsMap {
 					String ruri = translation.getRequestUri();
 					HashMap<String, String> attrMap = new HashMap<>();
 					Object objValue;
+
 					for (String name : request.getApplicationSession().getAttributeNameSet()) {
 						objValue = request.getApplicationSession().getAttribute(name);
 						if (objValue instanceof String) {
 							Callflow.getSipLogger().finest(request,
-									"TranslationsMap setting attrMap name=" + name + ", value=" + objValue);
+									"TranslationsMap.applyTranslations - SipApplicationSession attrMp name=" + name
+											+ ", value=" + objValue);
 							attrMap.put(name, (String) objValue);
 						}
 					}
+
+					for (String name : request.getSession().getAttributeNameSet()) {
+						objValue = request.getApplicationSession().getAttribute(name);
+						if (objValue instanceof String) {
+							Callflow.getSipLogger().finest(request,
+									"TranslationsMap.applyTranslations - SipSession attrMap name=" + name + ", value="
+											+ objValue);
+							attrMap.put(name, (String) objValue);
+						}
+					}
+
+					Callflow.getSipLogger().finest(request,
+							"TranslationsMap.applyTranslations - attempting to resolveVariables, attrMap=" + attrMap);
+
 					ruri = Configuration.resolveVariables(attrMap, ruri);
 
 					URI toUri = SettingsManager.getSipFactory().createURI(ruri);
@@ -110,6 +128,8 @@ public abstract class TranslationsMap {
 			sipLogger.severe(request, request.toString());
 			sipLogger.logStackTrace(e);
 		}
+
+		sipLogger.finer(request, "Translation.applyTranslations - end. translation=" + translation);
 
 		return translation;
 

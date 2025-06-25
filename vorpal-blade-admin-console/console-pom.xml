@@ -15,11 +15,9 @@
 		<maven.compiler.source>${java.version}</maven.compiler.source>
 		<maven.compiler.target>${java.version}</maven.compiler.target>
 		<maven-plugin-version>1.0.0</maven-plugin-version>
-		<jackson-version>2.12.7</jackson-version>
+		<jackson-version>2.16.0</jackson-version>
 		<slf4j-version>2.0.12</slf4j-version>
 		<swagger-version>2.2.20</swagger-version>
-		<occas>${OCCAS}</occas>
-		<hostname>${HOSTNAME}</hostname>
 		<occas-version>8.1</occas-version>
 	</properties>
 
@@ -31,6 +29,7 @@
 			<version>${occas-version}</version>
 			<scope>system</scope>
 			<systemPath>${OCCAS}/wlserver/server/lib/weblogic.jar</systemPath>
+
 		</dependency>
 
 		<dependency>
@@ -58,130 +57,12 @@
 			<version>2.7.3</version>
 		</dependency>
 		
-<dependency>
-    <groupId>jakarta.servlet.jsp.jstl</groupId>
-    <artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
-    <version>3.0.2</version>
-</dependency>
-		
-<!--
 		<dependency>
-    		<groupId>org.apache.taglibs</groupId>
-    		<artifactId>taglibs-standard-impl</artifactId>
-    		<version>1.2.5</version>
-    		<scope>runtime</scope>
-		</dependency>
-		
-		<dependency>
-    		<groupId>org.apache.taglibs</groupId>
-    		<artifactId>taglibs-standard-spec</artifactId>
-    		<version>1.2.5</version>
-		</dependency>
-		
-		<dependency>
-    		<groupId>org.apache.taglibs</groupId>
-			<artifactId>taglibs-standard-jstlel</artifactId>
-    		<version>1.2.5</version>
-		</dependency>
--->
-
-<!--
-
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-api</artifactId>
-			<version>${slf4j-version}</version>
+    		<groupId>jakarta.servlet.jsp.jstl</groupId>
+    		<artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+    		<version>3.0.2</version>
 		</dependency>
 
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-simple</artifactId>
-			<version>${slf4j-version}</version>
-			<scope>runtime</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-email</artifactId>
-			<version>1.6.0</version>
-		</dependency>
-
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-collections4</artifactId>
-			<version>4.5.0-M1</version>
-		</dependency>
-
-
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-text</artifactId>
-			<version>1.10.0</version>
-		</dependency>
-
-		<dependency>
-			<groupId>commons-io</groupId>
-			<artifactId>commons-io</artifactId>
-			<version>2.16.1</version>
-		</dependency>
-
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.13.2</version>
-			<scope>test</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>com.github.seancfoley</groupId>
-			<artifactId>ipaddress</artifactId>
-			<version>5.4.2</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.kjetland</groupId>
-			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
-			<version>1.0.39</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.fasterxml.jackson.module</groupId>
-			<artifactId>jackson-module-jsonSchema</artifactId>
-			<version>${jackson-version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-databind</artifactId>
-			<version>${jackson-version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-annotations</artifactId>
-			<version>${jackson-version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.fasterxml.jackson.jaxrs</groupId>
-			<artifactId>jackson-jaxrs-yaml-provider</artifactId>
-			<version>${jackson-version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.fasterxml.jackson.jaxrs</groupId>
-			<artifactId>jackson-jaxrs-xml-provider</artifactId>
-			<version>${jackson-version}</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.fasterxml.jackson.datatype</groupId>
-			<artifactId>jackson-datatype-joda</artifactId>
-			<version>${jackson-version}</version>
-		</dependency>
-
-
--->
 		<dependency>
 			<groupId>io.swagger.core.v3</groupId>
 			<artifactId>swagger-jaxrs2</artifactId>
@@ -206,13 +87,6 @@
 				<version>3.8.1</version>
 				<configuration>
 					<release>11</release>
-
-					<!--
-					<compilerArgs>
-						<arg>-proc:full</arg>
-					</compilerArgs>
-					-->
-
 				</configuration>
 			</plugin>
 
@@ -258,7 +132,7 @@
 						</goals>
 						<configuration>
 							<files>
-								<file>${basedir}/../${hostname}.properties</file>
+								<file>${basedir}/../${HOSTNAME}.properties</file>
 								<file>${basedir}/../version.properties</file>
 								<file>${basedir}/../build.number</file>
 							</files>
@@ -299,8 +173,8 @@
 							<tasks>
 								<echo>Displaying value of 'testproperty'
 									property</echo>
-								<echo>[testproperty] ${hostname}</echo>
-								<echo>[testproperty] ${OCCAS}</echo>
+								<echo>hostname = ${HOSTNAME}</echo>
+								<echo>occas = ${OCCAS}</echo>
 							</tasks>
 						</configuration>
 					</execution>
