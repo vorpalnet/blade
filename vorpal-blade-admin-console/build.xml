@@ -27,19 +27,25 @@
 
 	<target name="mvn_windows" if="isWindows" depends="init">
 		<exec dir="." executable="cmd">
-			<arg line="/c mvn clean package -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}" />
+			<arg line="/c mvn -f console-pom.xml clean package -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}" />
 		</exec>
 	</target>
 
 	<target name="mvn_unix" if="isUnix" depends="init">
 		<exec dir="." executable="sh">
-			<arg line="-c 'mvn clean package -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
+			<arg line="-c 'mvn -f console-pom.xml clean package -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
 		</exec>
 	</target>
 
 
 	<target name="package" depends="init, mvn_windows, mvn_unix">
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
+
+		<copy todir="src/main/webapp/WEB-INF/lib">
+			<fileset dir="${webapp}/WEB-INF/lib" />
+		</copy>
+
+
 	</target>
 
 

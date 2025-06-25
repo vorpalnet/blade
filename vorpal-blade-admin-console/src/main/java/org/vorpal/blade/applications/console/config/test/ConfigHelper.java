@@ -99,7 +99,14 @@ public class ConfigHelper {
 			System.out.println(json);
 
 			if (json != null && json.length() > 0) {
-				Files.writeString(path, json, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+				// java 11
+				// Files.writeString(path, json, StandardOpenOption.CREATE,
+				// StandardOpenOption.TRUNCATE_EXISTING);
+
+				// java 1.8
+				Files.write(path, json.getBytes());
+
 			}
 
 		} catch (IOException e) {
@@ -180,8 +187,8 @@ public class ConfigHelper {
 				remoteTimestamp = settings.getLastModified(configType);
 
 				System.out.println("testing begin...");
-				System.out.println("path exists? " + (path!=null));
-				System.out.println("path " + path );				
+				System.out.println("path exists? " + (path != null));
+				System.out.println("path " + path);
 				System.out.println("path.toFile().exists..? " + path.toFile().exists());
 				System.out.println("path.toFile().exists again..? " + path.toFile().exists());
 				System.out.println("testing end.");
