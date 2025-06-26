@@ -35,6 +35,7 @@ import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 import org.vorpal.blade.services.transfer.TransferServlet;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 import org.vorpal.blade.services.transfer.callflows.BlindTransfer;
+import org.vorpal.blade.services.transfer.callflows.Transfer;
 import org.vorpal.blade.services.transfer.callflows.TransferListener;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
@@ -265,6 +266,9 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 //							callflow = new BlindTransfer(this, true);
 							break;
 						}
+
+						// Add any inviteHeaders
+						((Transfer) callflow).setInviteHeaders(transferRequest.target.inviteHeaders);
 
 						sipLogger.finest(transferorSession, "TransferAPI callflow=" + callflow);
 

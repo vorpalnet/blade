@@ -64,6 +64,7 @@
 package org.vorpal.blade.services.transfer.callflows;
 
 import java.io.IOException;
+import java.util.List;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
@@ -73,6 +74,7 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.services.transfer.TransferServlet;
 import org.vorpal.blade.services.transfer.TransferSettings;
+import org.vorpal.blade.services.transfer.api.v1.Header;
 
 public class Transfer extends Callflow {
 	static final long serialVersionUID = 1L;
@@ -92,6 +94,17 @@ public class Transfer extends Callflow {
 	protected SipServletRequest transfereeRequest;
 	protected SipServletRequest targetRequest;
 	protected SipServletRequest transferorRequest;
+
+	protected List<Header> inviteHeaders;
+
+	public List<Header> getInviteHeaders() {
+		return inviteHeaders;
+	}
+
+	public Transfer setInviteHeaders(List<Header> inviteHeaders) {
+		this.inviteHeaders = inviteHeaders;
+		return this;
+	}
 
 	/**
 	 * This is a generic base class to be extended by other classes to create a

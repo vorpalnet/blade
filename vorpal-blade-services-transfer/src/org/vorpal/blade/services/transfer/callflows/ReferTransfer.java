@@ -74,6 +74,7 @@ import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.services.transfer.api.v1.Header;
 
 /**
  * The ReferTransfer callflow sends a REFER to Alice on behalf of Bob. Alice
@@ -100,6 +101,14 @@ public class ReferTransfer extends Transfer {
 			// - REST APIs. should add a dummy 202 response in the future.
 
 //			this.referRequest = referRequest;
+
+			// If this was method was invoked by the REST API, it might have set some extra
+			// headers.
+			if (this.inviteHeaders != null) {
+				for (Header header : inviteHeaders) {
+					targetRequest.setHeader(header.getName(), header.getValue());
+				}
+			}
 
 			// request is REFER to transferee (alice)
 			SipSession transfereeSession = referRequest.getSession();

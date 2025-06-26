@@ -121,6 +121,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Expectation;
+import org.vorpal.blade.services.transfer.api.v1.Header;
 
 /**
  * The BlindTransfer callflow performs an 'unattended' transfer operation.
@@ -176,6 +177,13 @@ public class BlindTransfer extends Transfer {
 					.getAttribute("INITIAL_REFER");
 			if (intialRefer != null) {
 				preserveReferHeaders(intialRefer, this.targetRequest);
+			}
+
+			// If this was method was invoked by the REST API, it might have set some INVITE headers.
+			if (this.inviteHeaders != null) {
+				for (Header header : inviteHeaders) {
+					targetRequest.setHeader(header.getName(), header.getValue());
+				}
 			}
 
 			sendResponse(referRequest.createResponse(202));
