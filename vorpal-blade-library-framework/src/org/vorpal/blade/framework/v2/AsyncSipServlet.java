@@ -215,25 +215,38 @@ public abstract class AsyncSipServlet extends SipServlet
 		String method = request.getMethod();
 		AttributesKey rr = null;
 
-		Queue<SipServletRequest> glareQueue = null;
-		Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
-
-		// glare handling; when expecting ack and you don't get one,
+		// Glare handling; when expecting an ACK and you don't get one,
 		// jam the message in a queue and process it later
+		// Note: the queuing mechanism is buggy, so we're returning 491 until a better
+		// algorithm is devised
+//		Queue<SipServletRequest> glareQueue = (Queue<SipServletRequest>) sipSession.getAttribute("GLARE_QUEUE");
+//		glareQueue = (null != glareQueue) ? glareQueue : new LinkedList<>();
 
-		if (false == method.equals("ACK")) {
-			if (expectAck != null && expectAck == true && false == method.equals("CANCEL")) {
-				sipLogger.warning(request,
-						"GLARE! " + method + " received while awaiting ACK. Queuing request for later processing...");
-				glareQueue = (Queue<SipServletRequest>) sipSession.getAttribute("GLARE_QUEUE");
-				glareQueue = (null != glareQueue) ? glareQueue : new LinkedList<>();
-				glareQueue.add(request);
-				sipSession.setAttribute("GLARE_QUEUE", glareQueue);
-				return;
-			}
-		} else {
+		Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
+		expectAck = (expectAck == true) ? true : false;
+
+		if (method.equals("ACK")) {
 			expectAck = false;
 			sipSession.removeAttribute("EXPECT_ACK");
+		} else {
+			if (expectAck && !method.equals("CANCEL")) { // anything other than cancel
+				sipLogger.fine(request,
+						"Glare; " + method + " received while awaiting ACK. Queuing request for later processing...");
+
+				SipServletResponse glareResponse = request.createResponse(491);
+				glareResponse.setHeader("Retry-After", "3"); // 3 seconds should enough time to clear the line
+				sendResponse(glareResponse);
+
+//				glareQueue.add(request);
+//				sipSession.setAttribute("GLARE_QUEUE", glareQueue);
+				return;
+			}
+		}
+
+		// Now that GLARE is taken care of, if this is an INVITE, we should expect an
+		// ACK, unless we reply with an error code -- See Callflow.sendResponse
+		if (method.equals("INVITE")) {
+			sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
 		}
 
 		try {
@@ -451,18 +464,19 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 
 		// process requests queued up from glare
-		if (expectAck != null && expectAck == false) {
-			glareQueue = (Queue<SipServletRequest>) sipSession.getAttribute("GLARE_QUEUE");
-			if (glareQueue != null) {
-				SipServletRequest glareRequest;
-				while (glareQueue.size() > 0) {
-					glareRequest = glareQueue.remove();
-					sipLogger.warning(glareRequest, "Processing queued " + glareRequest.getMethod() + " due to glare.");
-					doRequest(glareRequest);
-				}
-			}
-			sipSession.removeAttribute("GLARE_QUEUE");
-		}
+		// Note: this buggy because two or more requests in the queue would result in
+		// even more glare; a better algorithm needs to be devised
+//		if (expectAck == false) {
+//			if (glareQueue != null) {
+//				SipServletRequest glareRequest;
+//				while (glareQueue.size() > 0) {
+//					glareRequest = glareQueue.remove();
+//					sipLogger.warning(glareRequest, "Processing queued " + glareRequest.getMethod() + " due to glare.");
+//					doRequest(glareRequest);
+//				}
+//			}
+//			sipSession.removeAttribute("GLARE_QUEUE");
+//		}
 
 	}
 
@@ -473,11 +487,19 @@ public abstract class AsyncSipServlet extends SipServlet
 		Callback<SipServletResponse> callback;
 		SipSession sipSession = response.getSession();
 		SipApplicationSession appSession = response.getApplicationSession();
+		String method = response.getMethod();
 
 		try {
 			if (sipSession != null) {
 
 				if (sipSession.isValid()) {
+
+					// for GLARE handling
+					if (method.equals("INVITE")) {
+						if (Callflow.failure(response)) {
+							sipSession.removeAttribute("EXPECT_ACK");
+						}
+					}
 
 					callback = Callflow.pullCallback(response);
 

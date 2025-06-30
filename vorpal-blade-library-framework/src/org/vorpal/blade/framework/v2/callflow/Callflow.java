@@ -491,6 +491,17 @@ public abstract class Callflow implements Serializable {
 
 		SipApplicationSession appSession = request.getApplicationSession();
 		SipSession sipSession = request.getSession();
+		String method = request.getMethod();
+
+		// for GLARE handling
+		switch (method) {
+		case INVITE:
+			sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
+			break;
+		case ACK:
+			sipSession.removeAttribute("EXPECT_ACK");
+			break;
+		}
 
 		if (request.isInitial() && null == request.getHeader("X-Vorpal-Session")) {
 			String indexKey = getVorpalSessionId(appSession);
@@ -772,9 +783,11 @@ public abstract class Callflow implements Serializable {
 
 					switch (response.getMethod()) {
 					case INVITE:
-						// glare handling;
-						sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
-						// do not break; flow through
+
+						if (failure(response)) { // glare handling;
+							sipSession.removeAttribute("EXPECT_ACK");
+						}
+
 					case REGISTER:
 					case SUBSCRIBE:
 					case NOTIFY:

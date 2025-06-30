@@ -205,6 +205,16 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					// can finally log request
 					sipLogger.logObjectAsJson(transfereeSession, Level.FINER, transferRequest);
 
+					// handle glare
+					if (null != transfereeSession.getAttribute("EXPECT_ACK")) {
+						TransferResponse transferResponse = new TransferResponse();
+						transferResponse.status = 491;
+						transferResponse.description = "Request Pending";
+						transferResponse.request = transferRequest;
+						asyncResponse.resume(Response.status(Status.NOT_ACCEPTABLE).entity(transferResponse).build());
+						return;
+					}
+
 					Address transferee = (Address) transfereeSession.getAttribute("sipAddress");
 					Address target = null;
 
