@@ -1,9 +1,11 @@
 package org.vorpal.blade.services.proxy.router;
 
 import java.io.IOException;
+import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.Address;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
@@ -39,21 +41,30 @@ public class ProxyRouterSipServlet extends ProxyServlet {
 
 		RouterConfig config = settingsManager.getCurrent();
 
-		URI uri = config.findRoute(request);
-		if (uri == null) {
-			uri = request.getRequestURI();
+		URI ruri = config.findRoute(request);
+		if (ruri == null) {
+			ruri = request.getRequestURI();
 		}
 
-		sipLogger.finer(request, "proxyRequest... " + uri);
-
 		ProxyTier proxyTier = new ProxyTier();
-		proxyTier.addEndpoint(uri);
+		proxyTier.addEndpoint(ruri);
 		ProxyPlan.getTiers().add(proxyTier);
+
+		if (sipLogger.isLoggable(Level.INFO)) {
+
+			Address from = request.getFrom();
+			Address to = request.getTo();
+
+			sipLogger.info(request,
+					"ProxyRouterSipServlet.proxyRequest - from=" + from + ", to=" + to + ", ruri=" + ruri);
+		}
 	}
 
 	@Override
 	public void proxyResponse(SipServletResponse response, ProxyPlan ProxyPlan) throws ServletException, IOException {
-		sipLogger.finer("proxyResponse... " + response.getStatus());
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.finer("ProxyRouterSipServlet.proxyResponse - status=" + response.getStatus());
+		}
 	}
 
 }

@@ -36,7 +36,7 @@ public class ProxyRouterConfigSample extends RouterConfig implements Serializabl
 
 	public ProxyRouterConfigSample() {
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINER);
+		this.logging.setLoggingLevel(LoggingLevel.WARNING);
 		this.session = null;
 
 		Selector caller = new Selector("caller", "From", SIP_ADDRESS_PATTERN, "${user}");

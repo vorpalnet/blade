@@ -9,22 +9,18 @@ import java.util.logging.Level;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipApplicationSession;
-import javax.servlet.sip.SipApplicationSessionEvent;
-import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
-import javax.servlet.sip.SipSessionEvent;
-import javax.servlet.sip.SipSessionListener;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.b2bua.Passthru;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
-import org.vorpal.blade.framework.v2.logging.ConsoleColors;
 import org.vorpal.blade.services.transfer.callflows.AttendedTransfer;
 import org.vorpal.blade.services.transfer.callflows.BlindTransfer;
 import org.vorpal.blade.services.transfer.callflows.ConferenceTransfer;
@@ -40,13 +36,22 @@ import org.vorpal.blade.services.transfer.callflows.TransferListener;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-//public class TransferServlet extends B2buaServlet implements TransferListener {
-public class TransferServlet extends B2buaServlet //
-		implements TransferListener, SipApplicationSessionListener, SipSessionListener {
+// For debugging, listen on session creation and destruction
+//public class TransferServlet extends B2buaServlet
+//implements B2buaListener, TransferListener, SipApplicationSessionListener, SipSessionListener {
+public class TransferServlet extends B2buaServlet implements B2buaListener, TransferListener {
 
 	private static final long serialVersionUID = 1L;
 	// public class TransferServlet extends B2buaServlet {
 	public static SettingsManager<TransferSettings> settingsManager;
+
+	public static SettingsManager<TransferSettings> getSettingsManager() {
+		return settingsManager;
+	}
+
+	public static void setSettingsManager(SettingsManager<TransferSettings> settingsManager) {
+		TransferServlet.settingsManager = settingsManager;
+	}
 
 	public void showProperties(SipServletContextEvent event) {
 		String key, value;
@@ -192,48 +197,24 @@ public class TransferServlet extends B2buaServlet //
 	}
 
 	@Override
-	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
-
-		try {
-//			sipLogger.finer(outboundRequest, "TransferServlet callStarted...");
-
-			SipApplicationSession appSession = outboundRequest.getApplicationSession();
-//			sipLogger.finer(outboundRequest, "appSession id=" + appSession.getId());
-//			sipLogger.finer(outboundRequest, "appSession indexKeys=" + appSession.getIndexKeys());
-
-			// save X-Original-DN to memory
-			URI xOriginalDN = outboundRequest.getTo().getURI();
-			appSession.setAttribute("X-Original-DN", xOriginalDN);
-
-			// save X-Previous-DN to memory
-			URI xPreviousDN = outboundRequest.getRequestURI();
-			appSession.setAttribute("X-Previous-DN", xPreviousDN);
-
-			// For Transfer REST API
-			// save outbound request for REST API Session/Dialog
-			outboundRequest.getSession().setAttribute("initial_invite", outboundRequest);
-			SipServletRequest aliceRequest = this.getIncomingRequest(outboundRequest);
-			aliceRequest.getSession().setAttribute("sipAddress", aliceRequest.getFrom());
-			outboundRequest.getSession().setAttribute("sipAddress", outboundRequest.getTo());
-
-		} catch (Exception e) {
-			sipLogger.severe(outboundRequest, e);
-		}
-
-	}
-
-	@Override
 	public void transferRequested(SipServletRequest inboundRefer) throws ServletException, IOException {
 
 		try {
-//			sipLogger.finer(inboundRefer, "transferRequested...");
 
 			SipApplicationSession appSession = inboundRefer.getApplicationSession();
 
 			// save X-Previous-DN-Tmp for use later
 			URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
-//			sipLogger.finer(inboundRefer, "transferRequested... setting appSession attribute: Refer-To=" + referTo);
 			appSession.setAttribute("Refer-To", referTo);
+
+			if (sipLogger.isLoggable(Level.INFO)) {
+				String ruri = inboundRefer.getRequestURI().toString();
+				String from = inboundRefer.getFrom().toString();
+				String to = inboundRefer.getTo().toString();
+				String referredBy = inboundRefer.getHeader("Referred-By");
+				sipLogger.info(inboundRefer, "TransferServlet.transferRequested - ruri=" + ruri + ", from=" + from
+						+ ", to=" + to + ", referTo=" + referTo + ", referredBy=" + referredBy);
+			}
 
 		} catch (Exception e) {
 			sipLogger.severe(inboundRefer, e);
@@ -254,6 +235,10 @@ public class TransferServlet extends B2buaServlet //
 		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
 		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
 
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(outboundInvite, "TransferServlet.transferInitiated - method=" + outboundInvite.getMethod());
+		}
+
 	}
 
 	@Override
@@ -270,112 +255,162 @@ public class TransferServlet extends B2buaServlet //
 		// now update X-Previous-DN for future use after success transfer
 		URI referTo = (URI) appSession.getAttribute("Refer-To");
 		appSession.setAttribute("X-Previous-DN", referTo);
+
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(response, "TransferServlet.transferCompleted - status=" + response.getStatus());
+		}
+
 	}
 
 	@Override
 	public void transferDeclined(SipServletResponse response) throws ServletException, IOException {
-//		sipLogger.finer(response, "transferDeclined...");
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(response, "TransferServlet.transferDeclined - status=" + response.getStatus());
+		}
 	}
 
 	@Override
 	public void transferAbandoned(SipServletRequest request) throws ServletException, IOException {
-//		sipLogger.finer(request, "transferAbandoned...");
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(request, "TransferServlet.transferAbandoned - method=" + request.getMethod());
+		}
+	}
+
+	@Override
+	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
+
+		try {
+
+			SipApplicationSession appSession = outboundRequest.getApplicationSession();
+
+			// save X-Original-DN to memory
+			URI xOriginalDN = outboundRequest.getTo().getURI();
+			appSession.setAttribute("X-Original-DN", xOriginalDN);
+
+			// save X-Previous-DN to memory
+			URI xPreviousDN = outboundRequest.getRequestURI();
+			appSession.setAttribute("X-Previous-DN", xPreviousDN);
+
+			// For Transfer REST API
+			// save outbound request for REST API Session/Dialog
+			outboundRequest.getSession().setAttribute("initial_invite", outboundRequest);
+			SipServletRequest aliceRequest = this.getIncomingRequest(outboundRequest);
+			aliceRequest.getSession().setAttribute("sipAddress", aliceRequest.getFrom());
+			outboundRequest.getSession().setAttribute("sipAddress", outboundRequest.getTo());
+
+			if (sipLogger.isLoggable(Level.INFO)) {
+				String ruri = outboundRequest.getRequestURI().toString();
+				String from = outboundRequest.getFrom().toString();
+				String to = outboundRequest.getTo().toString();
+
+				sipLogger.info(outboundRequest,
+						"TransferServlet.callStarted - ruri=" + ruri + ", from=" + from + ", to=" + to);
+			}
+
+		} catch (Exception e) {
+			sipLogger.severe(outboundRequest, e);
+		}
+
 	}
 
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
-//		sipLogger.finer(outboundResponse, "callAnswered...");
 		SipSession caller = outboundResponse.getSession();
 		caller.setAttribute("userAgent", "caller");
 		SipSession callee = Callflow.getLinkedSession(caller);
 		callee.setAttribute("userAgent", "callee");
+
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(outboundResponse, "TransferServlet.callAnswered - status=" + outboundResponse.getStatus());
+		}
+
 	}
 
 	@Override
 	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
-//		sipLogger.finer(outboundRequest, "callConnected...");
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(outboundRequest, "TransferServlet.callConnected - method=" + outboundRequest.getMethod());
+		}
 	}
 
 	@Override
 	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
-//		sipLogger.finer(outboundRequest, "callCompleted...");
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(outboundRequest, "TransferServlet.callCompleted - method=" + outboundRequest.getMethod());
+		}
 	}
 
 	@Override
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
-//		sipLogger.finer(outboundResponse, "callDeclined...");
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(outboundResponse, "TransferServlet.callDeclined - status=" + outboundResponse.getStatus());
+		}
 	}
 
 	@Override
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
-//		sipLogger.finer(outboundRequest, "callAbandoned...");
-	}
-
-	public static SettingsManager<TransferSettings> getSettingsManager() {
-		return settingsManager;
-	}
-
-	public static void setSettingsManager(SettingsManager<TransferSettings> settingsManager) {
-		TransferServlet.settingsManager = settingsManager;
-	}
-
-	@Override
-	public void sessionCreated(SipApplicationSessionEvent event) {
-
-		if (sipLogger.isLoggable(Level.FINEST)) {
-			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, ConsoleColors.GREEN_BRIGHT + "appSession created..." + ConsoleColors.RESET);
-		}
-
-	}
-
-	@Override
-	public void sessionDestroyed(SipApplicationSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINEST)) {
-			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, ConsoleColors.RED_BRIGHT + "appSession destroyed..." + ConsoleColors.RESET);
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(outboundRequest, "TransferServlet.callAbandoned - method=" + outboundRequest.getMethod());
 		}
 	}
 
-	@Override
-	public void sessionExpired(SipApplicationSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINEST)) {
-			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "appSession expired...");
-		}
-	}
-
-	@Override
-	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINEST)) {
-			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "appSession readyToInvalidate...");
-		}
-	}
-
-	@Override
-	public void sessionCreated(SipSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINEST)) {
-			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession created...");
-		}
-	}
-
-	@Override
-	public void sessionDestroyed(SipSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINEST)) {
-			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession destroyed...");
-
-		}
-	}
-
-	@Override
-	public void sessionReadyToInvalidate(SipSessionEvent event) {
-		if (sipLogger.isLoggable(Level.FINEST)) {
-			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession readyToInvalidate...");
-		}
-	}
+//	@Override
+//	public void sessionCreated(SipApplicationSessionEvent event) {
+//
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipApplicationSession appSession = event.getApplicationSession();
+//			sipLogger.finer(appSession, ConsoleColors.GREEN_BRIGHT + "appSession created..." + ConsoleColors.RESET);
+//		}
+//
+//	}
+//
+//	@Override
+//	public void sessionDestroyed(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipApplicationSession appSession = event.getApplicationSession();
+//			sipLogger.finer(appSession, ConsoleColors.RED_BRIGHT + "appSession destroyed..." + ConsoleColors.RESET);
+//		}
+//	}
+//
+//	@Override
+//	public void sessionExpired(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipApplicationSession appSession = event.getApplicationSession();
+//			sipLogger.finer(appSession, "appSession expired...");
+//		}
+//	}
+//
+//	@Override
+//	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipApplicationSession appSession = event.getApplicationSession();
+//			sipLogger.finer(appSession, "appSession readyToInvalidate...");
+//		}
+//	}
+//
+//	@Override
+//	public void sessionCreated(SipSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipSession sipSession = event.getSession();
+//			sipLogger.finer(sipSession, "sipSession created...");
+//		}
+//	}
+//
+//	@Override
+//	public void sessionDestroyed(SipSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipSession sipSession = event.getSession();
+//			sipLogger.finer(sipSession, "sipSession destroyed...");
+//
+//		}
+//	}
+//
+//	@Override
+//	public void sessionReadyToInvalidate(SipSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			SipSession sipSession = event.getSession();
+//			sipLogger.finer(sipSession, "sipSession readyToInvalidate...");
+//		}
+//	}
 
 }

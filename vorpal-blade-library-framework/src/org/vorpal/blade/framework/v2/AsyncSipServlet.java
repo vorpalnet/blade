@@ -223,7 +223,7 @@ public abstract class AsyncSipServlet extends SipServlet
 //		glareQueue = (null != glareQueue) ? glareQueue : new LinkedList<>();
 
 		Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
-		expectAck = (expectAck == true) ? true : false;
+		expectAck = (expectAck != null && expectAck == true) ? true : false;
 
 		if (method.equals("ACK")) {
 			expectAck = false;
