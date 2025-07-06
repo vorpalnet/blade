@@ -116,7 +116,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 			Callflow callflow = null;
 
-			if (transferRequest.sessionKey != null) {
+			if (transferRequest != null && transferRequest.sessionKey != null) {
 				Set<String> appSessionIds = sipUtil.getSipApplicationSessionIds(transferRequest.sessionKey);
 
 				sipLogger.finest("invoking sipUtil.getSipApplicationSessionIds(" + transferRequest.sessionKey + ");");
@@ -126,7 +126,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						_appSession = sipUtil.getApplicationSessionById(id);
 						if (_appSession != null) {
 							sipLogger.finest(_appSession,
-									"appSessionId=" + id + "isNull=false, isValid=" + _appSession.isValid());
+									"appSessionId=" + id + ", isNull=false, isValid=" + _appSession.isValid());
 						} else {
 							sipLogger.finest("appSessionId=" + id + "isNull=true, isValid=false");
 						}
@@ -144,6 +144,15 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					}
 
 				}
+			} else {
+
+				TransferResponse transferResponse = new TransferResponse();
+				transferResponse.status = 500;
+				transferResponse.description = "Missing JSON in request body.";
+				transferResponse.request = transferRequest;
+				asyncResponse.resume(Response.status(Status.NOT_ACCEPTABLE).entity(transferResponse).build());
+				return;
+
 			}
 
 			if (appSession == null) {
