@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project basedir="." default="build" name="vorpal-blade-admin-console">
 	<!-- Define unique locations first -->
-	<property name="webapp" location="./target/${ant.project.name}" />
+	<property name="webapp" location="src/main/blade" />
+	<property name="classes" location="src/main/blade/WEB-INF/classes" />
+	<property name="target-webapp" location="./target/${ant.project.name}" />
 
 	<!-- Load environment variables -->
 	<property environment="env" />
@@ -11,6 +13,7 @@
 	<property file="../build.properties" />
 	<property file="../version.properties" />
 	<property file="../build.number" />
+
 
 	<!-- Import default locations and tasks -->
 	<import file="../libraries.xml" />
@@ -38,13 +41,25 @@
 	</target>
 
 
+	<target name="clean">
+		<!-- delete any ANT generated stuff -->
+		<delete dir="${build}" />
+		<!-- delete any Maven generated stuff -->
+		<delete dir="target" />
+		<!-- delete any Eclipse generated classes -->
+		<delete dir="${webapp}/WEB-INF/classes" />
+		<!-- delete any jars copied from target -->
+		<delete dir="${webapp}/WEB-INF/lib" />
+	</target>
+
+
 	<target name="package" depends="init, mvn_windows, mvn_unix">
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 
-		<copy todir="src/main/webapp/WEB-INF/lib">
-			<fileset dir="${webapp}/WEB-INF/lib" />
+		<!-- probably not the smartest thing to do -->
+		<copy todir="${webapp}/WEB-INF/lib">
+			<fileset dir="${target-webapp}/WEB-INF/lib" />
 		</copy>
-
 
 	</target>
 

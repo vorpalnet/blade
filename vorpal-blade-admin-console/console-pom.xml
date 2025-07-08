@@ -28,7 +28,7 @@
 			<artifactId>occas</artifactId>
 			<version>${occas-version}</version>
 			<scope>system</scope>
-			<systemPath>${OCCAS}/wlserver/server/lib/weblogic.jar</systemPath>
+			<systemPath>${MW_HOME}/wlserver/server/lib/weblogic.jar</systemPath>
 
 		</dependency>
 
@@ -171,8 +171,7 @@
 						</goals>
 						<configuration>
 							<tasks>
-								<echo>Displaying value of 'testproperty'
-									property</echo>
+								<echo>Displaying value of 'testproperty' property:</echo>
 								<echo>hostname = ${HOSTNAME}</echo>
 								<echo>occas = ${OCCAS}</echo>
 							</tasks>

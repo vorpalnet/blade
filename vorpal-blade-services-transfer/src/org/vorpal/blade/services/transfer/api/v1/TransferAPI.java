@@ -291,6 +291,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 						sipLogger.finest(transferorSession, "TransferAPI callflow=" + callflow);
 
+						if (appSession.getAttribute("INITIAL_REFER") == null) {
+							appSession.setAttribute("INITIAL_REFER", refer);
+						}
+
 						callflow.process(refer);
 
 						if (transferRequest.notification == null || //
