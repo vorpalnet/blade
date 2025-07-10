@@ -121,6 +121,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Expectation;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.services.transfer.api.v1.Header;
 
 /**
@@ -156,6 +157,9 @@ public class BlindTransfer extends Transfer {
 			URI referTo = referRequest.getAddressHeader("Refer-To").getURI();
 			appSession.setAttribute("Refer-To", referTo);
 
+			sipLogger.finer(referRequest,
+					Color.YELLOW_BOLD_BRIGHT("BlindTransfer.process - Saving Refer-To: " + referTo + " to memory."));
+
 			// User is notified a transfer is requested
 			transferListener.transferRequested(referRequest);
 
@@ -179,7 +183,8 @@ public class BlindTransfer extends Transfer {
 				preserveReferHeaders(intialRefer, this.targetRequest);
 			}
 
-			// If this was method was invoked by the REST API, it might have set some INVITE headers.
+			// If this was method was invoked by the REST API, it might have set some INVITE
+			// headers.
 			if (this.inviteHeaders != null) {
 				for (Header header : inviteHeaders) {
 					targetRequest.setHeader(header.getName(), header.getValue());

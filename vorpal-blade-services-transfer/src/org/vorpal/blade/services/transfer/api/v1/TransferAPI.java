@@ -14,6 +14,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
+import javax.servlet.sip.URI;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -32,9 +33,11 @@ import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.DummyRequest;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.services.transfer.TransferServlet;
 import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
 import org.vorpal.blade.services.transfer.callflows.BlindTransfer;
+import org.vorpal.blade.services.transfer.callflows.ReferTransfer;
 import org.vorpal.blade.services.transfer.callflows.Transfer;
 import org.vorpal.blade.services.transfer.callflows.TransferListener;
 
@@ -275,15 +278,12 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 						switch (style) {
 						case attended:
-//							callflow = new AttendedTransfer(this, false);
-//							break;
 						case conference:
-//							callflow = new ConferenceTransfer(this, false);
-//							break;
 						case blind:
 							callflow = new BlindTransfer(this, false);
-//							callflow = new BlindTransfer(this, true);
 							break;
+						case refer:
+							callflow = new ReferTransfer(this);
 						}
 
 						// Add any inviteHeaders
@@ -352,20 +352,76 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 	@Override
 	public void transferRequested(SipServletRequest inboundRefer) throws ServletException, IOException {
-		sipLogger.finer(inboundRefer, "TransferAPI transferRequested " + inboundRefer.getMethod());
+
+		try {
+
+			SipApplicationSession appSession = inboundRefer.getApplicationSession();
+
+			// save X-Previous-DN-Tmp for use later
+			URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
+			appSession.setAttribute("Refer-To", referTo);
+
+			if (sipLogger.isLoggable(Level.INFO)) {
+				URI ruri = inboundRefer.getRequestURI();
+				String from = inboundRefer.getFrom().toString();
+				String to = inboundRefer.getTo().toString();
+				String referredBy = inboundRefer.getHeader("Referred-By");
+				sipLogger.info(inboundRefer, "TransferAPI.transferRequested - ruri=" + ruri + ", from=" + from + ", to="
+						+ to + ", referTo=" + referTo + ", referredBy=" + referredBy);
+			}
+
+		} catch (Exception e) {
+			sipLogger.severe(inboundRefer, e);
+		}
 
 	}
 
 	@Override
-	public void transferInitiated(SipServletRequest outboundRequest) throws ServletException, IOException {
-		sipLogger.finer(outboundRequest, "TransferAPI transferInitiated " + outboundRequest.getMethod());
+	public void transferInitiated(SipServletRequest outboundInvite) throws ServletException, IOException {
+
+		SipApplicationSession appSession = outboundInvite.getApplicationSession();
+
+		// Set Header X-Original-DN
+		URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
+		outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
+		sipLogger.finer(outboundInvite, Color.YELLOW_BOLD_BRIGHT(
+				"TransferServlet.transferInitiated - setting INVITE header X-Original-DN: " + xOriginalDN.toString()));
+
+		// Set Header X-Previous-DN
+		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
+		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
+		sipLogger.finer(outboundInvite, Color.YELLOW_BOLD_BRIGHT(
+				"TransferServlet.transferInitiated - setting INVITE header X-Previous-DN: " + xPreviousDN.toString()));
+
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(outboundInvite, "TransferAPI.transferInitiated - method=" + outboundInvite.getMethod());
+		}
 	}
 
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
-		sipLogger.finer(response, "TransferAPI transferCompleted " + response.getMethod() + " " + response.getStatus()
+		sipLogger.finer(response, "TransferAPI.transferCompleted - " + response.getMethod() + " " + response.getStatus()
 				+ " " + response.getReasonPhrase());
 
+		
+		SipApplicationSession appSession = response.getApplicationSession();
+
+		SipSession callee = response.getSession();
+		callee.setAttribute("userAgent", "callee");
+		SipSession caller = Callflow.getLinkedSession(callee);
+		caller.setAttribute("userAgent", "caller");
+
+		// now update X-Previous-DN for future use after success transfer
+		URI referTo = (URI) appSession.getAttribute("Refer-To");
+		appSession.setAttribute("X-Previous-DN", referTo);
+		sipLogger.finer(response, Color
+				.YELLOW_BOLD_BRIGHT("TransferAPI.transferComplete - saving X-Previous-DN: " + referTo.toString()));
+
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(response, "TransferAPI.transferCompleted - status=" + response.getStatus());
+		}
+		
+		
 		AsyncResponse asyncResponse = responseMap.remove(response.getApplicationSession().getId());
 		if (asyncResponse != null) {
 			TransferResponse txferResp = new TransferResponse();
@@ -381,8 +437,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 	@Override
 	public void transferDeclined(SipServletResponse response) throws ServletException, IOException {
-		sipLogger.finer(response, "transferDeclined " + response.getMethod() + " " + response.getStatus() + " "
-				+ response.getReasonPhrase());
+		sipLogger.finer(response, "TransferAPI.transferDeclined - " + response.getMethod() + " " + response.getStatus()
+				+ " " + response.getReasonPhrase());
 
 		AsyncResponse asyncResponse = responseMap.remove(response.getApplicationSession().getId());
 		if (asyncResponse != null) {
@@ -398,7 +454,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 	@Override
 	public void transferAbandoned(SipServletRequest cancelRequest) throws ServletException, IOException {
-		sipLogger.finer(cancelRequest, "TransferAPI transferAbandoned " + cancelRequest.getMethod());
+		sipLogger.finer(cancelRequest, "TransferAPI.transferAbandoned - " + cancelRequest.getMethod());
 		AsyncResponse asyncResponse = responseMap.remove(cancelRequest.getApplicationSession().getId());
 		if (asyncResponse != null) {
 			TransferResponse txferResp = new TransferResponse();

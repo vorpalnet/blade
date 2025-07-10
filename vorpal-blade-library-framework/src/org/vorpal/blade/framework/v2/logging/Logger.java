@@ -828,9 +828,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				if (isLoggable(Level.FINEST)) {
 					if (request != null) {
-						log(Level.FINEST, "\r\n" + request.toString());
+						finest(request, direction + " Request:\n" + request.toString());
 					} else {
-						log(Level.FINEST, "\r\n" + response.toString());
+						finest(request, direction + " Response:\n" + response.toString());
 					}
 				}
 

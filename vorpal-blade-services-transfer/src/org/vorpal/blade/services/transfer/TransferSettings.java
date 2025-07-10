@@ -9,7 +9,7 @@ public class TransferSettings extends RouterConfig implements Serializable {
 	private static final long serialVersionUID = 2L;
 
 	public enum TransferStyle {
-		blind, attended, conference
+		blind, attended, conference, refer
 	};
 
 	protected Boolean transferAllRequests;

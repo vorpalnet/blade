@@ -385,11 +385,10 @@ public abstract class AsyncSipServlet extends SipServlet
 					}
 
 					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(request,
-								Color.YELLOW("AsyncSipServlet.doRequest - appSession id=" + appSession.getId() + //
-										", indexKeys=" + appSession.getIndexKeys() + //
-										", sessions=" + appSession.getSessionSet().size() + //
-										", timers=" + appSession.getTimers().size()));
+						sipLogger.finer(request, "AsyncSipServlet.doRequest - appSession id=" + appSession.getId() + //
+								", indexKeys=" + appSession.getIndexKeys() + //
+								", sessions=" + appSession.getSessionSet().size() + //
+								", timers=" + appSession.getTimers().size());
 
 						Map<String, String> attrMap = new HashMap<>();
 						Object value;
@@ -402,7 +401,8 @@ public abstract class AsyncSipServlet extends SipServlet
 							} else if (value instanceof Integer) {
 								attrMap.put(name, Integer.toString((Integer) value));
 							} else {
-								attrMap.put(name, "?object");
+								// too wordy
+								// attrMap.put(name, value.getClass().getSimpleName());
 							}
 						}
 						sipLogger.finer(sipSession, "AsyncSipServlet.doRequest - callflow="

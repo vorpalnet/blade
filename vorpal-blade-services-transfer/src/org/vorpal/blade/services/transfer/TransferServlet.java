@@ -21,6 +21,7 @@ import org.vorpal.blade.framework.v2.b2bua.Passthru;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.services.transfer.callflows.AttendedTransfer;
 import org.vorpal.blade.services.transfer.callflows.BlindTransfer;
 import org.vorpal.blade.services.transfer.callflows.ConferenceTransfer;
@@ -208,7 +209,7 @@ public class TransferServlet extends B2buaServlet implements B2buaListener, Tran
 			appSession.setAttribute("Refer-To", referTo);
 
 			if (sipLogger.isLoggable(Level.INFO)) {
-				String ruri = inboundRefer.getRequestURI().toString();
+				URI ruri = inboundRefer.getRequestURI();
 				String from = inboundRefer.getFrom().toString();
 				String to = inboundRefer.getTo().toString();
 				String referredBy = inboundRefer.getHeader("Referred-By");
@@ -230,10 +231,14 @@ public class TransferServlet extends B2buaServlet implements B2buaListener, Tran
 		// Set Header X-Original-DN
 		URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
 		outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
+		sipLogger.finer(outboundInvite, Color.YELLOW_BOLD_BRIGHT(
+				"TransferServlet.transferInitiated - setting INVITE header X-Original-DN: " + xOriginalDN.toString()));
 
 		// Set Header X-Previous-DN
 		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
 		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
+		sipLogger.finer(outboundInvite, Color.YELLOW_BOLD_BRIGHT(
+				"TransferServlet.transferInitiated - setting INVITE header X-Previous-DN: " + xPreviousDN.toString()));
 
 		if (sipLogger.isLoggable(Level.INFO)) {
 			sipLogger.info(outboundInvite, "TransferServlet.transferInitiated - method=" + outboundInvite.getMethod());
@@ -243,7 +248,6 @@ public class TransferServlet extends B2buaServlet implements B2buaListener, Tran
 
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
-//		sipLogger.finer(response, "transferCompleted...");
 
 		SipApplicationSession appSession = response.getApplicationSession();
 
@@ -255,6 +259,8 @@ public class TransferServlet extends B2buaServlet implements B2buaListener, Tran
 		// now update X-Previous-DN for future use after success transfer
 		URI referTo = (URI) appSession.getAttribute("Refer-To");
 		appSession.setAttribute("X-Previous-DN", referTo);
+		sipLogger.finer(response, Color
+				.YELLOW_BOLD_BRIGHT("TransferServlet.transferComplete - saving X-Previous-DN: " + referTo.toString()));
 
 		if (sipLogger.isLoggable(Level.INFO)) {
 			sipLogger.info(response, "TransferServlet.transferCompleted - status=" + response.getStatus());
@@ -286,10 +292,14 @@ public class TransferServlet extends B2buaServlet implements B2buaListener, Tran
 			// save X-Original-DN to memory
 			URI xOriginalDN = outboundRequest.getTo().getURI();
 			appSession.setAttribute("X-Original-DN", xOriginalDN);
+			sipLogger.finer(outboundRequest, Color.YELLOW_BOLD_BRIGHT(
+					"TransferServlet.callStarted - Saving X-Original-DN: " + xOriginalDN + " to memory."));
 
 			// save X-Previous-DN to memory
 			URI xPreviousDN = outboundRequest.getRequestURI();
 			appSession.setAttribute("X-Previous-DN", xPreviousDN);
+			sipLogger.finer(outboundRequest, Color.YELLOW_BOLD_BRIGHT(
+					"TransferServlet.callStarted - Saving X-Previous-DN: " + xPreviousDN + " to memory."));
 
 			// For Transfer REST API
 			// save outbound request for REST API Session/Dialog
