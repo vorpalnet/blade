@@ -53,6 +53,7 @@ import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerService;
 import javax.servlet.sip.TooManyHopsException;
+import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
@@ -1535,6 +1536,19 @@ public abstract class Callflow implements Serializable {
 		}
 
 		return sipSession;
+	}
+
+	/**
+	 * Returns the original incoming request which initiated the callStarted method.
+	 * Useful when used in conjunction with 'doNotProcess'.
+	 * 
+	 * @param outboundRequest
+	 * @return incoming request
+	 */
+	public static SipServletRequest getIncomingRequest(SipServletRequest outboundRequest) {
+		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
+		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
+		return incomingRequest;
 	}
 
 }

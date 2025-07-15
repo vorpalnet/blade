@@ -3,7 +3,6 @@ package org.vorpal.blade.services.transfer;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.logging.Level;
 
 import javax.servlet.ServletException;
@@ -25,7 +24,6 @@ import org.vorpal.blade.framework.v2.b2bua.Passthru;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
-import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.ConsoleColors;
 import org.vorpal.blade.framework.v2.transfer.AttendedTransfer;
 import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
@@ -61,46 +59,32 @@ public class TransferServlet extends B2buaServlet
 		TransferServlet.settingsManager = settingsManager;
 	}
 
-	public void showProperties(SipServletContextEvent event) {
-		String key, value;
-
-		sipLogger.info("System.getenv().get():");
-		for (String name : System.getenv().keySet()) {
-			sipLogger.info("\t" + name + "=" + System.getenv().get(name));
-		}
-
-		sipLogger.info("servletContext.getInitParameter():");
-
-		Iterator<String> itr = event.getServletContext().getInitParameterNames().asIterator();
-		while (itr.hasNext()) {
-			key = itr.next();
-			value = event.getServletContext().getInitParameter(key);
-			sipLogger.info("\t" + key + "=" + value);
-		}
-
-		sipLogger.info("servletContext.getAttribute():");
-		itr = event.getServletContext().getAttributeNames().asIterator();
-		while (itr.hasNext()) {
-			key = itr.next();
-			value = event.getServletContext().getAttribute(key).toString();
-			sipLogger.info("\t" + key + "=" + value);
-		}
-
-		try {
-			// Get ServerConfiguration
-
-//			InitialContext ctx = new InitialContext();
-//			MBeanServer mBeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/runtime");
-//			ObjectName ServerConfiguration = (ObjectName) mBeanServer
-//					.getAttribute(new ObjectName(RuntimeServiceMBean.OBJECT_NAME), "ServerConfiguration");
-//			String port = mBeanServer.getAttribute(ServerConfiguration, "ListenPort").toString();
-//			sipLogger.severe("ListenPort=" + port);
-
-		} catch (Exception e) {
-			sipLogger.severe(e);
-		}
-
-	}
+//	public void showProperties(SipServletContextEvent event) {
+//		String key, value;
+//
+//		sipLogger.info("System.getenv().get():");
+//		for (String name : System.getenv().keySet()) {
+//			sipLogger.info("\t" + name + "=" + System.getenv().get(name));
+//		}
+//
+//		sipLogger.info("servletContext.getInitParameter():");
+//
+//		Iterator<String> itr = event.getServletContext().getInitParameterNames().asIterator();
+//		while (itr.hasNext()) {
+//			key = itr.next();
+//			value = event.getServletContext().getInitParameter(key);
+//			sipLogger.info("\t" + key + "=" + value);
+//		}
+//
+//		sipLogger.info("servletContext.getAttribute():");
+//		itr = event.getServletContext().getAttributeNames().asIterator();
+//		while (itr.hasNext()) {
+//			key = itr.next();
+//			value = event.getServletContext().getAttribute(key).toString();
+//			sipLogger.info("\t" + key + "=" + value);
+//		}
+//
+//	}
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
@@ -109,13 +93,13 @@ public class TransferServlet extends B2buaServlet
 		// Quirky visibility problem
 		TransferAPI.settings = settingsManager;
 
-		sipLogger.info("servletCreated...");
+		sipLogger.info("TransferServlet.servletCreated");
 	}
 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) {
 		try {
-			sipLogger.info("servletDestroyed...");
+			sipLogger.info("TransferServlet.servletDestroyed");
 			settingsManager.unregister();
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -163,14 +147,11 @@ public class TransferServlet extends B2buaServlet
 			String ts = null;
 			if (t != null) {
 
-//				sipLogger.finer(request, "translation found!");
-
 				if (t.getAttributes() == null) {
 					t.setAttributes(new HashMap<String, String>());
 				}
 
 				ts = (String) t.getAttribute("style");
-//				sipLogger.finer(request, "style=" + ts);
 
 				if (ts == null) {
 					ts = settings.getDefaultTransferStyle().toString();
@@ -213,17 +194,13 @@ public class TransferServlet extends B2buaServlet
 
 		try {
 
-			SipApplicationSession appSession = inboundRefer.getApplicationSession();
-
-			// save X-Previous-DN-Tmp for use later
-			URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
-			appSession.setAttribute("Refer-To", referTo);
-
 			if (sipLogger.isLoggable(Level.INFO)) {
 				URI ruri = inboundRefer.getRequestURI();
 				String from = inboundRefer.getFrom().toString();
 				String to = inboundRefer.getTo().toString();
+				String referTo = inboundRefer.getHeader("Refer-To");
 				String referredBy = inboundRefer.getHeader("Referred-By");
+
 				sipLogger.info(inboundRefer, "TransferServlet.transferRequested - ruri=" + ruri + ", from=" + from
 						+ ", to=" + to + ", referTo=" + referTo + ", referredBy=" + referredBy);
 			}
@@ -235,24 +212,11 @@ public class TransferServlet extends B2buaServlet
 	}
 
 	@Override
-	public void transferInitiated(SipServletRequest outboundInvite) throws ServletException, IOException {
-
-		SipApplicationSession appSession = outboundInvite.getApplicationSession();
-
-		// Set Header X-Original-DN
-		URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
-		outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
-		sipLogger.finer(outboundInvite, Color.YELLOW_BOLD_BRIGHT(
-				"TransferServlet.transferInitiated - setting INVITE header X-Original-DN: " + xOriginalDN.toString()));
-
-		// Set Header X-Previous-DN
-		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
-		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
-		sipLogger.finer(outboundInvite, Color.YELLOW_BOLD_BRIGHT(
-				"TransferServlet.transferInitiated - setting INVITE header X-Previous-DN: " + xPreviousDN.toString()));
+	public void transferInitiated(SipServletRequest outboundRequest) throws ServletException, IOException {
 
 		if (sipLogger.isLoggable(Level.INFO)) {
-			sipLogger.info(outboundInvite, "TransferServlet.transferInitiated - method=" + outboundInvite.getMethod());
+			sipLogger.info(outboundRequest,
+					"TransferServlet.transferInitiated - method=" + outboundRequest.getMethod());
 		}
 
 	}
@@ -260,21 +224,9 @@ public class TransferServlet extends B2buaServlet
 	@Override
 	public void transferCompleted(SipServletResponse response) throws ServletException, IOException {
 
-		SipApplicationSession appSession = response.getApplicationSession();
-
-		SipSession callee = response.getSession();
-		callee.setAttribute("userAgent", "callee");
-		SipSession caller = Callflow.getLinkedSession(callee);
-		caller.setAttribute("userAgent", "caller");
-
-		// now update X-Previous-DN for future use after success transfer
-		URI referTo = (URI) appSession.getAttribute("Refer-To");
-		appSession.setAttribute("X-Previous-DN", referTo);
-		sipLogger.finer(response, Color
-				.YELLOW_BOLD_BRIGHT("TransferServlet.transferComplete - saving X-Previous-DN: " + referTo.toString()));
-
 		if (sipLogger.isLoggable(Level.INFO)) {
-			sipLogger.info(response, "TransferServlet.transferCompleted - status=" + response.getStatus());
+			sipLogger.info(response, "TransferServlet.transferCompleted - status=" + response.getStatus() + " "
+					+ response.getReasonPhrase());
 		}
 
 	}
@@ -282,7 +234,8 @@ public class TransferServlet extends B2buaServlet
 	@Override
 	public void transferDeclined(SipServletResponse response) throws ServletException, IOException {
 		if (sipLogger.isLoggable(Level.INFO)) {
-			sipLogger.info(response, "TransferServlet.transferDeclined - status=" + response.getStatus());
+			sipLogger.info(response, "TransferServlet.transferDeclined - status=" + response.getStatus() + " "
+					+ response.getReasonPhrase());
 		}
 	}
 
@@ -296,53 +249,23 @@ public class TransferServlet extends B2buaServlet
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
 
-		try {
+		if (sipLogger.isLoggable(Level.INFO)) {
+			String ruri = outboundRequest.getRequestURI().toString();
+			String from = outboundRequest.getFrom().toString();
+			String to = outboundRequest.getTo().toString();
 
-			SipApplicationSession appSession = outboundRequest.getApplicationSession();
-
-			// save X-Original-DN to memory
-			URI xOriginalDN = outboundRequest.getTo().getURI();
-			appSession.setAttribute("X-Original-DN", xOriginalDN);
-			sipLogger.finer(outboundRequest, Color.YELLOW_BOLD_BRIGHT(
-					"TransferServlet.callStarted - Saving X-Original-DN: " + xOriginalDN + " to memory."));
-
-			// save X-Previous-DN to memory
-			URI xPreviousDN = outboundRequest.getRequestURI();
-			appSession.setAttribute("X-Previous-DN", xPreviousDN);
-			sipLogger.finer(outboundRequest, Color.YELLOW_BOLD_BRIGHT(
-					"TransferServlet.callStarted - Saving X-Previous-DN: " + xPreviousDN + " to memory."));
-
-			// For Transfer REST API
-			// save outbound request for REST API Session/Dialog
-			outboundRequest.getSession().setAttribute("initial_invite", outboundRequest);
-			SipServletRequest aliceRequest = this.getIncomingRequest(outboundRequest);
-			aliceRequest.getSession().setAttribute("sipAddress", aliceRequest.getFrom());
-			outboundRequest.getSession().setAttribute("sipAddress", outboundRequest.getTo());
-
-			if (sipLogger.isLoggable(Level.INFO)) {
-				String ruri = outboundRequest.getRequestURI().toString();
-				String from = outboundRequest.getFrom().toString();
-				String to = outboundRequest.getTo().toString();
-
-				sipLogger.info(outboundRequest,
-						"TransferServlet.callStarted - ruri=" + ruri + ", from=" + from + ", to=" + to);
-			}
-
-		} catch (Exception e) {
-			sipLogger.severe(outboundRequest, e);
+			sipLogger.info(outboundRequest,
+					"TransferServlet.callStarted - ruri=" + ruri + ", from=" + from + ", to=" + to);
 		}
 
 	}
 
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
-		SipSession caller = outboundResponse.getSession();
-		caller.setAttribute("userAgent", "caller");
-		SipSession callee = Callflow.getLinkedSession(caller);
-		callee.setAttribute("userAgent", "callee");
 
 		if (sipLogger.isLoggable(Level.INFO)) {
-			sipLogger.info(outboundResponse, "TransferServlet.callAnswered - status=" + outboundResponse.getStatus());
+			sipLogger.info(outboundResponse, "TransferServlet.callAnswered - status=" + outboundResponse.getStatus()
+					+ " " + outboundResponse.getReasonPhrase());
 		}
 
 	}

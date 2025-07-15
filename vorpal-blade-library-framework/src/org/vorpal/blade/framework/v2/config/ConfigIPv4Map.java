@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
 import java.util.HashMap;
 
 import javax.servlet.sip.SipServletRequest;
@@ -11,7 +12,7 @@ import inet.ipaddr.IPAddressString;
 
 @Deprecated
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ConfigIPv4Map extends TranslationsMap {
+public class ConfigIPv4Map extends TranslationsMap implements Serializable{
 	public AddressMap map = new AddressMap();
 
 	public int size() {

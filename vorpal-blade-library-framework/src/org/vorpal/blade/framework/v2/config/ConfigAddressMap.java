@@ -24,6 +24,7 @@
 
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
 import java.util.HashMap;
 
 import javax.servlet.sip.SipServletRequest;
@@ -34,7 +35,8 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 import inet.ipaddr.IPAddressString;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ConfigAddressMap extends TranslationsMap {
+public class ConfigAddressMap extends TranslationsMap implements Serializable {
+	private static final long serialVersionUID = 1L;
 	public AddressMap map = new AddressMap();
 
 	public int size() {

@@ -1,8 +1,12 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
+
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
-public class KeepAliveParameters {
+public class KeepAliveParameters implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	public enum KeepAlive {
 		DISABLED, UPDATE, REINVITE
 	};

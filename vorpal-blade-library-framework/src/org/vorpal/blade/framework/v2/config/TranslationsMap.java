@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -29,7 +30,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 //		@JsonSubTypes.Type(value = ConfigIPv4Map.class, name = "ipv4"),
 //		@JsonSubTypes.Type(value = ConfigIPv6Map.class, name = "ipv6")
 
-public abstract class TranslationsMap {
+public abstract class TranslationsMap implements Serializable {
 	public String id;
 	public String description;
 	public List<Selector> selectors = new LinkedList<>();

@@ -1,5 +1,7 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
+
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonPropertyOrder({ //
@@ -8,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 		"primary", //
 		"secondary" })
 //@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ServerPair {
+public class ServerPair implements Serializable {
 //	private String id = null;
 //	private String description = null;
 	private String primary = null;

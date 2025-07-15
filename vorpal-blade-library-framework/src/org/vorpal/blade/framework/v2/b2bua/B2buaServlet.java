@@ -140,7 +140,7 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 	 * @param outboundRequest
 	 * @return incoming request
 	 */
-	public SipServletRequest getIncomingRequest(SipServletRequest outboundRequest) {
+	public static SipServletRequest getIncomingRequest(SipServletRequest outboundRequest) {
 		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
 		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
 		return incomingRequest;

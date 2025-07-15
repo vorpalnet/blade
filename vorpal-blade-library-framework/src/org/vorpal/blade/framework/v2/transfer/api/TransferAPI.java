@@ -6,7 +6,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
-import javax.ejb.Asynchronous;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
@@ -15,16 +14,10 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
@@ -35,6 +28,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Color;
+import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
 import org.vorpal.blade.framework.v2.transfer.ReferTransfer;
 import org.vorpal.blade.framework.v2.transfer.Transfer;
@@ -42,12 +36,7 @@ import org.vorpal.blade.framework.v2.transfer.TransferListener;
 import org.vorpal.blade.framework.v2.transfer.TransferSettings;
 import org.vorpal.blade.framework.v2.transfer.TransferSettings.TransferStyle;
 
-import io.swagger.v3.oas.annotations.OpenAPIDefinition;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
 //@OpenAPIDefinition(info = @Info( //
 //		title = "BLADE - Transfer", //
@@ -127,7 +116,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 //			@ApiResponse(responseCode = "410", description = "Transfer Abandoned"),
 //			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
 //			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
-	public void blindTransfer(
+	public void invokeTransfer(
 			@RequestBody(description = "transfer request", required = true) TransferRequest transferRequest,
 			@Context UriInfo uriInfo, @Suspended AsyncResponse asyncResponse) {
 
@@ -141,16 +130,18 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			if (transferRequest != null && transferRequest.sessionKey != null) {
 				Set<String> appSessionIds = sipUtil.getSipApplicationSessionIds(transferRequest.sessionKey);
 
-				sipLogger.finest("invoking sipUtil.getSipApplicationSessionIds(" + transferRequest.sessionKey + ");");
+				sipLogger.finest("TransferAPI.invokeTransfer - invoking sipUtil.getSipApplicationSessionIds("
+						+ transferRequest.sessionKey + ");");
 				if (sipLogger.isLoggable(Level.FINEST)) {
 					SipApplicationSession _appSession;
 					for (String id : appSessionIds) {
 						_appSession = sipUtil.getApplicationSessionById(id);
 						if (_appSession != null) {
-							sipLogger.finer(_appSession,
-									"appSessionId=" + id + ", isNull=false, isValid=" + _appSession.isValid());
+							sipLogger.finest(_appSession, "TransferAPI.invokeTransfer - appSessionId=" + id
+									+ ", isNull=false, isValid=" + _appSession.isValid());
 						} else {
-							sipLogger.finer("appSessionId=" + id + "isNull=true, isValid=false");
+							sipLogger.finer(
+									"TransferAPI.invokeTransfer - appSessionId=" + id + "isNull=true, isValid=false");
 						}
 					}
 				}
@@ -160,9 +151,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					appSession = sipUtil.getApplicationSessionById(appSessionId);
 
 					if (appSession != null) {
-						sipLogger.finer(appSession, "TransferAPI appSession.id=" + appSession.getId());
+						sipLogger.finer(appSession,
+								"TransferAPI.invokeTransfer - TransferAPI appSession.id=" + appSession.getId());
 					} else {
-						sipLogger.warning(appSession, "TransferAPI appSession.id=null");
+						sipLogger.warning(appSession, "TransferAPI.invokeTransfer - TransferAPI appSession.id=null");
 					}
 
 				}
@@ -172,21 +164,14 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				transferResponse.status = 500;
 				transferResponse.description = "Missing JSON in request body.";
 				transferResponse.request = transferRequest;
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferResponse="
+							+ Logger.serializeObject(transferResponse));
+				}
+
 				asyncResponse.resume(Response.status(Status.NOT_ACCEPTABLE).entity(transferResponse).build());
 				return;
-
-			}
-
-			if (appSession == null) {
-
-				if (sipLogger.isLoggable(Level.FINEST)) {
-					AsyncSipServlet.getSipLogger().logObjectAsJson(Level.FINEST, transferRequest);
-				}
-
-				if (sipLogger.isLoggable(Level.WARNING)) {
-					AsyncSipServlet.getSipLogger()
-							.warning("No appSession found for sessionKey=" + transferRequest.sessionKey);
-				}
 
 			}
 
@@ -199,8 +184,9 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 //				Address sipAddress = null;
 
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(appSession, "TransferAPI iterating through sessions... Looking for name="
-							+ transferRequest.dialogKey.name + ", value=" + transferRequest.dialogKey.value);
+					sipLogger.finer(appSession,
+							"TransferAPI.invokeTransfer - TransferAPI iterating through sessions... Looking for name="
+									+ transferRequest.dialogKey.name + ", value=" + transferRequest.dialogKey.value);
 				}
 
 				for (SipSession sipSession : (Set<SipSession>) appSession.getSessionSet("SIP")) {
@@ -223,10 +209,12 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					if (value != null && transferRequest.dialogKey.value.equalsIgnoreCase(value)) {
 						transfereeSession = sipSession;
 //						sipAddress = (Address) sipSession.getAttribute("sipAddress");
-						sipLogger.finer(sipSession, "sipSession.id=" + sipSession.getId() + ", match!");
+						sipLogger.finer(sipSession,
+								"TransferAPI.invokeTransfer - sipSession.id=" + sipSession.getId() + ", match!");
 						break;
 					} else {
-						sipLogger.finer(sipSession, "sipSession.id=" + sipSession.getId() + ", no match.");
+						sipLogger.finer(sipSession,
+								"TransferAPI.invokeTransfer - sipSession.id=" + sipSession.getId() + ", no match.");
 					}
 
 				}
@@ -234,7 +222,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				if (transfereeSession != null) {
 
 					// can finally log request
-					sipLogger.logObjectAsJson(transfereeSession, Level.FINER, transferRequest);
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferRequest="
+								+ Logger.serializeObject(transferRequest));
+					}
 
 					// handle glare
 					if (null != transfereeSession.getAttribute("EXPECT_ACK")) {
@@ -242,6 +233,12 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						transferResponse.status = 491;
 						transferResponse.description = "Request Pending";
 						transferResponse.request = transferRequest;
+
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferResponse="
+									+ Logger.serializeObject(transferResponse));
+						}
+
 						asyncResponse.resume(Response.status(Status.NOT_ACCEPTABLE).entity(transferResponse).build());
 						return;
 					}
@@ -264,15 +261,15 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						((SipURI) target.getURI()).setUser(transferRequest.target.user);
 					}
 
-					sipLogger.finer(transfereeSession, "TransferAPI target=" + target);
+					sipLogger.finer(transfereeSession, "TransferAPI.invokeTransfer -  target=" + target);
 
 					if (target != null) {
 						SipSession transferorSession = getLinkedSession(transfereeSession);
 
 						Address transferor = (Address) transferorSession.getAttribute("sipAddress");
 
-						sipLogger.info(transferorSession, "TransferAPI REST transfer request; transferee=" + transferee
-								+ ", target=" + target + ", transferor=" + transferor);
+//						sipLogger.info(transferorSession, "TransferAPI REST transfer request; transferee=" + transferee
+//								+ ", target=" + target + ", transferor=" + transferor);
 
 						// bob (transferee) is doing the 'transfer', to alice
 						DummyRequest refer = new DummyRequest(REFER, transferor, transferee);
@@ -282,7 +279,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						refer.setHeader("Refer-To", target.toString());
 
 						refer.setHeader("Referred-By", transferor.toString());
-						sipLogger.finer(transferorSession, "Getting Referred-By: " + refer.getHeader("Referred-By"));
+						sipLogger.finer(transferorSession,
+								"TransferAPI.invokeTransfer - Getting Referred-By: " + refer.getHeader("Referred-By"));
 
 						if (transferRequest.target.inviteHeaders != null) {
 							for (Header header : transferRequest.target.inviteHeaders) {
@@ -331,6 +329,11 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 							transferResponse.status = 202;
 							transferResponse.description = "Accepted, Fire and Forget";
 							transferResponse.request = transferRequest;
+
+							if (sipLogger.isLoggable(Level.FINER)) {
+								sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferResponse="
+										+ Logger.serializeObject(transferResponse));
+							}
 							asyncResponse.resume(Response.status(Status.ACCEPTED).entity(transferResponse).build());
 						}
 					} else {
@@ -338,22 +341,52 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						transferResponse.status = 500;
 						transferResponse.description = "Could not build target address";
 						transferResponse.request = transferRequest;
+
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferResponse="
+									+ Logger.serializeObject(transferResponse));
+						}
+
 						asyncResponse.resume(Response.status(Status.NOT_ACCEPTABLE).entity(transferResponse).build());
 					}
 
 				} else {
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferRequest="
+								+ Logger.serializeObject(transferRequest));
+					}
+
 					TransferResponse transferResponse = new TransferResponse();
 					transferResponse.status = 404;
 					transferResponse.description = "Dialog not found";
 					transferResponse.request = transferRequest;
+
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferResponse="
+								+ Logger.serializeObject(transferResponse));
+					}
+
 					asyncResponse.resume(Response.status(Status.NOT_FOUND).entity(transferResponse).build());
 				}
 
 			} else {
+
+				if (sipLogger.isLoggable(Level.WARNING)) {
+					AsyncSipServlet.getSipLogger()
+							.warning("No appSession found for sessionKey=" + transferRequest.sessionKey
+									+ ", transferRequest=" + Logger.serializeObject(transferRequest));
+				}
+
 				TransferResponse transferResponse = new TransferResponse();
 				transferResponse.status = 404;
 				transferResponse.description = "Session not found";
 				transferResponse.request = transferRequest;
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferResponse="
+							+ Logger.serializeObject(transferResponse));
+				}
+
 				asyncResponse.resume(Response.status(Status.NOT_FOUND).entity(transferResponse).build());
 			}
 
@@ -369,6 +402,12 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			transferResponse.status = 500;
 			transferResponse.description = "Internal Server Error";
 			transferResponse.request = transferRequest;
+
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(appSession,
+						"TransferAPI.invokeTransfer - transferResponse=" + Logger.serializeObject(transferResponse));
+			}
+
 			asyncResponse.resume(Response.status(Status.INTERNAL_SERVER_ERROR).entity(transferResponse).build());
 		}
 	}
@@ -378,16 +417,11 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 		try {
 
-			SipApplicationSession appSession = inboundRefer.getApplicationSession();
-
-			// save X-Previous-DN-Tmp for use later
-			URI referTo = inboundRefer.getAddressHeader("Refer-To").getURI();
-			appSession.setAttribute("Refer-To", referTo);
-
 			if (sipLogger.isLoggable(Level.INFO)) {
 				URI ruri = inboundRefer.getRequestURI();
 				String from = inboundRefer.getFrom().toString();
 				String to = inboundRefer.getTo().toString();
+				String referTo = inboundRefer.getHeader("Refer-To");
 				String referredBy = inboundRefer.getHeader("Referred-By");
 				sipLogger.info(inboundRefer, "TransferAPI.transferRequested - ruri=" + ruri + ", from=" + from + ", to="
 						+ to + ", referTo=" + referTo + ", referredBy=" + referredBy);
@@ -402,19 +436,15 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 	@Override
 	public void transferInitiated(SipServletRequest outboundInvite) throws ServletException, IOException {
 
-		SipApplicationSession appSession = outboundInvite.getApplicationSession();
-
-		// Set Header X-Original-DN
-		URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
-		outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
-		sipLogger.finer(outboundInvite, Color.YELLOW_BOLD_BRIGHT(
-				"TransferServlet.transferInitiated - setting INVITE header X-Original-DN: " + xOriginalDN.toString()));
-
-		// Set Header X-Previous-DN
-		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
-		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
-		sipLogger.finer(outboundInvite, Color.YELLOW_BOLD_BRIGHT(
-				"TransferServlet.transferInitiated - setting INVITE header X-Previous-DN: " + xPreviousDN.toString()));
+//		SipApplicationSession appSession = outboundInvite.getApplicationSession();
+//
+//		// Set Header X-Original-DN
+//		URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
+//		outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
+//
+//		// Set Header X-Previous-DN
+//		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
+//		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
 
 		if (sipLogger.isLoggable(Level.INFO)) {
 			sipLogger.info(outboundInvite, "TransferAPI.transferInitiated - method=" + outboundInvite.getMethod());
@@ -426,32 +456,37 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 		sipLogger.finer(response, "TransferAPI.transferCompleted - " + response.getMethod() + " " + response.getStatus()
 				+ " " + response.getReasonPhrase());
 
-		SipApplicationSession appSession = response.getApplicationSession();
-
-		SipSession callee = response.getSession();
-		callee.setAttribute("userAgent", "callee");
-		SipSession caller = Callflow.getLinkedSession(callee);
-		caller.setAttribute("userAgent", "caller");
-
-		// now update X-Previous-DN for future use after success transfer
-		URI referTo = (URI) appSession.getAttribute("Refer-To");
-		appSession.setAttribute("X-Previous-DN", referTo);
-		sipLogger.finer(response,
-				Color.YELLOW_BOLD_BRIGHT("TransferAPI.transferComplete - saving X-Previous-DN: " + referTo.toString()));
-
 		if (sipLogger.isLoggable(Level.INFO)) {
 			sipLogger.info(response, "TransferAPI.transferCompleted - status=" + response.getStatus());
 		}
 
-		AsyncResponse asyncResponse = responseMap.remove(response.getApplicationSession().getId());
-		if (asyncResponse != null) {
-			TransferResponse txferResp = new TransferResponse();
-			txferResp.event = "transferCompleted";
-			txferResp.method = response.getMethod();
-			txferResp.status = response.getStatus();
-			txferResp.description = response.getReasonPhrase();
-			txferResp.request = (TransferRequest) response.getApplicationSession().getAttribute(TXFER_REQUEST);
-			asyncResponse.resume(Response.status(Status.OK).entity(txferResp).build());
+		SipApplicationSession appSession = response.getApplicationSession();
+		TransferRequest transferRequest = (TransferRequest) appSession.getAttribute(TXFER_REQUEST);
+
+		if (transferRequest.notification.style.equals(Notification.Style.async)) {
+
+			AsyncResponse asyncResponse = responseMap.remove(response.getApplicationSession().getId());
+			if (asyncResponse != null) {
+				TransferResponse txferResp = new TransferResponse();
+				txferResp.event = "transferCompleted";
+				txferResp.method = response.getMethod();
+				txferResp.status = response.getStatus();
+				txferResp.description = response.getReasonPhrase();
+				txferResp.request = (TransferRequest) response.getApplicationSession().getAttribute(TXFER_REQUEST);
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(response,
+							"TransferAPI.transferCompleted - transferResponse=" + Logger.serializeObject(txferResp));
+				}
+
+				asyncResponse.resume(Response.status(Status.OK).entity(txferResp).build());
+			} else {
+
+				sipLogger.severe(response,
+						"TransferAPI.transferCompleted - Async notification requested, but no AsyncResponse found. Cannot 'resume'.");
+
+			}
+
 		}
 
 	}
@@ -469,6 +504,12 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			txferResp.status = response.getStatus();
 			txferResp.description = response.getReasonPhrase();
 			txferResp.request = (TransferRequest) response.getApplicationSession().getAttribute(TXFER_REQUEST);
+
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(response,
+						"TransferAPI.transferDeclined - transferResponse=" + Logger.serializeObject(txferResp));
+			}
+
 			asyncResponse.resume(Response.status(Status.FORBIDDEN).entity(txferResp).build());
 		}
 	}
@@ -482,6 +523,12 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			txferResp.event = "transferAbandoned";
 			txferResp.method = cancelRequest.getMethod();
 			txferResp.request = (TransferRequest) cancelRequest.getApplicationSession().getAttribute(TXFER_REQUEST);
+
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(cancelRequest,
+						"TransferAPI.transferAbandoned - transferResponse=" + Logger.serializeObject(txferResp));
+			}
+
 			asyncResponse.resume(Response.status(Status.GONE).entity(txferResp).build());
 		}
 	}

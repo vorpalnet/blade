@@ -1,18 +1,17 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
 import java.util.HashMap;
 
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.logging.Color;
-import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ConfigPrefixMap extends TranslationsMap {
+public class ConfigPrefixMap extends TranslationsMap implements Serializable{
 
 //	private static Logger sipLogger;
 

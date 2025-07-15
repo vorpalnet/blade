@@ -1,6 +1,8 @@
 package org.vorpal.blade.framework.v2.config;
 
-public class KeepAliveParametersDefault extends KeepAliveParameters {
+import java.io.Serializable;
+
+public class KeepAliveParametersDefault extends KeepAliveParameters implements Serializable{
 
 	public KeepAliveParametersDefault() {
 		this.style = KeepAlive.DISABLED;

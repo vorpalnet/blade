@@ -35,6 +35,7 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
+import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
@@ -106,6 +107,12 @@ public class InitialInvite extends Callflow {
 
 				if (successful(bobResponse)) {
 					if (b2buaListener != null) {
+
+						SipSession caller = aliceResponse.getSession();
+						caller.setAttribute("userAgent", "caller");
+						SipSession callee = Callflow.getLinkedSession(caller);
+						callee.setAttribute("userAgent", "callee");
+
 						b2buaListener.callAnswered(aliceResponse);
 					}
 				} else if (failure(bobResponse)) {
@@ -195,7 +202,15 @@ public class InitialInvite extends Callflow {
 			bobRequest.setAttribute("callflow", this);
 
 			if (b2buaListener != null) {
-//				sipLogger.warning(bobRequest, "invoking b2buaListener on " + b2buaListener.getClass().getName());
+				URI xOriginalDN = bobRequest.getTo().getURI();
+				appSession.setAttribute("X-Original-DN", xOriginalDN);
+				URI xPreviousDN = bobRequest.getRequestURI();
+				appSession.setAttribute("X-Previous-DN", xPreviousDN);
+				bobRequest.getSession().setAttribute("initial_invite", bobRequest);
+				SipServletRequest aliceRequest = getIncomingRequest(bobRequest);
+				aliceRequest.getSession().setAttribute("sipAddress", aliceRequest.getFrom());
+				bobRequest.getSession().setAttribute("sipAddress", bobRequest.getTo());
+
 				b2buaListener.callStarted(bobRequest);
 			}
 //			else {

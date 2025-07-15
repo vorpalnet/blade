@@ -70,12 +70,12 @@ public class TransferRestAPI extends TransferAPI implements TransferListener {
 			@ApiResponse(responseCode = "410", description = "Transfer Abandoned"),
 			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
-	public void blindTransfer( //
+	public void invokeTransfer( //
 			@RequestBody(description = "transfer request", required = true) TransferRequest transferRequest, //
 			@Context UriInfo uriInfo, //
 			@Suspended AsyncResponse asyncResponse) {
 
-		super.blindTransfer(transferRequest, uriInfo, asyncResponse);
+		super.invokeTransfer(transferRequest, uriInfo, asyncResponse);
 
 	}
 

@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -15,7 +16,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 		"connectionAttempts", //
 		"serverPairs" })
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ServerPool {
+public class ServerPool implements Serializable {
 	private String id;
 	private String description = null;
 	private Integer connectionAttempts = null;
@@ -54,8 +55,7 @@ public class ServerPool {
 //		this.serverPairs.add(serverPair);
 //		return serverPair;
 //	}
-	
-	
+
 	public ServerPair createServerPair(String primary, String secondary) {
 		ServerPair serverPair = new ServerPair(primary, secondary);
 		this.serverPairs.add(serverPair);

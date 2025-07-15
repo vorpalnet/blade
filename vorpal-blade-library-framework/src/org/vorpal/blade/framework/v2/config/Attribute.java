@@ -1,6 +1,8 @@
 package org.vorpal.blade.framework.v2.config;
 
-public class Attribute {
+import java.io.Serializable;
+
+public class Attribute implements Serializable{
 
 	public String name;
 	public String value;

@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 
@@ -9,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ConfigLinkedHashMap extends TranslationsMap {
+public class ConfigLinkedHashMap extends TranslationsMap implements Serializable{
 	public LinkedHashMap<String, Translation> map = new LinkedHashMap<>();
 
 	public int size() {

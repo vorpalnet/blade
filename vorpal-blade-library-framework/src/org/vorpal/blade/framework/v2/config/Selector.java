@@ -1,6 +1,7 @@
 package org.vorpal.blade.framework.v2.config;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -22,7 +23,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonPropertyOrder({ "id", "description", "attribute", "pattern", "expression" })
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class Selector {
+public class Selector implements Serializable {
 	protected String id; // optional for JSON references
 	protected String description; // optional for human readable descriptions
 	protected String attribute; // location of the key data, like in the 'To' header

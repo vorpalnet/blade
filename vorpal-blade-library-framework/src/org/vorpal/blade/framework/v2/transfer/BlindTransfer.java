@@ -118,8 +118,10 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
@@ -157,9 +159,6 @@ public class BlindTransfer extends Transfer {
 			// save X-Previous-DN-Tmp for use later
 			URI referTo = referRequest.getAddressHeader("Refer-To").getURI();
 			appSession.setAttribute("Refer-To", referTo);
-
-			sipLogger.finer(referRequest,
-					Color.YELLOW_BOLD_BRIGHT("BlindTransfer.process - Saving Refer-To: " + referTo + " to memory."));
 
 			// User is notified a transfer is requested
 			transferListener.transferRequested(referRequest);
@@ -222,7 +221,14 @@ public class BlindTransfer extends Transfer {
 				sendResponse(bye.createResponse(200));
 			});
 
-			// User is notified that transfer is initiated
+			// User is notified that transfer is initiated			
+			// Set Header X-Original-DN
+			URI xOriginalDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Original-DN");
+			targetRequest.setHeader("X-Original-DN", xOriginalDN.toString());
+			// Set Header X-Previous-DN
+			URI xPreviousDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Previous-DN");
+			targetRequest.setHeader("X-Previous-DN", xPreviousDN.toString());
+			
 			transferListener.transferInitiated(targetRequest);
 
 			// Force Referred-By, ignore preserveReferHeaders
@@ -270,6 +276,14 @@ public class BlindTransfer extends Transfer {
 						}
 
 						// User is notified of a successful transfer
+						
+						SipSession callee = targetResponse.getSession();
+						callee.setAttribute("userAgent", "callee");
+						SipSession caller = Callflow.getLinkedSession(callee);
+						caller.setAttribute("userAgent", "caller");
+						URI referTo2 = (URI) appSession.getAttribute("Refer-To");
+						appSession.setAttribute("X-Previous-DN", referTo2);
+					
 						transferListener.transferCompleted(targetResponse);
 
 					});

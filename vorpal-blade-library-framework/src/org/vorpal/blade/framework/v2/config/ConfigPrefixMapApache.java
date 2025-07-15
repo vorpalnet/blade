@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.SortedMap;
 
@@ -12,8 +13,7 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ConfigPrefixMapApache
-extends TranslationsMap {
+public class ConfigPrefixMapApache extends TranslationsMap implements Serializable {
 
 	Logger sipLogger = SettingsManager.getSipLogger();
 

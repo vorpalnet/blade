@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
 import java.util.HashMap;
 
 import javax.servlet.sip.SipServletRequest;
@@ -8,7 +9,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@type")
 
-public class ConfigHashMap extends TranslationsMap {
+public class ConfigHashMap extends TranslationsMap implements Serializable{
 
 	public HashMap<String, Translation> map = new HashMap<>();
 

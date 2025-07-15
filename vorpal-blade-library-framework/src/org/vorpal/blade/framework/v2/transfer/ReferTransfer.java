@@ -71,6 +71,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
+import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
@@ -106,9 +107,6 @@ public class ReferTransfer extends Transfer {
 			transfereeRequest = transfereeSession.createRequest(REFER);
 			copyContentAndHeaders(transferorRequest, transfereeRequest);
 
-//			transfereeRequest.setHeader("Refer-To", transferorRequest.getHeader("Refer-To"));
-//			transfereeRequest.setHeader("Referred-By", transferorRequest.getHeader("Referred-By"));
-
 			// If this was method was invoked by the REST API, it might have set some extra
 			// headers.
 			if (this.inviteHeaders != null) {
@@ -117,11 +115,9 @@ public class ReferTransfer extends Transfer {
 				}
 			}
 
-			// request is REFER to transferee (alice)
-//			SipSession transfereeSession = referRequest.getSession();
-
-			// linked session is transferor (bob)
-//			SipSession transferorSession = getLinkedSession(referRequest.getSession());
+			// save X-Previous-DN-Tmp for use later
+			URI referTo = transferorRequest.getAddressHeader("Refer-To").getURI();
+			transferorRequest.setAttribute("Refer-To", referTo);
 
 			// User is notified a transfer is requested
 			transferListener.transferRequested(transferorRequest);
@@ -162,10 +158,26 @@ public class ReferTransfer extends Transfer {
 
 						if (sipfrag.contains("100")) {
 							// User is notified that transfer is initiated
+
+							// Set Header X-Original-DN
+							URI xOriginalDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Original-DN");
+							targetRequest.setHeader("X-Original-DN", xOriginalDN.toString());
+							// Set Header X-Previous-DN
+							URI xPreviousDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Previous-DN");
+							targetRequest.setHeader("X-Previous-DN", xPreviousDN.toString());
+
 							transferListener.transferInitiated(transfereeRequest);
 						} else if (sipfrag.contains("200")) {
 							// User is notified of a successful transfer
 							// What response to use?
+
+							SipSession callee = referResponse.getSession();
+							callee.setAttribute("userAgent", "callee");
+							SipSession caller = Callflow.getLinkedSession(callee);
+							caller.setAttribute("userAgent", "caller");
+							URI referTo2 = (URI) referResponse.getApplicationSession().getAttribute("Refer-To");
+							referResponse.getApplicationSession().setAttribute("X-Previous-DN", referTo2);
+
 							transferListener.transferCompleted(referResponse);
 							sendRequest(transferorSession.createRequest(BYE));
 						} else if (sipfrag.contains("486")) {

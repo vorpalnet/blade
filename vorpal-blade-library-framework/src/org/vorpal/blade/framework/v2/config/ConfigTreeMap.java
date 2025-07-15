@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v2.config;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.TreeMap;
 
@@ -9,7 +10,7 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ConfigTreeMap extends TranslationsMap {
+public class ConfigTreeMap extends TranslationsMap implements Serializable {
 	public TreeMap<String, Translation> map = new TreeMap<>();
 
 	public int size() {

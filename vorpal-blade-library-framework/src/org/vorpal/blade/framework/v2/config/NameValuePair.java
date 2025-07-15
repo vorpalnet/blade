@@ -1,6 +1,8 @@
 package org.vorpal.blade.framework.v2.config;
 
-public class NameValuePair<Name, Value> {
+import java.io.Serializable;
+
+public class NameValuePair<Name, Value> implements Serializable{
 
 	private Name name;
 	private Value value;
