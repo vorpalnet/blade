@@ -25,7 +25,6 @@
 		</fileset>
 	</path>
 
-	<echo message="Looking for: ${framework}" />
 	<path id="vorpal-blade.classpath">
 		<fileset dir="${BLADE}/vorpal-blade-shared-libraries/target/dependency">
 			<include name="**/*.jar" />
@@ -754,7 +753,7 @@
 
 			<!-- version number is important for upgrades -->
 			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
-			
+
 		</manifest>
 		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}">
 			<lib dir="${build}/lib" />
@@ -768,17 +767,12 @@
 
 	<taskdef name="plantuml" classname="net.sourceforge.plantuml.ant.PlantUmlTask" classpath="${plantuml}" />
 
-
-
 	<target name="javadoc">
-		<echo message="javadoc, creating directory: ${docs}/${ant.project.name}" />
-
-
-		<!-- mkdir dir="${docs}/${ant.project.name}" / -->
+		<echo message="z-UMLDoclet: ${umldoclet}" />
+		<echo message="z-javadoc, creating directory: ${docs}/${ant.project.name}" />
 
 		<mkdir dir="${docs}/${ant.project.name}/images" />
 
-		<!-- plantuml dir="${src}" format="svg" output="${docs}/${ant.project.name}/images" /-->
 		<plantuml>
 			<fileset dir="${src}">
 				<filename name="**/*.java" />
@@ -786,11 +780,10 @@
 		</plantuml>
 
 
-		<!--
+		<!-- Add a custom stylesheet
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="${BLADE}/lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
--->
+        -->
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
-
 			<doclet name="nl.talsmasoftware.umldoclet.UMLDoclet" path="${umldoclet}">
 				<param name="-failOnCyclicPackageDependencies" value="false" />
 			</doclet>
@@ -799,12 +792,12 @@
 			<classpath refid="WebLogic System Libraries.libraryclasspath" />
 			<classpath refid="project.classpath" />
 
-			<!--			
+			<!-- Add a customer header		
 			<header>
 				<![CDATA[<a href="/index.html">
 				<img src="/assets/images/vorpal-logo.png" alt="Home" style="height:80px">
 				</a>]]></header>
--->
+            -->
 
 			<doctitle>
 				<![CDATA[<div>${ant.project.name} - v${implementation}.${build.number}</div>]]>
