@@ -86,7 +86,6 @@ public class ReferTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
 	static private Logger sipLogger = Callflow.sipLogger;
 
-//	public SipServletRequest referRequest;
 	public SipServletResponse referResponse;
 
 	public ReferTransfer(TransferListener referListener) {
@@ -94,13 +93,20 @@ public class ReferTransfer extends Transfer {
 	}
 
 	@Override
-	public void process(SipServletRequest referRequest) throws ServletException, IOException {
+	public void process(SipServletRequest transferorRequest) throws ServletException, IOException {
 		try {
 
 			// jwm - there should be a 202 response, but right now this is only invoked by
 			// - REST APIs. should add a dummy 202 response in the future.
 
-//			this.referRequest = referRequest;
+			SipSession transferorSession = transferorRequest.getSession();
+			SipSession transfereeSession = getLinkedSession(transferorSession);
+
+			transfereeRequest = transfereeSession.createRequest(REFER);
+			copyContentAndHeaders(transferorRequest, transfereeRequest);
+			
+//			transfereeRequest.setHeader("Refer-To", transferorRequest.getHeader("Refer-To"));
+//			transfereeRequest.setHeader("Referred-By", transferorRequest.getHeader("Referred-By"));
 
 			// If this was method was invoked by the REST API, it might have set some extra
 			// headers.
@@ -111,25 +117,28 @@ public class ReferTransfer extends Transfer {
 			}
 
 			// request is REFER to transferee (alice)
-			SipSession transfereeSession = referRequest.getSession();
+//			SipSession transfereeSession = referRequest.getSession();
 
 			// linked session is transferor (bob)
-			SipSession transferorSession = getLinkedSession(referRequest.getSession());
+//			SipSession transferorSession = getLinkedSession(referRequest.getSession());
 
 			// User is notified a transfer is requested
-			transferListener.transferRequested(referRequest);
+			transferListener.transferRequested(transferorRequest);
 
 			expectRequest(transfereeSession, CANCEL, (cancel) -> {
+				sipLogger.finer(transfereeSession, "ReferTransfer.process - expectRequest CANCEL, Alice hangs up.");
 
 				// Transferee (Alice) hangs up
-				transferListener.transferAbandoned(referRequest);
+				transferListener.transferAbandoned(transfereeRequest);
 
 				sendRequest(continueRequest(transferorSession, cancel));
-
 			});
 
 			// Expect to receive NOTIFY messages from transferee (alice)
 			expectRequest(transfereeSession, NOTIFY, (notify) -> {
+
+				sipLogger.finer(transfereeSession, "ReferTransfer.process - expectRequest NOTIFY");
+
 				// Place TransferListener logic here
 
 				// Respond back to NOTIFY
@@ -152,7 +161,7 @@ public class ReferTransfer extends Transfer {
 
 						if (sipfrag.contains("100")) {
 							// User is notified that transfer is initiated
-							transferListener.transferInitiated(referRequest);
+							transferListener.transferInitiated(transfereeRequest);
 						} else if (sipfrag.contains("200")) {
 							// User is notified of a successful transfer
 							// What response to use?
@@ -172,17 +181,26 @@ public class ReferTransfer extends Transfer {
 
 			});
 
-			sendRequest(referRequest, (referResponse) -> {
+//			sendRequest(referRequest, (referResponse) -> {
+			sendRequest(transfereeRequest, (referResponse) -> {
 				this.referResponse = referResponse;
 
-				// If refer fails, complete REST invocation as a failure
-				transferListener.transferDeclined(referResponse);
+//				if (successful(referResponse)) {
+//					// hang up. debugging. use the NOTIFY instead.
+//					sendRequest(transferorSession.createRequest(BYE));
+//				}
+
+				if (failure(referResponse)) {
+					// If refer fails, complete REST invocation as a failure
+					transferListener.transferDeclined(referResponse);
+				}
+
 			});
 
 		} catch (
 
 		Exception e) {
-			sipLogger.logStackTrace(referRequest, e);
+			sipLogger.logStackTrace(transfereeRequest, e);
 		}
 
 	}

@@ -128,10 +128,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					for (String id : appSessionIds) {
 						_appSession = sipUtil.getApplicationSessionById(id);
 						if (_appSession != null) {
-							sipLogger.finest(_appSession,
+							sipLogger.finer(_appSession,
 									"appSessionId=" + id + ", isNull=false, isValid=" + _appSession.isValid());
 						} else {
-							sipLogger.finest("appSessionId=" + id + "isNull=true, isValid=false");
+							sipLogger.finer("appSessionId=" + id + "isNull=true, isValid=false");
 						}
 					}
 				}
@@ -143,7 +143,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					if (appSession != null) {
 						sipLogger.finer(appSession, "TransferAPI appSession.id=" + appSession.getId());
 					} else {
-						sipLogger.warning(appSession, "TransferAPI appSession.id=" + appSession.getId());
+						sipLogger.warning(appSession, "TransferAPI appSession.id=null");
 					}
 
 				}
@@ -249,12 +249,15 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 					if (target != null) {
 						SipSession transferorSession = getLinkedSession(transfereeSession);
-						sipLogger.info(transferorSession,
-								"TransferAPI REST transfer request; transferee=" + transferee + ", target=" + target);
+
 						Address transferor = (Address) transferorSession.getAttribute("sipAddress");
+
+						sipLogger.info(transferorSession, "TransferAPI REST transfer request; transferee=" + transferee
+								+ ", target=" + target + ", transferor=" + transferor);
 
 						// bob (transferee) is doing the 'transfer', to alice
 						DummyRequest refer = new DummyRequest(REFER, transferor, transferee);
+						refer.setRequestURI(transferee.getURI());
 						refer.setApplicationSession(appSession);
 						refer.setSession(transferorSession);
 						refer.setHeader("Refer-To", target.toString());
@@ -283,6 +286,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 							callflow = new BlindTransfer(this, false);
 							break;
 						case refer:
+
 							callflow = new ReferTransfer(this);
 						}
 
@@ -403,7 +407,6 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 		sipLogger.finer(response, "TransferAPI.transferCompleted - " + response.getMethod() + " " + response.getStatus()
 				+ " " + response.getReasonPhrase());
 
-		
 		SipApplicationSession appSession = response.getApplicationSession();
 
 		SipSession callee = response.getSession();
@@ -414,14 +417,13 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 		// now update X-Previous-DN for future use after success transfer
 		URI referTo = (URI) appSession.getAttribute("Refer-To");
 		appSession.setAttribute("X-Previous-DN", referTo);
-		sipLogger.finer(response, Color
-				.YELLOW_BOLD_BRIGHT("TransferAPI.transferComplete - saving X-Previous-DN: " + referTo.toString()));
+		sipLogger.finer(response,
+				Color.YELLOW_BOLD_BRIGHT("TransferAPI.transferComplete - saving X-Previous-DN: " + referTo.toString()));
 
 		if (sipLogger.isLoggable(Level.INFO)) {
 			sipLogger.info(response, "TransferAPI.transferCompleted - status=" + response.getStatus());
 		}
-		
-		
+
 		AsyncResponse asyncResponse = responseMap.remove(response.getApplicationSession().getId());
 		if (asyncResponse != null) {
 			TransferResponse txferResp = new TransferResponse();

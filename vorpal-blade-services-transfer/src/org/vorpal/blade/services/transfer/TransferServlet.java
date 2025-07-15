@@ -9,10 +9,14 @@ import java.util.logging.Level;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipApplicationSession;
+import javax.servlet.sip.SipApplicationSessionEvent;
+import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
+import javax.servlet.sip.SipSessionEvent;
+import javax.servlet.sip.SipSessionListener;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
@@ -22,6 +26,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v2.logging.Color;
+import org.vorpal.blade.framework.v2.logging.ConsoleColors;
 import org.vorpal.blade.services.transfer.callflows.AttendedTransfer;
 import org.vorpal.blade.services.transfer.callflows.BlindTransfer;
 import org.vorpal.blade.services.transfer.callflows.ConferenceTransfer;
@@ -38,9 +43,9 @@ import org.vorpal.blade.services.transfer.callflows.TransferListener;
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
 // For debugging, listen on session creation and destruction
-//public class TransferServlet extends B2buaServlet
-//implements B2buaListener, TransferListener, SipApplicationSessionListener, SipSessionListener {
-public class TransferServlet extends B2buaServlet implements B2buaListener, TransferListener {
+public class TransferServlet extends B2buaServlet
+		implements B2buaListener, TransferListener, SipApplicationSessionListener, SipSessionListener {
+//public class TransferServlet extends B2buaServlet implements B2buaListener, TransferListener {
 
 	private static final long serialVersionUID = 1L;
 	// public class TransferServlet extends B2buaServlet {
@@ -364,63 +369,97 @@ public class TransferServlet extends B2buaServlet implements B2buaListener, Tran
 		}
 	}
 
-//	@Override
-//	public void sessionCreated(SipApplicationSessionEvent event) {
-//
-//		if (sipLogger.isLoggable(Level.FINER)) {
-//			SipApplicationSession appSession = event.getApplicationSession();
-//			sipLogger.finer(appSession, ConsoleColors.GREEN_BRIGHT + "appSession created..." + ConsoleColors.RESET);
-//		}
-//
-//	}
-//
-//	@Override
-//	public void sessionDestroyed(SipApplicationSessionEvent event) {
-//		if (sipLogger.isLoggable(Level.FINER)) {
-//			SipApplicationSession appSession = event.getApplicationSession();
-//			sipLogger.finer(appSession, ConsoleColors.RED_BRIGHT + "appSession destroyed..." + ConsoleColors.RESET);
-//		}
-//	}
-//
-//	@Override
-//	public void sessionExpired(SipApplicationSessionEvent event) {
-//		if (sipLogger.isLoggable(Level.FINER)) {
-//			SipApplicationSession appSession = event.getApplicationSession();
-//			sipLogger.finer(appSession, "appSession expired...");
-//		}
-//	}
-//
-//	@Override
-//	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
-//		if (sipLogger.isLoggable(Level.FINER)) {
-//			SipApplicationSession appSession = event.getApplicationSession();
-//			sipLogger.finer(appSession, "appSession readyToInvalidate...");
-//		}
-//	}
-//
-//	@Override
-//	public void sessionCreated(SipSessionEvent event) {
-//		if (sipLogger.isLoggable(Level.FINER)) {
-//			SipSession sipSession = event.getSession();
-//			sipLogger.finer(sipSession, "sipSession created...");
-//		}
-//	}
-//
-//	@Override
-//	public void sessionDestroyed(SipSessionEvent event) {
-//		if (sipLogger.isLoggable(Level.FINER)) {
-//			SipSession sipSession = event.getSession();
-//			sipLogger.finer(sipSession, "sipSession destroyed...");
-//
-//		}
-//	}
-//
-//	@Override
-//	public void sessionReadyToInvalidate(SipSessionEvent event) {
-//		if (sipLogger.isLoggable(Level.FINER)) {
-//			SipSession sipSession = event.getSession();
-//			sipLogger.finer(sipSession, "sipSession readyToInvalidate...");
-//		}
-//	}
+	@Override
+	public void sessionCreated(SipApplicationSessionEvent event) {
+
+		if (sipLogger.isLoggable(Level.FINEST)) {
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finest(appSession, ConsoleColors.GREEN_BRIGHT + "TransferServlet.sessionCreated - appSessionId="
+					+ event.getApplicationSession().getId() + ConsoleColors.RESET);
+		}
+
+	}
+
+	@Override
+	public void sessionDestroyed(SipApplicationSessionEvent event) {
+		if (sipLogger.isLoggable(Level.FINEST)) {
+
+			String id = null;
+			if (event.getApplicationSession() != null) {
+				id = event.getApplicationSession().getId();
+			}
+
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finest(appSession, ConsoleColors.RED_BRIGHT + "TransferServlet.sessionDestroyed - appSessionId="
+					+ id + ConsoleColors.RESET);
+		}
+	}
+
+	@Override
+	public void sessionExpired(SipApplicationSessionEvent event) {
+		if (sipLogger.isLoggable(Level.FINEST)) {
+
+			String id = null;
+			if (event.getApplicationSession() != null) {
+				id = event.getApplicationSession().getId();
+			}
+
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finest(appSession, "TransferServlet.sessionExpired - appSessionId=" + id);
+		}
+	}
+
+	@Override
+	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+		if (sipLogger.isLoggable(Level.FINEST)) {
+
+			String id = null;
+			if (event.getApplicationSession() != null) {
+				id = event.getApplicationSession().getId();
+			}
+
+			SipApplicationSession appSession = event.getApplicationSession();
+			sipLogger.finest(appSession, "TransferServlet.sessionReadyToInvalidate - appSessionId=" + id);
+		}
+	}
+
+	@Override
+	public void sessionCreated(SipSessionEvent event) {
+		if (sipLogger.isLoggable(Level.FINEST)) {
+			String id = null;
+			if (event.getSession() != null) {
+				id = event.getSession().getId();
+			}
+
+			SipSession sipSession = event.getSession();
+			sipLogger.finest(sipSession, "TransferServlet.sessionCreated - sipSessionId=" + id);
+		}
+	}
+
+	@Override
+	public void sessionDestroyed(SipSessionEvent event) {
+		if (sipLogger.isLoggable(Level.FINEST)) {
+			String id = null;
+			if (event.getSession() != null) {
+				id = event.getSession().getId();
+			}
+
+			SipSession sipSession = event.getSession();
+			sipLogger.finest(sipSession, "TransferServlet.sessionDestroyed - sipSessionId=" + id);
+		}
+	}
+
+	@Override
+	public void sessionReadyToInvalidate(SipSessionEvent event) {
+		if (sipLogger.isLoggable(Level.FINEST)) {
+			String id = null;
+			if (event.getSession() != null) {
+				id = event.getSession().getId();
+			}
+
+			SipSession sipSession = event.getSession();
+			sipLogger.finest(sipSession, "TransferServlet.sessionReadyToInvalidate - sipSessionId=" + id);
+		}
+	}
 
 }
