@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dnf -y install maven
-dnf -y install ant
-dnf -y install graphviz
-dnf -y install jq
+sudo dnf -y install maven
+sudo dnf -y install ant
+sudo dnf -y install graphviz
+sudo dnf -y install jq

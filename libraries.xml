@@ -2,7 +2,6 @@
 <project basedir="." name="common-libraries">
 	<tstamp />
 	<property file="../build.properties" />
-	<property file="../build.number" />
 	<property name="build" location="./build" />
 	<property name="debug" value="true" />
 	<property name="debuglevel" value="source,lines,vars" />
