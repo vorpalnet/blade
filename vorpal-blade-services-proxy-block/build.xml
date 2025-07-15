@@ -3,6 +3,7 @@
 <project basedir="." default="build" name="vorpal-blade-services-proxy-block">
 
 	<!-- Define unique locations first -->
+    
 	<property name="src" location="src/main/java" />
 	<property name="webapp" location="WebContent" />
 

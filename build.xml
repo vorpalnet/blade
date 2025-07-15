@@ -21,10 +21,10 @@
 	</taskdef>
 
 	<target name="init" depends="">
+        <buildnumber />
 		<if>
 			<available file="${computer.hostname}.properties" />
 			<then>
-                <buildnumber />
                 <property name="dist" location="./dist/${implementation}.${build.number}" />
                 <property name="docs" location="${dist}/docs" />
                 <echo message="Invoking build.xml buildnumber=${build.number}"/>
