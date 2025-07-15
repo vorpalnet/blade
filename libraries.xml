@@ -783,6 +783,11 @@
 		<!-- Add a custom stylesheet
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="${BLADE}/lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
         -->
+
+		<echo message="src=${src}" />
+		<echo message="destdir=${docs}/${ant.project.name}" />
+		<echo message="packagenames=${packagenames}" />
+
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
 			<doclet name="nl.talsmasoftware.umldoclet.UMLDoclet" path="${umldoclet}">
 				<param name="-failOnCyclicPackageDependencies" value="false" />
