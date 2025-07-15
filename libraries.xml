@@ -768,8 +768,8 @@
 	<taskdef name="plantuml" classname="net.sourceforge.plantuml.ant.PlantUmlTask" classpath="${plantuml}" />
 
 	<target name="javadoc">
-		<echo message="z-UMLDoclet: ${umldoclet}" />
-		<echo message="z-javadoc, creating directory: ${docs}/${ant.project.name}" />
+		<echo message="UMLDoclet: ${umldoclet}" />
+		<echo message="javadoc, creating directory: ${docs}/${ant.project.name}" />
 
 		<mkdir dir="${docs}/${ant.project.name}/images" />
 

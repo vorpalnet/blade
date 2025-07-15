@@ -27,7 +27,6 @@ import org.vorpal.blade.framework.v2.DummyRequest;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
 import org.vorpal.blade.framework.v2.transfer.ReferTransfer;
@@ -467,6 +466,9 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 			AsyncResponse asyncResponse = responseMap.remove(response.getApplicationSession().getId());
 			if (asyncResponse != null) {
+
+				sipLogger.finer(response, "TransferAPI.transferCompleted - Removed asyncResponse from responseMap.");
+
 				TransferResponse txferResp = new TransferResponse();
 				txferResp.event = "transferCompleted";
 				txferResp.method = response.getMethod();
@@ -483,7 +485,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 			} else {
 
 				sipLogger.severe(response,
-						"TransferAPI.transferCompleted - Async notification requested, but no AsyncResponse found. Cannot 'resume'.");
+						"TransferAPI.transferCompleted - Failed to remove asyncResponse from responseMap. Cannot 'resume'.");
 
 			}
 
