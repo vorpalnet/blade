@@ -3,6 +3,8 @@
 	<tstamp />
 	<property file="../build.properties" />
 	<property file="../build.number" />
+	
+	<echo message="build.number=${build.number}" />
 
 	<property name="build" location="./build" />
 	<property name="debug" value="true" />
