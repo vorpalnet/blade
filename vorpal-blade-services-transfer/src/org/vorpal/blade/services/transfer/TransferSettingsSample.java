@@ -8,6 +8,7 @@ import org.vorpal.blade.framework.v2.config.Selector;
 import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
 import org.vorpal.blade.framework.v2.config.TranslationsMap;
 import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
+import org.vorpal.blade.framework.v2.transfer.TransferSettings;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 

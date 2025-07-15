@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.transfer;
+package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.Serializable;
 import java.util.ArrayList;

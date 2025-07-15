@@ -111,7 +111,7 @@ alice <-- blade                 : 200 OK
 @enduml
 */
 
-package org.vorpal.blade.services.transfer.callflows;
+package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.IOException;
 
@@ -122,7 +122,8 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.framework.v2.logging.Color;
-import org.vorpal.blade.services.transfer.api.v1.Header;
+import org.vorpal.blade.framework.v2.transfer.api.Header;
+import org.vorpal.blade.framework.v2.transfer.api.Header;
 
 /**
  * The BlindTransfer callflow performs an 'unattended' transfer operation.
@@ -138,12 +139,12 @@ public class BlindTransfer extends Transfer {
 	private SipServletRequest aliceRequest;
 	private boolean sendNotify = true;
 
-	public BlindTransfer(TransferListener referListener) {
-		super(referListener);
+	public BlindTransfer(TransferListener referListener, TransferSettings transferSettings) {
+		super(referListener, transferSettings);
 	}
 
-	public BlindTransfer(TransferListener referListener, boolean sendNotify) {
-		super(referListener);
+	public BlindTransfer(TransferListener referListener, TransferSettings transferSettings, boolean sendNotify) {
+		super(referListener, transferSettings);
 		this.sendNotify = sendNotify;
 	}
 

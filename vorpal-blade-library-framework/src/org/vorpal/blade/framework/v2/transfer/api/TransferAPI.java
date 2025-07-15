@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.transfer.api.v1;
+package org.vorpal.blade.framework.v2.transfer.api;
 
 import java.io.IOException;
 import java.util.Map;
@@ -33,13 +33,14 @@ import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.DummyRequest;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Color;
-import org.vorpal.blade.services.transfer.TransferServlet;
-import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
-import org.vorpal.blade.services.transfer.callflows.BlindTransfer;
-import org.vorpal.blade.services.transfer.callflows.ReferTransfer;
-import org.vorpal.blade.services.transfer.callflows.Transfer;
-import org.vorpal.blade.services.transfer.callflows.TransferListener;
+import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
+import org.vorpal.blade.framework.v2.transfer.ReferTransfer;
+import org.vorpal.blade.framework.v2.transfer.Transfer;
+import org.vorpal.blade.framework.v2.transfer.TransferListener;
+import org.vorpal.blade.framework.v2.transfer.TransferSettings;
+import org.vorpal.blade.framework.v2.transfer.TransferSettings.TransferStyle;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,11 +49,11 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
-@OpenAPIDefinition(info = @Info( //
-		title = "BLADE - Transfer", //
-		version = "1", //
-		description = "Performs transfer operations"))
-@Path("v1")
+//@OpenAPIDefinition(info = @Info( //
+//		title = "BLADE - Transfer", //
+//		version = "1", //
+//		description = "Performs transfer operations"))
+//@Path("v1")
 public class TransferAPI extends ClientCallflow implements TransferListener {
 	private static final long serialVersionUID = 1L;
 
@@ -61,14 +62,32 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 	// static because you cannot serialize AsyncResponse
 	public static Map<String, AsyncResponse> responseMap = new ConcurrentHashMap<>();
 
-	@SuppressWarnings({ "unchecked" })
-	@GET
-	@Path("session/{key}")
-	@Produces({ MediaType.APPLICATION_JSON })
-	@Operation(summary = "Examine session variables")
-	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
-			@ApiResponse(responseCode = "404", description = "Not Found"),
-			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
+	public static SettingsManager<TransferSettings> settings;
+
+	public static Map<String, AsyncResponse> getResponseMap() {
+		return responseMap;
+	}
+
+	public static void setResponseMap(Map<String, AsyncResponse> responseMap) {
+		TransferAPI.responseMap = responseMap;
+	}
+
+	public static SettingsManager<TransferSettings> getSettings() {
+		return settings;
+	}
+
+	public static void setSettings(SettingsManager<TransferSettings> settings) {
+		TransferAPI.settings = settings;
+	}
+
+//	@SuppressWarnings({ "unchecked" })
+//	@GET
+//	@Path("session/{key}")
+//	@Produces({ MediaType.APPLICATION_JSON })
+//	@Operation(summary = "Examine session variables")
+//	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
+//			@ApiResponse(responseCode = "404", description = "Not Found"),
+//			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
 	public Response inspect(@PathParam("key") String key) {
 
 		Response response = null;
@@ -93,21 +112,21 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 		return response;
 	}
 
-	@SuppressWarnings({ "unchecked" })
-	@POST
-	@Asynchronous
-	@Path("transfer")
-	@Consumes({ MediaType.APPLICATION_JSON })
-	@Produces({ MediaType.APPLICATION_JSON })
-	@Operation(summary = "Transfer")
-	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
-			@ApiResponse(responseCode = "202", description = "Accepted"),
-			@ApiResponse(responseCode = "403", description = "Transfer Declined"),
-			@ApiResponse(responseCode = "404", description = "Not Found"),
-			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
-			@ApiResponse(responseCode = "410", description = "Transfer Abandoned"),
-			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
-			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
+//	@SuppressWarnings({ "unchecked" })
+//	@POST
+//	@Asynchronous
+//	@Path("transfer")
+//	@Consumes({ MediaType.APPLICATION_JSON })
+//	@Produces({ MediaType.APPLICATION_JSON })
+//	@Operation(summary = "Transfer")
+//	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
+//			@ApiResponse(responseCode = "202", description = "Accepted"),
+//			@ApiResponse(responseCode = "403", description = "Transfer Declined"),
+//			@ApiResponse(responseCode = "404", description = "Not Found"),
+//			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
+//			@ApiResponse(responseCode = "410", description = "Transfer Abandoned"),
+//			@ApiResponse(responseCode = "406", description = "Not Acceptable"),
+//			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
 	public void blindTransfer(
 			@RequestBody(description = "transfer request", required = true) TransferRequest transferRequest,
 			@Context UriInfo uriInfo, @Suspended AsyncResponse asyncResponse) {
@@ -273,7 +292,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 						TransferStyle style = transferRequest.style;
 						if (null == style) {
-							style = TransferServlet.settingsManager.getCurrent().getDefaultTransferStyle();
+							style = settings.getCurrent().getDefaultTransferStyle();
 						}
 						if (null == style) {
 							style = TransferStyle.blind;
@@ -283,11 +302,11 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						case attended:
 						case conference:
 						case blind:
-							callflow = new BlindTransfer(this, false);
+							callflow = new BlindTransfer(this, settings.getCurrent(), false);
 							break;
 						case refer:
 
-							callflow = new ReferTransfer(this);
+							callflow = new ReferTransfer(this, settings.getCurrent());
 						}
 
 						// Add any inviteHeaders

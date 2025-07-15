@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.transfer.api.v1;
+package org.vorpal.blade.framework.v2.transfer.api;
 
 import java.io.Serializable;
 import java.util.HashMap;

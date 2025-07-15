@@ -63,7 +63,7 @@ alice     <-->            carol : RTP
 @enduml
 */
 
-package org.vorpal.blade.services.transfer.callflows;
+package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.IOException;
 
@@ -74,7 +74,8 @@ import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
-import org.vorpal.blade.services.transfer.api.v1.Header;
+import org.vorpal.blade.framework.v2.transfer.api.Header;
+import org.vorpal.blade.framework.v2.transfer.api.Header;
 
 /**
  * The ReferTransfer callflow sends a REFER to Alice on behalf of Bob. Alice
@@ -88,8 +89,8 @@ public class ReferTransfer extends Transfer {
 
 	public SipServletResponse referResponse;
 
-	public ReferTransfer(TransferListener referListener) {
-		super(referListener);
+	public ReferTransfer(TransferListener referListener, TransferSettings transferSettings) {
+		super(referListener, transferSettings);
 	}
 
 	@Override
@@ -104,7 +105,7 @@ public class ReferTransfer extends Transfer {
 
 			transfereeRequest = transfereeSession.createRequest(REFER);
 			copyContentAndHeaders(transferorRequest, transfereeRequest);
-			
+
 //			transfereeRequest.setHeader("Refer-To", transferorRequest.getHeader("Refer-To"));
 //			transfereeRequest.setHeader("Referred-By", transferorRequest.getHeader("Referred-By"));
 

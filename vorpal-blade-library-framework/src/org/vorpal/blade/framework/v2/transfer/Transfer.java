@@ -61,7 +61,7 @@
  *  
  */
 
-package org.vorpal.blade.services.transfer.callflows;
+package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.IOException;
 import java.util.List;
@@ -72,9 +72,10 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.services.transfer.TransferServlet;
-import org.vorpal.blade.services.transfer.TransferSettings;
-import org.vorpal.blade.services.transfer.api.v1.Header;
+import org.vorpal.blade.framework.v2.transfer.api.Header;
+import org.vorpal.blade.framework.v2.transfer.api.Header;
+
+
 
 public class Transfer extends Callflow {
 	static final long serialVersionUID = 1L;
@@ -94,6 +95,7 @@ public class Transfer extends Callflow {
 	protected SipServletRequest transfereeRequest;
 	protected SipServletRequest targetRequest;
 	protected SipServletRequest transferorRequest;
+	protected TransferSettings transferSettings;
 
 	protected List<Header> inviteHeaders;
 
@@ -111,9 +113,11 @@ public class Transfer extends Callflow {
 	 * complete transfer callflow.
 	 * 
 	 * @param transferListener
+	 * @param transferSettings
 	 */
-	public Transfer(TransferListener transferListener) {
+	public Transfer(TransferListener transferListener, TransferSettings transferSettings) {
 		this.transferListener = transferListener;
+		this.transferSettings = transferSettings;
 	}
 
 	/**
@@ -134,10 +138,10 @@ public class Transfer extends Callflow {
 		sipLogger.finer(request, "Transfer transferee=" + transferee + ", target=" + target);
 
 		targetRequest = sipFactory.createRequest(appSession, INVITE, transferee, target);
-		targetRequest.setHeader("Allow", TransferServlet.getSettingsManager().getCurrent().getAllow());
+		targetRequest.setHeader("Allow", this.transferSettings.getAllow());
 
 		transfereeRequest = getLinkedSession(request.getSession()).createRequest(INVITE);
-		transfereeRequest.setHeader("Allow", TransferServlet.getSettingsManager().getCurrent().getAllow());
+		transfereeRequest.setHeader("Allow", this.transferSettings.getAllow());
 	}
 
 	/**
@@ -148,8 +152,8 @@ public class Transfer extends Callflow {
 	 * @param copyTo
 	 */
 	public void preserveInviteHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) {
-		TransferSettings ts = TransferServlet.settingsManager.getCurrent();
-		for (String header : ts.getPreserveInviteHeaders()) {
+//		TransferSettings ts = TransferServlet.settingsManager.getCurrent();
+		for (String header : this.transferSettings.getPreserveInviteHeaders()) {
 			String value = copyFrom.getHeader(header);
 			if (value != null && null == copyTo.getHeader(header)) {
 				copyHeader(header, copyFrom, copyTo);
@@ -165,8 +169,8 @@ public class Transfer extends Callflow {
 	 * @param copyTo
 	 */
 	public void preserveReferHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) {
-		TransferSettings ts = TransferServlet.settingsManager.getCurrent();
-		for (String header : ts.getPreserveReferHeaders()) {
+//		TransferSettings ts = TransferServlet.settingsManager.getCurrent();
+		for (String header : this.transferSettings.getPreserveReferHeaders()) {
 			String value = copyFrom.getHeader(header);
 			if (value != null) {
 				copyTo.setHeader(header, value);

@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.transfer.callflows;
+package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.IOException;
 
@@ -7,7 +7,6 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
-import org.vorpal.blade.services.transfer.api.v1.Dialog;
 
 public class TransferInitialInvite extends InitialInvite {
 
@@ -25,7 +24,7 @@ public class TransferInitialInvite extends InitialInvite {
 		request.getSession().setAttribute("initial_invite", request);
 
 		// jwm-test
-		Dialog dialog = new Dialog(request.getSession());
+		//Dialog dialog = new Dialog(request.getSession());
 
 		super.process(request);
 	}

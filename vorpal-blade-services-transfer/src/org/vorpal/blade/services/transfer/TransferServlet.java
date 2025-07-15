@@ -27,11 +27,13 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.ConsoleColors;
-import org.vorpal.blade.services.transfer.callflows.AttendedTransfer;
-import org.vorpal.blade.services.transfer.callflows.BlindTransfer;
-import org.vorpal.blade.services.transfer.callflows.ConferenceTransfer;
-import org.vorpal.blade.services.transfer.callflows.TransferInitialInvite;
-import org.vorpal.blade.services.transfer.callflows.TransferListener;
+import org.vorpal.blade.framework.v2.transfer.AttendedTransfer;
+import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
+import org.vorpal.blade.framework.v2.transfer.ConferenceTransfer;
+import org.vorpal.blade.framework.v2.transfer.TransferInitialInvite;
+import org.vorpal.blade.framework.v2.transfer.TransferListener;
+import org.vorpal.blade.framework.v2.transfer.TransferSettings;
+import org.vorpal.blade.framework.v2.transfer.api.TransferAPI;
 
 /**
  * This class implements an example B2BUA with transfer capabilities.
@@ -103,6 +105,10 @@ public class TransferServlet extends B2buaServlet
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		settingsManager = new SettingsManager<>(event, TransferSettings.class, new TransferSettingsSample());
+
+		// Quirky visibility problem
+		TransferAPI.settings = settingsManager;
+
 		sipLogger.info("servletCreated...");
 	}
 
@@ -121,13 +127,13 @@ public class TransferServlet extends B2buaServlet
 
 		switch ((ts != null) ? ts : "none") {
 		case "conference":
-			callflow = new ConferenceTransfer(this);
+			callflow = new ConferenceTransfer(this, settingsManager.getCurrent());
 			break;
 		case "attended":
-			callflow = new AttendedTransfer(this);
+			callflow = new AttendedTransfer(this, settingsManager.getCurrent());
 			break;
 		case "blind":
-			callflow = new BlindTransfer(this);
+			callflow = new BlindTransfer(this, settingsManager.getCurrent());
 			break;
 		default: // null & none
 			callflow = new Passthru(this);
@@ -167,7 +173,7 @@ public class TransferServlet extends B2buaServlet
 //				sipLogger.finer(request, "style=" + ts);
 
 				if (ts == null) {
-					ts = settings.defaultTransferStyle.toString();
+					ts = settings.getDefaultTransferStyle().toString();
 				}
 
 				if (ts == null) {

@@ -71,7 +71,7 @@
  *     |                    |                    |                    |
  */
 
-package org.vorpal.blade.services.transfer.callflows;
+package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.IOException;
 
@@ -80,18 +80,16 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callback;
 
-/**
- * 
- * @author jeff
- *
- */
-public class ConferenceTransfer extends Transfer {
+// Notes: 
+// https://www.dialogic.com/webhelp/csp1010/8.4.1_ipn3/sip_software_chap_-_sip_notify_subscription_state.htm
+
+public class AttendedTransfer extends Transfer {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
 	private Callback<SipServletRequest> loopOnPrack;
 
-	public ConferenceTransfer(TransferListener referListener) {
-		super(referListener);
+	public AttendedTransfer(TransferListener referListener, TransferSettings transferSetting) {
+		super(referListener, transferSetting);
 	}
 
 	@Override

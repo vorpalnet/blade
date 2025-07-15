@@ -22,7 +22,7 @@
  *  SOFTWARE.
  */
 
-package org.vorpal.blade.services.transfer.callflows;
+package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.IOException;
 import java.io.Serializable;

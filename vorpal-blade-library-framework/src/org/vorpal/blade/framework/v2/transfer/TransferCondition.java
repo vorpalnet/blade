@@ -1,7 +1,7 @@
-package org.vorpal.blade.services.transfer.callflows;
+package org.vorpal.blade.framework.v2.transfer;
 
 import org.vorpal.blade.framework.v2.config.Condition;
-import org.vorpal.blade.services.transfer.TransferSettings.TransferStyle;
+import org.vorpal.blade.framework.v2.transfer.TransferSettings.TransferStyle;
 
 public class TransferCondition {
 

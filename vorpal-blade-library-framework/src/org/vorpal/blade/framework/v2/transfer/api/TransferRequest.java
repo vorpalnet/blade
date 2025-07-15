@@ -1,8 +1,8 @@
-package org.vorpal.blade.services.transfer.api.v1;
+package org.vorpal.blade.framework.v2.transfer.api;
 
 import java.io.Serializable;
 
-import org.vorpal.blade.services.transfer.TransferSettings;
+import org.vorpal.blade.framework.v2.transfer.TransferSettings;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
