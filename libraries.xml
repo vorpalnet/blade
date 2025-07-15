@@ -797,6 +797,9 @@
 		<echo message="javadoc, creating directory: ${docs}/${ant.project.name}" />
 
 		<!-- mkdir dir="${docs}/${ant.project.name}" / -->
+		<echo message="UMLDoclet: ${umldoclet}" />
+		<echo message="javadoc, creating directory: ${docs}/${ant.project.name}" />
+
 		<mkdir dir="${docs}/${ant.project.name}/images" />
 
 		<!-- plantuml dir="${src}" format="svg" output="${docs}/${ant.project.name}/images" /-->
