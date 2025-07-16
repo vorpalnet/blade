@@ -2,9 +2,8 @@
 <project basedir="." name="common-libraries">
 	<tstamp />
 	<property file="../build.properties" />
+	<property file="../version.properties" />
 	<property file="../build.number" />
-	
-	<echo message="build.number=${build.number}" />
 
 	<property name="build" location="./build" />
 	<property name="debug" value="true" />
@@ -771,8 +770,10 @@
 	<taskdef name="plantuml" classname="net.sourceforge.plantuml.ant.PlantUmlTask" classpath="${plantuml}" />
 
 	<target name="javadoc">
-		<echo message="UMLDoclet: ${umldoclet}" />
-		<echo message="javadoc, creating directory: ${docs}/${ant.project.name}" />
+		<echo message="umldoclet=${umldoclet}" />
+		<echo message="src=${src}" />
+		<echo message="destdir=${docs}/${ant.project.name}" />
+		<echo message="packagenames=${packagenames}" />
 
 		<mkdir dir="${docs}/${ant.project.name}/images" />
 
@@ -782,14 +783,9 @@
 			</fileset>
 		</plantuml>
 
-
 		<!-- Add a custom stylesheet
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="${BLADE}/lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
         -->
-
-		<echo message="src=${src}" />
-		<echo message="destdir=${docs}/${ant.project.name}" />
-		<echo message="packagenames=${packagenames}" />
 
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
 			<doclet name="nl.talsmasoftware.umldoclet.UMLDoclet" path="${umldoclet}">
