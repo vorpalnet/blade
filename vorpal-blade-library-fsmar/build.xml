@@ -18,7 +18,7 @@
 	<import file="../libraries.xml" />
 
 	<target name="build" depends="init,compile,package">
-		<echo message="${ant.project.name} v${implementation}-b${build.number}" />
+		<echo message="${ant.project.name} v${implementation}.{build.number}" />
 	</target>
 
 	<target name="compile" depends="init">
