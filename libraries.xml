@@ -679,19 +679,20 @@
 	<target name="init">
 
 		<echo message="ant.project.name=${ant.project.name}" />
-		<echo message="\t build=${build}" />
-		<echo message="\t classes=${classes}" />
-		<echo message="\t src=${src}" />
-		<echo message="\t BLADE=${BLADE}" />
-		<echo message="\t OCCAS=${OCCAS}" />
-		<echo message="\t umldoclet=${umldoclet}" />
-		<echo message="\t plantuml=${plantuml}" />
-		<echo message="\t packagenames=${packagenames}" />
-		<echo message="\t dist=${dist}" />
-		<echo message="\t webapp=${webapp}" />
-		<echo message="\t framework=${framework}" />
-		<echo message="\t docs=${docs}" />
-
+		<echo message="   specification=${specification}" />
+		<echo message="   implementation=${implementation}" />
+		<echo message="   build=${build}" />
+		<echo message="   src=${src}" />
+		<echo message="   classes=${classes}" />
+		<echo message="   dist=${dist}" />
+		<echo message="   BLADE=${BLADE}" />
+		<echo message="   OCCAS=${OCCAS}" />
+		<echo message="   umldoclet=${umldoclet}" />
+		<echo message="   plantuml=${plantuml}" />
+		<echo message="   packagenames=${packagenames}" />
+		<echo message="   webapp=${webapp}" />
+		<echo message="   framework=${framework}" />
+		<echo message="   docs=${docs}" />
 
 		<mkdir dir="${dist}" />
 		<mkdir dir="${classes}" />
