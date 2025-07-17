@@ -114,18 +114,23 @@ alice <-- blade                 : 200 OK
 package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.IOException;
+import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
-import org.vorpal.blade.framework.v2.logging.Color;
+import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
-import org.vorpal.blade.framework.v2.transfer.api.Header;
+import org.vorpal.blade.framework.v2.transfer.api.TransferAPI;
+import org.vorpal.blade.framework.v2.transfer.api.TransferResponse;
 
 /**
  * The BlindTransfer callflow performs an 'unattended' transfer operation.
@@ -214,21 +219,26 @@ public class BlindTransfer extends Transfer {
 						sipLogger.finest(bobByeResponse, "Received response from Bob for manual BYE request");
 					});
 				}
+
+				transferListener.transferAbandoned(bye);
+
 			});
 
+			// In case transferor (bob) hangs up.
 			Expectation bobExpectation = expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
 				sipLogger.finer(transferorRequest, "transferor (bob) hangs up");
 				sendResponse(bye.createResponse(200));
+//				transferListener.transferInitiated(bye);
 			});
 
-			// User is notified that transfer is initiated			
+			// User is notified that transfer is initiated
 			// Set Header X-Original-DN
 			URI xOriginalDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Original-DN");
 			targetRequest.setHeader("X-Original-DN", xOriginalDN.toString());
 			// Set Header X-Previous-DN
 			URI xPreviousDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Previous-DN");
 			targetRequest.setHeader("X-Previous-DN", xPreviousDN.toString());
-			
+
 			transferListener.transferInitiated(targetRequest);
 
 			// Force Referred-By, ignore preserveReferHeaders
@@ -248,9 +258,13 @@ public class BlindTransfer extends Transfer {
 							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 
 				} else if (successful(targetResponse)) {
+					
 					sipLogger.finer(targetResponse, "target (carol) sends successful response "
 							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 
+					transferListener.transferCompleted(targetResponse);
+
+					
 					// Alice will no longer hangup, expect a BYE from Bob
 					aliceExpectation.clear();
 
@@ -276,16 +290,13 @@ public class BlindTransfer extends Transfer {
 						}
 
 						// User is notified of a successful transfer
-						
+
 						SipSession callee = targetResponse.getSession();
 						callee.setAttribute("userAgent", "callee");
 						SipSession caller = Callflow.getLinkedSession(callee);
 						caller.setAttribute("userAgent", "caller");
 						URI referTo2 = (URI) appSession.getAttribute("Refer-To");
 						appSession.setAttribute("X-Previous-DN", referTo2);
-					
-						transferListener.transferCompleted(targetResponse);
-
 					});
 
 				} else if (failure(targetResponse)) {

@@ -3,6 +3,7 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd"
 >
+
 	<wls:weblogic-version>14.1.1.0</wls:weblogic-version>
 	<wls:context-root>blade</wls:context-root>
 
@@ -37,30 +38,30 @@
 	</wls:security-role-assignment>
 
 
-  <wls:session-descriptor>
-    <wls:timeout-secs>3600</wls:timeout-secs>
-    <wls:invalidation-interval-secs>60</wls:invalidation-interval-secs>
-    <wls:cookie-name>BLADECONSOLESESSION</wls:cookie-name>
-    <wls:cookie-path>/blade/</wls:cookie-path>
-    <wls:cookie-max-age-secs>-1</wls:cookie-max-age-secs>
-    <wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
-  </wls:session-descriptor>
+	<wls:session-descriptor>
+		<wls:timeout-secs>3600</wls:timeout-secs>
+		<wls:invalidation-interval-secs>60</wls:invalidation-interval-secs>
+		<wls:cookie-name>BLADECONSOLESESSION</wls:cookie-name>
+		<wls:cookie-path>/blade/</wls:cookie-path>
+		<wls:cookie-max-age-secs>-1</wls:cookie-max-age-secs>
+		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
+	</wls:session-descriptor>
 
-  <wls:jsp-descriptor>
-    <wls:keepgenerated>false</wls:keepgenerated>
-    <wls:page-check-seconds>-1</wls:page-check-seconds>
-    <wls:verbose>true</wls:verbose>
-    <wls:debug>true</wls:debug>
-  </wls:jsp-descriptor>
+	<wls:jsp-descriptor>
+		<wls:keepgenerated>false</wls:keepgenerated>
+		<wls:page-check-seconds>-1</wls:page-check-seconds>
+		<wls:verbose>true</wls:verbose>
+		<wls:debug>true</wls:debug>
+	</wls:jsp-descriptor>
 
-  <wls:container-descriptor>
-    <wls:referer-validation>STRICT</wls:referer-validation>
-    <wls:filter-dispatched-requests-enabled>false</wls:filter-dispatched-requests-enabled>
-    <wls:servlet-reload-check-secs>-1</wls:servlet-reload-check-secs>
-    <wls:prefer-application-packages>
-      <wls:package-name>org.xmlsoap.schemas.*</wls:package-name>
-    </wls:prefer-application-packages>
-  </wls:container-descriptor>
+	<wls:container-descriptor>
+		<wls:referer-validation>STRICT</wls:referer-validation>
+		<wls:filter-dispatched-requests-enabled>false</wls:filter-dispatched-requests-enabled>
+		<wls:servlet-reload-check-secs>-1</wls:servlet-reload-check-secs>
+		<wls:prefer-application-packages>
+			<wls:package-name>org.xmlsoap.schemas.*</wls:package-name>
+		</wls:prefer-application-packages>
+	</wls:container-descriptor>
 
 
 

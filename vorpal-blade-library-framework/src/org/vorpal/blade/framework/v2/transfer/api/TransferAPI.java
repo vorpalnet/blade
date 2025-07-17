@@ -433,7 +433,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 	}
 
 	@Override
-	public void transferInitiated(SipServletRequest outboundInvite) throws ServletException, IOException {
+	public void transferInitiated(SipServletRequest request) throws ServletException, IOException {
 
 //		SipApplicationSession appSession = outboundInvite.getApplicationSession();
 //
@@ -445,9 +445,38 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 //		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
 //		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
 
-		if (sipLogger.isLoggable(Level.INFO)) {
-			sipLogger.info(outboundInvite, "TransferAPI.transferInitiated - method=" + outboundInvite.getMethod());
-		}
+		
+		// This is for when the transferor (bob) hangs up before finding out if the transfer was successful.
+//		if(request.getMethod().equals(BYE)) {
+//			TransferRequest txfrRequest = (TransferRequest) request.getApplicationSession().getAttribute(TXFER_REQUEST);
+//			if(txfrRequest!=null && txfrRequest.notification.style.equals(Notification.Style.async) ) {
+//				AsyncResponse asyncResponse = responseMap.remove(request.getApplicationSession().getId());
+//				if (asyncResponse != null) {
+//
+//					sipLogger.finer(request, "TransferAPI.transferCompleted - Removed asyncResponse from responseMap.");
+//
+//					TransferResponse txferResp = new TransferResponse();
+//					txferResp.event = "transferInitiated";
+//					txferResp.method = request.getMethod();
+//					txferResp.status = 204;
+//					txferResp.description = "No Notification";
+//					txferResp.request = txfrRequest;
+//
+//					if (sipLogger.isLoggable(Level.FINER)) {
+//						sipLogger.finer(request,
+//								"TransferAPI.transferInitiated - transferResponse=" + Logger.serializeObject(txferResp));
+//					}
+//
+//					asyncResponse.resume(Response.status(Status.OK).entity(txferResp).build());
+//				} 
+//			}
+//			
+//		}else {
+//			if (sipLogger.isLoggable(Level.INFO)) {
+//				sipLogger.info(request, "TransferAPI.transferInitiated - method=" + request.getMethod());
+//			}			
+//		}
+		
 	}
 
 	@Override
