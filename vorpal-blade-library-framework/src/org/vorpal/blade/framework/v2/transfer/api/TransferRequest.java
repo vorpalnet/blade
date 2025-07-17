@@ -4,10 +4,12 @@ import java.io.Serializable;
 
 import org.vorpal.blade.framework.v2.transfer.TransferSettings;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({ "style", "sessionKey", "dialogKey", "notification" })
 public class TransferRequest implements Serializable {
 	private static final long serialVersionUID = 1L;
