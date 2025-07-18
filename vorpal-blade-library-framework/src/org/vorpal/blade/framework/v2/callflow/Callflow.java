@@ -1057,20 +1057,20 @@ public abstract class Callflow implements Serializable {
 
 		for (String header : copyFrom.getHeaderNameList()) {
 
-			switch (header.hashCode()) {
-			case 2715: // ------- To
-			case 2198474: // ---- From
-			case 85998: // ------ Via
-			case -2081731894: // Call-ID
-			case -1678787584: // Contact
-			case 1244061434: // - Content-Length
-			case 2079004: // --- CSeq
-			case 1848913111: // - Max-Forwards
-			case 949037134: // -- Content-Type
-			case 887838157: // -- Record-Route
-			case 79151657: // --- Route
-			case 2525869: // ---- RSeq
-			case 2508503: // ---- RAck
+			switch (header) {
+			case "To":
+			case "From":
+			case "Via":
+			case "Call-ID":
+			case "Contact":
+			case "Content-Length":
+			case "CSeq":
+			case "Max-Forwards":
+			case "Content-Type":
+			case "Record-Route":
+			case "Route":
+			case "RSeq":
+			case "RAck":
 				// do not copy these headers
 				break;
 			default:

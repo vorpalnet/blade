@@ -217,13 +217,15 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	@Override
 	public List<String> getHeaderList(String key) {
 		List<String> headerList = new LinkedList<>();
-		headerList.addAll(headers.keySet());
+	
+		// Really shouldn't use Map
+		headerList.add(headers.get(key));
+		
 		return headerList;
 	}
 
 	@Override
 	public List<String> getHeaderNameList() {
-		// TODO Auto-generated method stub
 		return new ArrayList<String>(headers.keySet());
 	}
 

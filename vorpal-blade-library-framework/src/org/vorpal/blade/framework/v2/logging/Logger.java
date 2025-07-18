@@ -389,7 +389,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public static String from(SipServletMessage msg) {
-		String name = null;
+		String name = null;		
 		SipURI uri = (SipURI) msg.getFrom().getURI();
 		name = uri.getUser();
 
@@ -402,6 +402,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	public static String to(SipServletMessage msg) {
 		String name = null;
+		
 		SipURI uri = (SipURI) msg.getTo().getURI();
 		name = uri.getUser();
 
@@ -583,7 +584,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							}
 
 							else if (request.getMethod().equals("REFER")) {
-								note = "Refer-To: " + request.getAddressHeader("Refer-To");
+								
+//								note = "Refer-To: " + request.getAddressHeader("Refer-To");
+								note = "Refer-To: " + request.getHeader("Refer-To");
+								
+								
 							} else if (request.getMethod().equals("REGISTER")) {
 								String expires = request.getHeader("Expires");
 								if (expires == null) {
@@ -645,7 +650,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 									note += new String((byte[]) request.getContent());
 								}
 							} else if (request.getMethod().equals("REFER")) {
-								note = "Refer-To: " + request.getAddressHeader("Refer-To");
+//								note = "Refer-To: " + request.getAddressHeader("Refer-To");
+								note = "Refer-To: " + request.getHeader("Refer-To");
 							} else if (request.getMethod().equals("INVITE")) {
 								note = "From: " + request.getFrom();
 							}
@@ -716,7 +722,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							}
 
 							else if (request.getMethod().equals("REFER")) {
-								note = "Refer-To: " + request.getAddressHeader("Refer-To");
+//								note = "Refer-To: " + request.getAddressHeader("Refer-To");
+								note = "Refer-To: " + request.getHeader("Refer-To");
 							}
 
 							note = note.trim();
@@ -837,29 +844,31 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			}
 
 		} catch (Exception ex) {
+			
+			this.logStackTrace(ex);
 
-			if (request != null) {
-				this.warning(request, ex.getMessage());
-				this.warning(request, "Logging error, set logging to FINEST to see stack trace.");
-				if (this.isLoggable(Level.FINEST)) {
-					try {
-						throw new Exception("Logging error");
-					} catch (Exception e99) {
-						this.logStackTrace(e99);
-					}
-				}
-			} else {
-				this.warning(response, ex.getMessage());
-				this.fine(response, "Logging error, set logging to FINEST to see stack trace.");
-				if (this.isLoggable(Level.FINEST)) {
-					try {
-						throw new Exception("Logging error");
-					} catch (Exception e99) {
-						this.logStackTrace(e99);
-					}
-				}
-
-			}
+//			if (request != null) {
+//				this.warning(request, ex.getMessage());
+//				this.warning(request, "Logging error, set logging to FINEST to see stack trace.");
+//				if (this.isLoggable(Level.FINEST)) {
+//					try {
+//						throw new Exception("Logging error");
+//					} catch (Exception e99) {
+//						this.logStackTrace(e99);
+//					}
+//				}
+//			} else {
+//				this.warning(response, ex.getMessage());
+//				this.fine(response, "Logging error, set logging to FINEST to see stack trace.");
+//				if (this.isLoggable(Level.FINEST)) {
+//					try {
+//						throw new Exception("Logging error");
+//					} catch (Exception e99) {
+//						this.logStackTrace(e99);
+//					}
+//				}
+//
+//			}
 
 		}
 	}

@@ -276,13 +276,13 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						refer.setApplicationSession(appSession);
 						refer.setSession(transferorSession);
 						refer.setHeader("Refer-To", target.toString());
-
 						refer.setHeader("Referred-By", transferor.toString());
 						sipLogger.finer(transferorSession,
 								"TransferAPI.invokeTransfer - Getting Referred-By: " + refer.getHeader("Referred-By"));
 
 						if (transferRequest.target.inviteHeaders != null) {
 							for (Header header : transferRequest.target.inviteHeaders) {
+								sipLogger.severe(transferorSession, "header.name=" + header.value);
 								refer.setHeader(header.name, header.value);
 							}
 						}
@@ -445,8 +445,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 //		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
 //		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
 
-		
-		// This is for when the transferor (bob) hangs up before finding out if the transfer was successful.
+		// This is for when the transferor (bob) hangs up before finding out if the
+		// transfer was successful.
 //		if(request.getMethod().equals(BYE)) {
 //			TransferRequest txfrRequest = (TransferRequest) request.getApplicationSession().getAttribute(TXFER_REQUEST);
 //			if(txfrRequest!=null && txfrRequest.notification.style.equals(Notification.Style.async) ) {
@@ -476,7 +476,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 //				sipLogger.info(request, "TransferAPI.transferInitiated - method=" + request.getMethod());
 //			}			
 //		}
-		
+
 	}
 
 	@Override

@@ -59,6 +59,8 @@ alice ->  blade                 : NOTIFY
                                   note right: 200 OK
 alice <-- blade                 : 200 OK (NOTIFY)          
 alice     <-->            carol : RTP
+          blade ->  bob         : BYE                                  
+          blade <-- bob         : 200 OK
           
 @enduml
 */
