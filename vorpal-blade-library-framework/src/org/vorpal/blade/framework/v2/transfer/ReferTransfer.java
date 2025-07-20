@@ -161,12 +161,13 @@ public class ReferTransfer extends Transfer {
 						if (sipfrag.contains("100")) {
 							// User is notified that transfer is initiated
 
-							// Set Header X-Original-DN
-							URI xOriginalDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Original-DN");
-							targetRequest.setHeader("X-Original-DN", xOriginalDN.toString());
-							// Set Header X-Previous-DN
-							URI xPreviousDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Previous-DN");
-							targetRequest.setHeader("X-Previous-DN", xPreviousDN.toString());
+// Bogus!
+//							// Set Header X-Original-DN
+//							URI xOriginalDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Original-DN");
+//							targetRequest.setHeader("X-Original-DN", xOriginalDN.toString());
+//							// Set Header X-Previous-DN
+//							URI xPreviousDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Previous-DN");
+//							targetRequest.setHeader("X-Previous-DN", xPreviousDN.toString());
 
 							transferListener.transferInitiated(transfereeRequest);
 						} else if (sipfrag.contains("200")) {
@@ -178,7 +179,10 @@ public class ReferTransfer extends Transfer {
 							SipSession caller = Callflow.getLinkedSession(callee);
 							caller.setAttribute("userAgent", "caller");
 							URI referTo2 = (URI) referResponse.getApplicationSession().getAttribute("Refer-To");
-							referResponse.getApplicationSession().setAttribute("X-Previous-DN", referTo2);
+
+							if (referTo2 != null) {
+								referResponse.getApplicationSession().setAttribute("X-Previous-DN", referTo2);
+							}
 
 							transferListener.transferCompleted(referResponse);
 							sendRequest(transferorSession.createRequest(BYE));

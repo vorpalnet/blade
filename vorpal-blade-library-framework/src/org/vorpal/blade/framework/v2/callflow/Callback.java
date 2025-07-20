@@ -33,11 +33,13 @@ public interface Callback<T> extends Consumer<T>, Serializable {
 	@Override
 	default void accept(final T elem) {
 		try {
-			acceptThrows(elem);
-		} catch (final IllegalStateException ex) {
-			// Sometimes this happens, no idea why. Eat it.
-		} catch (final Exception ex) {
-			throw new RuntimeException(ex);
+
+			if (elem != null) {
+				acceptThrows(elem);
+			}
+
+		} catch (Exception ex) {
+			Callflow.getSipLogger().severe(ex);
 		}
 	}
 
