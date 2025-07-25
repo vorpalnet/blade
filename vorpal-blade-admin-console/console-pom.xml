@@ -28,7 +28,7 @@
 			<artifactId>occas</artifactId>
 			<version>${occas-version}</version>
 			<scope>system</scope>
-			<systemPath>${MW_HOME}/wlserver/server/lib/weblogic.jar</systemPath>
+			<systemPath>${OCCAS}/wlserver/server/lib/weblogic.jar</systemPath>
 
 		</dependency>
 

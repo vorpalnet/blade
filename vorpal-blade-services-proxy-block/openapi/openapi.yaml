@@ -1,0 +1,54 @@
+openapi: 3.0.1
+info:
+  title: Proxy-Block
+  description: Manages configurations.
+  version: "1"
+paths:
+  /v1/config/load/{id}:
+    get:
+      summary: Returns a configuration based on an identifier.
+      operationId: load
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallingNumbers"
+        "404":
+          description: Not Found
+        "500":
+          description: Internal Server Error
+components:
+  schemas:
+    CallingNumbers:
+      type: object
+      properties:
+        empty:
+          type: boolean
+      additionalProperties:
+        $ref: "#/components/schemas/OptimizedTranslation"
+    OptimizedDialed:
+      type: object
+      properties:
+        forwaredTo:
+          type: array
+          items:
+            type: string
+    OptimizedTranslation:
+      type: object
+      properties:
+        dialedNumbers:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/OptimizedDialed"
+        forwardTo:
+          type: array
+          items:
+            type: string

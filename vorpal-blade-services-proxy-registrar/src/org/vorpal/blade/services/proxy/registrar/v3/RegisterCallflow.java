@@ -16,13 +16,22 @@ public class RegisterCallflow extends Callflow {
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		SipApplicationSession appSession = request.getApplicationSession();
 
-		Registrar registrar = (Registrar) appSession.getAttribute("registrar");
-		registrar = (registrar != null) ? registrar : new Registrar();
+		SipServletResponse response;
 
-		SipServletResponse response = registrar.updateContacts(request);
-		appSession.setAttribute("registrar", registrar);
+		try {
+			Registrar registrar = (Registrar) appSession.getAttribute("registrar");
+			registrar = (registrar != null) ? registrar : new Registrar();
 
+			response = registrar.updateContacts(request);
+			appSession.setAttribute("registrar", registrar);
+
+		} catch (Exception ex) {
+			// Something is corrupt, clear memory, have user-agent try again
+			response = request.createResponse(503);
+			appSession.removeAttribute("registrar");
+		}
 		sendResponse(response);
+
 	}
 
 }

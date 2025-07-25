@@ -4,11 +4,8 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
 
 import org.vorpal.blade.services.proxy.block.optimized.OptimizedBlockConfig;
 import org.vorpal.blade.services.proxy.block.optimized.OptimizedBlockConfigSample;
@@ -16,6 +13,8 @@ import org.vorpal.blade.services.proxy.block.optimized.OptimizedBlockConfigSampl
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.info.Info;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
@@ -37,12 +36,16 @@ public class LoadConfig {
 	@Path("config/load/{id}")
 	@Produces({ MediaType.APPLICATION_JSON })
 	@Operation(summary = "Returns a configuration based on an identifier.")
-	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
+	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK", content = {
+			@Content(mediaType = "application/json", schema = @Schema(implementation = CallingNumbers.class)) }),
 			@ApiResponse(responseCode = "404", description = "Not Found"),
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
 	public Response load(@PathParam("id") String id) {
-		OptimizedBlockConfig confg = new OptimizedBlockConfigSample();
-		Response response = Response.ok().entity(confg).build();
+		CallingNumbers config = new CallingNumbers();
+
+//		OptimizedBlockConfig config = new OptimizedBlockConfigSample();
+
+		Response response = Response.ok().entity(config).build();
 		return response;
 	}
 
