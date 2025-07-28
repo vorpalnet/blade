@@ -4,12 +4,15 @@
 
 
 	<!-- Define unique locations first -->
+<<<<<<< HEAD
 	<property name="BLADE" location="blade" />
 	<property name="copyright" location="copyright SiriusXM" />
+=======
+>>>>>>> parent of b1a0206 (Javadoc issues.)
 	<property name="src" location="src" />
 	<property name="webapp" location="WebContent" />
-
-	<!-- Load environment variables -->
+	
+	<!-- Load environment variables -->	
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
