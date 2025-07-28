@@ -5,6 +5,7 @@
 
 	<!-- Define unique locations first -->
 	<property name="BLADE" location="blade" />
+	<property name="copyright" location="copyright SiriusXM" />
 	<property name="src" location="src" />
 	<property name="webapp" location="WebContent" />
 
