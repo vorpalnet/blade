@@ -790,18 +790,13 @@
 
 
 	<target name="javadoc">
-<<<<<<< HEAD
 		<echo message="umldoclet=${umldoclet}" />
 		<echo message="src=${src}" />
 		<echo message="destdir=${docs}/${ant.project.name}" />
 		<echo message="packagenames=${packagenames}" />
-=======
 		<echo message="javadoc, creating directory: ${docs}/${ant.project.name}" />
 
-
 		<!-- mkdir dir="${docs}/${ant.project.name}" / -->
->>>>>>> parent of b1a0206 (Javadoc issues.)
-
 		<mkdir dir="${docs}/${ant.project.name}/images" />
 
 		<!-- plantuml dir="${src}" format="svg" output="${docs}/${ant.project.name}/images" /-->
@@ -811,17 +806,13 @@
 			</fileset>
 		</plantuml>
 
-<<<<<<< HEAD
 		<!-- Add a custom stylesheet
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="${BLADE}/lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
         -->
 
-=======
-
 		<!--
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" stylesheetfile="${BLADE}/lib/javadoc_custom_stylesheet.css" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
 -->
->>>>>>> parent of b1a0206 (Javadoc issues.)
 		<javadoc sourcepath="${src}" destdir="${docs}/${ant.project.name}" packagenames="${packagenames}" private="true" additionalparam="-Xdoclint:none">
 
 			<doclet name="nl.talsmasoftware.umldoclet.UMLDoclet" path="${umldoclet}">
