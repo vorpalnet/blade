@@ -2,6 +2,7 @@
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-services-transfer">
 
+
 	<!-- Define unique locations first -->
 	<property name="BLADE" location="blade" />
 	<property name="src" location="src" />
