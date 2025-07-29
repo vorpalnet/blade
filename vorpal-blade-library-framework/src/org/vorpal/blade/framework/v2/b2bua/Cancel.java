@@ -110,8 +110,7 @@ public class Cancel extends Callflow {
 				sendResponse(request.createResponse(200));
 			}
 		} catch (Exception e) {
-			sipLogger.warning(request, "CANCEL received, but unable to process...");
-			sipLogger.severe(e);
+			// eat the error;
 		}
 	}
 
