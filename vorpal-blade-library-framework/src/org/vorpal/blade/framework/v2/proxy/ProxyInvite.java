@@ -7,6 +7,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.logging.Logger;
 
 public class ProxyInvite extends Callflow {
 	private static final long serialVersionUID = 1L;
@@ -40,30 +41,40 @@ public class ProxyInvite extends Callflow {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			sipLogger.finer("ProxyPlan tiers: " + proxyPlan.getTiers().size());
 		}
-		this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
-			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(request, "Got proxy response... status: " + response.getStatus()
-						+ ", isBranchResponse: " + response.isBranchResponse());
-			}
 
-			// this should probably go in 'proxyRequest'
-			this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack) -> {
+		try {
+
+			this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(ack, "ProxyInvite.process, expectRequest received ACK, do nothing");
+					sipLogger.finer(request, "Got proxy response... status: " + response.getStatus()
+							+ ", isBranchResponse: " + response.isBranchResponse());
 				}
+
+				// this should probably go in 'proxyRequest'
+				this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack) -> {
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(ack, "ProxyInvite.process, expectRequest received ACK, do nothing");
+					}
+				});
+
+				if (!successful(response) && !response.isBranchResponse()) {
+					if (false == proxyPlan.isEmpty()) {
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(response,
+									"Calling process again... ProxyPlan tiers: " + proxyPlan.getTiers().size());
+						}
+						this.process(request);
+					}
+				}
+
 			});
 
-			if (!successful(response) && !response.isBranchResponse()) {
-				if (false == proxyPlan.isEmpty()) {
-					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(response,
-								"Calling process again... ProxyPlan tiers: " + proxyPlan.getTiers().size());
-					}
-					this.process(request);
-				}
-			}
-
-		});
+		} catch (Exception ex) {
+			sipLogger.severe(request, "Exception while attempting to proxy to: " + Logger.serializeObject(proxyPlan));
+			sipLogger.severe(request, request.toString());
+			sipLogger.severe(request, ex);
+			sendResponse(request.createResponse(502));
+		}
 
 	}
 
