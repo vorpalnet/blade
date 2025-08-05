@@ -3,6 +3,7 @@
 	<tstamp />
 	<property file="../build.properties" />
 	<property file="../version.properties" />
+	<property file="../../build.number" />	
 	<property file="../build.number" />
 
 	<property name="build" location="./build" />
