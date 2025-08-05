@@ -2,9 +2,10 @@
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-services-acl">
 	
-	<!-- Define unique locations first -->
-	
-	<!-- Load environment variables -->	
+	<property name="src" location="src/main/java" />
+	<property name="webapp" location="src/main/webapp" />
+
+	<!-- Load environment variables -->
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />

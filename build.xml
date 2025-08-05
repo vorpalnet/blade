@@ -9,7 +9,7 @@
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="${computer.hostname}.properties" />
-    <property file="build.properties" />
+	<property file="build.properties" />
 	<property file="version.properties" />
 	<property name="umldoclet" location="./lib/umldoclet-2.1.2.jar" />
 
@@ -21,28 +21,31 @@
 	</taskdef>
 
 	<target name="init" depends="">
-        <buildnumber />
+		<buildnumber />
 		<if>
 			<available file="${computer.hostname}.properties" />
 			<then>
-                <property name="dist" location="./dist/${implementation}.${build.number}" />
-                <property name="docs" location="${dist}/docs" />
-                <echo message="Invoking build.xml buildnumber=${build.number}"/>
+				<property name="dist" location="./dist/${implementation}.${build.number}" />
+				<property name="docs" location="${dist}/docs" />
+				<echo message="Invoking build.xml buildnumber=${build.number}" />
 			</then>
 			<else>
 				<copy file="build.properties" tofile="${computer.hostname}.properties" overwrite="false" />
 				<fail>WARNING! Please edit the newly created ${computer.hostname}.properties file, then run ANT again.</fail>
 			</else>
 		</if>
-        
-        <echo message="setting dist directory to: ${dist}" />
-        
+
+		<echo message="setting dist directory to: ${dist}" />
+
 	</target>
 
 	<target name="build" depends="init">
 		<foreach target="build-all" param="var">
 			<path refid="subprojects" />
 		</foreach>
+
+		<echo message="To create the Javadocs, run 'ant javadocs'. " />
+
 	</target>
 
 	<target name="build-all" depends="">
@@ -78,17 +81,17 @@
 			<include name="vorpal-*" />
 			<exclude name="vorpal-blade-library-framework" />
 			<exclude name="vorpal-blade-shared-libraries" />
-			<exclude name="vorpal-blade-test-config" />			
+			<exclude name="vorpal-blade-test-config" />
 		</dirset>
 	</path>
-	
+
 	<path id="javadoc-subprojects">
 		<pathelement location="vorpal-blade-library-framework" />
 		<dirset dir=".">
 			<include name="vorpal-*" />
 			<exclude name="vorpal-blade-library-framework" />
 			<exclude name="vorpal-blade-shared-libraries" />
-			<exclude name="vorpal-blade-test-config" />			
+			<exclude name="vorpal-blade-test-config" />
 		</dirset>
 	</path>
 

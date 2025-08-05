@@ -1,24 +1,36 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-library-framework">
-	
+
 	<!-- Define unique locations first -->
 	<property name="BLADE" location="../" />
-	<property name="src" location="./src" />
+	<property name="src" location="src" />
 
-	<!-- Load environment variables -->	
+	<property name="build" location="build" />
+	<property name="classes" location="${build}/classes" />
+	<property name="lib" location="${build}/lib" />
+
+	<!-- Load environment variables -->
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />
 	<property file="../${computer.hostname}.properties" />
 	<property file="../build.properties" />
 	<property file="../version.properties" />
-	
+
 	<!-- Import default locations and tasks -->
 	<import file="../libraries.xml" />
-	
-	<target name="build" depends="init,compile,jar,javadoc">
+
+	<target name="build" depends="init,compile,jar">
 		<echo message="${ant.project.name} v${implementation}.{build.number}" />
 	</target>
-	
+
+	<target name="compile" depends="init">
+		<javac debug="${debug}" debuglevel="${debuglevel}" destdir="${classes}" includeantruntime="${includeantruntime}" release="${release}">
+			<src path="${src}" />
+			<src path=".apt_src" />
+			<classpath refid="project.classpath" />
+		</javac>
+	</target>
+
 </project>

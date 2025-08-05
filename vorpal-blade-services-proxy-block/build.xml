@@ -18,30 +18,4 @@
 	<!-- Import default locations and tasks -->
 	<import file="../libraries.xml" />
 
-
-	<target name="war" depends="compile">
-		<mkdir dir="${build}/lib" />
-		<echo message="war, copying ${framework} to ${build}/lib" />
-		<copy file="${framework}" todir="${build}/lib" />
-		<manifest file="${build}/MANIFEST.MF">
-			<attribute name="Copyright" value="${copyright}" />
-			<attribute name="License" value="${license}" />
-			<attribute name="Built-By" value="${user.name}" />
-			<attribute name="Implementation-Build-Date" value="${TODAY}" />
-
-			<!-- version number is important for upgrades -->
-			<!--
-			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
-			-->
-
-		</manifest>
-		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}">
-			<lib dir="${build}/lib" />
-			<classes dir="${classes}" />
-			<classes dir="${src}" />
-		</war>
-		<echo message="war, copying ${build}/${ant.project.name}.war to ${dist}" />
-		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
-	</target>
-
 </project>

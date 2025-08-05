@@ -3,7 +3,8 @@
 	<!-- Define unique locations first -->
 	<property name="webapp" location="src/main/blade" />
 	<property name="classes" location="src/main/blade/WEB-INF/classes" />
-	<property name="target-webapp" location="./target/${ant.project.name}" />
+
+	<!-- property name="target-webapp" location="./target/${ant.project.name}" /-->
 
 	<!-- Load environment variables -->
 	<property environment="env" />
@@ -18,7 +19,7 @@
 	<!-- Import default locations and tasks -->
 	<import file="../libraries.xml" />
 
-	<target name="build" depends="init, mvn_windows, mvn_unix, package" />
+	<target name="build" depends="init, maven, compile, war" />
 
 	<condition property="isWindows">
 		<os family="windows" />
@@ -30,13 +31,14 @@
 
 	<target name="mvn_windows" if="isWindows" depends="init">
 		<exec dir="." executable="cmd">
-			<arg line="/c mvn -f console-pom.xml clean package -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}" />
+			<arg line="/c mvn -f console-pom.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
 		</exec>
 	</target>
 
 	<target name="mvn_unix" if="isUnix" depends="init">
 		<exec dir="." executable="sh">
-			<arg line="-c 'mvn -f console-pom.xml clean package -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
+			<arg line="-c 'mvn -f console-pom.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
+
 		</exec>
 	</target>
 
@@ -44,23 +46,44 @@
 	<target name="clean">
 		<!-- delete any ANT generated stuff -->
 		<delete dir="${build}" />
-		<!-- delete any Maven generated stuff -->
-		<delete dir="target" />
 		<!-- delete any Eclipse generated classes -->
 		<delete dir="${webapp}/WEB-INF/classes" />
 		<!-- delete any jars copied from target -->
 		<delete dir="${webapp}/WEB-INF/lib" />
 	</target>
 
+	<target name="maven" depends="init, mvn_windows, mvn_unix" />
 
-	<target name="package" depends="init, mvn_windows, mvn_unix">
+	<target name="compile" depends="init">
+		<!-- this is useful for debugging
+		<echo message="vorpal-blade.classpath is ${toString:vorpal-blade.classpath}" />
+		-->
+
+		<javac debug="${debug}" debuglevel="${debuglevel}" destdir="${classes}" includeantruntime="${includeantruntime}" release="${release}">
+			<!--compilerarg value="-proc:full" /-->
+			<src path="${src}" />
+			<src path=".apt_src" />
+			<classpath refid="project.classpath" />
+		</javac>
+
+	</target>
+
+
+	<target name="war" depends="compile">
+		<echo message="Invoking custom WAR task..." />
+
+		<manifest file="${build}/MANIFEST.MF">
+			<attribute name="Copyright" value="${copyright}" />
+			<attribute name="License" value="${license}" />
+			<attribute name="Built-By" value="${user.name}" />
+			<attribute name="Implementation-Build-Date" value="${TODAY}" />
+			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
+		</manifest>
+
+		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}" webxml="${webapp}/WEB-INF/web.xml" needxmlfile="true">
+		</war>
+		<echo message="war, copying ${build}/${ant.project.name}.war to ${dist}" />
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
-
-		<!-- probably not the smartest thing to do -->
-		<copy todir="${webapp}/WEB-INF/lib">
-			<fileset dir="${target-webapp}/WEB-INF/lib" />
-		</copy>
-
 	</target>
 
 

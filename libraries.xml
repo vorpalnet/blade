@@ -10,7 +10,8 @@
 	<property name="debuglevel" value="source,lines,vars" />
 	<property name="includeantruntime" value="false" />
 	<property name="release" value="11" />
-	<property name="classes" location="${build}/classes" />
+	<property name="classes" location="${webapp}/WEB-INF/classes" />
+	<property name="lib" location="${webapp}/WEB-INF/lib" />
 	<property name="src" location="src/main/java" />
 	<property name="BLADE" location="../" />
 	<property name="umldoclet" location="${BLADE}/lib/umldoclet-2.1.2.jar" />
@@ -27,7 +28,6 @@
 		</fileset>
 	</path>
 
-	<echo message="Looking for: ${framework}" />
 	<path id="vorpal-blade.classpath">
 		<fileset dir="${BLADE}/vorpal-blade-shared-libraries/target/dependency">
 			<include name="**/*.jar" />
@@ -673,7 +673,7 @@
 		<path refid="vorpal-blade.classpath" />
 	</path>
 
-	<target name="build" depends="init,compile,war,javadoc">
+	<target name="build" depends="init,compile,war">
 		<echo message="${ant.project.name} v${implementation}.${build.number}" />
 	</target>
 
@@ -695,17 +695,23 @@
 		<echo message="   framework=${framework}" />
 		<echo message="   docs=${docs}" />
 
+		<mkdir dir="${build}" />
 		<mkdir dir="${dist}" />
 		<mkdir dir="${classes}" />
-		<mkdir dir="${webapp}/WEB-INF/lib" />
+		<mkdir dir="${lib}" />
 		<mkdir dir=".apt_src" />
 
+		<!-- preserve java source with compiled classes for accurate debugging -->
+
+		<!--
 		<copy includeemptydirs="false" todir="${classes}">
 			<fileset dir="${src}">
 				<exclude name="**/*.launch" />
 				<exclude name="**/*.java" />
 			</fileset>
 		</copy>
+		-->
+
 		<copy includeemptydirs="false" todir="${classes}">
 			<fileset dir=".apt_src">
 				<exclude name="**/*.launch" />
@@ -715,24 +721,28 @@
 	</target>
 
 	<target name="clean">
-		<!-- delete any ANT generated stuff -->
 		<delete dir="${build}" />
-		<!-- delete any Maven generated stuff -->
-		<delete dir="target" />
-		<!-- delete any Eclipse generated classes -->
-		<delete dir="${webapp}/WEB-INF/classes" />
+		<delete dir="${classes}" />
+		<delete dir="${lib}" />
 	</target>
 
-	<target depends="clean" name="clean-all" />
+	<!--
+	<target name="clean">
+		<delete dir="${build}" />
+		<delete dir="target" />
+		<delete dir="${webapp}/WEB-INF/classes" />
+	</target>
+	-->
+
+	<target name="clean-all" depends="clean" />
 
 
 	<target name="compile" depends="init">
-		<echo message="OCCAS=${OCCAS}" />
-		<echo message="BLADE=${BLADE}" />
-
-		<!-- this is useful fro debugging
+		<!-- this is useful for debugging
 		<echo message="vorpal-blade.classpath is ${toString:vorpal-blade.classpath}" />
 		-->
+
+		<copy file="${framework}" todir="${lib}" />
 
 		<javac debug="${debug}" debuglevel="${debuglevel}" destdir="${classes}" includeantruntime="${includeantruntime}" release="${release}">
 			<!--compilerarg value="-proc:full" /-->
@@ -761,33 +771,22 @@
 		<copy file="${build}/${ant.project.name}.jar" todir="${dist}" />
 	</target>
 
+
 	<target name="war" depends="compile">
-		<mkdir dir="${build}/lib" />
-		<echo message="war, copying ${framework} to ${build}/lib" />
-		<copy file="${framework}" todir="${build}/lib" />
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
-
-			<!-- version number is important for upgrades -->
 			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
-			
 		</manifest>
-		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}" needxmlfile="false">
-			<lib dir="${build}/lib" />
-			<classes dir="${classes}" />
+		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}" webxml="${webapp}/WEB-INF/web.xml" needxmlfile="true">
 			<classes dir="${src}" />
 		</war>
-		<echo message="war, copying ${build}/${ant.project.name}.war to ${dist}" />
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>
 
-
 	<taskdef name="plantuml" classname="net.sourceforge.plantuml.ant.PlantUmlTask" classpath="${plantuml}" />
-
-
 
 	<target name="javadoc">
 		<echo message="umldoclet=${umldoclet}" />
