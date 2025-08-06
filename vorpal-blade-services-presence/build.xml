@@ -2,8 +2,13 @@
 <!DOCTYPE project>
 <project basedir="." default="build" name="vorpal-blade-services-presence">
 	<!-- Define unique locations first -->
-	
-	<!-- Load environment variables -->	
+	<property name="src" location="src/main/java" />
+	<property name="webapp" location="src/main/webapp" />
+	<property name="classes" location="${webapp}/WEB-INF/classes" />
+	<property name="lib" location="${webapp}/WEB-INF/lib" />
+
+
+	<!-- Load environment variables -->
 	<property environment="env" />
 	<property environment="envvar" />
 	<exec executable="hostname" outputproperty="computer.hostname" />

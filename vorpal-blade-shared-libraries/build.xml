@@ -27,67 +27,56 @@
 
 	<target name="mvn_windows" if="isWindows" depends="init">
 		<exec dir="." executable="cmd">
-			<arg line="/c mvn clean package" />
+			<arg line="/c mvn -f shared-pom.xml dependency:copy-dependencies -DoutputDirectory=${lib} -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
 		</exec>
 	</target>
 
 	<target name="mvn_unix" if="isUnix" depends="init">
-		
-		<echo>jwm - Executing mvn_unix</echo>
-		
 		<exec dir="." executable="sh">
-			<arg line="-c 'mvn dependency:copy-dependencies'" />
+			<arg line="-c 'mvn -f shared-pom.xml dependency:copy-dependencies -DoutputDirectory=${lib} -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
+		</exec>
+	</target>
+
+
+
+	<target name="package" depends="init, mvn_windows, mvn_unix">
+
+		<exec dir="." executable="sh">
+			<arg line="-c 'zip -d ${lib}/jackson-core-*.jar META-INF/versions/17/\*' " />
 		</exec>
 
 		<exec dir="." executable="sh">
-			<arg line="-c 'zip -d target/dependency/jackson-core-*.jar META-INF/versions/17/\*' " />
-		</exec>
-		
-		<exec dir="." executable="sh">
-			<arg line="-c 'zip -d target/dependency/jackson-core-*.jar META-INF/versions/21/\*' " />
+			<arg line="-c 'zip -d ${lib}/jackson-core-*.jar META-INF/versions/21/\*' " />
 		</exec>
 
 		<exec dir="." executable="sh">
-			<arg line="-c 'zip -d target/dependency/jackson-core-*.jar META-INF/versions/22/\*' " />
+			<arg line="-c 'zip -d ${lib}/jackson-core-*.jar META-INF/versions/22/\*' " />
 		</exec>
-		
-		
-		<echo>Building Manifest</echo>
 
 		<manifest file="${build}/MANIFEST.MF">
+			<attribute name="Copyright" value="${copyright}" />
+			<attribute name="License" value="${license}" />
 			<attribute name="Specification-Title" value="${ant.project.name}" />
 			<attribute name="Specification-Version" value="${specification}" />
 			<attribute name="Implementation-Title" value="${ant.project.name}.war" />
-            <!-- always increment implementation number when jars change. no need for ${build.number} -->
-			<!-- attribute name="Implementation-Version" value="${implementation}.${build.number}" /-->
 			<attribute name="Implementation-Version" value="${implementation}" />
 			<attribute name="Extension-Name" value="vorpal-blade" />
-			<attribute name="Copyright" value="${copyright}" />
-			<attribute name="License" value="${license}" />
 			<attribute name="Built-By" value="${user.name}" />
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
 		</manifest>
 
 
 		<war needxmlfile='false' destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}">
-			<lib dir="target/dependency" />
-			<classes dir="${classes}" />
-			<classes dir="${src}" />
+			<classes dir="${src}" />	
 		</war>
 
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 
 	</target>
 
-	<target name="package" depends="init, mvn_windows, mvn_unix">
-<!--
-		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
--->
-	</target>
-	
 	<target name="clean">
 		<delete dir="${build}" />
-		<delete dir="target" />
+		<delete dir="${lib}" />
 	</target>
 
 

@@ -762,7 +762,7 @@
 			<attribute name="Specification-Title" value="${ant.project.name}" />
 			<attribute name="Implementation-Title" value="${ant.project.name}.jar" />
 			<attribute name="Specification-Version" value="${specification}" />
-			<attribute name="Implementation-Version" value="${implementation}.${build.number}" />
+			<attribute name="Implementation-Version" value="${implementation}" />
 		</manifest>
 		<jar destfile="${build}/${ant.project.name}.jar" manifest="${build}/MANIFEST.MF">
 			<fileset dir="${classes}" />

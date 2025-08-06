@@ -3,7 +3,11 @@
 <project basedir="." default="build" name="vorpal-blade-test-uac">
 	
 	<!-- Define unique locations first -->
-	<property name="BLADE" location="../" />
+	<property name="src" location="src/main/java" />
+	<property name="webapp" location="src/main/webapp" />
+	<property name="classes" location="${webapp}/WEB-INF/classes" />
+	<property name="lib" location="${webapp}/WEB-INF/lib" />
+
 
 	<!-- Load environment variables -->
 	<property environment="env" />
