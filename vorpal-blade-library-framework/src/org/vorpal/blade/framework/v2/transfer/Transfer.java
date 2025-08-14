@@ -75,8 +75,6 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
 
-
-
 public class Transfer extends Callflow {
 	static final long serialVersionUID = 1L;
 
@@ -138,10 +136,13 @@ public class Transfer extends Callflow {
 		sipLogger.finer(request, "Transfer transferee=" + transferee + ", target=" + target);
 
 		targetRequest = sipFactory.createRequest(appSession, INVITE, transferee, target);
-		targetRequest.setHeader("Allow", this.transferSettings.getAllow());
-
 		transfereeRequest = getLinkedSession(request.getSession()).createRequest(INVITE);
-		transfereeRequest.setHeader("Allow", this.transferSettings.getAllow());
+
+		if (transferSettings != null) {
+			targetRequest.setHeader("Allow", this.transferSettings.getAllow());
+			transfereeRequest.setHeader("Allow", this.transferSettings.getAllow());
+		}
+
 	}
 
 	/**
@@ -152,13 +153,16 @@ public class Transfer extends Callflow {
 	 * @param copyTo
 	 */
 	public void preserveInviteHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) {
-//		TransferSettings ts = TransferServlet.settingsManager.getCurrent();
-		for (String header : this.transferSettings.getPreserveInviteHeaders()) {
-			String value = copyFrom.getHeader(header);
-			if (value != null && null == copyTo.getHeader(header)) {
-				copyHeader(header, copyFrom, copyTo);
+		
+		if (transferSettings != null) {
+			for (String header : this.transferSettings.getPreserveInviteHeaders()) {
+				String value = copyFrom.getHeader(header);
+				if (value != null && null == copyTo.getHeader(header)) {
+					copyHeader(header, copyFrom, copyTo);
+				}
 			}
 		}
+
 	}
 
 	/**
@@ -169,11 +173,13 @@ public class Transfer extends Callflow {
 	 * @param copyTo
 	 */
 	public void preserveReferHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) {
-//		TransferSettings ts = TransferServlet.settingsManager.getCurrent();
-		for (String header : this.transferSettings.getPreserveReferHeaders()) {
-			String value = copyFrom.getHeader(header);
-			if (value != null) {
-				copyTo.setHeader(header, value);
+
+		if (transferSettings != null) {
+			for (String header : this.transferSettings.getPreserveReferHeaders()) {
+				String value = copyFrom.getHeader(header);
+				if (value != null) {
+					copyTo.setHeader(header, value);
+				}
 			}
 		}
 	}
