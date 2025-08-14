@@ -111,7 +111,7 @@ public class RouterConfig extends Configuration implements Serializable {
 		sipLogger.finer(request, "RouterConfig.findRoute - begin...");
 		t = findTranslation(request);
 		sipLogger.finer(request, "RouterConfig.findRoute - t=" + t);
-		if (t != null & t.getRequestUri() != null) {
+		if (t != null && t.getRequestUri() != null) {
 			sipLogger.finer(request, "RouterConfig.findRoute - applying parameters...");
 			uri = applyParameters(t, request);
 			sipLogger.finer(request, "RouterConfig.findRoute - parameters applied. uri=" + uri);

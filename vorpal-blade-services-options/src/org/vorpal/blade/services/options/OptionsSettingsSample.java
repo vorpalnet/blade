@@ -27,6 +27,7 @@ package org.vorpal.blade.services.options;
 import java.io.Serializable;
 
 import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
+import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 public class OptionsSettingsSample extends OptionsSettings implements Serializable {
@@ -35,16 +36,15 @@ public class OptionsSettingsSample extends OptionsSettings implements Serializab
 
 	public OptionsSettingsSample() {
 		this.logging = new LogParametersDefault();
+		this.logging.setLoggingLevel(LoggingLevel.WARNING);
 		this.session = new SessionParametersDefault();
-		
-		
+
 		accept = "application/sdp";
 		acceptLanguage = "en";
 		allow = "INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, PRACK, SUBSCRIBE, NOTIFY, PUBLISH, INFO, REFER, MESSAGE, UPDATE";
 		supported = "replaces";
 		userAgent = "OCCAS";
 		allowEvents = "talk, hold";
-
 	}
 
 }

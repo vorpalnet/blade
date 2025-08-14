@@ -3,16 +3,14 @@ package org.vorpal.blade.framework.v2.config;
 import java.io.Serializable;
 import java.util.LinkedList;
 
-
-
 public class SessionParametersDefault extends SessionParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	public SessionParametersDefault() {
-		this.expiration = 60;
+		this.expiration = 720; // 12 hours
 		this.keepAlive = new KeepAliveParametersDefault();
 		this.sessionSelectors = new LinkedList<>();
-		
+
 		AttributeSelector fromSel = new AttributeSelector();
 		fromSel.setId("fromSel");
 		fromSel.setAttribute("From");

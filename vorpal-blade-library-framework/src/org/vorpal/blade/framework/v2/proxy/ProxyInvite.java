@@ -28,7 +28,7 @@ public class ProxyInvite extends Callflow {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-
+		Boolean doNotProcess;
 		this.inboundRequest = request;
 
 		// Call the listener's method to build the ProxyPlan
@@ -38,43 +38,58 @@ public class ProxyInvite extends Callflow {
 			sipLogger.severe(request, "No ProxyListener defined.");
 		}
 
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer("ProxyPlan tiers: " + proxyPlan.getTiers().size());
-		}
+		// jwm - allow the user to reply with an error code
+		doNotProcess = (Boolean)request.getAttribute("doNotProcess");
+		if (doNotProcess==null || doNotProcess==false ) {
 
-		try {
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer("ProxyPlan tiers: " + proxyPlan.getTiers().size());
+			}
 
-			this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(request, "Got proxy response... status: " + response.getStatus()
-							+ ", isBranchResponse: " + response.isBranchResponse());
-				}
+			try {
 
-				// this should probably go in 'proxyRequest'
-				this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack) -> {
+				this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
 					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(ack, "ProxyInvite.process, expectRequest received ACK, do nothing");
+						sipLogger.finer(request, "Got proxy response... status: " + response.getStatus()
+								+ ", isBranchResponse: " + response.isBranchResponse());
 					}
+
+					// this should probably go in 'proxyRequest'
+					this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack) -> {
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(ack, "ProxyInvite.process, expectRequest received ACK, do nothing");
+						}
+					});
+
+					if (!successful(response) && !response.isBranchResponse()) {
+						if (false == proxyPlan.isEmpty()) {
+							if (sipLogger.isLoggable(Level.FINER)) {
+								sipLogger.finer(response,
+										"Calling process again... ProxyPlan tiers: " + proxyPlan.getTiers().size());
+							}
+
+							this.process(request);
+
+						}
+					}
+
 				});
 
-				if (!successful(response) && !response.isBranchResponse()) {
-					if (false == proxyPlan.isEmpty()) {
-						if (sipLogger.isLoggable(Level.FINER)) {
-							sipLogger.finer(response,
-									"Calling process again... ProxyPlan tiers: " + proxyPlan.getTiers().size());
-						}
-						this.process(request);
-					}
+			} catch (Exception ex) {
+				sipLogger.severe(request,
+						"Exception while attempting to proxy to: " + Logger.serializeObject(proxyPlan));
+				sipLogger.severe(request, request.toString());
+				sipLogger.severe(request, ex);
+
+				try {
+					sendResponse(request.createResponse(502));
+				} catch (Exception ex2) {
+					// eat it;
 				}
 
-			});
+			}
 
-		} catch (Exception ex) {
-			sipLogger.severe(request, "Exception while attempting to proxy to: " + Logger.serializeObject(proxyPlan));
-			sipLogger.severe(request, request.toString());
-			sipLogger.severe(request, ex);
-			sendResponse(request.createResponse(502));
-		}
+		} // doNotProcess
 
 	}
 

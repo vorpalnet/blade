@@ -38,7 +38,6 @@
 	<target name="mvn_unix" if="isUnix" depends="init">
 		<exec dir="." executable="sh">
 			<arg line="-c 'mvn -f console-pom.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
-
 		</exec>
 	</target>
 
@@ -84,6 +83,11 @@
 		</war>
 		<echo message="war, copying ${build}/${ant.project.name}.war to ${dist}" />
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
+	</target>
+	
+	<target name="clean">
+		<delete dir="${build}" />
+		<delete dir="${lib}" />
 	</target>
 
 
