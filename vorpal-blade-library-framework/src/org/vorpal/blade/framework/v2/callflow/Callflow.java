@@ -1446,58 +1446,47 @@ public abstract class Callflow implements Serializable {
 	public void proxyRequest(SipServletRequest inboundRequest, ProxyPlan proxyPlan,
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
-//		sipLogger.finer(inboundRequest, "Callflow.proxyRequest...");
-//		sipLogger.logObjectAsJson(Level.FINER, proxyPlan);
-
-		SipSession sipSession = inboundRequest.getSession();
 		SipApplicationSession appSession = inboundRequest.getApplicationSession();
 		Boolean isProxy = (Boolean) appSession.getAttribute("isProxy");
 		isProxy = (isProxy == null) ? false : isProxy;
 
-//		if (isProxy) {
-//			// Should NOT explicitly proxy subsequent request INVITE
-//			sipLogger.warning(inboundRequest, "Callflow.proxyRequest should not be called twice.");
-//			return;
-//			// throw new IOException("Callflow.proxyRequest should not be called twice.");
-//		}
+		if (false == proxyPlan.isEmpty()) {
 
-		if (proxyPlan.isEmpty()) {
-			throw new ServletException("Invalid ProxyPlan. No ProxyTiers defined.");
+			Proxy proxy = inboundRequest.getProxy();
+
+			ProxyTier proxyTier = proxyPlan.getTiers().remove(0);
+
+			proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
+
+			List<URI> endpoints = new LinkedList<URI>();
+			for (URI endpoint : proxyTier.getEndpoints()) {
+				sipLogger.finer(inboundRequest, "Callflow.proxyRequest - proxying request, endpoint=" + endpoint);
+				endpoints.add(endpoint);
+			}
+			List<ProxyBranch> proxyBranches = proxy.createProxyBranches(endpoints);
+
+			Integer timeout = proxyTier.getTimeout();
+			if (timeout != null && timeout > 0) {
+				proxy.setProxyTimeout(timeout);
+			}
+
+			inboundRequest.getSession().setAttribute("RESPONSE_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
+
+			// jwm - test proxy arrow - works!
+			inboundRequest.getApplicationSession().setAttribute("isProxy", Boolean.TRUE);
+
+			sipLogger.finer(inboundRequest,
+					"Callflow.proxyRequest - proxying request, proxyBranches.size=" + proxyBranches.size());
+			for (ProxyBranch proxyBranch : proxyBranches) {
+				sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null,
+						this.getClass().getSimpleName(), null);
+			}
+
+			proxy.startProxy();
+
+		} else {
+			sipLogger.finer(inboundRequest, "Callflow.proxyRequest - proxyPlan is empty");
 		}
-
-		Proxy proxy = inboundRequest.getProxy();
-
-		ProxyTier proxyTier = proxyPlan.getTiers().remove(0);
-
-		proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
-		// proxy.setRecordRoute(false);
-		// proxy.setSupervised(true);
-
-		List<URI> endpoints = new LinkedList<URI>();
-		for (URI endpoint : proxyTier.getEndpoints()) {
-			sipLogger.finer(inboundRequest, "proxying request, endpoint=" + endpoint);
-			endpoints.add(endpoint);
-		}
-		List<ProxyBranch> proxyBranches = proxy.createProxyBranches(endpoints);
-
-		Integer timeout = proxyTier.getTimeout();
-		if (timeout != null && timeout > 0) {
-			proxy.setProxyTimeout(timeout);
-		}
-
-		inboundRequest.getSession().setAttribute("RESPONSE_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
-//		inboundRequest.getSession().setAttribute("isProxy", Boolean.TRUE);
-
-		// jwm - test proxy arrow - works!
-		inboundRequest.getApplicationSession().setAttribute("isProxy", Boolean.TRUE);
-
-		sipLogger.finer(inboundRequest, "proxying request, proxyBranches.size=" + proxyBranches.size());
-		for (ProxyBranch proxyBranch : proxyBranches) {
-			sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null, this.getClass().getSimpleName(),
-					null);
-		}
-
-		proxy.startProxy();
 
 	}
 
