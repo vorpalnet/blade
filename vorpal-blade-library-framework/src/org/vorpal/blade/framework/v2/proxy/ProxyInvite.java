@@ -35,29 +35,29 @@ public class ProxyInvite extends Callflow {
 		if (this.proxyListener != null) {
 			this.proxyListener.proxyRequest(inboundRequest, proxyPlan);
 		} else {
-			sipLogger.severe(request, "No ProxyListener defined.");
+			sipLogger.severe(request, "ProxyInvite.process - No ProxyListener defined to build proxyPlan");
 		}
 
 		// jwm - allow the user to reply with an error code
-		doNotProcess = (Boolean)request.getAttribute("doNotProcess");
-		if (doNotProcess==null || doNotProcess==false ) {
+		doNotProcess = (Boolean) request.getAttribute("doNotProcess");
+		if (false == proxyPlan.isEmpty() && (doNotProcess == null || doNotProcess == false)) {
 
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("ProxyPlan tiers: " + proxyPlan.getTiers().size());
+				sipLogger.finer("ProxyInvite.process - ProxyPlan tiers size=" + proxyPlan.getTiers().size());
 			}
 
 			try {
 
 				this.proxyRequest(inboundRequest, proxyPlan, (response) -> {
 					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(request, "Got proxy response... status: " + response.getStatus()
-								+ ", isBranchResponse: " + response.isBranchResponse());
+						sipLogger.finer(request, "ProxyInvite.process - Got proxy response, status="
+								+ response.getStatus() + ", isBranchResponse=" + response.isBranchResponse());
 					}
 
 					// this should probably go in 'proxyRequest'
 					this.expectRequest(inboundRequest.getApplicationSession(), ACK, (ack) -> {
 						if (sipLogger.isLoggable(Level.FINER)) {
-							sipLogger.finer(ack, "ProxyInvite.process, expectRequest received ACK, do nothing");
+							sipLogger.finer(ack, "ProxyInvite.process - expectRequest received ACK, do nothing");
 						}
 					});
 
@@ -65,7 +65,8 @@ public class ProxyInvite extends Callflow {
 						if (false == proxyPlan.isEmpty()) {
 							if (sipLogger.isLoggable(Level.FINER)) {
 								sipLogger.finer(response,
-										"Calling process again... ProxyPlan tiers: " + proxyPlan.getTiers().size());
+										"ProxyInvite.process - Calling process again... ProxyPlan tiers: "
+												+ proxyPlan.getTiers().size());
 							}
 
 							this.process(request);
@@ -76,8 +77,8 @@ public class ProxyInvite extends Callflow {
 				});
 
 			} catch (Exception ex) {
-				sipLogger.severe(request,
-						"Exception while attempting to proxy to: " + Logger.serializeObject(proxyPlan));
+				sipLogger.severe(request, "ProxyInvite.process - Exception while attempting to proxy to: "
+						+ Logger.serializeObject(proxyPlan));
 				sipLogger.severe(request, request.toString());
 				sipLogger.severe(request, ex);
 
@@ -89,8 +90,9 @@ public class ProxyInvite extends Callflow {
 
 			}
 
-		} // doNotProcess
-
+		} else { // doNotProcess
+			sipLogger.finer(request, "ProxyInvite.process - empty proxyPlan or request marked as 'doNotProcess'");
+		}
 	}
 
 }
