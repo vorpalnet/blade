@@ -7,7 +7,7 @@
 	<property name="build" location="build" />
 	<property name="classes" location="${build}/classes" />
 	<property name="lib" location="${build}/lib" />
-	<property name="shared" location="../vorpal-blade-shared-libraries/target/dependency" />
+	<property name="shared" location="../vorpal-blade-shared-libraries/src/main/webapp/WEB-INF/lib" />
 	
 	<!-- Load environment variables -->
 	<property environment="env" />
