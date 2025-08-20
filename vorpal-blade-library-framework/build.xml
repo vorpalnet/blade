@@ -8,7 +8,9 @@
 
 	<property name="build" location="build" />
 	<property name="classes" location="${build}/classes" />
-	<property name="lib" location="${build}/lib" />
+	<property name="webapp" location="${build}/webapp" />
+	<property name="lib" location="${webapp}/WEB-INF/lib" />
+	
 
 	<!-- Load environment variables -->
 	<property environment="env" />
