@@ -738,9 +738,9 @@
 
 
 	<target name="compile" depends="init">
-		<!-- this is useful for debugging -->
+		<!-- this is useful for debugging 
 		<echo message="vorpal-blade.classpath is ${toString:vorpal-blade.classpath}" />
-		
+		-->
 
 		<copy file="${framework}" todir="${lib}" />
 
