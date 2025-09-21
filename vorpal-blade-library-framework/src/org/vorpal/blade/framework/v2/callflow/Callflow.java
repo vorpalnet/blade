@@ -1506,14 +1506,20 @@ public abstract class Callflow implements Serializable {
 		Callflow.sessionParameters = sessionParameters;
 	}
 
+	/**
+	 * Given a SipApplicationSession, this method returns a SipSession with the
+	 * matching attribute value pair.
+	 * 
+	 * @param appSession
+	 * @param name
+	 * @param value
+	 * @return
+	 */
+	@SuppressWarnings("unchecked")
 	public static SipSession getSession(SipApplicationSession appSession, String name, String value) {
 		SipSession sipSession = null;
 
-//		appSession.getSes
-//		Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
-
 		Object attribute;
-		String strValue;
 		for (SipSession ss : (Set<SipSession>) appSession.getSessionSet("SIP")) {
 			attribute = ss.getAttribute(name);
 			if (attribute != null && attribute instanceof String) {

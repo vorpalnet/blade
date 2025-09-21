@@ -59,7 +59,7 @@ public class AppRouter implements SipApplicationRouter {
 	public void init() {
 
 		try {
-			
+
 			settingsManager = new SettingsManager<>(FSMAR, AppRouterConfiguration.class,
 					new AppRouterConfigurationSample());
 			sipLogger = SettingsManager.getSipLogger();
@@ -94,6 +94,12 @@ public class AppRouter implements SipApplicationRouter {
 		try {
 			AppRouterConfiguration config = (saved != null) ? (AppRouterConfiguration) saved
 					: settingsManager.getCurrent();
+
+			if (config == null) {
+				// something has gone horribly wrong
+				throw new Exception("Invalid FSMAR configuration file.");
+
+			}
 
 			// Did the request originate from an app?
 			SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request) //

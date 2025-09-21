@@ -93,6 +93,7 @@ import inet.ipaddr.ipv6.IPv6Address;
 public class SettingsManager<T> {
 	protected T sample = null;
 	protected T current;
+
 	public static void setSipFactory(SipFactory sipFactory) {
 		SettingsManager.sipFactory = sipFactory;
 	}
@@ -110,6 +111,9 @@ public class SettingsManager<T> {
 
 	protected static String serverName;
 	protected static String clusterName;
+	protected static String domainName;
+	protected static String applicationName;
+	protected static String applicationVersion;
 
 	protected String servletContextName;
 	protected Path domainPath;
@@ -151,7 +155,11 @@ public class SettingsManager<T> {
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 
 		this.mapper = mapper;
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, mapper);
+
+		applicationName = basename(event.getServletContext().getServletContextName());
+		applicationVersion = version(event.getServletContext().getServletContextName());
+
+		this.build(applicationName, clazz, mapper);
 	}
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
@@ -160,19 +168,31 @@ public class SettingsManager<T> {
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 
 		this.mapper = mapper;
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, mapper);
+
+		applicationName = basename(event.getServletContext().getServletContextName());
+		applicationVersion = version(event.getServletContext().getServletContextName());
+
+		this.build(applicationName, clazz, mapper);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
+
+		applicationName = basename(event.getServletContext().getServletContextName());
+		applicationVersion = version(event.getServletContext().getServletContextName());
+
+		this.build(applicationName, clazz, null);
 	}
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
+
+		applicationName = basename(event.getServletContext().getServletContextName());
+		applicationVersion = version(event.getServletContext().getServletContextName());
+
+		this.build(applicationName, clazz, null);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample)
@@ -180,14 +200,22 @@ public class SettingsManager<T> {
 		this.sample = sample;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
+
+		applicationName = basename(event.getServletContext().getServletContextName());
+		applicationVersion = version(event.getServletContext().getServletContextName());
+
+		this.build(applicationName, clazz, null);
 	}
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, T sample) throws ServletException, IOException {
 		this.sample = sample;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
-		this.build(basename(event.getServletContext().getServletContextName()), clazz, null);
+
+		applicationName = basename(event.getServletContext().getServletContextName());
+		applicationVersion = version(event.getServletContext().getServletContextName());
+
+		this.build(applicationName, clazz, null);
 	}
 
 	public static SipFactory getSipFactory() {
@@ -269,6 +297,8 @@ public class SettingsManager<T> {
 				clusterName = (String) server.getAttribute(clusterObjectName, "Name");
 				clusterPath = Paths.get(configPath + "_clusters/" + clusterName);
 				Files.createDirectories(clusterPath);
+
+				domainName = server.getDefaultDomain();
 			}
 
 			// Support for SipFactory classes
@@ -471,14 +501,48 @@ public class SettingsManager<T> {
 
 	/**
 	 * Removes the version number from the deployed application name. For instance
-	 * an application with the name 'b2bua#2.1.0' would simply be 'b2bua'.
+	 * an application with the name 'b2bua#2.1.0' would simply be 'b2bua'. Use
+	 * SipServletContextEvent.getServletContext().getServletContextName() for the
+	 * name.
 	 * 
 	 * @param name
 	 * @return The base name of the application
+	 * @deprecated
 	 */
 	public static String basename(String name) {
 		int i = name.indexOf('#');
 		return (i >= 0) ? name.substring(0, i) : name;
+	}
+
+	/**
+	 * Returns the version number from the deployed application name. Use
+	 * SipServletContextEvent.getServletContext().getServletContextName() for the
+	 * name.
+	 * 
+	 * @param name
+	 * @return
+	 */
+	private static String version(String name) {
+		String version = null;
+
+		int i = name.indexOf('#');
+		if (i >= 0 && i < name.length() - 1) {
+			version = name.substring(i + 1);
+		}
+
+		return version;
+	}
+
+	public static String getApplicationName() {
+		return applicationName;
+	}
+
+	public static String getApplicationVersion() {
+		return applicationVersion;
+	}
+
+	public static String getDomainName() {
+		return domainName;
 	}
 
 }

@@ -97,11 +97,32 @@ public class Registrar implements Serializable {
 
 		// return an updated list of contacts
 		SipServletResponse response = registerRequest.createResponse(200);
+
 		Address contact;
+
 		for (ContactInfo contactInfo : contactsMap.values()) {
 			contact = contactInfo.getAddress();
-			contact.setParameter("expires", this.calculateExpires(contactInfo.getExpiration()));
-			response.addAddressHeader("Contact", contact, false);
+
+			if (contactsMap.size() > 1) {
+
+				// jwm - Failed to dispatch Sip message to servlet PRServlet
+				// java.lang.AssertionError at
+				// com.bea.wcp.sip.engine.ParameterableAdapter.setParameter(ParameterableAdapter.java:154)
+				// exception when modifying expires, try a deep copy
+				// contact.setParameter("expires",
+				// this.calculateExpires(contactInfo.getExpiration()));
+				// response.addAddressHeader("Contact", contact, false);
+
+				// jwm - does this work?
+				Address updatedContact = PRServlet.getSipFactory().createAddress(contact.toString());
+				updatedContact.setParameter("expires", this.calculateExpires(contactInfo.getExpiration()));
+				response.addAddressHeader("Contact", updatedContact, false);
+
+			} else {
+				// sloppy, fix later
+				response.setExpires(Integer.parseInt(this.calculateExpires(contactInfo.getExpiration())));
+			}
+
 		}
 
 		if (allowHeaders != null) {
