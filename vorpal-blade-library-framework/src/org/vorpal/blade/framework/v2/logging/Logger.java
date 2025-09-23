@@ -389,7 +389,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public static String from(SipServletMessage msg) {
-		String name = null;		
+		String name = null;
 		SipURI uri = (SipURI) msg.getFrom().getURI();
 		name = uri.getUser();
 
@@ -402,7 +402,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	public static String to(SipServletMessage msg) {
 		String name = null;
-		
+
 		SipURI uri = (SipURI) msg.getTo().getURI();
 		name = uri.getUser();
 
@@ -490,7 +490,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //#8                                    [BigLon*amedCall]-----------200-->[255.255.255.255]   ; OK (INVITE)
 
 	public void superArrow(Direction direction, SipServletRequest request, SipServletResponse response, String name) {
-
 		try {
 			boolean leftSide = false;
 
@@ -500,7 +499,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 						&& request.isInitial() //
 						&& direction.equals(Direction.RECEIVE)) {
 
-					request.getSession().setAttribute("DIAGRAM_SIDE", "LEFT");
+//					request.getSession().setAttribute("DIAGRAM_SIDE", "LEFT");
 					String line = String.format("%87s", "").replace(' ', '=');
 
 					// This is the new session =========== line
@@ -508,9 +507,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				}
 
 				if (request != null) {
-					leftSide = (null != request.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
+//					leftSide = (null != request.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
+					leftSide = (null != request.getSession().getAttribute("diagramLeft")
+							&& request.getSession().getAttribute("diagramLeft").equals(Boolean.TRUE)) ? true : false;
 				} else {
-					leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
+//					leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
+					leftSide = (null != response.getSession().getAttribute("diagramLeft")
+							&& response.getSession().getAttribute("diagramLeft").equals(Boolean.TRUE)) ? true : false;
 				}
 
 				if (response != null) {
@@ -525,12 +528,18 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			superArrow(direction, leftSide, request, response, name, null);
 
 		} catch (Exception ex) {
-			this.severe(ex);
+			ex.printStackTrace();
 		}
 	}
 
 	public void superArrow(Direction direction, boolean leftSide, SipServletRequest request,
 			SipServletResponse response, String name, String user) {
+//		log(Level.WARNING, "...superArrow direction=" + direction //
+//				+ ", leftSide=" + leftSide //
+//				+ ", request=" + ((request != null) ? request.getMethod() : null) //
+//				+ ", response=" + ((response != null) ? response.getMethod() : null) //
+//				+ ", name=" + name //
+//				+ ", user=" + user);
 
 		if (request == null && response == null) {
 			// Has to be one or the other, never both
@@ -584,11 +593,10 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							}
 
 							else if (request.getMethod().equals("REFER")) {
-								
+
 //								note = "Refer-To: " + request.getAddressHeader("Refer-To");
 								note = "Refer-To: " + request.getHeader("Refer-To");
-								
-								
+
 							} else if (request.getMethod().equals("REGISTER")) {
 								String expires = request.getHeader("Expires");
 								if (expires == null) {
@@ -844,8 +852,10 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			}
 
 		} catch (Exception ex) {
-			
-			this.logStackTrace(ex);
+
+			ex.printStackTrace();
+
+//			this.logStackTrace(ex);
 
 //			if (request != null) {
 //				this.warning(request, ex.getMessage());

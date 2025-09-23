@@ -1,5 +1,6 @@
 package org.vorpal.blade.services.proxy.registrar.v3;
 
+import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
@@ -10,8 +11,13 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
 //public class PRegistrarSettings extends Configuration{
-public class Settings extends Configuration {
+public class Settings extends Configuration implements Serializable {
 	private static final long serialVersionUID = -3362129920431974760L;
+	
+	/**
+	 * Specifies the SIP messages this container supports.
+	 */
+	protected String allowHeader;
 
 	/**
 	 * Specifies whether branches initiated in this proxy operation should include a
@@ -51,7 +57,8 @@ public class Settings extends Configuration {
 	 * Specifies whether branches initiated in this proxy operation should include a
 	 * Record-Route header for this servlet engine or not. This shall affect all the
 	 * branches created after its invocation. Record-routing is used to specify that
-	 * this servlet engine must stay on the signaling path of subsequent requests.
+	 * this servlet engine must stay on the signaling path of subsequent requests. Set to
+	 * 'false' to enable 'loose-routing'.
 	 */
 	public Boolean recordRoute;
 

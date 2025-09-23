@@ -1203,6 +1203,19 @@ public abstract class Callflow implements Serializable {
 			}
 		}
 
+		// for logging
+		// unnecessary?
+//		Boolean leftSS1 = (Boolean) ss1.getAttribute("diagramLeft");
+//		if (leftSS1 != null && leftSS1.equals(Boolean.TRUE)) {
+//			sipLogger.warning("linkSessions, setting ss2 diagramLeft to false");
+//			ss2.setAttribute("diagramLeft", Boolean.FALSE);
+//		}
+//		Boolean leftSS2 = (Boolean) ss2.getAttribute("diagramLeft");
+//		if (leftSS2 != null && leftSS2.equals(Boolean.TRUE)) {
+//			sipLogger.warning("linkSessions, setting ss1 diagramLeft to false");
+//			ss1.setAttribute("diagramLeft", Boolean.FALSE);
+//		}
+
 	}
 
 	public static void unlinkSessions(SipSession ss1, SipSession ss2) {
@@ -1216,7 +1229,13 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public static SipSession getLinkedSession(SipSession ss) {
-		return (SipSession) ss.getAttribute(LINKED_SESSION);
+		SipSession linkedSession = null;
+
+		if (ss.isValid()) {
+			linkedSession = (SipSession) ss.getAttribute(LINKED_SESSION);
+		}
+
+		return linkedSession;
 	}
 
 	/**
@@ -1426,6 +1445,16 @@ public abstract class Callflow implements Serializable {
 			throws TooManyHopsException {
 		SipApplicationSession appSession = proxy.getOriginalRequest().getApplicationSession();
 		appSession.setAttribute("PROXY_CALLBACK_INVITE", lambdaFunction);
+		appSession.setAttribute("isProxy", Boolean.TRUE);
+
+		for (URI endpoint : endpoints) {
+
+			// jwm - SUPERARROW NEEDS WORK!
+
+			sipLogger.superArrow(Direction.SEND, false, proxy.getOriginalRequest(), null,
+					this.getClass().getSimpleName(), null);
+		}
+
 		proxy.proxyTo(endpoints);
 	}
 
@@ -1460,7 +1489,9 @@ public abstract class Callflow implements Serializable {
 
 			List<URI> endpoints = new LinkedList<URI>();
 			for (URI endpoint : proxyTier.getEndpoints()) {
-				sipLogger.finer(inboundRequest, "Callflow.proxyRequest - proxying request, endpoint=" + endpoint);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(inboundRequest, "Callflow.proxyRequest - proxying request, endpoint=" + endpoint);
+				}
 				endpoints.add(endpoint);
 			}
 			List<ProxyBranch> proxyBranches = proxy.createProxyBranches(endpoints);
@@ -1475,8 +1506,11 @@ public abstract class Callflow implements Serializable {
 			// jwm - test proxy arrow - works!
 			inboundRequest.getApplicationSession().setAttribute("isProxy", Boolean.TRUE);
 
-			sipLogger.finer(inboundRequest,
-					"Callflow.proxyRequest - proxying request, proxyBranches.size=" + proxyBranches.size());
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(inboundRequest,
+						"Callflow.proxyRequest - proxying request, proxyBranches.size=" + proxyBranches.size());
+			}
+
 			for (ProxyBranch proxyBranch : proxyBranches) {
 				sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null,
 						this.getClass().getSimpleName(), null);

@@ -160,6 +160,12 @@ public class BlindTransfer extends Transfer {
 		try {
 			// request is REFER from transferor (bob)
 			SipApplicationSession appSession = referRequest.getApplicationSession();
+			
+			Boolean inProgress = (Boolean) appSession.getAttribute("IN_PROGRESS");
+			if(inProgress !=null && inProgress==Boolean.TRUE) {
+				throw new ServletException("Transfer already in progress");
+			}			
+			appSession.setAttribute("IN_PROGRESS", Boolean.TRUE);
 
 			// save X-Previous-DN-Tmp for use later
 			URI referTo = referRequest.getAddressHeader("Refer-To").getURI();
@@ -220,6 +226,7 @@ public class BlindTransfer extends Transfer {
 					});
 				}
 
+				appSession.removeAttribute("IN_PROGRESS");
 				transferListener.transferAbandoned(bye);
 
 			});
@@ -227,7 +234,8 @@ public class BlindTransfer extends Transfer {
 			// In case transferor (bob) hangs up.
 			Expectation bobExpectation = expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
 				sipLogger.finer(transferorRequest, "transferor (bob) hangs up");
-				sendResponse(bye.createResponse(200));
+				appSession.removeAttribute("IN_PROGRESS");
+				sendResponse(bye.createResponse(200));		
 //				transferListener.transferInitiated(bye);
 			});
 
@@ -262,6 +270,7 @@ public class BlindTransfer extends Transfer {
 					sipLogger.finer(targetResponse, "target (carol) sends successful response "
 							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 
+					appSession.removeAttribute("IN_PROGRESS");
 					transferListener.transferCompleted(targetResponse);
 
 					
@@ -305,6 +314,7 @@ public class BlindTransfer extends Transfer {
 
 					if (targetResponse.getStatus() == 487) {
 						sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
+						appSession.removeAttribute("IN_PROGRESS");
 						transferListener.transferAbandoned(referRequest);
 
 						// Instead of sending the failure notice, we pretend everything is successful so
@@ -322,6 +332,7 @@ public class BlindTransfer extends Transfer {
 						sipLogger.finer(targetResponse, "target (carol) has 'rejected' the call");
 
 						// User is notified that the transfer target did not answer
+						appSession.removeAttribute("IN_PROGRESS");
 						transferListener.transferDeclined(targetResponse);
 
 						// Bob won't send a BYE, but instead reINVITE.

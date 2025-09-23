@@ -1,6 +1,7 @@
 package org.vorpal.blade.services.proxy.registrar.v3;
 
 import java.io.IOException;
+import java.io.Serializable;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
@@ -9,7 +10,7 @@ import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
-public class RegisterCallflow extends Callflow {
+public class RegisterCallflow extends Callflow implements Serializable {
 	private static final long serialVersionUID = -5068514646904567798L;
 
 	@Override
