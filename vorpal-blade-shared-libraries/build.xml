@@ -65,7 +65,6 @@
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
 		</manifest>
 
-
 		<war needxmlfile='false' destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}">
 			<classes dir="${src}" />	
 		</war>
@@ -78,6 +77,9 @@
 		<delete dir="${build}" />
 		<delete dir="${lib}" />
 	</target>
-
+	
+	<target name="javadoc">
+		<echo message="No Javadocs for shared-libraries." />
+	</target>
 
 </project>
