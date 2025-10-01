@@ -785,8 +785,16 @@ public abstract class Callflow implements Serializable {
 					switch (response.getMethod()) {
 					case INVITE:
 
-						if (failure(response)) { // glare handling;
+						// glare handling;
+						if (response.getStatus() >= 300) {
+							sipLogger.finest(sipSession, "Removing EXPECT_ACK session attribute.");
 							sipSession.removeAttribute("EXPECT_ACK");
+
+							SipSession linkedSession = getLinkedSession(sipSession);
+							if (linkedSession != null) {
+								sipLogger.finest(linkedSession, "Removing EXPECT_ACK linked session attribute.");
+								linkedSession.removeAttribute("EXPECT_ACK");
+							}
 						}
 
 					case REGISTER:
