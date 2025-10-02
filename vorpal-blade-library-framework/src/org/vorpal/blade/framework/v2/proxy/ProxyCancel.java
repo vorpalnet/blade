@@ -20,13 +20,23 @@ public class ProxyCancel extends Callflow implements Serializable {
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
-		sendResponse(request.createResponse(200));
-
-		if (this.proxyListener != null) {
-			// what happens if there's a CANCEL?
-		}
-
-		request.getProxy().cancel();
+// jwm - the container takes care of everything		
+//		try {
+//		
+//		// jwm - container sends 200 OK automatically
+//		// sendResponse(request.createResponse(200));
+//
+//		if (this.proxyListener != null) {
+//			// what happens if there's a CANCEL?
+//			// API improvements for v3
+//		}
+//
+//		// already canceled by the container
+//		// request.getProxy().cancel();
+//		
+//		}catch(Exception ex) {
+//			sipLogger.severe(request, ex);
+//		}
 
 	}
 
