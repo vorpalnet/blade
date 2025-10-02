@@ -89,7 +89,6 @@ public class Cancel extends Callflow {
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		// The container will send a 200 OK for CANCEL
-		// sendResponse(request.createResponse(200));
 
 		try {
 			aliceCancel = request;
@@ -107,10 +106,12 @@ public class Cancel extends Callflow {
 				}
 			} else {
 				sipLogger.fine(request, "CANCEL received, but no linked session. Ignoring request.");
-				sendResponse(request.createResponse(200));
+				// jwm - for cancels, the container generates the 200 OK
+				// sendResponse(request.createResponse(200));
 			}
 		} catch (Exception e) {
-			// eat the error;
+			// log the error;
+			sipLogger.severe(request, e);
 		}
 	}
 
