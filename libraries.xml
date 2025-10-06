@@ -778,9 +778,9 @@
 	<condition property="isUnix">
 		<os family="unix" />
 	</condition>
-	
+
 	<target name="maven" depends="mvn_windows, mvn_unix" />
-	
+
 	<target name="mvn_windows" if="isWindows" depends="init">
 		<exec dir="." executable="cmd">
 			<arg line="/c mvn -f maven.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
@@ -795,6 +795,9 @@
 
 
 	<target name="war" depends="compile">
+		<mkdir dir="${build}/lib" />
+		<echo message="war, copying ${framework} to ${build}/lib" />
+		<copy file="${framework}" todir="${build}/lib" />
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
@@ -802,7 +805,9 @@
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
 			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
 		</manifest>
-		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}" webxml="${webapp}/WEB-INF/web.xml" needxmlfile="true">
+		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}" webxml="${webapp}/WEB-INF/web.xml" needxmlfile="true">			
+			<lib dir="${build}/lib" />
+			<!--classes dir="${classes}" /-->
 			<classes dir="${src}" />
 		</war>
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
