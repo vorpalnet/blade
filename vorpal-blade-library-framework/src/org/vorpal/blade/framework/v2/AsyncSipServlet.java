@@ -4,11 +4,9 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Queue;
 import java.util.Set;
 import java.util.logging.Level;
 
@@ -39,7 +37,6 @@ import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
 import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
-import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
@@ -225,241 +222,178 @@ public abstract class AsyncSipServlet extends SipServlet
 //		Queue<SipServletRequest> glareQueue = (Queue<SipServletRequest>) sipSession.getAttribute("GLARE_QUEUE");
 //		glareQueue = (null != glareQueue) ? glareQueue : new LinkedList<>();
 
-		Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
-		expectAck = (expectAck != null && expectAck == true) ? true : false;
+		// ignore reINVITES, INFO messages, etc if this is a proxy request
+		if (false == isProxy(request)) {
 
-		if (method.equals("ACK")) {
-			expectAck = false;
-			sipSession.removeAttribute("EXPECT_ACK");
-		} else {
-			if (expectAck && !method.equals("CANCEL")) { // anything other than cancel
+			Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
+			expectAck = (expectAck != null && expectAck == true) ? true : false;
 
-				if (sipLogger.isLoggable(Level.FINE)) {
-					sipLogger.fine(request,
-							"AsyncSipServlet.doResponse - Glare; " + method + " received while awaiting ACK.");
-				}
+			if (method.equals("ACK")) {
+				expectAck = false;
+				sipSession.removeAttribute("EXPECT_ACK");
+			} else {
+				if (expectAck && !method.equals("CANCEL")) { // anything other than cancel
 
-				SipServletResponse glareResponse = request.createResponse(491);
-				glareResponse.setHeader("Retry-After", "3"); // 3 seconds should enough time to clear the line
-				sendResponse(glareResponse);
+					if (sipLogger.isLoggable(Level.FINE)) {
+						sipLogger.fine(request,
+								"AsyncSipServlet.doResponse - Glare; " + method + " received while awaiting ACK.");
+					}
+
+					SipServletResponse glareResponse = request.createResponse(491);
+					glareResponse.setHeader("Retry-After", "3"); // 3 seconds should enough time to clear the line
+					sendResponse(glareResponse);
 
 //				glareQueue.add(request);
 //				sipSession.setAttribute("GLARE_QUEUE", glareQueue);
-				return;
-			}
-		}
-
-		// Now that GLARE is taken care of, if this is an INVITE, we should expect an
-		// ACK, unless we reply with an error code -- See Callflow.sendResponse
-		if (method.equals("INVITE")) {
-			sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
-		}
-
-		try {
-
-			if (request.isInitial()) {
-				// creates a session tracking key, if one doesn't already exist
-				generateIndexKey(request);
-
-				// attempt to keep track of who called whom
-				request.getSession().setAttribute("userAgent", "caller");
-				request.getSession().setAttribute("diagramLeft", Boolean.TRUE);
+					return;
+				}
 			}
 
-			if (request.isInitial() && Callflow.getSessionParameters() != null) {
-				SessionParameters sessionParameters = Callflow.getSessionParameters();
+			// Now that GLARE is taken care of, if this is an INVITE, we should expect an
+			// ACK, unless we reply with an error code -- See Callflow.sendResponse
+			if (method.equals("INVITE")) {
+				sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
+			}
 
-				if (sessionParameters.getExpiration() != null) {
-					request.getApplicationSession().setExpires(Callflow.getSessionParameters().getExpiration());
+			try {
+
+				if (request.isInitial()) {
+					// creates a session tracking key, if one doesn't already exist
+					generateIndexKey(request);
+
+					// attempt to keep track of who called whom
+					request.getSession().setAttribute("userAgent", "caller");
+					request.getSession().setAttribute("_diagramLeft", Boolean.TRUE);
+					request.getSession().setAttribute("_DID", ((SipURI) request.getTo().getURI()).getUser());
+					request.getSession().setAttribute("_ANI", ((SipURI) request.getFrom().getURI()).getUser());
 				}
 
-				// put the keep alive logic here
+				if (request.isInitial() && Callflow.getSessionParameters() != null) {
+					SessionParameters sessionParameters = Callflow.getSessionParameters();
 
-			}
+					if (sessionParameters.getExpiration() != null) {
+						request.getApplicationSession().setExpires(Callflow.getSessionParameters().getExpiration());
+					}
 
-			requestLambda = Callflow.pullCallback(request);
-			if (requestLambda != null) {
+					// put the keep alive logic here
+
+				}
+
+				requestLambda = Callflow.pullCallback(request);
+				if (requestLambda != null) {
 
 //				sipLogger.severe(request, "superArrow #1");
-				Callflow.getLogger().superArrow(Direction.RECEIVE, request, null,
-						requestLambda.getClass().getSimpleName());
+					Callflow.getLogger().superArrow(Direction.RECEIVE, request, null,
+							requestLambda.getClass().getSimpleName());
 
-				requestLambda.accept(request);
+					requestLambda.accept(request);
 
-			} else {
+				} else {
 
-				// Send 481 for ReINVITEs with failed linked sessions
-				if (method.equals("INVITE") && false == request.isInitial()) {
-					SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
-					if (linkedSession == null || false == linkedSession.isValid()) {
-						callflow = new Callflow481();
-					}
-				}
-
-				if (callflow == null) {
-					callflow = chooseCallflow(request);
-				}
-
-//				if (sipLogger.isLoggable(Level.FINER)) {
-//					if (callflow != null) {
-//						sipLogger.finer(request,
-//								"AsyncSipServlet.doRequest - method=" + request.getMethod() + ", callflow="
-//										+ callflow.getClass().getSimpleName() + ", isProxy=" + isProxy(request));
-//					} else {
-//						sipLogger.finer(request, "AsyncSipServlet.doRequest - method=" + request.getMethod()
-//								+ ", callflow=null, isProxy=" + isProxy(request));
-//					}
-//				}
-
-				if (callflow == null) {
-
-					if (isProxy(request)) {
-
-						Boolean leftDiagram = (Boolean) request.getSession().getAttribute("leftDiagram");
-						leftDiagram = (leftDiagram != null) ? true : false;
-//						sipLogger.severe(request, "superArrow #2");
-						Callflow.getLogger().superArrow(Direction.RECEIVE, !leftDiagram, request, null, "proxy", null);
-
-//						sipLogger.severe(request, "superArrow #3");
-						Callflow.getLogger().superArrow(Direction.SEND, leftDiagram, request, null, "proxy", null);
-
-					} else {
-
-						if (method.equals("ACK")) {
-//							sipLogger.severe(request, "superArrow #4");
-							Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
-						} else {
-
-//							sipLogger.severe(request, "superArrow #5");
-							Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
-							SipServletResponse response = request.createResponse(501);
-//							sipLogger.severe(request, "superArrow #6");
-							Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
-							Callflow.getLogger()
-									.warning("AsyncSipServlet.doResponse - No registered callflow for request method "
-											+ method + ", consider modifying the 'chooseCallflow' method.");
-							response.send();
+					// Send 481 for ReINVITEs with failed linked sessions
+					if (method.equals("INVITE") && false == request.isInitial()) {
+						SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
+						if (linkedSession == null || false == linkedSession.isValid()) {
+							callflow = new Callflow481();
 						}
 					}
 
-				} else {
+					if (callflow == null) {
+						callflow = chooseCallflow(request);
+					}
+
+					if (callflow == null) {
+
+						if (isProxy(request)) {
+
+//							Boolean leftDiagram = (Boolean) request.getSession().getAttribute("leftDiagram");
+//							leftDiagram = (leftDiagram != null) ? true : false;
+////						sipLogger.severe(request, "superArrow #2");
+//							Callflow.getLogger().superArrow(Direction.RECEIVE, !leftDiagram, request, null, "proxy",
+//									null);
+//
+////						sipLogger.severe(request, "superArrow #3");
+//							Callflow.getLogger().superArrow(Direction.SEND, leftDiagram, request, null, "proxy", null);
+
+						} else {
+
+							if (method.equals("ACK")) {
+//							sipLogger.severe(request, "superArrow #4");
+								Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
+							} else {
+
+//							sipLogger.severe(request, "superArrow #5");
+								Callflow.getLogger().superArrow(Direction.RECEIVE, request, null, "null");
+								SipServletResponse response = request.createResponse(501);
+//							sipLogger.severe(request, "superArrow #6");
+								Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
+								Callflow.getLogger().warning(
+										"AsyncSipServlet.doResponse - No registered callflow for request method "
+												+ method + ", consider modifying the 'chooseCallflow' method.");
+								response.send();
+							}
+						}
+
+					} else {
 //					sipLogger.severe(request, "superArrow #7");
-					sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
+						sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
 
-					// process AttributeSelectors here!
+						// process AttributeSelectors here!
 
-					// create any index keys defined by selectors in the config file
-					if (request.isInitial() && sessionParameters != null) {
+						// create any index keys defined by selectors in the config file
+						if (request.isInitial() && sessionParameters != null) {
 
-						// sipLogger.finest(request, "request.isInitial() && sessionParameters !=
-						// null");
+							// sipLogger.finest(request, "request.isInitial() && sessionParameters !=
+							// null");
 
-						List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
-						// sipLogger.finest(request, "Session AttributeSelectors list=" + selectors);
+							List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
+							// sipLogger.finest(request, "Session AttributeSelectors list=" + selectors);
 
-						if (selectors != null) {
-							// sipLogger.finest(request, "Session AttributeSelectors list size=" +
-							// selectors.size());
-							for (AttributeSelector selector : selectors) {
+							if (selectors != null) {
+								// sipLogger.finest(request, "Session AttributeSelectors list size=" +
+								// selectors.size());
+								for (AttributeSelector selector : selectors) {
 
-								if (selector.getDialog() == null
-										|| false == selector.getDialog().equals(DialogType.destination)) {
+									if (selector.getDialog() == null
+											|| false == selector.getDialog().equals(DialogType.destination)) {
 
-									rr = selector.findKey(request);
-									if (sipLogger.isLoggable(Level.FINEST)) {
-										sipLogger.finest(request, "AsyncSipServlet.doRequest - selector.id="
-												+ selector.getId() + ", rr=" + rr);
-									}
-
-									if (rr != null) {
-
-										// Create an index key for the appSession
-										if (rr.key != null) {
-											if (sipLogger.isLoggable(Level.FINER)) {
-												sipLogger.finer(request,
-														"AsyncSipServlet - doRequest, addingIndexKey: " + rr.key);
-											}
-											request.getApplicationSession().addIndexKey(rr.key);
+										rr = selector.findKey(request);
+										if (sipLogger.isLoggable(Level.FINEST)) {
+											sipLogger.finest(request, "AsyncSipServlet.doRequest - selector.id="
+													+ selector.getId() + ", rr=" + rr);
 										}
 
-										// Add named groups to SipSession
-										for (Entry<String, String> entry : rr.attributes.entrySet()) {
+										if (rr != null) {
+
+											// Create an index key for the appSession
+											if (rr.key != null) {
+												if (sipLogger.isLoggable(Level.FINER)) {
+													sipLogger.finer(request,
+															"AsyncSipServlet - doRequest, addingIndexKey: " + rr.key);
+												}
+												request.getApplicationSession().addIndexKey(rr.key);
+											}
+
+											// Add named groups to SipSession
+											for (Entry<String, String> entry : rr.attributes.entrySet()) {
 //											if (sipLogger.isLoggable(Level.FINER)) {
 //												sipLogger.finer(request,
 //														"AsyncSipServlet.doRequest - adding SipSession attribute "
 //																+ entry.getKey() + "=" + entry.getValue());
 //											}
-											sipSession.setAttribute(entry.getKey(), entry.getValue());
-										}
+												sipSession.setAttribute(entry.getKey(), entry.getValue());
+											}
 
-										// jwm - testing; this should only be for SipSession
-										for (Entry<String, String> entry : rr.attributes.entrySet()) {
+											// jwm - testing; this should only be for SipSession
+											for (Entry<String, String> entry : rr.attributes.entrySet()) {
 //											if (sipLogger.isLoggable(Level.FINER)) {
 //												sipLogger.finer(request,
 //														"AsyncSipServlet.doRequest - adding SipApplicationSession attribute "
 //																+ entry.getKey() + "=" + entry.getValue());
 //											}
-											appSession.setAttribute(entry.getKey(), entry.getValue());
-										}
-
-									}
-
-								}
-
-							}
-
-						}
-
-					}
-
-					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(request, "AsyncSipServlet.doRequest - appSession id=" + appSession.getId() + //
-								", indexKeys=" + appSession.getIndexKeys() + //
-								", sessions=" + appSession.getSessionSet().size() + //
-								", timers=" + appSession.getTimers().size());
-
-						Map<String, String> attrMap = new HashMap<>();
-						Object value;
-						for (String name : sipSession.getAttributeNameSet()) {
-							value = sipSession.getAttribute(name);
-							if (value instanceof String) {
-								attrMap.put(name, (String) value);
-							} else if (value instanceof Boolean) {
-								attrMap.put(name, Boolean.toString((Boolean) value));
-							} else if (value instanceof Integer) {
-								attrMap.put(name, Integer.toString((Integer) value));
-							} else {
-								// too wordy
-								// attrMap.put(name, value.getClass().getSimpleName());
-							}
-						}
-
-						sipLogger.finer(sipSession, "AsyncSipServlet.doRequest - callflow="
-								+ callflow.getClass().getSimpleName() + ", SipSession attributes: " + attrMap);
-					}
-
-					callflow.process(request);
-
-					SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
-
-					if (linkedSession != null) {
-
-						if (request.isInitial() && linkedSession != null && sessionParameters != null) {
-
-							List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
-
-							if (selectors != null) {
-								for (AttributeSelector selector : selectors) {
-
-									if (selector.getDialog() != null
-											&& selector.getDialog().equals(DialogType.destination)) {
-
-										rr = selector.findKey(request);
-										if (rr != null) {
-											// add any origin dialog session parameters from config file
-											for (Entry<String, String> entry : rr.attributes.entrySet()) {
-												linkedSession.setAttribute(entry.getKey(), entry.getValue());
+												appSession.setAttribute(entry.getKey(), entry.getValue());
 											}
+
 										}
 
 									}
@@ -468,38 +402,96 @@ public abstract class AsyncSipServlet extends SipServlet
 
 							}
 
-							if (sipLogger.isLoggable(Level.FINER)) {
-								Map<String, String> attrMap = new HashMap<>();
+						}
 
-								Object value;
-								for (String name : linkedSession.getAttributeNameSet()) {
-									value = linkedSession.getAttribute(name);
-									if (value instanceof String) {
-										attrMap.put(name, (String) value);
-									}
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(request, "AsyncSipServlet.doRequest - appSession id=" + appSession.getId() + //
+									", indexKeys=" + appSession.getIndexKeys() + //
+									", sessions=" + appSession.getSessionSet().size() + //
+									", timers=" + appSession.getTimers().size());
+
+							Map<String, String> attrMap = new HashMap<>();
+							Object value;
+							for (String name : sipSession.getAttributeNameSet()) {
+								value = sipSession.getAttribute(name);
+								if (value instanceof String) {
+									attrMap.put(name, (String) value);
+								} else if (value instanceof Boolean) {
+									attrMap.put(name, Boolean.toString((Boolean) value));
+								} else if (value instanceof Integer) {
+									attrMap.put(name, Integer.toString((Integer) value));
+								} else {
+									// too wordy
+									// attrMap.put(name, value.getClass().getSimpleName());
 								}
-								sipLogger.finer(sipSession,
-										"AsyncSipServlet.doRequest - Destination session attributes: " + attrMap);
+							}
+
+							sipLogger.finer(sipSession, "AsyncSipServlet.doRequest - callflow="
+									+ callflow.getClass().getSimpleName() + ", SipSession attributes: " + attrMap);
+						}
+
+						callflow.process(request);
+
+						SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
+
+						if (linkedSession != null) {
+
+							if (request.isInitial() && linkedSession != null && sessionParameters != null) {
+
+								List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
+
+								if (selectors != null) {
+									for (AttributeSelector selector : selectors) {
+
+										if (selector.getDialog() != null
+												&& selector.getDialog().equals(DialogType.destination)) {
+
+											rr = selector.findKey(request);
+											if (rr != null) {
+												// add any origin dialog session parameters from config file
+												for (Entry<String, String> entry : rr.attributes.entrySet()) {
+													linkedSession.setAttribute(entry.getKey(), entry.getValue());
+												}
+											}
+
+										}
+
+									}
+
+								}
+
+								if (sipLogger.isLoggable(Level.FINER)) {
+									Map<String, String> attrMap = new HashMap<>();
+
+									Object value;
+									for (String name : linkedSession.getAttributeNameSet()) {
+										value = linkedSession.getAttribute(name);
+										if (value instanceof String) {
+											attrMap.put(name, (String) value);
+										}
+									}
+									sipLogger.finer(sipSession,
+											"AsyncSipServlet.doRequest - Destination session attributes: " + attrMap);
+								}
+
 							}
 
 						}
 
 					}
-
 				}
+
+			} catch (Exception ex) {
+				String error = event.getServletContext().getServletContextName() + " " + ex.getClass().getSimpleName()
+						+ ", " + ex.getMessage();
+				sipLogger.severe(request, "Exception on SIP request: \n" + request.toString());
+				sipLogger.severe(request, ex);
+				sipLogger.getParent().severe(error);
 			}
 
-		} catch (Exception ex) {
-			String error = event.getServletContext().getServletContextName() + " " + ex.getClass().getSimpleName()
-					+ ", " + ex.getMessage();
-			sipLogger.severe(request, "Exception on SIP request: \n" + request.toString());
-			sipLogger.severe(request, ex);
-			sipLogger.getParent().severe(error);
-		}
-
-		// process requests queued up from glare
-		// Note: this buggy because two or more requests in the queue would result in
-		// even more glare; a better algorithm needs to be devised
+			// process requests queued up from glare
+			// Note: this buggy because two or more requests in the queue would result in
+			// even more glare; a better algorithm needs to be devised
 //		if (expectAck == false) {
 //			if (glareQueue != null) {
 //				SipServletRequest glareRequest;
@@ -512,6 +504,17 @@ public abstract class AsyncSipServlet extends SipServlet
 //			sipSession.removeAttribute("GLARE_QUEUE");
 //		}
 
+		} else { // isProxy, for logging purposes only
+			Boolean diagramLeft = true;
+			String proxyDid = (String) request.getSession().getAttribute("_DID");
+			String fromUser = ((SipURI) request.getFrom().getURI()).getUser();
+			if (proxyDid != null && fromUser != null && proxyDid.equals(fromUser)) {
+				diagramLeft = false;
+			}
+			Callflow.getLogger().superArrow(Direction.RECEIVE, diagramLeft, request, null, "proxy", null);
+			Callflow.getLogger().superArrow(Direction.SEND, !diagramLeft, request, null, "proxy", null);
+		}
+
 	}
 
 	@SuppressWarnings("unchecked")
@@ -523,171 +526,176 @@ public abstract class AsyncSipServlet extends SipServlet
 		SipApplicationSession appSession = response.getApplicationSession();
 		String method = response.getMethod();
 
-		try {
-			if (sipSession != null) {
+		if (false == isProxy(response)) {
 
-				if (sipSession.isValid()) {
+			try {
+
+				if (sipSession != null) {
+
+					if (sipSession.isValid()) {
 
 //					if (sipLogger.isLoggable(Level.FINER)) {
 //						sipLogger.finer(response, "AsyncSipServlet.doResponse - method=" + response.getMethod()
 //								+ ", status=" + response.getStatus() + ", reason=" + response.getReasonPhrase());
 //					}
 
-					// for GLARE handling
-					if (method.equals("INVITE")) {
-						if (Callflow.failure(response)) {
-							sipSession.removeAttribute("EXPECT_ACK");
-						}
-					}
-
-					callback = Callflow.pullCallback(response);
-
-					if (callback == null) {
-						callback = Callflow.pullProxyCallback(response);
-
-						if (callback != null) {
-							isProxy = true;
-						} else {
-
-							// Sometimes a 180 Ringing comes back on a brand new SipSession
-							// because the tag on the To header changed due to a failure downstream.
-							if (response.getMethod().equals("INVITE")) {
-								// Falling down a hole
-								Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
-
-								if (sipLogger.isLoggable(Level.FINER)) {
-									sipLogger.finer(response, "AsyncSipServlet.doResponse - Rogue session id="
-											+ response.getSession().getId());
-									sipLogger.finer(response,
-											"AsyncSipServlet.doResponse - Number of SipSessions: " + sessions.size());
-								}
-
-								for (SipSession session : sessions) {
-
-									if (sipLogger.isLoggable(Level.FINER)) {
-										sipLogger.finer(response,
-												"AsyncSipServlet.doResponse - Checking session id=" + session.getId());
-									}
-
-									if (session != response.getSession()) {
-
-										if (session.getCallId().equals(sipSession.getCallId())) {
-
-											callback = (Callback<SipServletResponse>) session
-													.getAttribute(RESPONSE_CALLBACK_INVITE);
-
-											if (callback != null) {
-
-												if (sipLogger.isLoggable(Level.FINER)) {
-													sipLogger.finer(session,
-															"AsyncSipServlet.doResponse - Early dialog session detected, merge in progress...");
-													sipLogger.finer(response,
-															"AsyncSipServlet.doResponse - Setting RESPONSE_CALLBACK_INVITE on merged session...");
-													sipLogger.finer(response,
-															"AsyncSipServlet.doResponse - Removing RESPONSE_CALLBACK_INVITE from original session...");
-												}
-
-												sipSession.setAttribute(RESPONSE_CALLBACK_INVITE, callback);
-
-												session.removeAttribute(RESPONSE_CALLBACK_INVITE);
-
-												// link the sessions
-												if (sipLogger.isLoggable(Level.FINER)) {
-													sipLogger.finer(session,
-															"AsyncSipServlet.doResponse - Linking sessions...");
-												}
-												SipSession linkedSession = Callflow.getLinkedSession(session);
-												session.removeAttribute("LINKED_SESSION");
-												Callflow.linkSessions(linkedSession, sipSession);
-
-												for (String attr : session.getAttributeNameSet()) {
-													if (sipLogger.isLoggable(Level.FINER)) {
-														sipLogger.finer(session,
-																"AsyncSipServlet.doResponse - Copying session attribute: "
-																		+ attr);
-													}
-													sipSession.setAttribute(attr, session.getAttribute(attr));
-												}
-
-												// invalidate the old session
-												if (sipLogger.isLoggable(Level.FINER)) {
-													sipLogger.finer(session,
-															"AsyncSipServlet.doResponse - Invalidating early session...");
-												}
-												session.invalidate();
-												if (sipLogger.isLoggable(Level.FINER)) {
-													sipLogger.finer(response,
-															"AsyncSipServlet.doResponse - Sessions successfully merged.");
-												}
-											}
-											break;
-										}
-									}
-								}
-							} else {
-
-								if (isProxy(response)) {
-
-									Boolean leftDiagram = (Boolean) response.getSession().getAttribute("leftDiagram");
-									leftDiagram = (leftDiagram != null) ? true : false;
-//									sipLogger.severe(response, "superArrow #9");
-									Callflow.getLogger().superArrow(Direction.RECEIVE, leftDiagram, null, response,
-											"proxy", null);
-
-//									sipLogger.severe(response, "superArrow #9.1");
-									Callflow.getLogger().superArrow(Direction.SEND, !leftDiagram, null, response,
-											"proxy", null);
-
-								} else {
-
-//									sipLogger.severe(response, "superArrow #8");
-									Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-											this.getClass().getSimpleName());
-
-								}
-
+						// for GLARE handling
+						if (method.equals("INVITE")) {
+							if (Callflow.failure(response)) {
+								sipSession.removeAttribute("EXPECT_ACK");
 							}
 						}
-					}
 
-					if (callback != null) {
+						callback = Callflow.pullCallback(response);
 
-						if (isProxy) {
+						if (callback == null) {
+							callback = Callflow.pullProxyCallback(response);
 
-							if (!Callflow.provisional(response)) {
+							if (callback != null) {
+								isProxy = true;
+							} else {
 
-//								sipLogger.severe(response, "superArrow #10");
+								// Sometimes a 180 Ringing comes back on a brand new SipSession
+								// because the tag on the To header changed due to a failure downstream.
+								if (response.getMethod().equals("INVITE")) {
+									// Falling down a hole
+									Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
+
+									if (sipLogger.isLoggable(Level.FINER)) {
+										sipLogger.finer(response, "AsyncSipServlet.doResponse - Rogue session id="
+												+ response.getSession().getId());
+										sipLogger.finer(response, "AsyncSipServlet.doResponse - Number of SipSessions: "
+												+ sessions.size());
+									}
+
+									for (SipSession session : sessions) {
+
+										if (sipLogger.isLoggable(Level.FINER)) {
+											sipLogger.finer(response,
+													"AsyncSipServlet.doResponse - Checking session id="
+															+ session.getId());
+										}
+
+										if (session != response.getSession()) {
+
+											if (session.getCallId().equals(sipSession.getCallId())) {
+
+												callback = (Callback<SipServletResponse>) session
+														.getAttribute(RESPONSE_CALLBACK_INVITE);
+
+												if (callback != null) {
+
+													if (sipLogger.isLoggable(Level.FINER)) {
+														sipLogger.finer(session,
+																"AsyncSipServlet.doResponse - Early dialog session detected, merge in progress...");
+														sipLogger.finer(response,
+																"AsyncSipServlet.doResponse - Setting RESPONSE_CALLBACK_INVITE on merged session...");
+														sipLogger.finer(response,
+																"AsyncSipServlet.doResponse - Removing RESPONSE_CALLBACK_INVITE from original session...");
+													}
+
+													sipSession.setAttribute(RESPONSE_CALLBACK_INVITE, callback);
+
+													session.removeAttribute(RESPONSE_CALLBACK_INVITE);
+
+													// link the sessions
+													if (sipLogger.isLoggable(Level.FINER)) {
+														sipLogger.finer(session,
+																"AsyncSipServlet.doResponse - Linking sessions...");
+													}
+													SipSession linkedSession = Callflow.getLinkedSession(session);
+													session.removeAttribute("LINKED_SESSION");
+													Callflow.linkSessions(linkedSession, sipSession);
+
+													for (String attr : session.getAttributeNameSet()) {
+														if (sipLogger.isLoggable(Level.FINER)) {
+															sipLogger.finer(session,
+																	"AsyncSipServlet.doResponse - Copying session attribute: "
+																			+ attr);
+														}
+														sipSession.setAttribute(attr, session.getAttribute(attr));
+													}
+
+													// invalidate the old session
+													if (sipLogger.isLoggable(Level.FINER)) {
+														sipLogger.finer(session,
+																"AsyncSipServlet.doResponse - Invalidating early session...");
+													}
+													session.invalidate();
+													if (sipLogger.isLoggable(Level.FINER)) {
+														sipLogger.finer(response,
+																"AsyncSipServlet.doResponse - Sessions successfully merged.");
+													}
+												}
+												break;
+											}
+										}
+									}
+								} else {
+
+									if (isProxy(response)) {
+
+										Boolean leftDiagram = (Boolean) response.getSession()
+												.getAttribute("leftDiagram");
+										leftDiagram = (leftDiagram != null) ? true : false;
+//									sipLogger.severe(response, "superArrow #9");
+										Callflow.getLogger().superArrow(Direction.RECEIVE, leftDiagram, null, response,
+												"proxy", null);
+
+//									sipLogger.severe(response, "superArrow #9.1");
+										Callflow.getLogger().superArrow(Direction.SEND, !leftDiagram, null, response,
+												"proxy", null);
+
+									} else {
+
+//									sipLogger.severe(response, "superArrow #8");
+										Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+												this.getClass().getSimpleName());
+
+									}
+
+								}
+							}
+						}
+
+						if (callback != null) {
+
+							if (isProxy) {
+
+//								if (!Callflow.provisional(response)) {
+//
+////								sipLogger.severe(response, "superArrow #10");
+//									Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+//											callback.getClass().getSimpleName());
+//
+//									callback.accept(response);
+//
+//								} else {
+////								sipLogger.severe(response, "superArrow #11");
+//									Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
+//
+//								}
+//
+//								Boolean leftDiagram = (Boolean) response.getSession().getAttribute("leftDiagram");
+//								leftDiagram = (leftDiagram != null) ? true : false;
+////							sipLogger.severe(response, "superArrow #12");
+//								Callflow.getLogger().superArrow(Direction.SEND, !leftDiagram, null, response, "proxy",
+//										null);
+
+							} else {
+
+//							sipLogger.severe(response, "superArrow #13");
+
 								Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
 										callback.getClass().getSimpleName());
 
 								callback.accept(response);
 
-							} else {
-//								sipLogger.severe(response, "superArrow #11");
-								Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
-
 							}
-
-							Boolean leftDiagram = (Boolean) response.getSession().getAttribute("leftDiagram");
-							leftDiagram = (leftDiagram != null) ? true : false;
-//							sipLogger.severe(response, "superArrow #12");
-							Callflow.getLogger().superArrow(Direction.SEND, !leftDiagram, null, response, "proxy",
-									null);
 
 						} else {
 
-//							sipLogger.severe(response, "superArrow #13");
-
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-									callback.getClass().getSimpleName());
-
-							callback.accept(response);
-
-						}
-
-					} else {
-
-						// is this needed?
+							// is this needed?
 
 //						sipLogger.severe(response, "superArrow #14");
 //						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
@@ -701,22 +709,33 @@ public abstract class AsyncSipServlet extends SipServlet
 //									this.getClass().getSimpleName(), null);
 //						}
 
+						}
+
+					} else {
+						sipLogger.warning(response,
+								"AsyncSipServlet.doResponse - SipSession " + sipSession.getId() + "is invalid.");
 					}
 
 				} else {
-					sipLogger.warning(response,
-							"AsyncSipServlet.doResponse - SipSession " + sipSession.getId() + "is invalid.");
+					sipLogger.warning(response, "AsyncSipServlet.doResponse - SipSession is null.");
 				}
-
-			} else {
-				sipLogger.warning(response, "AsyncSipServlet.doResponse - SipSession is null.");
+			} catch (Exception ex) {
+				sipLogger.severe(response,
+						"AsyncSipServlet.doResponse - Exception on SIP response: \n" + response.toString());
+				sipLogger.severe(response, ex);
+				sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " "
+						+ ex.getClass().getName() + ": " + ex.getMessage());
 			}
-		} catch (Exception ex) {
-			sipLogger.severe(response,
-					"AsyncSipServlet.doResponse - Exception on SIP response: \n" + response.toString());
-			sipLogger.severe(response, ex);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " "
-					+ ex.getClass().getName() + ": " + ex.getMessage());
+
+		} else { // isProxy, for logging purposes only
+			Boolean diagramLeft = false;
+			String proxyDid = (String) response.getSession().getAttribute("_DID");
+			String fromUser = ((SipURI) response.getFrom().getURI()).getUser();
+			if (proxyDid != null && fromUser != null && proxyDid.equals(fromUser)) {
+				diagramLeft = true;
+			}
+			Callflow.getLogger().superArrow(Direction.RECEIVE, diagramLeft, null, response, "proxy", null);
+			Callflow.getLogger().superArrow(Direction.SEND, !diagramLeft, null, response, "proxy", null);
 		}
 	}
 

@@ -8,6 +8,12 @@ import org.vorpal.blade.services.proxy.block.optimized.OptimizedTranslation;
 
 public class CallingNumbers implements Map<String, OptimizedTranslation> {
 
+	public OptimizedTranslation addCallingNumber(String callingNumber) {
+		OptimizedTranslation ot = new OptimizedTranslation();
+		this.put(callingNumber, ot);
+		return ot;
+	}
+
 	@Override
 	public int size() {
 		// TODO Auto-generated method stub
@@ -53,13 +59,13 @@ public class CallingNumbers implements Map<String, OptimizedTranslation> {
 	@Override
 	public void putAll(Map<? extends String, ? extends OptimizedTranslation> m) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void clear() {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override

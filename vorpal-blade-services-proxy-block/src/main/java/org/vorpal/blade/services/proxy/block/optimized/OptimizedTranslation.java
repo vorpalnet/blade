@@ -12,8 +12,19 @@ public class OptimizedTranslation {
 	public Map<String, OptimizedDialed> dialedNumbers = null;
 	public List<String> forwardTo;
 
+	public OptimizedTranslation forwardTo(String sipUri) {
+		forwardTo.add(sipUri);
+		return this;
+	}
+
+	public OptimizedDialed addDialedNumber(String dialedNumber) {
+		OptimizedDialed od = new OptimizedDialed();
+		dialedNumbers.put(dialedNumber, od);
+		return od;
+	}
+
 	public OptimizedTranslation() {
-		// default constructor
+		dialedNumbers = new HashMap<>();
 	}
 
 	public OptimizedTranslation(SimpleTranslation that) {

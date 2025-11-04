@@ -7,8 +7,8 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.vorpal.blade.services.proxy.block.optimized.OptimizedBlockConfig;
-import org.vorpal.blade.services.proxy.block.optimized.OptimizedBlockConfigSample;
+import org.vorpal.blade.services.proxy.block.optimized.OptimizedDialed;
+import org.vorpal.blade.services.proxy.block.optimized.OptimizedTranslation;
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +42,21 @@ public class LoadConfig {
 			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
 	public Response load(@PathParam("id") String id) {
 		CallingNumbers config = new CallingNumbers();
+
+//		OptimizedTranslation ot1 = new OptimizedTranslation();
+//		
+//		OptimizedDialed od1 = new OptimizedDialed();
+//		od1.forwardTo.add("sip:voicemail-101@10.1.1.101:5060");
+//		ot1.dialedNumbers.put("19135556789", od1);
+//		config.put("18165551234", ot1);
+
+		OptimizedTranslation ot1 = config.addCallingNumber("18165551234")
+				.forwardTo("sip:voicemail-101@10.1.1.101:5060");
+		ot1.addDialedNumber("19135556789").forwardTo("sip:voicemail-102@10.1.1.102:5060");
+		ot1.addDialedNumber("19135556789").forwardTo("sip:voicemail-103@10.1.1.103:5060");
+
+		OptimizedTranslation ot2 = config.addCallingNumber("14155551234")
+				.forwardTo("sip:voicemail-101@10.1.1.101:5060");
 
 //		OptimizedBlockConfig config = new OptimizedBlockConfigSample();
 

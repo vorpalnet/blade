@@ -5,7 +5,7 @@ import java.util.List;
 
 public class SimpleDialed {
 	public String id;
-	public List<String> forwaredTo = new LinkedList<>();
+	public List<String> forwardTo = new LinkedList<>();
 
 	public SimpleDialed() {
 		// default constructor

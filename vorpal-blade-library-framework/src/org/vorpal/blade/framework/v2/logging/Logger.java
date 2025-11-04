@@ -507,13 +507,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				}
 
 				if (request != null) {
-//					leftSide = (null != request.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
-					leftSide = (null != request.getSession().getAttribute("diagramLeft")
-							&& request.getSession().getAttribute("diagramLeft").equals(Boolean.TRUE)) ? true : false;
+					leftSide = (null != request.getSession().getAttribute("_diagramLeft")
+							&& request.getSession().getAttribute("_diagramLeft").equals(Boolean.TRUE)) ? true : false;
 				} else {
-//					leftSide = (null != response.getSession().getAttribute("DIAGRAM_SIDE")) ? true : false;
-					leftSide = (null != response.getSession().getAttribute("diagramLeft")
-							&& response.getSession().getAttribute("diagramLeft").equals(Boolean.TRUE)) ? true : false;
+					leftSide = (null != response.getSession().getAttribute("_diagramLeft")
+							&& response.getSession().getAttribute("_diagramLeft").equals(Boolean.TRUE)) ? true : false;
 				}
 
 				if (response != null) {

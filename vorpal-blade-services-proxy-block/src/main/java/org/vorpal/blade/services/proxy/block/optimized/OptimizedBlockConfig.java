@@ -105,7 +105,7 @@ public class OptimizedBlockConfig extends Configuration {
 				dialed = t1.dialedNumbers.get(toKey.key);
 
 				if (dialed != null) {
-					forwardNumbers = new LinkedList<String>(dialed.forwaredTo);
+					forwardNumbers = new LinkedList<String>(dialed.forwardTo);
 
 					if (forwardNumbers.size() > 0) {
 						Collections.shuffle(forwardNumbers);

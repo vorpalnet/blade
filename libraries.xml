@@ -20,7 +20,9 @@
 	<property name="packagenames" value="org.vorpal.*" />
 	<property name="dist" location="../dist/${implementation}.${build.number}" />
 	<property name="webapp" location="src/main/webapp" />
-	<property name="framework" location="${BLADE}/vorpal-blade-library-framework/build/vorpal-blade-library-framework.jar" />
+
+	<property name="framework_dir" location="${BLADE}/vorpal-blade-library-framework/build" />
+	<property name="framework" location="${framework_dir}/vorpal-blade-library-framework.jar" />
 	<property name="docs" location="${dist}/docs" />
 
 	<path id="Web App Libraries.libraryclasspath">
@@ -685,12 +687,11 @@
 		<echo message="   implementation=${implementation}" />
 		<echo message="   build=${build}" />
 		<echo message="   src=${src}" />
+		<echo message="   lib=${lib}" />
 		<echo message="   classes=${classes}" />
 		<echo message="   dist=${dist}" />
 		<echo message="   BLADE=${BLADE}" />
 		<echo message="   OCCAS=${OCCAS}" />
-		<echo message="   umldoclet=${umldoclet}" />
-		<echo message="   plantuml=${plantuml}" />
 		<echo message="   packagenames=${packagenames}" />
 		<echo message="   webapp=${webapp}" />
 		<echo message="   framework=${framework}" />
@@ -741,8 +742,6 @@
 		<!-- this is useful for debugging 
 		<echo message="vorpal-blade.classpath is ${toString:vorpal-blade.classpath}" />
 		-->
-
-		<copy file="${framework}" todir="${lib}" />
 
 		<javac debug="${debug}" debuglevel="${debuglevel}" destdir="${classes}" includeantruntime="${includeantruntime}" release="${release}">
 			<!--compilerarg value="-proc:full" /-->
@@ -795,9 +794,8 @@
 
 
 	<target name="war" depends="compile">
-		<mkdir dir="${build}/lib" />
 		<echo message="war, copying ${framework} to ${build}/lib" />
-		<copy file="${framework}" todir="${build}/lib" />
+
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
@@ -805,10 +803,9 @@
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
 			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
 		</manifest>
-		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}" webxml="${webapp}/WEB-INF/web.xml" needxmlfile="true">			
-			<lib dir="${build}/lib" />
-			<!--classes dir="${classes}" /-->
-			<classes dir="${src}" />
+		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}" webxml="${webapp}/WEB-INF/web.xml" needxmlfile="true">
+			<!-- classes dir="${src}" /-->
+			<lib dir="${framework_dir}" />
 		</war>
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>

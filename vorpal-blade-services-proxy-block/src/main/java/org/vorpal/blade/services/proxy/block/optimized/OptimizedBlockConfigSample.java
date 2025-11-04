@@ -85,58 +85,53 @@ public class OptimizedBlockConfigSample extends OptimizedBlockConfig {
 		stAlice.dialedNumbers = new HashMap<>();
 
 		OptimizedDialed bobDialed = new OptimizedDialed();
-		bobDialed.forwaredTo = new LinkedList<>();
-		bobDialed.forwaredTo.add("sip:carol@vorpal.net:${fromPort}");
+		bobDialed.forwardTo = new LinkedList<>();
+		bobDialed.forwardTo.add("sip:carol@vorpal.net:${fromPort}");
 
 		stAlice.dialedNumbers.put("bob", bobDialed);
 
 		OptimizedDialed carolDialed = new OptimizedDialed();
-		carolDialed.forwaredTo = new LinkedList<>();
-		carolDialed.forwaredTo.add("sip:bob@vorpal.net:${fromPort}");
+		carolDialed.forwardTo = new LinkedList<>();
+		carolDialed.forwardTo.add("sip:bob@vorpal.net:${fromPort}");
 
 		stAlice.dialedNumbers.put("carol", carolDialed);
 
 	}
-/*
-	public static void main(String[] args) throws JsonProcessingException, ServletParseException {
-
-		Logger sipLogger = LogManager.getLogger("BLADE");
-		sipLogger.setUseParentHandlers(false);
-		sipLogger.addHandler(new ConsoleHandler() {
-			{
-				setOutputStream(System.out);
-			}
-		});
-		sipLogger.setLevel(Level.FINEST);
-		SettingsManager.setSipLogger(sipLogger);
-		Callflow.setLogger(sipLogger);
-
-		OptimizedBlockConfig config1 = new OptimizedBlockConfigSample();
-		ObjectMapper mapper = new ObjectMapper();
-		mapper.setSerializationInclusion(Include.NON_NULL);
-		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
-		String output = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(config1);
-
-		System.out.println("Printing config1...");
-		System.out.println(output);
-
-		SipFactory sipFactory = new SipFactoryImpl(null, null);
-		Callflow.setSipFactory(sipFactory);
-		SettingsManager.setSipFactory(sipFactory);
-
-//		URI from = sipFactory.createURI("sip:alice@vorpal.net:6060");
-//		URI to = sipFactory.createURI("sip:carol@vorpal.net:7070");
-//		URI from = sipFactory.createURI("sip:18165551234@att.com"); // works
-		URI from = sipFactory.createURI("sip:+18165551234@att.com"); // works
-		URI to = sipFactory.createURI("sip:19135550001@att.com");
-
-		DummyRequest rqst1 = new DummyRequest("INVITE", from, to);
-
-		String forwardTo = forwardTo(config1, rqst1);
-
-		System.out.println("forwardTo: " + forwardTo);
-
-	}
-	*/
+	/*
+	 * public static void main(String[] args) throws JsonProcessingException,
+	 * ServletParseException {
+	 * 
+	 * Logger sipLogger = LogManager.getLogger("BLADE");
+	 * sipLogger.setUseParentHandlers(false); sipLogger.addHandler(new
+	 * ConsoleHandler() { { setOutputStream(System.out); } });
+	 * sipLogger.setLevel(Level.FINEST); SettingsManager.setSipLogger(sipLogger);
+	 * Callflow.setLogger(sipLogger);
+	 * 
+	 * OptimizedBlockConfig config1 = new OptimizedBlockConfigSample(); ObjectMapper
+	 * mapper = new ObjectMapper();
+	 * mapper.setSerializationInclusion(Include.NON_NULL);
+	 * mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS); String output =
+	 * mapper.writerWithDefaultPrettyPrinter().writeValueAsString(config1);
+	 * 
+	 * System.out.println("Printing config1..."); System.out.println(output);
+	 * 
+	 * SipFactory sipFactory = new SipFactoryImpl(null, null);
+	 * Callflow.setSipFactory(sipFactory);
+	 * SettingsManager.setSipFactory(sipFactory);
+	 * 
+	 * // URI from = sipFactory.createURI("sip:alice@vorpal.net:6060"); // URI to =
+	 * sipFactory.createURI("sip:carol@vorpal.net:7070"); // URI from =
+	 * sipFactory.createURI("sip:18165551234@att.com"); // works URI from =
+	 * sipFactory.createURI("sip:+18165551234@att.com"); // works URI to =
+	 * sipFactory.createURI("sip:19135550001@att.com");
+	 * 
+	 * DummyRequest rqst1 = new DummyRequest("INVITE", from, to);
+	 * 
+	 * String forwardTo = forwardTo(config1, rqst1);
+	 * 
+	 * System.out.println("forwardTo: " + forwardTo);
+	 * 
+	 * }
+	 */
 
 }

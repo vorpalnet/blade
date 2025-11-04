@@ -20,10 +20,15 @@ public class InviteCallflow extends Callflow implements Serializable {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-		SipApplicationSession appSession = sipUtil
-				.getApplicationSessionByKey(AsyncSipServlet.getAccountName(request.getRequestURI()), false);
 
-		Callflow.getSipLogger().severe(request, "InviteCallflow.process - appSession=" + appSession);
+		String accountName = AsyncSipServlet.getAccountName(request.getRequestURI());
+
+		SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(accountName, false);
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(request, "InviteCallflow.process - getApplicationSessionByKey, key=" + accountName
+					+ ", appSession=" + appSession);
+		}
 
 		List<URI> contacts = null;
 
@@ -33,7 +38,11 @@ public class InviteCallflow extends Callflow implements Serializable {
 
 		if (appSession != null) {
 			Registrar registrar = (Registrar) appSession.getAttribute("registrar");
-			Callflow.getSipLogger().severe(request, "InviteCallflow.process - registrar=" + registrar);
+
+			if (sipLogger.isLoggable(Level.FINER)) {
+				Callflow.getSipLogger().finer(request, "InviteCallflow.process - registrar=" + registrar);
+			}
+
 			if (registrar != null) {
 				contacts = registrar.getContacts(request);
 			}

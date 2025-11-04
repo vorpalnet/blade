@@ -6,14 +6,19 @@ import java.util.List;
 import org.vorpal.blade.services.proxy.block.simple.SimpleDialed;
 
 public class OptimizedDialed {
-	public List<String> forwaredTo = new LinkedList<>();
+	public List<String> forwardTo = new LinkedList<>();
+
+	public OptimizedDialed forwardTo(String sipUri) {
+		forwardTo.add(sipUri);
+		return this;
+	}
 
 	public OptimizedDialed() {
 		// default constructor
 	}
 
 	public OptimizedDialed(SimpleDialed that) {
-		this.forwaredTo = that.forwaredTo;
+		this.forwardTo = that.forwardTo;
 	}
 
 }

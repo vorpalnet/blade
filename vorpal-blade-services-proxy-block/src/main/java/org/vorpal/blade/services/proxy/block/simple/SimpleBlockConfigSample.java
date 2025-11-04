@@ -75,15 +75,15 @@ public class SimpleBlockConfigSample extends SimpleBlockConfig {
 		SimpleDialed sd1 = new SimpleDialed();
 		n9135551234.dialedNumbers.add(sd1);
 		sd1.id = "8005550001";
-		sd1.forwaredTo.add("${ruriProto}:${toUser}@10.10.10.12:${fromPort};${ruriUriparams}");
-		sd1.forwaredTo.add("${ruriProto}:${toUser}@10.10.10.13:${fromPort};${ruriUriparams}");
+		sd1.forwardTo.add("${ruriProto}:${toUser}@10.10.10.12:${fromPort};${ruriUriparams}");
+		sd1.forwardTo.add("${ruriProto}:${toUser}@10.10.10.13:${fromPort};${ruriUriparams}");
 		n9135551234.dialedNumbers.add(sd1);
 
 		SimpleDialed sd2 = new SimpleDialed();
 		n9135551234.dialedNumbers.add(sd2);
 		sd2.id = "8005550002";
-		sd2.forwaredTo.add("${ruriProto}:${toUser}@10.10.10.14:${fromPort};${ruriUriparams}");
-		sd2.forwaredTo.add("${ruriProto}:${toUser}@10.10.10.15:${fromPort};${ruriUriparams}");
+		sd2.forwardTo.add("${ruriProto}:${toUser}@10.10.10.14:${fromPort};${ruriUriparams}");
+		sd2.forwardTo.add("${ruriProto}:${toUser}@10.10.10.15:${fromPort};${ruriUriparams}");
 		n9135551234.dialedNumbers.add(sd2);
 
 // ----
@@ -99,59 +99,52 @@ public class SimpleBlockConfigSample extends SimpleBlockConfig {
 
 		SimpleDialed bobDialed = new SimpleDialed();
 		bobDialed.id = "bob";
-		bobDialed.forwaredTo = new LinkedList<>();
-		bobDialed.forwaredTo.add("sip:carol@vorpal.net:${fromPort}");
+		bobDialed.forwardTo = new LinkedList<>();
+		bobDialed.forwardTo.add("sip:carol@vorpal.net:${fromPort}");
 		stAlice.dialedNumbers.add(bobDialed);
 
 		SimpleDialed carolDialed = new SimpleDialed();
 		carolDialed.id = "carol";
-		carolDialed.forwaredTo = new LinkedList<>();
-		carolDialed.forwaredTo.add("sip:bob@vorpal.net:${fromPort}");
+		carolDialed.forwardTo = new LinkedList<>();
+		carolDialed.forwardTo.add("sip:bob@vorpal.net:${fromPort}");
 		stAlice.dialedNumbers.add(carolDialed);
 
 	}
 
-/*	
-	public static void main(String[] args) throws JsonProcessingException, ServletParseException {
+	/*
+	 * public static void main(String[] args) throws JsonProcessingException,
+	 * ServletParseException {
+	 * 
+	 * Logger sipLogger = LogManager.getLogger("BLADE");
+	 * sipLogger.setUseParentHandlers(false); sipLogger.addHandler(new
+	 * ConsoleHandler() { { setOutputStream(System.out); } });
+	 * sipLogger.setLevel(Level.FINEST); SettingsManager.setSipLogger(sipLogger);
+	 * Callflow.setLogger(sipLogger);
+	 * 
+	 * SimpleBlockConfig config1 = new SimpleBlockConfigSample(); ObjectMapper
+	 * mapper = new ObjectMapper();
+	 * mapper.setSerializationInclusion(Include.NON_NULL);
+	 * mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS); String output =
+	 * mapper.writerWithDefaultPrettyPrinter().writeValueAsString(config1);
+	 * 
+	 * System.out.println("Printing config1..."); System.out.println(output);
+	 * 
+	 * SipFactory sipFactory = new SipFactoryImpl(null, null);
+	 * Callflow.setSipFactory(sipFactory);
+	 * SettingsManager.setSipFactory(sipFactory);
+	 * 
+	 * // URI from = sipFactory.createURI("sip:alice@vorpal.net:6060"); // URI to =
+	 * sipFactory.createURI("sip:carol@vorpal.net:7070"); // URI from =
+	 * sipFactory.createURI("sip:18165551234@att.com"); // works URI from =
+	 * sipFactory.createURI("sip:+18165551234@att.com"); // works URI to =
+	 * sipFactory.createURI("sip:19135550001@att.com");
+	 * 
+	 * DummyRequest rqst1 = new DummyRequest("INVITE", from, to);
+	 * 
+	 * // String forwardTo = forwardTo(config1, rqst1); // //
+	 * System.out.println("forwardTo: " + forwardTo);
+	 * 
+	 * }
+	 */
 
-		Logger sipLogger = LogManager.getLogger("BLADE");
-		sipLogger.setUseParentHandlers(false);
-		sipLogger.addHandler(new ConsoleHandler() {
-			{
-				setOutputStream(System.out);
-			}
-		});
-		sipLogger.setLevel(Level.FINEST);
-		SettingsManager.setSipLogger(sipLogger);
-		Callflow.setLogger(sipLogger);
-
-		SimpleBlockConfig config1 = new SimpleBlockConfigSample();
-		ObjectMapper mapper = new ObjectMapper();
-		mapper.setSerializationInclusion(Include.NON_NULL);
-		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
-		String output = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(config1);
-
-		System.out.println("Printing config1...");
-		System.out.println(output);
-
-		SipFactory sipFactory = new SipFactoryImpl(null, null);
-		Callflow.setSipFactory(sipFactory);
-		SettingsManager.setSipFactory(sipFactory);
-
-//		URI from = sipFactory.createURI("sip:alice@vorpal.net:6060");
-//		URI to = sipFactory.createURI("sip:carol@vorpal.net:7070");
-//		URI from = sipFactory.createURI("sip:18165551234@att.com"); // works
-		URI from = sipFactory.createURI("sip:+18165551234@att.com"); // works
-		URI to = sipFactory.createURI("sip:19135550001@att.com");
-
-		DummyRequest rqst1 = new DummyRequest("INVITE", from, to);
-
-//		String forwardTo = forwardTo(config1, rqst1);
-//
-//		System.out.println("forwardTo: " + forwardTo);
-
-	}
-*/
-	
-	
 }

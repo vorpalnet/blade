@@ -27,6 +27,7 @@ package org.vorpal.blade.framework.v2.callflow;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -60,7 +61,6 @@ import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.DummyResponse;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
-import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
@@ -1210,20 +1210,6 @@ public abstract class Callflow implements Serializable {
 				ss1.setAttribute("userAgent", "callee");
 			}
 		}
-
-		// for logging
-		// unnecessary?
-//		Boolean leftSS1 = (Boolean) ss1.getAttribute("diagramLeft");
-//		if (leftSS1 != null && leftSS1.equals(Boolean.TRUE)) {
-//			sipLogger.warning("linkSessions, setting ss2 diagramLeft to false");
-//			ss2.setAttribute("diagramLeft", Boolean.FALSE);
-//		}
-//		Boolean leftSS2 = (Boolean) ss2.getAttribute("diagramLeft");
-//		if (leftSS2 != null && leftSS2.equals(Boolean.TRUE)) {
-//			sipLogger.warning("linkSessions, setting ss1 diagramLeft to false");
-//			ss1.setAttribute("diagramLeft", Boolean.FALSE);
-//		}
-
 	}
 
 	public static void unlinkSessions(SipSession ss1, SipSession ss2) {
@@ -1586,6 +1572,18 @@ public abstract class Callflow implements Serializable {
 		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
 		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
 		return incomingRequest;
+	}
+
+	public static Date getVorpalTimestamp(SipApplicationSession appSession) {
+		Date date = null;
+
+		if (appSession != null && appSession.isValid()) {
+			String strTimestamp = (String) appSession.getAttribute("X-Vorpal-Timestamp");
+			long timestamp = Long.parseLong(strTimestamp, 16);
+			date = new Date(timestamp);
+		}
+
+		return date;
 	}
 
 }
