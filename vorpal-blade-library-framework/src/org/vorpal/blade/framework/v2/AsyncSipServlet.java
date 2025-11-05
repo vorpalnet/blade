@@ -148,12 +148,12 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	@Override
-	final public void contextInitialized(ServletContextEvent sce) {
+	public void contextInitialized(ServletContextEvent sce) {
 		// do nothing;
 	}
 
 	@Override
-	final public void contextDestroyed(ServletContextEvent sce) {
+	public void contextDestroyed(ServletContextEvent sce) {
 		try {
 			servletDestroyed(event);
 		} catch (Exception ex) {
