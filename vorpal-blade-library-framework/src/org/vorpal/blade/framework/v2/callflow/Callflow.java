@@ -475,20 +475,10 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
 			throws ServletException, IOException {
-		request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
-		sendRequest(request);
-	}
 
-	/**
-	 * Sends a SipServletRequest object. This method does not supply a
-	 * SipServletResponse object to the user. (Useful for messages like ACK or
-	 * INFO.)
-	 * 
-	 * @param request
-	 * @throws ServletException
-	 * @throws IOException
-	 */
-	public void sendRequest(SipServletRequest request) throws ServletException, IOException {
+		if (lambdaFunction != null) {
+			request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
+		}
 
 		SipApplicationSession appSession = request.getApplicationSession();
 		SipSession sipSession = request.getSession();
@@ -530,22 +520,18 @@ public abstract class Callflow implements Serializable {
 			// useful for identifying sessions
 			sipSession.setAttribute("sipAddress", request.getTo());
 			request.send();
-		} catch (Exception e) {
+		} catch (Exception ex) {
 
-			sipLogger.severe(request, e);
+			sipLogger.severe(request, ex);
 
 			if (false == (request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))) {
 
 				// It's too maddening to write callflows where you have to worry about both
 				// error responses and exceptions. Let's create a dummy error response.
-				SipServletResponse errorResponse = new DummyResponse(request, 502);
+				SipServletResponse errorResponse = new DummyResponse(request, 502, ex.getMessage());
 
-				Callback<SipServletResponse> callback = Callflow.pullCallback(errorResponse);
-
-				if (callback != null) {
-					Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
-							callback.getClass().getSimpleName());
-					callback.accept(errorResponse);
+				if (lambdaFunction != null) {
+					lambdaFunction.accept(errorResponse);
 				} else {
 					Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
 							this.getClass().getSimpleName());
@@ -554,6 +540,21 @@ public abstract class Callflow implements Serializable {
 			}
 
 		}
+
+	}
+
+	/**
+	 * Sends a SipServletRequest object. This method does not supply a
+	 * SipServletResponse object to the user. (Useful for messages like ACK or
+	 * INFO.)
+	 * 
+	 * @param request
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public void sendRequest(SipServletRequest request) throws ServletException, IOException {
+
+		sendRequest(request, null);
 
 	}
 
@@ -1253,7 +1254,7 @@ public abstract class Callflow implements Serializable {
 	public static SipServletResponse createResponse(SipServletRequest aliceRequest, SipServletResponse bobResponse)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		SipServletResponse aliceResponse;
-		aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+		aliceResponse = aliceRequest.createResponse(bobResponse.getStatus(), bobResponse.getReasonPhrase());
 		copyContentAndHeaders(bobResponse, aliceResponse);
 
 		// jwm-test; Why not link the sessions now? I think that should work
