@@ -5,7 +5,7 @@
 	<!-- Define unique locations first -->
     
 	<property name="src" location="src/main/java" />
-	<property name="webapp" location="WebContent" />
+	<property name="webapp" location="src/main/webapp" />
 
 	<!-- Load environment variables -->
 	<property environment="env" />
