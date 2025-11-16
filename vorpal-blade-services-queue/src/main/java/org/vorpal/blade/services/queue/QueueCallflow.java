@@ -145,17 +145,21 @@ public class QueueCallflow extends Callflow {
 	}
 
 	public void complete() throws ServletException, IOException {
+		SipApplicationSession appSession;
+		SipSession sipSession;
 
-		try {
+		sipSession = aliceRequest.getSession();
+		appSession = aliceRequest.getApplicationSession();
+		if (appSession != null && appSession.isValid() && sipSession != null && sipSession.isValid()) {
 
-			SipApplicationSession appSession = aliceRequest.getApplicationSession();
+			try {
 
 //			sipLogger.finer(appSession, "is the app session null? " + ((appSession == null) ? true : false));
 
 //			if (appSession != null && appSession.isValid() && //
 //					aliceRequest.getSession() != null && aliceRequest.getSession().isValid()) {
 
-			if (appSession != null) {
+				if (appSession != null) {
 
 //				sipLogger.finer(appSession, "is the queue state canceled? " + this.stateEquals(QueueState.CANCELED));
 //				sipLogger.finer(appSession, "is the app session valid? " + appSession.isValid());
@@ -163,80 +167,84 @@ public class QueueCallflow extends Callflow {
 //				sipLogger.finer(appSession, "What is the sip session state? " + aliceRequest.getSession().getState());
 //				sipLogger.finer(appSession, "What is the queue state? " + getState());
 
-				if (false == this.stateEquals(QueueState.CANCELED)) {
-					stopTimers();
+					if (false == this.stateEquals(QueueState.CANCELED)) {
+						stopTimers();
 
-					SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, //
-							aliceRequest.getFrom(), //
-							aliceRequest.getTo());
-					bobRequest.setRequestURI(aliceRequest.getRequestURI());
+						SipServletRequest bobRequest = sipFactory.createRequest(appSession, INVITE, //
+								aliceRequest.getFrom(), //
+								aliceRequest.getTo());
+						bobRequest.setRequestURI(aliceRequest.getRequestURI());
 
-					switch (getState()) {
-					case MEDIA_CONNECTED:
-						Expectation byeExpectation = this.expectRequest(aliceRequest.getSession(), BYE, (bye) -> {
-							sipLogger.finer(aliceRequest.getSession(), "Expcectation byeExpectation invoked...");
-							sendRequest(bobRequest.createCancel());
-							setState(QueueState.CANCELED);
-						});
+						switch (getState()) {
+						case MEDIA_CONNECTED:
+							Expectation byeExpectation = this.expectRequest(aliceRequest.getSession(), BYE, (bye) -> {
+								sipLogger.finer(aliceRequest.getSession(), "Expcectation byeExpectation invoked...");
+								sendRequest(bobRequest.createCancel());
+								setState(QueueState.CANCELED);
+							});
 
-						sendRequest(bobRequest, (bobResponse) -> {
-							if (successful(bobResponse)) {
-								SipServletRequest aliceSDP = aliceRequest.getSession().createRequest(INVITE);
-								this.copyContent(bobResponse, aliceSDP);
-								sendRequest(aliceSDP, (aliceAck) -> {
-									linkSessions(bobResponse.getSession(), aliceAck.getSession());
-									sendRequest(copyContent(aliceAck, bobResponse.createAck()));
-									sendRequest(mediaRequest.getSession().createRequest(BYE));
+							sendRequest(bobRequest, (bobResponse) -> {
+								if (successful(bobResponse)) {
+									SipServletRequest aliceSDP = aliceRequest.getSession().createRequest(INVITE);
+									copyContent(bobResponse, aliceSDP);
+									sendRequest(aliceSDP, (aliceAck) -> {
+										linkSessions(bobResponse.getSession(), aliceAck.getSession());
+										sendRequest(copyContent(aliceAck, bobResponse.createAck()));
+										sendRequest(mediaRequest.getSession().createRequest(BYE));
 //									sipLogger.finer(aliceAck, "Expectation byeExpectation cleared...");
-									byeExpectation.clear();
-								});
-							}
-							if (failure(bobResponse)) {
-								// put this back on the queue to try again
-								sipLogger.finer(bobResponse,
-										"Call failure, returning to queue. status=" + bobResponse.getStatus()
-												+ ", from=" + bobResponse.getFrom() + ", to=" + bobResponse.getTo());
-								QueueServlet.queues.get(queueId).callflows.add(this);
-							}
-						});
-						break;
-
-					case MEDIA_RINGING:
-						sendRequest(mediaRequest.createCancel(), (media486) -> {
-							// do nothing;
-						}); // no break, fallthru;
-					case RINGING:
-						Expectation cancelWhileCalingBob = this.expectRequest(aliceRequest.getSession(), CANCEL,
-								(bye) -> {
-									sipLogger.finer(aliceRequest.getSession(),
-											"Expcectation cancelWhileCalingBob invoked...");
-									sendRequest(bobRequest.createCancel());
-									setState(QueueState.CANCELED);
-								});
-
-						sendRequest(copyContentAndHeaders(aliceRequest, bobRequest), (bobResponse) -> {
-							sendResponse(createResponse(aliceRequest, bobResponse), (ackOrPrack) -> {
-								switch (ackOrPrack.getMethod()) {
-								case PRACK:
-									sendRequest(copyContent(ackOrPrack, bobResponse.createPrack()));
-									break;
-								case ACK:
-									sendRequest(copyContent(ackOrPrack, bobResponse.createAck()));
-//									sipLogger.finer(ackOrPrack, "Expectation cancelWhileCalingBob cleared...");
-									cancelWhileCalingBob.clear();
-									break;
+										byeExpectation.clear();
+									});
+								}
+								if (failure(bobResponse)) {
+									// put this back on the queue to try again
+									sipLogger.finer(bobResponse,
+											"Call failure, returning to queue. status=" + bobResponse.getStatus()
+													+ ", from=" + bobResponse.getFrom() + ", to="
+													+ bobResponse.getTo());
+									QueueServlet.queues.get(queueId).callflows.add(this);
 								}
 							});
-						});
+							break;
+
+						case MEDIA_RINGING:
+							sendRequest(mediaRequest.createCancel(), (media486) -> {
+								// do nothing;
+							}); // no break, fallthru;
+						case RINGING:
+							Expectation cancelWhileCalingBob = this.expectRequest(aliceRequest.getSession(), CANCEL,
+									(bye) -> {
+										sipLogger.finer(aliceRequest.getSession(),
+												"Expcectation cancelWhileCalingBob invoked...");
+										sendRequest(bobRequest.createCancel());
+										setState(QueueState.CANCELED);
+									});
+
+							sendRequest(copyContentAndHeaders(aliceRequest, bobRequest), (bobResponse) -> {
+								sendResponse(createResponse(aliceRequest, bobResponse), (ackOrPrack) -> {
+									switch (ackOrPrack.getMethod()) {
+									case PRACK:
+										sendRequest(copyContent(ackOrPrack, bobResponse.createPrack()));
+										break;
+									case ACK:
+										sendRequest(copyContent(ackOrPrack, bobResponse.createAck()));
+//									sipLogger.finer(ackOrPrack, "Expectation cancelWhileCalingBob cleared...");
+										cancelWhileCalingBob.clear();
+										break;
+									}
+								});
+							});
+
+						}
 
 					}
-
 				}
+
+			} catch (Exception e) {
+				sipLogger.logWarningStackTrace(e);
 			}
 
-		} catch (Exception e) {
-			sipLogger.severe(e.getMessage());
-			sipLogger.logStackTrace(e);
+		} else {
+			sipLogger.warning(aliceRequest, "Invalid SipSession");
 		}
 
 	}

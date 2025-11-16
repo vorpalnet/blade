@@ -51,6 +51,21 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	private static ObjectMapper mapper = null;
 
 	@Override
+	public void log(Level level, String msg) {
+		try {
+			super.log(level, msg);
+		} catch (Exception ex) {
+			StringWriter errors = new StringWriter();
+			ex.printStackTrace(new PrintWriter(errors));
+			try {
+				this.getParent().warning("Logging problem... " + errors.toString());
+			} catch (Exception ex2) {
+				System.out.println("WARNING: Logging problem... " + errors.toString());
+			}
+		}
+	}
+
+	@Override
 	public Level getLevel() {
 		Level level = super.getLevel();
 		if (level == null) {
@@ -136,7 +151,19 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	public void logStackTrace(Exception e) {
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
-		severe(errors.toString());
+		warning("Logging error...  " + e.getMessage() + "\n" + errors.toString());
+	}
+
+	public void logSevereStackTrace(Exception e) {
+		StringWriter errors = new StringWriter();
+		e.printStackTrace(new PrintWriter(errors));
+		severe("Logging error...  " + e.getMessage() + "\n" + errors.toString());
+	}
+
+	public void logWarningStackTrace(Exception e) {
+		StringWriter errors = new StringWriter();
+		e.printStackTrace(new PrintWriter(errors));
+		warning("Logging warning...  " + e.getMessage() + "\n" + errors.toString());
 	}
 
 	/**
@@ -285,7 +312,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				}
 
 			} catch (Exception e) {
-				this.logStackTrace(e);
+				this.logWarningStackTrace(e);
 			}
 		}
 
@@ -526,7 +553,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			superArrow(direction, leftSide, request, response, name, null);
 
 		} catch (Exception ex) {
-			ex.printStackTrace();
+
+			if (Callflow.getSipLogger() != null) {
+				Callflow.getSipLogger().warning("Logging error... " + ex.getMessage());
+			}
+
 		}
 	}
 
@@ -538,11 +569,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //				+ ", response=" + ((response != null) ? response.getMethod() : null) //
 //				+ ", name=" + name //
 //				+ ", user=" + user);
-
-		if (request == null && response == null) {
-			// Has to be one or the other, never both
-			return;
-		}
 
 		try {
 
@@ -850,34 +876,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			}
 
 		} catch (Exception ex) {
-
-			ex.printStackTrace();
-
-//			this.logStackTrace(ex);
-
-//			if (request != null) {
-//				this.warning(request, ex.getMessage());
-//				this.warning(request, "Logging error, set logging to FINEST to see stack trace.");
-//				if (this.isLoggable(Level.FINEST)) {
-//					try {
-//						throw new Exception("Logging error");
-//					} catch (Exception e99) {
-//						this.logStackTrace(e99);
-//					}
-//				}
-//			} else {
-//				this.warning(response, ex.getMessage());
-//				this.fine(response, "Logging error, set logging to FINEST to see stack trace.");
-//				if (this.isLoggable(Level.FINEST)) {
-//					try {
-//						throw new Exception("Logging error");
-//					} catch (Exception e99) {
-//						this.logStackTrace(e99);
-//					}
-//				}
-//
-//			}
-
+			this.logWarningStackTrace(ex);
 		}
 	}
 

@@ -69,7 +69,7 @@ public class Queue {
 							callflow.complete();
 
 						} catch (Exception e) {
-							sipLogger.severe(e);
+							sipLogger.logWarningStackTrace(e);
 						}
 					} else {
 						break;

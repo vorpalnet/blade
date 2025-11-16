@@ -476,69 +476,79 @@ public abstract class Callflow implements Serializable {
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
 			throws ServletException, IOException {
 
-		if (lambdaFunction != null) {
-			request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
-		}
+		SipApplicationSession appSession;
+		SipSession sipSession;
 
-		SipApplicationSession appSession = request.getApplicationSession();
-		SipSession sipSession = request.getSession();
-		String method = request.getMethod();
+		if (request != null) {
+			appSession = request.getApplicationSession();
+			sipSession = request.getSession();
 
-		// for GLARE handling
-		switch (method) {
-		case INVITE:
-			sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
-			break;
-		case ACK:
-			sipSession.removeAttribute("EXPECT_ACK");
-			break;
-		}
-
-		if (request.isInitial() && null == request.getHeader("X-Vorpal-Session")) {
-			String indexKey = getVorpalSessionId(appSession);
-			if (indexKey == null) {
-				indexKey = AsyncSipServlet.generateIndexKey(request);
-			}
-			String dialog = getVorpalDialogId(sipSession);
-			if (dialog == null) {
-				dialog = createVorpalDialogId(sipSession);
-			}
-
-			String xvs = indexKey + ":" + dialog;
-			request.setHeader("X-Vorpal-Session", xvs);
-			String xvt = (String) appSession.getAttribute("X-Vorpal-Timestamp");
-			if (xvt == null) {
-				xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-			}
-			request.setHeader("X-Vorpal-Timestamp", xvt);
-
-		}
-
-		sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
-
-		try {
-			// useful for identifying sessions
-			sipSession.setAttribute("sipAddress", request.getTo());
-			request.send();
-		} catch (Exception ex) {
-
-			sipLogger.severe(request, ex);
-
-			if (false == (request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))) {
-
-				// It's too maddening to write callflows where you have to worry about both
-				// error responses and exceptions. Let's create a dummy error response.
-				SipServletResponse errorResponse = new DummyResponse(request, 502, ex.getMessage());
+			if (sipSession != null && sipSession.isValid()) {
 
 				if (lambdaFunction != null) {
-					lambdaFunction.accept(errorResponse);
-				} else {
-					Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
-							this.getClass().getSimpleName());
+					request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
+				}
+
+				String method = request.getMethod();
+
+				// for GLARE handling
+				switch (method) {
+				case INVITE:
+					sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
+					break;
+				case ACK:
+					sipSession.removeAttribute("EXPECT_ACK");
+					break;
+				}
+
+				if (request.isInitial() && null == request.getHeader("X-Vorpal-Session")) {
+					String indexKey = getVorpalSessionId(appSession);
+					if (indexKey == null) {
+						indexKey = AsyncSipServlet.generateIndexKey(request);
+					}
+					String dialog = getVorpalDialogId(sipSession);
+					if (dialog == null) {
+						dialog = createVorpalDialogId(sipSession);
+					}
+
+					String xvs = indexKey + ":" + dialog;
+					request.setHeader("X-Vorpal-Session", xvs);
+					String xvt = (String) appSession.getAttribute("X-Vorpal-Timestamp");
+					if (xvt == null) {
+						xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
+					}
+					request.setHeader("X-Vorpal-Timestamp", xvt);
+
+				}
+
+				sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
+
+				try {
+					// useful for identifying sessions
+					sipSession.setAttribute("sipAddress", request.getTo());
+					request.send();
+				} catch (Exception ex) {
+
+					sipLogger.severe(request, ex);
+
+					if (false == (request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))) {
+
+						// It's too maddening to write callflows where you have to worry about both
+						// error responses and exceptions. Let's create a dummy error response.
+						SipServletResponse errorResponse = new DummyResponse(request, 502, ex.getMessage());
+
+						if (lambdaFunction != null) {
+							lambdaFunction.accept(errorResponse);
+						} else {
+							Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
+									this.getClass().getSimpleName());
+						}
+
+					}
+
 				}
 
 			}
-
 		}
 
 	}
@@ -772,12 +782,12 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
+		SipSession sipSession;
 
-		if (response != null && response.isCommitted() == false) {
+		if (response != null && response.getStatus() != 487) {
+			sipSession = response.getSession();
 
-			SipSession sipSession = response.getSession();
-
-			if (sipSession != null && sipSession.isValid()) {
+			if (sipSession != null && sipSession.isValid() && response.isCommitted() == false) {
 
 				if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
 
@@ -836,6 +846,8 @@ public abstract class Callflow implements Serializable {
 
 				}
 			}
+		} else {
+			sipLogger.warning(response, "Skipping 487 response; Already sent by the container.");
 		}
 
 	}
