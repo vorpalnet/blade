@@ -30,7 +30,6 @@ import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
@@ -53,10 +52,6 @@ public class OptionsSipServlet extends AsyncSipServlet {
 	 * @param request
 	 * @return the UAC's IP address
 	 */
-//	@SipApplicationKey
-//	public static String sessionKey(SipServletRequest request) {
-//		return request.getRemoteAddr();
-//	}
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {

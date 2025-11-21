@@ -56,8 +56,8 @@ public class Queue {
 		timer = new Timer(); // timer id gives problems?
 		queueTask = new TimerTask() {
 			public void run() {
-				if (sipLogger.isLoggable(Level.FINE)) {
-					sipLogger.fine("Queue.initialize - timer fired, queue=" + id + ", count=" + callflows.size());
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer("Queue.initialize - timer fired, queue=" + id + ", count=" + callflows.size());
 				} // jwm testing, does this grow? no.
 					// QueueMemHog memHog = new QueueMemHog();
 				QueueCallflow callflow;
@@ -97,9 +97,10 @@ public class Queue {
 						}
 					} else {
 
-						sipLogger
-								.finer("Queue.initialize - queueTask, queue empty, callflows.size=" + callflows.size());
-
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(
+									"Queue.initialize - queueTask, queue empty, callflows.size=" + callflows.size());
+						}
 						break;
 					}
 
@@ -126,7 +127,7 @@ public class Queue {
 	}
 
 	public void stopTimers() {
-		if (sipLogger.isLoggable(Level.FINER)) {
+		if (sipLogger.isLoggable(Level.FINE)) {
 			sipLogger.fine("Queue.stopTimers...");
 		}
 

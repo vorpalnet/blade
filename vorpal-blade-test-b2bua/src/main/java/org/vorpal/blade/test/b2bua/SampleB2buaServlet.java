@@ -41,6 +41,7 @@ import javax.servlet.sip.SipSessionEvent;
 import javax.servlet.sip.SipSessionListener;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Color;
 
@@ -59,10 +60,22 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	@Resource
 	private SipFactory sipFactory;
 
+	@Override
+	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
+		Callflow callflow = null;
+
+		if (inboundRequest.getMethod().equals("CANCEL")) {
+			callflow = new CancelGlare();
+		} else {
+			callflow = super.chooseCallflow(inboundRequest);
+		}
+
+		return callflow;
+	}
+
 	/*
 	 * This is invoked when the servlet starts up.
 	 */
-
 	@Override
 	public void servletCreated(SipServletContextEvent event) {
 
