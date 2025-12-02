@@ -11,6 +11,8 @@ import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 public class QueueConfigSample extends QueueConfig {
 
+	private static final long serialVersionUID = 1L;
+
 	public QueueConfigSample() {
 
 		this.logging = new LogParametersDefault();

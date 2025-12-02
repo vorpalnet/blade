@@ -28,11 +28,13 @@ public class RegisterCallflow extends Callflow implements Serializable {
 
 		} catch (Exception ex) {
 			// Something is corrupt, clear memory, have user-agent try again
+			sipLogger.severe(ex);
 			response = request.createResponse(503);
 			appSession.removeAttribute("registrar");
 		}
-		sendResponse(response);
 
+		sipLogger.finer(request, "sending response... status=" + response.getStatus());
+		sendResponse(response);
 	}
 
 }

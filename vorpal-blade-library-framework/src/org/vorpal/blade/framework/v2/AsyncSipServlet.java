@@ -817,7 +817,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			Callflow.getLogger().superArrow(Direction.RECEIVE, diagramLeft, null, response, "proxy", null);
 			Callflow.getLogger().superArrow(Direction.SEND, !diagramLeft, null, response, "proxy", null);
 
-			// jwm - not sure this is safe, need to cancel timer
+			// jwm - cancel any existing timers?
 			// cleanup SipApplicationSession, otherwise it will timeout
 			if (response.getSession().getState().equals(State.EARLY)) {
 				Collection<ServletTimer> timers = response.getApplicationSession().getTimers();
@@ -831,7 +831,11 @@ public abstract class AsyncSipServlet extends SipServlet
 
 				sipLogger.finer(response,
 						"AsyncSipServlet.doResponse - invalidating proxy appSession: " + appSession.getId());
+
+				// jwm - manually invalidating the session give an error:
+				// appSession.setExpires(1); // One minute, is this safer?
 				appSession.invalidate();
+
 			}
 
 		}

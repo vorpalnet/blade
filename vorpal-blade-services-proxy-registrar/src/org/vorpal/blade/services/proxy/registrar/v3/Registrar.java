@@ -111,13 +111,17 @@ public class Registrar implements Serializable {
 //			sipLogger.finer(registerRequest, "Registrar.updateContacts - contactsMap.size=" + contactsMap.size());
 //		}
 
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(registerRequest, "Registrar.updateContacts - contactsMap.size=" + contactsMap.size());
+		}
+
 		if (contactsMap.size() == 0) {
 			// invalidate in one minute
 
-//			if (sipLogger.isLoggable(Level.FINER)) {
-//				sipLogger.finer(registerRequest,
-//						"Registrar.updateContacts - no contacts, invalidateWhenReady=false, expires=1");
-//			}
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(registerRequest,
+						"Registrar.updateContacts - appSession.setInvalidateWhenReady(true), appSession.setExpires(1)");
+			}
 
 			appSession.setInvalidateWhenReady(true);
 			appSession.setExpires(1);
@@ -126,13 +130,14 @@ public class Registrar implements Serializable {
 			int exp = (int) Math.ceil(maxExpires / 60.0);
 			allowHeaders = registerRequest.getHeaderList("Allow");
 
-//			if (sipLogger.isLoggable(Level.FINER)) {
-//				sipLogger.finer(registerRequest,
-//						"Registrar.updateContacts - invalidateWhenReady=false, expires=" + exp);
-//			}
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(registerRequest,
+						"Registrar.updateContacts - appSession.setInvalidateWhenReady(false), appSession.setExpires("
+								+ exp + ")");
+			}
 
-			appSession.setExpires(exp);
 			appSession.setInvalidateWhenReady(false);
+			appSession.setExpires(exp);
 
 		}
 

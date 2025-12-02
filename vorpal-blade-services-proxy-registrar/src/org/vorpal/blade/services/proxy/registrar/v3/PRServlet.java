@@ -18,7 +18,6 @@ import javax.servlet.sip.annotation.SipApplicationKey;
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v2.logging.ConsoleColors;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
@@ -77,7 +76,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 	public void sessionCreated(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession created...");
+			sipLogger.finer(sipSession, "PRServlet.sessionCreated - sipSession id="+sipSession.getId());
 		}
 	}
 
@@ -85,7 +84,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 	public void sessionDestroyed(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession destroyed...");
+			sipLogger.finer(sipSession, "PRServlet.sessionDestroyed - sipSession id="+sipSession.getId());
 
 		}
 	}
@@ -94,7 +93,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 	public void sessionReadyToInvalidate(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "sipSession readyToInvalidate...");
+			sipLogger.finer(sipSession, "PRServlet.sessionReadyToInvalidate - sipSession id="+sipSession.getId());
 		}
 	}
 
@@ -102,7 +101,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 	public void sessionCreated(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, ConsoleColors.GREEN_BRIGHT + "appSession created..." + ConsoleColors.RESET);
+			sipLogger.finer(appSession, "PRServlet.sessionCreated - appSession id="+appSession.getId());
 		}
 	}
 
@@ -110,7 +109,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, ConsoleColors.RED_BRIGHT + "appSession destroyed..." + ConsoleColors.RESET);
+			sipLogger.finer(appSession, "PRServlet.sessionDestroyed - appSession id="+appSession.getId());
 		}
 	}
 
@@ -118,7 +117,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 	public void sessionExpired(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "appSession expired...");
+			sipLogger.finer(appSession, "PRServlet.sessionExpired - appSession id="+appSession.getId());
 		}
 	}
 
@@ -126,7 +125,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "appSession readyToInvalidate...");
+			sipLogger.finer(appSession, "PRServlet.sessionReadyToInvalidate - appSession id="+appSession.getId());
 		}
 	}
 

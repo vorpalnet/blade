@@ -52,6 +52,7 @@ public class QueueCallflow extends Callflow {
 				setState(QueueState.CANCELED);
 			});
 
+			setState(QueueState.RINGING);
 			sendResponse(inboundRequest.createResponse(180));
 
 			// Create media request object, so it can be used in future timers (if
@@ -62,63 +63,65 @@ public class QueueCallflow extends Callflow {
 						sipFactory.createAddress(mediaUri));
 				copyContent(aliceRequest, mediaRequest);
 
-			}
+			} else {
 
-			if (null != attributes.ringPeriod) {
-				setState(QueueState.RINGING);
+				if (null != attributes.ringPeriod) {
+					setState(QueueState.RINGING);
 
-				ringingPeriodTimer = startTimer(aliceRequest.getApplicationSession(), attributes.ringPeriod * 1000,
-						attributes.ringPeriod * 1000, false, false, (timer) -> {
-							if (false == stateEquals(QueueState.CANCELED)) {
+					ringingPeriodTimer = startTimer(aliceRequest.getApplicationSession(), attributes.ringPeriod * 1000,
+							attributes.ringPeriod * 1000, false, false, (timer) -> {
+								if (false == stateEquals(QueueState.CANCELED)) {
 
-								if (0 == aliceRequest.getSession().getState().compareTo(State.EARLY)) {
-									sendResponse(aliceRequest.createResponse(180));
+									if (0 == aliceRequest.getSession().getState().compareTo(State.EARLY)) {
+										sendResponse(aliceRequest.createResponse(180));
+									}
+
 								}
+							});
+				}
 
-							}
-						});
-			}
+				// Set a ringing duration timer
+				if (attributes.ringDuration != null && attributes.ringDuration > 0 && mediaRequest != null) {
 
-			// Set a ringing duration timer
-			if (attributes.ringDuration != null && attributes.ringDuration > 0 && mediaRequest != null) {
+					startTimer(inboundRequest.getApplicationSession(), attributes.ringDuration * 1000, false,
+							(timer) -> {
+								if (attributes.announcement != null) {
 
-				startTimer(inboundRequest.getApplicationSession(), attributes.ringDuration * 1000, false, (timer) -> {
-					if (attributes.announcement != null) {
+									if (sipLogger.isLoggable(Level.FINER)) {
+										sipLogger.finer(aliceRequest,
+												"QueueCallflow.process - Expectation cancelWhileRinging cleared...");
+									}
+									cancelWhileRinging.clear();
 
-						if (sipLogger.isLoggable(Level.FINER)) {
-							sipLogger.finer(aliceRequest,
-									"QueueCallflow.process - Expectation cancelWhileRinging cleared...");
-						}
-						cancelWhileRinging.clear();
+									if (false == stateEquals(QueueState.CANCELED)) {
 
-						if (false == stateEquals(QueueState.CANCELED)) {
+										Expectation cancelWhileCallingMedia = this
+												.expectRequest(aliceRequest.getSession(), CANCEL, (cancel) -> {
+													if (sipLogger.isLoggable(Level.FINER)) {
+														sipLogger.finer(aliceRequest.getSession(),
+																"QueueCallflow.process - Expectation cancelWhileCallingMedia invoked...");
+													}
+													sendRequest(mediaRequest.createCancel());
+													setState(QueueState.CANCELED);
+												});
 
-							Expectation cancelWhileCallingMedia = this.expectRequest(aliceRequest.getSession(), CANCEL,
-									(cancel) -> {
-										if (sipLogger.isLoggable(Level.FINER)) {
-											sipLogger.finer(aliceRequest.getSession(),
-													"QueueCallflow.process - Expectation cancelWhileCallingMedia invoked...");
-										}
-										sendRequest(mediaRequest.createCancel());
-										setState(QueueState.CANCELED);
-									});
+										setState(QueueState.MEDIA_RINGING);
+										sendRequest(mediaRequest, (mediaResponse) -> {
+											if (successful(mediaResponse)) {
+												setState(QueueState.MEDIA_CONNECTED);
+												sendResponse(createResponse(aliceRequest, mediaResponse),
+														(aliceAckOrPrack) -> {
+															cancelWhileCallingMedia.clear();
+															stopTimers();
+															sendAckOrPrack(aliceAckOrPrack, mediaResponse);
+														});
+											}
 
-							setState(QueueState.MEDIA_RINGING);
-							sendRequest(mediaRequest, (mediaResponse) -> {
-								if (successful(mediaResponse)) {
-									setState(QueueState.MEDIA_CONNECTED);
-									sendResponse(createResponse(aliceRequest, mediaResponse), (aliceAckOrPrack) -> {
-										cancelWhileCallingMedia.clear();
-										stopTimers();
-										sendAckOrPrack(aliceAckOrPrack, mediaResponse);
-									});
-								}
-
-								// go back to just ringing state
-								else if (failure(mediaResponse)) {
-									setState(QueueState.RINGING);
-									cancelWhileCallingMedia.clear();
-									cancelWhileRinging.reset();
+											// go back to just ringing state
+											else if (failure(mediaResponse)) {
+												setState(QueueState.RINGING);
+												cancelWhileCallingMedia.clear();
+												cancelWhileRinging.reset();
 
 //								Expectation cancelWhileRinging2 = this.expectRequest(aliceRequest.getSession(), CANCEL,
 //										(cancel) -> {
@@ -127,19 +130,20 @@ public class QueueCallflow extends Callflow {
 //											stopTimers();
 //											setState(QueueState.CANCELED);
 //										});
-								}
+											}
 
+										});
+
+									}
+
+								} else {
+									if (false == stateEquals(QueueState.CANCELED)) {
+										this.complete();
+									}
+								}
 							});
 
-						}
-
-					} else {
-						if (false == stateEquals(QueueState.CANCELED)) {
-							this.complete();
-						}
-					}
-				});
-
+				}
 			}
 
 		} catch (Exception ex) {
