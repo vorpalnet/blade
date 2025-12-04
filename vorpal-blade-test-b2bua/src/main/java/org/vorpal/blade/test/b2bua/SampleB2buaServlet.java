@@ -54,6 +54,7 @@ import org.vorpal.blade.framework.v2.logging.Color;
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
 public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSessionListener, SipSessionListener {
+//public class SampleB2buaServlet extends B2buaServlet {
 	private static final long serialVersionUID = 1L;
 	public static SettingsManager<SampleB2buaConfig> settingsManager;
 
@@ -64,11 +65,14 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
 		Callflow callflow = null;
 
-		if (inboundRequest.getMethod().equals("CANCEL")) {
-			callflow = new CancelGlare();
-		} else {
-			callflow = super.chooseCallflow(inboundRequest);
-		}
+// jwm - for testing glare
+//		if (inboundRequest.getMethod().equals("CANCEL")) {
+//			callflow = new CancelGlare();
+//		} else {
+//			callflow = super.chooseCallflow(inboundRequest);
+//		}
+
+		callflow = super.chooseCallflow(inboundRequest);
 
 		return callflow;
 	}
@@ -158,7 +162,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 		sipLogger.info(request, "callAbandoned...");
 	}
 
-	@Override
+//	@Override
 	public void sessionCreated(SipApplicationSessionEvent event) {
 
 		if (sipLogger.isLoggable(Level.FINER)) {
@@ -168,7 +172,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 
 	}
 
-	@Override
+//	@Override
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
@@ -176,7 +180,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionExpired(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
@@ -184,7 +188,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
@@ -192,7 +196,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionCreated(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
@@ -200,7 +204,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionDestroyed(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
@@ -209,7 +213,7 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionReadyToInvalidate(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();

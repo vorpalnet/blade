@@ -105,7 +105,7 @@ public class Cancel extends Callflow {
 					});
 				}
 			} else {
-				sipLogger.fine(request, "CANCEL received, but no linked session. Ignoring request.");
+				sipLogger.finer(request, "CANCEL received, but no linked session. Ignoring request.");
 				// jwm - for cancels, the container generates the 200 OK
 				// sendResponse(request.createResponse(200));
 			}

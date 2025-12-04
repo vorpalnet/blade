@@ -50,6 +50,7 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
+import javax.servlet.sip.SipSession.State;
 import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerService;
@@ -782,72 +783,73 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
-		SipSession sipSession;
+		SipSession sipSession = null;
 
-		if (response != null && response.getStatus() != 487) {
-			sipSession = response.getSession();
+		if (response != null //
+				&& response.isCommitted() == false //
+				&& (sipSession = response.getSession()) != null //
+				&& sipSession.isValid() //
+				&& sipSession.getState() != State.TERMINATED //
+		) {
 
-			if (sipSession != null && sipSession.isValid() && response.isCommitted() == false) {
+			if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
 
-				if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
+				sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
-					sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+				switch (response.getMethod()) {
+				case INVITE:
 
-					switch (response.getMethod()) {
-					case INVITE:
+					// glare handling;
+					if (response.getStatus() >= 300) {
+						sipLogger.finest(sipSession, "Removing EXPECT_ACK session attribute.");
+						sipSession.removeAttribute("EXPECT_ACK");
 
-						// glare handling;
-						if (response.getStatus() >= 300) {
-							sipLogger.finest(sipSession, "Removing EXPECT_ACK session attribute.");
-							sipSession.removeAttribute("EXPECT_ACK");
-
-							SipSession linkedSession = getLinkedSession(sipSession);
-							if (linkedSession != null) {
-								sipLogger.finest(linkedSession, "Removing EXPECT_ACK linked session attribute.");
-								linkedSession.removeAttribute("EXPECT_ACK");
-							}
+						SipSession linkedSession = getLinkedSession(sipSession);
+						if (linkedSession != null) {
+							sipLogger.finest(linkedSession, "Removing EXPECT_ACK linked session attribute.");
+							linkedSession.removeAttribute("EXPECT_ACK");
 						}
-
-					case REGISTER:
-					case SUBSCRIBE:
-					case NOTIFY:
-					case PUBLISH:
-					case REFER:
-						String indexKey = getVorpalSessionId(response.getApplicationSession());
-						String dialog = getVorpalDialogId(response.getSession());
-						response.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
-
-						String xvt = (String) response.getApplicationSession().getAttribute("X-Vorpal-Timestamp");
-						if (xvt == null) {
-							xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-						}
-						response.setHeader("X-Vorpal-Timestamp", xvt);
-
 					}
 
-					response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
+				case REGISTER:
+				case SUBSCRIBE:
+				case NOTIFY:
+				case PUBLISH:
+				case REFER:
+					String indexKey = getVorpalSessionId(response.getApplicationSession());
+					String dialog = getVorpalDialogId(response.getSession());
+					response.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
 
-					if (provisional(response)) {
+					String xvt = (String) response.getApplicationSession().getAttribute("X-Vorpal-Timestamp");
+					if (xvt == null) {
+						xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
+					}
+					response.setHeader("X-Vorpal-Timestamp", xvt);
 
-						if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
+				}
 
-							if (response.getSession().isValid()) {
-								response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
-								response.sendReliably();
-							}
+				response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
 
-						} else {
-							response.send();
+				if (provisional(response)) {
+
+					if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
+
+						if (response.getSession().isValid()) {
+							response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
+							response.sendReliably();
 						}
 
 					} else {
 						response.send();
 					}
 
+				} else {
+					response.send();
 				}
 			}
+
 		} else {
-			sipLogger.warning(response, "Skipping 487 response; Already sent by the container.");
+			sipLogger.finer(response, "Callflow.sendResponse - Skipping response. Session terminated.");
 		}
 
 	}
@@ -953,7 +955,11 @@ public abstract class Callflow implements Serializable {
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		SipServletResponse destResponse = null;
 		destResponse = destRequest.createResponse(originResponse.getStatus(), originResponse.getReasonPhrase());
-		copyContentAndHeaders(originResponse, destResponse);
+
+		if (destResponse != null) {
+			copyContentAndHeaders(originResponse, destResponse);
+		}
+
 		return destResponse;
 	}
 
@@ -1032,11 +1038,16 @@ public abstract class Callflow implements Serializable {
 	@Deprecated
 	public static SipServletResponse createResponse(SipServletRequest request, SipServletResponse responseToCopy,
 			boolean copyContent) throws UnsupportedEncodingException, IOException, ServletParseException {
-		SipServletResponse response;
-		response = request.createResponse(responseToCopy.getStatus(), responseToCopy.getReasonPhrase());
-		copyHeaders(responseToCopy, response);
-		if (copyContent == true) {
-			response.setContent(responseToCopy.getContent(), responseToCopy.getContentType());
+		SipServletResponse response = null;
+
+		if (request != null && responseToCopy != null) {
+			response = request.createResponse(responseToCopy.getStatus(), responseToCopy.getReasonPhrase());
+			if (response != null) {
+				copyHeaders(responseToCopy, response);
+				if (copyContent == true) {
+					response.setContent(responseToCopy.getContent(), responseToCopy.getContentType());
+				}
+			}
 		}
 		return response;
 	}
@@ -1076,67 +1087,81 @@ public abstract class Callflow implements Serializable {
 	private static void copyHeadersMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
 			throws ServletParseException {
 
-		for (String header : copyFrom.getHeaderNameList()) {
+		if (copyFrom != null && copyTo != null) {
 
-			switch (header) {
-			case "To":
-			case "From":
-			case "Via":
-			case "Call-ID":
-			case "Contact":
-			case "Content-Length":
-			case "CSeq":
-			case "Max-Forwards":
-			case "Content-Type":
-			case "Record-Route":
-			case "Route":
-			case "RSeq":
-			case "RAck":
-				// do not copy these headers
-				break;
-			default:
-				copyHeader(header, copyFrom, copyTo);
+			for (String header : copyFrom.getHeaderNameList()) {
+
+				switch (header) {
+				case "To":
+				case "From":
+				case "Via":
+				case "Call-ID":
+				case "Contact":
+				case "Content-Length":
+				case "CSeq":
+				case "Max-Forwards":
+				case "Content-Type":
+				case "Record-Route":
+				case "Route":
+				case "RSeq":
+				case "RAck":
+					// do not copy these headers
+					break;
+				default:
+					copyHeader(header, copyFrom, copyTo);
+				}
+
 			}
-
 		}
 	}
 
 	public static void copyHeader(String header, SipServletMessage copyFrom, SipServletMessage copyTo) {
 
-		String v;
-		HashSet<String> hashSet = new HashSet<>();
-		StringBuilder sb = new StringBuilder();
-		for (String value : copyFrom.getHeaderList(header)) {
-			hashSet.add(value);
-		}
-		Iterator<String> i = hashSet.iterator();
-		while (i.hasNext()) {
-			v = i.next();
-			if (sb.length() == 0) {
-				sb.append(v);
-			} else {
-				sb.append(",");
-				sb.append(v);
-			}
-		}
-		copyTo.setHeader(header, sb.toString());
+		if (copyFrom != null && copyTo != null) {
 
+			String v;
+			HashSet<String> hashSet = new HashSet<>();
+			StringBuilder sb = new StringBuilder();
+			for (String value : copyFrom.getHeaderList(header)) {
+				hashSet.add(value);
+			}
+			Iterator<String> i = hashSet.iterator();
+			while (i.hasNext()) {
+				v = i.next();
+				if (sb.length() == 0) {
+					sb.append(v);
+				} else {
+					sb.append(",");
+					sb.append(v);
+				}
+			}
+			copyTo.setHeader(header, sb.toString());
+
+		}
 	}
 
 	private static void copyContentMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
 			throws UnsupportedEncodingException, IOException {
-		copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
+
+		if (copyFrom != null && copyTo != null) {
+			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
+		}
+
 	}
 
 	public static SipServletRequest copyContent(SipServletMessage copyFrom, SipServletRequest copyTo)
 			throws UnsupportedEncodingException, IOException {
-		copyContentMsg(copyFrom, copyTo);
+		if (copyFrom != null && copyTo != null) {
+			copyContentMsg(copyFrom, copyTo);
+		}
 		return copyTo;
 	}
 
 	public static SipServletResponse copyContent(SipServletMessage copyFrom, SipServletResponse copyTo)
 			throws UnsupportedEncodingException, IOException {
-		copyContentMsg(copyFrom, copyTo);
+		if (copyFrom != null && copyTo != null) {
+			copyContentMsg(copyFrom, copyTo);
+		}
 		return copyTo;
 	}
 
@@ -1150,15 +1175,17 @@ public abstract class Callflow implements Serializable {
 	 */
 	public static SipServletRequest copyHeaders(SipServletRequest copyFrom, SipServletRequest copyTo)
 			throws ServletParseException {
+		if (copyFrom != null && copyTo != null) {
 
-		// Special case, copy Contact headers for REGISTER message
-		if (copyFrom.getMethod().equals(REGISTER)) {
-			for (String value : copyFrom.getHeaderList(Contact)) {
-				copyTo.setHeader(Contact, value);
+			// Special case, copy Contact headers for REGISTER message
+			if (copyFrom.getMethod().equals(REGISTER)) {
+				for (String value : copyFrom.getHeaderList(Contact)) {
+					copyTo.setHeader(Contact, value);
+				}
 			}
-		}
 
-		copyHeadersMsg(copyFrom, copyTo);
+			copyHeadersMsg(copyFrom, copyTo);
+		}
 		return copyTo;
 	}
 
@@ -1173,39 +1200,48 @@ public abstract class Callflow implements Serializable {
 	 */
 	public static SipServletResponse copyHeaders(SipServletResponse copyFrom, SipServletResponse copyTo)
 			throws ServletParseException {
-		boolean copyContact = false;
 
-		if (copyFrom.getMethod().equals(REGISTER)) {
-			copyContact = true;
-		} else if (copyFrom.getStatus() >= 300 && copyFrom.getStatus() < 400) {
-			copyContact = true;
-		} else if (copyFrom.getStatus() == 485) {
-			copyContact = true;
-		} else if (copyFrom.getMethod().equals(OPTIONS) && copyFrom.getStatus() == 200) {
-			copyContact = true;
-		}
+		if (copyFrom != null && copyTo != null) {
+			boolean copyContact = false;
 
-		if (copyContact) {
-			for (String value : copyFrom.getHeaderList(Contact)) {
-				copyTo.setHeader(Contact, value);
+			if (copyFrom.getMethod().equals(REGISTER)) {
+				copyContact = true;
+			} else if (copyFrom.getStatus() >= 300 && copyFrom.getStatus() < 400) {
+				copyContact = true;
+			} else if (copyFrom.getStatus() == 485) {
+				copyContact = true;
+			} else if (copyFrom.getMethod().equals(OPTIONS) && copyFrom.getStatus() == 200) {
+				copyContact = true;
 			}
-		}
 
-		copyHeadersMsg(copyFrom, copyTo);
+			if (copyContact) {
+				for (String value : copyFrom.getHeaderList(Contact)) {
+					copyTo.setHeader(Contact, value);
+				}
+			}
+
+			copyHeadersMsg(copyFrom, copyTo);
+		}
 		return copyTo;
 	}
 
 	public static SipServletRequest copyContentAndHeaders(SipServletRequest copyFrom, SipServletRequest copyTo)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
-		copyHeadersMsg(copyFrom, copyTo);
-		copyContentMsg(copyFrom, copyTo);
+		if (copyFrom != null && copyTo != null) {
+			copyHeadersMsg(copyFrom, copyTo);
+			copyContentMsg(copyFrom, copyTo);
+		}
 		return copyTo;
 	}
 
 	public static SipServletResponse copyContentAndHeaders(SipServletResponse copyFrom, SipServletResponse copyTo)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
-		copyHeadersMsg(copyFrom, copyTo);
-		copyContentMsg(copyFrom, copyTo);
+
+		if (copyFrom != null && copyTo != null) {
+			copyHeadersMsg(copyFrom, copyTo);
+			copyContentMsg(copyFrom, copyTo);
+		}
+
 		return copyTo;
 	}
 
@@ -1265,15 +1301,26 @@ public abstract class Callflow implements Serializable {
 
 	public static SipServletResponse createResponse(SipServletRequest aliceRequest, SipServletResponse bobResponse)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
-		SipServletResponse aliceResponse;
-		aliceResponse = aliceRequest.createResponse(bobResponse.getStatus(), bobResponse.getReasonPhrase());
-		copyContentAndHeaders(bobResponse, aliceResponse);
+		SipServletResponse aliceResponse = null;
 
-		// jwm-test; Why not link the sessions now? I think that should work
-		if (successful(bobResponse)) {
-			linkSessions(bobResponse.getSession(), aliceResponse.getSession());
+		if (aliceRequest != null && bobResponse != null) {
+
+			SipSession aliceSession = aliceRequest.getSession();
+
+			if (aliceSession != null && aliceSession.isValid() && aliceSession.getState() != State.TERMINATED) {
+				aliceResponse = aliceRequest.createResponse(bobResponse.getStatus(), bobResponse.getReasonPhrase());
+
+				if (aliceResponse != null) {
+					copyContentAndHeaders(bobResponse, aliceResponse);
+
+					// jwm-test; Why not link the sessions now? I think that should work
+					if (successful(bobResponse)) {
+						linkSessions(bobResponse.getSession(), aliceResponse.getSession());
+					}
+				}
+
+			}
 		}
-
 		return aliceResponse;
 	}
 
@@ -1404,21 +1451,26 @@ public abstract class Callflow implements Serializable {
 	 */
 
 	public static URI copyParameters(URI from, URI to) throws ServletParseException {
-		SipURI sipFrom = (SipURI) from;
-		SipURI sipTo = (SipURI) to;
 
-		// copy user (if it doesn't exist)
-		if (sipFrom.getUser() != null && sipTo.getUser() == null) {
-			sipTo.setUser(sipFrom.getUser());
-		}
+		if (from != null && to != null) {
 
-		// copy URI parameters (if they don't exist)
-		String value;
-		for (String name : from.getParameterNameSet()) {
-			value = from.getParameter(name);
-			if (value != null && to.getParameter(name) != null && name.equals("tag") == false) {
-				to.setParameter(name, value);
+			SipURI sipFrom = (SipURI) from;
+			SipURI sipTo = (SipURI) to;
+
+			// copy user (if it doesn't exist)
+			if (sipFrom.getUser() != null && sipTo.getUser() == null) {
+				sipTo.setUser(sipFrom.getUser());
 			}
+
+			// copy URI parameters (if they don't exist)
+			String value;
+			for (String name : from.getParameterNameSet()) {
+				value = from.getParameter(name);
+				if (value != null && to.getParameter(name) != null && name.equals("tag") == false) {
+					to.setParameter(name, value);
+				}
+			}
+
 		}
 
 		return to;
@@ -1435,13 +1487,16 @@ public abstract class Callflow implements Serializable {
 	 */
 	public static Address copyParameters(Address from, Address to) throws ServletParseException {
 
-		copyParameters(from.getURI(), to.getURI());
+		if (from != null && to != null) {
 
-		String value;
-		for (String name : from.getParameterNameSet()) {
-			value = from.getParameter(name);
-			if (value != null && to.getParameter(name) != null && name.equals("tag") == false) {
-				to.setParameter(name, value);
+			copyParameters(from.getURI(), to.getURI());
+
+			String value;
+			for (String name : from.getParameterNameSet()) {
+				value = from.getParameter(name);
+				if (value != null && to.getParameter(name) != null && name.equals("tag") == false) {
+					to.setParameter(name, value);
+				}
 			}
 		}
 

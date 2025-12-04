@@ -11,6 +11,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSession.State;
 
+import org.vorpal.blade.framework.v2.b2bua.Cancel;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
@@ -50,6 +51,13 @@ public class QueueCallflow extends Callflow {
 
 				stopTimers();
 				setState(QueueState.CANCELED);
+
+				// Try to CANCEL or BYE any outbound requests;
+				sipLogger.finer(inboundRequest,
+						"QueueCallflow.process.cancelWhileRinging - invoking Cancel.process in case there are outbound requests.");
+				Callflow cancelCallflow = new Cancel(null);
+				cancelCallflow.process(inboundRequest);
+
 			});
 
 			setState(QueueState.RINGING);
@@ -178,27 +186,25 @@ public class QueueCallflow extends Callflow {
 		if (appSession != null && appSession.isValid() && sipSession != null && sipSession.isValid()) {
 
 			try {
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(aliceRequest, "QueueCallflow.complete - is the app session null? "
-							+ ((appSession == null) ? true : false));
-				}
-//			if (appSession != null && appSession.isValid() && //
-//					aliceRequest.getSession() != null && aliceRequest.getSession().isValid()) {
-
+//				if (sipLogger.isLoggable(Level.FINER)) {
+//					sipLogger.finer(aliceRequest, "QueueCallflow.complete - is the app session null? "
+//							+ ((appSession == null) ? true : false));
+//				}
+//
 				if (appSession != null) {
-
-					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(aliceRequest, "QueueCallflow.complete - is the queue state canceled? "
-								+ this.stateEquals(QueueState.CANCELED));
-						sipLogger.finer(aliceRequest,
-								"QueueCallflow.complete - is the app session valid? " + appSession.isValid());
-						sipLogger.finer(aliceRequest, "QueueCallflow.complete - is the sip session valid? "
-								+ aliceRequest.getSession().isValid());
-						sipLogger.finer(aliceRequest, "QueueCallflow.complete - What is the sip session state? "
-								+ aliceRequest.getSession().getState());
-						sipLogger.finer(aliceRequest,
-								"QueueCallflow.complete - What is the queue state? " + getState());
-					}
+//
+//					if (sipLogger.isLoggable(Level.FINER)) {
+//						sipLogger.finer(aliceRequest, "QueueCallflow.complete - is the queue state canceled? "
+//								+ this.stateEquals(QueueState.CANCELED));
+//						sipLogger.finer(aliceRequest,
+//								"QueueCallflow.complete - is the app session valid? " + appSession.isValid());
+//						sipLogger.finer(aliceRequest, "QueueCallflow.complete - is the sip session valid? "
+//								+ aliceRequest.getSession().isValid());
+//						sipLogger.finer(aliceRequest, "QueueCallflow.complete - What is the sip session state? "
+//								+ aliceRequest.getSession().getState());
+//						sipLogger.finer(aliceRequest,
+//								"QueueCallflow.complete - What is the queue state? " + getState());
+//					}
 
 					if (false == this.stateEquals(QueueState.CANCELED)) {
 						stopTimers();
@@ -308,7 +314,7 @@ public class QueueCallflow extends Callflow {
 			}
 
 		} else {
-			sipLogger.warning(aliceRequest, "QueueCallflow.complete - Invalid SipSession");
+			sipLogger.finer(aliceRequest, "QueueCallflow.complete - Invalid SipSession. Nothing to do.");
 		}
 
 	}
@@ -317,7 +323,7 @@ public class QueueCallflow extends Callflow {
 		QueueState state = null;
 
 		SipApplicationSession appSession = aliceRequest.getApplicationSession();
-		if (appSession != null) {
+		if (appSession != null && appSession.isValid()) {
 			state = (QueueState) appSession.getAttribute("STATE");
 		} else {
 			state = QueueState.CANCELED;

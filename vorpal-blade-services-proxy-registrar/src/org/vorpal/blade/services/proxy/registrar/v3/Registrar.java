@@ -55,11 +55,11 @@ public class Registrar implements Serializable {
 		return list;
 	}
 
-	public SipServletResponse updateContactz(SipServletRequest registerRequest) throws ServletParseException {
-		SipServletResponse response;
-		response = registerRequest.createResponse(200);
-		return response;
-	}
+//	public SipServletResponse updateContacts(SipServletRequest registerRequest) throws ServletParseException {
+//		SipServletResponse response;
+//		response = registerRequest.createResponse(200);
+//		return response;
+//	}
 
 	public SipServletResponse updateContacts(SipServletRequest registerRequest) throws ServletParseException {
 		List<String> allowHeaders = null;

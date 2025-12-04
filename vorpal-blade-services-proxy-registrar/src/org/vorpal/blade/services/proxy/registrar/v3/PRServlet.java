@@ -23,8 +23,8 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener {
-//public class PRServlet extends AsyncSipServlet {
+//public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener {
+public class PRServlet extends AsyncSipServlet {
 	private static final long serialVersionUID = 2804504496149776315L;
 	public static SettingsManager<Settings> settingsManager;
 
@@ -72,7 +72,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 		return callflow;
 	}
 
-	@Override
+//	@Override
 	public void sessionCreated(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
@@ -80,16 +80,15 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionDestroyed(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
 			sipLogger.finer(sipSession, "PRServlet.sessionDestroyed - sipSession id="+sipSession.getId());
-
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionReadyToInvalidate(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
@@ -97,7 +96,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionCreated(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
@@ -105,7 +104,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
@@ -113,7 +112,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionExpired(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
@@ -121,7 +120,7 @@ public class PRServlet extends AsyncSipServlet implements SipApplicationSessionL
 		}
 	}
 
-	@Override
+//	@Override
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();

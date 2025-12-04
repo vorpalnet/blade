@@ -98,36 +98,36 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		super(name, resourceBundleName);
 	}
 
-	private static final String NOSESS = "[--------:----] ";
+	private static final String NOSESS = "[--------:----]";
 
 	@Override
 	public void severe(String msg) {
-		super.severe(NOSESS + ConsoleColors.RED_BRIGHT + msg + ConsoleColors.RESET);
+		super.severe(NOSESS + " " + ConsoleColors.RED_BRIGHT + msg + ConsoleColors.RESET);
 	}
 
 	@Override
 	public void warning(String msg) {
-		super.warning(NOSESS + ConsoleColors.YELLOW_BOLD_BRIGHT + msg + ConsoleColors.RESET);
+		super.warning(NOSESS + " " + ConsoleColors.YELLOW_BOLD_BRIGHT + msg + ConsoleColors.RESET);
 	}
 
 	@Override
 	public void fine(String msg) {
-		super.fine(NOSESS + msg);
+		super.fine(NOSESS + " " + msg);
 	}
 
 	@Override
 	public void finer(String msg) {
-		super.finer(NOSESS + msg);
+		super.finer(NOSESS + " " + msg);
 	}
 
 	@Override
 	public void finest(String msg) {
-		super.finest(NOSESS + msg);
+		super.finest(NOSESS + " " + msg);
 	}
 
 	@Override
 	public void info(String msg) {
-		super.info(NOSESS + msg);
+		super.info(NOSESS + " " + msg);
 	}
 
 	public void logStackTrace(SipApplicationSession appSession, Exception e) {
@@ -301,15 +301,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 		if (this.isLoggable(level)) {
 			try {
-
-				if (message != null && message.getSession() != null && message.getSession().isValid()) {
-					log(level, hexHash(message.getSession()) + " " + comments);
-				} else if (comments != null) {
-					log(level, comments);
-				} else {
-					log(level, "Something weird in the logging is happening. Throwing stack trace to find it...");
-					throw new Exception("Weird logging error. Here's a stack trace for you.");
-				}
+			
+				log(level, hexHash(message) + " " + comments);
 
 			} catch (Exception e) {
 				this.logWarningStackTrace(e);
@@ -454,10 +447,20 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return hashValue;
 	}
 
+	public static String hexHash(SipServletMessage message) {
+		SipSession sipSession = null;
+
+		if (message != null) {
+			sipSession = message.getSession();
+		}
+
+		return hexHash(sipSession);
+	}
+
 	public static String hexHash(SipSession sipSession) {
 		String hashValue = NOSESS;
 
-		if (sipSession != null) {
+		if (sipSession != null && sipSession.isValid()) {
 
 			String hash1 = Callflow.getVorpalSessionId(sipSession.getApplicationSession());
 			if (hash1 == null) {
@@ -530,7 +533,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					String line = String.format("%87s", "").replace(' ', '=');
 
 					// This is the new session =========== line
-					log(Level.FINE, hexHash(request.getSession()) + (" ") + line);
+					log(Level.FINE, hexHash(request) + " " + line);
 				}
 
 				if (request != null) {
@@ -644,7 +647,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = String.format("%36s", ";") + " " + String.format("%-32s", note);
 
 //							str.append(hexHash(request.getSession())).append("{1}");
-							str.append(hexHash(request.getSession())).append(" ");
+							str.append(hexHash(request)).append(" ");
 
 //							comment = addState(request, comment);
 							str.append(alice).append(arrow).append(middle).append(comment);
@@ -663,7 +666,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 									+ response.getMethod() + ")";
 
 //							str.append(hexHash(response.getSession())).append("{2}");
-							str.append(hexHash(response.getSession())).append(" ");
+							str.append(hexHash(response)).append(" ");
 
 //							comment = addState(response, comment);
 
@@ -701,7 +704,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = String.format("%36s", ";") + " " + String.format("%-32s", note);
 
 //							str.append(hexHash(request.getSession())).append("{3}");
-							str.append(hexHash(request.getSession())).append(" ");
+							str.append(hexHash(request)).append(" ");
 
 //							comment = addState(request, comment);
 
@@ -722,7 +725,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 									+ response.getMethod() + ")";
 
 //							str.append(hexHash(response.getSession())).append("{4}");
-							str.append(hexHash(response.getSession())).append(" ");
+							str.append(hexHash(response)).append(" ");
 
 //							comment = addState(response, comment);
 
@@ -774,7 +777,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = " ; " + String.format("%-32s", note);
 
 //							str.append(hexHash(request.getSession())).append("{5}");
-							str.append(hexHash(request.getSession())).append(" ");
+							str.append(hexHash(request)).append(" ");
 
 //							comment = addState(request, comment);
 
@@ -794,7 +797,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = " ; " + response.getReasonPhrase() + " (" + response.getMethod() + ")";
 
 //							str.append(hexHash(response.getSession())).append("{6}");
-							str.append(hexHash(response.getSession())).append(" ");
+							str.append(hexHash(response)).append(" ");
 
 //							comment = addState(response, comment);
 
@@ -838,7 +841,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = " ; " + String.format("%-32s", note);
 
 //							str.append(hexHash(request.getSession())).append("{7}");
-							str.append(hexHash(request.getSession())).append(" ");
+							str.append(hexHash(request)).append(" ");
 
 //							comment = addState(request, comment);
 
@@ -852,7 +855,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 							String comment = " ; " + response.getReasonPhrase() + " (" + response.getMethod() + ")";
 
 //							str.append(hexHash(response.getSession())).append("{8}");
-							str.append(hexHash(response.getSession())).append(" ");
+							str.append(hexHash(response)).append(" ");
 
 //							comment = addState(response, comment);
 
