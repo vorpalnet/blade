@@ -24,7 +24,7 @@
 	<import file="../libraries.xml" />
 
 	<target name="build" depends="init,compile,jar">
-		<echo message="${ant.project.name} v${implementation}.{build.number}" />
+		<echo message="${ant.project.name} v${implementation}.${build.number}" />
 	</target>
 
 	<target name="compile" depends="init">

@@ -229,8 +229,12 @@ public abstract class AsyncSipServlet extends SipServlet
 			// For processing glare, stack messages up
 			Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
 			expectAck = (expectAck != null && expectAck == true) ? true : false;
+
+//			sipLogger.warning(_request, "AsyncSipServlet.doRequest - expectAck=" + expectAck);
 			if (expectAck == false) {
+
 				if (glareQueue != null && glareQueue.size() > 0) {
+					sipLogger.warning(_request, "AsyncSipServlet.doRequest - adding request to queue");
 					glareQueue.add(_request);
 					request = glareQueue.removeFirst();
 					sipSession.setAttribute(GLARE_QUEUE, glareQueue);
@@ -260,6 +264,7 @@ public abstract class AsyncSipServlet extends SipServlet
 							"AsyncSipServlet.doRequest - " + "method=" + request.getMethod() //
 									+ ", isInitial=" + request.isInitial() //
 									+ ", isCommitted=" + request.isCommitted() //
+									+ ", expectAck=" + expectAck //
 									+ ", session.isValid=" + sipSession.isValid() //
 									+ ", session.state=" + sipSession.getState() //
 									+ ", session.isReadyToInvalidate=" + sipSession.isReadyToInvalidate() //
@@ -284,7 +289,7 @@ public abstract class AsyncSipServlet extends SipServlet
 					// GLARE! Let's try to queue it up...
 					if (true == expectAck && false == method.equals("CANCEL")) { // anything other than cancel
 						sipLogger.warning(request, "AsyncSipServlet.doResponse - Glare; " + method
-								+ " received while awaiting ACK. Queing message.");
+								+ " received while awaiting ACK. Queuing message.");
 						glareQueue = (glareQueue != null) ? glareQueue : new LinkedList<>();
 						glareQueue.add(request);
 						sipSession.setAttribute(GLARE_QUEUE, glareQueue);
@@ -333,12 +338,13 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					} else {
 
-						// Send 481 for ReINVITEs with failed linked sessions
-						if (method.equals("INVITE") && false == request.isInitial()) {
-							if (linkedSession == null || false == linkedSession.isValid()) {
-								callflow = new Callflow481();
-							}
-						}
+// Send 481 for ReINVITEs with failed linked sessions
+// jwm - overly protective
+//						if (method.equals("INVITE") && false == request.isInitial()) {
+//							if (linkedSession == null || false == linkedSession.isValid()) {
+//								callflow = new Callflow481();
+//							}
+//						}
 
 						if (callflow == null) {
 							callflow = chooseCallflow(request);
