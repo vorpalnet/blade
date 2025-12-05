@@ -1510,9 +1510,7 @@ public abstract class Callflow implements Serializable {
 		appSession.setAttribute("isProxy", Boolean.TRUE);
 
 		for (URI endpoint : endpoints) {
-
 			// jwm - SUPERARROW NEEDS WORK!
-
 			sipLogger.superArrow(Direction.SEND, false, proxy.getOriginalRequest(), null,
 					this.getClass().getSimpleName(), null);
 		}

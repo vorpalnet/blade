@@ -18,13 +18,14 @@ import javax.servlet.sip.annotation.SipApplicationKey;
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Color;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-//public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener {
-public class PRServlet extends AsyncSipServlet {
+public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener {
+//public class PRServlet extends AsyncSipServlet {
 	private static final long serialVersionUID = 2804504496149776315L;
 	public static SettingsManager<Settings> settingsManager;
 
@@ -76,7 +77,7 @@ public class PRServlet extends AsyncSipServlet {
 	public void sessionCreated(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "PRServlet.sessionCreated - sipSession id="+sipSession.getId());
+			sipLogger.finer(sipSession, "PRServlet.sessionCreated - sipSession id=" + sipSession.getId());
 		}
 	}
 
@@ -84,7 +85,7 @@ public class PRServlet extends AsyncSipServlet {
 	public void sessionDestroyed(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "PRServlet.sessionDestroyed - sipSession id="+sipSession.getId());
+			sipLogger.finer(sipSession, "PRServlet.sessionDestroyed - sipSession id=" + sipSession.getId());
 		}
 	}
 
@@ -92,7 +93,7 @@ public class PRServlet extends AsyncSipServlet {
 	public void sessionReadyToInvalidate(SipSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
-			sipLogger.finer(sipSession, "PRServlet.sessionReadyToInvalidate - sipSession id="+sipSession.getId());
+			sipLogger.finer(sipSession, "PRServlet.sessionReadyToInvalidate - sipSession id=" + sipSession.getId());
 		}
 	}
 
@@ -100,7 +101,8 @@ public class PRServlet extends AsyncSipServlet {
 	public void sessionCreated(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "PRServlet.sessionCreated - appSession id="+appSession.getId());
+			sipLogger.finer(appSession,
+					Color.GREEN_BOLD_BRIGHT("PRServlet.sessionCreated - appSession id=" + appSession.getId()));
 		}
 	}
 
@@ -108,7 +110,8 @@ public class PRServlet extends AsyncSipServlet {
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "PRServlet.sessionDestroyed - appSession id="+appSession.getId());
+			sipLogger.finer(appSession,
+					Color.RED_BOLD_BRIGHT("PRServlet.sessionDestroyed - appSession id=" + appSession.getId()));
 		}
 	}
 
@@ -116,7 +119,7 @@ public class PRServlet extends AsyncSipServlet {
 	public void sessionExpired(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "PRServlet.sessionExpired - appSession id="+appSession.getId());
+			sipLogger.finer(appSession, "PRServlet.sessionExpired - appSession id=" + appSession.getId());
 		}
 	}
 
@@ -124,7 +127,7 @@ public class PRServlet extends AsyncSipServlet {
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.finer(appSession, "PRServlet.sessionReadyToInvalidate - appSession id="+appSession.getId());
+			sipLogger.finer(appSession, "PRServlet.sessionReadyToInvalidate - appSession id=" + appSession.getId());
 		}
 	}
 

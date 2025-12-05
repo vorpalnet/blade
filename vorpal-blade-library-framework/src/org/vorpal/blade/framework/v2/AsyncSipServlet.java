@@ -832,7 +832,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			} else { // true==isProxy
 
-				// for logging purposes only
+				// For logging purposes
 				Boolean diagramLeft = false;
 				String proxyDid = (String) response.getSession().getAttribute("_DID");
 				String fromUser = ((SipURI) response.getFrom().getURI()).getUser();
@@ -842,26 +842,13 @@ public abstract class AsyncSipServlet extends SipServlet
 				Callflow.getLogger().superArrow(Direction.RECEIVE, diagramLeft, null, response, "proxy", null);
 				Callflow.getLogger().superArrow(Direction.SEND, !diagramLeft, null, response, "proxy", null);
 
-				// jwm - cancel any existing timers?
-				// cleanup SipApplicationSession, otherwise it will timeout
-				if (response.getSession().getState().equals(State.EARLY)) {
-					Collection<ServletTimer> timers = response.getApplicationSession().getTimers();
-					Iterator<ServletTimer> itr = timers.iterator();
-					ServletTimer timer;
-					while (itr.hasNext()) {
-						timer = itr.next();
-						sipLogger.finer(response,
-								"AsyncSipServlet.doResponse - cancelling proxy timer: " + timer.getId());
-						timer.cancel();
-					}
-
+				// For 'loose' routing, since no BYE is received, we must manually invalidate
+				// the session
+				if (response.getSession().getState().equals(State.EARLY) //
+						&& false == response.getProxy().getRecordRoute()) {
 					sipLogger.finer(response,
 							"AsyncSipServlet.doResponse - invalidating proxy appSession: " + appSession.getId());
-
-					// jwm - manually invalidating the session give an error:
-					// appSession.setExpires(1); // One minute, is this safer?
 					appSession.invalidate();
-
 				}
 
 			}
