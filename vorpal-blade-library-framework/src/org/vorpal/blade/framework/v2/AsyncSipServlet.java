@@ -3,9 +3,7 @@ package org.vorpal.blade.framework.v2;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +34,6 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Callback;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.callflow.Callflow481;
 import org.vorpal.blade.framework.v2.callflow.CallflowAckBye;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
@@ -63,9 +60,9 @@ public abstract class AsyncSipServlet extends SipServlet
 	protected static SipFactory sipFactory;
 	protected static SipSessionsUtil sipUtil;
 	protected static TimerService timerService;
-	protected static SessionParameters sessionParameters;
 	private static final String RESPONSE_CALLBACK_INVITE = "RESPONSE_CALLBACK_INVITE";
 	private static final String GLARE_QUEUE = "BLADE_GLARE_QUEUE";
+	protected static SessionParameters sessionParameters;
 
 	/**
 	 * Called when the SipServlet has been created.
@@ -206,7 +203,8 @@ public abstract class AsyncSipServlet extends SipServlet
 		if (request.getMethod().equals("INVITE")) { // too resource intensive for OPTIONS, REGISTER, etc.
 			appSession.addIndexKey(indexKey);
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(request, "AsyncSipServlet - generateIndexKey, indexKeys=" + appSession.getIndexKeys());
+				sipLogger.finer(request, "AsyncSipServlet - generateIndexKey, adding indexKey=" + indexKey
+						+ ", all indexKeys=" + appSession.getIndexKeys());
 			}
 		}
 
@@ -285,6 +283,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				if (method.equals("ACK")) {
 					expectAck = false;
 					sipSession.removeAttribute("EXPECT_ACK");
+
 				} else {
 					// GLARE! Let's try to queue it up...
 					if (true == expectAck && false == method.equals("CANCEL")) { // anything other than cancel
@@ -317,16 +316,7 @@ public abstract class AsyncSipServlet extends SipServlet
 						request.getSession().setAttribute("_ANI", ((SipURI) request.getFrom().getURI()).getUser());
 					}
 
-					if (request.isInitial() && Callflow.getSessionParameters() != null) {
-						SessionParameters sessionParameters = Callflow.getSessionParameters();
-
-						if (sessionParameters.getExpiration() != null) {
-							request.getApplicationSession().setExpires(Callflow.getSessionParameters().getExpiration());
-						}
-
-						// put the keep alive logic here
-
-					}
+					// place additional KeepAlive logic here?
 
 					requestLambda = Callflow.pullCallback(request);
 					if (requestLambda != null) {
@@ -337,14 +327,6 @@ public abstract class AsyncSipServlet extends SipServlet
 						requestLambda.accept(request);
 
 					} else {
-
-// Send 481 for ReINVITEs with failed linked sessions
-// jwm - overly protective
-//						if (method.equals("INVITE") && false == request.isInitial()) {
-//							if (linkedSession == null || false == linkedSession.isValid()) {
-//								callflow = new Callflow481();
-//							}
-//						}
 
 						if (callflow == null) {
 							callflow = chooseCallflow(request);
@@ -373,8 +355,9 @@ public abstract class AsyncSipServlet extends SipServlet
 							// process AttributeSelectors here!
 
 							// create any index keys defined by selectors in the config file
-							if (request.isInitial() && sessionParameters != null) {
-								List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
+							if (request.isInitial() && Callflow.getSessionParameters() != null) {
+								List<AttributeSelector> selectors = Callflow.getSessionParameters()
+										.getSessionSelectors();
 
 								if (selectors != null) {
 									for (AttributeSelector selector : selectors) {
@@ -450,9 +433,11 @@ public abstract class AsyncSipServlet extends SipServlet
 
 							if (linkedSession != null) {
 
-								if (request.isInitial() && linkedSession != null && sessionParameters != null) {
+								if (request.isInitial() && linkedSession != null
+										&& Callflow.getSessionParameters() != null) {
 
-									List<AttributeSelector> selectors = sessionParameters.getSessionSelectors();
+									List<AttributeSelector> selectors = Callflow.getSessionParameters()
+											.getSessionSelectors();
 
 									if (selectors != null) {
 										for (AttributeSelector selector : selectors) {
@@ -1028,14 +1013,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
-	public static SessionParameters getSessionParameters() {
-		return sessionParameters;
-	}
-
-	public static void setSessionParameters(SessionParameters sessionParameters) {
-		AsyncSipServlet.sessionParameters = sessionParameters;
-	}
-
 	/**
 	 * Returns true if 'proxyRequest' was invoked previously.
 	 * 
@@ -1054,6 +1031,14 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 
 		return result;
+	}
+
+	public static SessionParameters getSessionParameters() {
+		return sessionParameters;
+	}
+
+	public static void setSessionParameters(SessionParameters _sessionParameters) {
+		sessionParameters = _sessionParameters;
 	}
 
 }

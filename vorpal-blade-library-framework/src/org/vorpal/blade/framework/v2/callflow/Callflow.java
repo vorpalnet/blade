@@ -40,10 +40,13 @@ import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
+import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.Proxy;
 import javax.servlet.sip.ProxyBranch;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.ServletTimer;
+import javax.servlet.sip.SessionKeepAlive;
+import javax.servlet.sip.SessionKeepAlive.Refresher;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletMessage;
@@ -62,6 +65,8 @@ import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.DummyResponse;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
+import org.vorpal.blade.framework.v2.keepalive.KeepAlive;
+import org.vorpal.blade.framework.v2.keepalive.KeepAliveExpiry;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
@@ -246,7 +251,6 @@ public abstract class Callflow implements Serializable {
 	@Deprecated
 	public String schedulePeriodicTimer(SipApplicationSession appSession, int seconds,
 			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
-		ServletTimer timer = null;
 		long delay = seconds * 1000;
 		long period = seconds * 1000;
 		boolean fixedDelay = false;
@@ -257,7 +261,6 @@ public abstract class Callflow implements Serializable {
 	@Deprecated
 	public String schedulePeriodicTimerInMilliseconds(SipApplicationSession appSession, long milliseconds,
 			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
-		ServletTimer timer = null;
 		long delay = milliseconds;
 		long period = milliseconds;
 		boolean fixedDelay = false;
@@ -474,6 +477,7 @@ public abstract class Callflow implements Serializable {
 	 * @throws ServletException
 	 * @throws IOException
 	 */
+	@SuppressWarnings("serial")
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
 			throws ServletException, IOException {
 
@@ -485,6 +489,58 @@ public abstract class Callflow implements Serializable {
 			sipSession = request.getSession();
 
 			if (sipSession != null && sipSession.isValid()) {
+
+				if (request.isInitial() // begin KeepAlive logic...
+						&& request.getMethod().equals(INVITE)) { //
+
+					Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
+
+					if (sessionExpires == null) {
+
+						int sessionExpiresInMinutes = 60; // 60 minutes
+
+						// Config file settings...
+						if (null != Callflow.getSessionParameters()
+								&& null != Callflow.getSessionParameters().getExpiration()) {
+							sessionExpiresInMinutes = Callflow.getSessionParameters().getExpiration(); //
+							if (sessionExpiresInMinutes < 3) {
+								sessionExpiresInMinutes = 3;
+							}
+						}
+
+						int sessionExpiresInSeconds = sessionExpiresInMinutes * 60;
+						int minSEinSeconds = sessionExpiresInSeconds / 2;
+						int appSessionExpiresInMinutes = (sessionExpiresInMinutes) + 1;
+
+						appSession.setExpires(appSessionExpiresInMinutes);
+						request.getSessionKeepAlivePreference().setEnabled(true);
+						request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
+						request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
+						request.getSessionKeepAlivePreference().setRefresher(Refresher.UAS);
+						SessionKeepAlive skl = request.getSession().getKeepAlive();
+
+						skl.setRefreshCallback(new SessionKeepAlive.Callback() {
+							public void handle(SipSession session) {
+								try {
+									KeepAlive refresher = new KeepAlive();
+									refresher.handle(session);
+								} catch (Exception e) {
+								}
+							}
+						});
+
+						skl.setExpiryCallback(new SessionKeepAlive.Callback() {
+							public void handle(SipSession session) {
+								try {
+									KeepAliveExpiry expiry = new KeepAliveExpiry();
+									expiry.handle(sipSession);
+								} catch (Exception e) {
+								}
+							}
+						});
+
+					}
+				} // end KeepAlive logic.
 
 				if (lambdaFunction != null) {
 					request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);

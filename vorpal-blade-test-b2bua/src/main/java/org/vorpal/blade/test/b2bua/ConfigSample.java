@@ -7,28 +7,21 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
+import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 public class ConfigSample extends SampleB2buaConfig implements Serializable {
+	private static final long serialVersionUID = 1L;
 
 	public ConfigSample() {
 
 		try {
 			this.logging = new LogParametersDefault();
+			this.logging.setLoggingLevel(LoggingLevel.FINER);
 			this.session = new SessionParametersDefault();
 
-			this.address = Callflow.getSipFactory().createAddress("Alice <sip:alice@vorpal.net>");
-//			this.ipv4Address = new IPAddressString("192.168.1.1").getAddress().toIPv4();
-//			this.ipv6Address = new IPAddressString("2605:a601:aeba:6500:468:ceac:53f1:5854").getAddress().toIPv6();
-			this.uri = Callflow.getSipFactory().createURI("sip:bob@vorpal.net");
-			this.value1 = "value #1";
-			this.value2 = "value #2";
-
-			map = new HashMap<>();
-			map.put("one", "this is value one");
-			map.put("two", "this is value two");
-
-			this.setLogging(new LogParametersDefault());
+			this.value1 = "one";
+			this.value2 = "two";
 
 			SessionParameters sp = new SessionParameters();
 			sp.setExpiration(900);
@@ -36,7 +29,7 @@ public class ConfigSample extends SampleB2buaConfig implements Serializable {
 			KeepAliveParameters kap = new KeepAliveParameters();
 			kap.setMinSE(90);
 			kap.setSessionExpires(180);
-			kap.setStyle(KeepAliveParameters.KeepAlive.UPDATE);
+			kap.setStyle(KeepAliveParameters.KeepAlive.REINVITE);
 
 			sp.setKeepAlive(kap);
 			this.setSession(sp);
