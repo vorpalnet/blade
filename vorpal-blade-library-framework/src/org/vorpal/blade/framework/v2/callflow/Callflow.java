@@ -484,128 +484,132 @@ public abstract class Callflow implements Serializable {
 		SipApplicationSession appSession;
 		SipSession sipSession;
 
-		if (request != null) {
-			appSession = request.getApplicationSession();
-			sipSession = request.getSession();
+		try {
 
-			if (sipSession != null && sipSession.isValid()) {
+			if (request != null) {
+				appSession = request.getApplicationSession();
+				sipSession = request.getSession();
 
-				if (request.isInitial() // begin KeepAlive logic...
-						&& request.getMethod().equals(INVITE)) { //
+				if (sipSession != null && sipSession.isValid()) {
 
-					Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
+					if (request.isInitial() // begin KeepAlive logic...
+							&& request.getMethod().equals(INVITE)) { //
 
-					if (sessionExpires == null) {
+						Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
 
-						int sessionExpiresInMinutes = 60; // 60 minutes
+						if (sessionExpires == null) {
 
-						// Config file settings...
-						if (null != Callflow.getSessionParameters()
-								&& null != Callflow.getSessionParameters().getExpiration()) {
-							sessionExpiresInMinutes = Callflow.getSessionParameters().getExpiration(); //
-							if (sessionExpiresInMinutes < 3) {
-								sessionExpiresInMinutes = 3;
+							int sessionExpiresInMinutes = 60; // 60 minutes
+
+							// Config file settings...
+							if (null != Callflow.getSessionParameters()
+									&& null != Callflow.getSessionParameters().getExpiration()) {
+								sessionExpiresInMinutes = Callflow.getSessionParameters().getExpiration(); //
+								if (sessionExpiresInMinutes < 3) {
+									sessionExpiresInMinutes = 3;
+								}
 							}
+
+							int sessionExpiresInSeconds = sessionExpiresInMinutes * 60;
+							int minSEinSeconds = sessionExpiresInSeconds / 2;
+							int appSessionExpiresInMinutes = (sessionExpiresInMinutes) + 1;
+
+							appSession.setExpires(appSessionExpiresInMinutes);
+							request.getSessionKeepAlivePreference().setEnabled(true);
+							request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
+							request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
+							request.getSessionKeepAlivePreference().setRefresher(Refresher.UAS);
+							SessionKeepAlive skl = request.getSession().getKeepAlive();
+
+							skl.setRefreshCallback(new SessionKeepAlive.Callback() {
+								public void handle(SipSession session) {
+									try {
+										KeepAlive refresher = new KeepAlive();
+										refresher.handle(session);
+									} catch (Exception e) {
+									}
+								}
+							});
+
+							skl.setExpiryCallback(new SessionKeepAlive.Callback() {
+								public void handle(SipSession session) {
+									try {
+										KeepAliveExpiry expiry = new KeepAliveExpiry();
+										expiry.handle(sipSession);
+									} catch (Exception e) {
+									}
+								}
+							});
+
+						}
+					} // end KeepAlive logic.
+
+					if (lambdaFunction != null) {
+						request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
+					}
+
+					String method = request.getMethod();
+
+					// for GLARE handling
+					switch (method) {
+					case INVITE:
+						sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
+						break;
+					case ACK:
+						sipSession.removeAttribute("EXPECT_ACK");
+						break;
+					}
+
+					if (request.isInitial() && null == request.getHeader("X-Vorpal-Session")) {
+						String indexKey = getVorpalSessionId(appSession);
+						if (indexKey == null) {
+							indexKey = AsyncSipServlet.generateIndexKey(request);
+						}
+						String dialog = getVorpalDialogId(sipSession);
+						if (dialog == null) {
+							dialog = createVorpalDialogId(sipSession);
 						}
 
-						int sessionExpiresInSeconds = sessionExpiresInMinutes * 60;
-						int minSEinSeconds = sessionExpiresInSeconds / 2;
-						int appSessionExpiresInMinutes = (sessionExpiresInMinutes) + 1;
-
-						appSession.setExpires(appSessionExpiresInMinutes);
-						request.getSessionKeepAlivePreference().setEnabled(true);
-						request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
-						request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
-						request.getSessionKeepAlivePreference().setRefresher(Refresher.UAS);
-						SessionKeepAlive skl = request.getSession().getKeepAlive();
-
-						skl.setRefreshCallback(new SessionKeepAlive.Callback() {
-							public void handle(SipSession session) {
-								try {
-									KeepAlive refresher = new KeepAlive();
-									refresher.handle(session);
-								} catch (Exception e) {
-								}
-							}
-						});
-
-						skl.setExpiryCallback(new SessionKeepAlive.Callback() {
-							public void handle(SipSession session) {
-								try {
-									KeepAliveExpiry expiry = new KeepAliveExpiry();
-									expiry.handle(sipSession);
-								} catch (Exception e) {
-								}
-							}
-						});
+						String xvs = indexKey + ":" + dialog;
+						request.setHeader("X-Vorpal-Session", xvs);
+						String xvt = (String) appSession.getAttribute("X-Vorpal-Timestamp");
+						if (xvt == null) {
+							xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
+						}
+						request.setHeader("X-Vorpal-Timestamp", xvt);
 
 					}
-				} // end KeepAlive logic.
 
-				if (lambdaFunction != null) {
-					request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
-				}
-
-				String method = request.getMethod();
-
-				// for GLARE handling
-				switch (method) {
-				case INVITE:
-					sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
-					break;
-				case ACK:
-					sipSession.removeAttribute("EXPECT_ACK");
-					break;
-				}
-
-				if (request.isInitial() && null == request.getHeader("X-Vorpal-Session")) {
-					String indexKey = getVorpalSessionId(appSession);
-					if (indexKey == null) {
-						indexKey = AsyncSipServlet.generateIndexKey(request);
-					}
-					String dialog = getVorpalDialogId(sipSession);
-					if (dialog == null) {
-						dialog = createVorpalDialogId(sipSession);
-					}
-
-					String xvs = indexKey + ":" + dialog;
-					request.setHeader("X-Vorpal-Session", xvs);
-					String xvt = (String) appSession.getAttribute("X-Vorpal-Timestamp");
-					if (xvt == null) {
-						xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-					}
-					request.setHeader("X-Vorpal-Timestamp", xvt);
-
-				}
-
-				sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
-
-				try {
 					// useful for identifying sessions
 					sipSession.setAttribute("sipAddress", request.getTo());
 					request.send();
-				} catch (Exception ex) {
-
-					sipLogger.severe(request, ex);
-
-					if (false == (request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))) {
-
-						// It's too maddening to write callflows where you have to worry about both
-						// error responses and exceptions. Let's create a dummy error response.
-						SipServletResponse errorResponse = new DummyResponse(request, 502, ex.getMessage());
-
-						if (lambdaFunction != null) {
-							lambdaFunction.accept(errorResponse);
-						} else {
-							Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
-									this.getClass().getSimpleName());
-						}
-
-					}
+					sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
 				}
+			}
+
+		} catch (Exception ex) {
+
+			sipLogger.severe(request, ex);
+
+			if (false == (request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))) {
+
+				// It's too maddening to write callflows where you have to worry about both
+				// error responses and exceptions. Let's create a dummy error response.
+				SipServletResponse errorResponse = new DummyResponse(request, 500, ex.getClass().getSimpleName());
+				errorResponse.setContent(ex.getMessage(), "text/plain");
+
+				if (lambdaFunction != null) {
+					lambdaFunction.accept(errorResponse);
+				}
+
+//				else {
+//					Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
+//							this.getClass().getSimpleName());
+//				}
 
 			}
+
 		}
 
 	}
