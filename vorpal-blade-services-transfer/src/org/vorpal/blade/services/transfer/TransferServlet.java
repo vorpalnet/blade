@@ -22,6 +22,7 @@ import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.b2bua.Passthru;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.CallflowResponseCode;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v2.logging.ConsoleColors;
@@ -149,6 +150,15 @@ public class TransferServlet extends B2buaServlet
 
 				if (t.getAttributes() == null) {
 					t.setAttributes(new HashMap<String, String>());
+				}
+
+				// Maybe we want to reject the REFER with an error?
+				Integer errorCode = (Integer) t.getAttribute("error");
+				if (errorCode != null) {
+					sipLogger.finer(request,
+							"TransferServlet.chooseCallflow - matching translation has a errorCode=" + errorCode);
+					callflow = new CallflowResponseCode(errorCode);
+					return callflow;
 				}
 
 				ts = (String) t.getAttribute("style");
