@@ -2,11 +2,8 @@ package org.vorpal.blade.framework.v2.config;
 
 import java.io.Serializable;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-
-import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
