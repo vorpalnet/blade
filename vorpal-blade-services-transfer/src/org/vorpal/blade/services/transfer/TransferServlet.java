@@ -143,22 +143,30 @@ public class TransferServlet extends B2buaServlet
 			if (request.getApplicationSession().getAttribute("INITIAL_REFER") == null) {
 				request.getApplicationSession().setAttribute("INITIAL_REFER", request);
 			}
+
 			// find matching translation, if defined
 			Translation t = settings.findTranslation(request);
 			String ts = null;
 			if (t != null) {
 
-				if (t.getAttributes() == null) {
-					t.setAttributes(new HashMap<String, String>());
+				// Maybe we want to reject the REFER with an error?
+				Integer statusCode = (Integer) t.getAttribute("statusCode");
+				if (statusCode != null) {
+					sipLogger.finer(request,
+							"TransferServlet.chooseCallflow - matching translation has a errorCode=" + statusCode);
+					String reasonPhrase = (String) t.getAttribute("reasonPhrase");
+
+					if (reasonPhrase != null) {
+						callflow = new CallflowResponseCode(statusCode, reasonPhrase);
+					} else {
+						callflow = new CallflowResponseCode(statusCode);
+					}
+
+					return callflow;
 				}
 
-				// Maybe we want to reject the REFER with an error?
-				Integer errorCode = (Integer) t.getAttribute("error");
-				if (errorCode != null) {
-					sipLogger.finer(request,
-							"TransferServlet.chooseCallflow - matching translation has a errorCode=" + errorCode);
-					callflow = new CallflowResponseCode(errorCode);
-					return callflow;
+				if (t.getAttributes() == null) {
+					t.setAttributes(new HashMap<String, String>());
 				}
 
 				ts = (String) t.getAttribute("style");
