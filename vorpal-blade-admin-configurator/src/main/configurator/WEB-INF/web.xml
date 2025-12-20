@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_ID" version="4.0"
+>
+	<display-name>vorpal-blade-admin-configurator</display-name>
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+
+	<servlet-mapping>
+		<servlet-name>logout</servlet-name>
+		<url-pattern>/logout</url-pattern>
+	</servlet-mapping>
+
+	<servlet>
+		<servlet-name>logout</servlet-name>
+		<servlet-class>org.vorpal.blade.applications.console.webapp.Logout</servlet-class>
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+
+
+<!-- 
+
+	<servlet>
+		<description />
+		<display-name>SaveServlet</display-name>
+		<servlet-name>SaveServlet</servlet-name>
+		<servlet-class>org.vorpal.blade.applications.console.mxgraph.SaveServlet</servlet-class>
+	</servlet>
+
+
+	<servlet>
+		<description />
+		<display-name>OpenServlet</display-name>
+		<servlet-name>OpenServlet</servlet-name>
+		<servlet-class>org.vorpal.blade.applications.console.mxgraph.OpenServlet</servlet-class>
+	</servlet>
+	
+ -->
+
+	<jsp-config>
+		<taglib>
+			<taglib-uri>http://java.sun.com/jsp/jstl/core</taglib-uri>
+			<taglib-location>/WEB-INF/lib/taglibs-standard-impl-1.2.5.jar</taglib-location>
+		</taglib>
+		<taglib>
+			<taglib-uri>http://java.sun.com/jsp/jstl/fmt</taglib-uri>
+			<taglib-location>/WEB-INF/lib/taglibs-standard-impl-1.2.5.jar</taglib-location>
+		</taglib>
+		<jsp-property-group>
+			<url-pattern>*.jsp</url-pattern>
+			<page-encoding>UTF-8</page-encoding>
+		</jsp-property-group>
+	</jsp-config>
+	
+	
+
+	<!-- no security required -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>login</web-resource-name>
+			<url-pattern>/login.jsp</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>assets</web-resource-name>
+			<url-pattern>/assets/*</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
+
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>blade</web-resource-name>
+			<url-pattern>/</url-pattern>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+			<role-name>Deployer</role-name>
+			<role-name>Monitor</role-name>
+		</auth-constraint>
+	</security-constraint>
+
+	<login-config>
+		<auth-method>CLIENT-CERT,FORM</auth-method>
+		<realm-name>default</realm-name>
+		<form-login-config>
+			<form-login-page>/login.jsp</form-login-page>
+			<form-error-page>/login.jsp</form-error-page>
+		</form-login-config>
+	</login-config>
+
+	<security-role>
+		<role-name>Admin</role-name>
+	</security-role>
+
+	<security-role>
+		<role-name>Operator</role-name>
+	</security-role>
+
+	<security-role>
+		<role-name>Deployer</role-name>
+	</security-role>
+
+	<security-role>
+		<role-name>Monitor</role-name>
+	</security-role>
+
+
+</web-app>

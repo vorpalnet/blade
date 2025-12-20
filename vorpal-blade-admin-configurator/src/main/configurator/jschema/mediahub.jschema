@@ -1,0 +1,45 @@
+{
+  "$schema" : "http://json-schema.org/draft-04/schema#",
+  "title" : "Media Hub Settings",
+  "type" : "object",
+  "additionalProperties" : false,
+  "properties" : {
+    "defaultSolution" : {
+      "propertyOrder" : 1,
+      "type" : "string",
+      "title" : "Default Solution"
+    },
+    "solutions" : {
+      "propertyOrder" : 2,
+      "type" : "array",
+      "format" : "table",
+      "items" : {
+        "$ref" : "#/definitions/SolutionExpression"
+      },
+      "title" : "Solutions"
+    }
+  },
+  "definitions" : {
+    "SolutionExpression" : {
+      "type" : "object",
+      "additionalProperties" : false,
+      "properties" : {
+        "pattern" : {
+          "propertyOrder" : 1,
+          "type" : "string",
+          "title" : "Pattern"
+        },
+        "solution" : {
+          "propertyOrder" : 2,
+          "type" : "string",
+          "title" : "Solution"
+        },
+        "stripXml" : {
+          "propertyOrder" : 3,
+          "type" : "boolean",
+          "title" : "Strip Xml"
+        }
+      }
+    }
+  }
+}

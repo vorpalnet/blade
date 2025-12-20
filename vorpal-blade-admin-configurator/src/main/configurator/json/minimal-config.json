@@ -1,0 +1,7 @@
+{
+  "defaultApplication": "b2bua",
+  "logging": {
+    "loggingLevel": "INFO",
+    "directory": "./logs"
+  }
+}

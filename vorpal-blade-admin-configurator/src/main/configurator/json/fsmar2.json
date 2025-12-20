@@ -1,0 +1,66 @@
+{
+    "defaultApplication": "transfer",
+    "previous": {
+        "b2bua": {
+            "triggers": {
+                "INVITE": {
+                    "transitions": [
+                        {
+                            "next": "shuffle"
+                        }
+                    ]
+                }
+            }
+        },
+        "null": {
+            "triggers": {
+                "REGISTER": {
+                    "transitions": [
+                        {
+                            "next": "proxy-registrar"
+                        }
+                    ]
+                },
+                "PUBLISH": {
+                    "transitions": [
+                        {
+                            "next": "presence"
+                        }
+                    ]
+                },
+                "OPTIONS": {
+                    "transitions": [
+                        {
+                            "next": "options"
+                        }
+                    ]
+                },
+                "INVITE": {
+                    "transitions": [
+                        {
+                            "next": "transfer"
+                        }
+                    ]
+                },
+                "SUBSCRIBE": {
+                    "transitions": [
+                        {
+                            "next": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "transfer": {
+            "triggers": {
+                "INVITE": {
+                    "transitions": [
+                        {
+                            "next": "proxy-registrar"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

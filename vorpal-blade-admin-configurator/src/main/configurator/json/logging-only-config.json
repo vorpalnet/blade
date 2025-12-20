@@ -1,0 +1,9 @@
+{
+  "logging": {
+    "useParentLogging": true,
+    "loggingLevel": "SEVERE",
+    "sequenceDiagramLoggingLevel": "OFF",
+    "configurationLoggingLevel": "WARNING"
+  },
+  "defaultApplication": "simple-app"
+}

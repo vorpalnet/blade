@@ -1,0 +1,108 @@
+{
+    "logging": {
+        "useParentLogging": false,
+        "directory": "./servers/${weblogic.Name}/logs/vorpal",
+        "fileSize": "100MiB",
+        "fileCount": 50,
+        "appendFile": true,
+        "loggingLevel": "FINER",
+        "sequenceDiagramLoggingLevel": "FINE",
+        "configurationLoggingLevel": "FINE",
+        "fileName": "${sip.application.name}.%g.log"
+    },
+    "fromSelector": {
+        "id": "fromSel",
+        "description": "Match on From header.",
+        "attribute": "From",
+        "pattern": "^(?:\"?(?<fromName>.*?)\"?\\s*)[<]*(?<fromProto>sips?):(?:[+1]*(?<fromUser>.*)@)*(?<fromHost>[^:;>]*)(?:[:](?<fromPort>[0-9]+))*(?:[;](?<fromUriparams>[^>]*))*[>]*[;]*(?<FromAddrparams>.*)$",
+        "expression": "${fromUser}",
+        "additionalExpressions": {
+            "fromPort": "5060"
+        }
+    },
+    "toSelector": {
+        "id": "toSel",
+        "description": "Match on To Header",
+        "attribute": "To",
+        "pattern": "^(?:\"?(?<toName>.*?)\"?\\s*)[<]*(?<toProto>sips?):(?:(?<toUser>.*)@)*(?<toHost>[^:;>]*)(?:[:](?<toPort>[0-9]+))*(?:[;](?<toUriparams>[^>]*))*[>]*[;]*(?<toAddrparams>.*)$",
+        "expression": "${toUser}"
+    },
+    "ruriSelector": {
+        "id": "ruriSel",
+        "description": "Match on request URI",
+        "attribute": "Request-URI",
+        "pattern": "^(?:\"?(?<ruriName>.*?)\"?\\s*)[<]*(?<ruriProto>sips?):(?:(?<ruriUser>.*)@)*(?<ruriHost>[^:;>]*)(?:[:](?<ruriPort>[0-9]+))*(?:[;](?<ruriUriparams>[^>]*))*[>]*[;]*(?<ruriAddrparams>.*)$"
+    },
+    "callingNumbers": [
+        {
+            "id": "8165551234",
+            "forwardTo": [
+                "${ruriProto}:${toUser}@10.10.10.10:${fromPort};${ruriUriparams}",
+                "${ruriProto}:${toUser}@10.10.10.11:${fromPort};${ruriUriparams}"
+            ]
+        },
+        {
+            "id": "9135551234",
+            "dialedNumbers": [
+                {
+                    "id": "8005550001",
+                    "forwaredTo": [
+                        "${ruriProto}:${toUser}@10.10.10.12:${fromPort};${ruriUriparams}",
+                        "${ruriProto}:${toUser}@10.10.10.13:${fromPort};${ruriUriparams}"
+                    ]
+                },
+                {
+                    "id": "8005550001",
+                    "forwaredTo": [
+                        "${ruriProto}:${toUser}@10.10.10.12:${fromPort};${ruriUriparams}",
+                        "${ruriProto}:${toUser}@10.10.10.13:${fromPort};${ruriUriparams}"
+                    ]
+                },
+                {
+                    "id": "8005550002",
+                    "forwaredTo": [
+                        "${ruriProto}:${toUser}@10.10.10.14:${fromPort};${ruriUriparams}",
+                        "${ruriProto}:${toUser}@10.10.10.15:${fromPort};${ruriUriparams}"
+                    ]
+                },
+                {
+                    "id": "8005550002",
+                    "forwaredTo": [
+                        "${ruriProto}:${toUser}@10.10.10.14:${fromPort};${ruriUriparams}",
+                        "${ruriProto}:${toUser}@10.10.10.15:${fromPort};${ruriUriparams}"
+                    ]
+                }
+            ],
+            "forwardTo": [
+                "${ruriProto}:${toUser}@10.10.10.10:${fromPort};${ruriUriparams}",
+                "${ruriProto}:${toUser}@10.10.10.11:${fromPort};${ruriUriparams}"
+            ]
+        },
+        {
+            "id": "alice",
+            "dialedNumbers": [
+                {
+                    "id": "bob",
+                    "forwaredTo": [
+                        "sip:carol@vorpal.net:${fromPort}"
+                    ]
+                },
+                {
+                    "id": "carol",
+                    "forwaredTo": [
+                        "sip:bob@vorpal.net:${fromPort}"
+                    ]
+                }
+            ],
+            "forwardTo": [
+                "sip:doug@vorpal.net"
+            ]
+        }
+    ],
+    "defaultRoute": {
+        "id": "defaultRoute",
+        "forwardTo": [
+            "${ruriProto}:${ruriUser}@${ruriHost}:${fromPort};${ruriUriparams}"
+        ]
+    }
+}

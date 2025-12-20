@@ -1,0 +1,21 @@
+{
+  "logging" : {
+    "useParentLogging" : false,
+    "directory" : "./servers/${weblogic.Name}/logs/vorpal",
+    "fileSize" : "100MiB",
+    "fileCount" : 25,
+    "appendFile" : true,
+    "loggingLevel" : "FINER",
+    "sequenceDiagramLoggingLevel" : "FINE",
+    "configurationLoggingLevel" : "FINE",
+    "fileName" : "${sip.application.name}.%g.log"
+  },
+  "session" : {
+    "expiration" : 900,
+    "keepAlive" : {
+      "style" : "DISABLED",
+      "sessionExpires" : 3600,
+      "minSE" : 1800
+    }
+  }
+}

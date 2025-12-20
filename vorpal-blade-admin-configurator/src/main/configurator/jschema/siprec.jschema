@@ -1,0 +1,49 @@
+{
+  "$schema" : "http://json-schema.org/draft-04/schema#",
+  "title" : "Settings",
+  "type" : "object",
+  "additionalProperties" : false,
+  "properties" : {
+    "defaultSolution" : {
+      "propertyOrder" : 1,
+      "type" : "string",
+      "title" : "Default Solution"
+    },
+    "solutions" : {
+      "propertyOrder" : 2,
+      "type" : "array",
+      "format" : "table",
+      "items" : {
+        "$ref" : "#/definitions/SolutionExpression"
+      },
+      "title" : "Solutions"
+    },
+    "patternforUcidchange" : {
+      "propertyOrder" : 3,
+      "type" : "string",
+      "title" : "Patternfor Ucidchange"
+    },
+    "recSolution" : {
+      "propertyOrder" : 4,
+      "title" : "Rec Solution"
+    }
+  },
+  "definitions" : {
+    "SolutionExpression" : {
+      "type" : "object",
+      "additionalProperties" : false,
+      "properties" : {
+        "pattern" : {
+          "propertyOrder" : 1,
+          "type" : "string",
+          "title" : "Pattern"
+        },
+        "solution" : {
+          "propertyOrder" : 2,
+          "type" : "string",
+          "title" : "Solution"
+        }
+      }
+    }
+  }
+}

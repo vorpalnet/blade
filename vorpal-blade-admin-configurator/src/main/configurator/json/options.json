@@ -1,0 +1,27 @@
+{
+  "logging" : {
+    "useParentLogging" : false,
+    "directory" : "./servers/${weblogic.Name}/logs/vorpal",
+    "fileSize" : "100MiB",
+    "fileCount" : 25,
+    "appendFile" : true,
+    "loggingLevel" : "FINEST",
+    "sequenceDiagramLoggingLevel" : "FINE",
+    "configurationLoggingLevel" : "FINE",
+    "fileName" : "${sip.application.name}.%g.log"
+  },
+  "session" : {
+    "expiration" : 3,
+    "keepAlive" : {
+      "style" : "DISABLED",
+      "sessionExpires" : 3600,
+      "minSE" : 1800
+    }
+  },
+  "accept" : "application/sdp",
+  "acceptLanguage" : "en",
+  "allow" : "INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, PRACK, SUBSCRIBE, NOTIFY, PUBLISH, INFO, REFER, MESSAGE, UPDATE",
+  "supported" : "replaces",
+  "userAgent" : "OCCAS",
+  "allowEvents" : "talk, hold"
+}

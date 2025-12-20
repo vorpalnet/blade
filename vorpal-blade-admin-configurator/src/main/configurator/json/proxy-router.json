@@ -1,0 +1,91 @@
+{
+  "logging" : {
+    "useParentLogging" : false,
+    "directory" : "./servers/${weblogic.Name}/logs/vorpal",
+    "fileSize" : "100MiB",
+    "fileCount" : 25,
+    "appendFile" : true,
+    "loggingLevel" : "FINER",
+    "sequenceDiagramLoggingLevel" : "FINE",
+    "configurationLoggingLevel" : "FINE",
+    "fileName" : "${sip.application.name}.%g.log"
+  },
+  "selectors" : [ {
+    "id" : "caller",
+    "description" : "caller's number",
+    "attribute" : "From",
+    "expression" : "${user}",
+    "pattern" : "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$"
+  }, {
+    "id" : "dialed",
+    "description" : "dialed number",
+    "attribute" : "To",
+    "expression" : "${user}",
+    "pattern" : "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$"
+  } ],
+  "maps" : [ {
+    "type" : "hash",
+    "id" : "callers",
+    "description" : "map of blocked callers",
+    "selectors" : [ "caller" ],
+    "map" : {
+      "12795555678" : {
+        "id" : "12795555678",
+        "description" : "harrases a specific employee",
+        "list" : [ {
+          "type" : "hash",
+          "selectors" : [ "dialed" ],
+          "map" : {
+            "15305559876" : {
+              "id" : "15305559876"
+            }
+          }
+        } ]
+      },
+      "18165551234" : {
+        "id" : "18165551234",
+        "description" : "generally abusive; send all calls to voicemail unless the below numbers are dialed",
+        "list" : [ {
+          "type" : "prefix",
+          "selectors" : [ "dialed" ],
+          "map" : {
+            "1913555" : {
+              "id" : "1913555",
+              "description" : "for (913) 555 NPA",
+              "requestUri" : "sip:voicemail913555"
+            },
+            "1913" : {
+              "id" : "1913",
+              "description" : "for (913) area code",
+              "requestUri" : "sip:voicemail913"
+            },
+            "19135550001" : {
+              "id" : "19135550001",
+              "description" : "for (913)555-001 NXX",
+              "requestUri" : "sip:voicemail9130001"
+            }
+          }
+        } ],
+        "requestUri" : "sip:voicemail"
+      },
+      "alice" : {
+        "id" : "alice",
+        "list" : [ {
+          "type" : "prefix",
+          "selectors" : [ "dialed" ],
+          "map" : {
+            "carol" : {
+              "id" : "carol",
+              "requestUri" : "sip:bob@vorpal.net"
+            },
+            "bob" : {
+              "id" : "bob",
+              "requestUri" : "sip:carol@vorpal.net"
+            }
+          }
+        } ]
+      }
+    }
+  } ],
+  "plan" : [ "callers" ]
+}

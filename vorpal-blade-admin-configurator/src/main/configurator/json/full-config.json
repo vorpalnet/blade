@@ -1,0 +1,86 @@
+{
+  "logging": {
+    "useParentLogging": false,
+    "directory": "./servers/${weblogic.Name}/logs/vorpal",
+    "fileSize": "100MiB",
+    "fileCount": 25,
+    "appendFile": true,
+    "loggingLevel": "WARNING",
+    "sequenceDiagramLoggingLevel": "FINE",
+    "configurationLoggingLevel": "FINE",
+    "fileName": "${sip.application.name}.%g.log"
+  },
+  "session": {
+    "expiration": 30,
+    "keepAlive": {
+      "style": "UPDATE",
+      "sessionExpires": 3600,
+      "minSE": 90
+    },
+    "sessionSelectors": [
+      {
+        "id": "caller",
+        "description": "Select caller information",
+        "attribute": "From",
+        "pattern": "^.*<(sips?):([^@]+)(?:@(.+))?>.*$",
+        "dialog": "origin"
+      }
+    ]
+  },
+  "defaultApplication": "b2bua",
+  "previous": {
+    "keep-alive": {
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "INV-2",
+              "next": "b2bua",
+              "condition": {
+                "Session-Expires": [
+                  {
+                    "value": "3600"
+                  },
+                  {
+                    "refresher": "uac"
+                  }
+                ],
+                "Region": [
+                  {
+                    "equals": "ORIGINATING"
+                  }
+                ]
+              },
+              "action": {
+                "originating": "From",
+                "route": ["sip:proxy1", "sip:proxy2"]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "null": {
+      "triggers": {
+        "REGISTER": {
+          "transitions": [
+            {
+              "next": "proxy-registrar"
+            }
+          ]
+        },
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "INV-1",
+              "next": "keep-alive",
+              "action": {
+                "originating": "From"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

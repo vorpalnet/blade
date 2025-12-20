@@ -1,0 +1,36 @@
+{
+  "logging" : {
+    "useParentLogging" : false,
+    "directory" : "./servers/${weblogic.Name}/logs/vorpal",
+    "fileSize" : "100MiB",
+    "fileCount" : 25,
+    "appendFile" : true,
+    "loggingLevel" : "FINER",
+    "sequenceDiagramLoggingLevel" : "FINE",
+    "configurationLoggingLevel" : "FINE",
+    "fileName" : "${sip.application.name}.%g.log"
+  },
+  "session" : {
+    "expiration" : 900
+  },
+  "collection" : [ {
+    "name" : "semafone",
+    "endpoints" : [ {
+      "sipUrl" : "sip:shufflebot",
+      "httpUrl" : "http://semafone1:80/callbackUrl/uniqueIdentifier"
+    } ]
+  }, {
+    "name" : "megaphone",
+    "endpoints" : [ {
+      "sipUrl" : "sip:megaphone1:5060",
+      "httpUrl" : "http://sip:megaphone1:80/callbackUrl/uniqueIdentifier"
+    }, {
+      "sipUrl" : "sip:megaphone2:5060",
+      "httpUrl" : "http://sip:megaphone2:80/callbackUrl/uniqueIdentifier"
+    } ]
+  } ],
+  "semafoneUrl" : "http://occasenginedevctc01:8001/shuffle/resources/api/v1/insert?sessionKey=${sessionKey}&endpoint=semafone",
+  "uuid" : "X-Genesys-CallUUID",
+  "gucid" : "Cisco-Gucid",
+  "cds_URL" : "http://gamera:8001/test-cds"
+}

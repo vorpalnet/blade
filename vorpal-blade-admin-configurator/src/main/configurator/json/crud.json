@@ -1,0 +1,65 @@
+{
+  "logging" : {
+    "useParentLogging" : false,
+    "directory" : "./servers/${weblogic.Name}/logs/vorpal",
+    "fileSize" : "100MiB",
+    "fileCount" : 25,
+    "appendFile" : true,
+    "loggingLevel" : "FINE",
+    "sequenceDiagramLoggingLevel" : "FINE",
+    "configurationLoggingLevel" : "FINE",
+    "fileName" : "${sip.application.name}.%g.log"
+  },
+  "ruleSets" : {
+    "rule1" : {
+      "id" : "rule1",
+      "map" : {
+        "port" : "5060"
+      },
+      "rules" : [ {
+        "create" : [ ],
+        "read" : [ ],
+        "update" : [ {
+          "attribute" : "Request-URI",
+          "replacement" : "${proto}:8666014427@${host}:5060;${uriparams}",
+          "pattern" : "(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)"
+        }, {
+          "attribute" : "To",
+          "replacement" : "${proto}:8666014427@${host}:5060;${uriparams}",
+          "pattern" : "(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)"
+        } ],
+        "delete" : [ ]
+      } ],
+      "output" : { }
+    }
+  },
+  "defaultRoute" : {
+    "id" : "default-route"
+  },
+  "selectors" : [ {
+    "id" : "ani",
+    "description" : "The user (dialed number) part of the To header",
+    "attribute" : "From",
+    "pattern" : "(?:\"(?<name>.*)\" )*[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*[;]*(?<uriparams>[^>]*)[>;]*(?<addrparams>.*)",
+    "expression" : "${user}"
+  } ],
+  "maps" : [ {
+    "type" : "prefix",
+    "id" : "prefix-map",
+    "description" : "Translations map for dialed number prefixes",
+    "selectors" : [ "ani" ],
+    "map" : {
+      "+118325150855" : {
+        "attributes" : {
+          "ruleSet" : "rule1"
+        }
+      },
+      "118325150855" : {
+        "attributes" : {
+          "ruleSet" : "rule1"
+        }
+      }
+    }
+  } ],
+  "plan" : [ "prefix-map" ]
+}
