@@ -1,419 +1,6 @@
-// JSON Schema and Data (loaded from the provided files)
-// These are set as default values, but can be changed via the schema selector
-let schema = {
-  "$schema" : "http://json-schema.org/draft-04/schema#",
-  "title" : "App Router Configuration",
-  "type" : "object",
-  "additionalProperties" : false,
-  "properties" : {
-    "logging" : {
-      "propertyOrder" : 1,
-      "$ref" : "#/definitions/LogParameters",
-      "description" : "Optional logging parameters",
-      "title" : "Logging"
-    },
-    "session" : {
-      "propertyOrder" : 2,
-      "$ref" : "#/definitions/SessionParameters",
-      "description" : "Optional session parameters",
-      "title" : "Session"
-    },
-    "defaultApplication" : {
-      "propertyOrder" : 3,
-      "type" : "string",
-      "title" : "Default Application"
-    },
-    "previous" : {
-      "propertyOrder" : 4,
-      "type" : "object",
-      "additionalProperties" : {
-        "$ref" : "#/definitions/State"
-      },
-      "title" : "Previous"
-    }
-  },
-  "definitions" : {
-    "LogParameters" : {
-      "type" : "object",
-      "additionalProperties" : false,
-      "properties" : {
-        "useParentLogging" : {
-          "propertyOrder" : 1,
-          "type" : "boolean",
-          "description" : "Write to parent logger, i.e. the WebLogic engine log file. Default: false",
-          "title" : "Use Parent Logging"
-        },
-        "directory" : {
-          "propertyOrder" : 2,
-          "type" : "string",
-          "description" : "Location of log files. Supports environment and servlet context variables. Default: ./servers/${weblogic.Name}/logs/vorpal",
-          "title" : "Directory"
-        },
-        "fileSize" : {
-          "propertyOrder" : 3,
-          "type" : "string",
-          "description" : "Maximum file size written in human readable form. Default: 100MiB",
-          "title" : "File Size"
-        },
-        "fileCount" : {
-          "propertyOrder" : 4,
-          "type" : "integer",
-          "description" : "Maximum number of log files. Default: 25",
-          "title" : "File Count"
-        },
-        "appendFile" : {
-          "propertyOrder" : 5,
-          "type" : "boolean",
-          "description" : "Continue to use the same log file after reboot. Default: true",
-          "title" : "Append File"
-        },
-        "loggingLevel" : {
-          "propertyOrder" : 6,
-          "type" : "string",
-          "enum" : [ "OFF", "SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST", "ALL" ],
-          "description" : "Logging level. Levels include: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL. Default: FINE",
-          "title" : "Logging Level"
-        },
-        "sequenceDiagramLoggingLevel" : {
-          "propertyOrder" : 7,
-          "type" : "string",
-          "enum" : [ "OFF", "SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST", "ALL" ],
-          "description" : "Level at which sequence diagrams will be logged. Default: FINE",
-          "title" : "Sequence Diagram Logging Level"
-        },
-        "configurationLoggingLevel" : {
-          "propertyOrder" : 8,
-          "type" : "string",
-          "enum" : [ "OFF", "SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST", "ALL" ],
-          "description" : "Level at which configuration changes will be logged. Default: FINE",
-          "title" : "Configuration Logging Level"
-        },
-        "fileName" : {
-          "propertyOrder" : 9,
-          "type" : "string",
-          "title" : "File Name"
-        }
-      }
-    },
-    "SessionParameters" : {
-      "type" : "object",
-      "additionalProperties" : false,
-      "properties" : {
-        "expiration" : {
-          "propertyOrder" : 1,
-          "type" : "integer",
-          "description" : "Set Application Session expiration in minutes.",
-          "title" : "Expiration"
-        },
-        "keepAlive" : {
-          "propertyOrder" : 2,
-          "$ref" : "#/definitions/KeepAliveParameters",
-          "description" : "Set Keep-Alive parameters.",
-          "title" : "Keep Alive"
-        },
-        "sessionSelectors" : {
-          "propertyOrder" : 3,
-          "type" : "array",
-          "format" : "table",
-          "items" : {
-            "$ref" : "#/definitions/AttributeSelector"
-          },
-          "description" : "List of selectors for creating session (SipApplicationSession) lookup keys.",
-          "title" : "Session Selectors"
-        }
-      }
-    },
-    "KeepAliveParameters" : {
-      "type" : "object",
-      "additionalProperties" : false,
-      "properties" : {
-        "style" : {
-          "propertyOrder" : 1,
-          "type" : "string",
-          "enum" : [ "DISABLED", "UPDATE", "REINVITE" ],
-          "description" : "Sets keep alive style: DISABLED, UPDATE, REINVITE",
-          "title" : "Style"
-        },
-        "sessionExpires" : {
-          "propertyOrder" : 2,
-          "type" : "integer",
-          "description" : "Sets Session-Expires header, in seconds",
-          "title" : "Session Expires"
-        },
-        "minSE" : {
-          "propertyOrder" : 3,
-          "type" : "integer",
-          "description" : "Sets Min-SE header, in seconds",
-          "title" : "Min SE"
-        }
-      }
-    },
-    "AttributeSelector" : {
-      "type" : "object",
-      "additionalProperties" : false,
-      "properties" : {
-        "id" : {
-          "propertyOrder" : 1,
-          "type" : "string",
-          "title" : "Id"
-        },
-        "description" : {
-          "propertyOrder" : 2,
-          "type" : "string",
-          "title" : "Description"
-        },
-        "attribute" : {
-          "propertyOrder" : 3,
-          "type" : "string",
-          "title" : "Attribute"
-        },
-        "pattern" : {
-          "propertyOrder" : 4,
-          "type" : "string",
-          "title" : "Pattern"
-        },
-        "expression" : {
-          "propertyOrder" : 5,
-          "type" : "string",
-          "title" : "Expression"
-        },
-        "dialog" : {
-          "propertyOrder" : 6,
-          "type" : "string",
-          "enum" : [ "origin", "destination" ],
-          "description" : "apply SipSession attributes to either origin or destination dialog",
-          "title" : "Dialog"
-        },
-        "additionalExpressions" : {
-          "propertyOrder" : 7,
-          "type" : "object",
-          "additionalProperties" : {
-            "type" : "string"
-          },
-          "title" : "Additional Expressions"
-        }
-      }
-    },
-    "State" : {
-      "type" : "object",
-      "additionalProperties" : false,
-      "properties" : {
-        "triggers" : {
-          "propertyOrder" : 1,
-          "type" : "object",
-          "additionalProperties" : {
-            "$ref" : "#/definitions/Trigger"
-          },
-          "title" : "Triggers"
-        }
-      }
-    },
-    "Trigger" : {
-      "type" : "object",
-      "additionalProperties" : false,
-      "properties" : {
-        "transitions" : {
-          "propertyOrder" : 1,
-          "type" : "array",
-          "format" : "table",
-          "items" : {
-            "$ref" : "#/definitions/Transition"
-          },
-          "title" : "Transitions"
-        }
-      }
-    },
-    "Transition" : {
-      "type" : "object",
-      "additionalProperties" : false,
-      "properties" : {
-        "id" : {
-          "propertyOrder" : 1,
-          "type" : "string",
-          "title" : "Id"
-        },
-        "next" : {
-          "propertyOrder" : 2,
-          "type" : "string",
-          "title" : "Next"
-        },
-        "condition" : {
-          "propertyOrder" : 3,
-          "type" : "object",
-          "additionalProperties" : {
-            "type" : "array",
-            "format" : "table",
-            "items" : {
-              "type" : "object",
-              "additionalProperties" : {
-                "type" : "string"
-              }
-            }
-          },
-          "title" : "Condition"
-        },
-        "action" : {
-          "propertyOrder" : 4,
-          "$ref" : "#/definitions/Action",
-          "title" : "Action"
-        }
-      }
-    },
-    "Action" : {
-      "type" : "object",
-      "additionalProperties" : false,
-      "properties" : {
-        "terminating" : {
-          "propertyOrder" : 1,
-          "type" : "string",
-          "title" : "Terminating"
-        },
-        "originating" : {
-          "propertyOrder" : 2,
-          "type" : "string",
-          "title" : "Originating"
-        },
-        "route" : {
-          "propertyOrder" : 3,
-          "type" : "array",
-          "format" : "table",
-          "items" : {
-            "type" : "string"
-          },
-          "title" : "Route"
-        },
-        "route_back" : {
-          "propertyOrder" : 4,
-          "type" : "array",
-          "format" : "table",
-          "items" : {
-            "type" : "string"
-          },
-          "title" : "Route _back"
-        },
-        "route_final" : {
-          "propertyOrder" : 5,
-          "type" : "array",
-          "format" : "table",
-          "items" : {
-            "type" : "string"
-          },
-          "title" : "Route _final"
-        }
-      }
-    }
-  }
-};
-
-let initialData = {
-  "logging" : {
-    "useParentLogging" : false,
-    "directory" : "./servers/${weblogic.Name}/logs/vorpal",
-    "fileSize" : "100MiB",
-    "fileCount" : 25,
-    "appendFile" : true,
-    "loggingLevel" : "WARNING",
-    "sequenceDiagramLoggingLevel" : "FINE",
-    "configurationLoggingLevel" : "FINE",
-    "fileName" : "${sip.application.name}.%g.log"
-  },
-  "defaultApplication" : "b2bua",
-  "previous" : {
-    "keep-alive" : {
-      "triggers" : {
-        "INVITE" : {
-          "transitions" : [ {
-            "id" : "INV-2",
-            "next" : "b2bua",
-            "condition" : {
-              "Session-Expires" : [ {
-                "value" : "3600"
-              }, {
-                "refresher" : "uac"
-              } ],
-              "Region" : [ {
-                "equals" : "ORIGINATING"
-              } ],
-              "Request-URI" : [ {
-                "uri" : "^(sips?):([^@]+)(?:@(.+))?$"
-              } ],
-              "From" : [ {
-                "address" : "^.*<(sips?):([^@]+)(?:@(.+))?>.*$"
-              } ],
-              "To" : [ {
-                "user" : "bob"
-              }, {
-                "host" : "vorpal.net"
-              }, {
-                "equals" : "<sip:bob@vorpal.net>"
-              } ],
-              "Directive" : [ {
-                "equals" : "CONTINUE"
-              } ],
-              "Region-Label" : [ {
-                "equals" : "ORIGINATING"
-              } ],
-              "Allow" : [ {
-                "contains" : "INV"
-              }, {
-                "includes" : "INVITE"
-              } ]
-            },
-            "action" : {
-              "originating" : "From",
-              "route" : [ "sip:proxy1", "sip:proxy2" ]
-            }
-          }, {
-            "id" : "INV-3",
-            "next" : "b2bua"
-          } ]
-        }
-      }
-    },
-    "b2bua" : {
-      "triggers" : {
-        "INVITE" : {
-          "transitions" : [ {
-            "next" : "proxy-registrar"
-          } ]
-        }
-      }
-    },
-    "null" : {
-      "triggers" : {
-        "REGISTER" : {
-          "transitions" : [ {
-            "next" : "proxy-registrar"
-          } ]
-        },
-        "PUBLISH" : {
-          "transitions" : [ {
-            "next" : "presence"
-          } ]
-        },
-        "OPTIONS" : {
-          "transitions" : [ {
-            "next" : "options"
-          } ]
-        },
-        "INVITE" : {
-          "transitions" : [ {
-            "id" : "INV-1",
-            "next" : "keep-alive",
-            "action" : {
-              "originating" : "From"
-            }
-          } ]
-        },
-        "SUBSCRIBE" : {
-          "transitions" : [ {
-            "next" : "presence"
-          } ]
-        }
-      }
-    }
-  }
-};
+// JSON Schema and Data - loaded dynamically when user selects from dropdowns
+let schema = {};
+let initialData = {};
 
 // Schema registry - populated dynamically from server
 let schemaRegistry = [];
@@ -425,7 +12,7 @@ let selectedTargetDirectory = null;
 
 let formIdCounter = 0;
 let jsonEditor;
-let currentData = initialData;
+let currentData = {};
 let currentTheme = 'eclipse';
 let currentSchemaName = null;
 let websocket = null;
@@ -895,11 +482,16 @@ function handleJsonLoaded(content) {
 }
 
 function finalizeSchemaLoad(newData) {
+    console.log('=== finalizeSchemaLoad called ===');
+    console.log('newData:', newData);
+    console.log('newData keys:', newData ? Object.keys(newData) : 'null');
+
     // Update the data
     initialData = newData;
     currentData = newData;
 
     // Regenerate the form with the new schema and data
+    console.log('Calling generateFormWithData...');
     generateFormWithData(currentData);
 
     // Update the JSON editor
@@ -1303,6 +895,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
 }
 
 function createMapGroup(fieldSchema, title, description, path, value = null, isNested = false) {
+    console.log(`createMapGroup [${path}]: value=`, value);
     const content = document.createElement('div');
 
     const hasData = hasValue(value);
@@ -1330,9 +923,13 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
 
     // Add existing entries
     if (value) {
-        Object.keys(value).forEach(key => {
+        const keys = Object.keys(value);
+        console.log(`  [${path}] Adding ${keys.length} map entries:`, keys);
+        keys.forEach(key => {
             addMapEntry(container, fieldSchema.additionalProperties, path, key, value[key]);
         });
+    } else {
+        console.log(`  [${path}] No value provided, map is empty`);
     }
 
     const section = createCollapsibleSection(title || 'Map', description, content, hasData, autoCollapse);
@@ -1533,172 +1130,271 @@ function generateForm() {
 }
 
 function getFormData() {
-    const data = {};
     const form = document.getElementById('dynamicForm');
 
-    // Get all regular form inputs
-    const inputs = form.querySelectorAll('input, select, textarea');
-    inputs.forEach(input => {
-        const path = input.getAttribute('data-path');
-        if (!path || input.classList.contains('map-key-input')) return;
+    // Recursively extract data from a container element
+    function extractData(container, schemaNode, debugPath = '') {
+        if (!schemaNode) return null;
 
-        let value;
-        if (input.type === 'checkbox') {
-            value = input.checked;
-        } else if (input.type === 'number') {
-            value = input.value ? parseInt(input.value) : null;
-        } else {
-            value = input.value || null;
+        // Resolve $ref if present
+        if (schemaNode.$ref) {
+            schemaNode = resolveRef(schemaNode.$ref);
+            if (!schemaNode) return null;
         }
 
-        if (value !== null && value !== '') {
-            setNestedValue(data, path, value);
-        }
-    });
+        console.log(`extractData [${debugPath}]: type=${schemaNode.type}, container=`, container);
 
-    // Handle maps
-    const mapContainers = form.querySelectorAll('.map-container');
-    mapContainers.forEach(container => {
-        const basePath = container.getAttribute('data-path');
-        const mapData = {};
+        if (schemaNode.type === 'object') {
+            if (schemaNode.additionalProperties) {
+                // This is a map - find map container
+                // Note: map-container might be inside a wrapper div due to createCollapsibleSection structure
+                const mapContainer = container.querySelector(':scope > .map-container, :scope > div > .map-container, :scope > .collapsible-section > .collapsible-content > .map-container');
+                console.log(`  [${debugPath}] MAP - mapContainer found:`, mapContainer);
+                if (!mapContainer) return null;
 
-        const entries = container.querySelectorAll('.map-entry');
-        entries.forEach(entry => {
-            const keyInput = entry.querySelector('.map-key-input');
-            const key = keyInput ? keyInput.value : '';
+                const result = {};
+                const entries = Array.from(mapContainer.children).filter(el => el.classList.contains('map-entry'));
+                console.log(`  [${debugPath}] MAP - found ${entries.length} entries`);
 
-            if (key) {
-                // Get value from the entry
-                const valueInputs = entry.querySelectorAll('input:not(.map-key-input), select, textarea');
-                if (valueInputs.length === 1) {
-                    // Simple value
-                    const valueInput = valueInputs[0];
-                    let value;
-                    if (valueInput.type === 'checkbox') {
-                        value = valueInput.checked;
-                    } else if (valueInput.type === 'number') {
-                        value = valueInput.value ? parseInt(valueInput.value) : null;
-                    } else {
-                        value = valueInput.value || null;
-                    }
-                    if (value !== null && value !== '') {
-                        mapData[key] = value;
-                    }
-                } else {
-                    // Complex value - extract from nested structure
-                    const entryData = {};
-                    valueInputs.forEach(input => {
-                        const inputPath = input.getAttribute('data-path');
-                        if (inputPath) {
-                            let value;
-                            if (input.type === 'checkbox') {
-                                value = input.checked;
-                            } else if (input.type === 'number') {
-                                value = input.value ? parseInt(input.value) : null;
-                            } else {
-                                value = input.value || null;
-                            }
-
-                            if (value !== null && value !== '') {
-                                // Remove the base path to get relative path
-                                const relativePath = inputPath.replace(new RegExp(`^${basePath}\\.${key}\\.?`), '');
-                                if (relativePath) {
-                                    setNestedValue(entryData, relativePath, value);
-                                } else {
-                                    entryData[key] = value;
-                                }
-                            }
-                        }
-                    });
-
-                    if (Object.keys(entryData).length > 0) {
-                        mapData[key] = entryData;
-                    }
-                }
-            }
-        });
-
-        if (Object.keys(mapData).length > 0) {
-            setNestedValue(data, basePath, mapData);
-        }
-    });
-
-    // Handle arrays
-    const arrayContainers = form.querySelectorAll('.array-container');
-    arrayContainers.forEach(container => {
-        const basePath = container.getAttribute('data-path');
-        const arrayData = [];
-
-        const items = container.querySelectorAll('.array-item');
-        items.forEach(item => {
-            const itemInputs = item.querySelectorAll('input, select, textarea');
-
-            if (itemInputs.length === 1) {
-                // Simple array item
-                const input = itemInputs[0];
-                let value;
-                if (input.type === 'checkbox') {
-                    value = input.checked;
-                } else if (input.type === 'number') {
-                    value = input.value ? parseInt(input.value) : null;
-                } else {
-                    value = input.value || null;
-                }
-
-                if (value !== null && value !== '') {
-                    arrayData.push(value);
-                }
-            } else {
-                // Complex array item
-                const itemData = {};
-                itemInputs.forEach(input => {
-                    const inputPath = input.getAttribute('data-path');
-                    if (inputPath) {
-                        let value;
-                        if (input.type === 'checkbox') {
-                            value = input.checked;
-                        } else if (input.type === 'number') {
-                            value = input.value ? parseInt(input.value) : null;
-                        } else {
-                            value = input.value || null;
-                        }
-
-                        if (value !== null && value !== '') {
-                            // Extract the property name from the path
-                            const pathParts = inputPath.split('.');
-                            const property = pathParts[pathParts.length - 1];
-                            itemData[property] = value;
+                entries.forEach((entry, idx) => {
+                    const keyInput = entry.querySelector('.map-key-input');
+                    const key = keyInput ? keyInput.value.trim() : '';
+                    console.log(`    [${debugPath}] entry ${idx}: key="${key}"`);
+                    if (key) {
+                        const valueData = extractData(entry, schemaNode.additionalProperties, `${debugPath}.${key}`);
+                        if (valueData !== null && (typeof valueData !== 'object' || Object.keys(valueData).length > 0)) {
+                            result[key] = valueData;
                         }
                     }
                 });
 
-                if (Object.keys(itemData).length > 0) {
-                    arrayData.push(itemData);
+                console.log(`  [${debugPath}] MAP result:`, result);
+                return Object.keys(result).length > 0 ? result : null;
+            } else if (schemaNode.properties) {
+                // Regular object with defined properties
+                const result = {};
+
+                // When extracting from array-items or map-entries, form content might be
+                // inside a .collapsible-content child (from the moved collapsible section)
+                const collapsibleContent = container.querySelector(':scope > .collapsible-content');
+                const searchContainer = collapsibleContent || container;
+
+                Object.keys(schemaNode.properties).forEach(propName => {
+                    let propSchema = schemaNode.properties[propName];
+                    const propTitle = propSchema.title || propName;
+
+                    // Resolve $ref for type checking
+                    let resolvedSchema = propSchema;
+                    if (propSchema.$ref) {
+                        resolvedSchema = resolveRef(propSchema.$ref);
+                    }
+
+                    const isComplexType = resolvedSchema &&
+                        (resolvedSchema.type === 'object' || resolvedSchema.type === 'array');
+
+                    if (isComplexType) {
+                        // Complex types (objects, arrays) - look for collapsible section
+                        // Note: sections might be inside a wrapper div due to createObjectGroup structure
+                        let targetContainer = null;
+                        const sections = searchContainer.querySelectorAll(':scope > .collapsible-section, :scope > div > .collapsible-section');
+                        sections.forEach(section => {
+                            const header = section.querySelector('.collapsible-header .collapsible-title span:last-child');
+                            if (header && header.textContent === propTitle) {
+                                targetContainer = section.querySelector('.collapsible-content');
+                            }
+                        });
+
+                        if (targetContainer) {
+                            const propData = extractData(targetContainer, propSchema, `${debugPath}.${propName}`);
+                            if (propData !== null && (typeof propData !== 'object' || Object.keys(propData).length > 0 || Array.isArray(propData))) {
+                                result[propName] = propData;
+                            }
+                        }
+                    } else {
+                        // Primitive types - look for form-group with matching label
+                        // Note: form-groups might be inside a wrapper div due to createObjectGroup structure
+                        const formGroups = searchContainer.querySelectorAll(':scope > .form-group, :scope > .checkbox-group, :scope > div > .form-group, :scope > div > .checkbox-group');
+                        let foundInput = null;
+
+                        formGroups.forEach(group => {
+                            const label = group.querySelector('label');
+                            // Check if label text matches (label might contain help icon, so check first text node or textContent)
+                            if (label) {
+                                let labelText = label.childNodes[0]?.textContent?.trim() || label.textContent?.trim();
+                                if (labelText === propTitle) {
+                                    foundInput = group.querySelector('input, select, textarea');
+                                }
+                            }
+                        });
+
+                        if (foundInput) {
+                            let value;
+                            if (foundInput.type === 'checkbox') {
+                                value = foundInput.checked;
+                            } else if (foundInput.type === 'number') {
+                                value = foundInput.value ? parseInt(foundInput.value, 10) : null;
+                            } else {
+                                value = foundInput.value || null;
+                            }
+
+                            if (value !== null && value !== '') {
+                                result[propName] = value;
+                            }
+                        }
+                    }
+                });
+
+                return Object.keys(result).length > 0 ? result : null;
+            }
+        } else if (schemaNode.type === 'array') {
+            // Find array container
+            // Note: array-container might be inside wrapper divs due to createCollapsibleSection/createArrayGroup structure
+            const arrayContainer = container.querySelector(':scope > .array-container, :scope > div > .array-container, :scope > .form-group.array > .array-container, :scope > div > .form-group.array > .array-container');
+            console.log(`  [${debugPath}] ARRAY - arrayContainer found:`, arrayContainer);
+            if (!arrayContainer) return null;
+
+            const result = [];
+            const items = Array.from(arrayContainer.children).filter(el => el.classList.contains('array-item'));
+            console.log(`  [${debugPath}] ARRAY - found ${items.length} items`);
+
+            items.forEach((item, idx) => {
+                const itemData = extractData(item, schemaNode.items, `${debugPath}[${idx}]`);
+                console.log(`    [${debugPath}] item ${idx} data:`, itemData);
+                if (itemData !== null) {
+                    result.push(itemData);
+                }
+            });
+
+            console.log(`  [${debugPath}] ARRAY result:`, result);
+            return result.length > 0 ? result : null;
+        } else {
+            // Primitive type - find the input
+            const input = container.querySelector('input:not(.map-key-input), select, textarea');
+            if (!input) return null;
+
+            let value;
+            if (input.type === 'checkbox') {
+                value = input.checked;
+            } else if (input.type === 'number') {
+                value = input.value ? parseInt(input.value, 10) : null;
+            } else {
+                value = input.value || null;
+            }
+
+            console.log(`  [${debugPath}] PRIMITIVE - value="${value}"`);
+            return (value !== null && value !== '') ? value : null;
+        }
+
+        return null;
+    }
+
+    // Start extraction from the form using the schema
+    const result = {};
+
+    console.log('=== getFormData() starting ===');
+    console.log('Schema properties:', schema && schema.properties ? Object.keys(schema.properties) : 'none');
+
+    if (schema && schema.properties) {
+        Object.keys(schema.properties).forEach(propName => {
+            let propSchema = schema.properties[propName];
+            const propTitle = propSchema.title || propName;
+
+            // Resolve $ref for type checking
+            let resolvedSchema = propSchema;
+            if (propSchema.$ref) {
+                resolvedSchema = resolveRef(propSchema.$ref);
+            }
+
+            const isComplexType = resolvedSchema &&
+                (resolvedSchema.type === 'object' || resolvedSchema.type === 'array');
+
+            if (isComplexType) {
+                // Complex types - look for collapsible section
+                const sections = form.querySelectorAll(':scope > .collapsible-section');
+                let targetSection = null;
+
+                sections.forEach(section => {
+                    const header = section.querySelector('.collapsible-header .collapsible-title span:last-child');
+                    if (header && header.textContent === propTitle) {
+                        targetSection = section;
+                    }
+                });
+
+                if (targetSection) {
+                    const content = targetSection.querySelector('.collapsible-content');
+                    if (content) {
+                        const propData = extractData(content, propSchema, propName);
+                        if (propData !== null && (typeof propData !== 'object' || Object.keys(propData).length > 0 || Array.isArray(propData))) {
+                            result[propName] = propData;
+                        }
+                    }
+                }
+            } else {
+                // Primitive types - look for form-group with matching label
+                const formGroups = form.querySelectorAll(':scope > .form-group');
+                let foundInput = null;
+
+                formGroups.forEach(group => {
+                    const label = group.querySelector('label');
+                    if (label) {
+                        let labelText = label.childNodes[0]?.textContent?.trim() || label.textContent?.trim();
+                        if (labelText === propTitle) {
+                            foundInput = group.querySelector('input, select, textarea');
+                        }
+                    }
+                });
+
+                if (foundInput) {
+                    let value;
+                    if (foundInput.type === 'checkbox') {
+                        value = foundInput.checked;
+                    } else if (foundInput.type === 'number') {
+                        value = foundInput.value ? parseInt(foundInput.value, 10) : null;
+                    } else {
+                        value = foundInput.value || null;
+                    }
+
+                    if (value !== null && value !== '') {
+                        result[propName] = value;
+                    }
                 }
             }
         });
+    }
 
-        if (arrayData.length > 0) {
-            setNestedValue(data, basePath, arrayData);
-        }
-    });
-
-    return data;
+    console.log('=== getFormData() result ===', JSON.stringify(result, null, 2));
+    return result;
 }
 
 function setNestedValue(obj, path, value) {
-    const keys = path.split('.');
+    // Parse path into segments, handling array notation like "items[0]"
+    const segments = [];
+    const regex = /([^.\[\]]+)|\[(\d+)\]/g;
+    let match;
+    while ((match = regex.exec(path)) !== null) {
+        if (match[1] !== undefined) {
+            segments.push({ type: 'key', value: match[1] });
+        } else if (match[2] !== undefined) {
+            segments.push({ type: 'index', value: parseInt(match[2], 10) });
+        }
+    }
+
     let current = obj;
 
-    for (let i = 0; i < keys.length - 1; i++) {
-        const key = keys[i];
-        if (!(key in current)) {
-            current[key] = {};
+    for (let i = 0; i < segments.length - 1; i++) {
+        const segment = segments[i];
+        const nextSegment = segments[i + 1];
+        const key = segment.value;
+
+        if (!(key in current) || current[key] === null || current[key] === undefined) {
+            // Create array or object based on next segment type
+            current[key] = nextSegment.type === 'index' ? [] : {};
         }
         current = current[key];
     }
 
-    current[keys[keys.length - 1]] = value;
+    const lastSegment = segments[segments.length - 1];
+    current[lastSegment.value] = value;
 }
 
 function saveData() {
@@ -2197,15 +1893,29 @@ function clearValidationErrors() {
 
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== DOMContentLoaded - initializing application ===');
+
     connectWebSocket();
     requestTargetDirectories(); // Request target directories (domain, clusters, servers)
     requestSchemaList(); // Request schemas from server instead of using hardcoded list
-    generateForm();
+
+    // Initialize with empty form and editor - user will select data from dropdowns
     initializeJsonEditor();
 
     // Feature: Initialize enhancements
     loadRecentFiles(); // Load recent files from localStorage
     setupDirtyTracking(); // Set up unsaved changes tracking
+
+    // Add tab click handlers (backup for onclick attributes)
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            console.log('Tab clicked:', this.textContent);
+            const tabName = this.textContent.includes('Form') ? 'form' : 'json';
+            switchTab(tabName);
+        });
+    });
+
+    console.log('=== Application initialized successfully ===');
 });
 
 function initializeJsonEditor() {
@@ -2222,8 +1932,8 @@ function initializeJsonEditor() {
     // Set the theme selector to the current theme
     document.getElementById('theme-select').value = currentTheme;
 
-    // Set initial JSON content
-    jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
+    // Set initial JSON content (empty until user selects a schema)
+    jsonEditor.setValue('{\n  \n}', -1);
 
     // Auto-sync on content change (debounced)
     let syncTimeout;
@@ -2249,16 +1959,22 @@ function changeTheme(themeName) {
 }
 
 function switchTab(tabName) {
+    console.log('=== switchTab called ===', tabName);
     const previousTab = document.querySelector('.tab-content.active').id;
+    console.log('Previous tab:', previousTab);
 
     // Auto-sync data when switching tabs
     try {
         if (tabName === 'json' && previousTab === 'form-tab') {
             // Switching to JSON tab - sync form data to JSON
+            console.log('Switching from Form to JSON - calling getFormData()');
             const formData = getFormData();
+            console.log('getFormData returned:', formData);
             currentData = formData;
             if (jsonEditor) {
-                jsonEditor.setValue(JSON.stringify(formData, null, 2), -1);
+                const jsonStr = JSON.stringify(formData, null, 2);
+                console.log('Setting JSON editor value:', jsonStr);
+                jsonEditor.setValue(jsonStr, -1);
             }
             showSyncStatus('Form data automatically synced to JSON editor', 'success');
         } else if (tabName === 'form' && previousTab === 'json-tab') {
@@ -2271,6 +1987,7 @@ function switchTab(tabName) {
             }
         }
     } catch (e) {
+        console.error('Error in switchTab:', e);
         if (tabName === 'form' && previousTab === 'json-tab') {
             showSyncStatus('Cannot sync invalid JSON to form: ' + e.message, 'error');
             // Don't switch tabs if JSON is invalid
@@ -2332,6 +2049,8 @@ function showSyncStatus(message, type) {
 }
 
 function generateFormWithData(data) {
+    console.log('=== generateFormWithData called ===');
+    console.log('Input data:', JSON.stringify(data, null, 2));
     currentData = data;
     const form = document.getElementById('dynamicForm');
     form.innerHTML = '';
@@ -2342,11 +2061,13 @@ function generateFormWithData(data) {
             const propValue = data[prop];
             const propTitle = propSchema.title || prop;
             const propDescription = propSchema.description;
+            console.log(`  Generating form for ${prop}:`, propValue);
 
             const group = createFormGroup(propSchema, propTitle, propDescription, prop, propValue);
             form.appendChild(group);
         });
     }
+    console.log('=== generateFormWithData complete ===');
 }
 
 // Version History Functions
