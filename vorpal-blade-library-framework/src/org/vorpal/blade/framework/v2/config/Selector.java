@@ -2,18 +2,14 @@ package org.vorpal.blade.framework.v2.config;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.DummyRequest;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -24,6 +20,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 @JsonPropertyOrder({ "id", "description", "attribute", "pattern", "expression" })
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Selector implements Serializable {
+	private static final long serialVersionUID = 1L;
 	protected String id; // optional for JSON references
 	protected String description; // optional for human readable descriptions
 	protected String attribute; // location of the key data, like in the 'To' header
@@ -97,8 +94,8 @@ public class Selector implements Serializable {
 
 		try {
 
-			// jwm - find named groups, useful later
-			Map<String, String> namedGroups = new HashMap<>();
+			// jwm - find named groups, useful later; see AttributeSelector
+			// Map<String, String> namedGroups = new HashMap<>();
 
 //			sipLogger.finer(request, "attribute=" + attribute);
 
@@ -224,61 +221,61 @@ public class Selector implements Serializable {
 		return regexRoute;
 	}
 
-	public static void main4(String args[]) throws ServletParseException {
+//	public static void main4(String args[]) throws ServletParseException {
+//
+//		SipServletRequest dummyRequest = new DummyRequest("INVITE", "19137774321", "18165551234");
+//
+//		Selector toSelector = new Selector("toSelector", "To", Configuration.SIP_ADDRESS_PATTERN, "${user}");
+//		toSelector.setDescription("The user part of the To header");
+//		RegExRoute key = toSelector.findKey(dummyRequest);
+//
+//	}
 
-		SipServletRequest dummyRequest = new DummyRequest("INVITE", "19137774321", "18165551234");
+//	public static void main3(String args[]) {
+//		String strPattern = ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*";
+//		String strExpression = "${recorddn}";
+//		String key = null;
+//	}
 
-		Selector toSelector = new Selector("toSelector", "To", Configuration.SIP_ADDRESS_PATTERN, "${user}");
-		toSelector.setDescription("The user part of the To header");
-		RegExRoute key = toSelector.findKey(dummyRequest);
-
-	}
-
-	public static void main3(String args[]) {
-		String strPattern = ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*";
-		String strExpression = "${recorddn}";
-		String key = null;
-	}
-
-	public static void main2(String args[]) {
-		String strPattern = ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*";
-		String strExpression = "${recorddn}";
-		String key = null;
-
-		String strBody = //
-				"\n" + // A newline (line feed) character
-						"\r\n" + // A carriage-return character followed immediately by a newline character
-						"\r" + // A standalone carriage-return character
-						"\u0085" + // A next-line character
-						"\u2028" + // A line-separator character
-						"\u2029" + // A paragraph-separator character
-						"yarp;booyah;recorddn=+18164388687;boonah;narp" + // actual text
-						"\u2029" + // A paragraph-separator character
-						"\u2028" + // A line-separator character
-						"\u0085" + // A next-line character
-						"\r" + // A standalone carriage-return character
-						"\r\n" + // A carriage-return character followed immediately by a newline character
-						"\n" // A newline (line feed) character
-		;
-
-//		Pattern pattern = Pattern.compile(strPattern); // Doesn't work;
-		Pattern pattern = Pattern.compile(strPattern, //
-				Pattern.CASE_INSENSITIVE | //
-						Pattern.MULTILINE | //
-						Pattern.DOTALL | //
-						Pattern.UNICODE_CASE | //
-						Pattern.CANON_EQ | //
-						Pattern.UNIX_LINES | //
-//						Pattern.LITERAL | // --This one is bad
-						Pattern.UNICODE_CHARACTER_CLASS | //
-						Pattern.COMMENTS);
-		Matcher matcher = pattern.matcher(strBody);
-		if (matcher.matches()) {
-			key = matcher.replaceAll(strExpression);
-		}
-
-		System.out.println("Key: " + key);
-
-	}
+//	public static void main2(String args[]) {
+//		String strPattern = ".*recorddn=[\\+]*(?<recorddn>[0-9]+).*";
+//		String strExpression = "${recorddn}";
+//		String key = null;
+//
+//		String strBody = //
+//				"\n" + // A newline (line feed) character
+//						"\r\n" + // A carriage-return character followed immediately by a newline character
+//						"\r" + // A standalone carriage-return character
+//						"\u0085" + // A next-line character
+//						"\u2028" + // A line-separator character
+//						"\u2029" + // A paragraph-separator character
+//						"yarp;booyah;recorddn=+18164388687;boonah;narp" + // actual text
+//						"\u2029" + // A paragraph-separator character
+//						"\u2028" + // A line-separator character
+//						"\u0085" + // A next-line character
+//						"\r" + // A standalone carriage-return character
+//						"\r\n" + // A carriage-return character followed immediately by a newline character
+//						"\n" // A newline (line feed) character
+//		;
+//
+////		Pattern pattern = Pattern.compile(strPattern); // Doesn't work;
+//		Pattern pattern = Pattern.compile(strPattern, //
+//				Pattern.CASE_INSENSITIVE | //
+//						Pattern.MULTILINE | //
+//						Pattern.DOTALL | //
+//						Pattern.UNICODE_CASE | //
+//						Pattern.CANON_EQ | //
+//						Pattern.UNIX_LINES | //
+////						Pattern.LITERAL | // --This one is bad
+//						Pattern.UNICODE_CHARACTER_CLASS | //
+//						Pattern.COMMENTS);
+//		Matcher matcher = pattern.matcher(strBody);
+//		if (matcher.matches()) {
+//			key = matcher.replaceAll(strExpression);
+//		}
+//
+//		System.out.println("Key: " + key);
+//
+//	}
 
 }

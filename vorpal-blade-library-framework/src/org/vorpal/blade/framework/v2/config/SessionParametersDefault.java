@@ -7,7 +7,7 @@ public class SessionParametersDefault extends SessionParameters implements Seria
 	private static final long serialVersionUID = 1L;
 
 	public SessionParametersDefault() {
-		this.expiration = 720; // 12 hours
+		this.expiration = 60; // 1 hour
 		this.keepAlive = new KeepAliveParametersDefault();
 		this.sessionSelectors = new LinkedList<>();
 
