@@ -46,13 +46,11 @@ function connectWebSocket() {
     const contextPath = window.location.pathname.substring(0, window.location.pathname.indexOf('/', 1));
     const wsUrl = protocol + '//' + window.location.host + contextPath + '/websocket';
 
-    console.log('Connecting to WebSocket:', wsUrl);
     updateWebSocketStatus('Connecting...', 'warning');
 
     websocket = new WebSocket(wsUrl);
 
     websocket.onopen = function() {
-        console.log('WebSocket connected successfully');
         updateWebSocketStatus('Connected', 'success');
         reconnectAttempts = 0; // Reset on successful connection
         lastPongTime = Date.now();
@@ -69,24 +67,20 @@ function connectWebSocket() {
     };
 
     websocket.onclose = function(event) {
-        console.log('WebSocket connection closed. Code:', event.code, 'Reason:', event.reason);
         stopHeartbeat(); // Stop sending pings
 
         if (reconnectAttempts < maxReconnectAttempts) {
             reconnectAttempts++;
             const delay = reconnectDelay * reconnectAttempts; // Exponential backoff
             updateWebSocketStatus(`Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...`, 'warning');
-            console.log(`Reconnecting in ${delay}ms...`);
             setTimeout(connectWebSocket, delay);
         } else {
             updateWebSocketStatus('Connection failed. Please reload page.', 'error');
-            console.error('Max reconnection attempts reached. Please check server and reload page.');
         }
     };
 
     websocket.onerror = function(error) {
         console.error('WebSocket error:', error);
-        console.log('WebSocket state:', websocket.readyState);
         updateWebSocketStatus('Connection error', 'error');
     };
 }
@@ -101,8 +95,6 @@ function updateWebSocketStatus(message, type) {
 }
 
 function handleWebSocketMessage(message) {
-    console.log('Received WebSocket message:', message.type);
-
     switch(message.type) {
         case 'schema_loaded':
             handleSchemaLoaded(message.content);
@@ -115,7 +107,6 @@ function handleWebSocketMessage(message) {
         case 'save_success':
             showSyncStatus('Data saved successfully', 'success');
             showSchemaLoadStatus('Saved', 'success');
-            console.log('Save successful');
             clearDirty(); // Feature: Clear dirty state after successful save
             break;
 
@@ -133,7 +124,6 @@ function handleWebSocketMessage(message) {
 
         case 'file_content':
             // Ignore initial file_content message from generic file manager
-            console.log('Received initial file_content (ignored)');
             break;
 
         case 'pong':
@@ -158,9 +148,6 @@ function handleWebSocketMessage(message) {
             showSyncStatus('Error: ' + message.content, 'error');
             console.error('Server error:', message.content);
             break;
-
-        default:
-            console.log('Unhandled message type:', message.type);
     }
 }
 
@@ -168,9 +155,7 @@ function sendWebSocketMessage(action, params) {
     if (websocket && websocket.readyState === WebSocket.OPEN) {
         const message = { action: action, ...params };
         websocket.send(JSON.stringify(message));
-        console.log('Sent WebSocket message:', message);
     } else {
-        console.error('WebSocket not connected');
         showSchemaLoadStatus('WebSocket not connected', 'error');
     }
 }
@@ -182,19 +167,15 @@ function startHeartbeat() {
     // Send ping every PING_INTERVAL milliseconds
     pingInterval = setInterval(function() {
         if (websocket && websocket.readyState === WebSocket.OPEN) {
-            console.log('Sending ping...');
             sendWebSocketMessage('ping', {});
 
             // Set timeout to expect pong response
             pongTimeout = setTimeout(function() {
-                console.error('No pong received within timeout. Connection may be dead.');
                 // Close connection to trigger reconnect
                 websocket.close(1000, 'No pong received');
             }, PONG_TIMEOUT);
         }
     }, PING_INTERVAL);
-
-    console.log('Heartbeat started (ping every ' + (PING_INTERVAL/1000) + 's)');
 }
 
 function stopHeartbeat() {
@@ -206,7 +187,6 @@ function stopHeartbeat() {
         clearTimeout(pongTimeout);
         pongTimeout = null;
     }
-    console.log('Heartbeat stopped');
 }
 
 function handlePong() {
@@ -217,16 +197,13 @@ function handlePong() {
     }
 
     lastPongTime = Date.now();
-    console.log('Pong received - connection alive');
 }
 
 // Target Directory Functions
 function requestTargetDirectories() {
     if (websocket && websocket.readyState === WebSocket.OPEN) {
-        console.log('Requesting target directories...');
         sendWebSocketMessage('list_target_directories', {});
     } else {
-        console.warn('WebSocket not connected, will retry target directories request');
         setTimeout(requestTargetDirectories, 1000);
     }
 }
@@ -234,7 +211,6 @@ function requestTargetDirectories() {
 function handleTargetDirectoriesList(content) {
     try {
         targetDirectories = JSON.parse(content);
-        console.log('Received', targetDirectories.length, 'target directories');
         populateTargetDirectoriesDropdown();
 
         // Auto-select domain if available
@@ -272,8 +248,6 @@ function populateTargetDirectoriesDropdown() {
         option.title = target.path + ' (' + target.type + ')';
         select.appendChild(option);
     });
-
-    console.log('Populated target dropdown with', targetDirectories.length, 'directories');
 }
 
 function onTargetDirectoryChange(path) {
@@ -283,7 +257,6 @@ function onTargetDirectoryChange(path) {
     }
 
     selectedTargetDirectory = targetDirectories.find(t => t.path === path);
-    console.log('Selected target directory:', selectedTargetDirectory);
     showSchemaLoadStatus('Target: ' + (selectedTargetDirectory ? selectedTargetDirectory.displayName : 'None'), 'success');
 }
 
@@ -291,10 +264,8 @@ function onTargetDirectoryChange(path) {
 // Request schema list from server
 function requestSchemaList() {
     if (websocket && websocket.readyState === WebSocket.OPEN) {
-        console.log('Requesting schema list from:', SCHEMAS_DIRECTORY);
         sendWebSocketMessage('list_schemas', { directory: SCHEMAS_DIRECTORY });
     } else {
-        console.warn('WebSocket not connected, will retry schema list request');
         setTimeout(requestSchemaList, 1000);
     }
 }
@@ -303,7 +274,6 @@ function requestSchemaList() {
 function handleSchemasList(content) {
     try {
         schemaRegistry = JSON.parse(content);
-        console.log('Received', schemaRegistry.length, 'schemas from server');
         populateSchemaDropdown();
     } catch (e) {
         console.error('Error parsing schemas list:', e);
@@ -352,8 +322,6 @@ function populateSchemaDropdown() {
         option.title = tooltip;
         select.appendChild(option);
     });
-
-    console.log('Populated dropdown with', schemaRegistry.length, 'schemas');
 }
 
 // Load a schema and its associated JSON data via WebSocket
@@ -388,11 +356,9 @@ function loadSchema(schemaName) {
     pendingRequests.set('schema', entry);
 
     // Request the schema file via WebSocket
-    console.log('Requesting schema:', entry.schemaFile);
     sendWebSocketMessage('load_schema', { file: entry.schemaFile });
 
     // Request JSON file resolution based on selected target
-    console.log('Resolving JSON file for schema:', schemaName, 'in target:', selectedTargetDirectory.path);
     sendWebSocketMessage('resolve_json_file', {
         schemaName: schemaName,
         targetDirectory: selectedTargetDirectory.path
@@ -402,7 +368,6 @@ function loadSchema(schemaName) {
 function handleJsonFileResolved(content) {
     try {
         const resolution = JSON.parse(content);
-        console.log('JSON file resolved:', resolution);
 
         const entry = pendingRequests.get('schema');
         if (entry) {
@@ -413,10 +378,8 @@ function handleJsonFileResolved(content) {
 
             // If JSON file exists, load it
             if (resolution.jsonFile) {
-                console.log('Loading JSON data:', resolution.jsonFile);
                 sendWebSocketMessage('load_json', { file: resolution.jsonFile });
             } else {
-                console.log('No JSON data file for this schema in selected target');
                 finalizeSchemaLoad({});
             }
         }
@@ -430,12 +393,10 @@ function handleSchemaLoaded(content) {
     try {
         const entry = pendingRequests.get('schema');
         if (!entry) {
-            console.error('No pending schema request found');
             return;
         }
 
         const newSchema = JSON.parse(content);
-        console.log('Schema loaded:', newSchema.title);
 
         // Update the global schema
         schema = newSchema;
@@ -459,16 +420,12 @@ function handleJsonLoaded(content) {
         let newData = {};
         if (content && content.trim() !== '') {
             newData = JSON.parse(content);
-            console.log('JSON data loaded successfully');
 
             // Check if we loaded from a sample file
             const entry = pendingRequests.get('schema');
             if (entry && entry.jsonFileType === 'sample') {
                 showSyncStatus('Loaded sample data (will save to primary location)', 'warning');
-                console.log('Using sample data file:', entry.jsonFile);
             }
-        } else {
-            console.log('Empty JSON data received');
         }
 
         finalizeSchemaLoad(newData);
@@ -482,16 +439,11 @@ function handleJsonLoaded(content) {
 }
 
 function finalizeSchemaLoad(newData) {
-    console.log('=== finalizeSchemaLoad called ===');
-    console.log('newData:', newData);
-    console.log('newData keys:', newData ? Object.keys(newData) : 'null');
-
     // Update the data
     initialData = newData;
     currentData = newData;
 
     // Regenerate the form with the new schema and data
-    console.log('Calling generateFormWithData...');
     generateFormWithData(currentData);
 
     // Update the JSON editor
@@ -895,7 +847,6 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
 }
 
 function createMapGroup(fieldSchema, title, description, path, value = null, isNested = false) {
-    console.log(`createMapGroup [${path}]: value=`, value);
     const content = document.createElement('div');
 
     const hasData = hasValue(value);
@@ -923,13 +874,9 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
 
     // Add existing entries
     if (value) {
-        const keys = Object.keys(value);
-        console.log(`  [${path}] Adding ${keys.length} map entries:`, keys);
-        keys.forEach(key => {
+        Object.keys(value).forEach(key => {
             addMapEntry(container, fieldSchema.additionalProperties, path, key, value[key]);
         });
-    } else {
-        console.log(`  [${path}] No value provided, map is empty`);
     }
 
     const section = createCollapsibleSection(title || 'Map', description, content, hasData, autoCollapse);
@@ -1142,24 +1089,19 @@ function getFormData() {
             if (!schemaNode) return null;
         }
 
-        console.log(`extractData [${debugPath}]: type=${schemaNode.type}, container=`, container);
-
         if (schemaNode.type === 'object') {
             if (schemaNode.additionalProperties) {
                 // This is a map - find map container
                 // Note: map-container might be inside a wrapper div due to createCollapsibleSection structure
                 const mapContainer = container.querySelector(':scope > .map-container, :scope > div > .map-container, :scope > .collapsible-section > .collapsible-content > .map-container');
-                console.log(`  [${debugPath}] MAP - mapContainer found:`, mapContainer);
                 if (!mapContainer) return null;
 
                 const result = {};
                 const entries = Array.from(mapContainer.children).filter(el => el.classList.contains('map-entry'));
-                console.log(`  [${debugPath}] MAP - found ${entries.length} entries`);
 
-                entries.forEach((entry, idx) => {
+                entries.forEach((entry) => {
                     const keyInput = entry.querySelector('.map-key-input');
                     const key = keyInput ? keyInput.value.trim() : '';
-                    console.log(`    [${debugPath}] entry ${idx}: key="${key}"`);
                     if (key) {
                         const valueData = extractData(entry, schemaNode.additionalProperties, `${debugPath}.${key}`);
                         if (valueData !== null && (typeof valueData !== 'object' || Object.keys(valueData).length > 0)) {
@@ -1168,7 +1110,6 @@ function getFormData() {
                     }
                 });
 
-                console.log(`  [${debugPath}] MAP result:`, result);
                 return Object.keys(result).length > 0 ? result : null;
             } else if (schemaNode.properties) {
                 // Regular object with defined properties
@@ -1250,22 +1191,18 @@ function getFormData() {
             // Find array container
             // Note: array-container might be inside wrapper divs due to createCollapsibleSection/createArrayGroup structure
             const arrayContainer = container.querySelector(':scope > .array-container, :scope > div > .array-container, :scope > .form-group.array > .array-container, :scope > div > .form-group.array > .array-container');
-            console.log(`  [${debugPath}] ARRAY - arrayContainer found:`, arrayContainer);
             if (!arrayContainer) return null;
 
             const result = [];
             const items = Array.from(arrayContainer.children).filter(el => el.classList.contains('array-item'));
-            console.log(`  [${debugPath}] ARRAY - found ${items.length} items`);
 
             items.forEach((item, idx) => {
                 const itemData = extractData(item, schemaNode.items, `${debugPath}[${idx}]`);
-                console.log(`    [${debugPath}] item ${idx} data:`, itemData);
                 if (itemData !== null) {
                     result.push(itemData);
                 }
             });
 
-            console.log(`  [${debugPath}] ARRAY result:`, result);
             return result.length > 0 ? result : null;
         } else {
             // Primitive type - find the input
@@ -1281,7 +1218,6 @@ function getFormData() {
                 value = input.value || null;
             }
 
-            console.log(`  [${debugPath}] PRIMITIVE - value="${value}"`);
             return (value !== null && value !== '') ? value : null;
         }
 
@@ -1290,9 +1226,6 @@ function getFormData() {
 
     // Start extraction from the form using the schema
     const result = {};
-
-    console.log('=== getFormData() starting ===');
-    console.log('Schema properties:', schema && schema.properties ? Object.keys(schema.properties) : 'none');
 
     if (schema && schema.properties) {
         Object.keys(schema.properties).forEach(propName => {
@@ -1362,7 +1295,6 @@ function getFormData() {
         });
     }
 
-    console.log('=== getFormData() result ===', JSON.stringify(result, null, 2));
     return result;
 }
 
@@ -1435,8 +1367,6 @@ function saveData() {
         // No file loaded, create new one in target directory
         savePath = selectedTargetDirectory.path + '/' + currentSchemaName + '.json';
     }
-
-    console.log('Saving to:', savePath);
 
     // Send save request via WebSocket
     const jsonContent = JSON.stringify(data, null, 2);
@@ -1513,7 +1443,6 @@ function setDirty() {
         if (indicator) {
             indicator.style.display = 'inline-flex';
         }
-        console.log('Form marked as dirty (unsaved changes)');
     }
 }
 
@@ -1525,7 +1454,6 @@ function clearDirty() {
     }
     // Save current snapshot for comparison
     savedDataSnapshot = JSON.stringify(getFormData());
-    console.log('Form marked as clean (saved)');
 }
 
 function checkUnsavedChanges() {
@@ -1723,8 +1651,6 @@ function executeClone() {
     // Construct save path for clone
     const clonePath = targetPath + '/' + currentSchemaName + '.json';
 
-    console.log('Cloning to:', clonePath);
-
     // Send save request via WebSocket
     const jsonContent = JSON.stringify(data, null, 2);
     sendWebSocketMessage('save_json', {
@@ -1893,8 +1819,6 @@ function clearValidationErrors() {
 
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('=== DOMContentLoaded - initializing application ===');
-
     connectWebSocket();
     requestTargetDirectories(); // Request target directories (domain, clusters, servers)
     requestSchemaList(); // Request schemas from server instead of using hardcoded list
@@ -1909,13 +1833,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add tab click handlers (backup for onclick attributes)
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', function(e) {
-            console.log('Tab clicked:', this.textContent);
             const tabName = this.textContent.includes('Form') ? 'form' : 'json';
             switchTab(tabName);
         });
     });
-
-    console.log('=== Application initialized successfully ===');
 });
 
 function initializeJsonEditor() {
@@ -1959,22 +1880,16 @@ function changeTheme(themeName) {
 }
 
 function switchTab(tabName) {
-    console.log('=== switchTab called ===', tabName);
     const previousTab = document.querySelector('.tab-content.active').id;
-    console.log('Previous tab:', previousTab);
 
     // Auto-sync data when switching tabs
     try {
         if (tabName === 'json' && previousTab === 'form-tab') {
             // Switching to JSON tab - sync form data to JSON
-            console.log('Switching from Form to JSON - calling getFormData()');
             const formData = getFormData();
-            console.log('getFormData returned:', formData);
             currentData = formData;
             if (jsonEditor) {
-                const jsonStr = JSON.stringify(formData, null, 2);
-                console.log('Setting JSON editor value:', jsonStr);
-                jsonEditor.setValue(jsonStr, -1);
+                jsonEditor.setValue(JSON.stringify(formData, null, 2), -1);
             }
             showSyncStatus('Form data automatically synced to JSON editor', 'success');
         } else if (tabName === 'form' && previousTab === 'json-tab') {
@@ -2049,8 +1964,6 @@ function showSyncStatus(message, type) {
 }
 
 function generateFormWithData(data) {
-    console.log('=== generateFormWithData called ===');
-    console.log('Input data:', JSON.stringify(data, null, 2));
     currentData = data;
     const form = document.getElementById('dynamicForm');
     form.innerHTML = '';
@@ -2061,13 +1974,11 @@ function generateFormWithData(data) {
             const propValue = data[prop];
             const propTitle = propSchema.title || prop;
             const propDescription = propSchema.description;
-            console.log(`  Generating form for ${prop}:`, propValue);
 
             const group = createFormGroup(propSchema, propTitle, propDescription, prop, propValue);
             form.appendChild(group);
         });
     }
-    console.log('=== generateFormWithData complete ===');
 }
 
 // Version History Functions
