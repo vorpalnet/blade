@@ -504,6 +504,15 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
         select.id = id;
         select.setAttribute('data-path', path);
 
+        // Add empty option when no value is set
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = '-- Select --';
+        if (value === null || value === undefined || value === '') {
+            emptyOption.selected = true;
+        }
+        select.appendChild(emptyOption);
+
         fieldSchema.enum.forEach(option => {
             const optionEl = document.createElement('option');
             optionEl.value = option;
@@ -1891,24 +1900,19 @@ function switchTab(tabName) {
             if (jsonEditor) {
                 jsonEditor.setValue(JSON.stringify(formData, null, 2), -1);
             }
-            showSyncStatus('Form data automatically synced to JSON editor', 'success');
         } else if (tabName === 'form' && previousTab === 'json-tab') {
             // Switching to Form tab - sync JSON data to form
             if (jsonEditor) {
                 const jsonData = JSON.parse(jsonEditor.getValue());
                 currentData = jsonData;
                 generateFormWithData(jsonData);
-                showSyncStatus('JSON data automatically synced to form', 'success');
             }
         }
     } catch (e) {
         console.error('Error in switchTab:', e);
         if (tabName === 'form' && previousTab === 'json-tab') {
             showSyncStatus('Cannot sync invalid JSON to form: ' + e.message, 'error');
-            // Don't switch tabs if JSON is invalid
             return;
-        } else {
-            showSyncStatus('Error during auto-sync: ' + e.message, 'error');
         }
     }
 
