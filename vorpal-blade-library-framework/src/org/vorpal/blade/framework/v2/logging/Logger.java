@@ -301,7 +301,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 		if (this.isLoggable(level)) {
 			try {
-			
+
 				log(level, hexHash(message) + " " + comments);
 
 			} catch (Exception e) {

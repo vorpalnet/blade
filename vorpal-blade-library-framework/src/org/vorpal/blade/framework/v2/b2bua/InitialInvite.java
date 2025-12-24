@@ -174,30 +174,6 @@ public class InitialInvite extends Callflow {
 			bobRequest.setRequestURI(aliceRequest.getRequestURI());
 			linkSessions(aliceRequest.getSession(), bobRequest.getSession());
 
-			// jwm - I think this code should go in Callflow.sendRequest
-			// Code to X-Vorpal-Session AND X-Vorpal-Timestamp
-			if (bobRequest.isInitial() && null == bobRequest.getHeader("X-Vorpal-Session")) {
-				SipSession sipSession = bobRequest.getSession();
-				String indexKey = getVorpalSessionId(appSession);
-				if (indexKey == null) {
-					indexKey = AsyncSipServlet.generateIndexKey(bobRequest);
-				}
-				String dialog = getVorpalDialogId(sipSession);
-				if (dialog == null) {
-					dialog = createVorpalDialogId(sipSession);
-				}
-
-				String xvs = indexKey + ":" + dialog;
-				request.setHeader("X-Vorpal-Session", xvs);
-				String xvt = (String) appSession.getAttribute("X-Vorpal-Timestamp");
-				if (xvt == null) {
-					xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-				}
-				request.setHeader("X-Vorpal-Timestamp", xvt);
-			} else {
-				// sipLogger.warning(bobRequest, "X-Vorpal-Sesson was already there?");
-			}
-
 			// This is an API kludge to let the user know what callflow was used
 			bobRequest.setAttribute("callflow", this);
 

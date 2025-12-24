@@ -27,7 +27,6 @@ package org.vorpal.blade.framework.v2.callflow;
 import java.io.IOException;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -62,11 +61,11 @@ import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.DummyResponse;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.keepalive.KeepAlive;
 import org.vorpal.blade.framework.v2.keepalive.KeepAliveExpiry;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
@@ -419,7 +418,7 @@ public abstract class Callflow implements Serializable {
 		return new Expectation(appSession, method, callback);
 	}
 
-	public static String createVorpalSessionId(SipApplicationSession appSession) {
+	private static String createVorpalSessionId(SipApplicationSession appSession) {
 		String indexKey = null;
 
 		do {
@@ -430,39 +429,87 @@ public abstract class Callflow implements Serializable {
 
 		appSession.setAttribute("X-Vorpal-Session", indexKey);
 
-		// appSession.addIndexKey(indexKey);
-
 		// X-Vorpal-Session + X-Vorpal-Timestamp will be unique.
 		// Use this for a database primary key in future designs.
 		appSession.setAttribute("X-Vorpal-Timestamp", Long.toHexString(System.currentTimeMillis()).toUpperCase());
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(appSession,
+					Color.RED_BOLD_BRIGHT("Callflow.createVorapalSessionId - indexKey=" + indexKey));
+		}
 
 		return indexKey;
 	}
 
 	public static String getVorpalSessionId(SipApplicationSession appSession) {
-		String indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+		return (String) appSession.getAttribute("X-Vorpal-Session");
+	}
+
+	public static String getVorpalSessionId(SipServletRequest request) {
+		String indexKey = null;
+		String dialogId = null;
+
+		if (request != null) {
+			SipApplicationSession appSession = request.getApplicationSession();
+			indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+
+			if (indexKey == null) {
+				String xVorpalSession = (String) appSession.getAttribute("X-Vorpal-Session");
+				if (xVorpalSession != null) {
+					SipSession sipSession = request.getSession();
+					indexKey = xVorpalSession.substring(0, xVorpalSession.indexOf(":"));
+					int colonIndex = xVorpalSession.indexOf(':');
+					indexKey = xVorpalSession.substring(0, colonIndex);
+					appSession.setAttribute("X-Vorpal-Session", indexKey);
+					dialogId = xVorpalSession.substring(colonIndex + 1);
+					sipSession.setAttribute("X-Vorpal-Dialog", dialogId);
+				}
+			}
+
+			indexKey = (indexKey != null) ? indexKey : createVorpalSessionId(appSession);
+		}
+
 		return indexKey;
 	}
 
-	public static String createVorpalDialogId(SipSession sipSession) {
+	private static String createVorpalDialogId(SipSession sipSession) {
 		String dialog = null;
 
-		try {
-			dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
-			sipSession.setAttribute("X-Vorpal-Dialog", dialog);
-		} catch (Exception e) {
-			// OU812;
+		if (sipSession != null) {
+
+			try {
+				dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
+				sipSession.setAttribute("X-Vorpal-Dialog", dialog);
+			} catch (Exception e) {
+				// OU812;
+			}
 		}
 
 		return dialog;
 	}
 
 	public static String getVorpalDialogId(SipSession sipSession) {
-		String dialog = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+		String dialog = null;
 
-		// jwm - When not using the full framework
-		if (dialog == null) {
-			dialog = createVorpalDialogId(sipSession);
+		if (sipSession != null) {
+			dialog = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+			dialog = (dialog != null) ? dialog : createVorpalDialogId(sipSession);
+		}
+
+		return dialog;
+	}
+
+	public static String getVorpalDialogId(SipServletMessage msg) {
+		String dialog = null;
+
+		if (msg != null) {
+			dialog = getVorpalDialogId(msg.getSession());
+
+			if (dialog == null) {
+				if (msg instanceof SipServletRequest) {
+					dialog = createVorpalDialogId(msg.getSession());
+				}
+			}
 		}
 
 		return dialog;
@@ -554,30 +601,19 @@ public abstract class Callflow implements Serializable {
 					switch (method) {
 					case INVITE:
 						sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
+
+						if (request.isInitial()) {
+							String vorpalId = getVorpalSessionId(appSession);
+							String dialogId = getVorpalDialogId(sipSession);
+							String timestamp = getVorpalTimestamp(appSession);
+							request.setHeader("X-Vorpal-Session", vorpalId + ":" + dialogId);
+							request.setHeader("X-Vorpal-Timestamp", timestamp);
+						}
+
 						break;
 					case ACK:
 						sipSession.removeAttribute("EXPECT_ACK");
 						break;
-					}
-
-					if (request.isInitial() && null == request.getHeader("X-Vorpal-Session")) {
-						String indexKey = getVorpalSessionId(appSession);
-						if (indexKey == null) {
-							indexKey = AsyncSipServlet.generateIndexKey(request);
-						}
-						String dialog = getVorpalDialogId(sipSession);
-						if (dialog == null) {
-							dialog = createVorpalDialogId(sipSession);
-						}
-
-						String xvs = indexKey + ":" + dialog;
-						request.setHeader("X-Vorpal-Session", xvs);
-						String xvt = (String) appSession.getAttribute("X-Vorpal-Timestamp");
-						if (xvt == null) {
-							xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-						}
-						request.setHeader("X-Vorpal-Timestamp", xvt);
-
 					}
 
 					// useful for identifying sessions
@@ -624,9 +660,7 @@ public abstract class Callflow implements Serializable {
 	 * @throws IOException
 	 */
 	public void sendRequest(SipServletRequest request) throws ServletException, IOException {
-
 		sendRequest(request, null);
-
 	}
 
 	/**
@@ -1700,16 +1734,17 @@ public abstract class Callflow implements Serializable {
 		return incomingRequest;
 	}
 
-	public static Date getVorpalTimestamp(SipApplicationSession appSession) {
-		Date date = null;
+	public static String getVorpalTimestamp(SipApplicationSession appSession) {
+		String timestamp = null;
 
 		if (appSession != null && appSession.isValid()) {
-			String strTimestamp = (String) appSession.getAttribute("X-Vorpal-Timestamp");
-			long timestamp = Long.parseLong(strTimestamp, 16);
-			date = new Date(timestamp);
+			timestamp = (String) appSession.getAttribute("X-Vorpal-Timestamp");
+			if (timestamp == null) {
+				timestamp = Long.toHexString(System.currentTimeMillis()).toUpperCase();
+			}
 		}
 
-		return date;
+		return timestamp;
 	}
 
 }

@@ -165,86 +165,47 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
-	/**
-	 * This function creates a header called X-Vorpal-Session, which contains a
-	 * SipApplicationSession index key if one does not already exist. This session
-	 * key can be used to in the future via
-	 * SipApplicationSession.getApplicationSessionByKey() for creating web service
-	 * requests or other types of functions.
-	 * 
-	 * @param request
-	 */
-	public static String generateIndexKey(SipServletRequest request) {
-		String session, indexKey, dialog;
-		SipApplicationSession appSession = request.getApplicationSession();
-		SipSession sipSession = request.getSession();
-
-		session = request.getHeader("X-Vorpal-Session");
-
-		if (null != session) {
-			int colonIndex = session.indexOf(':');
-			indexKey = session.substring(0, colonIndex);
-			appSession.setAttribute("X-Vorpal-Session", indexKey);
-			dialog = session.substring(colonIndex + 1);
-			sipSession.setAttribute("X-Vorpal-Dialog", dialog);
-		} else {
-
-			indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
-			if (indexKey == null) {
-				indexKey = Callflow.createVorpalSessionId(appSession);
-			}
-
-			dialog = (String) sipSession.getAttribute("X-Vorpal-Dialog");
-			if (dialog == null) {
-				dialog = Callflow.createVorpalDialogId(sipSession);
-			}
-		}
-
-		if (request.getMethod().equals("INVITE")) { // too resource intensive for OPTIONS, REGISTER, etc.
-			appSession.addIndexKey(indexKey);
-			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(request, "AsyncSipServlet - generateIndexKey, adding indexKey=" + indexKey
-						+ ", all indexKeys=" + appSession.getIndexKeys());
-			}
-		}
-
-		return indexKey;
-
-	}
-
 	@SuppressWarnings("unchecked")
 	@Override
 	protected void doRequest(SipServletRequest _request) throws ServletException, IOException {
 
 		try {
-
-			SipSession sipSession = _request.getSession();
 			SipServletRequest request = _request;
 
-			LinkedList<SipServletRequest> glareQueue = (LinkedList<SipServletRequest>) sipSession
-					.getAttribute(GLARE_QUEUE);
-
-			// For processing glare, stack messages up
-			Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
-			expectAck = (expectAck != null && expectAck == true) ? true : false;
-
-//			sipLogger.warning(_request, "AsyncSipServlet.doRequest - expectAck=" + expectAck);
-			if (expectAck == false) {
-
-				if (glareQueue != null && glareQueue.size() > 0) {
-					sipLogger.warning(_request, "AsyncSipServlet.doRequest - adding request to queue");
-					glareQueue.add(_request);
-					request = glareQueue.removeFirst();
-					sipSession.setAttribute(GLARE_QUEUE, glareQueue);
-				}
-			}
-
+			SipSession sipSession = _request.getSession();
+			LinkedList<SipServletRequest> glareQueue = //
+					(LinkedList<SipServletRequest>) sipSession.getAttribute(GLARE_QUEUE);
 			Callflow callflow = null;
 			Callback<SipServletRequest> requestLambda;
 			SipApplicationSession appSession = request.getApplicationSession();
 			String method = request.getMethod();
 			AttributesKey rr = null;
 			SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
+
+			if (request.getMethod().equals("INVITE") && request.isInitial()) {
+				// creates a session tracking key
+				appSession.addIndexKey(Callflow.getVorpalSessionId(request));
+
+				// attempt to keep track of who called whom
+				request.getSession().setAttribute("userAgent", "caller");
+				request.getSession().setAttribute("_diagramLeft", Boolean.TRUE);
+				request.getSession().setAttribute("_DID", ((SipURI) request.getTo().getURI()).getUser());
+				request.getSession().setAttribute("_ANI", ((SipURI) request.getFrom().getURI()).getUser());
+			}
+
+			// For processing glare, stack messages up
+			Boolean expectAck = (Boolean) sipSession.getAttribute("EXPECT_ACK");
+			expectAck = (expectAck != null && expectAck == true) ? true : false;
+
+			if (expectAck == false) {
+
+				if (glareQueue != null && glareQueue.size() > 0) {
+					sipLogger.warning(_request, "AsyncSipServlet.doRequest - glare; adding request to queue");
+					glareQueue.add(_request);
+					request = glareQueue.removeFirst();
+					sipSession.setAttribute(GLARE_QUEUE, glareQueue);
+				}
+			}
 
 			if (sipLogger.isLoggable(Level.FINER)) {
 				try {
@@ -305,16 +266,16 @@ public abstract class AsyncSipServlet extends SipServlet
 
 				try {
 
-					if (request.isInitial()) {
-						// creates a session tracking key, if one doesn't already exist
-						generateIndexKey(request);
-
-						// attempt to keep track of who called whom
-						request.getSession().setAttribute("userAgent", "caller");
-						request.getSession().setAttribute("_diagramLeft", Boolean.TRUE);
-						request.getSession().setAttribute("_DID", ((SipURI) request.getTo().getURI()).getUser());
-						request.getSession().setAttribute("_ANI", ((SipURI) request.getFrom().getURI()).getUser());
-					}
+//					if (request.isInitial()) {
+//						// creates a session tracking key, if one doesn't already exist
+//						generateIndexKey(request);
+//
+//						// attempt to keep track of who called whom
+//						request.getSession().setAttribute("userAgent", "caller");
+//						request.getSession().setAttribute("_diagramLeft", Boolean.TRUE);
+//						request.getSession().setAttribute("_DID", ((SipURI) request.getTo().getURI()).getUser());
+//						request.getSession().setAttribute("_ANI", ((SipURI) request.getFrom().getURI()).getUser());
+//					}
 
 					// place additional KeepAlive logic here?
 
