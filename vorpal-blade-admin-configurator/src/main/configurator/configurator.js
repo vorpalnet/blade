@@ -559,7 +559,10 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
     }
 }
 
-function createFormGroup(fieldSchema, title, description, path, value = null, isNested = false) {
+function createFormGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
+    // Store original schema for delete functionality (before $ref resolution)
+    const schemaForDelete = originalSchema || fieldSchema;
+
     if (fieldSchema.$ref) {
         fieldSchema = resolveRef(fieldSchema.$ref);
     }
@@ -567,17 +570,21 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
     if (fieldSchema.type === 'object') {
         if (fieldSchema.additionalProperties) {
             // This is a map
-            return createMapGroup(fieldSchema, title, description, path, value, isNested);
+            return createMapGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete);
         } else {
             // Regular object with defined properties
-            return createObjectGroup(fieldSchema, title, description, path, value, isNested);
+            return createObjectGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete);
         }
     } else if (fieldSchema.type === 'array') {
-        return createArrayGroup(fieldSchema, title, description, path, value, isNested);
+        return createArrayGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete);
     } else {
         // Simple field
         const group = document.createElement('div');
         group.className = `form-group${isNested ? ' nested' : ''}`;
+
+        // Create header with label and delete button
+        const headerRow = document.createElement('div');
+        headerRow.className = 'form-group-header';
 
         const label = document.createElement('label');
         label.textContent = title || 'Field';
@@ -596,7 +603,24 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
             label.appendChild(helpIcon);
         }
 
-        group.appendChild(label);
+        headerRow.appendChild(label);
+
+        // Add delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'delete-property-btn';
+        deleteBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+        deleteBtn.title = `Remove ${title}`;
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            // Replace with placeholder
+            const placeholder = createAddPropertyPlaceholder(schemaForDelete, title, description, path, null, isNested);
+            group.replaceWith(placeholder);
+            setDirty();
+        };
+        headerRow.appendChild(deleteBtn);
+
+        group.appendChild(headerRow);
 
         const element = createFormElement(fieldSchema, path, value);
 
@@ -604,8 +628,10 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
             const checkboxGroup = document.createElement('div');
             checkboxGroup.className = 'checkbox-group';
             checkboxGroup.appendChild(element);
+            // Move label into checkbox group
+            headerRow.removeChild(label);
             checkboxGroup.appendChild(label);
-            group.innerHTML = '';
+            // Keep delete button in header
             group.appendChild(checkboxGroup);
             if (description) {
                 const desc = document.createElement('div');
@@ -621,7 +647,7 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
     }
 }
 
-function createCollapsibleSection(title, description, content, hasData = false, autoCollapse = false) {
+function createCollapsibleSection(title, description, content, hasData = false, autoCollapse = false, deleteInfo = null) {
     const section = document.createElement('div');
     section.className = 'collapsible-section';
 
@@ -659,6 +685,30 @@ function createCollapsibleSection(title, description, content, hasData = false, 
     statusBadge.className = `collapsible-badge ${hasData ? 'has-data' : 'null'}`;
     statusBadge.textContent = hasData ? 'has data' : 'empty';
     badgeContainer.appendChild(statusBadge);
+
+    // Add delete button if deleteInfo is provided
+    if (deleteInfo) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'delete-property-btn';
+        deleteBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+        deleteBtn.title = `Remove ${title}`;
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            // Replace with placeholder
+            const placeholder = createAddPropertyPlaceholder(
+                deleteInfo.schema,
+                deleteInfo.title,
+                deleteInfo.description,
+                deleteInfo.path,
+                null,
+                deleteInfo.isNested
+            );
+            section.replaceWith(placeholder);
+            setDirty();
+        };
+        badgeContainer.appendChild(deleteBtn);
+    }
 
     header.appendChild(badgeContainer);
 
@@ -833,7 +883,109 @@ function hasValue(value) {
     return true;
 }
 
-function createObjectGroup(fieldSchema, title, description, path, value = null, isNested = false) {
+function generateDefaultValue(fieldSchema) {
+    if (!fieldSchema) return null;
+
+    // Resolve $ref if present
+    if (fieldSchema.$ref) {
+        fieldSchema = resolveRef(fieldSchema.$ref);
+        if (!fieldSchema) return null;
+    }
+
+    // Use schema default if provided
+    if (fieldSchema.default !== undefined) {
+        return JSON.parse(JSON.stringify(fieldSchema.default));
+    }
+
+    // Generate based on type
+    if (fieldSchema.enum && fieldSchema.enum.length > 0) {
+        return fieldSchema.enum[0];
+    }
+
+    switch (fieldSchema.type) {
+        case 'string':
+            return '';
+        case 'integer':
+        case 'number':
+            return 0;
+        case 'boolean':
+            return false;
+        case 'array':
+            return [];
+        case 'object':
+            if (fieldSchema.additionalProperties) {
+                // Map type - return empty object
+                return {};
+            } else if (fieldSchema.properties) {
+                // Object with defined properties - generate defaults for each property
+                const result = {};
+                Object.keys(fieldSchema.properties).forEach(prop => {
+                    const propDefault = generateDefaultValue(fieldSchema.properties[prop]);
+                    if (propDefault !== null) {
+                        result[prop] = propDefault;
+                    }
+                });
+                return result;
+            }
+            return {};
+        default:
+            return null;
+    }
+}
+
+function createAddPropertyPlaceholder(fieldSchema, title, description, path, container, isNested = false) {
+    const placeholder = document.createElement('div');
+    placeholder.className = `add-property-placeholder${isNested ? ' nested' : ''}`;
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'add-property-btn';
+    addBtn.innerHTML = '<span class="add-property-icon">+</span>';
+    addBtn.title = `Add ${title}`;
+
+    const label = document.createElement('span');
+    label.className = 'add-property-label';
+    label.textContent = title || 'Field';
+
+    // Add help icon with tooltip if description exists
+    if (description) {
+        const helpIcon = document.createElement('span');
+        helpIcon.className = 'field-help-icon';
+        helpIcon.innerHTML = '?';
+
+        const tooltip = document.createElement('div');
+        tooltip.className = 'field-help-tooltip';
+        tooltip.textContent = description;
+        helpIcon.appendChild(tooltip);
+
+        label.appendChild(helpIcon);
+    }
+
+    placeholder.appendChild(addBtn);
+    placeholder.appendChild(label);
+
+    addBtn.onclick = () => {
+        // Generate default value and create the actual form element
+        const defaultValue = generateDefaultValue(fieldSchema);
+        const propGroup = createFormGroup(fieldSchema, title, description, path, defaultValue, isNested);
+
+        // Replace placeholder with actual form group
+        placeholder.replaceWith(propGroup);
+
+        // Mark form as dirty since we're adding content
+        setDirty();
+
+        // Update parent heights
+        setTimeout(() => {
+            updateAllParentContainers(propGroup.closest('.collapsible-section'));
+        }, 10);
+    };
+
+    return placeholder;
+}
+
+function createObjectGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
+    const schemaForDelete = originalSchema || fieldSchema;
     const content = document.createElement('div');
 
     const hasData = hasValue(value);
@@ -847,15 +999,31 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
             const propTitle = propSchema.title || prop;
             const propDescription = propSchema.description;
 
-            const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true);
-            content.appendChild(propGroup);
+            // If property has no value, show a placeholder with '+' icon
+            if (!hasValue(propValue)) {
+                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, content, true);
+                content.appendChild(placeholder);
+            } else {
+                const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
+                content.appendChild(propGroup);
+            }
         });
     }
 
-    return createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse);
+    // Create deleteInfo for the collapsible section
+    const deleteInfo = {
+        schema: schemaForDelete,
+        title: title,
+        description: description,
+        path: path,
+        isNested: isNested
+    };
+
+    return createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo);
 }
 
-function createMapGroup(fieldSchema, title, description, path, value = null, isNested = false) {
+function createMapGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
+    const schemaForDelete = originalSchema || fieldSchema;
     const content = document.createElement('div');
 
     const hasData = hasValue(value);
@@ -888,7 +1056,16 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
         });
     }
 
-    const section = createCollapsibleSection(title || 'Map', description, content, hasData, autoCollapse);
+    // Create deleteInfo for the collapsible section
+    const deleteInfo = {
+        schema: schemaForDelete,
+        title: title,
+        description: description,
+        path: path,
+        isNested: isNested
+    };
+
+    const section = createCollapsibleSection(title || 'Map', description, content, hasData, autoCollapse, deleteInfo);
 
     // Function to update section status when items are added/removed
     function updateSectionStatus() {
@@ -901,7 +1078,8 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     return section;
 }
 
-function createArrayGroup(fieldSchema, title, description, path, value = null, isNested = false) {
+function createArrayGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
+    const schemaForDelete = originalSchema || fieldSchema;
     const content = document.createElement('div');
     content.className = 'form-group array';
 
@@ -935,7 +1113,16 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
         });
     }
 
-    const section = createCollapsibleSection(title || 'Array', description, content, hasData, autoCollapse);
+    // Create deleteInfo for the collapsible section
+    const deleteInfo = {
+        schema: schemaForDelete,
+        title: title,
+        description: description,
+        path: path,
+        isNested: isNested
+    };
+
+    const section = createCollapsibleSection(title || 'Array', description, content, hasData, autoCollapse, deleteInfo);
 
     // Function to update section status when items are added/removed
     function updateSectionStatus() {
@@ -1979,8 +2166,14 @@ function generateFormWithData(data) {
             const propTitle = propSchema.title || prop;
             const propDescription = propSchema.description;
 
-            const group = createFormGroup(propSchema, propTitle, propDescription, prop, propValue);
-            form.appendChild(group);
+            // If property has no value, show a placeholder with '+' icon
+            if (!hasValue(propValue)) {
+                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, prop, form, false);
+                form.appendChild(placeholder);
+            } else {
+                const group = createFormGroup(propSchema, propTitle, propDescription, prop, propValue, false, propSchema);
+                form.appendChild(group);
+            }
         });
     }
 }
