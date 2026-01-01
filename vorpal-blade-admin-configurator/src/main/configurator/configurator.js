@@ -736,15 +736,23 @@ function toggleCollapse(header, content, arrow) {
         header.classList.remove('collapsed');
         content.classList.remove('collapsed');
         arrow.classList.remove('collapsed');
+
+        // Temporarily remove maxHeight restrictions on all ancestors to allow proper measurement
+        const ancestors = getAncestorCollapsibleContents(header);
+        ancestors.forEach(el => {
+            el.style.maxHeight = 'none';
+        });
+
+        // Now measure and set the content height
         content.style.maxHeight = content.scrollHeight + 'px';
 
         // Auto-expand parent sections to provide room
         expandParentSections(header);
 
-        // Update heights of all ancestor containers
+        // Update heights of all ancestor containers after animation
         setTimeout(() => {
-            updateAllParentContainers(header.closest('.collapsible-section'));
-        }, 50);
+            recalculateAllAncestorHeights(header.closest('.collapsible-section'));
+        }, 350); // Wait for animation to complete
     } else {
         // Collapse
         header.classList.add('collapsed');
@@ -754,9 +762,47 @@ function toggleCollapse(header, content, arrow) {
 
         // Update parent heights after collapse
         setTimeout(() => {
-            updateAllParentContainers(header.closest('.collapsible-section'));
-        }, 300); // Wait for collapse animation
+            recalculateAllAncestorHeights(header.closest('.collapsible-section'));
+        }, 350); // Wait for collapse animation
     }
+}
+
+function getAncestorCollapsibleContents(element) {
+    const ancestors = [];
+    let current = element.parentElement;
+    while (current) {
+        if (current.classList.contains('collapsible-content') && !current.classList.contains('collapsed')) {
+            ancestors.push(current);
+        }
+        current = current.parentElement;
+    }
+    return ancestors;
+}
+
+function recalculateAllAncestorHeights(element) {
+    if (!element) return;
+
+    // Find all ancestor collapsible contents and recalculate from innermost to outermost
+    const ancestors = [];
+    let current = element;
+    while (current) {
+        if (current.classList.contains('collapsible-section')) {
+            const content = current.querySelector(':scope > .collapsible-content');
+            if (content && !content.classList.contains('collapsed')) {
+                ancestors.push(content);
+            }
+        }
+        current = current.parentElement;
+    }
+
+    // Recalculate heights from innermost to outermost
+    ancestors.forEach((content, index) => {
+        setTimeout(() => {
+            content.style.maxHeight = 'none';
+            const height = content.scrollHeight;
+            content.style.maxHeight = height + 'px';
+        }, index * 10);
+    });
 }
 
 function updateAllParentContainers(element) {
@@ -977,7 +1023,7 @@ function createAddPropertyPlaceholder(fieldSchema, title, description, path, con
 
         // Update parent heights
         setTimeout(() => {
-            updateAllParentContainers(propGroup.closest('.collapsible-section'));
+            recalculateAllAncestorHeights(propGroup.closest('.collapsible-section'));
         }, 10);
     };
 
@@ -1156,7 +1202,7 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
         // Update parent section status and heights
         updateParentSectionStatus(container);
         setTimeout(() => {
-            updateAllParentContainers(container.closest('.collapsible-section'));
+            recalculateAllAncestorHeights(container.closest('.collapsible-section'));
         }, 10);
     };
     header.appendChild(removeBtn);
@@ -1197,7 +1243,7 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
 
     // Update parent heights after adding
     setTimeout(() => {
-        updateAllParentContainers(container.closest('.collapsible-section'));
+        recalculateAllAncestorHeights(container.closest('.collapsible-section'));
     }, 10);
 }
 
@@ -1225,7 +1271,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         // Update parent section status and heights
         updateParentSectionStatus(container);
         setTimeout(() => {
-            updateAllParentContainers(container.closest('.collapsible-section'));
+            recalculateAllAncestorHeights(container.closest('.collapsible-section'));
         }, 10);
     };
     header.appendChild(removeBtn);
@@ -1251,7 +1297,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
 
     // Update parent heights after adding
     setTimeout(() => {
-        updateAllParentContainers(container.closest('.collapsible-section'));
+        recalculateAllAncestorHeights(container.closest('.collapsible-section'));
     }, 10);
 }
 
