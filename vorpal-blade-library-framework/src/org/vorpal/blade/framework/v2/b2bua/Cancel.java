@@ -24,56 +24,21 @@
 
 package org.vorpal.blade.framework.v2.b2bua;
 
-import java.io.IOException;
-
-import javax.servlet.ServletException;
-import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipSession;
-import javax.servlet.sip.UAMode;
-
-import org.vorpal.blade.framework.v2.callflow.Callflow;
-
-/*
+/**
+ * This class accepts a Cancel message and passes it on.
  * 
- * ALICE                       BLADE BOB ;
- *   |                         |                         | ;
- *   | INVITE                  |                         | ; InitialInvite callflow starts here
- *   |------------------------>|                         | ;
- *   |                         | INVITE                  | ;
- *   |                         |------------------------>| ;
- *   |                         |             180 Ringing | ;
- *   |                         |<------------------------| ;
- *   | 180 Ringing             |                         | ;
- *   |<------------------------|                         | ;
- *   | CANCEL                  |                         | ; Cancel callflow starts here
- *   |------------------------>|                         | ;
- *   | 200 OK                  |                         | ;
- *   |<------------------------|                         | ;
- *   |                         |                  CANCEL | ;
- *   |                         |------------------------>| ;
- *   |                         |                  200 OK | ;
- *   |                         |<------------------------| ;
- *   |                         |  487 Request Terminated | ;
- *   |                         |<------------------------| ;
- *   |                         |                     ACK | ;
- *   |                         |------------------------>| ; 
- *   |  487 Request Terminated |                         | ;
- *   |<------------------------|                         | ;
- *   |                     ACK |                         | ;
- *   |------------------------>|                         | ;
- *
+ * @deprecated Use the Terminate class in the future.
  */
+@Deprecated
+public class Cancel extends Terminate {
 
-public class Cancel extends Callflow {
 	private static final long serialVersionUID = 1L;
-	private SipServletRequest aliceCancel;
-	private B2buaServlet b2buaListener = null;
-	private SipServletRequest bobInvite;
 
 	/**
 	 * Implements the CANCEL callflow with no callback hooks.
 	 */
 	public Cancel() {
+		super(null);
 	}
 
 	/**
@@ -83,36 +48,7 @@ public class Cancel extends Callflow {
 	 * @param b2buaListener
 	 */
 	public Cancel(B2buaServlet b2buaListener) {
-		this.b2buaListener = b2buaListener;
-	}
-
-	@Override
-	public void process(SipServletRequest request) throws ServletException, IOException {
-		// The container will send a 200 OK for CANCEL
-
-		try {
-			aliceCancel = request;
-			SipSession linkedSession = getLinkedSession(aliceCancel.getSession());
-			if (linkedSession != null) {
-				bobInvite = linkedSession.getActiveInvite(UAMode.UAC);
-				if (bobInvite != null) {
-					SipServletRequest bobCancel = bobInvite.createCancel();
-					if (b2buaListener != null) {
-						b2buaListener.callAbandoned(bobCancel);
-					}
-					sendRequest(bobCancel, (bobCancelResponse) -> {
-						// do nothing;
-					});
-				}
-			} else {
-				sipLogger.finer(request, "CANCEL received, but no linked session. Ignoring request.");
-				// jwm - for cancels, the container generates the 200 OK
-				// sendResponse(request.createResponse(200));
-			}
-		} catch (Exception e) {
-			// log the error;
-			sipLogger.severe(request, e);
-		}
+		super(b2buaListener);
 	}
 
 }

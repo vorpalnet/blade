@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
@@ -20,13 +21,10 @@ public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public final static String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 
-//	@JsonPropertyDescription("Optional logging parameters")
-//	public String version = "2.1";
-
-	@JsonPropertyDescription("Optional logging parameters")
+	@JsonPropertyDescription("Logging parameters")
 	protected LogParameters logging;
 
-	@JsonPropertyDescription("Optional session parameters")
+	@JsonPropertyDescription("Session parameters")
 	protected SessionParameters session;
 
 	private final static long SECONDS_FACTOR = 1;

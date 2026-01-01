@@ -53,8 +53,8 @@ import org.vorpal.blade.framework.v2.logging.Color;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSessionListener, SipSessionListener {
-//public class SampleB2buaServlet extends B2buaServlet {
+//public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSessionListener, SipSessionListener {
+public class SampleB2buaServlet extends B2buaServlet {
 	private static final long serialVersionUID = 1L;
 	public static SettingsManager<SampleB2buaConfig> settingsManager;
 
@@ -119,6 +119,10 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void callStarted(SipServletRequest request) throws ServletException, IOException {
 		sipLogger.info(request, "callStarted...");
 
+		// for testing...
+//		sipLogger.warning(request, "SampleB2buaServlet.callStarted - About to produce a null pointer exception...");
+//		Callflow cf = null;
+//		cf.process(null);
 	}
 
 	/*
@@ -128,6 +132,11 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	public void callAnswered(SipServletResponse response) throws ServletException, IOException {
 		sipLogger.info(response, "callAnswered...");
 
+//		// for testing...
+//		sipLogger.warning(response, "SampleB2buaServlet.callAnswered - About to produce a null pointer exception...");
+//		Callflow cf = null;
+//		cf.process(null);
+
 	}
 
 	/*
@@ -136,6 +145,12 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	@Override
 	public void callConnected(SipServletRequest request) throws ServletException, IOException {
 		sipLogger.info(request, "callConnected...");
+
+// for testing...
+//		sipLogger.warning(request, "SampleB2buaServlet.callStarted - About to produce a null pointer exception...");
+//		Callflow cf = null;
+//		cf.process(null);
+
 	}
 
 	/*
@@ -144,6 +159,12 @@ public class SampleB2buaServlet extends B2buaServlet implements SipApplicationSe
 	@Override
 	public void callCompleted(SipServletRequest request) throws ServletException, IOException {
 		sipLogger.info(request, "callCompleted...");
+		
+		// for testing...
+//		sipLogger.warning(request, "SampleB2buaServlet.callStarted - About to produce a null pointer exception...");
+//		Callflow cf = null;
+//		cf.process(null);
+
 	}
 
 	/*

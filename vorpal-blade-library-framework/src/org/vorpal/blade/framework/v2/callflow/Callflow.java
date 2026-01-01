@@ -81,22 +81,22 @@ public abstract class Callflow implements Serializable {
 	protected static SessionParameters sessionParameters;
 
 	// Useful strings
-	protected static final String INVITE = "INVITE";
-	protected static final String ACK = "ACK";
-	protected static final String BYE = "BYE";
-	protected static final String CANCEL = "CANCEL";
-	protected static final String REGISTER = "REGISTER";
-	protected static final String OPTIONS = "OPTIONS";
-	protected static final String PRACK = "PRACK";
-	protected static final String SUBSCRIBE = "SUBSCRIBE";
-	protected static final String NOTIFY = "NOTIFY";
-	protected static final String PUBLISH = "PUBLISH";
-	protected static final String INFO = "INFO";
-	protected static final String UPDATE = "UPDATE";
-	protected static final String REFER = "REFER";
-	protected static final String SIP = "SIP";
-	protected static final String Contact = "Contact";
-	protected static final String RELIABLE = "100rel";
+	public static final String INVITE = "INVITE";
+	public static final String ACK = "ACK";
+	public static final String BYE = "BYE";
+	public static final String CANCEL = "CANCEL";
+	public static final String REGISTER = "REGISTER";
+	public static final String OPTIONS = "OPTIONS";
+	public static final String PRACK = "PRACK";
+	public static final String SUBSCRIBE = "SUBSCRIBE";
+	public static final String NOTIFY = "NOTIFY";
+	public static final String PUBLISH = "PUBLISH";
+	public static final String INFO = "INFO";
+	public static final String UPDATE = "UPDATE";
+	public static final String REFER = "REFER";
+	public static final String SIP = "SIP";
+	public static final String Contact = "Contact";
+	public static final String RELIABLE = "100rel";
 
 	protected static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
 	protected static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
@@ -155,6 +155,7 @@ public abstract class Callflow implements Serializable {
 
 				}
 			} catch (Exception e) {
+				sipLogger.warning(request, "Callflow.pullCallback - catch #1");
 				sipLogger.logStackTrace(request, e);
 			}
 
@@ -409,7 +410,7 @@ public abstract class Callflow implements Serializable {
 		} else {
 
 			if (sipLogger.isLoggable(Level.WARNING)) {
-				sipLogger.severe(appSession,
+				sipLogger.warning(appSession,
 						"Callflow.expectRequest - Failed to set expectation; appSession is invalid. This should not be possible. (Check your code.)");
 			}
 
@@ -418,6 +419,13 @@ public abstract class Callflow implements Serializable {
 		return new Expectation(appSession, method, callback);
 	}
 
+	/**
+	 * This method generates a unique 8-digit hexadecimal number 'vorpal-id', to be
+	 * used as a tracking number for messages traveling through the system.
+	 * 
+	 * @param appSession
+	 * @return
+	 */
 	private static String createVorpalSessionId(SipApplicationSession appSession) {
 		String indexKey = null;
 
@@ -425,24 +433,27 @@ public abstract class Callflow implements Serializable {
 			indexKey = String.format("%08X", //
 					Math.abs(ThreadLocalRandom.current().nextLong(0, 0xFFFFFFFFL)) //
 			).toUpperCase();
-		} while (null != getSipUtil().getApplicationSessionByKey(indexKey, false));
+		} while (getSipUtil().getSipApplicationSessionIds(indexKey).size() != 0);
 
 		appSession.setAttribute("X-Vorpal-Session", indexKey);
 
 		// X-Vorpal-Session + X-Vorpal-Timestamp will be unique.
 		// Use this for a database primary key in future designs.
-		appSession.setAttribute("X-Vorpal-Timestamp", Long.toHexString(System.currentTimeMillis()).toUpperCase());
+		String timestamp = Long.toHexString(System.currentTimeMillis()).toUpperCase();
+		appSession.setAttribute("X-Vorpal-Timestamp", timestamp);
 
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(appSession,
-					Color.RED_BOLD_BRIGHT("Callflow.createVorapalSessionId - indexKey=" + indexKey));
+		if (sipLogger.isLoggable(Level.FINEST)) {
+			sipLogger.finest(appSession,
+					"Callflow.createVorpalSessionId - created vorpal session=" + indexKey + ", timestamp=" + timestamp);
 		}
 
 		return indexKey;
 	}
 
 	public static String getVorpalSessionId(SipApplicationSession appSession) {
-		return (String) appSession.getAttribute("X-Vorpal-Session");
+		String session = (String) appSession.getAttribute("X-Vorpal-Session");
+//		sipLogger.severe("Callflow.getVorpalSessionId(SipApplicationSession appSession) - session=" + session);
+		return session;
 	}
 
 	public static String getVorpalSessionId(SipServletRequest request) {
@@ -469,6 +480,7 @@ public abstract class Callflow implements Serializable {
 			indexKey = (indexKey != null) ? indexKey : createVorpalSessionId(appSession);
 		}
 
+//		sipLogger.severe("Callflow.getVorpalSessionId(SipServletRequest request) - session=" + indexKey);
 		return indexKey;
 	}
 
@@ -481,6 +493,7 @@ public abstract class Callflow implements Serializable {
 				dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
 				sipSession.setAttribute("X-Vorpal-Dialog", dialog);
 			} catch (Exception e) {
+				sipLogger.warning(sipSession, "Callflow.createVorpalDialogId - catch #1");
 				// OU812;
 			}
 		}
@@ -574,6 +587,7 @@ public abstract class Callflow implements Serializable {
 										KeepAlive refresher = new KeepAlive();
 										refresher.handle(session);
 									} catch (Exception e) {
+										sipLogger.warning(sipSession, "Callflow.sendRequest - catch #1");
 									}
 								}
 							});
@@ -584,6 +598,7 @@ public abstract class Callflow implements Serializable {
 										KeepAliveExpiry expiry = new KeepAliveExpiry();
 										expiry.handle(sipSession);
 									} catch (Exception e) {
+										sipLogger.warning(sipSession, "Callflow.sendRequest - catch #2");
 									}
 								}
 							});
@@ -625,7 +640,7 @@ public abstract class Callflow implements Serializable {
 			}
 
 		} catch (Exception ex) {
-
+			sipLogger.warning(request, "Callflow.sendRequest - catch #3");
 			sipLogger.severe(request, ex);
 
 			if (false == (request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))) {
@@ -638,11 +653,6 @@ public abstract class Callflow implements Serializable {
 				if (lambdaFunction != null) {
 					lambdaFunction.accept(errorResponse);
 				}
-
-//				else {
-//					Callflow.getLogger().superArrow(Direction.RECEIVE, null, errorResponse,
-//							this.getClass().getSimpleName());
-//				}
 
 			}
 
@@ -703,6 +713,7 @@ public abstract class Callflow implements Serializable {
 
 				});
 			} catch (Exception e) {
+				sipLogger.warning(request, "Callflow.sendRequestsInSerial - catch #1");
 				sipLogger.severe(request, e.getMessage());
 				stopTimer(request.getApplicationSession(), timerId);
 
@@ -779,6 +790,7 @@ public abstract class Callflow implements Serializable {
 					try {
 						sendRequest(rqst.createCancel());
 					} catch (Exception e) {
+						sipLogger.warning(rqst, "Callflow.startTimer - catch #1");
 						// do nothing;
 					}
 				}
@@ -809,6 +821,7 @@ public abstract class Callflow implements Serializable {
 							try {
 								sendRequest(rqst.createCancel());
 							} catch (Exception e) {
+								sipLogger.warning(rqst, "Callflow.startTimer - catch #2");
 								// do nothing;
 							}
 						}
@@ -890,9 +903,7 @@ public abstract class Callflow implements Serializable {
 
 				sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
-				switch (response.getMethod()) {
-				case INVITE:
-
+				if (response.getMethod().equals(INVITE)) {
 					// glare handling;
 					if (response.getStatus() >= 300) {
 						sipLogger.finest(sipSession, "Removing EXPECT_ACK session attribute.");
@@ -905,21 +916,18 @@ public abstract class Callflow implements Serializable {
 						}
 					}
 
-				case REGISTER:
-				case SUBSCRIBE:
-				case NOTIFY:
-				case PUBLISH:
-				case REFER:
+				}
+
+				if (response.getRequest().isInitial()) {
+					sipLogger.warning(response, "Callflow.sendResponse - response is to initial INVITE");
+
 					String indexKey = getVorpalSessionId(response.getApplicationSession());
-					String dialog = getVorpalDialogId(response.getSession());
-					response.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
-
-					String xvt = (String) response.getApplicationSession().getAttribute("X-Vorpal-Timestamp");
-					if (xvt == null) {
-						xvt = Long.toHexString(System.currentTimeMillis()).toUpperCase();
+					if (indexKey != null) {
+						String dialog = getVorpalDialogId(response.getSession());
+						response.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
+						String xvt = (String) response.getApplicationSession().getAttribute("X-Vorpal-Timestamp");
+						response.setHeader("X-Vorpal-Timestamp", xvt);
 					}
-					response.setHeader("X-Vorpal-Timestamp", xvt);
-
 				}
 
 				response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
@@ -1429,6 +1437,7 @@ public abstract class Callflow implements Serializable {
 				bobAckOrPrack = copyContentAndHeaders(aliceAckOrPrack, bobResponse.createAck());
 			}
 		} catch (Exception e) {
+			sipLogger.warning(bobResponse, "Callflow.createAcknowlegement - catch #1");
 			throw new ServletParseException(e);
 		}
 

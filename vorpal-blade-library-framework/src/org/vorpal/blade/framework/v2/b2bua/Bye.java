@@ -22,218 +22,22 @@
  *  SOFTWARE.
  */
 
+/**
+ * This class accepts a BYE message and passes it on.
+ * 
+ * @deprecated Use the Terminate class in the future.
+ */
 package org.vorpal.blade.framework.v2.b2bua;
 
-import java.io.IOException;
-import java.util.Collection;
-import java.util.Iterator;
+public class Bye extends Terminate {
 
-import javax.servlet.ServletException;
-import javax.servlet.sip.SipApplicationSession;
-import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipServletResponse;
-import javax.servlet.sip.SipSession;
-import javax.servlet.sip.SipSession.State;
-import javax.servlet.sip.UAMode;
-
-import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
-
-public class Bye extends Callflow {
 	private static final long serialVersionUID = 1L;
-	private SipServletRequest aliceRequest;
-	private B2buaServlet b2buaListener = null;
 
 	public Bye() {
+		super(null);
 	}
 
 	public Bye(B2buaServlet b2buaListener) {
-		this.b2buaListener = b2buaListener;
+		super(b2buaListener);
 	}
-
-	@Override
-	public void process(SipServletRequest request) throws ServletException, IOException {
-		// Assumptions:
-		// * Any glare was resolved by AsyncSipServlet.
-
-		SipApplicationSession appSession = request.getApplicationSession();
-
-		SipServletRequest aliceRequest = request;
-		SipServletResponse aliceResponse;
-		SipSession aliceSession = aliceRequest.getSession();
-		SipSession bobSession = getLinkedSession(aliceSession);
-		String warnings = "";
-		boolean sendByeLater = false;
-		boolean cancelSent = false;
-
-		SipServletRequest bobRequest;
-
-		// Regardless of what happens below, clean up memory in 1 minute;
-		request.getApplicationSession().setInvalidateWhenReady(true); // Why would this be false?
-		request.getApplicationSession().setExpires(5);
-
-		// Send a 200 OK first. This is too important to wait on downstream processes.
-		try {
-
-			if (aliceSession != null //
-					&& aliceSession.isValid() //
-					&& aliceSession.getState() != State.TERMINATED) {
-				aliceResponse = request.createResponse(200);
-				sendResponse(aliceResponse);
-			} else {
-				// probably CANCELed. Don't stress over it.
-			}
-
-		} catch (Exception e1) {
-			warnings = "Unable to send 200 OK to BYE request. " + e1.getClass().getName() + ": " + e1.getMessage()
-					+ "; ";
-		}
-
-		try {
-
-			if (bobSession != null) {
-
-				Collection<SipServletRequest> requests;
-				Iterator<SipServletRequest> itr;
-				if (bobSession.isValid()) {
-
-					// Check for any UAC INVITEs that need to be CANCELed
-					requests = bobSession.getActiveRequests(UAMode.UAC);
-					itr = requests.iterator();
-					while (itr.hasNext()) {
-						bobRequest = itr.next();
-						if (bobRequest.getMethod().equals(INVITE)) {
-							warnings += "Outbound UAC INVITE awaiting final response. Sending CANCEL. ";
-
-							try {
-								cancelSent = true;
-								sendRequest(bobRequest.createCancel());
-							} catch (Exception cancelEx1) {
-								warnings += "Unable to send UAC INVITE. " + cancelEx1.getClass().getName() + ": "
-										+ cancelEx1.getMessage() + "; ";
-							}
-
-						} else {
-							sendByeLater = true;
-							warnings += "Glare. Outbound " + bobRequest.getMethod()
-									+ " awaiting final response. Must send BYE later; ";
-						}
-					}
-
-					// Check for any UAS INVITEs that need to be CANCELed
-					requests = bobSession.getActiveRequests(UAMode.UAS);
-					itr = requests.iterator();
-					while (itr.hasNext()) {
-						bobRequest = itr.next();
-						if (bobRequest.getMethod().equals(INVITE)) {
-							warnings += "Outbound UAS INVITE awaiting final response. Sending CANCEL. ";
-
-							try {
-								cancelSent = true;
-								sendRequest(bobRequest.createCancel());
-							} catch (Exception cancelEx2) {
-								warnings += "Unable to send UAS INVITE. " + cancelEx2.getClass().getName() + ": "
-										+ cancelEx2.getMessage() + "; ";
-							}
-
-						} else {
-							sendByeLater = true;
-							warnings += "Glare. Outbound " + bobRequest.getMethod()
-									+ " awaiting final response. Must send BYE later. ";
-						}
-					}
-
-					if (false == cancelSent) { // Don't send a BYE if a CANCEL was already sent
-
-						if (false == sendByeLater) {
-
-							// Send outbound BYE.
-							try {
-
-								// Send BYE or CANCEL
-
-								sipLogger.finer(bobSession, "bobSession.getState=" + bobSession.getState());
-								switch (bobSession.getState()) {
-								case CONFIRMED:
-									bobRequest = bobSession.createRequest(BYE);
-									copyContentAndHeaders(aliceRequest, bobRequest);
-
-									if (this.b2buaListener != null) {
-										b2buaListener.callCompleted(bobRequest);
-									}
-
-									sendRequest(bobRequest);
-									break;
-
-								case EARLY:
-									bobRequest = bobSession.createRequest(CANCEL);
-									copyContentAndHeaders(aliceRequest, bobRequest);
-
-									if (this.b2buaListener != null) {
-										b2buaListener.callCompleted(bobRequest);
-									}
-
-									sendRequest(bobRequest);
-									break;
-
-								case INITIAL:
-									break;
-
-								case TERMINATED:
-									break;
-
-								}
-
-							} catch (Exception byeException) {
-								warnings += "Unable to send BYE to linked session. " + byeException.getClass().getName()
-										+ ": " + byeException.getMessage() + "; ";
-							}
-						} else {
-
-							// Send outbound BYE 3 seconds later to avoid glare.
-							startTimer(appSession, 3000, false, (timer) -> {
-
-								try {
-									SipServletRequest laterBye = bobSession.createRequest(BYE);
-									copyContent(aliceRequest, laterBye);
-
-									if (this.b2buaListener != null) {
-										b2buaListener.callCompleted(laterBye);
-									}
-
-									sendRequest(laterBye);
-								} catch (Exception byeException) {
-									String warning = SettingsManager.getApplicationName() + " : Bye.process - "
-											+ "Due to potental glare, a 3 second timer was set to send a BYE, but it failed. "
-											+ byeException.getClass().getName() + ": " + byeException.getMessage()
-											+ "; ";
-									sipLogger.warning(bobSession, warning);
-									sipLogger.getParent().warning(warning);
-								}
-
-							});
-
-						}
-					}
-
-				} else {
-					sipLogger.finer(aliceRequest, "Bye.process - Outbound linked session exists, but is invalid.");
-				}
-			} else {
-				sipLogger.finer(aliceRequest, "Bye.process - Linked session does not exist.");
-			}
-
-		} catch (Exception e1) {
-			warnings = "Unable to send 200 OK to BYE request. " + e1.getClass().getName() + ": " + e1.getMessage()
-					+ "; ";
-		}
-
-		if (warnings.length() > 0) {
-			String warning = "Bye.process - " + warnings;
-			sipLogger.warning(request, warning);
-			sipLogger.getParent().warning(SettingsManager.getApplicationName() + " : " + warning);
-		}
-
-	}
-
 }

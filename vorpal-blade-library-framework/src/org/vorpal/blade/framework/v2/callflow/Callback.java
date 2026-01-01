@@ -39,7 +39,7 @@ public interface Callback<T> extends Consumer<T>, Serializable {
 			}
 
 		} catch (Exception ex) {
-			Callflow.getSipLogger().severe(ex);
+			throw new RuntimeException(ex);
 		}
 	}
 

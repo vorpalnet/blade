@@ -7,12 +7,10 @@ import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipApplicationSessionEvent;
-import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionEvent;
-import javax.servlet.sip.SipSessionListener;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
@@ -24,8 +22,8 @@ import org.vorpal.blade.framework.v2.logging.Color;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener {
-//public class PRServlet extends AsyncSipServlet {
+//public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener {
+public class PRServlet extends AsyncSipServlet {
 	private static final long serialVersionUID = 2804504496149776315L;
 	public static SettingsManager<Settings> settingsManager;
 

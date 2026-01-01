@@ -130,6 +130,24 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		super.info(NOSESS + " " + msg);
 	}
 
+	public static String stackTraceToString(Exception ex) {
+		String strStackTrace;
+
+		StringBuilder stackTrace = new StringBuilder();
+		StringWriter errors = new StringWriter();
+		ex.printStackTrace(new PrintWriter(errors));
+
+		stackTrace.append(ex.getMessage());
+		stackTrace.append("\n");
+		stackTrace.append(errors.toString());
+
+		strStackTrace = stackTrace.toString();
+		strStackTrace = strStackTrace.replace("\t", "");
+		strStackTrace = strStackTrace.replace("\n", "\r\n");
+
+		return strStackTrace;
+	}
+
 	public void logStackTrace(SipApplicationSession appSession, Exception e) {
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
@@ -872,7 +890,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					if (request != null) {
 						finest(request, direction + " Request:\n" + request.toString());
 					} else {
-						finest(request, direction + " Response:\n" + response.toString());
+						finest(response, direction + " Response:\n" + response.toString());
 					}
 				}
 

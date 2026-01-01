@@ -52,17 +52,20 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
 		Callflow callflow;
 
-		if (inboundRequest.getMethod().equals("INVITE")) {
+		switch (inboundRequest.getMethod()) {
+		case Callflow.INVITE:
 			if (inboundRequest.isInitial()) {
 				callflow = new InitialInvite(this);
 			} else {
 				callflow = new Reinvite(this);
 			}
-		} else if (inboundRequest.getMethod().equals("BYE")) {
-			callflow = new Bye(this);
-		} else if (inboundRequest.getMethod().equals("CANCEL")) {
-			callflow = new Cancel(this);
-		} else {
+			break;
+
+		case Callflow.BYE:
+		case Callflow.CANCEL:
+			callflow = new Terminate(this);
+			break;
+		default:
 			callflow = new Passthru(this);
 		}
 

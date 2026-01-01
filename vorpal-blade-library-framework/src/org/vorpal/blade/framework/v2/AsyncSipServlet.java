@@ -30,15 +30,19 @@ import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerListener;
 import javax.servlet.sip.TimerService;
+import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.v2.b2bua.Terminate;
 import org.vorpal.blade.framework.v2.callflow.Callback;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.CallflowAckBye;
+import org.vorpal.blade.framework.v2.callflow.CallflowCallConnectedError;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
 import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
@@ -119,9 +123,10 @@ public abstract class AsyncSipServlet extends SipServlet
 				sipLogger.info(application + " compiled using " + title + " version " + version);
 			}
 
-		} catch (Exception ex) {
-			sipLogger.severe(ex);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
+		} catch (Exception ex1) {
+			sipLogger.severe("AsyncSipServlet.servletInitialized - caught Exception #ex1");
+			sipLogger.severe(ex1);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex1.getMessage());
 		}
 
 	}
@@ -159,9 +164,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	public void contextDestroyed(ServletContextEvent sce) {
 		try {
 			servletDestroyed(event);
-		} catch (Exception ex) {
-			sipLogger.severe(ex);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
+		} catch (Exception ex1) {
+			sipLogger.warning("AsyncSipServlet.contextDestroyed - Exception #ex1");
+			sipLogger.severe(ex1);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex1.getMessage());
 		}
 	}
 
@@ -181,10 +187,17 @@ public abstract class AsyncSipServlet extends SipServlet
 			String method = request.getMethod();
 			AttributesKey rr = null;
 			SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
+			SessionParameters sessionParameters = AsyncSipServlet.getSessionParameters();
 
 			if (request.getMethod().equals("INVITE") && request.isInitial()) {
-				// creates a session tracking key
-				appSession.addIndexKey(Callflow.getVorpalSessionId(request));
+
+				// get / create the X-Vorpal-Session id, useful for tracking sessions
+				String indexKey = Callflow.getVorpalSessionId(request);
+
+				// use the X-Vorpal-Session as an index key if the configuration requires it
+				if (sessionParameters.indexVorpalSessionID != null && sessionParameters.indexVorpalSessionID == true) {
+					appSession.addIndexKey(indexKey);
+				}
 
 				// attempt to keep track of who called whom
 				request.getSession().setAttribute("userAgent", "caller");
@@ -207,7 +220,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 			}
 
-			if (sipLogger.isLoggable(Level.FINER)) {
+			if (sipLogger.isLoggable(Level.FINEST)) {
 				try {
 
 					boolean linkedSessionIsValid = false;
@@ -219,7 +232,7 @@ public abstract class AsyncSipServlet extends SipServlet
 						linkedSessionIsReadyToInvalidate = linkedSession.isReadyToInvalidate();
 					}
 
-					sipLogger.finer(request, //
+					sipLogger.finest(request, //
 							"AsyncSipServlet.doRequest - " + "method=" + request.getMethod() //
 									+ ", isInitial=" + request.isInitial() //
 									+ ", isCommitted=" + request.isCommitted() //
@@ -233,8 +246,9 @@ public abstract class AsyncSipServlet extends SipServlet
 									+ ", linkedSession.isReadyToInvalidate=" + linkedSessionIsReadyToInvalidate //
 					);
 
-				} catch (Exception ex) {
-					sipLogger.severe(request, ex);
+				} catch (Exception ex1) {
+					sipLogger.warning("AsyncSipServlet.doRequest - Exception #ex1");
+					sipLogger.severe(request, ex1);
 				}
 			}
 
@@ -305,7 +319,8 @@ public abstract class AsyncSipServlet extends SipServlet
 									Callflow.getLogger().superArrow(Direction.SEND, null, response, "null");
 									Callflow.getLogger().warning(
 											"AsyncSipServlet.doResponse - No registered callflow for request method "
-													+ method + ", consider modifying the 'chooseCallflow' method.");
+													+ method
+													+ ", consider overriding the 'chooseCallflow' method in your SipServlet class.");
 									response.send();
 								}
 							}
@@ -390,7 +405,12 @@ public abstract class AsyncSipServlet extends SipServlet
 										+ callflow.getClass().getSimpleName() + ", SipSession attributes: " + attrMap);
 							}
 
-							callflow.process(request);
+							try {
+								callflow.process(request);
+							} catch (Exception ex2) {
+								sipLogger.warning(request, "AsyncSipServlet.doRequest - Exception #ex2");
+								throw new ServletException(ex2);
+							}
 
 							if (linkedSession != null) {
 
@@ -442,12 +462,44 @@ public abstract class AsyncSipServlet extends SipServlet
 						}
 					}
 
-				} catch (Exception ex) {
-					String error = event.getServletContext().getServletContextName() + " "
-							+ ex.getClass().getSimpleName() + ", " + ex.getMessage();
+				} catch (Exception ex3) {
+					sipLogger.warning("AsyncSipServlet.doRequest - Exception #ex3");
+
+					Throwable cause = ex3.getCause();
+					while (cause.getCause() != null) {
+						cause = cause.getCause();
+					}
+
+					String reasonPhrase = convertCamelCaseToRegularWords(
+							SettingsManager.getApplicationName() + " " + cause.getClass().getSimpleName());
+
+					try { // this is a "hail mary"; if it fails, who cares?
+
+						if (request.getMethod().equals("INVITE")) {
+
+							sipLogger.warning(request, "AsyncSipServlet.doRequest - hail mary!");
+							SipServletResponse response = request.createResponse(500, reasonPhrase);
+							response.setContent(Logger.stackTraceToString(ex3), "text/plain");
+							sendResponse(response);
+						} else if (request.getMethod().equals("ACK")) {
+
+							// must send BYE back upstream
+							// must send ACK downstream, followed by BYE
+
+							Callflow cf = new CallflowCallConnectedError(ex3);
+							cf.process(request);
+
+						}
+
+					} catch (Exception ex4) {
+						// OU812
+						sipLogger.warning("AsyncSipServlet.doRequest - Exception #ex4...");
+						sipLogger.severe(request, ex4);
+					}
+
 					sipLogger.severe(request, "Exception on SIP request: \n" + request.toString());
-					sipLogger.severe(request, ex);
-					sipLogger.getParent().severe(error);
+					sipLogger.severe(request, ex3);
+					sipLogger.getParent().severe(reasonPhrase);
 				}
 
 			} else { // isProxy, for logging purposes only
@@ -471,17 +523,18 @@ public abstract class AsyncSipServlet extends SipServlet
 					sipSession.setAttribute(GLARE_QUEUE, glareQueue);
 					this.doRequest(glareRequest); // a little recursion never hurt anyone. ;-)
 
-				} catch (Exception glareEx) {
+				} catch (Exception ex5) {
+					sipLogger.warning("AsyncSipServlet.doRequest - Exception #ex5");
 
 					SipSession glareSession = glareRequest.getSession();
 					if (glareSession != null && glareSession.isValid()) {
 
 						String error = event.getServletContext().getServletContextName() + " "
-								+ glareEx.getClass().getSimpleName() + ", " + glareEx.getMessage();
+								+ ex5.getClass().getSimpleName() + ", " + ex5.getMessage();
 						sipLogger.severe(glareRequest,
 								"AsyncSipServlet.doRequest - Exception attempting to process GLARE request: \n"
 										+ glareRequest.toString());
-						sipLogger.severe(glareRequest, glareEx);
+						sipLogger.severe(glareRequest, ex5);
 						sipLogger.getParent().severe(error);
 						SipServletResponse glareResponse = glareRequest.createResponse(491); // Request Pending
 						glareResponse.setHeader("Retry-After", "3"); // 3 seconds should enough time to clear the line
@@ -491,12 +544,15 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 			}
 
-		} catch (Exception e99) { // this should never happen, but if it does...
+		} catch (Exception ex6) { // this should never happen, but if it does...
+
+			sipLogger.warning("AsyncSipServlet.doRequest - Exception #ex5");
+
 			if (sipLogger != null) {
-				sipLogger.severe(_request, e99);
-				sipLogger.getParent().severe(e99.getClass().getName() + " " + e99.getMessage());
+				sipLogger.severe(_request, ex6);
+				sipLogger.getParent().severe(ex6.getClass().getName() + " " + ex6.getMessage());
 			} else {
-				e99.printStackTrace();
+				ex6.printStackTrace();
 			}
 		}
 
@@ -543,18 +599,34 @@ public abstract class AsyncSipServlet extends SipServlet
 									+ ", linkedSession.isReadyToInvalidate=" + linkedSessionIsReadyToInvalidate //
 					);
 
-				} catch (Exception ex) {
-					sipLogger.severe(response, ex);
+				} catch (Exception ex1) {
+					sipLogger.warning("AsyncSipServlet.doReponse - Exception #ex1");
+					sipLogger.severe(response, ex1);
 				}
 			}
 
 			// Timing problem. Call was canceled, yet INVITE 180/200 came back.
-			if (method.equals("INVITE") //
-					&& Callflow.successful(response) //
-					&& linkedSession != null //
-					&& linkedSession.isValid() == false) {
+			// Does this get invoked with the new Terminate callflow?
+			if (linkedSession != null // has a linked session?
+					&& linkedSession.getState().equals(SipSession.State.TERMINATED) // but it is toast
+					&& method.equals("INVITE") // invite response comes in anway
+			) {
+				sipLogger.warning(response,
+						"AsyncSipServlet.doResponse - Linked session terminated (CANCEL?), but an INVITE response came through anyway. Killing the session with CallflowAckBye");
+
 				CallflowAckBye ackAndBye = new CallflowAckBye();
-				ackAndBye.process(response);
+
+				try {
+
+					if (false == Callflow.failure(response)) { // eat failure responses
+						ackAndBye.process(response);
+					}
+
+				} catch (Exception ex2) {
+					sipLogger.warning(response, "AsyncSipServlet.doResponse - Exception #ex2");
+					throw new ServletException(ex2);
+				}
+
 				return;
 			}
 
@@ -681,29 +753,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 								if (isProxy) {
 
-//								if (!Callflow.provisional(response)) {
-//
-////								sipLogger.severe(response, "superArrow #10");
-//									Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-//											callback.getClass().getSimpleName());
-//
-//									callback.accept(response);
-//
-//								} else {
-////								sipLogger.severe(response, "superArrow #11");
-//									Callflow.getLogger().superArrow(Direction.RECEIVE, null, response, "proxy");
-//
-//								}
-//
-//								Boolean leftDiagram = (Boolean) response.getSession().getAttribute("leftDiagram");
-//								leftDiagram = (leftDiagram != null) ? true : false;
-////							sipLogger.severe(response, "superArrow #12");
-//								Callflow.getLogger().superArrow(Direction.SEND, !leftDiagram, null, response, "proxy",
-//										null);
-
 								} else {
-
-//							sipLogger.severe(response, "superArrow #13");
 
 									Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
 											callback.getClass().getSimpleName());
@@ -713,20 +763,6 @@ public abstract class AsyncSipServlet extends SipServlet
 								}
 
 							} else {
-
-								// is this needed?
-
-//						sipLogger.severe(response, "superArrow #14");
-//						Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-//								this.getClass().getSimpleName());
-
-//						if (isProxy(response)) {
-//							Boolean leftDiagram = (Boolean) response.getSession().getAttribute("leftDiagram");
-//							leftDiagram = (leftDiagram != null) ? true : false;
-//							sipLogger.severe(response, "superArrow #15");
-//							Callflow.getLogger().superArrow(Direction.SEND, leftDiagram, null, response,
-//									this.getClass().getSimpleName(), null);
-//						}
 
 							}
 
@@ -738,12 +774,58 @@ public abstract class AsyncSipServlet extends SipServlet
 					} else {
 						sipLogger.warning(response, "AsyncSipServlet.doResponse - SipSession is null.");
 					}
-				} catch (Exception ex) {
+				} catch (Exception ex3) {
+					sipLogger.severe(response, "AsyncSipServlet.doResponse - linkedSession != nullException #ex3");
 					sipLogger.severe(response,
 							"AsyncSipServlet.doResponse - Exception on SIP response: \n" + response.toString());
-					sipLogger.severe(response, ex);
+					sipLogger.severe(response, ex3);
 					sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " "
-							+ ex.getClass().getName() + ": " + ex.getMessage());
+							+ ex3.getClass().getName() + ": " + ex3.getMessage());
+
+					try { // attempt to send error back upstream;
+
+						Throwable cause = ex3.getCause();
+						while (cause.getCause() != null) {
+							cause = cause.getCause();
+						}
+						linkedSession = Callflow.getLinkedSession(response.getSession());
+						SipServletRequest linkedRequest = linkedSession.getActiveInvite(UAMode.UAS);
+						SipServletResponse linkedResponse = linkedRequest.createResponse(500,
+								convertCamelCaseToRegularWords(
+										SettingsManager.getApplicationName() + " " + cause.getClass().getSimpleName()));
+						linkedResponse.setContent(Logger.stackTraceToString(ex3), "text/plain");
+						sendResponse(linkedResponse);
+					} catch (Exception ex4) {
+						sipLogger.severe(response, "AsyncSipServlet.doResponse - Exception #ex4");
+						sipLogger.severe(response, ex4);
+						// OU812
+					}
+
+					try { // attempt to kill the call going downstream
+						SipServletRequest rqst;
+						sipLogger.severe(response,
+								"AsyncSipServlet.doResponse - Attempting to kill the call going downstream");
+						if (response.getMethod().equals("INVITE")) {
+							if (Callflow.successful(response)) {
+								rqst = response.getSession().getActiveInvite(UAMode.UAC);
+								CallflowAckBye callflow = new CallflowAckBye();
+								sipLogger.severe(response, "AsyncSipServlet.doResponse - invoking CallflowAckBye");
+								callflow.process(response);
+							} else if (Callflow.provisional(response)) {
+								rqst = Callflow.getLinkedSession(response.getSession()).getActiveInvite(UAMode.UAS);
+								Callflow callflow = new Terminate(null);
+								sipLogger.severe(response,
+										"AsyncSipServlet.doResponse - invoking Cancel, rqst=" + rqst);
+								callflow.process(rqst);
+							}
+						}
+
+					} catch (Exception ex5) {
+						sipLogger.severe(response, "AsyncSipServlet.doResponse - Logging #ex5");
+						sipLogger.severe(response, ex5);
+						// OU812
+					}
+
 				}
 
 				// For processing any queued up glare requests;
@@ -758,15 +840,16 @@ public abstract class AsyncSipServlet extends SipServlet
 						glareRequest = glareQueue.removeFirst();
 						sipSession.setAttribute(GLARE_QUEUE, glareQueue);
 						this.doRequest(glareRequest); // a little recursion never hurt anyone. ;-)
-					} catch (Exception glareEx) {
+					} catch (Exception ex6) {
+						sipLogger.warning("AsyncSipServlet.doReponse - Exception #ex6");
 						SipSession glareSession = glareRequest.getSession();
 						if (glareSession != null && glareSession.isValid()) {
 							String error = event.getServletContext().getServletContextName() + " "
-									+ glareEx.getClass().getSimpleName() + ", " + glareEx.getMessage();
+									+ ex6.getClass().getSimpleName() + ", " + ex6.getMessage();
 							sipLogger.severe(glareRequest,
 									"AsyncSipServlet.doRequest - Exception attempting to process GLARE request: \n"
 											+ glareRequest.toString());
-							sipLogger.severe(glareRequest, glareEx);
+							sipLogger.severe(glareRequest, ex6);
 							sipLogger.getParent().severe(error);
 							SipServletResponse glareResponse = glareRequest.createResponse(491); // Request Pending
 							glareResponse.setHeader("Retry-After", "3"); // 3 seconds should enough time to clear the
@@ -799,12 +882,15 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			}
 
-		} catch (Exception e99) { // this should never happen, but if it does...
+		} catch (Exception ex7) { // this should never happen, but if it does...
+			sipLogger.warning("AsyncSipServlet.doReponse - Exception #5...");
+			sipLogger.warning(response, "Error #3");
+
 			if (sipLogger != null) {
-				sipLogger.severe(response, e99);
-				sipLogger.getParent().severe(e99.getClass().getName() + " " + e99.getMessage());
+				sipLogger.severe(response, ex7);
+				sipLogger.getParent().severe(ex7.getClass().getName() + " " + ex7.getMessage());
 			} else {
-				e99.printStackTrace();
+				ex7.printStackTrace();
 			}
 		}
 
@@ -822,10 +908,11 @@ public abstract class AsyncSipServlet extends SipServlet
 				callback.acceptThrows(timer);
 			}
 
-		} catch (Exception ex) {
+		} catch (Exception ex1) {
+			sipLogger.warning("AsyncSipServlet.timeout - Exception #ex1");
 			sipLogger.severe("AsyncSipServlet.doResponse - Exception on timer: " + timer.getId());
-			sipLogger.severe(ex);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
+			sipLogger.severe(ex1);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex1.getMessage());
 		}
 	}
 
@@ -924,8 +1011,9 @@ public abstract class AsyncSipServlet extends SipServlet
 			stringHash = byteArray2Text(messageDigest.digest());
 //			stringHash = hexEncode(messageDigest.digest());
 
-		} catch (NoSuchAlgorithmException ex) {
-			sipLogger.severe(ex);
+		} catch (NoSuchAlgorithmException ex1) {
+			sipLogger.warning("AsyncSipServlet.hash - Exception #ex1");
+			sipLogger.severe(ex1);
 		}
 
 		return stringHash;
@@ -963,14 +1051,14 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
-//		sipLogger.severe(response, "superArrow #16");
 		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 		try {
 			response.send();
-		} catch (Exception ex) {
+		} catch (Exception ex1) {
+			sipLogger.warning("AsyncSipServlet.sendReponse - Exception #ex1");
 			sipLogger.severe(response, "Exception on SIP response: \n" + response.toString());
-			sipLogger.severe(response, ex);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex.getMessage());
+			sipLogger.severe(response, ex1);
+			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex1.getMessage());
 		}
 	}
 
@@ -1000,6 +1088,23 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	public static void setSessionParameters(SessionParameters _sessionParameters) {
 		sessionParameters = _sessionParameters;
+	}
+
+	public static String convertCamelCaseToRegularWords(String camelCaseString) {
+		// Regex explanation:
+		// (?<=[a-z]) looks for an uppercase letter that is preceded by a lowercase
+		// letter (positive lookbehind).
+		// [A-Z] matches the actual uppercase letter.
+		// It replaces the matched uppercase letter with a space followed by the letter
+		// itself.
+		String result = camelCaseString.replaceAll("(?<=[a-z])([A-Z])", " $1");
+
+		// Optional: Capitalize the first letter of the resulting sentence
+		if (!result.isEmpty()) {
+			result = result.substring(0, 1).toUpperCase() + result.substring(1);
+		}
+
+		return result;
 	}
 
 }
