@@ -1,0 +1,30 @@
+{
+  "session": {
+    "expiration": 60,
+    "keepAlive": {
+      "style": "REINVITE",
+      "sessionExpires": 1800,
+      "minSE": 180
+    },
+    "sessionSelectors": [
+      {
+        "id": "from-user",
+        "description": "Extract user from From header",
+        "attribute": "From",
+        "pattern": "^.*<sips?:([^@]+)@.*",
+        "dialog": "origin",
+        "additionalExpressions": {
+          "domain": "^.*<sips?:[^@]+@([^>]+)>.*"
+        }
+      },
+      {
+        "id": "to-user",
+        "description": "Extract user from To header",
+        "attribute": "To",
+        "pattern": "^.*<sips?:([^@]+)@.*",
+        "dialog": "destination"
+      }
+    ]
+  },
+  "defaultApplication": "session-manager"
+}

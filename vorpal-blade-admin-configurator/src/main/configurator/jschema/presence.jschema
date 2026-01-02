@@ -1,0 +1,13 @@
+{
+  "$schema" : "http://json-schema.org/draft-04/schema#",
+  "title" : "Presence Settings",
+  "type" : "object",
+  "additionalProperties" : false,
+  "properties" : {
+    "setting1" : {
+      "propertyOrder" : 1,
+      "type" : "string",
+      "title" : "Setting 1"
+    }
+  }
+}

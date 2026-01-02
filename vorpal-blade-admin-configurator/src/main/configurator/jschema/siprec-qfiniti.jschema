@@ -1,0 +1,63 @@
+{
+  "$schema" : "http://json-schema.org/draft-04/schema#",
+  "title" : "Settings",
+  "type" : "object",
+  "additionalProperties" : false,
+  "properties" : {
+    "servers" : {
+      "propertyOrder" : 1,
+      "type" : "array",
+      "format" : "table",
+      "items" : {
+        "$ref" : "#/definitions/Servers"
+      },
+      "title" : "Servers"
+    },
+    "mediaservers" : {
+      "propertyOrder" : 2,
+      "type" : "array",
+      "format" : "table",
+      "items" : {
+        "$ref" : "#/definitions/MediaServers"
+      },
+      "title" : "Mediaservers"
+    }
+  },
+  "definitions" : {
+    "Servers" : {
+      "type" : "object",
+      "additionalProperties" : false,
+      "properties" : {
+        "pattern" : {
+          "propertyOrder" : 1,
+          "type" : "string",
+          "title" : "Pattern"
+        },
+        "addresses" : {
+          "propertyOrder" : 2,
+          "type" : "array",
+          "format" : "table",
+          "items" : {
+            "type" : "string"
+          },
+          "title" : "Addresses"
+        }
+      }
+    },
+    "MediaServers" : {
+      "type" : "object",
+      "additionalProperties" : false,
+      "properties" : {
+        "addresses" : {
+          "propertyOrder" : 1,
+          "type" : "array",
+          "format" : "table",
+          "items" : {
+            "type" : "string"
+          },
+          "title" : "Addresses"
+        }
+      }
+    }
+  }
+}

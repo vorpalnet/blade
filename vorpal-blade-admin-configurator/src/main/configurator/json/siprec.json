@@ -1,0 +1,89 @@
+{
+  "defaultSolution" : "hold",
+  "solutions" : [ {
+    "pattern" : "1997450048",
+    "solution" : "siprec-qfiniti"
+  },{
+    "pattern" : "000001997.*",
+    "solution" : "hold"
+  },
+{
+    "pattern" : "19977.*",
+    "solution" : "siprec-nice"
+  },{
+    "pattern" : "199741003",
+    "solution" : "siprec-qfiniti"
+  },{
+    "pattern" : "18778386365",
+    "solution" : "siprec-qfiniti"
+  },{
+    "pattern" : "199905500.*",
+    "solution" : "siprec-qfiniti"
+  },{
+    "pattern" : "1999055004",
+    "solution" : "siprec-qfiniti"
+  },{
+    "pattern" : "0032",
+    "solution" : "siprec-qfiniti"
+  },{
+    "pattern" : "0080",
+    "solution" : "siprec-nice"
+  }, {
+    "pattern" : ".*19711.*",
+    "solution" : "siprec-qfiniti"
+  }, {
+    "pattern" : ".*60000.*",
+    "solution" : "siprec-qfiniti"
+  }, {
+    "pattern" : ".*40000.*",
+    "solution" : "siprec-qfiniti"
+  }, {
+    "pattern" : ".*19709.*",
+    "solution" : "siprec-nice"
+  }, {
+    "pattern" : ".*1997040000",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*1997040001",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*1997040002",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*1997040003",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*1997040004",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*1997030000",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*1997030001",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*1997030002",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*1997030003",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*1997030004",
+    "solution" : "hold"
+  }, {
+    "pattern" : "9999999999",
+    "solution" : "hold"
+  }, {
+    "pattern" : "1970220010",
+    "solution" : "siprec-qfiniti"
+  },{
+    "pattern" : ".*19702.*",
+    "solution" : "siprec-nice"
+  },{
+    "pattern" : "DoNotRecord",
+    "solution" : "hold"
+  }, {
+    "pattern" : ".*",
+    "solution" : "siprec-nice"
+  } ]
+}

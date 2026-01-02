@@ -1,0 +1,291 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>vorpal.blade.admin.configurator</groupId>
+	<artifactId>vorpal-blade-admin-configurator</artifactId>
+	<packaging>war</packaging>
+	<version>2.0</version>
+	<name>Blade Admin Configurator</name>
+	<url>https://vorpalnet.github.io</url>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<java.version>11</java.version>
+		<maven.compiler.source>${java.version}</maven.compiler.source>
+		<maven.compiler.target>${java.version}</maven.compiler.target>
+		<maven-plugin-version>1.0.0</maven-plugin-version>
+		<jackson-version>2.16.0</jackson-version>
+		<slf4j-version>2.0.12</slf4j-version>
+		<swagger-version>2.2.20</swagger-version>
+		<occas-version>8.1</occas-version>
+	</properties>
+	
+	
+	<profiles>
+    <profile>
+        <id>unix</id>
+        <activation>
+            <os>
+                <family>unix</family>
+            </os>
+        </activation>
+        <properties>
+            <!--hostname>${env.HOSTNAME}</hostname-->
+            <hostname>gamera</hostname>
+        </properties>
+    </profile>
+    <profile>
+        <id>windows</id>
+        <activation>
+            <os>
+                <family>Windows</family>
+            </os>
+        </activation>
+        <properties>
+            <hostname>${env.COMPUTERNAME}</hostname>
+        </properties>
+    </profile>
+</profiles>
+
+
+	<dependencies>	
+	
+		<dependency>
+			<groupId>oracle.communications.converged.application.server</groupId>
+			<artifactId>occas</artifactId>
+			<version>${occas-version}</version>
+			<scope>system</scope>
+			<!--systemPath>/Users/jeff/Oracle/occas-8.1/wlserver/server/lib/weblogic.jar</systemPath-->
+			<systemPath>${OCCAS}/wlserver/server/lib/weblogic.jar</systemPath>
+		</dependency>
+		
+    <dependency>
+        <groupId>org.apache.taglibs</groupId>
+        <artifactId>taglibs-standard-impl</artifactId>
+        <version>1.2.5</version> <!-- Note: This is an older version but widely used. -->
+    </dependency>
+    
+    <!-- https://mvnrepository.com/artifact/xalan/xalan -->
+<dependency>
+    <groupId>xalan</groupId>
+    <artifactId>xalan</artifactId>
+    <version>2.7.3</version>
+</dependency>
+   
+
+<!-- 
+	
+	
+	<dependency>
+    <groupId>org.apache.taglibs</groupId>
+    <artifactId>taglibs-standard</artifactId>
+    <version>1.2.5</version>
+    <type>pom</type>
+</dependency>
+	
+	
+			<dependency>
+			<groupId>org.apache.xmlgraphics</groupId>
+			<artifactId>fop</artifactId>
+			<version>0.95</version>
+
+			<exclusions>
+				<exclusion>
+					<groupId>xml-apis</groupId>
+					<artifactId>xml-apis</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+	
+	
+	
+	<dependency>
+    <groupId>javax.servlet.jsp.jstl</groupId>
+    <artifactId>jstl</artifactId>
+    <version>1.2</version>
+</dependency>
+	
+			<dependency>
+			<groupId>oracle.communications.converged.application.server</groupId>
+			<artifactId>occas</artifactId>
+			<version>${occas-version}</version>
+			<scope>system</scope>
+			<systemPath>/Users/jeff/Oracle/occas-8.1/wlserver/server/lib/weblogic.jar</systemPath>
+		</dependency>
+		
+
+
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-jaxrs2</artifactId>
+			<version>${swagger-version}</version>
+		</dependency>
+	
+	
+			<dependency>
+    		<groupId>jakarta.servlet.jsp.jstl</groupId>
+    		<artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+    		<version>3.0.2</version>
+		</dependency>
+
+
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
+			<version>${swagger-version}</version>
+		</dependency>
+	
+		<dependency>
+			<groupId>org.apache.xmlgraphics</groupId>
+			<artifactId>fop</artifactId>
+			<version>0.95</version>
+
+			<exclusions>
+				<exclusion>
+					<groupId>xml-apis</groupId>
+					<artifactId>xml-apis</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		
+		<dependency>
+			<groupId>com.github.vlsi.mxgraph</groupId>
+			<artifactId>jgraphx</artifactId>
+			<version>4.2.2</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.hsqldb</groupId>
+			<artifactId>hsqldb</artifactId>
+			<version>2.7.3</version>
+		</dependency>
+-->
+
+	</dependencies>
+
+	<build>
+		<finalName>vorpal-blade-admin-configurator</finalName>
+		<plugins>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.8.1</version>
+				<configuration>
+					<release>11</release>
+				</configuration>
+			</plugin>
+			
+			
+   <plugin> 
+    <artifactId>maven-dependency-plugin</artifactId> 
+    <executions> 
+      <execution> 
+        <phase>package</phase> 
+          <goals> 
+            <goal>copy-dependencies</goal> 
+          </goals> 
+          <configuration> 
+             <outputDirectory>${basedir}/src/main/configurator/WEB-INF/lib</outputDirectory> 
+           </configuration> 
+        </execution> 
+      </executions> 
+    </plugin> 
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>3.4.1</version>
+				<executions>
+					<execution>
+						<id>enforce-bytecode-version</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<enforceBytecodeVersion>
+									<maxJdkVersion>11</maxJdkVersion>
+								</enforceBytecodeVersion>
+							</rules>
+							<fail>true</fail>
+						</configuration>
+					</execution>
+				</executions>
+				<dependencies>
+					<dependency>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>extra-enforcer-rules</artifactId>
+						<version>1.7.0</version>
+					</dependency>
+				</dependencies>
+			</plugin>
+
+
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>properties-maven-plugin</artifactId>
+				<version>1.2.1</version>
+				<executions>
+					<execution>
+						<phase>initialize</phase>
+						<goals>
+							<goal>read-project-properties</goal>
+						</goals>
+						<configuration>
+							<files>
+								<file>${basedir}/../gamera.properties</file>
+								<!-- file>${basedir}/../${hostname}.properties</file-->
+								<file>${basedir}/../version.properties</file>
+								<file>${basedir}/../build.number</file>
+							</files>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<version>3.3.2</version>
+				<configuration>
+					<outputDirectory>build</outputDirectory>
+					<failOnMissingWebXml>false</failOnMissingWebXml>
+					<archive>
+						<compress>true</compress>
+						<manifestEntries>
+							<Copyright>${copyright}</Copyright>
+							<License>${license}</License>
+							<Weblogic-Application-Version>${implementation}.${build.number}</Weblogic-Application-Version>
+						</manifestEntries>
+					</archive>
+				</configuration>
+			</plugin>
+
+<!--
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>1.1</version>
+				<executions>
+					<execution>
+						<phase>validate</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<tasks>
+								<echo>Displaying value of 'testproperty' property:</echo>
+								<echo>hostname = ${hostname}</echo>
+								<echo>occas = ${OCCAS}</echo>
+							</tasks>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+-->
+
+		</plugins>
+	</build>
+</project>

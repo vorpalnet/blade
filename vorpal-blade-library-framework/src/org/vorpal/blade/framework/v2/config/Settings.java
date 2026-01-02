@@ -268,13 +268,9 @@ public class Settings<T> implements SettingsMXBean {
 			if (settingsManager.current instanceof Configuration) {
 				Configuration cfg = (Configuration) settingsManager.current;
 				int expiration = cfg.getSession().getExpiration();
-				if (expiration < 3) {
-					sipLogger.warning("Configuration warning: session.expiration must be greater than '3'.");
-				}
-
-				if (cfg.getSession().getKeepAlive() != null) {
-					sipLogger.warning(
-							"Configuration warning: session.keepAlive is deprecated. The Keep Alive refresh value is 1/2 of session.expiration.");
+				if (expiration <= 3) {
+					sipLogger
+							.warning("Configuration warning: session.expiration must be greater than or equal to '3'.");
 				}
 
 			}

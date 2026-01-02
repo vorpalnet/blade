@@ -1,0 +1,127 @@
+{
+  "$schema" : "http://json-schema.org/draft-04/schema#",
+  "title" : "Cdr Settings Sample",
+  "type" : "object",
+  "additionalProperties" : false,
+  "properties" : {
+    "logging" : {
+      "propertyOrder" : 1,
+      "$ref" : "#/definitions/LogParameters",
+      "description" : "Optional logging parameters",
+      "title" : "Logging"
+    },
+    "session" : {
+      "propertyOrder" : 2,
+      "$ref" : "#/definitions/SessionParameters",
+      "description" : "Optional session parameters",
+      "title" : "Session"
+    }
+  },
+  "definitions" : {
+    "LogParameters" : {
+      "type" : "object",
+      "additionalProperties" : false,
+      "properties" : {
+        "useParentLogging" : {
+          "propertyOrder" : 1,
+          "type" : "boolean",
+          "description" : "Write to parent logger, i.e. the WebLogic engine log file. Default: false",
+          "title" : "Use Parent Logging"
+        },
+        "directory" : {
+          "propertyOrder" : 2,
+          "type" : "string",
+          "description" : "Location of log files. Supports environment and servlet context variables. Default: ./servers/${weblogic.Name}/logs/vorpal",
+          "title" : "Directory"
+        },
+        "fileSize" : {
+          "propertyOrder" : 3,
+          "type" : "string",
+          "description" : "Maximum file size written in human readable form. Default: 100MiB",
+          "title" : "File Size"
+        },
+        "fileCount" : {
+          "propertyOrder" : 4,
+          "type" : "integer",
+          "description" : "Maximum number of log files. Default: 25",
+          "title" : "File Count"
+        },
+        "appendFile" : {
+          "propertyOrder" : 5,
+          "type" : "boolean",
+          "description" : "Continue to use the same log file after reboot. Default: true",
+          "title" : "Append File"
+        },
+        "loggingLevel" : {
+          "propertyOrder" : 6,
+          "type" : "string",
+          "enum" : [ "OFF", "SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST", "ALL" ],
+          "description" : "Logging level. Levels include: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL. Default: FINE",
+          "title" : "Logging Level"
+        },
+        "sequenceDiagramLoggingLevel" : {
+          "propertyOrder" : 7,
+          "type" : "string",
+          "enum" : [ "OFF", "SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST", "ALL" ],
+          "description" : "Level at which sequence diagrams will be logged. Default: FINE",
+          "title" : "Sequence Diagram Logging Level"
+        },
+        "configurationLoggingLevel" : {
+          "propertyOrder" : 8,
+          "type" : "string",
+          "enum" : [ "OFF", "SEVERE", "WARNING", "INFO", "CONFIG", "FINE", "FINER", "FINEST", "ALL" ],
+          "description" : "Level at which configuration changes will be logged. Default: FINE",
+          "title" : "Configuration Logging Level"
+        },
+        "fileName" : {
+          "propertyOrder" : 9,
+          "type" : "string",
+          "title" : "File Name"
+        }
+      }
+    },
+    "SessionParameters" : {
+      "type" : "object",
+      "additionalProperties" : false,
+      "properties" : {
+        "expiration" : {
+          "propertyOrder" : 1,
+          "type" : "integer",
+          "description" : "Set Application Session expiration in minutes.",
+          "title" : "Expiration"
+        },
+        "keepAlive" : {
+          "propertyOrder" : 2,
+          "$ref" : "#/definitions/KeepAliveParameters",
+          "description" : "Set Keep-Alive parameters.",
+          "title" : "Keep Alive"
+        }
+      }
+    },
+    "KeepAliveParameters" : {
+      "type" : "object",
+      "additionalProperties" : false,
+      "properties" : {
+        "style" : {
+          "propertyOrder" : 1,
+          "type" : "string",
+          "enum" : [ "DISABLED", "UPDATE", "REINVITE" ],
+          "description" : "Sets keep alive style: DISABLED, UPDATE, REINVITE",
+          "title" : "Style"
+        },
+        "sessionExpires" : {
+          "propertyOrder" : 2,
+          "type" : "integer",
+          "description" : "Sets Session-Expires header, in seconds",
+          "title" : "Session Expires"
+        },
+        "minSE" : {
+          "propertyOrder" : 3,
+          "type" : "integer",
+          "description" : "Sets Min-SE header, in seconds",
+          "title" : "Min SE"
+        }
+      }
+    }
+  }
+}

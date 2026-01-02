@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic JSON Schema Form Generator</title>
+    <link rel="stylesheet" href="configurator.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/mode-json.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/theme-eclipse.js"></script>
+</head>
+<body>
+    <div class="container">
+ 
+        <h1 id="schema-title">Configurator</h1>
+
+        <!-- Feature: Recent Files -->
+        <div id="recent-files-container" class="recent-files-container" style="display: none;">
+            <div class="recent-files-header">Recent Files</div>
+            <div id="recent-files-list" class="recent-files-list">
+                <!-- Recent files will be populated here -->
+            </div>
+        </div>
+
+        <div class="schema-selector-container">
+            <label for="target-directory-select">Target:</label>
+            <select id="target-directory-select" onchange="onTargetDirectoryChange(this.value)">
+                <option value="">-- Select Target --</option>
+            </select>
+
+            <label for="schema-select" style="margin-left: 20px;">Schema:</label>
+            <select id="schema-select" onchange="loadSchema(this.value)">
+                <option value="">-- Select a Schema --</option>
+            </select>
+            <span id="websocket-status" class="sync-status warning" style="display: inline-flex;">WebSocket: Connecting...</span>
+            <span id="schema-load-status" class="sync-status" style="display: none;"></span>
+            <!-- Feature: Dirty Indicator -->
+            <span id="dirty-indicator" class="dirty-indicator" style="display: none;">● Unsaved Changes</span>
+        </div>
+
+        <h2 id="schema-title">App Router Configuration</h2>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="form">Form Editor</button>
+            <button class="tab" data-tab="json">JSON Editor</button>
+            <button class="tab" data-tab="schema">JSON Schema</button>
+        </div>
+        
+        <div id="form-tab" class="tab-content active">
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
+                <button type="button" class="clone-button" onclick="showCloneDialog()">Clone to Another Target</button>
+                <button type="button" class="btn btn-secondary" onclick="showVersionHistory()">Version History</button>
+                <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset Form</button>
+                <button type="button" class="btn btn-secondary" onclick="expandAll()">Expand All</button>
+                <button type="button" class="btn btn-secondary" onclick="collapseAll()">Collapse All</button>
+                <button type="button" class="btn btn-secondary" onclick="collapseEmpty()">Collapse Empty</button>
+            </div>
+
+            <!-- Feature: Validation Summary -->
+            <div id="validation-summary" class="validation-summary">
+                <div class="validation-summary-header">⚠ Validation Errors</div>
+                <ul id="validation-summary-list" class="validation-summary-list">
+                    <!-- Validation errors will be listed here -->
+                </ul>
+            </div>
+
+            <form id="dynamicForm">
+                <!-- Form will be generated here -->
+            </form>
+        </div>
+        
+        <div id="json-tab" class="tab-content">
+            <div class="json-controls">
+                <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
+                <button type="button" class="clone-button" onclick="showCloneDialog()">Clone to Another Target</button>
+                <button type="button" class="btn btn-secondary" onclick="showVersionHistory()">Version History</button>
+                <button type="button" class="btn btn-secondary" onclick="formatJson()">Format JSON</button>
+                <button type="button" class="btn btn-secondary" onclick="validateJson()">Validate</button>
+                <button type="button" class="btn btn-secondary" onclick="resetJson()">Reset JSON</button>
+                <div style="display: none;" class="theme-selector">
+                    <label for="theme-select">Theme:</label>
+                    <select id="theme-select" onchange="changeTheme(this.value)">
+                        <option value="monokai">Monokai</option>
+                        <option value="github">GitHub</option>
+                        <option value="tomorrow">Tomorrow</option>
+                        <option value="twilight">Twilight</option>
+                        <option value="textmate">TextMate</option>
+                        <option value="solarized_dark">Solarized Dark</option>
+                        <option value="solarized_light">Solarized Light</option>
+                        <option value="chrome">Chrome</option>
+                        <option value="clouds">Clouds</option>
+                        <option value="crimson_editor">Crimson Editor</option>
+                        <option value="eclipse" selected>Eclipse</option>
+                        <option value="tomorrow_night">Tomorrow Night</option>
+                        <option value="tomorrow_night_blue">Tomorrow Night Blue</option>
+                        <option value="tomorrow_night_bright">Tomorrow Night Bright</option>
+                        <option value="tomorrow_night_eighties">Tomorrow Night 80s</option>
+                        <option value="dracula">Dracula</option>
+                        <option value="cobalt">Cobalt</option>
+                    </select>
+                </div>
+                <div id="sync-status" class="sync-status" style="display: none;"></div>
+            </div>
+
+            <div id="json-editor" class="json-editor-container"></div>
+        </div>
+
+        <div id="schema-tab" class="tab-content">
+            <div class="json-controls">
+                <span class="sync-status success" style="display: inline-flex;">Read-only view of the JSON Schema</span>
+            </div>
+            <div id="schema-editor" class="json-editor-container"></div>
+        </div>
+    </div>
+
+    <!-- Version History Modal -->
+    <div id="versionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Version History</h2>
+                <button class="modal-close" onclick="closeVersionHistory()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="versionListContainer"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeVersionHistory()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clone Configuration Modal -->
+    <div id="cloneModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Clone Configuration</h2>
+                <button class="modal-close" onclick="closeCloneDialog()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Clone the current configuration to another target directory:</p>
+                <div class="form-group">
+                    <label for="clone-target-select">Destination Target:</label>
+                    <select id="clone-target-select" style="width: 100%; padding: 8px; margin-top: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                        <option value="">-- Select Target --</option>
+                    </select>
+                </div>
+                <div style="margin-top: 15px; padding: 12px; background: #fef3c7; border-radius: 6px; font-size: 13px;">
+                    <strong>Note:</strong> This will save the current configuration to the selected target directory.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="executeClone()">Clone</button>
+                <button type="button" class="btn btn-secondary" onclick="closeCloneDialog()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="configurator.js"></script>
+</body>
+</html>

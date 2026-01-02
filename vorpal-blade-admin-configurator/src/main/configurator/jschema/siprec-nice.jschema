@@ -1,0 +1,40 @@
+{
+  "$schema" : "http://json-schema.org/draft-04/schema#",
+  "title" : "Settings",
+  "type" : "object",
+  "additionalProperties" : false,
+  "properties" : {
+    "mapping" : {
+      "propertyOrder" : 1,
+      "type" : "array",
+      "format" : "table",
+      "items" : {
+        "$ref" : "#/definitions/VrspPair"
+      },
+      "title" : "Mapping"
+    }
+  },
+  "definitions" : {
+    "VrspPair" : {
+      "type" : "object",
+      "additionalProperties" : false,
+      "properties" : {
+        "active" : {
+          "propertyOrder" : 1,
+          "type" : "string",
+          "title" : "Active"
+        },
+        "backup" : {
+          "propertyOrder" : 2,
+          "type" : "string",
+          "title" : "Backup"
+        },
+        "pattern" : {
+          "propertyOrder" : 3,
+          "type" : "string",
+          "title" : "Pattern"
+        }
+      }
+    }
+  }
+}
