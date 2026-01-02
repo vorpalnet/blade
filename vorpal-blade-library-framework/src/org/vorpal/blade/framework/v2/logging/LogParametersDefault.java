@@ -12,9 +12,9 @@ public class LogParametersDefault extends LogParameters implements Serializable 
 		this.fileSize = "100MiB";
 		this.fileCount = 25;
 		this.appendFile = true;
-		this.loggingLevel = LoggingLevel.FINE;
+		this.loggingLevel = LoggingLevel.INFO;
 		this.sequenceDiagramLoggingLevel = LoggingLevel.FINE;
-		this.configurationLoggingLevel = LoggingLevel.FINE;
+		this.configurationLoggingLevel = LoggingLevel.INFO;
 	}
 
 }

@@ -12,6 +12,7 @@ let selectedTargetDirectory = null;
 
 let formIdCounter = 0;
 let jsonEditor;
+let schemaEditor;
 let currentData = {};
 let currentTheme = 'eclipse';
 let currentSchemaName = null;
@@ -450,6 +451,12 @@ function finalizeSchemaLoad(newData) {
     if (jsonEditor) {
         jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
     }
+
+    // Update the Schema editor (if already initialized)
+    if (schemaEditor) {
+        schemaEditor.setValue(JSON.stringify(schema, null, 2), -1);
+    }
+    // Note: If schema editor not yet initialized, it will get the schema when first shown
 
     showSchemaLoadStatus(`Loaded: ${schema.title || currentSchemaName}`, 'success');
 
@@ -1186,17 +1193,18 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
     entry.className = 'map-entry';
 
     const header = document.createElement('div');
-    header.className = 'array-item-header';
+    header.className = 'map-entry-header';
 
-    const title = document.createElement('div');
-    title.className = 'array-item-title';
-    title.textContent = 'Map Entry';
-    header.appendChild(title);
+    // Key input directly in header
+    const keyInput = createFormElement({ type: 'string' }, '', key, true);
+    keyInput.placeholder = 'Key';
+    header.appendChild(keyInput);
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.className = 'btn btn-danger';
-    removeBtn.textContent = 'Remove';
+    removeBtn.className = 'delete-property-btn';
+    removeBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+    removeBtn.title = 'Remove entry';
     removeBtn.onclick = () => {
         entry.remove();
         // Update parent section status and heights
@@ -1209,26 +1217,30 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
 
     entry.appendChild(header);
 
-    // Key input
-    const keyLabel = document.createElement('label');
-    keyLabel.textContent = 'Key';
-    entry.appendChild(keyLabel);
-
-    const keyInput = createFormElement({ type: 'string' }, '', key, true);
-    entry.appendChild(keyInput);
-
-    // Value input
-    const valueLabel = document.createElement('label');
-    valueLabel.textContent = 'Value';
-    entry.appendChild(valueLabel);
-
     const valuePath = basePath ? `${basePath}.${key}` : key;
 
     if (valueSchema.$ref) {
         valueSchema = resolveRef(valueSchema.$ref);
     }
 
-    if (valueSchema.type === 'object' || valueSchema.type === 'array') {
+    if (valueSchema.type === 'object' && valueSchema.properties) {
+        // Render object properties directly without a collapsible wrapper
+        Object.keys(valueSchema.properties).forEach(prop => {
+            const propSchema = valueSchema.properties[prop];
+            const propPath = valuePath ? `${valuePath}.${prop}` : prop;
+            const propValue = value && value[prop] !== undefined ? value[prop] : null;
+            const propTitle = propSchema.title || prop;
+            const propDescription = propSchema.description;
+
+            if (!hasValue(propValue)) {
+                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, entry, true);
+                entry.appendChild(placeholder);
+            } else {
+                const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
+                entry.appendChild(propGroup);
+            }
+        });
+    } else if (valueSchema.type === 'array') {
         const valueGroup = createFormGroup(valueSchema, null, null, valuePath, value, true);
         // Remove the outer form-group wrapper for inline display
         while (valueGroup.firstChild) {
@@ -2072,11 +2084,13 @@ document.addEventListener('DOMContentLoaded', function() {
     loadRecentFiles(); // Load recent files from localStorage
     setupDirtyTracking(); // Set up unsaved changes tracking
 
-    // Add tab click handlers (backup for onclick attributes)
+    // Add tab click handlers using data-tab attribute
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', function(e) {
-            const tabName = this.textContent.includes('Form') ? 'form' : 'json';
-            switchTab(tabName);
+            const tabName = this.getAttribute('data-tab');
+            if (tabName) {
+                switchTab(tabName);
+            }
         });
     });
 });
@@ -2111,6 +2125,8 @@ function initializeJsonEditor() {
             }
         }, 500);
     });
+
+    // Schema editor will be initialized lazily when first shown
 }
 
 function changeTheme(themeName) {
@@ -2122,44 +2138,89 @@ function changeTheme(themeName) {
 }
 
 function switchTab(tabName) {
-    const previousTab = document.querySelector('.tab-content.active').id;
-
-    // Auto-sync data when switching tabs
     try {
-        if (tabName === 'json' && previousTab === 'form-tab') {
-            // Switching to JSON tab - sync form data to JSON
-            const formData = getFormData();
-            currentData = formData;
-            if (jsonEditor) {
-                jsonEditor.setValue(JSON.stringify(formData, null, 2), -1);
+        const activeContent = document.querySelector('.tab-content.active');
+        const previousTab = activeContent ? activeContent.id : 'form-tab';
+
+        // Auto-sync data when switching tabs
+        try {
+            if ((tabName === 'json' || tabName === 'schema') && previousTab === 'form-tab') {
+                // Switching to JSON or Schema tab - sync form data to JSON
+                const formData = getFormData();
+                currentData = formData;
+                if (jsonEditor) {
+                    jsonEditor.setValue(JSON.stringify(formData, null, 2), -1);
+                }
+            } else if (tabName === 'form' && previousTab === 'json-tab') {
+                // Switching to Form tab - sync JSON data to form
+                if (jsonEditor) {
+                    const jsonData = JSON.parse(jsonEditor.getValue());
+                    currentData = jsonData;
+                    generateFormWithData(jsonData);
+                }
             }
-        } else if (tabName === 'form' && previousTab === 'json-tab') {
-            // Switching to Form tab - sync JSON data to form
-            if (jsonEditor) {
-                const jsonData = JSON.parse(jsonEditor.getValue());
-                currentData = jsonData;
-                generateFormWithData(jsonData);
+        } catch (e) {
+            console.error('Error syncing data in switchTab:', e);
+            if (tabName === 'form' && previousTab === 'json-tab') {
+                showSyncStatus('Cannot sync invalid JSON to form: ' + e.message, 'error');
+                return;
+            }
+        }
+
+        // Update tab buttons
+        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+        const activeTabBtn = document.querySelector(`.tab[data-tab="${tabName}"]`);
+        if (activeTabBtn) {
+            activeTabBtn.classList.add('active');
+        }
+
+        // Update tab content
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        const tabContent = document.getElementById(tabName + '-tab');
+        if (tabContent) {
+            tabContent.classList.add('active');
+        }
+
+        // Refresh editor layout if switching to JSON or Schema tab
+        if (tabName === 'json' && jsonEditor) {
+            setTimeout(() => jsonEditor.resize(), 100);
+        } else if (tabName === 'schema') {
+            // Initialize schema editor lazily on first show
+            if (!schemaEditor) {
+                initializeSchemaEditor();
+            }
+            if (schemaEditor) {
+                setTimeout(() => schemaEditor.resize(), 100);
             }
         }
     } catch (e) {
         console.error('Error in switchTab:', e);
-        if (tabName === 'form' && previousTab === 'json-tab') {
-            showSyncStatus('Cannot sync invalid JSON to form: ' + e.message, 'error');
-            return;
-        }
     }
+}
 
-    // Update tab buttons
-    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-    document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
-
-    // Update tab content
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-    document.getElementById(tabName + '-tab').classList.add('active');
-
-    // Refresh JSON editor layout if switching to JSON tab
-    if (tabName === 'json' && jsonEditor) {
-        setTimeout(() => jsonEditor.resize(), 100);
+function initializeSchemaEditor() {
+    try {
+        const schemaEditorEl = document.getElementById('schema-editor');
+        if (schemaEditorEl) {
+            schemaEditor = ace.edit("schema-editor");
+            schemaEditor.setTheme("ace/theme/" + currentTheme);
+            schemaEditor.session.setMode("ace/mode/json");
+            schemaEditor.setOptions({
+                fontSize: 14,
+                showPrintMargin: false,
+                wrap: true,
+                autoScrollEditorIntoView: true,
+                readOnly: true
+            });
+            // Set the current schema content
+            if (schema && Object.keys(schema).length > 0) {
+                schemaEditor.setValue(JSON.stringify(schema, null, 2), -1);
+            } else {
+                schemaEditor.setValue('{\n  \n}', -1);
+            }
+        }
+    } catch (e) {
+        console.error('Error initializing schema editor:', e);
     }
 }
 

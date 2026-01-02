@@ -41,8 +41,9 @@
         <h2 id="schema-title">App Router Configuration</h2>
 
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('form')">Form Editor</button>
-            <button class="tab" onclick="switchTab('json')">JSON Editor</button>
+            <button class="tab active" data-tab="form">Form Editor</button>
+            <button class="tab" data-tab="json">JSON Editor</button>
+            <button class="tab" data-tab="schema">JSON Schema</button>
         </div>
         
         <div id="form-tab" class="tab-content active">
@@ -103,6 +104,13 @@
             </div>
 
             <div id="json-editor" class="json-editor-container"></div>
+        </div>
+
+        <div id="schema-tab" class="tab-content">
+            <div class="json-controls">
+                <span class="sync-status success" style="display: inline-flex;">Read-only view of the JSON Schema</span>
+            </div>
+            <div id="schema-editor" class="json-editor-container"></div>
         </div>
     </div>
 

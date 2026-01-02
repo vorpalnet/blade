@@ -351,14 +351,26 @@ input:focus, select:focus, textarea:focus {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 6px;
-    padding: 15px;
+    padding: 12px;
     margin-bottom: 10px;
+}
+
+.map-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.map-entry-header .map-key-input {
+    flex: 1;
+    margin-bottom: 0;
 }
 
 .map-key-input {
     background: #fef3c7;
     border-color: #f59e0b;
-    margin-bottom: 10px;
+    font-weight: 500;
 }
 
 .description {

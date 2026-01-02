@@ -7,7 +7,9 @@ import java.util.logging.Level;
 import javax.servlet.ServletContext;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 public class LogParameters implements Serializable {
@@ -21,31 +23,54 @@ public class LogParameters implements Serializable {
 		KB, KiB, MB, MiB, GB, GiB
 	}
 
+	
+	/*
+	 * 		this.useParentLogging = false;
+		this.filename = "${sip.application.name}.%g.log";
+		this.directory = "./servers/${weblogic.Name}/logs/vorpal";
+		this.fileSize = "100MiB";
+		this.fileCount = 25;
+		this.appendFile = true;
+		this.loggingLevel = LoggingLevel.FINE;
+		this.sequenceDiagramLoggingLevel = LoggingLevel.FINE;
+		this.configurationLoggingLevel = LoggingLevel.FINE;
+	 */
+	
+	
 	@JsonPropertyDescription("Write to parent logger, i.e. the WebLogic engine log file. Default: false")
+	@JsonProperty(defaultValue = "false")
 	protected Boolean useParentLogging = null;
 
 	@JsonPropertyDescription("Location of log files. Supports environment and servlet context variables. Default: ./servers/${weblogic.Name}/logs/vorpal")
+	@JsonProperty(defaultValue = "./servers/${weblogic.Name}/logs/vorpal")
 	protected String directory = null;
 
 	@JsonPropertyDescription("Name of the log file. Supports environment and servlet context variables. Default: ${sip.application.name}.%g.log")
+	@JsonProperty(defaultValue = "${sip.application.name}.%g.log")
 	protected String filename = null;
 
 	@JsonPropertyDescription("Maximum file size written in human readable form. Default: 100MiB")
+	@JsonProperty(defaultValue = "100MiB")
 	protected String fileSize = null;
 
 	@JsonPropertyDescription("Maximum number of log files. Default: 25")
+	@JsonProperty(defaultValue = "25")
 	protected Integer fileCount = null;
 
 	@JsonPropertyDescription("Continue to use the same log file after reboot. Default: true")
+	@JsonProperty(defaultValue = "true")
 	protected Boolean appendFile = null;
 
-	@JsonPropertyDescription("Logging level. Levels include: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL. Default: FINE")
+	@JsonPropertyDescription("Logging level. Levels include: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL. Default: INFO")
+	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel loggingLevel = null;
 
 	@JsonPropertyDescription("Level at which sequence diagrams will be logged. Default: FINE")
+	@JsonProperty(defaultValue = "FINE")
 	protected LoggingLevel sequenceDiagramLoggingLevel = null;
 
 	@JsonPropertyDescription("Level at which configuration changes will be logged. Default: FINE")
+	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel configurationLoggingLevel = null;
 
 	public LogParameters() {
