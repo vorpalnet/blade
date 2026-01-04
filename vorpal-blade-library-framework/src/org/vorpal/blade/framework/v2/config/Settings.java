@@ -263,18 +263,6 @@ public class Settings<T> implements SettingsMXBean {
 
 			sipLogger.logConfiguration(config);
 
-			// stuff...
-
-			if (settingsManager.current instanceof Configuration) {
-				Configuration cfg = (Configuration) settingsManager.current;
-				int expiration = cfg.getSession().getExpiration();
-				if (expiration <= 3) {
-					sipLogger
-							.warning("Configuration warning: session.expiration must be greater than or equal to '3'.");
-				}
-
-			}
-
 		} catch (Exception e) {
 			sipLogger.severe(e);
 		}

@@ -1,0 +1,51 @@
+package org.vorpal.blade.services.analytics;
+
+import javax.annotation.Resource;
+import javax.ejb.ActivationConfigProperty;
+import javax.ejb.EJBException;
+import javax.ejb.MessageDriven;
+import javax.ejb.MessageDrivenBean;
+import javax.ejb.MessageDrivenContext;
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageListener;
+import javax.jms.TextMessage;
+
+@MessageDriven(name = "AnalyticsMDB", activationConfig = {
+		@ActivationConfigProperty(propertyName = "destinationType", propertyValue = "javax.jms.Queue"),
+//		@ActivationConfigProperty(propertyName = "destination", propertyValue = "queue/analytics"),
+		@ActivationConfigProperty(propertyName = "destination", propertyValue = "BladeJmsEventServer"),
+		@ActivationConfigProperty(propertyName = "acknowledgeMode", propertyValue = "Auto-acknowledge") })
+public class AnalyticsMDB implements MessageDrivenBean, MessageListener {
+
+	private static final long serialVersionUID = 1L;
+
+	@Resource
+	private MessageDrivenContext mdc;
+
+	@Override
+	public void onMessage(Message msg) {
+
+		TextMessage textMessage = (TextMessage) msg;
+
+		try {
+			System.out.println("Message received: " + textMessage.getText());
+		} catch (JMSException e) {
+			System.out.println("Error while trying to consume messages: " + e.getMessage());
+		}
+
+	}
+
+	@Override
+	public void ejbRemove() throws EJBException {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void setMessageDrivenContext(MessageDrivenContext arg0) throws EJBException {
+		// TODO Auto-generated method stub
+
+	}
+
+}
