@@ -8,7 +8,7 @@ public class SessionParametersDefault extends SessionParameters implements Seria
 
 	public SessionParametersDefault() {
 		this.expiration = 60; // 1 hour
-		this.keepAlive = new KeepAliveParametersDefault();
+		this.keepAlive = null; // deprecated
 		this.sessionSelectors = new LinkedList<>();
 
 		AttributeSelector fromSel = new AttributeSelector();

@@ -15,9 +15,9 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 public class Terminate extends Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
-	B2buaServlet b2buaListener;
+	B2buaListener b2buaListener;
 
-	public Terminate(B2buaServlet b2buaListener) {
+	public Terminate(B2buaListener b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
 

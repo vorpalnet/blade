@@ -36,12 +36,12 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 public class Reinvite extends Callflow {
 	static final long serialVersionUID = 1L;
 	private SipServletRequest aliceRequest;
-	private B2buaServlet b2buaListener;
+	private B2buaListener b2buaListener;
 
 	public Reinvite() {
 	}
 
-	public Reinvite(B2buaServlet b2buaListener) {
+	public Reinvite(B2buaListener b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
 

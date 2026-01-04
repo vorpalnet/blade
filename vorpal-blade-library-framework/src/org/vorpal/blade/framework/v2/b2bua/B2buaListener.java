@@ -91,4 +91,11 @@ public interface B2buaListener extends Serializable {
 	 */
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException;
 
+	
+	// jwm - what does this break?
+	public void requestEvent(SipServletRequest bobRequest) throws ServletException, IOException;
+
+	// jwm - what does this break?
+	public void responseEvent(SipServletResponse aliceResponse) throws ServletException, IOException;
+
 }

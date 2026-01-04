@@ -98,7 +98,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	protected abstract Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException;
 
 	@Override
-	final public void servletInitialized(SipServletContextEvent event) {
+	public void servletInitialized(SipServletContextEvent event) {
 		this.event = event;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
@@ -187,17 +187,12 @@ public abstract class AsyncSipServlet extends SipServlet
 			String method = request.getMethod();
 			AttributesKey rr = null;
 			SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
-			SessionParameters sessionParameters = AsyncSipServlet.getSessionParameters();
 
 			if (request.getMethod().equals("INVITE") && request.isInitial()) {
 
 				// get / create the X-Vorpal-Session id, useful for tracking sessions
 				String indexKey = Callflow.getVorpalSessionId(request);
-
-				// use the X-Vorpal-Session as an index key if the configuration requires it
-				if (sessionParameters.indexVorpalSessionID != null && sessionParameters.indexVorpalSessionID == true) {
-					appSession.addIndexKey(indexKey);
-				}
+				appSession.addIndexKey(indexKey);
 
 				// attempt to keep track of who called whom
 				request.getSession().setAttribute("userAgent", "caller");
@@ -607,28 +602,31 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			// Timing problem. Call was canceled, yet INVITE 180/200 came back.
 			// Does this get invoked with the new Terminate callflow?
-			if (linkedSession != null // has a linked session?
-					&& linkedSession.getState().equals(SipSession.State.TERMINATED) // but it is toast
-					&& method.equals("INVITE") // invite response comes in anway
-			) {
-				sipLogger.warning(response,
-						"AsyncSipServlet.doResponse - Linked session terminated (CANCEL?), but an INVITE response came through anyway. Killing the session with CallflowAckBye");
-
-				CallflowAckBye ackAndBye = new CallflowAckBye();
-
-				try {
-
-					if (false == Callflow.failure(response)) { // eat failure responses
-						ackAndBye.process(response);
-					}
-
-				} catch (Exception ex2) {
-					sipLogger.warning(response, "AsyncSipServlet.doResponse - Exception #ex2");
-					throw new ServletException(ex2);
-				}
-
-				return;
-			}
+			
+			// jwm -- problematic, return to this later
+			
+//			if (linkedSession != null // has a linked session?
+//					&& linkedSession.getState().equals(SipSession.State.TERMINATED) // but it is toast
+//					&& method.equals("INVITE") // invite response comes in anway
+//			) {
+//				sipLogger.warning(response,
+//						"AsyncSipServlet.doResponse - Linked session terminated (CANCEL?), but an INVITE response came through anyway. Killing the session with CallflowAckBye");
+//
+//				CallflowAckBye ackAndBye = new CallflowAckBye();
+//
+//				try {
+//
+//					if (false == Callflow.failure(response)) { // eat failure responses
+//						ackAndBye.process(response);
+//					}
+//
+//				} catch (Exception ex2) {
+//					sipLogger.warning(response, "AsyncSipServlet.doResponse - Exception #ex2");
+//					throw new ServletException(ex2);
+//				}
+//
+//				return;
+//			}
 
 			if (false == isProxy) {
 

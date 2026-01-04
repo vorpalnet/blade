@@ -7,7 +7,7 @@ public class LogParametersDefault extends LogParameters implements Serializable 
 
 	public LogParametersDefault() {
 		this.useParentLogging = false;
-		this.filename = "${sip.application.name}.%g.log";
+		this.fileName = "${sip.application.name}.%g.log";
 		this.directory = "./servers/${weblogic.Name}/logs/vorpal";
 		this.fileSize = "100MiB";
 		this.fileCount = 25;

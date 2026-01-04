@@ -47,7 +47,7 @@ public class LogParameters implements Serializable {
 
 	@JsonPropertyDescription("Name of the log file. Supports environment and servlet context variables. Default: ${sip.application.name}.%g.log")
 	@JsonProperty(defaultValue = "${sip.application.name}.%g.log")
-	protected String filename = null;
+	protected String fileName = null;
 
 	@JsonPropertyDescription("Maximum file size written in human readable form. Default: 100MiB")
 	@JsonProperty(defaultValue = "100MiB")
@@ -80,7 +80,7 @@ public class LogParameters implements Serializable {
 	public LogParameters(LogParameters that) {
 		this.useParentLogging = that.useParentLogging;
 		this.directory = that.directory;
-		this.filename = that.filename;
+		this.fileName = that.fileName;
 		this.fileSize = that.fileSize;
 		this.fileCount = that.fileCount;
 		this.appendFile = that.appendFile;
@@ -135,7 +135,7 @@ public class LogParameters implements Serializable {
 	 * @return the fileName
 	 */
 	public String getFileName() {
-		return filename;
+		return fileName;
 	}
 
 	/**
@@ -143,7 +143,7 @@ public class LogParameters implements Serializable {
 	 * @return instance of self
 	 */
 	public LogParameters setFileName(String fileName) {
-		this.filename = fileName;
+		this.fileName = fileName;
 		return this;
 	}
 
@@ -315,7 +315,7 @@ public class LogParameters implements Serializable {
 
 	public String resolveFilename(ServletContext servletContext) {
 		final String defaultName = "${sip.application.name}.%g.log";
-		return (filename != null) ? resolveVariables(servletContext, filename)
+		return (fileName != null) ? resolveVariables(servletContext, fileName)
 				: resolveVariables(servletContext, defaultName);
 	}
 
