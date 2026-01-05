@@ -12,20 +12,20 @@ import javax.persistence.NamedQuery;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
-
+import javax.servlet.sip.SipServletContextEvent;
 
 /**
  * The persistent class for the application database table.
  * 
  */
 @Entity
-@Table(name="application")
-@NamedQuery(name="Application.findAll", query="SELECT a FROM Application a")
+@Table(name = "application")
+@NamedQuery(name = "Application.findAll", query = "SELECT a FROM Application a")
 public class Application implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	@Id
-	@Column(updatable=false, unique=true, nullable=false)
+	@Column(updatable = false, unique = true, nullable = false)
 	private int id;
 
 	@Lob
@@ -35,27 +35,32 @@ public class Application implements Serializable {
 	private String comments;
 
 	@Temporal(TemporalType.TIMESTAMP)
-	@Column(updatable=false, nullable=false)
+	@Column(updatable = false, nullable = false)
 	private Date created;
 
-	private Timestamp destroyed;
+	@Temporal(TemporalType.TIMESTAMP)
+	@Column(updatable = false, nullable = true)
+	private Date destroyed;
 
-	@Column(length=64)
+	@Column(length = 64)
 	private String domain;
 
-	@Column(length=256)
+	@Column(length = 256)
 	private String host;
 
-	@Column(nullable=false, length=32)
+	@Column(nullable = false, length = 32)
 	private String name;
 
-	@Column(length=64)
+	@Column(length = 64)
 	private String server;
 
-	@Column(length=16)
+	@Column(length = 16)
 	private String version;
 
 	public Application() {
+	}
+
+	public Application(SipServletContextEvent event) {
 	}
 
 	public int getId() {
@@ -90,11 +95,11 @@ public class Application implements Serializable {
 		this.created = created;
 	}
 
-	public Timestamp getDestroyed() {
+	public Date getDestroyed() {
 		return this.destroyed;
 	}
 
-	public void setDestroyed(Timestamp destroyed) {
+	public void setDestroyed(Date destroyed) {
 		this.destroyed = destroyed;
 	}
 

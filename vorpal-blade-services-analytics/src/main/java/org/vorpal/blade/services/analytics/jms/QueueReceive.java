@@ -1,14 +1,14 @@
 package org.vorpal.blade.services.analytics.jms;
 
-import java.util.Enumeration;
+import java.io.Serializable;
 import java.util.Hashtable;
 
 import javax.ejb.ActivationConfigProperty;
 import javax.ejb.MessageDriven;
 import javax.jms.JMSException;
-import javax.jms.MapMessage;
 import javax.jms.Message;
 import javax.jms.MessageListener;
+import javax.jms.ObjectMessage;
 import javax.jms.Queue;
 import javax.jms.QueueConnection;
 import javax.jms.QueueConnectionFactory;
@@ -18,10 +18,9 @@ import javax.jms.Session;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
 
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
+import org.vorpal.blade.framework.v2.logging.Logger;
 
 /**
  * This example shows how to establish a connection to and receive messages from
@@ -48,6 +47,7 @@ public class QueueReceive extends ClientCallflow implements MessageListener {
 	private QueueReceiver qreceiver;
 	private Queue queue;
 	private boolean quit = false;
+	private static Logger sipLogger;
 
 	public QueueReceive() {
 		// default constructor
@@ -60,86 +60,44 @@ public class QueueReceive extends ClientCallflow implements MessageListener {
 	 */
 	@Override
 //	public void onMessage(ObjectMessage msg) {
-	public void onMessage(Message msg) {
+	public void onMessage(Message message) {
 
-		MapMessage mapMessage;
-//		EntityManagerFactory emf = null;
-//		EntityManager em = null;
+	
 
-//		System.out.println("onMessage msg instanceof Message=" + (msg instanceof Message) //
-//				+ ", TextMessage=" + (msg instanceof TextMessage) //
-//				+ ", ObjectMessage=" + (msg instanceof ObjectMessage) //
-//				+ ", MapMessage=" + (msg instanceof MapMessage) //
-//				);
+		    if (message instanceof ObjectMessage) {
+		        try {
+		            ObjectMessage objectMessage = (ObjectMessage) message;
+		            
+		            // Use the getObject() method
+		            Serializable receivedObject = objectMessage.getObject();
+		            
+		    		System.out.println("QueueReceive.onMessage - receivedObject=" + receivedObject.getClass().getName());
+		            System.out.println(Logger.serializeObject(receivedObject));
+		            
+		            
+		            
+		            
+//		            // You can then cast the Serializable object to its specific class
+//		            // (e.g., if you know it's a 'MyCustomObject' class)
+//		            // Note: The class must be present on the consumer's classpath and serializable.
+//		            if (receivedObject instanceof MyCustomObject) {
+//		                MyCustomObject myObject = (MyCustomObject) receivedObject;
+//		                // Now you can call methods on your object
+//		                myObject.anyMethodDefinedForTheObject();
+//		            } else {
+//		                System.out.println("Received unexpected object type.");
+//		            }
 
-		try {
-//			EventDetailRecord eventRecord = (EventDetailRecord) ((ObjectMessage) msg).getObject();
-
-			if (msg instanceof MapMessage) {
-				mapMessage = (MapMessage) msg;
-
-				Enumeration<String> mapNames = mapMessage.getMapNames();
-
-				sipLogger.info("Property names in MapMessage:");
-				while (mapNames.hasMoreElements()) {
-					String propertyName = mapNames.nextElement();
-					sipLogger.info(propertyName + "=" + mapMessage.getString(propertyName));
-				}
-
-				// now insert it into the tables
-
-//				sipLogger.warning("Persistence.createEntityManagerFactory...");
-//				emf = Persistence.createEntityManagerFactory("BladeCDR"); // Replace with your persistence unit name
-//				sipLogger.warning("emf.createEntityManager...");
-//				em = emf.createEntityManager();
-//
-//				sipLogger.warning("em.getTransaction().begin()...");
-//				em.getTransaction().begin(); // Start a transaction
-//
-//				String id = mapMessage.getString("X-Vorpal-Session");
-//				String timestamp = mapMessage.getString("X-Vorpal-Timestamp");
-//
-//				CdrSessionPK cdrSessionPK = new CdrSessionPK();
-//				cdrSessionPK.setId(id);
-//				cdrSessionPK.setStart(new Date(Long.parseLong(timestamp, 16)));
-//
-//				CdrSession cdrSession = new CdrSession();
-//				cdrSession.setId(cdrSessionPK);
-//
-//				cdrSession.setCluster(mapMessage.getString("cluster"));
-//				cdrSession.setDomain(mapMessage.getString("domain"));
-//
-//				// Persist the Product object (insert into the database)
-//				sipLogger.warning("em.persist...");
-//				em.persist(cdrSession);
-//
-////				sipLogger.warning("em.getTransaction().commit()...");
-////				em.getTransaction().commit(); // Commit the transaction
-
-			}
-
-		} catch (JMSException ex) {
-			sipLogger.severe(ex);
-		} catch (Exception e) {
-			sipLogger.severe(e);
-//			if (em.getTransaction().isActive()) {
-//				em.getTransaction().rollback(); // Rollback in case of error
-//			}
-			e.printStackTrace();
-		} 
+		        } catch (JMSException e) {
+		            e.printStackTrace();
+		            // Handle JMS errors (e.g., deserialization failure, internal provider error)
+		        }
+		    } else {
+		        // Handle other message types if necessary
+		        System.out.println("Received non-ObjectMessage.");
+		    }
 		
-		finally {
 
-//			if (em != null) {
-//				em.close(); // Close the EntityManager
-//			}
-//
-//			if (emf != null) {
-//				emf.close(); // Close the EntityManagerFactory
-//			}
-			
-			
-		}
 
 	}
 
@@ -152,6 +110,9 @@ public class QueueReceive extends ClientCallflow implements MessageListener {
 	 * @exception JMSException    if JMS fails to initialize due to internal error
 	 */
 	public void init(Context ctx, String queueName) throws NamingException, JMSException {
+
+		System.out.println("QueueReceive.init");
+
 		qconFactory = (QueueConnectionFactory) ctx.lookup(JMS_FACTORY);
 		qcon = qconFactory.createQueueConnection();
 		qsession = qcon.createQueueSession(false, Session.AUTO_ACKNOWLEDGE);
@@ -167,6 +128,8 @@ public class QueueReceive extends ClientCallflow implements MessageListener {
 	 * @exception JMSException if JMS fails to close objects due to internal error
 	 */
 	public void close() throws JMSException {
+		System.out.println("QueueReceive.close");
+
 		qreceiver.close();
 		qsession.close();
 		qcon.close();
@@ -200,6 +163,8 @@ public class QueueReceive extends ClientCallflow implements MessageListener {
 	}
 
 	private static InitialContext getInitialContext(String url) throws NamingException {
+		System.out.println("QueueReceive.getInitialContext");
+
 		Hashtable<String, String> env = new Hashtable<>();
 		env.put(Context.INITIAL_CONTEXT_FACTORY, JNDI_FACTORY);
 		env.put(Context.PROVIDER_URL, url);

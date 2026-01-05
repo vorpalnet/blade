@@ -1,6 +1,8 @@
 package org.vorpal.blade.services.analytics.jms;
 
 import java.io.Serializable;
+import java.sql.Date;
+import java.time.Instant;
 
 import javax.jms.JMSException;
 import javax.jms.ObjectMessage;
@@ -11,6 +13,10 @@ import javax.jms.QueueSender;
 import javax.jms.QueueSession;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
+
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.services.analytics.jpa.Application;
 
 /**
  * Utility class for publishing JPA entities to a JMS queue as ObjectMessages.
@@ -26,6 +32,7 @@ public class JmsPublisher {
 	private QueueSession qsession;
 	private Queue queue;
 	private QueueSender qsender;
+	private Logger sipLogger;
 
 	/**
 	 * Initialize the JMS connection and session.
@@ -34,6 +41,10 @@ public class JmsPublisher {
 	 * @throws JMSException    if JMS initialization fails
 	 */
 	public void init() throws NamingException, JMSException {
+		sipLogger = SettingsManager.getSipLogger();
+		
+		sipLogger.finer("JmsPublisher.init");
+
 		ctx = new InitialContext();
 		qconFactory = (QueueConnectionFactory) ctx.lookup(JMS_FACTORY);
 		qcon = qconFactory.createQueueConnection();
@@ -43,6 +54,51 @@ public class JmsPublisher {
 		qcon.start();
 	}
 
+	private Application application = null;
+
+	@SuppressWarnings("rawtypes")
+	public void applicationStart() {
+		sipLogger.finer("JmsPublisher.applicationStart");
+
+		try {
+
+			if (application == null) {
+
+				application = new Application();
+				application.setId(SettingsManager.getAppInstanceId());
+				application.setDomain(SettingsManager.getDomainName());
+				application.setHost(SettingsManager.getHostname());
+				application.setName(SettingsManager.getApplicationName());
+				application.setServer(SettingsManager.getServerName());
+				application.setCreated(Date.from(Instant.now()));
+
+				ObjectMessage message = qsession.createObjectMessage();
+				message.setObject(application);
+				qsender.send(message);
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+
+	}
+
+	@SuppressWarnings("rawtypes")
+	public void applicationStop() {
+		sipLogger.finer("JmsPublisher.applicationStop");
+
+		try {
+			Application application = new Application();
+			application.setId(SettingsManager.getAppInstanceId());
+			application.setDestroyed(Date.from(Instant.now()));
+			ObjectMessage message = qsession.createObjectMessage();
+			message.setObject(application);
+			qsender.send(message);
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+
+	}
+
 	/**
 	 * Send a Serializable object (typically a JPA entity) to the JMS queue.
 	 *
@@ -50,6 +106,8 @@ public class JmsPublisher {
 	 * @throws JMSException if sending fails
 	 */
 	public void send(Serializable object) throws JMSException {
+		sipLogger.finer("JmsPublisher.send");
+
 		ObjectMessage message = qsession.createObjectMessage();
 		message.setObject(object);
 		qsender.send(message);
@@ -63,6 +121,8 @@ public class JmsPublisher {
 	 * @throws JMSException if sending fails
 	 */
 	public void send(Serializable object, String type) throws JMSException {
+		sipLogger.finer("JmsPublisher.send(Serializable object, String type)");
+
 		ObjectMessage message = qsession.createObjectMessage();
 		message.setObject(object);
 		message.setStringProperty("type", type);
@@ -73,6 +133,8 @@ public class JmsPublisher {
 	 * Close JMS resources.
 	 */
 	public void close() {
+		sipLogger.finer("JmsPublisher.close");
+
 		try {
 			if (qsender != null)
 				qsender.close();

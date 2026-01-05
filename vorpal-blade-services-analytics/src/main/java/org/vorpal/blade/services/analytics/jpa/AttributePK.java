@@ -11,26 +11,34 @@ import javax.persistence.Embeddable;
  */
 @Embeddable
 public class AttributePK implements Serializable {
-	//default serial version id, required for serializable classes.
+	// default serial version id, required for serializable classes.
 	private static final long serialVersionUID = 1L;
 
-	@Column(name="event_id", insertable=true, updatable=false, unique=true, nullable=false)
+	@Column(name = "event_id", insertable = true, updatable = false, unique = true, nullable = false)
 	private long eventId;
 
-	@Column(unique=true, nullable=false, length=64)
+	@Column(unique = true, nullable = false, length = 64)
 	private String name;
 
 	public AttributePK() {
 	}
+
+	public AttributePK(String name) {
+		this.name = name;
+	}
+
 	public long getEventId() {
 		return this.eventId;
 	}
+
 	public void setEventId(long eventId) {
 		this.eventId = eventId;
 	}
+
 	public String getName() {
 		return this.name;
 	}
+
 	public void setName(String name) {
 		this.name = name;
 	}
@@ -42,10 +50,8 @@ public class AttributePK implements Serializable {
 		if (!(other instanceof AttributePK)) {
 			return false;
 		}
-		AttributePK castOther = (AttributePK)other;
-		return 
-			(this.eventId == castOther.eventId)
-			&& this.name.equals(castOther.name);
+		AttributePK castOther = (AttributePK) other;
+		return (this.eventId == castOther.eventId) && this.name.equals(castOther.name);
 	}
 
 	public int hashCode() {
@@ -53,7 +59,7 @@ public class AttributePK implements Serializable {
 		int hash = 17;
 		hash = hash * prime + ((int) (this.eventId ^ (this.eventId >>> 32)));
 		hash = hash * prime + this.name.hashCode();
-		
+
 		return hash;
 	}
 }

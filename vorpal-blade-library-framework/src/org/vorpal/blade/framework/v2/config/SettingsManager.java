@@ -26,10 +26,12 @@ package org.vorpal.blade.framework.v2.config;
 import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 
 import javax.management.InstanceAlreadyExistsException;
@@ -543,6 +545,35 @@ public class SettingsManager<T> {
 
 	public static String getDomainName() {
 		return domainName;
+	}
+
+	private static Integer appInstanceId = null;
+
+	public static int getAppInstanceId() {
+		if (appInstanceId == null) {
+			appInstanceId = ThreadLocalRandom.current().nextInt();
+		}
+		return appInstanceId;
+	}
+
+	private static String hostname = null;
+
+	public static String getHostname() {
+		if (hostname == null) {
+			hostname = System.getProperty("java.rmi.server.hostname");
+			hostname = (hostname != null) ? hostname : System.getenv("HOSTNAME");
+			hostname = (hostname != null) ? hostname : System.getenv("COMPUTERNAME");
+
+			try {
+				hostname = (hostname != null) ? hostname : InetAddress.getLocalHost().getHostName();
+			} catch (Exception ex) {
+				// OU812
+			}
+
+			hostname = (hostname != null) ? hostname : "unknown";
+		}
+
+		return hostname;
 	}
 
 }

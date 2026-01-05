@@ -50,8 +50,10 @@ public class AnalyticsListener
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
 		// this comes before contextInitialized
+		
+		
 
-		System.out.println(Color.RED("AnalyticsListener.servletInitialized - SipServlet"));
+		System.out.println("AnalyticsListener.servletInitialized - SipServlet");
 
 //		try {
 //
@@ -70,95 +72,95 @@ public class AnalyticsListener
 
 		System.out.println("AnalyticsListener.contextInitialized - WebServlet");
 
-		try {
-
-			if (emf == null) {
-
-				Date created = Date.from(Instant.now());
-
-				emf = Persistence.createEntityManagerFactory("BladeCDR");
-
-				EntityManager em = emf.createEntityManager();
-
-//				long sessionId = ThreadLocalRandom.current().nextInt(10000);
-				Long sessionId = ThreadLocalRandom.current().nextLong(10000);
-				int applicationId = ThreadLocalRandom.current().nextInt(1000);
-
-				Date now = Date.from(Instant.now());
-
-				// Application
-				Application application = new Application();
-				application.setId(applicationId);
-				application.setCreated(now);
-				application.setDomain("replicated");
-				application.setHost("gamera");
-				application.setName("b2bua");
-				application.setServer("engine1");
-				application.setVersion("1.0.1");
-
-				em.getTransaction().begin();
-				em.persist(application);
-				em.getTransaction().commit();
-				System.out.println("AnalyticsListener application: \n" + Logger.serializeObject(application));
-
-				// Session
-				Session session = new Session();
-				session.setId(sessionId);
-				session.setApplicationId(applicationId);
-				session.setCreated(now);
-
-				em.getTransaction().begin();
-				em.persist(session);
-				em.getTransaction().commit();
-				System.out.println("persisting session: \n" + Logger.serializeObject(session));
-
-				// Event
-				Event event = new Event();
-				event.setCreated(created);
-				event.setName("callStarted");
-				event.setApplicationId(applicationId);
-				event.setSessionId(sessionId);
-
-//				System.out.println("AnalyticsListener event: (before) \n" + Logger.serializeObject(event));
+//		try {
+//
+//			if (emf == null) {
+//
+//				Date created = Date.from(Instant.now());
+//
+//				emf = Persistence.createEntityManagerFactory("BladeCDR");
+//
+//				EntityManager em = emf.createEntityManager();
+//
+////				long sessionId = ThreadLocalRandom.current().nextInt(10000);
+//				Long sessionId = ThreadLocalRandom.current().nextLong(10000);
+//				int applicationId = ThreadLocalRandom.current().nextInt(1000);
+//
+//				Date now = Date.from(Instant.now());
+//
+//				// Application
+//				Application application = new Application();
+//				application.setId(applicationId);
+//				application.setCreated(now);
+//				application.setDomain("replicated");
+//				application.setHost("gamera");
+//				application.setName("b2bua");
+//				application.setServer("engine1");
+//				application.setVersion("1.0.1");
+//
 //				em.getTransaction().begin();
-//				em.persist(event);
+//				em.persist(application);
 //				em.getTransaction().commit();
-//				System.out.println("AnalyticsListener event: (after) \n" + Logger.serializeObject(event));
-
-				AttributePK attrPK = new AttributePK();
-				attrPK.setEventId(event.getId());
-				attrPK.setName("From");
-
-				Attribute from = new Attribute();
-				from.setId(attrPK);
-				from.setValue("sip:alice@vorpal.net");
-				event.addAttribute(from);
-
-				AttributePK attrPK2 = new AttributePK();
-				attrPK2.setName("To");
-				attrPK2.setEventId(event.getId());
-
-				Attribute to = new Attribute();
-				to.setId(attrPK2);
-				to.setValue("sip:bob@vorpal.net");
-				event.addAttribute(to);
-
-				System.out.println(
-						"AnalyticsListener event before (with attributes): \n" + Logger.serializeObject(event));
+//				System.out.println("AnalyticsListener application: \n" + Logger.serializeObject(application));
+//
+//				// Session
+//				Session session = new Session();
+//				session.setId(sessionId);
+//				session.setApplicationId(applicationId);
+//				session.setCreated(now);
+//
 //				em.getTransaction().begin();
-//				em.persist(event);
-				event.persistEvent(em);
+//				em.persist(session);
 //				em.getTransaction().commit();
-				System.out
-						.println("AnalyticsListener event after (with attributes): \n" + Logger.serializeObject(event));
-
-				em.close();
-
-			}
-
-		} catch (Exception ex) {
-			ex.printStackTrace();
-		}
+//				System.out.println("persisting session: \n" + Logger.serializeObject(session));
+//
+//				// Event
+//				Event event = new Event();
+//				event.setCreated(created);
+//				event.setName("callStarted");
+//				event.setApplicationId(applicationId);
+//				event.setSessionId(sessionId);
+//
+////				System.out.println("AnalyticsListener event: (before) \n" + Logger.serializeObject(event));
+////				em.getTransaction().begin();
+////				em.persist(event);
+////				em.getTransaction().commit();
+////				System.out.println("AnalyticsListener event: (after) \n" + Logger.serializeObject(event));
+//
+//				AttributePK attrPK = new AttributePK();
+//				attrPK.setEventId(event.getId());
+//				attrPK.setName("From");
+//
+//				Attribute from = new Attribute();
+//				from.setId(attrPK);
+//				from.setValue("sip:alice@vorpal.net");
+//				event.addAttribute(from);
+//
+//				AttributePK attrPK2 = new AttributePK();
+//				attrPK2.setName("To");
+//				attrPK2.setEventId(event.getId());
+//
+//				Attribute to = new Attribute();
+//				to.setId(attrPK2);
+//				to.setValue("sip:bob@vorpal.net");
+//				event.addAttribute(to);
+//
+//				System.out.println(
+//						"AnalyticsListener event before (with attributes): \n" + Logger.serializeObject(event));
+////				em.getTransaction().begin();
+////				em.persist(event);
+//				event.persistEvent(em);
+////				em.getTransaction().commit();
+//				System.out
+//						.println("AnalyticsListener event after (with attributes): \n" + Logger.serializeObject(event));
+//
+//				em.close();
+//
+//			}
+//
+//		} catch (Exception ex) {
+//			ex.printStackTrace();
+//		}
 
 	}
 

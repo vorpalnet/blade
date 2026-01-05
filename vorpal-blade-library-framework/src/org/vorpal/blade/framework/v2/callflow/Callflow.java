@@ -918,9 +918,8 @@ public abstract class Callflow implements Serializable {
 
 				}
 
+				// For inserting X-Vorpal-Session
 				if (response.getRequest().isInitial()) {
-					sipLogger.warning(response, "Callflow.sendResponse - response is to initial INVITE");
-
 					String indexKey = getVorpalSessionId(response.getApplicationSession());
 					if (indexKey != null) {
 						String dialog = getVorpalDialogId(response.getSession());

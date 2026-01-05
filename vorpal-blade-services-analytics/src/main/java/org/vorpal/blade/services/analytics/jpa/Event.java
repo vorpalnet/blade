@@ -53,6 +53,19 @@ public class Event implements Serializable {
 	private List<Attribute> attributes = new LinkedList<Attribute>();
 
 	public Event() {
+		this.setCreated(new Date());
+	}
+
+	public Event(int applicationId, long sessionId, String name) {
+		this.applicationId = applicationId;
+		this.sessionId = sessionId;
+		this.name = name;
+		this.setCreated(new Date());
+	}
+
+	public Event addAttribute(String name, String value) {
+		addAttribute(new Attribute(name, value));
+		return this;
 	}
 
 	// jwm - handcoded method to update the AttributePK to include the latest

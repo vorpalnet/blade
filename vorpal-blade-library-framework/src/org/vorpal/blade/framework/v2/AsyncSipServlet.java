@@ -600,33 +600,29 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 			}
 
-			// Timing problem. Call was canceled, yet INVITE 180/200 came back.
-			// Does this get invoked with the new Terminate callflow?
-			
-			// jwm -- problematic, return to this later
-			
-//			if (linkedSession != null // has a linked session?
-//					&& linkedSession.getState().equals(SipSession.State.TERMINATED) // but it is toast
-//					&& method.equals("INVITE") // invite response comes in anway
-//			) {
-//				sipLogger.warning(response,
-//						"AsyncSipServlet.doResponse - Linked session terminated (CANCEL?), but an INVITE response came through anyway. Killing the session with CallflowAckBye");
-//
-//				CallflowAckBye ackAndBye = new CallflowAckBye();
-//
-//				try {
-//
-//					if (false == Callflow.failure(response)) { // eat failure responses
-//						ackAndBye.process(response);
-//					}
-//
-//				} catch (Exception ex2) {
-//					sipLogger.warning(response, "AsyncSipServlet.doResponse - Exception #ex2");
-//					throw new ServletException(ex2);
-//				}
-//
-//				return;
-//			}
+			// Check for the possibility that an INVITE response comes back *after* the call
+			// has been canceled
+			if (method.equals("INVITE") && (linkedSession != null) && //
+					(false == linkedSession.isValid()
+							|| linkedSession.getState().equals(SipSession.State.TERMINATED))) {
+				sipLogger.warning(response,
+						"AsyncSipServlet.doResponse - Linked session terminated (CANCEL?), but an INVITE response came through anyway. Killing the session with CallflowAckBye");
+
+				CallflowAckBye ackAndBye = new CallflowAckBye();
+
+				try {
+
+					if (false == Callflow.failure(response)) { // eat failure responses
+						ackAndBye.process(response);
+					}
+
+				} catch (Exception ex2) {
+					sipLogger.warning(response, "AsyncSipServlet.doResponse - Exception #ex2");
+					throw new ServletException(ex2);
+				}
+
+				return;
+			}
 
 			if (false == isProxy) {
 

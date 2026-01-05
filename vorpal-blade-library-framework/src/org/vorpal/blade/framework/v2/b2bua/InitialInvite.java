@@ -113,16 +113,12 @@ public class InitialInvite extends Callflow {
 						SipSession callee = Callflow.getLinkedSession(caller);
 						callee.setAttribute("userAgent", "callee");
 
-						sipLogger.warning(aliceResponse, "InitialInvite.processContinue - callAnswered begin...");
-
 						try {
 							b2buaListener.callAnswered(aliceResponse);
 						} catch (Exception ex) {
 							sipLogger.warning(aliceResponse, "InitialInvite.processContinue - catch #1");
 							throw new ServletException(ex);
 						}
-
-						sipLogger.warning(aliceResponse, "InitialInvite.processContinue - callAnswered .....end");
 
 					}
 				} else if (failure(bobResponse)) {

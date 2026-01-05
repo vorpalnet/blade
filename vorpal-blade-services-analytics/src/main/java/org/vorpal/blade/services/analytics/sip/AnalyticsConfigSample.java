@@ -9,7 +9,7 @@ public class AnalyticsConfigSample extends AnalyticsConfig {
 	public AnalyticsConfigSample() {
 
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINEST);
+		this.logging.setLoggingLevel(LoggingLevel.FINER);
 		this.session = new SessionParametersDefault();
 
 		this.someValue = "value1";
