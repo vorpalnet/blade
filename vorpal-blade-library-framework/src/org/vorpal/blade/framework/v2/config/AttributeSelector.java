@@ -22,7 +22,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 /**
- * Selector for extracting session attributes from SIP messages with support for dialog association.
+ * Selector for extracting session attributes from SIP messages with support for
+ * dialog association.
  */
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 @JsonPropertyOrder({ "id", "description", "attribute", "pattern", "expression", "dialog", "additionalExpressions" })
@@ -40,6 +41,16 @@ public class AttributeSelector implements Serializable {
 	private String expression; // replacement pattern, like ${ucid} to format the key data
 	private DialogType dialog; // apply attributes to either origin or destination dialog (SipSession)
 	private Map<String, String> additionalExpressions;
+
+	public AttributeSelector() {
+	}
+
+	public AttributeSelector(String id, String attribute, String pattern, String expression) {
+		this.setId(id);
+		this.setAttribute(attribute);
+		this.setPattern(pattern);
+		this.setExpression(expression);
+	}
 
 	public DialogType getDialog() {
 		return dialog;
@@ -75,16 +86,6 @@ public class AttributeSelector implements Serializable {
 
 	@JsonIgnore
 	private String _strPattern;
-
-	public AttributeSelector() {
-	}
-
-	public AttributeSelector(String id, String attribute, String pattern, String expression) {
-		this.setId(id);
-		this.setAttribute(attribute);
-		this.setPattern(pattern);
-		this.setExpression(expression);
-	}
 
 	public String getId() {
 		return id;

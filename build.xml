@@ -82,6 +82,8 @@
 			<exclude name="vorpal-blade-library-framework" />
 			<exclude name="vorpal-blade-shared-libraries" />
 			<exclude name="vorpal-blade-test-config" />
+			<exclude name="vorpal-blade-admin-configurator" />
+			<exclude name="vorpal-blade-services-analytics" />
 		</dirset>
 	</path>
 
@@ -92,6 +94,8 @@
 			<exclude name="vorpal-blade-library-framework" />
 			<exclude name="vorpal-blade-shared-libraries" />
 			<exclude name="vorpal-blade-test-config" />
+			<exclude name="vorpal-blade-admin-configurator" />
+			<exclude name="vorpal-blade-services-analytics" />
 		</dirset>
 	</path>
 

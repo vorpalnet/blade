@@ -21,6 +21,15 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
  */
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
+	
+//	public enum Events{servletCreated, servletDestroyed };
+//	public Events 
+	
+	
+	
+	
+	
+	
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 
 	// Maximum iterations to prevent infinite loops in resolveVariables
@@ -31,6 +40,11 @@ public class Configuration implements Serializable {
 
 	@JsonPropertyDescription("Session parameters")
 	protected SessionParameters session;
+	
+	
+	
+	
+	
 
 	private final static long SECONDS_FACTOR = 1;
 	private final static long MINUTES_FACTOR = 60 * SECONDS_FACTOR;
