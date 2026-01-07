@@ -2,6 +2,10 @@ package org.vorpal.blade.framework.v2.logging;
 
 import java.io.Serializable;
 
+/**
+ * Default logging configuration values.
+ * Provides sensible defaults for log directory, file size, rotation count, and logging levels.
+ */
 public class LogParametersDefault extends LogParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 

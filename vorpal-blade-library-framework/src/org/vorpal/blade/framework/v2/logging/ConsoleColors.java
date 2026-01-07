@@ -24,6 +24,10 @@
 
 package org.vorpal.blade.framework.v2.logging;
 
+/**
+ * ANSI escape code constants for console text coloring.
+ * Provides constants for regular, bold, underlined, background, and bright color variants.
+ */
 public class ConsoleColors {
 	// Reset
 	public static final String RESET = "\033[0m"; // Text Reset

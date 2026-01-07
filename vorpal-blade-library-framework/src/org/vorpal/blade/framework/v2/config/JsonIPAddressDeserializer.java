@@ -10,6 +10,9 @@ import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 import inet.ipaddr.IPAddress;
 import inet.ipaddr.IPAddressString;
 
+/**
+ * Jackson deserializer for converting JSON strings to IPAddress objects.
+ */
 public class JsonIPAddressDeserializer extends StdDeserializer<IPAddress> {
 	private static final long serialVersionUID = 1L;
 

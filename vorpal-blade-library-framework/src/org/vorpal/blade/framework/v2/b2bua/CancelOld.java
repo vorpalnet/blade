@@ -64,16 +64,21 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
  *
  */
 
+/**
+ * Legacy CANCEL callflow handler with detailed sequence diagram documentation.
+ *
+ * @deprecated Use {@link Terminate} instead.
+ */
+@Deprecated
 public class CancelOld extends Callflow {
 	private static final long serialVersionUID = 1L;
-	private SipServletRequest aliceCancel;
-	private B2buaServlet b2buaListener = null;
-	private SipServletRequest bobInvite;
+	private B2buaServlet b2buaListener;
 
 	/**
 	 * Implements the CANCEL callflow with no callback hooks.
 	 */
 	public CancelOld() {
+		this.b2buaListener = null;
 	}
 
 	/**
@@ -91,26 +96,24 @@ public class CancelOld extends Callflow {
 		// The container will send a 200 OK for CANCEL
 
 		try {
-			aliceCancel = request;
+			SipServletRequest aliceCancel = request;
 			SipSession linkedSession = getLinkedSession(aliceCancel.getSession());
 			if (linkedSession != null) {
-				bobInvite = linkedSession.getActiveInvite(UAMode.UAC);
+				SipServletRequest bobInvite = linkedSession.getActiveInvite(UAMode.UAC);
 				if (bobInvite != null) {
 					SipServletRequest bobCancel = bobInvite.createCancel();
 					if (b2buaListener != null) {
 						b2buaListener.callAbandoned(bobCancel);
 					}
 					sendRequest(bobCancel, (bobCancelResponse) -> {
-						// do nothing;
+						// Response received; no action needed for CANCEL response
 					});
 				}
 			} else {
 				sipLogger.finer(request, "CANCEL received, but no linked session. Ignoring request.");
-				// jwm - for cancels, the container generates the 200 OK
-				// sendResponse(request.createResponse(200));
+				// For cancels, the container generates the 200 OK automatically
 			}
 		} catch (Exception e) {
-			// log the error;
 			sipLogger.severe(request, e);
 		}
 	}

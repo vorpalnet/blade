@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
-import com.fasterxml.jackson.annotation.JsonIdentityReference;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
@@ -15,8 +14,13 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 		"description", //
 		"connectionAttempts", //
 		"serverPairs" })
+/**
+ * A pool of server pairs with random selection for load balancing.
+ */
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ServerPool implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	private String id;
 	private String description = null;
 	private Integer connectionAttempts = null;
@@ -44,18 +48,6 @@ public class ServerPool implements Serializable {
 		return serverPair;
 	}
 
-//	public ServerPair createServerPair(String id) {
-//		ServerPair serverPair = new ServerPair(id);
-//		this.serverPairs.add(serverPair);
-//		return serverPair;
-//	}
-//
-//	public ServerPair createServerPair(String id, String primary, String secondary) {
-//		ServerPair serverPair = new ServerPair(id, primary, secondary);
-//		this.serverPairs.add(serverPair);
-//		return serverPair;
-//	}
-
 	public ServerPair createServerPair(String primary, String secondary) {
 		ServerPair serverPair = new ServerPair(primary, secondary);
 		this.serverPairs.add(serverPair);
@@ -82,7 +74,7 @@ public class ServerPool implements Serializable {
 
 	public ArrayList<ServerPair> selectRandomServerPairs() {
 		ArrayList<ServerPair> randomList = new ArrayList<>();
-		ArrayList<ServerPair> copyList = new ArrayList<ServerPair>(serverPairs);
+		ArrayList<ServerPair> copyList = new ArrayList<>(serverPairs);
 
 		int index;
 		int amount = 1;

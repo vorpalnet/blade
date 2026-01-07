@@ -2,6 +2,9 @@ package org.vorpal.blade.framework.v2.config;
 
 import java.io.Serializable;
 
+/**
+ * Default keep-alive parameters with standard values.
+ */
 public class KeepAliveParametersDefault extends KeepAliveParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 

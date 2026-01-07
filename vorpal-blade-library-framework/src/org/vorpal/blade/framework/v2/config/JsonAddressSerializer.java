@@ -11,6 +11,9 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.jsonFormatVisitors.JsonFormatVisitorWrapper;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
+/**
+ * Jackson serializer for converting SIP Address objects to JSON strings.
+ */
 public class JsonAddressSerializer extends StdSerializer<Address> {
 
 	private static final long serialVersionUID = 1L;
@@ -30,7 +33,8 @@ public class JsonAddressSerializer extends StdSerializer<Address> {
 
 	@Override
 	public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint)
-			throws JsonMappingException {		
+			throws JsonMappingException {
+		// Empty implementation - visitor pattern not used for this serializer
 	}
 
 }

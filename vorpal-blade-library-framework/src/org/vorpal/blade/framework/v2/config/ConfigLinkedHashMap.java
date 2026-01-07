@@ -9,8 +9,13 @@ import javax.servlet.sip.SipServletRequest;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
+/**
+ * Translation map using LinkedHashMap to preserve insertion order.
+ */
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ConfigLinkedHashMap extends TranslationsMap implements Serializable{
+public class ConfigLinkedHashMap extends TranslationsMap implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	public LinkedHashMap<String, Translation> map = new LinkedHashMap<>();
 
 	public int size() {

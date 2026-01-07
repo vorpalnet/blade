@@ -27,6 +27,9 @@ package org.vorpal.blade.framework.v2.config;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 
+/**
+ * Interface for checking conditions against SIP servlet requests.
+ */
 public interface RequestCondition {
 
 	public boolean check(String id, String headerName, SipServletRequest request) throws ServletParseException;

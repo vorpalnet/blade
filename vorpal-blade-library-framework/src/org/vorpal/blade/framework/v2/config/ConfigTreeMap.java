@@ -9,8 +9,13 @@ import javax.servlet.sip.SipServletRequest;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
+/**
+ * Translation map using TreeMap for sorted key-based lookups.
+ */
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigTreeMap extends TranslationsMap implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	public TreeMap<String, Translation> map = new TreeMap<>();
 
 	public int size() {

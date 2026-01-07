@@ -10,8 +10,10 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.jsonFormatVisitors.JsonFormatVisitorWrapper;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
-import com.fasterxml.jackson.databind.type.MapType;
 
+/**
+ * Jackson serializer for converting SIP URI objects to JSON strings.
+ */
 public class JsonUriSerializer extends StdSerializer<URI> {
 
 	private static final long serialVersionUID = 1L;
@@ -33,6 +35,7 @@ public class JsonUriSerializer extends StdSerializer<URI> {
 	@Override
 	public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint)
 			throws JsonMappingException {
+		// Empty implementation - visitor pattern not used for this serializer
 	}
 
 }

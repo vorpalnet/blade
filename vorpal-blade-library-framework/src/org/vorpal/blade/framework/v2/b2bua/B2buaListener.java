@@ -31,6 +31,10 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
+/**
+ * Callback interface for B2BUA call lifecycle events.
+ * Implement this interface to handle call state transitions and modify outbound messages.
+ */
 public interface B2buaListener extends Serializable {
 
 	/**
@@ -91,11 +95,23 @@ public interface B2buaListener extends Serializable {
 	 */
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException;
 
-	
-	// jwm - what does this break?
-	public void requestEvent(SipServletRequest bobRequest) throws ServletException, IOException;
 
-	// jwm - what does this break?
-	public void responseEvent(SipServletResponse aliceResponse) throws ServletException, IOException;
+	/**
+	 * Called for mid-dialog requests (e.g., re-INVITE, INFO, UPDATE).
+	 *
+	 * @param bobRequest the outbound request to modify
+	 * @throws ServletException if a servlet error occurs
+	 * @throws IOException if an I/O error occurs
+	 */
+	void requestEvent(SipServletRequest bobRequest) throws ServletException, IOException;
+
+	/**
+	 * Called for mid-dialog responses.
+	 *
+	 * @param aliceResponse the response to modify before sending
+	 * @throws ServletException if a servlet error occurs
+	 * @throws IOException if an I/O error occurs
+	 */
+	void responseEvent(SipServletResponse aliceResponse) throws ServletException, IOException;
 
 }

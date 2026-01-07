@@ -24,168 +24,214 @@
 
 package org.vorpal.blade.framework.v2.logging;
 
+/**
+ * Utility class for wrapping strings with ANSI color codes.
+ * Each method wraps the input string with the appropriate color code and automatically resets.
+ */
 public class Color {
 
-	public static final String RESET = "\033[0m"; // Text Reset
+	private Color() {
+		// Utility class - prevent instantiation
+	}
 
 	public static String BLACK(String str) {
-		return "\033[0;30m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLACK + str + ConsoleColors.RESET;
 	}
 
 	public static String RED(String str) {
-		return "\033[0;31m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.RED + str + ConsoleColors.RESET;
 	}
 
 	public static String GREEN(String str) {
-		return "\033[0;32m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.GREEN + str + ConsoleColors.RESET;
 	}
 
 	public static String YELLOW(String str) {
-		return "\033[0;33m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.YELLOW + str + ConsoleColors.RESET;
 	}
 
 	public static String BLUE(String str) {
-		return "\033[0;34m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLUE + str + ConsoleColors.RESET;
 	}
 
 	public static String PURPLE(String str) {
-		return "\033[0;35m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.PURPLE + str + ConsoleColors.RESET;
 	}
 
 	public static String CYAN(String str) {
-		return "\033[0;36m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.CYAN + str + ConsoleColors.RESET;
 	}
 
 	public static String WHITE(String str) {
-		return "\033[0;37m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.WHITE + str + ConsoleColors.RESET;
 	}
 
 	public static String BLACK_BOLD(String str) {
-		return "\033[1;30m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLACK_BOLD + str + ConsoleColors.RESET;
 	}
 
 	public static String RED_BOLD(String str) {
-		return "\033[1;31m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.RED_BOLD + str + ConsoleColors.RESET;
 	}
 
 	public static String GREEN_BOLD(String str) {
-		return "\033[1;32m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.GREEN_BOLD + str + ConsoleColors.RESET;
 	}
 
 	public static String YELLOW_BOLD(String str) {
-		return "\033[1;33m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.YELLOW_BOLD + str + ConsoleColors.RESET;
 	}
 
 	public static String BLUE_BOLD(String str) {
-		return "\033[1;34m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLUE_BOLD + str + ConsoleColors.RESET;
 	}
 
 	public static String PURPLE_BOLD(String str) {
-		return "\033[1;35m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.PURPLE_BOLD + str + ConsoleColors.RESET;
 	}
 
 	public static String CYAN_BOLD(String str) {
-		return "\033[1;36m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.CYAN_BOLD + str + ConsoleColors.RESET;
 	}
 
 	public static String WHITE_BOLD(String str) {
-		return "\033[1;37m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.WHITE_BOLD + str + ConsoleColors.RESET;
 	}
 
 	public static String BLACK_UNDERLINED(String str) {
-		return "\033[4;30m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLACK_UNDERLINED + str + ConsoleColors.RESET;
 	}
 
 	public static String RED_UNDERLINED(String str) {
-		return "\033[4;31m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.RED_UNDERLINED + str + ConsoleColors.RESET;
 	}
 
 	public static String GREEN_UNDERLINED(String str) {
-		return "\033[4;32m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.GREEN_UNDERLINED + str + ConsoleColors.RESET;
 	}
 
 	public static String YELLOW_UNDERLINED(String str) {
-		return "\033[4;33m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.YELLOW_UNDERLINED + str + ConsoleColors.RESET;
 	}
 
 	public static String BLUE_UNDERLINED(String str) {
-		return "\033[4;34m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLUE_UNDERLINED + str + ConsoleColors.RESET;
 	}
 
 	public static String PURPLE_UNDERLINED(String str) {
-		return "\033[4;35m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.PURPLE_UNDERLINED + str + ConsoleColors.RESET;
 	}
 
 	public static String CYAN_UNDERLINED(String str) {
-		return "\033[4;36m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.CYAN_UNDERLINED + str + ConsoleColors.RESET;
 	}
 
 	public static String WHITE_UNDERLINED(String str) {
-		return "\033[4;37m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.WHITE_UNDERLINED + str + ConsoleColors.RESET;
 	}
 
 	public static String BLACK_BRIGHT(String str) {
-		return "\033[0;90m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLACK_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String RED_BRIGHT(String str) {
-		return "\033[0;91m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.RED_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String GREEN_BRIGHT(String str) {
-		return "\033[0;92m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.GREEN_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String YELLOW_BRIGHT(String str) {
-		return "\033[0;93m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.YELLOW_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String BLUE_BRIGHT(String str) {
-		return "\033[0;94m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLUE_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String PURPLE_BRIGHT(String str) {
-		return "\033[0;95m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.PURPLE_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String CYAN_BRIGHT(String str) {
-		return "\033[0;96m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.CYAN_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String WHITE_BRIGHT(String str) {
-		return "\033[0;97m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.WHITE_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String BLACK_BOLD_BRIGHT(String str) {
-		return "\033[1;90m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLACK_BOLD_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String RED_BOLD_BRIGHT(String str) {
-		return "\033[1;91m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.RED_BOLD_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String GREEN_BOLD_BRIGHT(String str) {
-		return "\033[1;92m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.GREEN_BOLD_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String YELLOW_BOLD_BRIGHT(String str) {
-		return "\033[1;93m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.YELLOW_BOLD_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String BLUE_BOLD_BRIGHT(String str) {
-		return "\033[1;94m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.BLUE_BOLD_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String PURPLE_BOLD_BRIGHT(String str) {
-		return "\033[1;95m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.PURPLE_BOLD_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String CYAN_BOLD_BRIGHT(String str) {
-		return "\033[1;96m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.CYAN_BOLD_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 	public static String WHITE_BOLD_BRIGHT(String str) {
-		return "\033[1;97m" + str + RESET;
+		if (str == null) return null;
+		return ConsoleColors.WHITE_BOLD_BRIGHT + str + ConsoleColors.RESET;
 	}
 
 }

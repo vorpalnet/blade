@@ -34,6 +34,9 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 import inet.ipaddr.IPAddressString;
 
+/**
+ * Translation map using IP address trie for efficient CIDR-based lookups.
+ */
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigAddressMap extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;

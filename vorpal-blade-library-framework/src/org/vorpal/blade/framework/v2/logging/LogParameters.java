@@ -7,34 +7,33 @@ import java.util.logging.Level;
 import javax.servlet.ServletContext;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
-import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
+/**
+ * Configuration parameters for the logging system.
+ * Supports file-based logging with configurable directory, filename, size, and rotation settings.
+ */
 public class LogParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	// Default values as constants
+	private static final String DEFAULT_DIRECTORY = "./servers/${weblogic.Name}/logs/vorpal";
+	private static final String DEFAULT_FILENAME = "${sip.application.name}.%g.log";
+	private static final String DEFAULT_FILE_SIZE = "100MiB";
+	private static final int DEFAULT_FILE_COUNT = 25;
+	private static final String VARIABLE_START = "${";
+	private static final String VARIABLE_END = "}";
+	private static final String NULL_VALUE = "null";
+
 	public enum LoggingLevel {
 		OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL
-	};
+	}
 
 	public enum Unit {
 		KB, KiB, MB, MiB, GB, GiB
 	}
-
-	
-	/*
-	 * 		this.useParentLogging = false;
-		this.filename = "${sip.application.name}.%g.log";
-		this.directory = "./servers/${weblogic.Name}/logs/vorpal";
-		this.fileSize = "100MiB";
-		this.fileCount = 25;
-		this.appendFile = true;
-		this.loggingLevel = LoggingLevel.FINE;
-		this.sequenceDiagramLoggingLevel = LoggingLevel.FINE;
-		this.configurationLoggingLevel = LoggingLevel.FINE;
-	 */
 	
 	
 	@JsonPropertyDescription("Write to parent logger, i.e. the WebLogic engine log file. Default: false")
@@ -289,18 +288,25 @@ public class LogParameters implements Serializable {
 	}
 
 	public static String resolveVariables(ServletContext servletContext, String inputString) {
+		if (inputString == null) {
+			return null;
+		}
 		int openIndex;
 		int closeIndex;
 		String variable;
 		String key;
 		String value;
-		String outputString = new String(inputString);
-		while ((openIndex = outputString.indexOf("${")) >= 0) {
-			closeIndex = outputString.indexOf("}", openIndex);
+		String outputString = inputString;
+		while ((openIndex = outputString.indexOf(VARIABLE_START)) >= 0) {
+			closeIndex = outputString.indexOf(VARIABLE_END, openIndex);
+			if (closeIndex < 0) {
+				// Malformed variable syntax, stop processing
+				break;
+			}
 			variable = outputString.substring(openIndex, closeIndex + 1);
-			key = variable.substring(2, variable.length() - 1);
+			key = variable.substring(VARIABLE_START.length(), variable.length() - VARIABLE_END.length());
 			value = getAttribute(servletContext, key);
-			value = (value != null) ? value : "null";
+			value = (value != null) ? value : NULL_VALUE;
 			outputString = outputString.replace(variable, value);
 		}
 
@@ -308,32 +314,30 @@ public class LogParameters implements Serializable {
 	}
 
 	public String resolveDirectory(ServletContext servletContext) {
-		final String defaultDirectory = "./servers/${weblogic.Name}/logs/vorpal";
 		return (directory != null) ? resolveVariables(servletContext, directory)
-				: resolveVariables(servletContext, defaultDirectory);
+				: resolveVariables(servletContext, DEFAULT_DIRECTORY);
 	}
 
 	public String resolveFilename(ServletContext servletContext) {
-		final String defaultName = "${sip.application.name}.%g.log";
 		return (fileName != null) ? resolveVariables(servletContext, fileName)
-				: resolveVariables(servletContext, defaultName);
+				: resolveVariables(servletContext, DEFAULT_FILENAME);
 	}
 
 	public Boolean resolveUseParentLogging() {
-		return (useParentLogging != null) ? useParentLogging : false;
+		return (useParentLogging != null) ? useParentLogging : Boolean.FALSE;
 	}
 
 	public Integer resolveFileSize() throws ParseException {
 		return (this.fileSize != null) ? Configuration.parseHRNumberAsInt(this.fileSize)
-				: Configuration.parseHRNumberAsInt("100MiB");
+				: Configuration.parseHRNumberAsInt(DEFAULT_FILE_SIZE);
 	}
 
 	public Integer resolveFileCount() {
-		return (this.fileCount != null) ? this.fileCount : 25;
+		return (this.fileCount != null) ? this.fileCount : DEFAULT_FILE_COUNT;
 	}
 
 	public Boolean resolveFileAppend() {
-		return (this.appendFile != null) ? this.appendFile : true;
+		return (this.appendFile != null) ? this.appendFile : Boolean.TRUE;
 	}
 
 	public Level resolveLoggingLevel() {

@@ -10,9 +10,15 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 import inet.ipaddr.IPAddressString;
 
+/**
+ * Translation map for IPv4 address-based lookups.
+ * @deprecated Use ConfigAddressMap instead which supports both IPv4 and IPv6.
+ */
 @Deprecated
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-public class ConfigIPv4Map extends TranslationsMap implements Serializable{
+public class ConfigIPv4Map extends TranslationsMap implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	public AddressMap map = new AddressMap();
 
 	public int size() {

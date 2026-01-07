@@ -11,6 +11,9 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 import inet.ipaddr.IPAddress;
 
+/**
+ * Jackson serializer for converting IPAddress objects to JSON strings.
+ */
 public class JsonIPAddressSerializer extends StdSerializer<IPAddress> {
 
 	private static final long serialVersionUID = 1L;
@@ -32,6 +35,7 @@ public class JsonIPAddressSerializer extends StdSerializer<IPAddress> {
 	@Override
 	public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint)
 			throws JsonMappingException {
+		// Empty implementation - visitor pattern not used for this serializer
 	}
 
 }

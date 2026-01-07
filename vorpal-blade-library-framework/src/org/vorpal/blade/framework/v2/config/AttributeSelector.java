@@ -21,8 +21,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
+/**
+ * Selector for extracting session attributes from SIP messages with support for dialog association.
+ */
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-//public class AttributeSelector extends Selector{
 @JsonPropertyOrder({ "id", "description", "attribute", "pattern", "expression", "dialog", "additionalExpressions" })
 public class AttributeSelector implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -40,13 +42,6 @@ public class AttributeSelector implements Serializable {
 	private Map<String, String> additionalExpressions;
 
 	public DialogType getDialog() {
-//
-//		if (dialog == null) {
-//			return DialogType.origin;
-//		} else {
-//			return dialog;
-//		}
-
 		return dialog;
 	}
 
@@ -133,19 +128,18 @@ public class AttributeSelector implements Serializable {
 	}
 
 	public AttributesKey findKey(SipServletRequest request) {
+		if (request == null) {
+			return null;
+		}
+
 		Logger sipLogger = SettingsManager.getSipLogger();
 		AttributesKey attrsKey = null;
-//		RegExRoute regexRoute = null;
 		String key = null;
 		String header = null;
 		boolean matchResult = false;
 		String value = null;
 
 		try {
-
-			// jwm - find named groups, useful later
-			Map<String, String> namedGroups = new HashMap<>();
-
 			switch (attribute) {
 			case "body":
 			case "Body":
@@ -241,12 +235,12 @@ public class AttributeSelector implements Serializable {
 
 					// use any additional attributes in the selector
 
-					if (additionalExpressions != null && additionalExpressions.size() > 0) {
+					if (additionalExpressions != null && !additionalExpressions.isEmpty()) {
 						Map<String, String> additionalAttributes = new HashMap<>();
 						for (Entry<String, String> entry : this.additionalExpressions.entrySet()) {
 
 							// make sure not to overwrite existing attributes
-							if (false == attrsKey.attributes.containsKey(entry.getKey())) {
+							if (!attrsKey.attributes.containsKey(entry.getKey())) {
 								String attrValue = Configuration.resolveVariables(attrsKey.attributes,
 										entry.getValue());
 								additionalAttributes.put(entry.getKey(), attrValue);

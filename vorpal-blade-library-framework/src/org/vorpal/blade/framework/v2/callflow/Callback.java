@@ -27,22 +27,38 @@ package org.vorpal.blade.framework.v2.callflow;
 import java.io.Serializable;
 import java.util.function.Consumer;
 
+/**
+ * A serializable functional interface for SIP callflow callbacks that can throw exceptions.
+ * Extends Consumer to allow use with lambda expressions while supporting checked exceptions.
+ *
+ * @param <T> the type of the input to the callback (typically SipServletRequest or SipServletResponse)
+ */
 @FunctionalInterface
 public interface Callback<T> extends Consumer<T>, Serializable {
 
+	/**
+	 * Wraps the exception-throwing acceptThrows method to comply with Consumer interface.
+	 * Null elements are silently ignored.
+	 *
+	 * @param elem the input element to process
+	 * @throws RuntimeException wrapping any exception thrown by acceptThrows
+	 */
 	@Override
 	default void accept(final T elem) {
 		try {
-
 			if (elem != null) {
 				acceptThrows(elem);
 			}
-
 		} catch (Exception ex) {
 			throw new RuntimeException(ex);
 		}
 	}
 
+	/**
+	 * Performs this callback operation on the given element.
+	 *
+	 * @param t the input element
+	 * @throws Exception if the callback operation fails
+	 */
 	void acceptThrows(T t) throws Exception;
-
 }

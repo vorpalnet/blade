@@ -31,6 +31,9 @@ import java.util.LinkedList;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
 
+/**
+ * List of comparisons that are ANDed together when checking request conditions.
+ */
 public class ComparisonList extends LinkedList<Comparison> implements Serializable, RequestCondition {
 	private static final long serialVersionUID = 1L;
 

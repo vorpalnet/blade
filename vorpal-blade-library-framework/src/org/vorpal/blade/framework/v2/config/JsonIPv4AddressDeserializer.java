@@ -11,6 +11,9 @@ import inet.ipaddr.IPAddress;
 import inet.ipaddr.IPAddressString;
 import inet.ipaddr.ipv4.IPv4Address;
 
+/**
+ * Jackson deserializer for converting JSON strings to IPv4Address objects.
+ */
 public class JsonIPv4AddressDeserializer extends StdDeserializer<IPv4Address> {
 	private static final long serialVersionUID = 1L;
 

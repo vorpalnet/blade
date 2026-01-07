@@ -3,6 +3,9 @@ package org.vorpal.blade.framework.v2.config;
 import java.io.Serializable;
 import java.util.LinkedList;
 
+/**
+ * Default session parameters with standard values and a From header selector.
+ */
 public class SessionParametersDefault extends SessionParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -17,7 +20,6 @@ public class SessionParametersDefault extends SessionParameters implements Seria
 		fromSel.setPattern(Configuration.SIP_ADDRESS_PATTERN);
 		fromSel.setExpression("${user}");
 		fromSel.setDescription("Create index key based on the user-part of the From header");
-//		this.setDialog(DialogType.origin);
 		this.sessionSelectors.add(fromSel);
 	}
 

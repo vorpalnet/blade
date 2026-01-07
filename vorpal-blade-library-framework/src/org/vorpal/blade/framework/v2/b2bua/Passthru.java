@@ -33,12 +33,16 @@ import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
+/**
+ * Callflow for passing through mid-dialog requests (INFO, OPTIONS, etc.) in a B2BUA.
+ * Forwards requests and responses between the two call legs.
+ */
 public class Passthru extends Callflow {
 	private static final long serialVersionUID = 1L;
-	private SipServletRequest aliceRequest;
-	private B2buaListener b2buaListener = null;
+	private B2buaListener b2buaListener;
 
 	public Passthru() {
+		this.b2buaListener = null;
 	}
 
 	public Passthru(B2buaListener b2buaListener) {
@@ -51,7 +55,7 @@ public class Passthru extends Callflow {
 
 			SipServletRequest bobRequest;
 
-			aliceRequest = request;
+			final SipServletRequest aliceRequest = request;
 			SipSession sipSession = getLinkedSession(aliceRequest.getSession());
 
 			if (sipSession != null) {

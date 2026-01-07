@@ -25,6 +25,8 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipWebSocketContext;
 
 public class DummyMessage implements SipServletMessage, Serializable {
+	private static final long serialVersionUID = 1L;
+
 	protected Map<String, Object> attributes = new HashMap<>();
 	protected Locale locale;
 	protected Map<String, String> headers = new HashMap<>();
@@ -194,12 +196,11 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public Address getFrom() {
-		// TODO Auto-generated method stub
 		Address from = null;
 		try {
 			from = AsyncSipServlet.sipFactory.createAddress(headers.get("From"));
 		} catch (Exception e) {
-			e.printStackTrace();
+			// Failed to parse From address
 		}
 		return from;
 	}
@@ -226,7 +227,7 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public List<String> getHeaderNameList() {
-		return new ArrayList<String>(headers.keySet());
+		return new ArrayList<>(headers.keySet());
 	}
 
 	@Override
@@ -238,7 +239,7 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	@Override
 	public ListIterator<String> getHeaders(String arg0) {
 		// TODO Auto-generated method stub
-		return new ArrayList<String>(headers.keySet()).listIterator();
+		return new ArrayList<>(headers.keySet()).listIterator();
 	}
 
 	@Override
@@ -350,7 +351,7 @@ public class DummyMessage implements SipServletMessage, Serializable {
 		try {
 			to = AsyncSipServlet.sipFactory.createAddress(headers.get("To"));
 		} catch (Exception e) {
-			e.printStackTrace();
+			// Failed to parse To address
 		}
 		return to;
 	}

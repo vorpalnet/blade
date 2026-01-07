@@ -4,30 +4,20 @@ import java.io.Serializable;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+/**
+ * Represents a primary/secondary server pair for failover routing.
+ */
 @JsonPropertyOrder({ //
-//		"id", //
-//		"description", //
 		"primary", //
 		"secondary" })
-//@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ServerPair implements Serializable {
-//	private String id = null;
-//	private String description = null;
+	private static final long serialVersionUID = 1L;
+
 	private String primary = null;
 	private String secondary = null;
 
 	public ServerPair() {
 	}
-
-//	public ServerPair(String id, String primary, String secondary) {
-//		this.id = id;
-//		this.primary = primary;
-//		this.secondary = secondary;
-//	}
-//
-//	public ServerPair(String id) {
-//		this.id = id;
-//	}
 
 	public ServerPair(String primary, String secondary) {
 		this.primary = primary;
@@ -51,23 +41,5 @@ public class ServerPair implements Serializable {
 		this.secondary = secondary;
 		return this;
 	}
-
-//	public String getId() {
-//		return id;
-//	}
-//
-//	public ServerPair setId(String id) {
-//		this.id = id;
-//		return this;
-//	}
-//
-//	public String getDescription() {
-//		return description;
-//	}
-//
-//	public ServerPair setDescription(String description) {
-//		this.description = description;
-//		return this;
-//	}
 
 }

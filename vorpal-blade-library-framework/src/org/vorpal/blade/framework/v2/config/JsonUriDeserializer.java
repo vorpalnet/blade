@@ -10,6 +10,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 
+/**
+ * Jackson deserializer for converting JSON strings to SIP URI objects.
+ */
 public class JsonUriDeserializer extends StdDeserializer<URI> {
 	private static final long serialVersionUID = 1L;
 	

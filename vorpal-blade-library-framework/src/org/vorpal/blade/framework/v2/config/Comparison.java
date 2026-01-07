@@ -36,6 +36,9 @@ import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.v2.logging.Logger;
 
+/**
+ * Comparison operation mapping operator names to expressions for request matching.
+ */
 public class Comparison extends HashMap<String, String> implements RequestCondition, Serializable {
 
 	private static final long serialVersionUID = 1L;
@@ -171,7 +174,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 							sipLogger.finer(request, "Comparison.check... value: " + value);
 						}
 
-						if (contains == true) {
+						if (contains) {
 							break;
 						}
 					}
@@ -198,7 +201,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 						if (sipLogger.isLoggable(Level.FINER)) {
 							sipLogger.finer(request, "Comparison.check... value: " + value + ", includes: " + includes);
 						}
-						if (includes == true) {
+						if (includes) {
 							break;
 						}
 					}
@@ -218,7 +221,6 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				if (value != null) {
 					hasValue = value.equalsIgnoreCase(expression);
 				} else {
-//					Parameterable p;
 					Iterator<? extends Parameterable> pItr = request.getParameterableHeaders(name);
 					while (pItr.hasNext()) {
 						value = pItr.next().getValue();
@@ -229,7 +231,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 							sipLogger.finer(request, "Comparison.check... value: " + value + ", hasValue: " + hasValue);
 						}
 
-						if (hasValue == true) {
+						if (hasValue) {
 							break;
 						}
 
@@ -274,7 +276,7 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 										"Comparison.check... value: " + value + ", hasParam: " + hasParam);
 							}
 
-							if (hasParam == true) {
+							if (hasParam) {
 								break;
 							}
 

@@ -10,6 +10,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
 
+/**
+ * Jackson deserializer for converting JSON strings to SipURI objects.
+ */
 public class JsonSipUriDeserializer extends StdDeserializer<SipURI> {
 	private static final long serialVersionUID = 1L;
 

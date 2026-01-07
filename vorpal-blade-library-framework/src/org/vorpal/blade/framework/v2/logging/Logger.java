@@ -44,11 +44,41 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
+/**
+ * Extended logger for SIP applications with session-aware logging and sequence diagram generation.
+ * Provides colorized output, stack trace logging, and visual call flow diagrams.
+ */
 public class Logger extends java.util.logging.Logger implements Serializable {
 	private static final long serialVersionUID = 1L;
+
+	// String constants
+	private static final String NOSESS = "[--------:----]";
+	private static final String DEFAULT_HASH = "--------";
+	private static final String DEFAULT_DIALOG_HASH = "----";
+	private static final String SDP_SUFFIX = " (sdp)";
+	private static final String LOGGING_PROBLEM_PREFIX = "Logging problem... ";
+	private static final String LOGGING_ERROR_PREFIX = "Logging error...  ";
+	private static final String LOGGING_WARNING_PREFIX = "Logging warning...  ";
+	private static final String WARNING_PREFIX = "WARNING: ";
+	private static final String TIMER_SET_MSG = " timer set for ";
+	private static final String TIMER_EXPIRED_MSG = " timer expired";
+	private static final String MS_SUFFIX = "ms";
+	private static final String DIAGRAM_LEFT_ATTR = "_diagramLeft";
+	private static final String SIP_METHOD_INVITE = "INVITE";
+	private static final String SIP_METHOD_NOTIFY = "NOTIFY";
+	private static final String SIP_METHOD_REFER = "REFER";
+	private static final String SIP_METHOD_REGISTER = "REGISTER";
+	private static final String CONTENT_TYPE_SIPFRAG = "message/sipfrag";
+	private static final String HEADER_EVENT = "Event";
+	private static final String HEADER_SUBSCRIPTION_STATE = "Subscription-State";
+	private static final String HEADER_REFER_TO = "Refer-To";
+	private static final String HEADER_EXPIRES = "Expires";
+	private static final String HEADER_CONTACT = "Contact";
+
 	private Level sequenceDiagramLoggingLevel = Level.FINE;
 	private Level configurationLoggingLevel = Level.FINE;
-	private static ObjectMapper mapper = null;
+	private static volatile ObjectMapper mapper = null;
+	private static final Object MAPPER_LOCK = new Object();
 
 	@Override
 	public void log(Level level, String msg) {
@@ -58,9 +88,15 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			StringWriter errors = new StringWriter();
 			ex.printStackTrace(new PrintWriter(errors));
 			try {
-				this.getParent().warning("Logging problem... " + errors.toString());
+				java.util.logging.Logger parent = this.getParent();
+				if (parent != null) {
+					parent.warning(LOGGING_PROBLEM_PREFIX + errors.toString());
+				} else {
+					System.out.println(WARNING_PREFIX + LOGGING_PROBLEM_PREFIX + errors.toString());
+				}
 			} catch (Exception ex2) {
-				System.out.println("WARNING: Logging problem... " + errors.toString());
+				// Last resort - log to stdout
+				System.out.println(WARNING_PREFIX + LOGGING_PROBLEM_PREFIX + errors.toString());
 			}
 		}
 	}
@@ -69,7 +105,10 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	public Level getLevel() {
 		Level level = super.getLevel();
 		if (level == null) {
-			level = this.getParent().getLevel();
+			java.util.logging.Logger parent = this.getParent();
+			if (parent != null) {
+				level = parent.getLevel();
+			}
 		}
 		return level;
 	}
@@ -97,8 +136,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	protected Logger(String name, String resourceBundleName) {
 		super(name, resourceBundleName);
 	}
-
-	private static final String NOSESS = "[--------:----]";
 
 	@Override
 	public void severe(String msg) {
@@ -167,21 +204,24 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void logStackTrace(Exception e) {
+		if (e == null) return;
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
-		warning("Logging error...  " + e.getMessage() + "\n" + errors.toString());
+		warning(LOGGING_ERROR_PREFIX + e.getMessage() + "\n" + errors.toString());
 	}
 
 	public void logSevereStackTrace(Exception e) {
+		if (e == null) return;
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
-		severe("Logging error...  " + e.getMessage() + "\n" + errors.toString());
+		severe(LOGGING_ERROR_PREFIX + e.getMessage() + "\n" + errors.toString());
 	}
 
 	public void logWarningStackTrace(Exception e) {
+		if (e == null) return;
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
-		warning("Logging warning...  " + e.getMessage() + "\n" + errors.toString());
+		warning(LOGGING_WARNING_PREFIX + e.getMessage() + "\n" + errors.toString());
 	}
 
 	/**
@@ -260,9 +300,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 		if (obj != null) {
 			if (mapper == null) {
-				mapper = new ObjectMapper();
-				mapper.setSerializationInclusion(Include.NON_NULL);
-				mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+				synchronized (MAPPER_LOCK) {
+					if (mapper == null) {
+						ObjectMapper newMapper = new ObjectMapper();
+						newMapper.setSerializationInclusion(Include.NON_NULL);
+						newMapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+						mapper = newMapper;
+					}
+				}
 			}
 
 			StringWriter sw = new StringWriter();
@@ -271,7 +316,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				mapper.writerWithDefaultPrettyPrinter().writeValue(pw, obj);
 				value = sw.toString();
 			} catch (Exception ex) {
-				// cannot serialize, just give the pointer location
+				// Cannot serialize object, fall back to toString()
 				value = obj.toString();
 			}
 		}
@@ -410,113 +455,114 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public static String timeout(ServletTimer timer) {
-		String str;
+		if (timer == null) {
+			return NOSESS + TIMER_EXPIRED_MSG;
+		}
 
+		String str;
 		long timeRemaining = timer.getTimeRemaining();
 
 		if (timeRemaining > 0) {
-			str = hexHash(timer.getApplicationSession()) + " " + timer.getId() + " timer set for "
-					+ timer.getTimeRemaining() + "ms";
-
+			str = hexHash(timer.getApplicationSession()) + " " + timer.getId() + TIMER_SET_MSG
+					+ timer.getTimeRemaining() + MS_SUFFIX;
 		} else {
-			str = hexHash(timer.getApplicationSession()) + " " + timer.getId() + " timer expired";
-
+			str = hexHash(timer.getApplicationSession()) + " " + timer.getId() + TIMER_EXPIRED_MSG;
 		}
 		return str;
-
 	}
 
 	public static String from(SipServletMessage msg) {
-		String name = null;
+		if (msg == null || msg.getFrom() == null) {
+			return null;
+		}
 		SipURI uri = (SipURI) msg.getFrom().getURI();
-		name = uri.getUser();
-
+		if (uri == null) {
+			return null;
+		}
+		String name = uri.getUser();
 		if (name == null) {
 			name = uri.getHost();
 		}
-
 		return name;
 	}
 
 	public static String to(SipServletMessage msg) {
-		String name = null;
-
+		if (msg == null || msg.getTo() == null) {
+			return null;
+		}
 		SipURI uri = (SipURI) msg.getTo().getURI();
-		name = uri.getUser();
-
+		if (uri == null) {
+			return null;
+		}
+		String name = uri.getUser();
 		if (name == null) {
 			name = uri.getHost();
 		}
-
 		return name;
 	}
 
 	public static String hexHash(SipApplicationSession appSession) {
-		String hashValue = NOSESS;
-
-		if (appSession != null) {
-			String hash1 = Callflow.getVorpalSessionId(appSession);
-			if (hash1 == null) {
-				hash1 = "--------";
-			}
-			hashValue = "[" + hash1 + ":----]";
+		if (appSession == null) {
+			return NOSESS;
 		}
 
-		return hashValue;
+		String hash1 = Callflow.getVorpalSessionId(appSession);
+		if (hash1 == null) {
+			hash1 = DEFAULT_HASH;
+		}
+		return "[" + hash1 + ":" + DEFAULT_DIALOG_HASH + "]";
 	}
 
 	public static String hexHash(SipServletMessage message) {
-		SipSession sipSession = null;
-
-		if (message != null) {
-			sipSession = message.getSession();
+		if (message == null) {
+			return NOSESS;
 		}
-
-		return hexHash(sipSession);
+		return hexHash(message.getSession());
 	}
 
 	public static String hexHash(SipSession sipSession) {
-		String hashValue = NOSESS;
-
-		if (sipSession != null && sipSession.isValid()) {
-
-			String hash1 = Callflow.getVorpalSessionId(sipSession.getApplicationSession());
-			if (hash1 == null) {
-				hash1 = "--------";
-			}
-
-			String hash2 = Callflow.getVorpalDialogId(sipSession);
-			if (hash2 == null) {
-				hash2 = "----";
-			}
-
-			hashValue = "[" + hash1 + ":" + hash2 + "]";
+		if (sipSession == null || !sipSession.isValid()) {
+			return NOSESS;
 		}
-		return hashValue;
+
+		String hash1 = Callflow.getVorpalSessionId(sipSession.getApplicationSession());
+		if (hash1 == null) {
+			hash1 = DEFAULT_HASH;
+		}
+
+		String hash2 = Callflow.getVorpalDialogId(sipSession);
+		if (hash2 == null) {
+			hash2 = DEFAULT_DIALOG_HASH;
+		}
+
+		return "[" + hash1 + ":" + hash2 + "]";
 	}
 
-	public String shorten(String _value, int length) {
+	public String shorten(String inputValue, int length) {
+		if (inputValue == null) {
+			return "[]";
+		}
 
-		String value = null;
-		int dollarIndex = _value.indexOf('$');
+		String value;
+		int dollarIndex = inputValue.indexOf('$');
 
 		if (dollarIndex >= 0) {
-			value = _value.substring(0, dollarIndex);
+			value = inputValue.substring(0, dollarIndex);
 		} else {
-			value = _value;
+			value = inputValue;
 		}
 
 		StringBuilder sb = new StringBuilder();
+		int effectiveLength = length;
 
-		if (length >= 2) {
-			length = length - 2;
+		if (effectiveLength >= 2) {
+			effectiveLength = effectiveLength - 2;
 		}
 
-		if (value.length() <= length) {
+		if (value.length() <= effectiveLength) {
 			sb.append("[").append(value).append("]");
 		} else {
-
-			String name = value.substring(0, length);
+			String name = value.substring(0, effectiveLength);
 			sb.append("[");
 			sb.append(name);
 			sb.append("]");
@@ -555,11 +601,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				}
 
 				if (request != null) {
-					leftSide = (null != request.getSession().getAttribute("_diagramLeft")
-							&& request.getSession().getAttribute("_diagramLeft").equals(Boolean.TRUE)) ? true : false;
+					leftSide = Boolean.TRUE.equals(request.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
 				} else {
-					leftSide = (null != response.getSession().getAttribute("_diagramLeft")
-							&& response.getSession().getAttribute("_diagramLeft").equals(Boolean.TRUE)) ? true : false;
+					leftSide = Boolean.TRUE.equals(response.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
 				}
 
 				if (response != null) {
@@ -574,11 +618,10 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			superArrow(direction, leftSide, request, response, name, null);
 
 		} catch (Exception ex) {
-
-			if (Callflow.getSipLogger() != null) {
-				Callflow.getSipLogger().warning("Logging error... " + ex.getMessage());
+			Logger sipLogger = Callflow.getSipLogger();
+			if (sipLogger != null) {
+				sipLogger.warning(LOGGING_ERROR_PREFIX + ex.getMessage());
 			}
-
 		}
 	}
 
@@ -598,17 +641,17 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				String method = "";
 				if (request != null) {
-					method += request.getMethod();
+					method = request.getMethod();
 					if (request.getContentLength() > 0) {
-						method += " (sdp)";
+						method += SDP_SUFFIX;
 					}
 				}
 
 				String status = "";
 				if (response != null) {
-					status += response.getStatus();
+					status = String.valueOf(response.getStatus());
 					if (response.getContentLength() > 0) {
-						status += " (sdp)";
+						status += SDP_SUFFIX;
 					}
 				}
 
@@ -618,7 +661,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					if (direction.equals(Direction.RECEIVE)) {
 						if (request != null) { // #1
 
-							if (request.getMethod().equals("INVITE")) {
+							if (SIP_METHOD_INVITE.equals(request.getMethod())) {
 								if (request.isInitial()) {
 									note = request.getRequestURI().toString();
 								} else {
@@ -626,10 +669,10 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								}
 							}
 
-							else if (request.getMethod().equals("NOTIFY")) {
-								note += "Event: " + request.getHeader("Event");
-								note += ", Subscription-State: " + request.getHeader("Subscription-State");
-								if (request.getContentType().equals("message/sipfrag")) {
+							else if (SIP_METHOD_NOTIFY.equals(request.getMethod())) {
+								note = HEADER_EVENT + ": " + request.getHeader(HEADER_EVENT);
+								note += ", " + HEADER_SUBSCRIPTION_STATE + ": " + request.getHeader(HEADER_SUBSCRIPTION_STATE);
+								if (CONTENT_TYPE_SIPFRAG.equals(request.getContentType())) {
 									if (note.length() > 0) {
 										note += ", ";
 									}
@@ -637,17 +680,15 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								}
 							}
 
-							else if (request.getMethod().equals("REFER")) {
+							else if (SIP_METHOD_REFER.equals(request.getMethod())) {
+								note = HEADER_REFER_TO + ": " + request.getHeader(HEADER_REFER_TO);
 
-//								note = "Refer-To: " + request.getAddressHeader("Refer-To");
-								note = "Refer-To: " + request.getHeader("Refer-To");
-
-							} else if (request.getMethod().equals("REGISTER")) {
-								String expires = request.getHeader("Expires");
+							} else if (SIP_METHOD_REGISTER.equals(request.getMethod())) {
+								String expires = request.getHeader(HEADER_EXPIRES);
 								if (expires == null) {
-									expires = request.getParameterableHeader("Contact").getParameter("expires");
+									expires = request.getParameterableHeader(HEADER_CONTACT).getParameter("expires");
 								}
-								note = "Expires: " + expires;
+								note = HEADER_EXPIRES + ": " + expires;
 							}
 
 							note = note.trim();
@@ -693,19 +734,18 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					} else {
 						if (request != null) { // #3
 
-							if (request.getMethod().equals("NOTIFY")) {
-								note += "Event: " + request.getHeader("Event");
-								note += ", Subscription-State: " + request.getHeader("Subscription-State");
-								if (request.getContentType().equals("message/sipfrag")) {
+							if (SIP_METHOD_NOTIFY.equals(request.getMethod())) {
+								note = HEADER_EVENT + ": " + request.getHeader(HEADER_EVENT);
+								note += ", " + HEADER_SUBSCRIPTION_STATE + ": " + request.getHeader(HEADER_SUBSCRIPTION_STATE);
+								if (CONTENT_TYPE_SIPFRAG.equals(request.getContentType())) {
 									if (note.length() > 0) {
 										note += ", ";
 									}
 									note += new String((byte[]) request.getContent());
 								}
-							} else if (request.getMethod().equals("REFER")) {
-//								note = "Refer-To: " + request.getAddressHeader("Refer-To");
-								note = "Refer-To: " + request.getHeader("Refer-To");
-							} else if (request.getMethod().equals("INVITE")) {
+							} else if (SIP_METHOD_REFER.equals(request.getMethod())) {
+								note = HEADER_REFER_TO + ": " + request.getHeader(HEADER_REFER_TO);
+							} else if (SIP_METHOD_INVITE.equals(request.getMethod())) {
 								note = "From: " + request.getFrom();
 							}
 
@@ -755,7 +795,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					if (direction.equals(Direction.RECEIVE)) {
 						if (request != null) { // #5
 
-							if (request.getMethod().equals("INVITE")) {
+							if (SIP_METHOD_INVITE.equals(request.getMethod())) {
 								if (request.isInitial()) {
 									note = request.getRequestURI().toString();
 								} else {
@@ -763,10 +803,10 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								}
 							}
 
-							else if (request.getMethod().equals("NOTIFY")) {
-								note += "Event: " + request.getHeader("Event");
-								note += ", Subscription-State: " + request.getHeader("Subscription-State");
-								if (request.getContentType().equals("message/sipfrag")) {
+							else if (SIP_METHOD_NOTIFY.equals(request.getMethod())) {
+								note = HEADER_EVENT + ": " + request.getHeader(HEADER_EVENT);
+								note += ", " + HEADER_SUBSCRIPTION_STATE + ": " + request.getHeader(HEADER_SUBSCRIPTION_STATE);
+								if (CONTENT_TYPE_SIPFRAG.equals(request.getContentType())) {
 									if (note.length() > 0) {
 										note += ", ";
 									}
@@ -774,9 +814,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								}
 							}
 
-							else if (request.getMethod().equals("REFER")) {
-//								note = "Refer-To: " + request.getAddressHeader("Refer-To");
-								note = "Refer-To: " + request.getHeader("Refer-To");
+							else if (SIP_METHOD_REFER.equals(request.getMethod())) {
+								note = HEADER_REFER_TO + ": " + request.getHeader(HEADER_REFER_TO);
 							}
 
 							note = note.trim();
@@ -826,16 +865,16 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 						if (request != null) { // #7
 
-							if (request.getMethod().equals("INVITE")) {
+							if (SIP_METHOD_INVITE.equals(request.getMethod())) {
 								if (request.isInitial()) {
 									note = request.getRequestURI().toString();
 								} else {
 									note = "From: " + request.getFrom();
 								}
-							} else if (request.getMethod().equals("NOTIFY")) {
-								note += "Event: " + request.getHeader("Event");
-								note += ", Subscription-State: " + request.getHeader("Subscription-State");
-								if (request.getContentType().equals("message/sipfrag")) {
+							} else if (SIP_METHOD_NOTIFY.equals(request.getMethod())) {
+								note = HEADER_EVENT + ": " + request.getHeader(HEADER_EVENT);
+								note += ", " + HEADER_SUBSCRIPTION_STATE + ": " + request.getHeader(HEADER_SUBSCRIPTION_STATE);
+								if (CONTENT_TYPE_SIPFRAG.equals(request.getContentType())) {
 									if (note.length() > 0) {
 										note += ", ";
 									}

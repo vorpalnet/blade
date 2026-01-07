@@ -43,23 +43,31 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
 
 /**
+ * Settings implementation for managing configuration files through JMX.
  * @author Jeff McDonald
- *
+ * @param <T> the type of configuration object
  */
 public class Settings<T> implements SettingsMXBean {
-	private Logger sipLogger;
-	private Class<T> clazz;
+	// Config type constants
+	private static final String CONFIG_DOMAIN = "domain";
+	private static final String CONFIG_CLUSTER = "cluster";
+	private static final String CONFIG_SERVER = "server";
+	private static final String CONFIG_SCHEMA = "schema";
+	private static final String CONFIG_SAMPLE = "sample";
+
+	private final Logger sipLogger;
+	private final Class<T> clazz;
 	private T config;
-	private T sampleConfig;
+	private final T sampleConfig;
 
-	private ObjectMapper objectMapper;
-	private SettingsManager<T> settingsManager;
+	private final ObjectMapper objectMapper;
+	private final SettingsManager<T> settingsManager;
 
-	private Path domain;
-	private Path cluster;
-	private Path server;
-	private Path sample;
-	private Path schema;
+	private final Path domain;
+	private final Path cluster;
+	private final Path server;
+	private final Path sample;
+	private final Path schema;
 
 	private BufferedWriter bufferedWriter;
 	private BufferedReader bufferedReader;
@@ -107,7 +115,7 @@ public class Settings<T> implements SettingsMXBean {
 			}
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			sipLogger.severe(e);
 		}
 
 		sipLogger.info("getLastModified: " + timestamp);
@@ -125,7 +133,7 @@ public class Settings<T> implements SettingsMXBean {
 					StandardOpenOption.CREATE, //
 					StandardOpenOption.TRUNCATE_EXISTING);
 		} catch (Exception e) {
-			e.printStackTrace();
+			sipLogger.severe(e);
 		}
 	}
 
@@ -144,7 +152,7 @@ public class Settings<T> implements SettingsMXBean {
 			}
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			sipLogger.severe(e);
 		}
 	}
 
@@ -162,7 +170,7 @@ public class Settings<T> implements SettingsMXBean {
 			}
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			sipLogger.severe(e);
 		}
 	}
 
@@ -175,7 +183,7 @@ public class Settings<T> implements SettingsMXBean {
 			}
 
 		} catch (Exception e) {
-			e.printStackTrace();
+			sipLogger.severe(e);
 		}
 	}
 
@@ -241,7 +249,7 @@ public class Settings<T> implements SettingsMXBean {
 				Configuration cfg = (Configuration) config;
 
 				if (cfg.getLogging() != null //
-						&& cfg.getLogging().resolveUseParentLogging() == false //
+						&& !cfg.getLogging().resolveUseParentLogging() //
 						&& cfg.getLogging().resolveLoggingLevel() != null) {
 					AsyncSipServlet.getSipLogger().setLevel(cfg.getLogging().resolveLoggingLevel());
 					AsyncSipServlet.getSipLogger()
@@ -272,36 +280,29 @@ public class Settings<T> implements SettingsMXBean {
 	public Path getPath(String configType) {
 		Path path = null;
 
-		switch (configType) {
-		case "DOMAIN":
-		case "Domain":
-		case "domain":
+		if (configType == null) {
+			return null;
+		}
+
+		switch (configType.toLowerCase()) {
+		case CONFIG_DOMAIN:
 			path = domain;
 			break;
-		case "CLUSTER":
-		case "Cluster":
-		case "cluster":
+		case CONFIG_CLUSTER:
 			path = cluster;
 			break;
-
-		case "SERVER":
-		case "Server":
-		case "server":
+		case CONFIG_SERVER:
 			path = server;
 			break;
-
-		case "SCHEMA":
-		case "Schema":
-		case "schema":
+		case CONFIG_SCHEMA:
 			path = schema;
 			break;
-
-		case "SAMPLE":
-		case "Sample":
-		case "sample":
+		case CONFIG_SAMPLE:
 			path = sample;
 			break;
-
+		default:
+			// Unknown config type, return null
+			break;
 		}
 
 		return path;

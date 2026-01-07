@@ -11,6 +11,9 @@ import inet.ipaddr.IPAddress;
 import inet.ipaddr.IPAddressString;
 import inet.ipaddr.ipv6.IPv6Address;
 
+/**
+ * Jackson deserializer for converting JSON strings to IPv6Address objects.
+ */
 public class JsonIPv6AddressDeserializer extends StdDeserializer<IPv6Address> {
 	private static final long serialVersionUID = 1L;
 

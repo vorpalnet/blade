@@ -29,12 +29,11 @@ import javax.management.MXBean;
  * @author Jeff McDonald
  *
  */
+/**
+ * JMX MXBean interface for managing configuration settings at runtime.
+ */
 @MXBean
 public interface SettingsMXBean {
-
-//	public enum ConfigType {
-//		DOMAIN, CLUSTER, SERVER
-//	};
 
 	public long getLastModified(String configType);
 	

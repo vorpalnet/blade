@@ -12,8 +12,12 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
+/**
+ * Translation map using Apache PatriciaTrie for efficient prefix-based lookups.
+ */
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigPrefixMapApache extends TranslationsMap implements Serializable {
+	private static final long serialVersionUID = 1L;
 
 	Logger sipLogger = SettingsManager.getSipLogger();
 
@@ -50,7 +54,7 @@ public class ConfigPrefixMapApache extends TranslationsMap implements Serializab
 						sipLogger.finer(request, "prefix=" + substring);
 
 						sortedMap = map.prefixMap(substring);
-						if (false == sortedMap.isEmpty()) {
+						if (!sortedMap.isEmpty()) {
 							value = sortedMap.get(substring);
 							break;
 						}

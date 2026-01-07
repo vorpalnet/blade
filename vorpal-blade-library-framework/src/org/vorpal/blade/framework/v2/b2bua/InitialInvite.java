@@ -38,15 +38,36 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
+/**
+ * Callflow for handling initial INVITE requests in a B2BUA scenario.
+ * Creates the outbound leg, links sessions, and orchestrates the call setup process.
+ */
 public class InitialInvite extends Callflow {
-	static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
+
+	// Attribute keys for session and request attributes
+	private static final String ATTR_DO_NOT_PROCESS = "doNotProcess";
+	private static final String ATTR_USER_AGENT = "userAgent";
+	private static final String ATTR_X_ORIGINAL_DN = "X-Original-DN";
+	private static final String ATTR_X_PREVIOUS_DN = "X-Previous-DN";
+	private static final String ATTR_INITIAL_INVITE = "initial_invite";
+	private static final String ATTR_SIP_ADDRESS = "sipAddress";
+	private static final String ATTR_CALLFLOW = "callflow";
+	private static final String HEADER_SESSION_EXPIRES = "Session-Expires";
+
+	// User agent role identifiers
+	private static final String ROLE_CALLER = "caller";
+	private static final String ROLE_CALLEE = "callee";
+
+	// Time conversion constant
+	private static final int SECONDS_PER_MINUTE = 60;
+
 	private SipServletRequest aliceRequest;
 	private SipServletRequest bobRequest;
-	private B2buaListener b2buaListener = null;
-	private boolean doNotProcess = false;
+	private B2buaListener b2buaListener;
+	private boolean doNotProcess;
 
 	public InitialInvite() {
 	}
@@ -61,28 +82,31 @@ public class InitialInvite extends Callflow {
 	 * same (plus one minute for cleanup). If no header is found, use the expiration
 	 * value in the configuration file.
 	 * 
-	 * @param msg
-	 * @throws ServletParseException
+	 * @param msg the SIP servlet message
 	 */
-	public static void setSessionExpiration(SipServletMessage msg) throws ServletParseException {
+	public static void setSessionExpiration(SipServletMessage msg) {
+		if (msg == null) {
+			return;
+		}
 		SipApplicationSession appSession = msg.getApplicationSession();
+		if (appSession == null) {
+			return;
+		}
 
-		String sessionExpires = null;
-		Parameterable p = msg.getParameterableHeader("Session-Expires");
-		if (p != null) {
-			sessionExpires = p.getValue();
-			if (sessionExpires != null) {
-				appSession.setExpires((Integer.parseInt(sessionExpires) / 60) + 1);
+		try {
+			String sessionExpires = null;
+			Parameterable p = msg.getParameterableHeader(HEADER_SESSION_EXPIRES);
+			if (p != null) {
+				sessionExpires = p.getValue();
+				if (sessionExpires != null) {
+					appSession.setExpires((Integer.parseInt(sessionExpires) / SECONDS_PER_MINUTE) + 1);
+				}
 			}
-		} else {
-			// Use configuration file instead
-			// moving this to the AsyncSipServlet
-//			if (Callflow.getSessionParameters() != null) {
-//				if (Callflow.getSessionParameters().getExpiration() != null) {
-//					appSession.setExpires(Callflow.getSessionParameters().getExpiration());
-//				}
-//			}
-
+			// If no header, use configuration file instead (handled in AsyncSipServlet)
+		} catch (ServletParseException e) {
+			// Invalid Session-Expires header format; ignore and use default expiration
+		} catch (NumberFormatException e) {
+			// Invalid numeric value in Session-Expires header; ignore and use default expiration
 		}
 	}
 
@@ -98,7 +122,7 @@ public class InitialInvite extends Callflow {
 
 		sendRequest(bobRequest, (bobResponse) -> {
 
-			if (false == aliceRequest.isCommitted()) {
+			if (!aliceRequest.isCommitted()) {
 
 				setSessionExpiration(bobResponse);
 
@@ -109,9 +133,11 @@ public class InitialInvite extends Callflow {
 					if (b2buaListener != null) {
 
 						SipSession caller = aliceResponse.getSession();
-						caller.setAttribute("userAgent", "caller");
+						caller.setAttribute(ATTR_USER_AGENT, ROLE_CALLER);
 						SipSession callee = Callflow.getLinkedSession(caller);
-						callee.setAttribute("userAgent", "callee");
+						if (callee != null) {
+							callee.setAttribute(ATTR_USER_AGENT, ROLE_CALLEE);
+						}
 
 						try {
 							b2buaListener.callAnswered(aliceResponse);
@@ -129,10 +155,9 @@ public class InitialInvite extends Callflow {
 
 				// Sometimes you want to arrest the processing of the transaction.
 				// If either the callflow or the request are marked as 'doNotProcess', we won't
-				boolean _doNotProcess = (null == bobRequest.getAttribute("doNotProcess")) ? false
-						: (Boolean) bobRequest.getAttribute("doNotProcess");
+				boolean _doNotProcess = Boolean.TRUE.equals(bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
 				this.doNotProcess = (this.doNotProcess || _doNotProcess);
-				if (false == this.doNotProcess) {
+				if (!this.doNotProcess) {
 
 					sendResponse(aliceResponse, (aliceAck) -> {
 						if (aliceAck.getMethod().equals(PRACK)) {
@@ -180,33 +205,31 @@ public class InitialInvite extends Callflow {
 		linkSessions(aliceRequest.getSession(), bobRequest.getSession());
 
 		// This is an API kludge to let the user know what callflow was used
-		bobRequest.setAttribute("callflow", this);
+		bobRequest.setAttribute(ATTR_CALLFLOW, this);
 
 		if (b2buaListener != null) {
 			URI xOriginalDN = bobRequest.getTo().getURI();
-			appSession.setAttribute("X-Original-DN", xOriginalDN);
+			appSession.setAttribute(ATTR_X_ORIGINAL_DN, xOriginalDN);
 			URI xPreviousDN = bobRequest.getRequestURI();
-			appSession.setAttribute("X-Previous-DN", xPreviousDN);
-			bobRequest.getSession().setAttribute("initial_invite", bobRequest);
-			SipServletRequest aliceRequest = getIncomingRequest(bobRequest);
-			aliceRequest.getSession().setAttribute("sipAddress", aliceRequest.getFrom());
-			bobRequest.getSession().setAttribute("sipAddress", bobRequest.getTo());
+			appSession.setAttribute(ATTR_X_PREVIOUS_DN, xPreviousDN);
+			bobRequest.getSession().setAttribute(ATTR_INITIAL_INVITE, bobRequest);
+			SipServletRequest incomingAliceRequest = getIncomingRequest(bobRequest);
+			if (incomingAliceRequest != null) {
+				incomingAliceRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, incomingAliceRequest.getFrom());
+			}
+			bobRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, bobRequest.getTo());
 
 			b2buaListener.callStarted(bobRequest);
 		}
-//			else {
-//				sipLogger.warning(bobRequest, "no b2buaListener defined");
-//			}
 
 		// Remove the callflow so it's not serialized
-		bobRequest.removeAttribute("callflow");
+		bobRequest.removeAttribute(ATTR_CALLFLOW);
 
 		// Sometimes you want to arrest the processing of the transaction.
 		// If either the callflow or the request are marked as 'doNotProcess', we won't
-		boolean _doNotProcess = (null == bobRequest.getAttribute("doNotProcess")) ? false
-				: (Boolean) bobRequest.getAttribute("doNotProcess");
+		boolean _doNotProcess = Boolean.TRUE.equals(bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
 		this.doNotProcess = (this.doNotProcess || _doNotProcess);
-		if (false == this.doNotProcess) {
+		if (!this.doNotProcess) {
 			// This gives the developer a chance to halt processing and 'continue' later.
 
 			try {

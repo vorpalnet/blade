@@ -11,6 +11,9 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.jsonFormatVisitors.JsonFormatVisitorWrapper;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
+/**
+ * Jackson serializer for converting SipURI objects to JSON strings.
+ */
 public class JsonSipUriSerializer extends StdSerializer<SipURI> {
 
 	private static final long serialVersionUID = 1L;
@@ -32,6 +35,7 @@ public class JsonSipUriSerializer extends StdSerializer<SipURI> {
 	@Override
 	public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint)
 			throws JsonMappingException {
+		// Empty implementation - visitor pattern not used for this serializer
 	}
 
 }

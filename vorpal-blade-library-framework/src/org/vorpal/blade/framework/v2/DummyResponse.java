@@ -28,8 +28,9 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipWebSocketContext;
 
 public class DummyResponse implements SipServletResponse, Serializable {
+	private static final long serialVersionUID = 1L;
 
-	SipServletRequest request;
+	private final SipServletRequest request;
 
 	public DummyResponse(SipServletRequest req, int status) {
 		this(req, status, ReasonPhrase.getPhrase(status));

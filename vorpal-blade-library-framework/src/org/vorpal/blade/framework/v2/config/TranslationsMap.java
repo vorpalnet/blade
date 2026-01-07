@@ -30,7 +30,12 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 //		@JsonSubTypes.Type(value = ConfigIPv4Map.class, name = "ipv4"),
 //		@JsonSubTypes.Type(value = ConfigIPv6Map.class, name = "ipv6")
 
+/**
+ * Abstract base class for translation maps that look up translations based on SIP request content.
+ */
 public abstract class TranslationsMap implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	public String id;
 	public String description;
 	public List<Selector> selectors = new LinkedList<>();
@@ -46,10 +51,7 @@ public abstract class TranslationsMap implements Serializable {
 
 		sipLogger.finer(request, "Translation.applyTranslations - begin...");
 
-		String strRequestUri;
-		URI uri;
 		Translation translation = null;
-		RegExRoute regexRoute = null;
 
 		try {
 			translation = this.lookup(request);

@@ -2,7 +2,6 @@ package org.vorpal.blade.framework.v2.config;
 
 import java.io.Serializable;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -10,6 +9,10 @@ import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
+/**
+ * Legacy translation class with route arrays.
+ * @deprecated Use Translation instead.
+ */
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class TranslationOld implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -121,14 +124,14 @@ public class TranslationOld implements Serializable {
 
 	@JsonIgnore
 	public TranslationOld addAttribute(String key, Object value) {
-		attributes = (null != attributes) ? attributes : new HashMap<>();
+		attributes = (attributes != null) ? attributes : new HashMap<>();
 		attributes.put(key, value);
 		return this;
 	}
 
 	@JsonIgnore
 	public Object getAttribute(String key) {
-		return (null != attributes) ? attributes.get(key) : null;
+		return (attributes != null) ? attributes.get(key) : null;
 	}
 
 }

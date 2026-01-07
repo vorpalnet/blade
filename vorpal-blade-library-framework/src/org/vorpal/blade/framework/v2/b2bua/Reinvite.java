@@ -33,12 +33,16 @@ import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
+/**
+ * Callflow for handling re-INVITE requests in a B2BUA scenario.
+ * Forwards re-INVITE requests between the two call legs with SDP exchange.
+ */
 public class Reinvite extends Callflow {
-	static final long serialVersionUID = 1L;
-	private SipServletRequest aliceRequest;
+	private static final long serialVersionUID = 1L;
 	private B2buaListener b2buaListener;
 
 	public Reinvite() {
+		this.b2buaListener = null;
 	}
 
 	public Reinvite(B2buaListener b2buaListener) {
@@ -49,8 +53,12 @@ public class Reinvite extends Callflow {
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		try {
 
-			aliceRequest = request;
+			final SipServletRequest aliceRequest = request;
 			SipSession sipSession = getLinkedSession(aliceRequest.getSession());
+			if (sipSession == null) {
+				sipLogger.warning(request, "Reinvite.process - No linked session found");
+				return;
+			}
 			SipServletRequest bobRequest = sipSession.createRequest(INVITE);
 			copyContentAndHeaders(aliceRequest, bobRequest);
 
@@ -60,7 +68,7 @@ public class Reinvite extends Callflow {
 
 			sendRequest(bobRequest, (bobResponse) -> {
 
-				if (false==aliceRequest.isCommitted()) { // It may have been CANCELed			
+				if (!aliceRequest.isCommitted()) { // It may have been CANCELed			
 					SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 					copyContentAndHeaders(bobResponse, aliceResponse);
 					if (b2buaListener != null) {
@@ -80,9 +88,10 @@ public class Reinvite extends Callflow {
 
 			});
 
-		}catch (java.lang.IllegalStateException e) {
-			// eat the exception; do not log it
-		}catch (Exception e) {
+		} catch (IllegalStateException e) {
+			// Session may be invalid or committed; this can happen during race conditions
+			sipLogger.fine(request, "Reinvite.process - IllegalStateException (session may be invalid): " + e.getMessage());
+		} catch (Exception e) {
 			sipLogger.logStackTrace(request, e);
 			throw e;
 		}

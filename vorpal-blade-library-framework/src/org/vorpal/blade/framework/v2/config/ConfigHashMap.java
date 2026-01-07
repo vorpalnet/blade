@@ -7,9 +7,12 @@ import javax.servlet.sip.SipServletRequest;
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
+/**
+ * Translation map using HashMap for key-based lookups.
+ */
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@type")
-
-public class ConfigHashMap extends TranslationsMap implements Serializable{
+public class ConfigHashMap extends TranslationsMap implements Serializable {
+	private static final long serialVersionUID = 1L;
 
 	public HashMap<String, Translation> map = new HashMap<>();
 
@@ -21,19 +24,13 @@ public class ConfigHashMap extends TranslationsMap implements Serializable{
 	public Translation lookup(SipServletRequest request) {
 		Translation value = null;
 
-//		Logger sipLogger = Callflow.getSipLogger();
-
 		try {
 			for (Selector selector : this.selectors) {
-
-//				sipLogger.finer("selector.id=" + selector.getId());
 
 				RegExRoute regexRoute = selector.findKey(request);
 
 				if (regexRoute != null) {
-//					sipLogger.finer("regexRoute header=" + regexRoute.header + ", key=" + regexRoute.key);
 					value = map.get(regexRoute.key);
-//					sipLogger.finer("value=" + value);
 				}
 
 				if (value != null) {

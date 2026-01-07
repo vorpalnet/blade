@@ -9,6 +9,9 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.jsonFormatVisitors.JsonFormatVisitorWrapper;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
+/**
+ * Jackson serializer for converting generic Object instances to JSON strings using toString().
+ */
 public class JsonObjectSerializer extends StdSerializer<Object> {
 
 	private static final long serialVersionUID = 1L;

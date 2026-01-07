@@ -48,6 +48,9 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListener {
 	private static final long serialVersionUID = 1L;
 
+	/** Attribute key used to mark messages that should not be processed. */
+	private static final String ATTR_DO_NOT_PROCESS = "doNotProcess";
+
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
 		Callflow callflow;
@@ -97,7 +100,10 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 	 * @param outboundRequest
 	 */
 	public void doNotProcess(SipServletMessage msg) {
-		msg.setAttribute("doNotProcess", true);
+		if (msg == null) {
+			return;
+		}
+		msg.setAttribute(ATTR_DO_NOT_PROCESS, true);
 	}
 
 	/**
@@ -110,9 +116,18 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 	 * @throws IOException
 	 */
 	public void doNotProcess(SipServletRequest outboundRequest, int statusCode) throws ServletException, IOException {
-		outboundRequest.setAttribute("doNotProcess", true);
+		if (outboundRequest == null) {
+			return;
+		}
+		outboundRequest.setAttribute(ATTR_DO_NOT_PROCESS, true);
 		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
+		if (linkedSession == null) {
+			return;
+		}
 		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
+		if (incomingRequest == null) {
+			return;
+		}
 		SipServletResponse errorResponse = incomingRequest.createResponse(statusCode);
 		sendResponse(errorResponse);
 	}
@@ -129,9 +144,18 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 	 */
 	public void doNotProcess(SipServletRequest outboundRequest, int statusCode, String reasonPhrase)
 			throws ServletException, IOException {
-		outboundRequest.setAttribute("doNotProcess", true);
+		if (outboundRequest == null) {
+			return;
+		}
+		outboundRequest.setAttribute(ATTR_DO_NOT_PROCESS, true);
 		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
+		if (linkedSession == null) {
+			return;
+		}
 		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
+		if (incomingRequest == null) {
+			return;
+		}
 		SipServletResponse errorResponse = incomingRequest.createResponse(statusCode, reasonPhrase);
 		sendResponse(errorResponse);
 	}
@@ -144,9 +168,14 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 	 * @return incoming request
 	 */
 	public static SipServletRequest getIncomingRequest(SipServletRequest outboundRequest) {
+		if (outboundRequest == null) {
+			return null;
+		}
 		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
-		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
-		return incomingRequest;
+		if (linkedSession == null) {
+			return null;
+		}
+		return linkedSession.getActiveInvite(UAMode.UAS);
 	}
 
 }

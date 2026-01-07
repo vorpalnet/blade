@@ -30,7 +30,6 @@ import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 
@@ -40,8 +39,10 @@ import javax.management.MBeanServer;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
+
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletException;
+import com.fasterxml.jackson.core.JsonGenerationException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipFactory;
@@ -56,7 +57,6 @@ import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -68,6 +68,8 @@ import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
 import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
 import com.kjetland.jackson.jsonSchema.SubclassesResolver;
 import com.kjetland.jackson.jsonSchema.SubclassesResolverImpl;
+
+import java.util.Arrays;
 
 import inet.ipaddr.IPAddress;
 import inet.ipaddr.ipv4.IPv4Address;
@@ -153,8 +155,8 @@ public class SettingsManager<T> {
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
-		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
 
 		this.mapper = mapper;
 
@@ -166,8 +168,8 @@ public class SettingsManager<T> {
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
-		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
 
 		this.mapper = mapper;
 
@@ -178,8 +180,8 @@ public class SettingsManager<T> {
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
-		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
 
 		applicationName = basename(event.getServletContext().getServletContextName());
 		applicationVersion = version(event.getServletContext().getServletContextName());
@@ -188,8 +190,8 @@ public class SettingsManager<T> {
 	}
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
-		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
 
 		applicationName = basename(event.getServletContext().getServletContextName());
 		applicationVersion = version(event.getServletContext().getServletContextName());
@@ -200,8 +202,8 @@ public class SettingsManager<T> {
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample)
 			throws ServletException, IOException {
 		this.sample = sample;
-		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
 
 		applicationName = basename(event.getServletContext().getServletContextName());
 		applicationVersion = version(event.getServletContext().getServletContextName());
@@ -211,8 +213,8 @@ public class SettingsManager<T> {
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, T sample) throws ServletException, IOException {
 		this.sample = sample;
-		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
+		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
 
 		applicationName = basename(event.getServletContext().getServletContextName());
 		applicationVersion = version(event.getServletContext().getServletContextName());
@@ -280,24 +282,23 @@ public class SettingsManager<T> {
 			settings = new Settings<T>(clazz, this, name, mapper, sample);
 
 			// Get the managed server & cluster names
-			String configPath = "config/custom/vorpal/";
-			domainPath = Paths.get(configPath);
+			domainPath = Paths.get(CONFIG_BASE_PATH);
 			Files.createDirectories(domainPath);
-			schemaPath = Paths.get(configPath + "_schemas/");
+			schemaPath = Paths.get(CONFIG_BASE_PATH + "_schemas/");
 			Files.createDirectories(schemaPath);
 
-			samplePath = Paths.get(configPath + "_samples/");
+			samplePath = Paths.get(CONFIG_BASE_PATH + "_samples/");
 			Files.createDirectories(samplePath);
 
 			server = ManagementFactory.getPlatformMBeanServer();
 			serverName = System.getProperty("weblogic.Name");
-			serverPath = Paths.get(configPath + "_servers/" + serverName);
+			serverPath = Paths.get(CONFIG_BASE_PATH + "_servers/" + serverName);
 			Files.createDirectories(serverPath);
 			ObjectName managedServerName = new ObjectName("com.bea:Name=" + serverName + ",Type=Server");
 			ObjectName clusterObjectName = (ObjectName) server.getAttribute(managedServerName, "Cluster");
 			if (clusterObjectName != null) {
 				clusterName = (String) server.getAttribute(clusterObjectName, "Name");
-				clusterPath = Paths.get(configPath + "_clusters/" + clusterName);
+				clusterPath = Paths.get(CONFIG_BASE_PATH + "_clusters/" + clusterName);
 				Files.createDirectories(clusterPath);
 
 				domainName = server.getDefaultDomain();
@@ -567,7 +568,7 @@ public class SettingsManager<T> {
 			try {
 				hostname = (hostname != null) ? hostname : InetAddress.getLocalHost().getHostName();
 			} catch (Exception ex) {
-				// OU812
+				// Unable to get hostname from InetAddress - will fall back to default "unknown"
 			}
 
 			hostname = (hostname != null) ? hostname : "unknown";
@@ -575,5 +576,12 @@ public class SettingsManager<T> {
 
 		return hostname;
 	}
+
+	// Config path constant
+	private static final String CONFIG_BASE_PATH = "config/custom/vorpal/";
+
+	// Servlet context attribute names
+	private static final String ATTR_SIP_FACTORY = "javax.servlet.sip.SipFactory";
+	private static final String ATTR_SIP_SESSIONS_UTIL = "javax.servlet.sip.SipSessionsUtil";
 
 }

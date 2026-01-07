@@ -39,12 +39,29 @@ import javax.servlet.sip.UAMode;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
+/**
+ * Legacy BYE callflow with complex glare handling.
+ *
+ * @deprecated Use {@link Terminate} instead.
+ */
+@Deprecated
 public class ByeOld extends Callflow {
 	private static final long serialVersionUID = 1L;
+
+	/** HTTP status code for successful response. */
+	private static final int STATUS_OK = 200;
+
+	/** Session expiration time in minutes for cleanup. */
+	private static final int CLEANUP_EXPIRATION_MINUTES = 5;
+
+	/** Delay in milliseconds before sending BYE to avoid glare. */
+	private static final int GLARE_DELAY_MS = 3000;
+
 	private SipServletRequest aliceRequest;
-	private B2buaServlet b2buaListener = null;
+	private B2buaServlet b2buaListener;
 
 	public ByeOld() {
+		this.b2buaListener = null;
 	}
 
 	public ByeOld(B2buaServlet b2buaListener) {
@@ -62,7 +79,7 @@ public class ByeOld extends Callflow {
 		SipServletResponse aliceResponse;
 		SipSession aliceSession = aliceRequest.getSession();
 		SipSession bobSession = getLinkedSession(aliceSession);
-		String warnings = "";
+		StringBuilder warnings = new StringBuilder();
 		boolean sendByeLater = false;
 		boolean cancelSent = false;
 
@@ -70,7 +87,7 @@ public class ByeOld extends Callflow {
 
 		// Regardless of what happens below, clean up memory in 1 minute;
 		request.getApplicationSession().setInvalidateWhenReady(true); // Why would this be false?
-		request.getApplicationSession().setExpires(5);
+		request.getApplicationSession().setExpires(CLEANUP_EXPIRATION_MINUTES);
 
 		// Send a 200 OK first. This is too important to wait on downstream processes.
 		try {
@@ -78,15 +95,16 @@ public class ByeOld extends Callflow {
 			if (aliceSession != null //
 					&& aliceSession.isValid() //
 					&& aliceSession.getState() != State.TERMINATED) {
-				aliceResponse = request.createResponse(200);
+				aliceResponse = request.createResponse(STATUS_OK);
 				sendResponse(aliceResponse);
 			} else {
 				// probably CANCELed. Don't stress over it.
 			}
 
 		} catch (Exception e1) {
-			warnings = "Unable to send 200 OK to BYE request. " + e1.getClass().getName() + ": " + e1.getMessage()
-					+ "; ";
+			warnings.append("Unable to send 200 OK to BYE request. ")
+					.append(e1.getClass().getName()).append(": ")
+					.append(e1.getMessage()).append("; ");
 		}
 
 		try {
@@ -103,20 +121,21 @@ public class ByeOld extends Callflow {
 					while (itr.hasNext()) {
 						bobRequest = itr.next();
 						if (bobRequest.getMethod().equals(INVITE)) {
-							warnings += "Outbound UAC INVITE awaiting final response. Sending CANCEL. ";
+							warnings.append("Outbound UAC INVITE awaiting final response. Sending CANCEL. ");
 
 							try {
 								cancelSent = true;
 								sendRequest(bobRequest.createCancel());
 							} catch (Exception cancelEx1) {
-								warnings += "Unable to send UAC INVITE. " + cancelEx1.getClass().getName() + ": "
-										+ cancelEx1.getMessage() + "; ";
+								warnings.append("Unable to send UAC INVITE. ")
+										.append(cancelEx1.getClass().getName()).append(": ")
+										.append(cancelEx1.getMessage()).append("; ");
 							}
 
 						} else {
 							sendByeLater = true;
-							warnings += "Glare. Outbound " + bobRequest.getMethod()
-									+ " awaiting final response. Must send BYE later; ";
+							warnings.append("Glare. Outbound ").append(bobRequest.getMethod())
+									.append(" awaiting final response. Must send BYE later; ");
 						}
 					}
 
@@ -126,26 +145,27 @@ public class ByeOld extends Callflow {
 					while (itr.hasNext()) {
 						bobRequest = itr.next();
 						if (bobRequest.getMethod().equals(INVITE)) {
-							warnings += "Outbound UAS INVITE awaiting final response. Sending CANCEL. ";
+							warnings.append("Outbound UAS INVITE awaiting final response. Sending CANCEL. ");
 
 							try {
 								cancelSent = true;
 								sendRequest(bobRequest.createCancel());
 							} catch (Exception cancelEx2) {
-								warnings += "Unable to send UAS INVITE. " + cancelEx2.getClass().getName() + ": "
-										+ cancelEx2.getMessage() + "; ";
+								warnings.append("Unable to send UAS INVITE. ")
+										.append(cancelEx2.getClass().getName()).append(": ")
+										.append(cancelEx2.getMessage()).append("; ");
 							}
 
 						} else {
 							sendByeLater = true;
-							warnings += "Glare. Outbound " + bobRequest.getMethod()
-									+ " awaiting final response. Must send BYE later. ";
+							warnings.append("Glare. Outbound ").append(bobRequest.getMethod())
+									.append(" awaiting final response. Must send BYE later. ");
 						}
 					}
 
-					if (false == cancelSent) { // Don't send a BYE if a CANCEL was already sent
+					if (!cancelSent) { // Don't send a BYE if a CANCEL was already sent
 
-						if (false == sendByeLater) {
+						if (!sendByeLater) {
 
 							// Send outbound BYE.
 							try {
@@ -185,13 +205,14 @@ public class ByeOld extends Callflow {
 								}
 
 							} catch (Exception byeException) {
-								warnings += "Unable to send BYE to linked session. " + byeException.getClass().getName()
-										+ ": " + byeException.getMessage() + "; ";
+								warnings.append("Unable to send BYE to linked session. ")
+										.append(byeException.getClass().getName()).append(": ")
+										.append(byeException.getMessage()).append("; ");
 							}
 						} else {
 
 							// Send outbound BYE 3 seconds later to avoid glare.
-							startTimer(appSession, 3000, false, (timer) -> {
+							startTimer(appSession, GLARE_DELAY_MS, false, (timer) -> {
 
 								try {
 									SipServletRequest laterBye = bobSession.createRequest(BYE);
@@ -224,12 +245,14 @@ public class ByeOld extends Callflow {
 			}
 
 		} catch (Exception e1) {
-			warnings = "Unable to send 200 OK to BYE request. " + e1.getClass().getName() + ": " + e1.getMessage()
-					+ "; ";
+			warnings.setLength(0);
+			warnings.append("Unable to send 200 OK to BYE request. ")
+					.append(e1.getClass().getName()).append(": ")
+					.append(e1.getMessage()).append("; ");
 		}
 
 		if (warnings.length() > 0) {
-			String warning = "Bye.process - " + warnings;
+			String warning = "Bye.process - " + warnings.toString();
 			sipLogger.warning(request, warning);
 			sipLogger.getParent().warning(SettingsManager.getApplicationName() + " : " + warning);
 		}

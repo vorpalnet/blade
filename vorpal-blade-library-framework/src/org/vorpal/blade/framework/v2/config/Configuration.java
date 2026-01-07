@@ -4,7 +4,6 @@ import java.io.Serializable;
 import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
@@ -17,9 +16,15 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
+/**
+ * Base configuration class with logging, session parameters, and utility methods.
+ */
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
-	public final static String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
+	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
+
+	// Maximum iterations to prevent infinite loops in resolveVariables
+	private static final int MAX_VARIABLE_RESOLUTION_ITERATIONS = 25;
 
 	@JsonPropertyDescription("Logging parameters")
 	protected LogParameters logging;
@@ -78,7 +83,8 @@ public class Configuration implements Serializable {
 
 			return Math.round(value);
 		} catch (Exception e) {
-			e.printStackTrace();
+			// Log exception details for debugging configuration issues
+			Callflow.getSipLogger().severe(e);
 			throw new ParseException("Wrong number format in configuration. Example formats include: 1, 2s, 3m, 4h", 0);
 		}
 	}
@@ -137,7 +143,8 @@ public class Configuration implements Serializable {
 
 			return Math.round(value);
 		} catch (Exception e) {
-			e.printStackTrace();
+			// Log exception details for debugging configuration issues
+			Callflow.getSipLogger().severe(e);
 			throw new ParseException(
 					"Wrong number format in configuration. Example formats include: 1, 2KiB, 3KB, 4MiB, 5MB, 6GiB, or 7.5GB",
 					0);
@@ -192,7 +199,7 @@ public class Configuration implements Serializable {
 					outputString = outputString.replace(variable, "?{" + key + "}");
 				}
 
-				if (counter >= 25) {
+				if (counter >= MAX_VARIABLE_RESOLUTION_ITERATIONS) {
 					Callflow.getSipLogger()
 							.warning("Configuration.resolveVariables - INFINITE LOOP, CHECK CONFIGURATION, counter="
 									+ counter + ", expression=" + expression + ", attributes=" + attributes);

@@ -24,11 +24,17 @@
 
 /**
  * This class accepts a BYE message and passes it on.
- * 
- * @deprecated Use the Terminate class in the future.
+ *
+ * @deprecated Use the Terminate class instead.
  */
 package org.vorpal.blade.framework.v2.b2bua;
 
+/**
+ * Legacy BYE callflow handler.
+ *
+ * @deprecated Use {@link Terminate} instead.
+ */
+@Deprecated
 public class Bye extends Terminate {
 
 	private static final long serialVersionUID = 1L;

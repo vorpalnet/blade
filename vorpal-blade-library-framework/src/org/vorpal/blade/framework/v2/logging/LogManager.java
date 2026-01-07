@@ -41,25 +41,35 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import weblogic.kernel.KernelLogManager;
 
+/**
+ * Manages application-specific loggers with file-based output.
+ * Automatically creates and configures loggers on context initialization.
+ */
 @WebListener
 public class LogManager implements ServletContextListener {
+
+	private static final String LOG_FILE_SUFFIX = ".%g.log";
+	private static final String DEFAULT_LOGGER_NAME = "BLADE";
+	private static final String PATH_SEPARATOR = "/";
+
 	private static String basename;
-//	private LogParameters logParameters;
 
 	@Override
-	final public void contextInitialized(ServletContextEvent sce) {
-		basename = SettingsManager.basename(sce.getServletContext().getServletContextName());
+	public final void contextInitialized(ServletContextEvent sce) {
+		if (sce != null && sce.getServletContext() != null) {
+			basename = SettingsManager.basename(sce.getServletContext().getServletContextName());
+		}
 	}
 
 	@Override
-	final public void contextDestroyed(ServletContextEvent sce) {
+	public final void contextDestroyed(ServletContextEvent sce) {
 		closeLogger(basename);
 	}
 
-	private static ConcurrentHashMap<String, Logger> logMap = new ConcurrentHashMap<String, Logger>();
+	private static final ConcurrentHashMap<String, Logger> logMap = new ConcurrentHashMap<>();
 
 	public static Logger getLogger(String basename, ServletContext context, LogParameters logParameters) {
-		Logger logger;
+		Logger logger = null;
 
 		// If absolutely nothing is known, give up and use the parent logger
 		if (basename == null && context == null && logParameters == null) {
@@ -67,7 +77,7 @@ public class LogManager implements ServletContextListener {
 
 			java.util.logging.Logger parentLogger = KernelLogManager.getLogger();
 			if (parentLogger == null) {
-				parentLogger = java.util.logging.Logger.getLogger("BLADE");
+				parentLogger = java.util.logging.Logger.getLogger(DEFAULT_LOGGER_NAME);
 			}
 			logger.setParent(parentLogger);
 
@@ -75,61 +85,76 @@ public class LogManager implements ServletContextListener {
 		}
 
 		// Without basename (typical), use servlet context name
-		if (basename == null && context != null) {
-			basename = SettingsManager.basename(context.getServletContextName());
+		String effectiveBasename = basename;
+		if (effectiveBasename == null && context != null) {
+			effectiveBasename = SettingsManager.basename(context.getServletContextName());
 		}
 
 		// If the logger already exists, use it
-		logger = logMap.get(basename);
-		if (logger != null) {
-			return logger;
+		if (effectiveBasename != null) {
+			logger = logMap.get(effectiveBasename);
+			if (logger != null) {
+				return logger;
+			}
 		}
 
 		// If no logParameters, use default values
-		if (logParameters == null) {
-			logParameters = new LogParametersDefault();
+		LogParameters effectiveLogParameters = logParameters;
+		if (effectiveLogParameters == null) {
+			effectiveLogParameters = new LogParametersDefault();
 		}
 
 		// Okay, we've made it this far, time to build the custom logger
 		try {
 
 			String filename;
-			if (basename == null) {
-				filename = logParameters.resolveFilename(context);
+			if (effectiveBasename == null) {
+				filename = effectiveLogParameters.resolveFilename(context);
 			} else {
-				filename = basename + ".%g.log";
+				filename = effectiveBasename + LOG_FILE_SUFFIX;
 			}
 
-			String directory = logParameters.resolveDirectory(context);
-			int fileCount = logParameters.resolveFileCount();
-			int fileSize = logParameters.resolveFileSize();
-			boolean fileAppend = logParameters.resolveFileAppend();
-			boolean useParentLogging = logParameters.resolveUseParentLogging();
-			Level loggingLevel = logParameters.resolveLoggingLevel();
+			String directory = effectiveLogParameters.resolveDirectory(context);
+			int fileCount = effectiveLogParameters.resolveFileCount();
+			int fileSize = effectiveLogParameters.resolveFileSize();
+			boolean fileAppend = effectiveLogParameters.resolveFileAppend();
+			boolean useParentLogging = effectiveLogParameters.resolveUseParentLogging();
+			Level loggingLevel = effectiveLogParameters.resolveLoggingLevel();
 
 			File file = new File(directory);
 			file.mkdirs();
-			String filepath = directory + "/" + filename;
+			String filepath = directory + PATH_SEPARATOR + filename;
 			Formatter formatter = new LogFormatter();
 			Handler handler = new FileHandler(filepath, fileSize, fileCount, fileAppend);
 			handler.setFormatter(formatter);
 
-			logger = new Logger(basename, null);
+			logger = new Logger(effectiveBasename, null);
 
 			logger.addHandler(handler);
 
 			java.util.logging.Logger parentLogger = KernelLogManager.getLogger();
 			if (parentLogger == null) {
-				parentLogger = java.util.logging.Logger.getLogger("BLADE");
+				parentLogger = java.util.logging.Logger.getLogger(DEFAULT_LOGGER_NAME);
 			}
 			logger.setParent(parentLogger);
 
 			logger.setUseParentHandlers(useParentLogging);
 			logger.setLevel(loggingLevel); // may be null, but that okay. will use parent's level
 
-			logMap.put(basename, logger);
+			if (effectiveBasename != null) {
+				logMap.put(effectiveBasename, logger);
+			}
 		} catch (Exception e) {
+			// Log to stderr since the logger is not yet available
+			System.err.println("Failed to create logger: " + e.getMessage());
 			e.printStackTrace();
+			// Return a fallback logger if creation failed
+			java.util.logging.Logger parentLogger = KernelLogManager.getLogger();
+			if (parentLogger == null) {
+				parentLogger = java.util.logging.Logger.getLogger(DEFAULT_LOGGER_NAME);
+			}
+			logger = new Logger(effectiveBasename != null ? effectiveBasename : DEFAULT_LOGGER_NAME, null);
+			logger.setParent(parentLogger);
 		}
 
 		return logger;
@@ -141,6 +166,9 @@ public class LogManager implements ServletContextListener {
 	}
 
 	public static Logger getLogger(SipServletContextEvent event) {
+		if (event == null) {
+			return getLogger(null, null, null);
+		}
 		return getLogger(null, event.getServletContext(), null);
 	}
 
@@ -153,19 +181,27 @@ public class LogManager implements ServletContextListener {
 	}
 
 	public static void closeLogger(ServletContextEvent event) {
-		closeLogger(SettingsManager.basename(event.getServletContext().getServletContextName()));
+		if (event != null && event.getServletContext() != null) {
+			closeLogger(SettingsManager.basename(event.getServletContext().getServletContextName()));
+		}
 	}
 
 	public static void closeLogger(SipServletContextEvent event) {
-		closeLogger(SettingsManager.basename(event.getServletContext().getServletContextName()));
+		if (event != null && event.getServletContext() != null) {
+			closeLogger(SettingsManager.basename(event.getServletContext().getServletContextName()));
+		}
 	}
 
 	public static void closeLogger(String basename) {
-
+		if (basename == null) {
+			return;
+		}
 		Logger logger = logMap.remove(basename);
 		if (logger != null) {
 			for (Handler handler : logger.getHandlers()) {
-				handler.close();
+				if (handler != null) {
+					handler.close();
+				}
 			}
 		}
 	}

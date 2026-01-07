@@ -12,14 +12,15 @@ import javax.servlet.sip.URI;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
+/**
+ * Router configuration with selectors, translation maps and a default route.
+ */
 public class RouterConfig extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public LinkedList<Selector> selectors = new LinkedList<>();
 	public LinkedList<TranslationsMap> maps = new LinkedList<>();
 	public LinkedList<TranslationsMap> plan = new LinkedList<>();
 
-	// jwm - don't create a blank default route? simpler, i think.
-	// public Translation defaultRoute = new Translation("defaultRoute");
 	public Translation defaultRoute = null;
 
 	public RouterConfig() {

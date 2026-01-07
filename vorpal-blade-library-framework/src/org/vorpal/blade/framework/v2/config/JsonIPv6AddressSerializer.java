@@ -11,6 +11,9 @@ import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 import inet.ipaddr.ipv6.IPv6Address;
 
+/**
+ * Jackson serializer for converting IPv6Address objects to JSON strings.
+ */
 public class JsonIPv6AddressSerializer extends StdSerializer<IPv6Address> {
 
 	private static final long serialVersionUID = 1L;
@@ -32,6 +35,7 @@ public class JsonIPv6AddressSerializer extends StdSerializer<IPv6Address> {
 	@Override
 	public void acceptJsonFormatVisitor(JsonFormatVisitorWrapper visitor, JavaType typeHint)
 			throws JsonMappingException {
+		// Empty implementation - visitor pattern not used for this serializer
 	}
 
 }

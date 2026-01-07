@@ -29,7 +29,6 @@ import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +64,6 @@ import org.vorpal.blade.framework.v2.DummyResponse;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.keepalive.KeepAlive;
 import org.vorpal.blade.framework.v2.keepalive.KeepAliveExpiry;
-import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
@@ -105,18 +103,64 @@ public abstract class Callflow implements Serializable {
 	protected static final String DELAYED_REQUEST = "DELAYED_REQUEST";
 	protected static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
 
+	// Header and attribute name constants
+	private static final String X_VORPAL_SESSION = "X-Vorpal-Session";
+	private static final String X_VORPAL_TIMESTAMP = "X-Vorpal-Timestamp";
+	private static final String X_VORPAL_DIALOG = "X-Vorpal-Dialog";
+	private static final String EXPECT_ACK = "EXPECT_ACK";
+	private static final String USER_AGENT_ATTR = "userAgent";
+	private static final String SIP_ADDRESS_ATTR = "sipAddress";
+	private static final String IS_PROXY_ATTR = "isProxy";
+	private static final String CALLER = "caller";
+	private static final String CALLEE = "callee";
+	private static final String MESSAGE_SIPFRAG = "message/sipfrag";
+	private static final String SEND_REQUESTS_PREFIX = "SEND_REQUESTS_";
+
+	// Response code constants
+	private static final int RESPONSE_CODE_408 = 408;
+	private static final int RESPONSE_CODE_486 = 486;
+	private static final int RESPONSE_CODE_500 = 500;
+
+	// Session expiration defaults
+	private static final int DEFAULT_SESSION_EXPIRES_MINUTES = 60;
+	private static final int MIN_SESSION_EXPIRES_MINUTES = 3;
+
+	/**
+	 * Checks if the response is a provisional response (1xx status code).
+	 *
+	 * @param response the SIP response to check
+	 * @return true if the status code is between 100 and 199 inclusive
+	 */
 	public static boolean provisional(SipServletResponse response) {
 		return (response.getStatus() >= 100 && response.getStatus() < 200);
 	}
 
+	/**
+	 * Checks if the response is a successful response (2xx status code).
+	 *
+	 * @param response the SIP response to check
+	 * @return true if the status code is between 200 and 299 inclusive
+	 */
 	public static boolean successful(SipServletResponse response) {
 		return (response.getStatus() >= 200 && response.getStatus() < 300);
 	}
 
+	/**
+	 * Checks if the response is a redirection response (3xx status code).
+	 *
+	 * @param response the SIP response to check
+	 * @return true if the status code is between 300 and 399 inclusive
+	 */
 	public static boolean redirection(SipServletResponse response) {
 		return (response.getStatus() >= 300 && response.getStatus() < 400);
 	}
 
+	/**
+	 * Checks if the response is a failure response (4xx, 5xx, or 6xx status code).
+	 *
+	 * @param response the SIP response to check
+	 * @return true if the status code is 400 or greater
+	 */
 	public static boolean failure(SipServletResponse response) {
 		return (response.getStatus() >= 400);
 	}
@@ -140,7 +184,7 @@ public abstract class Callflow implements Serializable {
 			boolean removeAttribute = true;
 
 			try {
-				if (request.getMethod().equals(NOTIFY) && request.getContentType().equals("message/sipfrag")) {
+				if (request.getMethod().equals(NOTIFY) && MESSAGE_SIPFRAG.equals(request.getContentType())) {
 					String sipfrag;
 					if (request.getContent() instanceof String) {
 						sipfrag = (String) request.getContent();
@@ -148,8 +192,8 @@ public abstract class Callflow implements Serializable {
 						sipfrag = new String(request.getRawContent()).trim();
 					}
 
-					// jwm - note to self: what were you thinking?
-					if (false == sipfrag.matches(".*[2-5][0-9][0-9].*")) {
+					// Keep callback for provisional NOTIFY responses (sipfrag without final status)
+					if (!sipfrag.matches(".*[2-5][0-9][0-9].*")) {
 						removeAttribute = false;
 					}
 
@@ -174,6 +218,14 @@ public abstract class Callflow implements Serializable {
 		return callback;
 	}
 
+	/**
+	 * Retrieves and removes the response callback associated with the SIP session.
+	 * For proxy responses, retrieves the callback from the original request's session.
+	 * Only removes the callback attribute for final responses (status >= 200).
+	 *
+	 * @param response the SIP response
+	 * @return the callback function, or null if none was registered
+	 */
 	@SuppressWarnings("unchecked")
 	public static Callback<SipServletResponse> pullCallback(SipServletResponse response) {
 
@@ -202,6 +254,13 @@ public abstract class Callflow implements Serializable {
 		return callback;
 	}
 
+	/**
+	 * Retrieves and removes the proxy callback associated with the application session.
+	 * Only removes the callback attribute for final responses (status >= 200).
+	 *
+	 * @param response the SIP response from a proxy branch
+	 * @return the callback function, or null if none was registered
+	 */
 	@SuppressWarnings("unchecked")
 	public static Callback<SipServletResponse> pullProxyCallback(SipServletResponse response) {
 		Callback<SipServletResponse> callback = null;
@@ -217,35 +276,79 @@ public abstract class Callflow implements Serializable {
 		return callback;
 	}
 
+	/**
+	 * Retrieves the callback stored in the timer's info object.
+	 *
+	 * @param timer the servlet timer
+	 * @return the callback function stored when the timer was created
+	 */
 	@SuppressWarnings("unchecked")
 	public static Callback<ServletTimer> pullCallback(ServletTimer timer) {
 		return (Callback<ServletTimer>) timer.getInfo();
 	}
 
+	/**
+	 * Returns the SIP logger used for logging SIP messages and callflow events.
+	 *
+	 * @return the SIP logger instance
+	 */
 	public static Logger getLogger() {
 		return sipLogger;
 	}
 
+	/**
+	 * Sets the SIP logger used for logging SIP messages and callflow events.
+	 *
+	 * @param sipLogger the SIP logger instance to set
+	 */
 	public static void setLogger(Logger sipLogger) {
 		Callflow.sipLogger = sipLogger;
 	}
 
+	/**
+	 * Returns the timer service used to create and manage servlet timers.
+	 *
+	 * @return the timer service instance
+	 */
 	public static TimerService getTimerService() {
 		return timerService;
 	}
 
+	/**
+	 * Sets the timer service used to create and manage servlet timers.
+	 *
+	 * @param timerService the timer service instance to set
+	 */
 	public static void setTimerService(TimerService timerService) {
 		Callflow.timerService = timerService;
 	}
 
+	/**
+	 * Returns the SIP factory used to create SIP messages, addresses, and URIs.
+	 *
+	 * @return the SIP factory instance
+	 */
 	public static SipFactory getSipFactory() {
 		return sipFactory;
 	}
 
+	/**
+	 * Returns the SIP sessions utility for looking up application sessions by key.
+	 *
+	 * @return the SIP sessions utility instance
+	 */
 	public static SipSessionsUtil getSipUtil() {
 		return sipUtil;
 	}
 
+	/**
+	 * Processes an incoming SIP request. Subclasses must implement this method
+	 * to define their specific callflow logic.
+	 *
+	 * @param request the incoming SIP request to process
+	 * @throws ServletException if a servlet error occurs during processing
+	 * @throws IOException if an I/O error occurs during processing
+	 */
 	public abstract void process(SipServletRequest request) throws ServletException, IOException;
 
 	@Deprecated
@@ -433,14 +536,14 @@ public abstract class Callflow implements Serializable {
 			indexKey = String.format("%08X", //
 					Math.abs(ThreadLocalRandom.current().nextLong(0, 0xFFFFFFFFL)) //
 			).toUpperCase();
-		} while (getSipUtil().getSipApplicationSessionIds(indexKey).size() != 0);
+		} while (!getSipUtil().getSipApplicationSessionIds(indexKey).isEmpty());
 
-		appSession.setAttribute("X-Vorpal-Session", indexKey);
+		appSession.setAttribute(X_VORPAL_SESSION, indexKey);
 
 		// X-Vorpal-Session + X-Vorpal-Timestamp will be unique.
 		// Use this for a database primary key in future designs.
 		String timestamp = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-		appSession.setAttribute("X-Vorpal-Timestamp", timestamp);
+		appSession.setAttribute(X_VORPAL_TIMESTAMP, timestamp);
 
 		if (sipLogger.isLoggable(Level.FINEST)) {
 			sipLogger.finest(appSession,
@@ -450,78 +553,112 @@ public abstract class Callflow implements Serializable {
 		return indexKey;
 	}
 
+	/**
+	 * Returns the Vorpal session ID for the given application session.
+	 * The Vorpal session ID is a unique 8-digit hexadecimal identifier used
+	 * for tracking messages across the system.
+	 *
+	 * @param appSession the SIP application session
+	 * @return the Vorpal session ID, or null if not set
+	 */
 	public static String getVorpalSessionId(SipApplicationSession appSession) {
-		String session = (String) appSession.getAttribute("X-Vorpal-Session");
-//		sipLogger.severe("Callflow.getVorpalSessionId(SipApplicationSession appSession) - session=" + session);
-		return session;
+		if (appSession == null) {
+			return null;
+		}
+		return (String) appSession.getAttribute(X_VORPAL_SESSION);
 	}
 
+	/**
+	 * Returns the Vorpal session ID for the given request, creating one if necessary.
+	 * If the request contains a composite X-Vorpal-Session header (session:dialog format),
+	 * it will be parsed and the dialog ID will be stored separately.
+	 *
+	 * @param request the SIP request
+	 * @return the Vorpal session ID
+	 */
 	public static String getVorpalSessionId(SipServletRequest request) {
 		String indexKey = null;
-		String dialogId = null;
 
 		if (request != null) {
 			SipApplicationSession appSession = request.getApplicationSession();
-			indexKey = (String) appSession.getAttribute("X-Vorpal-Session");
+			indexKey = (String) appSession.getAttribute(X_VORPAL_SESSION);
 
 			if (indexKey == null) {
-				String xVorpalSession = (String) appSession.getAttribute("X-Vorpal-Session");
+				String xVorpalSession = (String) appSession.getAttribute(X_VORPAL_SESSION);
 				if (xVorpalSession != null) {
 					SipSession sipSession = request.getSession();
-					indexKey = xVorpalSession.substring(0, xVorpalSession.indexOf(":"));
 					int colonIndex = xVorpalSession.indexOf(':');
-					indexKey = xVorpalSession.substring(0, colonIndex);
-					appSession.setAttribute("X-Vorpal-Session", indexKey);
-					dialogId = xVorpalSession.substring(colonIndex + 1);
-					sipSession.setAttribute("X-Vorpal-Dialog", dialogId);
+					if (colonIndex > 0) {
+						indexKey = xVorpalSession.substring(0, colonIndex);
+						appSession.setAttribute(X_VORPAL_SESSION, indexKey);
+						String dialogId = xVorpalSession.substring(colonIndex + 1);
+						sipSession.setAttribute(X_VORPAL_DIALOG, dialogId);
+					}
 				}
 			}
 
 			indexKey = (indexKey != null) ? indexKey : createVorpalSessionId(appSession);
 		}
 
-//		sipLogger.severe("Callflow.getVorpalSessionId(SipServletRequest request) - session=" + indexKey);
 		return indexKey;
 	}
 
+	/**
+	 * Creates a unique 4-digit hexadecimal dialog ID for the session.
+	 *
+	 * @param sipSession the SIP session
+	 * @return the newly created dialog ID, or null if session is null
+	 */
 	private static String createVorpalDialogId(SipSession sipSession) {
 		String dialog = null;
 
 		if (sipSession != null) {
-
 			try {
 				dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
-				sipSession.setAttribute("X-Vorpal-Dialog", dialog);
+				sipSession.setAttribute(X_VORPAL_DIALOG, dialog);
 			} catch (Exception e) {
-				sipLogger.warning(sipSession, "Callflow.createVorpalDialogId - catch #1");
-				// OU812;
+				// Session may have been invalidated - log and continue
+				if (sipLogger != null) {
+					sipLogger.warning(sipSession, "Callflow.createVorpalDialogId - catch #1: " + e.getMessage());
+				}
 			}
 		}
 
 		return dialog;
 	}
 
+	/**
+	 * Returns the Vorpal dialog ID for the given SIP session, creating one if necessary.
+	 *
+	 * @param sipSession the SIP session
+	 * @return the Vorpal dialog ID, or null if session is null
+	 */
 	public static String getVorpalDialogId(SipSession sipSession) {
 		String dialog = null;
 
 		if (sipSession != null) {
-			dialog = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+			dialog = (String) sipSession.getAttribute(X_VORPAL_DIALOG);
 			dialog = (dialog != null) ? dialog : createVorpalDialogId(sipSession);
 		}
 
 		return dialog;
 	}
 
+	/**
+	 * Returns the Vorpal dialog ID for the given SIP message, creating one if necessary
+	 * for requests.
+	 *
+	 * @param msg the SIP message (request or response)
+	 * @return the Vorpal dialog ID, or null if message is null
+	 */
 	public static String getVorpalDialogId(SipServletMessage msg) {
 		String dialog = null;
 
 		if (msg != null) {
 			dialog = getVorpalDialogId(msg.getSession());
 
-			if (dialog == null) {
-				if (msg instanceof SipServletRequest) {
-					dialog = createVorpalDialogId(msg.getSession());
-				}
+			if (dialog == null && msg instanceof SipServletRequest) {
+				dialog = createVorpalDialogId(msg.getSession());
 			}
 		}
 
@@ -559,14 +696,14 @@ public abstract class Callflow implements Serializable {
 
 						if (sessionExpires == null) {
 
-							int sessionExpiresInMinutes = 60; // 60 minutes
+							int sessionExpiresInMinutes = DEFAULT_SESSION_EXPIRES_MINUTES;
 
 							// Config file settings...
-							if (null != Callflow.getSessionParameters()
-									&& null != Callflow.getSessionParameters().getExpiration()) {
-								sessionExpiresInMinutes = Callflow.getSessionParameters().getExpiration(); //
-								if (sessionExpiresInMinutes < 3) {
-									sessionExpiresInMinutes = 3;
+							SessionParameters params = Callflow.getSessionParameters();
+							if (params != null && params.getExpiration() != null) {
+								sessionExpiresInMinutes = params.getExpiration();
+								if (sessionExpiresInMinutes < MIN_SESSION_EXPIRES_MINUTES) {
+									sessionExpiresInMinutes = MIN_SESSION_EXPIRES_MINUTES;
 								}
 							}
 
@@ -615,24 +752,24 @@ public abstract class Callflow implements Serializable {
 					// for GLARE handling
 					switch (method) {
 					case INVITE:
-						sipSession.setAttribute("EXPECT_ACK", Boolean.TRUE);
+						sipSession.setAttribute(EXPECT_ACK, Boolean.TRUE);
 
 						if (request.isInitial()) {
 							String vorpalId = getVorpalSessionId(appSession);
 							String dialogId = getVorpalDialogId(sipSession);
 							String timestamp = getVorpalTimestamp(appSession);
-							request.setHeader("X-Vorpal-Session", vorpalId + ":" + dialogId);
-							request.setHeader("X-Vorpal-Timestamp", timestamp);
+							request.setHeader(X_VORPAL_SESSION, vorpalId + ":" + dialogId);
+							request.setHeader(X_VORPAL_TIMESTAMP, timestamp);
 						}
 
 						break;
 					case ACK:
-						sipSession.removeAttribute("EXPECT_ACK");
+						sipSession.removeAttribute(EXPECT_ACK);
 						break;
 					}
 
 					// useful for identifying sessions
-					sipSession.setAttribute("sipAddress", request.getTo());
+					sipSession.setAttribute(SIP_ADDRESS_ATTR, request.getTo());
 					request.send();
 					sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
@@ -643,11 +780,11 @@ public abstract class Callflow implements Serializable {
 			sipLogger.warning(request, "Callflow.sendRequest - catch #3");
 			sipLogger.severe(request, ex);
 
-			if (false == (request.getMethod().equals(ACK) || request.getMethod().equals(PRACK))) {
+			if (!request.getMethod().equals(ACK) && !request.getMethod().equals(PRACK)) {
 
 				// It's too maddening to write callflows where you have to worry about both
 				// error responses and exceptions. Let's create a dummy error response.
-				SipServletResponse errorResponse = new DummyResponse(request, 500, ex.getClass().getSimpleName());
+				SipServletResponse errorResponse = new DummyResponse(request, RESPONSE_CODE_500, ex.getClass().getSimpleName());
 				errorResponse.setContent(ex.getMessage(), "text/plain");
 
 				if (lambdaFunction != null) {
@@ -685,43 +822,43 @@ public abstract class Callflow implements Serializable {
 	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
 			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
 
-		if (requests.size() > 0) {
+		if (!requests.isEmpty()) {
 			SipServletRequest request = requests.remove(0);
 			String timerId = startTimer(request.getApplicationSession(), milliseconds, false, (timeout) -> {
 				sendRequest(request.createCancel());
-				if (requests.size() > 0) {
+				if (!requests.isEmpty()) {
 					sendRequestsInSerial(milliseconds, requests, lambdaFunction);
 				} else {
 					// No valid responses, create a dummy one
-					lambdaFunction.accept(request.createResponse(408));
+					lambdaFunction.accept(request.createResponse(RESPONSE_CODE_408));
 				}
 			});
 
 			try {
 				sendRequest(request, (response) -> {
 					stopTimer(response.getApplicationSession(), timerId);
-					if (!failure(response) || requests.size() == 0) {
+					if (!failure(response) || requests.isEmpty()) {
 						lambdaFunction.accept(response);
 					} else {
-						if (requests.size() > 0) {
+						if (!requests.isEmpty()) {
 							sendRequestsInSerial(milliseconds, requests, lambdaFunction);
 						} else {
 							// No valid responses, create a dummy one
-							lambdaFunction.accept(request.createResponse(408));
+							lambdaFunction.accept(request.createResponse(RESPONSE_CODE_408));
 						}
 					}
 
 				});
 			} catch (Exception e) {
-				sipLogger.warning(request, "Callflow.sendRequestsInSerial - catch #1");
+				sipLogger.warning(request, "Callflow.sendRequestsInSerial - catch #1: " + e.getMessage());
 				sipLogger.severe(request, e.getMessage());
 				stopTimer(request.getApplicationSession(), timerId);
 
-				if (requests.size() > 0) {
+				if (!requests.isEmpty()) {
 					sendRequestsInSerial(milliseconds, requests, lambdaFunction);
 				} else {
 					// No valid responses, create a dummy one
-					lambdaFunction.accept(request.createResponse(408));
+					lambdaFunction.accept(request.createResponse(RESPONSE_CODE_408));
 				}
 
 			}
@@ -764,7 +901,7 @@ public abstract class Callflow implements Serializable {
 		SipServletRequest firstRequest = requests.iterator().next();
 		SipApplicationSession appSession = firstRequest.getApplicationSession();
 
-		String id = "SEND_REQUESTS_" + Math.abs(ThreadLocalRandom.current().nextInt());
+		String id = SEND_REQUESTS_PREFIX + Math.abs(ThreadLocalRandom.current().nextInt());
 
 		// create a hash map for outstanding requests, use the SipSession id as the key
 		Map<String, SipServletRequest> requestMap = new HashMap<>();
@@ -781,7 +918,7 @@ public abstract class Callflow implements Serializable {
 			@SuppressWarnings("unchecked")
 			Map<String, SipServletRequest> savedRequests = (Map<String, SipServletRequest>) appSession.getAttribute(id);
 
-			if (savedRequests != null && false == savedRequests.isEmpty()) {
+			if (savedRequests != null && !savedRequests.isEmpty()) {
 
 				appSession.removeAttribute(id);
 
@@ -796,7 +933,7 @@ public abstract class Callflow implements Serializable {
 				}
 
 				// create a dummy response and give it to the user
-				lambdaFunction.accept(firstRequest.createResponse(408));
+				lambdaFunction.accept(firstRequest.createResponse(RESPONSE_CODE_408));
 			}
 		}) : null;
 
@@ -893,7 +1030,7 @@ public abstract class Callflow implements Serializable {
 		SipSession sipSession = null;
 
 		if (response != null //
-				&& response.isCommitted() == false //
+				&& !response.isCommitted() //
 				&& (sipSession = response.getSession()) != null //
 				&& sipSession.isValid() //
 				&& sipSession.getState() != State.TERMINATED //
@@ -907,12 +1044,12 @@ public abstract class Callflow implements Serializable {
 					// glare handling;
 					if (response.getStatus() >= 300) {
 						sipLogger.finest(sipSession, "Removing EXPECT_ACK session attribute.");
-						sipSession.removeAttribute("EXPECT_ACK");
+						sipSession.removeAttribute(EXPECT_ACK);
 
 						SipSession linkedSession = getLinkedSession(sipSession);
 						if (linkedSession != null) {
 							sipLogger.finest(linkedSession, "Removing EXPECT_ACK linked session attribute.");
-							linkedSession.removeAttribute("EXPECT_ACK");
+							linkedSession.removeAttribute(EXPECT_ACK);
 						}
 					}
 
@@ -923,9 +1060,9 @@ public abstract class Callflow implements Serializable {
 					String indexKey = getVorpalSessionId(response.getApplicationSession());
 					if (indexKey != null) {
 						String dialog = getVorpalDialogId(response.getSession());
-						response.setHeader("X-Vorpal-Session", indexKey + ":" + dialog);
-						String xvt = (String) response.getApplicationSession().getAttribute("X-Vorpal-Timestamp");
-						response.setHeader("X-Vorpal-Timestamp", xvt);
+						response.setHeader(X_VORPAL_SESSION, indexKey + ":" + dialog);
+						String xvt = (String) response.getApplicationSession().getAttribute(X_VORPAL_TIMESTAMP);
+						response.setHeader(X_VORPAL_TIMESTAMP, xvt);
 					}
 				}
 
@@ -1090,7 +1227,6 @@ public abstract class Callflow implements Serializable {
 				origin.getFrom(), //
 				origin.getTo()); //
 
-//		destination.setRequestURI(origin.getRequestURI());
 		copyContentAndHeaders(origin, destination);
 		return destination;
 	}
@@ -1108,6 +1244,16 @@ public abstract class Callflow implements Serializable {
 		return destination;
 	}
 
+	/**
+	 * Creates a new initial SIP request based on the original request.
+	 *
+	 * @param origin the original SIP request to copy from
+	 * @param copyContent if true, copies both content and headers; if false, copies only headers
+	 * @return the new SIP request
+	 * @throws IOException if an I/O error occurs
+	 * @throws ServletParseException if address parsing fails
+	 * @deprecated use createRequest methods instead
+	 */
 	@Deprecated
 	public static SipServletRequest createInitialRequest(SipServletRequest origin, boolean copyContent)
 			throws IOException, ServletParseException {
@@ -1129,13 +1275,33 @@ public abstract class Callflow implements Serializable {
 		return destination;
 	}
 
+	/**
+	 * Creates a new SIP request with the specified method on the same session as the response.
+	 *
+	 * @param response the SIP response whose session will be used to create the request
+	 * @param method the SIP method for the new request (e.g., "BYE", "INFO")
+	 * @return the new SIP request
+	 * @throws IOException if an I/O error occurs
+	 * @throws ServletParseException if parsing fails
+	 */
 	public static SipServletRequest createRequest(SipServletResponse response, String method)
 			throws IOException, ServletParseException {
 		SipServletRequest request = response.getSession().createRequest(method);
 		return request;
 	}
 
-	// Why have this function? Of course you want to copy the content.
+	/**
+	 * Creates a new SIP response based on an existing response with optional content copying.
+	 *
+	 * @param request the SIP request to create the response for
+	 * @param responseToCopy the response to copy status, headers, and optionally content from
+	 * @param copyContent if true, copies the content body; if false, copies only headers
+	 * @return the new SIP response, or null if request or responseToCopy is null
+	 * @throws UnsupportedEncodingException if the content encoding is not supported
+	 * @throws IOException if an I/O error occurs
+	 * @throws ServletParseException if parsing fails
+	 * @deprecated use createResponse without copyContent parameter instead
+	 */
 	@Deprecated
 	public static SipServletResponse createResponse(SipServletRequest request, SipServletResponse responseToCopy,
 			boolean copyContent) throws UnsupportedEncodingException, IOException, ServletParseException {
@@ -1145,7 +1311,7 @@ public abstract class Callflow implements Serializable {
 			response = request.createResponse(responseToCopy.getStatus(), responseToCopy.getReasonPhrase());
 			if (response != null) {
 				copyHeaders(responseToCopy, response);
-				if (copyContent == true) {
+				if (copyContent) {
 					response.setContent(responseToCopy.getContent(), responseToCopy.getContentType());
 				}
 			}
@@ -1164,7 +1330,7 @@ public abstract class Callflow implements Serializable {
 			sendRequest(destAck);
 		} else {
 			// Glare, send 486 busy
-			sendResponse(origin.createResponse(486));
+			sendResponse(origin.createResponse(RESPONSE_CODE_486));
 		}
 	}
 
@@ -1216,28 +1382,17 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
+	/**
+	 * Copies a specific header from one SIP message to another, deduplicating values.
+	 *
+	 * @param header the name of the header to copy
+	 * @param copyFrom the source SIP message
+	 * @param copyTo the destination SIP message
+	 */
 	public static void copyHeader(String header, SipServletMessage copyFrom, SipServletMessage copyTo) {
-
 		if (copyFrom != null && copyTo != null) {
-
-			String v;
-			HashSet<String> hashSet = new HashSet<>();
-			StringBuilder sb = new StringBuilder();
-			for (String value : copyFrom.getHeaderList(header)) {
-				hashSet.add(value);
-			}
-			Iterator<String> i = hashSet.iterator();
-			while (i.hasNext()) {
-				v = i.next();
-				if (sb.length() == 0) {
-					sb.append(v);
-				} else {
-					sb.append(",");
-					sb.append(v);
-				}
-			}
-			copyTo.setHeader(header, sb.toString());
-
+			Set<String> uniqueValues = new HashSet<>(copyFrom.getHeaderList(header));
+			copyTo.setHeader(header, String.join(",", uniqueValues));
 		}
 	}
 
@@ -1250,6 +1405,15 @@ public abstract class Callflow implements Serializable {
 
 	}
 
+	/**
+	 * Copies the content body from one SIP message to a request.
+	 *
+	 * @param copyFrom the source SIP message
+	 * @param copyTo the destination SIP request
+	 * @return the destination request with copied content
+	 * @throws UnsupportedEncodingException if the content encoding is not supported
+	 * @throws IOException if an I/O error occurs
+	 */
 	public static SipServletRequest copyContent(SipServletMessage copyFrom, SipServletRequest copyTo)
 			throws UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
@@ -1258,6 +1422,15 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
+	/**
+	 * Copies the content body from one SIP message to a response.
+	 *
+	 * @param copyFrom the source SIP message
+	 * @param copyTo the destination SIP response
+	 * @return the destination response with copied content
+	 * @throws UnsupportedEncodingException if the content encoding is not supported
+	 * @throws IOException if an I/O error occurs
+	 */
 	public static SipServletResponse copyContent(SipServletMessage copyFrom, SipServletResponse copyTo)
 			throws UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
@@ -1326,6 +1499,16 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
+	/**
+	 * Copies both headers and content body from one SIP request to another.
+	 *
+	 * @param copyFrom the source SIP request
+	 * @param copyTo the destination SIP request
+	 * @return the destination request with copied headers and content
+	 * @throws ServletParseException if parsing fails
+	 * @throws UnsupportedEncodingException if the content encoding is not supported
+	 * @throws IOException if an I/O error occurs
+	 */
 	public static SipServletRequest copyContentAndHeaders(SipServletRequest copyFrom, SipServletRequest copyTo)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
@@ -1335,50 +1518,79 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
+	/**
+	 * Copies both headers and content body from one SIP response to another.
+	 *
+	 * @param copyFrom the source SIP response
+	 * @param copyTo the destination SIP response
+	 * @return the destination response with copied headers and content
+	 * @throws ServletParseException if parsing fails
+	 * @throws UnsupportedEncodingException if the content encoding is not supported
+	 * @throws IOException if an I/O error occurs
+	 */
 	public static SipServletResponse copyContentAndHeaders(SipServletResponse copyFrom, SipServletResponse copyTo)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
-
 		if (copyFrom != null && copyTo != null) {
 			copyHeadersMsg(copyFrom, copyTo);
 			copyContentMsg(copyFrom, copyTo);
 		}
-
 		return copyTo;
 	}
 
+	/**
+	 * Links two SIP sessions together bidirectionally in a B2BUA scenario.
+	 * Each session stores a reference to the other via the LINKED_SESSION attribute.
+	 * Also attempts to track caller/callee roles based on userAgent attributes.
+	 *
+	 * @param ss1 the first SIP session to link
+	 * @param ss2 the second SIP session to link
+	 */
 	public static void linkSessions(SipSession ss1, SipSession ss2) {
+		if (ss1 == null || ss2 == null) {
+			return;
+		}
 		ss1.setAttribute(LINKED_SESSION, ss2);
 		ss2.setAttribute(LINKED_SESSION, ss1);
 
 		// attempt to keep track of who called whom
-		String ss1UserAgent = (String) ss1.getAttribute("userAgent");
-		if (ss1UserAgent != null && ss1UserAgent.equals("caller")) {
-			ss2.setAttribute("userAgent", "callee");
+		String ss1UserAgent = (String) ss1.getAttribute(USER_AGENT_ATTR);
+		if (ss1UserAgent != null && ss1UserAgent.equals(CALLER)) {
+			ss2.setAttribute(USER_AGENT_ATTR, CALLEE);
 		} else {
-			String ss2UserAgent = (String) ss2.getAttribute("userAgent");
-			if (ss2UserAgent != null && ss2UserAgent.equals("caller")) {
-				ss1.setAttribute("userAgent", "callee");
+			String ss2UserAgent = (String) ss2.getAttribute(USER_AGENT_ATTR);
+			if (ss2UserAgent != null && ss2UserAgent.equals(CALLER)) {
+				ss1.setAttribute(USER_AGENT_ATTR, CALLEE);
 			}
 		}
 	}
 
+	/**
+	 * Unlinks two previously linked SIP sessions by removing the LINKED_SESSION
+	 * attribute from each session. Only removes attributes from sessions that are still valid.
+	 *
+	 * @param ss1 the first SIP session to unlink
+	 * @param ss2 the second SIP session to unlink
+	 */
 	public static void unlinkSessions(SipSession ss1, SipSession ss2) {
-
-		if (ss1.isValid()) {
+		if (ss1 != null && ss1.isValid()) {
 			ss1.removeAttribute(LINKED_SESSION);
 		}
-		if (ss2.isValid()) {
+		if (ss2 != null && ss2.isValid()) {
 			ss2.removeAttribute(LINKED_SESSION);
 		}
 	}
 
+	/**
+	 * Retrieves the linked SIP session for the given session in a B2BUA scenario.
+	 *
+	 * @param ss the SIP session to get the linked session for
+	 * @return the linked SIP session, or null if the session is invalid or not linked
+	 */
 	public static SipSession getLinkedSession(SipSession ss) {
 		SipSession linkedSession = null;
-
-		if (ss.isValid()) {
+		if (ss != null && ss.isValid()) {
 			linkedSession = (SipSession) ss.getAttribute(LINKED_SESSION);
 		}
-
 		return linkedSession;
 	}
 
@@ -1568,7 +1780,7 @@ public abstract class Callflow implements Serializable {
 			String value;
 			for (String name : from.getParameterNameSet()) {
 				value = from.getParameter(name);
-				if (value != null && to.getParameter(name) != null && name.equals("tag") == false) {
+				if (value != null && to.getParameter(name) != null && !"tag".equals(name)) {
 					to.setParameter(name, value);
 				}
 			}
@@ -1596,7 +1808,7 @@ public abstract class Callflow implements Serializable {
 			String value;
 			for (String name : from.getParameterNameSet()) {
 				value = from.getParameter(name);
-				if (value != null && to.getParameter(name) != null && name.equals("tag") == false) {
+				if (value != null && to.getParameter(name) != null && !"tag".equals(name)) {
 					to.setParameter(name, value);
 				}
 			}
@@ -1605,11 +1817,19 @@ public abstract class Callflow implements Serializable {
 		return to;
 	}
 
+	/**
+	 * Proxies a SIP request to multiple endpoints with a callback for the response.
+	 *
+	 * @param proxy the Proxy object from the original request
+	 * @param endpoints the list of URIs to proxy the request to
+	 * @param lambdaFunction callback invoked when a response is received
+	 * @throws TooManyHopsException if the Max-Forwards header has reached zero
+	 */
 	public void proxyRequest(Proxy proxy, List<URI> endpoints, Callback<SipServletResponse> lambdaFunction)
 			throws TooManyHopsException {
 		SipApplicationSession appSession = proxy.getOriginalRequest().getApplicationSession();
-		appSession.setAttribute("PROXY_CALLBACK_INVITE", lambdaFunction);
-		appSession.setAttribute("isProxy", Boolean.TRUE);
+		appSession.setAttribute(PROXY_CALLBACK_ + INVITE, lambdaFunction);
+		appSession.setAttribute(IS_PROXY_ATTR, Boolean.TRUE);
 
 		for (URI endpoint : endpoints) {
 			// jwm - SUPERARROW NEEDS WORK!
@@ -1620,12 +1840,26 @@ public abstract class Callflow implements Serializable {
 		proxy.proxyTo(endpoints);
 	}
 
+	/**
+	 * Proxies a SIP request to multiple endpoints without a response callback.
+	 *
+	 * @param proxy the Proxy object from the original request
+	 * @param endpoints the list of URIs to proxy the request to
+	 * @throws TooManyHopsException if the Max-Forwards header has reached zero
+	 */
 	public void proxyRequest(Proxy proxy, List<URI> endpoints) throws TooManyHopsException {
 		proxyRequest(proxy, endpoints, (response) -> {
 			// do nothing;
 		});
 	}
 
+	/**
+	 * Proxies a SIP request to a single endpoint without a response callback.
+	 *
+	 * @param proxy the Proxy object from the original request
+	 * @param endpoint the URI to proxy the request to
+	 * @throws TooManyHopsException if the Max-Forwards header has reached zero
+	 */
 	public void proxyRequest(Proxy proxy, URI endpoint) throws TooManyHopsException {
 		List<URI> endpoints = new LinkedList<>();
 		endpoints.add(endpoint);
@@ -1634,14 +1868,23 @@ public abstract class Callflow implements Serializable {
 		});
 	}
 
+	/**
+	 * Proxies a SIP request using a ProxyPlan that defines tiered routing with
+	 * parallel or sequential mode for each tier.
+	 *
+	 * @param inboundRequest the inbound SIP request to proxy
+	 * @param proxyPlan the routing plan containing tiers and endpoints
+	 * @param lambdaFunction callback invoked when the final response is received
+	 * @throws IOException if an I/O error occurs
+	 * @throws ServletException if a servlet error occurs
+	 */
 	public void proxyRequest(SipServletRequest inboundRequest, ProxyPlan proxyPlan,
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
 		SipApplicationSession appSession = inboundRequest.getApplicationSession();
-		Boolean isProxy = (Boolean) appSession.getAttribute("isProxy");
-		isProxy = (isProxy == null) ? false : isProxy;
+		boolean isProxy = Boolean.TRUE.equals(appSession.getAttribute(IS_PROXY_ATTR));
 
-		if (false == proxyPlan.isEmpty()) {
+		if (!proxyPlan.isEmpty()) {
 
 			Proxy proxy = inboundRequest.getProxy();
 
@@ -1649,7 +1892,7 @@ public abstract class Callflow implements Serializable {
 
 			proxy.setParallel(proxyTier.getMode().equals(Mode.parallel));
 
-			List<URI> endpoints = new LinkedList<URI>();
+			List<URI> endpoints = new LinkedList<>();
 			for (URI endpoint : proxyTier.getEndpoints()) {
 				if (sipLogger.isLoggable(Level.FINER)) {
 					sipLogger.finer(inboundRequest, "Callflow.proxyRequest - proxying request, endpoint=" + endpoint);
@@ -1663,10 +1906,10 @@ public abstract class Callflow implements Serializable {
 				proxy.setProxyTimeout(timeout);
 			}
 
-			inboundRequest.getSession().setAttribute("RESPONSE_CALLBACK_" + inboundRequest.getMethod(), lambdaFunction);
+			inboundRequest.getSession().setAttribute(RESPONSE_CALLBACK_ + inboundRequest.getMethod(), lambdaFunction);
 
 			// jwm - test proxy arrow - works!
-			inboundRequest.getApplicationSession().setAttribute("isProxy", Boolean.TRUE);
+			inboundRequest.getApplicationSession().setAttribute(IS_PROXY_ATTR, Boolean.TRUE);
 
 			if (sipLogger.isLoggable(Level.FINER)) {
 				sipLogger.finer(inboundRequest,
@@ -1737,16 +1980,21 @@ public abstract class Callflow implements Serializable {
 	 * @return incoming request
 	 */
 	public static SipServletRequest getIncomingRequest(SipServletRequest outboundRequest) {
+		if (outboundRequest == null) {
+			return null;
+		}
 		SipSession linkedSession = Callflow.getLinkedSession(outboundRequest.getSession());
-		SipServletRequest incomingRequest = linkedSession.getActiveInvite(UAMode.UAS);
-		return incomingRequest;
+		if (linkedSession == null) {
+			return null;
+		}
+		return linkedSession.getActiveInvite(UAMode.UAS);
 	}
 
 	public static String getVorpalTimestamp(SipApplicationSession appSession) {
 		String timestamp = null;
 
 		if (appSession != null && appSession.isValid()) {
-			timestamp = (String) appSession.getAttribute("X-Vorpal-Timestamp");
+			timestamp = (String) appSession.getAttribute(X_VORPAL_TIMESTAMP);
 			if (timestamp == null) {
 				timestamp = Long.toHexString(System.currentTimeMillis()).toUpperCase();
 			}

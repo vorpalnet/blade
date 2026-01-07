@@ -2,7 +2,13 @@ package org.vorpal.blade.framework.v2.config;
 
 import java.io.Serializable;
 
-public class NameValuePair<Name, Value> implements Serializable{
+/**
+ * Generic name-value pair container.
+ * @param <Name> the type of the name
+ * @param <Value> the type of the value
+ */
+public class NameValuePair<Name, Value> implements Serializable {
+	private static final long serialVersionUID = 1L;
 
 	private Name name;
 	private Value value;

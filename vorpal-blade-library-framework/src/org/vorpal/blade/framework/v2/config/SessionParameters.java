@@ -5,6 +5,9 @@ import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
+/**
+ * Configuration parameters for SIP session management.
+ */
 public class SessionParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 

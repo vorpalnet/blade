@@ -2,7 +2,11 @@ package org.vorpal.blade.framework.v2.config;
 
 import java.io.Serializable;
 
-public class Attribute implements Serializable{
+/**
+ * Simple name-value pair representing a single attribute.
+ */
+public class Attribute implements Serializable {
+	private static final long serialVersionUID = 1L;
 
 	public String name;
 	public String value;
