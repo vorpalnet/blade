@@ -11,7 +11,19 @@ import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
+/**
+ * Represents a SIP dialog for REST API responses.
+ *
+ * <p>Contains dialog identification, initial INVITE headers, and
+ * Base64-encoded message body content.
+ */
 public class Dialog implements Serializable {
+	private static final long serialVersionUID = 1L;
+
+	// Session attribute keys
+	private static final String X_VORPAL_DIALOG_ATTR = "X-Vorpal-Dialog";
+	private static final String INITIAL_INVITE_ATTR = "initial_invite";
+
 	public String id;
 	public String requestUri;
 	public String remoteParty;
@@ -19,16 +31,21 @@ public class Dialog implements Serializable {
 	public String content = null;
 
 	public Dialog() {
-		// do nothing;
+		// Default constructor
 	}
 
 	public Dialog(SipSession sipSession) {
+		if (sipSession == null) {
+			return;
+		}
+
 		try {
+			id = (String) sipSession.getAttribute(X_VORPAL_DIALOG_ATTR);
 
-			
-			id = (String) sipSession.getAttribute("X-Vorpal-Dialog");
-
-			SipServletRequest initialInvite = (SipServletRequest) sipSession.getAttribute("initial_invite");
+			SipServletRequest initialInvite = (SipServletRequest) sipSession.getAttribute(INITIAL_INVITE_ATTR);
+			if (initialInvite == null) {
+				return;
+			}
 
 			for (String name : initialInvite.getHeaderNameList()) {
 				inviteHeaders.put(name, initialInvite.getHeaderList(name));
@@ -46,13 +63,6 @@ public class Dialog implements Serializable {
 
 				content = Base64.getMimeEncoder().encodeToString(rawContent);
 			}
-			
-//			Object obj;
-//			for(String name: sipSession.getAttributeNameSet()) {
-//				obj = sipSession.
-//			}
-			
-			
 
 		} catch (Exception e) {
 			Callflow.getSipLogger().severe(e);

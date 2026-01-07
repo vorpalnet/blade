@@ -4,7 +4,6 @@ import javax.servlet.sip.SessionKeepAlive;
 import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
-import org.vorpal.blade.framework.v2.config.KeepAliveParameters.KeepAlive;
 
 /* Visit https://plantuml.com/sequence-diagram for notes on how to draw.
 @startuml doc-files/keepalive_reinvite.png
@@ -24,19 +23,34 @@ alice <-  blade         : ACK (SDP)
 @enduml
 */
 
+/**
+ * Handles session expiry by terminating both call legs with BYE requests.
+ * Used when a keep-alive timeout occurs and the call should be terminated.
+ *
+ * @see SessionKeepAlive.Callback
+ */
 public class KeepAliveExpiry extends ClientCallflow implements SessionKeepAlive.Callback {
 
 	private static final long serialVersionUID = 1L;
 
+	/**
+	 * Handles session expiry by sending BYE to both call legs.
+	 *
+	 * @param sipSession the SIP session that expired
+	 */
 	@Override
 	public void handle(SipSession sipSession) {
+		// Defensive null check for sipSession parameter
+		if (sipSession == null) {
+			return;
+		}
 
 		try {
-			if (sipSession != null && sipSession.isValid()) {
+			if (sipSession.isValid()) {
 				sendRequest(sipSession.createRequest(BYE));
 			}
-		} catch (Exception ex1) {
-			sipLogger.logStackTrace(sipSession, ex1);
+		} catch (Exception ex) {
+			sipLogger.logStackTrace(sipSession, ex);
 		}
 
 		SipSession linkedSession = getLinkedSession(sipSession);
@@ -45,10 +59,8 @@ public class KeepAliveExpiry extends ClientCallflow implements SessionKeepAlive.
 			if (linkedSession != null && linkedSession.isValid()) {
 				sendRequest(linkedSession.createRequest(BYE));
 			}
-		} catch (Exception ex1) {
-			sipLogger.logStackTrace(linkedSession, ex1);
+		} catch (Exception ex) {
+			sipLogger.logStackTrace(linkedSession, ex);
 		}
-
 	}
-
 }

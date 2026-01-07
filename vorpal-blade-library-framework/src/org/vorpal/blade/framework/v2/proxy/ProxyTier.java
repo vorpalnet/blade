@@ -6,29 +6,45 @@ import java.util.List;
 
 import javax.servlet.sip.URI;
 
+/**
+ * Represents a routing tier within a proxy plan.
+ * A tier contains endpoints that can be tried in parallel or serial mode with an optional timeout.
+ */
 public class ProxyTier implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	/**
+	 * Routing mode for endpoints within this tier.
+	 */
 	public enum Mode {
-		parallel, serial
+		/** Try all endpoints simultaneously */
+		parallel,
+		/** Try endpoints one at a time in order */
+		serial
 	}
+
+	/** Default timeout value in seconds */
+	private static final Integer DEFAULT_TIMEOUT = 0;
 
 	private String id = null;
 	private Mode mode = Mode.serial;
-	private Integer timeout = 0;
+	private Integer timeout = DEFAULT_TIMEOUT;
 	private List<URI> endpoints = new ArrayList<>();
 
 	public ProxyTier() {
 	}
 
-//	public ProxyTier(URI endpoint) {
-//		this.endpoints.add(new ProxyEndpoint(endpoint));
-//	}
-
+	/**
+	 * Copy constructor.
+	 *
+	 * @param that the ProxyTier to copy
+	 */
 	public ProxyTier(ProxyTier that) {
-		this.mode = that.mode;
-		this.timeout = that.timeout;
-		this.endpoints = new ArrayList<URI>(that.endpoints);
+		if (that != null) {
+			this.mode = that.mode;
+			this.timeout = that.timeout;
+			this.endpoints = that.endpoints != null ? new ArrayList<>(that.endpoints) : new ArrayList<>();
+		}
 	}
 
 	public String getId() {
@@ -64,7 +80,12 @@ public class ProxyTier implements Serializable {
 	}
 
 	public URI addEndpoint(URI endpoint) {
-		this.endpoints.add(endpoint);
+		if (endpoint != null) {
+			if (this.endpoints == null) {
+				this.endpoints = new ArrayList<>();
+			}
+			this.endpoints.add(endpoint);
+		}
 		return endpoint;
 	}
 

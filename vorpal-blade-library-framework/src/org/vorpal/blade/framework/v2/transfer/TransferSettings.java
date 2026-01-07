@@ -2,41 +2,51 @@ package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.List;
 
 import org.vorpal.blade.framework.v2.config.RouterConfig;
 
+/**
+ * Configuration settings for transfer operations.
+ *
+ * <p>Defines transfer style defaults, allowed SIP methods, and header
+ * preservation rules for INVITE and REFER requests.
+ */
 public class TransferSettings extends RouterConfig implements Serializable {
 	private static final long serialVersionUID = 2L;
 
+	/** Default allowed SIP methods. */
+	private static final String DEFAULT_ALLOW = "MESSAGE, REFER, NOTIFY, CANCEL, ACK, UPDATE, PRACK, OPTIONS, INVITE, INFO, SUBSCRIBE, BYE";
+
 	public enum TransferStyle {
 		blind, attended, conference, refer
-	};
+	}
 
 	protected Boolean transferAllRequests;
 	protected TransferStyle defaultTransferStyle;
 	protected String conferenceApp;
 
-	protected String allow = "MESSAGE, REFER, NOTIFY, CANCEL, ACK, UPDATE, PRACK, OPTIONS, INVITE, INFO, SUBSCRIBE, BYE";
-	protected ArrayList<String> preserveInviteHeaders = new ArrayList<>();
-	protected ArrayList<String> preserveReferHeaders = new ArrayList<>();
+	protected String allow = DEFAULT_ALLOW;
+	protected List<String> preserveInviteHeaders = new ArrayList<>();
+	protected List<String> preserveReferHeaders = new ArrayList<>();
 
-	public ArrayList<String> getPreserveReferHeaders() {
+	public List<String> getPreserveReferHeaders() {
 		return preserveReferHeaders;
 	}
 
-	public void setPreserveReferHeaders(ArrayList<String> preserveReferHeaders) {
+	public void setPreserveReferHeaders(List<String> preserveReferHeaders) {
 		this.preserveReferHeaders = preserveReferHeaders;
 	}
 
 	public TransferSettings() {
-
+		// Default constructor
 	}
 
-	public ArrayList<String> getPreserveInviteHeaders() {
+	public List<String> getPreserveInviteHeaders() {
 		return preserveInviteHeaders;
 	}
 
-	public void setPreserveInviteHeaders(ArrayList<String> preserveInviteHeaders) {
+	public void setPreserveInviteHeaders(List<String> preserveInviteHeaders) {
 		this.preserveInviteHeaders = preserveInviteHeaders;
 	}
 

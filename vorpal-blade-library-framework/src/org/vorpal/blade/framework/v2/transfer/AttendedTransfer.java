@@ -78,15 +78,15 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.callflow.Callback;
-
-// Notes: 
-// https://www.dialogic.com/webhelp/csp1010/8.4.1_ipn3/sip_software_chap_-_sip_notify_subscription_state.htm
-
+/**
+ * Implements an attended (consultative) transfer call flow.
+ *
+ * <p>In an attended transfer, the transferor first establishes a call with
+ * the transfer target before completing the transfer, allowing consultation
+ * between the parties.
+ */
 public class AttendedTransfer extends Transfer {
-	static final long serialVersionUID = 1L;
-	private SipServletRequest aliceRequest;
-	private Callback<SipServletRequest> loopOnPrack;
+	private static final long serialVersionUID = 1L;
 
 	public AttendedTransfer(TransferListener referListener, TransferSettings transferSetting) {
 		super(referListener, transferSetting);
@@ -94,7 +94,7 @@ public class AttendedTransfer extends Transfer {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-
+		// No implementation yet - attended transfer not fully implemented
 	}
 
 }

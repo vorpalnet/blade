@@ -5,6 +5,12 @@ import java.io.Serializable;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+/**
+ * REST API response for transfer operation results.
+ *
+ * <p>Contains the transfer event type, SIP method, status code,
+ * description, and the original request.
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({ "event", "method", "status", "description", "request" })
 public class TransferResponse implements Serializable {

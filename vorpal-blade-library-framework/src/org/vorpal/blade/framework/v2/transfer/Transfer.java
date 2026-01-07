@@ -73,27 +73,37 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
-import org.vorpal.blade.framework.v2.transfer.api.Header;
 
+/**
+ * Base class for SIP call transfer operations.
+ *
+ * <p>Provides common functionality for constructing transfer requests,
+ * preserving headers, and managing the transferor, transferee, and target
+ * SIP sessions.
+ */
 public class Transfer extends Callflow {
-	static final long serialVersionUID = 1L;
+	private static final long serialVersionUID = 1L;
 
-	protected final static String REFER_TO = "Refer-To";
-	protected final static String REFERRED_BY = "Referred-By";
-	protected final static String SUBSCRIPTION_STATE = "Subscription-State";
-	protected final static String EVENT = "Event";
-	protected final static String ACTIVE = "active";
-	protected final static String PENDING = "pending";
-	protected final static String SIPFRAG = "message/sipfrag";
-	protected final static String TRYING_100 = "SIP/2.0 100 Trying";
-	protected final static String OK_200 = "SIP/2.0 200 OK";
+	// SIP Header name constants
+	protected static final String REFER_TO = "Refer-To";
+	protected static final String REFERRED_BY = "Referred-By";
+	protected static final String SUBSCRIPTION_STATE = "Subscription-State";
+	protected static final String EVENT = "Event";
+	protected static final String ACTIVE = "active";
+	protected static final String PENDING = "pending";
+	protected static final String SIPFRAG = "message/sipfrag";
+	protected static final String TRYING_100 = "SIP/2.0 100 Trying";
+	protected static final String OK_200 = "SIP/2.0 200 OK";
 
-	protected TransferListener transferListener;
+	// SIP header name for Allow header
+	private static final String ALLOW_HEADER = "Allow";
+
+	protected final TransferListener transferListener;
+	protected final TransferSettings transferSettings;
 
 	protected SipServletRequest transfereeRequest;
 	protected SipServletRequest targetRequest;
 	protected SipServletRequest transferorRequest;
-	protected TransferSettings transferSettings;
 
 	protected List<Header> inviteHeaders;
 
@@ -120,12 +130,17 @@ public class Transfer extends Callflow {
 
 	/**
 	 * Call this method to construct the various request objects.
-	 * 
-	 * @param request
-	 * @throws ServletException
-	 * @throws IOException
+	 *
+	 * @param request the SIP request to process
+	 * @throws ServletException if a servlet error occurs
+	 * @throws IOException if an I/O error occurs
+	 * @throws IllegalArgumentException if request is null
 	 */
 	protected void createRequests(SipServletRequest request) throws ServletException, IOException {
+		if (request == null) {
+			throw new IllegalArgumentException("Request cannot be null");
+		}
+
 		transferorRequest = request;
 
 		SipApplicationSession appSession = request.getApplicationSession();
@@ -139,8 +154,8 @@ public class Transfer extends Callflow {
 		transfereeRequest = getLinkedSession(request.getSession()).createRequest(INVITE);
 
 		if (transferSettings != null) {
-			targetRequest.setHeader("Allow", this.transferSettings.getAllow());
-			transfereeRequest.setHeader("Allow", this.transferSettings.getAllow());
+			targetRequest.setHeader(ALLOW_HEADER, this.transferSettings.getAllow());
+			transfereeRequest.setHeader(ALLOW_HEADER, this.transferSettings.getAllow());
 		}
 
 	}
@@ -157,7 +172,7 @@ public class Transfer extends Callflow {
 		if (transferSettings != null) {
 			for (String header : this.transferSettings.getPreserveInviteHeaders()) {
 				String value = copyFrom.getHeader(header);
-				if (value != null && null == copyTo.getHeader(header)) {
+				if (value != null && copyTo.getHeader(header) == null) {
 					copyHeader(header, copyFrom, copyTo);
 				}
 			}

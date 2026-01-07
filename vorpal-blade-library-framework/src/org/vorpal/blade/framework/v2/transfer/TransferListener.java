@@ -31,6 +31,12 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
+/**
+ * Listener interface for receiving transfer lifecycle events.
+ *
+ * <p>Implementations of this interface are notified when transfer operations
+ * are requested, initiated, completed, declined, or abandoned.
+ */
 public interface TransferListener extends Serializable {
 
 	/**

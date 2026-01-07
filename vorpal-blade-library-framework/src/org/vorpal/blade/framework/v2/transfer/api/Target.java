@@ -5,7 +5,16 @@ import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * Specifies the transfer target destination.
+ *
+ * <p>Provides multiple ways to identify the target: full SIP address,
+ * SIP URI, user-part only, or account. Additional INVITE headers
+ * can also be specified.
+ */
 public class Target implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	@Schema(description = "Full target SIP address", defaultValue = "Carol <sip:carol@vorpal.net>", nullable = true)
 	public String sipAddress;
 
@@ -22,7 +31,7 @@ public class Target implements Serializable {
 	public List<Header> inviteHeaders;
 
 	public Target() {
-		// do nothing
+		// Default constructor
 	}
 
 }

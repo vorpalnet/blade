@@ -76,8 +76,6 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.logging.Logger;
-import org.vorpal.blade.framework.v2.transfer.api.Header;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
 
 /**
@@ -87,8 +85,18 @@ import org.vorpal.blade.framework.v2.transfer.api.Header;
  * <img src="doc-files/refer_transfer.png">
  */
 public class ReferTransfer extends Transfer {
-	static final long serialVersionUID = 1L;
-	static private Logger sipLogger = Callflow.sipLogger;
+	private static final long serialVersionUID = 1L;
+
+	// SIPFRAG response code indicators
+	private static final String SIPFRAG_100 = "100";
+	private static final String SIPFRAG_200 = "200";
+	private static final String SIPFRAG_486 = "486";
+
+	// Session attribute keys
+	private static final String USER_AGENT_ATTR = "userAgent";
+	private static final String USER_AGENT_CALLEE = "callee";
+	private static final String USER_AGENT_CALLER = "caller";
+	private static final String X_PREVIOUS_DN_ATTR = "X-Previous-DN";
 
 	public SipServletResponse referResponse;
 
@@ -111,15 +119,15 @@ public class ReferTransfer extends Transfer {
 
 			// If this was method was invoked by the REST API, it might have set some extra
 			// headers.
-			if (this.inviteHeaders != null) {
+			if (this.inviteHeaders != null && targetRequest != null) {
 				for (Header header : inviteHeaders) {
 					targetRequest.setHeader(header.getName(), header.getValue());
 				}
 			}
 
 			// save X-Previous-DN-Tmp for use later
-			URI referTo = transferorRequest.getAddressHeader("Refer-To").getURI();
-			transferorRequest.setAttribute("Refer-To", referTo);
+			URI referTo = transferorRequest.getAddressHeader(REFER_TO).getURI();
+			transferorRequest.setAttribute(REFER_TO, referTo);
 
 			// User is notified a transfer is requested
 			transferListener.transferRequested(transferorRequest);
@@ -158,39 +166,36 @@ public class ReferTransfer extends Transfer {
 						// SIP/2.0 200 OK -- Call Answered
 						// SIP/2.0 486 Busy Here -- Call Refused
 
-						if (sipfrag.contains("100")) {
+						if (sipfrag.contains(SIPFRAG_100)) {
 							// User is notified that transfer is initiated
-
-// Bogus!
-//							// Set Header X-Original-DN
-//							URI xOriginalDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Original-DN");
-//							targetRequest.setHeader("X-Original-DN", xOriginalDN.toString());
-//							// Set Header X-Previous-DN
-//							URI xPreviousDN = (URI) targetRequest.getApplicationSession().getAttribute("X-Previous-DN");
-//							targetRequest.setHeader("X-Previous-DN", xPreviousDN.toString());
-
 							transferListener.transferInitiated(transfereeRequest);
-						} else if (sipfrag.contains("200")) {
+						} else if (sipfrag.contains(SIPFRAG_200)) {
 							// User is notified of a successful transfer
 							// What response to use?
 
-							SipSession callee = referResponse.getSession();
-							callee.setAttribute("userAgent", "callee");
-							SipSession caller = Callflow.getLinkedSession(callee);
-							caller.setAttribute("userAgent", "caller");
-							URI referTo2 = (URI) referResponse.getApplicationSession().getAttribute("Refer-To");
+							if (referResponse != null) {
+								SipSession callee = referResponse.getSession();
+								callee.setAttribute(USER_AGENT_ATTR, USER_AGENT_CALLEE);
+								SipSession caller = Callflow.getLinkedSession(callee);
+								if (caller != null) {
+									caller.setAttribute(USER_AGENT_ATTR, USER_AGENT_CALLER);
+								}
+								URI referTo2 = (URI) referResponse.getApplicationSession().getAttribute(REFER_TO);
 
-							if (referTo2 != null) {
-								referResponse.getApplicationSession().setAttribute("X-Previous-DN", referTo2);
+								if (referTo2 != null) {
+									referResponse.getApplicationSession().setAttribute(X_PREVIOUS_DN_ATTR, referTo2);
+								}
+
+								transferListener.transferCompleted(referResponse);
 							}
-
-							transferListener.transferCompleted(referResponse);
 							sendRequest(transferorSession.createRequest(BYE));
-						} else if (sipfrag.contains("486")) {
+						} else if (sipfrag.contains(SIPFRAG_486)) {
 
 							// User is notified that the transfer target did not answer
 							// What response to use?
-							transferListener.transferDeclined(referResponse);
+							if (referResponse != null) {
+								transferListener.transferDeclined(referResponse);
+							}
 
 						}
 
@@ -200,14 +205,8 @@ public class ReferTransfer extends Transfer {
 
 			});
 
-//			sendRequest(referRequest, (referResponse) -> {
 			sendRequest(transfereeRequest, (referResponse) -> {
 				this.referResponse = referResponse;
-
-//				if (successful(referResponse)) {
-//					// hang up. debugging. use the NOTIFY instead.
-//					sendRequest(transferorSession.createRequest(BYE));
-//				}
 
 				if (failure(referResponse)) {
 					// If refer fails, complete REST invocation as a failure

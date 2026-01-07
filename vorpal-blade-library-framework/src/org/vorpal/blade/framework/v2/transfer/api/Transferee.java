@@ -4,7 +4,15 @@ import java.io.Serializable;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * Identifies the party being transferred (the transferee).
+ *
+ * <p>Provides multiple ways to identify the transferee: dialog ID,
+ * SIP address, SIP URI, user-part, or account.
+ */
 public class Transferee implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	@Schema(description = "X-Vorpal-Dialog", defaultValue = "BA5E", nullable = true)
 	public String dialog; // x-vorpal-dialog
 
@@ -24,6 +32,6 @@ public class Transferee implements Serializable {
 	public Header dialogAttribute;
 
 	public Transferee() {
-		// do nothing;
+		// Default constructor
 	}
 }

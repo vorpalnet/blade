@@ -1,43 +1,40 @@
 package org.vorpal.blade.framework.v2.proxy;
 
 import java.io.IOException;
-import java.io.Serializable;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
-public class ProxyCancel extends Callflow implements Serializable {
-	private ProxyListener proxyListener;
+/**
+ * Callflow for handling CANCEL requests in proxy mode.
+ * The container automatically handles CANCEL processing, so this is a no-op.
+ */
+public class ProxyCancel extends Callflow {
+	private static final long serialVersionUID = 1L;
 
+	@SuppressWarnings("unused")
+	private final ProxyListener proxyListener;
+
+	/**
+	 * Creates a new ProxyCancel callflow.
+	 *
+	 * @param proxyListener the proxy listener (reserved for future use)
+	 */
 	public ProxyCancel(ProxyListener proxyListener) {
 		this.proxyListener = proxyListener;
 	}
 
-	private static final long serialVersionUID = 1L;
-
+	/**
+	 * No-op implementation - the container handles CANCEL automatically.
+	 *
+	 * @param request the CANCEL request
+	 * @throws ServletException if a servlet error occurs
+	 * @throws IOException if an I/O error occurs
+	 */
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-
-// jwm - the container takes care of everything		
-//		try {
-//		
-//		// jwm - container sends 200 OK automatically
-//		// sendResponse(request.createResponse(200));
-//
-//		if (this.proxyListener != null) {
-//			// what happens if there's a CANCEL?
-//			// API improvements for v3
-//		}
-//
-//		// already canceled by the container
-//		// request.getProxy().cancel();
-//		
-//		}catch(Exception ex) {
-//			sipLogger.severe(request, ex);
-//		}
-
+		// Container handles CANCEL automatically
 	}
-
 }

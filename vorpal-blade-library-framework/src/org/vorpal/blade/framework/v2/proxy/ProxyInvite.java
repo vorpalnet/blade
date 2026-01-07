@@ -9,9 +9,19 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
+/**
+ * Callflow for proxying INVITE requests through configured tiers.
+ * Handles proxy plan execution, response callbacks, and tier failover.
+ */
 public class ProxyInvite extends Callflow {
 	private static final long serialVersionUID = 1L;
-	private ProxyListener proxyListener;
+
+	/** SIP response code for Bad Gateway */
+	private static final int RESPONSE_BAD_GATEWAY = 502;
+	/** Request attribute name to skip processing */
+	private static final String ATTR_DO_NOT_PROCESS = "doNotProcess";
+
+	private final ProxyListener proxyListener;
 	private ProxyPlan proxyPlan;
 	private SipServletRequest inboundRequest;
 
@@ -28,6 +38,11 @@ public class ProxyInvite extends Callflow {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
+		if (request == null) {
+			sipLogger.severe("ProxyInvite.process - Request is null");
+			return;
+		}
+
 		Boolean doNotProcess;
 		this.inboundRequest = request;
 
@@ -38,9 +53,9 @@ public class ProxyInvite extends Callflow {
 			sipLogger.severe(request, "ProxyInvite.process - No ProxyListener defined to build proxyPlan");
 		}
 
-		// jwm - allow the user to reply with an error code
-		doNotProcess = (Boolean) request.getAttribute("doNotProcess");
-		if (false == proxyPlan.isEmpty() && (doNotProcess == null || doNotProcess == false)) {
+		// Allow the user to reply with an error code
+		doNotProcess = (Boolean) request.getAttribute(ATTR_DO_NOT_PROCESS);
+		if (!proxyPlan.isEmpty() && !Boolean.TRUE.equals(doNotProcess)) {
 
 			if (sipLogger.isLoggable(Level.FINER)) {
 				sipLogger.finer("ProxyInvite.process - ProxyPlan tiers size=" + proxyPlan.getTiers().size());
@@ -62,7 +77,7 @@ public class ProxyInvite extends Callflow {
 					});
 
 					if (!successful(response) && !response.isBranchResponse()) {
-						if (false == proxyPlan.isEmpty()) {
+						if (!proxyPlan.isEmpty()) {
 							if (sipLogger.isLoggable(Level.FINER)) {
 								sipLogger.finer(response,
 										"ProxyInvite.process - Calling process again... ProxyPlan tiers: "
@@ -83,9 +98,10 @@ public class ProxyInvite extends Callflow {
 				sipLogger.severe(request, ex);
 
 				try {
-					sendResponse(request.createResponse(502));
+					sendResponse(request.createResponse(RESPONSE_BAD_GATEWAY));
 				} catch (Exception ex2) {
-					// eat it;
+					// Unable to send error response - connection may be closed or request invalid
+					sipLogger.warning(request, "ProxyInvite.process - Failed to send 502 response: " + ex2.getMessage());
 				}
 
 			}

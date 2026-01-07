@@ -6,6 +6,12 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * Configuration for transfer operation notification delivery.
+ *
+ * <p>Specifies how the caller should be notified of transfer results:
+ * immediate response, async wait, REST callback, or JMS message.
+ */
 @JsonPropertyOrder({"style", "uid", "callbackName", "jmsQueueName"})
 public class Notification implements Serializable {
 	private static final long serialVersionUID = 1L;

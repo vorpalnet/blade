@@ -12,7 +12,20 @@ import javax.servlet.sip.SipSession;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * REST API response containing SIP application session information.
+ *
+ * <p>Provides session attributes, group memberships, and dialog details
+ * for API inspection of active calls.
+ */
 public class SessionResponse implements Serializable {
+	private static final long serialVersionUID = 1L;
+
+	// Session attribute keys
+	private static final String X_VORPAL_SESSION_ATTR = "X-Vorpal-Session";
+	private static final String X_VORPAL_DIALOG_ATTR = "X-Vorpal-Dialog";
+	private static final String SIP_PROTOCOL = "SIP";
+
 	private Integer expires = null;
 
 	public String id = null;
@@ -21,18 +34,20 @@ public class SessionResponse implements Serializable {
 	public Map<String, Dialog> dialogs = new HashMap<>();
 
 	public SessionResponse() {
-		// do nothing;
+		// Default constructor
 	}
 
 	public SessionResponse(SipApplicationSession appSession) {
-		Object obj;
+		if (appSession == null) {
+			return;
+		}
 
 		// set the session id
-		id = (String) appSession.getAttribute("X-Vorpal-Session");
+		id = (String) appSession.getAttribute(X_VORPAL_SESSION_ATTR);
 
 		// set any session variables (String)
 		for (String name : appSession.getAttributeNameSet()) {
-			obj = appSession.getAttribute(name);
+			Object obj = appSession.getAttribute(name);
 			if (obj instanceof String) {
 				attributes.put(name, (String) obj);
 			}
@@ -40,20 +55,19 @@ public class SessionResponse implements Serializable {
 
 		// set any groups (index keys) that are different than the id
 		for (String group : appSession.getIndexKeys()) {
-			if (group.equals(id) == false) {
+			if (!group.equals(id)) {
 				groups.add(group);
 			}
 		}
 
 		@SuppressWarnings("unchecked")
-		Iterator<SipSession> itr = (Iterator<SipSession>) appSession.getSessions("SIP");
+		Iterator<SipSession> itr = (Iterator<SipSession>) appSession.getSessions(SIP_PROTOCOL);
 
-		SipSession sipSession;
 		while (itr.hasNext()) {
-			sipSession = itr.next();
+			SipSession sipSession = itr.next();
 			if (sipSession.isValid()) {
 
-				String dialogId = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+				String dialogId = (String) sipSession.getAttribute(X_VORPAL_DIALOG_ATTR);
 				if (dialogId != null) {
 					Dialog sessionDialog = new Dialog(sipSession);
 					this.dialogs.put(dialogId, sessionDialog);
@@ -78,19 +92,25 @@ public class SessionResponse implements Serializable {
 	}
 
 	public SessionResponse addGroup(String group) {
-		groups = (groups != null) ? groups : new LinkedList<>();
+		if (groups == null) {
+			groups = new LinkedList<>();
+		}
 		groups.add(group);
 		return this;
 	}
 
 	public SessionResponse addAttribute(String name, String value) {
-		attributes = (attributes != null) ? attributes : new HashMap<>();
+		if (attributes == null) {
+			attributes = new HashMap<>();
+		}
 		attributes.put(name, value);
 		return this;
 	}
 
 	public SessionResponse addDialog(String dialogId, Dialog dialog) {
-		dialogs = (dialogs != null) ? dialogs : new HashMap<>();
+		if (dialogs == null) {
+			dialogs = new HashMap<>();
+		}
 		dialogs.put(dialogId, dialog);
 		return this;
 	}

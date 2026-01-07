@@ -78,17 +78,14 @@ import java.io.IOException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.callflow.Callback;
-
 /**
- * 
- * @author jeff
+ * Implements a conference transfer call flow.
  *
+ * <p>In a conference transfer, multiple parties are bridged together
+ * into a conference call rather than performing a simple two-party transfer.
  */
 public class ConferenceTransfer extends Transfer {
-	static final long serialVersionUID = 1L;
-	private SipServletRequest aliceRequest;
-	private Callback<SipServletRequest> loopOnPrack;
+	private static final long serialVersionUID = 1L;
 
 	public ConferenceTransfer(TransferListener referListener, TransferSettings transferSettings) {
 		super(referListener, transferSettings);
@@ -96,7 +93,7 @@ public class ConferenceTransfer extends Transfer {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-
+		// No implementation yet - conference transfer not fully implemented
 	}
 
 }

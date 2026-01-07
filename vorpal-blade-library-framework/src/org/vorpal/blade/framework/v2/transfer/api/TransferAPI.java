@@ -37,15 +37,33 @@ import org.vorpal.blade.framework.v2.transfer.TransferSettings.TransferStyle;
 
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 
-//@OpenAPIDefinition(info = @Info( //
-//		title = "BLADE - Transfer", //
-//		version = "1", //
-//		description = "Performs transfer operations"))
-//@Path("v1")
+/**
+ * REST API endpoint for initiating and managing call transfers.
+ *
+ * <p>Provides endpoints for inspecting sessions and invoking transfer
+ * operations. Implements TransferListener to handle transfer lifecycle events.
+ */
 public class TransferAPI extends ClientCallflow implements TransferListener {
 	private static final long serialVersionUID = 1L;
 
-	private final static String TXFER_REQUEST = "TXFER_REQUEST";
+	// Session attribute keys
+	private static final String TXFER_REQUEST = "TXFER_REQUEST";
+	private static final String INITIAL_REFER_ATTR = "INITIAL_REFER";
+	private static final String EXPECT_ACK_ATTR = "EXPECT_ACK";
+	private static final String SIP_ADDRESS_ATTR = "sipAddress";
+
+	// SIP header names
+	private static final String REFER_TO_HEADER = "Refer-To";
+	private static final String REFERRED_BY_HEADER = "Referred-By";
+
+	// Response description constants
+	private static final String DESC_MISSING_JSON = "Missing JSON in request body.";
+	private static final String DESC_REQUEST_PENDING = "Request Pending";
+	private static final String DESC_TARGET_BUILD_FAILED = "Could not build target address";
+	private static final String DESC_DIALOG_NOT_FOUND = "Dialog not found";
+	private static final String DESC_SESSION_NOT_FOUND = "Session not found";
+	private static final String DESC_FIRE_AND_FORGET = "Accepted, Fire and Forget";
+	private static final String DESC_INTERNAL_ERROR = "Internal Server Error";
 
 	// static because you cannot serialize AsyncResponse
 	public static Map<String, AsyncResponse> responseMap = new ConcurrentHashMap<>();
@@ -161,7 +179,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 				TransferResponse transferResponse = new TransferResponse();
 				transferResponse.status = 500;
-				transferResponse.description = "Missing JSON in request body.";
+				transferResponse.description = DESC_MISSING_JSON;
 				transferResponse.request = transferRequest;
 
 				if (sipLogger.isLoggable(Level.FINER)) {
@@ -227,10 +245,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					}
 
 					// handle glare
-					if (null != transfereeSession.getAttribute("EXPECT_ACK")) {
+					if (transfereeSession.getAttribute(EXPECT_ACK_ATTR) != null) {
 						TransferResponse transferResponse = new TransferResponse();
 						transferResponse.status = 491;
-						transferResponse.description = "Request Pending";
+						transferResponse.description = DESC_REQUEST_PENDING;
 						transferResponse.request = transferRequest;
 
 						if (sipLogger.isLoggable(Level.FINER)) {
@@ -242,7 +260,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						return;
 					}
 
-					Address transferee = (Address) transfereeSession.getAttribute("sipAddress");
+					Address transferee = (Address) transfereeSession.getAttribute(SIP_ADDRESS_ATTR);
 					Address target = null;
 
 					if (transferRequest.target.sipAddress != null) {
@@ -265,7 +283,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					if (target != null) {
 						SipSession transferorSession = getLinkedSession(transfereeSession);
 
-						Address transferor = (Address) transferorSession.getAttribute("sipAddress");
+						Address transferor = (Address) transferorSession.getAttribute(SIP_ADDRESS_ATTR);
 
 //						sipLogger.info(transferorSession, "TransferAPI REST transfer request; transferee=" + transferee
 //								+ ", target=" + target + ", transferor=" + transferor);
@@ -275,10 +293,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						refer.setRequestURI(transferee.getURI());
 						refer.setApplicationSession(appSession);
 						refer.setSession(transferorSession);
-						refer.setHeader("Refer-To", target.toString());
-						refer.setHeader("Referred-By", transferor.toString());
+						refer.setHeader(REFER_TO_HEADER, target.toString());
+						refer.setHeader(REFERRED_BY_HEADER, transferor.toString());
 						sipLogger.finer(transferorSession,
-								"TransferAPI.invokeTransfer - Getting Referred-By: " + refer.getHeader("Referred-By"));
+								"TransferAPI.invokeTransfer - Getting Referred-By: " + refer.getHeader(REFERRED_BY_HEADER));
 
 						if (transferRequest.target.inviteHeaders != null) {
 							for (Header header : transferRequest.target.inviteHeaders) {
@@ -288,10 +306,10 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 						}
 
 						TransferStyle style = transferRequest.style;
-						if (null == style) {
+						if (style == null) {
 							style = settings.getCurrent().getDefaultTransferStyle();
 						}
-						if (null == style) {
+						if (style == null) {
 							style = TransferStyle.blind;
 						}
 
@@ -311,8 +329,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 						sipLogger.finest(transferorSession, "TransferAPI callflow=" + callflow);
 
-						if (appSession.getAttribute("INITIAL_REFER") == null) {
-							appSession.setAttribute("INITIAL_REFER", refer);
+						if (appSession.getAttribute(INITIAL_REFER_ATTR) == null) {
+							appSession.setAttribute(INITIAL_REFER_ATTR, refer);
 						}
 
 						callflow.process(refer);
@@ -326,7 +344,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 							// must be none, callback or jms
 							TransferResponse transferResponse = new TransferResponse();
 							transferResponse.status = 202;
-							transferResponse.description = "Accepted, Fire and Forget";
+							transferResponse.description = DESC_FIRE_AND_FORGET;
 							transferResponse.request = transferRequest;
 
 							if (sipLogger.isLoggable(Level.FINER)) {
@@ -338,7 +356,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					} else {
 						TransferResponse transferResponse = new TransferResponse();
 						transferResponse.status = 500;
-						transferResponse.description = "Could not build target address";
+						transferResponse.description = DESC_TARGET_BUILD_FAILED;
 						transferResponse.request = transferRequest;
 
 						if (sipLogger.isLoggable(Level.FINER)) {
@@ -357,7 +375,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 					TransferResponse transferResponse = new TransferResponse();
 					transferResponse.status = 404;
-					transferResponse.description = "Dialog not found";
+					transferResponse.description = DESC_DIALOG_NOT_FOUND;
 					transferResponse.request = transferRequest;
 
 					if (sipLogger.isLoggable(Level.FINER)) {
@@ -378,7 +396,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 				TransferResponse transferResponse = new TransferResponse();
 				transferResponse.status = 404;
-				transferResponse.description = "Session not found";
+				transferResponse.description = DESC_SESSION_NOT_FOUND;
 				transferResponse.request = transferRequest;
 
 				if (sipLogger.isLoggable(Level.FINER)) {
@@ -399,7 +417,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 			TransferResponse transferResponse = new TransferResponse();
 			transferResponse.status = 500;
-			transferResponse.description = "Internal Server Error";
+			transferResponse.description = DESC_INTERNAL_ERROR;
 			transferResponse.request = transferRequest;
 
 			if (sipLogger.isLoggable(Level.FINER)) {
@@ -420,8 +438,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				URI ruri = inboundRefer.getRequestURI();
 				String from = inboundRefer.getFrom().toString();
 				String to = inboundRefer.getTo().toString();
-				String referTo = inboundRefer.getHeader("Refer-To");
-				String referredBy = inboundRefer.getHeader("Referred-By");
+				String referTo = inboundRefer.getHeader(REFER_TO_HEADER);
+				String referredBy = inboundRefer.getHeader(REFERRED_BY_HEADER);
 				sipLogger.info(inboundRefer, "TransferAPI.transferRequested - ruri=" + ruri + ", from=" + from + ", to="
 						+ to + ", referTo=" + referTo + ", referredBy=" + referredBy);
 			}
@@ -434,49 +452,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 	@Override
 	public void transferInitiated(SipServletRequest request) throws ServletException, IOException {
-
-//		SipApplicationSession appSession = outboundInvite.getApplicationSession();
-//
-//		// Set Header X-Original-DN
-//		URI xOriginalDN = (URI) appSession.getAttribute("X-Original-DN");
-//		outboundInvite.setHeader("X-Original-DN", xOriginalDN.toString());
-//
-//		// Set Header X-Previous-DN
-//		URI xPreviousDN = (URI) appSession.getAttribute("X-Previous-DN");
-//		outboundInvite.setHeader("X-Previous-DN", xPreviousDN.toString());
-
-		// This is for when the transferor (bob) hangs up before finding out if the
-		// transfer was successful.
-//		if(request.getMethod().equals(BYE)) {
-//			TransferRequest txfrRequest = (TransferRequest) request.getApplicationSession().getAttribute(TXFER_REQUEST);
-//			if(txfrRequest!=null && txfrRequest.notification.style.equals(Notification.Style.async) ) {
-//				AsyncResponse asyncResponse = responseMap.remove(request.getApplicationSession().getId());
-//				if (asyncResponse != null) {
-//
-//					sipLogger.finer(request, "TransferAPI.transferCompleted - Removed asyncResponse from responseMap.");
-//
-//					TransferResponse txferResp = new TransferResponse();
-//					txferResp.event = "transferInitiated";
-//					txferResp.method = request.getMethod();
-//					txferResp.status = 204;
-//					txferResp.description = "No Notification";
-//					txferResp.request = txfrRequest;
-//
-//					if (sipLogger.isLoggable(Level.FINER)) {
-//						sipLogger.finer(request,
-//								"TransferAPI.transferInitiated - transferResponse=" + Logger.serializeObject(txferResp));
-//					}
-//
-//					asyncResponse.resume(Response.status(Status.OK).entity(txferResp).build());
-//				} 
-//			}
-//			
-//		}else {
-//			if (sipLogger.isLoggable(Level.INFO)) {
-//				sipLogger.info(request, "TransferAPI.transferInitiated - method=" + request.getMethod());
-//			}			
-//		}
-
+		// No action needed; transfer initiation is handled in the callflow
 	}
 
 	@Override
@@ -491,7 +467,8 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 		SipApplicationSession appSession = response.getApplicationSession();
 		TransferRequest transferRequest = (TransferRequest) appSession.getAttribute(TXFER_REQUEST);
 
-		if (transferRequest.notification.style.equals(Notification.Style.async)) {
+		if (transferRequest != null && transferRequest.notification != null
+				&& Notification.Style.async.equals(transferRequest.notification.style)) {
 
 			AsyncResponse asyncResponse = responseMap.remove(response.getApplicationSession().getId());
 			if (asyncResponse != null) {

@@ -9,6 +9,12 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * REST API request for initiating a call transfer.
+ *
+ * <p>Contains transfer style, session identification, dialog selection,
+ * notification preferences, and target destination.
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({ "style", "sessionKey", "dialogKey", "notification" })
 public class TransferRequest implements Serializable {

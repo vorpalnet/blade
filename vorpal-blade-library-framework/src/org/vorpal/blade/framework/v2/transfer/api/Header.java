@@ -4,7 +4,15 @@ import java.io.Serializable;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+/**
+ * Represents a SIP header name-value pair.
+ *
+ * <p>Used to specify additional headers for INVITE or REFER requests
+ * in transfer operations.
+ */
 public class Header implements Serializable {
+	private static final long serialVersionUID = 1L;
+
 	@Schema(description = "Name of SIP header", defaultValue = "X-Importance", nullable = false)
 	public String name;
 
@@ -12,7 +20,7 @@ public class Header implements Serializable {
 	public String value;
 
 	public Header() {
-		// do nothing
+		// Default constructor
 	}
 
 	public String getName() {
