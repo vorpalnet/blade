@@ -45,8 +45,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
 /**
- * Extended logger for SIP applications with session-aware logging and sequence diagram generation.
- * Provides colorized output, stack trace logging, and visual call flow diagrams.
+ * Extended logger for SIP applications with session-aware logging and sequence
+ * diagram generation. Provides colorized output, stack trace logging, and
+ * visual call flow diagrams.
  */
 public class Logger extends java.util.logging.Logger implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -204,21 +205,24 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void logStackTrace(Exception e) {
-		if (e == null) return;
+		if (e == null)
+			return;
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
 		warning(LOGGING_ERROR_PREFIX + e.getMessage() + "\n" + errors.toString());
 	}
 
 	public void logSevereStackTrace(Exception e) {
-		if (e == null) return;
+		if (e == null)
+			return;
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
 		severe(LOGGING_ERROR_PREFIX + e.getMessage() + "\n" + errors.toString());
 	}
 
 	public void logWarningStackTrace(Exception e) {
-		if (e == null) return;
+		if (e == null)
+			return;
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
 		warning(LOGGING_WARNING_PREFIX + e.getMessage() + "\n" + errors.toString());
@@ -671,7 +675,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							else if (SIP_METHOD_NOTIFY.equals(request.getMethod())) {
 								note = HEADER_EVENT + ": " + request.getHeader(HEADER_EVENT);
-								note += ", " + HEADER_SUBSCRIPTION_STATE + ": " + request.getHeader(HEADER_SUBSCRIPTION_STATE);
+								note += ", " + HEADER_SUBSCRIPTION_STATE + ": "
+										+ request.getHeader(HEADER_SUBSCRIPTION_STATE);
 								if (CONTENT_TYPE_SIPFRAG.equals(request.getContentType())) {
 									if (note.length() > 0) {
 										note += ", ";
@@ -736,7 +741,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							if (SIP_METHOD_NOTIFY.equals(request.getMethod())) {
 								note = HEADER_EVENT + ": " + request.getHeader(HEADER_EVENT);
-								note += ", " + HEADER_SUBSCRIPTION_STATE + ": " + request.getHeader(HEADER_SUBSCRIPTION_STATE);
+								note += ", " + HEADER_SUBSCRIPTION_STATE + ": "
+										+ request.getHeader(HEADER_SUBSCRIPTION_STATE);
 								if (CONTENT_TYPE_SIPFRAG.equals(request.getContentType())) {
 									if (note.length() > 0) {
 										note += ", ";
@@ -805,7 +811,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 							else if (SIP_METHOD_NOTIFY.equals(request.getMethod())) {
 								note = HEADER_EVENT + ": " + request.getHeader(HEADER_EVENT);
-								note += ", " + HEADER_SUBSCRIPTION_STATE + ": " + request.getHeader(HEADER_SUBSCRIPTION_STATE);
+								note += ", " + HEADER_SUBSCRIPTION_STATE + ": "
+										+ request.getHeader(HEADER_SUBSCRIPTION_STATE);
 								if (CONTENT_TYPE_SIPFRAG.equals(request.getContentType())) {
 									if (note.length() > 0) {
 										note += ", ";
@@ -873,7 +880,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 								}
 							} else if (SIP_METHOD_NOTIFY.equals(request.getMethod())) {
 								note = HEADER_EVENT + ": " + request.getHeader(HEADER_EVENT);
-								note += ", " + HEADER_SUBSCRIPTION_STATE + ": " + request.getHeader(HEADER_SUBSCRIPTION_STATE);
+								note += ", " + HEADER_SUBSCRIPTION_STATE + ": "
+										+ request.getHeader(HEADER_SUBSCRIPTION_STATE);
 								if (CONTENT_TYPE_SIPFRAG.equals(request.getContentType())) {
 									if (note.length() > 0) {
 										note += ", ";
@@ -938,6 +946,35 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		} catch (Exception ex) {
 			this.logWarningStackTrace(ex);
 		}
+	}
+
+	/**
+	 * This method allows you to manually specify the sessionId and dialogId as
+	 * strings.
+	 * 
+	 * @param level
+	 * @param appSessionId
+	 * @param dialogId
+	 * @param comments
+	 */
+	public void log(Level level, String sessionId, String dialogId, String comments) {
+		StringBuilder strBuilder = new StringBuilder();
+
+		String appId = "--------";
+		String diaId = "----";
+
+		if (sessionId != null) {
+			appId = sessionId;
+
+		}
+
+		if (dialogId != null) {
+			diaId = dialogId;
+		}
+
+		String message = strBuilder.append("[").append(appId).append(":").append(diaId + "] " + comments).toString();
+
+		log(level, message);
 	}
 
 }
