@@ -208,8 +208,17 @@ public class InitialInvite extends Callflow {
 		bobRequest.setAttribute(ATTR_CALLFLOW, this);
 
 		if (b2buaListener != null) {
-			URI xOriginalDN = bobRequest.getTo().getURI();
-			appSession.setAttribute(ATTR_X_ORIGINAL_DN, xOriginalDN);
+			
+			Address xOriginalDnAddress = aliceRequest.getAddressHeader(ATTR_X_ORIGINAL_DN);
+			URI xOriginalDN;
+			if(xOriginalDnAddress!=null) {
+				xOriginalDN = xOriginalDnAddress.getURI();
+			}else {
+				xOriginalDN  = bobRequest.getTo().getURI();
+			}
+			appSession.setAttribute(ATTR_X_ORIGINAL_DN, xOriginalDN);				
+			
+			
 			URI xPreviousDN = bobRequest.getRequestURI();
 			appSession.setAttribute(ATTR_X_PREVIOUS_DN, xPreviousDN);
 			bobRequest.getSession().setAttribute(ATTR_INITIAL_INVITE, bobRequest);
