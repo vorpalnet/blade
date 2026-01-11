@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2;
+package org.vorpal.blade.framework.v2.testing;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -27,15 +27,38 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipWebSocketContext;
 
+/**
+ * A mock implementation of SipServletResponse for unit testing.
+ * Provides response functionality including status codes and reason phrases
+ * without requiring a SIP container.
+ *
+ * <p>Most getter methods delegate to the associated request. The send() and
+ * sendReliably() methods are no-ops. Includes an inner ReasonPhrase class
+ * that maps standard SIP status codes to their reason phrases.
+ */
 public class DummyResponse implements SipServletResponse, Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private final SipServletRequest request;
 
+	/**
+	 * Constructs a DummyResponse with the specified status code.
+	 * The reason phrase is automatically determined from the status code.
+	 *
+	 * @param req the request this response is for
+	 * @param status the SIP status code
+	 */
 	public DummyResponse(SipServletRequest req, int status) {
 		this(req, status, ReasonPhrase.getPhrase(status));
 	}
 
+	/**
+	 * Constructs a DummyResponse with the specified status code and reason phrase.
+	 *
+	 * @param req the request this response is for
+	 * @param status the SIP status code
+	 * @param reason the custom reason phrase
+	 */
 	public DummyResponse(SipServletRequest req, int status, String reason) {
 		this.request = req;
 		this.status = status;
@@ -516,11 +539,26 @@ public class DummyResponse implements SipServletResponse, Serializable {
 //	private SipServletRequest req;
 //	private boolean isVirtualBranchResponse;
 
+	/**
+	 * Utility class that maps SIP status codes to their standard reason phrases.
+	 * Covers provisional (1xx), success (2xx), redirection (3xx), client error (4xx),
+	 * server error (5xx), and global failure (6xx) response codes.
+	 */
 	public static class ReasonPhrase {
 
+		/**
+		 * Default constructor.
+		 */
 		public ReasonPhrase() {
 		}
 
+		/**
+		 * Returns the standard SIP reason phrase for the given status code.
+		 *
+		 * @param statusCode the SIP status code
+		 * @return the corresponding reason phrase
+		 * @throws IllegalArgumentException if the status code is not in a valid range
+		 */
 		public static String getPhrase(int statusCode) {
 			switch (statusCode / 100) {
 			case 1: // '\001'

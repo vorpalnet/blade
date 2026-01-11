@@ -69,9 +69,17 @@ public class InitialInvite extends Callflow {
 	private B2buaListener b2buaListener;
 	private boolean doNotProcess;
 
+	/**
+	 * Constructs an InitialInvite callflow with no listener callbacks.
+	 */
 	public InitialInvite() {
 	}
 
+	/**
+	 * Constructs an InitialInvite callflow with the specified listener.
+	 *
+	 * @param b2buaListener the B2BUA listener to receive lifecycle callbacks
+	 */
 	public InitialInvite(B2buaListener b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
@@ -252,36 +260,79 @@ public class InitialInvite extends Callflow {
 
 	}
 
+	/**
+	 * Returns the inbound INVITE request from the caller (Alice).
+	 *
+	 * @return the inbound request
+	 */
 	public SipServletRequest getInboundRequest() {
 		return aliceRequest;
 	}
 
+	/**
+	 * Sets the inbound INVITE request.
+	 *
+	 * @param aliceRequest the inbound request to set
+	 * @return this InitialInvite for method chaining
+	 */
 	public InitialInvite setInboundRequest(SipServletRequest aliceRequest) {
 		this.aliceRequest = aliceRequest;
 		return this;
 	}
 
+	/**
+	 * Returns the outbound INVITE request to the callee (Bob).
+	 *
+	 * @return the outbound request
+	 */
 	public SipServletRequest getOutboundRequest() {
 		return bobRequest;
 	}
 
+	/**
+	 * Sets the outbound INVITE request.
+	 *
+	 * @param bobRequest the outbound request to set
+	 * @return this InitialInvite for method chaining
+	 */
 	public InitialInvite setOutboundRequest(SipServletRequest bobRequest) {
 		this.bobRequest = bobRequest;
 		return this;
 	}
 
+	/**
+	 * Returns the B2BUA listener receiving lifecycle callbacks.
+	 *
+	 * @return the B2BUA listener, or null if not set
+	 */
 	public B2buaListener getB2buaListener() {
 		return b2buaListener;
 	}
 
+	/**
+	 * Sets the B2BUA listener to receive lifecycle callbacks.
+	 *
+	 * @param b2buaListener the B2BUA listener to set
+	 */
 	public void setB2buaListener(B2buaListener b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}
 
+	/**
+	 * Returns whether processing has been halted for this callflow.
+	 *
+	 * @return true if processing should not continue, false otherwise
+	 */
 	public boolean isDoNotProcess() {
 		return doNotProcess;
 	}
 
+	/**
+	 * Sets whether to halt processing for this callflow.
+	 * When set to true, the framework will not automatically send the outbound request.
+	 *
+	 * @param doNotProcess true to halt automatic processing, false to continue normally
+	 */
 	public void setDoNotProcess(boolean doNotProcess) {
 		this.doNotProcess = doNotProcess;
 	}

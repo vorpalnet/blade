@@ -107,10 +107,21 @@ public class Transfer extends Callflow {
 
 	protected List<Header> inviteHeaders;
 
+	/**
+	 * Returns the list of custom headers to add to INVITE requests.
+	 *
+	 * @return the list of custom headers, or null if not set
+	 */
 	public List<Header> getInviteHeaders() {
 		return inviteHeaders;
 	}
 
+	/**
+	 * Sets the list of custom headers to add to INVITE requests.
+	 *
+	 * @param inviteHeaders the list of headers to add
+	 * @return this Transfer for method chaining
+	 */
 	public Transfer setInviteHeaders(List<Header> inviteHeaders) {
 		this.inviteHeaders = inviteHeaders;
 		return this;

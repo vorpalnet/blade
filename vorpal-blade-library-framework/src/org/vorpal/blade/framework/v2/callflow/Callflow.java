@@ -60,7 +60,6 @@ import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.v2.DummyResponse;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.keepalive.KeepAlive;
 import org.vorpal.blade.framework.v2.keepalive.KeepAliveExpiry;
@@ -69,6 +68,7 @@ import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
 import org.vorpal.blade.framework.v2.proxy.ProxyTier;
 import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
+import org.vorpal.blade.framework.v2.testing.DummyResponse;
 
 public abstract class Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -1107,10 +1107,20 @@ public abstract class Callflow implements Serializable {
 		});
 	}
 
+	/**
+	 * Sets the SIP factory used to create SIP messages, addresses, and URIs.
+	 *
+	 * @param sipFactory the SIP factory instance to set
+	 */
 	public static void setSipFactory(SipFactory sipFactory) {
 		Callflow.sipFactory = sipFactory;
 	}
 
+	/**
+	 * Sets the SIP sessions utility for looking up application sessions by key.
+	 *
+	 * @param sipUtil the SIP sessions utility instance to set
+	 */
 	public static void setSipUtil(SipSessionsUtil sipUtil) {
 		Callflow.sipUtil = sipUtil;
 	}
@@ -1231,6 +1241,16 @@ public abstract class Callflow implements Serializable {
 		return destination;
 	}
 
+	/**
+	 * Creates a new SIP request with a different To address, copying content and headers
+	 * from the original request.
+	 *
+	 * @param origin the original SIP request to copy from
+	 * @param to the new destination address
+	 * @return the new SIP request
+	 * @throws IOException if an I/O error occurs
+	 * @throws ServletParseException if address parsing fails
+	 */
 	public static SipServletRequest createNewRequest(SipServletRequest origin, Address to)
 			throws IOException, ServletParseException {
 
@@ -1319,6 +1339,16 @@ public abstract class Callflow implements Serializable {
 		return response;
 	}
 
+	/**
+	 * Sends an ACK or PRACK request downstream based on an upstream request.
+	 * For PRACK, also sends the response back upstream. For other methods,
+	 * treats it as a glare condition and sends 486 Busy.
+	 *
+	 * @param origin the upstream ACK or PRACK request
+	 * @param dest the downstream response to acknowledge
+	 * @throws IOException if an I/O error occurs
+	 * @throws ServletException if a servlet error occurs
+	 */
 	public void sendAckOrPrack(SipServletRequest origin, SipServletResponse dest) throws IOException, ServletException {
 		if (origin.getMethod().equals(PRACK)) {
 			SipServletRequest destPrack = copyContentAndHeaders(origin, dest.createPrack());
@@ -1605,6 +1635,14 @@ public abstract class Callflow implements Serializable {
 		// Must be overloaded
 	}
 
+	/**
+	 * Schedules a request to be processed after a specified delay.
+	 * The request is stored in the application session and a timer is created
+	 * to trigger processing after the delay.
+	 *
+	 * @param request the SIP request to process later
+	 * @param delay_in_milliseconds the delay in milliseconds before processing
+	 */
 	public void processLater(SipServletRequest request, long delay_in_milliseconds) {
 		if (request.getApplicationSession().isValid()) {
 			request.getApplicationSession().setAttribute(DELAYED_REQUEST, request);
@@ -1612,6 +1650,17 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
+	/**
+	 * Creates a response for the upstream request by copying status, headers, and content
+	 * from a downstream response. Links the sessions on successful responses.
+	 *
+	 * @param aliceRequest the upstream request to create a response for
+	 * @param bobResponse the downstream response to copy from
+	 * @return the created response, or null if either parameter is null or session is invalid
+	 * @throws ServletParseException if header parsing fails
+	 * @throws UnsupportedEncodingException if the content encoding is not supported
+	 * @throws IOException if an I/O error occurs
+	 */
 	public static SipServletResponse createResponse(SipServletRequest aliceRequest, SipServletResponse bobResponse)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		SipServletResponse aliceResponse = null;
@@ -1637,6 +1686,15 @@ public abstract class Callflow implements Serializable {
 		return aliceResponse;
 	}
 
+	/**
+	 * Creates an ACK or PRACK request for a downstream response by copying content
+	 * and headers from the upstream acknowledgement request.
+	 *
+	 * @param bobResponse the downstream response to acknowledge
+	 * @param aliceAckOrPrack the upstream ACK or PRACK request to copy from
+	 * @return the created ACK or PRACK request
+	 * @throws ServletParseException if the method is neither ACK nor PRACK, or if parsing fails
+	 */
 	public static SipServletRequest createAcknowlegement(SipServletResponse bobResponse,
 			SipServletRequest aliceAckOrPrack) throws ServletParseException {
 		SipServletRequest bobAckOrPrack = null;
@@ -1721,6 +1779,18 @@ public abstract class Callflow implements Serializable {
 		return createInitialRequest(endpoint, SipApplicationRoutingDirective.CONTINUE, initialRequest);
 	}
 
+	/**
+	 * Creates a new request with the CONTINUE routing directive using a template request
+	 * for content and headers, while using the original request for routing directive linkage.
+	 *
+	 * @param endpoint the destination URI for the request
+	 * @param template the template request to copy content and headers from
+	 * @param aliceRequest the original request for routing directive linkage
+	 * @return the new SIP request with CONTINUE routing directive
+	 * @throws ServletParseException if parsing fails
+	 * @throws UnsupportedEncodingException if the content encoding is not supported
+	 * @throws IOException if an I/O error occurs
+	 */
 	public static SipServletRequest createContinueInitialRequest(URI endpoint, SipServletRequest template,
 			SipServletRequest aliceRequest) throws ServletParseException, UnsupportedEncodingException, IOException {
 
@@ -1738,6 +1808,16 @@ public abstract class Callflow implements Serializable {
 		return bobRequest;
 	}
 
+	/**
+	 * Creates a copy of a SIP request, duplicating the method, From, To, content,
+	 * headers, and request URI.
+	 *
+	 * @param aliceRequest the request to copy
+	 * @return the new SIP request
+	 * @throws ServletParseException if parsing fails
+	 * @throws UnsupportedEncodingException if the content encoding is not supported
+	 * @throws IOException if an I/O error occurs
+	 */
 	public static SipServletRequest createRequest(SipServletRequest aliceRequest)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		SipServletRequest bobRequest;
@@ -1929,18 +2009,42 @@ public abstract class Callflow implements Serializable {
 
 	}
 
+	/**
+	 * Returns the SIP logger used for logging SIP messages and callflow events.
+	 * Alias for {@link #getLogger()}.
+	 *
+	 * @return the SIP logger instance
+	 */
 	public static Logger getSipLogger() {
 		return sipLogger;
 	}
 
+	/**
+	 * Sets the SIP logger used for logging SIP messages and callflow events.
+	 * Alias for {@link #setLogger(Logger)}.
+	 *
+	 * @param sipLogger the SIP logger instance to set
+	 */
 	public static void setSipLogger(Logger sipLogger) {
 		Callflow.sipLogger = sipLogger;
 	}
 
+	/**
+	 * Returns the session parameters configuration used for session attribute extraction
+	 * and session expiration settings.
+	 *
+	 * @return the current session parameters, or null if not configured
+	 */
 	public static SessionParameters getSessionParameters() {
 		return sessionParameters;
 	}
 
+	/**
+	 * Sets the session parameters configuration used for session attribute extraction
+	 * and session expiration settings.
+	 *
+	 * @param sessionParameters the session parameters to set
+	 */
 	public static void setSessionParameters(SessionParameters sessionParameters) {
 		Callflow.sessionParameters = sessionParameters;
 	}
@@ -1990,6 +2094,14 @@ public abstract class Callflow implements Serializable {
 		return linkedSession.getActiveInvite(UAMode.UAS);
 	}
 
+	/**
+	 * Returns the Vorpal timestamp for the given application session.
+	 * The timestamp is a hexadecimal representation of the session creation time,
+	 * used in combination with the Vorpal session ID for unique identification.
+	 *
+	 * @param appSession the SIP application session
+	 * @return the Vorpal timestamp, or null if session is null or invalid
+	 */
 	public static String getVorpalTimestamp(SipApplicationSession appSession) {
 		String timestamp = null;
 

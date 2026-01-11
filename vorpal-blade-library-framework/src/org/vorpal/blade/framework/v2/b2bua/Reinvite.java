@@ -41,10 +41,18 @@ public class Reinvite extends Callflow {
 	private static final long serialVersionUID = 1L;
 	private B2buaListener b2buaListener;
 
+	/**
+	 * Constructs a Reinvite callflow with no listener callbacks.
+	 */
 	public Reinvite() {
 		this.b2buaListener = null;
 	}
 
+	/**
+	 * Constructs a Reinvite callflow with the specified listener.
+	 *
+	 * @param b2buaListener the B2BUA listener to receive request/response events
+	 */
 	public Reinvite(B2buaListener b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}

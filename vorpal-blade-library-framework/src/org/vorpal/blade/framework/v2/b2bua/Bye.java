@@ -39,10 +39,18 @@ public class Bye extends Terminate {
 
 	private static final long serialVersionUID = 1L;
 
+	/**
+	 * Constructs a BYE callflow handler with no callback hooks.
+	 */
 	public Bye() {
 		super(null);
 	}
 
+	/**
+	 * Constructs a BYE callflow handler with the specified listener.
+	 *
+	 * @param b2buaListener the B2BUA servlet to receive lifecycle callbacks
+	 */
 	public Bye(B2buaServlet b2buaListener) {
 		super(b2buaListener);
 	}

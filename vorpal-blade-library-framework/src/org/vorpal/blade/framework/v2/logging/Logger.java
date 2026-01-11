@@ -114,26 +114,58 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return level;
 	}
 
+	/**
+	 * Returns the logging level used for sequence diagram output.
+	 *
+	 * @return the sequence diagram logging level
+	 */
 	public Level getSequenceDiagramLoggingLevel() {
 		return sequenceDiagramLoggingLevel;
 	}
 
+	/**
+	 * Sets the logging level for sequence diagram output.
+	 *
+	 * @param sequenceDiagramLoggingLevel the logging level to use for diagrams
+	 */
 	public void setSequenceDiagramLoggingLevel(Level sequenceDiagramLoggingLevel) {
 		this.sequenceDiagramLoggingLevel = sequenceDiagramLoggingLevel;
 	}
 
+	/**
+	 * Returns the logging level used for configuration output.
+	 *
+	 * @return the configuration logging level
+	 */
 	public Level getConfigurationLoggingLevel() {
 		return configurationLoggingLevel;
 	}
 
+	/**
+	 * Sets the logging level for configuration output.
+	 *
+	 * @param configurationLoggingLevel the logging level to use for configuration
+	 */
 	public void setConfigurationLoggingLevel(Level configurationLoggingLevel) {
 		this.configurationLoggingLevel = configurationLoggingLevel;
 	}
 
+	/**
+	 * Direction of SIP message flow for sequence diagram rendering.
+	 */
 	public static enum Direction {
-		SEND, RECEIVE
+		/** Message is being sent */
+		SEND,
+		/** Message is being received */
+		RECEIVE
 	};
 
+	/**
+	 * Constructs a Logger with the specified name and resource bundle.
+	 *
+	 * @param name the logger name
+	 * @param resourceBundleName the resource bundle name for localization
+	 */
 	protected Logger(String name, String resourceBundleName) {
 		super(name, resourceBundleName);
 	}
@@ -168,6 +200,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		super.info(NOSESS + " " + msg);
 	}
 
+	/**
+	 * Converts an exception stack trace to a formatted string.
+	 *
+	 * @param ex the exception to convert
+	 * @return the formatted stack trace string
+	 */
 	public static String stackTraceToString(Exception ex) {
 		String strStackTrace;
 
@@ -186,24 +224,47 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return strStackTrace;
 	}
 
+	/**
+	 * Logs an exception stack trace at SEVERE level with application session context.
+	 *
+	 * @param appSession the application session for context
+	 * @param e the exception to log
+	 */
 	public void logStackTrace(SipApplicationSession appSession, Exception e) {
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
 		severe(appSession, errors.toString());
 	}
 
+	/**
+	 * Logs an exception stack trace at SEVERE level with SIP session context.
+	 *
+	 * @param sipSession the SIP session for context
+	 * @param e the exception to log
+	 */
 	public void logStackTrace(SipSession sipSession, Exception e) {
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
 		severe(sipSession, errors.toString());
 	}
 
+	/**
+	 * Logs an exception stack trace at SEVERE level with SIP message context.
+	 *
+	 * @param msg the SIP message for context
+	 * @param e the exception to log
+	 */
 	public void logStackTrace(SipServletMessage msg, Exception e) {
 		StringWriter errors = new StringWriter();
 		e.printStackTrace(new PrintWriter(errors));
 		severe(msg, errors.toString());
 	}
 
+	/**
+	 * Logs an exception stack trace at WARNING level without session context.
+	 *
+	 * @param e the exception to log
+	 */
 	public void logStackTrace(Exception e) {
 		if (e == null)
 			return;
@@ -212,6 +273,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		warning(LOGGING_ERROR_PREFIX + e.getMessage() + "\n" + errors.toString());
 	}
 
+	/**
+	 * Logs an exception stack trace at SEVERE level without session context.
+	 *
+	 * @param e the exception to log
+	 */
 	public void logSevereStackTrace(Exception e) {
 		if (e == null)
 			return;
@@ -220,6 +286,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		severe(LOGGING_ERROR_PREFIX + e.getMessage() + "\n" + errors.toString());
 	}
 
+	/**
+	 * Logs an exception stack trace at WARNING level without session context.
+	 *
+	 * @param e the exception to log
+	 */
 	public void logWarningStackTrace(Exception e) {
 		if (e == null)
 			return;
@@ -328,10 +399,21 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return value;
 	}
 
+	/**
+	 * Logs an exception at SEVERE level without message context.
+	 *
+	 * @param e the exception to log
+	 */
 	public void severe(Exception e) {
 		severe(null, e);
 	}
 
+	/**
+	 * Logs an exception at SEVERE level with SIP message context.
+	 *
+	 * @param message the SIP message for context
+	 * @param e the exception to log
+	 */
 	public void severe(SipServletMessage message, Exception e) {
 		StringWriter sw = new StringWriter();
 		PrintWriter pw = new PrintWriter(sw);
@@ -343,12 +425,25 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		}
 	}
 
+	/**
+	 * Logs a timer event at the specified level.
+	 *
+	 * @param level the logging level
+	 * @param timer the servlet timer
+	 */
 	public void log(Level level, ServletTimer timer) {
 		if (this.isLoggable(level)) {
 			log(level, timer, null);
 		}
 	}
 
+	/**
+	 * Logs a timer event with comments at the specified level.
+	 *
+	 * @param level the logging level
+	 * @param timer the servlet timer
+	 * @param comments additional comments to include
+	 */
 	public void log(Level level, ServletTimer timer, String comments) {
 
 		if (this.isLoggable(level)) {
@@ -364,6 +459,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	}
 
+	/**
+	 * Logs a message with SIP message context at the specified level.
+	 *
+	 * @param level the logging level
+	 * @param message the SIP message for context
+	 * @param comments the message to log
+	 */
 	public void log(Level level, SipServletMessage message, String comments) {
 
 		if (this.isLoggable(level)) {
@@ -378,86 +480,124 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	}
 
+	/** Logs at FINE level with SIP message context. */
 	public void fine(SipServletMessage message, String comments) {
 		log(Level.FINE, message, comments);
 	}
 
+	/** Logs at FINER level with SIP message context. */
 	public void finer(SipServletMessage message, String comments) {
 		log(Level.FINER, message, comments);
 	}
 
+	/** Logs at FINEST level with SIP message context. */
 	public void finest(SipServletMessage message, String comments) {
 		log(Level.FINEST, message, comments);
 	}
 
+	/** Logs at INFO level with SIP message context. */
 	public void info(SipServletMessage message, String comments) {
 		log(Level.INFO, message, comments);
 	}
 
+	/** Logs at SEVERE level with SIP message context and red coloring. */
 	public void severe(SipServletMessage message, String comments) {
 		log(Level.SEVERE, message, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
+	/** Logs at WARNING level with SIP message context and yellow coloring. */
 	public void warning(SipServletMessage message, String comments) {
 		log(Level.WARNING, message, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
+	/**
+	 * Logs a message with application session context at the specified level.
+	 *
+	 * @param level the logging level
+	 * @param appSession the application session for context
+	 * @param comments the message to log
+	 */
 	public void log(Level level, SipApplicationSession appSession, String comments) {
 		log(level, hexHash(appSession) + " " + comments);
 	}
 
+	/**
+	 * Logs a message with SIP session context at the specified level.
+	 *
+	 * @param level the logging level
+	 * @param sipSession the SIP session for context
+	 * @param comments the message to log
+	 */
 	public void log(Level level, SipSession sipSession, String comments) {
 		log(level, hexHash(sipSession) + " " + comments);
 	}
 
+	/** Logs at FINE level with SIP session context. */
 	public void fine(SipSession sipSession, String comments) {
 		log(Level.FINE, sipSession, comments);
 	}
 
+	/** Logs at FINE level with application session context. */
 	public void fine(SipApplicationSession appSession, String comments) {
 		log(Level.FINE, appSession, comments);
 	}
 
+	/** Logs at FINER level with SIP session context. */
 	public void finer(SipSession sipSession, String comments) {
 		log(Level.FINER, sipSession, comments);
 	}
 
+	/** Logs at FINER level with application session context. */
 	public void finer(SipApplicationSession appSession, String comments) {
 		log(Level.FINER, appSession, comments);
 	}
 
+	/** Logs at FINEST level with SIP session context. */
 	public void finest(SipSession sipSession, String comments) {
 		log(Level.FINEST, sipSession, comments);
 	}
 
+	/** Logs at FINEST level with application session context. */
 	public void finest(SipApplicationSession appSession, String comments) {
 		log(Level.FINEST, appSession, comments);
 	}
 
+	/** Logs at INFO level with SIP session context. */
 	public void info(SipSession sipSession, String comments) {
 		log(Level.INFO, sipSession, comments);
 	}
 
+	/** Logs at INFO level with application session context. */
 	public void info(SipApplicationSession appSession, String comments) {
 		log(Level.INFO, appSession, comments);
 	}
 
+	/** Logs at SEVERE level with SIP session context and red coloring. */
 	public void severe(SipSession sipSession, String comments) {
 		log(Level.SEVERE, sipSession, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
+	/** Logs at SEVERE level with application session context and red coloring. */
 	public void severe(SipApplicationSession appSession, String comments) {
 		log(Level.SEVERE, appSession, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
+	/** Logs at WARNING level with SIP session context and yellow coloring. */
 	public void warning(SipSession sipSession, String comments) {
 		log(Level.WARNING, sipSession, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
+	/** Logs at WARNING level with application session context and yellow coloring. */
 	public void warning(SipApplicationSession appSession, String comments) {
 		log(Level.WARNING, appSession, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
+	/**
+	 * Formats a timer timeout message for logging.
+	 *
+	 * @param timer the servlet timer
+	 * @return the formatted timeout message
+	 */
 	public static String timeout(ServletTimer timer) {
 		if (timer == null) {
 			return NOSESS + TIMER_EXPIRED_MSG;
@@ -475,6 +615,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return str;
 	}
 
+	/**
+	 * Extracts the From user or host from a SIP message.
+	 *
+	 * @param msg the SIP message
+	 * @return the user or host part of the From address
+	 */
 	public static String from(SipServletMessage msg) {
 		if (msg == null || msg.getFrom() == null) {
 			return null;
@@ -490,6 +636,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return name;
 	}
 
+	/**
+	 * Extracts the To user or host from a SIP message.
+	 *
+	 * @param msg the SIP message
+	 * @return the user or host part of the To address
+	 */
 	public static String to(SipServletMessage msg) {
 		if (msg == null || msg.getTo() == null) {
 			return null;
@@ -505,6 +657,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return name;
 	}
 
+	/**
+	 * Creates a hex hash identifier for an application session.
+	 *
+	 * @param appSession the application session
+	 * @return the formatted session identifier string
+	 */
 	public static String hexHash(SipApplicationSession appSession) {
 		if (appSession == null) {
 			return NOSESS;
@@ -517,6 +675,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return "[" + hash1 + ":" + DEFAULT_DIALOG_HASH + "]";
 	}
 
+	/**
+	 * Creates a hex hash identifier for a SIP message.
+	 *
+	 * @param message the SIP message
+	 * @return the formatted session identifier string
+	 */
 	public static String hexHash(SipServletMessage message) {
 		if (message == null) {
 			return NOSESS;
@@ -524,6 +688,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return hexHash(message.getSession());
 	}
 
+	/**
+	 * Creates a hex hash identifier for a SIP session.
+	 *
+	 * @param sipSession the SIP session
+	 * @return the formatted session and dialog identifier string
+	 */
 	public static String hexHash(SipSession sipSession) {
 		if (sipSession == null || !sipSession.isValid()) {
 			return NOSESS;
@@ -542,6 +712,13 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		return "[" + hash1 + ":" + hash2 + "]";
 	}
 
+	/**
+	 * Shortens a string to fit within a specified length for sequence diagram display.
+	 *
+	 * @param inputValue the input string
+	 * @param length the maximum length including brackets
+	 * @return the shortened string enclosed in brackets
+	 */
 	public String shorten(String inputValue, int length) {
 		if (inputValue == null) {
 			return "[]";
@@ -587,6 +764,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 //#7                                    [BigLonedCall]-----------INVITE-->[255.255.255.255]   ; SDP
 //#8                                    [BigLon*amedCall]-----------200-->[255.255.255.255]   ; OK (INVITE)
 
+	/**
+	 * Renders a sequence diagram arrow for SIP message flow visualization.
+	 *
+	 * @param direction the direction of the message (SEND or RECEIVE)
+	 * @param request the SIP request, or null for responses
+	 * @param response the SIP response, or null for requests
+	 * @param name the name to display for the local endpoint
+	 */
 	public void superArrow(Direction direction, SipServletRequest request, SipServletResponse response, String name) {
 		try {
 			boolean leftSide = false;
@@ -629,6 +814,16 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		}
 	}
 
+	/**
+	 * Renders a sequence diagram arrow with full control over positioning.
+	 *
+	 * @param direction the direction of the message (SEND or RECEIVE)
+	 * @param leftSide true to render on the left side of the diagram
+	 * @param request the SIP request, or null for responses
+	 * @param response the SIP response, or null for requests
+	 * @param name the name to display for the local endpoint
+	 * @param user optional user name for the remote endpoint
+	 */
 	public void superArrow(Direction direction, boolean leftSide, SipServletRequest request,
 			SipServletResponse response, String name, String user) {
 //		log(Level.WARNING, "...superArrow direction=" + direction //

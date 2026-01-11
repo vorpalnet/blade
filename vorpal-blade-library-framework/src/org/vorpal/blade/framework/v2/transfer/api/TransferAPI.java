@@ -23,11 +23,11 @@ import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
-import org.vorpal.blade.framework.v2.DummyRequest;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v2.testing.DummyRequest;
 import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
 import org.vorpal.blade.framework.v2.transfer.ReferTransfer;
 import org.vorpal.blade.framework.v2.transfer.Transfer;
@@ -70,22 +70,49 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 	public static SettingsManager<TransferSettings> settings;
 
+	/**
+	 * Returns the map of pending asynchronous responses keyed by application session ID.
+	 *
+	 * @return the response map
+	 */
 	public static Map<String, AsyncResponse> getResponseMap() {
 		return responseMap;
 	}
 
+	/**
+	 * Sets the map of pending asynchronous responses.
+	 *
+	 * @param responseMap the response map to set
+	 */
 	public static void setResponseMap(Map<String, AsyncResponse> responseMap) {
 		TransferAPI.responseMap = responseMap;
 	}
 
+	/**
+	 * Returns the settings manager for transfer configuration.
+	 *
+	 * @return the settings manager
+	 */
 	public static SettingsManager<TransferSettings> getSettings() {
 		return settings;
 	}
 
+	/**
+	 * Sets the settings manager for transfer configuration.
+	 *
+	 * @param settings the settings manager to set
+	 */
 	public static void setSettings(SettingsManager<TransferSettings> settings) {
 		TransferAPI.settings = settings;
 	}
 
+	/**
+	 * Inspects session variables for a given session key.
+	 * Returns session information if the session exists, or 404 if not found.
+	 *
+	 * @param key the session index key to look up
+	 * @return a Response containing SessionResponse on success, or 404 if not found
+	 */
 //	@SuppressWarnings({ "unchecked" })
 //	@GET
 //	@Path("session/{key}")
@@ -118,6 +145,26 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 		return response;
 	}
 
+	/**
+	 * Invokes a call transfer operation based on the provided transfer request.
+	 * Supports blind, attended, conference, and REFER-based transfer styles.
+	 *
+	 * <p>Response codes:
+	 * <ul>
+	 *   <li>200 OK - Transfer completed successfully</li>
+	 *   <li>202 Accepted - Transfer initiated (fire and forget mode)</li>
+	 *   <li>403 Forbidden - Transfer declined by remote party</li>
+	 *   <li>404 Not Found - Session or dialog not found</li>
+	 *   <li>406 Not Acceptable - Invalid request or target</li>
+	 *   <li>410 Gone - Transfer abandoned</li>
+	 *   <li>491 Request Pending - Glare condition detected</li>
+	 *   <li>500 Internal Server Error - Unexpected error</li>
+	 * </ul>
+	 *
+	 * @param transferRequest the transfer request containing session key, dialog key, and target
+	 * @param uriInfo the URI context information
+	 * @param asyncResponse the JAX-RS async response for deferred completion
+	 */
 //	@SuppressWarnings({ "unchecked" })
 //	@POST
 //	@Asynchronous

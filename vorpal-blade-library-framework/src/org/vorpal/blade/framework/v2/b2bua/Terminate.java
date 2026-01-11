@@ -48,6 +48,11 @@ public class Terminate extends Callflow {
 
 	private final B2buaListener b2buaListener;
 
+	/**
+	 * Constructs a Terminate callflow with the specified listener.
+	 *
+	 * @param b2buaListener the B2BUA listener to receive lifecycle callbacks, or null for no callbacks
+	 */
 	public Terminate(B2buaListener b2buaListener) {
 		this.b2buaListener = b2buaListener;
 	}

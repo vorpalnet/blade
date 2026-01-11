@@ -42,9 +42,20 @@ public class AttributeSelector implements Serializable {
 	private DialogType dialog; // apply attributes to either origin or destination dialog (SipSession)
 	private Map<String, String> additionalExpressions;
 
+	/**
+	 * Default constructor for JSON deserialization.
+	 */
 	public AttributeSelector() {
 	}
 
+	/**
+	 * Constructs an AttributeSelector with the specified parameters.
+	 *
+	 * @param id the unique identifier for this selector
+	 * @param attribute the SIP message attribute to extract (e.g., "To", "From", "body")
+	 * @param pattern the regular expression pattern with named capturing groups
+	 * @param expression the replacement expression using captured group references
+	 */
 	public AttributeSelector(String id, String attribute, String pattern, String expression) {
 		this.setId(id);
 		this.setAttribute(attribute);
@@ -52,25 +63,58 @@ public class AttributeSelector implements Serializable {
 		this.setExpression(expression);
 	}
 
+	/**
+	 * Returns the dialog type indicating whether attributes should be applied
+	 * to the origin or destination SIP session.
+	 *
+	 * @return the dialog type, or null if not specified
+	 */
 	public DialogType getDialog() {
 		return dialog;
 	}
 
+	/**
+	 * Sets the dialog type indicating whether attributes should be applied
+	 * to the origin or destination SIP session.
+	 *
+	 * @param dialog the dialog type (origin or destination)
+	 * @return this AttributeSelector for method chaining
+	 */
 	@JsonPropertyDescription("apply SipSession attributes to either origin or destination dialog")
 	public AttributeSelector setDialog(DialogType dialog) {
 		this.dialog = dialog;
 		return this;
 	}
 
+	/**
+	 * Returns the map of additional expressions that define derived attributes
+	 * computed from the captured groups.
+	 *
+	 * @return the additional expressions map, or null if not configured
+	 */
 	public Map<String, String> getAdditionalExpressions() {
 		return additionalExpressions;
 	}
 
+	/**
+	 * Sets the map of additional expressions that define derived attributes
+	 * computed from the captured groups.
+	 *
+	 * @param additionalExpressions the additional expressions map
+	 * @return this AttributeSelector for method chaining
+	 */
 	public AttributeSelector setAdditionalExpressions(Map<String, String> additionalExpressions) {
 		this.additionalExpressions = additionalExpressions;
 		return this;
 	}
 
+	/**
+	 * Adds a single additional expression that defines a derived attribute.
+	 *
+	 * @param attributeName the name of the derived attribute
+	 * @param attributeExpression the expression to compute the attribute value
+	 * @return this AttributeSelector for method chaining
+	 */
 	public AttributeSelector addAdditionalExpression(String attributeName, String attributeExpression) {
 
 		if (this.additionalExpressions == null) {
@@ -87,47 +131,113 @@ public class AttributeSelector implements Serializable {
 	@JsonIgnore
 	private String _strPattern;
 
+	/**
+	 * Returns the unique identifier for this selector, used for JSON references.
+	 *
+	 * @return the selector ID
+	 */
 	public String getId() {
 		return id;
 	}
 
+	/**
+	 * Sets the unique identifier for this selector, used for JSON references.
+	 *
+	 * @param id the selector ID
+	 */
 	public void setId(String id) {
 		this.id = id;
 	}
 
+	/**
+	 * Returns the human-readable description of this selector.
+	 *
+	 * @return the description
+	 */
 	public String getDescription() {
 		return description;
 	}
 
+	/**
+	 * Sets the human-readable description of this selector.
+	 *
+	 * @param description the description
+	 */
 	public void setDescription(String description) {
 		this.description = description;
 	}
 
+	/**
+	 * Returns the SIP message attribute to extract data from.
+	 * Supported values include: "To", "From", "body", "Content", "ruri", "Request-URI", "remoteIP",
+	 * or any standard SIP header name.
+	 *
+	 * @return the attribute name
+	 */
 	public String getAttribute() {
 		return attribute;
 	}
 
+	/**
+	 * Sets the SIP message attribute to extract data from.
+	 * Supported values include: "To", "From", "body", "Content", "ruri", "Request-URI", "remoteIP",
+	 * or any standard SIP header name.
+	 *
+	 * @param attribute the attribute name
+	 */
 	public void setAttribute(String attribute) {
 		this.attribute = attribute;
 	}
 
+	/**
+	 * Returns the replacement expression used to format the extracted key.
+	 * The expression may contain references to named capturing groups.
+	 *
+	 * @return the replacement expression
+	 */
 	public String getExpression() {
 		return expression;
 	}
 
+	/**
+	 * Sets the replacement expression used to format the extracted key.
+	 * The expression may contain references to named capturing groups.
+	 *
+	 * @param expression the replacement expression
+	 */
 	public void setExpression(String expression) {
 		this.expression = expression;
 	}
 
+	/**
+	 * Returns the regular expression pattern string.
+	 *
+	 * @return the pattern string
+	 */
 	public String getPattern() {
 		return _pattern.toString();
 	}
 
+	/**
+	 * Sets the regular expression pattern with named capturing groups.
+	 * The pattern is compiled with DOTALL flag to allow matching across lines.
+	 *
+	 * @param pattern the regular expression pattern
+	 */
 	public void setPattern(String pattern) {
 		this._strPattern = pattern;
 		this._pattern = Pattern.compile(pattern, Pattern.DOTALL);
 	}
 
+	/**
+	 * Extracts attributes from the SIP request using the configured pattern.
+	 * Parses the specified attribute (header, body, URI, etc.) and applies
+	 * the regular expression to extract named capturing groups.
+	 *
+	 * @param request the SIP request to extract attributes from
+	 * @return an AttributesKey containing the extracted key and attributes,
+	 *         or null if the request is null or pattern does not match
+	 */
 	public AttributesKey findKey(SipServletRequest request) {
 		if (request == null) {
 			return null;
@@ -165,6 +275,9 @@ public class AttributeSelector implements Serializable {
 				}
 				break;
 
+			case "ruri":
+			case "Ruri":
+			case "RURI":
 			case "requestURI":
 			case "RequestURI":
 			case "Request-URI":
@@ -270,8 +383,8 @@ public class AttributeSelector implements Serializable {
 		} catch (Exception e) {
 			sipLogger.severe(request, "AttributeSelector.findKey - Error; Check configuration file." + //
 					"; matchResult=" + matchResult + //
-					", selector id=" + this.getId() + //
-					", attribute=" + this.getAttribute() + //
+					", selector id=" + id + //
+					", attribute=" + attribute + //
 					", value=" + value + //
 					", pattern=" + _strPattern + //
 					", expression=" + expression + //

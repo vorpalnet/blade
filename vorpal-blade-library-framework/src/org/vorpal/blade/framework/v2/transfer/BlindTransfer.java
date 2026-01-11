@@ -155,11 +155,24 @@ public class BlindTransfer extends Transfer {
 
 	private final boolean sendNotify;
 
+	/**
+	 * Constructs a BlindTransfer with NOTIFY messages enabled.
+	 *
+	 * @param referListener the listener to receive transfer lifecycle events
+	 * @param transferSettings the transfer configuration settings
+	 */
 	public BlindTransfer(TransferListener referListener, TransferSettings transferSettings) {
 		super(referListener, transferSettings);
 		this.sendNotify = true;
 	}
 
+	/**
+	 * Constructs a BlindTransfer with configurable NOTIFY messages.
+	 *
+	 * @param referListener the listener to receive transfer lifecycle events
+	 * @param transferSettings the transfer configuration settings
+	 * @param sendNotify true to send NOTIFY messages to the transferor, false otherwise
+	 */
 	public BlindTransfer(TransferListener referListener, TransferSettings transferSettings, boolean sendNotify) {
 		super(referListener, transferSettings);
 		this.sendNotify = sendNotify;

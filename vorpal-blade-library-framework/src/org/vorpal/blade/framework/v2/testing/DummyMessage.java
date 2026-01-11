@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2;
+package org.vorpal.blade.framework.v2.testing;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -24,6 +24,16 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipWebSocketContext;
 
+import org.vorpal.blade.framework.v2.AsyncSipServlet;
+
+/**
+ * A mock implementation of SipServletMessage for unit testing.
+ * Provides basic message functionality including header and attribute storage
+ * without requiring a SIP container.
+ *
+ * <p>This class serves as the base for DummyRequest and DummyResponse,
+ * implementing common message operations. The send() method is a no-op.
+ */
 public class DummyMessage implements SipServletMessage, Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -42,10 +52,48 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	protected SipApplicationSession sipApplicationSession;
 	protected SipSession session;
 
+	/**
+	 * Returns the SIP application session associated with this message.
+	 *
+	 * @return the application session
+	 */
+	public SipApplicationSession getSipApplicationSession() {
+		return sipApplicationSession;
+	}
+
+	/**
+	 * Sets the SIP application session for this message.
+	 *
+	 * @param sipApplicationSession the application session to set
+	 */
+	public void setSipApplicationSession(SipApplicationSession sipApplicationSession) {
+		this.sipApplicationSession = sipApplicationSession;
+	}
+
+	/**
+	 * Sets the SIP method for this message.
+	 *
+	 * @param method the SIP method (e.g., "INVITE", "BYE", "REFER")
+	 */
+	public void setMethod(String method) {
+		this.method = method;
+	}
+
+	/**
+	 * Sets the SIP application session for this message.
+	 * Alias for {@link #setSipApplicationSession(SipApplicationSession)}.
+	 *
+	 * @param sipApplicationSession the application session to set
+	 */
 	public void setApplicationSession(SipApplicationSession sipApplicationSession) {
 		this.sipApplicationSession = sipApplicationSession;
 	}
 
+	/**
+	 * Sets the SIP session for this message.
+	 *
+	 * @param session the SIP session to set
+	 */
 	public void setSession(SipSession session) {
 		this.session = session;
 	}
@@ -115,7 +163,7 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public Address getAddressHeader(String key) throws ServletParseException {
-		return AsyncSipServlet.sipFactory.createAddress(headers.get(key));
+		return AsyncSipServlet.getSipFactory().createAddress(headers.get(key));
 	}
 
 	@Override
@@ -198,7 +246,7 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	public Address getFrom() {
 		Address from = null;
 		try {
-			from = AsyncSipServlet.sipFactory.createAddress(headers.get("From"));
+			from = AsyncSipServlet.getSipFactory().createAddress(headers.get("From"));
 		} catch (Exception e) {
 			// Failed to parse From address
 		}
@@ -218,10 +266,10 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	@Override
 	public List<String> getHeaderList(String key) {
 		List<String> headerList = new LinkedList<>();
-	
+
 		// Really shouldn't use Map
 		headerList.add(headers.get(key));
-		
+
 		return headerList;
 	}
 
@@ -285,7 +333,7 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public Parameterable getParameterableHeader(String key) throws ServletParseException {
-		return AsyncSipServlet.sipFactory.createParameterable(headers.get(key));
+		return AsyncSipServlet.getSipFactory().createParameterable(headers.get(key));
 	}
 
 	@Override
@@ -349,7 +397,7 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	public Address getTo() {
 		Address to = null;
 		try {
-			to = AsyncSipServlet.sipFactory.createAddress(headers.get("To"));
+			to = AsyncSipServlet.getSipFactory().createAddress(headers.get("To"));
 		} catch (Exception e) {
 			// Failed to parse To address
 		}

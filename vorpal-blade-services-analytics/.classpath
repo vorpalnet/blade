@@ -21,5 +21,6 @@
 	<classpathentry kind="var" path="WLSERVER/sip/server/lib/sipservlet-api.jar"/>
 	<classpathentry kind="con" path="org.eclipse.datatools.connectivity.jdt.DRIVERLIBRARY/MySQL JDBC Driver"/>
 	<classpathentry kind="con" path="oracle.eclipse.tools.weblogic.lib.shared/vorpal-blade/allow-newer/2.0"/>
+	<classpathentry kind="var" path="WLSERVER/sip/server/lib/wlss.jar"/>
 	<classpathentry kind="output" path="build/classes"/>
 </classpath>

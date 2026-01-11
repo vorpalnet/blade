@@ -31,6 +31,9 @@ public class ProxyTier implements Serializable {
 	private Integer timeout = DEFAULT_TIMEOUT;
 	private List<URI> endpoints = new ArrayList<>();
 
+	/**
+	 * Default constructor for JSON deserialization.
+	 */
 	public ProxyTier() {
 	}
 
@@ -47,38 +50,84 @@ public class ProxyTier implements Serializable {
 		}
 	}
 
+	/**
+	 * Returns the unique identifier for this tier.
+	 *
+	 * @return the tier ID
+	 */
 	public String getId() {
 		return id;
 	}
 
+	/**
+	 * Sets the unique identifier for this tier.
+	 *
+	 * @param id the tier ID
+	 */
 	public void setId(String id) {
 		this.id = id;
 	}
 
+	/**
+	 * Returns the routing mode for this tier.
+	 *
+	 * @return the routing mode (parallel or serial)
+	 */
 	public Mode getMode() {
 		return mode;
 	}
 
+	/**
+	 * Sets the routing mode for this tier.
+	 *
+	 * @param mode the routing mode (parallel or serial)
+	 */
 	public void setMode(Mode mode) {
 		this.mode = mode;
 	}
 
+	/**
+	 * Returns the timeout in seconds for this tier.
+	 *
+	 * @return the timeout value
+	 */
 	public Integer getTimeout() {
 		return timeout;
 	}
 
+	/**
+	 * Sets the timeout in seconds for this tier.
+	 *
+	 * @param timeout the timeout value
+	 */
 	public void setTimeout(Integer timeout) {
 		this.timeout = timeout;
 	}
 
+	/**
+	 * Returns the list of endpoint URIs for this tier.
+	 *
+	 * @return the list of endpoints
+	 */
 	public List<URI> getEndpoints() {
 		return endpoints;
 	}
 
+	/**
+	 * Sets the list of endpoint URIs for this tier.
+	 *
+	 * @param endpoints the list of endpoints
+	 */
 	public void setEndpoints(List<URI> endpoints) {
 		this.endpoints = endpoints;
 	}
 
+	/**
+	 * Adds an endpoint URI to this tier.
+	 *
+	 * @param endpoint the endpoint URI to add
+	 * @return the added endpoint URI
+	 */
 	public URI addEndpoint(URI endpoint) {
 		if (endpoint != null) {
 			if (this.endpoints == null) {

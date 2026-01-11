@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2;
+package org.vorpal.blade.framework.v2.testing;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -20,6 +20,7 @@ import javax.servlet.sip.B2buaHelper;
 import javax.servlet.sip.InviteBranch;
 import javax.servlet.sip.Proxy;
 import javax.servlet.sip.ServletParseException;
+import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipURI;
@@ -28,27 +29,104 @@ import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 
+/**
+ * A mock implementation of SipServletRequest for unit testing. Provides request
+ * functionality including method, headers, and URI management without requiring
+ * a SIP container.
+ *
+ * <p>
+ * Creates DummyResponse instances when createResponse() is called. Most proxy
+ * and routing methods are stub implementations.
+ */
 public class DummyRequest extends DummyMessage implements SipServletRequest, Serializable {
 
 	private static final long serialVersionUID = 1L;
-	private String content;
-	private String contentType;
 	private URI requestUri;
 
-	public DummyRequest(String method, String from, String to) throws ServletParseException {
-		this.method = method;
-		this.headers.put("From", from);
-		this.headers.put("To", to);
-//		this.requestUri = Callflow.getSipFactory().createURI(to);
+	/**
+	 * Constructs a DummyRequest with the specified application session and method.
+	 *
+	 * @param appSession the application session for this request
+	 * @param method     the SIP method (e.g., "INVITE", "BYE", "REFER")
+	 * @throws ServletParseException if parsing fails
+	 */
+	public DummyRequest(SipApplicationSession appSession, String method) throws ServletParseException {
+		this.setApplicationSession(appSession);
+		this.setMethod(method);
 	}
 
-	public DummyRequest(String method, URI from, URI to) {
+	/**
+	 * Constructs a DummyRequest with the specified parameters using string
+	 * addresses.
+	 *
+	 * @param appSession the application session for this request
+	 * @param method     the SIP method
+	 * @param from       the From address as a string
+	 * @param to         the To address as a string
+	 * @throws ServletParseException if address parsing fails
+	 */
+	public DummyRequest(SipApplicationSession appSession, String method, String from, String to)
+			throws ServletParseException {
+		this.setApplicationSession(appSession);
+		this.method = method;
+		this.setHeader("From", from);
+		this.headers.put("To", to);
+	}
+
+	/**
+	 * Constructs a DummyRequest with the specified parameters using string
+	 * addresses.
+	 *
+	 * @param method the SIP method
+	 * @param from   the From address as a string
+	 * @param to     the To address as a string
+	 * @throws ServletParseException if address parsing fails
+	 */
+	public DummyRequest(String method, String from, String to) throws ServletParseException {
+		this(new DummyApplicationSession("test"), method, from, to);
+	}
+
+	/**
+	 * Constructs a DummyRequest with the specified parameters using URI objects.
+	 *
+	 * @param appSession the application session for this request
+	 * @param method     the SIP method
+	 * @param from       the From URI
+	 * @param to         the To URI (also used as the request URI)
+	 */
+	public DummyRequest(SipApplicationSession appSession, String method, URI from, URI to) {
+		this.setApplicationSession(appSession);
 		this.method = method;
 		this.headers.put("From", from.toString());
 		this.headers.put("To", to.toString());
 		this.requestUri = to;
 	}
 
+	/**
+	 * Constructs a DummyRequest with the specified parameters using Address
+	 * objects.
+	 *
+	 * @param appSession the application session for this request
+	 * @param method     the SIP method
+	 * @param from       the From address
+	 * @param to         the To address
+	 */
+	public DummyRequest(SipApplicationSession appSession, String method, Address from, Address to) {
+		this.setApplicationSession(appSession);
+		this.method = method;
+		this.headers.put("From", from.toString());
+		this.headers.put("To", to.toString());
+	}
+
+	/**
+	 * Constructs a DummyRequest with the specified method and addresses. The
+	 * application session should be set separately using
+	 * {@link #setApplicationSession(SipApplicationSession)}.
+	 *
+	 * @param method the SIP method
+	 * @param from   the From address
+	 * @param to     the To address
+	 */
 	public DummyRequest(String method, Address from, Address to) {
 		this.method = method;
 		this.headers.put("From", from.toString());
@@ -207,15 +285,13 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	}
 
 	@Override
-	public SipServletResponse createResponse(int arg0) {
-		// TODO Auto-generated method stub
-		return null;
+	public SipServletResponse createResponse(int status) {
+		return new DummyResponse(this, status);
 	}
 
 	@Override
-	public SipServletResponse createResponse(int arg0, String arg1) {
-		// TODO Auto-generated method stub
-		return null;
+	public SipServletResponse createResponse(int status, String reasonPhrase) {
+		return new DummyResponse(this, status, reasonPhrase);
 	}
 
 	@Override

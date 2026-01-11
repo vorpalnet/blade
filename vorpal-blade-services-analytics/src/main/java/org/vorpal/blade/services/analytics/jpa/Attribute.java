@@ -30,8 +30,11 @@ public class Attribute implements Serializable {
 	}
 
 	public Attribute(String name, String value) {
-		AttributePK attrPK = new AttributePK();
-		attrPK.setName("name");
+//		AttributePK attrPK = new AttributePK();
+//		attrPK.setName(name);
+//		this.setId(attrPK);
+		
+		this.setId(new AttributePK(name));
 		this.value = value;
 	}
 
