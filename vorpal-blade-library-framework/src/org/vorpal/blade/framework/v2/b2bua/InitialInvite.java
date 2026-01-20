@@ -38,11 +38,14 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
+import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 /**
- * Callflow for handling initial INVITE requests in a B2BUA scenario.
- * Creates the outbound leg, links sessions, and orchestrates the call setup process.
+ * Callflow for handling initial INVITE requests in a B2BUA scenario. Creates
+ * the outbound leg, links sessions, and orchestrates the call setup process.
  */
 public class InitialInvite extends Callflow {
 	private static final long serialVersionUID = 1L;
@@ -114,7 +117,8 @@ public class InitialInvite extends Callflow {
 		} catch (ServletParseException e) {
 			// Invalid Session-Expires header format; ignore and use default expiration
 		} catch (NumberFormatException e) {
-			// Invalid numeric value in Session-Expires header; ignore and use default expiration
+			// Invalid numeric value in Session-Expires header; ignore and use default
+			// expiration
 		}
 	}
 
@@ -138,17 +142,22 @@ public class InitialInvite extends Callflow {
 				copyContentAndHeaders(bobResponse, aliceResponse);
 
 				if (successful(bobResponse)) {
+
+					SipSession caller = aliceResponse.getSession();
+					caller.setAttribute(ATTR_USER_AGENT, ROLE_CALLER);
+					SipSession callee = Callflow.getLinkedSession(caller);
+					if (callee != null) {
+						callee.setAttribute(ATTR_USER_AGENT, ROLE_CALLEE);
+					}
+
 					if (b2buaListener != null) {
 
-						SipSession caller = aliceResponse.getSession();
-						caller.setAttribute(ATTR_USER_AGENT, ROLE_CALLER);
-						SipSession callee = Callflow.getLinkedSession(caller);
-						if (callee != null) {
-							callee.setAttribute(ATTR_USER_AGENT, ROLE_CALLEE);
-						}
-
 						try {
+
+							SettingsManager.createEvent("callAnswered", aliceResponse);
 							b2buaListener.callAnswered(aliceResponse);
+							SettingsManager.sendEvent(aliceResponse);
+
 						} catch (Exception ex) {
 							sipLogger.warning(aliceResponse, "InitialInvite.processContinue - catch #1");
 							throw new ServletException(ex);
@@ -157,7 +166,9 @@ public class InitialInvite extends Callflow {
 					}
 				} else if (failure(bobResponse)) {
 					if (b2buaListener != null) {
+						SettingsManager.createEvent("callDeclined", aliceResponse);
 						b2buaListener.callDeclined(aliceResponse);
+						SettingsManager.sendEvent(aliceResponse);
 					}
 				}
 
@@ -180,7 +191,11 @@ public class InitialInvite extends Callflow {
 						} else if (aliceAck.getMethod().equals(ACK)) {
 							SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
 							if (b2buaListener != null) {
+
+								SettingsManager.createEvent("callConnected", bobAck);
 								b2buaListener.callConnected(bobAck);
+								SettingsManager.sendEvent(bobAck);
+
 							}
 							sendRequest(bobAck);
 						} else {
@@ -210,33 +225,32 @@ public class InitialInvite extends Callflow {
 		bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
 		copyContentAndHeaders(aliceRequest, bobRequest);
 		bobRequest.setRequestURI(aliceRequest.getRequestURI());
-		linkSessions(aliceRequest.getSession(), bobRequest.getSession());
 
 		// This is an API kludge to let the user know what callflow was used
 		bobRequest.setAttribute(ATTR_CALLFLOW, this);
 
-		if (b2buaListener != null) {
-			
-			Address xOriginalDnAddress = aliceRequest.getAddressHeader(ATTR_X_ORIGINAL_DN);
-			URI xOriginalDN;
-			if(xOriginalDnAddress!=null) {
-				xOriginalDN = xOriginalDnAddress.getURI();
-			}else {
-				xOriginalDN  = bobRequest.getTo().getURI();
-			}
-			appSession.setAttribute(ATTR_X_ORIGINAL_DN, xOriginalDN);				
-			
-			
-			URI xPreviousDN = bobRequest.getRequestURI();
-			appSession.setAttribute(ATTR_X_PREVIOUS_DN, xPreviousDN);
-			bobRequest.getSession().setAttribute(ATTR_INITIAL_INVITE, bobRequest);
-			SipServletRequest incomingAliceRequest = getIncomingRequest(bobRequest);
-			if (incomingAliceRequest != null) {
-				incomingAliceRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, incomingAliceRequest.getFrom());
-			}
-			bobRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, bobRequest.getTo());
+		Address xOriginalDnAddress = aliceRequest.getAddressHeader(ATTR_X_ORIGINAL_DN);
+		URI xOriginalDN;
+		if (xOriginalDnAddress != null) {
+			xOriginalDN = xOriginalDnAddress.getURI();
+		} else {
+			xOriginalDN = bobRequest.getTo().getURI();
+		}
+		appSession.setAttribute(ATTR_X_ORIGINAL_DN, xOriginalDN);
 
+		URI xPreviousDN = bobRequest.getRequestURI();
+		appSession.setAttribute(ATTR_X_PREVIOUS_DN, xPreviousDN);
+		bobRequest.getSession().setAttribute(ATTR_INITIAL_INVITE, bobRequest);
+		SipServletRequest incomingAliceRequest = getIncomingRequest(bobRequest);
+		if (incomingAliceRequest != null) {
+			incomingAliceRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, incomingAliceRequest.getFrom());
+		}
+		bobRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, bobRequest.getTo());
+
+		if (b2buaListener != null) {
+			SettingsManager.createEvent("callStarted", bobRequest);
 			b2buaListener.callStarted(bobRequest);
+			SettingsManager.sendEvent(bobRequest);
 		}
 
 		// Remove the callflow so it's not serialized
@@ -328,10 +342,11 @@ public class InitialInvite extends Callflow {
 	}
 
 	/**
-	 * Sets whether to halt processing for this callflow.
-	 * When set to true, the framework will not automatically send the outbound request.
+	 * Sets whether to halt processing for this callflow. When set to true, the
+	 * framework will not automatically send the outbound request.
 	 *
-	 * @param doNotProcess true to halt automatic processing, false to continue normally
+	 * @param doNotProcess true to halt automatic processing, false to continue
+	 *                     normally
 	 */
 	public void setDoNotProcess(boolean doNotProcess) {
 		this.doNotProcess = doNotProcess;

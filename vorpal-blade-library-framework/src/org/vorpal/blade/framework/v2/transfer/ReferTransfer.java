@@ -76,6 +76,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
 
 /**
@@ -130,13 +131,21 @@ public class ReferTransfer extends Transfer {
 			transferorRequest.setAttribute(REFER_TO, referTo);
 
 			// User is notified a transfer is requested
-			transferListener.transferRequested(transferorRequest);
+			if (transferListener != null) {
+				SettingsManager.createEvent("transferRequested", transferorRequest);
+				transferListener.transferRequested(transferorRequest);
+				SettingsManager.sendEvent(transferorRequest);
+			}
 
 			expectRequest(transfereeSession, CANCEL, (cancel) -> {
 				sipLogger.finer(transfereeSession, "ReferTransfer.process - expectRequest CANCEL, Alice hangs up.");
 
 				// Transferee (Alice) hangs up
-				transferListener.transferAbandoned(transfereeRequest);
+				if (transferListener != null) {
+					SettingsManager.createEvent("transferAbandoned", transfereeRequest);
+					transferListener.transferAbandoned(transfereeRequest);
+					SettingsManager.sendEvent(transfereeRequest);
+				}
 
 				sendRequest(continueRequest(transferorSession, cancel));
 			});
@@ -168,7 +177,13 @@ public class ReferTransfer extends Transfer {
 
 						if (sipfrag.contains(SIPFRAG_100)) {
 							// User is notified that transfer is initiated
-							transferListener.transferInitiated(transfereeRequest);
+
+							if (transferListener != null) {
+								SettingsManager.createEvent("transferInitiated", transfereeRequest);
+								transferListener.transferInitiated(transfereeRequest);
+								SettingsManager.sendEvent(transfereeRequest);
+							}
+
 						} else if (sipfrag.contains(SIPFRAG_200)) {
 							// User is notified of a successful transfer
 							// What response to use?
@@ -186,7 +201,11 @@ public class ReferTransfer extends Transfer {
 									referResponse.getApplicationSession().setAttribute(X_PREVIOUS_DN_ATTR, referTo2);
 								}
 
-								transferListener.transferCompleted(referResponse);
+								if (transferListener != null) {
+									SettingsManager.createEvent("transferCompleted", referResponse);
+									transferListener.transferCompleted(referResponse);
+									SettingsManager.sendEvent(referResponse);
+								}
 							}
 							sendRequest(transferorSession.createRequest(BYE));
 						} else if (sipfrag.contains(SIPFRAG_486)) {
@@ -194,7 +213,13 @@ public class ReferTransfer extends Transfer {
 							// User is notified that the transfer target did not answer
 							// What response to use?
 							if (referResponse != null) {
-								transferListener.transferDeclined(referResponse);
+
+								if (transferListener != null) {
+									SettingsManager.createEvent("transferDeclined", referResponse);
+									transferListener.transferDeclined(referResponse);
+									SettingsManager.sendEvent(referResponse);
+								}
+
 							}
 
 						}
@@ -210,7 +235,13 @@ public class ReferTransfer extends Transfer {
 
 				if (failure(referResponse)) {
 					// If refer fails, complete REST invocation as a failure
-					transferListener.transferDeclined(referResponse);
+
+					if (transferListener != null) {
+						SettingsManager.createEvent("transferDeclined", referResponse);
+						transferListener.transferDeclined(referResponse);
+						SettingsManager.sendEvent(referResponse);
+					}
+
 				}
 
 			});

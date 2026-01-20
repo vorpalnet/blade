@@ -72,7 +72,6 @@ public class Passthru extends Callflow {
 				bobRequest = sipFactory.createRequest(request.getApplicationSession(), request.getMethod(),
 						request.getFrom(), request.getTo());
 				bobRequest.setRequestURI(request.getRequestURI());
-				linkSessions(request.getSession(), bobRequest.getSession());
 			}
 
 			copyContentAndHeaders(aliceRequest, bobRequest);

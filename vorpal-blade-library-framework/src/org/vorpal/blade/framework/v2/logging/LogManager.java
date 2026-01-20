@@ -26,10 +26,12 @@ package org.vorpal.blade.framework.v2.logging;
 
 import java.io.File;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
 import java.util.logging.Formatter;
 import java.util.logging.Handler;
 import java.util.logging.Level;
+import java.util.logging.SimpleFormatter;
 
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
@@ -37,13 +39,14 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import weblogic.kernel.KernelLogManager;
 
 /**
- * Manages application-specific loggers with file-based output.
- * Automatically creates and configures loggers on context initialization.
+ * Manages application-specific loggers with file-based output. Automatically
+ * creates and configures loggers on context initialization.
  */
 @WebListener
 public class LogManager implements ServletContextListener {
@@ -204,6 +207,29 @@ public class LogManager implements ServletContextListener {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Returns a 'console' logger suitable for unit testing.
+	 * 
+	 * @return logger
+	 */
+	public static Logger getConsoleLogger() {
+		Logger sipLogger = LogManager.getLogger("BLADE");
+		Callflow.setSipLogger(sipLogger);
+		SettingsManager.setSipLogger(sipLogger);
+
+		sipLogger.removeHandler(sipLogger.getHandlers()[0]);
+		ConsoleHandler consoleHandler = new ConsoleHandler();
+
+		SimpleFormatter formatter = new SimpleFormatter();
+		consoleHandler.setFormatter(formatter);
+		consoleHandler.setLevel(Level.ALL);
+
+		sipLogger.addHandler(consoleHandler);
+		sipLogger.setLevel(Level.ALL);
+		sipLogger.setUseParentHandlers(false);
+		return sipLogger;
 	}
 
 }

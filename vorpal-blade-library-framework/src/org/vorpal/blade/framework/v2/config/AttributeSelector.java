@@ -11,7 +11,10 @@ import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.servlet.sip.SipServletContextEvent;
+import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v2.logging.Logger;
 
@@ -51,9 +54,10 @@ public class AttributeSelector implements Serializable {
 	/**
 	 * Constructs an AttributeSelector with the specified parameters.
 	 *
-	 * @param id the unique identifier for this selector
-	 * @param attribute the SIP message attribute to extract (e.g., "To", "From", "body")
-	 * @param pattern the regular expression pattern with named capturing groups
+	 * @param id         the unique identifier for this selector
+	 * @param attribute  the SIP message attribute to extract (e.g., "To", "From",
+	 *                   "body")
+	 * @param pattern    the regular expression pattern with named capturing groups
 	 * @param expression the replacement expression using captured group references
 	 */
 	public AttributeSelector(String id, String attribute, String pattern, String expression) {
@@ -64,8 +68,8 @@ public class AttributeSelector implements Serializable {
 	}
 
 	/**
-	 * Returns the dialog type indicating whether attributes should be applied
-	 * to the origin or destination SIP session.
+	 * Returns the dialog type indicating whether attributes should be applied to
+	 * the origin or destination SIP session.
 	 *
 	 * @return the dialog type, or null if not specified
 	 */
@@ -74,8 +78,8 @@ public class AttributeSelector implements Serializable {
 	}
 
 	/**
-	 * Sets the dialog type indicating whether attributes should be applied
-	 * to the origin or destination SIP session.
+	 * Sets the dialog type indicating whether attributes should be applied to the
+	 * origin or destination SIP session.
 	 *
 	 * @param dialog the dialog type (origin or destination)
 	 * @return this AttributeSelector for method chaining
@@ -111,7 +115,7 @@ public class AttributeSelector implements Serializable {
 	/**
 	 * Adds a single additional expression that defines a derived attribute.
 	 *
-	 * @param attributeName the name of the derived attribute
+	 * @param attributeName       the name of the derived attribute
 	 * @param attributeExpression the expression to compute the attribute value
 	 * @return this AttributeSelector for method chaining
 	 */
@@ -168,8 +172,8 @@ public class AttributeSelector implements Serializable {
 	}
 
 	/**
-	 * Returns the SIP message attribute to extract data from.
-	 * Supported values include: "To", "From", "body", "Content", "ruri", "Request-URI", "remoteIP",
+	 * Returns the SIP message attribute to extract data from. Supported values
+	 * include: "To", "From", "body", "Content", "ruri", "Request-URI", "remoteIP",
 	 * or any standard SIP header name.
 	 *
 	 * @return the attribute name
@@ -179,8 +183,8 @@ public class AttributeSelector implements Serializable {
 	}
 
 	/**
-	 * Sets the SIP message attribute to extract data from.
-	 * Supported values include: "To", "From", "body", "Content", "ruri", "Request-URI", "remoteIP",
+	 * Sets the SIP message attribute to extract data from. Supported values
+	 * include: "To", "From", "body", "Content", "ruri", "Request-URI", "remoteIP",
 	 * or any standard SIP header name.
 	 *
 	 * @param attribute the attribute name
@@ -190,8 +194,8 @@ public class AttributeSelector implements Serializable {
 	}
 
 	/**
-	 * Returns the replacement expression used to format the extracted key.
-	 * The expression may contain references to named capturing groups.
+	 * Returns the replacement expression used to format the extracted key. The
+	 * expression may contain references to named capturing groups.
 	 *
 	 * @return the replacement expression
 	 */
@@ -200,8 +204,8 @@ public class AttributeSelector implements Serializable {
 	}
 
 	/**
-	 * Sets the replacement expression used to format the extracted key.
-	 * The expression may contain references to named capturing groups.
+	 * Sets the replacement expression used to format the extracted key. The
+	 * expression may contain references to named capturing groups.
 	 *
 	 * @param expression the replacement expression
 	 */
@@ -219,8 +223,8 @@ public class AttributeSelector implements Serializable {
 	}
 
 	/**
-	 * Sets the regular expression pattern with named capturing groups.
-	 * The pattern is compiled with DOTALL flag to allow matching across lines.
+	 * Sets the regular expression pattern with named capturing groups. The pattern
+	 * is compiled with DOTALL flag to allow matching across lines.
 	 *
 	 * @param pattern the regular expression pattern
 	 */
@@ -230,16 +234,16 @@ public class AttributeSelector implements Serializable {
 	}
 
 	/**
-	 * Extracts attributes from the SIP request using the configured pattern.
-	 * Parses the specified attribute (header, body, URI, etc.) and applies
-	 * the regular expression to extract named capturing groups.
+	 * Extracts attributes from the SIP request using the configured pattern. Parses
+	 * the specified attribute (header, body, URI, etc.) and applies the regular
+	 * expression to extract named capturing groups.
 	 *
 	 * @param request the SIP request to extract attributes from
-	 * @return an AttributesKey containing the extracted key and attributes,
-	 *         or null if the request is null or pattern does not match
+	 * @return an AttributesKey containing the extracted key and attributes, or null
+	 *         if the request is null or pattern does not match
 	 */
-	public AttributesKey findKey(SipServletRequest request) {
-		if (request == null) {
+	public AttributesKey findKey(SipServletMessage message) {
+		if (message == null) {
 			return null;
 		}
 
@@ -252,21 +256,36 @@ public class AttributeSelector implements Serializable {
 
 		try {
 			switch (attribute) {
+
+			case "status":
+				if (message instanceof SipServletResponse) {
+					header = Integer.toString(((SipServletResponse) message).getStatus());
+				}
+
+				break;
+
+			case "reason":
+			case "reasonPhrase":
+				if (message instanceof SipServletResponse) {
+					header = ((SipServletResponse) message).getReasonPhrase();
+				}
+				break;
+
 			case "body":
 			case "Body":
 			case "content":
 			case "Content":
 				header = "";
 				try {
-					if (request.getContent() != null) {
-						if (request.getContent() instanceof String) {
-							header = (String) request.getContent();
+					if (message.getContent() != null) {
+						if (message.getContent() instanceof String) {
+							header = (String) message.getContent();
 						} else {
-							byte[] content = (byte[]) request.getContent();
+							byte[] content = (byte[]) message.getContent();
 							header = new String(content);
 						}
 					} else {
-						sipLogger.severe(request,
+						sipLogger.severe(message,
 								"AttributeSelector.findKey - No content in message body. Check configuration.");
 					}
 				} catch (IOException e) { // this should never happen
@@ -281,13 +300,16 @@ public class AttributeSelector implements Serializable {
 			case "requestURI":
 			case "RequestURI":
 			case "Request-URI":
-				header = request.getRequestURI().toString();
+				if (message instanceof SipServletRequest) {
+					header = ((SipServletRequest) message).getRequestURI().toString();
+				}
+
 				break;
 
 			case "remoteIP":
 			case "RemoteIP":
 			case "Remote-IP":
-				header = request.getRemoteAddr();
+				header = message.getRemoteAddr();
 
 				if (header == null) { // test case only
 					header = "127.0.0.1";
@@ -295,10 +317,10 @@ public class AttributeSelector implements Serializable {
 
 				break;
 			default:
-				header = request.getHeader(attribute);
+				header = message.getHeader(attribute);
 
 				if (header == null) {
-					header = (String) request.getSession().getAttribute(attribute);
+					header = (String) message.getSession().getAttribute(attribute);
 				}
 
 			}
@@ -368,7 +390,7 @@ public class AttributeSelector implements Serializable {
 				}
 
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(request, "AttributeSelector.findKey - " + //
+					sipLogger.finer(message, "AttributeSelector.findKey - " + //
 							"- matchResult=" + matchResult + //
 							", selector id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
@@ -381,7 +403,7 @@ public class AttributeSelector implements Serializable {
 			}
 
 		} catch (Exception e) {
-			sipLogger.severe(request, "AttributeSelector.findKey - Error; Check configuration file." + //
+			sipLogger.severe(message, "AttributeSelector.findKey - Error; Check configuration file." + //
 					"; matchResult=" + matchResult + //
 					", selector id=" + id + //
 					", attribute=" + attribute + //
@@ -389,8 +411,146 @@ public class AttributeSelector implements Serializable {
 					", pattern=" + _strPattern + //
 					", expression=" + expression + //
 					", key=" + key);
-			sipLogger.severe(request, request.toString());
-			sipLogger.logStackTrace(request, e);
+			sipLogger.severe(message, message.toString());
+			sipLogger.logStackTrace(message, e);
+		}
+
+		return attrsKey;
+	}
+
+	public AttributesKey findKey(SipServletContextEvent context) {
+		if (context == null) {
+			return null;
+		}
+
+		Logger sipLogger = SettingsManager.getSipLogger();
+		AttributesKey attrsKey = null;
+		String key = null;
+		String header = null;
+		boolean matchResult = false;
+		String value = null;
+
+		// what can you do with context?
+		{
+			context.getServletContext().getAttribute(value);
+			context.getServletContext().getInitParameter(value);
+
+		}
+
+		try {
+			switch (attribute) {
+
+			case "servletInfo":
+				header = context.getSipServlet().getServletInfo();
+				break;
+
+			case "servletName":
+				header = context.getSipServlet().getServletName();
+				break;
+
+			case "contextPath":
+				header = context.getServletContext().getContextPath();
+				break;
+
+			case "servletContextName":
+				header = context.getServletContext().getServletContextName();
+				break;
+
+			default:
+				header = context.getServletContext().getInitParameter(attribute);
+				header = (header != null) ? header : (String) context.getServletContext().getAttribute(attribute);
+				header = (header != null) ? header : System.getenv(attribute);
+				header = (header != null) ? header : System.getProperty("weblogic.Name");
+			}
+
+			if (header != null) {
+
+				Matcher matcher = _pattern.matcher(header);
+
+				value = (attribute.matches("Content")) ? "[...]" : header;
+
+				matchResult = matcher.matches();
+
+				if (matchResult && expression != null) {
+					key = matcher.replaceAll(expression);
+				}
+
+				if (matchResult) {
+
+					attrsKey = new AttributesKey();
+					attrsKey.key = key;
+
+					LinkedList<String> groups = new LinkedList<>();
+					Matcher m = _p.matcher(this._strPattern);
+					String __name;
+
+					while (m.find()) {
+						__name = m.group("name");
+						if (__name != null) {
+							groups.add(__name);
+						}
+					}
+
+					// a__ variables. yucky! clean this up later.
+					// This builds regex named group pairs for use later
+					Matcher a__matcher = _pattern.matcher(header);
+					boolean a__matchFound = a__matcher.find();
+					if (a__matchFound) {
+						String a__name, a__value;
+						Iterator<String> a__itr = groups.iterator();
+						while (a__itr.hasNext()) {
+							a__name = a__itr.next();
+							a__value = a__matcher.group(a__name);
+							if (a__value != null && a__value.length() > 0) {
+								attrsKey.attributes.put(a__name, a__value);
+							}
+						}
+					}
+
+					// use any additional attributes in the selector
+
+					if (additionalExpressions != null && !additionalExpressions.isEmpty()) {
+						Map<String, String> additionalAttributes = new HashMap<>();
+						for (Entry<String, String> entry : this.additionalExpressions.entrySet()) {
+
+							// make sure not to overwrite existing attributes
+							if (!attrsKey.attributes.containsKey(entry.getKey())) {
+								String attrValue = Configuration.resolveVariables(attrsKey.attributes,
+										entry.getValue());
+								additionalAttributes.put(entry.getKey(), attrValue);
+							}
+
+						}
+
+						attrsKey.attributes.putAll(additionalAttributes);
+					}
+
+				}
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer("AttributeSelector.findKey - " + //
+							"- matchResult=" + matchResult + //
+							", selector id=" + this.getId() + //
+							", attribute=" + this.getAttribute() + //
+							", value=" + value + //
+							", pattern=" + _strPattern + //
+							", expression=" + expression + //
+							", key=" + key);
+				}
+
+			}
+
+		} catch (Exception e) {
+			sipLogger.severe("AttributeSelector.findKey - Error; Check configuration file." + //
+					"; matchResult=" + matchResult + //
+					", selector id=" + id + //
+					", attribute=" + attribute + //
+					", value=" + value + //
+					", pattern=" + _strPattern + //
+					", expression=" + expression + //
+					", key=" + key);
+			sipLogger.severe(Logger.serializeObject(context));
+			sipLogger.logStackTrace(e);
 		}
 
 		return attrsKey;

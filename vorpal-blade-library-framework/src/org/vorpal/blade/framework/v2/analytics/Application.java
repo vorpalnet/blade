@@ -1,7 +1,6 @@
-package org.vorpal.blade.services.analytics.jpa;
+package org.vorpal.blade.framework.v2.analytics;
 
 import java.io.Serializable;
-import java.sql.Timestamp;
 import java.util.Date;
 
 import javax.persistence.Column;

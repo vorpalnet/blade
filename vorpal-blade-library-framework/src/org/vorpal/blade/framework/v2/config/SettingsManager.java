@@ -30,7 +30,7 @@ import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.Arrays;
 import java.util.logging.Level;
 
 import javax.management.InstanceAlreadyExistsException;
@@ -39,24 +39,27 @@ import javax.management.MBeanServer;
 import javax.management.NotCompliantMBeanException;
 import javax.management.ObjectInstance;
 import javax.management.ObjectName;
-
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletException;
-import com.fasterxml.jackson.core.JsonGenerationException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipFactory;
+import javax.servlet.sip.SipServletContext;
 import javax.servlet.sip.SipServletContextEvent;
+import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -68,8 +71,6 @@ import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
 import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
 import com.kjetland.jackson.jsonSchema.SubclassesResolver;
 import com.kjetland.jackson.jsonSchema.SubclassesResolverImpl;
-
-import java.util.Arrays;
 
 import inet.ipaddr.IPAddress;
 import inet.ipaddr.ipv4.IPv4Address;
@@ -92,8 +93,6 @@ import inet.ipaddr.ipv6.IPv6Address;
  * @param <T> any type of serializable class
  *
  */
-// @WebListener
-//public class SettingsManager<T> implements ServletContextListener {
 public class SettingsManager<T> {
 	protected T sample = null;
 	protected T current;
@@ -119,6 +118,8 @@ public class SettingsManager<T> {
 	protected static String applicationName;
 	protected static String applicationVersion;
 
+	protected static Analytics analytics;
+
 	protected String servletContextName;
 	protected Path domainPath;
 	protected Path clusterPath;
@@ -134,6 +135,13 @@ public class SettingsManager<T> {
 	protected JsonNode clusterNode = NullNode.getInstance();
 	protected JsonNode serverNode = NullNode.getInstance();
 	protected JsonNode mergedNode = NullNode.getInstance();
+
+	// Config path constant
+	private static final String CONFIG_BASE_PATH = "config/custom/vorpal/";
+
+	// Servlet context attribute names
+	private static final String ATTR_SIP_FACTORY = "javax.servlet.sip.SipFactory";
+	private static final String ATTR_SIP_SESSIONS_UTIL = "javax.servlet.sip.SipSessionsUtil";
 
 	public SettingsManager() {
 
@@ -379,6 +387,11 @@ public class SettingsManager<T> {
 				this.saveSampleConfigFile(current);
 			}
 
+			// set analytics to a static variable, useful for finding it later
+			if (current instanceof Configuration) {
+				analytics = ((Configuration) current).getAnalytics();
+			}
+
 		} catch (Exception e) {
 			sipLogger.severe(e);
 			throw new ServletException(e);
@@ -510,7 +523,6 @@ public class SettingsManager<T> {
 	 * 
 	 * @param name
 	 * @return The base name of the application
-	 * @deprecated
 	 */
 	public static String basename(String name) {
 		int i = name.indexOf('#');
@@ -523,7 +535,7 @@ public class SettingsManager<T> {
 	 * name.
 	 * 
 	 * @param name
-	 * @return
+	 * @return the version number
 	 */
 	private static String version(String name) {
 		String version = null;
@@ -548,15 +560,6 @@ public class SettingsManager<T> {
 		return domainName;
 	}
 
-	private static Integer appInstanceId = null;
-
-	public static int getAppInstanceId() {
-		if (appInstanceId == null) {
-			appInstanceId = ThreadLocalRandom.current().nextInt();
-		}
-		return appInstanceId;
-	}
-
 	private static String hostname = null;
 
 	public static String getHostname() {
@@ -577,11 +580,50 @@ public class SettingsManager<T> {
 		return hostname;
 	}
 
-	// Config path constant
-	private static final String CONFIG_BASE_PATH = "config/custom/vorpal/";
+	public static Analytics getAnalytics() {
+		return analytics;
+	}
 
-	// Servlet context attribute names
-	private static final String ATTR_SIP_FACTORY = "javax.servlet.sip.SipFactory";
-	private static final String ATTR_SIP_SESSIONS_UTIL = "javax.servlet.sip.SipSessionsUtil";
+	public static void setAnalytics(Analytics analytics) {
+		SettingsManager.analytics = analytics;
+	}
+
+	public static void createEvent(String name, SipServletMessage message) {
+		if (analytics != null) {
+			Event event = null;
+			event = analytics.createEvent(name, message);
+			message.setAttribute("event", event);
+		}
+	}
+
+	public static void createEvent(String name, SipServletContextEvent context) {
+//		sipLogger.warning("SettingsManager.createEvent - name="+name+", getServletContextName="+context.getServletContext().getServletContextName());
+
+		if (analytics != null) {
+			Event event = null;
+			event = analytics.createEvent(name, context);
+			context.getServletContext().setAttribute("event", event);
+		}
+	}
+
+	public static void sendEvent(SipServletMessage message) {
+		if (analytics != null) {
+			Event event = (Event) message.getAttribute("event");
+			if (event != null) {
+				message.removeAttribute("event");
+				analytics.sendEvent(event);
+			}
+		}
+	}
+
+	public static void sendEvent(SipServletContextEvent context) {
+		if (analytics != null) {
+			Event event = (Event) context.getServletContext().getAttribute("event");
+			if (event != null) {
+				context.getServletContext().removeAttribute("event");
+				analytics.sendEvent(event);
+			}
+		}
+	}
 
 }

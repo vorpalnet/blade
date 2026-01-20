@@ -35,10 +35,11 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.UAMode;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 /**
- * Callflow for handling BYE and CANCEL requests in a B2BUA scenario.
- * Terminates both call legs by sending appropriate termination requests.
+ * Callflow for handling BYE and CANCEL requests in a B2BUA scenario. Terminates
+ * both call legs by sending appropriate termination requests.
  */
 public class Terminate extends Callflow {
 	private static final long serialVersionUID = 1L;
@@ -51,7 +52,8 @@ public class Terminate extends Callflow {
 	/**
 	 * Constructs a Terminate callflow with the specified listener.
 	 *
-	 * @param b2buaListener the B2BUA listener to receive lifecycle callbacks, or null for no callbacks
+	 * @param b2buaListener the B2BUA listener to receive lifecycle callbacks, or
+	 *                      null for no callbacks
 	 */
 	public Terminate(B2buaListener b2buaListener) {
 		this.b2buaListener = b2buaListener;
@@ -103,7 +105,9 @@ public class Terminate extends Callflow {
 							copyContentAndHeaders(request, terminationRequest);
 
 							if (b2buaListener != null) {
+								SettingsManager.createEvent("callAbandoned", terminationRequest);
 								b2buaListener.callAbandoned(terminationRequest);
+								SettingsManager.sendEvent(terminationRequest);
 							}
 						}
 
@@ -114,7 +118,9 @@ public class Terminate extends Callflow {
 						copyContentAndHeaders(request, terminationRequest);
 
 						if (b2buaListener != null) {
+							SettingsManager.createEvent("callCompleted", terminationRequest);
 							b2buaListener.callCompleted(terminationRequest);
+							SettingsManager.sendEvent(terminationRequest);
 						}
 
 						break;
@@ -129,7 +135,8 @@ public class Terminate extends Callflow {
 							sendRequest(terminationRequest);
 						}
 					} catch (Exception ex1) {
-						sipLogger.warning(request, "Terminate.process - Failed to send termination request: " + ex1.getMessage());
+						sipLogger.warning(request,
+								"Terminate.process - Failed to send termination request: " + ex1.getMessage());
 						exception = ex1;
 					}
 

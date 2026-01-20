@@ -14,9 +14,11 @@ import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 
-import org.vorpal.blade.services.analytics.jpa.Application;
-import org.vorpal.blade.services.analytics.jpa.Event;
-import org.vorpal.blade.services.analytics.jpa.Session;
+import org.vorpal.blade.framework.v2.analytics.Application;
+import org.vorpal.blade.framework.v2.analytics.Event;
+import org.vorpal.blade.framework.v2.analytics.Session;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Logger;
 
 /**
  * Message-driven bean that receives JPA entities via JMS ObjectMessages and
@@ -28,13 +30,15 @@ import org.vorpal.blade.services.analytics.jpa.Session;
 public class AnalyticsJmsListener implements MessageListener {
 
 	private EntityManagerFactory emf;
+	private static Logger sipLogger;
 
 	@PostConstruct
 	public void init() {
+		sipLogger = SettingsManager.getSipLogger();
 		try {
 			emf = Persistence.createEntityManagerFactory("BladeCDR");
 		} catch (Exception e) {
-			System.err.println("AnalyticsJmsListener: Failed to create EntityManagerFactory: " + e.getMessage());
+			sipLogger.info("AnalyticsJmsListener: Failed to create EntityManagerFactory: " + e.getMessage());
 			e.printStackTrace();
 		}
 	}
@@ -49,7 +53,7 @@ public class AnalyticsJmsListener implements MessageListener {
 	@Override
 	public void onMessage(Message message) {
 		if (!(message instanceof ObjectMessage)) {
-			System.err.println("AnalyticsJmsListener: Received non-ObjectMessage, ignoring");
+			sipLogger.warning("AnalyticsJmsListener: Received non-ObjectMessage, ignoring");
 			return;
 		}
 
@@ -61,21 +65,25 @@ public class AnalyticsJmsListener implements MessageListener {
 			em = emf.createEntityManager();
 
 			if (object instanceof Application) {
+				sipLogger.info("AnalyticsJmsListener.onMessage - persisting...\n"
+						+ Logger.serializeObject((Application) object));
 				persistApplication(em, (Application) object);
 			} else if (object instanceof Session) {
+				sipLogger.info(
+						"AnalyticsJmsListener.onMessage - persisting...\n" + Logger.serializeObject((Session) object));
 				persistSession(em, (Session) object);
 			} else if (object instanceof Event) {
+				sipLogger.info(
+						"AnalyticsJmsListener.onMessage - persisting...\n" + Logger.serializeObject((Event) object));
 				persistEvent(em, (Event) object);
 			} else {
-				System.err.println("AnalyticsJmsListener: Unknown object type: " + object.getClass().getName());
+				sipLogger.info("AnalyticsJmsListener.onMessage - persisting...\n" + object);
+				sipLogger.info("AnalyticsJmsListener: Unknown object type: " + object.getClass().getName());
 			}
 
-		} catch (JMSException e) {
-			System.err.println("AnalyticsJmsListener: JMS error: " + e.getMessage());
-			e.printStackTrace();
-		} catch (Exception e) {
-			System.err.println("AnalyticsJmsListener: Persistence error: " + e.getMessage());
-			e.printStackTrace();
+		} catch (Exception ex) {
+			sipLogger.severe("AnalyticsJmsListener: JMS error: " + ex.getMessage());
+			sipLogger.severe(ex);
 		} finally {
 			if (em != null && em.isOpen()) {
 				em.close();
@@ -84,23 +92,23 @@ public class AnalyticsJmsListener implements MessageListener {
 	}
 
 	private void persistApplication(EntityManager em, Application application) {
-		em.getTransaction().begin();
+//		em.getTransaction().begin();
 		em.persist(application);
-		em.getTransaction().commit();
-		System.out.println("AnalyticsJmsListener: Persisted Application id=" + application.getId());
+//		em.getTransaction().commit();
+		sipLogger.info("AnalyticsJmsListener: Persisted Application id=" + application.getId());
 	}
 
 	private void persistSession(EntityManager em, Session session) {
-		em.getTransaction().begin();
+//		em.getTransaction().begin();
 		em.persist(session);
-		em.getTransaction().commit();
-		System.out.println("AnalyticsJmsListener: Persisted Session id=" + session.getId());
+//		em.getTransaction().commit();
+		sipLogger.info("AnalyticsJmsListener: Persisted Session id=" + session.getId());
 	}
 
 	private void persistEvent(EntityManager em, Event event) {
 		// Use the custom persistEvent method to handle AttributePK.eventId update
 		event.persistEvent(em);
-		System.out.println("AnalyticsJmsListener: Persisted Event id=" + event.getId());
+		sipLogger.info("AnalyticsJmsListener: Persisted Event id=" + event.getId());
 	}
 
 }

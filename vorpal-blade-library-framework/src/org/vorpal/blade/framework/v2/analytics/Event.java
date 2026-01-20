@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.analytics.jpa;
+package org.vorpal.blade.framework.v2.analytics;
 
 import java.io.Serializable;
 import java.util.Date;
@@ -77,9 +77,9 @@ public class Event implements Serializable {
 		this.attributes = new LinkedList<Attribute>();
 
 		// persist just the event
-		em.getTransaction().begin();
+//		em.getTransaction().begin();
 		em.persist(this);
-		em.getTransaction().commit();
+//		em.getTransaction().commit();
 
 		// update the event id in the attributes
 		for (Attribute attr : _attributes) {
@@ -90,9 +90,9 @@ public class Event implements Serializable {
 		this.attributes = _attributes;
 
 		// persist the attributes
-		em.getTransaction().begin();
+//		em.getTransaction().begin();
 		em.persist(this);
-		em.getTransaction().commit();
+//		em.getTransaction().commit();
 
 	}
 

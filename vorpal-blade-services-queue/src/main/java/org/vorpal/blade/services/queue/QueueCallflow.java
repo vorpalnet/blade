@@ -240,7 +240,10 @@ public class QueueCallflow extends Callflow {
 							});
 
 							sendRequest(bobRequest, (bobResponse) -> {
-								linkSessions(aliceRequest.getSession(), bobResponse.getSession());
+//								linkSessions(aliceRequest.getSession(), bobResponse.getSession());
+								linkSession(aliceRequest.getSession(), bobResponse.getSession());
+								linkSession(bobResponse.getSession(), aliceRequest.getSession() );
+								
 
 								if (sipLogger.isLoggable(Level.FINER)) {
 									sipLogger.finer(bobResponse,

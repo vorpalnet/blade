@@ -123,6 +123,7 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
 
 /**
@@ -158,7 +159,7 @@ public class BlindTransfer extends Transfer {
 	/**
 	 * Constructs a BlindTransfer with NOTIFY messages enabled.
 	 *
-	 * @param referListener the listener to receive transfer lifecycle events
+	 * @param referListener    the listener to receive transfer lifecycle events
 	 * @param transferSettings the transfer configuration settings
 	 */
 	public BlindTransfer(TransferListener referListener, TransferSettings transferSettings) {
@@ -169,9 +170,10 @@ public class BlindTransfer extends Transfer {
 	/**
 	 * Constructs a BlindTransfer with configurable NOTIFY messages.
 	 *
-	 * @param referListener the listener to receive transfer lifecycle events
+	 * @param referListener    the listener to receive transfer lifecycle events
 	 * @param transferSettings the transfer configuration settings
-	 * @param sendNotify true to send NOTIFY messages to the transferor, false otherwise
+	 * @param sendNotify       true to send NOTIFY messages to the transferor, false
+	 *                         otherwise
 	 */
 	public BlindTransfer(TransferListener referListener, TransferSettings transferSettings, boolean sendNotify) {
 		super(referListener, transferSettings);
@@ -195,7 +197,10 @@ public class BlindTransfer extends Transfer {
 			appSession.setAttribute(REFER_TO, referTo);
 
 			// User is notified a transfer is requested
-			transferListener.transferRequested(referRequest);
+			if (transferListener != null) {
+				SettingsManager.createEvent("transferRequested", referRequest);
+				transferListener.transferRequested(referRequest);
+			}
 
 			createRequests(referRequest);
 
@@ -250,7 +255,12 @@ public class BlindTransfer extends Transfer {
 				}
 
 				appSession.removeAttribute(IN_PROGRESS_ATTR);
-				transferListener.transferAbandoned(bye);
+
+				if (transferListener != null) {
+					SettingsManager.createEvent("transferAbandoned", bye);
+					transferListener.transferAbandoned(bye);
+					SettingsManager.sendEvent(bye);
+				}
 
 			});
 
@@ -273,7 +283,11 @@ public class BlindTransfer extends Transfer {
 				targetRequest.setHeader(X_PREVIOUS_DN_ATTR, xPreviousDN.toString());
 			}
 
-			transferListener.transferInitiated(targetRequest);
+			if (transferListener != null) {
+				SettingsManager.createEvent("transferInitiated", targetRequest);
+				transferListener.transferInitiated(targetRequest);
+				SettingsManager.sendEvent(targetRequest);
+			}
 
 			// Force Referred-By, ignore preserveReferHeaders
 			this.targetRequest.removeHeader(REFERRED_BY);
@@ -297,14 +311,28 @@ public class BlindTransfer extends Transfer {
 							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 
 					appSession.removeAttribute(IN_PROGRESS_ATTR);
-					transferListener.transferCompleted(targetResponse);
+
+					if (transferListener != null) {
+						SettingsManager.createEvent("transferCompleted", targetResponse);
+						transferListener.transferCompleted(targetResponse);
+						SettingsManager.sendEvent(targetResponse);
+					}
 
 					// Alice will no longer hangup, expect a BYE from Bob
 					aliceExpectation.clear();
 
 					copyContent(targetResponse, transfereeRequest);
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
-						linkSessions(transfereeRequest.getSession(), targetResponse.getSession());
+
+						sipLogger.severe(transfereeResponse, "BlindTransfer.processes - linking session...");
+						if(null==transfereeRequest.getSession().getAttribute(USER_AGENT_ATTR)) {
+							sipLogger.severe(transfereeResponse, "BlindTransfer.processes - transfereeRequest not linked!");			
+						}
+						if(null==targetResponse.getSession().getAttribute(USER_AGENT_ATTR)) {
+							sipLogger.severe(targetResponse, "BlindTransfer.processes - targetResponse not linked!");			
+						}
+						linkSession(transfereeRequest, targetResponse);
+
 						sendRequest(transfereeResponse.createAck());
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
 
@@ -342,7 +370,12 @@ public class BlindTransfer extends Transfer {
 					if (targetResponse.getStatus() == 487) {
 						sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
 						appSession.removeAttribute(IN_PROGRESS_ATTR);
-						transferListener.transferAbandoned(referRequest);
+
+						if (transferListener != null) {
+							SettingsManager.createEvent("transferAbandoned", referRequest);
+							transferListener.transferAbandoned(referRequest);
+							SettingsManager.sendEvent(referRequest);
+						}
 
 						// Instead of sending the failure notice, we pretend everything is successful so
 						// Bob will hang up
@@ -360,7 +393,12 @@ public class BlindTransfer extends Transfer {
 
 						// User is notified that the transfer target did not answer
 						appSession.removeAttribute(IN_PROGRESS_ATTR);
-						transferListener.transferDeclined(targetResponse);
+
+						if (transferListener != null) {
+							SettingsManager.createEvent("transferDeclined", targetResponse);
+							transferListener.transferDeclined(targetResponse);
+							SettingsManager.sendEvent(targetResponse);
+						}
 
 						// Bob won't send a BYE, but instead reINVITE.
 						bobExpectation.clear();

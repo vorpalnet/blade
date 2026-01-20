@@ -9,6 +9,7 @@ import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
@@ -17,19 +18,15 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 /**
- * Base configuration class with logging, session parameters, and utility methods.
+ * Base configuration class with logging, session parameters, and utility
+ * methods.
  */
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
-	
+
 //	public enum Events{servletCreated, servletDestroyed };
 //	public Events 
-	
-	
-	
-	
-	
-	
+
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 
 	// Maximum iterations to prevent infinite loops in resolveVariables
@@ -40,11 +37,9 @@ public class Configuration implements Serializable {
 
 	@JsonPropertyDescription("Session parameters")
 	protected SessionParameters session;
-	
-	
-	
-	
-	
+
+	@JsonPropertyDescription("Analytics parameters")
+	protected Analytics analytics;
 
 	private final static long SECONDS_FACTOR = 1;
 	private final static long MINUTES_FACTOR = 60 * SECONDS_FACTOR;
@@ -240,33 +235,13 @@ public class Configuration implements Serializable {
 		return outputString;
 	}
 
-	public static void main(String[] args) throws Exception {
+	public Analytics getAnalytics() {
+		return analytics;
+	}
 
-		Logger sipLogger = LogManager.getLogger("BLADE");
-		sipLogger.setUseParentHandlers(false);
-		sipLogger.addHandler(new ConsoleHandler() {
-			{
-				setOutputStream(System.out);
-			}
-		});
-		sipLogger.setLevel(Level.FINEST);
-		sipLogger.getParent().setLevel(Level.FINEST);
-		SettingsManager.setSipLogger(sipLogger);
-		Callflow.setLogger(sipLogger);
-
-		String output;
-		String expression = "${proto}:${user}@10.119.127.147:${port};${uriparams}";
-//		String expression = "${proto}:${user}@10.119.127.147:${port};${uriparams";
-
-		Map<String, String> attributes = new HashMap<>();
-
-		attributes.put("proto", "sip");
-//		attributes.put("user", "jeff");
-//		attributes.put("port", "5060");
-		attributes.put("uriparams", "whatever=true");
-
-		output = resolveVariables(attributes, expression);
-		System.out.println("output=" + output);
+	public Configuration setAnalytics(Analytics analytics) {
+		this.analytics = analytics;
+		return this;
 	}
 
 }

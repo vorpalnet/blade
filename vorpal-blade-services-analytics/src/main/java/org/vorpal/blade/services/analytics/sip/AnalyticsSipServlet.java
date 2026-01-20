@@ -1,10 +1,7 @@
 package org.vorpal.blade.services.analytics.sip;
 
 import java.io.IOException;
-import java.time.Instant;
-import java.util.Date;
 
-import javax.jms.JMSException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipApplicationSessionEvent;
@@ -13,16 +10,11 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
+import org.vorpal.blade.framework.v2.analytics.Application;
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v2.logging.Color;
-import org.vorpal.blade.services.analytics.jms.JmsPublisher;
-import org.vorpal.blade.services.analytics.jpa.Application;
-import org.vorpal.blade.services.analytics.jpa.Attribute;
-import org.vorpal.blade.services.analytics.jpa.AttributePK;
-import org.vorpal.blade.services.analytics.jpa.Event;
 
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
@@ -31,7 +23,7 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 	private static final long serialVersionUID = 1L;
 
 	public static SettingsManager<AnalyticsConfig> settingsManager;
-	public static JmsPublisher jmsPublisher;
+//	public static JmsPublisher jmsPublisher;
 
 	public static Application application;
 
@@ -43,10 +35,6 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 					new AnalyticsConfigSample());
 
 			sipLogger.fine("AnalyticsSipServlet.servletCreated");
-
-			jmsPublisher = new JmsPublisher();
-			jmsPublisher.init();
-
 		} catch (Exception e) {
 			sipLogger.severe(e);
 		}
@@ -55,11 +43,6 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		sipLogger.fine("AnalyticsSipServlet.servletDestroyed");
-
-		if (jmsPublisher != null) {
-			jmsPublisher.applicationStop();
-			jmsPublisher.close();
-		}
 	}
 
 	public static long combineToLong(long timestamp, int otherValue) {
@@ -97,120 +80,52 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
-		sipLogger.fine(outboundRequest, "AnalyticsSipServlet.callStarted");
-
-		Long sessionId = getSessionId(outboundRequest.getApplicationSession());
-
-		jmsPublisher.applicationStart(); // only invoked once
-
-//		sendEvent("callStarted", outboundRequest);
-
-		Event event = new Event();
-		event.setApplicationId(SettingsManager.getAppInstanceId());
-		event.setSessionId(sessionId);
-		event.setCreated(Date.from(Instant.now()));
-		event.setName("callStarted");
-
-		event.addAttribute("From", outboundRequest.getFrom().toString());
-		event.addAttribute("To", outboundRequest.getTo().toString());
-
-		try {
-			jmsPublisher.send(event);
-		} catch (Exception ex) {
-			ex.printStackTrace();
-		}
+		sipLogger.info(outboundRequest, "AnalyticsSipServlet.callStarted");
 	}
 
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
-		sipLogger.fine(outboundResponse, "AnalyticsSipServlet.callAnswered");
-		sendEvent("callAnswered", outboundResponse.getRequest());
+		sipLogger.info(outboundResponse, "AnalyticsSipServlet.callAnswered");
 	}
 
 	@Override
 	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
-		sipLogger.fine(outboundRequest, "AnalyticsSipServlet.callConnected");
-		sendEvent("callConnected", outboundRequest);
+		sipLogger.info(outboundRequest, "AnalyticsSipServlet.callConnected");
 	}
 
 	@Override
 	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
-		sipLogger.fine(outboundRequest, "AnalyticsSipServlet.callCompleted");
-		sendEvent("callCompleted", outboundRequest);
+		sipLogger.info(outboundRequest, "AnalyticsSipServlet.callCompleted");
 	}
 
 	@Override
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
-		sipLogger.fine(outboundResponse, "AnalyticsSipServlet.callDeclined");
-		sendEvent("callDeclined", outboundResponse.getRequest());
+		sipLogger.info(outboundResponse, "AnalyticsSipServlet.callDeclined");
 	}
 
 	@Override
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
-		sipLogger.fine(outboundRequest, "AnalyticsSipServlet.callAbandoned");
-		sendEvent("callAbandoned", outboundRequest);
+		sipLogger.info(outboundRequest, "AnalyticsSipServlet.callAbandoned");
 	}
 
 	@Override
 	public void sessionCreated(SipApplicationSessionEvent event) {
-		sipLogger.fine(event.getApplicationSession(), "AnalyticsSipServlet.sessionCreated");
-
+		sipLogger.info(event.getApplicationSession(), "AnalyticsSipServlet.sessionCreated");
 	}
 
 	@Override
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
-		sipLogger.fine(event.getApplicationSession(), "AnalyticsSipServlet.sessionDestroyed");
-
+		sipLogger.info(event.getApplicationSession(), "AnalyticsSipServlet.sessionDestroyed");
 	}
 
 	@Override
 	public void sessionExpired(SipApplicationSessionEvent event) {
-		sipLogger.fine(event.getApplicationSession(), "AnalyticsSipServlet.sessionExpired");
-
+		sipLogger.info(event.getApplicationSession(), "AnalyticsSipServlet.sessionExpired");
 	}
 
 	@Override
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
-		sipLogger.fine(event.getApplicationSession(), "AnalyticsSipServlet.sessionReadyToInvalidate");
-	}
-
-	/**
-	 * Helper method to create and send an Event with From/To attributes.
-	 */
-	private void sendEvent(String eventName, SipServletRequest request) {
-		sipLogger.finer("AnalyticsSipServlet.sendEvent");
-		try {
-			Event event = new Event();
-			event.setName(eventName);
-			event.setCreated(new Date());
-
-			// Add From attribute
-			String fromHeader = request.getHeader("From");
-			if (fromHeader != null) {
-				AttributePK fromPK = new AttributePK();
-				fromPK.setName("From");
-				Attribute from = new Attribute();
-				from.setId(fromPK);
-				from.setValue(fromHeader);
-				event.addAttribute(from);
-			}
-
-			// Add To attribute
-			String toHeader = request.getHeader("To");
-			if (toHeader != null) {
-				AttributePK toPK = new AttributePK();
-				toPK.setName("To");
-				Attribute to = new Attribute();
-				to.setId(toPK);
-				to.setValue(toHeader);
-				event.addAttribute(to);
-			}
-
-			jmsPublisher.send(event);
-
-		} catch (JMSException e) {
-			sipLogger.severe(e);
-		}
+		sipLogger.info(event.getApplicationSession(), "AnalyticsSipServlet.sessionReadyToInvalidate");
 	}
 
 }

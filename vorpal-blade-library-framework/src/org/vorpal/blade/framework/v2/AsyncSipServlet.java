@@ -34,6 +34,9 @@ import javax.servlet.sip.TimerService;
 import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v2.analytics.Event;
+import org.vorpal.blade.framework.v2.analytics.JmsPublisher;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
 import org.vorpal.blade.framework.v2.callflow.Callback;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
@@ -104,11 +107,12 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	/**
 	 * Called by the container when the SIP servlet is initialized. This method
-	 * initializes the SIP factory, session utilities, timer service, and logger.
-	 * It also invokes the abstract {@link #servletCreated(SipServletContextEvent)}
+	 * initializes the SIP factory, session utilities, timer service, and logger. It
+	 * also invokes the abstract {@link #servletCreated(SipServletContextEvent)}
 	 * method for subclass-specific initialization.
 	 *
-	 * @param event the SIP servlet context event containing initialization information
+	 * @param event the SIP servlet context event containing initialization
+	 *              information
 	 */
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
@@ -123,8 +127,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		Callflow.setTimerService(timerService);
 
 		try {
-
-			servletCreated(event);
 			sipLogger = LogManager.getLogger(event);
 
 			Package pkg = AsyncSipServlet.class.getPackage();
@@ -134,6 +136,22 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			if (title != null) {
 				sipLogger.info(application + " compiled using " + title + " version " + version);
+			}
+
+			servletCreated(event);
+
+			Analytics analytics = SettingsManager.getAnalytics();
+			if (analytics != null) {
+
+				sipLogger.info("AsyncSipServlet.servletInitialized - analytics events=" + analytics.getEvents());
+				sipLogger.info(
+						"AsyncSipServlet.servletInitialized - analytics events size=" + analytics.getEvents().size());
+
+				analytics.jmsPublisher = new JmsPublisher(analytics.getJmsFactory(), analytics.getJmsQueue());
+				analytics.jmsPublisher.init();
+				analytics.jmsPublisher.applicationStart();
+				SettingsManager.createEvent("servletCreated", event);
+				SettingsManager.sendEvent(event);
 			}
 
 		} catch (Exception ex1) {
@@ -169,8 +187,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Called by the container when the servlet context is initialized.
-	 * This implementation is empty; override in subclasses if needed.
+	 * Called by the container when the servlet context is initialized. This
+	 * implementation is empty; override in subclasses if needed.
 	 *
 	 * @param sce the servlet context event
 	 */
@@ -180,16 +198,25 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Called by the container when the servlet context is destroyed.
-	 * Invokes the {@link #servletDestroyed(SipServletContextEvent)} method
-	 * for subclass-specific cleanup.
+	 * Called by the container when the servlet context is destroyed. Invokes the
+	 * {@link #servletDestroyed(SipServletContextEvent)} method for
+	 * subclass-specific cleanup.
 	 *
 	 * @param sce the servlet context event
 	 */
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
 		try {
+
+			SettingsManager.createEvent("servletDestroyed", event);
 			servletDestroyed(event);
+			SettingsManager.sendEvent(event);
+
+			Analytics analytics = SettingsManager.getAnalytics();
+			if (analytics.jmsPublisher != null) {
+				analytics.jmsPublisher.applicationStop();
+			}
+
 		} catch (Exception ex1) {
 			sipLogger.warning("AsyncSipServlet.contextDestroyed - Exception #ex1");
 			sipLogger.severe(ex1);
@@ -200,17 +227,19 @@ public abstract class AsyncSipServlet extends SipServlet
 	/**
 	 * Processes incoming SIP requests. This method handles:
 	 * <ul>
-	 *   <li>Initial INVITE session setup and tracking</li>
-	 *   <li>Glare detection and queuing (when messages arrive while awaiting ACK)</li>
-	 *   <li>Callback invocation for expected requests</li>
-	 *   <li>Callflow selection and processing via {@link #chooseCallflow(SipServletRequest)}</li>
-	 *   <li>Session attribute extraction based on configured selectors</li>
-	 *   <li>Proxy request logging</li>
+	 * <li>Initial INVITE session setup and tracking</li>
+	 * <li>Glare detection and queuing (when messages arrive while awaiting
+	 * ACK)</li>
+	 * <li>Callback invocation for expected requests</li>
+	 * <li>Callflow selection and processing via
+	 * {@link #chooseCallflow(SipServletRequest)}</li>
+	 * <li>Session attribute extraction based on configured selectors</li>
+	 * <li>Proxy request logging</li>
 	 * </ul>
 	 *
 	 * @param _request the incoming SIP request
 	 * @throws ServletException if a servlet error occurs during processing
-	 * @throws IOException if an I/O error occurs during processing
+	 * @throws IOException      if an I/O error occurs during processing
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
@@ -429,8 +458,8 @@ public abstract class AsyncSipServlet extends SipServlet
 								throw new ServletException(ex2);
 							}
 
-							if (linkedSession != null
-									&& request.isInitial() && Callflow.getSessionParameters() != null) {
+							if (linkedSession != null && request.isInitial()
+									&& Callflow.getSessionParameters() != null) {
 
 								List<AttributeSelector> selectors = Callflow.getSessionParameters()
 										.getSessionSelectors();
@@ -465,8 +494,7 @@ public abstract class AsyncSipServlet extends SipServlet
 										}
 									}
 									sipLogger.finer(sipSession,
-											"AsyncSipServlet.doRequest - Destination session attributes: "
-													+ attrMap);
+											"AsyncSipServlet.doRequest - Destination session attributes: " + attrMap);
 								}
 
 							}
@@ -545,17 +573,18 @@ public abstract class AsyncSipServlet extends SipServlet
 	/**
 	 * Processes incoming SIP responses. This method handles:
 	 * <ul>
-	 *   <li>Detection of responses arriving after call cancellation</li>
-	 *   <li>Callback invocation for pending response handlers</li>
-	 *   <li>Early dialog session merging when To-tag changes</li>
-	 *   <li>Glare queue processing after response handling</li>
-	 *   <li>Proxy response logging and session invalidation for loose routing</li>
-	 *   <li>Error recovery including upstream error notification and downstream call termination</li>
+	 * <li>Detection of responses arriving after call cancellation</li>
+	 * <li>Callback invocation for pending response handlers</li>
+	 * <li>Early dialog session merging when To-tag changes</li>
+	 * <li>Glare queue processing after response handling</li>
+	 * <li>Proxy response logging and session invalidation for loose routing</li>
+	 * <li>Error recovery including upstream error notification and downstream call
+	 * termination</li>
 	 * </ul>
 	 *
 	 * @param response the incoming SIP response
 	 * @throws ServletException if a servlet error occurs during processing
-	 * @throws IOException if an I/O error occurs during processing
+	 * @throws IOException      if an I/O error occurs during processing
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
@@ -606,20 +635,13 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			// Check for the possibility that an INVITE response comes back *after* the call
 			// has been canceled
-			if (method.equals("INVITE") && linkedSession != null && //
-					(!linkedSession.isValid()
-							|| linkedSession.getState().equals(SipSession.State.TERMINATED))) {
+			if (method.equals("INVITE") && Callflow.successful(response) && linkedSession != null && //
+					(!linkedSession.isValid() || linkedSession.getState().equals(SipSession.State.TERMINATED))) {
 				sipLogger.warning(response,
 						"AsyncSipServlet.doResponse - Linked session terminated (CANCEL?), but an INVITE response came through anyway. Killing the session with CallflowAckBye");
-
 				CallflowAckBye ackAndBye = new CallflowAckBye();
-
 				try {
-
-					if (!Callflow.failure(response)) { // eat failure responses
-						ackAndBye.process(response);
-					}
-
+					ackAndBye.process(response);
 				} catch (Exception ex2) {
 					sipLogger.warning(response, "AsyncSipServlet.doResponse - Exception #ex2");
 					throw new ServletException(ex2);
@@ -634,121 +656,122 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					if (sipSession != null && sipSession.isValid()) {
 
-							callback = Callflow.pullCallback(response);
+						callback = Callflow.pullCallback(response);
 
-							if (callback == null) {
-								callback = Callflow.pullProxyCallback(response);
+						if (callback == null) {
+							callback = Callflow.pullProxyCallback(response);
 
-								if (callback != null) {
-									isProxy = true;
-								} else {
+							if (callback != null) {
+								isProxy = true;
+							} else {
 
-									// Sometimes a 180 Ringing comes back on a brand new SipSession
-									// because the tag on the To header changed due to a failure downstream.
-									if (response.getMethod().equals("INVITE")) {
-										// Falling down a hole
-										Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
+								// Sometimes a 180 Ringing comes back on a brand new SipSession
+								// because the tag on the To header changed due to a failure downstream.
+								if (response.getMethod().equals("INVITE")) {
+									// Falling down a hole
+									Set<SipSession> sessions = (Set<SipSession>) appSession.getSessionSet("SIP");
+
+									if (sipLogger.isLoggable(Level.FINER)) {
+										sipLogger.finer(response, "AsyncSipServlet.doResponse - Rogue session id="
+												+ response.getSession().getId());
+										sipLogger.finer(response, "AsyncSipServlet.doResponse - Number of SipSessions: "
+												+ sessions.size());
+									}
+
+									for (SipSession session : sessions) {
 
 										if (sipLogger.isLoggable(Level.FINER)) {
-											sipLogger.finer(response, "AsyncSipServlet.doResponse - Rogue session id="
-													+ response.getSession().getId());
 											sipLogger.finer(response,
-													"AsyncSipServlet.doResponse - Number of SipSessions: "
-															+ sessions.size());
+													"AsyncSipServlet.doResponse - Checking session id="
+															+ session.getId());
 										}
 
-										for (SipSession session : sessions) {
+										if (session != response.getSession()) {
 
-											if (sipLogger.isLoggable(Level.FINER)) {
-												sipLogger.finer(response,
-														"AsyncSipServlet.doResponse - Checking session id="
-																+ session.getId());
-											}
+											if (session.getCallId().equals(sipSession.getCallId())) {
 
-											if (session != response.getSession()) {
+												callback = (Callback<SipServletResponse>) session
+														.getAttribute(RESPONSE_CALLBACK_INVITE);
 
-												if (session.getCallId().equals(sipSession.getCallId())) {
+												if (callback != null) {
 
-													callback = (Callback<SipServletResponse>) session
-															.getAttribute(RESPONSE_CALLBACK_INVITE);
-
-													if (callback != null) {
-
-														if (sipLogger.isLoggable(Level.FINER)) {
-															sipLogger.finer(session,
-																	"AsyncSipServlet.doResponse - Early dialog session detected, merge in progress...");
-															sipLogger.finer(response,
-																	"AsyncSipServlet.doResponse - Setting RESPONSE_CALLBACK_INVITE on merged session...");
-															sipLogger.finer(response,
-																	"AsyncSipServlet.doResponse - Removing RESPONSE_CALLBACK_INVITE from original session...");
-														}
-
-														sipSession.setAttribute(RESPONSE_CALLBACK_INVITE, callback);
-
-														session.removeAttribute(RESPONSE_CALLBACK_INVITE);
-
-														// link the sessions
-														if (sipLogger.isLoggable(Level.FINER)) {
-															sipLogger.finer(session,
-																	"AsyncSipServlet.doResponse - Linking sessions...");
-														}
-
-														session.removeAttribute(LINKED_SESSION);
-														Callflow.linkSessions(linkedSession, sipSession);
-
-														for (String attr : session.getAttributeNameSet()) {
-															if (sipLogger.isLoggable(Level.FINER)) {
-																sipLogger.finer(session,
-																		"AsyncSipServlet.doResponse - Copying session attribute: "
-																				+ attr);
-															}
-															sipSession.setAttribute(attr, session.getAttribute(attr));
-														}
-
-														// invalidate the old session
-														if (sipLogger.isLoggable(Level.FINER)) {
-															sipLogger.finer(session,
-																	"AsyncSipServlet.doResponse - Invalidating early session...");
-														}
-														session.invalidate();
-														if (sipLogger.isLoggable(Level.FINER)) {
-															sipLogger.finer(response,
-																	"AsyncSipServlet.doResponse - Sessions successfully merged.");
-														}
+													if (sipLogger.isLoggable(Level.FINER)) {
+														sipLogger.finer(session,
+																"AsyncSipServlet.doResponse - Early dialog session detected, merge in progress...");
+														sipLogger.finer(response,
+																"AsyncSipServlet.doResponse - Setting RESPONSE_CALLBACK_INVITE on merged session...");
+														sipLogger.finer(response,
+																"AsyncSipServlet.doResponse - Removing RESPONSE_CALLBACK_INVITE from original session...");
 													}
-													break;
+
+													sipSession.setAttribute(RESPONSE_CALLBACK_INVITE, callback);
+
+													session.removeAttribute(RESPONSE_CALLBACK_INVITE);
+
+													// link the sessions
+													if (sipLogger.isLoggable(Level.FINER)) {
+														sipLogger.finer(session,
+																"AsyncSipServlet.doResponse - Linking sessions...");
+													}
+
+													session.removeAttribute(LINKED_SESSION);
+													// Callflow.linkSessions(linkedSession, sipSession);
+													Callflow.linkSession(linkedSession, sipSession);
+													Callflow.linkSession(sipSession, linkedSession);
+
+													for (String attr : session.getAttributeNameSet()) {
+														if (sipLogger.isLoggable(Level.FINER)) {
+															sipLogger.finer(session,
+																	"AsyncSipServlet.doResponse - Copying session attribute: "
+																			+ attr);
+														}
+														sipSession.setAttribute(attr, session.getAttribute(attr));
+													}
+
+													// invalidate the old session
+													if (sipLogger.isLoggable(Level.FINER)) {
+														sipLogger.finer(session,
+																"AsyncSipServlet.doResponse - Invalidating early session...");
+													}
+													session.invalidate();
+													if (sipLogger.isLoggable(Level.FINER)) {
+														sipLogger.finer(response,
+																"AsyncSipServlet.doResponse - Sessions successfully merged.");
+													}
 												}
+												break;
 											}
 										}
+									}
+								} else {
+
+									if (isProxy(response)) {
+
+										boolean leftDiagram = Boolean.TRUE
+												.equals(response.getSession().getAttribute("leftDiagram"));
+
+										Callflow.getLogger().superArrow(Direction.RECEIVE, leftDiagram, null, response,
+												"proxy", null);
+
+										Callflow.getLogger().superArrow(Direction.SEND, !leftDiagram, null, response,
+												"proxy", null);
+
 									} else {
 
-										if (isProxy(response)) {
-
-											boolean leftDiagram = Boolean.TRUE.equals(
-													response.getSession().getAttribute("leftDiagram"));
-
-											Callflow.getLogger().superArrow(Direction.RECEIVE, leftDiagram, null,
-													response, "proxy", null);
-
-											Callflow.getLogger().superArrow(Direction.SEND, !leftDiagram, null,
-													response, "proxy", null);
-
-										} else {
-
-											Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-													this.getClass().getSimpleName());
-
-										}
+										Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+												this.getClass().getSimpleName());
 
 									}
+
 								}
 							}
+						}
 
-							if (callback != null && !isProxy) {
-								Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
-										callback.getClass().getSimpleName());
-								callback.accept(response);
-							}
+						if (callback != null && !isProxy) {
+							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
+									callback.getClass().getSimpleName());
+							callback.accept(response);
+						}
 
 					} else {
 						if (sipSession == null) {
@@ -759,7 +782,7 @@ public abstract class AsyncSipServlet extends SipServlet
 						}
 					}
 				} catch (Exception ex3) {
-					sipLogger.severe(response, "AsyncSipServlet.doResponse - linkedSession != nullException #ex3");
+					sipLogger.severe(response, "AsyncSipServlet.doResponse - Exception #ex3");
 					sipLogger.severe(response,
 							"AsyncSipServlet.doResponse - Exception on SIP response: \n" + response.toString());
 					sipLogger.severe(response, ex3);
@@ -855,10 +878,11 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Handles timer expiration events. Retrieves and invokes the callback
-	 * function stored in the timer's info object when the timer was created.
+	 * Handles timer expiration events. Retrieves and invokes the callback function
+	 * stored in the timer's info object when the timer was created.
 	 *
-	 * @param timer the expired servlet timer containing the callback in its info object
+	 * @param timer the expired servlet timer containing the callback in its info
+	 *              object
 	 */
 	@SuppressWarnings("unchecked")
 	@Override
@@ -944,8 +968,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Converts a byte array to an alphanumeric string representation.
-	 * Uses a 62-character alphabet (0-9, a-z, A-Z) for compact encoding.
+	 * Converts a byte array to an alphanumeric string representation. Uses a
+	 * 62-character alphabet (0-9, a-z, A-Z) for compact encoding.
 	 *
 	 * @param bytes the byte array to convert
 	 * @return an alphanumeric string representation of the bytes
@@ -968,9 +992,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Computes an MD5 hash of the input string and returns it as an alphanumeric string.
-	 * Note: MD5 is used here for hash distribution, not cryptographic security.
-	 * This method is useful for generating unique keys for SIP application sessions.
+	 * Computes an MD5 hash of the input string and returns it as an alphanumeric
+	 * string. Note: MD5 is used here for hash distribution, not cryptographic
+	 * security. This method is useful for generating unique keys for SIP
+	 * application sessions.
 	 *
 	 * @param stringToHash the string to hash
 	 * @return the hashed string in alphanumeric format, or null if hashing fails
@@ -992,9 +1017,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Gets or creates a SIP application session using a hashed key derived from the input string.
-	 * This method detects and logs hash collisions when different input strings produce the same hash.
-	 * Useful in {@code @SipApplicationKey} methods for correlating related SIP sessions.
+	 * Gets or creates a SIP application session using a hashed key derived from the
+	 * input string. This method detects and logs hash collisions when different
+	 * input strings produce the same hash. Useful in {@code @SipApplicationKey}
+	 * methods for correlating related SIP sessions.
 	 *
 	 * @param stringToHash the string to hash for generating the session key
 	 * @return the hashed string used as the application session key
@@ -1011,8 +1037,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			appSession.setAttribute(HASHKEY, hashedString);
 		} else if (!existingHashKey.equals(hashedString)) {
 			// this is bad because the hash keys collide;
-			sipLogger.severe("@SipApplicationKey hash key collision. SipApplicationSession.id: "
-					+ appSession.getId() + " collides with " + existingHashKey + " and " + hashedString);
+			sipLogger.severe("@SipApplicationKey hash key collision. SipApplicationSession.id: " + appSession.getId()
+					+ " collides with " + existingHashKey + " and " + hashedString);
 			appSession.setAttribute(HASHKEY_COLLISION, true);
 		}
 
@@ -1041,9 +1067,9 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Processes queued requests that were delayed due to glare conditions.
-	 * Glare occurs when both endpoints send requests simultaneously, requiring
-	 * one side to queue its request until the other completes.
+	 * Processes queued requests that were delayed due to glare conditions. Glare
+	 * occurs when both endpoints send requests simultaneously, requiring one side
+	 * to queue its request until the other completes.
 	 *
 	 * @param sipSession the SIP session containing the glare queue
 	 * @param glareQueue the queue of pending requests to process
@@ -1068,8 +1094,8 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			SipSession glareSession = glareRequest.getSession();
 			if (glareSession != null && glareSession.isValid()) {
-				String error = event.getServletContext().getServletContextName() + " "
-						+ e.getClass().getSimpleName() + ", " + e.getMessage();
+				String error = event.getServletContext().getServletContextName() + " " + e.getClass().getSimpleName()
+						+ ", " + e.getMessage();
 				sipLogger.severe(glareRequest,
 						"AsyncSipServlet.processGlareQueue - Exception attempting to process GLARE request: \n"
 								+ glareRequest.toString());
@@ -1093,7 +1119,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	 *
 	 * @param response the SIP response to send
 	 * @throws ServletException if a servlet error occurs while sending
-	 * @throws IOException if an I/O error occurs while sending
+	 * @throws IOException      if an I/O error occurs while sending
 	 */
 	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
 		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
@@ -1108,8 +1134,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Determines if the SIP message is being handled in proxy mode.
-	 * Returns true if {@code proxyRequest} was previously invoked on this application session.
+	 * Determines if the SIP message is being handled in proxy mode. Returns true if
+	 * {@code proxyRequest} was previously invoked on this application session.
 	 *
 	 * @param msg the SIP message to check
 	 * @return true if the message is in proxy mode, false otherwise
@@ -1119,7 +1145,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Returns the session parameters configuration used for session attribute extraction.
+	 * Returns the session parameters configuration used for session attribute
+	 * extraction.
 	 *
 	 * @return the current session parameters, or null if not configured
 	 */
@@ -1128,7 +1155,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Sets the session parameters configuration used for session attribute extraction.
+	 * Sets the session parameters configuration used for session attribute
+	 * extraction.
 	 *
 	 * @param _sessionParameters the session parameters to set
 	 */
@@ -1137,12 +1165,13 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/**
-	 * Converts a camelCase string to regular words separated by spaces.
-	 * For example, "myVariableName" becomes "My Variable Name".
-	 * Used for generating human-readable error messages from exception class names.
+	 * Converts a camelCase string to regular words separated by spaces. For
+	 * example, "myVariableName" becomes "My Variable Name". Used for generating
+	 * human-readable error messages from exception class names.
 	 *
 	 * @param camelCaseString the camelCase string to convert
-	 * @return the string with spaces inserted before uppercase letters and first letter capitalized
+	 * @return the string with spaces inserted before uppercase letters and first
+	 *         letter capitalized
 	 */
 	public static String convertCamelCaseToRegularWords(String camelCaseString) {
 		// Regex explanation:
@@ -1160,5 +1189,21 @@ public abstract class AsyncSipServlet extends SipServlet
 
 		return result;
 	}
-	
+
+	public static Event getEvent(SipServletMessage message) {
+		return (Event) message.getAttribute("event");
+	}
+
+	public static Event getEvent(SipServletContextEvent contextEvent) {
+		return (Event) contextEvent.getServletContext().getAttribute("event");
+	}
+
+	public static void setEvent(Event event, SipServletMessage message) {
+		message.setAttribute("event", event);
+	}
+
+	public static void setEvent(Event event, SipServletContextEvent contextEvent) {
+		contextEvent.getServletContext().setAttribute("event", event);
+	}
+
 }

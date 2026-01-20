@@ -55,10 +55,10 @@ CREATE TABLE session(
 
     -- instant it was first generated
     created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_session_created (created)
+    INDEX idx_session_created (created),
 
     -- instant it was destroyed (NULL while active)
-    destroyed TIMESTAMP NULL DEFAULT NULL,
+    destroyed TIMESTAMP NULL DEFAULT NULL
 );
 
 -- this table maintains a list of index keys referencing a session;

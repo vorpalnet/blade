@@ -102,8 +102,7 @@ public class ByeOld extends Callflow {
 			}
 
 		} catch (Exception e1) {
-			warnings.append("Unable to send 200 OK to BYE request. ")
-					.append(e1.getClass().getName()).append(": ")
+			warnings.append("Unable to send 200 OK to BYE request. ").append(e1.getClass().getName()).append(": ")
 					.append(e1.getMessage()).append("; ");
 		}
 
@@ -127,9 +126,8 @@ public class ByeOld extends Callflow {
 								cancelSent = true;
 								sendRequest(bobRequest.createCancel());
 							} catch (Exception cancelEx1) {
-								warnings.append("Unable to send UAC INVITE. ")
-										.append(cancelEx1.getClass().getName()).append(": ")
-										.append(cancelEx1.getMessage()).append("; ");
+								warnings.append("Unable to send UAC INVITE. ").append(cancelEx1.getClass().getName())
+										.append(": ").append(cancelEx1.getMessage()).append("; ");
 							}
 
 						} else {
@@ -151,9 +149,8 @@ public class ByeOld extends Callflow {
 								cancelSent = true;
 								sendRequest(bobRequest.createCancel());
 							} catch (Exception cancelEx2) {
-								warnings.append("Unable to send UAS INVITE. ")
-										.append(cancelEx2.getClass().getName()).append(": ")
-										.append(cancelEx2.getMessage()).append("; ");
+								warnings.append("Unable to send UAS INVITE. ").append(cancelEx2.getClass().getName())
+										.append(": ").append(cancelEx2.getMessage()).append("; ");
 							}
 
 						} else {
@@ -216,7 +213,7 @@ public class ByeOld extends Callflow {
 
 								try {
 									SipServletRequest laterBye = bobSession.createRequest(BYE);
-									copyContent(aliceRequest, laterBye);
+									copyContentAndHeaders(aliceRequest, laterBye);
 
 									if (this.b2buaListener != null) {
 										b2buaListener.callCompleted(laterBye);
@@ -246,8 +243,7 @@ public class ByeOld extends Callflow {
 
 		} catch (Exception e1) {
 			warnings.setLength(0);
-			warnings.append("Unable to send 200 OK to BYE request. ")
-					.append(e1.getClass().getName()).append(": ")
+			warnings.append("Unable to send 200 OK to BYE request. ").append(e1.getClass().getName()).append(": ")
 					.append(e1.getMessage()).append("; ");
 		}
 
