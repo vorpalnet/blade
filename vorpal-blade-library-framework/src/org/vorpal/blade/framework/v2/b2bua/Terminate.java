@@ -79,7 +79,8 @@ public class Terminate extends Callflow {
 			}
 
 			if (linkedSession != sipSession) { // do not operate on self
-				if (getLinkedSession(linkedSession) == sipSession) { // we found it!
+
+				if (getLinkedSession(linkedSession).getId().equals(sipSession.getId())) { // we found it!
 					if (sipLogger.isLoggable(Level.FINER)) {
 						sipLogger.finer(request, "Terminate.process - sipSession.id=" + sipSession.getId() //
 								+ ", sipSession.state=" + sipSession.getState() //

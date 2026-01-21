@@ -1587,7 +1587,9 @@ public abstract class Callflow implements Serializable {
 									+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
 		}
 
-		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession());
+//		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession());
+
+		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
 
 		if (inbound instanceof SipServletRequest) {
 			SipServletRequest inboundRequest = (SipServletRequest) inbound;
@@ -1625,7 +1627,9 @@ public abstract class Callflow implements Serializable {
 								+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
 			}
 
-			outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession());
+//			outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession());
+			outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
+
 		} else {
 			if (sipLogger.isLoggable(Level.FINER)) {
 				sipLogger.finer(inbound,
@@ -1638,7 +1642,7 @@ public abstract class Callflow implements Serializable {
 
 	@Deprecated
 	public static void linkSession(SipSession inbound, SipSession outbound) {
-		outbound.setAttribute(LINKED_SESSION, inbound);
+		outbound.setAttribute(LINKED_SESSION, inbound.getId());
 
 		if (sipLogger.isLoggable(Level.FINER)) {
 			sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
@@ -1673,24 +1677,20 @@ public abstract class Callflow implements Serializable {
 	 *         linked
 	 */
 	public static SipSession getLinkedSession(SipSession ss) {
+
 		SipSession linkedSession = null;
 		if (ss != null && ss.isValid()) {
-			linkedSession = (SipSession) ss.getAttribute(LINKED_SESSION);
+			String strLinkedSession;
+
+			strLinkedSession = (String) ss.getAttribute(LINKED_SESSION);
+			if (strLinkedSession != null) {
+				linkedSession = ss.getApplicationSession().getSipSession(strLinkedSession);
+			}
+
 		}
+
 		return linkedSession;
 	}
-
-//	public static SipSession getLinkedSessions(SipServletMessage msg) {
-//		SipSession ss=null;
-//		
-//		ss = (SipSession)msg.getSession().getAttribute(LINKED_SESSION);
-//		if(ss==null) {
-//			
-//		}
-//		
-//		
-//		return ss;
-//	}
 
 	/**
 	 * This method is designed to be overloaded by the developer. It is the natural
