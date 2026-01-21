@@ -1069,16 +1069,12 @@ public abstract class Callflow implements Serializable {
 					if (indexKey != null) {
 						String dialog = getVorpalDialogId(response.getSession());
 						response.setHeader(X_VORPAL_SESSION, indexKey + ":" + dialog);
-						
-						
+
 //						String xvt = (String) response.getApplicationSession().getAttribute(X_VORPAL_TIMESTAMP);
-						
-						String xvt =  getVorpalTimestamp(response.getApplicationSession());
+
+						String xvt = getVorpalTimestamp(response.getApplicationSession());
 						response.setHeader(X_VORPAL_TIMESTAMP, xvt);
-					
-					
-					
-					
+
 					}
 				}
 
@@ -1448,33 +1444,6 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
-//	private static void copyContentMsg(SipServletMessage copyFrom, SipServletMessage copyTo)
-//			throws UnsupportedEncodingException, IOException {
-//
-//		if (copyFrom != null && copyTo != null) {
-//			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
-//		}
-//
-//	}
-
-//	/**
-//	 * Copies the content body from one SIP message to a request.
-//	 *
-//	 * @param copyFrom the source SIP message
-//	 * @param copyTo   the destination SIP request
-//	 * @return the destination request with copied content
-//	 * @throws UnsupportedEncodingException if the content encoding is not supported
-//	 * @throws IOException                  if an I/O error occurs
-//	 */
-//	public static SipServletRequest copyContent(SipServletMessage copyFrom, SipServletRequest copyTo)
-//			throws UnsupportedEncodingException, IOException {
-//		if (copyFrom != null && copyTo != null) {
-//			copyContentMsg(copyFrom, copyTo);
-//			linkSession(copyFrom, copyTo);
-//		}
-//		return copyTo;
-//	}
-
 	/**
 	 * Copies the content body from one SIP message to a request.
 	 *
@@ -1488,49 +1457,10 @@ public abstract class Callflow implements Serializable {
 			throws UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
 			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
-
-			if (copyTo.isInitial()) {
-				linkSession(copyFrom, copyTo);
-			}
-
+			linkSession(copyFrom, copyTo);
 		}
 		return copyTo;
 	}
-
-//	/**
-//	 * Copies the content body from one SIP message to a request.
-//	 *
-//	 * @param copyFrom the source SIP request
-//	 * @param copyTo   the destination SIP request
-//	 * @return the destination request with copied content
-//	 * @throws UnsupportedEncodingException if the content encoding is not supported
-//	 * @throws IOException                  if an I/O error occurs
-//	 */
-//	public static SipServletMessage copyContent(SipServletMessage copyFrom, SipServletMessage copyTo)
-//			throws UnsupportedEncodingException, IOException {
-//		if (copyFrom != null && copyTo != null) {
-//			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
-//			linkSession(copyFrom, copyTo);
-//		}
-//		return copyTo;
-//	}
-
-//	/**
-//	 * Copies the content body from one SIP message to a response.
-//	 *
-//	 * @param copyFrom the source SIP message
-//	 * @param copyTo   the destination SIP response
-//	 * @return the destination response with copied content
-//	 * @throws UnsupportedEncodingException if the content encoding is not supported
-//	 * @throws IOException                  if an I/O error occurs
-//	 */
-//	public static SipServletResponse copyContent(SipServletMessage copyFrom, SipServletResponse copyTo)
-//			throws UnsupportedEncodingException, IOException {
-//		if (copyFrom != null && copyTo != null) {
-//			copyContentMsg(copyFrom, copyTo);
-//		}
-//		return copyTo;
-//	}
 
 	/**
 	 * Copy non-system headers with the exception of Contact for REGISTER requests.
@@ -1552,10 +1482,7 @@ public abstract class Callflow implements Serializable {
 			}
 
 			copyHeadersMsg(copyFrom, copyTo);
-
-			if (copyTo.isInitial()) {
-				linkSession(copyFrom, copyTo); // one-way link, do the same on response
-			}
+			linkSession(copyFrom, copyTo); // one-way link, do the same on response
 		}
 		return copyTo;
 	}
@@ -1642,34 +1569,6 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
-//	/**
-//	 * Links two SIP sessions together bidirectionally in a B2BUA scenario. Each
-//	 * session stores a reference to the other via the LINKED_SESSION attribute.
-//	 * Also attempts to track caller/callee roles based on userAgent attributes.
-//	 *
-//	 * @param ss1 the first SIP session to link
-//	 * @param ss2 the second SIP session to link
-//	 * @deprecated use linkSession for better control
-//	 */
-//	public static void linkSessions(SipSession ss1, SipSession ss2) {
-//		if (ss1 == null || ss2 == null) {
-//			return;
-//		}
-//		ss1.setAttribute(LINKED_SESSION, ss2);
-//		ss2.setAttribute(LINKED_SESSION, ss1);
-//
-//		// attempt to keep track of who called whom
-//		String ss1UserAgent = (String) ss1.getAttribute(USER_AGENT_ATTR);
-//		if (ss1UserAgent != null && ss1UserAgent.equals(CALLER)) {
-//			ss2.setAttribute(USER_AGENT_ATTR, CALLEE);
-//		} else {
-//			String ss2UserAgent = (String) ss2.getAttribute(USER_AGENT_ATTR);
-//			if (ss2UserAgent != null && ss2UserAgent.equals(CALLER)) {
-//				ss1.setAttribute(USER_AGENT_ATTR, CALLEE);
-//			}
-//		}
-//	}
-
 	/**
 	 * Links the outbound request to the inbound request by placing a reference to
 	 * the inbound session int the outbound session. Sets the session attribute
@@ -1680,11 +1579,32 @@ public abstract class Callflow implements Serializable {
 	 * @param outbound
 	 */
 	public static void linkSession(SipServletMessage inbound, SipServletMessage outbound) {
-		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession());
-		if (inbound.getMethod().equals(INVITE)) {
-			inbound.getSession().setAttribute(USER_AGENT_ATTR, CALLER);
-			outbound.getSession().setAttribute(USER_AGENT_ATTR, CALLEE);
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(inbound,
+					Color.RED_BOLD_BRIGHT(
+							"Callflow.linkSession(SipServletMessage inbound, SipServletMessage outbound) - linking "
+									+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
 		}
+
+		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession());
+
+		if (inbound instanceof SipServletRequest) {
+			SipServletRequest inboundRequest = (SipServletRequest) inbound;
+			if (inboundRequest.getMethod().equals(INVITE) && inboundRequest.isInitial()) {
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
+							"Callflow.linkSession(SipServletMessage inbound, SipServletMessage outbound) - setting "
+									+ getVorpalDialogId(inbound) + " to caller and " + getVorpalDialogId(outbound)
+									+ " to callee"));
+				}
+
+				inbound.getSession().setAttribute(USER_AGENT_ATTR, CALLER);
+				outbound.getSession().setAttribute(USER_AGENT_ATTR, CALLEE);
+			}
+		}
+
 	}
 
 	/**
@@ -1696,13 +1616,36 @@ public abstract class Callflow implements Serializable {
 	 * @param outbound
 	 */
 	public static void linkSession(SipServletResponse inbound, SipServletMessage outbound) {
+
 		if (successful(inbound)) {
+
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
+						"Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - linking "
+								+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
+			}
+
 			outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession());
+		} else {
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(inbound,
+						Color.RED_BOLD_BRIGHT(
+								"Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - status="
+										+ inbound.getStatus() + " not ready to link."));
+			}
 		}
 	}
 
+	@Deprecated
 	public static void linkSession(SipSession inbound, SipSession outbound) {
 		outbound.setAttribute(LINKED_SESSION, inbound);
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
+					"Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - @Deprecated linking "
+							+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
+		}
+
 	}
 
 	/**

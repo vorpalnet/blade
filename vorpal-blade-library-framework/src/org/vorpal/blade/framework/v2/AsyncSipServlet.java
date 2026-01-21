@@ -718,7 +718,7 @@ public abstract class AsyncSipServlet extends SipServlet
 													// Callflow.linkSessions(linkedSession, sipSession);
 													Callflow.linkSession(linkedSession, sipSession);
 													Callflow.linkSession(sipSession, linkedSession);
-
+													
 													for (String attr : session.getAttributeNameSet()) {
 														if (sipLogger.isLoggable(Level.FINER)) {
 															sipLogger.finer(session,

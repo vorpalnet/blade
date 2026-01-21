@@ -122,6 +122,69 @@ public class InitialInvite extends Callflow {
 		}
 	}
 
+	@Override
+	public void process(SipServletRequest request) throws ServletException, IOException {
+
+		aliceRequest = request;
+
+		SipApplicationSession appSession = aliceRequest.getApplicationSession();
+
+		Address to = aliceRequest.getTo();
+		Address from = aliceRequest.getFrom();
+
+		bobRequest = sipFactory.createRequest(appSession, INVITE, from, to);
+		bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
+		copyContentAndHeaders(aliceRequest, bobRequest);
+		bobRequest.setRequestURI(aliceRequest.getRequestURI());
+
+		// This is an API kludge to let the user know what callflow was used
+		bobRequest.setAttribute(ATTR_CALLFLOW, this);
+
+		Address xOriginalDnAddress = aliceRequest.getAddressHeader(ATTR_X_ORIGINAL_DN);
+		URI xOriginalDN;
+		if (xOriginalDnAddress != null) {
+			xOriginalDN = xOriginalDnAddress.getURI();
+		} else {
+			xOriginalDN = bobRequest.getTo().getURI();
+		}
+		appSession.setAttribute(ATTR_X_ORIGINAL_DN, xOriginalDN);
+
+		URI xPreviousDN = bobRequest.getRequestURI();
+		appSession.setAttribute(ATTR_X_PREVIOUS_DN, xPreviousDN);
+		bobRequest.getSession().setAttribute(ATTR_INITIAL_INVITE, bobRequest);
+		SipServletRequest incomingAliceRequest = getIncomingRequest(bobRequest);
+		if (incomingAliceRequest != null) {
+			incomingAliceRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, incomingAliceRequest.getFrom());
+		}
+		bobRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, bobRequest.getTo());
+
+		if (b2buaListener != null) {
+			SettingsManager.createEvent("callStarted", bobRequest);
+			b2buaListener.callStarted(bobRequest);
+			SettingsManager.sendEvent(bobRequest);
+		}
+
+		// Remove the callflow so it's not serialized
+		bobRequest.removeAttribute(ATTR_CALLFLOW);
+
+		// Sometimes you want to arrest the processing of the transaction.
+		// If either the callflow or the request are marked as 'doNotProcess', we won't
+		boolean _doNotProcess = Boolean.TRUE.equals(bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
+		this.doNotProcess = (this.doNotProcess || _doNotProcess);
+		if (!this.doNotProcess) {
+			// This gives the developer a chance to halt processing and 'continue' later.
+
+			try {
+				this.processContinue();
+			} catch (Exception ex) {
+				sipLogger.warning(bobRequest, "InitialInvite.process - catch #1");
+				throw new ServletException(ex);
+			}
+
+		}
+
+	}
+	
 	/**
 	 * This method allows the continuation of processing the transaction at a later
 	 * time. Used in the development of the Queue service.
@@ -208,69 +271,6 @@ public class InitialInvite extends Callflow {
 
 			}
 		});
-
-	}
-
-	@Override
-	public void process(SipServletRequest request) throws ServletException, IOException {
-
-		aliceRequest = request;
-
-		SipApplicationSession appSession = aliceRequest.getApplicationSession();
-
-		Address to = aliceRequest.getTo();
-		Address from = aliceRequest.getFrom();
-
-		bobRequest = sipFactory.createRequest(appSession, INVITE, from, to);
-		bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
-		copyContentAndHeaders(aliceRequest, bobRequest);
-		bobRequest.setRequestURI(aliceRequest.getRequestURI());
-
-		// This is an API kludge to let the user know what callflow was used
-		bobRequest.setAttribute(ATTR_CALLFLOW, this);
-
-		Address xOriginalDnAddress = aliceRequest.getAddressHeader(ATTR_X_ORIGINAL_DN);
-		URI xOriginalDN;
-		if (xOriginalDnAddress != null) {
-			xOriginalDN = xOriginalDnAddress.getURI();
-		} else {
-			xOriginalDN = bobRequest.getTo().getURI();
-		}
-		appSession.setAttribute(ATTR_X_ORIGINAL_DN, xOriginalDN);
-
-		URI xPreviousDN = bobRequest.getRequestURI();
-		appSession.setAttribute(ATTR_X_PREVIOUS_DN, xPreviousDN);
-		bobRequest.getSession().setAttribute(ATTR_INITIAL_INVITE, bobRequest);
-		SipServletRequest incomingAliceRequest = getIncomingRequest(bobRequest);
-		if (incomingAliceRequest != null) {
-			incomingAliceRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, incomingAliceRequest.getFrom());
-		}
-		bobRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, bobRequest.getTo());
-
-		if (b2buaListener != null) {
-			SettingsManager.createEvent("callStarted", bobRequest);
-			b2buaListener.callStarted(bobRequest);
-			SettingsManager.sendEvent(bobRequest);
-		}
-
-		// Remove the callflow so it's not serialized
-		bobRequest.removeAttribute(ATTR_CALLFLOW);
-
-		// Sometimes you want to arrest the processing of the transaction.
-		// If either the callflow or the request are marked as 'doNotProcess', we won't
-		boolean _doNotProcess = Boolean.TRUE.equals(bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
-		this.doNotProcess = (this.doNotProcess || _doNotProcess);
-		if (!this.doNotProcess) {
-			// This gives the developer a chance to halt processing and 'continue' later.
-
-			try {
-				this.processContinue();
-			} catch (Exception ex) {
-				sipLogger.warning(bobRequest, "InitialInvite.process - catch #1");
-				throw new ServletException(ex);
-			}
-
-		}
 
 	}
 

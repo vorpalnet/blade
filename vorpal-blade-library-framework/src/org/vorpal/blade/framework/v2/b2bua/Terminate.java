@@ -73,12 +73,15 @@ public class Terminate extends Callflow {
 		while (itr.hasNext()) { // iterate through all possible linked sessions
 			linkedSession = itr.next();
 
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(request, "Terminate.process - sipSession=" + getVorpalDialogId(sipSession)
+						+ ", linkedSession=" + getVorpalDialogId(linkedSession));
+			}
+
 			if (linkedSession != sipSession) { // do not operate on self
 				if (getLinkedSession(linkedSession) == sipSession) { // we found it!
-					SipServletRequest terminationRequest = null;
-
 					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(request, "ByeOrCancel.process - sipSession.id=" + sipSession.getId() //
+						sipLogger.finer(request, "Terminate.process - sipSession.id=" + sipSession.getId() //
 								+ ", sipSession.state=" + sipSession.getState() //
 								+ ", sipSession.isValid=" + sipSession.isValid() //
 								+ ", linkedSession.id=" + linkedSession.getId() //
@@ -86,6 +89,8 @@ public class Terminate extends Callflow {
 								+ ", linkedSession.isValid=" + linkedSession.isValid() //
 						);
 					}
+
+					SipServletRequest terminationRequest = null;
 
 					switch (linkedSession.getState()) {
 
@@ -133,6 +138,15 @@ public class Terminate extends Callflow {
 						sipLogger.warning(request,
 								"Terminate.process - Failed to send termination request: " + ex1.getMessage());
 						exception = ex1;
+					}
+
+				} else {
+
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(request,
+								"Terminate.process - Unrelated sessions... How did they get there!? sipSession="
+										+ getVorpalDialogId(sipSession) + ", linkedSession="
+										+ getVorpalDialogId(linkedSession));
 					}
 
 				}

@@ -186,25 +186,7 @@ public class QueueCallflow extends Callflow {
 		if (appSession != null && appSession.isValid() && sipSession != null && sipSession.isValid()) {
 
 			try {
-//				if (sipLogger.isLoggable(Level.FINER)) {
-//					sipLogger.finer(aliceRequest, "QueueCallflow.complete - is the app session null? "
-//							+ ((appSession == null) ? true : false));
-//				}
-//
 				if (appSession != null) {
-//
-//					if (sipLogger.isLoggable(Level.FINER)) {
-//						sipLogger.finer(aliceRequest, "QueueCallflow.complete - is the queue state canceled? "
-//								+ this.stateEquals(QueueState.CANCELED));
-//						sipLogger.finer(aliceRequest,
-//								"QueueCallflow.complete - is the app session valid? " + appSession.isValid());
-//						sipLogger.finer(aliceRequest, "QueueCallflow.complete - is the sip session valid? "
-//								+ aliceRequest.getSession().isValid());
-//						sipLogger.finer(aliceRequest, "QueueCallflow.complete - What is the sip session state? "
-//								+ aliceRequest.getSession().getState());
-//						sipLogger.finer(aliceRequest,
-//								"QueueCallflow.complete - What is the queue state? " + getState());
-//					}
 
 					if (false == this.stateEquals(QueueState.CANCELED)) {
 						stopTimers();
@@ -241,9 +223,8 @@ public class QueueCallflow extends Callflow {
 
 							sendRequest(bobRequest, (bobResponse) -> {
 //								linkSessions(aliceRequest.getSession(), bobResponse.getSession());
-								linkSession(aliceRequest.getSession(), bobResponse.getSession());
-								linkSession(bobResponse.getSession(), aliceRequest.getSession() );
-								
+//								linkSession(aliceRequest.getSession(), bobResponse.getSession());
+//								linkSession(bobResponse.getSession(), aliceRequest.getSession());
 
 								if (sipLogger.isLoggable(Level.FINER)) {
 									sipLogger.finer(bobResponse,
