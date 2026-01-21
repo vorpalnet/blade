@@ -68,11 +68,6 @@ public class Terminate extends Callflow {
 		SipSession linkedSession;
 		Exception exception = null;
 
-		// Send response immediately for fear of a downstream process eating the BYE
-		if (request.getMethod().equals(BYE)) {
-			sendResponse(request.createResponse(STATUS_OK));
-		}
-
 		@SuppressWarnings("unchecked")
 		Iterator<SipSession> itr = (Iterator<SipSession>) appSession.getSessions(SIP);
 		while (itr.hasNext()) { // iterate through all possible linked sessions
@@ -82,8 +77,8 @@ public class Terminate extends Callflow {
 				if (getLinkedSession(linkedSession) == sipSession) { // we found it!
 					SipServletRequest terminationRequest = null;
 
-					if (sipLogger.isLoggable(Level.FINEST)) {
-						sipLogger.finest(request, "ByeOrCancel.process - sipSession.id=" + sipSession.getId() //
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(request, "ByeOrCancel.process - sipSession.id=" + sipSession.getId() //
 								+ ", sipSession.state=" + sipSession.getState() //
 								+ ", sipSession.isValid=" + sipSession.isValid() //
 								+ ", linkedSession.id=" + linkedSession.getId() //
@@ -144,6 +139,11 @@ public class Terminate extends Callflow {
 
 			}
 
+		}
+
+		// Send response immediately for fear of a downstream process eating the BYE
+		if (request.getMethod().equals(BYE)) {
+			sendResponse(request.createResponse(STATUS_OK));
 		}
 
 		if (exception != null) {
