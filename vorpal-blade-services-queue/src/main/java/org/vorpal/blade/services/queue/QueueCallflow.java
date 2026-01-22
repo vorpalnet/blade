@@ -14,6 +14,7 @@ import javax.servlet.sip.SipSession.State;
 import org.vorpal.blade.framework.v2.b2bua.Cancel;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
 
 public class QueueCallflow extends Callflow {
@@ -69,6 +70,11 @@ public class QueueCallflow extends Callflow {
 			if (mediaUri != null) {
 				this.mediaRequest = sipFactory.createRequest(appSession, INVITE, aliceRequest.getFrom(),
 						sipFactory.createAddress(mediaUri));
+				
+				if(sipLogger.isLoggable(Level.FINER)){
+					sipLogger.finer(inboundRequest, Color.PURPLE_BRIGHT("QueueCallflow.process - copyContent @1"));
+				}
+				
 				copyContent(aliceRequest, mediaRequest);
 
 			} else {
@@ -222,9 +228,9 @@ public class QueueCallflow extends Callflow {
 							});
 
 							sendRequest(bobRequest, (bobResponse) -> {
-//								linkSessions(aliceRequest.getSession(), bobResponse.getSession());
-//								linkSession(aliceRequest.getSession(), bobResponse.getSession());
-//								linkSession(bobResponse.getSession(), aliceRequest.getSession());
+//								l*inkSessions(aliceRequest.getSession(), bobResponse.getSession());
+//								l*inkSession(aliceRequest.getSession(), bobResponse.getSession());
+//								l*inkSession(bobResponse.getSession(), aliceRequest.getSession());
 
 								if (sipLogger.isLoggable(Level.FINER)) {
 									sipLogger.finer(bobResponse,
@@ -234,9 +240,17 @@ public class QueueCallflow extends Callflow {
 
 								if (successful(bobResponse)) {
 									SipServletRequest aliceSDP = aliceRequest.getSession().createRequest(INVITE);
+									
+									if(sipLogger.isLoggable(Level.FINER)){
+										sipLogger.finer(bobResponse, Color.PURPLE_BRIGHT("QueueCallflow.process - copyContent @2"));
+									}
+									
 									copyContent(bobResponse, aliceSDP);
 
 									sendRequest(aliceSDP, (aliceAck) -> {
+										if(sipLogger.isLoggable(Level.FINER)){
+										sipLogger.finer(bobResponse, Color.PURPLE_BRIGHT("QueueCallflow.process - copyContent @3"));
+									}
 										sendRequest(copyContent(aliceAck, bobResponse.createAck()));
 										sendRequest(mediaRequest.getSession().createRequest(BYE));
 //									sipLogger.finer(aliceAck, "Expectation byeExpectation cleared...");
@@ -267,13 +281,24 @@ public class QueueCallflow extends Callflow {
 										setState(QueueState.CANCELED);
 									});
 
+							if(sipLogger.isLoggable(Level.FINER)){
+								sipLogger.finer(aliceRequest, Color.PURPLE_BRIGHT("QueueCallflow.process - copyContentAndHeaders @4"));
+							}
 							sendRequest(copyContentAndHeaders(aliceRequest, bobRequest), (bobResponse) -> {
 								sendResponse(createResponse(aliceRequest, bobResponse), (ackOrPrack) -> {
 									switch (ackOrPrack.getMethod()) {
 									case PRACK:
+										if(sipLogger.isLoggable(Level.FINER)){
+											sipLogger.finer(ackOrPrack, Color.PURPLE_BRIGHT("QueueCallflow.process - copyContent @5"));
+										}
 										sendRequest(copyContent(ackOrPrack, bobResponse.createPrack()));
 										break;
 									case ACK:
+										
+										if(sipLogger.isLoggable(Level.FINER)){
+											sipLogger.finer(ackOrPrack, Color.PURPLE_BRIGHT("QueueCallflow.process - copyContent @6"));
+										}
+									
 										sendRequest(copyContent(ackOrPrack, bobResponse.createAck()));
 										sipLogger.finer(ackOrPrack,
 												"QueueCallflow.complete - Expectation cancelWhileCalingBob cleared...");

@@ -201,7 +201,7 @@ public abstract class Callflow implements Serializable {
 
 				}
 			} catch (Exception e) {
-				sipLogger.warning(request, "Callflow.pullCallback - catch #1");
+				sipLogger.warning(request, "#Q1 Callflow.pullCallback - Exception e");
 				sipLogger.logStackTrace(request, e);
 			}
 
@@ -273,7 +273,7 @@ public abstract class Callflow implements Serializable {
 		callback = (Callback<SipServletResponse>) appSession.getAttribute(attribute);
 		if (callback != null) {
 			if (response.getProxyBranch() == null && response.getStatus() >= 200) {
-				sipLogger.finer(response, "removing " + attribute + " SipApplicationSession attribute.");
+				sipLogger.finer(response, "#1.1 removing " + attribute + " SipApplicationSession attribute.");
 				appSession.removeAttribute(attribute);
 			}
 		}
@@ -518,7 +518,7 @@ public abstract class Callflow implements Serializable {
 
 			if (sipLogger.isLoggable(Level.WARNING)) {
 				sipLogger.warning(appSession,
-						"Callflow.expectRequest - Failed to set expectation; appSession is invalid. This should not be possible. (Check your code.)");
+						"#1.2 Callflow.expectRequest - Failed to set expectation; appSession is invalid. This should not be possible. (Check your code.)");
 			}
 
 		}
@@ -730,8 +730,9 @@ public abstract class Callflow implements Serializable {
 									try {
 										KeepAlive refresher = new KeepAlive();
 										refresher.handle(session);
-									} catch (Exception e) {
-										sipLogger.warning(sipSession, "Callflow.sendRequest - catch #1");
+									} catch (Exception e100) {
+										sipLogger.warning(sipSession,
+												"#1.3 Callflow.sendRequest - catch Exception e100");
 									}
 								}
 							});
@@ -741,8 +742,9 @@ public abstract class Callflow implements Serializable {
 									try {
 										KeepAliveExpiry expiry = new KeepAliveExpiry();
 										expiry.handle(sipSession);
-									} catch (Exception e) {
-										sipLogger.warning(sipSession, "Callflow.sendRequest - catch #2");
+									} catch (Exception e200) {
+										sipLogger.warning(sipSession,
+												"#1.4 Callflow.sendRequest - catch Exception e200");
 									}
 								}
 							});
@@ -783,17 +785,17 @@ public abstract class Callflow implements Serializable {
 				}
 			}
 
-		} catch (Exception ex) {
-			sipLogger.warning(request, "Callflow.sendRequest - catch #3");
-			sipLogger.severe(request, ex);
+		} catch (Exception ex300) {
+			sipLogger.warning(request, "#1.5 Callflow.sendRequest - catch Exception ex300");
+			sipLogger.severe(request, ex300);
 
 			if (!request.getMethod().equals(ACK) && !request.getMethod().equals(PRACK)) {
 
 				// It's too maddening to write callflows where you have to worry about both
 				// error responses and exceptions. Let's create a dummy error response.
 				SipServletResponse errorResponse = new DummyResponse(request, RESPONSE_CODE_500,
-						ex.getClass().getSimpleName());
-				errorResponse.setContent(ex.getMessage(), "text/plain");
+						ex300.getClass().getSimpleName());
+				errorResponse.setContent(ex300.getMessage(), "text/plain");
 
 				if (lambdaFunction != null) {
 					lambdaFunction.accept(errorResponse);
@@ -857,9 +859,10 @@ public abstract class Callflow implements Serializable {
 					}
 
 				});
-			} catch (Exception e) {
-				sipLogger.warning(request, "Callflow.sendRequestsInSerial - catch #1: " + e.getMessage());
-				sipLogger.severe(request, e.getMessage());
+			} catch (Exception ex500) {
+				sipLogger.warning(request,
+						"#1.6 Callflow.sendRequestsInSerial - catch Exception ex500: " + ex500.getMessage());
+				sipLogger.severe(request, ex500.getMessage());
 				stopTimer(request.getApplicationSession(), timerId);
 
 				if (!requests.isEmpty()) {
@@ -872,7 +875,7 @@ public abstract class Callflow implements Serializable {
 			}
 
 		} else {
-			sipLogger.warning("Callflow.sendRequestsInSerial... Empty request list.");
+			sipLogger.warning("#1.7 Callflow.sendRequestsInSerial... Empty request list.");
 		}
 
 	}
@@ -934,8 +937,8 @@ public abstract class Callflow implements Serializable {
 				for (SipServletRequest rqst : savedRequests.values()) {
 					try {
 						sendRequest(rqst.createCancel());
-					} catch (Exception e) {
-						sipLogger.warning(rqst, "Callflow.startTimer - catch #1");
+					} catch (Exception ex900) {
+						sipLogger.warning(rqst, "#1.8 Callflow.startTimer - catch Exception ex900");
 						// do nothing;
 					}
 				}
@@ -965,8 +968,8 @@ public abstract class Callflow implements Serializable {
 						for (SipServletRequest rqst : savedRequests.values()) {
 							try {
 								sendRequest(rqst.createCancel());
-							} catch (Exception e) {
-								sipLogger.warning(rqst, "Callflow.startTimer - catch #2");
+							} catch (Exception exAA1) {
+								sipLogger.warning(rqst, "#1.9 Callflow.startTimer - catch Exception exAA1");
 								// do nothing;
 							}
 						}
@@ -1051,12 +1054,12 @@ public abstract class Callflow implements Serializable {
 				if (response.getMethod().equals(INVITE)) {
 					// glare handling;
 					if (response.getStatus() >= 300) {
-						sipLogger.finest(sipSession, "Removing EXPECT_ACK session attribute.");
+						sipLogger.finest(sipSession, "#2.1 Removing EXPECT_ACK session attribute.");
 						sipSession.removeAttribute(EXPECT_ACK);
 
 						SipSession linkedSession = getLinkedSession(sipSession);
 						if (linkedSession != null) {
-							sipLogger.finest(linkedSession, "Removing EXPECT_ACK linked session attribute.");
+							sipLogger.finest(linkedSession, "#2.2 Removing EXPECT_ACK linked session attribute.");
 							linkedSession.removeAttribute(EXPECT_ACK);
 						}
 					}
@@ -1099,7 +1102,7 @@ public abstract class Callflow implements Serializable {
 			}
 
 		} else {
-			sipLogger.finer(response, "Callflow.sendResponse - Skipping response. Session terminated.");
+			sipLogger.finer(response, "#2.3 Callflow.sendResponse - Skipping response. Session terminated.");
 		}
 
 	}
@@ -1222,22 +1225,6 @@ public abstract class Callflow implements Serializable {
 		return destResponse;
 	}
 
-//	@Deprecated
-//	public static SipServletRequest createContinueRequest(SipServletRequest origin)
-//			throws IOException, ServletParseException {
-//
-//		SipServletRequest destination = sipFactory.createRequest(//
-//				origin.getApplicationSession(), //
-//				origin.getMethod(), //
-//				origin.getFrom(), //
-//				origin.getTo()); //
-//
-//		destination.setRequestURI(origin.getRequestURI());
-//		destination.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, origin);
-//		copyContentAndHeaders(origin, destination);
-//		return destination;
-//	}
-
 	@Deprecated
 	public static SipServletRequest createNewRequest(SipServletRequest origin)
 			throws IOException, ServletParseException {
@@ -1275,38 +1262,6 @@ public abstract class Callflow implements Serializable {
 		return destination;
 	}
 
-//	/**
-//	 * Creates a new initial SIP request based on the original request.
-//	 *
-//	 * @param origin      the original SIP request to copy from
-//	 * @param copyContent if true, copies both content and headers; if false, copies
-//	 *                    only headers
-//	 * @return the new SIP request
-//	 * @throws IOException           if an I/O error occurs
-//	 * @throws ServletParseException if address parsing fails
-//	 * @deprecated use createRequest methods instead
-//	 */
-//	@Deprecated
-//	public static SipServletRequest createInitialRequest(SipServletRequest origin, boolean copyContent)
-//			throws IOException, ServletParseException {
-//
-//		SipServletRequest destination = sipFactory.createRequest(//
-//				origin.getApplicationSession(), //
-//				origin.getMethod(), //
-//				origin.getFrom(), //
-//				origin.getTo()); //
-//
-//		destination.setRequestURI(origin.getRequestURI());
-//		destination.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, origin);
-//		if (copyContent) {
-//			copyContentAndHeaders(origin, destination);
-//		} else {
-//			copyHeaders(origin, destination);
-//		}
-//
-//		return destination;
-//	}
-
 	/**
 	 * Creates a new SIP request with the specified method on the same session as
 	 * the response.
@@ -1323,38 +1278,6 @@ public abstract class Callflow implements Serializable {
 		SipServletRequest request = response.getSession().createRequest(method);
 		return request;
 	}
-
-//	/**
-//	 * Creates a new SIP response based on an existing response with optional
-//	 * content copying.
-//	 *
-//	 * @param request        the SIP request to create the response for
-//	 * @param responseToCopy the response to copy status, headers, and optionally
-//	 *                       content from
-//	 * @param copyContent    if true, copies the content body; if false, copies only
-//	 *                       headers
-//	 * @return the new SIP response, or null if request or responseToCopy is null
-//	 * @throws UnsupportedEncodingException if the content encoding is not supported
-//	 * @throws IOException                  if an I/O error occurs
-//	 * @throws ServletParseException        if parsing fails
-//	 * @deprecated use createResponse without copyContent parameter instead
-//	 */
-//	@Deprecated
-//	public static SipServletResponse createResponse(SipServletRequest request, SipServletResponse responseToCopy,
-//			boolean copyContent) throws UnsupportedEncodingException, IOException, ServletParseException {
-//		SipServletResponse response = null;
-//
-//		if (request != null && responseToCopy != null) {
-//			response = request.createResponse(responseToCopy.getStatus(), responseToCopy.getReasonPhrase());
-//			if (response != null) {
-//				copyHeaders(responseToCopy, response);
-//				if (copyContent) {
-//					response.setContent(responseToCopy.getContent(), responseToCopy.getContentType());
-//				}
-//			}
-//		}
-//		return response;
-//	}
 
 	/**
 	 * Sends an ACK or PRACK request downstream based on an upstream request. For
@@ -1457,7 +1380,34 @@ public abstract class Callflow implements Serializable {
 			throws UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
 			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
-			linkSession(copyFrom, copyTo);
+
+			if (copyTo.isInitial() || copyTo.getMethod().equals(ACK)) {
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
+							"#2.4 Callflow.copyContent(SipServletMessage copyFrom, SipServletRequest copyTo) - linking "
+									+ getVorpalDialogId(copyFrom) + " to " + getVorpalDialogId(copyTo)));
+				}
+				linkSession(copyFrom, copyTo);
+			}
+		}
+		return copyTo;
+	}
+
+	public static SipServletResponse copyContent(SipServletMessage copyFrom, SipServletResponse copyTo)
+			throws UnsupportedEncodingException, IOException {
+		if (copyFrom != null && copyTo != null) {
+			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
+
+			if (successful(copyTo)) {
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
+							"#2.33 Callflow.copyContent(SipServletMessage copyFrom, SipServletRequest copyTo) - linking "
+									+ getVorpalDialogId(copyFrom) + " to " + getVorpalDialogId(copyTo)));
+				}
+
+				linkSession(copyFrom, copyTo);
+			}
+
 		}
 		return copyTo;
 	}
@@ -1482,7 +1432,14 @@ public abstract class Callflow implements Serializable {
 			}
 
 			copyHeadersMsg(copyFrom, copyTo);
-			linkSession(copyFrom, copyTo); // one-way link, do the same on response
+
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
+						"#2.5 Callflow.copyHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) - linking "
+								+ getVorpalDialogId(copyFrom) + " to " + getVorpalDialogId(copyTo)));
+			}
+
+//			linkSession(copyFrom, copyTo); // one-way link, do the same on response
 		}
 		return copyTo;
 	}
@@ -1520,9 +1477,6 @@ public abstract class Callflow implements Serializable {
 
 			copyHeadersMsg(copyFrom, copyTo);
 
-			if (successful(copyFrom)) {
-				linkSession(copyFrom, copyTo); // now the sessions are fully linked
-			}
 		}
 		return copyTo;
 	}
@@ -1541,8 +1495,7 @@ public abstract class Callflow implements Serializable {
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
 			copyHeadersMsg(copyFrom, copyTo);
-			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
-			linkSession(copyFrom, copyTo); // one way, do the opposite on successful response
+			copyContent(copyFrom, copyTo);
 		}
 		return copyTo;
 	}
@@ -1561,95 +1514,27 @@ public abstract class Callflow implements Serializable {
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
 			copyHeadersMsg(copyFrom, copyTo);
-			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
-			if (successful(copyFrom)) {
-				linkSession(copyFrom, copyTo); // now both sessions are fully linked
-			}
+			copyContent(copyFrom, copyTo);
 		}
 		return copyTo;
 	}
 
-	/**
-	 * Links the outbound request to the inbound request by placing a reference to
-	 * the inbound session int the outbound session. Sets the session attribute
-	 * 'userAgent' to 'caller' or 'callee' respectfully. This is intended to be used
-	 * for initial INVITEs.
-	 * 
-	 * @param inbound
-	 * @param outbound
-	 */
 	public static void linkSession(SipServletMessage inbound, SipServletMessage outbound) {
-
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(inbound,
-					Color.RED_BOLD_BRIGHT(
-							"Callflow.linkSession(SipServletMessage inbound, SipServletMessage outbound) - linking "
-									+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
-		}
-
-//		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession());
-
-		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
-
-		if (inbound instanceof SipServletRequest) {
-			SipServletRequest inboundRequest = (SipServletRequest) inbound;
-			if (inboundRequest.getMethod().equals(INVITE) && inboundRequest.isInitial()) {
-
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
-							"Callflow.linkSession(SipServletMessage inbound, SipServletMessage outbound) - setting "
-									+ getVorpalDialogId(inbound) + " to caller and " + getVorpalDialogId(outbound)
-									+ " to callee"));
-				}
-
-				inbound.getSession().setAttribute(USER_AGENT_ATTR, CALLER);
-				outbound.getSession().setAttribute(USER_AGENT_ATTR, CALLEE);
-			}
-		}
-
-	}
-
-	/**
-	 * Links the inbound response to the outbound response by placing a reference to
-	 * the inbound session in the outbound session. Only links the sessions for 2xx
-	 * status codes. This is intended to be used for successful responses.
-	 * 
-	 * @param inbound
-	 * @param outbound
-	 */
-	public static void linkSession(SipServletResponse inbound, SipServletMessage outbound) {
-
-		if (successful(inbound)) {
-
-			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
-						"Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - linking "
-								+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
-			}
-
-//			outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession());
-			outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
-
-		} else {
-			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(inbound,
-						Color.RED_BOLD_BRIGHT(
-								"Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - status="
-										+ inbound.getStatus() + " not ready to link."));
-			}
-		}
-	}
-
-	@Deprecated
-	public static void linkSession(SipSession inbound, SipSession outbound) {
-		outbound.setAttribute(LINKED_SESSION, inbound.getId());
-
 		if (sipLogger.isLoggable(Level.FINER)) {
 			sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
-					"Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - @Deprecated linking "
+					"#4.77 Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - linking "
 							+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
 		}
+		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
+	}
 
+	public static void linkSession(SipSession inbound, SipSession outbound) {
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
+					"#4.66 Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - linking "
+							+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
+		}
+		outbound.setAttribute(LINKED_SESSION, inbound.getId());
 	}
 
 	/**
@@ -1772,8 +1657,8 @@ public abstract class Callflow implements Serializable {
 				bobAckOrPrack = copyContentAndHeaders(aliceAckOrPrack, bobResponse.createAck());
 			}
 		} catch (Exception ex) {
-			sipLogger.warning(bobResponse, "Callflow.createAcknowlegement - Exception " + ex.getClass().getSimpleName()
-					+ ": " + ex.getMessage());
+			sipLogger.warning(bobResponse, "#5.99 Callflow.createAcknowlegement - Exception "
+					+ ex.getClass().getSimpleName() + ": " + ex.getMessage());
 			throw new ServletParseException(ex);
 		}
 
@@ -2047,7 +1932,8 @@ public abstract class Callflow implements Serializable {
 			List<URI> endpoints = new LinkedList<>();
 			for (URI endpoint : proxyTier.getEndpoints()) {
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(inboundRequest, "Callflow.proxyRequest - proxying request, endpoint=" + endpoint);
+					sipLogger.finer(inboundRequest,
+							"#6.99 Callflow.proxyRequest - proxying request, endpoint=" + endpoint);
 				}
 				endpoints.add(endpoint);
 			}
@@ -2065,7 +1951,7 @@ public abstract class Callflow implements Serializable {
 
 			if (sipLogger.isLoggable(Level.FINER)) {
 				sipLogger.finer(inboundRequest,
-						"Callflow.proxyRequest - proxying request, proxyBranches.size=" + proxyBranches.size());
+						"#7.99 Callflow.proxyRequest - proxying request, proxyBranches.size=" + proxyBranches.size());
 			}
 
 			for (ProxyBranch proxyBranch : proxyBranches) {
@@ -2076,7 +1962,7 @@ public abstract class Callflow implements Serializable {
 			proxy.startProxy();
 
 		} else {
-			sipLogger.finer(inboundRequest, "Callflow.proxyRequest - proxyPlan is empty");
+			sipLogger.finer(inboundRequest, "#8.99 Callflow.proxyRequest - proxyPlan is empty");
 		}
 
 	}
