@@ -643,7 +643,7 @@ public abstract class Callflow implements Serializable {
 	public static String getVorpalDialogId(SipSession sipSession) {
 		String dialog = null;
 
-		if (sipSession != null) {
+		if (sipSession != null && sipSession.isValid()) {
 			dialog = (String) sipSession.getAttribute(X_VORPAL_DIALOG);
 			dialog = (dialog != null) ? dialog : createVorpalDialogId(sipSession);
 		}
@@ -1038,72 +1038,77 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
-		SipSession sipSession = null;
+		SipSession sipSession = response.getSession();
 
-		if (response != null //
-				&& !response.isCommitted() //
-				&& (sipSession = response.getSession()) != null //
-				&& sipSession.isValid() //
-				&& sipSession.getState() != State.TERMINATED //
-		) {
+		sipLogger.finer(response,
+				"Callflow.sendResponse - response.isCommitted? " + (response.isCommitted()) + ", sipSession="
+						+ sipSession + ", sipSession.isValid? " + (sipSession.isValid()) + ", sipSession.state="
+						+ sipSession.getState() + ", linkedSession=" + getLinkedSession(sipSession));
 
-			if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
+//		if (response != null //
+//				&& !response.isCommitted() //
+//				&& sipSession != null //
+//				&& sipSession.isValid() //
+//				&& sipSession.getState() != State.TERMINATED //
+//		) {
 
-				sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
 
-				if (response.getMethod().equals(INVITE)) {
-					// glare handling;
-					if (response.getStatus() >= 300) {
-						sipLogger.finest(sipSession, "#2.1 Removing EXPECT_ACK session attribute.");
-						sipSession.removeAttribute(EXPECT_ACK);
+			sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 
-						SipSession linkedSession = getLinkedSession(sipSession);
-						if (linkedSession != null) {
-							sipLogger.finest(linkedSession, "#2.2 Removing EXPECT_ACK linked session attribute.");
-							linkedSession.removeAttribute(EXPECT_ACK);
-						}
+			if (response.getMethod().equals(INVITE)) {
+				// glare handling;
+				if (response.getStatus() >= 300) {
+					sipLogger.finest(sipSession, "#2.1 Removing EXPECT_ACK session attribute.");
+					sipSession.removeAttribute(EXPECT_ACK);
+
+					SipSession linkedSession = getLinkedSession(sipSession);
+					if (linkedSession != null) {
+						sipLogger.finest(linkedSession, "#2.2 Removing EXPECT_ACK linked session attribute.");
+						linkedSession.removeAttribute(EXPECT_ACK);
 					}
-
 				}
 
-				// For inserting X-Vorpal-Session
-				if (response.getRequest().isInitial()) {
-					String indexKey = getVorpalSessionId(response.getApplicationSession());
-					if (indexKey != null) {
-						String dialog = getVorpalDialogId(response.getSession());
-						response.setHeader(X_VORPAL_SESSION, indexKey + ":" + dialog);
+			}
+
+			// For inserting X-Vorpal-Session
+			if (response.getRequest().isInitial()) {
+				String indexKey = getVorpalSessionId(response.getApplicationSession());
+				if (indexKey != null) {
+					String dialog = getVorpalDialogId(response.getSession());
+					response.setHeader(X_VORPAL_SESSION, indexKey + ":" + dialog);
 
 //						String xvt = (String) response.getApplicationSession().getAttribute(X_VORPAL_TIMESTAMP);
 
-						String xvt = getVorpalTimestamp(response.getApplicationSession());
-						response.setHeader(X_VORPAL_TIMESTAMP, xvt);
+					String xvt = getVorpalTimestamp(response.getApplicationSession());
+					response.setHeader(X_VORPAL_TIMESTAMP, xvt);
 
-					}
 				}
+			}
 
-				response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
+			response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
 
-				if (provisional(response)) {
+			if (provisional(response)) {
 
-					if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
+				if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
 
-						if (response.getSession().isValid()) {
-							response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
-							response.sendReliably();
-						}
-
-					} else {
-						response.send();
+					if (response.getSession().isValid()) {
+						response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
+						response.sendReliably();
 					}
 
 				} else {
 					response.send();
 				}
-			}
 
-		} else {
-			sipLogger.finer(response, "#2.3 Callflow.sendResponse - Skipping response. Session terminated.");
+			} else {
+				response.send();
+			}
 		}
+
+//		} else {
+//			sipLogger.finer(response, "#2.3 Callflow.sendResponse - Skipping response. Session terminated.");
+//		}
 
 	}
 
@@ -1381,14 +1386,20 @@ public abstract class Callflow implements Serializable {
 		if (copyFrom != null && copyTo != null) {
 			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
 
-			if (copyTo.isInitial() || copyTo.getMethod().equals(ACK)) {
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
-							"#2.4 Callflow.copyContent(SipServletMessage copyFrom, SipServletRequest copyTo) - linking "
-									+ getVorpalDialogId(copyFrom) + " to " + getVorpalDialogId(copyTo)));
-				}
-				linkSession(copyFrom, copyTo);
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
+						"#2.4 Callflow.copyContent(SipServletMessage copyFrom, SipServletRequest copyTo) - copyTo.isInitial? "
+								+ (copyTo.isInitial()) + ", copyTo.method=" + copyTo.getMethod()));
 			}
+
+//			if (copyTo.isInitial() || copyTo.getMethod().equals(ACK)) {
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
+						"#2.4 Callflow.copyContent(SipServletMessage copyFrom, SipServletRequest copyTo) - linking "
+								+ getVorpalDialogId(copyFrom) + " to " + getVorpalDialogId(copyTo)));
+			}
+			linkSession(copyFrom, copyTo);
+//			}
 		}
 		return copyTo;
 	}

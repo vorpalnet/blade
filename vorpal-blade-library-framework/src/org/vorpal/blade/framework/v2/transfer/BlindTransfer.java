@@ -299,15 +299,15 @@ public class BlindTransfer extends Transfer {
 
 			sendRequest(targetRequest, (targetResponse) -> {
 
-				sipLogger.finer(targetResponse, "targetResponse status=" + targetResponse.getStatus());
+				sipLogger.finer(targetResponse, "BlindTransfer.process - targetResponse status=" + targetResponse.getStatus());
 
 				if (provisional(targetResponse)) {
-					sipLogger.finer(targetResponse, "target (carol) sends provisional response "
+					sipLogger.finer(targetResponse, "BlindTransfer.process - target (carol) sends provisional response "
 							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 
 				} else if (successful(targetResponse)) {
 
-					sipLogger.finer(targetResponse, "target (carol) sends successful response "
+					sipLogger.finer(targetResponse, "BlindTransfer.process - target (carol) sends successful response "
 							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 
 					appSession.removeAttribute(IN_PROGRESS_ATTR);
@@ -322,6 +322,7 @@ public class BlindTransfer extends Transfer {
 					aliceExpectation.clear();
 
 					copyContent(targetResponse, transfereeRequest);
+					
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
 
 						sipLogger.severe(transfereeResponse, "BlindTransfer.processes - linking session...");
