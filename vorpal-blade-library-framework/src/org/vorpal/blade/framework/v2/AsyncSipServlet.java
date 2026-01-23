@@ -275,9 +275,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			boolean expectAck = Boolean.TRUE.equals(sipSession.getAttribute(EXPECT_ACK));
 
 			if (!expectAck) {
-
 				if (glareQueue != null && !glareQueue.isEmpty()) {
-					sipLogger.warning(_request, "AsyncSipServlet.doRequest - glare; adding request to queue");
+					sipLogger.warning(_request, "AsyncSipServlet.doRequest - adding request to glare queue");
 					glareQueue.add(_request);
 					request = glareQueue.removeFirst();
 					sipSession.setAttribute(GLARE_QUEUE, glareQueue);
@@ -324,8 +323,9 @@ public abstract class AsyncSipServlet extends SipServlet
 					sipSession.removeAttribute(EXPECT_ACK);
 
 				} else {
-					// GLARE! Let's try to queue it up...
-					if (expectAck && !method.equals("CANCEL")) { // anything other than cancel
+					// GLARE! Let's try to queue it up... CANCEL or BYE get immediate priority.
+					if (expectAck && //
+							(!method.equals("CANCEL") || !method.equals("CANCEL"))) {
 						sipLogger.warning(request, "AsyncSipServlet.doResponse - Glare; " + method
 								+ " received while awaiting ACK. Queuing message.");
 						glareQueue = (glareQueue != null) ? glareQueue : new LinkedList<>();
@@ -517,7 +517,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 						if (request.getMethod().equals("INVITE")) {
 
-							sipLogger.warning(request, "AsyncSipServlet.doRequest - hail mary!");
+							sipLogger.warning(request, "AsyncSipServlet.doRequest - Unknown error, sending 500 response");
 							SipServletResponse response = request.createResponse(500, reasonPhrase);
 							response.setContent(Logger.stackTraceToString(ex3), "text/plain");
 							sendResponse(response);
@@ -597,7 +597,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			String method = response.getMethod();
 			SipSession linkedSession = Callflow.getLinkedSession(response.getSession());
 
-			if (sipLogger.isLoggable(Level.FINER)) {
+			if (sipLogger.isLoggable(Level.FINEST)) {
 				try {
 					String sessionState = "unknown";
 					if (sipSession.isValid()) {
@@ -613,7 +613,7 @@ public abstract class AsyncSipServlet extends SipServlet
 						linkedSessionIsReadyToInvalidate = linkedSession.isReadyToInvalidate();
 					}
 
-					sipLogger.finer(response, //
+					sipLogger.finest(response, //
 							"AsyncSipServlet.doResponse - " + "method=" + response.getMethod() //
 									+ ", status=" + response.getStatus() //
 									+ ", reasonPhrase=" + response.getReasonPhrase() //

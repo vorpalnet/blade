@@ -114,6 +114,7 @@ alice <-- blade                 : 200 OK
 package org.vorpal.blade.framework.v2.transfer;
 
 import java.io.IOException;
+import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipApplicationSession;
@@ -121,9 +122,9 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
 
 /**
@@ -242,16 +243,22 @@ public class BlindTransfer extends Transfer {
 
 			// in the event the transferee hangs up before the transfer completes
 			Expectation aliceExpectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
-				sipLogger.finer(bye, "transferee (alice) disconnected before transfer completed");
-				sendResponse(bye.createResponse(200));
-				sendRequest(targetRequest.createCancel());
 
-				if (!sendNotify) {
-					// jwm - 2025-05-14, we have to manually hang up on Bob.
-					sipLogger.finest(transferorRequest, "Manually sending BYE to Bob");
-					sendRequest(transferorRequest.getSession().createRequest(BYE), (bobByeResponse) -> {
-						sipLogger.finest(bobByeResponse, "Received response from Bob for manual BYE request");
-					});
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(bye,
+							"BlindTransfer.process - transferee (alice) disconnected before transfer completed");
+				}
+
+				sendResponse(bye.createResponse(200));
+
+				if (targetRequest.getSession().isValid()) {
+					sendRequest(targetRequest.createCancel());
+				}
+
+				if (!sendNotify) { // we have to manually hang up on Bob.
+					if (transferorRequest.getSession().isValid()) {
+						sendRequest(transferorRequest.getSession().createRequest(BYE));
+					}
 				}
 
 				appSession.removeAttribute(IN_PROGRESS_ATTR);
@@ -266,7 +273,11 @@ public class BlindTransfer extends Transfer {
 
 			// In case transferor (bob) hangs up.
 			Expectation bobExpectation = expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-				sipLogger.finer(transferorRequest, "transferor (bob) hangs up");
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(transferorRequest, "transferor (bob) hangs up");
+				}
+
 				appSession.removeAttribute(IN_PROGRESS_ATTR);
 				sendResponse(bye.createResponse(200));
 			});
@@ -299,16 +310,21 @@ public class BlindTransfer extends Transfer {
 
 			sendRequest(targetRequest, (targetResponse) -> {
 
-				sipLogger.finer(targetResponse, "BlindTransfer.process - targetResponse status=" + targetResponse.getStatus());
-
 				if (provisional(targetResponse)) {
-					sipLogger.finer(targetResponse, "BlindTransfer.process - target (carol) sends provisional response "
-							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
+
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(targetResponse,
+								"BlindTransfer.process - target (carol) sends provisional response "
+										+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
+					}
 
 				} else if (successful(targetResponse)) {
 
-					sipLogger.finer(targetResponse, "BlindTransfer.process - target (carol) sends successful response "
-							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(targetResponse,
+								"BlindTransfer.process - target (carol) sends successful response "
+										+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
+					}
 
 					appSession.removeAttribute(IN_PROGRESS_ATTR);
 
@@ -321,22 +337,13 @@ public class BlindTransfer extends Transfer {
 					// Alice will no longer hangup, expect a BYE from Bob
 					aliceExpectation.clear();
 
-					copyContent(targetResponse, transfereeRequest);
-					
+					copyContent(targetResponse, transfereeRequest); // link target to transferee
+
 					sendRequest(transfereeRequest, (transfereeResponse) -> {
 
-						sipLogger.severe(transfereeResponse, "BlindTransfer.processes - linking session...");
-						if(null==transfereeRequest.getSession().getAttribute(USER_AGENT_ATTR)) {
-							sipLogger.severe(transfereeResponse, "BlindTransfer.processes - transfereeRequest not linked!");			
-						}
-						if(null==targetResponse.getSession().getAttribute(USER_AGENT_ATTR)) {
-							sipLogger.severe(targetResponse, "BlindTransfer.processes - targetResponse not linked!");			
-						}
-						linkSession(transfereeRequest, targetResponse);
-
 						sendRequest(transfereeResponse.createAck());
-						sendRequest(copyContent(transfereeResponse, targetResponse.createAck()));
-
+						sendRequest(copyContent(transfereeResponse, targetResponse.createAck())); // transferee to
+																									// target
 						// Send the SIP/2.0 200 OK to the transferor (bob)
 						if (sendNotify) {
 							SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
@@ -348,8 +355,10 @@ public class BlindTransfer extends Transfer {
 
 							sendRequest(notify200);
 						} else {
-							// Send a BYE to transferor (bob)
-							sendRequest(referRequest.getSession().createRequest(BYE));
+							// Send a BYE to transferor (bob) if necessary
+							if (referRequest.getSession().isValid()) {
+								sendRequest(referRequest.getSession().createRequest(BYE));
+							}
 						}
 
 						// User is notified of a successful transfer
@@ -365,11 +374,18 @@ public class BlindTransfer extends Transfer {
 					});
 
 				} else if (failure(targetResponse)) {
-					sipLogger.finer(targetResponse, "target (carol) sends failure response "
-							+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
+
+					if (sipLogger.isLoggable(Level.FINER)) {
+						sipLogger.finer(targetResponse, "target (carol) sends failure response "
+								+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
+					}
 
 					if (targetResponse.getStatus() == 487) {
-						sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
+
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
+						}
+
 						appSession.removeAttribute(IN_PROGRESS_ATTR);
 
 						if (transferListener != null) {
@@ -390,8 +406,10 @@ public class BlindTransfer extends Transfer {
 						}
 
 					} else {
-						sipLogger.finer(targetResponse, "target (carol) has 'rejected' the call");
 
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(targetResponse, "target (carol) has 'rejected' the call");
+						}
 						// User is notified that the transfer target did not answer
 						appSession.removeAttribute(IN_PROGRESS_ATTR);
 

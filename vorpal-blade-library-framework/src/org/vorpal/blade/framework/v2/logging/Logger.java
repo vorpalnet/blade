@@ -163,7 +163,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	/**
 	 * Constructs a Logger with the specified name and resource bundle.
 	 *
-	 * @param name the logger name
+	 * @param name               the logger name
 	 * @param resourceBundleName the resource bundle name for localization
 	 */
 	protected Logger(String name, String resourceBundleName) {
@@ -225,10 +225,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	/**
-	 * Logs an exception stack trace at SEVERE level with application session context.
+	 * Logs an exception stack trace at SEVERE level with application session
+	 * context.
 	 *
 	 * @param appSession the application session for context
-	 * @param e the exception to log
+	 * @param e          the exception to log
 	 */
 	public void logStackTrace(SipApplicationSession appSession, Exception e) {
 		StringWriter errors = new StringWriter();
@@ -240,7 +241,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * Logs an exception stack trace at SEVERE level with SIP session context.
 	 *
 	 * @param sipSession the SIP session for context
-	 * @param e the exception to log
+	 * @param e          the exception to log
 	 */
 	public void logStackTrace(SipSession sipSession, Exception e) {
 		StringWriter errors = new StringWriter();
@@ -252,7 +253,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * Logs an exception stack trace at SEVERE level with SIP message context.
 	 *
 	 * @param msg the SIP message for context
-	 * @param e the exception to log
+	 * @param e   the exception to log
 	 */
 	public void logStackTrace(SipServletMessage msg, Exception e) {
 		StringWriter errors = new StringWriter();
@@ -389,6 +390,42 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			PrintWriter pw = new PrintWriter(sw);
 			try {
 				mapper.writerWithDefaultPrettyPrinter().writeValue(pw, obj);
+//				mapper.writer().writeValue(pw, obj);
+				value = sw.toString();
+			} catch (Exception ex) {
+				// Cannot serialize object, fall back to toString()
+				value = obj.toString();
+			}
+		}
+
+		return value;
+	}
+
+	/**
+	 * Serializes an object as JSON and returns a string.
+	 * 
+	 * @param obj
+	 * @return
+	 */
+	public static String serializeObjectWithoutNLCR(Object obj) {
+		String value = null;
+
+		if (obj != null) {
+			if (mapper == null) {
+				synchronized (MAPPER_LOCK) {
+					if (mapper == null) {
+						ObjectMapper newMapper = new ObjectMapper();
+						newMapper.setSerializationInclusion(Include.NON_NULL);
+						newMapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+						mapper = newMapper;
+					}
+				}
+			}
+
+			StringWriter sw = new StringWriter();
+			PrintWriter pw = new PrintWriter(sw);
+			try {
+				mapper.writer().writeValue(pw, obj);
 				value = sw.toString();
 			} catch (Exception ex) {
 				// Cannot serialize object, fall back to toString()
@@ -412,7 +449,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * Logs an exception at SEVERE level with SIP message context.
 	 *
 	 * @param message the SIP message for context
-	 * @param e the exception to log
+	 * @param e       the exception to log
 	 */
 	public void severe(SipServletMessage message, Exception e) {
 		StringWriter sw = new StringWriter();
@@ -440,8 +477,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	/**
 	 * Logs a timer event with comments at the specified level.
 	 *
-	 * @param level the logging level
-	 * @param timer the servlet timer
+	 * @param level    the logging level
+	 * @param timer    the servlet timer
 	 * @param comments additional comments to include
 	 */
 	public void log(Level level, ServletTimer timer, String comments) {
@@ -462,8 +499,8 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	/**
 	 * Logs a message with SIP message context at the specified level.
 	 *
-	 * @param level the logging level
-	 * @param message the SIP message for context
+	 * @param level    the logging level
+	 * @param message  the SIP message for context
 	 * @param comments the message to log
 	 */
 	public void log(Level level, SipServletMessage message, String comments) {
@@ -513,9 +550,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	/**
 	 * Logs a message with application session context at the specified level.
 	 *
-	 * @param level the logging level
+	 * @param level      the logging level
 	 * @param appSession the application session for context
-	 * @param comments the message to log
+	 * @param comments   the message to log
 	 */
 	public void log(Level level, SipApplicationSession appSession, String comments) {
 		log(level, hexHash(appSession) + " " + comments);
@@ -524,9 +561,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	/**
 	 * Logs a message with SIP session context at the specified level.
 	 *
-	 * @param level the logging level
+	 * @param level      the logging level
 	 * @param sipSession the SIP session for context
-	 * @param comments the message to log
+	 * @param comments   the message to log
 	 */
 	public void log(Level level, SipSession sipSession, String comments) {
 		log(level, hexHash(sipSession) + " " + comments);
@@ -587,7 +624,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		log(Level.WARNING, sipSession, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
 	}
 
-	/** Logs at WARNING level with application session context and yellow coloring. */
+	/**
+	 * Logs at WARNING level with application session context and yellow coloring.
+	 */
 	public void warning(SipApplicationSession appSession, String comments) {
 		log(Level.WARNING, appSession, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
 	}
@@ -713,10 +752,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	/**
-	 * Shortens a string to fit within a specified length for sequence diagram display.
+	 * Shortens a string to fit within a specified length for sequence diagram
+	 * display.
 	 *
 	 * @param inputValue the input string
-	 * @param length the maximum length including brackets
+	 * @param length     the maximum length including brackets
 	 * @return the shortened string enclosed in brackets
 	 */
 	public String shorten(String inputValue, int length) {
@@ -768,9 +808,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * Renders a sequence diagram arrow for SIP message flow visualization.
 	 *
 	 * @param direction the direction of the message (SEND or RECEIVE)
-	 * @param request the SIP request, or null for responses
-	 * @param response the SIP response, or null for requests
-	 * @param name the name to display for the local endpoint
+	 * @param request   the SIP request, or null for responses
+	 * @param response  the SIP response, or null for requests
+	 * @param name      the name to display for the local endpoint
 	 */
 	public void superArrow(Direction direction, SipServletRequest request, SipServletResponse response, String name) {
 		try {
@@ -818,11 +858,11 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * Renders a sequence diagram arrow with full control over positioning.
 	 *
 	 * @param direction the direction of the message (SEND or RECEIVE)
-	 * @param leftSide true to render on the left side of the diagram
-	 * @param request the SIP request, or null for responses
-	 * @param response the SIP response, or null for requests
-	 * @param name the name to display for the local endpoint
-	 * @param user optional user name for the remote endpoint
+	 * @param leftSide  true to render on the left side of the diagram
+	 * @param request   the SIP request, or null for responses
+	 * @param response  the SIP response, or null for requests
+	 * @param name      the name to display for the local endpoint
+	 * @param user      optional user name for the remote endpoint
 	 */
 	public void superArrow(Direction direction, boolean leftSide, SipServletRequest request,
 			SipServletResponse response, String name, String user) {

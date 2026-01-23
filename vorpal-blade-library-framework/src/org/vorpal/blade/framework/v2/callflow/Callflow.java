@@ -273,7 +273,6 @@ public abstract class Callflow implements Serializable {
 		callback = (Callback<SipServletResponse>) appSession.getAttribute(attribute);
 		if (callback != null) {
 			if (response.getProxyBranch() == null && response.getStatus() >= 200) {
-				sipLogger.finer(response, "#1.1 removing " + attribute + " SipApplicationSession attribute.");
 				appSession.removeAttribute(attribute);
 			}
 		}
@@ -1040,18 +1039,6 @@ public abstract class Callflow implements Serializable {
 			throws ServletException, IOException {
 		SipSession sipSession = response.getSession();
 
-		sipLogger.finer(response,
-				"Callflow.sendResponse - response.isCommitted? " + (response.isCommitted()) + ", sipSession="
-						+ sipSession + ", sipSession.isValid? " + (sipSession.isValid()) + ", sipSession.state="
-						+ sipSession.getState() + ", linkedSession=" + getLinkedSession(sipSession));
-
-//		if (response != null //
-//				&& !response.isCommitted() //
-//				&& sipSession != null //
-//				&& sipSession.isValid() //
-//				&& sipSession.getState() != State.TERMINATED //
-//		) {
-
 		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
 
 			sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
@@ -1059,12 +1046,10 @@ public abstract class Callflow implements Serializable {
 			if (response.getMethod().equals(INVITE)) {
 				// glare handling;
 				if (response.getStatus() >= 300) {
-					sipLogger.finest(sipSession, "#2.1 Removing EXPECT_ACK session attribute.");
 					sipSession.removeAttribute(EXPECT_ACK);
 
 					SipSession linkedSession = getLinkedSession(sipSession);
 					if (linkedSession != null) {
-						sipLogger.finest(linkedSession, "#2.2 Removing EXPECT_ACK linked session attribute.");
 						linkedSession.removeAttribute(EXPECT_ACK);
 					}
 				}
@@ -1105,10 +1090,6 @@ public abstract class Callflow implements Serializable {
 				response.send();
 			}
 		}
-
-//		} else {
-//			sipLogger.finer(response, "#2.3 Callflow.sendResponse - Skipping response. Session terminated.");
-//		}
 
 	}
 
@@ -1385,21 +1366,7 @@ public abstract class Callflow implements Serializable {
 			throws UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
 			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
-
-			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
-						"#2.4 Callflow.copyContent(SipServletMessage copyFrom, SipServletRequest copyTo) - copyTo.isInitial? "
-								+ (copyTo.isInitial()) + ", copyTo.method=" + copyTo.getMethod()));
-			}
-
-//			if (copyTo.isInitial() || copyTo.getMethod().equals(ACK)) {
-			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
-						"#2.4 Callflow.copyContent(SipServletMessage copyFrom, SipServletRequest copyTo) - linking "
-								+ getVorpalDialogId(copyFrom) + " to " + getVorpalDialogId(copyTo)));
-			}
 			linkSession(copyFrom, copyTo);
-//			}
 		}
 		return copyTo;
 	}
@@ -1410,12 +1377,6 @@ public abstract class Callflow implements Serializable {
 			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
 
 			if (successful(copyTo)) {
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
-							"#2.33 Callflow.copyContent(SipServletMessage copyFrom, SipServletRequest copyTo) - linking "
-									+ getVorpalDialogId(copyFrom) + " to " + getVorpalDialogId(copyTo)));
-				}
-
 				linkSession(copyFrom, copyTo);
 			}
 
@@ -1443,14 +1404,6 @@ public abstract class Callflow implements Serializable {
 			}
 
 			copyHeadersMsg(copyFrom, copyTo);
-
-			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(copyTo, Color.GREEN_BOLD_BRIGHT(
-						"#2.5 Callflow.copyHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) - linking "
-								+ getVorpalDialogId(copyFrom) + " to " + getVorpalDialogId(copyTo)));
-			}
-
-//			linkSession(copyFrom, copyTo); // one-way link, do the same on response
 		}
 		return copyTo;
 	}
@@ -1531,20 +1484,10 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public static void linkSession(SipServletMessage inbound, SipServletMessage outbound) {
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
-					"#4.77 Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - linking "
-							+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
-		}
 		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
 	}
 
 	public static void linkSession(SipSession inbound, SipSession outbound) {
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(inbound, Color.RED_BOLD_BRIGHT(
-					"#4.66 Callflow.linkSession(SipServletResponse inbound, SipServletMessage outbound) - linking "
-							+ getVorpalDialogId(inbound) + " to " + getVorpalDialogId(outbound)));
-		}
 		outbound.setAttribute(LINKED_SESSION, inbound.getId());
 	}
 
@@ -1942,10 +1885,6 @@ public abstract class Callflow implements Serializable {
 
 			List<URI> endpoints = new LinkedList<>();
 			for (URI endpoint : proxyTier.getEndpoints()) {
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(inboundRequest,
-							"#6.99 Callflow.proxyRequest - proxying request, endpoint=" + endpoint);
-				}
 				endpoints.add(endpoint);
 			}
 			List<ProxyBranch> proxyBranches = proxy.createProxyBranches(endpoints);
@@ -1957,13 +1896,7 @@ public abstract class Callflow implements Serializable {
 
 			inboundRequest.getSession().setAttribute(RESPONSE_CALLBACK_ + inboundRequest.getMethod(), lambdaFunction);
 
-			// jwm - test proxy arrow - works!
 			inboundRequest.getApplicationSession().setAttribute(IS_PROXY_ATTR, Boolean.TRUE);
-
-			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(inboundRequest,
-						"#7.99 Callflow.proxyRequest - proxying request, proxyBranches.size=" + proxyBranches.size());
-			}
 
 			for (ProxyBranch proxyBranch : proxyBranches) {
 				sipLogger.superArrow(Direction.SEND, false, proxyBranch.getRequest(), null,
