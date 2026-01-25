@@ -77,9 +77,9 @@ import org.vorpal.blade.framework.v2.transfer.api.Header;
 /**
  * Base class for SIP call transfer operations.
  *
- * <p>Provides common functionality for constructing transfer requests,
- * preserving headers, and managing the transferor, transferee, and target
- * SIP sessions.
+ * <p>
+ * Provides common functionality for constructing transfer requests, preserving
+ * headers, and managing the transferor, transferee, and target SIP sessions.
  */
 public class Transfer extends Callflow {
 	private static final long serialVersionUID = 1L;
@@ -143,8 +143,8 @@ public class Transfer extends Callflow {
 	 * Call this method to construct the various request objects.
 	 *
 	 * @param request the SIP request to process
-	 * @throws ServletException if a servlet error occurs
-	 * @throws IOException if an I/O error occurs
+	 * @throws ServletException         if a servlet error occurs
+	 * @throws IOException              if an I/O error occurs
 	 * @throws IllegalArgumentException if request is null
 	 */
 	protected void createRequests(SipServletRequest request) throws ServletException, IOException {
@@ -163,6 +163,7 @@ public class Transfer extends Callflow {
 
 		targetRequest = sipFactory.createRequest(appSession, INVITE, transferee, target);
 		transfereeRequest = getLinkedSession(request.getSession()).createRequest(INVITE);
+		linkSession(transfereeRequest, targetRequest);
 
 		if (transferSettings != null) {
 			targetRequest.setHeader(ALLOW_HEADER, this.transferSettings.getAllow());
@@ -179,7 +180,7 @@ public class Transfer extends Callflow {
 	 * @param copyTo
 	 */
 	public void preserveInviteHeaders(SipServletRequest copyFrom, SipServletRequest copyTo) {
-		
+
 		if (transferSettings != null) {
 			for (String header : this.transferSettings.getPreserveInviteHeaders()) {
 				String value = copyFrom.getHeader(header);

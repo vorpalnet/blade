@@ -115,7 +115,7 @@ public class SettingsManager<T> {
 	protected static String serverName;
 	protected static String clusterName;
 	protected static String domainName;
-	protected static String applicationName;
+	protected static String applicationName="";
 	protected static String applicationVersion;
 
 	protected static Analytics analytics;

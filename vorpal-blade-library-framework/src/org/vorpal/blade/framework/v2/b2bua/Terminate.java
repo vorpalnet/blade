@@ -68,29 +68,33 @@ public class Terminate extends Callflow {
 		SipSession linkedSession;
 		Exception exception = null;
 
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(request,
+					"Terminate.process - looking for sessions linked with " + getVorpalDialogId(sipSession));
+		}
+
 		@SuppressWarnings("unchecked")
 		Iterator<SipSession> itr = (Iterator<SipSession>) appSession.getSessions(SIP);
 		while (itr.hasNext()) { // iterate through all possible linked sessions
 			linkedSession = itr.next();
 
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer(request, "Terminate.process - sipSession=" + getVorpalDialogId(sipSession)
-						+ ", linkedSession=" + getVorpalDialogId(linkedSession));
+				sipLogger.finer(request, "Terminate.process - session " + getVorpalDialogId(linkedSession)
+						+ " points to " + getVorpalDialogId(getLinkedSession(linkedSession)));
 			}
 
-			if (linkedSession != sipSession) { // do not operate on self
+			if (linkedSession != sipSession) { // do not attempt to operate on self
 
 				if (null != getLinkedSession(linkedSession) //
 						&& getLinkedSession(linkedSession).getId().equals(sipSession.getId()) //
 				) { // we found it!
 
 					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(request, "Terminate.process - sipSession.id=" + sipSession.getId() //
-								+ ", sipSession.state=" + sipSession.getState() //
-								+ ", sipSession.isValid=" + sipSession.isValid() //
-								+ ", linkedSession.id=" + linkedSession.getId() //
-								+ ", linkedSession.state=" + linkedSession.getState() //
-								+ ", linkedSession.isValid=" + linkedSession.isValid() //
+						sipLogger.finer(request, "Terminate.process - Found a linked session! " + //
+								"dialog=" + getVorpalDialogId(linkedSession) //
+								+ ", id=" + linkedSession.getId() //
+								+ ", state=" + linkedSession.getState() //
+								+ ", isValid=" + linkedSession.isValid() //
 						);
 					}
 
@@ -98,7 +102,7 @@ public class Terminate extends Callflow {
 
 					switch (linkedSession.getState()) {
 
-					case INITIAL: // has not been sent?
+					case INITIAL: // created, but not sent
 						linkedSession.invalidate();
 						break;
 
@@ -106,7 +110,10 @@ public class Terminate extends Callflow {
 						SipServletRequest activeInvite = linkedSession.getActiveInvite(UAMode.UAC);
 						if (activeInvite != null) {
 							terminationRequest = activeInvite.createCancel();
-							copyContentAndHeaders(request, terminationRequest);
+
+							if (request.getMethod().equals(CANCEL)) {
+								copyContentAndHeaders(request, terminationRequest);
+							}
 
 							if (b2buaListener != null) {
 								SettingsManager.createEvent("callAbandoned", terminationRequest);
@@ -119,7 +126,9 @@ public class Terminate extends Callflow {
 
 					case CONFIRMED: // 200 OK
 						terminationRequest = linkedSession.createRequest(BYE);
-						copyContentAndHeaders(request, terminationRequest);
+						if (request.getMethod().equals(BYE)) {
+							copyContentAndHeaders(request, terminationRequest);
+						}
 
 						if (b2buaListener != null) {
 							SettingsManager.createEvent("callCompleted", terminationRequest);
@@ -146,12 +155,7 @@ public class Terminate extends Callflow {
 
 				} else {
 
-					if (sipLogger.isLoggable(Level.FINER)) {
-						sipLogger.finer(request,
-								"Terminate.process - Unrelated sessions... How did they get there!? sipSession="
-										+ getVorpalDialogId(sipSession) + ", linkedSession="
-										+ getVorpalDialogId(linkedSession));
-					}
+					// unrelated sessions, leave them alone
 
 				}
 

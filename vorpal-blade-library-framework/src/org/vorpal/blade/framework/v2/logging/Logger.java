@@ -39,6 +39,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -172,32 +173,38 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	@Override
 	public void severe(String msg) {
-		super.severe(NOSESS + " " + ConsoleColors.RED_BRIGHT + msg + ConsoleColors.RESET);
+		String sess = NOSESS + " " + SettingsManager.getApplicationName();
+		super.severe(sess + " " + ConsoleColors.RED_BRIGHT + msg + ConsoleColors.RESET);
 	}
 
 	@Override
 	public void warning(String msg) {
-		super.warning(NOSESS + " " + ConsoleColors.YELLOW_BOLD_BRIGHT + msg + ConsoleColors.RESET);
+		String sess = NOSESS + " " + SettingsManager.getApplicationName();
+		super.warning(sess + " " + ConsoleColors.YELLOW_BOLD_BRIGHT + msg + ConsoleColors.RESET);
 	}
 
 	@Override
 	public void fine(String msg) {
-		super.fine(NOSESS + " " + msg);
+		String sess = NOSESS + " " + SettingsManager.getApplicationName();
+		super.fine(sess + " " + msg);
 	}
 
 	@Override
 	public void finer(String msg) {
-		super.finer(NOSESS + " " + msg);
+		String sess = NOSESS + " " + SettingsManager.getApplicationName();
+		super.finer(sess + " " + msg);
 	}
 
 	@Override
 	public void finest(String msg) {
-		super.finest(NOSESS + " " + msg);
+		String sess = NOSESS + " " + SettingsManager.getApplicationName();
+		super.finest(sess + " " + msg);
 	}
 
 	@Override
 	public void info(String msg) {
-		super.info(NOSESS + " " + msg);
+		String sess = NOSESS + " " + SettingsManager.getApplicationName();
+		super.info(sess + " " + msg);
 	}
 
 	/**
@@ -390,7 +397,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			PrintWriter pw = new PrintWriter(sw);
 			try {
 				mapper.writerWithDefaultPrettyPrinter().writeValue(pw, obj);
-//				mapper.writer().writeValue(pw, obj);
 				value = sw.toString();
 			} catch (Exception ex) {
 				// Cannot serialize object, fall back to toString()
@@ -639,7 +645,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 */
 	public static String timeout(ServletTimer timer) {
 		if (timer == null) {
-			return NOSESS + TIMER_EXPIRED_MSG;
+			return NOSESS + " " + SettingsManager.getApplicationName() + TIMER_EXPIRED_MSG;
 		}
 
 		String str;
@@ -703,15 +709,23 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * @return the formatted session identifier string
 	 */
 	public static String hexHash(SipApplicationSession appSession) {
-		if (appSession == null) {
-			return NOSESS;
+		StringBuilder sb = new StringBuilder();
+
+		if (appSession != null) {
+
+			String hash1 = Callflow.getVorpalSessionId(appSession);
+			if (hash1 == null) {
+				hash1 = DEFAULT_HASH;
+			}
+
+			sb.append("[").append(hash1).append(":").append(DEFAULT_DIALOG_HASH).append("]");
+			sb.append(" ").append(SettingsManager.getApplicationName());
+
+		} else {
+			sb.append(NOSESS).append(" ").append(SettingsManager.getApplicationName());
 		}
 
-		String hash1 = Callflow.getVorpalSessionId(appSession);
-		if (hash1 == null) {
-			hash1 = DEFAULT_HASH;
-		}
-		return "[" + hash1 + ":" + DEFAULT_DIALOG_HASH + "]";
+		return sb.toString();
 	}
 
 	/**
@@ -721,10 +735,19 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * @return the formatted session identifier string
 	 */
 	public static String hexHash(SipServletMessage message) {
+		String hash = null;
+
 		if (message == null) {
-			return NOSESS;
+			StringBuilder sb = new StringBuilder();
+			sb.append(NOSESS);
+			sb.append(" ").append(SettingsManager.getApplicationName());
+
+			hash = sb.toString();
+		} else {
+			hash = hexHash(message.getSession());
 		}
-		return hexHash(message.getSession());
+
+		return hash;
 	}
 
 	/**
@@ -734,21 +757,30 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * @return the formatted session and dialog identifier string
 	 */
 	public static String hexHash(SipSession sipSession) {
+		String hash = NOSESS;
+
 		if (sipSession == null || !sipSession.isValid()) {
-			return NOSESS;
+			hash = NOSESS;
+		} else {
+			StringBuilder sb = new StringBuilder();
+
+			String hash1 = Callflow.getVorpalSessionId(sipSession.getApplicationSession());
+			if (hash1 == null) {
+				hash1 = DEFAULT_HASH;
+			}
+
+			String hash2 = Callflow.getVorpalDialogId(sipSession);
+			if (hash2 == null) {
+				hash2 = DEFAULT_DIALOG_HASH;
+			}
+
+			sb.append("[").append(hash1).append(":").append(hash2).append("]");
+			sb.append(" ").append(SettingsManager.getApplicationName());
+
+			hash = sb.toString();
 		}
 
-		String hash1 = Callflow.getVorpalSessionId(sipSession.getApplicationSession());
-		if (hash1 == null) {
-			hash1 = DEFAULT_HASH;
-		}
-
-		String hash2 = Callflow.getVorpalDialogId(sipSession);
-		if (hash2 == null) {
-			hash2 = DEFAULT_DIALOG_HASH;
-		}
-
-		return "[" + hash1 + ":" + hash2 + "]";
+		return hash;
 	}
 
 	/**

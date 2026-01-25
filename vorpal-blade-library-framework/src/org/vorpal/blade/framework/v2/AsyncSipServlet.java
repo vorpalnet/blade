@@ -283,19 +283,21 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 			}
 
-			if (sipLogger.isLoggable(Level.FINEST)) {
+			if (sipLogger.isLoggable(Level.FINER)) {
 				try {
 
+					String linkedDialog = null;
 					boolean linkedSessionIsValid = false;
 					String linkedSessionState = "unknown";
 					boolean linkedSessionIsReadyToInvalidate = false;
 					if (linkedSession != null && linkedSession.isValid()) {
+						linkedDialog = Callflow.getVorpalDialogId(linkedSession);
 						linkedSessionIsValid = linkedSession.isValid();
 						linkedSessionState = linkedSession.getState().toString();
 						linkedSessionIsReadyToInvalidate = linkedSession.isReadyToInvalidate();
 					}
 
-					sipLogger.finest(request, //
+					sipLogger.finer(request, //
 							"AsyncSipServlet.doRequest - " + "method=" + request.getMethod() //
 									+ ", isInitial=" + request.isInitial() //
 									+ ", isCommitted=" + request.isCommitted() //
@@ -304,6 +306,7 @@ public abstract class AsyncSipServlet extends SipServlet
 									+ ", session.state=" + sipSession.getState() //
 									+ ", session.isReadyToInvalidate=" + sipSession.isReadyToInvalidate() //
 									+ ", linkedSession=" + (linkedSession != null) //
+									+ ", linkedSession.dialog=" + linkedDialog //
 									+ ", linkedSession.isValid=" + linkedSessionIsValid //
 									+ ", linkedSession.state=" + linkedSessionState //
 									+ ", linkedSession.isReadyToInvalidate=" + linkedSessionIsReadyToInvalidate //
@@ -517,7 +520,8 @@ public abstract class AsyncSipServlet extends SipServlet
 
 						if (request.getMethod().equals("INVITE")) {
 
-							sipLogger.warning(request, "AsyncSipServlet.doRequest - Unknown error, sending 500 response");
+							sipLogger.warning(request,
+									"AsyncSipServlet.doRequest - Unknown error, sending 500 response");
 							SipServletResponse response = request.createResponse(500, reasonPhrase);
 							response.setContent(Logger.stackTraceToString(ex3), "text/plain");
 							sendResponse(response);
@@ -597,23 +601,25 @@ public abstract class AsyncSipServlet extends SipServlet
 			String method = response.getMethod();
 			SipSession linkedSession = Callflow.getLinkedSession(response.getSession());
 
-			if (sipLogger.isLoggable(Level.FINEST)) {
+			if (sipLogger.isLoggable(Level.FINER)) {
 				try {
 					String sessionState = "unknown";
 					if (sipSession.isValid()) {
 						sessionState = sipSession.getState().toString();
 					}
 
+					String linkedDialog = null;
 					boolean linkedSessionIsValid = false;
 					String linkedSessionState = "unknown";
 					boolean linkedSessionIsReadyToInvalidate = false;
 					if (linkedSession != null && linkedSession.isValid()) {
+						linkedDialog = Callflow.getVorpalDialogId(linkedSession);
 						linkedSessionIsValid = linkedSession.isValid();
 						linkedSessionState = linkedSession.getState().toString();
 						linkedSessionIsReadyToInvalidate = linkedSession.isReadyToInvalidate();
 					}
 
-					sipLogger.finest(response, //
+					sipLogger.finer(response, //
 							"AsyncSipServlet.doResponse - " + "method=" + response.getMethod() //
 									+ ", status=" + response.getStatus() //
 									+ ", reasonPhrase=" + response.getReasonPhrase() //
@@ -622,6 +628,7 @@ public abstract class AsyncSipServlet extends SipServlet
 									+ ", session.state=" + sessionState //
 									+ ", session.isReadyToInvalidate=" + sipSession.isReadyToInvalidate() //
 									+ ", linkedSession=" + (linkedSession != null) //
+									+ ", linkedSession.dialog=" + linkedDialog //
 									+ ", linkedSession.isValid=" + linkedSessionIsValid //
 									+ ", linkedSession.state=" + linkedSessionState //
 									+ ", linkedSession.isReadyToInvalidate=" + linkedSessionIsReadyToInvalidate //

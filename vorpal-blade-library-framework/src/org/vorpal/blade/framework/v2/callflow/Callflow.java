@@ -1366,7 +1366,13 @@ public abstract class Callflow implements Serializable {
 			throws UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
 			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
-			linkSession(copyFrom, copyTo);
+
+			// automatically link session
+			if (copyTo.isInitial() //
+					|| copyTo.getMethod().equals(INVITE) //
+					|| copyTo.getMethod().equals(ACK)) {
+				linkSession(copyFrom, copyTo);
+			}
 		}
 		return copyTo;
 	}
@@ -1376,7 +1382,8 @@ public abstract class Callflow implements Serializable {
 		if (copyFrom != null && copyTo != null) {
 			copyTo.setContent(copyFrom.getContent(), copyFrom.getContentType());
 
-			if (successful(copyTo)) {
+			// automatically link session
+			if (successful(copyTo) && copyTo.getSession().getState().equals(State.EARLY)) {
 				linkSession(copyFrom, copyTo);
 			}
 
@@ -1484,10 +1491,20 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public static void linkSession(SipServletMessage inbound, SipServletMessage outbound) {
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(inbound, Color.YELLOW_BOLD_BRIGHT("Callflow.linkSession - linkSession("
+					+ getVorpalDialogId(inbound) + ", " + getVorpalDialogId(outbound) + ")"));
+		}
 		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
+
 	}
 
 	public static void linkSession(SipSession inbound, SipSession outbound) {
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(inbound, Color.YELLOW_BOLD_BRIGHT("Callflow.linkSession - linkSession("
+					+ getVorpalDialogId(inbound) + ", " + getVorpalDialogId(outbound) + ")"));
+		}
 		outbound.setAttribute(LINKED_SESSION, inbound.getId());
 	}
 

@@ -26,9 +26,12 @@ package org.vorpal.blade.services.queue;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.SipApplicationSessionEvent;
+import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
@@ -36,6 +39,7 @@ import javax.servlet.sip.SipServletResponse;
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.Translation;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
 import org.vorpal.blade.services.queue.config.QueueConfig;
 import org.vorpal.blade.services.queue.config.QueueConfigSample;
@@ -49,6 +53,7 @@ import org.vorpal.blade.services.queue.config.QueueSettingsManager;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
+//public class QueueServlet extends B2buaServlet implements SipApplicationSessionListener {
 public class QueueServlet extends B2buaServlet {
 	private static final long serialVersionUID = 1L;
 
@@ -150,5 +155,37 @@ public class QueueServlet extends B2buaServlet {
 	@Override
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
 	}
+
+//	@Override
+//	public void sessionCreated(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			sipLogger.finer(event.getApplicationSession(), Color.GREEN_BOLD_BRIGHT("QueueServlet.sessionCreated"));
+//		}
+//	}
+//
+//	@Override
+//	public void sessionDestroyed(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			sipLogger.finer(event.getApplicationSession(), Color.RED_BOLD_BRIGHT("QueueServlet.sessionDestroyed..."));
+//		}
+//
+//	}
+//
+//	@Override
+//	public void sessionExpired(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			sipLogger.finer(event.getApplicationSession(), Color.RED_BOLD_BRIGHT("QueueServlet.sessionExpired..."));
+//		}
+//
+//	}
+//
+//	@Override
+//	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+//		if (sipLogger.isLoggable(Level.FINER)) {
+//			sipLogger.finer(event.getApplicationSession(),
+//					Color.RED_BOLD_BRIGHT("QueueServlet.sessionReadyToInvalidate..."));
+//		}
+//
+//	}
 
 }

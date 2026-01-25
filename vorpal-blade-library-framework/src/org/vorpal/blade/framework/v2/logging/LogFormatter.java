@@ -30,9 +30,11 @@ import java.util.logging.Formatter;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+
 /**
  * Custom log formatter that outputs log records in a compact, readable format.
- * Format: LEVEL   YYYY-MM-DD HH:mm:ss.SSS - message
+ * Format: LEVEL YYYY-MM-DD HH:mm:ss.SSS - message
  */
 public final class LogFormatter extends Formatter {
 
@@ -42,8 +44,8 @@ public final class LogFormatter extends Formatter {
 	private static final int INITIAL_BUFFER_SIZE = 1000;
 
 	// ThreadLocal for thread-safe date formatting
-	private static final ThreadLocal<SimpleDateFormat> dateFormatter = ThreadLocal.withInitial(
-			() -> new SimpleDateFormat(DATE_FORMAT_PATTERN));
+	private static final ThreadLocal<SimpleDateFormat> dateFormatter = ThreadLocal
+			.withInitial(() -> new SimpleDateFormat(DATE_FORMAT_PATTERN));
 
 	/**
 	 * Formats a log record into a readable string.
@@ -57,19 +59,20 @@ public final class LogFormatter extends Formatter {
 			return "";
 		}
 		StringBuilder builder = new StringBuilder(INITIAL_BUFFER_SIZE);
-		builder.append(padRight(record.getLevel(), LEVEL_PADDING));
+		builder.append(padRight(record.getLevel().toString(), LEVEL_PADDING));
 		builder.append(" ").append(dateFormatter.get().format(new Date(record.getMillis())));
-		builder.append(" - ").append(formatMessage(record));
+		builder.append(" - ");
+		builder.append(formatMessage(record));
 		builder.append(LINE_SEPARATOR);
 		return builder.toString();
 	}
 
 	@SuppressWarnings("unused")
-	private static String padLeft(Level level, int length) {
-		return String.format("%1$" + length + "s", level.toString());
+	private static String padLeft(String str, int length) {
+		return String.format("%1$" + length + "s", str);
 	}
 
-	private static String padRight(Level level, int length) {
-		return String.format("%1$-" + length + "s", level.toString());
+	private static String padRight(String str, int length) {
+		return String.format("%1$-" + length + "s", str);
 	}
 }
