@@ -1524,6 +1524,12 @@ public abstract class Callflow implements Serializable {
 			ss2.removeAttribute(LINKED_SESSION);
 		}
 	}
+	
+	public static void unlinkSession(SipServletMessage msg) {
+		if (msg != null && msg.getSession().isValid()) {
+			msg.getSession().removeAttribute(LINKED_SESSION);
+		}
+	}
 
 	/**
 	 * Retrieves the linked SIP session for the given session in a B2BUA scenario.
