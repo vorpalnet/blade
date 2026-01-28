@@ -42,6 +42,7 @@ import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Color;
 
 /**
  * Callflow for handling initial INVITE requests in a B2BUA scenario. Creates
@@ -87,40 +88,44 @@ public class InitialInvite extends Callflow {
 		this.b2buaListener = b2buaListener;
 	}
 
-	/**
-	 * This method looks for the "Session-Expires" header on either a request or
-	 * response object. If it exists, it sets the SipApplicationSession to be the
-	 * same (plus one minute for cleanup). If no header is found, use the expiration
-	 * value in the configuration file.
-	 * 
-	 * @param msg the SIP servlet message
-	 */
-	public static void setSessionExpiration(SipServletMessage msg) {
-		if (msg == null) {
-			return;
-		}
-		SipApplicationSession appSession = msg.getApplicationSession();
-		if (appSession == null) {
-			return;
-		}
-
-		try {
-			String sessionExpires = null;
-			Parameterable p = msg.getParameterableHeader(HEADER_SESSION_EXPIRES);
-			if (p != null) {
-				sessionExpires = p.getValue();
-				if (sessionExpires != null) {
-					appSession.setExpires((Integer.parseInt(sessionExpires) / SECONDS_PER_MINUTE) + 1);
-				}
-			}
-			// If no header, use configuration file instead (handled in AsyncSipServlet)
-		} catch (ServletParseException e) {
-			// Invalid Session-Expires header format; ignore and use default expiration
-		} catch (NumberFormatException e) {
-			// Invalid numeric value in Session-Expires header; ignore and use default
-			// expiration
-		}
-	}
+//	/**
+//	 * This method looks for the "Session-Expires" header on either a request or
+//	 * response object. If it exists, it sets the SipApplicationSession to be the
+//	 * same. If no header is found, use the expiration
+//	 * value in the configuration file.
+//	 * 
+//	 * @param msg the SIP servlet message
+//	 */
+//	public static void setSessionExpiration(SipServletMessage msg) {
+//		if (msg == null) {
+//			return;
+//		}
+//		SipApplicationSession appSession = msg.getApplicationSession();
+//		if (appSession == null) {
+//			return;
+//		}
+//
+//		try {
+//			String sessionExpires = null;
+//			Parameterable p = msg.getParameterableHeader(HEADER_SESSION_EXPIRES);
+//			if (p != null) {
+//				sessionExpires = p.getValue();
+//				if (sessionExpires != null) {
+//
+//					int appSessionExpiresInMinutes = (Integer.parseInt(sessionExpires) / SECONDS_PER_MINUTE);
+//					sipLogger.finer(msg, Color.YELLOW_BOLD_BRIGHT(
+//							"InitialInvite.setSessionExpiration - appSessionExpiresInMinutes=" + appSessionExpiresInMinutes));
+//					appSession.setExpires(appSessionExpiresInMinutes);
+//				}
+//			}
+//			// If no header, use configuration file instead (handled in AsyncSipServlet)
+//		} catch (ServletParseException e) {
+//			// Invalid Session-Expires header format; ignore and use default expiration
+//		} catch (NumberFormatException e) {
+//			// Invalid numeric value in Session-Expires header; ignore and use default
+//			// expiration
+//		}
+//	}
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
@@ -184,7 +189,7 @@ public class InitialInvite extends Callflow {
 		}
 
 	}
-	
+
 	/**
 	 * This method allows the continuation of processing the transaction at a later
 	 * time. Used in the development of the Queue service.
@@ -199,7 +204,7 @@ public class InitialInvite extends Callflow {
 
 			if (!aliceRequest.isCommitted()) {
 
-				setSessionExpiration(bobResponse);
+//				setSessionExpiration(bobResponse);
 
 				SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
 				copyContentAndHeaders(bobResponse, aliceResponse);

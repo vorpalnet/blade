@@ -39,10 +39,10 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
  * @author Jeff McDonald
  *
  */
-@WebListener
-@javax.servlet.sip.annotation.SipApplication(distributable = true)
-@javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
-@javax.servlet.sip.annotation.SipListener
+//@WebListener
+//@javax.servlet.sip.annotation.SipApplication(distributable = true)
+//@javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
+//@javax.servlet.sip.annotation.SipListener
 public class TestClientServlet extends AsyncSipServlet {
 	private static final long serialVersionUID = 1L;
 	private static SettingsManager<TestClientConfig> settingsManager;

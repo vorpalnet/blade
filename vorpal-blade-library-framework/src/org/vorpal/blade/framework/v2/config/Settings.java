@@ -260,6 +260,9 @@ public class Settings<T> implements SettingsMXBean {
 
 				if (cfg.getSession() != null) {
 					Callflow.setSessionParameters(cfg.getSession());
+					
+					
+					
 					AsyncSipServlet.setSessionParameters(cfg.getSession());
 				}
 

@@ -44,7 +44,6 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipFactory;
-import javax.servlet.sip.SipServletContext;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipSessionsUtil;
@@ -118,7 +117,17 @@ public class SettingsManager<T> {
 	protected static String applicationName="";
 	protected static String applicationVersion;
 
-	protected static Analytics analytics;
+	public static Analytics analytics;
+	public static SessionParameters sessionParameters;
+
+
+	public static SessionParameters getSessionParameters() {
+		return sessionParameters;
+	}
+
+	public static void setSessionParameters(SessionParameters sessionParameters) {
+		SettingsManager.sessionParameters = sessionParameters;
+	}
 
 	protected String servletContextName;
 	protected Path domainPath;
@@ -390,7 +399,11 @@ public class SettingsManager<T> {
 			// set analytics to a static variable, useful for finding it later
 			if (current instanceof Configuration) {
 				analytics = ((Configuration) current).getAnalytics();
+				sessionParameters = ((Configuration) current).getSession();
 			}
+			
+			
+			
 
 		} catch (Exception e) {
 			sipLogger.severe(e);

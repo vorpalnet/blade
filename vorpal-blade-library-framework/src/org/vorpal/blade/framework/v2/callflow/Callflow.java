@@ -72,6 +72,8 @@ import org.vorpal.blade.framework.v2.proxy.ProxyTier;
 import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
 import org.vorpal.blade.framework.v2.testing.DummyResponse;
 
+import com.sun.xml.ws.runtime.dev.SessionManager;
+
 public abstract class Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
 	protected static SipFactory sipFactory;
@@ -79,6 +81,14 @@ public abstract class Callflow implements Serializable {
 	protected static TimerService timerService;
 	protected static Logger sipLogger;
 	protected static SessionParameters sessionParameters;
+
+	public static SessionParameters getSessionParameters() {
+		return sessionParameters;
+	}
+
+	public static void setSessionParameters(SessionParameters sessionParameters) {
+		Callflow.sessionParameters = sessionParameters;
+	}
 
 	// Useful strings
 	public static final String INVITE = "INVITE";
@@ -125,7 +135,7 @@ public abstract class Callflow implements Serializable {
 
 	// Session expiration defaults
 	private static final int DEFAULT_SESSION_EXPIRES_MINUTES = 60;
-	private static final int MIN_SESSION_EXPIRES_MINUTES = 3;
+	private static final int MIN_SESSION_EXPIRES_MINUTES = 30;
 
 	/**
 	 * Checks if the response is a provisional response (1xx status code).
@@ -695,61 +705,102 @@ public abstract class Callflow implements Serializable {
 
 				if (sipSession != null && sipSession.isValid()) {
 
-					if (request.isInitial() // begin KeepAlive logic...
-							&& request.getMethod().equals(INVITE)) { //
+					// begin KeepAlive logic...
+					try {
+						if (request.isInitial() && request.getMethod().equals(INVITE)) { //
+							int configSessionExpiresInMinutes = DEFAULT_SESSION_EXPIRES_MINUTES;
 
-						Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
-
-						if (sessionExpires == null) {
-
-							int sessionExpiresInMinutes = DEFAULT_SESSION_EXPIRES_MINUTES;
-
-							// Config file settings...
-							SessionParameters params = Callflow.getSessionParameters();
+							SessionParameters params = SettingsManager.getSessionParameters();
 							if (params != null && params.getExpiration() != null) {
-								sessionExpiresInMinutes = params.getExpiration();
-								if (sessionExpiresInMinutes < MIN_SESSION_EXPIRES_MINUTES) {
-									sessionExpiresInMinutes = MIN_SESSION_EXPIRES_MINUTES;
-								}
+								configSessionExpiresInMinutes = params.getExpiration();
+//								sipLogger.severe(request,
+//										"Callflow.sendRequest - #GF session params exists. configSessionExpiresInMinutes="
+//												+ configSessionExpiresInMinutes);
+
 							}
 
-							int sessionExpiresInSeconds = sessionExpiresInMinutes * 60;
-							int minSEinSeconds = sessionExpiresInSeconds / 2;
-							int appSessionExpiresInMinutes = (sessionExpiresInMinutes) + 1;
+							int sessionExpiresInMinutes = 0;
+							int finalSessionExpiresInMinutes = 0;
 
-							appSession.setExpires(appSessionExpiresInMinutes);
-							request.getSessionKeepAlivePreference().setEnabled(true);
-							request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
-							request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
-							request.getSessionKeepAlivePreference().setRefresher(Refresher.UAS);
-							SessionKeepAlive skl = request.getSession().getKeepAlive();
+							Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
+							String refresher = null;
+							if (sessionExpires != null) {
+								refresher = sessionExpires.getParameter("refresher");
+							}
 
-							skl.setRefreshCallback(new SessionKeepAlive.Callback() {
-								public void handle(SipSession session) {
-									try {
-										KeepAlive refresher = new KeepAlive();
-										refresher.handle(session);
-									} catch (Exception e100) {
-										sipLogger.warning(sipSession,
-												"#1.3 Callflow.sendRequest - catch Exception e100");
-									}
+							if (sessionExpires == null) { // create Session-Expires
+
+								int sessionExpiresInSeconds = configSessionExpiresInMinutes * 60;
+								int minSEinSeconds = sessionExpiresInSeconds / 2;
+
+								if (sipLogger.isLoggable(Level.FINER)) {
+									sipLogger.finer(request,
+											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - sessionExpiresInSeconds="
+													+ sessionExpiresInSeconds + ", minSEinSeconds=" + minSEinSeconds));
 								}
-							});
 
-							skl.setExpiryCallback(new SessionKeepAlive.Callback() {
-								public void handle(SipSession session) {
-									try {
-										KeepAliveExpiry expiry = new KeepAliveExpiry();
-										expiry.handle(sipSession);
-									} catch (Exception e200) {
-										sipLogger.warning(sipSession,
-												"#1.4 Callflow.sendRequest - catch Exception e200");
+								request.getSessionKeepAlivePreference().setEnabled(true);
+								request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
+								request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
+								request.getSessionKeepAlivePreference().setRefresher(Refresher.UAC);
+								SessionKeepAlive skl = request.getSession().getKeepAlive();
+
+								skl.setRefreshCallback(new SessionKeepAlive.Callback() {
+									public void handle(SipSession session) {
+										try {
+											KeepAlive refresher = new KeepAlive();
+											refresher.handle(session);
+										} catch (Exception e100) {
+											sipLogger.warning(sipSession,
+													"#1.3 Callflow.sendRequest - catch Exception e100");
+										}
 									}
-								}
-							});
+								});
+
+								skl.setExpiryCallback(new SessionKeepAlive.Callback() {
+									public void handle(SipSession session) {
+										try {
+											KeepAliveExpiry expiry = new KeepAliveExpiry();
+											expiry.handle(sipSession);
+										} catch (Exception e200) {
+											sipLogger.warning(sipSession,
+													"#1.4 Callflow.sendRequest - catch Exception e200");
+										}
+									}
+								});
+
+							}
+
+							else { // sessionExpires == null
+								String strSessionExpires = sessionExpires.getValue();
+								sessionExpiresInMinutes = Integer.parseInt(strSessionExpires) / 60;
+
+//								sipLogger.severe(request,
+//										"Callflow.sendRequest - #QZ session params exists. sessionExpiresInMinutes="
+//												+ sessionExpiresInMinutes);
+
+								sessionExpires.setParameter("refresher", "uac");
+							}
+
+							finalSessionExpiresInMinutes = Math.max(sessionExpiresInMinutes,
+									configSessionExpiresInMinutes);
+
+							if (sipLogger.isLoggable(Level.FINER)) {
+								sipLogger.finer(request, Color.YELLOW_BOLD_BRIGHT(
+										"Callflow.sendRequest - appSession.setExpires sessionExpiresInMinutes="
+												+ sessionExpiresInMinutes//
+												+ ", configSessionExpiresInMinutes=" + configSessionExpiresInMinutes//
+												+ ", finalSessionExpiresInMinutes=" + finalSessionExpiresInMinutes));
+							}
+
+							appSession.setExpires(finalSessionExpiresInMinutes + 1); // and a pinch to grow on
 
 						}
-					} // end KeepAlive logic.
+					} catch (Exception exk) {
+						sipLogger.severe(request,
+								"Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
+					}
+					// end KeepAlive logic.
 
 					if (lambdaFunction != null) {
 						request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
@@ -784,7 +835,9 @@ public abstract class Callflow implements Serializable {
 				}
 			}
 
-		} catch (Exception ex300) {
+		} catch (
+
+		Exception ex300) {
 			sipLogger.warning(request, "#1.5 Callflow.sendRequest - catch Exception ex300");
 			sipLogger.severe(request, ex300);
 
@@ -1070,6 +1123,92 @@ public abstract class Callflow implements Serializable {
 
 				}
 			}
+
+//			// begin KeepAlive logic...
+//			try {
+//				if (successful(response) //
+//						&& response.getMethod().equals(INVITE) //
+//						&& response.getRequest().isInitial() //
+//				) { //
+//					int sessionExpiresInMinutes = DEFAULT_SESSION_EXPIRES_MINUTES;
+//
+//					Parameterable sessionExpires = response.getRequest().getParameterableHeader("Session-Expires");
+//					String refresher;
+//					if (sessionExpires != null//
+//							&& ((refresher = sessionExpires.getParameter("refresher")) != null) //
+//							&& refresher.equalsIgnoreCase("uas") //
+//					) { // create Session-Expires
+//
+//						String strSessionExpires = sessionExpires.getValue();
+//						sessionExpiresInMinutes = Integer.parseInt(strSessionExpires) / 60;
+//
+//						if (sipLogger.isLoggable(Level.FINER)) {
+//							sipLogger.finer(response,
+//									Color.YELLOW_BOLD_BRIGHT(
+//											"Callflow.sendRequest - strSessionExpires=(" + strSessionExpires
+//													+ ", sessionExpiresInMinutes=" + sessionExpiresInMinutes));
+//						}
+//
+//						int sessionExpiresInSeconds = sessionExpiresInMinutes * 60;
+//						int minSEinSeconds = sessionExpiresInSeconds / 2;
+//
+//						if (sipLogger.isLoggable(Level.FINER)) {
+//							sipLogger.finer(response,
+//									Color.YELLOW_BOLD_BRIGHT("Callflow.sendResponse - sessionExpiresInSeconds="
+//											+ sessionExpiresInSeconds + ", minSEinSeconds=" + minSEinSeconds));
+//						}
+//
+//						response.getSessionKeepAlivePreference().setEnabled(true);
+//						response.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
+//						response.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
+//						response.getSessionKeepAlivePreference().setRefresher(Refresher.UAS);
+//						SessionKeepAlive skl = response.getSession().getKeepAlive();
+//
+//						skl.setRefreshCallback(new SessionKeepAlive.Callback() {
+//							public void handle(SipSession session) {
+//								try {
+//									KeepAlive refresher = new KeepAlive();
+//									refresher.handle(session);
+//								} catch (Exception e100) {
+//									sipLogger.warning(sipSession, "#1.3 Callflow.sendRequest - catch Exception e100");
+//								}
+//							}
+//						});
+//
+//						skl.setExpiryCallback(new SessionKeepAlive.Callback() {
+//							public void handle(SipSession session) {
+//								try {
+//									KeepAliveExpiry expiry = new KeepAliveExpiry();
+//									expiry.handle(sipSession);
+//								} catch (Exception e200) {
+//									sipLogger.warning(sipSession, "#1.4 Callflow.sendRequest - catch Exception e200");
+//								}
+//							}
+//						});
+//
+//					} else {
+//
+////						SessionParameters params = Callflow.getSessionParameters(); // config file settings
+//						SessionParameters params = SettingsManager.getSessionParameters(); // config file settings
+//						if (params != null && params.getExpiration() != null) {
+//							sessionExpiresInMinutes = params.getExpiration();
+//						}
+//					}
+//
+//					if (sipLogger.isLoggable(Level.FINER)) {
+//						sipLogger.finer(response, Color.YELLOW_BOLD_BRIGHT(
+//								"Callflow.sendRequest - appSession.setExpires(" + sessionExpiresInMinutes + ")"));
+//					}
+//					response.getApplicationSession().setExpires(sessionExpiresInMinutes + 1); // and a pinch to grow on
+//
+//				}
+//
+//			} catch (Exception exKeepAlive) {
+//				sipLogger.warning(response,
+//						"Callflow.doResponse - Unable to set keep alive: " + exKeepAlive.getMessage());
+//				sipLogger.severe(response, exKeepAlive);
+//			}
+//			// end KeepAlive logic.
 
 			response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
 
@@ -1524,7 +1663,7 @@ public abstract class Callflow implements Serializable {
 			ss2.removeAttribute(LINKED_SESSION);
 		}
 	}
-	
+
 	public static void unlinkSession(SipServletMessage msg) {
 		if (msg != null && msg.getSession().isValid()) {
 			msg.getSession().removeAttribute(LINKED_SESSION);
@@ -1954,25 +2093,25 @@ public abstract class Callflow implements Serializable {
 		Callflow.sipLogger = sipLogger;
 	}
 
-	/**
-	 * Returns the session parameters configuration used for session attribute
-	 * extraction and session expiration settings.
-	 *
-	 * @return the current session parameters, or null if not configured
-	 */
-	public static SessionParameters getSessionParameters() {
-		return sessionParameters;
-	}
-
-	/**
-	 * Sets the session parameters configuration used for session attribute
-	 * extraction and session expiration settings.
-	 *
-	 * @param sessionParameters the session parameters to set
-	 */
-	public static void setSessionParameters(SessionParameters sessionParameters) {
-		Callflow.sessionParameters = sessionParameters;
-	}
+//	/**
+//	 * Returns the session parameters configuration used for session attribute
+//	 * extraction and session expiration settings.
+//	 *
+//	 * @return the current session parameters, or null if not configured
+//	 */
+//	public static SessionParameters getSessionParameters() {
+//		return SettingsManager.getSessionParams();
+//	}
+//
+//	/**
+//	 * Sets the session parameters configuration used for session attribute
+//	 * extraction and session expiration settings.
+//	 *
+//	 * @param sessionParameters the session parameters to set
+//	 */
+//	public static void setSessionParameters(SessionParameters sessionParameters) {
+//		Callflow.sessionParameters = sessionParameters;
+//	}
 
 	/**
 	 * Given a SipApplicationSession, this method returns a SipSession with the
