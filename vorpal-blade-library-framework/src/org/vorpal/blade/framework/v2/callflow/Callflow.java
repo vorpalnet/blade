@@ -718,82 +718,86 @@ public abstract class Callflow implements Serializable {
 //												+ configSessionExpiresInMinutes);
 
 							}
+							
+							appSession.setExpires(configSessionExpiresInMinutes + 1); // and a pinch to grow on
 
-							int sessionExpiresInMinutes = 0;
-							int finalSessionExpiresInMinutes = 0;
-
-							Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
-							String refresher = null;
-							if (sessionExpires != null) {
-								refresher = sessionExpires.getParameter("refresher");
-							}
-
-							if (sessionExpires == null) { // create Session-Expires
-
-								int sessionExpiresInSeconds = configSessionExpiresInMinutes * 60;
-								int minSEinSeconds = sessionExpiresInSeconds / 2;
-
-								if (sipLogger.isLoggable(Level.FINER)) {
-									sipLogger.finer(request,
-											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - sessionExpiresInSeconds="
-													+ sessionExpiresInSeconds + ", minSEinSeconds=" + minSEinSeconds));
-								}
-
-								request.getSessionKeepAlivePreference().setEnabled(true);
-								request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
-								request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
-								request.getSessionKeepAlivePreference().setRefresher(Refresher.UAC);
-								SessionKeepAlive skl = request.getSession().getKeepAlive();
-
-								skl.setRefreshCallback(new SessionKeepAlive.Callback() {
-									public void handle(SipSession session) {
-										try {
-											KeepAlive refresher = new KeepAlive();
-											refresher.handle(session);
-										} catch (Exception e100) {
-											sipLogger.warning(sipSession,
-													"#1.3 Callflow.sendRequest - catch Exception e100");
-										}
-									}
-								});
-
-								skl.setExpiryCallback(new SessionKeepAlive.Callback() {
-									public void handle(SipSession session) {
-										try {
-											KeepAliveExpiry expiry = new KeepAliveExpiry();
-											expiry.handle(sipSession);
-										} catch (Exception e200) {
-											sipLogger.warning(sipSession,
-													"#1.4 Callflow.sendRequest - catch Exception e200");
-										}
-									}
-								});
-
-							}
-
-							else { // sessionExpires == null
-								String strSessionExpires = sessionExpires.getValue();
-								sessionExpiresInMinutes = Integer.parseInt(strSessionExpires) / 60;
-
-//								sipLogger.severe(request,
-//										"Callflow.sendRequest - #QZ session params exists. sessionExpiresInMinutes="
-//												+ sessionExpiresInMinutes);
-
-								sessionExpires.setParameter("refresher", "uac");
-							}
-
-							finalSessionExpiresInMinutes = Math.max(sessionExpiresInMinutes,
-									configSessionExpiresInMinutes);
-
-							if (sipLogger.isLoggable(Level.FINER)) {
-								sipLogger.finer(request, Color.YELLOW_BOLD_BRIGHT(
-										"Callflow.sendRequest - appSession.setExpires sessionExpiresInMinutes="
-												+ sessionExpiresInMinutes//
-												+ ", configSessionExpiresInMinutes=" + configSessionExpiresInMinutes//
-												+ ", finalSessionExpiresInMinutes=" + finalSessionExpiresInMinutes));
-							}
-
-							appSession.setExpires(finalSessionExpiresInMinutes + 1); // and a pinch to grow on
+//							
+//
+//							int sessionExpiresInMinutes = 0;
+//							int finalSessionExpiresInMinutes = 0;
+//
+//							Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
+//							String refresher = null;
+//							if (sessionExpires != null) {
+//								refresher = sessionExpires.getParameter("refresher");
+//							}
+//
+//							if (sessionExpires == null) { // create Session-Expires
+//
+//								int sessionExpiresInSeconds = configSessionExpiresInMinutes * 60;
+//								int minSEinSeconds = sessionExpiresInSeconds / 2;
+//
+//								if (sipLogger.isLoggable(Level.FINER)) {
+//									sipLogger.finer(request,
+//											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - sessionExpiresInSeconds="
+//													+ sessionExpiresInSeconds + ", minSEinSeconds=" + minSEinSeconds));
+//								}
+//
+//								request.getSessionKeepAlivePreference().setEnabled(true);
+//								request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
+//								request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
+//								request.getSessionKeepAlivePreference().setRefresher(Refresher.UAC);
+//								SessionKeepAlive skl = request.getSession().getKeepAlive();
+//
+//								skl.setRefreshCallback(new SessionKeepAlive.Callback() {
+//									public void handle(SipSession session) {
+//										try {
+//											KeepAlive refresher = new KeepAlive();
+//											refresher.handle(session);
+//										} catch (Exception e100) {
+//											sipLogger.warning(sipSession,
+//													"#1.3 Callflow.sendRequest - catch Exception e100");
+//										}
+//									}
+//								});
+//
+//								skl.setExpiryCallback(new SessionKeepAlive.Callback() {
+//									public void handle(SipSession session) {
+//										try {
+//											KeepAliveExpiry expiry = new KeepAliveExpiry();
+//											expiry.handle(sipSession);
+//										} catch (Exception e200) {
+//											sipLogger.warning(sipSession,
+//													"#1.4 Callflow.sendRequest - catch Exception e200");
+//										}
+//									}
+//								});
+//
+//							}
+// 
+//							else { // sessionExpires == null
+//								String strSessionExpires = sessionExpires.getValue();
+//								sessionExpiresInMinutes = Integer.parseInt(strSessionExpires) / 60;
+//
+////								sipLogger.severe(request,
+////										"Callflow.sendRequest - #QZ session params exists. sessionExpiresInMinutes="
+////												+ sessionExpiresInMinutes);
+//
+//								sessionExpires.setParameter("refresher", "uac");
+//							}
+//
+//							finalSessionExpiresInMinutes = Math.max(sessionExpiresInMinutes,
+//									configSessionExpiresInMinutes);
+//
+//							if (sipLogger.isLoggable(Level.FINER)) {
+//								sipLogger.finer(request, Color.YELLOW_BOLD_BRIGHT(
+//										"Callflow.sendRequest - appSession.setExpires sessionExpiresInMinutes="
+//												+ sessionExpiresInMinutes//
+//												+ ", configSessionExpiresInMinutes=" + configSessionExpiresInMinutes//
+//												+ ", finalSessionExpiresInMinutes=" + finalSessionExpiresInMinutes));
+//							}
+//
+//							appSession.setExpires(finalSessionExpiresInMinutes + 1); // and a pinch to grow on
 
 						}
 					} catch (Exception exk) {
