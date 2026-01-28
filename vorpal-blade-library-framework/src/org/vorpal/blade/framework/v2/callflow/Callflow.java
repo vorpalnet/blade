@@ -614,8 +614,6 @@ public abstract class Callflow implements Serializable {
 			indexKey = (indexKey != null) ? indexKey : createVorpalSessionId(appSession);
 		}
 
-		System.out.println(
-				SettingsManager.getApplicationName() + "... Callflow.getVorpalSessionId - indexKey=" + indexKey);
 		return indexKey;
 	}
 
@@ -718,7 +716,7 @@ public abstract class Callflow implements Serializable {
 //												+ configSessionExpiresInMinutes);
 
 							}
-							
+
 							appSession.setExpires(configSessionExpiresInMinutes + 1); // and a pinch to grow on
 
 //							
