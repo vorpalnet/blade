@@ -717,6 +717,8 @@ public abstract class Callflow implements Serializable {
 
 							}
 
+							sipLogger.severe(request, "Callflow.sendRequest - appSession.setExpires("
+									+ configSessionExpiresInMinutes + ")");
 							appSession.setExpires(configSessionExpiresInMinutes + 1); // and a pinch to grow on
 
 //							
