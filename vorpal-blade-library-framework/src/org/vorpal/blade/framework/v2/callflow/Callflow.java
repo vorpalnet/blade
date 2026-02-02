@@ -704,103 +704,102 @@ public abstract class Callflow implements Serializable {
 
 				if (sipSession != null && sipSession.isValid()) {
 
-					// begin KeepAlive logic...
-					try {
-						if (request.isInitial() //
-								&& request.getMethod().equals(INVITE) //
-								&& request.getAttribute("noKeepAlive") == null //
-
-						) { //
-							int configSessionExpiresInMinutes = DEFAULT_SESSION_EXPIRES_MINUTES;
-
-							SessionParameters params = SettingsManager.getSessionParameters();
-							if (params != null && params.getExpiration() != null) {
-								configSessionExpiresInMinutes = params.getExpiration();
-//								sipLogger.finer(request,
-//										"Callflow.sendRequest - #GF session params exists. configSessionExpiresInMinutes="
-//												+ configSessionExpiresInMinutes);
-							}
-
-							int sessionExpiresInMinutes = 0;
-							int finalSessionExpiresInMinutes = 0;
-
-							Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
-							String refresher = null;
-							boolean uas = false;
-							if (sessionExpires != null) {
-								refresher = sessionExpires.getParameter("refresher");
-								uas = refresher.equals("uas");
-								sessionExpires.setParameter("refresher", "uac"); // changing it to uac so no other app
-																					// operates on it
-							}
-
-							if (sessionExpires == null || uas == true) { // create Session-Expires
-								int sessionExpiresInSeconds = 3600; // a fool and his money are soon parted
-								int minSEinSeconds = 1800;
-
-								if (sipLogger.isLoggable(Level.FINER)) {
-									sipLogger.finer(request,
-											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - setting keep alive timer; "//
-													+ "expiration=" + sessionExpiresInSeconds // "
-													+ ", minSE=" + minSEinSeconds //
-											));
-								}
-
-								request.getSessionKeepAlivePreference().setEnabled(true);
-								request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
-								request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
-								request.getSessionKeepAlivePreference().setRefresher(Refresher.UAC);
-								SessionKeepAlive skl = request.getSession().getKeepAlive();
-
-								skl.setRefreshCallback(new SessionKeepAlive.Callback() {
-									public void handle(SipSession session) {
-										try {
-											KeepAlive refresher = new KeepAlive();
-											refresher.handle(session);
-										} catch (Exception e100) {
-											sipLogger.warning(sipSession,
-													"#1.3 Callflow.sendRequest - catch Exception e100");
-										}
-									}
-								});
-
-								skl.setExpiryCallback(new SessionKeepAlive.Callback() {
-									public void handle(SipSession session) {
-										try {
-											KeepAliveExpiry expiry = new KeepAliveExpiry();
-											expiry.handle(sipSession);
-										} catch (Exception e200) {
-											sipLogger.warning(sipSession,
-													"#1.4 Callflow.sendRequest - catch Exception e200");
-										}
-									}
-								});
-
-							}
-
-							if (configSessionExpiresInMinutes <= 0) { // never expires
-								finalSessionExpiresInMinutes = configSessionExpiresInMinutes;
-							} else {
-								finalSessionExpiresInMinutes = Math.max(sessionExpiresInMinutes,
-										configSessionExpiresInMinutes);
-							}
-
-							if (sipLogger.isLoggable(Level.FINER)) {
-								sipLogger.finer(request, Color.YELLOW_BOLD_BRIGHT(
-										"Callflow.sendRequest - appSession.setExpires sessionExpiresInMinutes="
-												+ sessionExpiresInMinutes//
-												+ ", configSessionExpiresInMinutes=" + configSessionExpiresInMinutes//
-												+ ", finalSessionExpiresInMinutes=" + finalSessionExpiresInMinutes));
-							}
-
-							appSession.setExpires(finalSessionExpiresInMinutes);
-
-						}
-					} catch (Exception exk) {
-						sipLogger.severe(request,
-								"Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
-					}
-					// end KeepAlive logic.
+					
+					// Transfer has problems with default values... fix that before re-enabling this.
+//					// begin KeepAlive logic...
+//					try {
+//						if (request.isInitial() //
+//								&& request.getMethod().equals(INVITE) //
+//								&& request.getAttribute("noKeepAlive") == null //
+//
+//						) { //
+//							int configSessionExpiresInMinutes = DEFAULT_SESSION_EXPIRES_MINUTES;
+//
+//							SessionParameters params = SettingsManager.getSessionParameters();
+//							if (params != null && params.getExpiration() != null) {
+//								configSessionExpiresInMinutes = params.getExpiration();
+//							}
+//
+//							int sessionExpiresInMinutes = 0;
+//							int finalSessionExpiresInMinutes = 0;
+//
+//							Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
+//							String refresher = null;
+//							boolean uas = false;
+//							if (sessionExpires != null) {
+//								refresher = sessionExpires.getParameter("refresher");
+//								uas = refresher.equals("uas");
+//								sessionExpires.setParameter("refresher", "uac"); // changing it to uac so no other app
+//																					// operates on it
+//							}
+//
+//							if (sessionExpires == null || uas == true) { // create Session-Expires
+//								int sessionExpiresInSeconds = 3600; // a fool and his money are soon parted
+//								int minSEinSeconds = 1800;
+//
+//								if (sipLogger.isLoggable(Level.FINER)) {
+//									sipLogger.finer(request,
+//											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - setting keep alive timer; "//
+//													+ "expiration=" + sessionExpiresInSeconds // "
+//													+ ", minSE=" + minSEinSeconds //
+//											));
+//								}
+//
+//								request.getSessionKeepAlivePreference().setEnabled(true);
+//								request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
+//								request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
+//								request.getSessionKeepAlivePreference().setRefresher(Refresher.UAC);
+//								SessionKeepAlive skl = request.getSession().getKeepAlive();
+//
+//								skl.setRefreshCallback(new SessionKeepAlive.Callback() {
+//									public void handle(SipSession session) {
+//										try {
+//											KeepAlive refresher = new KeepAlive();
+//											refresher.handle(session);
+//										} catch (Exception e100) {
+//											sipLogger.warning(sipSession,
+//													"#1.3 Callflow.sendRequest - catch Exception e100");
+//										}
+//									}
+//								});
+//
+//								skl.setExpiryCallback(new SessionKeepAlive.Callback() {
+//									public void handle(SipSession session) {
+//										try {
+//											KeepAliveExpiry expiry = new KeepAliveExpiry();
+//											expiry.handle(sipSession);
+//										} catch (Exception e200) {
+//											sipLogger.warning(sipSession,
+//													"#1.4 Callflow.sendRequest - catch Exception e200");
+//										}
+//									}
+//								});
+//
+//							}
+//
+//							if (configSessionExpiresInMinutes <= 0) { // never expires
+//								finalSessionExpiresInMinutes = configSessionExpiresInMinutes;
+//							} else {
+//								finalSessionExpiresInMinutes = Math.max(sessionExpiresInMinutes,
+//										configSessionExpiresInMinutes);
+//							}
+//
+//							if (sipLogger.isLoggable(Level.FINER)) {
+//								sipLogger.finer(request, Color.YELLOW_BOLD_BRIGHT(
+//										"Callflow.sendRequest - appSession.setExpires sessionExpiresInMinutes="
+//												+ sessionExpiresInMinutes//
+//												+ ", configSessionExpiresInMinutes=" + configSessionExpiresInMinutes//
+//												+ ", finalSessionExpiresInMinutes=" + finalSessionExpiresInMinutes));
+//							}
+//
+//							appSession.setExpires(finalSessionExpiresInMinutes);
+//
+//						}
+//					} catch (Exception exk) {
+//						sipLogger.severe(request,
+//								"Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
+//					}
+//					// end KeepAlive logic.
 
 					if (lambdaFunction != null) {
 						request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);

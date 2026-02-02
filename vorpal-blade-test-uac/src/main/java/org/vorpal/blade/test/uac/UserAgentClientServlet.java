@@ -34,6 +34,8 @@ public class UserAgentClientServlet extends B2buaServlet {
 
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
+		outboundRequest.setAttribute("noKeepAlive", Boolean.TRUE); // for testing keep alive
+		
 		for (Entry<String, String> entry : settings.getCurrent().headers.entrySet()) {
 			outboundRequest.setHeader(entry.getKey(), entry.getValue());
 		}
