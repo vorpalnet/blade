@@ -281,7 +281,7 @@ public class QueueCallflow extends Callflow {
 			} catch (Exception e) {
 				sipLogger.warning(aliceRequest,
 						"QueueCallflow.complete - Caught Exception " + e.getClass().getName() + " " + e.getMessage());
-				sipLogger.logWarningStackTrace(e);
+				e.printStackTrace();
 			}
 
 		} else {

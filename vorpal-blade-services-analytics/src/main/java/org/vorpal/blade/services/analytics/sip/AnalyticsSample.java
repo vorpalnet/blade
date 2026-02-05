@@ -1,5 +1,9 @@
-package org.vorpal.blade.framework.v2.analytics;
+package org.vorpal.blade.services.analytics.sip;
 
+import java.util.logging.Level;
+
+import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v2.analytics.EventSelector;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
 public class AnalyticsSample extends Analytics {
