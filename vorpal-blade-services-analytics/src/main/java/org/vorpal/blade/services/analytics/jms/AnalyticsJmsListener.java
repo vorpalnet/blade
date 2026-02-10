@@ -24,9 +24,9 @@ import org.vorpal.blade.framework.v2.logging.Logger;
  * Message-driven bean that receives JPA entities via JMS ObjectMessages and
  * persists them to the database.
  */
-@MessageDriven(mappedName = "jms/TestJMSQueue", activationConfig = {
-		@ActivationConfigProperty(propertyName = "acknowledgeMode", propertyValue = "Auto-acknowledge"),
-		@ActivationConfigProperty(propertyName = "destinationType", propertyValue = "javax.jms.Queue") })
+//@MessageDriven(mappedName = "jms/TestJMSQueue", activationConfig = {
+//		@ActivationConfigProperty(propertyName = "acknowledgeMode", propertyValue = "Auto-acknowledge"),
+//		@ActivationConfigProperty(propertyName = "destinationType", propertyValue = "javax.jms.Queue") })
 public class AnalyticsJmsListener implements MessageListener {
 
 	private EntityManagerFactory emf;

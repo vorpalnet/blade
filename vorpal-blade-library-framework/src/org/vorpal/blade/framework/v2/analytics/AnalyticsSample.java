@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.analytics.sip;
+package org.vorpal.blade.framework.v2.analytics;
 
 import java.util.logging.Level;
 

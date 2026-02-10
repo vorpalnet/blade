@@ -1,5 +1,6 @@
 package org.vorpal.blade.services.analytics.sip;
 
+import org.vorpal.blade.framework.v2.analytics.AnalyticsSample;
 import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
 import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
