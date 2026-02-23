@@ -23,7 +23,6 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 	private static final long serialVersionUID = 1L;
 
 	public static SettingsManager<AnalyticsConfig> settingsManager;
-//	public static JmsPublisher jmsPublisher;
 
 	public static Application application;
 

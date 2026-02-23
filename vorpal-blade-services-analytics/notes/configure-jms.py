@@ -1,64 +1,93 @@
+# This script configures a JMS queue for receiving analytics events.
+# Temporarily, set the following environment variables:
 
+wl_user = os.environ.get('WL_USER')   # weblogic
+wl_pass = os.environ.get('WL_PASS')   # welcome1
+wl_admin = os.environ.get('WL_ADMIN') # t3://localhost:7001
 
-wl_user = os.environ.get('WL_USER')
-wl_pass = os.environ.get('WL_PASS')
-wl_admin = os.environ.get('WL_ADMIN')
-
-#connect('weblogic', 'welcome1', 't3://localhost:7001')
 connect(wl_user, wl_pass, wl_admin)
+
 edit()
+
+cd('/')
+cmo.createFileStore('BladeAnalyticsFileStore')
+
+cd('/FileStores/BladeAnalyticsFileStore')
+cmo.setDirectory('BladeAnalytics')
+set('Targets',jarray.array([ObjectName('com.bea:Name=BEA_ENGINE_TIER_CLUST,Type=Cluster')], ObjectName))
+
+activate()
 
 startEdit()
 
 cd('/')
-cmo.createJMSServer('TestJMSServer')
+cmo.createJMSServer('BladeAnalyticsJMSServer')
 
-cd('/JMSServers/TestJMSServer')
-set('Targets',jarray.array([ObjectName('com.bea:Name=engine1,Type=Server')], ObjectName))
+cd('/JMSServers/BladeAnalyticsJMSServer')
+cmo.setPersistentStore(getMBean('/FileStores/BladeAnalyticsFileStore'))
+set('Targets',jarray.array([ObjectName('com.bea:Name=BEA_ENGINE_TIER_CLUST,Type=Cluster')], ObjectName))
+
+activate()
+
+startEdit()
 
 cd('/')
-cmo.createJMSSystemResource('TestJMSModule')
+cmo.createJMSSystemResource('BladeAnalyticsSystemModule', 'BladeAnalytics/BladeAnalytics-jms.xml')
 
-cd('/JMSSystemResources/TestJMSModule')
-set('Targets',jarray.array([ObjectName('com.bea:Name=engine1,Type=Server')], ObjectName))
+cd('/JMSSystemResources/BladeAnalyticsSystemModule')
+set('Targets',jarray.array([ObjectName('com.bea:Name=BEA_ENGINE_TIER_CLUST,Type=Cluster')], ObjectName))
 
-cmo.createSubDeployment('TestSubdeployment')
+activate()
 
-cd('/JMSSystemResources/TestJMSModule/SubDeployments/TestSubdeployment')
-set('Targets',jarray.array([ObjectName('com.bea:Name=TestJMSServer,Type=JMSServer')], ObjectName))
+startEdit()
+cmo.createSubDeployment('BladeAnalyticsSubdeployment')
 
-cd('/JMSSystemResources/TestJMSModule/JMSResource/TestJMSModule')
-cmo.createConnectionFactory('TestConnectionFactory')
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/SubDeployments/BladeAnalyticsSubdeployment')
+set('Targets',jarray.array([ObjectName('com.bea:Name=BladeAnalyticsJMSServer,Type=JMSServer')], ObjectName))
 
-cd('/JMSSystemResources/TestJMSModule/JMSResource/TestJMSModule/ConnectionFactories/TestConnectionFactory')
-cmo.setJNDIName('jms/TestConnectionFactory')
+activate()
 
-cd('/JMSSystemResources/TestJMSModule/JMSResource/TestJMSModule/ConnectionFactories/TestConnectionFactory/SecurityParams/TestConnectionFactory')
+startEdit()
+
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/JMSResource/BladeAnalyticsSystemModule')
+cmo.createConnectionFactory('BladeAnalyticsConnectionFactory')
+
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/JMSResource/BladeAnalyticsSystemModule/ConnectionFactories/BladeAnalyticsConnectionFactory')
+cmo.setJNDIName('jms/BladeAnalyticsConnectionFactory')
+
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/JMSResource/BladeAnalyticsSystemModule/ConnectionFactories/BladeAnalyticsConnectionFactory/SecurityParams/BladeAnalyticsConnectionFactory')
 cmo.setAttachJMSXUserId(false)
 
-cd('/JMSSystemResources/TestJMSModule/JMSResource/TestJMSModule/ConnectionFactories/TestConnectionFactory/ClientParams/TestConnectionFactory')
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/JMSResource/BladeAnalyticsSystemModule/ConnectionFactories/BladeAnalyticsConnectionFactory/ClientParams/BladeAnalyticsConnectionFactory')
 cmo.setClientIdPolicy('Restricted')
 cmo.setSubscriptionSharingPolicy('Exclusive')
 cmo.setMessagesMaximum(10)
 
-cd('/JMSSystemResources/TestJMSModule/JMSResource/TestJMSModule/ConnectionFactories/TestConnectionFactory/TransactionParams/TestConnectionFactory')
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/JMSResource/BladeAnalyticsSystemModule/ConnectionFactories/BladeAnalyticsConnectionFactory/TransactionParams/BladeAnalyticsConnectionFactory')
 cmo.setXAConnectionFactoryEnabled(true)
 
-cd('/JMSSystemResources/TestJMSModule/SubDeployments/TestSubdeployment')
-set('Targets',jarray.array([ObjectName('com.bea:Name=TestJMSServer,Type=JMSServer')], ObjectName))
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/SubDeployments/BladeAnalyticsSubdeployment')
+set('Targets',jarray.array([ObjectName('com.bea:Name=BladeAnalyticsJMSServer,Type=JMSServer')], ObjectName))
 
-cd('/JMSSystemResources/TestJMSModule/JMSResource/TestJMSModule/ConnectionFactories/TestConnectionFactory')
-cmo.setSubDeploymentName('TestSubdeployment')
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/JMSResource/BladeAnalyticsSystemModule/ConnectionFactories/BladeAnalyticsConnectionFactory')
+cmo.setSubDeploymentName('BladeAnalyticsSubdeployment')
 
-cd('/JMSSystemResources/TestJMSModule/JMSResource/TestJMSModule')
-cmo.createQueue('TestJMSQueue')
+activate()
 
-cd('/JMSSystemResources/TestJMSModule/JMSResource/TestJMSModule/Queues/TestJMSQueue')
-cmo.setJNDIName('jms/TestJMSQueue')
-cmo.setSubDeploymentName('TestSubdeployment')
+startEdit()
 
-cd('/JMSSystemResources/TestJMSModule/SubDeployments/TestSubdeployment')
-set('Targets',jarray.array([ObjectName('com.bea:Name=TestJMSServer,Type=JMSServer')], ObjectName))
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/JMSResource/BladeAnalyticsSystemModule')
+cmo.createUniformDistributedQueue('BladeAnalyticsDistributedQueue')
+
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/JMSResource/BladeAnalyticsSystemModule/UniformDistributedQueues/BladeAnalyticsDistributedQueue')
+cmo.setJNDIName('jms/BladeAnalyticsDistributedQueue')
+
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/SubDeployments/BladeAnalyticsSubdeployment')
+set('Targets',jarray.array([ObjectName('com.bea:Name=BladeAnalyticsJMSServer,Type=JMSServer')], ObjectName))
+
+cd('/JMSSystemResources/BladeAnalyticsSystemModule/JMSResource/BladeAnalyticsSystemModule/UniformDistributedQueues/BladeAnalyticsDistributedQueue')
+cmo.setSubDeploymentName('BladeAnalyticsSubdeployment')
+
 
 save()
 activate()

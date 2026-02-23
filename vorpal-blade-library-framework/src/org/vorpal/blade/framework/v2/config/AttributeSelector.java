@@ -16,6 +16,7 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
@@ -243,7 +244,7 @@ public class AttributeSelector implements Serializable {
 	 *         if the request is null or pattern does not match
 	 */
 	public AttributesKey findKey(SipServletMessage message) {
-		if (message == null) {
+		if (message == null || attribute == null) {
 			return null;
 		}
 
@@ -419,7 +420,7 @@ public class AttributeSelector implements Serializable {
 	}
 
 	public AttributesKey findKey(SipServletContextEvent context) {
-		if (context == null) {
+		if (context == null || attribute == null) {
 			return null;
 		}
 
@@ -429,13 +430,6 @@ public class AttributeSelector implements Serializable {
 		String header = null;
 		boolean matchResult = false;
 		String value = null;
-
-		// what can you do with context?
-		{
-			context.getServletContext().getAttribute(value);
-			context.getServletContext().getInitParameter(value);
-
-		}
 
 		try {
 			switch (attribute) {
@@ -458,11 +452,11 @@ public class AttributeSelector implements Serializable {
 
 			default:
 				header = context.getServletContext().getInitParameter(attribute);
-				header = (header != null) ? header : (String) context.getServletContext().getAttribute(attribute);
-				header = (header != null) ? header : System.getenv(attribute);
-				header = (header != null) ? header : System.getProperty("weblogic.Name");
+				header = (header != null || "null".equals(header)) ? header : (String) context.getServletContext().getAttribute(attribute);
+				header = (header != null || "null".equals(header)) ? header : System.getenv(attribute);
+				header = (header != null || "null".equals(header)) ? header : System.getProperty(attribute);
 			}
-
+			
 			if (header != null) {
 
 				Matcher matcher = _pattern.matcher(header);

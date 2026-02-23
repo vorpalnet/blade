@@ -86,12 +86,10 @@ public class DialogAPI extends Callflow implements Serializable {
 	@Path("dialog/{sessionId}")
 	@Consumes({ MediaType.APPLICATION_JSON })
 	@Operation(summary = "Create a new dialog.")
-		@ApiResponses(value = {
-			@ApiResponse(responseCode = "200", description = "OK"), 
-			@ApiResponse(responseCode = "404", description = "Not Found"), 
-	        @ApiResponse(responseCode = "500", description = "Internal Server Error")
-	})
-	
+	@ApiResponses(value = { @ApiResponse(responseCode = "200", description = "OK"),
+			@ApiResponse(responseCode = "404", description = "Not Found"),
+			@ApiResponse(responseCode = "500", description = "Internal Server Error") })
+
 	public void createDialog(
 			@Parameter(required = true, example = "ABCD6789", description = "Session ID") @PathParam("sessionId") String sessionId,
 			@RequestBody(description = "optional session properties", required = true) Dialog dialogData,
@@ -179,7 +177,7 @@ public class DialogAPI extends Callflow implements Serializable {
 //		}
 //
 //	}
-	
+
 	@GET
 	@Asynchronous
 	@Path("dialog/{sessionId}/{dialogId}/connect/{dialogId2}")
@@ -197,7 +195,8 @@ public class DialogAPI extends Callflow implements Serializable {
 		SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(sessionId, false);
 
 		// can't serialize AsyncResponse, so jam it in static memory
-		String vorpalSession = (String) appSession.getAttribute("X-Vorpal-Session");
+		String vorpalSession = this.getVorpalSessionId(appSession);
+
 		TpccServlet.responseMap.put(vorpalSession, asyncResponse);
 
 		try {
@@ -208,7 +207,7 @@ public class DialogAPI extends Callflow implements Serializable {
 				Map<String, SipSession> sessionsMap = new HashMap<>();
 				String dialog = null;
 				for (SipSession sipSession : (Set<SipSession>) appSession.getSessionSet(SIP)) {
-					dialog = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+					dialog = this.getVorpalDialogId(sipSession);
 					if (dialog != null) {
 						sessionsMap.put(dialog, sipSession);
 					}
@@ -301,7 +300,7 @@ public class DialogAPI extends Callflow implements Serializable {
 				// This is the quickest way I can think of to find sessions
 				Map<String, SipSession> sessionsMap = new HashMap<>();
 				for (SipSession sipSession : (Set<SipSession>) appSession.getSessionSet(SIP)) {
-					dialogId = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+					dialogId = this.getVorpalDialogId(sipSession);
 					if (dialogId != null) {
 						sessionsMap.put(dialogId, sipSession);
 					}
@@ -344,7 +343,7 @@ public class DialogAPI extends Callflow implements Serializable {
 				// This is the quickest way I can think of to find sessions
 				Map<String, SipSession> sessionsMap = new HashMap<>();
 				for (SipSession sipSession : (Set<SipSession>) appSession.getSessionSet(SIP)) {
-					dialogId = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+					dialogId = this.getVorpalDialogId(sipSession);
 					if (dialogId != null) {
 						sessionsMap.put(dialogId, sipSession);
 					}
@@ -395,7 +394,7 @@ public class DialogAPI extends Callflow implements Serializable {
 				// This is the quickest way I can think of to find sessions
 				Map<String, SipSession> sessionsMap = new HashMap<>();
 				for (SipSession sipSession : (Set<SipSession>) appSession.getSessionSet(SIP)) {
-					dialogId = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+					dialogId = this.getVorpalDialogId(sipSession);
 					if (dialogId != null) {
 						sessionsMap.put(dialogId, sipSession);
 					}
@@ -422,69 +421,6 @@ public class DialogAPI extends Callflow implements Serializable {
 			sipLogger.severe(e);
 		}
 	}
-
-//	@POST
-//	@Path("session")
-//	@Consumes({ MediaType.APPLICATION_JSON })
-//	@Operation(summary = "Create a new session with properties defined in JSON body.")
-//	public Response createSession(
-//			@RequestBody(description = "optional session properties", required = true) Session sessionData,
-//			@Context UriInfo uriInfo) {
-//
-//		Response response = null;
-//
-//		sipLogger.info("createSession with JSON...");
-//		System.out.println("createSession...");
-//
-//		try {
-//
-//			SipApplicationSession appSession;
-//			String indexKey = null;
-//			do {
-//				indexKey = String.format("%08X", Math.abs(ThreadLocalRandom.current().nextLong(0, 0xFFFFFFFFL)))
-//						.toUpperCase();
-//			} while (null == (appSession = sipFactory.createApplicationSessionByKey(indexKey)));
-//			appSession.setAttribute("X-Vorpal-Session", indexKey);
-//			appSession.addIndexKey(indexKey);
-//
-//			if (sessionData != null && sessionData.expires != null) {
-//				appSession.setExpires(sessionData.expires);
-//			} else {
-//				Integer expiration = TpccServlet.settingsManager.getCurrent().getSession().getExpiration();
-//				if (expiration != null) {
-//					appSession.setExpires(expiration);
-//				}
-//			}
-//
-//			if (sessionData != null) {
-//				if (sessionData.attributes != null && sessionData.attributes.size() > 0) {
-//					for (Entry<String, String> entry : sessionData.attributes.entrySet()) {
-//						appSession.setAttribute("3pcc_" + entry.getKey(), entry.getValue());
-//					}
-//				}
-//
-//				if (sessionData.groups != null && sessionData.groups.size() > 0) {
-//					for (String group : sessionData.groups) {
-//						appSession.addIndexKey(group);
-//					}
-//				}
-//			}
-//
-//			UriBuilder uriBuilder = uriInfo.getAbsolutePathBuilder().path(indexKey);
-//			response = Response.created(uriBuilder.build()).build();
-//
-//		} catch (Exception e) {
-//			sipLogger.severe(e);
-//			e.printStackTrace();
-//		}
-//
-//		if (response == null) {
-//			response = Response.serverError().build();
-//		}
-//
-//		return response;
-//
-//	}
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {

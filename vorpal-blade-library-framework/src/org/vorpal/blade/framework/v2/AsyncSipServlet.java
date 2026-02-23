@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
+import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipFactory;
@@ -51,7 +53,6 @@ import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 
-
 /**
  * This abstract SipServlet is designed to implement the features of the BLADE
  * asynchronous APIs (lambda expressions). Extend and implement this class to
@@ -64,7 +65,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		implements SipServletListener, ServletContextListener, TimerListener {
 
 	private static final long serialVersionUID = 1L;
-	private SipServletContextEvent event;
+	private static SipServletContextEvent initialSipServletContextEvent;
 	protected static Logger sipLogger;
 	protected static SipFactory sipFactory;
 	protected static SipSessionsUtil sipUtil;
@@ -75,6 +76,8 @@ public abstract class AsyncSipServlet extends SipServlet
 	private static final String LINKED_SESSION = "LINKED_SESSION";
 	private static final String HASHKEY = "HASHKEY";
 	private static final String HASHKEY_COLLISION = "HASHKEY_COLLISION";
+	public static final String X_VORPAL_SESSION = "X-Vorpal-Session";
+	public static final String TIMESTAMP = "ts";
 	protected static SessionParameters sessionParameters;
 
 	/**
@@ -117,7 +120,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	 */
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
-		this.event = event;
+		this.initialSipServletContextEvent = event;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		timerService = (TimerService) event.getServletContext().getAttribute("javax.servlet.sip.TimerService");
@@ -142,17 +145,45 @@ public abstract class AsyncSipServlet extends SipServlet
 			servletCreated(event);
 
 			Analytics analytics = SettingsManager.getAnalytics();
-			if (analytics != null) {
+			if (analytics != null && Boolean.TRUE.equals(analytics.enabled)) {
 
-				sipLogger.info("AsyncSipServlet.servletInitialized - analytics events=" + analytics.getEvents());
-				sipLogger.info(
-						"AsyncSipServlet.servletInitialized - analytics events size=" + analytics.getEvents().size());
+				sipLogger.finer("These are the system properties that can be logged through 'analytics':");
 
-				analytics.jmsPublisher = new JmsPublisher(analytics.getJmsFactory(), analytics.getJmsQueue());
-				analytics.jmsPublisher.init();
-				analytics.jmsPublisher.applicationStart();
-				SettingsManager.createEvent("servletCreated", event);
+				String key, value;
+				Iterator<String> itr = event.getServletContext().getInitParameterNames().asIterator();
+				while (itr.hasNext()) {
+					key = itr.next();
+					value = event.getServletContext().getInitParameter(key);
+					sipLogger.finer("AsyncSipServlet.servletInitialized - init\t" + key + "=" + value);
+				}
+
+				itr = event.getServletContext().getAttributeNames().asIterator();
+				while (itr.hasNext()) {
+					key = itr.next();
+					value = event.getServletContext().getAttribute(key).toString();
+					sipLogger.finer("AsyncSipServlet.servletInitialized - attr\t" + key + "=" + value);
+				}
+
+				for (Entry<String, String> entry : System.getenv().entrySet()) {
+					sipLogger.finer(
+							"AsyncSipServlet.servletInitialized - env\t" + entry.getKey() + "=" + entry.getValue());
+				}
+
+				for (Entry<Object, Object> entry : System.getProperties().entrySet()) {
+					sipLogger.finer("AsyncSipServlet.servletInitialized - props\t" + entry.getKey().toString() + "="
+							+ entry.getValue().toString());
+				}
+
+				Analytics.jmsPublisher = new JmsPublisher("jms/BladeAnalyticsConnectionFactory",
+						"jms/BladeAnalyticsDistributedQueue");
+				Analytics.jmsPublisher.init();
+				Analytics.jmsPublisher.applicationStart();
+
+				Event servletCreated = SettingsManager.createEvent("start", event);
+				start(servletCreated);
 				SettingsManager.sendEvent(event);
+			} else {
+				servletCreated(event);
 			}
 
 		} catch (Exception ex1) {
@@ -161,6 +192,24 @@ public abstract class AsyncSipServlet extends SipServlet
 			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex1.getMessage());
 		}
 
+	}
+
+	/**
+	 * Override this method to edit the start analytics event.
+	 * 
+	 * @param event
+	 */
+	public void start(Event event) {
+		// override by user
+	}
+
+	/**
+	 * Override this method to edit the stop analytics event.
+	 * 
+	 * @param event
+	 */
+	public void stop(Event event) {
+		// override by user
 	}
 
 	/**
@@ -209,19 +258,23 @@ public abstract class AsyncSipServlet extends SipServlet
 	public void contextDestroyed(ServletContextEvent sce) {
 		try {
 
-			SettingsManager.createEvent("servletDestroyed", event);
-			servletDestroyed(event);
-			SettingsManager.sendEvent(event);
+			servletDestroyed(initialSipServletContextEvent);
 
-			Analytics analytics = SettingsManager.getAnalytics();
-			if (analytics.jmsPublisher != null) {
-				analytics.jmsPublisher.applicationStop();
+			if (Analytics.jmsPublisher != null) {
+				Event stopEvent = SettingsManager.createEvent("stop", initialSipServletContextEvent);
+				stop(stopEvent);
+				SettingsManager.sendEvent(stopEvent);
+
+				Analytics.jmsPublisher.applicationStop();
+				Analytics.jmsPublisher.close();
+				Analytics.jmsPublisher = null;
 			}
 
 		} catch (Exception ex1) {
 			sipLogger.warning("AsyncSipServlet.contextDestroyed - Exception #ex1");
 			sipLogger.severe(ex1);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex1.getMessage());
+			sipLogger.getParent().severe(
+					initialSipServletContextEvent.getServletContext().getServletContextName() + " " + ex1.getMessage());
 		}
 	}
 
@@ -261,15 +314,33 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			if (request.getMethod().equals("INVITE") && request.isInitial()) {
 
-				// get / create the X-Vorpal-Session id, useful for tracking sessions
 				String indexKey = Callflow.getVorpalSessionId(request);
 				appSession.addIndexKey(indexKey);
 
 				// attempt to keep track of who called whom
 				request.getSession().setAttribute("userAgent", "caller");
 				request.getSession().setAttribute("_diagramLeft", Boolean.TRUE);
-				request.getSession().setAttribute("_DID", ((SipURI) request.getTo().getURI()).getUser());
-				request.getSession().setAttribute("_ANI", ((SipURI) request.getFrom().getURI()).getUser());
+
+				String user = ((SipURI) request.getTo().getURI()).getUser();
+				if (user != null) {
+					request.getSession().setAttribute("_DID", user);
+				}
+
+				String ani = ((SipURI) request.getFrom().getURI()).getUser();
+				if (ani != null) {
+					request.getSession().setAttribute("_ANI", ani);
+				}
+
+				// save keep-alive information
+				Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
+				if (sessionExpires != null) {
+					appSession.setAttribute("Session-Expires", sessionExpires);
+					String minSE = request.getHeader("Min-SE");
+					if (minSE != null) {
+						appSession.setAttribute("Min-SE", minSE);
+					}
+				}
+
 			}
 
 			// For processing glare, stack messages up
@@ -794,8 +865,9 @@ public abstract class AsyncSipServlet extends SipServlet
 					sipLogger.severe(response,
 							"AsyncSipServlet.doResponse - Exception on SIP response: \n" + response.toString());
 					sipLogger.severe(response, ex3);
-					sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " "
-							+ ex3.getClass().getName() + ": " + ex3.getMessage());
+					sipLogger.getParent()
+							.severe(initialSipServletContextEvent.getServletContext().getServletContextName() + " "
+									+ ex3.getClass().getName() + ": " + ex3.getMessage());
 
 					try { // attempt to send error back upstream;
 
@@ -908,7 +980,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			sipLogger.warning("AsyncSipServlet.timeout - Exception #ex1");
 			sipLogger.severe("AsyncSipServlet.doResponse - Exception on timer: " + timer.getId());
 			sipLogger.severe(ex1);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex1.getMessage());
+			sipLogger.getParent().severe(
+					initialSipServletContextEvent.getServletContext().getServletContextName() + " " + ex1.getMessage());
 		}
 	}
 
@@ -1102,8 +1175,8 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			SipSession glareSession = glareRequest.getSession();
 			if (glareSession != null && glareSession.isValid()) {
-				String error = event.getServletContext().getServletContextName() + " " + e.getClass().getSimpleName()
-						+ ", " + e.getMessage();
+				String error = initialSipServletContextEvent.getServletContext().getServletContextName() + " "
+						+ e.getClass().getSimpleName() + ", " + e.getMessage();
 				sipLogger.severe(glareRequest,
 						"AsyncSipServlet.processGlareQueue - Exception attempting to process GLARE request: \n"
 								+ glareRequest.toString());
@@ -1137,7 +1210,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			sipLogger.warning("AsyncSipServlet.sendReponse - Exception #ex1");
 			sipLogger.severe(response, "Exception on SIP response: \n" + response.toString());
 			sipLogger.severe(response, ex1);
-			sipLogger.getParent().severe(event.getServletContext().getServletContextName() + " " + ex1.getMessage());
+			sipLogger.getParent().severe(
+					initialSipServletContextEvent.getServletContext().getServletContextName() + " " + ex1.getMessage());
 		}
 	}
 
@@ -1212,6 +1286,51 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	public static void setEvent(Event event, SipServletContextEvent contextEvent) {
 		contextEvent.getServletContext().setAttribute("event", event);
+	}
+
+	public static String getVorpalSessionIdFromMessage(SipServletMessage msg) {
+		String vorpalSessionId = null;
+
+		try {
+			Parameterable xVorpalSession = msg.getParameterableHeader(X_VORPAL_SESSION);
+			if (xVorpalSession != null) {
+				vorpalSessionId = xVorpalSession.getValue();
+			}
+		} catch (Exception ex) {
+			sipLogger.severe(msg, ex);
+		}
+
+		return vorpalSessionId;
+	}
+
+	public static String getVorpalDialogIdFromMessage(SipServletMessage msg) {
+		String dialog = null;
+
+		try {
+			Parameterable xVorpalSession = msg.getParameterableHeader(X_VORPAL_SESSION);
+			if (xVorpalSession != null) {
+				dialog = xVorpalSession.getParameter("dialog");
+			}
+		} catch (Exception ex) {
+			sipLogger.severe(msg, ex);
+		}
+
+		return dialog;
+	}
+
+	public static String getVorpalTimestampFromMessage(SipServletMessage msg) {
+		String timestamp = null;
+
+		try {
+			Parameterable xVorpalSession = msg.getParameterableHeader(X_VORPAL_SESSION);
+			if (xVorpalSession != null) {
+				timestamp = xVorpalSession.getParameter(TIMESTAMP);
+			}
+		} catch (Exception ex) {
+			sipLogger.severe(msg, ex);
+		}
+
+		return timestamp;
 	}
 
 }

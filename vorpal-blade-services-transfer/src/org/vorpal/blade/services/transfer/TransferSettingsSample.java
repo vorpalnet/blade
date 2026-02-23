@@ -2,7 +2,7 @@ package org.vorpal.blade.services.transfer;
 
 import java.util.List;
 
-import org.vorpal.blade.framework.v2.analytics.AnalyticsSample;
+import org.vorpal.blade.framework.v2.analytics.AnalyticsTransferSample;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.ConfigHashMap;
 import org.vorpal.blade.framework.v2.config.ConfigPrefixMap;
@@ -20,54 +20,20 @@ public class TransferSettingsSample extends TransferSettings {
 	public TransferSettingsSample() {
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LoggingLevel.FINER);
-//		this.analytics = new AnalyticsSample();
+		this.analytics = new AnalyticsTransferSample();
 
 		this.session = new SessionParametersDefault();
-		this.getSession().setExpiration(900);
+		this.getSession().setExpiration(60);
 
-		this.conferenceApp = "sip:conference-sems";
-
-//		// setup dialog (SipSession) variables to identify who to transfer
-//		this.session.dialogVariables = new LinkedList<>();
-//		TranslationsMap direction = new ConfigHashMap();
-//		this.session.dialogVariables.add(direction);
-//		direction.description = "set the direction";
-//		direction.id = "direction";
-//		Selector ds = direction.addSelector(new Selector());
-//		ds.setAttribute("From");
-//		ds.setDescription("use from to determine direction");
-//		ds.setExpression("${name}");
-//		ds.setId("ds1");
-//		ds.setPattern(SIP_ADDRESS_PATTERN);
-//		Translation t = direction.createTranslation("alice");
-//		t.addAttribute("direction", "inbound");
+		this.conferenceApp = null;
 
 		List<AttributeSelector> indexKeySelectors = this.getSession().getSessionSelectors();
-
-//		AttributeSelector xVorpalSession = new AttributeSelector();
-//		xVorpalSession.setId("xVorpalSession");
-//		xVorpalSession.setDescription("Create a session key based on the session portion of X-Vorpal-Session");
-//		xVorpalSession.setAttribute("X-Vorpal-Session");
-//		xVorpalSession.setPattern("^(?<session>.*):(?<dialog>.*)$");
-//		xVorpalSession.setExpression("${session}");
-//		indexKeySelectors.add(xVorpalSession);
-
-//		AttributeSelector testInbound = new AttributeSelector();
-//		testInbound.setId("user-agent");
-//		testInbound.setDescription(
-//				"Mark the session as inbound based on OSM-Features; no expression means no session key");
-//		testInbound.setAttribute("User-Agent");
-//		testInbound.setPattern("^.*LinphoneiOS.*$");
-//		testInbound.setExpression(null);
-//		testInbound.addAdditionalExpression("direction", "inbound");
-//		indexKeySelectors.add(testInbound);
 
 		AttributeSelector inbound = new AttributeSelector();
 		inbound.setId("inbound");
 		inbound.setDescription("Mark the session as inbound based on OSM-Features. No expression means no session key");
 		inbound.setAttribute("OSM-Features");
 		inbound.setPattern("^.*shuffleib.*$");
-//		inbound.setExpression("inbound");
 		inbound.addAdditionalExpression("direction", "inbound");
 		indexKeySelectors.add(inbound);
 
@@ -77,7 +43,6 @@ public class TransferSettingsSample extends TransferSettings {
 				"Mark the session as outbound based on OSM-Features. No expression means no session key");
 		outbound.setAttribute("OSM-Features");
 		outbound.setPattern("^.*shuffleob.*$");
-//		outbound.setExpression("outbound");
 		outbound.addAdditionalExpression("direction", "outbound");
 		indexKeySelectors.add(outbound);
 

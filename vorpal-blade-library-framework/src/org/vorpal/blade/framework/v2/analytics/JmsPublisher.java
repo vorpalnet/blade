@@ -13,17 +13,15 @@ import javax.jms.QueueSender;
 import javax.jms.QueueSession;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
-import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Logger;
 
 /**
  * Utility class for publishing JPA entities to a JMS queue as ObjectMessages.
  */
-// jwm - come back to this later
-// @WebListener
 public class JmsPublisher implements ServletContextListener {
 
 	private String jmsFactory;
@@ -158,6 +156,7 @@ public class JmsPublisher implements ServletContextListener {
 		ObjectMessage message = qsession.createObjectMessage();
 		message.setObject(object);
 		qsender.send(message);
+		Callflow.getSipLogger().warning("JmsPublisher.send - Sending "+object.getClass().getSimpleName()+":\n"+Logger.serializeObject(object)); 
 	}
 
 	/**
@@ -193,37 +192,6 @@ public class JmsPublisher implements ServletContextListener {
 			// log but don't throw
 			e.printStackTrace();
 		}
-	}
-
-	@Override
-	public void contextInitialized(ServletContextEvent event) {
-		// Code to run when the web application is started
-		Callflow.getSipLogger().warning("JmsPublisher.contextInitialized - Analytics JmsPublisher starting...");
-
-		try {
-
-			if (SettingsManager.getAnalytics() != null && Analytics.jmsPublisher == null) {
-				Analytics.jmsPublisher = new JmsPublisher(SettingsManager.getAnalytics().getJmsFactory(),
-						SettingsManager.getAnalytics().getJmsQueue());
-				Analytics.jmsPublisher.init();
-			}
-
-		} catch (Exception ex) {
-			ex.printStackTrace();
-		}
-
-	}
-
-	@Override
-	public void contextDestroyed(ServletContextEvent event) {
-		// Code to run when the web application is shutting down
-		Callflow.getSipLogger().warning("Analytics JmsPublisher stopped.");
-
-		if (Analytics.jmsPublisher != null) {
-			Analytics.jmsPublisher.applicationStop();
-			Analytics.jmsPublisher.close();
-		}
-
 	}
 
 }

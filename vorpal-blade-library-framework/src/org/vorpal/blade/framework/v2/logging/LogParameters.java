@@ -68,9 +68,14 @@ public class LogParameters implements Serializable {
 	@JsonProperty(defaultValue = "FINE")
 	protected LoggingLevel sequenceDiagramLoggingLevel = null;
 
-	@JsonPropertyDescription("Level at which configuration changes will be logged. Default: FINE")
+	@JsonPropertyDescription("Level at which configuration changes will be logged. Default: INFO")
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel configurationLoggingLevel = null;
+	
+	
+	@JsonPropertyDescription("Level at which analytics (if enabled) will be logged. Default: INFO")
+	@JsonProperty(defaultValue = "INFO")
+	protected LoggingLevel analyticsLoggingLevel = null;
 
 	public LogParameters() {
 

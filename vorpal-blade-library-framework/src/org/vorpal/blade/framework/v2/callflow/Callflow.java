@@ -72,8 +72,6 @@ import org.vorpal.blade.framework.v2.proxy.ProxyTier;
 import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
 import org.vorpal.blade.framework.v2.testing.DummyResponse;
 
-import com.sun.xml.ws.runtime.dev.SessionManager;
-
 public abstract class Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
 	protected static SipFactory sipFactory;
@@ -108,6 +106,9 @@ public abstract class Callflow implements Serializable {
 	public static final String SIP = "SIP";
 	public static final String Contact = "Contact";
 	public static final String RELIABLE = "100rel";
+	public static final String SESSION_EXPIRES = "Session-Expires";
+	public static final String MIN_SE = "Min-SE";
+	public static final String X_VORPAL_SESSION = "X-Vorpal-Session";
 
 	protected static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
 	protected static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
@@ -116,10 +117,10 @@ public abstract class Callflow implements Serializable {
 	protected static final String DELAYED_REQUEST = "DELAYED_REQUEST";
 	protected static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
 
-	// Header and attribute name constants
-	private static final String X_VORPAL_SESSION = "X-Vorpal-Session";
-	private static final String X_VORPAL_TIMESTAMP = "X-Vorpal-Timestamp";
-	private static final String X_VORPAL_DIALOG = "X-Vorpal-Dialog";
+	private static final String VORPAL_SESSION = "VORPAL_SESSION";
+	private static final String VORPAL_TIMESTAMP = "VORPAL_TIMESTAMP";
+	private static final String VORPAL_DIALOG = "VORPAL_DIALOG";
+
 	private static final String EXPECT_ACK = "EXPECT_ACK";
 	private static final String USER_AGENT_ATTR = "userAgent";
 	private static final String SIP_ADDRESS_ATTR = "sipAddress";
@@ -554,15 +555,13 @@ public abstract class Callflow implements Serializable {
 
 		} while (!getSipUtil().getSipApplicationSessionIds(indexKey).isEmpty());
 
-		appSession.setAttribute(X_VORPAL_SESSION, indexKey);
+		appSession.setAttribute(VORPAL_SESSION, indexKey);
 
-		// X-Vorpal-Session + X-Vorpal-Timestamp will be unique.
+		// Vorpal Session + Timestamp will be unique.
 		// Use this for a database primary key in future designs.
 		String timestamp = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-		appSession.setAttribute(X_VORPAL_TIMESTAMP, timestamp);
+		appSession.setAttribute(VORPAL_TIMESTAMP, timestamp);
 
-		System.out.println(
-				SettingsManager.getApplicationName() + "... Callflow.createVorpalSessionId - indexKey=" + indexKey);
 		return indexKey;
 	}
 
@@ -578,14 +577,13 @@ public abstract class Callflow implements Serializable {
 		if (appSession == null) {
 			return null;
 		}
-		return (String) appSession.getAttribute(X_VORPAL_SESSION);
+		return (String) appSession.getAttribute(VORPAL_SESSION);
 	}
 
 	/**
 	 * Returns the Vorpal session ID for the given request, creating one if
-	 * necessary. If the request contains a composite X-Vorpal-Session header
-	 * (session:dialog format), it will be parsed and the dialog ID will be stored
-	 * separately.
+	 * necessary and storing it in memory. If they exist, this method will save the
+	 * 'dialog' and 'timestamp' parameters in memory.
 	 *
 	 * @param request the SIP request
 	 * @return the Vorpal session ID
@@ -595,21 +593,38 @@ public abstract class Callflow implements Serializable {
 
 		if (request != null) {
 			SipApplicationSession appSession = request.getApplicationSession();
-			indexKey = (String) appSession.getAttribute(X_VORPAL_SESSION);
+			SipSession sipSession = request.getSession();
+
+			indexKey = (String) appSession.getAttribute(VORPAL_SESSION);
 
 			if (indexKey == null) {
-				String xVorpalSession = (String) request.getHeader(X_VORPAL_SESSION);
 
-				if (xVorpalSession != null) {
-					SipSession sipSession = request.getSession();
-					int colonIndex = xVorpalSession.indexOf(':');
-					if (colonIndex > 0) {
-						indexKey = xVorpalSession.substring(0, colonIndex);
-						appSession.setAttribute(X_VORPAL_SESSION, indexKey);
-						String dialogId = xVorpalSession.substring(colonIndex + 1);
-						sipSession.setAttribute(X_VORPAL_DIALOG, dialogId);
+				try {
+
+					Parameterable xVorpalSession = (Parameterable) request.getParameterableHeader(X_VORPAL_SESSION);
+
+					if (xVorpalSession != null) {
+						indexKey = xVorpalSession.getValue();
+						if (indexKey != null) {
+							appSession.setAttribute(VORPAL_SESSION, indexKey);
+						}
+
+						String dialogId = xVorpalSession.getParameter("dialog");
+						if (dialogId != null) {
+							sipSession.setAttribute(VORPAL_DIALOG, dialogId);
+						}
+
+						String vorpalTimestamp = xVorpalSession.getParameter(VORPAL_TIMESTAMP);
+						if (vorpalTimestamp != null) {
+							appSession.setAttribute(VORPAL_TIMESTAMP, vorpalTimestamp);
+						}
 					}
+				} catch (Exception ex) {
+					sipLogger.severe(request, "Callflow.getVorpalSessionId - Exception: "
+							+ ex.getClass().getSimpleName() + " " + ex.getMessage());
+					sipLogger.severe(request, ex);
 				}
+
 			}
 
 			indexKey = (indexKey != null) ? indexKey : createVorpalSessionId(appSession);
@@ -632,7 +647,7 @@ public abstract class Callflow implements Serializable {
 		if (sipSession != null) {
 			try {
 				dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
-				sipSession.setAttribute(X_VORPAL_DIALOG, dialog);
+				sipSession.setAttribute(VORPAL_DIALOG, dialog);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -652,7 +667,7 @@ public abstract class Callflow implements Serializable {
 		String dialog = null;
 
 		if (sipSession != null && sipSession.isValid()) {
-			dialog = (String) sipSession.getAttribute(X_VORPAL_DIALOG);
+			dialog = (String) sipSession.getAttribute(VORPAL_DIALOG);
 			dialog = (dialog != null) ? dialog : createVorpalDialogId(sipSession);
 		}
 
@@ -713,6 +728,21 @@ public abstract class Callflow implements Serializable {
 								&& request.getAttribute("noKeepAlive") == null //
 
 						) { //
+
+							// In the case of a complicated B2BUA like 'transfer' where a new INVITE is sent
+							// out, it is wise to supply the original 'Session-Expires' if it exists.
+							Parameterable sessionExpires = request.getParameterableHeader(SESSION_EXPIRES);
+							if (sessionExpires == null) {
+								sessionExpires = (Parameterable) appSession.getAttribute(SESSION_EXPIRES);
+								if (sessionExpires != null) {
+									request.addHeader(SESSION_EXPIRES, sessionExpires.toString());
+									String minSE = (String) appSession.getAttribute(MIN_SE);
+									if (minSE != null) {
+										request.addHeader(MIN_SE, (String) appSession.getAttribute(MIN_SE));
+									}
+								}
+							}
+
 							int configSessionExpiresInMinutes = DEFAULT_SESSION_EXPIRES_MINUTES;
 
 							SessionParameters params = SettingsManager.getSessionParameters();
@@ -723,7 +753,6 @@ public abstract class Callflow implements Serializable {
 							int sessionExpiresInMinutes = 0;
 							int finalSessionExpiresInMinutes = 0;
 
-							Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
 							String refresher = null;
 							boolean uas = false;
 							if (sessionExpires != null) {
@@ -737,43 +766,43 @@ public abstract class Callflow implements Serializable {
 								int sessionExpiresInSeconds = 3600; // a fool and his money are soon parted
 								int minSEinSeconds = 1800;
 
-//								if (sipLogger.isLoggable(Level.FINER)) {
-//									sipLogger.finer(request,
-//											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - setting keep alive timer; "//
-//													+ "expiration=" + sessionExpiresInSeconds // "
-//													+ ", minSE=" + minSEinSeconds //
-//											));
-//								}
-//
-//								request.getSessionKeepAlivePreference().setEnabled(true);
-//								request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
-//								request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
-//								request.getSessionKeepAlivePreference().setRefresher(Refresher.UAC);
-//								SessionKeepAlive skl = request.getSession().getKeepAlive();
-//
-//								skl.setRefreshCallback(new SessionKeepAlive.Callback() {
-//									public void handle(SipSession session) {
-//										try {
-//											KeepAlive refresher = new KeepAlive();
-//											refresher.handle(session);
-//										} catch (Exception e100) {
-//											sipLogger.warning(sipSession,
-//													"#1.3 Callflow.sendRequest - catch Exception e100");
-//										}
-//									}
-//								});
-//
-//								skl.setExpiryCallback(new SessionKeepAlive.Callback() {
-//									public void handle(SipSession session) {
-//										try {
-//											KeepAliveExpiry expiry = new KeepAliveExpiry();
-//											expiry.handle(sipSession);
-//										} catch (Exception e200) {
-//											sipLogger.warning(sipSession,
-//													"#1.4 Callflow.sendRequest - catch Exception e200");
-//										}
-//									}
-//								});
+								if (sipLogger.isLoggable(Level.FINER)) {
+									sipLogger.finer(request,
+											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - setting keep alive timer; "//
+													+ "expiration=" + sessionExpiresInSeconds // "
+													+ ", minSE=" + minSEinSeconds //
+											));
+								}
+
+								request.getSessionKeepAlivePreference().setEnabled(true);
+								request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
+								request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
+								request.getSessionKeepAlivePreference().setRefresher(Refresher.UAC);
+								SessionKeepAlive skl = request.getSession().getKeepAlive();
+
+								skl.setRefreshCallback(new SessionKeepAlive.Callback() {
+									public void handle(SipSession session) {
+										try {
+											KeepAlive refresher = new KeepAlive();
+											refresher.handle(session);
+										} catch (Exception e100) {
+											sipLogger.warning(sipSession,
+													"#1.3 Callflow.sendRequest - catch Exception e100");
+										}
+									}
+								});
+
+								skl.setExpiryCallback(new SessionKeepAlive.Callback() {
+									public void handle(SipSession session) {
+										try {
+											KeepAliveExpiry expiry = new KeepAliveExpiry();
+											expiry.handle(sipSession);
+										} catch (Exception e200) {
+											sipLogger.warning(sipSession,
+													"#1.4 Callflow.sendRequest - catch Exception e200");
+										}
+									}
+								});
 
 							}
 
@@ -784,13 +813,13 @@ public abstract class Callflow implements Serializable {
 										configSessionExpiresInMinutes);
 							}
 
-//							if (sipLogger.isLoggable(Level.FINER)) {
-//								sipLogger.finer(request, Color.YELLOW_BOLD_BRIGHT(
-//										"Callflow.sendRequest - appSession.setExpires sessionExpiresInMinutes="
-//												+ sessionExpiresInMinutes//
-//												+ ", configSessionExpiresInMinutes=" + configSessionExpiresInMinutes//
-//												+ ", finalSessionExpiresInMinutes=" + finalSessionExpiresInMinutes));
-//							}
+							if (sipLogger.isLoggable(Level.FINER)) {
+								sipLogger.finer(request,
+										"Callflow.sendRequest - appSession.setExpires sessionExpiresInMinutes=" //
+												+ sessionExpiresInMinutes //
+												+ ", configSessionExpiresInMinutes=" + configSessionExpiresInMinutes //
+												+ ", finalSessionExpiresInMinutes=" + finalSessionExpiresInMinutes);
+							}
 
 							if (sipLogger.isLoggable(Level.FINER)) {
 								sipLogger.finer(request, Color.YELLOW_BOLD_BRIGHT(
@@ -822,8 +851,8 @@ public abstract class Callflow implements Serializable {
 							String vorpalId = getVorpalSessionId(appSession);
 							String dialogId = getVorpalDialogId(sipSession);
 							String timestamp = getVorpalTimestamp(appSession);
-							request.setHeader(X_VORPAL_SESSION, vorpalId + ":" + dialogId);
-							request.setHeader(X_VORPAL_TIMESTAMP, timestamp);
+							String xVorpalSession = vorpalId + ";dialog=" + dialogId + ";timestamp=" + timestamp;
+							request.setHeader(X_VORPAL_SESSION, xVorpalSession);
 						}
 
 						break;
@@ -1114,106 +1143,16 @@ public abstract class Callflow implements Serializable {
 
 			}
 
-			// For inserting X-Vorpal-Session
+			// For inserting Vorpal Session header
 			if (response.getRequest().isInitial()) {
 				String indexKey = getVorpalSessionId(response.getApplicationSession());
 				if (indexKey != null) {
 					String dialog = getVorpalDialogId(response.getSession());
-					response.setHeader(X_VORPAL_SESSION, indexKey + ":" + dialog);
-
-//						String xvt = (String) response.getApplicationSession().getAttribute(X_VORPAL_TIMESTAMP);
-
-					String xvt = getVorpalTimestamp(response.getApplicationSession());
-					response.setHeader(X_VORPAL_TIMESTAMP, xvt);
-
+					String timestamp = getVorpalTimestamp(response.getApplicationSession());
+					String xVorpalSession = indexKey + ";dialog=" + dialog + ";timestamp=" + timestamp;
+					response.setHeader(X_VORPAL_SESSION, xVorpalSession);
 				}
 			}
-
-//			// begin KeepAlive logic...
-//			try {
-//				if (successful(response) //
-//						&& response.getMethod().equals(INVITE) //
-//						&& response.getRequest().isInitial() //
-//				) { //
-//					int sessionExpiresInMinutes = DEFAULT_SESSION_EXPIRES_MINUTES;
-//
-//					Parameterable sessionExpires = response.getRequest().getParameterableHeader("Session-Expires");
-//					String refresher;
-//					if (sessionExpires != null//
-//							&& ((refresher = sessionExpires.getParameter("refresher")) != null) //
-//							&& refresher.equalsIgnoreCase("uas") //
-//					) { // create Session-Expires
-//
-//						String strSessionExpires = sessionExpires.getValue();
-//						sessionExpiresInMinutes = Integer.parseInt(strSessionExpires) / 60;
-//
-//						if (sipLogger.isLoggable(Level.FINER)) {
-//							sipLogger.finer(response,
-//									Color.YELLOW_BOLD_BRIGHT(
-//											"Callflow.sendRequest - strSessionExpires=(" + strSessionExpires
-//													+ ", sessionExpiresInMinutes=" + sessionExpiresInMinutes));
-//						}
-//
-//						int sessionExpiresInSeconds = sessionExpiresInMinutes * 60;
-//						int minSEinSeconds = sessionExpiresInSeconds / 2;
-//
-//						if (sipLogger.isLoggable(Level.FINER)) {
-//							sipLogger.finer(response,
-//									Color.YELLOW_BOLD_BRIGHT("Callflow.sendResponse - sessionExpiresInSeconds="
-//											+ sessionExpiresInSeconds + ", minSEinSeconds=" + minSEinSeconds));
-//						}
-//						
-//						response.getRequest().getSessionKeepAlivePreference().setEnabled(true);
-//						response.getRequest().getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
-//						response.getRequest().getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
-//						response.getRequest().getSessionKeepAlivePreference().setRefresher(Refresher.UAS); 
-//						SessionKeepAlive skl = response.getSession().getKeepAlive();
-//
-//						skl.setRefreshCallback(new SessionKeepAlive.Callback() {
-//							public void handle(SipSession session) {
-//								try {
-//									KeepAlive refresher = new KeepAlive();
-//									refresher.handle(session);
-//								} catch (Exception e100) {
-//									sipLogger.warning(sipSession, "#1.3 Callflow.sendRequest - catch Exception e100");
-//								}
-//							}
-//						});
-//
-//						skl.setExpiryCallback(new SessionKeepAlive.Callback() {
-//							public void handle(SipSession session) {
-//								try {
-//									KeepAliveExpiry expiry = new KeepAliveExpiry();
-//									expiry.handle(sipSession);
-//								} catch (Exception e200) {
-//									sipLogger.warning(sipSession, "#1.4 Callflow.sendRequest - catch Exception e200");
-//								}
-//							}
-//						});
-//
-//					} else {
-//
-////						SessionParameters params = Callflow.getSessionParameters(); // config file settings
-//						SessionParameters params = SettingsManager.getSessionParameters(); // config file settings
-//						if (params != null && params.getExpiration() != null) {
-//							sessionExpiresInMinutes = params.getExpiration();
-//						}
-//					}
-//
-//					if (sipLogger.isLoggable(Level.FINER)) {
-//						sipLogger.finer(response, Color.YELLOW_BOLD_BRIGHT(
-//								"Callflow.sendRequest - appSession.setExpires(" + sessionExpiresInMinutes + ")"));
-//					}
-//					response.getApplicationSession().setExpires(sessionExpiresInMinutes + 1); // and a pinch to grow on
-//
-//				}
-//
-//			} catch (Exception exKeepAlive) {
-//				sipLogger.warning(response,
-//						"Callflow.doResponse - Unable to set keep alive: " + exKeepAlive.getMessage());
-//				sipLogger.severe(response, exKeepAlive);
-//			}
-//			// end KeepAlive logic.
 
 			response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
 
@@ -2191,7 +2130,7 @@ public abstract class Callflow implements Serializable {
 		String timestamp = null;
 
 		if (appSession != null && appSession.isValid()) {
-			timestamp = (String) appSession.getAttribute(X_VORPAL_TIMESTAMP);
+			timestamp = (String) appSession.getAttribute(VORPAL_TIMESTAMP);
 			if (timestamp == null) {
 				timestamp = Long.toHexString(System.currentTimeMillis()).toUpperCase();
 			}

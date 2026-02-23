@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE project>
-<project basedir="." default="build" name="vorpal-blade-services-transfer">
+<project basedir="." default="build" name="vorpal-blade-services-analytics">
 
 
 	<!-- Define unique locations first -->
-	<property name="src" location="src" />
-	<property name="webapp" location="WebContent" />
+	<property name="src" location="src/main/java" />
+	<property name="webapp" location="src/main/webapp" />
 	
 	<!-- Load environment variables -->	
 	<property environment="env" />

@@ -23,8 +23,8 @@ public class TransferRequest implements Serializable {
 	@Schema(description = "style of transfer: blind, attended or conference", defaultValue = "blind", nullable = true)
 	public TransferSettings.TransferStyle style;
 
-	@Schema(description = "X-Vorpal-Session header value or custom index key defined in the configuration file", defaultValue = "ABCD1234", nullable = true)
-	public String sessionKey; // x-vorpal-session or other
+	@Schema(description = "Vorpal Session or custom index key defined in the configuration file", defaultValue = "ABCD1234", nullable = true)
+	public String sessionKey; 
 
 //	@Schema(description = "Transferee dialog (SipSession) matching attribute", defaultValue = "ABCD1234", nullable = true)
 	public DialogKey dialogKey;

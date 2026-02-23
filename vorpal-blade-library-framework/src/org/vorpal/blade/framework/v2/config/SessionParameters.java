@@ -14,7 +14,7 @@ public class SessionParameters implements Serializable {
 	@JsonPropertyDescription("Set Application Session expiration in minutes.")
 	public Integer expiration = null;
 
-	@JsonPropertyDescription("Automatically index the session using X-Vorpal-Session value? Default is false.")
+	@JsonPropertyDescription("Automatically index the session using Vorpal Session? Default is false.")
 	public Boolean indexVorpalSessionID = null;
 
 	@JsonPropertyDescription("Set Keep-Alive parameters.")

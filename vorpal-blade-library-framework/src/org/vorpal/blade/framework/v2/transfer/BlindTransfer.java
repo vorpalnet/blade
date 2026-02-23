@@ -188,9 +188,14 @@ public class BlindTransfer extends Transfer {
 			SipApplicationSession appSession = referRequest.getApplicationSession();
 
 			Boolean inProgress = (Boolean) appSession.getAttribute(IN_PROGRESS_ATTR);
+			
 			if (Boolean.TRUE.equals(inProgress)) {
-				throw new ServletException("Transfer already in progress");
+				// jwm - let's make this more elegant
+			    // throw new ServletException("Transfer already in progress");
+				sendResponse(referRequest.createResponse(491, "Transfer Already Pending"));
+				return;
 			}
+			
 			appSession.setAttribute(IN_PROGRESS_ATTR, Boolean.TRUE);
 
 			// save X-Previous-DN-Tmp for use later

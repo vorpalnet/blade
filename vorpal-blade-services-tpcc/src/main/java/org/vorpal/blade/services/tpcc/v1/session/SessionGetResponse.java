@@ -9,6 +9,7 @@ import java.util.Map;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipSession;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.services.tpcc.v1.dialog.Dialog;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -25,7 +26,7 @@ public class SessionGetResponse {
 	}
 
 	public SessionGetResponse(SipApplicationSession appSession) {
-		String sessionId = (String) appSession.getAttribute("X-Vorpal-Session");
+		String sessionId = Callflow.getVorpalSessionId(appSession);
 
 		for (String name : appSession.getAttributeNameSet()) {
 			if (name.startsWith("3pcc_")) {
@@ -47,7 +48,7 @@ public class SessionGetResponse {
 			sipSession = itr.next();
 			if (sipSession.isValid()) {
 
-				String dialogId = (String) sipSession.getAttribute("X-Vorpal-Dialog");
+				String dialogId = Callflow.getVorpalDialogId(sipSession);
 				if (dialogId != null) {
 					Dialog sessionDialog = new Dialog(sipSession);
 					this.dialogs.put(dialogId, sessionDialog);

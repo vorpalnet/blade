@@ -10,20 +10,19 @@ import java.util.Map;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipSession;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * REST API response containing SIP application session information.
  *
- * <p>Provides session attributes, group memberships, and dialog details
- * for API inspection of active calls.
+ * <p>
+ * Provides session attributes, group memberships, and dialog details for API
+ * inspection of active calls.
  */
 public class SessionResponse implements Serializable {
 	private static final long serialVersionUID = 1L;
-
-	// Session attribute keys
-	private static final String X_VORPAL_SESSION_ATTR = "X-Vorpal-Session";
-	private static final String X_VORPAL_DIALOG_ATTR = "X-Vorpal-Dialog";
 	private static final String SIP_PROTOCOL = "SIP";
 
 	private Integer expires = null;
@@ -43,7 +42,7 @@ public class SessionResponse implements Serializable {
 		}
 
 		// set the session id
-		id = (String) appSession.getAttribute(X_VORPAL_SESSION_ATTR);
+		id = Callflow.getVorpalSessionId(appSession);
 
 		// set any session variables (String)
 		for (String name : appSession.getAttributeNameSet()) {
@@ -66,8 +65,8 @@ public class SessionResponse implements Serializable {
 		while (itr.hasNext()) {
 			SipSession sipSession = itr.next();
 			if (sipSession.isValid()) {
+				String dialogId = Callflow.getVorpalDialogId(sipSession);
 
-				String dialogId = (String) sipSession.getAttribute(X_VORPAL_DIALOG_ATTR);
 				if (dialogId != null) {
 					Dialog sessionDialog = new Dialog(sipSession);
 					this.dialogs.put(dialogId, sessionDialog);

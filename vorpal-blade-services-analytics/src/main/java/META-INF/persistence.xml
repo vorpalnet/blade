@@ -5,10 +5,10 @@ http://xmlns.jcp.org/xml/ns/persistence/persistence_2_2.xsd"
 	version="2.2"
 >
 
-	<persistence-unit name="BladeCDR" transaction-type="RESOURCE_LOCAL">
+	<persistence-unit name="BladeAnalytics" transaction-type="RESOURCE_LOCAL">
        <!-- Specify the persistence provider (EclipseLink is common) -->
 		<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
-		<non-jta-data-source>jdbc/BladeCDR</non-jta-data-source>
+		<non-jta-data-source>jdbc/BladeAnalytics</non-jta-data-source>
 		<class>org.vorpal.blade.framework.v2.analytics.Application</class>
 		<class>org.vorpal.blade.framework.v2.analytics.Attribute</class>
 		<class>org.vorpal.blade.framework.v2.analytics.AttributePK</class>
@@ -16,18 +16,19 @@ http://xmlns.jcp.org/xml/ns/persistence/persistence_2_2.xsd"
 		<class>org.vorpal.blade.framework.v2.analytics.Session</class>
 		<class>org.vorpal.blade.framework.v2.analytics.SessionKey</class>
 		<class>org.vorpal.blade.framework.v2.analytics.SessionKeyPK</class>
-
 		<exclude-unlisted-classes>true</exclude-unlisted-classes>
-
 		<properties>
             <!-- EclipseLink specific properties for DDL generation and logging -->
 			<property name="eclipselink.target-server" value="WebLogic" />
 			<property name="javax.persistence.jdbc.driver" value="com.mysql.jdbc.Driver" />
-			<!--property name="eclipselink.ddl-generation" value="drop-and-create-tables" /-->
-			<property name="eclipselink.ddl-generation" value="create-tables" />
 			<property name="eclipselink.logging.level" value="WARNING" />
 			<property name="eclipselink.logging.thread" value="true" />
 			<property name="eclipselink.logging.timestamp" value="true" />
+			<property name="eclipselink.ddl-generation.output-mode" value="database"/>
+			<property name="eclipselink.ddl-generation" value="create-or-extend-tables" />
+			<!--property name="eclipselink.ddl-generation" value="none" /-->
+			<!--property name="eclipselink.ddl-generation" value="create-tables" /-->
+			<!--property name="eclipselink.ddl-generation" value="drop-and-create-tables" /-->
 		</properties>
 	</persistence-unit>
 

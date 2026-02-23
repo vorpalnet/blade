@@ -114,12 +114,11 @@ public class SettingsManager<T> {
 	protected static String serverName;
 	protected static String clusterName;
 	protected static String domainName;
-	protected static String applicationName="";
+	protected static String applicationName = "";
 	protected static String applicationVersion;
 
 	public static Analytics analytics;
 	public static SessionParameters sessionParameters;
-
 
 	public static SessionParameters getSessionParameters() {
 		return sessionParameters;
@@ -401,9 +400,6 @@ public class SettingsManager<T> {
 				analytics = ((Configuration) current).getAnalytics();
 				sessionParameters = ((Configuration) current).getSession();
 			}
-			
-			
-			
 
 		} catch (Exception e) {
 			sipLogger.severe(e);
@@ -601,28 +597,31 @@ public class SettingsManager<T> {
 		SettingsManager.analytics = analytics;
 	}
 
-	public static void createEvent(String name, SipServletMessage message) {
-		if (analytics != null) {
-			Event event = null;
+	public static Event createEvent(String name, SipServletMessage message) {
+		Event event = null;
+		if (Analytics.jmsPublisher != null) {
 			event = analytics.createEvent(name, message);
 			message.setAttribute("event", event);
 		}
+		return event;
 	}
 
-	public static void createEvent(String name, SipServletContextEvent context) {
-//		sipLogger.warning("SettingsManager.createEvent - name="+name+", getServletContextName="+context.getServletContext().getServletContextName());
+	public static Event createEvent(String name, SipServletContextEvent context) {
+		Event event = null;
 
-		if (analytics != null) {
-			Event event = null;
+		if (Analytics.jmsPublisher != null) {
 			event = analytics.createEvent(name, context);
 			context.getServletContext().setAttribute("event", event);
 		}
+
+		return event;
 	}
 
 	public static void sendEvent(SipServletMessage message) {
-		if (analytics != null) {
+		if (Analytics.jmsPublisher != null) {
 			Event event = (Event) message.getAttribute("event");
 			if (event != null) {
+				analytics.addDestinationAttributes(event, message);
 				message.removeAttribute("event");
 				analytics.sendEvent(event);
 			}
@@ -630,12 +629,18 @@ public class SettingsManager<T> {
 	}
 
 	public static void sendEvent(SipServletContextEvent context) {
-		if (analytics != null) {
+		if (Analytics.jmsPublisher != null) {
 			Event event = (Event) context.getServletContext().getAttribute("event");
 			if (event != null) {
 				context.getServletContext().removeAttribute("event");
 				analytics.sendEvent(event);
 			}
+		}
+	}
+
+	public static void sendEvent(Event event) {
+		if (Analytics.jmsPublisher != null && event != null) {
+			analytics.sendEvent(event);
 		}
 	}
 

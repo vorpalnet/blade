@@ -17,9 +17,10 @@ public class EventSelector {
 		return attributes;
 	}
 
-	public EventSelector addAttribute(String id, String attribute, String pattern, String expression) {
-		attributes.add(new AttributeSelector(id, attribute, pattern, expression));
-		return this;
+	public AttributeSelector addAttribute(String id, String attribute, String pattern, String expression) {
+		AttributeSelector as = new AttributeSelector(id, attribute, pattern, expression);
+		attributes.add(as);
+		return as;
 	}
 
 	public EventSelector setAttributes(Set<AttributeSelector> attributes) {
@@ -27,9 +28,9 @@ public class EventSelector {
 		return this;
 	}
 
-	public EventSelector addAttribute(AttributeSelector attr) {
+	public AttributeSelector addAttribute(AttributeSelector attr) {
 		attributes.add(attr);
-		return this;
+		return attr;
 	}
 
 }
