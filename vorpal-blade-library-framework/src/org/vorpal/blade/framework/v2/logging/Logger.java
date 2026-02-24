@@ -38,6 +38,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
+import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
@@ -79,6 +80,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	private Level sequenceDiagramLoggingLevel = Level.FINE;
 	private Level configurationLoggingLevel = Level.FINE;
+	private Level analyticsLoggingLevel = Level.OFF;
 	private static volatile ObjectMapper mapper = null;
 	private static final Object MAPPER_LOCK = new Object();
 
@@ -151,6 +153,14 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		this.configurationLoggingLevel = configurationLoggingLevel;
 	}
 
+	public Level getAnalyticsLoggingLevel() {
+		return analyticsLoggingLevel;
+	}
+
+	public void setAnalyticsLoggingLevel(Level analyticsLoggingLevel) {
+		this.analyticsLoggingLevel = analyticsLoggingLevel;
+	}
+
 	/**
 	 * Direction of SIP message flow for sequence diagram rendering.
 	 */
@@ -171,40 +181,59 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		super(name, resourceBundleName);
 	}
 
+	public void logEvent(Event event) {
+		if (this.isLoggable(analyticsLoggingLevel)) {
+			String sess = NOSESS + " Event: " + SettingsManager.getApplicationName();
+			log(this.analyticsLoggingLevel, sess + " " + ConsoleColors.GREEN_BOLD_BRIGHT + Logger.serializeObjectWithoutNLCR(event)+ ConsoleColors.RESET);
+		}
+	}
+
 	@Override
 	public void severe(String msg) {
-		String sess = NOSESS + " " + SettingsManager.getApplicationName();
-		super.severe(sess + " " + ConsoleColors.RED_BRIGHT + msg + ConsoleColors.RESET);
+		if (this.isLoggable(Level.SEVERE)) {
+			String sess = NOSESS + " " + SettingsManager.getApplicationName();
+			super.severe(sess + " " + ConsoleColors.RED_BRIGHT + msg + ConsoleColors.RESET);
+		}
 	}
 
 	@Override
 	public void warning(String msg) {
-		String sess = NOSESS + " " + SettingsManager.getApplicationName();
-		super.warning(sess + " " + ConsoleColors.YELLOW_BOLD_BRIGHT + msg + ConsoleColors.RESET);
+		if (this.isLoggable(Level.WARNING)) {
+			String sess = NOSESS + " " + SettingsManager.getApplicationName();
+			super.warning(sess + " " + ConsoleColors.YELLOW_BOLD_BRIGHT + msg + ConsoleColors.RESET);
+		}
 	}
 
 	@Override
 	public void fine(String msg) {
-		String sess = NOSESS + " " + SettingsManager.getApplicationName();
-		super.fine(sess + " " + msg);
+		if (this.isLoggable(Level.FINE)) {
+			String sess = NOSESS + " " + SettingsManager.getApplicationName();
+			super.fine(sess + " " + msg);
+		}
 	}
 
 	@Override
 	public void finer(String msg) {
-		String sess = NOSESS + " " + SettingsManager.getApplicationName();
-		super.finer(sess + " " + msg);
+		if (this.isLoggable(Level.FINER)) {
+			String sess = NOSESS + " " + SettingsManager.getApplicationName();
+			super.finer(sess + " " + msg);
+		}
 	}
 
 	@Override
 	public void finest(String msg) {
-		String sess = NOSESS + " " + SettingsManager.getApplicationName();
-		super.finest(sess + " " + msg);
+		if (this.isLoggable(Level.FINEST)) {
+			String sess = NOSESS + " " + SettingsManager.getApplicationName();
+			super.finest(sess + " " + msg);
+		}
 	}
 
 	@Override
 	public void info(String msg) {
-		String sess = NOSESS + " " + SettingsManager.getApplicationName();
-		super.info(sess + " " + msg);
+		if (this.isLoggable(Level.INFO)) {
+			String sess = NOSESS + " " + SettingsManager.getApplicationName();
+			super.info(sess + " " + msg);
+		}
 	}
 
 	/**

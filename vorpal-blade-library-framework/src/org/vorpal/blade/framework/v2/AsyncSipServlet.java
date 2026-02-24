@@ -145,7 +145,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			servletCreated(event);
 
 			Analytics analytics = SettingsManager.getAnalytics();
-			if (analytics != null && Boolean.TRUE.equals(analytics.enabled)) {
+			if (analytics != null) {
 
 				sipLogger.finer("These are the system properties that can be logged through 'analytics':");
 
@@ -174,14 +174,22 @@ public abstract class AsyncSipServlet extends SipServlet
 							+ entry.getValue().toString());
 				}
 
-				Analytics.jmsPublisher = new JmsPublisher("jms/BladeAnalyticsConnectionFactory",
-						"jms/BladeAnalyticsDistributedQueue");
-				Analytics.jmsPublisher.init();
-				Analytics.jmsPublisher.applicationStart();
+				if (Boolean.TRUE.equals(analytics.isEnabled())) {
+					try {
+						Analytics.jmsPublisher = new JmsPublisher("jms/BladeAnalyticsConnectionFactory",
+								"jms/BladeAnalyticsDistributedQueue");
+						Analytics.jmsPublisher.init();
+						Analytics.jmsPublisher.applicationStart();
+					} catch (Exception e) {
+						sipLogger.severe(
+								"AsyncSipServlet.servletInitialized - Cannot create JmsPublisher for Analytics. Ensure jms/BladeAnalyticsConnectionFactory and jms/BladeAnalyticsDistributedQueue is configured.");
+					}
+				}
 
 				Event servletCreated = SettingsManager.createEvent("start", event);
 				start(servletCreated);
 				SettingsManager.sendEvent(event);
+
 			} else {
 				servletCreated(event);
 			}

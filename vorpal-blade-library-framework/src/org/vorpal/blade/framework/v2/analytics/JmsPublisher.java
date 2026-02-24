@@ -155,6 +155,7 @@ public class JmsPublisher implements ServletContextListener {
 
 		ObjectMessage message = qsession.createObjectMessage();
 		message.setObject(object);
+		
 		qsender.send(message);
 		Callflow.getSipLogger().warning("JmsPublisher.send - Sending "+object.getClass().getSimpleName()+":\n"+Logger.serializeObject(object)); 
 	}

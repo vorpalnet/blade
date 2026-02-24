@@ -115,11 +115,11 @@ public class Terminate extends Callflow {
 								copyContentAndHeaders(request, terminationRequest);
 							}
 
-							if (b2buaListener != null) {
 								SettingsManager.createEvent("callAbandoned", terminationRequest);
+								if (b2buaListener != null) {
 								b2buaListener.callAbandoned(terminationRequest);
+								}
 								SettingsManager.sendEvent(terminationRequest);
-							}
 						}
 
 						break;
@@ -130,11 +130,11 @@ public class Terminate extends Callflow {
 							copyContentAndHeaders(request, terminationRequest);
 						}
 
-						if (b2buaListener != null) {
 							SettingsManager.createEvent("callCompleted", terminationRequest);
+							if (b2buaListener != null) {
 							b2buaListener.callCompleted(terminationRequest);
+							}
 							SettingsManager.sendEvent(terminationRequest);
-						}
 
 						break;
 

@@ -753,6 +753,9 @@ public abstract class Callflow implements Serializable {
 							int sessionExpiresInMinutes = 0;
 							int finalSessionExpiresInMinutes = 0;
 
+							int sessionExpiresInSeconds = 3600; // default
+							int minSEinSeconds = 1800; // default
+
 							String refresher = null;
 							boolean uas = false;
 							if (sessionExpires != null) {
@@ -763,9 +766,18 @@ public abstract class Callflow implements Serializable {
 							}
 
 							if (sessionExpires == null || uas == true) { // create Session-Expires
-								int sessionExpiresInSeconds = 3600; // a fool and his money are soon parted
-								int minSEinSeconds = 1800;
 
+								if(uas==true) {
+									sessionExpiresInSeconds = Integer.parseInt(sessionExpires.getValue());
+									String strMinSE = request.getHeader("Min-SE");
+									if(strMinSE!=null) {
+										minSEinSeconds = Integer.parseInt(strMinSE);										
+									}else {
+										minSEinSeconds = sessionExpiresInSeconds / 2;
+									}									
+								}
+								
+								
 								if (sipLogger.isLoggable(Level.FINER)) {
 									sipLogger.finer(request,
 											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - setting keep alive timer; "//

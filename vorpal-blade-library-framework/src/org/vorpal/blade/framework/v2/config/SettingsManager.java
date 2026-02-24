@@ -55,6 +55,8 @@ import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogManager;
+import org.vorpal.blade.framework.v2.logging.LogParameters;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -117,8 +119,9 @@ public class SettingsManager<T> {
 	protected static String applicationName = "";
 	protected static String applicationVersion;
 
-	public static Analytics analytics;
-	public static SessionParameters sessionParameters;
+	protected static Analytics analytics;
+	protected static SessionParameters sessionParameters;
+	protected static LogParameters logParameters;
 
 	public static SessionParameters getSessionParameters() {
 		return sessionParameters;
@@ -399,7 +402,12 @@ public class SettingsManager<T> {
 			if (current instanceof Configuration) {
 				analytics = ((Configuration) current).getAnalytics();
 				sessionParameters = ((Configuration) current).getSession();
+				logParameters = ((Configuration) current).getLogging();
 			}
+
+			analytics = (analytics != null) ? analytics : new Analytics();
+			logParameters = (logParameters != null) ? logParameters : new LogParametersDefault();
+			sessionParameters = (sessionParameters != null) ? sessionParameters : new SessionParametersDefault();
 
 		} catch (Exception e) {
 			sipLogger.severe(e);
@@ -599,7 +607,7 @@ public class SettingsManager<T> {
 
 	public static Event createEvent(String name, SipServletMessage message) {
 		Event event = null;
-		if (Analytics.jmsPublisher != null) {
+		if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
 			event = analytics.createEvent(name, message);
 			message.setAttribute("event", event);
 		}
@@ -609,7 +617,7 @@ public class SettingsManager<T> {
 	public static Event createEvent(String name, SipServletContextEvent context) {
 		Event event = null;
 
-		if (Analytics.jmsPublisher != null) {
+		if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
 			event = analytics.createEvent(name, context);
 			context.getServletContext().setAttribute("event", event);
 		}
@@ -618,30 +626,43 @@ public class SettingsManager<T> {
 	}
 
 	public static void sendEvent(SipServletMessage message) {
-		if (Analytics.jmsPublisher != null) {
+		if (message != null) {
+
 			Event event = (Event) message.getAttribute("event");
 			if (event != null) {
 				analytics.addDestinationAttributes(event, message);
 				message.removeAttribute("event");
+				sipLogger.logEvent(event);
 				analytics.sendEvent(event);
 			}
+
 		}
+
 	}
 
-	public static void sendEvent(SipServletContextEvent context) {
-		if (Analytics.jmsPublisher != null) {
-			Event event = (Event) context.getServletContext().getAttribute("event");
+	public static void sendEvent(SipServletContextEvent ssce) {
+		if (ssce != null) {
+			Event event = (Event) ssce.getServletContext().getAttribute("event");
 			if (event != null) {
-				context.getServletContext().removeAttribute("event");
+				analytics.addDestinationAttributes(event, ssce);
+				ssce.getServletContext().removeAttribute("event");
+				sipLogger.logEvent(event);
 				analytics.sendEvent(event);
 			}
 		}
 	}
 
 	public static void sendEvent(Event event) {
-		if (Analytics.jmsPublisher != null && event != null) {
-			analytics.sendEvent(event);
-		}
+		sipLogger.logEvent(event);
+		analytics.sendEvent(event);
+	}
+
+	public static LogParameters getLogParameters() {
+		return logParameters;
+	}
+
+	public static void setLogParameters(LogParameters logParameters) {
+		SettingsManager.logParameters = logParameters;
 	}
 
 }

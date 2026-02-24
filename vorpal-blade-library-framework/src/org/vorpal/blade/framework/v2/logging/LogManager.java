@@ -144,6 +144,14 @@ public class LogManager implements ServletContextListener {
 			logger.setUseParentHandlers(useParentLogging);
 			logger.setLevel(loggingLevel); // may be null, but that okay. will use parent's level
 
+			// set all misc. logging levels
+			logger.setAnalyticsLoggingLevel(
+					LogParameters.parseLoggingLevel(effectiveLogParameters.getAnalyticsLoggingLevel()));
+			logger.setConfigurationLoggingLevel(
+					LogParameters.parseLoggingLevel(effectiveLogParameters.getConfigurationLoggingLevel()));
+			logger.setSequenceDiagramLoggingLevel(
+					LogParameters.parseLoggingLevel(effectiveLogParameters.getSequenceDiagramLoggingLevel()));
+
 			if (effectiveBasename != null) {
 				logMap.put(effectiveBasename, logger);
 			}

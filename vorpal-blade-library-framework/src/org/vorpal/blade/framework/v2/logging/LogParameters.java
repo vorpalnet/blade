@@ -12,8 +12,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 /**
- * Configuration parameters for the logging system.
- * Supports file-based logging with configurable directory, filename, size, and rotation settings.
+ * Configuration parameters for the logging system. Supports file-based logging
+ * with configurable directory, filename, size, and rotation settings.
  */
 public class LogParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -34,8 +34,7 @@ public class LogParameters implements Serializable {
 	public enum Unit {
 		KB, KiB, MB, MiB, GB, GiB
 	}
-	
-	
+
 	@JsonPropertyDescription("Write to parent logger, i.e. the WebLogic engine log file. Default: false")
 	@JsonProperty(defaultValue = "false")
 	protected Boolean useParentLogging = null;
@@ -71,8 +70,7 @@ public class LogParameters implements Serializable {
 	@JsonPropertyDescription("Level at which configuration changes will be logged. Default: INFO")
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel configurationLoggingLevel = null;
-	
-	
+
 	@JsonPropertyDescription("Level at which analytics (if enabled) will be logged. Default: INFO")
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel analyticsLoggingLevel = null;
@@ -219,9 +217,9 @@ public class LogParameters implements Serializable {
 		return parseLoggingLevel(this.getSequenceDiagramLoggingLevel());
 	}
 
-	public Level parseLoggingLevel(LoggingLevel level) {
+	public static Level parseLoggingLevel(LoggingLevel level) {
 		if (level == null) {
-			return Level.FINE;
+			return Level.OFF;
 		}
 
 		switch (level) {
@@ -347,6 +345,14 @@ public class LogParameters implements Serializable {
 
 	public Level resolveLoggingLevel() {
 		return parseLoggingLevel(this.getLoggingLevel());
+	}
+
+	public LoggingLevel getAnalyticsLoggingLevel() {
+		return analyticsLoggingLevel;
+	}
+
+	public void setAnalyticsLoggingLevel(LoggingLevel analyticsLoggingLevel) {
+		this.analyticsLoggingLevel = analyticsLoggingLevel;
 	}
 
 }

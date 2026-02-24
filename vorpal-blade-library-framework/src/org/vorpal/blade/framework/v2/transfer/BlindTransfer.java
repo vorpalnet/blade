@@ -188,14 +188,14 @@ public class BlindTransfer extends Transfer {
 			SipApplicationSession appSession = referRequest.getApplicationSession();
 
 			Boolean inProgress = (Boolean) appSession.getAttribute(IN_PROGRESS_ATTR);
-			
+
 			if (Boolean.TRUE.equals(inProgress)) {
 				// jwm - let's make this more elegant
-			    // throw new ServletException("Transfer already in progress");
+				// throw new ServletException("Transfer already in progress");
 				sendResponse(referRequest.createResponse(491, "Transfer Already Pending"));
 				return;
 			}
-			
+
 			appSession.setAttribute(IN_PROGRESS_ATTR, Boolean.TRUE);
 
 			// save X-Previous-DN-Tmp for use later
@@ -268,11 +268,11 @@ public class BlindTransfer extends Transfer {
 
 				appSession.removeAttribute(IN_PROGRESS_ATTR);
 
+				SettingsManager.createEvent("transferAbandoned", bye);
 				if (transferListener != null) {
-					SettingsManager.createEvent("transferAbandoned", bye);
 					transferListener.transferAbandoned(bye);
-					SettingsManager.sendEvent(bye);
 				}
+				SettingsManager.sendEvent(bye);
 
 			});
 
@@ -299,11 +299,11 @@ public class BlindTransfer extends Transfer {
 				targetRequest.setHeader(X_PREVIOUS_DN_ATTR, xPreviousDN.toString());
 			}
 
+			SettingsManager.createEvent("transferInitiated", targetRequest);
 			if (transferListener != null) {
-				SettingsManager.createEvent("transferInitiated", targetRequest);
 				transferListener.transferInitiated(targetRequest);
-				SettingsManager.sendEvent(targetRequest);
 			}
+			SettingsManager.sendEvent(targetRequest);
 
 			// Force Referred-By, ignore preserveReferHeaders
 			this.targetRequest.removeHeader(REFERRED_BY);
@@ -333,11 +333,11 @@ public class BlindTransfer extends Transfer {
 
 					appSession.removeAttribute(IN_PROGRESS_ATTR);
 
+					SettingsManager.createEvent("transferCompleted", targetResponse);
 					if (transferListener != null) {
-						SettingsManager.createEvent("transferCompleted", targetResponse);
 						transferListener.transferCompleted(targetResponse);
-						SettingsManager.sendEvent(targetResponse);
 					}
+					SettingsManager.sendEvent(targetResponse);
 
 					// Alice will no longer hangup, expect a BYE from Bob
 					aliceExpectation.clear();
@@ -393,11 +393,11 @@ public class BlindTransfer extends Transfer {
 
 						appSession.removeAttribute(IN_PROGRESS_ATTR);
 
+						SettingsManager.createEvent("transferAbandoned", referRequest);
 						if (transferListener != null) {
-							SettingsManager.createEvent("transferAbandoned", referRequest);
 							transferListener.transferAbandoned(referRequest);
-							SettingsManager.sendEvent(referRequest);
 						}
+						SettingsManager.sendEvent(referRequest);
 
 						// Instead of sending the failure notice, we pretend everything is successful so
 						// Bob will hang up
@@ -418,11 +418,11 @@ public class BlindTransfer extends Transfer {
 						// User is notified that the transfer target did not answer
 						appSession.removeAttribute(IN_PROGRESS_ATTR);
 
+						SettingsManager.createEvent("transferDeclined", targetResponse);
 						if (transferListener != null) {
-							SettingsManager.createEvent("transferDeclined", targetResponse);
 							transferListener.transferDeclined(targetResponse);
-							SettingsManager.sendEvent(targetResponse);
 						}
+						SettingsManager.sendEvent(targetResponse);
 
 						// Bob won't send a BYE, but instead reINVITE.
 						bobExpectation.clear();

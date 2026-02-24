@@ -23,9 +23,9 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 @JsonPropertyOrder({ "enabled", "loggingLevel", "events" })
 public class Analytics {
 
-	public Boolean enabled = true;
+	private Boolean enabled = false;
 
-	public Map<String, EventSelector> events = new HashMap<>();
+	private Map<String, EventSelector> events = new HashMap<>();
 
 	@JsonIgnore
 	private static Integer appInstanceId = null;
@@ -52,39 +52,36 @@ public class Analytics {
 	public Event createEvent(String eventName, SipServletMessage message) {
 		Event event = null;
 
-		if (jmsPublisher != null) {
-
-			if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-				if (message instanceof SipServletRequest) {
-					Callflow.getSipLogger().finer(message,
-							"Analytics.createEvent #1 - eventName=" + eventName + ", message=" + message.getMethod());
-				} else {
-					Callflow.getSipLogger().finer(message, "Analytics.createEvent #1 - eventName=" + eventName //
-							+ ", message=" + message.getMethod() + " " //
-							+ ((SipServletResponse) message).getStatus() + " " //
-							+ ((SipServletResponse) message).getReasonPhrase());
-				}
+		if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
+			if (message instanceof SipServletRequest) {
+				Callflow.getSipLogger().finer(message,
+						"Analytics.createEvent #1 - eventName=" + eventName + ", message=" + message.getMethod());
+			} else {
+				Callflow.getSipLogger().finer(message, "Analytics.createEvent #1 - eventName=" + eventName //
+						+ ", message=" + message.getMethod() + " " //
+						+ ((SipServletResponse) message).getStatus() + " " //
+						+ ((SipServletResponse) message).getReasonPhrase());
 			}
+		}
 
-			event = new Event();
-			event.setName(eventName);
+		event = new Event();
+		event.setName(eventName);
 
-			event.setApplicationId(getAppInstanceId());
+		event.setApplicationId(getAppInstanceId());
 
-			EventSelector evsel = events.get(eventName);
+		EventSelector evsel = events.get(eventName);
 
-			if (evsel != null) {
-				AttributesKey attrsKey;
-				for (AttributeSelector attrSel : evsel.getAttributes()) {
+		if (evsel != null) {
+			AttributesKey attrsKey;
+			for (AttributeSelector attrSel : evsel.getAttributes()) {
 
-					if (true == DialogType.origin.equals(attrSel.getDialog())) {
-						attrsKey = attrSel.findKey(message);
-						if (attrsKey != null) {
-							event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
-						}
+				if (true == DialogType.origin.equals(attrSel.getDialog())) {
+					attrsKey = attrSel.findKey(message);
+					if (attrsKey != null) {
+						event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
 					}
-
 				}
+
 			}
 		}
 
@@ -101,6 +98,29 @@ public class Analytics {
 				if (false == DialogType.origin.equals(attrSel.getDialog())) {
 					attrsKey = attrSel.findKey(message);
 					if (attrsKey != null) {
+						Callflow.getSipLogger().warning(
+								"Analytics.addDestinationAttributes - " + attrSel.getId() + "=" + attrsKey.key);
+						event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
+					}
+				}
+			}
+		}
+
+		return event;
+	}
+
+	public Event addDestinationAttributes(Event event, SipServletContextEvent ssce) {
+		EventSelector evsel = events.get(event.getName());
+
+		if (evsel != null) {
+			AttributesKey attrsKey;
+			for (AttributeSelector attrSel : evsel.getAttributes()) {
+
+				if (false == DialogType.origin.equals(attrSel.getDialog())) {
+					attrsKey = attrSel.findKey(ssce);
+					if (attrsKey != null) {
+						Callflow.getSipLogger().warning(
+								"Analytics.addDestinationAttributes - " + attrSel.getId() + "=" + attrsKey.key);
 						event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
 					}
 				}
@@ -113,30 +133,18 @@ public class Analytics {
 	public Event createEvent(String eventName, SipServletContextEvent context) {
 		Event event = null;
 
-		if (jmsPublisher != null) {
+		event = new Event();
+		event.setName(eventName);
+		event.setApplicationId(getAppInstanceId());
 
-			if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-				Callflow.getSipLogger().finer("Analytics.createEvent #1 - eventName=" + eventName);
-			}
+		EventSelector evsel = events.get(eventName);
 
-			event = new Event();
-			event.setName(eventName);
-
-			event.setApplicationId(getAppInstanceId());
-
-			for (String key : events.keySet()) {
-				SettingsManager.sipLogger.warning("Analytics.createEvent - events key=" + key);
-			}
-
-			EventSelector evsel = events.get(eventName);
-
-			if (evsel != null) {
-				AttributesKey attrsKey;
-				for (AttributeSelector attrSel : evsel.getAttributes()) {
-					attrsKey = attrSel.findKey(context);
-					if (attrsKey != null) {
-						event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
-					}
+		if (evsel != null) {
+			AttributesKey attrsKey;
+			for (AttributeSelector attrSel : evsel.getAttributes()) {
+				attrsKey = attrSel.findKey(context);
+				if (attrsKey != null) {
+					event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
 				}
 			}
 		}
@@ -155,7 +163,11 @@ public class Analytics {
 
 	public void sendEvent(Event event) {
 		try {
-			jmsPublisher.send(event);
+
+			if (jmsPublisher != null) {
+				jmsPublisher.send(event);
+			}
+
 		} catch (JMSException ex) {
 			ex.printStackTrace();
 		}
@@ -174,6 +186,18 @@ public class Analytics {
 
 	public static void setJmsPublisher(JmsPublisher jmsPublisher) {
 		Analytics.jmsPublisher = jmsPublisher;
+	}
+
+	public Boolean isEnabled() {
+		return enabled;
+	}
+
+	public void setEnabled(Boolean enabled) {
+		this.enabled = enabled;
+	}
+
+	public static void setAppInstanceId(Integer appInstanceId) {
+		Analytics.appInstanceId = appInstanceId;
 	}
 
 }

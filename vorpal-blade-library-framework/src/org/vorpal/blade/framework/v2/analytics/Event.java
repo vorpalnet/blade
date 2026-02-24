@@ -19,6 +19,8 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
 /**
  * The persistent class for the event database table.
  * 
@@ -26,6 +28,7 @@ import javax.persistence.TemporalType;
 @Entity
 @Table(name = "event")
 @NamedQuery(name = "Event.findAll", query = "SELECT e FROM Event e")
+@JsonPropertyOrder({"name", "attributes", "id", "application_id","sessionId", "created"})
 public class Event implements Serializable {
 	private static final long serialVersionUID = 1L;
 

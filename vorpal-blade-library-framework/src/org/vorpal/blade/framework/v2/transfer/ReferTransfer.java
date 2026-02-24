@@ -131,21 +131,21 @@ public class ReferTransfer extends Transfer {
 			transferorRequest.setAttribute(REFER_TO, referTo);
 
 			// User is notified a transfer is requested
+			SettingsManager.createEvent("transferRequested", transferorRequest);
 			if (transferListener != null) {
-				SettingsManager.createEvent("transferRequested", transferorRequest);
 				transferListener.transferRequested(transferorRequest);
-				SettingsManager.sendEvent(transferorRequest);
 			}
+			SettingsManager.sendEvent(transferorRequest);
 
 			expectRequest(transfereeSession, CANCEL, (cancel) -> {
 				sipLogger.finer(transfereeSession, "ReferTransfer.process - expectRequest CANCEL, Alice hangs up.");
 
 				// Transferee (Alice) hangs up
+				SettingsManager.createEvent("transferAbandoned", transfereeRequest);
 				if (transferListener != null) {
-					SettingsManager.createEvent("transferAbandoned", transfereeRequest);
 					transferListener.transferAbandoned(transfereeRequest);
-					SettingsManager.sendEvent(transfereeRequest);
 				}
+				SettingsManager.sendEvent(transfereeRequest);
 
 				sendRequest(continueRequest(transferorSession, cancel));
 			});
@@ -178,11 +178,11 @@ public class ReferTransfer extends Transfer {
 						if (sipfrag.contains(SIPFRAG_100)) {
 							// User is notified that transfer is initiated
 
+							SettingsManager.createEvent("transferInitiated", transfereeRequest);
 							if (transferListener != null) {
-								SettingsManager.createEvent("transferInitiated", transfereeRequest);
 								transferListener.transferInitiated(transfereeRequest);
-								SettingsManager.sendEvent(transfereeRequest);
 							}
+							SettingsManager.sendEvent(transfereeRequest);
 
 						} else if (sipfrag.contains(SIPFRAG_200)) {
 							// User is notified of a successful transfer
@@ -201,11 +201,11 @@ public class ReferTransfer extends Transfer {
 									referResponse.getApplicationSession().setAttribute(X_PREVIOUS_DN_ATTR, referTo2);
 								}
 
-								if (transferListener != null) {
 									SettingsManager.createEvent("transferCompleted", referResponse);
+									if (transferListener != null) {
 									transferListener.transferCompleted(referResponse);
+									}
 									SettingsManager.sendEvent(referResponse);
-								}
 							}
 							sendRequest(transferorSession.createRequest(BYE));
 						} else if (sipfrag.contains(SIPFRAG_486)) {
@@ -214,11 +214,11 @@ public class ReferTransfer extends Transfer {
 							// What response to use?
 							if (referResponse != null) {
 
-								if (transferListener != null) {
 									SettingsManager.createEvent("transferDeclined", referResponse);
+									if (transferListener != null) {
 									transferListener.transferDeclined(referResponse);
+									}
 									SettingsManager.sendEvent(referResponse);
-								}
 
 							}
 
@@ -236,11 +236,11 @@ public class ReferTransfer extends Transfer {
 				if (failure(referResponse)) {
 					// If refer fails, complete REST invocation as a failure
 
-					if (transferListener != null) {
 						SettingsManager.createEvent("transferDeclined", referResponse);
+						if (transferListener != null) {
 						transferListener.transferDeclined(referResponse);
+						}
 						SettingsManager.sendEvent(referResponse);
-					}
 
 				}
 

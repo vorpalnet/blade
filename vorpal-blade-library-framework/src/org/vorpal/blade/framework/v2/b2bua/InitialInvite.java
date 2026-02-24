@@ -163,11 +163,11 @@ public class InitialInvite extends Callflow {
 		}
 		bobRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, bobRequest.getTo());
 
+		SettingsManager.createEvent("callStarted", bobRequest);
 		if (b2buaListener != null) {
-			SettingsManager.createEvent("callStarted", bobRequest);
 			b2buaListener.callStarted(bobRequest);
-			SettingsManager.sendEvent(bobRequest);
 		}
+		SettingsManager.sendEvent(bobRequest);
 
 		// Remove the callflow so it's not serialized
 		bobRequest.removeAttribute(ATTR_CALLFLOW);
@@ -233,11 +233,11 @@ public class InitialInvite extends Callflow {
 
 					}
 				} else if (failure(bobResponse)) {
+					SettingsManager.createEvent("callDeclined", aliceResponse);
 					if (b2buaListener != null) {
-						SettingsManager.createEvent("callDeclined", aliceResponse);
 						b2buaListener.callDeclined(aliceResponse);
-						SettingsManager.sendEvent(aliceResponse);
 					}
+					SettingsManager.sendEvent(aliceResponse);
 				}
 
 				// Sometimes you want to arrest the processing of the transaction.
@@ -258,13 +258,11 @@ public class InitialInvite extends Callflow {
 							});
 						} else if (aliceAck.getMethod().equals(ACK)) {
 							SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
+							SettingsManager.createEvent("callConnected", bobAck);
 							if (b2buaListener != null) {
-
-								SettingsManager.createEvent("callConnected", bobAck);
 								b2buaListener.callConnected(bobAck);
-								SettingsManager.sendEvent(bobAck);
-
 							}
+							SettingsManager.sendEvent(bobAck);
 							sendRequest(bobAck);
 						} else {
 							// implement GLARE here?
