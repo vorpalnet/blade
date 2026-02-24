@@ -27,6 +27,7 @@ package org.vorpal.blade.framework.v2.logging;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
+import java.util.Iterator;
 import java.util.logging.Level;
 
 import javax.servlet.sip.Proxy;
@@ -38,6 +39,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
+import org.vorpal.blade.framework.v2.analytics.Attribute;
 import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
@@ -182,9 +184,25 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	}
 
 	public void logEvent(Event event) {
-		if (this.isLoggable(analyticsLoggingLevel)) {
-			String sess = NOSESS + " Event: " + SettingsManager.getApplicationName();
-			log(this.analyticsLoggingLevel, sess + " " + ConsoleColors.GREEN_BOLD_BRIGHT + Logger.serializeObjectWithoutNLCR(event)+ ConsoleColors.RESET);
+		if (event != null) {
+			if (this.isLoggable(analyticsLoggingLevel)) {
+				StringBuilder strBuilder = new StringBuilder();
+				strBuilder.append(NOSESS);
+				strBuilder.append(" Event: ");
+				strBuilder.append(SettingsManager.getApplicationName());
+
+				Iterator<Attribute> itr = event.getAttributes().iterator();
+				Attribute attr;
+				if (itr.hasNext()) {
+					attr = itr.next();
+					strBuilder.append(attr.getId() + "=" + attr.getValue());
+					if (itr.hasNext()) {
+						strBuilder.append(", ");
+					}
+				}
+
+				log(this.analyticsLoggingLevel, strBuilder.toString());
+			}
 		}
 	}
 

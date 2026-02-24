@@ -74,7 +74,11 @@ public class LogParameters implements Serializable {
 	@JsonPropertyDescription("Level at which analytics (if enabled) will be logged. Default: INFO")
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel analyticsLoggingLevel = null;
-
+	
+	@JsonPropertyDescription("Support ANSI colors in logging? It's useful for debugging but can be annoying in production. Default: false")
+	@JsonProperty(defaultValue = "false")
+	protected Boolean colorsEnabled = false;
+	
 	public LogParameters() {
 
 	}

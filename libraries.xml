@@ -760,7 +760,7 @@
 			<attribute name="Implementation-Title" value="${ant.project.name}.jar" />
 			<attribute name="Specification-Version" value="${specification}" />
 			<attribute name="Implementation-Version" value="${implementation}" />
-		</manifest>		
+		</manifest>
 		<jar destfile="${build}/${ant.project.name}.jar" manifest="${build}/MANIFEST.MF">
 			<fileset dir="${classes}" />
 			<fileset dir="${src}" includes="**/*.java" />
@@ -795,6 +795,9 @@
 	<target name="war" depends="compile">
 		<echo message="war, copying ${framework} to ${build}/lib" />
 
+		<!-- in case META-INF doesn't exist -->
+		<mkdir dir="${src}/META-INF" />
+
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
@@ -802,15 +805,15 @@
 			<attribute name="Implementation-Build-Date" value="${TODAY}" />
 			<attribute name="Weblogic-Application-Version" value="${implementation}.${build.number}" />
 		</manifest>
-			
+
 		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}" webxml="${webapp}/WEB-INF/web.xml" needxmlfile="true">
 			<classes dir="${classes}" />
 			<lib dir="${framework_dir}">
-				<include name="**/*.jar"/>
+				<include name="**/*.jar" />
 			</lib>
-			<metainf dir="${src}/META-INF"/>
+			<metainf dir="${src}/META-INF" />
 		</war>
-				
+
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
 	</target>
 

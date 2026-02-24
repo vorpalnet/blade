@@ -142,9 +142,11 @@ public class Analytics {
 		if (evsel != null) {
 			AttributesKey attrsKey;
 			for (AttributeSelector attrSel : evsel.getAttributes()) {
-				attrsKey = attrSel.findKey(context);
-				if (attrsKey != null) {
-					event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
+				if (true == DialogType.origin.equals(attrSel.getDialog())) {
+					attrsKey = attrSel.findKey(context);
+					if (attrsKey != null) {
+						event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
+					}
 				}
 			}
 		}
