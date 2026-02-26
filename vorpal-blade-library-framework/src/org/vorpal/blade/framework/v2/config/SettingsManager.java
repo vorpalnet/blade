@@ -298,7 +298,7 @@ public class SettingsManager<T> {
 			AsyncSipServlet.setSipLogger(sipLogger);
 			Callflow.setLogger(sipLogger);
 
-			settings = new Settings<T>(clazz, this, name, mapper, sample);
+//			settings = new Settings<T>(clazz, this, name, mapper, sample);
 
 			// Get the managed server & cluster names
 			domainPath = Paths.get(CONFIG_BASE_PATH);
@@ -319,10 +319,14 @@ public class SettingsManager<T> {
 				clusterName = (String) server.getAttribute(clusterObjectName, "Name");
 				clusterPath = Paths.get(CONFIG_BASE_PATH + "_clusters/" + clusterName);
 				Files.createDirectories(clusterPath);
-
 				domainName = server.getDefaultDomain();
 			}
 
+			settings = new Settings<T>(clazz, this, name, mapper, sample);
+
+			
+			
+			
 			// Support for SipFactory classes
 
 			// URI
@@ -652,17 +656,52 @@ public class SettingsManager<T> {
 		}
 	}
 
-//	public static void sendEvent(Event event) {
-//		sipLogger.logEvent(event);
-//		analytics.sendEvent(event);
-//	}
-
 	public static LogParameters getLogParameters() {
 		return logParameters;
 	}
 
 	public static void setLogParameters(LogParameters logParameters) {
 		SettingsManager.logParameters = logParameters;
+	}
+
+	public Path getDomainPath() {
+		return domainPath;
+	}
+
+	public void setDomainPath(Path domainPath) {
+		this.domainPath = domainPath;
+	}
+
+	public Path getClusterPath() {
+		return clusterPath;
+	}
+
+	public void setClusterPath(Path clusterPath) {
+		this.clusterPath = clusterPath;
+	}
+
+	public Path getServerPath() {
+		return serverPath;
+	}
+
+	public void setServerPath(Path serverPath) {
+		this.serverPath = serverPath;
+	}
+
+	public Path getSchemaPath() {
+		return schemaPath;
+	}
+
+	public void setSchemaPath(Path schemaPath) {
+		this.schemaPath = schemaPath;
+	}
+
+	public Path getSamplePath() {
+		return samplePath;
+	}
+
+	public void setSamplePath(Path samplePath) {
+		this.samplePath = samplePath;
 	}
 
 }

@@ -350,7 +350,7 @@ public class ConfigurationMonitor extends Thread {
 							"vorpal.blade:Name=" + appName + ",Type=Configuration,Location=" + parent + ",*");
 				} else if (cluster) {
 					objectName = new ObjectName(
-							"vorpal.blade:Name=" + appName + ",Type=Configuration,Location=*,Cluster=" + parent);
+							"vorpal.blade:Name=" + appName + ",Type=Configuration,Cluster=" + parent + ",*");
 				}
 
 				System.out.println("ConfigurationMonitor.updateManagedMBeans looking for " + objectName);

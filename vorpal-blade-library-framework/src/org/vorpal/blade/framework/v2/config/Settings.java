@@ -44,6 +44,7 @@ import com.fasterxml.jackson.databind.node.NullNode;
 
 /**
  * Settings implementation for managing configuration files through JMX.
+ * 
  * @author Jeff McDonald
  * @param <T> the type of configuration object
  */
@@ -84,11 +85,12 @@ public class Settings<T> implements SettingsMXBean {
 		this.clazz = clazz;
 		this.objectMapper = objectMapper;
 
-		domain = Paths.get("./config/custom/vorpal/" + configName + ".json");
-		cluster = Paths.get("./config/custom/vorpal/_clusters/" + configName + ".json");
-		server = Paths.get("./config/custom/vorpal/_servers/" + configName + ".json");
-		sample = Paths.get("./config/custom/vorpal/_samples/" + configName + ".json.SAMPLE");
-		schema = Paths.get("./config/custom/vorpal/_schemas/" + configName + ".jschema");
+		domain = Paths.get(settingsManager.getDomainPath() + "/" + configName + ".json");
+		sample = Paths.get(settingsManager.getSamplePath() + "/" + configName + ".json.SAMPLE");
+		schema = Paths.get(settingsManager.getSchemaPath() + "/" + configName + ".jschema");
+		cluster = Paths.get(settingsManager.getClusterPath() + "/" + configName + ".json");
+		server = Paths.get(settingsManager.getServerPath() + "/" + configName + ".json");
+
 	}
 
 	public T getConfiguration() throws JsonProcessingException, IOException {
@@ -260,9 +262,7 @@ public class Settings<T> implements SettingsMXBean {
 
 				if (cfg.getSession() != null) {
 					Callflow.setSessionParameters(cfg.getSession());
-					
-					
-					
+
 					AsyncSipServlet.setSessionParameters(cfg.getSession());
 				}
 
