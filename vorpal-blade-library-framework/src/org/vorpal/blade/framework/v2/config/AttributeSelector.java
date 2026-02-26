@@ -261,6 +261,8 @@ public class AttributeSelector implements Serializable {
 			case "status":
 				if (message instanceof SipServletResponse) {
 					header = Integer.toString(((SipServletResponse) message).getStatus());
+				} else {
+					sipLogger.warning(message, "No 'status' defined for " + message.getClass().getSimpleName());
 				}
 
 				break;
@@ -269,6 +271,8 @@ public class AttributeSelector implements Serializable {
 			case "reasonPhrase":
 				if (message instanceof SipServletResponse) {
 					header = ((SipServletResponse) message).getReasonPhrase();
+				} else {
+					sipLogger.warning(message, "No 'reasonPhrase' defined for " + message.getClass().getSimpleName());
 				}
 				break;
 
@@ -452,11 +456,12 @@ public class AttributeSelector implements Serializable {
 
 			default:
 				header = context.getServletContext().getInitParameter(attribute);
-				header = (header != null || "null".equals(header)) ? header : (String) context.getServletContext().getAttribute(attribute);
+				header = (header != null || "null".equals(header)) ? header
+						: (String) context.getServletContext().getAttribute(attribute);
 				header = (header != null || "null".equals(header)) ? header : System.getenv(attribute);
 				header = (header != null || "null".equals(header)) ? header : System.getProperty(attribute);
 			}
-			
+
 			if (header != null) {
 
 				Matcher matcher = _pattern.matcher(header);

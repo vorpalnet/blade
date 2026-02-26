@@ -98,8 +98,6 @@ public class Analytics {
 				if (false == DialogType.origin.equals(attrSel.getDialog())) {
 					attrsKey = attrSel.findKey(message);
 					if (attrsKey != null) {
-						Callflow.getSipLogger().warning(
-								"Analytics.addDestinationAttributes - " + attrSel.getId() + "=" + attrsKey.key);
 						event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
 					}
 				}
@@ -119,8 +117,6 @@ public class Analytics {
 				if (false == DialogType.origin.equals(attrSel.getDialog())) {
 					attrsKey = attrSel.findKey(ssce);
 					if (attrsKey != null) {
-						Callflow.getSipLogger().warning(
-								"Analytics.addDestinationAttributes - " + attrSel.getId() + "=" + attrsKey.key);
 						event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
 					}
 				}

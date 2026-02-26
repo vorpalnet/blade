@@ -183,25 +183,30 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		super(name, resourceBundleName);
 	}
 
-	public void logEvent(Event event) {
-		if (event != null) {
+	public void logEvent(SipSession sipSession, Event event) {
+		if (event != null && isLoggable(analyticsLoggingLevel)) {
 			if (this.isLoggable(analyticsLoggingLevel)) {
 				StringBuilder strBuilder = new StringBuilder();
-				strBuilder.append(NOSESS);
-				strBuilder.append(" Event: ");
-				strBuilder.append(SettingsManager.getApplicationName());
+				strBuilder.append("event=");
+				strBuilder.append(event.getName());
 
 				Iterator<Attribute> itr = event.getAttributes().iterator();
 				Attribute attr;
+
 				if (itr.hasNext()) {
+					strBuilder.append(", ");
+				}
+
+				while (itr.hasNext()) {
 					attr = itr.next();
-					strBuilder.append(attr.getId() + "=" + attr.getValue());
+					strBuilder.append(attr.getId().getName() + "=" + attr.getValue());
 					if (itr.hasNext()) {
 						strBuilder.append(", ");
 					}
 				}
 
-				log(this.analyticsLoggingLevel, strBuilder.toString());
+				String comments = strBuilder.toString();
+				log(this.analyticsLoggingLevel, sipSession, comments);
 			}
 		}
 	}

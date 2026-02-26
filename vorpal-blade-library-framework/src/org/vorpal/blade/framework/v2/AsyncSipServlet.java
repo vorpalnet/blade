@@ -269,9 +269,12 @@ public abstract class AsyncSipServlet extends SipServlet
 			servletDestroyed(initialSipServletContextEvent);
 
 			if (Analytics.jmsPublisher != null) {
-				Event stopEvent = SettingsManager.createEvent("stop", initialSipServletContextEvent);
-				stop(stopEvent);
-				SettingsManager.sendEvent(stopEvent);
+
+// jwm - FIXME				
+				
+//				Event stopEvent = SettingsManager.createEvent("stop", initialSipServletContextEvent);
+//				stop(stopEvent);
+//				SettingsManager.sendEvent(stopEvent);
 
 				Analytics.jmsPublisher.applicationStop();
 				Analytics.jmsPublisher.close();

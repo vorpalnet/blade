@@ -632,7 +632,7 @@ public class SettingsManager<T> {
 			if (event != null) {
 				analytics.addDestinationAttributes(event, message);
 				message.removeAttribute("event");
-				sipLogger.logEvent(event);
+				sipLogger.logEvent(message.getSession(), event);
 				analytics.sendEvent(event);
 			}
 
@@ -646,16 +646,16 @@ public class SettingsManager<T> {
 			if (event != null) {
 				analytics.addDestinationAttributes(event, ssce);
 				ssce.getServletContext().removeAttribute("event");
-				sipLogger.logEvent(event);
+				sipLogger.logEvent(null, event);
 				analytics.sendEvent(event);
 			}
 		}
 	}
 
-	public static void sendEvent(Event event) {
-		sipLogger.logEvent(event);
-		analytics.sendEvent(event);
-	}
+//	public static void sendEvent(Event event) {
+//		sipLogger.logEvent(event);
+//		analytics.sendEvent(event);
+//	}
 
 	public static LogParameters getLogParameters() {
 		return logParameters;
