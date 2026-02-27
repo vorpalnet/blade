@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<project basedir="." default="build" name="vorpal-blade-admin-console">
+<project basedir="." default="build" name="vorpal-blade-configurator">
 	<!-- Define unique locations first -->
-	<property name="webapp" location="src/main/blade" />
-	<property name="classes" location="src/main/blade/WEB-INF/classes" />
+	<property name="webapp" location="src/main/configurator" />
+	<property name="classes" location="src/main/configurator/WEB-INF/classes" />
 
 	<!-- property name="target-webapp" location="./target/${ant.project.name}" /-->
 
@@ -37,7 +37,7 @@
 
 	<target name="mvn_unix" if="isUnix" depends="init">
 		<exec dir="." executable="sh">
-			<arg line="-c 'mvn -f console-pom.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
+			<arg line="-c 'mvn -f pom.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
 		</exec>
 	</target>
 

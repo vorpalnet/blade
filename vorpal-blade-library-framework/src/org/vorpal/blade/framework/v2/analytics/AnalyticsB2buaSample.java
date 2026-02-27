@@ -1,8 +1,12 @@
 package org.vorpal.blade.framework.v2.analytics;
 
+import java.io.Serializable;
+
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
 
-public class AnalyticsB2buaSample extends AnalyticsAsyncSipServletSample {
+public class AnalyticsB2buaSample extends AnalyticsAsyncSipServletSample implements Serializable{
+
+	private static final long serialVersionUID = 1L;
 
 	public AnalyticsB2buaSample() {
 		

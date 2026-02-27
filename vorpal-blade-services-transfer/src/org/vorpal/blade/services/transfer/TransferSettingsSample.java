@@ -19,7 +19,7 @@ public class TransferSettingsSample extends TransferSettings {
 
 	public TransferSettingsSample() {
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.INFO);
+		this.logging.setLoggingLevel(LoggingLevel.FINER);
 		this.analytics = new AnalyticsTransferSample();
 
 		this.session = new SessionParametersDefault();

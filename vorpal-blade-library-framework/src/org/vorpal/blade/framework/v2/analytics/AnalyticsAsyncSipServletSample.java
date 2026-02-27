@@ -1,6 +1,10 @@
 package org.vorpal.blade.framework.v2.analytics;
 
-public class AnalyticsAsyncSipServletSample extends Analytics {
+import java.io.Serializable;
+
+public class AnalyticsAsyncSipServletSample extends Analytics implements Serializable{
+
+	private static final long serialVersionUID = 1L;
 
 	public AnalyticsAsyncSipServletSample() {
 

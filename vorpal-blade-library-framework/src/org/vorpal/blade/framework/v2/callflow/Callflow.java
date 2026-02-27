@@ -136,8 +136,8 @@ public abstract class Callflow implements Serializable {
 	private static final int RESPONSE_CODE_500 = 500;
 
 	// Session expiration defaults
-	private static final int DEFAULT_SESSION_EXPIRES_MINUTES = 60;
-	private static final int MIN_SESSION_EXPIRES_MINUTES = 30;
+//	private static final int DEFAULT_SESSION_EXPIRES_MINUTES = 60;
+//	private static final int MIN_SESSION_EXPIRES_MINUTES = 30;
 
 	/**
 	 * Checks if the response is a provisional response (1xx status code).
@@ -743,18 +743,21 @@ public abstract class Callflow implements Serializable {
 								}
 							}
 
-							int configSessionExpiresInMinutes = DEFAULT_SESSION_EXPIRES_MINUTES;
+							int configSessionExpiresInMinutes = (int) ((((appSession.getExpirationTime()
+									- System.currentTimeMillis()) / 1000) + 1) / 60);
 
 							SessionParameters params = SettingsManager.getSessionParameters();
 							if (params != null && params.getExpiration() != null) {
-								configSessionExpiresInMinutes = params.getExpiration();
+
+								configSessionExpiresInMinutes = Math.max(configSessionExpiresInMinutes,
+										params.getExpiration());
 							}
 
 							int sessionExpiresInMinutes = 0;
 							int finalSessionExpiresInMinutes = 0;
 
-							int sessionExpiresInSeconds = 3600; // default
-							int minSEinSeconds = 1800; // default
+							int sessionExpiresInSeconds = configSessionExpiresInMinutes * 60; // default
+							int minSEinSeconds = sessionExpiresInSeconds / 2;
 
 							String refresher = null;
 							boolean uas = false;
@@ -767,17 +770,16 @@ public abstract class Callflow implements Serializable {
 
 							if (sessionExpires == null || uas == true) { // create Session-Expires
 
-								if(uas==true) {
+								if (uas == true) {
 									sessionExpiresInSeconds = Integer.parseInt(sessionExpires.getValue());
 									String strMinSE = request.getHeader("Min-SE");
-									if(strMinSE!=null) {
-										minSEinSeconds = Integer.parseInt(strMinSE);										
-									}else {
+									if (strMinSE != null) {
+										minSEinSeconds = Integer.parseInt(strMinSE);
+									} else {
 										minSEinSeconds = sessionExpiresInSeconds / 2;
-									}									
+									}
 								}
-								
-								
+
 								if (sipLogger.isLoggable(Level.FINER)) {
 									sipLogger.finer(request,
 											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - setting keep alive timer; "//
@@ -841,7 +843,7 @@ public abstract class Callflow implements Serializable {
 
 							appSession.setExpires(finalSessionExpiresInMinutes);
 
-						}
+						} // request is initial
 					} catch (Exception exk) {
 						sipLogger.severe(request,
 								"Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
@@ -1136,6 +1138,8 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
+		sipLogger.warning(response, "Callflow.sendResponse - response.send() begin...");
+
 		SipSession sipSession = response.getSession();
 
 		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
@@ -1174,17 +1178,22 @@ public abstract class Callflow implements Serializable {
 
 					if (response.getSession().isValid()) {
 						response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
+						sipLogger.warning(response, "Callflow.sendResponse - response.sendReliably()...");
 						response.sendReliably();
 					}
 
 				} else {
+					sipLogger.warning(response, "Callflow.sendResponse - response.send #1...");
 					response.send();
 				}
 
 			} else {
+				sipLogger.warning(response, "Callflow.sendResponse - response.send #2...");
 				response.send();
 			}
 		}
+
+		sipLogger.warning(response, "Callflow.sendResponse - response.send() end.");
 
 	}
 
@@ -1604,8 +1613,8 @@ public abstract class Callflow implements Serializable {
 	public static void linkSession(SipServletMessage inbound, SipServletMessage outbound) {
 
 		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(inbound, Color.YELLOW_BOLD_BRIGHT("Callflow.linkSession - linkSession("
-					+ getVorpalDialogId(inbound) + ", " + getVorpalDialogId(outbound) + ")"));
+			sipLogger.finer(inbound, "Callflow.linkSession - linkSession(" + getVorpalDialogId(inbound) + ", "
+					+ getVorpalDialogId(outbound) + ")");
 		}
 		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
 

@@ -1,5 +1,6 @@
 package org.vorpal.blade.framework.v2.analytics;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -15,13 +16,14 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
 import org.vorpal.blade.framework.v2.config.AttributesKey;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 @JsonPropertyOrder({ "enabled", "loggingLevel", "events" })
-public class Analytics {
+public class Analytics implements Serializable{
+
+	private static final long serialVersionUID = 1L;
 
 	private Boolean enabled = false;
 

@@ -34,7 +34,11 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v2.analytics.AnalyticsB2buaSample;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.logging.LogParameters;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -262,13 +266,30 @@ public class Settings<T> implements SettingsMXBean {
 
 				if (cfg.getSession() != null) {
 					Callflow.setSessionParameters(cfg.getSession());
-
 					AsyncSipServlet.setSessionParameters(cfg.getSession());
 				}
 
 			}
 
 			settingsManager.current = (T) this.getConfiguration();
+
+			SessionParameters sp = null;
+			LogParameters lp = null;
+			Analytics an = null;
+
+			if (this.getConfiguration() instanceof Configuration) {
+				sp = ((Configuration) this.getConfiguration()).getSession();
+				lp = ((Configuration) this.getConfiguration()).getLogging();
+				an = ((Configuration) this.getConfiguration()).getAnalytics();
+			}
+			sp = (sp != null) ? sp : new SessionParametersDefault();
+			SettingsManager.setSessionParameters(sp);
+
+			lp = (lp != null) ? lp : new LogParametersDefault();
+			SettingsManager.setLogParameters(lp);
+
+			an = (an != null) ? an : new AnalyticsB2buaSample();
+			SettingsManager.setAnalytics(an);
 
 			settingsManager.initialize(config);
 

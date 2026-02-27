@@ -1,12 +1,14 @@
 package org.vorpal.blade.framework.v2.analytics;
 
+import java.io.Serializable;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 
-public class EventSelector {
-
+public class EventSelector implements Serializable{
+	private static final long serialVersionUID = 1L;
+	
 	private Set<AttributeSelector> attributes;
 
 	public EventSelector() {

@@ -701,7 +701,6 @@
 		<mkdir dir="${dist}" />
 		<mkdir dir="${classes}" />
 		<mkdir dir="${lib}" />
-		<mkdir dir=".apt_src" />
 
 		<!-- preserve java source with compiled classes for accurate debugging -->
 
@@ -723,8 +722,9 @@
 	</target>
 
 	<target name="clean">
-		<delete dir="${build}" />
+		<echo message="cleaning ${ant.project.name}..." />
 		<delete dir="${classes}" />
+		<delete dir="${build}" />
 	</target>
 
 	<!--
@@ -735,8 +735,11 @@
 	</target>
 	-->
 
-	<target name="clean-all" depends="clean" />
-
+	<!--
+	<target name="clean-all" depends="clean" >
+		<echo message="ant.project.name=${ant.project.name}" />
+	</target>
+	-->
 
 	<target name="compile" depends="init">
 		<!-- this is useful for debugging 
