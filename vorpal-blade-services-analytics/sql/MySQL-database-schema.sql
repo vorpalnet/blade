@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS attribute;
 DROP TABLE IF EXISTS event;
 DROP TABLE IF EXISTS session_key;
 DROP TABLE IF EXISTS session;
-DROP TABLE IF EXISTS application;
+--DROP TABLE IF EXISTS application;
 
 -- this table tracks application instances, unique deployments in time
 CREATE TABLE application(
@@ -97,7 +97,7 @@ CREATE TABLE event(
      REFERENCES application(id) ON DELETE CASCADE,
 
    -- may be null for sessionless events like startup & shutdown
-   session_id BIGINT,
+   session_id BIGINT NULL,
      CONSTRAINT event_fk2
      FOREIGN KEY (session_id)
      REFERENCES session(id) ON DELETE CASCADE,
@@ -130,3 +130,8 @@ CREATE TABLE attribute(
    -- something like 'sip:alice@vorpal.org'
    value TEXT NOT NULL
 );
+
+
+-- call: ALTER TABLE attribute ADD CONSTRAINT FK_attribute_event_id FOREIGN KEY (event_id) REFERENCES event (ID)
+
+

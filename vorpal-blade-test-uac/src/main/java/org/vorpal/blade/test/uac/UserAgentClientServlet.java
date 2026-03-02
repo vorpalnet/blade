@@ -25,17 +25,21 @@ public class UserAgentClientServlet extends B2buaServlet {
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
 		settings = new SettingsManager<>(event, UserAgentClientConfig.class, new UserAgentClientConfigSample());
+		sipLogger.info("UserAgentClientServlet.servletCreated");
 	}
 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
+		sipLogger.info("UserAgentClientServlet.servletDestroyed");
 		settings.unregister();
 	}
 
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
+		sipLogger.info(outboundRequest, "UserAgentClientServlet.callStarted");
+
 		outboundRequest.setAttribute("noKeepAlive", Boolean.TRUE); // for testing keep alive
-		
+
 		for (Entry<String, String> entry : settings.getCurrent().headers.entrySet()) {
 			outboundRequest.setHeader(entry.getKey(), entry.getValue());
 		}
@@ -43,30 +47,35 @@ public class UserAgentClientServlet extends B2buaServlet {
 
 	@Override
 	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
+		sipLogger.info(outboundResponse, "UserAgentClientServlet.callAnswered");
 		// TODO Auto-generated method stub
 
 	}
 
 	@Override
 	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
+		sipLogger.info(outboundRequest, "UserAgentClientServlet.callConnected");
 		// TODO Auto-generated method stub
 
 	}
 
 	@Override
 	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
+		sipLogger.info(outboundRequest, "UserAgentClientServlet.callCompleted");
 		// TODO Auto-generated method stub
 
 	}
 
 	@Override
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
+		sipLogger.info(outboundResponse, "UserAgentClientServlet.callDeclined");
 		// TODO Auto-generated method stub
 
 	}
 
 	@Override
 	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
+		sipLogger.info(outboundRequest, "UserAgentClientServlet.callAbandoned");
 		// TODO Auto-generated method stub
 
 	}

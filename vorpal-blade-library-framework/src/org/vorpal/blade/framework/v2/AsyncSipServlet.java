@@ -76,8 +76,6 @@ public abstract class AsyncSipServlet extends SipServlet
 	private static final String LINKED_SESSION = "LINKED_SESSION";
 	private static final String HASHKEY = "HASHKEY";
 	private static final String HASHKEY_COLLISION = "HASHKEY_COLLISION";
-	public static final String X_VORPAL_SESSION = "X-Vorpal-Session";
-	public static final String TIMESTAMP = "ts";
 	protected static SessionParameters sessionParameters;
 
 	/**
@@ -120,7 +118,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	 */
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
-		this.initialSipServletContextEvent = event;
+		initialSipServletContextEvent = event;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute("javax.servlet.sip.SipSessionsUtil");
 		timerService = (TimerService) event.getServletContext().getAttribute("javax.servlet.sip.TimerService");
@@ -147,31 +145,39 @@ public abstract class AsyncSipServlet extends SipServlet
 			Analytics analytics = SettingsManager.getAnalytics();
 			if (analytics != null) {
 
-				sipLogger.finer("These are the system properties that can be logged through 'analytics':");
+				if (sipLogger.isLoggable(sipLogger.getConfigurationLoggingLevel())) {
 
-				String key, value;
-				Iterator<String> itr = event.getServletContext().getInitParameterNames().asIterator();
-				while (itr.hasNext()) {
-					key = itr.next();
-					value = event.getServletContext().getInitParameter(key);
-					sipLogger.finer("AsyncSipServlet.servletInitialized - init\t" + key + "=" + value);
-				}
+					sipLogger.log(sipLogger.getConfigurationLoggingLevel(),
+							"These are the system properties that can be logged through 'analytics':");
 
-				itr = event.getServletContext().getAttributeNames().asIterator();
-				while (itr.hasNext()) {
-					key = itr.next();
-					value = event.getServletContext().getAttribute(key).toString();
-					sipLogger.finer("AsyncSipServlet.servletInitialized - attr\t" + key + "=" + value);
-				}
+					String key, value;
+					Iterator<String> itr = event.getServletContext().getInitParameterNames().asIterator();
+					while (itr.hasNext()) {
+						key = itr.next();
+						value = event.getServletContext().getInitParameter(key);
+						sipLogger.log(sipLogger.getConfigurationLoggingLevel(),
+								"AsyncSipServlet.servletInitialized - init\t" + key + "=" + value);
+					}
 
-				for (Entry<String, String> entry : System.getenv().entrySet()) {
-					sipLogger.finer(
-							"AsyncSipServlet.servletInitialized - env\t" + entry.getKey() + "=" + entry.getValue());
-				}
+					itr = event.getServletContext().getAttributeNames().asIterator();
+					while (itr.hasNext()) {
+						key = itr.next();
+						value = event.getServletContext().getAttribute(key).toString();
+						sipLogger.log(sipLogger.getConfigurationLoggingLevel(),
+								"AsyncSipServlet.servletInitialized - attr\t" + key + "=" + value);
+					}
 
-				for (Entry<Object, Object> entry : System.getProperties().entrySet()) {
-					sipLogger.finer("AsyncSipServlet.servletInitialized - props\t" + entry.getKey().toString() + "="
-							+ entry.getValue().toString());
+					for (Entry<String, String> entry : System.getenv().entrySet()) {
+						sipLogger.log(sipLogger.getConfigurationLoggingLevel(),
+								"AsyncSipServlet.servletInitialized - env\t" + entry.getKey() + "=" + entry.getValue());
+					}
+
+					for (Entry<Object, Object> entry : System.getProperties().entrySet()) {
+						sipLogger.log(sipLogger.getConfigurationLoggingLevel(),
+								"AsyncSipServlet.servletInitialized - props\t" + entry.getKey().toString() + "="
+										+ entry.getValue().toString());
+					}
+
 				}
 
 				if (Boolean.TRUE.equals(analytics.isEnabled())) {
@@ -271,7 +277,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			if (Analytics.jmsPublisher != null) {
 
 // jwm - FIXME				
-				
+
 //				Event stopEvent = SettingsManager.createEvent("stop", initialSipServletContextEvent);
 //				stop(stopEvent);
 //				SettingsManager.sendEvent(stopEvent);
@@ -1303,7 +1309,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		String vorpalSessionId = null;
 
 		try {
-			Parameterable xVorpalSession = msg.getParameterableHeader(X_VORPAL_SESSION);
+			Parameterable xVorpalSession = msg.getParameterableHeader(Callflow.X_VORPAL_SESSION);
 			if (xVorpalSession != null) {
 				vorpalSessionId = xVorpalSession.getValue();
 			}
@@ -1318,9 +1324,9 @@ public abstract class AsyncSipServlet extends SipServlet
 		String dialog = null;
 
 		try {
-			Parameterable xVorpalSession = msg.getParameterableHeader(X_VORPAL_SESSION);
+			Parameterable xVorpalSession = msg.getParameterableHeader(Callflow.X_VORPAL_SESSION);
 			if (xVorpalSession != null) {
-				dialog = xVorpalSession.getParameter("dialog");
+				dialog = xVorpalSession.getParameter(Callflow.DIALOG_PARAM);
 			}
 		} catch (Exception ex) {
 			sipLogger.severe(msg, ex);
@@ -1333,9 +1339,9 @@ public abstract class AsyncSipServlet extends SipServlet
 		String timestamp = null;
 
 		try {
-			Parameterable xVorpalSession = msg.getParameterableHeader(X_VORPAL_SESSION);
+			Parameterable xVorpalSession = msg.getParameterableHeader(Callflow.X_VORPAL_SESSION);
 			if (xVorpalSession != null) {
-				timestamp = xVorpalSession.getParameter(TIMESTAMP);
+				timestamp = xVorpalSession.getParameter(Callflow.TIMESTAMP_PARAM);
 			}
 		} catch (Exception ex) {
 			sipLogger.severe(msg, ex);

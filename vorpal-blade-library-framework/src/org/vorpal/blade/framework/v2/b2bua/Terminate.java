@@ -34,6 +34,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.UAMode;
 
+import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
@@ -115,11 +116,13 @@ public class Terminate extends Callflow {
 								copyContentAndHeaders(request, terminationRequest);
 							}
 
-								SettingsManager.createEvent("callAbandoned", terminationRequest);
-								if (b2buaListener != null) {
+							SettingsManager.createEvent("callAbandoned", terminationRequest);
+							if (b2buaListener != null) {
 								b2buaListener.callAbandoned(terminationRequest);
-								}
-								SettingsManager.sendEvent(terminationRequest);
+							}
+							SettingsManager.sendEvent(terminationRequest);
+							Analytics.sessionStop(terminationRequest);
+
 						}
 
 						break;
@@ -130,11 +133,12 @@ public class Terminate extends Callflow {
 							copyContentAndHeaders(request, terminationRequest);
 						}
 
-							SettingsManager.createEvent("callCompleted", terminationRequest);
-							if (b2buaListener != null) {
+						SettingsManager.createEvent("callCompleted", terminationRequest);
+						if (b2buaListener != null) {
 							b2buaListener.callCompleted(terminationRequest);
-							}
-							SettingsManager.sendEvent(terminationRequest);
+						}
+						SettingsManager.sendEvent(terminationRequest);
+						Analytics.sessionStop(terminationRequest);
 
 						break;
 

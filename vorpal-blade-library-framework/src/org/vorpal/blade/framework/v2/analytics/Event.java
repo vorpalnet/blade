@@ -2,8 +2,8 @@ package org.vorpal.blade.framework.v2.analytics;
 
 import java.io.Serializable;
 import java.util.Date;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 import javax.persistence.CascadeType;
 import javax.persistence.Column;
@@ -13,6 +13,7 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
+import javax.persistence.MapKeyColumn;
 import javax.persistence.NamedQuery;
 import javax.persistence.OneToMany;
 import javax.persistence.Table;
@@ -48,12 +49,13 @@ public class Event implements Serializable {
 	private String name;
 
 	@Column(name = "session_id")
-	private long sessionId;
+	private Long sessionId;
 
 	// unidirectional one-to-many association to Attribute
 	@OneToMany(cascade = { CascadeType.ALL }, orphanRemoval = true)
 	@JoinColumn(name = "event_id", nullable = false)
-	private List<Attribute> attributes = new LinkedList<Attribute>();
+	@MapKeyColumn(name = "name", insertable = false, updatable = false)
+	private Map<String, Attribute> attributes = new HashMap<>();
 
 	public Event() {
 		this.setCreated(new Date());
@@ -75,27 +77,19 @@ public class Event implements Serializable {
 	// Event.id
 	public void persistEvent(EntityManager em) {
 
-		// remove the attributes
-		List<Attribute> _attributes = this.getAttributes();
-		this.attributes = new LinkedList<Attribute>();
+		// save and remove the attributes
+		Map<String, Attribute> _attributes = this.getAttributes();
+		this.attributes = new HashMap<>();
 
-		// persist just the event
-//		em.getTransaction().begin();
+		// persist just the event and flush to get the generated id
 		em.persist(this);
-//		em.getTransaction().commit();
+		em.flush();
 
-		// update the event id in the attributes
-		for (Attribute attr : _attributes) {
+		// persist each attribute individually with the correct event id
+		for (Attribute attr : _attributes.values()) {
 			attr.getId().setEventId(id);
+			em.persist(attr);
 		}
-
-		// restore the attributes
-		this.attributes = _attributes;
-
-		// persist the attributes
-//		em.getTransaction().begin();
-		em.persist(this);
-//		em.getTransaction().commit();
 
 	}
 
@@ -131,29 +125,29 @@ public class Event implements Serializable {
 		this.name = name;
 	}
 
-	public long getSessionId() {
+	public Long getSessionId() {
 		return this.sessionId;
 	}
 
-	public void setSessionId(long sessionId) {
+	public void setSessionId(Long sessionId) {
 		this.sessionId = sessionId;
 	}
 
-	public List<Attribute> getAttributes() {
+	public Map<String, Attribute> getAttributes() {
 		return this.attributes;
 	}
 
-	public void setAttributes(List<Attribute> attributes) {
+	public void setAttributes(Map<String, Attribute> attributes) {
 		this.attributes = attributes;
 	}
 
 	public Attribute addAttribute(Attribute attribute) {
-		getAttributes().add(attribute);
+		getAttributes().put(attribute.getId().getName(), attribute);
 		return attribute;
 	}
 
 	public Attribute removeAttribute(Attribute attribute) {
-		getAttributes().remove(attribute);
+		getAttributes().remove(attribute.getId().getName());
 		return attribute;
 	}
 

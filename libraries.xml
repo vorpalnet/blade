@@ -801,6 +801,10 @@
 		<!-- in case META-INF doesn't exist -->
 		<mkdir dir="${src}/META-INF" />
 
+		<copy todir="${classes}">
+			<fileset dir="${src}" includes="**/*" />
+		</copy>
+
 		<manifest file="${build}/MANIFEST.MF">
 			<attribute name="Copyright" value="${copyright}" />
 			<attribute name="License" value="${license}" />
@@ -814,7 +818,6 @@
 			<lib dir="${framework_dir}">
 				<include name="**/*.jar" />
 			</lib>
-			<metainf dir="${src}/META-INF" />
 		</war>
 
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />

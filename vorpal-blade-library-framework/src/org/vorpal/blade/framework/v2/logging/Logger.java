@@ -28,6 +28,7 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.Iterator;
+import java.util.Map.Entry;
 import java.util.logging.Level;
 
 import javax.servlet.sip.Proxy;
@@ -190,16 +191,16 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				strBuilder.append("event=");
 				strBuilder.append(event.getName());
 
-				Iterator<Attribute> itr = event.getAttributes().iterator();
-				Attribute attr;
+				Iterator<Entry<String, Attribute>> itr = event.getAttributes().entrySet().iterator();
+				Entry<String, Attribute> entry;
 
 				if (itr.hasNext()) {
 					strBuilder.append(", ");
 				}
 
 				while (itr.hasNext()) {
-					attr = itr.next();
-					strBuilder.append(attr.getId().getName() + "=" + attr.getValue());
+					entry = itr.next();
+					strBuilder.append(entry.getKey() + "=" + entry.getValue().getValue() );
 					if (itr.hasNext()) {
 						strBuilder.append(", ");
 					}

@@ -11,6 +11,8 @@ import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
@@ -323,11 +325,7 @@ public class AttributeSelector implements Serializable {
 				break;
 			default:
 				header = message.getHeader(attribute);
-
-				if (header == null) {
-					header = (String) message.getSession().getAttribute(attribute);
-				}
-
+				header = (header != null) ? header : (String) message.getSession().getAttribute(attribute);
 			}
 
 			if (header != null) {
@@ -456,10 +454,9 @@ public class AttributeSelector implements Serializable {
 
 			default:
 				header = context.getServletContext().getInitParameter(attribute);
-				header = (header != null || "null".equals(header)) ? header
-						: (String) context.getServletContext().getAttribute(attribute);
-				header = (header != null || "null".equals(header)) ? header : System.getenv(attribute);
-				header = (header != null || "null".equals(header)) ? header : System.getProperty(attribute);
+				header = (header != null) ? header : (String) context.getServletContext().getAttribute(attribute);
+				header = (header != null) ? header : System.getenv(attribute);
+				header = (header != null) ? header : System.getProperty(attribute);
 			}
 
 			if (header != null) {
@@ -549,6 +546,284 @@ public class AttributeSelector implements Serializable {
 					", expression=" + expression + //
 					", key=" + key);
 			sipLogger.severe(Logger.serializeObject(context));
+			sipLogger.logStackTrace(e);
+		}
+
+		return attrsKey;
+	}
+
+	public AttributesKey findKey(HttpServletRequest request) {
+		if (request == null || attribute == null) {
+			return null;
+		}
+
+		Logger sipLogger = SettingsManager.getSipLogger();
+		AttributesKey attrsKey = null;
+		String key = null;
+		String header = null;
+		boolean matchResult = false;
+		String value = null;
+
+		try {
+			switch (attribute) {
+
+			case "method":
+				header = request.getMethod();
+				break;
+
+			case "requestURI":
+			case "RequestURI":
+				header = request.getRequestURI();
+				break;
+
+			case "contextPath":
+				header = request.getContextPath();
+				break;
+
+			case "pathInfo":
+				header = request.getPathInfo();
+				break;
+
+			case "queryString":
+				header = request.getQueryString();
+				break;
+
+			case "remoteIP":
+			case "remoteAddr":
+				header = request.getRemoteAddr();
+				break;
+
+			case "contentType":
+				header = request.getContentType();
+				break;
+
+			case "body":
+			case "content":
+				try {
+					java.io.BufferedReader reader = request.getReader();
+					if (reader != null) {
+						StringBuilder sb = new StringBuilder();
+						String line;
+						while ((line = reader.readLine()) != null) {
+							sb.append(line);
+						}
+						header = sb.toString();
+					}
+				} catch (IOException e) {
+					sipLogger.logStackTrace(e);
+					return null;
+				}
+				break;
+
+			default:
+				header = request.getHeader(attribute);
+				header = (header != null) ? header : request.getParameter(attribute);
+				header = (header != null) ? header
+						: (request.getAttribute(attribute) != null
+								? request.getAttribute(attribute).toString()
+								: null);
+			}
+
+			if (header != null) {
+
+				Matcher matcher = _pattern.matcher(header);
+
+				value = (attribute.matches("content|body")) ? "[...]" : header;
+
+				matchResult = matcher.matches();
+
+				if (matchResult && expression != null) {
+					key = matcher.replaceAll(expression);
+				}
+
+				if (matchResult) {
+
+					attrsKey = new AttributesKey();
+					attrsKey.key = key;
+
+					LinkedList<String> groups = new LinkedList<>();
+					Matcher m = _p.matcher(this._strPattern);
+					String __name;
+
+					while (m.find()) {
+						__name = m.group("name");
+						if (__name != null) {
+							groups.add(__name);
+						}
+					}
+
+					Matcher a__matcher = _pattern.matcher(header);
+					boolean a__matchFound = a__matcher.find();
+					if (a__matchFound) {
+						String a__name, a__value;
+						Iterator<String> a__itr = groups.iterator();
+						while (a__itr.hasNext()) {
+							a__name = a__itr.next();
+							a__value = a__matcher.group(a__name);
+							if (a__value != null && a__value.length() > 0) {
+								attrsKey.attributes.put(a__name, a__value);
+							}
+						}
+					}
+
+					if (additionalExpressions != null && !additionalExpressions.isEmpty()) {
+						Map<String, String> additionalAttributes = new HashMap<>();
+						for (Entry<String, String> entry : this.additionalExpressions.entrySet()) {
+							if (!attrsKey.attributes.containsKey(entry.getKey())) {
+								String attrValue = Configuration.resolveVariables(attrsKey.attributes,
+										entry.getValue());
+								additionalAttributes.put(entry.getKey(), attrValue);
+							}
+						}
+						attrsKey.attributes.putAll(additionalAttributes);
+					}
+
+				}
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer("AttributeSelector.findKey(HttpServletRequest) - " + //
+							"- matchResult=" + matchResult + //
+							", selector id=" + this.getId() + //
+							", attribute=" + this.getAttribute() + //
+							", value=" + value + //
+							", pattern=" + _strPattern + //
+							", expression=" + expression + //
+							", key=" + key);
+				}
+
+			}
+
+		} catch (Exception e) {
+			sipLogger.severe("AttributeSelector.findKey(HttpServletRequest) - Error; Check configuration file." + //
+					"; matchResult=" + matchResult + //
+					", selector id=" + id + //
+					", attribute=" + attribute + //
+					", value=" + value + //
+					", pattern=" + _strPattern + //
+					", expression=" + expression + //
+					", key=" + key);
+			sipLogger.logStackTrace(e);
+		}
+
+		return attrsKey;
+	}
+
+	public AttributesKey findKey(HttpServletResponse response) {
+		return findKey(response, null);
+	}
+
+	public AttributesKey findKey(HttpServletResponse response, byte[] responseBody) {
+		if (response == null || attribute == null) {
+			return null;
+		}
+
+		Logger sipLogger = SettingsManager.getSipLogger();
+		AttributesKey attrsKey = null;
+		String key = null;
+		String header = null;
+		boolean matchResult = false;
+		String value = null;
+
+		try {
+			switch (attribute) {
+
+			case "status":
+				header = Integer.toString(response.getStatus());
+				break;
+
+			case "contentType":
+				header = response.getContentType();
+				break;
+
+			case "body":
+			case "content":
+				if (responseBody != null) {
+					header = new String(responseBody);
+				}
+				break;
+
+			default:
+				header = response.getHeader(attribute);
+			}
+
+			if (header != null) {
+
+				Matcher matcher = _pattern.matcher(header);
+
+				value = (attribute.matches("content|body")) ? "[...]" : header;
+
+				matchResult = matcher.matches();
+
+				if (matchResult && expression != null) {
+					key = matcher.replaceAll(expression);
+				}
+
+				if (matchResult) {
+
+					attrsKey = new AttributesKey();
+					attrsKey.key = key;
+
+					LinkedList<String> groups = new LinkedList<>();
+					Matcher m = _p.matcher(this._strPattern);
+					String __name;
+
+					while (m.find()) {
+						__name = m.group("name");
+						if (__name != null) {
+							groups.add(__name);
+						}
+					}
+
+					Matcher a__matcher = _pattern.matcher(header);
+					boolean a__matchFound = a__matcher.find();
+					if (a__matchFound) {
+						String a__name, a__value;
+						Iterator<String> a__itr = groups.iterator();
+						while (a__itr.hasNext()) {
+							a__name = a__itr.next();
+							a__value = a__matcher.group(a__name);
+							if (a__value != null && a__value.length() > 0) {
+								attrsKey.attributes.put(a__name, a__value);
+							}
+						}
+					}
+
+					if (additionalExpressions != null && !additionalExpressions.isEmpty()) {
+						Map<String, String> additionalAttributes = new HashMap<>();
+						for (Entry<String, String> entry : this.additionalExpressions.entrySet()) {
+							if (!attrsKey.attributes.containsKey(entry.getKey())) {
+								String attrValue = Configuration.resolveVariables(attrsKey.attributes,
+										entry.getValue());
+								additionalAttributes.put(entry.getKey(), attrValue);
+							}
+						}
+						attrsKey.attributes.putAll(additionalAttributes);
+					}
+
+				}
+
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer("AttributeSelector.findKey(HttpServletResponse) - " + //
+							"- matchResult=" + matchResult + //
+							", selector id=" + this.getId() + //
+							", attribute=" + this.getAttribute() + //
+							", value=" + value + //
+							", pattern=" + _strPattern + //
+							", expression=" + expression + //
+							", key=" + key);
+				}
+
+			}
+
+		} catch (Exception e) {
+			sipLogger.severe("AttributeSelector.findKey(HttpServletResponse) - Error; Check configuration file." + //
+					"; matchResult=" + matchResult + //
+					", selector id=" + id + //
+					", attribute=" + attribute + //
+					", value=" + value + //
+					", pattern=" + _strPattern + //
+					", expression=" + expression + //
+					", key=" + key);
 			sipLogger.logStackTrace(e);
 		}
 

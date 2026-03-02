@@ -15,6 +15,8 @@ import javax.ejb.Timeout;
 import javax.ejb.Timer;
 import javax.ejb.TimerConfig;
 import javax.ejb.TimerService;
+import javax.ejb.TransactionManagement;
+import javax.ejb.TransactionManagementType;
 import javax.jms.Message;
 import javax.jms.MessageListener;
 import javax.jms.ObjectMessage;
@@ -40,6 +42,8 @@ import org.vorpal.blade.services.analytics.sip.AnalyticsSipServlet;
  * persistent store. A programmatic timer periodically checks for database
  * recovery and resumes message delivery when the connection is restored.
  */
+
+@TransactionManagement (TransactionManagementType.BEAN)
 @MessageDriven(mappedName = "jms/BladeAnalyticsDistributedQueue", activationConfig = {
 		@ActivationConfigProperty(propertyName = "acknowledgeMode", propertyValue = "Auto-acknowledge"),
 		@ActivationConfigProperty(propertyName = "destinationType", propertyValue = "javax.jms.Queue") })
@@ -64,7 +68,11 @@ public class AnalyticsJmsListener implements MessageListener {
 		try {
 			emf = Persistence.createEntityManagerFactory("BladeAnalytics");
 		} catch (Exception e) {
-			sipLogger.severe("AnalyticsJmsListener: Failed to create EntityManagerFactory: " + e.getMessage());
+			if (sipLogger != null) {
+				sipLogger.severe("AnalyticsJmsListener: Failed to create EntityManagerFactory: " + e.getMessage());
+			} else {
+				System.err.println("AnalyticsJmsListener: Failed to create EntityManagerFactory: " + e.getMessage());
+			}
 			reportDatabaseDown();
 		}
 	}
@@ -79,11 +87,15 @@ public class AnalyticsJmsListener implements MessageListener {
 	@Override
 	public void onMessage(Message message) {
 
+		// Lazy init logger if it wasn't available at @PostConstruct time
+		if (sipLogger == null) {
+			sipLogger = SettingsManager.getSipLogger();
+		}
+
 		// Safety net: if a message slips through during the brief window between
-		// setting databaseDown and the JMX suspend taking effect, roll it back.
+		// setting databaseDown and the JMX suspend taking effect, discard it.
 		if (databaseDown) {
-			sipLogger.warning("AnalyticsJmsListener: Database unavailable, rolling back message");
-			mdbContext.setRollbackOnly();
+			sipLogger.warning("AnalyticsJmsListener: Database unavailable, discarding message");
 			return;
 		}
 
@@ -99,7 +111,6 @@ public class AnalyticsJmsListener implements MessageListener {
 			} catch (Exception e) {
 				sipLogger.severe("AnalyticsJmsListener: Cannot create EntityManagerFactory: " + e.getMessage());
 				reportDatabaseDown();
-				mdbContext.setRollbackOnly();
 				return;
 			}
 		}
@@ -148,7 +159,6 @@ public class AnalyticsJmsListener implements MessageListener {
 				sipLogger.severe("AnalyticsJmsListener: Database connection error: " + ex.getMessage());
 				closeEmf();
 				reportDatabaseDown();
-				mdbContext.setRollbackOnly();
 			} else {
 				// Non-connection error (bad data, constraint violation, etc.)
 				// Log it but let the message be consumed to avoid infinite redelivery
@@ -177,7 +187,11 @@ public class AnalyticsJmsListener implements MessageListener {
 		synchronized (AnalyticsJmsListener.class) {
 			if (!databaseDown) {
 				databaseDown = true;
-				sipLogger.severe("AnalyticsJmsListener: Database failure detected, suspending message delivery");
+				if (sipLogger != null) {
+					sipLogger.severe("AnalyticsJmsListener: Database failure detected, suspending message delivery");
+				} else {
+					System.err.println("AnalyticsJmsListener: Database failure detected, suspending message delivery");
+				}
 				suspendMessageDelivery();
 				startHealthCheckTimer();
 			}
@@ -283,12 +297,12 @@ public class AnalyticsJmsListener implements MessageListener {
 	}
 
 	private void persistApplication(EntityManager em, Application application) {
-		em.persist(application);
+		em.merge(application);
 		sipLogger.info("AnalyticsJmsListener: Persisted Application id=" + application.getId());
 	}
 
 	private void persistSession(EntityManager em, Session session) {
-		em.persist(session);
+		em.merge(session);
 		sipLogger.info("AnalyticsJmsListener: Persisted Session id=" + session.getId());
 	}
 

@@ -60,6 +60,7 @@ import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
+import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.keepalive.KeepAlive;
@@ -120,6 +121,9 @@ public abstract class Callflow implements Serializable {
 	private static final String VORPAL_SESSION = "VORPAL_SESSION";
 	private static final String VORPAL_TIMESTAMP = "VORPAL_TIMESTAMP";
 	private static final String VORPAL_DIALOG = "VORPAL_DIALOG";
+
+	public static final String TIMESTAMP_PARAM = "ts";
+	public static final String DIALOG_PARAM = "dialog";
 
 	private static final String EXPECT_ACK = "EXPECT_ACK";
 	private static final String USER_AGENT_ATTR = "userAgent";
@@ -609,12 +613,12 @@ public abstract class Callflow implements Serializable {
 							appSession.setAttribute(VORPAL_SESSION, indexKey);
 						}
 
-						String dialogId = xVorpalSession.getParameter("dialog");
+						String dialogId = xVorpalSession.getParameter(DIALOG_PARAM);
 						if (dialogId != null) {
 							sipSession.setAttribute(VORPAL_DIALOG, dialogId);
 						}
 
-						String vorpalTimestamp = xVorpalSession.getParameter(VORPAL_TIMESTAMP);
+						String vorpalTimestamp = xVorpalSession.getParameter(TIMESTAMP_PARAM);
 						if (vorpalTimestamp != null) {
 							appSession.setAttribute(VORPAL_TIMESTAMP, vorpalTimestamp);
 						}
@@ -719,8 +723,6 @@ public abstract class Callflow implements Serializable {
 
 				if (sipSession != null && sipSession.isValid()) {
 
-					// Transfer has problems with default values... fix that before re-enabling
-					// this.
 //					// begin KeepAlive logic...
 					try {
 						if (request.isInitial() //
@@ -862,11 +864,11 @@ public abstract class Callflow implements Serializable {
 						sipSession.setAttribute(EXPECT_ACK, Boolean.TRUE);
 
 						if (request.isInitial()) {
-							String vorpalId = getVorpalSessionId(appSession);
-							String dialogId = getVorpalDialogId(sipSession);
-							String timestamp = getVorpalTimestamp(appSession);
-							String xVorpalSession = vorpalId + ";dialog=" + dialogId + ";timestamp=" + timestamp;
-							request.setHeader(X_VORPAL_SESSION, xVorpalSession);
+							Parameterable xVorpalSession = sipFactory
+									.createParameterable(getVorpalSessionId(appSession));
+							xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
+							xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
+							request.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
 						}
 
 						break;
@@ -882,6 +884,10 @@ public abstract class Callflow implements Serializable {
 
 				}
 			}
+
+			// For associating SIP with HTTP during Analytics processing
+			// The AnalyticsFilter will remove it.
+			Analytics.sipServletRequest.set(request);
 
 		} catch (
 
@@ -1138,8 +1144,8 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
-		sipLogger.warning(response, "Callflow.sendResponse - response.send() begin...");
 
+		SipApplicationSession appSession = response.getApplicationSession();
 		SipSession sipSession = response.getSession();
 
 		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
@@ -1163,10 +1169,10 @@ public abstract class Callflow implements Serializable {
 			if (response.getRequest().isInitial()) {
 				String indexKey = getVorpalSessionId(response.getApplicationSession());
 				if (indexKey != null) {
-					String dialog = getVorpalDialogId(response.getSession());
-					String timestamp = getVorpalTimestamp(response.getApplicationSession());
-					String xVorpalSession = indexKey + ";dialog=" + dialog + ";timestamp=" + timestamp;
-					response.setHeader(X_VORPAL_SESSION, xVorpalSession);
+					Parameterable xVorpalSession = sipFactory.createParameterable(getVorpalSessionId(appSession));
+					xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
+					xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
+					response.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
 				}
 			}
 
@@ -1178,22 +1184,17 @@ public abstract class Callflow implements Serializable {
 
 					if (response.getSession().isValid()) {
 						response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
-						sipLogger.warning(response, "Callflow.sendResponse - response.sendReliably()...");
 						response.sendReliably();
 					}
 
 				} else {
-					sipLogger.warning(response, "Callflow.sendResponse - response.send #1...");
 					response.send();
 				}
 
 			} else {
-				sipLogger.warning(response, "Callflow.sendResponse - response.send #2...");
 				response.send();
 			}
 		}
-
-		sipLogger.warning(response, "Callflow.sendResponse - response.send() end.");
 
 	}
 

@@ -44,38 +44,38 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 		sipLogger.fine("AnalyticsSipServlet.servletDestroyed");
 	}
 
-	public static long combineToLong(long timestamp, int otherValue) {
-		sipLogger.finer("AnalyticsSipServlet.combineToLong");
-		// Convert timestamp to 32 bits (takes the lower 32 bits)
-		int timestamp32 = (int) timestamp;
-
-		// Combine: shift timestamp to upper 32 bits, OR with other value in lower 32
-		// bits
-		// Use 0xFFFFFFFFL mask to prevent sign extension of otherValue
-		return ((long) timestamp32 << 32) | (otherValue & 0xFFFFFFFFL);
-	}
-
-	// Helper method to extract the timestamp back
-	public static int extractTimestamp(long combined) {
-		sipLogger.finer("AnalyticsSipServlet.extractTimestamp");
-		return (int) (combined >>> 32);
-	}
-
-	// Helper method to extract the other value back
-	public static int extractOtherValue(long combined) {
-		sipLogger.finer("AnalyticsSipServlet.extractOtherValue");
-		return (int) combined;
-	}
-
-	public static long getSessionId(SipApplicationSession appSession) {
-		sipLogger.finer("AnalyticsSipServlet.getSessionId");
-		String vTimestamp = Callflow.getVorpalTimestamp(appSession);
-		Long timestamp = Long.parseLong(vTimestamp, 16);
-		Integer otherValue = Integer.parseUnsignedInt(Callflow.getVorpalSessionId(appSession), 16);
-
-		long sessionId = combineToLong(timestamp, otherValue);
-		return sessionId;
-	}
+//	public static long combineToLong(long timestamp, int otherValue) {
+//		sipLogger.finer("AnalyticsSipServlet.combineToLong");
+//		// Convert timestamp to 32 bits (takes the lower 32 bits)
+//		int timestamp32 = (int) timestamp;
+//
+//		// Combine: shift timestamp to upper 32 bits, OR with other value in lower 32
+//		// bits
+//		// Use 0xFFFFFFFFL mask to prevent sign extension of otherValue
+//		return ((long) timestamp32 << 32) | (otherValue & 0xFFFFFFFFL);
+//	}
+//
+//	// Helper method to extract the timestamp back
+//	public static int extractTimestamp(long combined) {
+//		sipLogger.finer("AnalyticsSipServlet.extractTimestamp");
+//		return (int) (combined >>> 32);
+//	}
+//
+//	// Helper method to extract the other value back
+//	public static int extractOtherValue(long combined) {
+//		sipLogger.finer("AnalyticsSipServlet.extractOtherValue");
+//		return (int) combined;
+//	}
+//
+//	public static long getSessionId(SipApplicationSession appSession) {
+//		sipLogger.finer("AnalyticsSipServlet.getSessionId");
+//		String vTimestamp = Callflow.getVorpalTimestamp(appSession);
+//		Long timestamp = Long.parseLong(vTimestamp, 16);
+//		Integer otherValue = Integer.parseUnsignedInt(Callflow.getVorpalSessionId(appSession), 16);
+//
+//		long sessionId = combineToLong(timestamp, otherValue);
+//		return sessionId;
+//	}
 
 	@Override
 	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {

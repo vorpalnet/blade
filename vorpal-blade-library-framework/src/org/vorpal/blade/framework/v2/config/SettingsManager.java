@@ -53,6 +53,7 @@ import javax.servlet.sip.URI;
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.analytics.Event;
+import org.vorpal.blade.framework.v2.analytics.Session;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
@@ -324,9 +325,6 @@ public class SettingsManager<T> {
 
 			settings = new Settings<T>(clazz, this, name, mapper, sample);
 
-			
-			
-			
 			// Support for SipFactory classes
 
 			// URI
@@ -611,10 +609,12 @@ public class SettingsManager<T> {
 
 	public static Event createEvent(String name, SipServletMessage message) {
 		Event event = null;
+
 		if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
 			event = analytics.createEvent(name, message);
 			message.setAttribute("event", event);
 		}
+
 		return event;
 	}
 
@@ -623,7 +623,10 @@ public class SettingsManager<T> {
 
 		if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
 			event = analytics.createEvent(name, context);
-			context.getServletContext().setAttribute("event", event);
+
+			// jwm - this is a bad idea
+			// context.getServletContext().setAttribute("event", event);
+
 		}
 
 		return event;

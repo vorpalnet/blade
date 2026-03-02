@@ -2,6 +2,7 @@ package org.vorpal.blade.framework.v2.analytics;
 
 import java.io.Serializable;
 import java.sql.Date;
+import java.sql.Timestamp;
 import java.time.Instant;
 
 import javax.jms.JMSException;
@@ -14,6 +15,7 @@ import javax.jms.QueueSession;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.servlet.ServletContextListener;
+import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
@@ -126,20 +128,69 @@ public class JmsPublisher implements ServletContextListener {
 
 	@SuppressWarnings("rawtypes")
 	public void applicationStop() {
-//		sipLogger.finer("JmsPublisher.applicationStop");
+		Logger sipLogger = Callflow.getSipLogger();
 
 		try {
-			System.out.println("JmsPublisher application.setId=" + Analytics.getAppInstanceId());
+			sipLogger.warning("JmsPublisher.applicationStop - application.setId=" + Analytics.getAppInstanceId());
 			application.setId(Analytics.getAppInstanceId());
-			System.out.println("JmsPublisher application.setDestroyed=" + Date.from(Instant.now()));
+			System.out.println("JmsPublisher.applicationStop - application.setDestroyed=" + Date.from(Instant.now()));
 			application.setDestroyed(Date.from(Instant.now()));
 			ObjectMessage message = qsession.createObjectMessage();
 			message.setObject(application);
 			qsender.send(message);
 		} catch (Exception ex) {
-			ex.printStackTrace();
+			sipLogger.severe(ex);
 		}
 
+	}
+
+	public Session sessionStart(SipServletMessage msg) {
+		Session session = null;
+		Logger sipLogger = Callflow.getSipLogger();
+		try {
+			sipLogger.warning(msg, "JmsPublisher.sessionStart... jmsPublisher="+Analytics.jmsPublisher+", isLoggable="+sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel()));
+			if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
+				session = Analytics.createSession(msg);
+				sipLogger.warning(msg, "JmsPublisher.sessionStart... session="+session);
+				if (session != null && Analytics.jmsPublisher != null) {
+					ObjectMessage message = qsession.createObjectMessage();
+					message.setObject(session);
+					sipLogger.warning(msg, "JmsPublisher.sessionStart... sending session");
+					qsender.send(message);
+					sipLogger.warning(msg, "JmsPublisher.sessionStart... session sent");
+				}
+
+			}
+
+		} catch (Exception ex) {
+			sipLogger.severe(ex);
+		}
+
+		return session;
+	}
+
+	public Session sessionStop(SipServletMessage msg) {
+		Session session = null;
+		Logger sipLogger = Callflow.getSipLogger();
+		try {
+
+			if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
+				session = Analytics.createSession(msg);
+				session.setDestroyed(Timestamp.from(Instant.now()));
+
+				if (session != null && Analytics.jmsPublisher != null) {
+					ObjectMessage message = qsession.createObjectMessage();
+					message.setObject(session);
+					qsender.send(message);
+				}
+
+			}
+
+		} catch (Exception ex) {
+			sipLogger.severe(ex);
+		}
+
+		return session;
 	}
 
 	/**
@@ -155,9 +206,10 @@ public class JmsPublisher implements ServletContextListener {
 
 		ObjectMessage message = qsession.createObjectMessage();
 		message.setObject(object);
-		
+
 		qsender.send(message);
-		Callflow.getSipLogger().warning("JmsPublisher.send - Sending "+object.getClass().getSimpleName()+":\n"+Logger.serializeObject(object)); 
+		Callflow.getSipLogger().warning("JmsPublisher.send - Sending " + object.getClass().getSimpleName() + ":\n"
+				+ Logger.serializeObject(object));
 	}
 
 	/**

@@ -28,10 +28,7 @@ import java.io.IOException;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
-import javax.servlet.sip.Parameterable;
-import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipApplicationSession;
-import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
@@ -39,10 +36,9 @@ import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.analytics.Event;
+import org.vorpal.blade.framework.v2.analytics.Session;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v2.logging.Color;
 
 /**
  * Callflow for handling initial INVITE requests in a B2BUA scenario. Creates
@@ -88,45 +84,6 @@ public class InitialInvite extends Callflow {
 		this.b2buaListener = b2buaListener;
 	}
 
-//	/**
-//	 * This method looks for the "Session-Expires" header on either a request or
-//	 * response object. If it exists, it sets the SipApplicationSession to be the
-//	 * same. If no header is found, use the expiration
-//	 * value in the configuration file.
-//	 * 
-//	 * @param msg the SIP servlet message
-//	 */
-//	public static void setSessionExpiration(SipServletMessage msg) {
-//		if (msg == null) {
-//			return;
-//		}
-//		SipApplicationSession appSession = msg.getApplicationSession();
-//		if (appSession == null) {
-//			return;
-//		}
-//
-//		try {
-//			String sessionExpires = null;
-//			Parameterable p = msg.getParameterableHeader(HEADER_SESSION_EXPIRES);
-//			if (p != null) {
-//				sessionExpires = p.getValue();
-//				if (sessionExpires != null) {
-//
-//					int appSessionExpiresInMinutes = (Integer.parseInt(sessionExpires) / SECONDS_PER_MINUTE);
-//					sipLogger.finer(msg, Color.YELLOW_BOLD_BRIGHT(
-//							"InitialInvite.setSessionExpiration - appSessionExpiresInMinutes=" + appSessionExpiresInMinutes));
-//					appSession.setExpires(appSessionExpiresInMinutes);
-//				}
-//			}
-//			// If no header, use configuration file instead (handled in AsyncSipServlet)
-//		} catch (ServletParseException e) {
-//			// Invalid Session-Expires header format; ignore and use default expiration
-//		} catch (NumberFormatException e) {
-//			// Invalid numeric value in Session-Expires header; ignore and use default
-//			// expiration
-//		}
-//	}
-
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
@@ -163,6 +120,7 @@ public class InitialInvite extends Callflow {
 		}
 		bobRequest.getSession().setAttribute(ATTR_SIP_ADDRESS, bobRequest.getTo());
 
+		Analytics.sessionStart(bobRequest);
 		SettingsManager.createEvent("callStarted", bobRequest);
 		if (b2buaListener != null) {
 			b2buaListener.callStarted(bobRequest);
@@ -238,6 +196,7 @@ public class InitialInvite extends Callflow {
 						b2buaListener.callDeclined(aliceResponse);
 					}
 					SettingsManager.sendEvent(aliceResponse);
+					Analytics.sessionStop(aliceResponse);
 				}
 
 				// Sometimes you want to arrest the processing of the transaction.
