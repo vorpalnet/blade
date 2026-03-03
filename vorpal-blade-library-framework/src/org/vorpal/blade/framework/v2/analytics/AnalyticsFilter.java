@@ -17,7 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
-@WebFilter(filterName = "AnalyticsFilter", urlPatterns = "/*")
+@WebFilter(filterName = "AnalyticsFilter", urlPatterns = "/*", asyncSupported = true)
 public class AnalyticsFilter implements Filter {
 
 	public static final String ANALYTICS_ATTRIBUTE = "org.vorpal.blade.analytics";
