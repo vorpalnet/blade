@@ -30,7 +30,6 @@
 	<target name="compile" depends="init">
 		<javac debug="${debug}" debuglevel="${debuglevel}" destdir="${classes}" includeantruntime="${includeantruntime}" release="${release}">
 			<src path="${src}" />
-			<src path=".apt_src" />
 			<classpath refid="project.classpath" />
 		</javac>
 	</target>

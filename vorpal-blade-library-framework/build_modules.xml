@@ -155,7 +155,6 @@
 		<echo message="${ant.project.name}: ${ant.file}" />
 		<javac debug="true" debuglevel="${debuglevel}" destdir="${build}" includeantruntime="false" source="${source}" target="${target}">
 			<src path="${src}" />
-			<src path=".apt_src" />
 			<modulepath refid="project.classpath" />
 <!--
 			<modulepath refid="vorpal-blade-library-framework.classpath" />

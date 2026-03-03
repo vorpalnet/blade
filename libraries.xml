@@ -702,23 +702,6 @@
 		<mkdir dir="${classes}" />
 		<mkdir dir="${lib}" />
 
-		<!-- preserve java source with compiled classes for accurate debugging -->
-
-		<!--
-		<copy includeemptydirs="false" todir="${classes}">
-			<fileset dir="${src}">
-				<exclude name="**/*.launch" />
-				<exclude name="**/*.java" />
-			</fileset>
-		</copy>
-		-->
-
-		<copy includeemptydirs="false" todir="${classes}">
-			<fileset dir=".apt_src">
-				<exclude name="**/*.launch" />
-				<exclude name="**/*.java" />
-			</fileset>
-		</copy>
 	</target>
 
 	<target name="clean">
