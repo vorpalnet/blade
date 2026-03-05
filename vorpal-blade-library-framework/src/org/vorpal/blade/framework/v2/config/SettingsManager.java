@@ -606,6 +606,17 @@ public class SettingsManager<T> {
 	public static void setAnalytics(Analytics analytics) {
 		SettingsManager.analytics = analytics;
 	}
+	
+	
+	public static Event createEvent(String name, JsonNode message) {
+		Event event = null;
+
+		if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
+			event = analytics.createEvent(name, message);
+		}
+
+		return event;
+	}
 
 	public static Event createEvent(String name, SipServletMessage message) {
 		Event event = null;

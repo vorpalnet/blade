@@ -11,21 +11,22 @@ import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.jayway.jsonpath.DocumentContext;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.spi.json.JacksonJsonNodeJsonProvider;
+import com.jayway.jsonpath.spi.mapper.JacksonMappingProvider;
 
 /**
  * Selector for extracting session attributes from SIP messages with support for
@@ -552,8 +553,12 @@ public class AttributeSelector implements Serializable {
 		return attrsKey;
 	}
 
-	public AttributesKey findKey(HttpServletRequest request) {
-		if (request == null || attribute == null) {
+	private static final com.jayway.jsonpath.Configuration jsonConfiguration = com.jayway.jsonpath.Configuration
+			.builder().jsonProvider(new JacksonJsonNodeJsonProvider()).mappingProvider(new JacksonMappingProvider())
+			.build();
+
+	public AttributesKey findKey(JsonNode jsonNode) {
+		if (jsonNode == null || attribute == null) {
 			return null;
 		}
 
@@ -565,64 +570,8 @@ public class AttributeSelector implements Serializable {
 		String value = null;
 
 		try {
-			switch (attribute) {
-
-			case "method":
-				header = request.getMethod();
-				break;
-
-			case "requestURI":
-			case "RequestURI":
-				header = request.getRequestURI();
-				break;
-
-			case "contextPath":
-				header = request.getContextPath();
-				break;
-
-			case "pathInfo":
-				header = request.getPathInfo();
-				break;
-
-			case "queryString":
-				header = request.getQueryString();
-				break;
-
-			case "remoteIP":
-			case "remoteAddr":
-				header = request.getRemoteAddr();
-				break;
-
-			case "contentType":
-				header = request.getContentType();
-				break;
-
-			case "body":
-			case "content":
-				try {
-					java.io.BufferedReader reader = request.getReader();
-					if (reader != null) {
-						StringBuilder sb = new StringBuilder();
-						String line;
-						while ((line = reader.readLine()) != null) {
-							sb.append(line);
-						}
-						header = sb.toString();
-					}
-				} catch (IOException e) {
-					sipLogger.logStackTrace(e);
-					return null;
-				}
-				break;
-
-			default:
-				header = request.getHeader(attribute);
-				header = (header != null) ? header : request.getParameter(attribute);
-				header = (header != null) ? header
-						: (request.getAttribute(attribute) != null
-								? request.getAttribute(attribute).toString()
-								: null);
-			}
+			DocumentContext documentContext = JsonPath.using(jsonConfiguration).parse(jsonNode);
+			header = documentContext.read(attribute, String.class);
 
 			if (header != null) {
 

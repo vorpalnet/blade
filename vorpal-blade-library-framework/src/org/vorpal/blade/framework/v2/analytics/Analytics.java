@@ -1,14 +1,16 @@
 package org.vorpal.blade.framework.v2.analytics;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 
 import javax.jms.JMSException;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletContextEvent;
@@ -16,7 +18,6 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
@@ -25,6 +26,7 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.fasterxml.jackson.databind.JsonNode;
 
 @JsonPropertyOrder({ "enabled", "loggingLevel", "events" })
 public class Analytics implements Serializable {
@@ -64,19 +66,6 @@ public class Analytics implements Serializable {
 		Event event = null;
 
 		Long sessionId = getSessionId(message.getApplicationSession());
-		Callflow.getSipLogger().warning(message, "Analytics.createEvent - sessionId=" + sessionId);
-
-		if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-			if (message instanceof SipServletRequest) {
-				Callflow.getSipLogger().finer(message,
-						"Analytics.createEvent #1 - eventName=" + eventName + ", message=" + message.getMethod());
-			} else {
-				Callflow.getSipLogger().finer(message, "Analytics.createEvent #1 - eventName=" + eventName //
-						+ ", message=" + message.getMethod() + " " //
-						+ ((SipServletResponse) message).getStatus() + " " //
-						+ ((SipServletResponse) message).getReasonPhrase());
-			}
-		}
 
 		event = new Event();
 		event.setName(eventName);
@@ -165,9 +154,10 @@ public class Analytics implements Serializable {
 		return event;
 	}
 
-	public Event createEvent(String eventName, HttpServletRequest request) {
+	public Event createEvent(String eventName, JsonNode jsonNode) {
 		Event event = new Event();
 		event.setName(eventName);
+//		event.setSessionId(sessionId);
 		event.setApplicationId(getAppInstanceId());
 
 		EventSelector evsel = events.get(eventName);
@@ -177,13 +167,21 @@ public class Analytics implements Serializable {
 			for (AttributeSelector attrSel : evsel.getAttributes()) {
 
 				if (true == DialogType.origin.equals(attrSel.getDialog())) {
-					attrsKey = attrSel.findKey(request);
+					attrsKey = attrSel.findKey(jsonNode);
 					if (attrsKey != null) {
 						event.addAttribute(new Attribute(attrSel.getId(), attrsKey.key));
 					}
 				}
 
 			}
+		}
+
+		if (evsel != null) {
+			List<String> keys = new ArrayList<>();
+			Iterator<String> iterator = jsonNode.fieldNames();
+			iterator.forEachRemaining(e -> {
+				keys.add(e);
+			});
 		}
 
 		return event;
@@ -261,7 +259,6 @@ public class Analytics implements Serializable {
 	}
 
 	private static long combineToLong(long timestamp, int sessionId) {
-		Callflow.getSipLogger().finer("AnalyticsSipServlet.combineToLong");
 		// Convert timestamp to 32 bits (takes the lower 32 bits)
 		int timestamp32 = (int) timestamp;
 
@@ -277,15 +274,13 @@ public class Analytics implements Serializable {
 
 // Helper method to extract the other value back
 	private static int extractSessionId(long combined) {
-		Callflow.getSipLogger().finer("AnalyticsSipServlet.extractOtherValue");
 		return (int) combined;
 	}
 
-	private static Long getSessionId(SipApplicationSession appSession) {
+	public static Long getSessionId(SipApplicationSession appSession) {
 
 		Long sessionId = (Long) appSession.getAttribute("ANALYTICS_SESSION");
 		if (sessionId == null) {
-			Callflow.getSipLogger().finer("AnalyticsSipServlet.getSessionId");
 			String vTimestamp = Callflow.getVorpalTimestamp(appSession);
 			Long timestamp = Long.parseLong(vTimestamp, 16);
 			Integer otherValue = Integer.parseUnsignedInt(Callflow.getVorpalSessionId(appSession), 16);
@@ -296,17 +291,12 @@ public class Analytics implements Serializable {
 	}
 
 	public static Session createSession(SipServletMessage msg) {
-		Logger sipLogger = Callflow.getSipLogger();
 		Session session = new Session();
 		long sessionId = getSessionId(msg.getApplicationSession());
-		sipLogger.warning(msg, "Analytics.createSession - sessionId=" + sessionId);
 		session.setId(sessionId);
 		String strTimestamp = Callflow.getVorpalTimestamp(msg.getApplicationSession());
-		sipLogger.warning(msg, "Analytics.createSession - strTimestamp=" + strTimestamp);
 		long timestamp = Long.parseLong(strTimestamp, 16);
-		sipLogger.warning(msg, "Analytics.createSession - timestamp=" + timestamp);
 		Date date = new Date(timestamp);
-		sipLogger.warning(msg, "Analytics.createSession - date=" + date);
 
 		session.setApplicationId(getAppInstanceId());
 		session.setCreated(null);

@@ -40,6 +40,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
+import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Attribute;
 import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
@@ -200,7 +201,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 				while (itr.hasNext()) {
 					entry = itr.next();
-					strBuilder.append(entry.getKey() + "=" + entry.getValue().getValue() );
+					strBuilder.append(entry.getKey() + "=" + entry.getValue().getValue());
 					if (itr.hasNext()) {
 						strBuilder.append(", ");
 					}
@@ -216,7 +217,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	public void severe(String msg) {
 		if (this.isLoggable(Level.SEVERE)) {
 			String sess = NOSESS + " " + SettingsManager.getApplicationName();
-			super.severe(sess + " " + ConsoleColors.RED_BRIGHT + msg + ConsoleColors.RESET);
+			super.severe(sess + " " + Color.RED_BOLD_BRIGHT(msg));
 		}
 	}
 
@@ -224,7 +225,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	public void warning(String msg) {
 		if (this.isLoggable(Level.WARNING)) {
 			String sess = NOSESS + " " + SettingsManager.getApplicationName();
-			super.warning(sess + " " + ConsoleColors.YELLOW_BOLD_BRIGHT + msg + ConsoleColors.RESET);
+			super.warning(sess + " " + Color.YELLOW_BOLD_BRIGHT(msg));
 		}
 	}
 
@@ -466,7 +467,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * @param obj
 	 * @return
 	 */
-	public static String serializeObjectWithoutNLCR(Object obj) {
+	public static String serializeObjectWithoutCRLF(Object obj) {
 		String value = null;
 
 		if (obj != null) {
@@ -598,12 +599,12 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	/** Logs at SEVERE level with SIP message context and red coloring. */
 	public void severe(SipServletMessage message, String comments) {
-		log(Level.SEVERE, message, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+		log(Level.SEVERE, message, Color.RED_BOLD_BRIGHT(comments));
 	}
 
 	/** Logs at WARNING level with SIP message context and yellow coloring. */
 	public void warning(SipServletMessage message, String comments) {
-		log(Level.WARNING, message, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
+		log(Level.WARNING, message, Color.YELLOW_BOLD_BRIGHT(comments));
 	}
 
 	/**
@@ -670,24 +671,24 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	/** Logs at SEVERE level with SIP session context and red coloring. */
 	public void severe(SipSession sipSession, String comments) {
-		log(Level.SEVERE, sipSession, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+		log(Level.SEVERE, sipSession, Color.RED_BOLD_BRIGHT(comments));
 	}
 
 	/** Logs at SEVERE level with application session context and red coloring. */
 	public void severe(SipApplicationSession appSession, String comments) {
-		log(Level.SEVERE, appSession, ConsoleColors.RED_BRIGHT + comments + ConsoleColors.RESET);
+		log(Level.SEVERE, appSession, Color.RED_BOLD_BRIGHT(comments));
 	}
 
 	/** Logs at WARNING level with SIP session context and yellow coloring. */
 	public void warning(SipSession sipSession, String comments) {
-		log(Level.WARNING, sipSession, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
+		log(Level.WARNING, sipSession, Color.YELLOW_BOLD_BRIGHT(comments));
 	}
 
 	/**
 	 * Logs at WARNING level with application session context and yellow coloring.
 	 */
 	public void warning(SipApplicationSession appSession, String comments) {
-		log(Level.WARNING, appSession, ConsoleColors.YELLOW_BOLD_BRIGHT + comments + ConsoleColors.RESET);
+		log(Level.WARNING, appSession, Color.YELLOW_BOLD_BRIGHT(comments));
 	}
 
 	/**
@@ -798,6 +799,21 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			hash = sb.toString();
 		} else {
 			hash = hexHash(message.getSession());
+
+			// jwm - remove in the future
+			// Color coding for understanding glare
+			switch (Callflow.getGlareState(message.getSession())) {
+			case PROTECT:
+				hash = Color.YELLOW_BOLD_BRIGHT(hash);
+				break;
+			case QUEUE:
+				hash = Color.YELLOW_BOLD_BRIGHT(hash);
+				break;
+			case ALLOW:
+				hash = Color.GREEN_BOLD_BRIGHT(hash);
+				break;
+			}
+
 		}
 
 		return hash;
@@ -831,6 +847,22 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			sb.append(" ").append(SettingsManager.getApplicationName());
 
 			hash = sb.toString();
+
+			// jwm - remove in the future
+			// Color coding for understanding glare
+			if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
+				switch (Callflow.getGlareState(sipSession)) {
+				case PROTECT:
+					hash = Color.RED_BOLD_BRIGHT(hash);
+					break;
+				case QUEUE:
+					hash = Color.YELLOW_BOLD_BRIGHT(hash);
+					break;
+				case ALLOW:
+					hash = Color.GREEN_BOLD_BRIGHT(hash);
+					break;
+				}
+			}
 		}
 
 		return hash;
@@ -901,7 +933,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		try {
 			boolean leftSide = false;
 
-			if (isLoggable(Level.FINE)) { // TODO: This seems like a problem with the Configuration file settings.
+			if (isLoggable(getSequenceDiagramLoggingLevel())) {
 
 				if (request != null //
 						&& request.isInitial() //
@@ -911,7 +943,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					String line = String.format("%87s", "").replace(' ', '=');
 
 					// This is the new session =========== line
-					log(Level.FINE, hexHash(request) + " " + line);
+					log(getSequenceDiagramLoggingLevel(), hexHash(request) + " " + line);
 				}
 
 				if (request != null) {
@@ -1285,7 +1317,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 		if (sessionId != null) {
 			appId = sessionId;
-
 		}
 
 		if (dialogId != null) {

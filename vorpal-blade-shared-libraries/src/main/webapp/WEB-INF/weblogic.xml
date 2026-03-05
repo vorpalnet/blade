@@ -42,6 +42,7 @@
 			<wls:package-name>org.slf4j.*</wls:package-name>
 			<wls:package-name>org.yaml.snakeyaml*</wls:package-name>
 			<wls:package-name>scala.*</wls:package-name>
+			<wls:package-name>com.jayway.jsonpath.*</wls:package-name>
 		</wls:prefer-application-packages>
 	</wls:container-descriptor>
 	<wls:context-root>vorpal-blade-shared-libraries</wls:context-root>

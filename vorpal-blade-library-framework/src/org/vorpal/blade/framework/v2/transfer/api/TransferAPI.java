@@ -236,7 +236,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 				if (sipLogger.isLoggable(Level.FINE)) {
 					sipLogger.fine(appSession, "TransferAPI.invokeTransfer - transferResponse="
-							+ Logger.serializeObjectWithoutNLCR(transferResponse));
+							+ Logger.serializeObjectWithoutCRLF(transferResponse));
 				}
 
 				asyncResponse.resume(Response.status(Status.NOT_ACCEPTABLE).entity(transferResponse).build());
@@ -293,7 +293,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					// can finally log request
 					if (sipLogger.isLoggable(Level.FINE)) {
 						sipLogger.fine(appSession, "TransferAPI.invokeTransfer - transferRequest="
-								+ Logger.serializeObjectWithoutNLCR(transferRequest));
+								+ Logger.serializeObjectWithoutCRLF(transferRequest));
 					}
 
 					// handle glare
@@ -401,7 +401,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 							if (sipLogger.isLoggable(Level.FINE)) {
 								sipLogger.fine(appSession, "TransferAPI.invokeTransfer - transferResponse="
-										+ Logger.serializeObjectWithoutNLCR(transferResponse));
+										+ Logger.serializeObjectWithoutCRLF(transferResponse));
 							}
 							asyncResponse.resume(Response.status(Status.ACCEPTED).entity(transferResponse).build());
 						}
@@ -413,7 +413,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 						if (sipLogger.isLoggable(Level.FINE)) {
 							sipLogger.fine(appSession, "TransferAPI.invokeTransfer - transferResponse="
-									+ Logger.serializeObjectWithoutNLCR(transferResponse));
+									+ Logger.serializeObjectWithoutCRLF(transferResponse));
 						}
 
 						asyncResponse.resume(Response.status(Status.NOT_ACCEPTABLE).entity(transferResponse).build());
@@ -422,7 +422,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				} else {
 					if (sipLogger.isLoggable(Level.FINER)) {
 						sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferRequest="
-								+ Logger.serializeObjectWithoutNLCR(transferRequest));
+								+ Logger.serializeObjectWithoutCRLF(transferRequest));
 					}
 
 					TransferResponse transferResponse = new TransferResponse();
@@ -432,7 +432,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 					if (sipLogger.isLoggable(Level.FINE)) {
 						sipLogger.fine(appSession, "TransferAPI.invokeTransfer - transferResponse="
-								+ Logger.serializeObjectWithoutNLCR(transferResponse));
+								+ Logger.serializeObjectWithoutCRLF(transferResponse));
 					}
 
 					asyncResponse.resume(Response.status(Status.NOT_FOUND).entity(transferResponse).build());
@@ -443,7 +443,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 				if (sipLogger.isLoggable(Level.WARNING)) {
 					AsyncSipServlet.getSipLogger()
 							.warning("No appSession found for sessionKey=" + transferRequest.sessionKey
-									+ ", transferRequest=" + Logger.serializeObjectWithoutNLCR(transferRequest));
+									+ ", transferRequest=" + Logger.serializeObjectWithoutCRLF(transferRequest));
 				}
 
 				TransferResponse transferResponse = new TransferResponse();
@@ -453,7 +453,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 				if (sipLogger.isLoggable(Level.FINER)) {
 					sipLogger.finer(appSession, "TransferAPI.invokeTransfer - transferResponse="
-							+ Logger.serializeObjectWithoutNLCR(transferResponse));
+							+ Logger.serializeObjectWithoutCRLF(transferResponse));
 				}
 
 				asyncResponse.resume(Response.status(Status.NOT_FOUND).entity(transferResponse).build());
@@ -474,7 +474,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 			if (sipLogger.isLoggable(Level.FINE)) {
 				sipLogger.fine(appSession,
-						"TransferAPI.invokeTransfer - transferResponse=" + Logger.serializeObjectWithoutNLCR(transferResponse));
+						"TransferAPI.invokeTransfer - transferResponse=" + Logger.serializeObjectWithoutCRLF(transferResponse));
 			}
 
 			asyncResponse.resume(Response.status(Status.INTERNAL_SERVER_ERROR).entity(transferResponse).build());
@@ -534,7 +534,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 				if (sipLogger.isLoggable(Level.FINE)) {
 					sipLogger.fine(response,
-							"TransferAPI.transferCompleted - transferResponse=" + Logger.serializeObjectWithoutNLCR(txferResp));
+							"TransferAPI.transferCompleted - transferResponse=" + Logger.serializeObjectWithoutCRLF(txferResp));
 				}
 
 				asyncResponse.resume(Response.status(Status.OK).entity(txferResp).build());
@@ -565,7 +565,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 
 			if (sipLogger.isLoggable(Level.FINE)) {
 				sipLogger.fine(response,
-						"TransferAPI.transferDeclined - transferResponse=" + Logger.serializeObjectWithoutNLCR(txferResp));
+						"TransferAPI.transferDeclined - transferResponse=" + Logger.serializeObjectWithoutCRLF(txferResp));
 			}
 
 			asyncResponse.resume(Response.status(Status.FORBIDDEN).entity(txferResp).build());

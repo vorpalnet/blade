@@ -97,6 +97,10 @@ public class Transfer extends Callflow {
 
 	// SIP header name for Allow header
 	private static final String ALLOW_HEADER = "Allow";
+	
+	private static final String TRANSFER_IN_PROGRESS = "TRANSFER_IN_PROGRESS";
+	
+	
 
 	protected final TransferListener transferListener;
 	protected final TransferSettings transferSettings;
@@ -214,6 +218,14 @@ public class Transfer extends Callflow {
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
+	}
+	
+	protected static boolean isTransferInProgress(SipApplicationSession appSession) {
+		return Boolean.TRUE.equals(appSession.getAttribute(TRANSFER_IN_PROGRESS));
+	}
+	
+	protected static void setTransferInProgress(SipApplicationSession appSession, boolean value) {
+		appSession.setAttribute(TRANSFER_IN_PROGRESS, value);
 	}
 
 }

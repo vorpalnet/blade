@@ -27,7 +27,7 @@ public class TransferSettingsSample extends TransferSettings {
 
 		this.conferenceApp = null;
 
-//		List<AttributeSelector> indexKeySelectors = this.getSession().getSessionSelectors();
+		List<AttributeSelector> indexKeySelectors = this.getSession().getSessionSelectors();
 //
 //		AttributeSelector inbound = new AttributeSelector();
 //		inbound.setId("inbound");
@@ -46,13 +46,13 @@ public class TransferSettingsSample extends TransferSettings {
 //		outbound.addAdditionalExpression("direction", "outbound");
 //		indexKeySelectors.add(outbound);
 //
-//		AttributeSelector gucidSelector = new AttributeSelector();
-//		gucidSelector.setId("gucidSelector");
-//		gucidSelector.setDescription("Create index key based on the value of the Cisco-Gucid header");
-//		gucidSelector.setAttribute("Cisco-Gucid");
-//		gucidSelector.setPattern("^(?<gucid>.*)$");
-//		gucidSelector.setExpression("${gucid}");
-//		indexKeySelectors.add(gucidSelector);
+		AttributeSelector gucidSelector = new AttributeSelector();
+		gucidSelector.setId("gucidSelector");
+		gucidSelector.setDescription("Create index key based on the value of the Cisco-Gucid header");
+		gucidSelector.setAttribute("Cisco-Gucid");
+		gucidSelector.setPattern("^(?<gucid>.*)$");
+		gucidSelector.setExpression("${gucid}");
+		indexKeySelectors.add(gucidSelector);
 //
 //		AttributeSelector guuid = new AttributeSelector();
 //		guuid.setId("guuidSelector");
@@ -70,16 +70,16 @@ public class TransferSettingsSample extends TransferSettings {
 //		this.preserveInviteHeaders.add("User-to-User");
 		this.preserveReferHeaders.add("Referred-By");
 
-//		Selector dialed = new Selector("dialed", "From", SIP_ADDRESS_PATTERN, "${user}");
-//		dialed.setDescription("The user (dialed number) part of the From header");
-//		this.selectors.add(dialed);
+		Selector dialed = new Selector("dialed", "From", SIP_ADDRESS_PATTERN, "${user}");
+		dialed.setDescription("The user (dialed number) part of the From header");
+		this.selectors.add(dialed);
 
 		TranslationsMap prefixMap = new ConfigPrefixMap();
-//		prefixMap.id = "prefix-map";
-//		prefixMap.addSelector(dialed);
-//		prefixMap.description = "Translations map for dialed number prefixes";
-//
-//		prefixMap.createTranslation("bob").setId("bob").addAttribute("style", "blind");
+		prefixMap.id = "prefix-map";
+		prefixMap.addSelector(dialed);
+		prefixMap.description = "Translations map for dialed number prefixes";
+
+		prefixMap.createTranslation("bob").setId("bob").addAttribute("style", "blind");
 //
 //		prefixMap.createTranslation("1897").setId("t1").addAttribute("style",
 //				TransferSettings.TransferStyle.blind.toString());
@@ -89,10 +89,10 @@ public class TransferSettingsSample extends TransferSettings {
 //				TransferSettings.TransferStyle.conference.toString());
 
 		TranslationsMap hashMap = new ConfigHashMap();
-//		hashMap.id = "hash-map";
-//		hashMap.addSelector(dialed);
-//		hashMap.description = "Translations map for account names";
-//		hashMap.createTranslation("bob").addAttribute("style", TransferSettings.TransferStyle.blind.toString());
+		hashMap.id = "hash-map";
+		hashMap.addSelector(dialed);
+		hashMap.description = "Translations map for account names";
+		hashMap.createTranslation("bob").addAttribute("style", TransferSettings.TransferStyle.blind.toString());
 
 		this.maps.add(prefixMap);
 		this.maps.add(hashMap);

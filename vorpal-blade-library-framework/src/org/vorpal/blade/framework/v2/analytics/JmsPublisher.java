@@ -35,18 +35,11 @@ public class JmsPublisher implements ServletContextListener {
 	private QueueSession qsession;
 	private Queue queue;
 	private QueueSender qsender;
-//	private Logger sipLogger;
 
 	public JmsPublisher() {
-//		Callflow.getSipLogger().warning("JmsPublisher.constructor");
-
 	}
 
 	public JmsPublisher(String jmsFactory, String jmsQueue) {
-
-//		Callflow.getSipLogger()
-//				.warning("JmsPublisher.constructor - jsmFactory=" + jmsFactory + ", jmsQueue=" + jmsQueue);
-
 		this.jmsFactory = jmsFactory;
 		this.jmsQueue = jmsQueue;
 	}
@@ -58,20 +51,13 @@ public class JmsPublisher implements ServletContextListener {
 	 * @throws JMSException    if JMS initialization fails
 	 */
 	public void init() throws NamingException, JMSException {
-		SettingsManager.getSipLogger().info("JmsPublisher.init - jmsFactory=" + jmsFactory + ", jmsQueue=" + jmsQueue);
-
 		ctx = new InitialContext();
-
 		qconFactory = (QueueConnectionFactory) ctx.lookup(jmsFactory);
 		qcon = qconFactory.createQueueConnection();
 		qsession = qcon.createQueueSession(false, javax.jms.Session.AUTO_ACKNOWLEDGE);
 		queue = (Queue) ctx.lookup(jmsQueue);
 		qsender = qsession.createSender(queue);
 		qcon.start();
-
-		SettingsManager.getSipLogger().info("JmsPublisher.init - qconFactory=" + qconFactory + ", qcon=" + qcon
-				+ ", qsession=" + qsession + ", queue=" + queue + ", qsender=" + qsender);
-
 	}
 
 	public String getJmsFactory() {
@@ -96,24 +82,15 @@ public class JmsPublisher implements ServletContextListener {
 
 	@SuppressWarnings("rawtypes")
 	public void applicationStart() {
-//		sipLogger.finer("JmsPublisher.applicationStart");
-
 		try {
 
 			if (application == null) {
-
 				application = new Application();
-
 				application.setId(Analytics.getAppInstanceId());
-
 				application.setDomain(SettingsManager.getDomainName());
-
 				application.setHost(SettingsManager.getHostname());
-
 				application.setName(SettingsManager.getApplicationName());
-
 				application.setServer(SettingsManager.getServerName());
-
 				application.setCreated(Date.from(Instant.now()));
 
 				ObjectMessage message = qsession.createObjectMessage();
@@ -123,23 +100,21 @@ public class JmsPublisher implements ServletContextListener {
 		} catch (Exception ex) {
 			ex.printStackTrace();
 		}
-
 	}
 
 	@SuppressWarnings("rawtypes")
 	public void applicationStop() {
 		Logger sipLogger = Callflow.getSipLogger();
-
 		try {
-			sipLogger.warning("JmsPublisher.applicationStop - application.setId=" + Analytics.getAppInstanceId());
 			application.setId(Analytics.getAppInstanceId());
-			System.out.println("JmsPublisher.applicationStop - application.setDestroyed=" + Date.from(Instant.now()));
 			application.setDestroyed(Date.from(Instant.now()));
-			ObjectMessage message = qsession.createObjectMessage();
-			message.setObject(application);
-			qsender.send(message);
+			if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
+				ObjectMessage message = qsession.createObjectMessage();
+				message.setObject(application);
+				qsender.send(message);
+			}
 		} catch (Exception ex) {
-			sipLogger.severe(ex);
+			Callflow.getSipLogger().severe(ex);
 		}
 
 	}
@@ -148,20 +123,14 @@ public class JmsPublisher implements ServletContextListener {
 		Session session = null;
 		Logger sipLogger = Callflow.getSipLogger();
 		try {
-			sipLogger.warning(msg, "JmsPublisher.sessionStart... jmsPublisher="+Analytics.jmsPublisher+", isLoggable="+sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel()));
 			if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
 				session = Analytics.createSession(msg);
-				sipLogger.warning(msg, "JmsPublisher.sessionStart... session="+session);
 				if (session != null && Analytics.jmsPublisher != null) {
 					ObjectMessage message = qsession.createObjectMessage();
 					message.setObject(session);
-					sipLogger.warning(msg, "JmsPublisher.sessionStart... sending session");
 					qsender.send(message);
-					sipLogger.warning(msg, "JmsPublisher.sessionStart... session sent");
 				}
-
 			}
-
 		} catch (Exception ex) {
 			sipLogger.severe(ex);
 		}
@@ -200,16 +169,9 @@ public class JmsPublisher implements ServletContextListener {
 	 * @throws JMSException if sending fails
 	 */
 	public void send(Serializable object) throws JMSException {
-//		sipLogger.finer("JmsPublisher.send");
-
-		SettingsManager.sipLogger.warning("JmsPublisher.send - is qsession null? " + (qsession == null));
-
 		ObjectMessage message = qsession.createObjectMessage();
 		message.setObject(object);
-
 		qsender.send(message);
-		Callflow.getSipLogger().warning("JmsPublisher.send - Sending " + object.getClass().getSimpleName() + ":\n"
-				+ Logger.serializeObject(object));
 	}
 
 	/**
@@ -220,8 +182,6 @@ public class JmsPublisher implements ServletContextListener {
 	 * @throws JMSException if sending fails
 	 */
 	public void send(Serializable object, String type) throws JMSException {
-//		sipLogger.finer("JmsPublisher.send(Serializable object, String type)");
-
 		ObjectMessage message = qsession.createObjectMessage();
 		message.setObject(object);
 		message.setStringProperty("type", type);
@@ -232,8 +192,6 @@ public class JmsPublisher implements ServletContextListener {
 	 * Close JMS resources.
 	 */
 	public void close() {
-//		sipLogger.finer("JmsPublisher.close");
-
 		try {
 			if (qsender != null)
 				qsender.close();

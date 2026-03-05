@@ -122,9 +122,9 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
 
 /**
@@ -140,7 +140,6 @@ public class BlindTransfer extends Transfer {
 	private static final long serialVersionUID = 1L;
 
 	// Session attribute keys
-	private static final String IN_PROGRESS_ATTR = "IN_PROGRESS";
 	private static final String INITIAL_INVITE_ATTR = "INITIAL_INVITE";
 	private static final String INITIAL_REFER_ATTR = "INITIAL_REFER";
 	private static final String X_ORIGINAL_DN_ATTR = "X-Original-DN";
@@ -186,27 +185,35 @@ public class BlindTransfer extends Transfer {
 		try {
 			// request is REFER from transferor (bob)
 			SipApplicationSession appSession = referRequest.getApplicationSession();
+			SipSession sipSession = referRequest.getSession();
+			SipSession linkedSession = getLinkedSession(sipSession);
 
-			Boolean inProgress = (Boolean) appSession.getAttribute(IN_PROGRESS_ATTR);
+//			Boolean inProgress = (Boolean) appSession.getAttribute(IN_PROGRESS_ATTR);
+//			if (Boolean.TRUE.equals(inProgress)) {
+//				sendResponse(referRequest.createResponse(491));
+//				return;
+//			}
+//			appSession.setAttribute(IN_PROGRESS_ATTR, Boolean.TRUE);
 
-			if (Boolean.TRUE.equals(inProgress)) {
-				// jwm - let's make this more elegant
-				// throw new ServletException("Transfer already in progress");
-				sendResponse(referRequest.createResponse(491, "Transfer Already Pending"));
-				return;
+			// Glare
+			if (true == isTransferInProgress(appSession)) {
+				sipLogger.warning(referRequest, "BlindTransfer.process - Request pending, sending 491");
+				sendResponse(referRequest.createResponse(491));
+			} else {
+				setTransferInProgress(appSession, true);
 			}
-
-			appSession.setAttribute(IN_PROGRESS_ATTR, Boolean.TRUE);
 
 			// save X-Previous-DN-Tmp for use later
 			URI referTo = referRequest.getAddressHeader(REFER_TO).getURI();
 			appSession.setAttribute(REFER_TO, referTo);
 
 			// User is notified a transfer is requested
+			setTransferInProgress(appSession, true);
+			SettingsManager.createEvent("transferRequested", referRequest);
 			if (transferListener != null) {
-				SettingsManager.createEvent("transferRequested", referRequest);
 				transferListener.transferRequested(referRequest);
 			}
+			SettingsManager.sendEvent(referRequest);
 
 			createRequests(referRequest);
 
@@ -256,7 +263,8 @@ public class BlindTransfer extends Transfer {
 
 				sendResponse(bye.createResponse(200));
 
-				if (targetRequest.getSession().isValid()) {
+				if (targetRequest.getSession().isValid() //
+						&& targetRequest.getSession().getState() == SipSession.State.EARLY) {
 					sendRequest(targetRequest.createCancel());
 				}
 
@@ -266,24 +274,21 @@ public class BlindTransfer extends Transfer {
 					}
 				}
 
-				appSession.removeAttribute(IN_PROGRESS_ATTR);
-
+				setTransferInProgress(appSession, false);
 				SettingsManager.createEvent("transferAbandoned", bye);
 				if (transferListener != null) {
 					transferListener.transferAbandoned(bye);
 				}
+				sipLogger.finer("BlindTransfer.process - SettingsManager.sendEvent(bye); #2");
 				SettingsManager.sendEvent(bye);
 
 			});
 
 			// In case transferor (bob) hangs up.
 			Expectation bobExpectation = expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-
 				if (sipLogger.isLoggable(Level.FINER)) {
 					sipLogger.finer(transferorRequest, "transferor (bob) hangs up");
 				}
-
-				appSession.removeAttribute(IN_PROGRESS_ATTR);
 				sendResponse(bye.createResponse(200));
 			});
 
@@ -303,6 +308,7 @@ public class BlindTransfer extends Transfer {
 			if (transferListener != null) {
 				transferListener.transferInitiated(targetRequest);
 			}
+			sipLogger.finer("BlindTransfer.process - SettingsManager.sendEvent(targetRequest); #3");
 			SettingsManager.sendEvent(targetRequest);
 
 			// Force Referred-By, ignore preserveReferHeaders
@@ -331,12 +337,14 @@ public class BlindTransfer extends Transfer {
 										+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 					}
 
-					appSession.removeAttribute(IN_PROGRESS_ATTR);
+					// remove glare protection
+					setTransferInProgress(appSession, false);
 
 					SettingsManager.createEvent("transferCompleted", targetResponse);
 					if (transferListener != null) {
 						transferListener.transferCompleted(targetResponse);
 					}
+					sipLogger.finer("BlindTransfer.process - SettingsManager.sendEvent(targetResponse); #4");
 					SettingsManager.sendEvent(targetResponse);
 
 					// Alice will no longer hangup, expect a BYE from Bob
@@ -391,12 +399,14 @@ public class BlindTransfer extends Transfer {
 							sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
 						}
 
-						appSession.removeAttribute(IN_PROGRESS_ATTR);
+						// remove glare protection
+						setTransferInProgress(appSession, false);
 
 						SettingsManager.createEvent("transferAbandoned", referRequest);
 						if (transferListener != null) {
 							transferListener.transferAbandoned(referRequest);
 						}
+						sipLogger.finer("BlindTransfer.process - SettingsManager.sendEvent(referRequest); #5");
 						SettingsManager.sendEvent(referRequest);
 
 						// Instead of sending the failure notice, we pretend everything is successful so
@@ -415,13 +425,14 @@ public class BlindTransfer extends Transfer {
 						if (sipLogger.isLoggable(Level.FINER)) {
 							sipLogger.finer(targetResponse, "target (carol) has 'rejected' the call");
 						}
+						
 						// User is notified that the transfer target did not answer
-						appSession.removeAttribute(IN_PROGRESS_ATTR);
-
+						setTransferInProgress(appSession, false);
 						SettingsManager.createEvent("transferDeclined", targetResponse);
 						if (transferListener != null) {
 							transferListener.transferDeclined(targetResponse);
 						}
+						sipLogger.finer("BlindTransfer.process - SettingsManager.sendEvent(targetResponse); #1");
 						SettingsManager.sendEvent(targetResponse);
 
 						// Bob won't send a BYE, but instead reINVITE.
@@ -450,5 +461,8 @@ public class BlindTransfer extends Transfer {
 		}
 
 	}
+	
+	
+	
 
 }

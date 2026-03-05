@@ -44,11 +44,13 @@ import org.vorpal.blade.framework.v2.callflow.Callback;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.CallflowAckBye;
 import org.vorpal.blade.framework.v2.callflow.CallflowCallConnectedError;
+import org.vorpal.blade.framework.v2.callflow.Callflow.GlareState;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.AttributeSelector.DialogType;
 import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
@@ -71,11 +73,19 @@ public abstract class AsyncSipServlet extends SipServlet
 	protected static SipSessionsUtil sipUtil;
 	protected static TimerService timerService;
 	private static final String RESPONSE_CALLBACK_INVITE = "RESPONSE_CALLBACK_INVITE";
-	private static final String GLARE_QUEUE = "BLADE_GLARE_QUEUE";
-	private static final String EXPECT_ACK = "EXPECT_ACK";
+	private static final String GLARE_QUEUE = "GLARE_QUEUE";
+//	private static final String EXPECT_ACK = "EXPECT_ACK";
 	private static final String LINKED_SESSION = "LINKED_SESSION";
 	private static final String HASHKEY = "HASHKEY";
 	private static final String HASHKEY_COLLISION = "HASHKEY_COLLISION";
+
+	private static final String CANCEL = "CANCEL";
+	private static final String INVITE = "INVITE";
+	private static final String BYE = "BYE";
+	private static final String ACK = "ACK";
+	private static final String REFER = "REFER";
+	
+
 	protected static SessionParameters sessionParameters;
 
 	/**
@@ -318,10 +328,15 @@ public abstract class AsyncSipServlet extends SipServlet
 
 		try {
 			SipServletRequest request = _request;
-
 			SipSession sipSession = _request.getSession();
-			LinkedList<SipServletRequest> glareQueue = //
-					(LinkedList<SipServletRequest>) sipSession.getAttribute(GLARE_QUEUE);
+
+// UDP makes queuing necessary, sigh!			
+			LinkedList<SipServletRequest> glareQueue = (LinkedList<SipServletRequest>) sipSession
+					.getAttribute(GLARE_QUEUE);
+			if (glareQueue == null) {
+				glareQueue = new LinkedList<>();
+			}
+
 			Callflow callflow = null;
 			Callback<SipServletRequest> requestLambda;
 			SipApplicationSession appSession = request.getApplicationSession();
@@ -329,49 +344,13 @@ public abstract class AsyncSipServlet extends SipServlet
 			AttributesKey rr = null;
 			SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
 
+			// get the Vorpal ID first thing
 			if (request.getMethod().equals("INVITE") && request.isInitial()) {
-
 				String indexKey = Callflow.getVorpalSessionId(request);
 				appSession.addIndexKey(indexKey);
-
-				// attempt to keep track of who called whom
-				request.getSession().setAttribute("userAgent", "caller");
-				request.getSession().setAttribute("_diagramLeft", Boolean.TRUE);
-
-				String user = ((SipURI) request.getTo().getURI()).getUser();
-				if (user != null) {
-					request.getSession().setAttribute("_DID", user);
-				}
-
-				String ani = ((SipURI) request.getFrom().getURI()).getUser();
-				if (ani != null) {
-					request.getSession().setAttribute("_ANI", ani);
-				}
-
-				// save keep-alive information
-				Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
-				if (sessionExpires != null) {
-					appSession.setAttribute("Session-Expires", sessionExpires);
-					String minSE = request.getHeader("Min-SE");
-					if (minSE != null) {
-						appSession.setAttribute("Min-SE", minSE);
-					}
-				}
-
 			}
 
-			// For processing glare, stack messages up
-			boolean expectAck = Boolean.TRUE.equals(sipSession.getAttribute(EXPECT_ACK));
-
-			if (!expectAck) {
-				if (glareQueue != null && !glareQueue.isEmpty()) {
-					sipLogger.warning(_request, "AsyncSipServlet.doRequest - adding request to glare queue");
-					glareQueue.add(_request);
-					request = glareQueue.removeFirst();
-					sipSession.setAttribute(GLARE_QUEUE, glareQueue);
-				}
-			}
-
+			// Log useful variables for debugging purposes
 			if (sipLogger.isLoggable(Level.FINER)) {
 				try {
 
@@ -390,10 +369,10 @@ public abstract class AsyncSipServlet extends SipServlet
 							"AsyncSipServlet.doRequest - " + "method=" + request.getMethod() //
 									+ ", isInitial=" + request.isInitial() //
 									+ ", isCommitted=" + request.isCommitted() //
-									+ ", expectAck=" + expectAck //
 									+ ", session.isValid=" + sipSession.isValid() //
 									+ ", session.state=" + sipSession.getState() //
 									+ ", session.isReadyToInvalidate=" + sipSession.isReadyToInvalidate() //
+									+ ", session.glare=" + Callflow.getGlareState(sipSession) //
 									+ ", linkedSession=" + (linkedSession != null) //
 									+ ", linkedSession.dialog=" + linkedDialog //
 									+ ", linkedSession.isValid=" + linkedSessionIsValid //
@@ -407,32 +386,65 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 			}
 
+			// Check for GLARE
+			switch (method) {
+			case BYE:
+			case CANCEL:
+			case ACK:
+				Callflow.setGlareState(sipSession, GlareState.ALLOW);
+				break;
+			case REFER:
+				// do not allow more refers until we get a 200 OK (NOTIFY)
+				Callflow.setGlareState(sipSession, GlareState.PROTECT);
+				break;
+			default:
+				switch (Callflow.getGlareState(sipSession)) {
+				case PROTECT:
+					sipLogger.warning(request, "AsyncSipServlet.doRequest - glare, sending 491 response");
+					sendResponse(request.createResponse(491));
+					return; // -- RETURN, STOP PROCESSING
+				case QUEUE:
+					sipLogger.warning(request, "AsyncSipServlet.doRequest - glare, adding to queue");
+					glareQueue.add(request);
+					sipSession.setAttribute(GLARE_QUEUE, glareQueue);
+					return; // -- RETURN, STOP PROCESSING
+				default:
+					Callflow.setGlareState(sipSession, GlareState.PROTECT);
+				}
+			}
+
+			if (request.getMethod().equals("INVITE") && request.isInitial()) {
+
+				// attempt to keep track of who called whom
+				request.getSession().setAttribute("userAgent", "caller");
+				request.getSession().setAttribute("_diagramLeft", Boolean.TRUE);
+
+				String user = ((SipURI) request.getTo().getURI()).getUser();
+				if (user != null) {
+					request.getSession().setAttribute("_DID", user);
+				}
+
+				String ani = ((SipURI) request.getFrom().getURI()).getUser();
+				if (ani != null) {
+					request.getSession().setAttribute("_ANI", ani);
+				}
+
+				// save keep-alive information
+				Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
+				if (sessionExpires != null) {
+					sipSession.setAttribute("Session-Expires", sessionExpires);
+					String minSE = request.getHeader("Min-SE");
+					if (minSE != null) {
+						sipSession.setAttribute("Min-SE", minSE);
+					}
+					sipLogger.finer(request,
+							"AsyncSipServlet.doRequest - Saving sessionExpires=" + sessionExpires + ", minSE=" + minSE);
+				}
+
+			}
+
 			// ignore reINVITES, INFO messages, etc if this is a proxy request
 			if (!isProxy(request)) {
-
-				if (method.equals("ACK")) {
-					expectAck = false;
-					sipSession.removeAttribute(EXPECT_ACK);
-
-				} else {
-					// GLARE! Let's try to queue it up... CANCEL or BYE get immediate priority.
-					if (expectAck && //
-							(!method.equals("CANCEL") || !method.equals("CANCEL"))) {
-						sipLogger.warning(request, "AsyncSipServlet.doResponse - Glare; " + method
-								+ " received while awaiting ACK. Queuing message.");
-						glareQueue = (glareQueue != null) ? glareQueue : new LinkedList<>();
-						glareQueue.add(request);
-						sipSession.setAttribute(GLARE_QUEUE, glareQueue);
-						return; // wait for ACK before processing messages in the glare queue
-					}
-
-				}
-
-				// Now that GLARE is taken care of, if this is an INVITE, we should expect an
-				// ACK, unless we reply with an error code -- See Callflow.sendResponse
-				if (method.equals("INVITE")) {
-					sipSession.setAttribute(EXPECT_ACK, Boolean.TRUE);
-				}
 
 				try {
 					requestLambda = Callflow.pullCallback(request);
@@ -646,8 +658,13 @@ public abstract class AsyncSipServlet extends SipServlet
 				Callflow.getLogger().superArrow(Direction.SEND, !diagramLeft, request, null, "proxy", null);
 			}
 
-			// Last, but not least, process any queued up requests due to glare.
-			processGlareQueue(sipSession, glareQueue);
+			// Anything in the Queue? Use recursion
+			if (false == glareQueue.isEmpty()) {
+				SipServletRequest glareRequest = glareQueue.removeFirst();
+				sipSession.setAttribute(GLARE_QUEUE, glareQueue);
+				sipLogger.warning(glareRequest, "AsyncSipServlet.doRequest - processing request in glare queue");
+				doRequest(glareRequest);
+			}
 
 		} catch (Exception ex6) { // this should never happen, but if it does...
 
@@ -726,6 +743,17 @@ public abstract class AsyncSipServlet extends SipServlet
 				} catch (Exception ex1) {
 					sipLogger.warning("AsyncSipServlet.doReponse - Exception #ex1");
 					sipLogger.severe(response, ex1);
+				}
+			}
+
+			// For GLARE
+			if (method.equals(INVITE)) {
+				if (Callflow.failure(response)) {
+					Callflow.setGlareState(sipSession, GlareState.ALLOW);
+				}
+			} else {
+				if (false == Callflow.provisional(response)) {
+					Callflow.setGlareState(sipSession, GlareState.ALLOW);
 				}
 			}
 
@@ -933,9 +961,9 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 
 				// For processing any queued up glare requests (e.g., INFO messages stacked up)
-				LinkedList<SipServletRequest> glareQueue = (LinkedList<SipServletRequest>) sipSession
-						.getAttribute(GLARE_QUEUE);
-				processGlareQueue(sipSession, glareQueue);
+//				LinkedList<SipServletRequest> glareQueue = (LinkedList<SipServletRequest>) sipSession
+//						.getAttribute(GLARE_QUEUE);
+//				processGlareQueue(sipSession, glareQueue);
 
 			} else { // isProxy
 
@@ -1164,52 +1192,52 @@ public abstract class AsyncSipServlet extends SipServlet
 		return (sipUri.getUser() + "@" + sipUri.getHost()).toLowerCase();
 	}
 
-	/**
-	 * Processes queued requests that were delayed due to glare conditions. Glare
-	 * occurs when both endpoints send requests simultaneously, requiring one side
-	 * to queue its request until the other completes.
-	 *
-	 * @param sipSession the SIP session containing the glare queue
-	 * @param glareQueue the queue of pending requests to process
-	 */
-	private void processGlareQueue(SipSession sipSession, LinkedList<SipServletRequest> glareQueue) {
-		if (glareQueue == null || glareQueue.isEmpty()) {
-			return;
-		}
-
-		boolean expectAck = Boolean.TRUE.equals(sipSession.getAttribute(EXPECT_ACK));
-		if (expectAck) {
-			return;
-		}
-
-		SipServletRequest glareRequest = null;
-		try {
-			glareRequest = glareQueue.removeFirst();
-			sipSession.setAttribute(GLARE_QUEUE, glareQueue);
-			this.doRequest(glareRequest);
-		} catch (Exception e) {
-			sipLogger.warning("AsyncSipServlet.processGlareQueue - Exception processing glare request");
-
-			SipSession glareSession = glareRequest.getSession();
-			if (glareSession != null && glareSession.isValid()) {
-				String error = initialSipServletContextEvent.getServletContext().getServletContextName() + " "
-						+ e.getClass().getSimpleName() + ", " + e.getMessage();
-				sipLogger.severe(glareRequest,
-						"AsyncSipServlet.processGlareQueue - Exception attempting to process GLARE request: \n"
-								+ glareRequest.toString());
-				sipLogger.severe(glareRequest, e);
-				sipLogger.getParent().severe(error);
-				try {
-					SipServletResponse glareResponse = glareRequest.createResponse(491); // Request Pending
-					glareResponse.setHeader("Retry-After", "3");
-					sendResponse(glareResponse);
-				} catch (Exception responseException) {
-					sipLogger.severe(glareRequest, "Failed to send 491 response for glare request");
-					sipLogger.severe(glareRequest, responseException);
-				}
-			}
-		}
-	}
+//	/**
+//	 * Processes queued requests that were delayed due to glare conditions. Glare
+//	 * occurs when both endpoints send requests simultaneously, requiring one side
+//	 * to queue its request until the other completes.
+//	 *
+//	 * @param sipSession the SIP session containing the glare queue
+//	 * @param glareQueue the queue of pending requests to process
+//	 */
+//	private void processGlareQueue(SipSession sipSession, LinkedList<SipServletRequest> glareQueue) {
+//		if (glareQueue == null || glareQueue.isEmpty()) {
+//			return;
+//		}
+//
+//		boolean expectAck = Boolean.TRUE.equals(sipSession.getAttribute(EXPECT_ACK));
+//		if (expectAck) {
+//			return;
+//		}
+//
+//		SipServletRequest glareRequest = null;
+//		try {
+//			glareRequest = glareQueue.removeFirst();
+//			sipSession.setAttribute(GLARE_QUEUE, glareQueue);
+//			this.doRequest(glareRequest);
+//		} catch (Exception e) {
+//			sipLogger.warning("AsyncSipServlet.processGlareQueue - Exception processing glare request");
+//
+//			SipSession glareSession = glareRequest.getSession();
+//			if (glareSession != null && glareSession.isValid()) {
+//				String error = initialSipServletContextEvent.getServletContext().getServletContextName() + " "
+//						+ e.getClass().getSimpleName() + ", " + e.getMessage();
+//				sipLogger.severe(glareRequest,
+//						"AsyncSipServlet.processGlareQueue - Exception attempting to process GLARE request: \n"
+//								+ glareRequest.toString());
+//				sipLogger.severe(glareRequest, e);
+//				sipLogger.getParent().severe(error);
+//				try {
+//					SipServletResponse glareResponse = glareRequest.createResponse(491); // Request Pending
+//					glareResponse.setHeader("Retry-After", "3");
+//					sendResponse(glareResponse);
+//				} catch (Exception responseException) {
+//					sipLogger.severe(glareRequest, "Failed to send 491 response for glare request");
+//					sipLogger.severe(glareRequest, responseException);
+//				}
+//			}
+//		}
+//	}
 
 	/**
 	 * Sends a SIP response and logs the outgoing message. This method provides

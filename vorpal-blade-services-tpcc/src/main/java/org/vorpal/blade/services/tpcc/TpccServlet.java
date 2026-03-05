@@ -20,7 +20,6 @@ import javax.ws.rs.container.AsyncResponse;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v2.logging.ConsoleColors;
 
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
@@ -89,7 +88,7 @@ public class TpccServlet extends B2buaServlet //
 	public void sessionCreated(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.INFO)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.info(appSession, ConsoleColors.GREEN_BRIGHT + "appSession created..." + ConsoleColors.RESET);
+			sipLogger.info(appSession, "appSession created...");
 		}
 	}
 
@@ -97,7 +96,7 @@ public class TpccServlet extends B2buaServlet //
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
 		if (sipLogger.isLoggable(Level.INFO)) {
 			SipApplicationSession appSession = event.getApplicationSession();
-			sipLogger.info(appSession, ConsoleColors.RED_BRIGHT + "appSession destroyed..." + ConsoleColors.RESET);
+			sipLogger.info(appSession, "appSession destroyed...");
 		}
 	}
 
@@ -130,7 +129,6 @@ public class TpccServlet extends B2buaServlet //
 		if (sipLogger.isLoggable(Level.INFO)) {
 			SipSession sipSession = event.getSession();
 			sipLogger.info(sipSession, "sipSession sessionDestroyed...");
-
 		}
 	}
 

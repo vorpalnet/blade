@@ -125,6 +125,7 @@ public class InitialInvite extends Callflow {
 		if (b2buaListener != null) {
 			b2buaListener.callStarted(bobRequest);
 		}
+		sipLogger.finer(bobRequest, "InitialInvite.process - SettingsManager.sendEvent(bobRequest); #1");
 		SettingsManager.sendEvent(bobRequest);
 
 		// Remove the callflow so it's not serialized
@@ -140,7 +141,7 @@ public class InitialInvite extends Callflow {
 			try {
 				this.processContinue();
 			} catch (Exception ex) {
-				sipLogger.warning(bobRequest, "InitialInvite.process - catch #1");
+				sipLogger.finer(bobRequest, "InitialInvite.process - catch #1");
 				throw new ServletException(ex);
 			}
 
@@ -181,7 +182,10 @@ public class InitialInvite extends Callflow {
 						try {
 
 							SettingsManager.createEvent("callAnswered", aliceResponse);
-							b2buaListener.callAnswered(aliceResponse);
+							if (b2buaListener != null) {
+								b2buaListener.callAnswered(aliceResponse);
+							}
+//							sipLogger.finer("InitialInvite.processContinue - SettingsManager.sendEvent(aliceResponse); #2");
 							SettingsManager.sendEvent(aliceResponse);
 
 						} catch (Exception ex) {
@@ -191,10 +195,13 @@ public class InitialInvite extends Callflow {
 
 					}
 				} else if (failure(bobResponse)) {
+//					sipLogger
+//							.finer("InitialInvite.processContinue - creating callDeclined event for: " + bobResponse);
 					SettingsManager.createEvent("callDeclined", aliceResponse);
 					if (b2buaListener != null) {
 						b2buaListener.callDeclined(aliceResponse);
 					}
+//					sipLogger.finer("InitialInvite.processContinue - SettingsManager.sendEvent(aliceResponse); #3");
 					SettingsManager.sendEvent(aliceResponse);
 					Analytics.sessionStop(aliceResponse);
 				}
@@ -221,6 +228,7 @@ public class InitialInvite extends Callflow {
 							if (b2buaListener != null) {
 								b2buaListener.callConnected(bobAck);
 							}
+//							sipLogger.finer(bobAck, "InitialInvite.processContinue - SettingsManager.sendEvent(bobAck); #4");
 							SettingsManager.sendEvent(bobAck);
 							sendRequest(bobAck);
 						} else {

@@ -49,6 +49,7 @@
 				<include name="scala-library*.jar" />
 				<include name="slf4j*.jar" />
 				<include name="classgraph*.jar" />
+				<include name="json*.jar" />
 			</fileset>
 		</unzip>
 

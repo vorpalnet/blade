@@ -135,6 +135,7 @@ public class ReferTransfer extends Transfer {
 			if (transferListener != null) {
 				transferListener.transferRequested(transferorRequest);
 			}
+			sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(transferorRequest); #2");
 			SettingsManager.sendEvent(transferorRequest);
 
 			expectRequest(transfereeSession, CANCEL, (cancel) -> {
@@ -145,6 +146,7 @@ public class ReferTransfer extends Transfer {
 				if (transferListener != null) {
 					transferListener.transferAbandoned(transfereeRequest);
 				}
+				sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(transfereeRequest); #3");
 				SettingsManager.sendEvent(transfereeRequest);
 
 				sendRequest(continueRequest(transferorSession, cancel));
@@ -182,6 +184,7 @@ public class ReferTransfer extends Transfer {
 							if (transferListener != null) {
 								transferListener.transferInitiated(transfereeRequest);
 							}
+							sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(transfereeRequest); #4");
 							SettingsManager.sendEvent(transfereeRequest);
 
 						} else if (sipfrag.contains(SIPFRAG_200)) {
@@ -205,6 +208,7 @@ public class ReferTransfer extends Transfer {
 									if (transferListener != null) {
 									transferListener.transferCompleted(referResponse);
 									}
+									sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(referResponse); #5");
 									SettingsManager.sendEvent(referResponse);
 							}
 							sendRequest(transferorSession.createRequest(BYE));
@@ -218,6 +222,7 @@ public class ReferTransfer extends Transfer {
 									if (transferListener != null) {
 									transferListener.transferDeclined(referResponse);
 									}
+									sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(referResponse); #6");
 									SettingsManager.sendEvent(referResponse);
 
 							}
@@ -240,6 +245,7 @@ public class ReferTransfer extends Transfer {
 						if (transferListener != null) {
 						transferListener.transferDeclined(referResponse);
 						}
+						sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(referResponse); #1");
 						SettingsManager.sendEvent(referResponse);
 
 				}

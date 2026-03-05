@@ -120,6 +120,7 @@ public class Terminate extends Callflow {
 							if (b2buaListener != null) {
 								b2buaListener.callAbandoned(terminationRequest);
 							}
+							// sipLogger.finer("Terminate.process - SettingsManager.sendEvent(terminationRequest); #1");
 							SettingsManager.sendEvent(terminationRequest);
 							Analytics.sessionStop(terminationRequest);
 
@@ -137,6 +138,7 @@ public class Terminate extends Callflow {
 						if (b2buaListener != null) {
 							b2buaListener.callCompleted(terminationRequest);
 						}
+						// sipLogger.finer("Terminate.process - SettingsManager.sendEvent(terminationRequest); #2");
 						SettingsManager.sendEvent(terminationRequest);
 						Analytics.sessionStop(terminationRequest);
 

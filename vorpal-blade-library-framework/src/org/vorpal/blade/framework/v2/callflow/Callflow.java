@@ -74,6 +74,13 @@ import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
 import org.vorpal.blade.framework.v2.testing.DummyResponse;
 
 public abstract class Callflow implements Serializable {
+
+	public enum GlareState {
+		ALLOW, // no glare, process all messages
+		QUEUE, // okay to queue requests that come in out of order
+		PROTECT, // protect against glare by issuing 491
+	};
+
 	private static final long serialVersionUID = 1L;
 	protected static SipFactory sipFactory;
 	protected static SipSessionsUtil sipUtil;
@@ -125,7 +132,7 @@ public abstract class Callflow implements Serializable {
 	public static final String TIMESTAMP_PARAM = "ts";
 	public static final String DIALOG_PARAM = "dialog";
 
-	private static final String EXPECT_ACK = "EXPECT_ACK";
+//	private static final String EXPECT_ACK = "EXPECT_ACK";
 	private static final String USER_AGENT_ATTR = "userAgent";
 	private static final String SIP_ADDRESS_ATTR = "sipAddress";
 	private static final String IS_PROXY_ATTR = "isProxy";
@@ -133,6 +140,9 @@ public abstract class Callflow implements Serializable {
 	private static final String CALLEE = "callee";
 	private static final String MESSAGE_SIPFRAG = "message/sipfrag";
 	private static final String SEND_REQUESTS_PREFIX = "SEND_REQUESTS_";
+//	private static final String REQUEST_PENDING = "REQUEST_PENDING";
+
+	private static final String GLARE_STATE = "GLARE_STATE";
 
 	// Response code constants
 	private static final int RESPONSE_CODE_408 = 408;
@@ -527,7 +537,7 @@ public abstract class Callflow implements Serializable {
 
 		String attribute = REQUEST_CALLBACK_ + method;
 
-		if (appSession.isValid()) {
+		if (appSession.isValid() && callback != null) {
 			appSession.setAttribute(attribute, callback);
 		} else {
 
@@ -564,7 +574,9 @@ public abstract class Callflow implements Serializable {
 		// Vorpal Session + Timestamp will be unique.
 		// Use this for a database primary key in future designs.
 		String timestamp = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-		appSession.setAttribute(VORPAL_TIMESTAMP, timestamp);
+		if (timestamp != null) {
+			appSession.setAttribute(VORPAL_TIMESTAMP, timestamp);
+		}
 
 		return indexKey;
 	}
@@ -651,7 +663,9 @@ public abstract class Callflow implements Serializable {
 		if (sipSession != null) {
 			try {
 				dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
-				sipSession.setAttribute(VORPAL_DIALOG, dialog);
+				if (dialog != null) {
+					sipSession.setAttribute(VORPAL_DIALOG, dialog);
+				}
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -714,6 +728,7 @@ public abstract class Callflow implements Serializable {
 
 		SipApplicationSession appSession;
 		SipSession sipSession;
+		String method = request.getMethod();
 
 		try {
 
@@ -722,6 +737,32 @@ public abstract class Callflow implements Serializable {
 				sipSession = request.getSession();
 
 				if (sipSession != null && sipSession.isValid()) {
+
+					// For GLARE
+					switch (method) {
+					case INVITE:
+						if (request.getMethod().equals(INVITE) && request.isInitial()) {
+							Parameterable xVorpalSession = sipFactory
+									.createParameterable(getVorpalSessionId(appSession));
+							xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
+							xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
+							request.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
+						}
+						setGlareState(sipSession, GlareState.PROTECT);
+						break;
+
+					case REFER:
+						setGlareState(sipSession, GlareState.PROTECT);
+						break;
+
+					case ACK:
+					case CANCEL:
+						setGlareState(sipSession, GlareState.ALLOW);
+						break;
+
+					default:
+						// setGlareState(sipSession, GlareState.PROTECT);
+					}
 
 //					// begin KeepAlive logic...
 					try {
@@ -782,14 +823,6 @@ public abstract class Callflow implements Serializable {
 									}
 								}
 
-								if (sipLogger.isLoggable(Level.FINER)) {
-									sipLogger.finer(request,
-											Color.YELLOW_BOLD_BRIGHT("Callflow.sendRequest - setting keep alive timer; "//
-													+ "expiration=" + sessionExpiresInSeconds // "
-													+ ", minSE=" + minSEinSeconds //
-											));
-								}
-
 								request.getSessionKeepAlivePreference().setEnabled(true);
 								request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
 								request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
@@ -820,6 +853,12 @@ public abstract class Callflow implements Serializable {
 									}
 								});
 
+								if (sipLogger.isLoggable(Level.FINER)) {
+									sipLogger.finer(request, "Callflow.sendRequest - setting keep alive timer; "//
+											+ "Session-Expires=" + request.getHeader("Session-Expires") // "
+											+ ", Min-SE=" + request.getHeader("Min-SE"));
+								}
+
 							}
 
 							if (configSessionExpiresInMinutes <= 0) { // never expires
@@ -830,19 +869,9 @@ public abstract class Callflow implements Serializable {
 							}
 
 							if (sipLogger.isLoggable(Level.FINER)) {
-								sipLogger.finer(request,
-										"Callflow.sendRequest - appSession.setExpires sessionExpiresInMinutes=" //
-												+ sessionExpiresInMinutes //
-												+ ", configSessionExpiresInMinutes=" + configSessionExpiresInMinutes //
-												+ ", finalSessionExpiresInMinutes=" + finalSessionExpiresInMinutes);
+								sipLogger.finer(request, "Callflow.sendRequest - setting appSession expires="//
+										+ finalSessionExpiresInMinutes);
 							}
-
-							if (sipLogger.isLoggable(Level.FINER)) {
-								sipLogger.finer(request, Color.YELLOW_BOLD_BRIGHT(
-										"Callflow.sendRequest - appSession.setExpires finalSessionExpiresInMinutes="
-												+ finalSessionExpiresInMinutes));
-							}
-
 							appSession.setExpires(finalSessionExpiresInMinutes);
 
 						} // request is initial
@@ -856,38 +885,19 @@ public abstract class Callflow implements Serializable {
 						request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
 					}
 
-					String method = request.getMethod();
-
-					// for GLARE handling
-					switch (method) {
-					case INVITE:
-						sipSession.setAttribute(EXPECT_ACK, Boolean.TRUE);
-
-						if (request.isInitial()) {
-							Parameterable xVorpalSession = sipFactory
-									.createParameterable(getVorpalSessionId(appSession));
-							xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
-							xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
-							request.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
-						}
-
-						break;
-					case ACK:
-						sipSession.removeAttribute(EXPECT_ACK);
-						break;
+					// useful for identifying sessions
+					if (request.getTo() != null) {
+						sipSession.setAttribute(SIP_ADDRESS_ATTR, request.getTo());
 					}
 
-					// useful for identifying sessions
-					sipSession.setAttribute(SIP_ADDRESS_ATTR, request.getTo());
+					// Useful for associating SIP with HTTP
+					Analytics.sipServletRequest.set(request);
+
 					request.send();
 					sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
 
 				}
 			}
-
-			// For associating SIP with HTTP during Analytics processing
-			// The AnalyticsFilter will remove it.
-			Analytics.sipServletRequest.set(request);
 
 		} catch (
 
@@ -1026,7 +1036,9 @@ public abstract class Callflow implements Serializable {
 			requestMap.put(request.getSession().getId(), request);
 		}
 
-		appSession.setAttribute(id, requestMap);
+		if (requestMap != null) {
+			appSession.setAttribute(id, requestMap);
+		}
 
 		// create a timer for canceling requests, if needed
 		// using a little syntactical magic for lambda expressions
@@ -1095,7 +1107,9 @@ public abstract class Callflow implements Serializable {
 								lambdaFunction.accept(response);
 							} else {
 								// save the outstanding requests and await for future responses
-								appSession.setAttribute(id, savedRequests);
+								if (savedRequests != null) {
+									appSession.setAttribute(id, savedRequests);
+								}
 							}
 
 						}
@@ -1147,52 +1161,70 @@ public abstract class Callflow implements Serializable {
 
 		SipApplicationSession appSession = response.getApplicationSession();
 		SipSession sipSession = response.getSession();
+		String method = response.getMethod();
+		int status = response.getStatus();
 
-		if (response.getAttribute(WITHHOLD_RESPONSE) == null) {
+		if (false == Boolean.TRUE.equals(response.getAttribute(WITHHOLD_RESPONSE))) {
 
-			sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
-
-			if (response.getMethod().equals(INVITE)) {
-				// glare handling;
-				if (response.getStatus() >= 300) {
-					sipSession.removeAttribute(EXPECT_ACK);
-
-					SipSession linkedSession = getLinkedSession(sipSession);
-					if (linkedSession != null) {
-						linkedSession.removeAttribute(EXPECT_ACK);
+			// Glare logic
+			switch (method) {
+			case REFER:
+				// leave in PROTECT
+				break;
+			case INVITE:
+				// For inserting Vorpal Session header
+				if (response.getRequest().isInitial()) {
+					String indexKey = getVorpalSessionId(response.getApplicationSession());
+					if (indexKey != null) {
+						Parameterable xVorpalSession = sipFactory.createParameterable(getVorpalSessionId(appSession));
+						xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
+						xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
+						response.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
 					}
 				}
 
-			}
-
-			// For inserting Vorpal Session header
-			if (response.getRequest().isInitial()) {
-				String indexKey = getVorpalSessionId(response.getApplicationSession());
-				if (indexKey != null) {
-					Parameterable xVorpalSession = sipFactory.createParameterable(getVorpalSessionId(appSession));
-					xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
-					xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
-					response.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
+				// Glare handling
+				if (status != 491) {
+					if (successful(response)) {
+						// jwm - unnecessary
+						setGlareState(sipSession, GlareState.QUEUE);
+					} else if (failure(response)) {
+						setGlareState(sipSession, GlareState.ALLOW);
+					}
 				}
+
+				break;
+			default:
+				// Clear GLARE if final response
+				if (false == (provisional(response) || status == 491)) {
+					setGlareState(sipSession, GlareState.ALLOW);
+				}
+
 			}
 
-			response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
+			if (lambdaFunction != null) {
+				response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
+			}
 
 			if (provisional(response)) {
 
 				if (response.isReliableProvisional() || null != response.getAttribute(RELIABLE)) {
 
-					if (response.getSession().isValid()) {
+					if (response.getSession().isValid() && lambdaFunction != null) {
 						response.getSession().setAttribute(REQUEST_CALLBACK_ + PRACK, lambdaFunction);
 						response.sendReliably();
 					}
 
 				} else {
 					response.send();
+					sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+
 				}
 
 			} else {
 				response.send();
+				sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+
 			}
 		}
 
@@ -1612,21 +1644,24 @@ public abstract class Callflow implements Serializable {
 	}
 
 	public static void linkSession(SipServletMessage inbound, SipServletMessage outbound) {
+		if (inbound.getSession().isValid() && outbound.getSession().isValid()) {
 
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(inbound, "Callflow.linkSession - linkSession(" + getVorpalDialogId(inbound) + ", "
-					+ getVorpalDialogId(outbound) + ")");
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(inbound, "Callflow.linkSession - linkSession(" + getVorpalDialogId(inbound) + ", "
+						+ getVorpalDialogId(outbound) + ")");
+			}
+			outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
 		}
-		outbound.getSession().setAttribute(LINKED_SESSION, inbound.getSession().getId());
-
 	}
 
 	public static void linkSession(SipSession inbound, SipSession outbound) {
-		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer(inbound, Color.YELLOW_BOLD_BRIGHT("Callflow.linkSession - linkSession("
-					+ getVorpalDialogId(inbound) + ", " + getVorpalDialogId(outbound) + ")"));
+		if (inbound.isValid() && outbound.isValid()) {
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(inbound, Color.YELLOW_BOLD_BRIGHT("Callflow.linkSession - linkSession("
+						+ getVorpalDialogId(inbound) + ", " + getVorpalDialogId(outbound) + ")"));
+			}
+			outbound.setAttribute(LINKED_SESSION, inbound.getId());
 		}
-		outbound.setAttribute(LINKED_SESSION, inbound.getId());
 	}
 
 	/**
@@ -1695,7 +1730,7 @@ public abstract class Callflow implements Serializable {
 	 * @param delay_in_milliseconds the delay in milliseconds before processing
 	 */
 	public void processLater(SipServletRequest request, long delay_in_milliseconds) {
-		if (request.getApplicationSession().isValid()) {
+		if (request.getApplicationSession().isValid() && request != null) {
 			request.getApplicationSession().setAttribute(DELAYED_REQUEST, request);
 			timerService.createTimer(request.getApplicationSession(), delay_in_milliseconds, false, this);
 		}
@@ -1962,17 +1997,19 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void proxyRequest(Proxy proxy, List<URI> endpoints, Callback<SipServletResponse> lambdaFunction)
 			throws TooManyHopsException {
-		SipApplicationSession appSession = proxy.getOriginalRequest().getApplicationSession();
-		appSession.setAttribute(PROXY_CALLBACK_ + INVITE, lambdaFunction);
-		appSession.setAttribute(IS_PROXY_ATTR, Boolean.TRUE);
+		if (lambdaFunction != null) {
+			SipApplicationSession appSession = proxy.getOriginalRequest().getApplicationSession();
+			appSession.setAttribute(PROXY_CALLBACK_ + INVITE, lambdaFunction);
+			appSession.setAttribute(IS_PROXY_ATTR, Boolean.TRUE);
 
-		for (URI endpoint : endpoints) {
-			// jwm - SUPERARROW NEEDS WORK!
-			sipLogger.superArrow(Direction.SEND, false, proxy.getOriginalRequest(), null,
-					this.getClass().getSimpleName(), null);
+			for (URI endpoint : endpoints) {
+				// jwm - SUPERARROW NEEDS WORK!
+				sipLogger.superArrow(Direction.SEND, false, proxy.getOriginalRequest(), null,
+						this.getClass().getSimpleName(), null);
+			}
+
+			proxy.proxyTo(endpoints);
 		}
-
-		proxy.proxyTo(endpoints);
 	}
 
 	/**
@@ -2038,7 +2075,10 @@ public abstract class Callflow implements Serializable {
 				proxy.setProxyTimeout(timeout);
 			}
 
-			inboundRequest.getSession().setAttribute(RESPONSE_CALLBACK_ + inboundRequest.getMethod(), lambdaFunction);
+			if (lambdaFunction != null) {
+				inboundRequest.getSession().setAttribute(RESPONSE_CALLBACK_ + inboundRequest.getMethod(),
+						lambdaFunction);
+			}
 
 			inboundRequest.getApplicationSession().setAttribute(IS_PROXY_ATTR, Boolean.TRUE);
 
@@ -2159,6 +2199,39 @@ public abstract class Callflow implements Serializable {
 		}
 
 		return timestamp;
+	}
+
+	public static void setGlareState(SipSession sipSession, GlareState state) {
+		if (state != null) {
+			sipSession.setAttribute(GLARE_STATE, state);
+		} else {
+			sipSession.setAttribute(GLARE_STATE, GlareState.ALLOW);
+		}
+
+		// jwm - color coding to understand glare; remove in the future
+		if (sipLogger.isLoggable(Level.FINER)) {
+			state = (state != null) ? state : GlareState.ALLOW;
+			String msg = "Callflow.setGlareState - Setting state to " + state;
+			switch (getGlareState(sipSession)) {
+			case ALLOW:
+				msg = Color.GREEN_BOLD_BRIGHT(msg);
+				break;
+			case QUEUE:
+				msg = Color.YELLOW_BOLD_BRIGHT(msg);
+				break;
+			case PROTECT:
+				msg = Color.RED_BOLD_BRIGHT(msg);
+				break;
+			}
+			sipLogger.finer(sipSession, msg);
+		}
+
+	}
+
+	public static GlareState getGlareState(SipSession sipSession) {
+		GlareState state = (GlareState) sipSession.getAttribute(GLARE_STATE);
+		state = (state != null) ? state : GlareState.ALLOW;
+		return state;
 	}
 
 }
