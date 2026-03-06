@@ -122,7 +122,6 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
@@ -155,6 +154,7 @@ public class BlindTransfer extends Transfer {
 	private static final String SUBSCRIPTION_TERMINATED_REJECTED = "terminated;reason=rejected";
 
 	private final boolean sendNotify;
+	private boolean ignoreBob = false;
 
 	/**
 	 * Constructs a BlindTransfer with NOTIFY messages enabled.
@@ -185,30 +185,14 @@ public class BlindTransfer extends Transfer {
 		try {
 			// request is REFER from transferor (bob)
 			SipApplicationSession appSession = referRequest.getApplicationSession();
-			SipSession sipSession = referRequest.getSession();
-			SipSession linkedSession = getLinkedSession(sipSession);
-
-//			Boolean inProgress = (Boolean) appSession.getAttribute(IN_PROGRESS_ATTR);
-//			if (Boolean.TRUE.equals(inProgress)) {
-//				sendResponse(referRequest.createResponse(491));
-//				return;
-//			}
-//			appSession.setAttribute(IN_PROGRESS_ATTR, Boolean.TRUE);
-
-			// Glare
-			if (true == isTransferInProgress(appSession)) {
-				sipLogger.warning(referRequest, "BlindTransfer.process - Request pending, sending 491");
-				sendResponse(referRequest.createResponse(491));
-			} else {
-				setTransferInProgress(appSession, true);
-			}
+			// SipSession sipSession = referRequest.getSession();
+			// SipSession linkedSession = getLinkedSession(sipSession);
 
 			// save X-Previous-DN-Tmp for use later
 			URI referTo = referRequest.getAddressHeader(REFER_TO).getURI();
 			appSession.setAttribute(REFER_TO, referTo);
 
 			// User is notified a transfer is requested
-			setTransferInProgress(appSession, true);
 			SettingsManager.createEvent("transferRequested", referRequest);
 			if (transferListener != null) {
 				transferListener.transferRequested(referRequest);
@@ -250,7 +234,13 @@ public class BlindTransfer extends Transfer {
 				notify100.setHeader(EVENT, "refer");
 				notify100.setHeader(SUBSCRIPTION_STATE, SUBSCRIPTION_PENDING_EXPIRES);
 				notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
-				sendRequest(notify100);
+				sendRequest(notify100, (notifyResponse) -> {
+					if (failure(notifyResponse)) {
+						// What about Bob?
+						sipLogger.warning(transfereeRequest, "BlindTransfer.process - Transferor (Bob) disconnected early.");
+						ignoreBob = true;
+					}
+				});
 			}
 
 			// in the event the transferee hangs up before the transfer completes
@@ -274,7 +264,6 @@ public class BlindTransfer extends Transfer {
 					}
 				}
 
-				setTransferInProgress(appSession, false);
 				SettingsManager.createEvent("transferAbandoned", bye);
 				if (transferListener != null) {
 					transferListener.transferAbandoned(bye);
@@ -337,9 +326,6 @@ public class BlindTransfer extends Transfer {
 										+ targetResponse.getStatus() + " " + targetResponse.getReasonPhrase());
 					}
 
-					// remove glare protection
-					setTransferInProgress(appSession, false);
-
 					SettingsManager.createEvent("transferCompleted", targetResponse);
 					if (transferListener != null) {
 						transferListener.transferCompleted(targetResponse);
@@ -358,19 +344,21 @@ public class BlindTransfer extends Transfer {
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck())); // transferee to
 																									// target
 						// Send the SIP/2.0 200 OK to the transferor (bob)
-						if (sendNotify) {
-							SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
-							notify200.setHeader(EVENT, "refer");
-							notify200.setHeader(SUBSCRIPTION_STATE, SUBSCRIPTION_TERMINATED_NORESOURCE);
-							String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
-									+ targetResponse.getReasonPhrase();
-							notify200.setContent(sipFrag.getBytes(), SIPFRAG);
+						if (ignoreBob == false) {
+							if (sendNotify) {
+								SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
+								notify200.setHeader(EVENT, "refer");
+								notify200.setHeader(SUBSCRIPTION_STATE, SUBSCRIPTION_TERMINATED_NORESOURCE);
+								String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
+										+ targetResponse.getReasonPhrase();
+								notify200.setContent(sipFrag.getBytes(), SIPFRAG);
 
-							sendRequest(notify200);
-						} else {
-							// Send a BYE to transferor (bob) if necessary
-							if (referRequest.getSession().isValid()) {
-								sendRequest(referRequest.getSession().createRequest(BYE));
+								sendRequest(notify200);
+							} else {
+								// Send a BYE to transferor (bob) if necessary
+								if (referRequest.getSession().isValid()) {
+									sendRequest(referRequest.getSession().createRequest(BYE));
+								}
 							}
 						}
 
@@ -399,9 +387,6 @@ public class BlindTransfer extends Transfer {
 							sipLogger.finer(targetResponse, "transferee (alice) has decided to 'giveup'");
 						}
 
-						// remove glare protection
-						setTransferInProgress(appSession, false);
-
 						SettingsManager.createEvent("transferAbandoned", referRequest);
 						if (transferListener != null) {
 							transferListener.transferAbandoned(referRequest);
@@ -425,9 +410,8 @@ public class BlindTransfer extends Transfer {
 						if (sipLogger.isLoggable(Level.FINER)) {
 							sipLogger.finer(targetResponse, "target (carol) has 'rejected' the call");
 						}
-						
+
 						// User is notified that the transfer target did not answer
-						setTransferInProgress(appSession, false);
 						SettingsManager.createEvent("transferDeclined", targetResponse);
 						if (transferListener != null) {
 							transferListener.transferDeclined(targetResponse);
@@ -461,8 +445,5 @@ public class BlindTransfer extends Transfer {
 		}
 
 	}
-	
-	
-	
 
 }

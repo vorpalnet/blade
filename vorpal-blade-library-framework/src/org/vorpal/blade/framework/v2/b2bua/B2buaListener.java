@@ -103,7 +103,7 @@ public interface B2buaListener extends Serializable {
 	 * @throws ServletException if a servlet error occurs
 	 * @throws IOException if an I/O error occurs
 	 */
-	void requestEvent(SipServletRequest bobRequest) throws ServletException, IOException;
+	public void requestEvent(SipServletRequest bobRequest) throws ServletException, IOException;
 
 	/**
 	 * Called for mid-dialog responses.
@@ -112,6 +112,6 @@ public interface B2buaListener extends Serializable {
 	 * @throws ServletException if a servlet error occurs
 	 * @throws IOException if an I/O error occurs
 	 */
-	void responseEvent(SipServletResponse aliceResponse) throws ServletException, IOException;
+	public void responseEvent(SipServletResponse aliceResponse) throws ServletException, IOException;
 
 }

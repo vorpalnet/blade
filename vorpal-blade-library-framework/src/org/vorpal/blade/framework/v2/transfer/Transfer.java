@@ -219,13 +219,5 @@ public class Transfer extends Callflow {
 	public void process(SipServletRequest request) throws ServletException, IOException {
 
 	}
-	
-	protected static boolean isTransferInProgress(SipApplicationSession appSession) {
-		return Boolean.TRUE.equals(appSession.getAttribute(TRANSFER_IN_PROGRESS));
-	}
-	
-	protected static void setTransferInProgress(SipApplicationSession appSession, boolean value) {
-		appSession.setAttribute(TRANSFER_IN_PROGRESS, value);
-	}
 
 }

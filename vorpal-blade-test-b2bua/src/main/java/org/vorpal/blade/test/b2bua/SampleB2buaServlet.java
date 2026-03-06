@@ -31,14 +31,12 @@ import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipApplicationSessionEvent;
-import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionEvent;
-import javax.servlet.sip.SipSessionListener;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
@@ -65,12 +63,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
 		Callflow callflow = null;
 
-// jwm - for testing glare
-//		if (inboundRequest.getMethod().equals("CANCEL")) {
-//			callflow = new CancelGlare();
-//		} else {
-//			callflow = super.chooseCallflow(inboundRequest);
-//		}
+		// choose your custom callflows here
 
 		callflow = super.chooseCallflow(inboundRequest);
 
@@ -159,7 +152,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 	@Override
 	public void callCompleted(SipServletRequest request) throws ServletException, IOException {
 		sipLogger.info(request, "callCompleted...");
-		
+
 		// for testing...
 //		sipLogger.warning(request, "SampleB2buaServlet.callStarted - About to produce a null pointer exception...");
 //		Callflow cf = null;
@@ -240,6 +233,37 @@ public class SampleB2buaServlet extends B2buaServlet {
 			SipSession sipSession = event.getSession();
 			sipLogger.finer(sipSession, "sipSession readyToInvalidate... " + sipSession.getId());
 		}
+	}
+
+	/**
+	 * Called for mid-dialog requests (e.g., re-INVITE, INFO, UPDATE).
+	 *
+	 * @param bobRequest the outbound request to modify
+	 * @throws ServletException if a servlet error occurs
+	 * @throws IOException      if an I/O error occurs
+	 */
+	@Override
+	public void requestEvent(SipServletRequest bobRequest) throws ServletException, IOException {
+
+	}
+
+	/**
+	 * Called for mid-dialog responses.
+	 *
+	 * @param aliceResponse the response to modify before sending
+	 * @throws ServletException if a servlet error occurs
+	 * @throws IOException      if an I/O error occurs
+	 */
+	@Override
+	public void responseEvent(SipServletResponse aliceResponse) throws ServletException, IOException {
+
+// jwm - testing to see what happense if Bob disappears
+//		if (aliceResponse.getMethod().equals(Callflow.NOTIFY)) {
+//			sipLogger.finer(aliceResponse, "SampleB2buaServlet.responseEvent - ");
+//			aliceResponse.setStatus(404);
+//		}
+	
+	
 	}
 
 }

@@ -62,7 +62,7 @@ public class AnalyticsFilter implements Filter {
 			event.setSessionId(Analytics.getSessionId(sipRequest.getApplicationSession()));
 			Analytics.sipServletRequest.remove();
 		}else {
-			sipLogger.severe("AnalyticsFilter.doFilter - Could not find sipServletRequest. Bummer!");
+			sipLogger.severe("AnalyticsFilter.doFilter - Could not find sipServletRequest.");
 		}
 
 		sipLogger.logEvent(sipRequest.getSession(), event);
@@ -72,9 +72,9 @@ public class AnalyticsFilter implements Filter {
 		byte[] responseBody = wrappedResponse.getBody();
 
 		if (responseBody != null && responseBody.length > 0) {
-			Callflow.getSipLogger().warning("AnalyticsFilter.doFilter - responseBody=" + responseBody);
+			Callflow.getSipLogger().finer("AnalyticsFilter.doFilter - responseBody=" + responseBody);
 		}else {
-			Callflow.getSipLogger().warning("AnalyticsFilter.doFilter - There is no responseBody!");
+			Callflow.getSipLogger().finer("AnalyticsFilter.doFilter - There is no responseBody!");
 		}
 
 		// Copy the buffered response body to the actual response
@@ -98,8 +98,8 @@ public class AnalyticsFilter implements Filter {
 			BufferedRequestWrapper wrappedRequest = new BufferedRequestWrapper(httpRequest);
 			BufferedResponseWrapper wrappedResponse = new BufferedResponseWrapper(httpResponse);
 
-			sipLogger.warning("AnalyticsFilter.doFilter - contentType=" + wrappedRequest.getContentType());
-			sipLogger.warning("AnalyticsFilter.doFilter - contextPath=" + wrappedRequest.getContextPath() //
+			sipLogger.finer("AnalyticsFilter.doFilter - contentType=" + wrappedRequest.getContentType());
+			sipLogger.finer("AnalyticsFilter.doFilter - contextPath=" + wrappedRequest.getContextPath() //
 					+ ", pathInfo=" + wrappedRequest.getPathInfo() //
 					+ ", pathTranslated=" + wrappedRequest.getPathTranslated() //
 					+ ", servletPath=" + wrappedRequest.getServletPath() //
@@ -111,13 +111,13 @@ public class AnalyticsFilter implements Filter {
 
 				for (Map.Entry<String, EventSelector> entry : analytics.getEvents().entrySet()) {
 
-					sipLogger.warning("AnalyticsFilter.doFilter - entry.key=" + entry.getKey());
+					sipLogger.finer("AnalyticsFilter.doFilter - entry.key=" + entry.getKey());
 
 					if (httpRequest.getPathInfo().equals(entry.getKey())) {
-						sipLogger.warning("AnalyticsFilter.doFilter - entry.key=" + entry.getKey());
+						sipLogger.finer("AnalyticsFilter.doFilter - entry.key=" + entry.getKey());
 						Matcher matcher = pattern.matcher(httpRequest.getContextPath());
 						String name = matcher.replaceAll("$1");
-						sipLogger.warning("AnalyticsFilter.doFilter - name=" + name);
+						sipLogger.finer("AnalyticsFilter.doFilter - name=" + name);
 
 						event = SettingsManager.createEvent(entry.getKey(), jsonNode);
 					}
