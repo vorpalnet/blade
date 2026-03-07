@@ -154,7 +154,6 @@ public class BlindTransfer extends Transfer {
 	private static final String SUBSCRIPTION_TERMINATED_REJECTED = "terminated;reason=rejected";
 
 	private final boolean sendNotify;
-	private boolean ignoreBob = false;
 
 	/**
 	 * Constructs a BlindTransfer with NOTIFY messages enabled.
@@ -236,9 +235,8 @@ public class BlindTransfer extends Transfer {
 				notify100.setContent(TRYING_100.getBytes(), SIPFRAG);
 				sendRequest(notify100, (notifyResponse) -> {
 					if (failure(notifyResponse)) {
-						// What about Bob?
+						// What about Bob? Baby steps!
 						sipLogger.warning(transfereeRequest, "BlindTransfer.process - Transferor (Bob) disconnected early.");
-						ignoreBob = true;
 					}
 				});
 			}
@@ -344,7 +342,8 @@ public class BlindTransfer extends Transfer {
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck())); // transferee to
 																									// target
 						// Send the SIP/2.0 200 OK to the transferor (bob)
-						if (ignoreBob == false) {
+						// Sometimes bob returns a 404 on the first notify, so we have to ignore him
+						if (referRequest.getSession().isValid() == true) { 
 							if (sendNotify) {
 								SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
 								notify200.setHeader(EVENT, "refer");
