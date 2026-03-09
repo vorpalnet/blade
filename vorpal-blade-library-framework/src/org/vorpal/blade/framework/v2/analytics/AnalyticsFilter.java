@@ -27,7 +27,7 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-@WebFilter(filterName = "AnalyticsFilter", urlPatterns = "/*", asyncSupported = true)
+//@WebFilter(filterName = "AnalyticsFilter", urlPatterns = "/*", asyncSupported = true)
 public class AnalyticsFilter implements Filter {
 
 	public static final String ANALYTICS_ATTRIBUTE = "org.vorpal.blade.analytics";
