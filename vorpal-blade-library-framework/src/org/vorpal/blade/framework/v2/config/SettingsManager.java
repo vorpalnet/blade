@@ -176,7 +176,9 @@ public class SettingsManager<T> {
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
+		Callflow.setSipUtil(sipUtil);
 
 		this.mapper = mapper;
 
@@ -189,7 +191,9 @@ public class SettingsManager<T> {
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
+		Callflow.setSipUtil(sipUtil);
 
 		this.mapper = mapper;
 
@@ -201,7 +205,9 @@ public class SettingsManager<T> {
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
+		Callflow.setSipUtil(sipUtil);
 
 		applicationName = basename(event.getServletContext().getServletContextName());
 		applicationVersion = version(event.getServletContext().getServletContextName());
@@ -211,7 +217,9 @@ public class SettingsManager<T> {
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
+		Callflow.setSipUtil(sipUtil);
 
 		applicationName = basename(event.getServletContext().getServletContextName());
 		applicationVersion = version(event.getServletContext().getServletContextName());
@@ -223,7 +231,9 @@ public class SettingsManager<T> {
 			throws ServletException, IOException {
 		this.sample = sample;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
+		Callflow.setSipUtil(sipUtil);
 
 		applicationName = basename(event.getServletContext().getServletContextName());
 		applicationVersion = version(event.getServletContext().getServletContextName());
@@ -234,7 +244,9 @@ public class SettingsManager<T> {
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, T sample) throws ServletException, IOException {
 		this.sample = sample;
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
+		Callflow.setSipUtil(sipUtil);
 
 		applicationName = basename(event.getServletContext().getServletContextName());
 		applicationVersion = version(event.getServletContext().getServletContextName());
