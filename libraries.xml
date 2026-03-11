@@ -767,7 +767,7 @@
 
 	<target name="mvn_windows" if="isWindows" depends="init">
 		<exec dir="." executable="cmd">
-			<arg line="/c mvn -f maven.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
+			<arg line="/c 'mvn -f maven.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
 		</exec>
 	</target>
 

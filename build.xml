@@ -52,8 +52,10 @@
 		<ant dir="${var}" inheritrefs="true" inheritAll="true" target="build" />
 	</target>
 
-
-	<target name="clean" depends="">
+	<target name="clean">
+		<exec dir="." executable="sh">
+			<arg line="-c 'find . -name *.class -delete'" />
+		</exec>
 		<foreach target="clean-all" param="var">
 			<path refid="subprojects" />
 		</foreach>
