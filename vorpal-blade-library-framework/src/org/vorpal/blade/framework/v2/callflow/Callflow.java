@@ -606,44 +606,63 @@ public abstract class Callflow implements Serializable {
 	 */
 	public static String getVorpalSessionId(SipServletRequest request) {
 		String indexKey = null;
+		String vorpalTimestamp = null;
+		String dialogId = null;
 
 		if (request != null) {
 			SipApplicationSession appSession = request.getApplicationSession();
 			SipSession sipSession = request.getSession();
 
 			indexKey = (String) appSession.getAttribute(VORPAL_SESSION);
-
 			if (indexKey == null) {
-
 				try {
-
 					Parameterable xVorpalSession = (Parameterable) request.getParameterableHeader(X_VORPAL_SESSION);
-
 					if (xVorpalSession != null) {
-						indexKey = xVorpalSession.getValue();
-						if (indexKey != null) {
-							appSession.setAttribute(VORPAL_SESSION, indexKey);
-						}
-
-						String dialogId = xVorpalSession.getParameter(DIALOG_PARAM);
+						dialogId = xVorpalSession.getParameter(DIALOG_PARAM);
 						if (dialogId != null) {
-							sipSession.setAttribute(VORPAL_DIALOG, dialogId);
+							indexKey = xVorpalSession.getValue();
+							vorpalTimestamp = xVorpalSession.getParameter(TIMESTAMP_PARAM);
+						} else {
+							String session = null;
+							try { // X-Vorpal-Session exists, but is not in the correct format. Probably the old one...
+								vorpalTimestamp = request.getHeader("X-Vorpal-Timestamp");
+								if (null != vorpalTimestamp) {
+									session = request.getHeader("X-Vorpal-Session");
+									int colonIndex = session.indexOf(':');
+									indexKey = session.substring(0, colonIndex);
+									dialogId = session.substring(colonIndex + 1);
+								}
+							} catch (Exception ex65) {
+								sipLogger.warning(request,
+										"Callflow.getVorpalSessionId - ex65 " + ex65.getClass().getSimpleName() + " "
+												+ ex65.getMessage() + ", Unable to parse header '" + X_VORPAL_SESSION
+												+ ": " + session + "'. Creating a new one.");
+							}
 						}
 
-						String vorpalTimestamp = xVorpalSession.getParameter(TIMESTAMP_PARAM);
-						if (vorpalTimestamp != null) {
-							appSession.setAttribute(VORPAL_TIMESTAMP, vorpalTimestamp);
-						}
 					}
 				} catch (Exception ex) {
-					sipLogger.severe(request, "Callflow.getVorpalSessionId - Exception: "
-							+ ex.getClass().getSimpleName() + " " + ex.getMessage());
-					sipLogger.severe(request, ex);
+					String value = null;
+					try {
+						value = request.getHeader(X_VORPAL_SESSION);
+					} catch (Exception ex12) {
+						sipLogger.severe(ex12);
+					}
+					sipLogger.warning(request,
+							"Callflow.getVorpalSessionId - ex12 " + ex.getClass().getSimpleName() + " " + ex.getMessage()
+									+ ", Unable to parse header '" + X_VORPAL_SESSION + ": " + value
+									+ "'. Creating a new one.");
 				}
-
 			}
 
-			indexKey = (indexKey != null) ? indexKey : createVorpalSessionId(appSession);
+			if (indexKey != null && dialogId != null && vorpalTimestamp != null) {
+				sipSession.setAttribute(VORPAL_DIALOG, dialogId);
+				appSession.setAttribute(VORPAL_TIMESTAMP, vorpalTimestamp);
+				appSession.setAttribute(VORPAL_SESSION, indexKey);
+			} else {
+				indexKey = createVorpalSessionId(appSession);
+			}
+
 		}
 
 		return indexKey;
