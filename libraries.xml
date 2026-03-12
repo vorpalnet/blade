@@ -26,7 +26,7 @@
 	<property name="docs" location="${dist}/docs" />
 
 	<path id="Web App Libraries.libraryclasspath">
-		<fileset dir="${webapp}/WEB-INF/lib">
+		<fileset dir="${lib}">
 			<filename name="**/*.jar" />
 		</fileset>
 	</path>
@@ -661,7 +661,7 @@
 	<!--target name="build" /-->
 
 	<path id="Web App Libraries.libraryclasspath">
-		<fileset dir="${webapp}/WEB-INF/lib">
+		<fileset dir="${lib}">
 			<filename name="**/*.jar" />
 		</fileset>
 	</path>
@@ -710,20 +710,6 @@
 		<delete dir="${build}" />
 	</target>
 
-	<!--
-	<target name="clean">
-		<delete dir="${build}" />
-		<delete dir="target" />
-		<delete dir="${webapp}/WEB-INF/classes" />
-	</target>
-	-->
-
-	<!--
-	<target name="clean-all" depends="clean" >
-		<echo message="ant.project.name=${ant.project.name}" />
-	</target>
-	-->
-
 	<target name="compile" depends="init">
 		<!-- this is useful for debugging 
 		<echo message="vorpal-blade.classpath is ${toString:vorpal-blade.classpath}" />
@@ -767,13 +753,13 @@
 
 	<target name="mvn_windows" if="isWindows" depends="init">
 		<exec dir="." executable="cmd">
-			<arg line="/c 'mvn -f maven.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
+			<arg line="/c 'mvn -f maven.xml dependency:copy-dependencies -DoutputDirectory=${build}/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
 		</exec>
 	</target>
 
 	<target name="mvn_unix" if="isUnix" depends="init">
 		<exec dir="." executable="sh">
-			<arg line="-c 'mvn -f maven.xml dependency:copy-dependencies -DoutputDirectory=${webapp}/WEB-INF/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
+			<arg line="-c 'mvn -f maven.xml dependency:copy-dependencies -DoutputDirectory=${build}/lib -DOCCAS=${OCCAS} -DHOSTNAME=${computer.hostname}'" />
 		</exec>
 	</target>
 

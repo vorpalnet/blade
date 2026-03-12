@@ -2,7 +2,6 @@
 <project basedir="." default="build" name="vorpal-blade-configurator">
 	<!-- Define unique locations first -->
 	<property name="webapp" location="src/main/configurator" />
-	<property name="classes" location="src/main/configurator/WEB-INF/classes" />
 
 	<!-- property name="target-webapp" location="./target/${ant.project.name}" /-->
 
