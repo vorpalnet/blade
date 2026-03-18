@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?><project-modules id="moduleCoreId" project-version="1.5.0">
+                    
+    
+    
+    
+    <wb-module deploy-name="vorpal-blade-admin-configurator-2.9.3-SNAPSHOT">
+                        
+        
+        <wb-resource deploy-path="/" source-path="/target/m2e-wtp/web-resources"/>
+                                        
+        
+        
+        
+        <wb-resource deploy-path="/" source-path="/src/main/configurator" tag="defaultRootSource"/>
+                                        
+        
+        
+        
+        <wb-resource deploy-path="/WEB-INF/classes" source-path="/src/main/java"/>
+                                        
+        
+        
+        
+        <wb-resource deploy-path="/WEB-INF/classes" source-path="/.apt_src"/>
+                                        
+        
+        
+        
+        <property name="java-output-path" value="/vorpal-blade-admin-configurator/build/classes"/>
+                        
+        
+        <property name="component.exclusion.patterns" value="none"/>
+                
+        <property name="context-root" value="vorpal-blade-admin-configurator"/>
+                                    
+    
+    
+    
+    </wb-module>
+                
+
+
+
+</project-modules>
