@@ -624,7 +624,8 @@ public abstract class Callflow implements Serializable {
 							vorpalTimestamp = xVorpalSession.getParameter(TIMESTAMP_PARAM);
 						} else {
 							String session = null;
-							try { // X-Vorpal-Session exists, but is not in the correct format. Probably the old one...
+							try { // X-Vorpal-Session exists, but is not in the correct format. Probably the old
+									// one...
 								vorpalTimestamp = request.getHeader("X-Vorpal-Timestamp");
 								if (null != vorpalTimestamp) {
 									session = request.getHeader("X-Vorpal-Session");
@@ -649,8 +650,8 @@ public abstract class Callflow implements Serializable {
 						sipLogger.severe(ex12);
 					}
 					sipLogger.warning(request,
-							"Callflow.getVorpalSessionId - ex12 " + ex.getClass().getSimpleName() + " " + ex.getMessage()
-									+ ", Unable to parse header '" + X_VORPAL_SESSION + ": " + value
+							"Callflow.getVorpalSessionId - ex12 " + ex.getClass().getSimpleName() + " "
+									+ ex.getMessage() + ", Unable to parse header '" + X_VORPAL_SESSION + ": " + value
 									+ "'. Creating a new one.");
 				}
 			}
@@ -761,11 +762,13 @@ public abstract class Callflow implements Serializable {
 					switch (method) {
 					case INVITE:
 						if (request.getMethod().equals(INVITE) && request.isInitial()) {
-							Parameterable xVorpalSession = sipFactory
-									.createParameterable(getVorpalSessionId(appSession));
-							xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
-							xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
-							request.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
+							String vorpalSessionId = getVorpalSessionId(appSession);
+							if (vorpalSessionId != null) { // if it's null, let's not worry about it.
+								Parameterable xVorpalSession = sipFactory.createParameterable(vorpalSessionId);
+								xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
+								xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
+								request.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
+							}
 						}
 						setGlareState(sipSession, GlareState.PROTECT);
 						break;
