@@ -40,20 +40,6 @@
 
 	<build>
 		<finalName>vorpal-blade-fsmar</finalName>
-		<!-- Non-standard source directory (existing layout) -->
-		<sourceDirectory>src</sourceDirectory>
-		<resources>
-			<!-- Include META-INF/services for SPI -->
-			<resource>
-				<directory>src</directory>
-				<includes>
-					<include>META-INF/**</include>
-				</includes>
-				<excludes>
-					<exclude>**/*.java</exclude>
-				</excludes>
-			</resource>
-		</resources>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

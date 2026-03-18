@@ -18,7 +18,9 @@ deps/
 
 # Eclipse (M2Eclipse regenerates these from pom.xml)
 .classpath
+.project
 .settings/
+.externalToolBuilders/
 .factorypath
 .apt_src
 

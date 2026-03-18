@@ -56,8 +56,6 @@
 
 	<build>
 		<finalName>vorpal-blade-framework</finalName>
-		<!-- Non-standard source directory (existing layout) -->
-		<sourceDirectory>src</sourceDirectory>
 	</build>
 
 </project>

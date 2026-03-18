@@ -69,7 +69,6 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-war-plugin</artifactId>
 				<configuration>
-					<warSourceDirectory>src/main/blade</warSourceDirectory>
 					<!-- Standalone WAR (not in EAR) - include all JARs -->
 					<packagingExcludes>none</packagingExcludes>
 				</configuration>
