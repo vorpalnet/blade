@@ -20,7 +20,7 @@
 		<module>libs/fsmar</module>
 		<module>admin/blade</module>
 		<module>admin/configurator</module>
-		<module>apps/applications</module>
+		<module>apps</module>
 
 		<!-- Service and test modules are controlled by profiles below.
 		     Exclude any module with -Dskip.<name>, e.g. -Dskip.analytics -->
@@ -365,7 +365,7 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- Dist copy moved to apps/applications/pom.xml (EAR, built last) -->
+			<!-- Dist copy moved to apps/pom.xml (EAR, built last) -->
 		</plugins>
 	</build>
 

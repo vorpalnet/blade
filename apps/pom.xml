@@ -8,7 +8,7 @@
 		<groupId>org.vorpal.blade</groupId>
 		<artifactId>vorpal-blade</artifactId>
 		<version>${revision}</version>
-		<relativePath>../../pom.xml</relativePath>
+		<relativePath>../pom.xml</relativePath>
 	</parent>
 
 	<artifactId>vorpal-blade-applications</artifactId>
@@ -158,7 +158,7 @@
 									cd ${project.build.directory}/${project.build.finalName} &amp;&amp;
 									jar uf ../${project.build.finalName}.ear lib/ &amp;&amp;
 									echo "Stripped multi-release classes above Java 11 from EAR lib/ JARs";
-									DISTDIR="${project.basedir}/../../dist/${project.version}";
+									DISTDIR="${project.basedir}/../dist/${project.version}";
 									if [ -d "$DISTDIR" ]; then
 										cp -f ${project.build.directory}/${project.build.finalName}.ear "$DISTDIR/"
 									fi
@@ -175,7 +175,7 @@
 							<arguments>
 								<argument>-c</argument>
 								<argument>
-									ROOTDIR="${project.basedir}/../..";
+									ROOTDIR="${project.basedir}/..";
 									DISTDIR="$ROOTDIR/dist/${project.version}";
 									mkdir -p "$DISTDIR" &amp;&amp;
 									cp -f ${project.build.directory}/${project.build.finalName}.ear "$DISTDIR/";
