@@ -57,15 +57,15 @@ public class AnalyticsFilter implements Filter {
 		SipServletRequest sipRequest = Analytics.sipServletRequest.get();
 		if (sipRequest != null) {
 
-			sipLogger.severe(sipRequest.getSession(), "AnalyticsFilter.doFilter - sipRequest.id="+sipRequest.getId());
+			Callflow.getSipLogger().severe(sipRequest.getSession(), "AnalyticsFilter.doFilter - sipRequest.id="+sipRequest.getId());
 
 			event.setSessionId(Analytics.getSessionId(sipRequest.getApplicationSession()));
 			Analytics.sipServletRequest.remove();
 		}else {
-			sipLogger.severe("AnalyticsFilter.doFilter - Could not find sipServletRequest.");
+			Callflow.getSipLogger().severe("AnalyticsFilter.doFilter - Could not find sipServletRequest.");
 		}
 
-		sipLogger.logEvent(sipRequest.getSession(), event);
+		Callflow.getSipLogger().logEvent(sipRequest.getSession(), event);
 		analytics.sendEvent(event);
 
 		// Now build and send events with both request and response attributes
@@ -92,14 +92,12 @@ public class AnalyticsFilter implements Filter {
 			HttpServletRequest httpRequest = (HttpServletRequest) request;
 			HttpServletResponse httpResponse = (HttpServletResponse) response;
 
-			Logger sipLogger = SettingsManager.getSipLogger();
-
 			// Wrap request and response to allow re-reading the body
 			BufferedRequestWrapper wrappedRequest = new BufferedRequestWrapper(httpRequest);
 			BufferedResponseWrapper wrappedResponse = new BufferedResponseWrapper(httpResponse);
 
-			sipLogger.finer("AnalyticsFilter.doFilter - contentType=" + wrappedRequest.getContentType());
-			sipLogger.finer("AnalyticsFilter.doFilter - contextPath=" + wrappedRequest.getContextPath() //
+			Callflow.getSipLogger().finer("AnalyticsFilter.doFilter - contentType=" + wrappedRequest.getContentType());
+			Callflow.getSipLogger().finer("AnalyticsFilter.doFilter - contextPath=" + wrappedRequest.getContextPath() //
 					+ ", pathInfo=" + wrappedRequest.getPathInfo() //
 					+ ", pathTranslated=" + wrappedRequest.getPathTranslated() //
 					+ ", servletPath=" + wrappedRequest.getServletPath() //
@@ -111,13 +109,13 @@ public class AnalyticsFilter implements Filter {
 
 				for (Map.Entry<String, EventSelector> entry : analytics.getEvents().entrySet()) {
 
-					sipLogger.finer("AnalyticsFilter.doFilter - entry.key=" + entry.getKey());
+					Callflow.getSipLogger().finer("AnalyticsFilter.doFilter - entry.key=" + entry.getKey());
 
 					if (httpRequest.getPathInfo().equals(entry.getKey())) {
-						sipLogger.finer("AnalyticsFilter.doFilter - entry.key=" + entry.getKey());
+						Callflow.getSipLogger().finer("AnalyticsFilter.doFilter - entry.key=" + entry.getKey());
 						Matcher matcher = pattern.matcher(httpRequest.getContextPath());
 						String name = matcher.replaceAll("$1");
-						sipLogger.finer("AnalyticsFilter.doFilter - name=" + name);
+						Callflow.getSipLogger().finer("AnalyticsFilter.doFilter - name=" + name);
 
 						event = SettingsManager.createEvent(entry.getKey(), jsonNode);
 					}
@@ -132,7 +130,7 @@ public class AnalyticsFilter implements Filter {
 				wrappedRequest.getAsyncContext().addListener(new AsyncListener() {
 					@Override
 					public void onComplete(AsyncEvent e) throws IOException {
-						processAnalytics(sipLogger, analytics, wrappedResponse, asyncEvent);
+						processAnalytics(Callflow.getSipLogger(), analytics, wrappedResponse, asyncEvent);
 					}
 					@Override
 					public void onTimeout(AsyncEvent e) throws IOException {}
@@ -142,7 +140,7 @@ public class AnalyticsFilter implements Filter {
 					public void onStartAsync(AsyncEvent e) throws IOException {}
 				});
 			} else {
-				processAnalytics(sipLogger, analytics, wrappedResponse, event);
+				processAnalytics(Callflow.getSipLogger(), analytics, wrappedResponse, event);
 			}
 
 		} else {

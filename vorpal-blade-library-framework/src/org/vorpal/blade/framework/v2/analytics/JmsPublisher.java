@@ -104,11 +104,10 @@ public class JmsPublisher implements ServletContextListener {
 
 	@SuppressWarnings("rawtypes")
 	public void applicationStop() {
-		Logger sipLogger = Callflow.getSipLogger();
 		try {
 			application.setId(Analytics.getAppInstanceId());
 			application.setDestroyed(Date.from(Instant.now()));
-			if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
+			if (Analytics.jmsPublisher != null || Callflow.getSipLogger().isLoggable(Callflow.getSipLogger().getAnalyticsLoggingLevel())) {
 				ObjectMessage message = qsession.createObjectMessage();
 				message.setObject(application);
 				qsender.send(message);
@@ -121,9 +120,8 @@ public class JmsPublisher implements ServletContextListener {
 
 	public Session sessionStart(SipServletMessage msg) {
 		Session session = null;
-		Logger sipLogger = Callflow.getSipLogger();
 		try {
-			if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
+			if (Analytics.jmsPublisher != null || Callflow.getSipLogger().isLoggable(Callflow.getSipLogger().getAnalyticsLoggingLevel())) {
 				session = Analytics.createSession(msg);
 				if (session != null && Analytics.jmsPublisher != null) {
 					ObjectMessage message = qsession.createObjectMessage();
@@ -132,7 +130,7 @@ public class JmsPublisher implements ServletContextListener {
 				}
 			}
 		} catch (Exception ex) {
-			sipLogger.severe(ex);
+			Callflow.getSipLogger().severe(ex);
 		}
 
 		return session;
@@ -140,10 +138,9 @@ public class JmsPublisher implements ServletContextListener {
 
 	public Session sessionStop(SipServletMessage msg) {
 		Session session = null;
-		Logger sipLogger = Callflow.getSipLogger();
 		try {
 
-			if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
+			if (Analytics.jmsPublisher != null || Callflow.getSipLogger().isLoggable(Callflow.getSipLogger().getAnalyticsLoggingLevel())) {
 				session = Analytics.createSession(msg);
 				session.setDestroyed(Timestamp.from(Instant.now()));
 
@@ -156,7 +153,7 @@ public class JmsPublisher implements ServletContextListener {
 			}
 
 		} catch (Exception ex) {
-			sipLogger.severe(ex);
+			Callflow.getSipLogger().severe(ex);
 		}
 
 		return session;

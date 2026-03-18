@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -92,7 +93,6 @@ public class Selector implements Serializable {
 			return null;
 		}
 
-		Logger sipLogger = SettingsManager.getSipLogger();
 		RegExRoute regexRoute = null;
 		String key = null;
 		String header = null;
@@ -104,7 +104,7 @@ public class Selector implements Serializable {
 			// jwm - find named groups, useful later; see AttributeSelector
 			// Map<String, String> namedGroups = new HashMap<>();
 
-//			sipLogger.finer(request, "attribute=" + attribute);
+//			Callflow.getSipLogger().finer(request, "attribute=" + attribute);
 
 			switch (attribute) {
 			case "Content":
@@ -119,11 +119,11 @@ public class Selector implements Serializable {
 							header = new String(content);
 						}
 					} else {
-						sipLogger.warning(request,
+						Callflow.getSipLogger().warning(request,
 								"Selector.findKey - No content in message body. Check configuration.");
 					}
 				} catch (IOException e) { // this should never happen
-					SettingsManager.getSipLogger().logStackTrace(e);
+					Callflow.getSipLogger().logStackTrace(e);
 					return null;
 				}
 				break;
@@ -146,7 +146,7 @@ public class Selector implements Serializable {
 				header = request.getHeader(attribute);
 			}
 
-//			sipLogger.finer(request, "header=" + header);
+//			Callflow.getSipLogger().finer(request, "header=" + header);
 
 			if (header != null) {
 
@@ -154,12 +154,12 @@ public class Selector implements Serializable {
 
 				value = (attribute.matches("Content")) ? "[...]" : header;
 
-//				sipLogger.finer(request, "value=" + value);
+//				Callflow.getSipLogger().finer(request, "value=" + value);
 
 				if (matcher.matches()) {
 					matchResult = true;
 					key = matcher.replaceAll(expression);
-//					sipLogger.finer(request, "key=" + key);
+//					Callflow.getSipLogger().finer(request, "key=" + key);
 				}
 
 				if (key != null) {
@@ -198,8 +198,8 @@ public class Selector implements Serializable {
 
 				}
 
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(request, "Selector.findKey id=" + this.getId() + //
+				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
+					Callflow.getSipLogger().finer(request, "Selector.findKey id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
 							", value=" + value + //
 							", matchResult=" + matchResult + //
@@ -208,14 +208,14 @@ public class Selector implements Serializable {
 
 			} else {
 				// jwm - testing
-				// sipLogger.severe(request, "No header found: " + attribute);
+				// Callflow.getSipLogger().severe(request, "No header found: " + attribute);
 			}
 
 		} catch (Exception e) {
-			sipLogger.getParent().severe("Selector.findKey Error: " + e.getMessage());
-			sipLogger.severe(request, request.toString());
-			sipLogger.logStackTrace(e);
-			sipLogger.severe(request, "Selector id=" + this.getId() + //
+			Callflow.getSipLogger().getParent().severe("Selector.findKey Error: " + e.getMessage());
+			Callflow.getSipLogger().severe(request, request.toString());
+			Callflow.getSipLogger().logStackTrace(e);
+			Callflow.getSipLogger().severe(request, "Selector id=" + this.getId() + //
 					", attribute=" + this.getAttribute() + //
 					", value=" + value + //
 					", matchResult=" + matchResult + //

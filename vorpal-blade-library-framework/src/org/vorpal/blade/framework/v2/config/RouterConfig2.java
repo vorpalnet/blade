@@ -8,6 +8,8 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+
 /**
  * Router configuration with selectors, translation maps and a routing plan.
  */
@@ -50,13 +52,12 @@ public class RouterConfig2 extends Configuration implements Serializable {
 	}
 
 	public Translation findTranslation(SipServletRequest request) throws ServletParseException {
-		org.vorpal.blade.framework.v2.logging.Logger sipLogger = SettingsManager.getSipLogger();
 		Translation t = null;
 
-		sipLogger.finer(request, "Translation.findTranslation() searching maps size: " + plan.size());
+		Callflow.getSipLogger().finer(request, "Translation.findTranslation() searching maps size: " + plan.size());
 
 		for (TranslationsMap map : plan) {
-			sipLogger.finer(request, "Translation.findTranslation() searching map: " + map.getId());
+			Callflow.getSipLogger().finer(request, "Translation.findTranslation() searching map: " + map.getId());
 			t = map.applyTranslations(request);
 			if (t != null) {
 				break;
@@ -64,11 +65,11 @@ public class RouterConfig2 extends Configuration implements Serializable {
 		}
 
 		if (t != null) {
-			sipLogger.finer(request, "Found translation id: " + t.getId() + //
+			Callflow.getSipLogger().finer(request, "Found translation id: " + t.getId() + //
 					", desc: " + t.getDescription() + //
 					", route-group: " + t.getAttribute("route-group"));
 		} else {
-			sipLogger.finer(request, "No match found, using default.");
+			Callflow.getSipLogger().finer(request, "No match found, using default.");
 		}
 
 		return (t != null) ? t : defaultRoute;

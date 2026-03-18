@@ -47,9 +47,8 @@ public abstract class TranslationsMap implements Serializable {
 	public abstract int size();
 
 	public Translation applyTranslations(SipServletRequest request) {
-		Logger sipLogger = SettingsManager.getSipLogger();
 
-		sipLogger.finer(request, "Translation.applyTranslations - begin...");
+		Callflow.getSipLogger().finer(request, "Translation.applyTranslations - begin...");
 
 		Translation translation = null;
 
@@ -57,8 +56,8 @@ public abstract class TranslationsMap implements Serializable {
 			translation = this.lookup(request);
 
 			if (translation != null) {
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(request, this.getClass().getSimpleName() + //
+				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
+					Callflow.getSipLogger().finer(request, this.getClass().getSimpleName() + //
 							" " + this.getId() + //
 							" found translation id=" + translation.getId() + //
 							", description=" + translation.getDescription() + //
@@ -66,8 +65,8 @@ public abstract class TranslationsMap implements Serializable {
 				}
 
 			} else {
-				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer(request, this.getClass().getSimpleName() + " found no translation.");
+				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
+					Callflow.getSipLogger().finer(request, this.getClass().getSimpleName() + " found no translation.");
 				}
 			}
 
@@ -113,7 +112,7 @@ public abstract class TranslationsMap implements Serializable {
 				if (translation.getList() != null) {
 					Translation t = null;
 					for (TranslationsMap map : translation.getList()) {
-						sipLogger.finer(request, "Checking further TranslationMaps id: " + map.getId());
+						Callflow.getSipLogger().finer(request, "Checking further TranslationMaps id: " + map.getId());
 						t = map.applyTranslations(request);
 						if (t != null) {
 							break;
@@ -127,12 +126,12 @@ public abstract class TranslationsMap implements Serializable {
 			}
 
 		} catch (Exception e) {
-			sipLogger.severe(request, "Unknown error for " + this.getClass().getSimpleName() + ".applyTranslations()");
-			sipLogger.severe(request, request.toString());
-			sipLogger.logStackTrace(e);
+			Callflow.getSipLogger().severe(request, "Unknown error for " + this.getClass().getSimpleName() + ".applyTranslations()");
+			Callflow.getSipLogger().severe(request, request.toString());
+			Callflow.getSipLogger().logStackTrace(e);
 		}
 
-		sipLogger.finer(request, "Translation.applyTranslations - end. translation=" + translation);
+		Callflow.getSipLogger().finer(request, "Translation.applyTranslations - end. translation=" + translation);
 
 		return translation;
 
