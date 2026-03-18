@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-shared-libraries</artifactId>
+	<packaging>war</packaging>
+	<name>Vorpal:BLADE Shared Libraries</name>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-framework</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>vorpal-blade-shared-libraries</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<!-- Override skinny WAR setting — this WAR must include all JARs -->
+					<packagingExcludes></packagingExcludes>
+					<archive>
+						<manifestEntries>
+							<Specification-Title>vorpal-blade-shared-libraries</Specification-Title>
+							<Specification-Version>2.0</Specification-Version>
+							<Implementation-Title>vorpal-blade-shared-libraries.war</Implementation-Title>
+							<Implementation-Version>${revision}</Implementation-Version>
+							<Extension-Name>vorpal-blade</Extension-Name>
+							<Copyright>${blade.copyright}</Copyright>
+							<License>${blade.license}</License>
+							<Built-By>${user.name}</Built-By>
+							<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
+						</manifestEntries>
+					</archive>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

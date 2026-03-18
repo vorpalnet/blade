@@ -1,0 +1,495 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>org.vorpal.blade</groupId>
+	<artifactId>vorpal-blade</artifactId>
+	<version>${revision}</version>
+	<packaging>pom</packaging>
+
+	<name>Vorpal:BLADE</name>
+	<description>Blended Layer Application Development Environment</description>
+	<url>https://vorpal.net</url>
+
+	<modules>
+		<!-- Always built -->
+		<module>libs/framework</module>
+		<module>libs/shared-library</module>
+		<module>libs/fsmar</module>
+		<module>admin/blade</module>
+		<module>admin/configurator</module>
+		<module>apps/applications</module>
+
+		<!-- Service and test modules are controlled by profiles below.
+		     Exclude any module with -Dskip.<name>, e.g. -Dskip.analytics -->
+	</modules>
+
+	<properties>
+		<revision>2.9.3</revision>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<java.version>11</java.version>
+		<maven.compiler.release>${java.version}</maven.compiler.release>
+		<build.number>0</build.number>
+		<maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
+
+		<!-- Manifest metadata -->
+		<blade.copyright>Copyright 2024 Vorpal Networks, LLC. All Rights Reserved.</blade.copyright>
+		<blade.license>MIT License</blade.license>
+
+		<!-- Dependency versions -->
+		<jackson.version>2.18.2</jackson.version>
+		<slf4j.version>2.0.17</slf4j.version>
+		<swagger.version>2.2.28</swagger.version>
+		<swagger-parser.version>2.1.25</swagger-parser.version>
+		<commons-email.version>1.6.0</commons-email.version>
+		<commons-collections4.version>4.5.0-M3</commons-collections4.version>
+		<ipaddress.version>5.5.1</ipaddress.version>
+		<xalan.version>2.7.3</xalan.version>
+		<jsonpath.version>2.10.0</jsonpath.version>
+		<jsonschema.version>1.0.39</jsonschema.version>
+		<findbugs.version>3.0.2</findbugs.version>
+		<gson-fire.version>1.9.0</gson-fire.version>
+		<okhttp.version>4.12.0</okhttp.version>
+		<oauth2.version>1.0.2</oauth2.version>
+
+		<!-- Plugin versions -->
+		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+		<maven-war-plugin.version>3.4.0</maven-war-plugin.version>
+		<maven-ear-plugin.version>3.4.0</maven-ear-plugin.version>
+		<maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
+		<maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
+		<umldoclet.version>2.1.2</umldoclet.version>
+	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<!-- Internal modules -->
+			<dependency>
+				<groupId>org.vorpal.blade</groupId>
+				<artifactId>vorpal-blade-framework</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.vorpal.blade</groupId>
+				<artifactId>vorpal-blade-fsmar</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+
+			<!-- Jackson -->
+			<dependency>
+				<groupId>com.fasterxml.jackson.dataformat</groupId>
+				<artifactId>jackson-dataformat-xml</artifactId>
+				<version>${jackson.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson.core</groupId>
+				<artifactId>jackson-databind</artifactId>
+				<version>${jackson.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson.core</groupId>
+				<artifactId>jackson-core</artifactId>
+				<version>${jackson.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.fasterxml.jackson.core</groupId>
+				<artifactId>jackson-annotations</artifactId>
+				<version>${jackson.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.joschi.jackson</groupId>
+				<artifactId>jackson-datatype-threetenbp</artifactId>
+				<version>${jackson.version}</version>
+			</dependency>
+
+			<!-- SLF4J -->
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-api</artifactId>
+				<version>${slf4j.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-simple</artifactId>
+				<version>${slf4j.version}</version>
+			</dependency>
+
+			<!-- JSON Path -->
+			<dependency>
+				<groupId>com.jayway.jsonpath</groupId>
+				<artifactId>json-path</artifactId>
+				<version>${jsonpath.version}</version>
+			</dependency>
+
+			<!-- JSON Schema -->
+			<dependency>
+				<groupId>com.kjetland</groupId>
+				<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
+				<version>${jsonschema.version}</version>
+			</dependency>
+
+			<!-- Swagger / OpenAPI -->
+			<dependency>
+				<groupId>io.swagger.core.v3</groupId>
+				<artifactId>swagger-jaxrs2</artifactId>
+				<version>${swagger.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.swagger.core.v3</groupId>
+				<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
+				<version>${swagger.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.swagger.parser.v3</groupId>
+				<artifactId>swagger-parser-v3</artifactId>
+				<version>${swagger-parser.version}</version>
+			</dependency>
+
+			<!-- Commons -->
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-email</artifactId>
+				<version>${commons-email.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-collections4</artifactId>
+				<version>${commons-collections4.version}</version>
+			</dependency>
+
+			<!-- IP Address -->
+			<dependency>
+				<groupId>com.github.seancfoley</groupId>
+				<artifactId>ipaddress</artifactId>
+				<version>${ipaddress.version}</version>
+			</dependency>
+
+			<!-- Xalan -->
+			<dependency>
+				<groupId>xalan</groupId>
+				<artifactId>xalan</artifactId>
+				<version>${xalan.version}</version>
+			</dependency>
+
+			<!-- FindBugs -->
+			<dependency>
+				<groupId>com.google.code.findbugs</groupId>
+				<artifactId>jsr305</artifactId>
+				<version>${findbugs.version}</version>
+			</dependency>
+
+			<!-- GSON Fire -->
+			<dependency>
+				<groupId>io.gsonfire</groupId>
+				<artifactId>gson-fire</artifactId>
+				<version>${gson-fire.version}</version>
+			</dependency>
+
+			<!-- OkHttp -->
+			<dependency>
+				<groupId>com.squareup.okhttp3</groupId>
+				<artifactId>logging-interceptor</artifactId>
+				<version>${okhttp.version}</version>
+			</dependency>
+
+			<!-- OAuth2 -->
+			<dependency>
+				<groupId>org.apache.oltu.oauth2</groupId>
+				<artifactId>org.apache.oltu.oauth2.client</artifactId>
+				<version>${oauth2.version}</version>
+			</dependency>
+
+			<!-- Admin Console specific -->
+			<dependency>
+				<groupId>org.apache.xmlgraphics</groupId>
+				<artifactId>fop</artifactId>
+				<version>0.95</version>
+				<exclusions>
+					<exclusion>
+						<groupId>xml-apis</groupId>
+						<artifactId>xml-apis</artifactId>
+					</exclusion>
+				</exclusions>
+			</dependency>
+			<dependency>
+				<groupId>com.github.vlsi.mxgraph</groupId>
+				<artifactId>jgraphx</artifactId>
+				<version>4.2.2</version>
+			</dependency>
+			<dependency>
+				<groupId>org.hsqldb</groupId>
+				<artifactId>hsqldb</artifactId>
+				<version>2.7.3</version>
+			</dependency>
+			<dependency>
+				<groupId>jakarta.servlet.jsp.jstl</groupId>
+				<artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+				<version>3.0.2</version>
+			</dependency>
+
+			<!-- Admin Configurator specific -->
+			<dependency>
+				<groupId>org.apache.taglibs</groupId>
+				<artifactId>taglibs-standard-impl</artifactId>
+				<version>1.2.5</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<!-- OCCAS/WebLogic dependencies (provided by the app server at runtime).
+	     Run ./install-occas.sh to install these into your local Maven repository. -->
+	<dependencies>
+		<dependency>
+			<groupId>javax</groupId>
+			<artifactId>javaee-api</artifactId>
+			<version>8.0-occas</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.oracle.weblogic</groupId>
+			<artifactId>weblogic-server</artifactId>
+			<version>14.1.1</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.oracle.weblogic</groupId>
+			<artifactId>weblogic-logging</artifactId>
+			<version>14.1.1</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.oracle.occas</groupId>
+			<artifactId>sipservlet-api</artifactId>
+			<version>8.1</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.oracle.occas</groupId>
+			<artifactId>wlss</artifactId>
+			<version>8.1</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.oracle.occas</groupId>
+			<artifactId>wlssapi</artifactId>
+			<version>8.1</version>
+			<scope>provided</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<version>${maven-compiler-plugin.version}</version>
+					<configuration>
+						<release>${java.version}</release>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-war-plugin</artifactId>
+					<version>${maven-war-plugin.version}</version>
+					<configuration>
+						<failOnMissingWebXml>false</failOnMissingWebXml>
+						<!-- Skinny WARs: exclude all JARs, they go in the EAR lib/ -->
+						<packagingExcludes>WEB-INF/lib/*.jar</packagingExcludes>
+						<archive>
+							<manifestEntries>
+								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
+								<WebLogic-Application-Version>${revision}-${build.number}</WebLogic-Application-Version>
+								<Copyright>${blade.copyright}</Copyright>
+								<License>${blade.license}</License>
+								<Built-By>${user.name}</Built-By>
+							</manifestEntries>
+						</archive>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-jar-plugin</artifactId>
+					<version>${maven-jar-plugin.version}</version>
+					<configuration>
+						<archive>
+							<manifestEntries>
+								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
+								<WebLogic-Application-Version>${revision}-${build.number}</WebLogic-Application-Version>
+								<Copyright>${blade.copyright}</Copyright>
+								<License>${blade.license}</License>
+								<Built-By>${user.name}</Built-By>
+							</manifestEntries>
+						</archive>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-ear-plugin</artifactId>
+					<version>${maven-ear-plugin.version}</version>
+					<configuration>
+						<archive>
+							<manifestEntries>
+								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
+								<WebLogic-Application-Version>${revision}-${build.number}</WebLogic-Application-Version>
+								<Copyright>${blade.copyright}</Copyright>
+								<License>${blade.license}</License>
+								<Built-By>${user.name}</Built-By>
+							</manifestEntries>
+						</archive>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>flatten-maven-plugin</artifactId>
+				<version>1.6.0</version>
+				<configuration>
+					<updatePomFile>true</updatePomFile>
+					<flattenMode>resolveCiFriendliesOnly</flattenMode>
+				</configuration>
+				<executions>
+					<execution>
+						<id>flatten</id>
+						<phase>process-resources</phase>
+						<goals><goal>flatten</goal></goals>
+					</execution>
+					<execution>
+						<id>flatten-clean</id>
+						<phase>clean</phase>
+						<goals><goal>clean</goal></goals>
+					</execution>
+				</executions>
+			</plugin>
+			<!-- Dist copy moved to apps/applications/pom.xml (EAR, built last) -->
+		</plugins>
+	</build>
+
+	<profiles>
+		<!-- Service/test module profiles. Active by default; exclude with -Dskip.<name> -->
+		<profile>
+			<id>acl</id>
+			<activation><property><name>!skip.acl</name></property></activation>
+			<modules><module>apps/acl</module></modules>
+		</profile>
+		<profile>
+			<id>analytics</id>
+			<activation><property><name>!skip.analytics</name></property></activation>
+			<modules><module>apps/analytics</module></modules>
+		</profile>
+		<profile>
+			<id>hold</id>
+			<activation><property><name>!skip.hold</name></property></activation>
+			<modules><module>apps/hold</module></modules>
+		</profile>
+<profile>
+			<id>options</id>
+			<activation><property><name>!skip.options</name></property></activation>
+			<modules><module>apps/options</module></modules>
+		</profile>
+		<profile>
+			<id>presence</id>
+			<activation><property><name>!skip.presence</name></property></activation>
+			<modules><module>apps/presence</module></modules>
+		</profile>
+		<profile>
+			<id>proxy-balancer</id>
+			<activation><property><name>!skip.proxy-balancer</name></property></activation>
+			<modules><module>apps/proxy-balancer</module></modules>
+		</profile>
+		<profile>
+			<id>proxy-block</id>
+			<activation><property><name>!skip.proxy-block</name></property></activation>
+			<modules><module>apps/proxy-block</module></modules>
+		</profile>
+		<profile>
+			<id>proxy-registrar</id>
+			<activation><property><name>!skip.proxy-registrar</name></property></activation>
+			<modules><module>apps/proxy-registrar</module></modules>
+		</profile>
+		<profile>
+			<id>proxy-router</id>
+			<activation><property><name>!skip.proxy-router</name></property></activation>
+			<modules><module>apps/proxy-router</module></modules>
+		</profile>
+		<profile>
+			<id>queue</id>
+			<activation><property><name>!skip.queue</name></property></activation>
+			<modules><module>apps/queue</module></modules>
+		</profile>
+		<profile>
+			<id>tpcc</id>
+			<activation><property><name>!skip.tpcc</name></property></activation>
+			<modules><module>apps/tpcc</module></modules>
+		</profile>
+		<profile>
+			<id>transfer</id>
+			<activation><property><name>!skip.transfer</name></property></activation>
+			<modules><module>apps/transfer</module></modules>
+		</profile>
+		<profile>
+			<id>test-b2bua</id>
+			<activation><property><name>!skip.test-b2bua</name></property></activation>
+			<modules><module>test/test-b2bua</module></modules>
+		</profile>
+		<profile>
+			<id>test-uac</id>
+			<activation><property><name>!skip.test-uac</name></property></activation>
+			<modules><module>test/test-uac</module></modules>
+		</profile>
+		<profile>
+			<id>test-uas</id>
+			<activation><property><name>!skip.test-uas</name></property></activation>
+			<modules><module>test/test-uas</module></modules>
+		</profile>
+
+		<profile>
+			<id>javadocs</id>
+			<modules>
+				<module>javadoc</module>
+			</modules>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-javadoc-plugin</artifactId>
+						<version>${maven-javadoc-plugin.version}</version>
+						<executions>
+							<execution>
+								<id>generate-javadocs</id>
+								<phase>package</phase>
+								<goals>
+									<goal>javadoc</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<doclet>nl.talsmasoftware.umldoclet.UMLDoclet</doclet>
+							<docletArtifact>
+								<groupId>nl.talsmasoftware</groupId>
+								<artifactId>umldoclet</artifactId>
+								<version>${umldoclet.version}</version>
+							</docletArtifact>
+							<additionalOptions>
+								<additionalOption>-failOnCyclicPackageDependencies false</additionalOption>
+							</additionalOptions>
+							<show>private</show>
+							<doclint>none</doclint>
+							<links>
+								<link>https://docs.oracle.com/en/java/javase/11/docs/api</link>
+								<link>https://javaee.github.io/javaee-spec/javadocs/</link>
+								<link>https://vorpalnet.github.io/jsr359/</link>
+							</links>
+							<bottom><![CDATA[Copyright 2024 Vorpal Networks, LLC. All Rights Reserved.<br/>MIT License; Without warranty or liability of any kind.]]></bottom>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
+</project>
