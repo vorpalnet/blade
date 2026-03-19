@@ -77,7 +77,7 @@ public class LogParameters implements Serializable {
 	
 	@JsonPropertyDescription("Support ANSI colors in logging? It's useful for debugging but can be annoying in production. Default: false")
 	@JsonProperty(defaultValue = "false")
-	protected Boolean colorsEnabled = false;
+	public Boolean colorsEnabled = false;
 	
 	public LogParameters() {
 

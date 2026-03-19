@@ -112,7 +112,7 @@ public class Color {
 	}
 
 	public static String BLACK(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLACK + str + RESET;
 		}
 
@@ -120,273 +120,273 @@ public class Color {
 	}
 
 	public static String RED(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = RED + str + RESET;
 		}
 		return str;
 	}
 
 	public static String GREEN(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = GREEN + str + RESET;
 		}
 		return str;
 	}
 
 	public static String YELLOW(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = YELLOW + str + RESET;
 		}
 		return str;
 	}
 
 	public static String BLUE(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLUE + str + RESET;
 		}
 		return str;
 	}
 
 	public static String PURPLE(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = PURPLE + str + RESET;
 		}
 		return str;
 	}
 
 	public static String CYAN(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = CYAN + str + RESET;
 		}
 		return str;
 	}
 
 	public static String WHITE(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = WHITE + str + RESET;
 		}
 		return str;
 	}
 
 	public static String BLACK_BOLD(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLACK_BOLD + str + RESET;
 		}
 		return str;
 	}
 
 	public static String RED_BOLD(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = RED_BOLD + str + RESET;
 		}
 		return str;
 	}
 
 	public static String GREEN_BOLD(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = GREEN_BOLD + str + RESET;
 		}
 		return str;
 	}
 
 	public static String YELLOW_BOLD(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = YELLOW_BOLD + str + RESET;
 		}
 		return str;
 	}
 
 	public static String BLUE_BOLD(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLUE_BOLD + str + RESET;
 		}
 		return str;
 	}
 
 	public static String PURPLE_BOLD(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = PURPLE_BOLD + str + RESET;
 		}
 		return str;
 	}
 
 	public static String CYAN_BOLD(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = CYAN_BOLD + str + RESET;
 		}
 		return str;
 	}
 
 	public static String WHITE_BOLD(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = WHITE_BOLD + str + RESET;
 		}
 		return str;
 	}
 
 	public static String BLACK_UNDERLINED(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLACK_UNDERLINED + str + RESET;
 		}
 		return str;
 	}
 
 	public static String RED_UNDERLINED(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = RED_UNDERLINED + str + RESET;
 		}
 		return str;
 	}
 
 	public static String GREEN_UNDERLINED(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = GREEN_UNDERLINED + str + RESET;
 		}
 		return str;
 	}
 
 	public static String YELLOW_UNDERLINED(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = YELLOW_UNDERLINED + str + RESET;
 		}
 		return str;
 	}
 
 	public static String BLUE_UNDERLINED(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLUE_UNDERLINED + str + RESET;
 		}
 		return str;
 	}
 
 	public static String PURPLE_UNDERLINED(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = PURPLE_UNDERLINED + str + RESET;
 		}
 		return str;
 	}
 
 	public static String CYAN_UNDERLINED(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = CYAN_UNDERLINED + str + RESET;
 		}
 		return str;
 	}
 
 	public static String WHITE_UNDERLINED(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = WHITE_UNDERLINED + str + RESET;
 		}
 		return str;
 	}
 
 	public static String BLACK_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLACK_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String RED_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = RED_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String GREEN_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = GREEN_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String YELLOW_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = YELLOW_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String BLUE_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLUE_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String PURPLE_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = PURPLE_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String CYAN_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = CYAN_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String WHITE_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = WHITE_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String BLACK_BOLD_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLACK_BOLD_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String RED_BOLD_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = RED_BOLD_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String GREEN_BOLD_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = GREEN_BOLD_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String YELLOW_BOLD_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = YELLOW_BOLD_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String BLUE_BOLD_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = BLUE_BOLD_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String PURPLE_BOLD_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = PURPLE_BOLD_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String CYAN_BOLD_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = CYAN_BOLD_BRIGHT + str + RESET;
 		}
 		return str;
 	}
 
 	public static String WHITE_BOLD_BRIGHT(String str) {
-		if (str != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
+		if (str != null && SettingsManager.getLogParameters() != null && Boolean.TRUE.equals(SettingsManager.getLogParameters().colorsEnabled)) {
 			str = WHITE_BOLD_BRIGHT + str + RESET;
 		}
 		return str;

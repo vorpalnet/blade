@@ -52,8 +52,8 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v2.analytics.AnalyticsAsyncSipServletSample;
 import org.vorpal.blade.framework.v2.analytics.Event;
-import org.vorpal.blade.framework.v2.analytics.Session;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
@@ -120,9 +120,9 @@ public class SettingsManager<T> {
 	protected static String applicationName = "";
 	protected static String applicationVersion;
 
-	protected static Analytics analytics;
-	protected static SessionParameters sessionParameters;
-	protected static LogParameters logParameters;
+	protected static Analytics analytics = new AnalyticsAsyncSipServletSample();
+	protected static SessionParameters sessionParameters = new SessionParametersDefault();
+	protected static LogParameters logParameters = new LogParametersDefault();
 
 	public static SessionParameters getSessionParameters() {
 		return sessionParameters;
