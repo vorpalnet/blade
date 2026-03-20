@@ -117,6 +117,8 @@ public abstract class Callflow implements Serializable {
 	public static final String SESSION_EXPIRES = "Session-Expires";
 	public static final String MIN_SE = "Min-SE";
 	public static final String X_VORPAL_SESSION = "X-Vorpal-Session";
+	public static final String X_VORPAL_ID = "X-Vorpal-ID";
+	public static final String X_VORPAL_TIMESTAMP = "X-Vorpal-Timestamp";
 
 	protected static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
 	protected static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
@@ -615,45 +617,41 @@ public abstract class Callflow implements Serializable {
 
 			indexKey = (String) appSession.getAttribute(VORPAL_SESSION);
 			if (indexKey == null) {
-				try {
-					Parameterable xVorpalSession = (Parameterable) request.getParameterableHeader(X_VORPAL_SESSION);
-					if (xVorpalSession != null) {
-						dialogId = xVorpalSession.getParameter(DIALOG_PARAM);
-						if (dialogId != null) {
-							indexKey = xVorpalSession.getValue();
-							vorpalTimestamp = xVorpalSession.getParameter(TIMESTAMP_PARAM);
-						} else {
-							String session = null;
-							try { // X-Vorpal-Session exists, but is not in the correct format. Probably the old
-									// one...
-								vorpalTimestamp = request.getHeader("X-Vorpal-Timestamp");
-								if (null != vorpalTimestamp) {
-									session = request.getHeader("X-Vorpal-Session");
-									int colonIndex = session.indexOf(':');
-									indexKey = session.substring(0, colonIndex);
-									dialogId = session.substring(colonIndex + 1);
-								}
-							} catch (Exception ex65) {
-								sipLogger.warning(request,
-										"Callflow.getVorpalSessionId - ex65 " + ex65.getClass().getSimpleName() + " "
-												+ ex65.getMessage() + ", Unable to parse header '" + X_VORPAL_SESSION
-												+ ": " + session + "'. Creating a new one.");
-							}
-						}
 
+				// Try X-Vorpal-ID (new parameterable format) first
+				try {
+					Parameterable xVorpalId = request.getParameterableHeader(X_VORPAL_ID);
+					if (xVorpalId != null) {
+						indexKey = xVorpalId.getValue();
+						dialogId = xVorpalId.getParameter(DIALOG_PARAM);
+						vorpalTimestamp = xVorpalId.getParameter(TIMESTAMP_PARAM);
 					}
 				} catch (Exception ex) {
-					String value = null;
-					try {
-						value = request.getHeader(X_VORPAL_SESSION);
-					} catch (Exception ex12) {
-						sipLogger.severe(ex12);
-					}
 					sipLogger.warning(request,
-							"Callflow.getVorpalSessionId - ex12 " + ex.getClass().getSimpleName() + " "
-									+ ex.getMessage() + ", Unable to parse header '" + X_VORPAL_SESSION + ": " + value
-									+ "'. Creating a new one.");
+							"Callflow.getVorpalSessionId - Unable to parse header '" + X_VORPAL_ID + "': "
+									+ ex.getClass().getSimpleName() + " " + ex.getMessage());
 				}
+
+				// Fall back to X-Vorpal-Session (old colon format) + X-Vorpal-Timestamp
+				if (indexKey == null) {
+					try {
+						String session = request.getHeader(X_VORPAL_SESSION);
+						if (session != null) {
+							vorpalTimestamp = request.getHeader(X_VORPAL_TIMESTAMP);
+							if (vorpalTimestamp != null) {
+								int colonIndex = session.indexOf(':');
+								indexKey = session.substring(0, colonIndex);
+								dialogId = session.substring(colonIndex + 1);
+							}
+						}
+					} catch (Exception ex) {
+						sipLogger.warning(request,
+								"Callflow.getVorpalSessionId - Unable to parse header '" + X_VORPAL_SESSION + "': "
+										+ ex.getClass().getSimpleName() + " " + ex.getMessage()
+										+ ". Creating a new one.");
+					}
+				}
+
 			}
 
 			if (indexKey != null && dialogId != null && vorpalTimestamp != null) {
@@ -764,10 +762,18 @@ public abstract class Callflow implements Serializable {
 						if (request.getMethod().equals(INVITE) && request.isInitial()) {
 							String vorpalSessionId = getVorpalSessionId(appSession);
 							if (vorpalSessionId != null) { // if it's null, let's not worry about it.
-								Parameterable xVorpalSession = sipFactory.createParameterable(vorpalSessionId);
-								xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
-								xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
-								request.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
+								String dialogId = getVorpalDialogId(sipSession);
+								String timestamp = getVorpalTimestamp(appSession);
+
+								// Old format: X-Vorpal-Session + X-Vorpal-Timestamp
+								request.setHeader(X_VORPAL_SESSION, vorpalSessionId + ":" + dialogId);
+								request.setHeader(X_VORPAL_TIMESTAMP, timestamp);
+
+								// New format: X-Vorpal-ID (parameterable)
+								Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
+								xVorpalId.setParameter(DIALOG_PARAM, dialogId);
+								xVorpalId.setParameter(TIMESTAMP_PARAM, timestamp);
+								request.setParameterableHeader(X_VORPAL_ID, xVorpalId);
 							}
 						}
 						setGlareState(sipSession, GlareState.PROTECT);
@@ -1198,10 +1204,19 @@ public abstract class Callflow implements Serializable {
 				if (response.getRequest().isInitial()) {
 					String indexKey = getVorpalSessionId(response.getApplicationSession());
 					if (indexKey != null) {
-						Parameterable xVorpalSession = sipFactory.createParameterable(getVorpalSessionId(appSession));
-						xVorpalSession.setParameter(DIALOG_PARAM, getVorpalDialogId(sipSession));
-						xVorpalSession.setParameter(TIMESTAMP_PARAM, getVorpalTimestamp(appSession));
-						response.setParameterableHeader(X_VORPAL_SESSION, xVorpalSession);
+						String vorpalSessionId = getVorpalSessionId(appSession);
+						String dialogId = getVorpalDialogId(sipSession);
+						String timestamp = getVorpalTimestamp(appSession);
+
+						// Old format: X-Vorpal-Session + X-Vorpal-Timestamp
+						response.setHeader(X_VORPAL_SESSION, vorpalSessionId + ":" + dialogId);
+						response.setHeader(X_VORPAL_TIMESTAMP, timestamp);
+
+						// New format: X-Vorpal-ID (parameterable)
+						Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
+						xVorpalId.setParameter(DIALOG_PARAM, dialogId);
+						xVorpalId.setParameter(TIMESTAMP_PARAM, timestamp);
+						response.setParameterableHeader(X_VORPAL_ID, xVorpalId);
 					}
 				}
 

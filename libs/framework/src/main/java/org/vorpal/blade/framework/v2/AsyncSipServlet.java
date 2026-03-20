@@ -1337,12 +1337,26 @@ public abstract class AsyncSipServlet extends SipServlet
 		String vorpalSessionId = null;
 
 		try {
-			Parameterable xVorpalSession = msg.getParameterableHeader(Callflow.X_VORPAL_SESSION);
-			if (xVorpalSession != null) {
-				vorpalSessionId = xVorpalSession.getValue();
+			// Try X-Vorpal-ID (new parameterable format) first
+			Parameterable xVorpalId = msg.getParameterableHeader(Callflow.X_VORPAL_ID);
+			if (xVorpalId != null) {
+				vorpalSessionId = xVorpalId.getValue();
 			}
 		} catch (Exception ex) {
 			sipLogger.severe(msg, ex);
+		}
+
+		// Fall back to X-Vorpal-Session (old colon format)
+		if (vorpalSessionId == null) {
+			try {
+				String session = msg.getHeader(Callflow.X_VORPAL_SESSION);
+				if (session != null) {
+					int colonIndex = session.indexOf(':');
+					vorpalSessionId = (colonIndex >= 0) ? session.substring(0, colonIndex) : session;
+				}
+			} catch (Exception ex) {
+				sipLogger.severe(msg, ex);
+			}
 		}
 
 		return vorpalSessionId;
@@ -1352,12 +1366,28 @@ public abstract class AsyncSipServlet extends SipServlet
 		String dialog = null;
 
 		try {
-			Parameterable xVorpalSession = msg.getParameterableHeader(Callflow.X_VORPAL_SESSION);
-			if (xVorpalSession != null) {
-				dialog = xVorpalSession.getParameter(Callflow.DIALOG_PARAM);
+			// Try X-Vorpal-ID (new parameterable format) first
+			Parameterable xVorpalId = msg.getParameterableHeader(Callflow.X_VORPAL_ID);
+			if (xVorpalId != null) {
+				dialog = xVorpalId.getParameter(Callflow.DIALOG_PARAM);
 			}
 		} catch (Exception ex) {
 			sipLogger.severe(msg, ex);
+		}
+
+		// Fall back to X-Vorpal-Session (old colon format)
+		if (dialog == null) {
+			try {
+				String session = msg.getHeader(Callflow.X_VORPAL_SESSION);
+				if (session != null) {
+					int colonIndex = session.indexOf(':');
+					if (colonIndex >= 0) {
+						dialog = session.substring(colonIndex + 1);
+					}
+				}
+			} catch (Exception ex) {
+				sipLogger.severe(msg, ex);
+			}
 		}
 
 		return dialog;
@@ -1367,12 +1397,22 @@ public abstract class AsyncSipServlet extends SipServlet
 		String timestamp = null;
 
 		try {
-			Parameterable xVorpalSession = msg.getParameterableHeader(Callflow.X_VORPAL_SESSION);
-			if (xVorpalSession != null) {
-				timestamp = xVorpalSession.getParameter(Callflow.TIMESTAMP_PARAM);
+			// Try X-Vorpal-ID (new parameterable format) first
+			Parameterable xVorpalId = msg.getParameterableHeader(Callflow.X_VORPAL_ID);
+			if (xVorpalId != null) {
+				timestamp = xVorpalId.getParameter(Callflow.TIMESTAMP_PARAM);
 			}
 		} catch (Exception ex) {
 			sipLogger.severe(msg, ex);
+		}
+
+		// Fall back to X-Vorpal-Timestamp header
+		if (timestamp == null) {
+			try {
+				timestamp = msg.getHeader(Callflow.X_VORPAL_TIMESTAMP);
+			} catch (Exception ex) {
+				sipLogger.severe(msg, ex);
+			}
 		}
 
 		return timestamp;
