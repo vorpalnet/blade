@@ -238,7 +238,7 @@
 										echo "Stripped multi-release classes above Java 11 from EAR lib/ JARs";
 										DISTDIR="${project.basedir}/../dist/${revision}-${build.number}";
 										if [ -d "$DISTDIR" ]; then
-											cp -f ${project.build.directory}/${project.build.finalName}.ear "$DISTDIR/${project.build.finalName}-${build.profile}.ear"
+											cp -f ${project.build.directory}/${project.build.finalName}.ear "$DISTDIR/"
 										fi
 									else
 										echo "Skipping multi-release stripping (java.version=$JAVA_VER, only needed for 11)"
@@ -256,10 +256,16 @@
 							<arguments>
 								<argument>-c</argument>
 								<argument>
-									DISTDIR="${project.basedir}/../dist/${revision}-${build.number}";
+									ROOTDIR="${project.basedir}/..";
+									DISTDIR="$ROOTDIR/dist/${revision}-${build.number}";
 									mkdir -p "$DISTDIR" &amp;&amp;
-									cp -f ${project.build.directory}/${project.build.finalName}.ear "$DISTDIR/${project.build.finalName}-${build.profile}.ear";
-									echo "EAR copied to dist/${revision}-${build.number}/${project.build.finalName}-${build.profile}.ear"
+									cp -f ${project.build.directory}/${project.build.finalName}.ear "$DISTDIR/";
+									cp -f "$ROOTDIR/libs/framework/target/vorpal-blade-library-framework.jar" "$DISTDIR/" 2>/dev/null;
+									cp -f "$ROOTDIR/libs/shared/target/vorpal-blade-library-shared.war" "$DISTDIR/" 2>/dev/null;
+									cp -f "$ROOTDIR/libs/fsmar/target/vorpal-blade-library-fsmar.jar" "$DISTDIR/" 2>/dev/null;
+									cp -f "$ROOTDIR/admin/console/target/vorpal-blade-admin-console.war" "$DISTDIR/" 2>/dev/null;
+									cp -f "$ROOTDIR/admin/configurator/target/vorpal-blade-admin-configurator.war" "$DISTDIR/" 2>/dev/null;
+									echo "Dist artifacts copied to dist/${revision}-${build.number}/"
 								</argument>
 							</arguments>
 						</configuration>

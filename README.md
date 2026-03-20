@@ -170,14 +170,13 @@ Each `./build.sh` invocation auto-increments a build number stored in `build.num
 
 ## Build Profiles
 
-The `build.sh` script accepts one or more **module profiles** (which apps to build) and an optional **platform** (which OCCAS/Java version to target). When multiple profiles are specified, the script compiles all modules once, then assembles a separate EAR for each profile (e.g. `vorpal-blade-services-production.ear`, `vorpal-blade-services-minimal.ear`).
+The `build.sh` script accepts two optional arguments: a **module profile** (which apps to build) and a **platform** (which OCCAS/Java version to target).
 
 ```bash
 ./build.sh                              # full build, OCCAS 8.1 (defaults)
-./build.sh production                   # production EAR, OCCAS 8.1
-./build.sh production minimal           # two EARs in one build
-./build.sh production occas-8.2         # production EAR, OCCAS 8.2
-./build.sh production minimal occas-8.2 # two EARs, OCCAS 8.2
+./build.sh production                   # production services, OCCAS 8.1
+./build.sh production occas-8.2         # production services, OCCAS 8.2
+./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
 ./build.sh production clean package     # with explicit Maven goals
 ./build.sh -- -Pjavadocs                # full build with extra Maven flags
 ```
