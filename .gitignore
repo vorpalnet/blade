@@ -26,6 +26,9 @@ deps/
 
 # Java
 *.class
+*.jar
+*.war
+*.ear
 
 # WebLogic
 .WL_internal
