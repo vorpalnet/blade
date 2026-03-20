@@ -18,7 +18,7 @@
 	<dependencies>
 		<dependency>
 			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-framework</artifactId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
 		</dependency>
 	</dependencies>
 

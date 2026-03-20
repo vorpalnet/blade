@@ -11,14 +11,14 @@
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>vorpal-blade-configurator</artifactId>
+	<artifactId>vorpal-blade-admin-configurator</artifactId>
 	<packaging>war</packaging>
 	<name>Vorpal:BLADE Admin Configurator</name>
 
 	<dependencies>
 		<dependency>
 			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-framework</artifactId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.taglibs</groupId>
@@ -31,7 +31,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-configurator</finalName>
+		<finalName>vorpal-blade-admin-configurator</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

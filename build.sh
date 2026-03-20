@@ -27,7 +27,7 @@ DEFAULT_PLATFORM="occas-8.1"
 
 # --- Discover all available service/test modules from directory names ---
 discover_modules() {
-    for subdir in apps test; do
+    for subdir in services test; do
         for dir in "${SCRIPT_DIR}/${subdir}"/*/; do
             local name=$(basename "$dir")
             # Skip always-built modules

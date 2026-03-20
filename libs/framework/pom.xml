@@ -11,7 +11,7 @@
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>vorpal-blade-framework</artifactId>
+	<artifactId>vorpal-blade-library-framework</artifactId>
 	<packaging>jar</packaging>
 	<name>Vorpal:BLADE Framework Library</name>
 
@@ -55,7 +55,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-framework</finalName>
+		<finalName>vorpal-blade-library-framework</finalName>
 	</build>
 
 </project>

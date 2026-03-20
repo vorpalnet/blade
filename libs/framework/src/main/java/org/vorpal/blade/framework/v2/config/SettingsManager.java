@@ -52,8 +52,8 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v2.analytics.AnalyticsAsyncSipServletSample;
 import org.vorpal.blade.framework.v2.analytics.Event;
-import org.vorpal.blade.framework.v2.analytics.Session;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
@@ -120,9 +120,13 @@ public class SettingsManager<T> {
 	protected static String applicationName = "";
 	protected static String applicationVersion;
 
-	protected static Analytics analytics;
-	protected static SessionParameters sessionParameters;
-	protected static LogParameters logParameters;
+//	protected static Analytics analytics = new AnalyticsAsyncSipServletSample();
+//	protected static SessionParameters sessionParameters = new SessionParametersDefault();
+//	protected static LogParameters logParameters = new LogParametersDefault();
+
+	private static Analytics analytics = null;
+	private static SessionParameters sessionParameters = null;
+	private static LogParameters logParameters = null;
 
 	public static SessionParameters getSessionParameters() {
 		return sessionParameters;
@@ -132,6 +136,7 @@ public class SettingsManager<T> {
 		SettingsManager.sessionParameters = sessionParameters;
 	}
 
+	protected javax.servlet.ServletContext servletContext;
 	protected String servletContextName;
 	protected Path domainPath;
 	protected Path clusterPath;
@@ -175,6 +180,7 @@ public class SettingsManager<T> {
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
+		this.servletContext = event.getServletContext();
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
 		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
@@ -190,6 +196,7 @@ public class SettingsManager<T> {
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
+		this.servletContext = event.getServletContext();
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
 		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
@@ -204,6 +211,7 @@ public class SettingsManager<T> {
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
+		this.servletContext = event.getServletContext();
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
 		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
@@ -216,6 +224,7 @@ public class SettingsManager<T> {
 	}
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
+		this.servletContext = event.getServletContext();
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
 		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
@@ -230,6 +239,7 @@ public class SettingsManager<T> {
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample)
 			throws ServletException, IOException {
 		this.sample = sample;
+		this.servletContext = event.getServletContext();
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
 		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
@@ -243,6 +253,7 @@ public class SettingsManager<T> {
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, T sample) throws ServletException, IOException {
 		this.sample = sample;
+		this.servletContext = event.getServletContext();
 		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
 		Callflow.setSipFactory(sipFactory);
 		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
@@ -512,6 +523,10 @@ public class SettingsManager<T> {
 		this.servletContextName = servletContextName;
 	}
 
+	public javax.servlet.ServletContext getServletContext() {
+		return servletContext;
+	}
+
 	public static String getServerName() {
 		return serverName;
 	}
@@ -618,8 +633,7 @@ public class SettingsManager<T> {
 	public static void setAnalytics(Analytics analytics) {
 		SettingsManager.analytics = analytics;
 	}
-	
-	
+
 	public static Event createEvent(String name, JsonNode message) {
 		Event event = null;
 

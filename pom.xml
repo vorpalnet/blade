@@ -16,18 +16,18 @@
 	<modules>
 		<!-- Always built -->
 		<module>libs/framework</module>
-		<module>libs/shared-library</module>
+		<module>libs/shared</module>
 		<module>libs/fsmar</module>
-		<module>admin/blade</module>
+		<module>admin/console</module>
 		<module>admin/configurator</module>
-		<module>apps</module>
+		<module>services</module>
 
 		<!-- Service and test modules are controlled by profiles below.
 		     Exclude any module with -Dskip.<name>, e.g. -Dskip.analytics -->
 	</modules>
 
 	<properties>
-		<revision>2.9.3</revision>
+		<revision>2.9.4</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<java.version>11</java.version>
 		<maven.compiler.release>${java.version}</maven.compiler.release>
@@ -68,12 +68,12 @@
 			<!-- Internal modules -->
 			<dependency>
 				<groupId>org.vorpal.blade</groupId>
-				<artifactId>vorpal-blade-framework</artifactId>
+				<artifactId>vorpal-blade-library-framework</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.vorpal.blade</groupId>
-				<artifactId>vorpal-blade-fsmar</artifactId>
+				<artifactId>vorpal-blade-library-fsmar</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 
@@ -365,7 +365,7 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- Dist copy moved to apps/pom.xml (EAR, built last) -->
+			<!-- Dist copy moved to services/pom.xml (EAR, built last) -->
 		</plugins>
 	</build>
 
@@ -374,62 +374,62 @@
 		<profile>
 			<id>acl</id>
 			<activation><property><name>!skip.acl</name></property></activation>
-			<modules><module>apps/acl</module></modules>
+			<modules><module>services/acl</module></modules>
 		</profile>
 		<profile>
 			<id>analytics</id>
 			<activation><property><name>!skip.analytics</name></property></activation>
-			<modules><module>apps/analytics</module></modules>
+			<modules><module>services/analytics</module></modules>
 		</profile>
 		<profile>
 			<id>hold</id>
 			<activation><property><name>!skip.hold</name></property></activation>
-			<modules><module>apps/hold</module></modules>
+			<modules><module>services/hold</module></modules>
 		</profile>
 <profile>
 			<id>options</id>
 			<activation><property><name>!skip.options</name></property></activation>
-			<modules><module>apps/options</module></modules>
+			<modules><module>services/options</module></modules>
 		</profile>
 		<profile>
 			<id>presence</id>
 			<activation><property><name>!skip.presence</name></property></activation>
-			<modules><module>apps/presence</module></modules>
+			<modules><module>services/presence</module></modules>
 		</profile>
 		<profile>
 			<id>proxy-balancer</id>
 			<activation><property><name>!skip.proxy-balancer</name></property></activation>
-			<modules><module>apps/proxy-balancer</module></modules>
+			<modules><module>services/proxy-balancer</module></modules>
 		</profile>
 		<profile>
 			<id>proxy-block</id>
 			<activation><property><name>!skip.proxy-block</name></property></activation>
-			<modules><module>apps/proxy-block</module></modules>
+			<modules><module>services/proxy-block</module></modules>
 		</profile>
 		<profile>
 			<id>proxy-registrar</id>
 			<activation><property><name>!skip.proxy-registrar</name></property></activation>
-			<modules><module>apps/proxy-registrar</module></modules>
+			<modules><module>services/proxy-registrar</module></modules>
 		</profile>
 		<profile>
 			<id>proxy-router</id>
 			<activation><property><name>!skip.proxy-router</name></property></activation>
-			<modules><module>apps/proxy-router</module></modules>
+			<modules><module>services/proxy-router</module></modules>
 		</profile>
 		<profile>
 			<id>queue</id>
 			<activation><property><name>!skip.queue</name></property></activation>
-			<modules><module>apps/queue</module></modules>
+			<modules><module>services/queue</module></modules>
 		</profile>
 		<profile>
 			<id>tpcc</id>
 			<activation><property><name>!skip.tpcc</name></property></activation>
-			<modules><module>apps/tpcc</module></modules>
+			<modules><module>services/tpcc</module></modules>
 		</profile>
 		<profile>
 			<id>transfer</id>
 			<activation><property><name>!skip.transfer</name></property></activation>
-			<modules><module>apps/transfer</module></modules>
+			<modules><module>services/transfer</module></modules>
 		</profile>
 		<profile>
 			<id>test-b2bua</id>

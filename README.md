@@ -47,7 +47,7 @@ Deployed to the WebLogic AdminServer as standalone WARs.
 | Configurator | Web-based configuration editor for application settings |
 | Javadoc | Browsable Javadoc site with UML class diagrams (built with `-Pjavadocs`) |
 
-### Applications
+### Services
 
 Deployed to the OCCAS cluster as skinny WARs inside the EAR.
 
@@ -83,11 +83,12 @@ Deployed to the cluster alongside production applications. Excluded by the `prod
 ```
 libs/           Libraries
   framework/      Vorpal:BLADE Framework (JAR)
+  shared/         WebLogic shared library (WAR)
   fsmar/          Finite State Machine Application Router (fat JAR)
 admin/          Admin tools (deployed to AdminServer)
-  blade/          Admin Console (WAR)
+  console/        Admin Console (WAR)
   configurator/   Configuration Editor (WAR)
-apps/           Applications (deployed to cluster via EAR)
+services/       Services (deployed to cluster via EAR)
   acl/            Access Control List
   analytics/      Call detail records and analytics
   hold/           Music/media on hold
@@ -100,7 +101,6 @@ apps/           Applications (deployed to cluster via EAR)
   queue/          Call queuing and distribution
   tpcc/           Third-party call control
   transfer/       REFER-based call transfer
-  applications/   EAR packaging module
 test/           Test applications (excluded by production profile)
   test-b2bua/     Example B2BUA
   test-uac/       REST-operated User Agent Client
@@ -131,16 +131,16 @@ Install the OCCAS JARs into your local Maven repository:
 
 ## Output
 
-All deployable artifacts are copied to `dist/<version>/`:
+All deployable artifacts are copied to `dist/<version>-<build>/`:
 
 ```
-dist/<version>/
-  vorpal-blade-applications.ear        # EAR (deploy to engine targets)
-  vorpal-blade-framework.jar           # Framework library
-  vorpal-blade-shared-libraries.war    # WebLogic shared library (alternative to EAR)
-  vorpal-blade-fsmar.jar               # FSMAR (copy to OCCAS approuter lib/)
-  vorpal-blade.war                     # Admin Console (deploy to AdminServer)
-  vorpal-blade-configurator.war        # Admin Configurator (deploy to AdminServer)
+dist/<version>-<build>/
+  vorpal-blade-services.ear        # EAR (deploy to engine targets)
+  vorpal-blade-library-framework.jar   # Framework library
+  vorpal-blade-library-shared.war      # WebLogic shared library (alternative to EAR)
+  vorpal-blade-library-fsmar.jar       # FSMAR (copy to OCCAS approuter lib/)
+  vorpal-blade-admin-console.war       # Admin Console (deploy to AdminServer)
+  vorpal-blade-admin-configurator.war  # Admin Configurator (deploy to AdminServer)
 ```
 
 - **FSMAR JAR** must be installed manually into the OCCAS approuter `lib/` folder.
@@ -151,10 +151,10 @@ dist/<version>/
 There are two ways to deploy BLADE applications to the OCCAS cluster:
 
 **Option 1: EAR deployment (recommended)**
-Deploy `vorpal-blade-applications.ear` to the cluster. The EAR bundles all service WARs (skinny), the framework JAR, and third-party JARs in `lib/`. This is the simplest approach — one artifact, one deployment.
+Deploy `vorpal-blade-services.ear` to the cluster. The EAR bundles all service WARs (skinny), the framework JAR, and third-party JARs in `lib/`. This is the simplest approach — one artifact, one deployment.
 
 **Option 2: Shared library + individual WARs**
-Deploy `vorpal-blade-shared-libraries.war` as a WebLogic shared library, then deploy individual application WARs separately. Applications reference the shared library in their `weblogic.xml`:
+Deploy `vorpal-blade-library-shared.war` as a WebLogic shared library, then deploy individual application WARs separately. Applications reference the shared library in their `weblogic.xml`:
 
 ```xml
 <library-ref>
@@ -218,10 +218,13 @@ Deploy this WAR to the AdminServer to browse javadocs at `/javadoc`. The index p
 
 ## Deploy to WebLogic/OCCAS
 
-Deploy the EAR to a running WebLogic/OCCAS server:
+Manage the EAR on a running WebLogic/OCCAS server:
 
 ```bash
-./build.sh -- verify -Pdeploy -Dwls.password=yourpassword
+./build.sh -- verify -Pdeploy   -Dwls.password=secret   # deploy (or update)
+./build.sh -- verify -Pundeploy -Dwls.password=secret   # remove
+./build.sh -- verify -Pstop     -Dwls.password=secret   # stop without removing
+./build.sh -- verify -Pstart    -Dwls.password=secret   # start a stopped app
 ```
 
 The defaults are `t3://localhost:7001`, user `weblogic`, and target `AdminServer`. Override with `-Dwls.adminurl=...`, `-Dwls.user=...`, `-Dwls.targets=...`.

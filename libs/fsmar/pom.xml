@@ -11,14 +11,14 @@
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>vorpal-blade-fsmar</artifactId>
+	<artifactId>vorpal-blade-library-fsmar</artifactId>
 	<packaging>jar</packaging>
 	<name>Vorpal:BLADE FSMAR Library</name>
 
 	<dependencies>
 		<dependency>
 			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-framework</artifactId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.dataformat</groupId>
@@ -39,7 +39,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-fsmar</finalName>
+		<finalName>vorpal-blade-library-fsmar</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -58,33 +58,45 @@
 									<exclude>com.oracle.occas:*</exclude>
 								</excludes>
 							</artifactSet>
-							<!-- Strip multi-release classes above Java 11 that crash
-							     WebLogic's classloader. Preserves versions/9/ and versions/11/. -->
-							<filters>
-								<filter>
-									<artifact>*:*</artifact>
-									<excludes>
-										<exclude>META-INF/versions/12/**</exclude>
-										<exclude>META-INF/versions/13/**</exclude>
-										<exclude>META-INF/versions/14/**</exclude>
-										<exclude>META-INF/versions/15/**</exclude>
-										<exclude>META-INF/versions/16/**</exclude>
-										<exclude>META-INF/versions/17/**</exclude>
-										<exclude>META-INF/versions/18/**</exclude>
-										<exclude>META-INF/versions/19/**</exclude>
-										<exclude>META-INF/versions/20/**</exclude>
-										<exclude>META-INF/versions/21/**</exclude>
-										<exclude>META-INF/versions/22/**</exclude>
-										<exclude>META-INF/versions/23/**</exclude>
-										<exclude>META-INF/versions/24/**</exclude>
-										<exclude>META-INF/versions/25/**</exclude>
-									</excludes>
-								</filter>
-							</filters>
 							<transformers>
 								<!-- Merge META-INF/services files from all JARs -->
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
 							</transformers>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<!-- Strip multi-release classes above Java 11 from the shaded JAR.
+			     Only needed for Java 11; later JDKs handle multi-release JARs correctly.
+			     Preserves META-INF/versions/9/ and versions/11/. -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.5.0</version>
+				<executions>
+					<execution>
+						<id>strip-multirelease</id>
+						<phase>package</phase>
+						<goals><goal>exec</goal></goals>
+						<configuration>
+							<executable>bash</executable>
+							<arguments>
+								<argument>-c</argument>
+								<argument>
+JAVA_VER="${java.version}";
+if [ "$JAVA_VER" = "11" ]; then
+  JARFILE="${project.build.directory}/${project.build.finalName}.jar";
+  for ver in $(jar tf "$JARFILE" 2>/dev/null | grep 'META-INF/versions/' | sed 's|META-INF/versions/||' | cut -d/ -f1 | sort -un); do
+    if [ "$ver" -gt 11 ]; then
+      zip -qd "$JARFILE" "META-INF/versions/$ver/*" 2>/dev/null || true
+    fi
+  done;
+  echo "Stripped multi-release classes above Java 11 from FSMAR JAR"
+else
+  echo "Skipping multi-release stripping (java.version=$JAVA_VER, only needed for 11)"
+fi
+								</argument>
+							</arguments>
 						</configuration>
 					</execution>
 				</executions>

@@ -26,7 +26,7 @@ Use git clone to download BLADE.
 
 ## Installation
 
-To use the Vorpal:BLADE Framework, deploy the shared libraries "vorpal-blade-shared-libraries-2.x.x.war" to the cluster.
+To use the Vorpal:BLADE Framework, deploy the shared library "vorpal-blade-library-shared-2.x.x.war" to the cluster.
 
 
 ## Development
@@ -44,5 +44,5 @@ To use the framework in your SIP Servlet application, add the following text to 
 ## Eclipse
 
 To compile against the framework in Eclipse, import the "vorpal-blade-library-framework" 
-and "vorpal-blade-shared-libraries" projects from your cloned GIT repository.
+and "vorpal-blade-library-shared" projects from your cloned GIT repository.
 
