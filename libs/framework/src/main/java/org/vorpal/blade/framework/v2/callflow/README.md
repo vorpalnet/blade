@@ -1,4 +1,4 @@
-# Vorpal:BLADE Framework Callflow
+# BLADE Framework Callflow
 
 See Javadocs: [org.vorpal.blade.framework.callflow](https://vorpalnet.github.io/blade/vorpal-blade-library-framework/org/vorpal/blade/framework/callflow/Callflow.html)
 
@@ -34,7 +34,7 @@ But this gets confusing very fast. Consider "doResponse()". Response to what? No
 every response. Pretty quickly, you will find yourself implementing state variables to keep
 track of all the dialogs. It gets ugly real fast.
 
-Instead, the Vorpal:BLADE APIs utilize lambda expressions to simplify things.
+Instead, the BLADE APIs utilize lambda expressions to simplify things.
 
 For instance, here's an example:
 

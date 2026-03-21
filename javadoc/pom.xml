@@ -12,7 +12,7 @@
 
 	<artifactId>javadoc</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Javadoc</name>
+	<name>BLADE Javadoc</name>
 
 	<build>
 		<plugins>

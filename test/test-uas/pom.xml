@@ -13,7 +13,7 @@
 
 	<artifactId>test-uas</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Test UAS</name>
+	<name>BLADE Test UAS</name>
 
 	<dependencies>
 		<dependency>

@@ -1,10 +1,10 @@
-# Vorpal:BLADE Framework
+# BLADE Framework
 
 [Javadocs](https://vorpalnet.github.io/blade/vorpal-blade-library-framework/index.html)
 
-Welcome to the Vorpal:BLADE framework library.
+Welcome to the BLADE framework library.
 
-Please note: Although The Vorpal:BLADE Framework attempts to support SIP Servlets JSR-359 APIs, it has only been tested
+Please note: Although The BLADE Framework attempts to support SIP Servlets JSR-359 APIs, it has only been tested
 on the Oracle Communications Converged Application Server (OCCAS). You will find a lot of Oracle specific jargon in this
 documentation. Be warned!
 
@@ -26,7 +26,7 @@ Use git clone to download BLADE.
 
 ## Installation
 
-To use the Vorpal:BLADE Framework, deploy the shared library "vorpal-blade-library-shared-2.x.x.war" to the cluster.
+To use the BLADE Framework, deploy the shared library "vorpal-blade-library-shared-2.x.x.war" to the cluster.
 
 
 ## Development

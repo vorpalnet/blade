@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-library-framework</artifactId>
 	<packaging>jar</packaging>
-	<name>Vorpal:BLADE Framework Library</name>
+	<name>BLADE Framework Library</name>
 
 	<dependencies>
 		<dependency>

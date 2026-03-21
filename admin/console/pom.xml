@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-admin-console</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Admin Console</name>
+	<name>BLADE Admin Console</name>
 
 	<dependencies>
 		<dependency>

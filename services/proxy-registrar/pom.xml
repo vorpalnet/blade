@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-services-proxy-registrar</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Proxy Registrar Service</name>
+	<name>BLADE Proxy Registrar Service</name>
 
 	<dependencies>
 		<dependency>

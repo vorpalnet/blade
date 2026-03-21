@@ -1,8 +1,8 @@
-# Vorpal:BLADE Framework
+# BLADE Framework
 
 See Javadocs: [org.vorpal.blade.framework](https://vorpalnet.github.io/blade/vorpal-blade-library-framework/org/vorpal/blade/framework/package-summary.html)
 
-Welcome to the Vorpal:BLADE framework library.
+Welcome to the BLADE framework library.
 
 The base package "org.vorpal.blade.framework" contains only one class:
 [AsyncSipServlet](https://vorpalnet.github.io/vorpal-blade-library-framework/org/vorpal/blade/framework/AsyncSipServlet.html).

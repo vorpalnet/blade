@@ -344,10 +344,18 @@ public abstract class AsyncSipServlet extends SipServlet
 			AttributesKey rr = null;
 			SipSession linkedSession = Callflow.getLinkedSession(request.getSession());
 
-			// get the Vorpal ID first thing
-			if (request.getMethod().equals("INVITE") && request.isInitial()) {
-				String indexKey = Callflow.getVorpalSessionId(request);
-				appSession.addIndexKey(indexKey);
+			// get the Vorpal ID first thing (skip short-lived, fire-and-forget methods)
+			if (request.isInitial()) {
+				switch (method) {
+				case "OPTIONS":
+				case "INFO":
+				case "MESSAGE":
+					break;
+				default:
+					String indexKey = Callflow.getVorpalSessionId(request);
+					appSession.addIndexKey(indexKey);
+					break;
+				}
 			}
 
 			// Log useful variables for debugging purposes

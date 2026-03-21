@@ -1,4 +1,4 @@
-# Vorpal:BLADE Framework Logging
+# BLADE Framework Logging
 
 See Javadocs: [org.vorpal.blade.framework.logging](https://vorpalnet.github.io/vorpal-blade-library-framework/index.html?org/vorpal/blade/framework/logging/package-summary.html)
 

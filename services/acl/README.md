@@ -1,4 +1,4 @@
-# Vorpal:BLADE Access Control Lists (ACL)
+# BLADE Access Control Lists (ACL)
 
 [Javadocs](https://vorpalnet.github.io/vorpal-blade-acl/index.html)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# build.sh - Profile-driven build wrapper for Vorpal:BLADE
+# build.sh - Profile-driven build wrapper for BLADE
 #
 # Usage:
 #   ./build.sh [profile] [platform] [maven-args...]
@@ -128,9 +128,14 @@ build.number=${BUILD_NUM}
 EOB
 
 # --- Default to 'verify' if no Maven goals specified ---
-# Uses 'verify' so the dist copy runs after all modules are packaged
-if [ ${#MAVEN_ARGS[@]} -eq 0 ]; then
-    MAVEN_ARGS=("verify")
+# Uses 'verify' so the dist copy runs after all modules are packaged.
+# Check for actual goals (non-flag args) since flags like -Pjavadocs don't count.
+HAS_GOALS=false
+for arg in "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}"; do
+    [[ "$arg" != -* ]] && HAS_GOALS=true
+done
+if [ "$HAS_GOALS" = false ]; then
+    MAVEN_ARGS=("verify" "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}")
 fi
 
 # --- Show what we're doing ---

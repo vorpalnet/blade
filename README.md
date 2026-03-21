@@ -1,4 +1,4 @@
-# Vorpal:BLADE
+# BLADE
 
 **B**lended **L**ayer **A**pplication **D**evelopment **E**nvironment
 
@@ -49,7 +49,7 @@ Deployed to the WebLogic AdminServer as standalone WARs.
 
 ### Services
 
-Deployed to the OCCAS cluster as skinny WARs inside the EAR.
+Deployed to the OCCAS cluster via the EAR. Each WAR includes the framework JAR; 3rd-party libraries come from the shared library.
 
 | Module | Description |
 | --- | --- |
@@ -82,8 +82,8 @@ Deployed to the cluster alongside production applications. Excluded by the `prod
 
 ```
 libs/           Libraries
-  framework/      Vorpal:BLADE Framework (JAR)
-  shared/         WebLogic shared library (WAR)
+  framework/      BLADE Framework (JAR)
+  shared/         WebLogic shared library WAR (3rd-party JARs only)
   fsmar/          Finite State Machine Application Router (fat JAR)
 admin/          Admin tools (deployed to AdminServer)
   console/        Admin Console (WAR)
@@ -151,10 +151,10 @@ dist/<version>-<build>/
 There are two ways to deploy BLADE applications to the OCCAS cluster:
 
 **Option 1: EAR deployment (recommended)**
-Deploy `vorpal-blade-services.ear` to the cluster. The EAR bundles all service WARs (skinny), the framework JAR, and third-party JARs in `lib/`. This is the simplest approach — one artifact, one deployment.
+Deploy `vorpal-blade-services.ear` to the cluster. The EAR bundles all service WARs — each WAR includes the framework JAR, and 3rd-party libraries are provided by the shared library. No JARs in the EAR `lib/`. This is the simplest approach — one artifact, one deployment.
 
 **Option 2: Shared library + individual WARs**
-Deploy `vorpal-blade-library-shared.war` as a WebLogic shared library, then deploy individual application WARs separately. Applications reference the shared library in their `weblogic.xml`:
+Deploy `vorpal-blade-library-shared.war` as a WebLogic shared library (contains 3rd-party JARs only), then deploy individual application WARs separately. Each WAR includes the framework JAR and references the shared library for 3rd-party dependencies in their `weblogic.xml`:
 
 ```xml
 <library-ref>
@@ -162,7 +162,7 @@ Deploy `vorpal-blade-library-shared.war` as a WebLogic shared library, then depl
 </library-ref>
 ```
 
-This approach allows you to deploy, update, or remove individual applications without redeploying the entire suite. It is also the required approach for customers building their own BLADE applications — deploy the shared library once, then deploy your custom WARs alongside it.
+This approach allows you to deploy, update, or remove individual applications without redeploying the entire suite. Individual WARs are self-sufficient (framework included) and only need the shared library for 3rd-party dependencies. This is also the required approach for customers building their own BLADE applications — deploy the shared library once, then deploy your custom WARs alongside it.
 
 ## Build Number
 
@@ -202,7 +202,7 @@ To create a custom module profile, copy an existing `build-profiles/*.conf` file
 
 ## Javadocs
 
-Javadoc generation is off by default. To build with Javadocs:
+Javadoc generation is off by default and requires **JDK 23+** (for Markdown comment support via [JEP 467](https://openjdk.org/jeps/467)). The project compiles with `--release 11` so the same JDK is used for both compilation and doc generation. To build with Javadocs:
 
 ```bash
 ./build.sh -- -Pjavadocs
@@ -215,6 +215,23 @@ javadoc/target/javadoc-<version>.war
 ```
 
 Deploy this WAR to the AdminServer to browse javadocs at `/javadoc`. The index page links to each module's javadoc automatically — no build changes needed when adding new modules.
+
+### Markdown Javadoc Comments
+
+Javadoc comments can be written using Markdown syntax with `///` triple-slash comments ([JEP 467](https://openjdk.org/jeps/467)). For example:
+
+```java
+/// Returns the **session** associated with this request.
+///
+/// - If `create` is `true`, creates a new session when none exists.
+/// - Returns `null` otherwise.
+///
+/// @param create whether to create a new session
+/// @return the session, or `null`
+public SipSession getSession(boolean create) { ... }
+```
+
+Traditional `/** */` comments remain fully compatible and can coexist with `///` comments — migrate gradually as you see fit.
 
 ## Deploy to WebLogic/OCCAS
 

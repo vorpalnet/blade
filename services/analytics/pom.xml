@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-services-analytics</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Analytics Service</name>
+	<name>BLADE Analytics Service</name>
 
 	<dependencies>
 		<dependency>

@@ -1,4 +1,4 @@
-# Vorpal:BLADE Admin-Console
+# BLADE Admin-Console
 
 [Javadocs](https://vorpalnet.github.io/vorpal-blade-admin-console/index.html)
 

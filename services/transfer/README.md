@@ -1,4 +1,4 @@
-# Vorpal:BLADE
+# BLADE
 
 The transfer service will perform a 'blind' transfer when it receives a REFER and a matching condition is met.
 

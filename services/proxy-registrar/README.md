@@ -1,4 +1,4 @@
-# Vorpal:BLADE Proxy-Registrar
+# BLADE Proxy-Registrar
 
 
 ```

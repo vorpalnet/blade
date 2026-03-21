@@ -1,5 +1,5 @@
 /**
- * This is the base package of the Vorpal:BLADE framework library. The purpose
+ * This is the base package of the BLADE framework library. The purpose
  * of this library is to provide the developer a convenient and intuitive
  * approach to developing SIP Servlet applications.
  *

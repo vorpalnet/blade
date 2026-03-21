@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-library-fsmar</artifactId>
 	<packaging>jar</packaging>
-	<name>Vorpal:BLADE FSMAR Library</name>
+	<name>BLADE FSMAR Library</name>
 
 	<dependencies>
 		<dependency>

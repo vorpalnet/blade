@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-services-hold</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Hold Service</name>
+	<name>BLADE Hold Service</name>
 
 	<dependencies>
 		<dependency>

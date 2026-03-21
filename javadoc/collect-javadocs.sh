@@ -36,9 +36,9 @@ cat > "$DOCROOT/index.html" <<HEADER
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Vorpal:BLADE Javadoc</title>
+    <title>BLADE Javadoc</title>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f5f5f5; }
         h1 { color: #333; border-bottom: 2px solid #4a90d9; padding-bottom: 10px; }
         p.version { color: #888; font-size: 14px; }
         h2 { color: #555; margin-top: 30px; }
@@ -49,7 +49,11 @@ cat > "$DOCROOT/index.html" <<HEADER
     </style>
 </head>
 <body>
-    <h1>Vorpal:BLADE Javadoc</h1>
+    <div style="background:#602671; padding:10px 16px; margin-bottom:16px;">
+        <img src="images/vorpal_logo_white.svg" height="50" alt="Vorpal">
+    </div>
+    <div style="padding: 0 40px;">
+    <h1>BLADE Javadoc</h1>
     <p class="version">Version: ${VERSION}</p>
     <h2>Modules</h2>
     <ul>
@@ -66,6 +70,7 @@ done
 
 cat >> "$DOCROOT/index.html" <<'FOOTER'
     </ul>
+    </div>
 </body>
 </html>
 FOOTER

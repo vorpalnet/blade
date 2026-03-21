@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-services-acl</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE ACL Service</name>
+	<name>BLADE ACL Service</name>
 
 	<dependencies>
 		<dependency>

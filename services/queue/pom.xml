@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-services-queue</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Queue Service</name>
+	<name>BLADE Queue Service</name>
 
 	<dependencies>
 		<dependency>

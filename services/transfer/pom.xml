@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-services-transfer</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Transfer Service</name>
+	<name>BLADE Transfer Service</name>
 
 	<dependencies>
 		<dependency>

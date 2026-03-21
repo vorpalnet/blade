@@ -13,7 +13,7 @@
 
 	<artifactId>test-uac</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Test UAC</name>
+	<name>BLADE Test UAC</name>
 
 	<dependencies>
 		<dependency>

@@ -1,4 +1,4 @@
-# Vorpal:BLADE Framework Config
+# BLADE Framework Config
 
 See Javadocs: [org.vorpal.blade.framework.config](https://vorpalnet.github.io/vorpal-blade-library-framework/index.html?org/vorpal/blade/framework/config/package-summary.html)
 

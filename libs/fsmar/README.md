@@ -1,4 +1,4 @@
-# Vorpal:BLADE FSMAR 2.0
+# BLADE FSMAR 2.0
 
 Welcome to the one and only... FSMAR!
 

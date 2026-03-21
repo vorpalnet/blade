@@ -1,2 +1,2 @@
-# Vorpal:BLADE
+# BLADE
 

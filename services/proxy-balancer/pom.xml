@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-services-proxy-balancer</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Proxy Balancer Service</name>
+	<name>BLADE Proxy Balancer Service</name>
 
 	<dependencies>
 		<dependency>

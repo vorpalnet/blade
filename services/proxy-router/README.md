@@ -1,6 +1,6 @@
 # Proxy-Router
 
-Welcome to the Vorpal:BLADE R3, the Reductive Reasoning Router.
+Welcome to the BLADE R3, the Reductive Reasoning Router.
 
 The goal behind R3 is to build a universal router that can build translations maps based on any piece of data
 within a SIP message without scripting (for now). It is called "reductive" because it works upon a simple
@@ -202,7 +202,7 @@ It is trivial to simply put everything in order:
 In this case, the R3 router will search "address-map-1" for a match. Failing that, it will search "prefix-map-1".
 Finally, failing to find any matches, it will use the default route. 
 
-In this particular case, the default route uses the Vorpal:BLADE test UAS server to
+In this particular case, the default route uses the BLADE test UAS server to
 respond back with a 404 "not found" status code.
 
 ## Additional Thoughts...

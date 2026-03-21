@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-admin-configurator</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Admin Configurator</name>
+	<name>BLADE Admin Configurator</name>
 
 	<dependencies>
 		<dependency>

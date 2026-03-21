@@ -13,7 +13,7 @@
 
 	<artifactId>vorpal-blade-services-options</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Options Service</name>
+	<name>BLADE Options Service</name>
 
 	<dependencies>
 		<dependency>

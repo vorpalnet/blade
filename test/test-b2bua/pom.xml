@@ -13,7 +13,7 @@
 
 	<artifactId>test-b2bua</artifactId>
 	<packaging>war</packaging>
-	<name>Vorpal:BLADE Test B2BUA</name>
+	<name>BLADE Test B2BUA</name>
 
 	<dependencies>
 		<dependency>

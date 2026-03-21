@@ -1,4 +1,4 @@
-# Vorpal:BLADE Framework B2bUA
+# BLADE Framework B2bUA
 
 See Javadocs: [org.vorpal.blade.framework.b2bua](https://vorpalnet.github.io/vorpal-blade-library-framework/index.html?org/vorpal/blade/framework/b2bua/package-summary.html)
 
@@ -84,7 +84,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 
 ```
 
-To use the Vorpal:BLADE B2BUA framework, you simply need to extend the class B2buaServlet and
+To use the BLADE B2BUA framework, you simply need to extend the class B2buaServlet and
 override this methods:
 
 * callStarted
