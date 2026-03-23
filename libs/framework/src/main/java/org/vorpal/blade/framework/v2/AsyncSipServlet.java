@@ -173,13 +173,13 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// @throws IOException if an I/O error occurs during selection
 	protected abstract Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException;
 
-	/// Called by the container when the SIP servlet is initialized. This method
-	/// initializes the SIP factory, session utilities, timer service, and logger. It
-	/// also invokes the abstract {@link #servletCreated(SipServletContextEvent)}
-	/// method for subclass-specific initialization.
-	///
-	/// @param event the SIP servlet context event containing initialization
-	///              information
+	/// Initializes the servlet when the SIP container starts
+	/// 
+	/// This method sets up the SIP factory, session utilities, timer service, and logger.
+	/// It also invokes the abstract servletCreated method for application-specific initialization,
+	/// configures analytics if enabled, and logs system configuration parameters.
+	/// 
+	/// @param event the SIP servlet context event containing initialization information
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
 		initialSipServletContextEvent = event;
@@ -320,19 +320,21 @@ public abstract class AsyncSipServlet extends SipServlet
 		// override this method
 	}
 
-	/// Called by the container when the servlet context is initialized. This
-	/// implementation is empty; override in subclasses if needed.
-	///
+	/// Handles servlet context initialization
+	/// 
+	/// This implementation is empty by default. Override in subclasses if needed.
+	/// 
 	/// @param sce the servlet context event
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
 		// do nothing;
 	}
 
-	/// Called by the container when the servlet context is destroyed. Invokes the
-	/// {@link #servletDestroyed(SipServletContextEvent)} method for
-	/// subclass-specific cleanup.
-	///
+	/// Handles servlet context destruction and cleanup
+	/// 
+	/// Invokes the servletDestroyed method for application-specific cleanup
+	/// and shuts down analytics publisher if configured.
+	/// 
 	/// @param sce the servlet context event
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
@@ -361,21 +363,15 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
-	/// Processes incoming SIP requests. This method handles:
-	/// <ul>
-	/// <li>Initial INVITE session setup and tracking</li>
-	/// <li>Glare detection and queuing (when messages arrive while awaiting
-	/// ACK)</li>
-	/// <li>Callback invocation for expected requests</li>
-	/// <li>Callflow selection and processing via
-	/// {@link #chooseCallflow(SipServletRequest)}</li>
-	/// <li>Session attribute extraction based on configured selectors</li>
-	/// <li>Proxy request logging</li>
-	/// </ul>
-	///
+	/// Processes incoming SIP requests with glare detection and callback handling
+	/// 
+	/// This method handles initial INVITE session setup, glare detection and queuing,
+	/// callback invocation for expected requests, callflow selection and processing,
+	/// session attribute extraction based on configured selectors, and proxy request logging.
+	/// 
 	/// @param _request the incoming SIP request
 	/// @throws ServletException if a servlet error occurs during processing
-	/// @throws IOException      if an I/O error occurs during processing
+	/// @throws IOException if an I/O error occurs during processing
 	@SuppressWarnings("unchecked")
 	@Override
 	protected void doRequest(SipServletRequest _request) throws ServletException, IOException {
@@ -742,20 +738,16 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	}
 
-	/// Processes incoming SIP responses. This method handles:
-	/// <ul>
-	/// <li>Detection of responses arriving after call cancellation</li>
-	/// <li>Callback invocation for pending response handlers</li>
-	/// <li>Early dialog session merging when To-tag changes</li>
-	/// <li>Glare queue processing after response handling</li>
-	/// <li>Proxy response logging and session invalidation for loose routing</li>
-	/// <li>Error recovery including upstream error notification and downstream call
-	/// termination</li>
-	/// </ul>
-	///
+	/// Processes incoming SIP responses with callback handling and error recovery
+	/// 
+	/// This method handles detection of responses arriving after call cancellation,
+	/// callback invocation for pending response handlers, early dialog session merging
+	/// when To-tag changes, proxy response logging and session invalidation for loose routing,
+	/// and error recovery including upstream error notification and downstream call termination.
+	/// 
 	/// @param response the incoming SIP response
 	/// @throws ServletException if a servlet error occurs during processing
-	/// @throws IOException      if an I/O error occurs during processing
+	/// @throws IOException if an I/O error occurs during processing
 	@SuppressWarnings("unchecked")
 	@Override
 	protected void doResponse(SipServletResponse response) throws ServletException, IOException {
@@ -1062,11 +1054,13 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	}
 
-	/// Handles timer expiration events. Retrieves and invokes the callback function
-	/// stored in the timer's info object when the timer was created.
-	///
-	/// @param timer the expired servlet timer containing the callback in its info
-	///              object
+	/// Handles servlet timer expiration events
+	/// 
+	/// Retrieves and invokes the callback function stored in the timer's info object
+	/// when the timer was created. Callbacks are executed using the acceptThrows method
+	/// to handle exceptions properly.
+	/// 
+	/// @param timer the expired servlet timer containing the callback in its info object
 	@SuppressWarnings("unchecked")
 	@Override
 	final public void timeout(ServletTimer timer) {
@@ -1137,9 +1131,10 @@ public abstract class AsyncSipServlet extends SipServlet
 		return timerService;
 	}
 
-	/// Converts a byte array to an alphanumeric string representation. Uses a
-	/// 62-character alphabet (0-9, a-z, A-Z) for compact encoding.
-	///
+	/// Converts a byte array to an alphanumeric string representation
+	/// 
+	/// Uses a 62-character alphabet (0-9, a-z, A-Z) for compact encoding.
+	/// 
 	/// @param bytes the byte array to convert
 	/// @return an alphanumeric string representation of the bytes
 	private static String byteArray2Text(byte[] bytes) {
