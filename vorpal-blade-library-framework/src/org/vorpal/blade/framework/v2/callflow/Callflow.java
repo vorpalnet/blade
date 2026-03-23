@@ -75,6 +75,8 @@ import org.vorpal.blade.framework.v2.testing.DummyResponse;
 
 public abstract class Callflow implements Serializable {
 
+	boolean keepAliveEnabled = false;
+
 	public enum GlareState {
 		ALLOW, // no glare, process all messages
 		QUEUE, // okay to queue requests that come in out of order
@@ -793,6 +795,8 @@ public abstract class Callflow implements Serializable {
 					}
 
 //					// begin KeepAlive logic...
+
+if(keepAliveEnabled){
 					try {
 						if (request.isInitial() //
 								&& request.getMethod().equals(INVITE) //
@@ -834,7 +838,9 @@ public abstract class Callflow implements Serializable {
 							boolean uas = false;
 							if (sessionExpires != null) {
 								refresher = sessionExpires.getParameter("refresher");
-								uas = refresher.equals("uas");
+								if(refresher!=null){
+									uas = refresher.equals("uas");
+								}
 								sessionExpires.setParameter("refresher", "uac"); // changing it to uac so no other app
 																					// operates on it
 							}
@@ -908,6 +914,7 @@ public abstract class Callflow implements Serializable {
 								"Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
 					}
 					// end KeepAlive logic.
+}
 
 					if (lambdaFunction != null) {
 						request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
