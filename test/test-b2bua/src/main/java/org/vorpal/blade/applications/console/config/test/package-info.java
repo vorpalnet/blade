@@ -1,1 +1,0 @@
-package org.vorpal.blade.applications.console.config.test;

@@ -1,1 +1,0 @@
-package org.vorpal.blade.services.proxy.block.api;

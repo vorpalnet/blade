@@ -1137,13 +1137,11 @@ public abstract class AsyncSipServlet extends SipServlet
 		return timerService;
 	}
 
-	/**
-	 * Converts a byte array to an alphanumeric string representation. Uses a
-	 * 62-character alphabet (0-9, a-z, A-Z) for compact encoding.
-	 *
-	 * @param bytes the byte array to convert
-	 * @return an alphanumeric string representation of the bytes
-	 */
+	/// Converts a byte array to an alphanumeric string representation. Uses a
+	/// 62-character alphabet (0-9, a-z, A-Z) for compact encoding.
+	///
+	/// @param bytes the byte array to convert
+	/// @return an alphanumeric string representation of the bytes
 	private static String byteArray2Text(byte[] bytes) {
 		final char[] alphanum = { // 62 characters for randomish pattern distribution
 				'0', '1', '2', '3', '4', '5', '6', '7', //

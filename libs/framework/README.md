@@ -1,131 +1,137 @@
 # Framework Module
 
-The `libs/framework` module provides the core framework infrastructure for Vorpal Blade applications, including SIP servlet extensions, session management, B2BUA functionality, and SDP processing capabilities. This module serves as the foundation for building robust SIP-based telecommunications applications.
+The **libs/framework** module provides the core infrastructure and utilities for the Vorpal Blade SIP application server. This module contains essential components for SIP session management, B2BUA functionality, call flow orchestration, configuration management, and testing utilities, along with integrated NIST SDP (Session Description Protocol) libraries.
 
 ## Overview
 
-This framework module combines NIST SIP/SDP libraries with Vorpal Blade's proprietary framework components to deliver:
+This framework module serves as the foundation for building robust SIP-based applications and services. It provides a comprehensive set of tools and abstractions that simplify the development of telecommunications applications while maintaining high performance and reliability standards.
 
-- Advanced SIP session management and call flow control
-- Back-to-back User Agent (B2BUA) functionality
-- Session Description Protocol (SDP) parsing and manipulation
-- Proxy services and call transfer capabilities
-- Analytics, logging, and monitoring infrastructure
-- Configuration management and testing utilities
+Key features include:
+- Advanced B2BUA (Back-to-Back User Agent) capabilities
+- Flexible call flow management and orchestration
+- Comprehensive analytics and monitoring
+- Configuration management with JSON schema validation
+- Proxy and transfer functionalities
+- Testing utilities for SIP applications
+- Full SDP parsing and manipulation support
 
 ## Architecture
 
-The module is organized into two main component groups:
+The module is organized into several key functional areas:
 
-### NIST Libraries
-Standard SIP/SDP implementation providing core protocol support and parsing capabilities.
+### Core Framework
+Provides the foundational classes and utilities for SIP application development.
 
-### Vorpal Blade Framework v2
-Proprietary framework components built on top of NIST libraries, offering high-level abstractions and enterprise features for SIP application development.
+### SIP Protocol Support
+Includes complete SDP (Session Description Protocol) implementation from NIST libraries for robust SIP message handling.
 
-## Packages
+### Application Services
+Higher-level services for common telecommunications use cases including B2BUA operations, call transfers, and proxy functionality.
 
-### `gov.nist.core`
-Core NIST library utilities and base classes providing fundamental data structures and helper functions for SIP protocol implementation.
+## Package Structure
 
-### `gov.nist.javax.sdp`
-NIST implementation of the Session Description Protocol (SDP) specification, providing comprehensive SDP message handling and manipulation capabilities.
+### NIST SDP Libraries
 
-### `gov.nist.javax.sdp.fields`
-SDP field implementations representing individual components of SDP messages such as origin, connection, media, and attribute fields.
+#### `gov.nist.core`
+Core NIST utilities and foundational classes for SIP protocol implementation. Provides essential data structures and helper methods used throughout the SDP stack.
 
-### `gov.nist.javax.sdp.parser`
-Parser components for converting raw SDP text into structured Java objects and vice versa, with support for validation and error handling.
+#### `javax.sdp`
+Standard Java SDP API definitions and interfaces. This package defines the public API for Session Description Protocol operations in compliance with JSR standards.
 
-### `javax.sdp`
-Standard SDP API interfaces and contracts as defined by the Java Community Process, ensuring compatibility with SDP specifications.
+#### `gov.nist.javax.sdp`
+NIST's implementation of the standard SDP API. Contains concrete implementations of the javax.sdp interfaces with enhanced functionality and performance optimizations.
 
-### `org.vorpal.blade.framework.v2`
-Core Vorpal Blade framework classes providing the main application infrastructure, session management, and SIP servlet extensions.
+#### `gov.nist.javax.sdp.fields`
+SDP field implementations for all standard and extended SDP attributes. Handles parsing, validation, and serialization of individual SDP message components.
 
-### `org.vorpal.blade.framework.v2.analytics`
-Analytics and metrics collection components for monitoring application performance, call statistics, and operational insights.
+#### `gov.nist.javax.sdp.parser`
+Comprehensive SDP message parsing engine. Provides robust parsing capabilities for SDP messages with error handling and validation.
 
-### `org.vorpal.blade.framework.v2.b2bua`
-Back-to-back User Agent implementation enabling advanced call routing, media manipulation, and session border controller functionality.
+### Vorpal Blade Framework
 
-### `org.vorpal.blade.framework.v2.callflow`
-Call flow management utilities for orchestrating complex multi-party call scenarios and business logic execution.
+#### `org.vorpal.blade.framework.v2`
+Core framework classes and base abstractions for SIP servlet applications. Contains fundamental building blocks for creating SIP-based services.
 
-### `org.vorpal.blade.framework.v2.config`
-Configuration management system supporting dynamic configuration updates, validation, and environment-specific settings.
+#### `org.vorpal.blade.framework.v2.analytics`
+Analytics and metrics collection framework for monitoring SIP application performance, call statistics, and system health.
 
-### `org.vorpal.blade.framework.v2.keepalive`
-Keep-alive mechanisms for maintaining SIP registrations, dialog state, and connection health monitoring.
+#### `org.vorpal.blade.framework.v2.b2bua`
+Back-to-Back User Agent implementation providing call bridging, media relay, and session management capabilities for advanced call routing scenarios.
 
-### `org.vorpal.blade.framework.v2.logging`
-Enhanced logging infrastructure with SIP-aware formatters, structured logging, and integration with monitoring systems.
+#### `org.vorpal.blade.framework.v2.callflow`
+Call flow orchestration engine for defining and executing complex telecommunications workflows with state management and error handling.
 
-### `org.vorpal.blade.framework.v2.proxy`
-SIP proxy implementation with support for routing policies, load balancing, and protocol translation capabilities.
+#### `org.vorpal.blade.framework.v2.config`
+Configuration management system with support for JSON schema validation, dynamic reloading, and environment-specific settings.
 
-### `org.vorpal.blade.framework.v2.testing`
-Testing utilities and mock objects for unit testing SIP applications, including test harnesses and scenario simulation tools.
+#### `org.vorpal.blade.framework.v2.keepalive`
+Keep-alive and health monitoring utilities for maintaining persistent connections and ensuring service availability.
 
-### `org.vorpal.blade.framework.v2.transfer`
-Call transfer services supporting supervised, unsupervised, and consultative transfer scenarios with proper SIP signaling.
+#### `org.vorpal.blade.framework.v2.logging`
+Enhanced logging framework with SIP-specific log formatting, call correlation, and structured logging capabilities.
 
-### `org.vorpal.blade.framework.v2.transfer.api`
-Public APIs for call transfer functionality, providing clean interfaces for application developers to implement transfer features.
+#### `org.vorpal.blade.framework.v2.proxy`
+SIP proxy implementation with routing logic, load balancing, and failover capabilities for scalable SIP infrastructure.
+
+#### `org.vorpal.blade.framework.v2.testing`
+Comprehensive testing utilities including SIP message generators, mock objects, and test harnesses for unit and integration testing.
+
+#### `org.vorpal.blade.framework.v2.transfer`
+Call transfer implementation supporting both attended and unattended transfers with comprehensive error handling and state management.
+
+#### `org.vorpal.blade.framework.v2.transfer.api`
+Public API definitions for call transfer operations, providing clean interfaces for transfer functionality integration.
 
 ## Dependencies
 
-| Dependency | Purpose |
-|------------|---------|
-| `jackson-dataformat-xml` | XML serialization and deserialization for configuration and data exchange |
-| `jackson-databind` | JSON data binding and object mapping capabilities |
-| `slf4j-api` | Logging facade providing unified logging interface |
-| `mbknor-jackson-jsonschema` | JSON Schema generation for configuration validation |
-| `swagger-jaxrs2` | API documentation and specification generation |
-| `json-path` | JSONPath query language implementation for data extraction |
-| `ipaddress` | IP address parsing, validation, and manipulation utilities |
-| `commons-collections4` | Enhanced collection data structures and utilities |
-| `commons-email` | Email functionality for notifications and alerts |
+### Core Libraries
+- **com.fasterxml.jackson.dataformat:jackson-dataformat-xml** - XML data binding for configuration and message processing
+- **com.fasterxml.jackson.core:jackson-databind** - JSON data binding and object mapping
+- **org.slf4j:slf4j-api** - Logging facade for consistent logging across the framework
+
+### Schema and Documentation
+- **com.kjetland:mbknor-jackson-jsonschema_2.13** - JSON schema generation for configuration validation
+- **io.swagger.core.v3:swagger-jaxrs2** - API documentation and OpenAPI specification support
+
+### Utilities
+- **com.jayway.jsonpath:json-path** - JSONPath expression evaluation for configuration querying
+- **com.github.seancfoley:ipaddress** - Advanced IP address parsing and manipulation
+- **org.apache.commons:commons-collections4** - Enhanced collection utilities and data structures
+- **org.apache.commons:commons-email** - Email notification capabilities for system alerts
 
 ## Related Modules
 
-- [libs/shared](../shared) - Shared utilities and common components
-- [libs/fsmar](../fsmar) - Finite State Machine and Action Router implementation  
-- [admin/console](../../admin/console) - Administrative web console interface
-- [admin/configurator](../../admin/configurator) - Configuration management tools
-- [services](../../services) - Application services built on this framework
+- [**libs/shared**](../shared) - Shared utilities and common classes used across all modules
+- [**libs/fsmar**](../fsmar) - Finite State Machine and Application Router implementation
+- [**admin/console**](../admin/console) - Administrative web console for system management
+- [**admin/configurator**](../admin/configurator) - Configuration management interface
+- [**services**](../services) - Application services built on this framework
 
 ## Integration Guide
 
-### Maven Dependency
-
-Add the following dependency to your project's `pom.xml`:
-
-```xml
-<dependency>
-    <groupId>org.vorpal.blade</groupId>
-    <artifactId>framework</artifactId>
-    <version>${vorpal.blade.version}</version>
-</dependency>
-```
-
 ### Basic Usage
 
-1. **Framework Initialization**: Extend the base framework classes to create your SIP application
-2. **Configuration**: Use the config package to define application-specific settings
-3. **Session Management**: Leverage B2BUA components for call handling and routing
-4. **Logging**: Integrate with the logging framework for structured application logs
-5. **Testing**: Utilize testing utilities for comprehensive application validation
+1. **Extend Framework Classes**: Inherit from base framework classes to create SIP servlets
+2. **Configure Services**: Use the configuration management system to define service parameters
+3. **Implement Call Flows**: Leverage the call flow engine to define business logic
+4. **Add Analytics**: Integrate analytics components for monitoring and reporting
 
-### Key Integration Points
+### Configuration
 
-- Implement custom call flows using the callflow package
-- Configure proxy behavior through the proxy components  
-- Integrate analytics for operational monitoring
-- Use transfer APIs for advanced call control features
+The framework uses JSON-based configuration with schema validation. Configuration files should be structured according to the JSON schemas provided by the config package.
 
-## Requirements
+### Testing
+
+Utilize the testing utilities to create comprehensive test suites for SIP applications. The testing framework provides mock SIP environments and message generators for thorough testing scenarios.
+
+### Logging
+
+Configure logging using the enhanced logging framework which provides SIP-specific formatting and correlation capabilities for better debugging and monitoring.
+
+## Build Requirements
 
 - Java 8 or higher
-- SIP Servlet container (e.g., Oracle Communications Converged Application Server)
-- Maven 3.6+ for building
+- Maven 3.6+
+- Access to required external dependencies
+
+This module is designed to be the cornerstone of SIP application development within the Vorpal Blade ecosystem, providing both low-level protocol support and high-level application services.

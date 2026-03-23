@@ -468,6 +468,8 @@
 							</execution>
 						</executions>
 						<configuration>
+							<javadocExecutable>/Library/Java/JavaVirtualMachines/jdk-25.jdk/Contents/Home/bin/javadoc</javadocExecutable>
+							<source>25</source>
 							<doclet>nl.talsmasoftware.umldoclet.UMLDoclet</doclet>
 							<docletArtifact>
 								<groupId>nl.talsmasoftware</groupId>
@@ -482,7 +484,8 @@
 							<links>
 								<link>https://docs.oracle.com/en/java/javase/11/docs/api</link>
 								<link>https://javaee.github.io/javaee-spec/javadocs/</link>
-								<link>https://vorpalnet.github.io/jsr359/</link>
+								<link>https://jakarta.ee/specifications/platform/8/apidocs/</link>
+								<link>https://vorpal.net/javadocs/jsr359/</link>
 							</links>
 							<top><![CDATA[<div style="background:#602671; padding:6px 16px; margin-bottom:4px;">
 <svg height="50" viewBox="0 0 514.19 263.37" xmlns="http://www.w3.org/2000/svg">
