@@ -627,9 +627,8 @@ public abstract class Callflow implements Serializable {
 						vorpalTimestamp = xVorpalId.getParameter(TIMESTAMP_PARAM);
 					}
 				} catch (Exception ex) {
-					sipLogger.warning(request,
-							"Callflow.getVorpalSessionId - Unable to parse header '" + X_VORPAL_ID + "': "
-									+ ex.getClass().getSimpleName() + " " + ex.getMessage());
+					sipLogger.warning(request, "Callflow.getVorpalSessionId - Unable to parse header '" + X_VORPAL_ID
+							+ "': " + ex.getClass().getSimpleName() + " " + ex.getMessage());
 				}
 
 				// Fall back to X-Vorpal-Session (old colon format) + X-Vorpal-Timestamp
@@ -834,9 +833,11 @@ public abstract class Callflow implements Serializable {
 							boolean uas = false;
 							if (sessionExpires != null) {
 								refresher = sessionExpires.getParameter("refresher");
-								uas = refresher.equals("uas");
-								sessionExpires.setParameter("refresher", "uac"); // changing it to uac so no other app
-																					// operates on it
+								if (refresher != null) {
+									uas = refresher.equals("uas");
+								}
+								// important, so no other app operates on it.
+								sessionExpires.setParameter("refresher", "uac");
 							}
 
 							if (sessionExpires == null || uas == true) { // create Session-Expires
