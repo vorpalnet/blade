@@ -1,96 +1,80 @@
 # Transfer Service Module
 
+The `services/transfer` module provides SIP call transfer functionality within the Vorpal Blade platform. This service handles both attended and unattended call transfers, managing the complex SIP signaling required to seamlessly move active calls between endpoints.
+
 ## Overview
 
-The Transfer Service module provides comprehensive call transfer functionality within the Vorpal Blade telecommunications platform. This module implements SIP-compliant call transfer mechanisms, including supervised and unsupervised (blind) transfers, consultative transfers, and advanced transfer scenarios. It manages the complex state transitions and SIP dialog manipulations required for seamless call handoffs between endpoints.
+This module implements RFC 3515 (REFER method) and related SIP transfer specifications to enable:
 
-## Module Information
+- **Attended Transfers**: Consultation-based transfers where the transferor speaks with the transfer target before completing the transfer
+- **Unattended Transfers**: Blind transfers where calls are immediately redirected to the target
+- **Transfer State Management**: Tracking transfer progress and handling failure scenarios
+- **Multi-party Transfer Support**: Advanced transfer scenarios involving multiple participants
 
-- **Module Name**: `services/transfer`
-- **Group ID**: `org.vorpal.blade`
-- **Artifact ID**: `vorpal-blade-services-transfer`
-- **Type**: Service Module
+The service integrates with the broader Vorpal Blade ecosystem to provide enterprise-grade call transfer capabilities with full audit trails and analytics support.
 
-## Packages
+## Package Structure
 
-### `org.vorpal.blade.services.transfer`
+### [`org.vorpal.blade.services.transfer`](#orgvorpalbladeservicestransfer)
 
 Core transfer service implementation containing:
 
-- **Transfer Controllers**: Manage different types of call transfers (blind, attended, consultative)
-- **State Machines**: Handle complex transfer state transitions and SIP dialog management
-- **Transfer Handlers**: Process SIP REFER messages and manage transfer workflows
-- **Session Management**: Track and coordinate multiple SIP dialogs during transfer operations
-- **Event Processors**: Handle transfer-related SIP events and notifications
+- **Transfer Controllers**: Main service logic for handling REFER requests and managing transfer workflows
+- **Transfer State Machines**: Stateful processing of transfer operations with proper cleanup
+- **SIP Message Handlers**: Protocol-specific handlers for REFER, NOTIFY, and related methods
+- **Transfer Validators**: Business rule validation for transfer authorization and feasibility
+- **Event Publishers**: Integration points for transfer-related events and notifications
 
 ## Dependencies
 
 ### Core Dependencies
 
-- **`org.vorpal.blade:vorpal-blade-library-framework`**: Provides the foundational framework components, SIP stack integration, and core service infrastructure required for implementing transfer operations
+- **org.vorpal.blade:vorpal-blade-library-framework**: Core framework providing SIP servlet infrastructure, session management, and common utilities required for service operation
 
 ## Related Modules
 
-### Framework and Shared Libraries
-- [**libs/framework**](../libs/framework) - Core framework and SIP stack integration
-- [**libs/shared/bin**](../libs/shared/bin) - Shared utilities and binary components
-- [**libs/fsmar**](../libs/fsmar) - Finite State Machine and Routing utilities
+### Framework & Shared Libraries
+- [**libs/framework**](../libs/framework) - Core framework components and utilities
+- [**libs/shared/bin**](../libs/shared/bin) - Shared binary utilities and common functions
+- [**libs/fsmar**](../libs/fsmar) - Finite State Machine and Rules engine
 
-### Administration Modules
-- [**admin/console**](../admin/console) - Management console with transfer monitoring capabilities
-- [**admin/configurator**](../admin/configurator) - Transfer service configuration management
+### Administration
+- [**admin/console**](../admin/console) - Web-based administration interface
+- [**admin/configurator**](../admin/configurator) - Configuration management tools
 
-### Service Modules
-- [**services/acl**](../services/acl) - Access control for transfer operations
-- [**services/analytics**](../services/analytics) - Transfer operation analytics and reporting
-- [**services/hold**](../services/hold) - Call hold functionality used during consultative transfers
-- [**services/options**](../services/options) - SIP OPTIONS handling for transfer capability negotiation
+### Related Services
+- [**services/acl**](../services/acl) - Access control and authorization services
+- [**services/analytics**](../services/analytics) - Call analytics and reporting integration
+- [**services/hold**](../services/hold) - Call hold/unhold functionality that works with transfers
+- [**services/options**](../services/options) - SIP OPTIONS handling for capability negotiation
 - [**services/presence**](../services/presence) - Presence information for transfer target validation
 - [**services/proxy-balancer**](../services/proxy-balancer) - Load balancing for transfer routing
-- [**services/proxy-block**](../services/proxy-block) - Call blocking integration for transfer restrictions
-- [**services/proxy-registrar**](../services/proxy-registrar) - User location services for transfer targets
-- [**services/proxy-router**](../services/proxy-router) - Routing services for transfer destinations
-- [**services/queue**](../services/queue) - Queue integration for transferred calls
-- [**services/tpcc**](../services/tpcc) - Third-party call control coordination
-
-## Features
-
-- **Blind Transfer**: Immediate call handoff without consultation
-- **Attended Transfer**: Consultation with transfer target before completion
-- **Consultative Transfer**: Multi-party consultation before transfer execution
-- **Transfer Recovery**: Handling of failed transfer scenarios and fallback procedures
-- **SIP REFER Support**: Full RFC 3515 compliance for SIP-based transfers
-- **State Persistence**: Reliable transfer state management across system restarts
-- **Multi-party Coordination**: Complex transfer scenarios involving multiple parties
+- [**services/proxy-block**](../services/proxy-block) - Call blocking rules that may affect transfers
+- [**services/proxy-registrar**](../services/proxy-registrar) - User registration for transfer target resolution
+- [**services/proxy-router**](../services/proxy-router) - Call routing logic for transfer completion
+- [**services/queue**](../services/queue) - Call queue integration for transfer-to-queue scenarios
+- [**services/tpcc**](../services/tpcc) - Third-party call control integration
 
 ## Integration Guide
 
-### Basic Setup
+### Service Configuration
 
-1. **Dependency Configuration**: Include the transfer service module in your Maven dependencies
-2. **Service Registration**: Register transfer handlers with the SIP application router
-3. **State Management**: Configure transfer state persistence and recovery mechanisms
-4. **Event Handling**: Set up transfer event listeners and notification handlers
+1. **Enable Transfer Service**: Configure the service in your Vorpal Blade deployment descriptor
+2. **ACL Integration**: Set up appropriate access controls through the ACL service
+3. **Analytics Setup**: Configure transfer event reporting to the analytics service
+4. **Routing Rules**: Establish transfer routing policies via the proxy-router service
 
-### Service Integration
+### Key Integration Points
 
-The Transfer Service integrates with multiple Vorpal Blade components:
+- **Session Management**: Leverages framework session handling for transfer state persistence
+- **Event Notification**: Publishes transfer events to analytics and audit systems  
+- **Authorization**: Validates transfer permissions through ACL service integration
+- **Target Resolution**: Uses registrar and presence services for transfer target validation
+- **Call State Coordination**: Integrates with hold service for proper call state management
 
-- **Proxy Services**: Coordinates with routing and registration services for transfer target resolution
-- **Hold Service**: Manages call hold states during consultative transfers
-- **Analytics Service**: Provides transfer operation metrics and success rates
-- **Queue Service**: Handles transfers to queue destinations and agent endpoints
+### Deployment Considerations
 
-### Configuration Requirements
-
-- Transfer timeout configurations for different transfer types
-- SIP dialog management parameters for multi-party scenarios
-- Integration endpoints for related services (hold, queue, routing)
-- Security policies for transfer authorization and validation
-
-## Usage Notes
-
-- Requires active SIP dialogs for transfer operations
-- Integrates with presence services for transfer target availability
-- Supports both SIP REFER and application-layer transfer mechanisms
-- Provides comprehensive logging for transfer operation debugging and audit trails
+- Ensure proper SIP dialog state management across transfer operations
+- Configure appropriate timeouts for transfer completion scenarios
+- Set up monitoring for transfer success/failure rates
+- Establish proper cleanup procedures for failed transfers

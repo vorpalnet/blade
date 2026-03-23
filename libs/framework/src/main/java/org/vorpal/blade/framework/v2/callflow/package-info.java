@@ -20,7 +20,7 @@
 /// ### Base Classes
 /// - [Callflow] - Abstract base class for all SIP callflows with comprehensive SIP utilities
 /// - [ClientCallflow] - Base class for client-initiated callflows with no-op request processing
-/// - [Callback] - Functional interface for serializable SIP callbacks extending Consumer
+/// - [Callback] - Functional interface for serializable SIP callbacks extending `Consumer`
 ///
 /// ### Pre-built Callflows
 /// - [Callflow481] - Responds with 481 (Call/Transaction Does Not Exist)
@@ -33,20 +33,52 @@
 ///
 /// ## Features
 ///
-/// - **Asynchronous Processing**: Callback-based handling of SIP messages and timers
-/// - **Dialog Management**: Session linking, glare state handling, and dialog utilities
-/// - **Message Manipulation**: Copy headers, content, and create various SIP messages
-/// - **Proxy Support**: Advanced proxying with plans, tiers, and callback handling
-/// - **Timer Services**: Flexible timer scheduling with lambda callbacks and cancellation
-/// - **Error Handling**: Built-in error callflows and exception management
-/// - **Analytics Integration**: Built-in logging and analytics support
-/// - **Session Management**: Vorpal session IDs, dialog IDs, and keep-alive support
+/// ### Asynchronous Processing
+/// The framework uses callback-based handling for all SIP messages and timer events.
+/// The [Callback] interface extends `Consumer` and supports serialization for cluster environments.
+///
+/// ### Dialog and Session Management
+/// - Vorpal session IDs for unique identification across the system
+/// - Dialog ID generation for tracking SIP dialogs
+/// - Session linking for B2BUA scenarios
+/// - Glare state management for race condition handling
+///
+/// ### Message Manipulation
+/// - Copy headers, content, and create various SIP messages
+/// - Create new requests from templates with routing directives
+/// - Response creation with status code copying
+/// - ACK/PRACK generation for proper dialog handling
+///
+/// ### Proxy Support
+/// - Multi-endpoint proxying with parallel or sequential modes
+/// - `ProxyPlan` support for tiered routing strategies
+/// - Response callback handling for proxy scenarios
+///
+/// ### Timer Services
+/// - One-time and periodic timer scheduling
+/// - Millisecond precision timing
+/// - Lambda callback integration
+/// - Timer cancellation and cleanup
+///
+/// ### Error Handling
+/// - Built-in error callflows for common scenarios
+/// - Exception wrapping and propagation
+/// - Proper cleanup for failed calls
+/// - Connected call error handling with BYE termination
 ///
 /// ## SIP Method Constants
 ///
-/// The [Callflow] class provides constants for all standard SIP methods including
+/// The [Callflow] class provides constants for all standard SIP methods:
 /// `INVITE`, `ACK`, `BYE`, `CANCEL`, `REGISTER`, `OPTIONS`, `PRACK`, `SUBSCRIBE`,
 /// `NOTIFY`, `PUBLISH`, `INFO`, `UPDATE`, `REFER`, and `MESSAGE`.
+///
+/// ## Response Classification
+///
+/// Static utility methods are provided for response classification:
+/// - `provisional()` - 1xx responses
+/// - `successful()` - 2xx responses  
+/// - `redirection()` - 3xx responses
+/// - `failure()` - 4xx, 5xx, 6xx responses
 ///
 /// @see Callflow
 /// @see Callback

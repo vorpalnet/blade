@@ -6,7 +6,8 @@
 ///
 /// ## Key Classes
 ///
-/// - [CreateDialog] - Client call flow implementation for creating SIP dialogs through TPCC operations
+/// - [CreateDialog] - Client call flow implementation for creating SIP dialogs through TPCC operations.
+///   Extends `ClientCallflow` to handle SIP servlet requests and integrate with the TPCC dialog API.
 ///
 /// ## Overview
 ///
@@ -14,9 +15,13 @@
 /// to provide TPCC-specific functionality. These implementations handle SIP servlet requests and
 /// integrate with the TPCC dialog API to manage call control operations.
 ///
+/// The [CreateDialog] class serves as the primary entry point for TPCC dialog creation operations,
+/// processing incoming SIP INVITE requests and coordinating with the dialog API to establish
+/// controlled call sessions.
+///
 /// The package is part of the larger TPCC service architecture and works in conjunction with
 /// the dialog API components to provide comprehensive third-party call control capabilities.
 ///
-/// @see org.vorpal.blade.framework.v2.callflow.ClientCallflow
-/// @see org.vorpal.blade.services.tpcc.v1.DialogAPI
+/// @see [org.vorpal.blade.framework.v2.callflow.ClientCallflow]
+/// @see [org.vorpal.blade.services.tpcc.v1.DialogAPI]
 package org.vorpal.blade.services.tpcc.callflows;

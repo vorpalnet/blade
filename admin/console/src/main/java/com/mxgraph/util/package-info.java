@@ -27,20 +27,28 @@
 /// ### Stream and I/O Operations  
 /// Provides helper methods for:
 /// - Stream copying with default 4KB buffer size or configurable buffer sizes
-/// - Input stream reading and conversion to strings using BufferedReader
+/// - Input stream reading and conversion to strings using `BufferedReader`
 /// - Efficient I/O operations optimized for performance
 ///
 /// ### Geometric Transformations
 /// Offers mathematical utilities for:
 /// - Point rotation calculations using precomputed cosine and sine values
 /// - Geometry transformation for rotated objects with center point coordinates
-/// - Support for [mxGeometry] and mxPoint coordinate manipulations
+/// - Support for `mxGeometry` and `mxPoint` coordinate manipulations
 ///
 /// ### Configuration Constants
 /// Defines system-wide limits and settings for:
 /// - Maximum request size of approximately 50MB
 /// - Maximum area calculations (10,000 x 10,000)
 /// - Image domain URL configuration for diagram resources
+///
+/// ## Performance Characteristics
+///
+/// The [mxBase64] implementation is optimized for high performance, offering approximately
+/// 10x faster encoding/decoding on small arrays (10-1000 bytes) and 2-3x performance
+/// improvement on larger arrays (10,000-1,000,000 bytes) compared to standard implementations.
+/// The implementation avoids creating temporary arrays, reducing memory overhead and garbage
+/// collection pressure.
 ///
 /// @see Constants
 /// @see Utils  

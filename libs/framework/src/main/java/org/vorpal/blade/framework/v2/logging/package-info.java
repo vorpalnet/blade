@@ -16,8 +16,8 @@
 ///
 /// ### Session-Aware Logging
 /// The framework integrates deeply with SIP servlet contexts through specialized logging methods that
-/// automatically include session identifiers ([SipSession], [SipApplicationSession]) and message context for improved traceability.
-/// Supports logging with [SipServletMessage], [ServletTimer], and [Proxy] contexts.
+/// automatically include session identifiers (`SipSession`, `SipApplicationSession`) and message context for improved traceability.
+/// Supports logging with `SipServletMessage`, `ServletTimer`, and `Proxy` contexts.
 ///
 /// ### Configurable Output
 /// Supports both console and file-based logging with configurable rotation, sizing, and formatting options through [LogParameters].
@@ -25,7 +25,7 @@
 ///
 /// ### Sequence Diagram Generation
 /// Provides visual call flow logging capabilities through the `superArrow` methods for debugging complex SIP interactions 
-/// and message flows with directional indicators and participant identification.
+/// and message flows with directional indicators and participant identification using the [Logger.Direction] enum.
 ///
 /// ### Multiple Logging Levels
 /// Supports separate logging levels for different components including sequence diagrams (`sequenceDiagramLoggingLevel`), 
@@ -35,7 +35,7 @@
 /// ### Advanced Capabilities
 /// - Stack trace logging with SIP context through `logStackTrace` methods
 /// - JSON object serialization for complex data structures via `logObjectAsJson` methods
-/// - Analytics event logging with [Event] and [Attribute] support
+/// - Analytics event logging with `Event` and `Attribute` support
 /// - Variable substitution in configuration paths using servlet context properties
 ///
 /// ## Configuration
@@ -46,10 +46,10 @@
 /// rotation count, and logging levels.
 ///
 /// File size parsing supports units through [LogParameters.Unit] enum, and the system integrates
-/// with WebLogic's [weblogic.kernel.KernelLogManager] for enterprise deployment compatibility.
+/// with `weblogic.kernel.KernelLogManager` for enterprise deployment compatibility.
 ///
 /// @see Logger
-/// @see LogManager  
+/// @see LogManager
 /// @see LogParameters
 /// @see LogParametersDefault
 /// @see LogFormatter

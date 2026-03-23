@@ -1,122 +1,137 @@
 # Admin Console Module
 
-A comprehensive web-based administration console for the Vorpal Blade framework, providing graphical configuration management, monitoring, and system administration capabilities.
+The `admin/console` module provides a comprehensive web-based administrative interface for the Vorpal Blade framework. This module offers visualization, configuration management, and monitoring capabilities through an intuitive web console.
 
 ## Overview
 
-The `admin/console` module serves as the primary administrative interface for Vorpal Blade applications. It provides a web-based console with visual graph editing capabilities, configuration management, and real-time monitoring of framework components and services.
+The Admin Console serves as the primary administrative interface for managing Vorpal Blade applications and services. It features:
 
-Key features:
-- Web-based administration interface
-- Visual graph-based configuration editing using mxGraph
-- RESTful API with Swagger documentation
-- Configuration validation and testing utilities
-- Integration with multiple Vorpal Blade services
+- Interactive graph-based visualization of system components
+- Web-based configuration management interface  
+- Real-time monitoring and analytics dashboards
+- RESTful API endpoints with Swagger documentation
+- File upload and management capabilities
+- Integration with all Vorpal Blade services and modules
 
 ## Architecture
 
-This module is built on a layered architecture consisting of:
-- **Web Layer**: JSP-based web application with REST endpoints
-- **Configuration Layer**: Management and validation of system configurations
-- **Graph Layer**: Visual representation and editing of service topologies
-- **Utilities Layer**: Supporting tools and mxGraph extensions
+This module is built on a modern web architecture combining:
 
-## Packages
+- **Backend**: JAX-RS services with Swagger API documentation
+- **Frontend**: JSP-based web application with JSTL support
+- **Visualization**: mxGraph integration for interactive diagrams
+- **Data Layer**: HSQLDB for configuration persistence
+- **Configuration**: Framework v2 configuration system
 
-### [`com.mxgraph.util`](#commxgraphutil)
-Extended utilities and enhancements for the mxGraph library, providing additional functionality for graph manipulation and rendering within the admin console context.
+## Package Structure
 
-### [`org.vorpal.blade.applications.console.config`](#orgvorpalbladeapplicationsconsoleconfig)
-Core configuration management classes responsible for loading, validating, and persisting administrative console settings and system configurations.
+### [com.mxgraph.util](#commxgraphutil)
+Utility classes extending the mxGraph library functionality for enhanced diagram rendering and manipulation within the console interface.
 
-### [`org.vorpal.blade.applications.console.config.test`](#orgvorpalbladeapplicationsconsoleconfigtest)
-Testing utilities and validation frameworks for configuration management, ensuring configuration integrity and providing diagnostic capabilities.
+### [org.vorpal.blade.applications.console.config](#orgvorpalbladeapplicationsconsoleconfig)
+Core configuration classes for the admin console application, including settings management, persistence layer configuration, and application-specific parameters.
 
-### [`org.vorpal.blade.applications.console.mxgraph`](#orgvorpalbladeapplicationsconsolemxgraph)
-Integration layer between the mxGraph visualization library and Vorpal Blade framework, enabling visual representation of service topologies and call flows.
+### [org.vorpal.blade.applications.console.config.test](#orgvorpalbladeapplicationsconsoleconfigtest)
+Test utilities and mock configurations for console configuration testing, providing test harnesses and validation tools for configuration components.
 
-### [`org.vorpal.blade.applications.console.webapp`](#orgvorpalbladeapplicationsconsolewebapp)
-Web application components including servlets, REST endpoints, and web utilities that power the administrative console's user interface and API.
+### [org.vorpal.blade.applications.console.mxgraph](#orgvorpalbladeapplicationsconsolemxgraph)
+Integration layer between the Vorpal Blade framework and mxGraph visualization library, enabling interactive network topology and service relationship diagrams.
 
-### [`org.vorpal.blade.framework.v2.config`](#orgvorpalbladeframeworkv2config)
-Framework-level configuration abstractions and interfaces that define the configuration contracts used throughout the Vorpal Blade ecosystem.
+### [org.vorpal.blade.applications.console.webapp](#orgvorpalbladeapplicationsconsolewebapp)
+Web application layer containing servlets, REST endpoints, JSP pages, and web-specific utilities for the administrative console interface.
+
+### [org.vorpal.blade.framework.v2.config](#orgvorpalbladeframeworkv2config)
+Framework v2 configuration system components, providing advanced configuration management, validation, and persistence capabilities.
 
 ## Dependencies
 
-### Core Dependencies
-- **org.vorpal.blade:vorpal-blade-library-framework** - Core framework libraries and utilities
-- **org.hsqldb:hsqldb** - Embedded database for configuration storage and caching
+### Core Framework
+- **org.vorpal.blade:vorpal-blade-library-framework** - Core Vorpal Blade framework library providing foundational services and utilities
 
-### Web & API Dependencies
-- **jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api** - JSP Standard Tag Library for web interface
-- **io.swagger.core.v3:swagger-jaxrs2** - API documentation and REST endpoint generation
-- **io.swagger.core.v3:swagger-jaxrs2-servlet-initializer-v2** - Swagger servlet integration
+### Visualization & Graphics
+- **com.github.vlsi.mxgraph:jgraphx** - Interactive graph visualization library for network topology diagrams
+- **org.apache.xmlgraphics:fop** - Apache FOP for PDF generation and advanced document formatting
 
-### Visualization Dependencies
-- **com.github.vlsi.mxgraph:jgraphx** - Graph visualization and editing capabilities
-- **org.apache.xmlgraphics:fop** - PDF and document generation for reports
+### Database
+- **org.hsqldb:hsqldb** - Embedded SQL database for configuration persistence and caching
 
-### Utility Dependencies
-- **commons-fileupload:commons-fileupload** (v1.5) - File upload handling for configuration imports
-- **commons-lang:commons-lang** (v2.6) - Common utility functions and string manipulation
+### Web Framework
+- **jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api** - JSTL API for enhanced JSP templating and web page rendering
+- **io.swagger.core.v3:swagger-jaxrs2** - Swagger OpenAPI integration for REST API documentation
+- **io.swagger.core.v3:swagger-jaxrs2-servlet-initializer-v2** - Swagger servlet initialization and configuration
+
+### Utilities
+- **commons-fileupload:commons-fileupload** (1.5) - File upload handling for configuration import/export
+- **commons-lang:commons-lang** (2.6) - Common utility functions and string manipulation
 
 ## Related Modules
 
-### Framework Libraries
+### Core Libraries
 - [libs/framework](../libs/framework) - Core framework components
 - [libs/shared/bin](../libs/shared/bin) - Shared binary utilities
-- [libs/fsmar](../libs/fsmar) - Finite State Machine Archive utilities
+- [libs/fsmar](../libs/fsmar) - File system monitoring and resource management
 
-### Administrative Tools
-- [admin/configurator](../admin/configurator) - Advanced configuration management tools
+### Administrative Modules
+- [admin/configurator](../admin/configurator) - Configuration management tools
 
-### Managed Services
-The console provides management capabilities for the following services:
-
-**Core Services:**
-- [services/acl](../services/acl) - Access Control Lists
-- [services/analytics](../services/analytics) - Call analytics and reporting
-- [services/presence](../services/presence) - Presence management
-
-**Proxy Services:**
-- [services/proxy-balancer](../services/proxy-balancer) - Load balancing
-- [services/proxy-block](../services/proxy-block) - Call blocking and filtering
-- [services/proxy-registrar](../services/proxy-registrar) - SIP registration handling
-- [services/proxy-router](../services/proxy-router) - Call routing logic
-
-**Call Handling Services:**
-- [services/hold](../services/hold) - Call hold management
-- [services/options](../services/options) - SIP OPTIONS handling
-- [services/queue](../services/queue) - Call queuing system
-- [services/transfer](../services/transfer) - Call transfer services
-
-**Specialized Services:**
-- [services/tpcc](../services/tpcc) - Third Party Call Control
+### Service Modules
+- [services/acl](../services/acl) - Access Control List service
+- [services/analytics](../services/analytics) - Analytics and reporting service
+- [services/hold](../services/hold) - Call hold management service
+- [services/options](../services/options) - SIP OPTIONS handling service
+- [services/presence](../services/presence) - Presence information service
+- [services/proxy-balancer](../services/proxy-balancer) - Load balancing proxy service
+- [services/proxy-block](../services/proxy-block) - Traffic blocking proxy service
+- [services/proxy-registrar](../services/proxy-registrar) - SIP registrar proxy service
+- [services/proxy-router](../services/proxy-router) - Routing proxy service
+- [services/queue](../services/queue) - Message queue service
+- [services/tpcc](../services/tpcc) - Third-party call control service
+- [services/transfer](../services/transfer) - Call transfer service
 
 ## Integration Guide
 
-### Basic Setup
+### Building the Module
 
-1. **Deploy the Web Application**: Deploy the admin console WAR to your servlet container
-2. **Configure Database**: Ensure HSQLDB is properly configured for configuration persistence
-3. **Framework Integration**: Verify connection to the Vorpal Blade framework libraries
+```bash
+mvn clean compile
+mvn package
+```
 
-### Configuration Management
+### Deployment
 
-The console integrates with the framework's configuration system through:
-- RESTful configuration APIs
-- Visual graph-based configuration editing
-- Real-time validation and testing utilities
-- Import/export capabilities for configuration sets
+1. Ensure all dependent modules are built and available
+2. Deploy the generated WAR file to your servlet container
+3. Configure database connection properties
+4. Initialize the admin console through the web interface
 
-### Service Integration
+### Configuration
 
-Each managed service integrates with the console through:
-- Standardized configuration interfaces
-- Status monitoring endpoints
-- Administrative control APIs
-- Visual representation in service topology graphs
+The console requires configuration of:
 
-## API Documentation
+- Database connection parameters for HSQLDB
+- Framework v2 configuration file locations  
+- Service endpoint URLs for managed modules
+- Authentication and authorization settings
 
-When deployed, the admin console provides interactive API documentation via Swagger UI, accessible at `/api-docs` endpoint. This includes comprehensive documentation for all REST endpoints and configuration schemas.
+### API Access
+
+The console exposes RESTful APIs documented through Swagger UI, accessible at:
+- `/api-docs` - OpenAPI specification
+- `/swagger-ui` - Interactive API documentation
+
+## Development
+
+### Prerequisites
+
+- Java 8 or higher
+- Maven 3.6+
+- Servlet container (Tomcat, Jetty, etc.)
+
+### Testing
+
+Run unit tests with:
+```bash
+mvn test
+```
+
+Integration tests require a running servlet container and configured database connection.

@@ -6,19 +6,28 @@
 ///
 /// ## Key Classes
 ///
-/// - [QueueConfig] - Main configuration class that extends RouterConfig and manages queue definitions
-/// - [QueueAttributes] - Serializable configuration object defining individual queue parameters such as period, rate, ring duration, and announcements
-/// - [QueueSettingsManager] - Settings manager that handles configuration initialization and management for the queue service
-/// - [QueueConfigSample] - Sample configuration implementation providing default queue setup examples
+/// - [QueueConfig] - Main configuration class that extends `RouterConfig` and manages queue definitions through a map of queue identifiers to their attributes
+/// - [QueueAttributes] - Serializable configuration object defining individual queue parameters such as polling period, processing rate, ring duration, ring period, and announcement settings
+/// - [QueueSettingsManager] - Specialized settings manager that handles configuration initialization and management for the queue service, including creation of actual FIFO queue instances
+/// - [QueueConfigSample] - Sample configuration implementation providing default queue setup examples for testing and demonstration purposes
 ///
 /// ## Configuration Structure
 ///
 /// The configuration system uses a hierarchical approach where:
-/// - [QueueConfig] serves as the root configuration containing a map of queue definitions
-/// - Each queue is identified by a string key and associated with [QueueAttributes]
-/// - [QueueAttributes] encapsulates timing parameters (`period`, `rate`, `ringDuration`, `ringPeriod`) and announcement settings
-/// - [QueueSettingsManager] provides the infrastructure for loading and managing these configurations
+/// - [QueueConfig] serves as the root configuration containing a map of queue definitions accessed by string identifiers
+/// - Each queue is identified by a string key and associated with [QueueAttributes] that define its operational behavior
+/// - [QueueAttributes] encapsulates timing parameters (`period` for polling intervals, `rate` for transactions per cycle, `ringDuration` for response timeouts, `ringPeriod` for ring intervals) and announcement file settings
+/// - [QueueSettingsManager] provides the infrastructure for loading configurations and initializing the underlying queue data structures
 ///
-/// @see org.vorpal.blade.framework.v2.config.RouterConfig
-/// @see org.vorpal.blade.framework.v2.config.SettingsManager
+/// ## Configuration Parameters
+///
+/// Queue behavior is controlled through several key parameters:
+/// - **Period**: Milliseconds between queue polling cycles
+/// - **Rate**: Number of transactions processed per polling cycle  
+/// - **Ring Duration**: Timeout in milliseconds for announcement or agent response before requeueing
+/// - **Ring Period**: Interval between ring attempts
+/// - **Announcement**: Audio file or message to play to queued callers
+///
+/// @see [org.vorpal.blade.framework.v2.config.RouterConfig]
+/// @see [org.vorpal.blade.framework.v2.config.SettingsManager]
 package org.vorpal.blade.services.queue.config;

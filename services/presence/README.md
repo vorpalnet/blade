@@ -1,89 +1,85 @@
-# Presence Service Module
+# Presence Service
+
+[![Maven](https://img.shields.io/badge/Maven-Module-blue.svg)](https://maven.apache.org/)
+[![Java](https://img.shields.io/badge/Java-Enterprise-orange.svg)](https://www.oracle.com/java/)
 
 ## Overview
 
-The `services/presence` module provides presence management capabilities for the Vorpal Blade SIP communication platform. This service tracks and manages the real-time availability status of users, endpoints, and network entities within the SIP ecosystem. It enables presence-aware routing, status publishing/subscribing, and integration with various communication services.
+The Presence Service module provides real-time user presence management and notification capabilities within the Vorpal Blade communication platform. This service handles presence state tracking, subscription management, and presence event distribution across the system.
+
+Key features include:
+- Real-time presence state monitoring
+- Presence subscription and notification management
+- Integration with SIP/SIMPLE presence framework
+- Scalable presence event distribution
+- Presence policy enforcement and privacy controls
 
 ## Architecture
 
-This module implements SIP SIMPLE (Session Initiation Protocol for Instant Messaging and Presence Leveraging Extensions) standards to provide comprehensive presence functionality including:
-
-- Real-time presence state management
-- Presence publication and subscription handling
-- Watcher list management
-- Presence policy enforcement
-- Integration with SIP registrar services
+This module implements presence functionality as part of the larger Vorpal Blade services ecosystem, providing centralized presence management for communication services including voice, video, and messaging applications.
 
 ## Packages
 
-### org.vorpal.blade.services.presence
+### [`org.vorpal.blade.services.presence`](#orgvorpalbladeservicespresence)
 
-The core presence service package containing:
-
-- **Presence State Management** - Tracks and maintains user presence information
-- **Publication Handlers** - Processes presence publication requests from endpoints  
-- **Subscription Management** - Handles presence subscription requests and notifications
-- **Watcher Services** - Manages presence watcher lists and permissions
-- **Policy Engine** - Enforces presence authorization policies
-- **Event Notification** - Distributes presence updates to subscribers
+Core presence service implementation containing:
+- **Presence State Management** - Tracks and manages user presence states (available, busy, away, offline)
+- **Subscription Handling** - Manages presence subscription requests and authorization
+- **Notification Engine** - Distributes presence updates to authorized subscribers
+- **Policy Enforcement** - Implements presence privacy and access control policies
+- **Event Processing** - Handles incoming presence publications and state changes
 
 ## Dependencies
 
-### Core Dependencies
+| Dependency | Purpose |
+|------------|---------|
+| `org.vorpal.blade:vorpal-blade-library-framework` | Core framework providing base services, configuration management, and common utilities |
 
-- **org.vorpal.blade:vorpal-blade-library-framework** - Core framework providing SIP servlet container, message handling, and service lifecycle management
+## Related Modules
 
-### Related Framework Modules
+### Core Framework
+- [libs/framework](../libs/framework) - Core framework and base services
+- [libs/shared/bin](../libs/shared/bin) - Shared binary utilities and common components
+- [libs/fsmar](../libs/fsmar) - Finite State Machine and Routing library
 
-- [**libs/framework**](../libs/framework) - Base framework components and utilities
-- [**libs/shared/bin**](../libs/shared/bin) - Shared binary utilities and common functions
-- [**libs/fsmar**](../libs/fsmar) - Finite State Machine framework for presence state transitions
+### Administration
+- [admin/console](../admin/console) - Administrative console for presence service management
+- [admin/configurator](../admin/configurator) - Configuration management tools
 
-### Administrative Modules
-
-- [**admin/console**](../admin/console) - Web-based administration interface for presence configuration
-- [**admin/configurator**](../admin/configurator) - Configuration management tools
-
-### Service Integration
-
-- [**services/acl**](../services/acl) - Access control lists for presence authorization
-- [**services/analytics**](../services/analytics) - Presence metrics and reporting
-- [**services/proxy-registrar**](../services/proxy-registrar) - SIP registration integration for presence binding
-- [**services/proxy-router**](../services/proxy-router) - Presence-aware call routing
-- [**services/proxy-balancer**](../services/proxy-balancer) - Load balancing with presence considerations
+### Service Modules
+- [services/acl](../services/acl) - Access Control Lists for presence authorization
+- [services/analytics](../services/analytics) - Presence analytics and reporting
+- [services/proxy-registrar](../services/proxy-registrar) - User registration and location services
+- [services/proxy-router](../services/proxy-router) - Message routing and delivery
+- [services/options](../services/options) - SIP OPTIONS handling for presence capabilities
 
 ### Supporting Services
-
-- [**services/hold**](../services/hold) - Call hold status integration
-- [**services/options**](../services/options) - SIP OPTIONS method handling for capability discovery
-- [**services/proxy-block**](../services/proxy-block) - Blocking services integration
-- [**services/queue**](../services/queue) - Message queuing for presence events
-- [**services/tpcc**](../services/tpcc) - Third-party call control integration
-- [**services/transfer**](../services/transfer) - Call transfer status tracking
+- [services/hold](../services/hold) - Call hold state integration
+- [services/proxy-balancer](../services/proxy-balancer) - Load balancing for presence traffic
+- [services/proxy-block](../services/proxy-block) - Traffic filtering and blocking
+- [services/queue](../services/queue) - Message queuing for presence events
+- [services/tpcc](../services/tpcc) - Third-party call control integration
+- [services/transfer](../services/transfer) - Call transfer state coordination
 
 ## Integration Guide
 
-### Basic Setup
+### Service Configuration
 
-1. **Module Configuration**: Configure presence service parameters including subscription timeouts, notification intervals, and policy rules
-2. **Database Integration**: Set up presence state persistence if required for high-availability deployments
-3. **SIP Integration**: Ensure proper integration with SIP registrar and proxy services for presence-aware routing
+1. **Presence Policies** - Configure presence privacy and access control policies through the [admin/configurator](../admin/configurator) module
+2. **ACL Integration** - Coordinate with [services/acl](../services/acl) for subscriber authorization
+3. **Analytics Setup** - Enable presence metrics collection via [services/analytics](../services/analytics)
 
-### Service Integration
+### Runtime Dependencies
 
-The presence service integrates with other Vorpal Blade services through:
+- Requires active [services/proxy-registrar](../services/proxy-registrar) for user location services
+- Integrates with [services/proxy-router](../services/proxy-router) for message delivery
+- Utilizes [services/queue](../services/queue) for asynchronous event processing
 
-- **Event Subscription**: Other services can subscribe to presence state changes
-- **Policy Integration**: ACL service provides authorization rules for presence access
-- **Analytics Integration**: Presence metrics are reported to the analytics service
-- **Routing Integration**: Proxy services utilize presence information for intelligent call routing
+### Deployment Notes
 
-### Deployment Considerations
-
-- Configure appropriate memory allocation for presence state caching
-- Set up clustering support for distributed presence state management
-- Implement proper security policies for presence information access
-- Consider geographic distribution requirements for presence replication
+- Deploy alongside core proxy services for optimal performance
+- Configure appropriate scaling parameters for high-presence-volume environments
+- Ensure network connectivity to all related service modules for full functionality
 
 ## Maven Coordinates
 
@@ -92,6 +88,6 @@ The presence service integrates with other Vorpal Blade services through:
 <artifactId>services-presence</artifactId>
 ```
 
-## Version Compatibility
+## License
 
-This module is designed to work with the Vorpal Blade platform and requires compatible versions of the framework and related service modules.
+This module is part of the Vorpal Blade communication platform. See project root for license information.

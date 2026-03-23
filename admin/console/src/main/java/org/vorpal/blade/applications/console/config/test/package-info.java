@@ -12,7 +12,7 @@
 ///
 /// ## Configuration Utilities
 ///
-/// - [ConfigHelper] - Comprehensive utility class for file-based configuration management supporting multiple configuration types, local file operations, JMX integration with [SettingsMXBean], and directory listing capabilities
+/// - [ConfigHelper] - Comprehensive utility class for file-based configuration management supporting multiple configuration types, local file operations, JMX integration with `SettingsMXBean`, and directory listing capabilities
 ///
 /// ## Test Components
 ///
@@ -21,11 +21,11 @@
 /// - [HelloBean] - Additional service bean providing `sayHelloFromServiceBean()` method for testing purposes
 ///
 /// The package integrates with the broader Blade framework through JMX management
-/// interfaces using [MBeanServer] and [ObjectName] for runtime configuration access.
+/// interfaces using `MBeanServer` and `ObjectName` for runtime configuration access.
 /// Configuration data is handled in JSON format with file I/O operations managed
-/// through [java.nio.file.Path] and related NIO.2 APIs. The [ConfigHelper] class
-/// provides both programmatic file access and integration with the Blade framework's
-/// settings management system.
+/// through NIO.2 APIs. The [ConfigHelper] class provides both programmatic file access 
+/// and integration with the Blade framework's settings management system through
+/// [org.vorpal.blade.framework.v2.config.SettingsMXBean].
 ///
 /// @see BladeConsoleMXBean
 /// @see BladeConsole

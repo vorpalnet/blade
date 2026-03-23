@@ -7,21 +7,25 @@
 ///
 /// ## Key Classes
 ///
-/// - [LoadConfig] - REST API service for loading and managing proxy-block configurations
-/// - [CallingNumbers] - Map implementation for managing calling number to translation mappings
+/// - [LoadConfig] - JAX-RS REST service providing configuration loading endpoints with OpenAPI documentation
+/// - [CallingNumbers] - `Map` implementation for managing calling number to translation mappings
 ///
 /// ## Configuration Management
 ///
-/// The [LoadConfig] class provides RESTful endpoints for runtime configuration loading,
-/// serving as an example implementation for how the proxy-block application retrieves
-/// configurations from external sources. It includes OpenAPI documentation and supports
-/// JSON response formats.
+/// The [LoadConfig] class serves as an example implementation demonstrating how the
+/// proxy-block application can load configurations at runtime through RESTful endpoints.
+/// It is designed as a reference implementation - the actual proxy-block service will
+/// implement a client to retrieve configurations from external sources. The service
+/// includes comprehensive OpenAPI annotations for API documentation and operates under
+/// the "v1" path namespace.
 ///
-/// ## Number Translation
+/// ## Number Translation Storage
 ///
 /// The [CallingNumbers] class implements the [java.util.Map] interface to provide
-/// efficient storage and retrieval of calling number translations using
-/// [org.vorpal.blade.services.proxy.block.optimized.OptimizedTranslation] objects.
+/// efficient storage and retrieval of calling number translations. It maps string-based
+/// calling numbers to `OptimizedTranslation` objects and includes a specialized
+/// `addCallingNumber` method for convenient number registration beyond the standard
+/// Map operations.
 ///
 /// @see LoadConfig
 /// @see CallingNumbers

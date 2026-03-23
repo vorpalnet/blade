@@ -15,7 +15,15 @@
 ///
 /// The servlet implementations in this package handle HTTP requests for administrative
 /// console operations, providing the necessary endpoints for user session management
-/// and authentication control.
+/// and authentication control. All servlets extend `HttpServlet` and implement
+/// specific HTTP methods to handle their respective operations.
+///
+/// ## Servlet Endpoints
+///
+/// The package currently provides the following servlet endpoints:
+///
+/// - **Logout Operations**: The [Logout] servlet processes GET requests to terminate
+///   user sessions and handle logout workflows
 ///
 /// @see javax.servlet.http.HttpServlet
 /// @see javax.servlet.http.HttpServletRequest

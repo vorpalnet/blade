@@ -65,7 +65,7 @@
 /// ### IP Address Serialization
 /// - [JsonIPAddressSerializer]/[JsonIPAddressDeserializer] - IPAddress object conversion
 /// - [JsonIPv4AddressSerializer]/[JsonIPv4AddressDeserializer] - IPv4Address object conversion
-/// - [JsonIPv6AddressSerializer]/[JsonIPv6AddressSerializer] - IPv6Address object conversion
+/// - [JsonIPv6AddressSerializer]/[JsonIPv6AddressDeserializer] - IPv6Address object conversion
 /// - [InetAddressKeyDeserializer] - Jackson key deserializer for IPAddress map keys
 ///
 /// ### Generic Serialization
@@ -75,7 +75,7 @@
 ///
 /// - [SettingsMXBean] - JMX MXBean interface for managing configuration settings at runtime with file operations and reload capability
 ///
-/// @see org.vorpal.blade.framework.v2.callflow.Callflow
-/// @see org.vorpal.blade.framework.v2.logging.Logger
-/// @see org.vorpal.blade.framework.v2.analytics.Analytics
+/// @see [org.vorpal.blade.framework.v2.callflow.Callflow]
+/// @see [org.vorpal.blade.framework.v2.logging.Logger]
+/// @see [org.vorpal.blade.framework.v2.analytics.Analytics]
 package org.vorpal.blade.framework.v2.config;

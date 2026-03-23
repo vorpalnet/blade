@@ -1,102 +1,93 @@
 # Admin Configurator Module
 
+The admin configurator module provides configuration management capabilities for the Vorpal Blade platform. This module enables dynamic configuration of services, console applications, and framework components through web-based interfaces and programmatic APIs.
+
 ## Overview
 
-The `admin/configurator` module provides configuration management capabilities for the Vorpal Blade application suite. This module serves as the central configuration hub, offering both programmatic configuration APIs and web-based configuration interfaces for system administrators.
+The configurator module serves as the central configuration hub for the Vorpal Blade ecosystem, offering:
 
-The module encompasses configuration validation, persistence, and runtime management features that support various Vorpal Blade services and applications.
+- Web-based configuration interfaces for administrative tasks
+- Dynamic service configuration management
+- Framework-level configuration support
+- Integration with console applications
+- Test utilities for configuration validation
 
 ## Architecture
 
-This module is built on the Vorpal Blade framework v2 and provides configuration services through both console applications and web applications. It integrates tightly with the admin console system to provide comprehensive configuration management capabilities.
+This module is part of the admin subsystem and works closely with the console module to provide comprehensive administrative capabilities. It bridges the gap between the framework's configuration requirements and the various services that depend on runtime configuration changes.
 
 ## Packages
 
-### org.vorpal.blade.applications.console.config
-Core configuration management package containing the primary configuration APIs, data models, and business logic. This package provides:
-- Configuration schema definitions
-- Configuration validation and serialization
-- Runtime configuration management
-- Configuration persistence mechanisms
+### [`org.vorpal.blade.applications.console.config`](#orgvorpalbladeapplicationsconsoleconfig)
 
-### org.vorpal.blade.applications.console.config.test  
-Testing utilities and test cases for the configuration management system. Includes:
-- Unit tests for configuration components
-- Integration test utilities
-- Mock configuration providers
-- Test data fixtures
+Core configuration management for console applications. Provides APIs for reading, writing, and validating configuration parameters for administrative interfaces.
 
-### org.vorpal.blade.applications.console.webapp
-Web application components for browser-based configuration management. Features:
-- JSP-based configuration interfaces
-- RESTful configuration APIs
-- Web form validation and processing
-- Session management for configuration editing
+### [`org.vorpal.blade.applications.console.config.test`](#orgvorpalbladeapplicationsconsoleconfigtest)
 
-### org.vorpal.blade.framework.v2.config
-Framework-level configuration infrastructure built on Vorpal Blade framework v2. Provides:
-- Base configuration abstractions
-- Configuration lifecycle management
-- Framework integration points
-- Configuration event handling
+Testing utilities and mock implementations for configuration management. Contains unit test helpers and configuration validation tools for console applications.
+
+### [`org.vorpal.blade.applications.console.webapp`](#orgvorpalbladeapplicationsconsolewebapp)
+
+Web application components for configuration management interfaces. Implements servlets, JSP support, and web-based configuration forms for administrative users.
+
+### [`org.vorpal.blade.framework.v2.config`](#orgvorpalbladeframeworkv2config)
+
+Framework-level configuration management for Vorpal Blade v2. Handles core framework configuration, service bootstrapping, and runtime configuration updates.
 
 ## Dependencies
 
 ### Core Dependencies
-- **org.vorpal.blade:vorpal-blade-library-framework** - Core Vorpal Blade framework providing base application infrastructure and common utilities
-- **org.apache.taglibs:taglibs-standard-impl** - JSTL implementation for JSP-based web interface rendering and standard tag library support
-- **xalan:xalan** - Apache Xalan XSLT processor for XML configuration transformation and processing
+
+- **org.vorpal.blade:vorpal-blade-library-framework** - Core framework library providing base configuration interfaces and utilities
+- **org.apache.taglibs:taglibs-standard-impl** - JSP Standard Tag Library implementation for web interface rendering
+- **xalan:xalan** - XSLT processor for XML configuration transformations and template processing
 
 ## Related Modules
 
-### Framework and Core Libraries
-- [libs/framework](../libs/framework) - Core framework components and base classes
-- [libs/shared/bin](../libs/shared/bin) - Shared binary utilities and common tools
-- [libs/fsmar](../libs/fsmar) - File system monitoring and resource management
+### Core Framework
+- [libs/framework](../libs/framework) - Base framework components and interfaces
+- [libs/shared/bin](../libs/shared/bin) - Shared binary utilities and helper classes
+- [libs/fsmar](../libs/fsmar) - File system management and resource handling
 
-### Administrative Modules
-- [admin/console](../admin/console) - Main administrative console interface
+### Administrative Components
+- [admin/console](../admin/console) - Administrative console interface and management tools
 
-### Service Modules
-The configurator manages settings for the following service modules:
-
-- [services/acl](../services/acl) - Access Control List service configuration
-- [services/analytics](../services/analytics) - Analytics and reporting service settings
-- [services/hold](../services/hold) - Call hold service configuration  
-- [services/options](../services/options) - SIP OPTIONS handling service settings
-- [services/presence](../services/presence) - Presence service configuration
-- [services/proxy-balancer](../services/proxy-balancer) - Load balancing proxy settings
-- [services/proxy-block](../services/proxy-block) - Call blocking proxy configuration
-- [services/proxy-registrar](../services/proxy-registrar) - SIP registrar proxy settings
-- [services/proxy-router](../services/proxy-router) - Routing proxy configuration
-- [services/queue](../services/queue) - Queue management service settings
-- [services/tpcc](../services/tpcc) - Third-party call control service configuration
-- [services/transfer](../services/transfer) - Call transfer service settings
+### Configurable Services
+- [services/acl](../services/acl) - Access control list management service
+- [services/analytics](../services/analytics) - Analytics and reporting service
+- [services/hold](../services/hold) - Call hold management service
+- [services/options](../services/options) - SIP OPTIONS handling service
+- [services/presence](../services/presence) - Presence and availability service
+- [services/proxy-balancer](../services/proxy-balancer) - Load balancing proxy service
+- [services/proxy-block](../services/proxy-block) - Request blocking proxy service
+- [services/proxy-registrar](../services/proxy-registrar) - SIP registrar proxy service
+- [services/proxy-router](../services/proxy-router) - SIP routing proxy service
+- [services/queue](../services/queue) - Message queuing service
+- [services/tpcc](../services/tpcc) - Third-party call control service
+- [services/transfer](../services/transfer) - Call transfer management service
 
 ## Integration Guide
 
-### Basic Configuration Management
+### Configuration Management
 
-1. **Include the configurator module** in your Maven project dependencies
-2. **Initialize configuration services** by integrating with the Vorpal Blade framework v2
-3. **Access configuration APIs** through the `org.vorpal.blade.framework.v2.config` package
-4. **Implement configuration listeners** to respond to configuration changes
+1. **Service Configuration**: Use the framework v2 config package to manage service-level configurations
+2. **Web Interface**: Leverage the console webapp package for browser-based configuration management
+3. **Testing**: Utilize the test package utilities for validating configuration changes
 
-### Web Interface Integration
+### Web Application Integration
 
-1. **Deploy the web application components** to your servlet container
-2. **Configure authentication and authorization** for administrative access
-3. **Customize JSP templates** if needed for your specific UI requirements
-4. **Integrate with the admin console** module for unified administrative experience
+The webapp package provides servlet-based configuration interfaces that integrate with the main admin console. JSP pages use the Apache Taglibs for dynamic content rendering and form processing.
 
-### Service Configuration
+### Framework Integration
 
-Each service module can be configured through this configurator by:
-- Defining configuration schemas specific to the service
-- Implementing configuration validation rules
-- Registering configuration change listeners
-- Providing service-specific configuration UI components
+The module integrates with the core framework through the v2 config package, enabling runtime configuration updates without service restarts. Configuration changes are propagated to dependent services through the framework's event system.
 
-## Build Information
+## Build Requirements
 
-This module is built using Maven and requires Java 8 or higher. The module produces both library JAR artifacts and web application archives (WAR) for deployment.
+- Maven 3.x
+- Java 8 or higher
+- Access to Vorpal Blade framework libraries
+
+## Usage
+
+This module is typically deployed as part of the larger Vorpal Blade administrative suite. It should be configured alongside the admin console module and requires proper integration with the target services that need configuration management capabilities.

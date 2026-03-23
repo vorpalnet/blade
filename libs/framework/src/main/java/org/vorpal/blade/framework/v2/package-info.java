@@ -14,10 +14,10 @@
 ///
 /// ## Key Features
 ///
-/// - **Asynchronous Processing**: Lambda-based callbacks for non-blocking SIP message handling using [Callback] objects
+/// - **Asynchronous Processing**: Lambda-based callbacks for non-blocking SIP message handling using [org.vorpal.blade.framework.v2.callflow.Callback] objects
 /// - **Glare Prevention**: Automatic queuing of conflicting requests to prevent 491 responses on UDP transport
-/// - **Session Management**: Sophisticated session linking and attribute extraction using configurable [AttributeSelector] objects
-/// - **Analytics Integration**: Optional JMS-based event publishing for call detail records and monitoring through [Analytics] framework
+/// - **Session Management**: Sophisticated session linking and attribute extraction using configurable [org.vorpal.blade.framework.v2.config.AttributeSelector] objects
+/// - **Analytics Integration**: Optional JMS-based event publishing for call detail records and monitoring through [org.vorpal.blade.framework.v2.analytics.Analytics] framework
 /// - **Error Recovery**: Automatic upstream error notification and downstream call termination
 /// - **Hash-based Session Correlation**: MD5-based application session keying with collision detection via `getAppSessionHashKey()`
 ///
@@ -26,7 +26,7 @@
 /// Applications extend [AsyncSipServlet] and implement three abstract methods:
 /// - `servletCreated(SipServletContextEvent)` - Application-specific initialization
 /// - `servletDestroyed(SipServletContextEvent)` - Cleanup and resource release
-/// - `chooseCallflow(SipServletRequest)` - [Callflow] selection based on request characteristics
+/// - `chooseCallflow(SipServletRequest)` - [org.vorpal.blade.framework.v2.callflow.Callflow] selection based on request characteristics
 ///
 /// The framework handles SIP message routing through `doRequest()` and `doResponse()` methods,
 /// callback management via servlet timers, and session lifecycle automatically, allowing
@@ -44,11 +44,11 @@
 /// ## Integration Points
 ///
 /// This package integrates with several companion packages:
-/// - `analytics` - Event publishing and call detail record generation via [Event] objects
-/// - `callflow` - Callback-based call flow processing patterns through [Callflow] implementations
-/// - `config` - Session parameter extraction using [SessionParameters] and [AttributeSelector]
-/// - `logging` - Centralized logging with SIP message tracing via [Logger]
-/// - `b2bua` - Back-to-Back User Agent implementation patterns including [Terminate] functionality
+/// - `analytics` - Event publishing and call detail record generation via [org.vorpal.blade.framework.v2.analytics.Event] objects
+/// - `callflow` - Callback-based call flow processing patterns through [org.vorpal.blade.framework.v2.callflow.Callflow] implementations
+/// - `config` - Session parameter extraction using [org.vorpal.blade.framework.v2.config.SessionParameters] and [org.vorpal.blade.framework.v2.config.AttributeSelector]
+/// - `logging` - Centralized logging with SIP message tracing via [org.vorpal.blade.framework.v2.logging.Logger]
+/// - `b2bua` - Back-to-Back User Agent implementation patterns including [org.vorpal.blade.framework.v2.b2bua.Terminate] functionality
 ///
 /// The framework is designed for deployment in SIP servlet containers implementing the
 /// JSR 289 specification and provides both servlet context and SIP session lifecycle

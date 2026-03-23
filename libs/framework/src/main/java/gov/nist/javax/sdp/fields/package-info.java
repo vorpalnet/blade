@@ -7,28 +7,28 @@
 /// ## Core Field Classes
 ///
 /// ### Session-Level Fields
-/// - [ProtoVersionField] - Protocol version field (`v=`) implementing [javax.sdp.Version]
-/// - [OriginField] - Origin field (`o=`) containing session originator information
-/// - [SessionNameField] - Session name field (`s=`) implementing [javax.sdp.SessionName]
-/// - [InformationField] - Information field (`i=`) for session descriptions
-/// - [URIField] - URI field (`u=`) for session URIs implementing [javax.sdp.URI]
-/// - [EmailField] - Email field (`e=`) for contact information implementing [javax.sdp.EMail]
-/// - [PhoneField] - Phone field (`p=`) for contact numbers implementing [javax.sdp.Phone]
-/// - [ConnectionField] - Connection field (`c=`) for network connection data
-/// - [BandwidthField] - Bandwidth field (`b=`) for bandwidth specifications
-/// - [TimeField] - Time field (`t=`) for session timing implementing [javax.sdp.Time]
-/// - [RepeatField] - Repeat field (`r=`) for recurring sessions implementing [javax.sdp.RepeatTime]
-/// - [ZoneField] - Zone field (`z=`) for timezone adjustments implementing [javax.sdp.TimeZoneAdjustment]
-/// - [KeyField] - Key field (`k=`) for encryption keys implementing [javax.sdp.Key]
-/// - [AttributeField] - Attribute field (`a=`) for session and media attributes
+/// - [ProtoVersionField] - Protocol version field (`v=`) implementing `javax.sdp.Version`
+/// - [OriginField] - Origin field (`o=`) containing session originator information implementing `javax.sdp.Origin`
+/// - [SessionNameField] - Session name field (`s=`) implementing `javax.sdp.SessionName`
+/// - [InformationField] - Information field (`i=`) for session descriptions implementing `javax.sdp.Info`
+/// - [URIField] - URI field (`u=`) for session URIs implementing `javax.sdp.URI`
+/// - [EmailField] - Email field (`e=`) for contact information implementing `javax.sdp.EMail`
+/// - [PhoneField] - Phone field (`p=`) for contact numbers implementing `javax.sdp.Phone`
+/// - [ConnectionField] - Connection field (`c=`) for network connection data implementing `javax.sdp.Connection`
+/// - [BandwidthField] - Bandwidth field (`b=`) for bandwidth specifications implementing `javax.sdp.BandWidth`
+/// - [TimeField] - Time field (`t=`) for session timing implementing `javax.sdp.Time`
+/// - [RepeatField] - Repeat field (`r=`) for recurring sessions implementing `javax.sdp.RepeatTime`
+/// - [ZoneField] - Zone field (`z=`) for timezone adjustments implementing `javax.sdp.TimeZoneAdjustment`
+/// - [KeyField] - Key field (`k=`) for encryption keys implementing `javax.sdp.Key`
+/// - [AttributeField] - Attribute field (`a=`) for session and media attributes implementing `javax.sdp.Attribute`
 ///
 /// ### Media-Level Fields
-/// - [MediaField] - Media field (`m=`) defining media streams and formats implementing [javax.sdp.Media]
+/// - [MediaField] - Media field (`m=`) defining media streams and formats implementing `javax.sdp.Media`
 ///
 /// ## Supporting Data Structures
 ///
 /// ### Connection and Address Classes
-/// - [ConnectionAddress] - Represents connection address information with TTL and port
+/// - [ConnectionAddress] - Represents connection address information with TTL and port settings
 /// - [Email] - Email address representation with username and hostname components
 /// - [EmailAddress] - Complete email address with optional display name
 ///

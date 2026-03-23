@@ -6,27 +6,46 @@
 ///
 /// ## Core Components
 ///
-/// - [QueueServlet] - Main SIP servlet that extends B2buaServlet to handle incoming calls and route them through queues
+/// - [QueueServlet] - Main SIP servlet that extends `B2buaServlet` to handle incoming calls and route them through queues
 /// - [Queue] - Central queue entity that manages call flows, maintains statistics, and handles timer-based operations
-/// - [QueueCallflow] - Individual call flow handler that extends Callflow to manage the lifecycle of queued calls
+/// - [QueueCallflow] - Individual call flow handler that extends `Callflow` to manage the lifecycle of queued calls
 /// - [Statistics] - Comprehensive statistics collector that tracks queue performance metrics over minute, hourly, and daily intervals
 ///
 /// ## Architecture
 ///
 /// The service operates as a SIP application that intercepts incoming calls and places them in configurable queues.
-/// Each [Queue] maintains a thread-safe deque of [QueueCallflow] objects representing active calls. The system uses
-/// Java timers for periodic queue processing and statistics collection.
+/// Each [Queue] maintains a thread-safe `ConcurrentLinkedDeque` of [QueueCallflow] objects representing active calls. 
+/// The system uses Java timers for periodic queue processing and statistics collection.
+///
+/// ### Queue Processing
+///
+/// The [Queue] class manages individual queues with configurable attributes and maintains real-time statistics.
+/// Each queue uses timer-based processing to handle call distribution and tracking. Queue operations are thread-safe
+/// to support concurrent call handling.
+///
+/// ### Call Flow Management
+///
+/// [QueueCallflow] extends the Vorpal Blade `Callflow` class to handle SIP call states specific to queue operations.
+/// It manages the complete lifecycle of queued calls including processing inbound requests, handling timers,
+/// and state transitions through the `QueueState` enumeration.
+///
+/// ### Statistics Tracking
+///
+/// The [Statistics] class provides comprehensive monitoring with separate high/low watermark tracking for
+/// minute, hourly, and daily intervals. Statistics are collected using timer-based tasks that run at
+/// randomized intervals to distribute system load.
 ///
 /// ## Key Features
 ///
 /// - Thread-safe concurrent call handling using `ConcurrentLinkedDeque`
-/// - Configurable queue attributes through [QueueAttributes]
-/// - Real-time statistics tracking with high/low watermarks
-/// - Timer-based queue processing for call distribution
+/// - Configurable queue attributes through `QueueAttributes`
+/// - Real-time statistics tracking with high/low watermarks across multiple time intervals
+/// - Timer-based queue processing for automated call distribution
 /// - Integration with Vorpal Blade framework's B2BUA capabilities
 /// - Support for SIP servlet timers and application session management
+/// - State-based call flow management with configurable queue behaviors
 ///
-/// @see org.vorpal.blade.framework.v2.b2bua.B2buaServlet
-/// @see org.vorpal.blade.framework.v2.callflow.Callflow
-/// @see javax.servlet.sip.SipServlet
+/// @see [org.vorpal.blade.framework.v2.b2bua.B2buaServlet]
+/// @see [org.vorpal.blade.framework.v2.callflow.Callflow]
+/// @see [javax.servlet.sip.SipServlet]
 package org.vorpal.blade.services.queue;

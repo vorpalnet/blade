@@ -8,7 +8,7 @@
 ///
 /// - [Logout] - HTTP servlet that handles user logout requests via GET method
 ///
-/// The servlets in this package extend [javax.servlet.http.HttpServlet] and follow standard
+/// The servlets in this package extend `HttpServlet` and follow standard
 /// Java EE servlet patterns for handling HTTP requests and responses. They implement the
 /// `doGet` method to process HTTP GET requests and manage appropriate servlet responses.
 /// These components are designed to work within the broader Vorpal Blade console application

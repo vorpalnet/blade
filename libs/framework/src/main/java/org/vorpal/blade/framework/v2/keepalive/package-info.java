@@ -9,23 +9,23 @@
 /// - [KeepAlive] - Implements session keep-alive by sending re-INVITE requests to both call legs
 /// - [KeepAliveExpiry] - Handles session expiry by terminating calls with BYE requests
 ///
-/// ## Functionality
+/// ## Architecture
 ///
-/// The keep-alive process involves:
-/// 
-/// 1. **Session Refresh**: [KeepAlive] sends INVITE requests to refresh RTP streams
-/// 2. **SDP Exchange**: Negotiates media parameters between call participants  
-/// 3. **Session Termination**: [KeepAliveExpiry] terminates expired sessions
+/// Both classes extend `ClientCallflow` and implement `SessionKeepAlive.Callback` to integrate
+/// with the SIP servlet container's session management system. Each class provides a `handle()`
+/// method that processes SIP sessions based on the specific keep-alive scenario:
 ///
-/// Both classes extend [ClientCallflow] and implement [SessionKeepAlive.Callback] to integrate
-/// with the SIP servlet container's session management system. Each class provides a `handle()` 
-/// method that processes the specific SIP session based on the keep-alive scenario.
+/// - **Session Refresh**: [KeepAlive] sends INVITE requests to refresh RTP streams and negotiates
+///   media parameters through SDP exchange between call participants
+/// - **Session Termination**: [KeepAliveExpiry] terminates expired sessions by sending BYE requests
+///   to both call legs when keep-alive timeouts occur
 ///
-/// ## Call Flow Diagrams
+/// ## Integration
 ///
-/// Both classes include PlantUML sequence diagrams in their source documentation that illustrate
-/// the re-INVITE call flow for RTP stream refresh, showing the interaction between Alice, the
-/// Blade framework, and Bob during the keep-alive process.
+/// Classes in this package are designed to work with the SIP servlet container's session management
+/// system through the `SessionKeepAlive.Callback` interface. The callflow implementations handle
+/// the specific SIP messaging required for each scenario while leveraging the broader framework
+/// infrastructure for call processing.
 ///
 /// @see javax.servlet.sip.SessionKeepAlive.Callback
 /// @see org.vorpal.blade.framework.v2.callflow.ClientCallflow

@@ -37,14 +37,14 @@
 /// ## Features
 ///
 /// - **Event Collection**: Configurable collection of SIP and HTTP events with thread-local request context
-/// - **Attribute Extraction**: Pattern-based extraction of attributes from SIP messages and HTTP requests
-/// - **Database Persistence**: JPA-based persistence of analytics data with named queries
-/// - **JMS Integration**: Asynchronous publishing of events to JMS queues with proper connection management
-/// - **Request Buffering**: Non-intrusive capture of HTTP request and response bodies with wrapper classes
-/// - **Session Tracking**: Complete lifecycle tracking of SIP application sessions with key-value storage
-/// - **Async Support**: Full support for asynchronous servlet processing with proper listener integration
+/// - **Attribute Extraction**: Pattern-based extraction of attributes from SIP messages and HTTP requests using `AttributeSelector`
+/// - **Database Persistence**: JPA-based persistence of analytics data with named queries for all entity types
+/// - **JMS Integration**: Asynchronous publishing of events to JMS queues with proper connection management and lifecycle support
+/// - **Request Buffering**: Non-intrusive capture of HTTP request and response bodies with wrapper classes that preserve original streams
+/// - **Session Tracking**: Complete lifecycle tracking of SIP application sessions with key-value storage capabilities
+/// - **Async Support**: Full support for asynchronous servlet processing with proper listener integration through [AnalyticsFilter]
 ///
-/// @see org.vorpal.blade.framework.v2.config.AttributeSelector
-/// @see org.vorpal.blade.framework.v2.callflow.Callflow
-/// @see org.vorpal.blade.framework.v2.config.SettingsManager
+/// @see [org.vorpal.blade.framework.v2.config.AttributeSelector]
+/// @see [org.vorpal.blade.framework.v2.callflow.Callflow]
+/// @see [org.vorpal.blade.framework.v2.config.SettingsManager]
 package org.vorpal.blade.framework.v2.analytics;

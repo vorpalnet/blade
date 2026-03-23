@@ -1,105 +1,96 @@
 # Proxy Registrar Service
 
-The `services/proxy-registrar` module provides SIP registration management capabilities for the Vorpal Blade platform. This service handles user agent registration, maintains registration state, and manages contact bindings for SIP proxy operations.
+A SIP proxy registrar service module that handles user registration and location management within the Vorpal Blade SIP servlet container framework.
 
 ## Overview
 
-The Proxy Registrar service implements RFC 3261 compliant SIP registration functionality, enabling user agents to register their contact information with the SIP proxy server. It manages registration expiration, authentication challenges, and contact binding updates while integrating seamlessly with other Vorpal Blade services.
+The `services/proxy-registrar` module provides SIP REGISTER request processing capabilities, managing user registrations and maintaining location databases for SIP endpoints. This service is a core component of the Vorpal Blade SIP proxy infrastructure, enabling user authentication, registration validation, and contact binding management.
 
-Key features:
-- SIP REGISTER request processing and validation
-- Contact binding management and storage
-- Registration expiration handling
-- Authentication integration
-- Real-time registration status monitoring
-- High availability and failover support
+## Features
 
-## Architecture
+- SIP REGISTER request processing
+- User location database management
+- Contact binding and expiration handling
+- Registration authentication and authorization
+- Integration with proxy routing services
+- Scalable registration storage backend
 
-This module follows the Vorpal Blade service architecture pattern and integrates with the framework's servlet container, configuration management, and persistence layers. The registrar maintains an in-memory cache of active registrations while persisting long-term state for reliability.
-
-## Packages
+## Package Structure
 
 ### [`org.vorpal.blade.services.proxy.registrar.v3`](#orgvorpalbladeservicesproxyregistrarv3)
 
-Core implementation of the SIP registrar functionality including:
-- Registration request processing
-- Contact binding management
-- Expiration timer handling
-- Database persistence operations
-- Administrative interfaces
+Core registrar service implementation containing:
+- SIP REGISTER message handlers
+- Location database interfaces and implementations
+- Registration policy enforcement
+- Contact management utilities
+- Authentication integration components
 
 ## Dependencies
 
 ### Core Dependencies
 
-- **org.vorpal.blade:vorpal-blade-library-framework** - Core framework providing servlet container, configuration management, logging, and base service infrastructure
+- **`org.vorpal.blade:vorpal-blade-library-framework`** - Core framework library providing SIP servlet container functionality, base service classes, and essential utilities
 
-### Related Framework Modules
+## Related Modules
 
-- [**libs/framework**](../libs/framework) - Base framework components and utilities
-- [**libs/shared/bin**](../libs/shared/bin) - Shared binary utilities and helper classes
+### Core Framework
+- [**libs/framework**](../libs/framework) - Base framework components and service interfaces
+- [**libs/shared/bin**](../libs/shared/bin) - Shared binary utilities and common libraries
 - [**libs/fsmar**](../libs/fsmar) - Finite State Machine and Application Router components
 
-### Administration Modules
+### Administration
+- [**admin/console**](../admin/console) - Administrative console interface
+- [**admin/configurator**](../admin/configurator) - Service configuration management
 
-- [**admin/console**](../admin/console) - Web-based administration console for monitoring registration status
-- [**admin/configurator**](../admin/configurator) - Configuration management interface for registrar settings
-
-### Integrated Services
-
-- [**services/acl**](../services/acl) - Access control list management for registration authorization
-- [**services/analytics**](../services/analytics) - Registration metrics and analytics collection
-- [**services/proxy-router**](../services/proxy-router) - Request routing based on registration data
-- [**services/proxy-balancer**](../services/proxy-balancer) - Load balancing for registered endpoints
-- [**services/proxy-block**](../services/proxy-block) - Blocking and filtering integration
-- [**services/presence**](../services/presence) - Presence status tied to registration state
+### Related Services
+- [**services/acl**](../services/acl) - Access Control List service for registration authorization
+- [**services/analytics**](../services/analytics) - Registration analytics and monitoring
+- [**services/proxy-router**](../services/proxy-router) - SIP proxy routing engine that uses registration data
+- [**services/proxy-balancer**](../services/proxy-balancer) - Load balancing service for registered endpoints
+- [**services/proxy-block**](../services/proxy-block) - Call blocking service integration
+- [**services/presence**](../services/presence) - Presence service integration for registered users
 
 ### Supporting Services
-
-- [**services/hold**](../services/hold) - Call hold functionality for registered endpoints
-- [**services/options**](../services/options) - SIP OPTIONS handling for registered contacts
-- [**services/queue**](../services/queue) - Message queuing for registration events
-- [**services/tpcc**](../services/tpcc) - Third-party call control integration
-- [**services/transfer**](../services/transfer) - Call transfer capabilities
-
-## Configuration
-
-The registrar service requires configuration for:
-- Default registration expiration times
-- Maximum contacts per Address of Record (AOR)
-- Database connection parameters
-- Authentication realm settings
-- Integration endpoints for related services
-
-Configuration is managed through the standard Vorpal Blade configuration framework accessible via the admin console.
+- [**services/hold**](../services/hold) - Call hold functionality
+- [**services/options**](../services/options) - SIP OPTIONS handling
+- [**services/queue**](../services/queue) - Message queuing service
+- [**services/tpcc**](../services/tpcc) - Third Party Call Control service
+- [**services/transfer**](../services/transfer) - Call transfer functionality
 
 ## Integration Guide
 
-### Basic Integration
+### Basic Setup
 
-1. Ensure the framework and required dependencies are properly configured
-2. Deploy the proxy-registrar service to the Vorpal Blade container
-3. Configure database connectivity for registration persistence
-4. Set up authentication integration if required
-5. Configure related services (ACL, analytics, etc.) as needed
+1. **Add Maven dependency** to your project's `pom.xml`
+2. **Configure registrar settings** through the admin configurator module
+3. **Initialize location database** backend storage
+4. **Deploy alongside proxy-router** service for complete proxy functionality
 
-### Service Interaction
+### Service Configuration
 
-The registrar service automatically integrates with:
-- **ACL Service** for registration authorization
-- **Analytics Service** for metrics collection  
-- **Proxy Router** for location service functionality
-- **Presence Service** for registration status updates
+The registrar service integrates with:
+- **ACL service** for registration authorization policies
+- **Analytics service** for registration event tracking
+- **Proxy router** for location-based call routing
+- **Presence service** for user availability status
 
-### Monitoring
+### Database Integration
 
-Registration status and metrics are available through:
-- Admin console dashboard
-- Analytics service integration
-- JMX monitoring endpoints
-- Log file analysis
+Configure the location database backend through:
+- Connection pool settings
+- Storage retention policies
+- Contact expiration timers
+- Registration refresh intervals
 
-## API Compatibility
+## Maven Coordinates
 
-This module implements version 3 of the proxy registrar API, maintaining backward compatibility with previous versions while providing enhanced functionality and performance improvements.
+```xml
+<groupId>org.vorpal.blade</groupId>
+<artifactId>proxy-registrar</artifactId>
+<version>${vorpal.blade.version}</version>
+```
+
+## License
+
+Part of the Vorpal Blade SIP Servlet Container project.

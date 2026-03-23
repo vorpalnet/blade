@@ -8,11 +8,11 @@
 ///
 /// ### Main Classes
 ///
-/// - [B2buaServlet] - Abstract base servlet that implements the core B2BUA logic and extends AsyncSipServlet
-/// - [B2buaListener] - Callback interface for handling B2BUA call lifecycle events and message modification
+/// - [B2buaServlet] - Abstract base servlet that implements the core B2BUA logic and provides lifecycle callbacks
+/// - [B2buaListener] - Interface for handling B2BUA call lifecycle events and message modification
 /// - [B2buaConfiguration] - Configuration class extending the base Configuration for B2BUA-specific settings
 ///
-/// ### Callflow Handlers
+/// ### Active Callflow Handlers
 ///
 /// The package includes specialized callflow classes for handling different SIP message types:
 ///
@@ -34,7 +34,8 @@
 ///
 /// The B2BUA framework follows a callflow-based architecture where different SIP message types are 
 /// handled by specific callflow classes. The [B2buaServlet] serves as the main entry point, routing 
-/// requests to appropriate callflows and providing lifecycle callbacks through the [B2buaListener] interface.
+/// requests to appropriate callflows through the `chooseCallflow()` method and providing lifecycle 
+/// callbacks through the [B2buaListener] interface.
 ///
 /// Applications extend [B2buaServlet] and implement the [B2buaListener] methods to customize call handling,
 /// modify messages, and implement routing logic. The framework automatically manages session linking,
@@ -44,14 +45,21 @@
 ///
 /// The [B2buaListener] interface provides callback methods for key call lifecycle events:
 ///
-/// - `callStarted()` - Called when an outbound call is initiated
-/// - `callAnswered()` - Called when the outbound call receives a success response
-/// - `callConnected()` - Called when the call is fully established
-/// - `callCompleted()` - Called when the call terminates normally
-/// - `callDeclined()` - Called when the outbound call is rejected
-/// - `callAbandoned()` - Called when the call is cancelled or abandoned
-/// - `requestEvent()` - Called for general request processing
-/// - `responseEvent()` - Called for general response processing
+/// - `callStarted()` - Called when an outbound INVITE is about to be sent
+/// - `callAnswered()` - Called when the outbound call receives a 200 OK response
+/// - `callConnected()` - Called when the ACK for the initial INVITE is received
+/// - `callCompleted()` - Called when a BYE request is received
+/// - `callDeclined()` - Called when the outbound call receives an error response
+/// - `callAbandoned()` - Called when a CANCEL request is received
+/// - `requestEvent()` - Called for mid-dialog requests
+/// - `responseEvent()` - Called for mid-dialog responses
+///
+/// ## Message Processing Control
+///
+/// The framework provides methods to control message processing:
+///
+/// - `doNotProcess()` - Prevents automatic message forwarding, allowing custom handling
+/// - `getIncomingRequest()` - Retrieves the original incoming request for custom processing
 ///
 /// @see org.vorpal.blade.framework.v2.AsyncSipServlet
 /// @see org.vorpal.blade.framework.v2.callflow.Callflow

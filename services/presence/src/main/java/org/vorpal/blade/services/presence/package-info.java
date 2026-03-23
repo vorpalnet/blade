@@ -15,25 +15,38 @@
 ///
 /// ## Key Components
 ///
-/// - [PresenceServlet] - Main SIP servlet that handles incoming requests and routes them to appropriate callflows
+/// - [PresenceServlet] - Main SIP servlet extending `AsyncSipServlet` that handles incoming requests and routes them to appropriate callflows
 /// - [PublishCallflow] - Processes PUBLISH requests for presence state updates
 /// - [SubscribeCallflow] - Handles SUBSCRIBE requests for presence event notifications
 /// - [Event] - Core data structure representing a presence event with associated subscribers
-/// - [PresenceSettings] - Configuration settings for the presence service
+/// - [PresenceSettings] - Serializable configuration settings for the presence service
 ///
-/// ## Request Flow
+/// ## Request Processing
+///
+/// The [PresenceServlet] serves as the entry point for all SIP requests and uses a callflow-based 
+/// architecture to route requests to the appropriate handler. The servlet includes session key 
+/// generation, lifecycle management, and callflow selection logic.
 ///
 /// ### PUBLISH Operations
-/// Requests are organized by account_id (From header) containing an EventMap where each 
-/// event includes content, content type, originator information, and subscriber lists.
+/// 
+/// Handled by [PublishCallflow], these requests are organized by account_id (From header) 
+/// containing an EventMap where each event includes content, content type, originator 
+/// information, and subscriber lists.
 ///
 /// ### SUBSCRIBE Operations
-/// Session identification uses the combination of From header and Event name. Session 
-/// expiration is managed based on the Expires header value, with automatic cleanup 
-/// when subscriptions expire.
+/// 
+/// Managed by [SubscribeCallflow], session identification uses the combination of From header 
+/// and Event name. Session expiration is managed based on the Expires header value, with 
+/// automatic cleanup when subscriptions expire.
+///
+/// ## Configuration
+///
+/// The service uses [PresenceSettings] for configuration management through a static 
+/// `SettingsManager` instance maintained by [PresenceServlet].
 ///
 /// @see PresenceServlet
-/// @see PublishCallflow
+/// @see PublishCallflow  
 /// @see SubscribeCallflow
 /// @see Event
+/// @see PresenceSettings
 package org.vorpal.blade.services.presence;

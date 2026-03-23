@@ -64,17 +64,17 @@
 /// - **Conditional Routing** - Rule-based transfer style selection based on request attributes using [TransferCondition]
 /// - **Session Management** - Proper handling of multiple concurrent SIP sessions during transfers
 /// - **Error Handling** - Robust failure scenarios with appropriate SIP response codes and NOTIFY messages
-/// - **B2BUA Integration** - Seamless integration with Back-to-Back User Agent functionality
+/// - **B2BUA Integration** - Seamless integration with Back-to-Back User Agent functionality through [TransferInitialInvite]
 ///
 /// ## Configuration
 ///
 /// Transfer behavior is controlled through [TransferSettings] which allows configuration of:
-/// - Default transfer styles and conditional routing
+/// - Default transfer styles and conditional routing via `TransferStyle` enumeration
 /// - Allowed SIP methods for transfer operations
 /// - Header preservation rules for INVITE and REFER requests
 /// - Conference application settings
 ///
-/// @see org.vorpal.blade.framework.v2.b2bua
-/// @see org.vorpal.blade.framework.v2.callflow
-/// @see javax.servlet.sip
+/// @see [org.vorpal.blade.framework.v2.b2bua]
+/// @see [org.vorpal.blade.framework.v2.callflow]
+/// @see [javax.servlet.sip]
 package org.vorpal.blade.framework.v2.transfer;
