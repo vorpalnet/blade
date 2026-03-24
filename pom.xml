@@ -365,6 +365,14 @@
 					</execution>
 				</executions>
 			</plugin>
+			<!-- Only the framework JAR should be installed to .m2; skip all others -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-install-plugin</artifactId>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
 			<!-- Dist copy moved to services/pom.xml (EAR, built last) -->
 		</plugins>
 	</build>

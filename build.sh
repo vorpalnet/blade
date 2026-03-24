@@ -127,15 +127,16 @@ cat > "$BUILD_NUMBER_FILE" <<EOB
 build.number=${BUILD_NUM}
 EOB
 
-# --- Default to 'verify' if no Maven goals specified ---
-# Uses 'verify' so the dist copy runs after all modules are packaged.
+# --- Default to 'install' if no Maven goals specified ---
+# Uses 'install' so the framework JAR is installed to the local .m2 repository.
+# All other modules have maven-install-plugin skipped; only the framework JAR is installed.
 # Check for actual goals (non-flag args) since flags like -Pjavadocs don't count.
 HAS_GOALS=false
 for arg in "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}"; do
     [[ "$arg" != -* ]] && HAS_GOALS=true
 done
 if [ "$HAS_GOALS" = false ]; then
-    MAVEN_ARGS=("verify" "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}")
+    MAVEN_ARGS=("install" "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}")
 fi
 
 # --- Show what we're doing ---
