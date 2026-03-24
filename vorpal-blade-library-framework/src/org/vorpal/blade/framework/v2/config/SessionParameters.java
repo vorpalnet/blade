@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
  * Configuration parameters for SIP session management.
@@ -11,15 +12,19 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 public class SessionParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@JsonPropertyDescription("Set Application Session expiration in minutes.")
 	public Integer expiration = null;
 
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@JsonPropertyDescription("Automatically index the session using Vorpal Session? Default is false.")
 	public Boolean indexVorpalSessionID = null;
 
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@JsonPropertyDescription("Set Keep-Alive parameters.")
 	public KeepAliveParameters keepAlive = null;
 
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@JsonPropertyDescription("List of selectors for creating session (SipApplicationSession) lookup keys.")
 	public List<AttributeSelector> sessionSelectors = null;
 
