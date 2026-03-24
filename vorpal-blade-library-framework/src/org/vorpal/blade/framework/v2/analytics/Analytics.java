@@ -25,6 +25,7 @@ import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -34,11 +35,14 @@ public class Analytics implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	// For associating SIP with HTTP
+	@JsonIgnore
 	public static final ThreadLocal<SipServletRequest> sipServletRequest = new ThreadLocal<>();
 
-	private Boolean enabled = false;
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public Boolean enabled = false;
 
-	private Map<String, EventSelector> events = new HashMap<>();
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	public Map<String, EventSelector> events = new HashMap<>();
 
 	@JsonIgnore
 	private static Integer appInstanceId = null;
