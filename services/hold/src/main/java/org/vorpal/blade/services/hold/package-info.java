@@ -1,5 +1,3 @@
-/// # SIP Hold Service
-///
 /// This package provides a SIP B2BUA (Back-to-Back User Agent) service implementation 
 /// that handles call hold functionality. The service extends the Vorpal Blade framework
 /// to manage SIP calls with hold and resume capabilities.
@@ -31,6 +29,49 @@
 ///
 /// The service is configured as a distributable SIP application with automatic startup
 /// and includes comprehensive lifecycle management through servlet context events.
+///
+/// ## Detailed Class Reference
+///
+/// ### HoldServlet
+///
+/// The main servlet class annotated with `@WebListener`, `@SipApplication(distributable=true)`,
+/// and `@SipServlet(loadOnStartup=1)`. It extends `B2buaServlet` and routes incoming
+/// requests via `chooseCallflow`:
+///
+/// - Initial INVITE requests are routed to [HoldInvite]
+/// - CANCEL and BYE requests are routed to [HoldBye]
+/// - Unrecognized methods fall back to [NotImplemented]
+///
+/// Lifecycle methods `servletCreated` and `servletDestroyed` manage the
+/// [HoldSettings] configuration through a static `SettingsManager`.
+///
+/// ### HoldInvite
+///
+/// Processes re-INVITE requests to place a call on hold. Reads the SDP body from
+/// the incoming request, replaces `a=sendrecv` with `a=inactive` to mute media,
+/// copies the `Allow` header, and sends back a 200 OK response. This implements
+/// the standard RFC 3264 hold mechanism by setting the media direction to inactive.
+///
+/// ### HoldBye
+///
+/// Handles BYE requests to terminate held calls. Creates and sends a simple 200 OK
+/// response to acknowledge the session teardown.
+///
+/// ### NotImplemented
+///
+/// A fallback callflow handler for SIP methods that the hold service does not support.
+/// Responds with 405 (Method Not Allowed) to indicate the method is not implemented.
+///
+/// ### HoldSettings
+///
+/// Configuration class extending `RouterConfig` and implementing `Serializable`.
+/// Provides the configuration structure for the hold service, inheriting routing
+/// configuration capabilities from the framework.
+///
+/// ### HoldSettingsSample
+///
+/// Sample configuration subclass of [HoldSettings] used as the default configuration
+/// when no external configuration file is present.
 ///
 /// @see HoldServlet
 /// @see [org.vorpal.blade.framework.v2.b2bua.B2buaServlet]

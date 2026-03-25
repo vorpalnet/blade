@@ -1,5 +1,3 @@
-/// # SIP Callflow Framework
-///
 /// This package provides a comprehensive framework for building SIP application callflows
 /// using asynchronous callback-based programming patterns. It enables developers to create
 /// complex SIP applications with fluent APIs for handling requests, responses, timers,

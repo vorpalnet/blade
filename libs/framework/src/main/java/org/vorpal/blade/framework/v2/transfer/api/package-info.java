@@ -1,5 +1,3 @@
-/// # SIP Call Transfer REST API
-///
 /// This package provides a comprehensive REST API for managing SIP call transfers within the Vorpal Blade framework.
 /// It enables inspection of active SIP sessions and initiation of various transfer operations through
 /// HTTP endpoints with flexible notification mechanisms and full lifecycle tracking.

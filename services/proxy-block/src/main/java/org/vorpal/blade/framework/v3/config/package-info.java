@@ -1,5 +1,3 @@
-/// # SIP Servlet Configuration Framework V3
-///
 /// This package provides a flexible routing and translation configuration framework for SIP servlet applications.
 /// It enables dynamic routing decisions based on SIP message attributes through pattern matching and translation maps.
 ///
@@ -39,6 +37,15 @@
 /// - `RouterConfig<T>` - Router configuration for route type T
 /// - `Translation<T>` - Translation containing route of type T  
 /// - `TranslationsMap<T>` - Map interface for translations of route type T
+///
+/// ## Sub-packages
+///
+/// ### [org.vorpal.blade.framework.v3.config.maps]
+/// Provides concrete implementations of translation maps for the configuration
+/// framework. Includes [ConfigHashMap][org.vorpal.blade.framework.v3.config.maps.ConfigHashMap] for exact key matching and [ConfigPrefixMap][org.vorpal.blade.framework.v3.config.maps.ConfigPrefixMap]
+/// for longest-prefix matching, both implementing [TranslationsMap]. These maps
+/// support JSON serialization with Jackson annotations and fluent APIs for
+/// programmatic configuration of routing rules.
 ///
 /// @see AttributeSelector
 /// @see RouterConfig

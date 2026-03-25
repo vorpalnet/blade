@@ -1,5 +1,3 @@
-/// # Utility Classes for mxGraph
-///
 /// This package provides essential utility classes and constants for the mxGraph library,
 /// offering encoding, string manipulation, I/O operations, geometric transformations, and 
 /// configuration capabilities.

@@ -1,5 +1,3 @@
-/// # Blade Console Configuration Test Package
-///
 /// This package provides a comprehensive web-based console and configuration management system 
 /// for Blade applications, including JMX integration, servlet lifecycle management, and 
 /// configuration file handling utilities.

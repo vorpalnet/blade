@@ -495,7 +495,8 @@
 								<link>https://jakarta.ee/specifications/platform/8/apidocs/</link>
 								<link>https://vorpal.net/javadocs/jsr359/</link>
 							</links>
-							<top><![CDATA[<div style="background:#602671; padding:6px 16px; margin-bottom:4px;">
+							<top><![CDATA[<div style="background:#602671; padding:8px 16px; margin-bottom:4px; display:flex; align-items:center; gap:16px;">
+<a href="https://vorpal.net" style="display:flex; align-items:center; text-decoration:none;">
 <svg height="50" viewBox="0 0 514.19 263.37" xmlns="http://www.w3.org/2000/svg">
   <defs><style>.cls-1{fill:#fff;}</style></defs>
   <g id="boy">
@@ -512,8 +513,14 @@
     </g>
   </g>
 </svg>
+</a>
+<span style="color:rgba(255,255,255,0.7); font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:13px;">v${revision}</span>
+<div style="margin-left:auto; display:flex; gap:20px; font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:14px;">
+<a href="https://vorpal.net/javadocs/" style="color:#fff; text-decoration:none;">Documentation</a>
+<a href="https://github.com/vorpalnet/blade" style="color:#fff; text-decoration:none;">GitHub</a>
+</div>
 </div>]]></top>
-							<bottom><![CDATA[Copyright 2024 Vorpal Networks, LLC. All Rights Reserved.<br/>MIT License; Without warranty or liability of any kind.]]></bottom>
+							<bottom><![CDATA[Copyright 2025 <a href="https://vorpal.net">Vorpal Networks, LLC</a>. All Rights Reserved.<br/>MIT License; Without warranty or liability of any kind.]]></bottom>
 						</configuration>
 					</plugin>
 				</plugins>

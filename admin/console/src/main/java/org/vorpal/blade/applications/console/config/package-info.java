@@ -1,5 +1,3 @@
-/// # Configuration Management for Vorpal Blade Console
-///
 /// This package provides comprehensive configuration management capabilities for the Vorpal Blade
 /// console application, including real-time file monitoring, REST APIs, WebSocket communication,
 /// and web-based interfaces for configuration manipulation.
@@ -52,6 +50,48 @@
 /// changes and automatically update corresponding configuration objects. Web-based
 /// interfaces provide both traditional HTTP and modern WebSocket communication channels
 /// for interactive configuration management with message-based communication protocols.
+///
+/// ## Sub-packages
+///
+/// ### [org.vorpal.blade.applications.console.config.test]
+/// Provides a management console interface and configuration utilities for testing and
+/// managing Blade framework applications. Includes JMX-based management through
+/// [BladeConsoleMXBean][org.vorpal.blade.applications.console.config.test.BladeConsoleMXBean]
+/// and [BladeConsole][org.vorpal.blade.applications.console.config.test.BladeConsole],
+/// servlet lifecycle management via
+/// [BladeConsoleListener][org.vorpal.blade.applications.console.config.test.BladeConsoleListener],
+/// and file-based configuration handling with
+/// [ConfigHelper][org.vorpal.blade.applications.console.config.test.ConfigHelper].
+/// Also contains EJB test components for verifying container integration on AdminServer.
+///
+/// ## Related Packages
+///
+/// The console module also contains the following packages outside this hierarchy:
+///
+/// ### [org.vorpal.blade.applications.console.webapp]
+/// Provides web servlet components for the console application's user interface,
+/// including the [Logout][org.vorpal.blade.applications.console.webapp.Logout] servlet
+/// that handles session invalidation with anti-caching headers and redirect to the login page.
+///
+/// ### [org.vorpal.blade.applications.console.mxgraph]
+/// Provides utilities and servlets for integrating with mxGraph diagramming functionality.
+/// Includes [OpenServlet][org.vorpal.blade.applications.console.mxgraph.OpenServlet] for
+/// file upload and diagram format processing (Gliffy, GraphML, PNG with embedded XML),
+/// [SaveServlet][org.vorpal.blade.applications.console.mxgraph.SaveServlet] for diagram
+/// export, and [Formatter][org.vorpal.blade.applications.console.mxgraph.Formatter] for
+/// XML pretty-printing and transformation.
+///
+/// ### [com.mxgraph.util]
+/// Bundled utility classes for the mxGraph library including
+/// [mxBase64][com.mxgraph.util.mxBase64] for high-performance BASE64 encoding/decoding,
+/// [Utils][com.mxgraph.util.Utils] for compression/decompression and geometric transformations,
+/// and [Constants][com.mxgraph.util.Constants] for application-wide size limits and configuration.
+///
+/// ### [org.vorpal.blade.framework.v2.config]
+/// Contains the [SettingsMXBean][org.vorpal.blade.framework.v2.config.SettingsMXBean] JMX
+/// interface used by the console to interact with remote service configurations at runtime,
+/// providing streaming file I/O operations, configuration scoping (domain/cluster/server),
+/// and runtime reload capabilities.
 ///
 /// @see ConfigurationMonitor
 /// @see ConfigurationMonitorStartup

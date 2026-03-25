@@ -1,5 +1,3 @@
-/// # NIST SDP Implementation Package
-///
 /// This package provides a comprehensive implementation of the Session Description Protocol (SDP)
 /// based on the JSR 141 specification. It contains concrete implementations of the core SDP
 /// interfaces for creating, parsing, and manipulating SDP session descriptions.
@@ -53,6 +51,22 @@
 ///
 /// The implementation classes use `Vector` collections for thread-safe access
 /// to lists of SDP components, though individual field modifications are not synchronized.
+///
+/// ## Sub-packages
+///
+/// ### [gov.nist.javax.sdp.fields]
+/// Provides complete implementations of all standard SDP fields from RFC 2327 with JSR 141
+/// compliance. Includes session-level fields like [ProtoVersionField][gov.nist.javax.sdp.fields.ProtoVersionField], [OriginField][gov.nist.javax.sdp.fields.OriginField], and
+/// [ConnectionField][gov.nist.javax.sdp.fields.ConnectionField], media-level [MediaField][gov.nist.javax.sdp.fields.MediaField], and supporting data structures for connection
+/// addresses, typed times, and precondition attributes. All field classes extend [SDPField][gov.nist.javax.sdp.fields.SDPField]
+/// and implement corresponding `javax.sdp` interfaces.
+///
+/// ### [gov.nist.javax.sdp.parser]
+/// Contains specialized parsers for converting SDP field strings into structured field objects.
+/// The [ParserFactory][gov.nist.javax.sdp.parser.ParserFactory] provides centralized parser instantiation, while individual parsers like
+/// [ConnectionFieldParser][gov.nist.javax.sdp.parser.ConnectionFieldParser], [MediaFieldParser][gov.nist.javax.sdp.parser.MediaFieldParser], and [OriginFieldParser][gov.nist.javax.sdp.parser.OriginFieldParser] handle field-specific
+/// syntax validation. The [SDPAnnounceParser][gov.nist.javax.sdp.parser.SDPAnnounceParser] processes complete SDP messages with support
+/// for mixed line ending formats.
 ///
 /// @see [SessionDescriptionImpl]
 /// @see [MediaDescriptionImpl]

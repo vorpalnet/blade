@@ -1,40 +1,62 @@
-/// # Optimized Block Configuration Package
-///
-/// This package provides an optimized implementation for SIP call blocking and routing services.
-/// It builds upon the Vorpal Blade framework to offer high-performance call flow control through
-/// pre-compiled translation tables and attribute-based request routing.
+/// This package provides an optimized implementation for SIP call blocking and routing
+/// services. It uses `HashMap`-based lookup tables for high-performance call flow control,
+/// converting the list-based simple configuration into map-keyed structures.
 ///
 /// ## Core Components
 ///
-/// - [OptimizedBlockConfig] - Main configuration class that defines attribute selectors for FROM, TO, and Request-URI headers, along with calling number mappings and default routing rules. Provides the static `forwardTo()` method for determining routing destinations.
-/// - [OptimizedTranslation] - Represents translation rules for specific calling numbers, containing dialed number mappings and forward-to destinations. Can be constructed from simple translation configurations.
-/// - [OptimizedDialed] - Handles dialed number routing with forward-to SIP URI lists for call destinations. Supports fluent configuration through method chaining.
-/// - [OptimizedBlockConfigSample] - Sample implementation demonstrating typical configuration patterns with predefined regex patterns for header normalization of FROM and TO selectors.
+/// - [OptimizedBlockConfig] - Main configuration class extending `Configuration`
+/// - [OptimizedTranslation] - Per-calling-number translation rules with dialed number mappings
+/// - [OptimizedDialed] - Per-dialed-number forwarding destinations
+/// - [OptimizedBlockConfigSample] - Sample configuration with predefined regex patterns
 ///
-/// ## Key Features
+/// ## Configuration Class
 ///
-/// The package supports:
-/// - Attribute-based request routing using configurable selectors for FROM, TO, and Request-URI headers
-/// - Calling number to translation rule mappings for personalized routing via the `callingNumbers` map
-/// - Dialed number specific forwarding rules through nested routing tables
-/// - Default routing fallback mechanisms when no specific rules match
-/// - Integration with `SipServletRequest` processing for real-time call routing decisions
-/// - Conversion from simple block configurations to optimized formats for better performance
-/// - Fluent API design with method chaining for configuration building
+/// ### OptimizedBlockConfig
+/// [OptimizedBlockConfig] extends `Configuration` and defines three `AttributeSelector`
+/// fields for extracting normalized values from SIP headers:
+/// - `fromSelector` - extracts the calling party number from the From header
+/// - `toSelector` - extracts the dialed number from the To header
+/// - `ruriSelector` - optionally extracts values from the Request-URI
 ///
-/// ## Configuration Structure
+/// It stores calling number translations in a `Map<String, OptimizedTranslation>`
+/// keyed by calling number string, and provides a `defaultRoute` fallback.
 ///
-/// The optimized configuration uses a hierarchical structure:
-/// 1. Attribute selectors extract normalized values from SIP headers
-/// 2. Calling numbers map to specific translation rules
-/// 3. Translation rules contain dialed number mappings and default forward-to lists
-/// 4. Dialed number entries specify final routing destinations
-/// 5. Default routes handle unmatched scenarios
+/// ### forwardTo() Routing Logic
+/// The static `forwardTo(config, request)` method implements the core routing algorithm:
+/// 1. Extracts From, To, and Request-URI keys using the configured selectors
+/// 2. Looks up the calling number in `callingNumbers`, falling back to `defaultRoute`
+/// 3. If a match has `dialedNumbers`, looks up the To key for per-destination routing
+/// 4. Falls back to the translation's `forwardTo` list if no dialed match
+/// 5. Shuffles the forward-to list for load distribution and picks the first entry
+/// 6. Resolves `${variable}` placeholders from merged selector attributes
+/// 7. Validates the final SIP URI via `SipFactory.createURI()`
 ///
-/// This optimized implementation is designed for high-throughput SIP proxy scenarios where
-/// performance-critical call routing decisions must be made efficiently with minimal processing overhead.
+/// ## Translation Classes
 ///
-/// @see [org.vorpal.blade.framework.v2.config.Configuration]
-/// @see [org.vorpal.blade.framework.v2.config.AttributeSelector]
-/// @see [org.vorpal.blade.services.proxy.block.simple]
+/// ### OptimizedTranslation
+/// [OptimizedTranslation] holds a `Map<String, OptimizedDialed>` for dialed number
+/// routing and a `List<String>` of `forwardTo` SIP URIs as defaults. It provides:
+/// - `forwardTo(sipUri)` - fluent method to add a forwarding destination
+/// - `addDialedNumber(dialedNumber)` - creates and inserts an [OptimizedDialed] entry
+/// - A constructor accepting [SimpleTranslation][org.vorpal.blade.services.proxy.block.simple.SimpleTranslation] for conversion from simple format
+///
+/// ### OptimizedDialed
+/// [OptimizedDialed] contains a `List<String>` of `forwardTo` SIP URIs for a specific
+/// dialed number. It provides:
+/// - `forwardTo(sipUri)` - fluent method to add a destination, returns `this` for chaining
+/// - A constructor accepting [SimpleDialed][org.vorpal.blade.services.proxy.block.simple.SimpleDialed] for conversion from simple format
+///
+/// ## Sample Configuration
+///
+/// ### OptimizedBlockConfigSample
+/// [OptimizedBlockConfigSample] extends [OptimizedBlockConfig] and pre-populates:
+/// - From selector with regex extracting `fromUser` and defaulting `fromPort` to 5060
+/// - To selector with regex extracting `toUser`
+/// - A default route forwarding to `${toProto}:${toUser}@${toHost}:${fromPort}`
+/// - Sample calling number entries for `"8165551234"` and `"alice"` with per-dialed
+///   number overrides demonstrating the routing hierarchy
+///
+/// @see org.vorpal.blade.framework.v2.config.Configuration
+/// @see org.vorpal.blade.framework.v2.config.AttributeSelector
+/// @see org.vorpal.blade.services.proxy.block.simple
 package org.vorpal.blade.services.proxy.block.optimized;

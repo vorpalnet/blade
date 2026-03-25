@@ -1,5 +1,3 @@
-/// # Logging Framework for SIP Applications
-///
 /// This package provides a comprehensive logging framework specifically designed for SIP servlet applications,
 /// offering enhanced logging capabilities with session awareness, ANSI color support, and sequence diagram generation.
 ///

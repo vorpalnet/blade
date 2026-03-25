@@ -1,5 +1,3 @@
-/// # SIP Proxy Framework
-///
 /// This package provides a comprehensive framework for building SIP proxy applications
 /// with support for multi-tier routing, failover mechanisms, and flexible routing policies.
 ///

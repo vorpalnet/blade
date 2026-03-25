@@ -1,5 +1,3 @@
-/// # Transfer Services Package
-///
 /// This package provides comprehensive SIP transfer capabilities through REST API and servlet 
 /// implementations. It enables blind transfers, attended transfers, and conference transfers 
 /// for SIP communications within the Vorpal Blade framework, offering both HTTP-based and 

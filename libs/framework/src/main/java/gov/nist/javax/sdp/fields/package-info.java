@@ -1,5 +1,3 @@
-/// # SDP Field Implementations
-///
 /// This package provides complete implementations of Session Description Protocol (SDP) fields
 /// as defined in RFC 2327 and JSR 141. It contains concrete field classes that represent
 /// all standard SDP header fields and their associated data structures.

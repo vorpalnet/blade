@@ -1,5 +1,3 @@
-/// # SIP Call Transfer Framework
-///
 /// This package provides a comprehensive framework for implementing SIP call transfer operations
 /// in the Vorpal Blade framework. It supports multiple transfer styles including blind, attended,
 /// conference, and REFER-based transfers with configurable behavior and lifecycle event handling.
@@ -73,6 +71,15 @@
 /// - Allowed SIP methods for transfer operations
 /// - Header preservation rules for INVITE and REFER requests
 /// - Conference application settings
+///
+/// ## Sub-packages
+///
+/// ### [org.vorpal.blade.framework.v2.transfer.api]
+/// Provides a comprehensive REST API for managing SIP call transfers through HTTP endpoints.
+/// The [TransferAPI][org.vorpal.blade.framework.v2.transfer.api.TransferAPI] controller enables session inspection and transfer initiation with support
+/// for multiple notification mechanisms including synchronous responses, asynchronous polling,
+/// REST callbacks, and JMS messaging. Request and response models like [TransferRequest][org.vorpal.blade.framework.v2.transfer.api.TransferRequest],
+/// [TransferResponse][org.vorpal.blade.framework.v2.transfer.api.TransferResponse], and [SessionResponse][org.vorpal.blade.framework.v2.transfer.api.SessionResponse] define the API contract.
 ///
 /// @see [org.vorpal.blade.framework.v2.b2bua]
 /// @see [org.vorpal.blade.framework.v2.callflow]

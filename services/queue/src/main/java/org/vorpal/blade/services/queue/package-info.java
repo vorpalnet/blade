@@ -1,5 +1,3 @@
-/// # Queue Management Service
-///
 /// This package provides a comprehensive SIP-based call queue management system built on the Vorpal Blade framework.
 /// It implements automatic call distribution (ACD) functionality with support for call waiting, statistics tracking,
 /// and configurable queue behaviors.
@@ -44,6 +42,16 @@
 /// - Integration with Vorpal Blade framework's B2BUA capabilities
 /// - Support for SIP servlet timers and application session management
 /// - State-based call flow management with configurable queue behaviors
+///
+/// ## Sub-packages
+///
+/// ### [org.vorpal.blade.services.queue.config]
+/// Provides configuration management for the queue service, defining queue behavior
+/// parameters such as polling period, processing rate, ring duration, and announcement
+/// settings. [QueueConfig][org.vorpal.blade.services.queue.config.QueueConfig] serves as the root configuration containing a map of queue
+/// definitions, while [QueueAttributes][org.vorpal.blade.services.queue.config.QueueAttributes] encapsulates the operational parameters for
+/// individual queue instances. [QueueSettingsManager][org.vorpal.blade.services.queue.config.QueueSettingsManager] handles initialization and
+/// creation of actual FIFO queue objects.
 ///
 /// @see [org.vorpal.blade.framework.v2.b2bua.B2buaServlet]
 /// @see [org.vorpal.blade.framework.v2.callflow.Callflow]

@@ -1,5 +1,3 @@
-/// # B2BUA Framework Package
-///
 /// This package provides a comprehensive framework for implementing Back-to-Back User Agent (B2BUA) 
 /// functionality in SIP servlet applications. A B2BUA acts as an intermediary that terminates incoming 
 /// SIP calls and creates corresponding outbound calls, enabling call routing, modification, and control.

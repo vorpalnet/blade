@@ -1,5 +1,3 @@
-/// # Testing Framework Package
-///
 /// This package provides comprehensive mock implementations of SIP servlet interfaces for unit testing
 /// SIP applications without requiring a full SIP container environment. The mock classes enable
 /// isolated testing of SIP application logic by providing functional implementations of core

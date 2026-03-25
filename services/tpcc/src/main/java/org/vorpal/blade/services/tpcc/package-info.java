@@ -1,5 +1,3 @@
-/// # TPCC Service Package
-///
 /// This package provides a Third Party Call Control (TPCC) service implementation
 /// for SIP-based telecommunications applications. It enables external applications
 /// to control and manipulate SIP calls through REST APIs with proper CORS support.
@@ -37,6 +35,52 @@
 /// The service uses a configuration hierarchy where [TpccSettings] extends the
 /// framework's base configuration, and [TpccSettingsSample] provides a concrete
 /// implementation example with logging levels and session parameters.
+///
+/// ## Detailed Class Reference
+///
+/// ### TpccServlet
+///
+/// Main SIP servlet annotated with `@WebListener`, `@SipApplication(distributable=true)`,
+/// and `@SipServlet(loadOnStartup=1)`. Extends `B2buaServlet` and implements both
+/// `SipApplicationSessionListener` and `SipSessionListener` for comprehensive session
+/// lifecycle tracking. Maintains a static `ConcurrentHashMap<String, AsyncResponse>`
+/// (`responseMap`) for correlating asynchronous REST API calls with SIP responses.
+/// Logs session creation, destruction, expiration, and invalidation events at INFO level.
+///
+/// ### CorsFilter
+///
+/// JAX-RS filter annotated with `@Provider` and `@PreMatching` that enables Cross-Origin
+/// Resource Sharing for the REST API. Implements both `ContainerRequestFilter` and
+/// `ContainerResponseFilter`. Preflight OPTIONS requests with an `Origin` header are
+/// aborted with 200 OK. Response headers are enriched with `Access-Control-Allow-Methods`,
+/// `Access-Control-Allow-Credentials`, `Access-Control-Allow-Headers`,
+/// `Access-Control-Expose-Headers`, and `Access-Control-Allow-Origin` (reflecting the
+/// request's origin).
+///
+/// ### TpccSettings
+///
+/// Configuration class extending the framework's base `Configuration`. Provides the
+/// configuration structure for TPCC-specific settings such as logging and session parameters.
+///
+/// ### TpccSettingsSample
+///
+/// Default configuration with logging set to `FINE` level and session expiration set
+/// to 900 seconds (15 minutes). Used as the fallback when no external configuration
+/// file is present.
+///
+/// ## Sub-packages
+///
+/// ### [org.vorpal.blade.services.tpcc.callflows]
+/// Contains call flow implementations for TPCC dialog creation operations. The
+/// [CreateDialog][org.vorpal.blade.services.tpcc.callflows.CreateDialog] class extends `ClientCallflow` to bridge asynchronous SIP
+/// INVITE/response exchanges with the JAX-RS async REST response model, enabling
+/// REST callers to receive SIP outcomes as HTTP status codes.
+///
+/// ### [org.vorpal.blade.services.tpcc.v1]
+/// Provides RESTful API endpoints for managing SIP dialogs through the [DialogAPI][org.vorpal.blade.services.tpcc.v1.DialogAPI]
+/// controller. Supports dialog creation, retrieval, modification, connection, and
+/// termination via standard HTTP operations. Uses asynchronous processing with
+/// `ConcurrentHashMap`-based response tracking for non-blocking SIP integration.
 ///
 /// @see TpccServlet
 /// @see CorsFilter

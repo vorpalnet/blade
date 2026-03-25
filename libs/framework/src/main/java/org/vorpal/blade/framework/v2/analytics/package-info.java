@@ -1,5 +1,3 @@
-/// # Analytics Framework Package
-///
 /// This package provides comprehensive analytics and monitoring capabilities for SIP servlet applications
 /// within the Vorpal Blade framework. It enables collection, processing, and publishing of application
 /// events, session data, and custom attributes for analysis and reporting purposes.

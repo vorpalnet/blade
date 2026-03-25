@@ -77,7 +77,7 @@ import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 /// }
 /// ```
 /// 
-/// See [B2buaServlet] for a complete implementation example.
+/// See [B2buaServlet][org.vorpal.blade.framework.v2.b2bua.B2buaServlet] for a complete implementation example.
 /// 
 /// ## Key Features
 /// 

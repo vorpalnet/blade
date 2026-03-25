@@ -1,5 +1,3 @@
-/// # Configuration Management Console
-///
 /// This package provides a web-based configuration management system for monitoring
 /// and managing configuration files and MBean settings. It implements a real-time
 /// file monitoring system with WebSocket-based communication for live updates.
@@ -52,6 +50,34 @@
 /// ### Application Discovery
 /// Includes functionality to query and discover available applications through the
 /// `queryApps` method using JNDI lookups for dynamic configuration management.
+///
+/// ## Sub-packages
+///
+/// ### [org.vorpal.blade.applications.console.config.test]
+/// Provides a web-based console and configuration management system for Blade
+/// applications, including JMX integration through
+/// [BladeConsoleMXBean][org.vorpal.blade.applications.console.config.test.BladeConsoleMXBean]
+/// and [BladeConsole][org.vorpal.blade.applications.console.config.test.BladeConsole],
+/// servlet lifecycle management via
+/// [BladeConsoleListener][org.vorpal.blade.applications.console.config.test.BladeConsoleListener],
+/// and file-based configuration utilities with
+/// [ConfigHelper][org.vorpal.blade.applications.console.config.test.ConfigHelper].
+/// Several EJB components are included in an inactive test state for development purposes.
+///
+/// ## Related Packages
+///
+/// The configurator module also contains the following packages outside this hierarchy:
+///
+/// ### [org.vorpal.blade.applications.console.webapp]
+/// Provides web servlet components for the configurator application's user interface,
+/// including the [Logout][org.vorpal.blade.applications.console.webapp.Logout] servlet
+/// that handles session invalidation with anti-caching headers and redirect to the login page.
+///
+/// ### [org.vorpal.blade.framework.v2.config]
+/// Contains the [SettingsMXBean][org.vorpal.blade.framework.v2.config.SettingsMXBean] JMX
+/// interface used by the configurator to interact with remote service configurations at
+/// runtime, providing streaming file I/O operations, configuration scoping
+/// (domain/cluster/server), and runtime reload capabilities.
 ///
 /// @see ConfigurationMonitor
 /// @see FileManagerServlet

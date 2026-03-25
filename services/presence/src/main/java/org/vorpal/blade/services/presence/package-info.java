@@ -1,5 +1,3 @@
-/// # SIP Presence Service
-///
 /// This package implements a SIP-based presence service that handles PUBLISH and SUBSCRIBE 
 /// operations for real-time presence information exchange. The service is built on the 
 /// Vorpal Blade framework and provides a complete solution for managing presence events 

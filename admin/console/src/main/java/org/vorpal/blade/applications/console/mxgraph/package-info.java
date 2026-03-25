@@ -1,5 +1,3 @@
-/// # Package Overview
-///
 /// This package provides utilities and servlets for integrating with mxGraph diagramming functionality,
 /// including file processing, XML formatting, and web-based diagram operations within the Vorpal Blade
 /// console application framework.

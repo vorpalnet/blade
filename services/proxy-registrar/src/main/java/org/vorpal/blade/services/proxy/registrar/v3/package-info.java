@@ -1,5 +1,3 @@
-/// # SIP Proxy Registrar Service (Version 3)
-///
 /// This package provides a comprehensive SIP proxy and registrar service implementation
 /// built on the Vorpal Blade framework. It handles SIP REGISTER requests for location
 /// services and proxies INVITE requests to registered contacts.

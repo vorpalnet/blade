@@ -1,5 +1,3 @@
-/// # Vorpal Blade Framework v2 Configuration Package
-///
 /// This package provides comprehensive configuration management capabilities for SIP servlet applications
 /// built on the Vorpal Blade framework. It includes translation maps, routing configurations, attribute
 /// selectors, and JSON serialization/deserialization support for SIP-specific types.

@@ -1,37 +1,50 @@
-/// # Configuration Maps Package
-///
-/// This package provides concrete implementations of translation maps for the Vorpal Blade framework's
-/// configuration system. Translation maps are responsible for routing and translating SIP servlet requests
-/// based on configurable attribute selectors and lookup strategies.
+/// This package provides concrete implementations of translation maps for the Vorpal Blade
+/// framework's configuration system. Translation maps route and translate SIP servlet
+/// requests based on configurable attribute selectors and lookup strategies.
 ///
 /// ## Key Classes
 ///
-/// - [ConfigHashMap] - HashMap-based translation map that performs exact key matching for request routing
-/// - [ConfigPrefixMap] - HashMap-based translation map that performs prefix-based matching for request routing
+/// - [ConfigHashMap] - HashMap-based translation map with exact key matching
+/// - [ConfigPrefixMap] - HashMap-based translation map with prefix-based matching
 ///
-/// ## Features
+/// ## Map Implementations
 ///
-/// Both implementation classes provide:
-/// - Attribute selector-based request routing using `AttributeSelector` lists
-/// - JSON serialization support with Jackson annotations for configuration persistence
-/// - Generic type support for flexible translation target types
-/// - Builder-pattern methods for fluent configuration
-/// - Integration with SIP servlet request processing
+/// ### ConfigHashMap Exact Matching
+/// [ConfigHashMap] extends `HashMap<String, Translation<T>>` and implements
+/// `TranslationsMap<T>`. It iterates through its list of `AttributeSelector` objects,
+/// calling `findKey(request)` on each to extract a key from the `SipServletRequest`.
+/// If the extracted key matches a map entry exactly, the corresponding `Translation`
+/// is returned. An optional `defaultRoute` field provides fallback routing when no
+/// exact match is found. Matched attribute variables from the selector are merged
+/// into the translation's attributes map.
 ///
-/// The maps extend `HashMap<String, Translation<T>>` and implement the `TranslationsMap` interface,
-/// providing different lookup strategies:
-/// - **ConfigHashMap**: Exact string matching with optional default route fallback
-/// - **ConfigPrefixMap**: Prefix-based matching for hierarchical routing scenarios
+/// ### ConfigPrefixMap Prefix Matching
+/// [ConfigPrefixMap] extends `HashMap<String, Translation<T>>` and implements
+/// `TranslationsMap<T>`. After extracting a key via its selectors, it performs a
+/// longest-prefix search by progressively shortening the key string from the full
+/// length down to one character, returning the first map entry that matches. This
+/// is useful for hierarchical routing scenarios such as telephone number prefix
+/// matching (e.g., area codes or country codes).
 ///
-/// ## Configuration Support
+/// ### Common Map Properties
+/// Both maps expose:
+/// - `id` - a required identifier, annotated with `@JsonPropertyDescription`
+/// - `desc` - an optional human-readable description (ConfigHashMap only)
+/// - `selectors` - a `List<AttributeSelector>` defining how to extract keys from requests
+/// - `createTranslation(key)` - factory method to build and insert a new `Translation`
+/// - `addSelector(selector)` - fluent method to append an `AttributeSelector`
 ///
-/// Both classes include Jackson annotations for JSON serialization:
-/// - `@JsonTypeInfo` for polymorphic type handling
-/// - `@JsonIdentityInfo` for object identity management during serialization
-/// - Support for unique identifiers and descriptions for configuration management
+/// ## JSON Serialization
 ///
-/// The maps support dynamic translation creation through the `createTranslation()` method and
-/// provide fluent APIs for adding selectors and configuring routing behavior.
+/// ### Jackson Annotations
+/// Both classes use `@JsonTypeInfo` with `JsonTypeInfo.Id.CLASS` for polymorphic
+/// deserialization and `@JsonIdentityInfo` with `PropertyGenerator` keyed on the
+/// `id` field to handle object identity during serialization cycles.
+///
+/// ### Configuration Persistence
+/// The maps serialize cleanly to JSON for storage in the Blade configuration file
+/// system (`config/custom/vorpal/`), enabling runtime loading and hot-reloading of
+/// translation routing rules.
 ///
 /// @see org.vorpal.blade.framework.v3.config.TranslationsMap
 /// @see org.vorpal.blade.framework.v3.config.Translation

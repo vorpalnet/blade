@@ -1,5 +1,3 @@
-/// # Session Description Protocol (SDP) API
-///
 /// Provides a comprehensive Java API for parsing, creating, and manipulating Session Description Protocol (SDP) messages
 /// as defined in IETF RFC 2327. This package enables applications to handle multimedia session descriptions used in
 /// protocols like SIP, RTSP, and SAP.

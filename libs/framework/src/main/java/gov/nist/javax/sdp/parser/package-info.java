@@ -1,5 +1,3 @@
-/// # SDP Parser Package
-///
 /// This package provides comprehensive parsing functionality for Session Description Protocol (SDP) 
 /// messages as defined in RFC 4566. The parsers convert SDP field strings into structured field 
 /// objects for programmatic manipulation and validation.

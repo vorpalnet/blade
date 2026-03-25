@@ -1,5 +1,3 @@
-/// # TPCC Dialog Services v1
-///
 /// This package provides data transfer objects and request/response models for managing
 /// SIP dialogs in the TPCC (Third Party Call Control) service version 1. It contains
 /// classes that represent dialog states, connection requests, and property management
