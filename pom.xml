@@ -21,6 +21,7 @@
 		<module>admin/console</module>
 		<module>admin/configurator</module>
 		<module>services</module>
+		<module>javadoc</module>
 
 		<!-- Service and test modules are controlled by profiles below.
 		     Exclude any module with -Dskip.<name>, e.g. -Dskip.analytics -->
@@ -457,9 +458,6 @@
 
 		<profile>
 			<id>javadocs</id>
-			<modules>
-				<module>javadoc</module>
-			</modules>
 			<build>
 				<plugins>
 					<plugin>
@@ -486,6 +484,7 @@
 							</docletArtifact>
 							<additionalOptions>
 								<additionalOption>-failOnCyclicPackageDependencies false</additionalOption>
+								<additionalOption>--add-stylesheet ${maven.multiModuleProjectDirectory}/javadoc/src/main/resources/vorpal-theme.css</additionalOption>
 							</additionalOptions>
 							<show>public</show>
 							<doclint>none</doclint>

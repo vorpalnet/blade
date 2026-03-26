@@ -15,6 +15,7 @@
 	<name>BLADE Javadoc</name>
 
 	<build>
+		<finalName>blade</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -32,6 +33,26 @@
 								<argument>${project.basedir}/..</argument>
 								<argument>${project.build.directory}/javadoc-content</argument>
 								<argument>${project.version}</argument>
+							</arguments>
+						</configuration>
+					</execution>
+					<execution>
+						<id>copy-dist</id>
+						<phase>verify</phase>
+						<goals><goal>exec</goal></goals>
+						<configuration>
+							<executable>bash</executable>
+							<arguments>
+								<argument>-c</argument>
+								<argument>
+DISTDIR="${project.basedir}/../dist/${revision}-${build.number}";
+if [ -d "$DISTDIR" ]; then
+  cp -f "${project.build.directory}/${project.build.finalName}.war" "$DISTDIR/";
+  echo "Javadoc WAR copied to dist/${revision}-${build.number}/${project.build.finalName}.war"
+else
+  echo "Dist directory not found, skipping javadoc WAR copy"
+fi
+								</argument>
 							</arguments>
 						</configuration>
 					</execution>

@@ -45,7 +45,7 @@ Deployed to the WebLogic AdminServer as standalone WARs.
 | --- | --- |
 | Blade Console | Admin console for managing and monitoring BLADE applications |
 | Configurator | Web-based configuration editor for application settings |
-| Javadoc | Browsable Javadoc site with UML class diagrams (built with `-Pjavadocs`) |
+| Javadoc | Browsable Javadoc site with UML class diagrams |
 
 ### Services
 
@@ -105,7 +105,7 @@ test/           Test applications (excluded by production profile)
   test-b2bua/     Example B2BUA
   test-uac/       REST-operated User Agent Client
   test-uas/       Configurable User Agent Server
-javadoc/        Javadoc WAR (built with -Pjavadocs)
+javadoc/        Javadoc WAR (always built; -Pjavadocs regenerates per-module javadocs)
 ```
 
 # Compiling
@@ -202,16 +202,16 @@ To create a custom module profile, copy an existing `build-profiles/*.conf` file
 
 ## Javadocs
 
-Javadoc generation is off by default and requires **JDK 23+** (for Markdown comment support via [JEP 467](https://openjdk.org/jeps/467)). The project compiles with `--release 11` so the same JDK is used for both compilation and doc generation. To build with Javadocs:
+The javadoc module is always built and its WAR is copied to the `dist/` folder alongside other artifacts. By default it bundles previously generated javadoc output. To regenerate per-module javadocs (requires **JDK 23+** for Markdown comment support via [JEP 467](https://openjdk.org/jeps/467)):
 
 ```bash
 ./build.sh -- -Pjavadocs
 ```
 
-This uses the [UML Doclet](https://github.com/talsma-ict/umldoclet) to generate class diagrams (SVG) alongside the standard Javadoc HTML. All module javadocs are bundled into a deployable WAR:
+This uses the [UML Doclet](https://github.com/talsma-ict/umldoclet) to generate class diagrams (SVG) alongside the standard Javadoc HTML, with Vorpal purple branding. All module javadocs are bundled into a deployable WAR:
 
 ```
-javadoc/target/javadoc-<version>.war
+dist/<version>-<build>/javadoc.war
 ```
 
 Deploy this WAR to the AdminServer to browse javadocs at `/javadoc`. The index page links to each module's javadoc automatically — no build changes needed when adding new modules.
