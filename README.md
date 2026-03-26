@@ -8,7 +8,7 @@ tl;dr...
 2.1) install weblogic patches
 2.2) install occas patches
 3) run `./install-occas.sh /path/to/occas-8.1` (one-time setup)
-4) run `./build.sh` to build the EAR
+4) run `./build.sh` to build the EAR (produces `vorpal-blade-services-full.ear`)
 5) deploy the EAR to OCCAS
 6) install (and configure) the fsmar, it will allow you to string apps together during a callflow
 7) nothing will work, everything will fail. check the logs in `<domain>/servers/engine(?)/logs/vorpal/<app>.log`
@@ -135,12 +135,14 @@ All deployable artifacts are copied to `dist/<version>-<build>/`:
 
 ```
 dist/<version>-<build>/
-  vorpal-blade-services.ear        # EAR (deploy to engine targets)
-  vorpal-blade-library-framework.jar   # Framework library
-  vorpal-blade-library-shared.war      # WebLogic shared library (alternative to EAR)
-  vorpal-blade-library-fsmar.jar       # FSMAR (copy to OCCAS approuter lib/)
-  vorpal-blade-admin-console.war       # Admin Console (deploy to AdminServer)
-  vorpal-blade-admin-configurator.war  # Admin Configurator (deploy to AdminServer)
+  vorpal-blade-services-<profile>.ear    # EAR named after build profile (deploy to engine targets)
+  vorpal-blade-library-framework.jar     # Framework library
+  vorpal-blade-library-shared.war        # WebLogic shared library (alternative to EAR)
+  vorpal-blade-library-fsmar.jar         # FSMAR (copy to OCCAS approuter lib/)
+  vorpal-blade-admin-console.war         # Admin Console (deploy to AdminServer)
+  vorpal-blade-admin-configurator.war    # Admin Configurator (deploy to AdminServer)
+  <profile>.conf                         # Build profile used for this build
+  <platform>.conf                        # Platform profile used for this build
 ```
 
 - **FSMAR JAR** must be installed manually into the OCCAS approuter `lib/` folder.
@@ -151,7 +153,7 @@ dist/<version>-<build>/
 There are two ways to deploy BLADE applications to the OCCAS cluster:
 
 **Option 1: EAR deployment (recommended)**
-Deploy `vorpal-blade-services.ear` to the cluster. The EAR bundles all service WARs — each WAR includes the framework JAR, and 3rd-party libraries are provided by the shared library. No JARs in the EAR `lib/`. This is the simplest approach — one artifact, one deployment.
+Deploy the EAR (e.g. `vorpal-blade-services-production.ear`) to the cluster. The EAR bundles all service WARs — each WAR includes the framework JAR, and 3rd-party libraries are provided by the shared library. No JARs in the EAR `lib/`. This is the simplest approach — one artifact, one deployment.
 
 **Option 2: Shared library + individual WARs**
 Deploy `vorpal-blade-library-shared.war` as a WebLogic shared library (contains 3rd-party JARs only), then deploy individual application WARs separately. Each WAR includes the framework JAR and references the shared library for 3rd-party dependencies in their `weblogic.xml`:
@@ -170,13 +172,16 @@ Each `./build.sh` invocation auto-increments a build number stored in `build.num
 
 ## Build Profiles
 
-The `build.sh` script accepts two optional arguments: a **module profile** (which apps to build) and a **platform** (which OCCAS/Java version to target).
+The `build.sh` script accepts one or more **module profiles** (which apps to build), an optional **platform** (which OCCAS/Java version to target), and optional Maven arguments.
+
+Each profile produces its own EAR named `vorpal-blade-services-<profile>.ear`. When multiple profiles are specified, all required modules are built once, then each profile's EAR is packaged separately.
 
 ```bash
 ./build.sh                              # full build, OCCAS 8.1 (defaults)
-./build.sh production                   # production services, OCCAS 8.1
+./build.sh production                   # vorpal-blade-services-production.ear
 ./build.sh production occas-8.2         # production services, OCCAS 8.2
 ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
+./build.sh production minimal           # two EARs: production + minimal
 ./build.sh production clean package     # with explicit Maven goals
 ./build.sh -- -Pjavadocs                # full build with extra Maven flags
 ```
@@ -185,9 +190,9 @@ Module profiles (`build-profiles/*.conf`):
 
 | Profile | Description |
 | --- | --- |
-| `full` | All 16 service and test modules (default) |
-| `production` | 13 production services, no test apps |
-| `minimal` | Just proxy-registrar and proxy-router |
+| `full` | All 15 service and test modules (default) → `vorpal-blade-services-full.ear` |
+| `production` | 12 production services, no test apps → `vorpal-blade-services-production.ear` |
+| `minimal` | Just proxy-registrar and proxy-router → `vorpal-blade-services-minimal.ear` |
 
 Platform profiles (`build-profiles/platforms/*.conf`):
 

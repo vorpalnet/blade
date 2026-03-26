@@ -1221,53 +1221,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		return (sipUri.getUser() + "@" + sipUri.getHost()).toLowerCase();
 	}
 
-//	/**
-//	 * Processes queued requests that were delayed due to glare conditions. Glare
-//	 * occurs when both endpoints send requests simultaneously, requiring one side
-//	 * to queue its request until the other completes.
-//	 *
-//	 * @param sipSession the SIP session containing the glare queue
-//	 * @param glareQueue the queue of pending requests to process
-//	 */
-//	private void processGlareQueue(SipSession sipSession, LinkedList<SipServletRequest> glareQueue) {
-//		if (glareQueue == null || glareQueue.isEmpty()) {
-//			return;
-//		}
-//
-//		boolean expectAck = Boolean.TRUE.equals(sipSession.getAttribute(EXPECT_ACK));
-//		if (expectAck) {
-//			return;
-//		}
-//
-//		SipServletRequest glareRequest = null;
-//		try {
-//			glareRequest = glareQueue.removeFirst();
-//			sipSession.setAttribute(GLARE_QUEUE, glareQueue);
-//			this.doRequest(glareRequest);
-//		} catch (Exception e) {
-//			sipLogger.warning("AsyncSipServlet.processGlareQueue - Exception processing glare request");
-//
-//			SipSession glareSession = glareRequest.getSession();
-//			if (glareSession != null && glareSession.isValid()) {
-//				String error = initialSipServletContextEvent.getServletContext().getServletContextName() + " "
-//						+ e.getClass().getSimpleName() + ", " + e.getMessage();
-//				sipLogger.severe(glareRequest,
-//						"AsyncSipServlet.processGlareQueue - Exception attempting to process GLARE request: \n"
-//								+ glareRequest.toString());
-//				sipLogger.severe(glareRequest, e);
-//				sipLogger.getParent().severe(error);
-//				try {
-//					SipServletResponse glareResponse = glareRequest.createResponse(491); // Request Pending
-//					glareResponse.setHeader("Retry-After", "3");
-//					sendResponse(glareResponse);
-//				} catch (Exception responseException) {
-//					sipLogger.severe(glareRequest, "Failed to send 491 response for glare request");
-//					sipLogger.severe(glareRequest, responseException);
-//				}
-//			}
-//		}
-//	}
-
 	/// Sends a SIP response with centralized logging and error handling
 	/// 
 	/// This method provides a central point for response transmission with automatic
@@ -1296,7 +1249,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// @param msg the SIP message to check
 	/// @return true if the message is in proxy mode, false otherwise
 	public static boolean isProxy(SipServletMessage msg) {
-		return Boolean.TRUE.equals(msg.getApplicationSession().getAttribute("isProxy"));
+		return Boolean.TRUE.equals((Boolean)msg.getApplicationSession().getAttribute("isProxy"));
 	}
 
 	/// Returns the session parameters configuration used for session attribute extraction

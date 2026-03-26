@@ -17,8 +17,8 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-library-framework</artifactId>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.taglibs</groupId>

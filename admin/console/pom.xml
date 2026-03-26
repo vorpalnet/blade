@@ -17,10 +17,6 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-library-framework</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>org.apache.xmlgraphics</groupId>
 			<artifactId>fop</artifactId>
 		</dependency>

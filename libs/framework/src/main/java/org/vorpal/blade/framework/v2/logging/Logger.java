@@ -947,9 +947,9 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 				}
 
 				if (request != null) {
-					leftSide = Boolean.TRUE.equals(request.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
+					leftSide = Boolean.TRUE.equals((Boolean)request.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
 				} else {
-					leftSide = Boolean.TRUE.equals(response.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
+					leftSide = Boolean.TRUE.equals((Boolean)response.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
 				}
 
 				if (response != null) {

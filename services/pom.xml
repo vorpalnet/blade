@@ -22,7 +22,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-services</finalName>
+		<finalName>vorpal-blade-services-${ear.profile}</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -134,6 +134,8 @@
 									cp -f "$ROOTDIR/libs/fsmar/target/vorpal-blade-library-fsmar.jar" "$DISTDIR/" 2>/dev/null;
 									cp -f "$ROOTDIR/admin/console/target/vorpal-blade-admin-console.war" "$DISTDIR/" 2>/dev/null;
 									cp -f "$ROOTDIR/admin/configurator/target/vorpal-blade-admin-configurator.war" "$DISTDIR/" 2>/dev/null;
+									cp -f "$ROOTDIR/build-profiles/${ear.profile}.conf" "$DISTDIR/" 2>/dev/null;
+									cp -f "$ROOTDIR/build-profiles/platforms/${build.platform}.conf" "$DISTDIR/" 2>/dev/null;
 									echo "Dist artifacts copied to dist/${revision}-${build.number}/"
 								</argument>
 							</arguments>

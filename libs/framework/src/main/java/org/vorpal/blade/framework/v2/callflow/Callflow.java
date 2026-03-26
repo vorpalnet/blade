@@ -1193,7 +1193,7 @@ public abstract class Callflow implements Serializable {
 		String method = response.getMethod();
 		int status = response.getStatus();
 
-		if (false == Boolean.TRUE.equals(response.getAttribute(WITHHOLD_RESPONSE))) {
+		if (false == Boolean.TRUE.equals((Boolean)response.getAttribute(WITHHOLD_RESPONSE))) {
 
 			// Glare logic
 			switch (method) {
@@ -2092,7 +2092,7 @@ public abstract class Callflow implements Serializable {
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
 		SipApplicationSession appSession = inboundRequest.getApplicationSession();
-		boolean isProxy = Boolean.TRUE.equals(appSession.getAttribute(IS_PROXY_ATTR));
+		boolean isProxy = Boolean.TRUE.equals((Booolean)appSession.getAttribute(IS_PROXY_ATTR));
 
 		if (!proxyPlan.isEmpty()) {
 
