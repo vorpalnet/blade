@@ -11,9 +11,9 @@
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>vorpal-blade-admin-configurator</artifactId>
+	<artifactId>vorpal-blade-admin-dev-console</artifactId>
 	<packaging>war</packaging>
-	<name>BLADE Admin Configurator</name>
+	<name>BLADE Dev Console</name>
 
 	<dependencies>
 		<dependency>
@@ -21,16 +21,26 @@
 			<artifactId>jackson-databind</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.taglibs</groupId>
-			<artifactId>taglibs-standard-impl</artifactId>
+			<groupId>org.apache.xmlgraphics</groupId>
+			<artifactId>fop</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>xalan</groupId>
-			<artifactId>xalan</artifactId>
+			<groupId>xml-apis</groupId>
+			<artifactId>xml-apis</artifactId>
+			<version>1.4.01</version>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.networknt</groupId>
-			<artifactId>json-schema-validator</artifactId>
+			<groupId>com.github.vlsi.mxgraph</groupId>
+			<artifactId>jgraphx</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.hsqldb</groupId>
+			<artifactId>hsqldb</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>jakarta.servlet.jsp.jstl</groupId>
+			<artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.swagger.core.v3</groupId>
@@ -40,10 +50,20 @@
 			<groupId>io.swagger.core.v3</groupId>
 			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>commons-fileupload</groupId>
+			<artifactId>commons-fileupload</artifactId>
+			<version>1.5</version>
+		</dependency>
+		<dependency>
+			<groupId>commons-lang</groupId>
+			<artifactId>commons-lang</artifactId>
+			<version>2.6</version>
+		</dependency>
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-admin-configurator</finalName>
+		<finalName>vorpal-blade-admin-dev-console</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

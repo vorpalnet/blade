@@ -2,9 +2,8 @@
 let schema = {};
 let initialData = {};
 
-// Schema registry - populated dynamically from server
+// Schema registry - populated dynamically from MBeans
 let schemaRegistry = [];
-const SCHEMAS_DIRECTORY = "./config/custom/vorpal/_schemas";
 
 // Target directories - populated dynamically from server
 let targetDirectories = [];
@@ -105,10 +104,19 @@ function handleWebSocketMessage(message) {
             handleJsonLoaded(message.content);
             break;
 
+        case 'sample_loaded':
+            handleSampleLoaded(message.content);
+            break;
+
         case 'save_success':
             showSyncStatus('Data saved successfully', 'success');
             showSchemaLoadStatus('Saved', 'success');
             clearDirty(); // Feature: Clear dirty state after successful save
+            break;
+
+        case 'reload_success':
+            showSyncStatus(message.content, 'success');
+            showSchemaLoadStatus('Reloaded', 'success');
             break;
 
         case 'version_list':
@@ -262,10 +270,10 @@ function onTargetDirectoryChange(path) {
 }
 
 // Populate the schema dropdown
-// Request schema list from server
+// Request schema list from server (discovers deployed apps via JMX MBeans)
 function requestSchemaList() {
     if (websocket && websocket.readyState === WebSocket.OPEN) {
-        sendWebSocketMessage('list_schemas', { directory: SCHEMAS_DIRECTORY });
+        sendWebSocketMessage('list_schemas', {});
     } else {
         setTimeout(requestSchemaList, 1000);
     }
@@ -301,26 +309,8 @@ function populateSchemaDropdown() {
     schemaRegistry.forEach(entry => {
         const option = document.createElement('option');
         option.value = entry.name;
-
-        // Add indicator based on data file type
-        let indicator = '';
-        let tooltip = entry.fileName;
-
-        if (entry.jsonFile) {
-            if (entry.jsonFileType === 'primary') {
-                indicator = ' ●'; // Has primary data file
-                tooltip += ' (has data)';
-            } else if (entry.jsonFileType === 'sample') {
-                indicator = ' ○'; // Has sample data file only
-                tooltip += ' (sample data)';
-            }
-        } else {
-            indicator = ''; // No data file
-            tooltip += ' (no data)';
-        }
-
-        option.textContent = entry.name + indicator;
-        option.title = tooltip;
+        option.textContent = entry.name;
+        option.title = entry.name;
         select.appendChild(option);
     });
 }
@@ -356,8 +346,8 @@ function loadSchema(schemaName) {
     // Store the entry in a pending request
     pendingRequests.set('schema', entry);
 
-    // Request the schema file via WebSocket
-    sendWebSocketMessage('load_schema', { file: entry.schemaFile });
+    // Request the schema from the filesystem
+    sendWebSocketMessage('load_schema', { appName: entry.appName });
 
     // Request JSON file resolution based on selected target
     sendWebSocketMessage('resolve_json_file', {
@@ -377,9 +367,14 @@ function handleJsonFileResolved(content) {
             entry.jsonFileType = resolution.jsonFileType;
             pendingRequests.set('schema', entry);
 
-            // If JSON file exists, load it
-            if (resolution.jsonFile) {
-                sendWebSocketMessage('load_json', { file: resolution.jsonFile });
+            if (resolution.exists) {
+                if (resolution.jsonFileType === 'sample') {
+                    // Load sample from filesystem
+                    sendWebSocketMessage('load_sample', { appName: resolution.appName });
+                } else {
+                    // Load primary config from filesystem
+                    sendWebSocketMessage('load_json', { file: resolution.jsonFile });
+                }
             } else {
                 finalizeSchemaLoad({});
             }
@@ -395,6 +390,10 @@ function handleSchemaLoaded(content) {
         const entry = pendingRequests.get('schema');
         if (!entry) {
             return;
+        }
+
+        if (!content || content.trim() === '') {
+            throw new Error('Empty schema received from server');
         }
 
         const newSchema = JSON.parse(content);
@@ -421,12 +420,6 @@ function handleJsonLoaded(content) {
         let newData = {};
         if (content && content.trim() !== '') {
             newData = JSON.parse(content);
-
-            // Check if we loaded from a sample file
-            const entry = pendingRequests.get('schema');
-            if (entry && entry.jsonFileType === 'sample') {
-                showSyncStatus('Loaded sample data (will save to primary location)', 'warning');
-            }
         }
 
         finalizeSchemaLoad(newData);
@@ -437,6 +430,30 @@ function handleJsonLoaded(content) {
         // Continue with empty data
         finalizeSchemaLoad({});
     }
+}
+
+function handleSampleLoaded(content) {
+    try {
+        let sampleData = {};
+        if (content && content.trim() !== '') {
+            sampleData = JSON.parse(content);
+            showSyncStatus('Loaded sample data (will save to primary location)', 'warning');
+        }
+        finalizeSchemaLoad(sampleData);
+    } catch (error) {
+        console.error('Error processing sample data:', error);
+        showSchemaLoadStatus('Warning: Could not parse sample data', 'warning');
+        finalizeSchemaLoad({});
+    }
+}
+
+function loadSample() {
+    if (!currentSchemaName) {
+        showSchemaLoadStatus('Please select a schema first', 'error');
+        return;
+    }
+    showSchemaLoadStatus('Loading sample...', 'warning');
+    sendWebSocketMessage('load_sample', { appName: currentSchemaName });
 }
 
 function finalizeSchemaLoad(newData) {
@@ -1630,6 +1647,16 @@ function saveData() {
     });
 
     showSyncStatus('Saving data...', 'warning');
+}
+
+function reloadConfig() {
+    if (!currentSchemaName) {
+        showSyncStatus('Please select a schema first', 'warning');
+        return;
+    }
+
+    sendWebSocketMessage('reload', { appName: currentSchemaName });
+    showSyncStatus('Reloading configuration...', 'warning');
 }
 
 function resetForm() {

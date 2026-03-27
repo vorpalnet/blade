@@ -4,18 +4,16 @@
 <%
 StringBuilder appsHtml = new StringBuilder();
 
-Set<String> apps = ConfigurationMonitor.queryApps();
+Set<String> apps = AppDiscovery.queryApps();
 
-// ServletContext sc = getServletContext();
 Principal principal = request.getUserPrincipal();
 String user = principal.getName();
 
+String configuratorRoot = "/vorpal-blade-admin-configurator";
+
 for (String app : apps) {
-	System.out.println("Running app: " + app);
-
-	appsHtml.append("<li class=\"nav-item\"><a href=\"../json/index.jsp?configType=Domain&app=" + app
+	appsHtml.append("<li class=\"nav-item\"><a href=\"" + configuratorRoot + "/index.html?app=" + app
 	+ "\" class=\"nav-link\" target=\"content_iframe\">" + app + "</a></li>\n");
-
 }
 %>
 <!DOCTYPE html>
@@ -222,30 +220,6 @@ for (String app : apps) {
 
 								<%=appsHtml.toString()%>
 
-								<!-- 
-								<li class="nav-item"><a href="../json/index.jsp?app=b2bua"
-									class="nav-link" target="content_iframe">b2bua</a></li>
-
-								<li class="nav-item"><a
-									href="../json/index.jsp?app=genrec2" class="nav-link"
-									target="content_iframe">genrec2</a></li>
-
-								<li class="nav-item"><a
-									href="../json/index.jsp?app=mediahub2" class="nav-link"
-									target="content_iframe">mediahub2</a></li>
-
-								<li class="nav-item"><a href="../json/index.jsp?app=minsdp"
-									class="nav-link" target="content_iframe">minsdp</a></li>
-
-								<li class="nav-item"><a
-									href="../json/index.jsp?app=proxy-registrar" class="nav-link"
-									target="content_iframe">proxy-registrar</a></li>
-
-								<li class="nav-item"><a
-									href="../json/index.jsp?app=transfer" class="nav-link"
-									target="content_iframe">transfer</a></li>
--->
-
 							</ul></li>
 
 						<!-- /layout -->
@@ -260,9 +234,7 @@ for (String app : apps) {
 
 						<li class="nav-item nav-item-submenu nav-item-open nav-item-expanded"><a href="#" class="nav-link"><i class="icon-stack2"></i> <span>Tools</span></a>
 							<ul class="nav nav-group-sub" data-submenu-title="Tools">
-								<li class="nav-item"><a href="../mxgraph/index.html" class="nav-link" target="content_iframe">FSMAR</a></li>
-								<li class="nav-item"><a href="../json/index.jsp?configType=Domian&app=b2bua" class="nav-link" target="content_iframe">Configurator</a></li>
-								<li class="nav-item"><a href="../easyui/index.html" class="nav-link" target="content_iframe">Media Tester</a></li>
+								<li class="nav-item"><a href="<%=configuratorRoot%>/index.html" class="nav-link" target="content_iframe">Configurator</a></li>
 								<li class="nav-item"><a href="../swagger/index.html" class="nav-link" target="content_iframe">Swagger</a></li>
 								<!-- 	
 								<li class="nav-item"><a href="layout_navbar_fixed.html"

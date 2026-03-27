@@ -20,6 +20,10 @@
 # EAR naming:
 #   Each profile produces its own EAR named vorpal-blade-services-<profile>.ear
 #   e.g. vorpal-blade-services-production.ear, vorpal-blade-services-minimal.ear
+#
+# Dist management:
+#   On success: previous dist directories are zipped; current build stays unzipped.
+#   On failure: the current build's dist directory is deleted.
 # ============================================================================
 
 set -euo pipefail
@@ -29,6 +33,9 @@ PROFILES_DIR="${SCRIPT_DIR}/build-profiles"
 PLATFORMS_DIR="${PROFILES_DIR}/platforms"
 DEFAULT_PROFILE="full"
 DEFAULT_PLATFORM="occas-8.1"
+
+# --- Parse project version from pom.xml ---
+REVISION=$(grep '<revision>' "${SCRIPT_DIR}/pom.xml" | head -1 | sed 's/.*<revision>\(.*\)<\/revision>.*/\1/')
 
 # --- Discover all available service/test modules from directory names ---
 discover_modules() {
@@ -69,6 +76,28 @@ compute_skip_flags() {
             [ -n "$prop" ] && echo "-D${prop}"
         fi
     done <<< "$all_modules"
+}
+
+# --- Remove the current build's dist directory on failure ---
+cleanup_failed_dist() {
+    if [ -d "$DISTDIR" ]; then
+        rm -rf "$DISTDIR"
+        echo "Build failed — removed dist/${REVISION}-${BUILD_NUM}/"
+    fi
+}
+
+# --- Zip previous dist directories (not the current build) ---
+zip_previous_dist() {
+    local dist_parent="${SCRIPT_DIR}/dist"
+    [ -d "$dist_parent" ] || return 0
+    for dir in "$dist_parent"/*/; do
+        [ -d "$dir" ] || continue
+        local base=$(basename "$dir")
+        # Skip the current build's directory
+        [ "$base" = "${REVISION}-${BUILD_NUM}" ] && continue
+        (cd "$dist_parent" && zip -qr "${base}.zip" "$base" && rm -rf "$base")
+        echo "Zipped dist/${base}.zip"
+    done
 }
 
 # --- Parse arguments: collect multiple profiles, one platform, and Maven args ---
@@ -126,6 +155,9 @@ cat > "$BUILD_NUMBER_FILE" <<EOB
 build.number=${BUILD_NUM}
 EOB
 
+# --- Dist directory for this build ---
+DISTDIR="${SCRIPT_DIR}/dist/${REVISION}-${BUILD_NUM}"
+
 # --- Default to 'install' if no Maven goals specified ---
 # Uses 'install' so the framework JAR is installed to the local .m2 repository.
 # All other modules have maven-install-plugin skipped; only the framework JAR is installed.
@@ -176,7 +208,8 @@ if [ ${#PROFILES[@]} -eq 1 ]; then
     fi
     echo ""
 
-    exec "${SCRIPT_DIR}/mvnw" \
+    set +e
+    "${SCRIPT_DIR}/mvnw" \
         "${MAVEN_GOALS[@]}" \
         "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
         "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
@@ -184,6 +217,15 @@ if [ ${#PROFILES[@]} -eq 1 ]; then
         "-Dbuild.number=${BUILD_NUM}" \
         "-Dear.profile=${PROFILE}" \
         "-Dbuild.platform=${PLATFORM}"
+    MVN_EXIT=$?
+    set -e
+
+    if [ $MVN_EXIT -ne 0 ]; then
+        cleanup_failed_dist
+        exit $MVN_EXIT
+    fi
+
+    zip_previous_dist
 else
     # =====================================================================
     # Multiple profiles: build modules first, then EAR per profile
@@ -219,6 +261,7 @@ else
     # --- Phase 1: Build all modules except EAR ---
     # Install all artifacts to .m2 so the EAR module can find WARs in phase 2.
     echo "=== Phase 1: Building modules ==="
+    set +e
     "${SCRIPT_DIR}/mvnw" \
         "${MAVEN_GOALS[@]}" \
         "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
@@ -227,6 +270,13 @@ else
         "${JAVA_FLAG[@]+"${JAVA_FLAG[@]}"}" \
         "-Dbuild.number=${BUILD_NUM}" \
         "-Dblade.skip.install=false"
+    MVN_EXIT=$?
+    set -e
+
+    if [ $MVN_EXIT -ne 0 ]; then
+        cleanup_failed_dist
+        exit $MVN_EXIT
+    fi
 
     # --- Phase 2: Build EAR for each profile ---
     for profile in "${PROFILES[@]}"; do
@@ -237,6 +287,7 @@ else
             [ -n "$flag" ] && PROFILE_SKIP_FLAGS+=("$flag")
         done < <(compute_skip_flags "${PROFILES_DIR}/${profile}.conf" "$ALL_MODULES")
 
+        set +e
         "${SCRIPT_DIR}/mvnw" \
             verify \
             "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
@@ -246,6 +297,13 @@ else
             "-Dbuild.number=${BUILD_NUM}" \
             "-Dear.profile=${profile}" \
             "-Dbuild.platform=${PLATFORM}"
+        MVN_EXIT=$?
+        set -e
+
+        if [ $MVN_EXIT -ne 0 ]; then
+            cleanup_failed_dist
+            exit $MVN_EXIT
+        fi
     done
 
     echo ""
@@ -253,4 +311,6 @@ else
     for profile in "${PROFILES[@]}"; do
         echo "  vorpal-blade-services-${profile}.ear"
     done
+
+    zip_previous_dist
 fi

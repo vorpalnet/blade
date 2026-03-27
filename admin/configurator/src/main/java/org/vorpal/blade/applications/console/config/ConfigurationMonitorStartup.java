@@ -6,32 +6,17 @@ import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 import javax.servlet.annotation.WebListener;
 
-@WebListener
+// Auto-reload disabled: configuration changes are now applied manually via the
+// Reload button in the configurator UI, which calls SettingsMXBean.reload() via JMX.
+// @WebListener
 public class ConfigurationMonitorStartup implements ServletContextListener {
-	private ConfigurationMonitor configurationMonitor;
 
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
-
-		try {
-			configurationMonitor = new ConfigurationMonitor();
-			configurationMonitor.initialize(Paths.get("./config/custom/vorpal"), true);
-			configurationMonitor.start();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
 	}
 
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
-
-		try {
-			configurationMonitor.interrupt();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
 	}
 
 }

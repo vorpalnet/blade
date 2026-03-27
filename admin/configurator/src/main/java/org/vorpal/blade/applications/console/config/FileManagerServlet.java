@@ -8,11 +8,17 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.management.JMX;
 import javax.management.MBeanServer;
+import javax.management.ObjectInstance;
+import javax.management.ObjectName;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -27,6 +33,8 @@ import javax.websocket.server.ServerEndpoint;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.vorpal.blade.framework.v2.config.SettingsMXBean;
+
 @WebServlet("/filemanager")
 @ServerEndpoint("/websocket")
 public class FileManagerServlet extends HttpServlet {
@@ -36,26 +44,16 @@ public class FileManagerServlet extends HttpServlet {
 	private static final String DATA_FILE_PATH = "server_data.txt";
 	private static final Set<Session> websocketSessions = new CopyOnWriteArraySet<>();
 	private static final ObjectMapper objectMapper = new ObjectMapper();
-	private static final int MAX_VERSIONS = 20; // Maximum number of versions to keep per file
+	private static final int MAX_VERSIONS = 20;
+
+	private static final String DOMAIN_HOME = System.getProperty("DOMAIN_HOME",
+			System.getenv().getOrDefault("DOMAIN_HOME", "."));
+	private static final String CONFIG_BASE = DOMAIN_HOME + "/config/custom/vorpal";
+	private static final String SCHEMAS_DIR = CONFIG_BASE + "/_schemas";
+	private static final String SAMPLES_DIR = CONFIG_BASE + "/_samples";
 
 	private static MBeanServer server;
 	private static String domainName;
-
-//	@Override
-//	public void init(ServletConfig config) throws ServletException {
-//		super.init(config); // Essential call
-//		System.out.println("FileManagerServlet.init(ServletConfig config)");
-//	}
-
-//	@Override
-//	public void init() {
-//		System.out.println("FileManagerServlet.init()");
-//	}
-//
-//	@Override
-//	public void destroy() {
-//		System.out.println("FileManagerServlet.destroy()");
-//	}
 
 	// WebSocket Event Handlers
 	@OnOpen
@@ -109,17 +107,29 @@ public class FileManagerServlet extends HttpServlet {
 				break;
 
 			case "load_schema":
-				String schemaFile = jsonNode.get("file").asText();
-				String schemaContent = loadConfigFile(schemaFile);
-				sendMessageToSession(session, createMessage("schema_loaded", schemaContent));
+				String schemaApp = jsonNode.get("appName").asText();
+				String schemaContent = loadSchemaFromFilesystem(schemaApp);
+				if (schemaContent == null || schemaContent.trim().isEmpty()) {
+					sendMessageToSession(session, createMessage("error", "Schema not found: " + schemaApp));
+				} else {
+					sendMessageToSession(session, createMessage("schema_loaded", schemaContent));
+				}
 				break;
 
 			case "load_json":
 				String jsonFile = jsonNode.get("file").asText();
 				String jsonContent = loadConfigFile(jsonFile);
-				System.out.println("attempting to load file=" + jsonFile + ", size="
-						+ ((jsonContent != null) ? jsonContent.length() : 0));
 				sendMessageToSession(session, createMessage("json_loaded", jsonContent));
+				break;
+
+			case "load_sample":
+				String sampleApp = jsonNode.get("appName").asText();
+				String sampleContent = loadSampleFromFilesystem(sampleApp);
+				if (sampleContent == null || sampleContent.trim().isEmpty()) {
+					sendMessageToSession(session, createMessage("error", "Sample not found: " + sampleApp));
+				} else {
+					sendMessageToSession(session, createMessage("sample_loaded", sampleContent));
+				}
 				break;
 
 			case "save_json":
@@ -155,9 +165,15 @@ public class FileManagerServlet extends HttpServlet {
 				sendMessageToSession(session, createMessage("pong", String.valueOf(System.currentTimeMillis())));
 				break;
 
+			case "reload":
+				String reloadApp = jsonNode.get("appName").asText();
+				reloadViaMBean(reloadApp);
+				sendMessageToSession(session, createMessage("reload_success", "Configuration reloaded for " + reloadApp));
+				logger.info("Reloaded configuration for: " + reloadApp);
+				break;
+
 			case "list_schemas":
-				String schemasDir = jsonNode.get("directory").asText();
-				String schemasList = listSchemas(schemasDir);
+				String schemasList = listSchemasFromFilesystem();
 				sendMessageToSession(session, createMessage("schemas_list", schemasList));
 				break;
 
@@ -202,7 +218,6 @@ public class FileManagerServlet extends HttpServlet {
 		String action = request.getParameter("action");
 
 		if ("download".equals(action)) {
-			// Download file content
 			response.setContentType("text/plain");
 			response.setHeader("Content-Disposition", "attachment; filename=\"server_data.txt\"");
 
@@ -215,7 +230,6 @@ public class FileManagerServlet extends HttpServlet {
 			}
 
 		} else {
-			// Serve the HTML page
 			response.setContentType("text/html");
 			response.getWriter().write(getHtmlPage());
 		}
@@ -233,7 +247,6 @@ public class FileManagerServlet extends HttpServlet {
 			switch (action) {
 			case "write":
 				writeToFile(data);
-				// Broadcast to WebSocket clients
 				broadcastMessage(createMessage("file_updated", data));
 				response.getWriter().write("{\"status\":\"success\",\"message\":\"File written successfully\"}");
 				break;
@@ -246,9 +259,8 @@ public class FileManagerServlet extends HttpServlet {
 
 			case "append":
 				appendToFile(data);
-				String updatedContent = readFromFile();
-				// Broadcast to WebSocket clients
-				broadcastMessage(createMessage("file_updated", updatedContent));
+				String updatedContent2 = readFromFile();
+				broadcastMessage(createMessage("file_updated", updatedContent2));
 				response.getWriter().write("{\"status\":\"success\",\"message\":\"Data appended successfully\"}");
 				break;
 
@@ -259,6 +271,86 @@ public class FileManagerServlet extends HttpServlet {
 			logger.log(Level.SEVERE, "Error in POST request", e);
 			response.getWriter().write("{\"status\":\"error\",\"message\":\"" + e.getMessage() + "\"}");
 		}
+	}
+
+	// --- JMX Helper Methods ---
+
+	private MBeanServer getMBeanServer() throws NamingException {
+		InitialContext ctx = new InitialContext();
+		try {
+			return (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
+		} finally {
+			ctx.close();
+		}
+	}
+
+	private SettingsMXBean getMBeanProxy(MBeanServer mbeanServer, String appName) throws Exception {
+		ObjectName pattern = new ObjectName("vorpal.blade:Name=" + appName + ",Type=Configuration,*");
+		Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(pattern, null);
+		if (mbeans.isEmpty()) {
+			return null;
+		}
+		ObjectName name = mbeans.iterator().next().getObjectName();
+		return JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
+	}
+
+	private void reloadViaMBean(String appName) throws Exception {
+		MBeanServer mbeanServer = getMBeanServer();
+		ObjectName pattern = new ObjectName("vorpal.blade:Name=" + appName + ",Type=Configuration,*");
+		Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(pattern, null);
+		if (mbeans.isEmpty()) {
+			throw new IOException("No MBean found for application: " + appName);
+		}
+		for (ObjectInstance mbean : mbeans) {
+			SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, mbean.getObjectName(), SettingsMXBean.class);
+			settings.reload();
+			logger.info("Reloaded MBean: " + mbean.getObjectName());
+		}
+	}
+
+	private String listSchemasFromFilesystem() {
+		java.util.List<java.util.Map<String, Object>> schemaList = new java.util.ArrayList<>();
+
+		try {
+			Path schemasPath = Paths.get(SCHEMAS_DIR);
+			if (Files.exists(schemasPath) && Files.isDirectory(schemasPath)) {
+				try (java.util.stream.Stream<Path> stream = Files.list(schemasPath)) {
+					stream.filter(p -> p.toString().endsWith(".jschema")).sorted().forEach(p -> {
+						String fileName = p.getFileName().toString();
+						String appName = fileName.substring(0, fileName.lastIndexOf(".jschema"));
+						java.util.Map<String, Object> schemaInfo = new java.util.HashMap<>();
+						schemaInfo.put("name", appName);
+						schemaInfo.put("appName", appName);
+						schemaList.add(schemaInfo);
+					});
+				}
+			}
+		} catch (Exception e) {
+			logger.log(Level.SEVERE, "Error listing schemas from filesystem", e);
+		}
+
+		try {
+			return objectMapper.writeValueAsString(schemaList);
+		} catch (Exception e) {
+			logger.log(Level.SEVERE, "Error serializing schema list", e);
+			return "[]";
+		}
+	}
+
+	private String loadSchemaFromFilesystem(String appName) throws IOException {
+		Path schemaPath = Paths.get(SCHEMAS_DIR + "/" + appName + ".jschema");
+		if (!Files.exists(schemaPath)) {
+			return null;
+		}
+		return new String(Files.readAllBytes(schemaPath));
+	}
+
+	private String loadSampleFromFilesystem(String appName) throws IOException {
+		Path samplePath = Paths.get(SAMPLES_DIR + "/" + appName + ".json");
+		if (!Files.exists(samplePath)) {
+			return null;
+		}
+		return new String(Files.readAllBytes(samplePath));
 	}
 
 	// File Operation Methods
@@ -272,27 +364,7 @@ public class FileManagerServlet extends HttpServlet {
 	}
 
 	private String loadConfigFile(String relativePath) throws IOException {
-		// Load file from web application context
-
 		String realPath = relativePath;
-
-//		System.out.println("relativePath=" + relativePath);
-//
-//		System.out.println("getServletContext()");
-//		getServletContext();
-//
-//
-//
-//
-//		System.out.println("getServletContext().getRealPath(\"/\" + relativePath)");
-//		String rp = getServletContext().getRealPath("/" + relativePath);
-//
-//		System.out.println("rp=" + rp);
-//
-//		String realPath = getServletContext().getRealPath("/" + relativePath);
-//		if (realPath == null) {
-//			throw new IOException("File not found: " + relativePath);
-//		}
 
 		Path filePath = Paths.get(realPath);
 		if (!Files.exists(filePath)) {
@@ -304,13 +376,10 @@ public class FileManagerServlet extends HttpServlet {
 	}
 
 	private void saveConfigFile(String relativePath, String content) throws IOException {
-		// Normalize path: if saving from a .SAMPLE file, save to the primary location
 		String realPath = relativePath;
 
 		// If path points to a sample file, convert to primary location
 		if (realPath.contains("/_samples/") && realPath.endsWith(".json.SAMPLE")) {
-			// Convert: ./config/custom/vorpal/_samples/foo.json.SAMPLE
-			// To: ./config/custom/vorpal/foo.json
 			realPath = realPath.replace("/_samples/", "/").replace(".json.SAMPLE", ".json");
 			logger.info("Converted sample path to primary: " + realPath);
 		}
@@ -327,34 +396,28 @@ public class FileManagerServlet extends HttpServlet {
 			Files.createDirectories(filePath.getParent());
 		}
 
-		// Write the file
 		Files.write(filePath, content.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 		logger.info("Saved config file: " + realPath);
 	}
 
 	private void createVersionBackup(Path filePath) throws IOException {
-		// Create .versions directory next to the file
 		Path versionsDir = filePath.getParent().resolve(".versions");
 		if (!Files.exists(versionsDir)) {
 			Files.createDirectories(versionsDir);
 		}
 
-		// Create version filename with timestamp
 		String fileName = filePath.getFileName().toString();
 		long timestamp = System.currentTimeMillis();
 		String versionFileName = fileName + "." + timestamp + ".version";
 		Path versionPath = versionsDir.resolve(versionFileName);
 
-		// Copy current file to version
 		Files.copy(filePath, versionPath, StandardCopyOption.REPLACE_EXISTING);
 		logger.info("Created version backup: " + versionPath);
 
-		// Clean up old versions
 		cleanupOldVersions(versionsDir, fileName);
 	}
 
 	private void cleanupOldVersions(Path versionsDir, String baseFileName) throws IOException {
-		// Find all versions for this file
 		String versionPrefix = baseFileName + ".";
 		java.util.List<Path> versions = new java.util.ArrayList<>();
 
@@ -362,14 +425,12 @@ public class FileManagerServlet extends HttpServlet {
 			stream.filter(p -> p.getFileName().toString().startsWith(versionPrefix)).forEach(versions::add);
 		}
 
-		// Sort by timestamp (embedded in filename)
 		versions.sort((p1, p2) -> {
 			String name1 = p1.getFileName().toString();
 			String name2 = p2.getFileName().toString();
-			return name2.compareTo(name1); // Descending order (newest first)
+			return name2.compareTo(name1);
 		});
 
-		// Remove old versions if we exceed MAX_VERSIONS
 		if (versions.size() > MAX_VERSIONS) {
 			for (int i = MAX_VERSIONS; i < versions.size(); i++) {
 				Files.delete(versions.get(i));
@@ -385,7 +446,7 @@ public class FileManagerServlet extends HttpServlet {
 		Path versionsDir = filePath.getParent().resolve(".versions");
 
 		if (!Files.exists(versionsDir)) {
-			return "[]"; // No versions yet
+			return "[]";
 		}
 
 		String versionPrefix = fileName + ".";
@@ -395,7 +456,6 @@ public class FileManagerServlet extends HttpServlet {
 			stream.filter(p -> p.getFileName().toString().startsWith(versionPrefix)).forEach(versionPath -> {
 				try {
 					String versionFileName = versionPath.getFileName().toString();
-					// Extract timestamp from filename: baseFileName.timestamp.version
 					String timestampStr = versionFileName.substring(versionPrefix.length(),
 							versionFileName.lastIndexOf(".version"));
 					long timestamp = Long.parseLong(timestampStr);
@@ -413,7 +473,6 @@ public class FileManagerServlet extends HttpServlet {
 			});
 		}
 
-		// Sort by timestamp descending (newest first)
 		versionList.sort((v1, v2) -> Long.compare((Long) v2.get("timestamp"), (Long) v1.get("timestamp")));
 
 		return objectMapper.writeValueAsString(versionList);
@@ -432,15 +491,12 @@ public class FileManagerServlet extends HttpServlet {
 			throw new IOException("Version not found: " + versionFileName);
 		}
 
-		// Read version content
 		String content = new String(Files.readAllBytes(versionPath));
 
-		// Create backup of current file before restoring
 		if (Files.exists(filePath)) {
 			createVersionBackup(filePath);
 		}
 
-		// Restore version
 		Files.write(filePath, content.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 		logger.info("Restored version " + timestampStr + " to file: " + realPath);
 
@@ -467,18 +523,18 @@ public class FileManagerServlet extends HttpServlet {
 		java.util.List<java.util.Map<String, Object>> targetList = new java.util.ArrayList<>();
 
 		// Add domain directory
-		Path domainPath = Paths.get("./config/custom/vorpal");
+		Path domainPath = Paths.get(CONFIG_BASE);
 		if (Files.exists(domainPath) && Files.isDirectory(domainPath)) {
 			java.util.Map<String, Object> domainInfo = new java.util.HashMap<>();
 			domainInfo.put("name", "Domain");
-			domainInfo.put("path", "./config/custom/vorpal");
+			domainInfo.put("path", CONFIG_BASE);
 			domainInfo.put("type", "domain");
 			domainInfo.put("displayName", "Domain (" + domainName + ")");
 			targetList.add(domainInfo);
 		}
 
 		// Add cluster directories
-		Path clustersPath = Paths.get("./config/custom/vorpal/_clusters");
+		Path clustersPath = Paths.get(CONFIG_BASE + "/_clusters");
 		if (Files.exists(clustersPath) && Files.isDirectory(clustersPath)) {
 			try (java.util.stream.Stream<Path> stream = Files.list(clustersPath)) {
 				stream.filter(Files::isDirectory).sorted(
@@ -487,7 +543,7 @@ public class FileManagerServlet extends HttpServlet {
 							String clusterName = clusterPath.getFileName().toString();
 							java.util.Map<String, Object> clusterInfo = new java.util.HashMap<>();
 							clusterInfo.put("name", clusterName);
-							clusterInfo.put("path", "./config/custom/_clusters/" + clusterName);
+							clusterInfo.put("path", CONFIG_BASE + "/_clusters/" + clusterName);
 							clusterInfo.put("type", "cluster");
 							clusterInfo.put("displayName", "Cluster: " + clusterName);
 							targetList.add(clusterInfo);
@@ -496,7 +552,7 @@ public class FileManagerServlet extends HttpServlet {
 		}
 
 		// Add server directories
-		Path serversPath = Paths.get("./config/custom/vorpal/_servers");
+		Path serversPath = Paths.get(CONFIG_BASE + "/_servers");
 		if (Files.exists(serversPath) && Files.isDirectory(serversPath)) {
 			try (java.util.stream.Stream<Path> stream = Files.list(serversPath)) {
 				stream.filter(Files::isDirectory).sorted(
@@ -505,7 +561,7 @@ public class FileManagerServlet extends HttpServlet {
 							String serverName = serverPath.getFileName().toString();
 							java.util.Map<String, Object> serverInfo = new java.util.HashMap<>();
 							serverInfo.put("name", serverName);
-							serverInfo.put("path", "./config/custom/_servers/" + serverName);
+							serverInfo.put("path", CONFIG_BASE + "/_servers/" + serverName);
 							serverInfo.put("type", "server");
 							serverInfo.put("displayName", "Server: " + serverName);
 							targetList.add(serverInfo);
@@ -530,13 +586,11 @@ public class FileManagerServlet extends HttpServlet {
 		}
 
 		// Only check for sample files if target is domain directory
-		if (targetDirectory.equals("./config/custom/vorpal")) {
-			String sampleJsonFileName = schemaName + ".json.SAMPLE";
-			Path sampleJsonPath = Paths.get("./config/custom/vorpal/_samples/" + sampleJsonFileName);
-
-			if (Files.exists(sampleJsonPath)) {
+		if (targetDirectory.equals(CONFIG_BASE)) {
+			Path samplePath = Paths.get(SAMPLES_DIR + "/" + schemaName + ".json");
+			if (Files.exists(samplePath)) {
 				java.util.Map<String, Object> result = new java.util.HashMap<>();
-				result.put("jsonFile", "./config/custom/vorpal/_samples/" + sampleJsonFileName);
+				result.put("appName", schemaName);
 				result.put("jsonFileType", "sample");
 				result.put("exists", true);
 				return objectMapper.writeValueAsString(result);
@@ -549,57 +603,6 @@ public class FileManagerServlet extends HttpServlet {
 		result.put("jsonFileType", null);
 		result.put("exists", false);
 		return objectMapper.writeValueAsString(result);
-	}
-
-	private String listSchemas(String schemasDirectory) throws IOException {
-		Path schemasDir = Paths.get(schemasDirectory);
-
-		if (!Files.exists(schemasDir)) {
-			logger.warning("Schemas directory does not exist: " + schemasDirectory);
-			return "[]";
-		}
-
-		if (!Files.isDirectory(schemasDir)) {
-			throw new IOException("Path is not a directory: " + schemasDirectory);
-		}
-
-		java.util.List<java.util.Map<String, Object>> schemaList = new java.util.ArrayList<>();
-
-		try (java.util.stream.Stream<Path> stream = Files.list(schemasDir)) {
-			stream.filter(path -> {
-				String fileName = path.getFileName().toString().toLowerCase();
-				return fileName.endsWith(".jschema") || fileName.endsWith(".json");
-			}).sorted((p1, p2) -> p1.getFileName().toString().compareToIgnoreCase(p2.getFileName().toString()))
-					.forEach(schemaPath -> {
-						try {
-							String fileName = schemaPath.getFileName().toString();
-							// Remove extension to get schema name
-							String schemaName = fileName.replaceFirst("\\.(jschema|json)$", "");
-							// Remove common suffixes like "-schema"
-							schemaName = schemaName.replaceFirst("-schema$", "");
-
-							long size = Files.size(schemaPath);
-							String relativePath = schemasDirectory + "/" + fileName;
-
-							java.util.Map<String, Object> schemaInfo = new java.util.HashMap<>();
-							schemaInfo.put("name", schemaName);
-							schemaInfo.put("fileName", fileName);
-							schemaInfo.put("schemaFile", relativePath);
-							schemaInfo.put("size", size);
-
-							// This method is called without target directory context
-							// JSON file resolution will be done dynamically based on selected target
-							schemaInfo.put("jsonFile", null);
-							schemaInfo.put("jsonFileType", null);
-
-							schemaList.add(schemaInfo);
-						} catch (Exception e) {
-							logger.log(Level.WARNING, "Error reading schema file: " + schemaPath, e);
-						}
-					});
-		}
-
-		return objectMapper.writeValueAsString(schemaList);
 	}
 
 	private synchronized void writeToFile(String content) throws IOException {
@@ -728,12 +731,11 @@ public class FileManagerServlet extends HttpServlet {
 				+ "            messageDiv.className = 'status ' + type;\n"
 				+ "            messageDiv.textContent = message;\n"
 				+ "            messagesElement.appendChild(messageDiv);\n" + "            \n"
-				+ "            // Remove message after 5 seconds\n" + "            setTimeout(() => {\n"
-				+ "                if (messageDiv.parentNode) {\n"
+				+ "            setTimeout(() => {\n" + "                if (messageDiv.parentNode) {\n"
 				+ "                    messageDiv.parentNode.removeChild(messageDiv);\n" + "                }\n"
 				+ "            }, 5000);\n" + "        }\n" + "        \n"
-				+ "        // Connect WebSocket when page loads\n" + "        window.onload = function() {\n"
-				+ "            connectWebSocket();\n" + "        };\n" + "    </script>\n" + "</body>\n" + "</html>";
+				+ "        window.onload = function() {\n" + "            connectWebSocket();\n" + "        };\n"
+				+ "    </script>\n" + "</body>\n" + "</html>";
 	}
 
 	// Message class for JSON serialization
@@ -751,7 +753,6 @@ public class FileManagerServlet extends HttpServlet {
 			this.timestamp = System.currentTimeMillis();
 		}
 
-		// Getters and setters for JSON serialization
 		public String getType() {
 			return type;
 		}

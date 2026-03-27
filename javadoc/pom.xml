@@ -15,7 +15,7 @@
 	<name>BLADE Javadoc</name>
 
 	<build>
-		<finalName>blade</finalName>
+		<finalName>vorpal-blade-javadoc</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>

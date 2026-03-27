@@ -41,11 +41,12 @@ It also comes with a carrier-grade Finite State Machine Application Router, the 
 
 Deployed to the WebLogic AdminServer as standalone WARs.
 
-| Module | Description |
-| --- | --- |
-| Blade Console | Admin console for managing and monitoring BLADE applications |
-| Configurator | Web-based configuration editor for application settings |
-| Javadoc | Browsable Javadoc site with UML class diagrams |
+| Module | Context Root | Description |
+| --- | --- | --- |
+| Console | `/blade` | Admin dashboard; sidebar loads configurator and other tools via iframe |
+| Configurator | `/vorpal-blade-admin-configurator` | Configuration editor with JSON Schema forms, JMX-based schema discovery |
+| Dev Console | `/vorpal-blade-admin-dev-console` | Experimental tools: mxGraph diagrams, EasyUI, old JSON editor |
+| Javadoc | `/vorpal-blade-javadoc` | Browsable Javadoc site with UML class diagrams |
 
 ### Services
 
@@ -86,8 +87,9 @@ libs/           Libraries
   shared/         WebLogic shared library WAR (3rd-party JARs only)
   fsmar/          Finite State Machine Application Router (fat JAR)
 admin/          Admin tools (deployed to AdminServer)
-  console/        Admin Console (WAR)
+  console/        Admin Console — super-console dashboard (WAR, context: /blade)
   configurator/   Configuration Editor (WAR)
+  dev-console/    Dev Console — experimental tools (WAR)
 services/       Services (deployed to cluster via EAR)
   acl/            Access Control List
   analytics/      Call detail records and analytics
@@ -129,6 +131,22 @@ Install the OCCAS JARs into your local Maven repository:
 ./build.sh
 ```
 
+### Building Individual Modules
+
+To build a single module without rebuilding the entire project, use `./mvnw -pl <module-path> package`. If the module depends on the framework library, install it first:
+
+```bash
+# install framework JAR to local Maven repo (needed if framework code has changed)
+./mvnw -pl libs/framework install
+
+# then build the individual module
+./mvnw -pl admin/configurator package
+./mvnw -pl services/proxy-router package
+./mvnw -pl test/test-b2bua package
+```
+
+If the framework hasn't changed since your last full build, you can skip the install step and just build the module directly.
+
 ## Output
 
 All deployable artifacts are copied to `dist/<version>-<build>/`:
@@ -139,14 +157,17 @@ dist/<version>-<build>/
   vorpal-blade-library-framework.jar     # Framework library
   vorpal-blade-library-shared.war        # WebLogic shared library (alternative to EAR)
   vorpal-blade-library-fsmar.jar         # FSMAR (copy to OCCAS approuter lib/)
-  vorpal-blade-admin-console.war         # Admin Console (deploy to AdminServer)
+  vorpal-blade-admin-console.war         # Admin Console (deploy to AdminServer, context: /blade)
   vorpal-blade-admin-configurator.war    # Admin Configurator (deploy to AdminServer)
+  vorpal-blade-admin-dev-console.war     # Dev Console (deploy to AdminServer, experimental)
   <profile>.conf                         # Build profile used for this build
   <platform>.conf                        # Platform profile used for this build
 ```
 
 - **FSMAR JAR** must be installed manually into the OCCAS approuter `lib/` folder.
 - **Admin WARs** are standalone (include all dependency JARs) and are deployed separately to AdminServer.
+- On a successful build, any previous `dist/` directories are automatically zipped and the directories removed. The current build's directory is left unzipped.
+- On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
 
 ### Deployment Options
 
@@ -216,7 +237,7 @@ The javadoc module is always built and its WAR is copied to the `dist/` folder a
 This uses the [UML Doclet](https://github.com/talsma-ict/umldoclet) to generate class diagrams (SVG) alongside the standard Javadoc HTML, with Vorpal purple branding. All module javadocs are bundled into a deployable WAR:
 
 ```
-dist/<version>-<build>/javadoc.war
+dist/<version>-<build>/vorpal-blade-javadoc.war
 ```
 
 Deploy this WAR to the AdminServer to browse javadocs at `/javadoc`. The index page links to each module's javadoc automatically — no build changes needed when adding new modules.

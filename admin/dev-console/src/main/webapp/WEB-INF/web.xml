@@ -3,10 +3,10 @@
 	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
 	id="WebApp_ID" version="4.0"
 >
-	<display-name>blade</display-name>
+	<display-name>blade-dev</display-name>
 
 	<welcome-file-list>
-		<welcome-file>limitless/index.jsp</welcome-file>
+		<welcome-file>json/index.jsp</welcome-file>
 	</welcome-file-list>
 
 	<servlet-mapping>
@@ -45,7 +45,7 @@
 
 	<security-constraint>
 		<web-resource-collection>
-			<web-resource-name>blade</web-resource-name>
+			<web-resource-name>blade-dev</web-resource-name>
 			<url-pattern>/</url-pattern>
 		</web-resource-collection>
 		<auth-constraint>

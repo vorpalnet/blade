@@ -2092,7 +2092,7 @@ public abstract class Callflow implements Serializable {
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
 		SipApplicationSession appSession = inboundRequest.getApplicationSession();
-		boolean isProxy = Boolean.TRUE.equals((Booolean)appSession.getAttribute(IS_PROXY_ATTR));
+		boolean isProxy = Boolean.TRUE.equals((Boolean)appSession.getAttribute(IS_PROXY_ATTR));
 
 		if (!proxyPlan.isEmpty()) {
 
