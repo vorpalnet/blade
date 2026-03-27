@@ -18,7 +18,6 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v2.logging.Logger;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -252,6 +251,7 @@ public class AttributeSelector implements Serializable {
 			return null;
 		}
 
+		Logger sipLogger = SettingsManager.getSipLogger();
 		AttributesKey attrsKey = null;
 		String key = null;
 		String header = null;
@@ -265,7 +265,7 @@ public class AttributeSelector implements Serializable {
 				if (message instanceof SipServletResponse) {
 					header = Integer.toString(((SipServletResponse) message).getStatus());
 				} else {
-					Callflow.getSipLogger().warning(message, "No 'status' defined for " + message.getClass().getSimpleName());
+					sipLogger.warning(message, "No 'status' defined for " + message.getClass().getSimpleName());
 				}
 
 				break;
@@ -275,7 +275,7 @@ public class AttributeSelector implements Serializable {
 				if (message instanceof SipServletResponse) {
 					header = ((SipServletResponse) message).getReasonPhrase();
 				} else {
-					Callflow.getSipLogger().warning(message, "No 'reasonPhrase' defined for " + message.getClass().getSimpleName());
+					sipLogger.warning(message, "No 'reasonPhrase' defined for " + message.getClass().getSimpleName());
 				}
 				break;
 
@@ -293,11 +293,11 @@ public class AttributeSelector implements Serializable {
 							header = new String(content);
 						}
 					} else {
-						Callflow.getSipLogger().severe(message,
+						sipLogger.severe(message,
 								"AttributeSelector.findKey - No content in message body. Check configuration.");
 					}
 				} catch (IOException e) { // this should never happen
-					Callflow.getSipLogger().logStackTrace(e);
+					SettingsManager.getSipLogger().logStackTrace(e);
 					return null;
 				}
 				break;
@@ -393,8 +393,8 @@ public class AttributeSelector implements Serializable {
 
 				}
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(message, "AttributeSelector.findKey - " + //
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(message, "AttributeSelector.findKey - " + //
 							"- matchResult=" + matchResult + //
 							", selector id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
@@ -407,7 +407,7 @@ public class AttributeSelector implements Serializable {
 			}
 
 		} catch (Exception e) {
-			Callflow.getSipLogger().severe(message, "AttributeSelector.findKey - Error; Check configuration file." + //
+			sipLogger.severe(message, "AttributeSelector.findKey - Error; Check configuration file." + //
 					"; matchResult=" + matchResult + //
 					", selector id=" + id + //
 					", attribute=" + attribute + //
@@ -415,8 +415,8 @@ public class AttributeSelector implements Serializable {
 					", pattern=" + _strPattern + //
 					", expression=" + expression + //
 					", key=" + key);
-			Callflow.getSipLogger().severe(message, message.toString());
-			Callflow.getSipLogger().logStackTrace(message, e);
+			sipLogger.severe(message, message.toString());
+			sipLogger.logStackTrace(message, e);
 		}
 
 		return attrsKey;
@@ -427,6 +427,7 @@ public class AttributeSelector implements Serializable {
 			return null;
 		}
 
+		Logger sipLogger = SettingsManager.getSipLogger();
 		AttributesKey attrsKey = null;
 		String key = null;
 		String header = null;
@@ -523,8 +524,8 @@ public class AttributeSelector implements Serializable {
 
 				}
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer("AttributeSelector.findKey - " + //
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer("AttributeSelector.findKey - " + //
 							"- matchResult=" + matchResult + //
 							", selector id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
@@ -537,7 +538,7 @@ public class AttributeSelector implements Serializable {
 			}
 
 		} catch (Exception e) {
-			Callflow.getSipLogger().severe("AttributeSelector.findKey - Error; Check configuration file." + //
+			sipLogger.severe("AttributeSelector.findKey - Error; Check configuration file." + //
 					"; matchResult=" + matchResult + //
 					", selector id=" + id + //
 					", attribute=" + attribute + //
@@ -545,8 +546,8 @@ public class AttributeSelector implements Serializable {
 					", pattern=" + _strPattern + //
 					", expression=" + expression + //
 					", key=" + key);
-			Callflow.getSipLogger().severe(Logger.serializeObject(context));
-			Callflow.getSipLogger().logStackTrace(e);
+			sipLogger.severe(Logger.serializeObject(context));
+			sipLogger.logStackTrace(e);
 		}
 
 		return attrsKey;
@@ -561,6 +562,7 @@ public class AttributeSelector implements Serializable {
 			return null;
 		}
 
+		Logger sipLogger = SettingsManager.getSipLogger();
 		AttributesKey attrsKey = null;
 		String key = null;
 		String header = null;
@@ -627,8 +629,8 @@ public class AttributeSelector implements Serializable {
 
 				}
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer("AttributeSelector.findKey(HttpServletRequest) - " + //
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer("AttributeSelector.findKey(HttpServletRequest) - " + //
 							"- matchResult=" + matchResult + //
 							", selector id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
@@ -641,7 +643,7 @@ public class AttributeSelector implements Serializable {
 			}
 
 		} catch (Exception e) {
-			Callflow.getSipLogger().severe("AttributeSelector.findKey(HttpServletRequest) - Error; Check configuration file." + //
+			sipLogger.severe("AttributeSelector.findKey(HttpServletRequest) - Error; Check configuration file." + //
 					"; matchResult=" + matchResult + //
 					", selector id=" + id + //
 					", attribute=" + attribute + //
@@ -649,7 +651,7 @@ public class AttributeSelector implements Serializable {
 					", pattern=" + _strPattern + //
 					", expression=" + expression + //
 					", key=" + key);
-			Callflow.getSipLogger().logStackTrace(e);
+			sipLogger.logStackTrace(e);
 		}
 
 		return attrsKey;
@@ -664,6 +666,7 @@ public class AttributeSelector implements Serializable {
 			return null;
 		}
 
+		Logger sipLogger = SettingsManager.getSipLogger();
 		AttributesKey attrsKey = null;
 		String key = null;
 		String header = null;
@@ -748,8 +751,8 @@ public class AttributeSelector implements Serializable {
 
 				}
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer("AttributeSelector.findKey(HttpServletResponse) - " + //
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer("AttributeSelector.findKey(HttpServletResponse) - " + //
 							"- matchResult=" + matchResult + //
 							", selector id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
@@ -762,7 +765,7 @@ public class AttributeSelector implements Serializable {
 			}
 
 		} catch (Exception e) {
-			Callflow.getSipLogger().severe("AttributeSelector.findKey(HttpServletResponse) - Error; Check configuration file." + //
+			sipLogger.severe("AttributeSelector.findKey(HttpServletResponse) - Error; Check configuration file." + //
 					"; matchResult=" + matchResult + //
 					", selector id=" + id + //
 					", attribute=" + attribute + //
@@ -770,7 +773,7 @@ public class AttributeSelector implements Serializable {
 					", pattern=" + _strPattern + //
 					", expression=" + expression + //
 					", key=" + key);
-			Callflow.getSipLogger().logStackTrace(e);
+			sipLogger.logStackTrace(e);
 		}
 
 		return attrsKey;

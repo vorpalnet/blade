@@ -16,7 +16,6 @@ import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
  * Base configuration class with logging, session parameters, and utility
@@ -33,15 +32,12 @@ public class Configuration implements Serializable {
 	// Maximum iterations to prevent infinite loops in resolveVariables
 	private static final int MAX_VARIABLE_RESOLUTION_ITERATIONS = 25;
 
-	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@JsonPropertyDescription("Logging parameters")
 	protected LogParameters logging;
 
-	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@JsonPropertyDescription("Session parameters")
 	protected SessionParameters session;
 
-	@JsonInclude(JsonInclude.Include.NON_NULL)
 	@JsonPropertyDescription("Analytics parameters")
 	protected Analytics analytics;
 

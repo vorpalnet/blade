@@ -58,14 +58,15 @@ public class RouterConfig extends Configuration implements Serializable {
 	}
 
 	public Translation findTranslation(SipServletRequest request) throws ServletParseException {
+		Logger sipLogger = SettingsManager.getSipLogger();
 		Translation t = null;
 
-		Callflow.getSipLogger().finer(request, "RouterConfig.findTranslation - begin...");
+		sipLogger.finer(request, "RouterConfig.findTranslation - begin...");
 
-		Callflow.getSipLogger().finer(request, "RouterConfig.findTranslation - searching maps size: " + plan.size());
+		sipLogger.finer(request, "RouterConfig.findTranslation - searching maps size: " + plan.size());
 
 		for (TranslationsMap map : plan) {
-			Callflow.getSipLogger().finer(request, "RouterConfig.findTranslation -  searching map: " + map.getId());
+			sipLogger.finer(request, "RouterConfig.findTranslation -  searching map: " + map.getId());
 			t = map.applyTranslations(request);
 			if (t != null) {
 				break;
@@ -74,8 +75,8 @@ public class RouterConfig extends Configuration implements Serializable {
 
 		if (t != null) {
 
-			if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-				Callflow.getSipLogger().finer(request, "RouterConfig.findTranslation - Found translation id=" + t.getId() + //
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(request, "RouterConfig.findTranslation - Found translation id=" + t.getId() + //
 						", desc=" + t.getDescription() + //
 						", ruri=" + t.getRequestUri() + //
 						", attributes=" + t.getAttributes());
@@ -84,8 +85,8 @@ public class RouterConfig extends Configuration implements Serializable {
 		} else {
 			t = defaultRoute;
 			if (t != null) {
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request,
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request,
 							"RouterConfig.findTranslation - No translation found, using defaultRoute in config file. id="
 									+ t.getId() + //
 									", desc=" + t.getDescription() + //
@@ -93,34 +94,35 @@ public class RouterConfig extends Configuration implements Serializable {
 									", attributes=" + t.getAttributes());
 				}
 			} else {
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "RouterConfig.findTranslation - No translation found, returning null.");
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "RouterConfig.findTranslation - No translation found, returning null.");
 				}
 			}
 		}
 
-		Callflow.getSipLogger().finer(request, "RouterConfig.findTranslation - end. t="+t);
+		sipLogger.finer(request, "RouterConfig.findTranslation - end. t="+t);
 		return t;
 	}
 
 	public URI findRoute(SipServletRequest request) throws ServletParseException {
+		Logger sipLogger = SettingsManager.getSipLogger();
 
 		Translation t = null;
 		URI uri = null;
-		Callflow.getSipLogger().finer(request, "RouterConfig.findRoute - begin...");
+		sipLogger.finer(request, "RouterConfig.findRoute - begin...");
 		t = findTranslation(request);
-		Callflow.getSipLogger().finer(request, "RouterConfig.findRoute - t=" + t);
+		sipLogger.finer(request, "RouterConfig.findRoute - t=" + t);
 		if (t != null && t.getRequestUri() != null) {
-			Callflow.getSipLogger().finer(request, "RouterConfig.findRoute - applying parameters...");
+			sipLogger.finer(request, "RouterConfig.findRoute - applying parameters...");
 			uri = applyParameters(t, request);
-			Callflow.getSipLogger().finer(request, "RouterConfig.findRoute - parameters applied. uri=" + uri);
+			sipLogger.finer(request, "RouterConfig.findRoute - parameters applied. uri=" + uri);
 		} else {
-			Callflow.getSipLogger().finer(request, "RouterConfig.findRoute - no translation found.");
+			sipLogger.finer(request, "RouterConfig.findRoute - no translation found.");
 			uri = request.getRequestURI();
-			Callflow.getSipLogger().finer(request, "RouterConfig.findRoute - using requestURI, uri=" + uri);
+			sipLogger.finer(request, "RouterConfig.findRoute - using requestURI, uri=" + uri);
 		}
 
-		Callflow.getSipLogger().finer(request, "RouterConfig.findRoute - end. uri=" + uri);
+		sipLogger.finer(request, "RouterConfig.findRoute - end. uri=" + uri);
 		return uri;
 	}
 
