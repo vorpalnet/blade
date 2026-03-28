@@ -424,13 +424,26 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- Only the framework JAR should be installed to .m2; skip all others -->
+			<!-- Install the parent POM and framework JAR to .m2; skip all others.
+		     The parent POM must be installed because the framework JAR references it,
+		     and downstream modules (fsmar, shared) need to resolve it. -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-install-plugin</artifactId>
 				<configuration>
 					<skip>${blade.skip.install}</skip>
 				</configuration>
+				<executions>
+					<execution>
+						<id>install-parent-pom</id>
+						<phase>install</phase>
+						<goals><goal>install</goal></goals>
+						<inherited>false</inherited>
+						<configuration>
+							<skip>false</skip>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 			<!-- Dist copy moved to services/pom.xml (EAR, built last) -->
 		</plugins>

@@ -99,13 +99,15 @@ h2 {
 
 .collapsible-content {
     padding: 10px 12px;
-    transition: max-height 0.3s ease-out;
-    overflow: hidden;
+    transition: max-height 0.3s ease-out, overflow 0s 0.3s;
+    overflow: visible;
 }
 
 .collapsible-content.collapsed {
     max-height: 0;
     padding: 0 12px;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, overflow 0s;
 }
 
 .collapsible-badge {

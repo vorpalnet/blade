@@ -770,18 +770,29 @@ function toggleCollapse(header, content, arrow) {
             el.style.maxHeight = 'none';
         });
 
-        // Now measure and set the content height
+        // Now measure and set the content height for animation
         content.style.maxHeight = content.scrollHeight + 'px';
 
         // Auto-expand parent sections to provide room
         expandParentSections(header);
 
-        // Update heights of all ancestor containers after animation
+        // After animation completes, switch to 'none' so content can grow freely
         setTimeout(() => {
-            recalculateAllAncestorHeights(header.closest('.collapsible-section'));
+            if (!content.classList.contains('collapsed')) {
+                content.style.maxHeight = 'none';
+            }
+            // Set all expanded ancestors to 'none' as well
+            ancestors.forEach(el => {
+                if (!el.classList.contains('collapsed')) {
+                    el.style.maxHeight = 'none';
+                }
+            });
         }, 350); // Wait for animation to complete
     } else {
-        // Collapse
+        // Collapse — first set a pixel value so transition can animate from it
+        content.style.maxHeight = content.scrollHeight + 'px';
+        // Force reflow so browser sees the pixel value before we set 0
+        content.offsetHeight;
         header.classList.add('collapsed');
         content.classList.add('collapsed');
         arrow.classList.add('collapsed');
@@ -822,57 +833,23 @@ function recalculateAllAncestorHeights(element) {
         current = current.parentElement;
     }
 
-    // Recalculate heights from innermost to outermost
-    ancestors.forEach((content, index) => {
-        setTimeout(() => {
-            content.style.maxHeight = 'none';
-            const height = content.scrollHeight;
-            content.style.maxHeight = height + 'px';
-        }, index * 10);
+    // Set all expanded ancestors to 'none' so they grow freely with content
+    ancestors.forEach(content => {
+        content.style.maxHeight = 'none';
     });
 }
 
 function updateAllParentContainers(element) {
     if (!element) return;
 
-    // Start from the current element and work up the DOM tree
-    let currentElement = element;
-
-    while (currentElement) {
-        // Update collapsible section content height
-        if (currentElement.classList.contains('collapsible-section')) {
-            const content = currentElement.querySelector('.collapsible-content');
-            if (content && !content.classList.contains('collapsed')) {
-                content.style.maxHeight = 'none';
-                setTimeout(() => {
-                    content.style.maxHeight = content.scrollHeight + 'px';
-                }, 10);
-            }
+    // Walk up the DOM and set all expanded collapsible-content ancestors to max-height: none
+    let current = element.closest('.collapsible-section');
+    while (current) {
+        const content = current.querySelector(':scope > .collapsible-content');
+        if (content && !content.classList.contains('collapsed')) {
+            content.style.maxHeight = 'none';
         }
-
-        // Find next parent collapsible section, map entry, or array item
-        currentElement = currentElement.parentElement;
-        while (currentElement &&
-               !currentElement.classList.contains('collapsible-section') &&
-               !currentElement.classList.contains('map-entry') &&
-               !currentElement.classList.contains('array-item')) {
-            currentElement = currentElement.parentElement;
-        }
-
-        // If we found a map entry or array item, check if it's inside a collapsible section
-        if (currentElement && (currentElement.classList.contains('map-entry') || currentElement.classList.contains('array-item'))) {
-            const parentSection = currentElement.closest('.collapsible-section');
-            if (parentSection) {
-                const parentContent = parentSection.querySelector('.collapsible-content');
-                if (parentContent && !parentContent.classList.contains('collapsed')) {
-                    parentContent.style.maxHeight = 'none';
-                    setTimeout(() => {
-                        parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
-                    }, 20);
-                }
-            }
-            currentElement = parentSection;
-        }
+        current = current.parentElement ? current.parentElement.closest('.collapsible-section') : null;
     }
 }
 
@@ -894,7 +871,7 @@ function expandParentSections(element) {
                 parentHeader.classList.remove('collapsed');
                 parentContent.classList.remove('collapsed');
                 parentArrow.classList.remove('collapsed');
-                parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
+                parentContent.style.maxHeight = 'none';
             }
 
             currentSection = parentSection;
@@ -915,36 +892,17 @@ function updateParentHeights(section) {
 
     const content = section.querySelector('.collapsible-content');
     if (content && !content.classList.contains('collapsed')) {
-        content.style.maxHeight = content.scrollHeight + 'px';
+        content.style.maxHeight = 'none';
     }
 
-    // Update parent section heights - including map entries and array items
-    let parentElement = section.parentElement;
-    while (parentElement) {
-        // Check if parent is a map entry or array item
-        if (parentElement.classList.contains('map-entry') || parentElement.classList.contains('array-item')) {
-            // Force recalculation by temporarily removing max-height constraints
-            const parentContent = parentElement.closest('.collapsible-content');
-            if (parentContent && !parentContent.classList.contains('collapsed')) {
-                parentContent.style.maxHeight = 'none';
-                setTimeout(() => {
-                    parentContent.style.maxHeight = parentContent.scrollHeight + 'px';
-                }, 10);
-            }
+    // Walk up and set all expanded ancestor sections to none
+    let current = section.parentElement ? section.parentElement.closest('.collapsible-section') : null;
+    while (current) {
+        const parentContent = current.querySelector(':scope > .collapsible-content');
+        if (parentContent && !parentContent.classList.contains('collapsed')) {
+            parentContent.style.maxHeight = 'none';
         }
-
-        // Check if parent is a collapsible section
-        const parentSection = parentElement.closest('.collapsible-section');
-        if (parentSection && parentSection !== section) {
-            const parentSectionContent = parentSection.querySelector('.collapsible-content');
-            if (parentSectionContent && !parentSectionContent.classList.contains('collapsed')) {
-                parentSectionContent.style.maxHeight = parentSectionContent.scrollHeight + 'px';
-            }
-            updateParentHeights(parentSection);
-            break;
-        } else {
-            parentElement = parentElement.parentElement;
-        }
+        current = current.parentElement ? current.parentElement.closest('.collapsible-section') : null;
     }
 }
 
@@ -1262,10 +1220,7 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
         });
     } else if (valueSchema.type === 'array') {
         const valueGroup = createFormGroup(valueSchema, null, null, valuePath, value, true);
-        // Remove the outer form-group wrapper for inline display
-        while (valueGroup.firstChild) {
-            entry.appendChild(valueGroup.firstChild);
-        }
+        entry.appendChild(valueGroup);
     } else {
         const valueInput = createFormElement(valueSchema, valuePath, value);
         entry.appendChild(valueInput);
@@ -1306,7 +1261,37 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         }, 10);
     };
 
-    if (itemSchema.type === 'object' && itemSchema.properties) {
+    if (itemSchema.type === 'object' && itemSchema.additionalProperties) {
+        // Map type — render as inline key-value pairs within the array item
+        const header = document.createElement('div');
+        header.className = 'array-item-header';
+        header.appendChild(removeBtn);
+        item.appendChild(header);
+
+        const mapHeader = document.createElement('div');
+        mapHeader.className = 'array-header';
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn btn-primary';
+        addBtn.textContent = 'Add Entry';
+        addBtn.onclick = () => {
+            addMapEntry(mapContainer, itemSchema.additionalProperties, itemPath);
+        };
+        mapHeader.appendChild(addBtn);
+        item.appendChild(mapHeader);
+
+        const mapContainer = document.createElement('div');
+        mapContainer.className = 'map-container';
+        mapContainer.setAttribute('data-path', itemPath);
+        item.appendChild(mapContainer);
+
+        // Add existing entries
+        if (value && typeof value === 'object') {
+            Object.keys(value).forEach(key => {
+                addMapEntry(mapContainer, itemSchema.additionalProperties, itemPath, key, value[key]);
+            });
+        }
+    } else if (itemSchema.type === 'object' && itemSchema.properties) {
         // Render object properties inline (no collapsible wrapper)
         const header = document.createElement('div');
         header.className = 'array-item-header';
@@ -1350,10 +1335,15 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
 
     container.appendChild(item);
 
-    // Update parent heights after adding
-    setTimeout(() => {
-        recalculateAllAncestorHeights(container.closest('.collapsible-section'));
-    }, 10);
+    // Set all ancestor collapsible-content elements to max-height: none
+    // so they grow to fit the new content
+    let el = container.closest('.collapsible-content');
+    while (el) {
+        if (!el.classList.contains('collapsed')) {
+            el.style.maxHeight = 'none';
+        }
+        el = el.parentElement ? el.parentElement.closest('.collapsible-content') : null;
+    }
 }
 
 function updateParentSectionStatus(container) {
@@ -1703,7 +1693,7 @@ function expandAll() {
         header.classList.remove('collapsed');
         content.classList.remove('collapsed');
         arrow.classList.remove('collapsed');
-        content.style.maxHeight = content.scrollHeight + 'px';
+        content.style.maxHeight = 'none';
     });
 }
 
