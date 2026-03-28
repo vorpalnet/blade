@@ -281,6 +281,11 @@ input:focus, select:focus, textarea:focus {
     gap: 8px;
 }
 
+.checkbox-group label {
+    flex: 1;
+    margin-bottom: 0;
+}
+
 .checkbox-group input[type="checkbox"] {
     width: auto;
 }
@@ -316,15 +321,6 @@ input:focus, select:focus, textarea:focus {
     background: #2563eb;
 }
 
-.btn-danger {
-    background: #dc2626;
-    color: white;
-}
-
-.btn-danger:hover {
-    background: #b91c1c;
-}
-
 .btn-secondary {
     background: #6b7280;
     color: white;
@@ -345,14 +341,15 @@ input:focus, select:focus, textarea:focus {
 
 .array-item-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
-    margin-bottom: 6px;
+    gap: 8px;
+    margin-bottom: 4px;
 }
 
-.array-item-title {
-    font-weight: 500;
-    color: #4b5563;
+.array-item-header input,
+.array-item-header select {
+    flex: 1;
 }
 
 .map-entry {
@@ -793,7 +790,7 @@ input:focus, select:focus, textarea:focus {
     height: 22px;
     padding: 0;
     border: none;
-    border-radius: 50%;
+    border-radius: 4px;
     background: #3b82f6;
     color: white;
     cursor: pointer;
@@ -803,7 +800,7 @@ input:focus, select:focus, textarea:focus {
 
 .add-property-btn:hover {
     background: #2563eb;
-    transform: scale(1.1);
+    transform: scale(1.05);
 }
 
 .add-property-icon {
@@ -829,8 +826,8 @@ input:focus, select:focus, textarea:focus {
     height: 22px;
     padding: 0;
     border: none;
-    border-radius: 50%;
-    background: #ef4444;
+    border-radius: 4px;
+    background: #3b82f6;
     color: white;
     cursor: pointer;
     transition: all 0.2s;
@@ -839,8 +836,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 .delete-property-btn:hover {
-    background: #dc2626;
-    transform: scale(1.1);
+    background: #2563eb;
+    transform: scale(1.05);
 }
 
 .delete-property-icon {

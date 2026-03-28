@@ -652,10 +652,13 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
             const checkboxGroup = document.createElement('div');
             checkboxGroup.className = 'checkbox-group';
             checkboxGroup.appendChild(element);
-            // Move label into checkbox group
+            // Move label and delete button into checkbox group
             headerRow.removeChild(label);
             checkboxGroup.appendChild(label);
-            // Keep delete button in header
+            headerRow.removeChild(deleteBtn);
+            checkboxGroup.appendChild(deleteBtn);
+            // Remove empty header row
+            group.removeChild(headerRow);
             group.appendChild(checkboxGroup);
             if (description) {
                 const desc = document.createElement('div');
@@ -1283,19 +1286,18 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
     const item = document.createElement('div');
     item.className = 'array-item';
 
-    const header = document.createElement('div');
-    header.className = 'array-item-header';
+    if (itemSchema.$ref) {
+        itemSchema = resolveRef(itemSchema.$ref);
+    }
 
-    const title = document.createElement('div');
-    title.className = 'array-item-title';
-    title.textContent = `Item ${currentIndex + 1}`;
-    header.appendChild(title);
-
+    // Create remove button (shared across all item types)
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
-    removeBtn.className = 'btn btn-danger';
-    removeBtn.textContent = 'Remove';
-    removeBtn.onclick = () => {
+    removeBtn.className = 'delete-property-btn';
+    removeBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+    removeBtn.title = 'Remove item';
+    removeBtn.onclick = (e) => {
+        e.stopPropagation();
         item.remove();
         // Update parent section status and heights
         updateParentSectionStatus(container);
@@ -1303,23 +1305,47 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
             recalculateAllAncestorHeights(container.closest('.collapsible-section'));
         }, 10);
     };
-    header.appendChild(removeBtn);
 
-    item.appendChild(header);
+    if (itemSchema.type === 'object' && itemSchema.properties) {
+        // Render object properties inline (no collapsible wrapper)
+        const header = document.createElement('div');
+        header.className = 'array-item-header';
+        header.appendChild(removeBtn);
+        item.appendChild(header);
 
-    if (itemSchema.$ref) {
-        itemSchema = resolveRef(itemSchema.$ref);
-    }
+        Object.keys(itemSchema.properties).forEach(prop => {
+            const propSchema = itemSchema.properties[prop];
+            const propPath = itemPath ? `${itemPath}.${prop}` : prop;
+            const propValue = value && value[prop] !== undefined ? value[prop] : null;
+            const propTitle = propSchema.title || prop;
+            const propDescription = propSchema.description;
 
-    if (itemSchema.type === 'object' || itemSchema.type === 'array') {
+            if (!hasValue(propValue)) {
+                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, item, true);
+                item.appendChild(placeholder);
+            } else {
+                const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
+                item.appendChild(propGroup);
+            }
+        });
+    } else if (itemSchema.type === 'array') {
+        const header = document.createElement('div');
+        header.className = 'array-item-header';
+        header.appendChild(removeBtn);
+        item.appendChild(header);
+
         const itemGroup = createFormGroup(itemSchema, null, null, itemPath, value, true);
-        // Remove the outer form-group wrapper for inline display
         while (itemGroup.firstChild) {
             item.appendChild(itemGroup.firstChild);
         }
     } else {
+        // Simple value — put input and remove button on same row
+        const header = document.createElement('div');
+        header.className = 'array-item-header';
         const itemInput = createFormElement(itemSchema, itemPath, value);
-        item.appendChild(itemInput);
+        header.appendChild(itemInput);
+        header.appendChild(removeBtn);
+        item.appendChild(header);
     }
 
     container.appendChild(item);

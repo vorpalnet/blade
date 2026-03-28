@@ -66,8 +66,6 @@ public class FileManagerServlet extends HttpServlet {
 		}
 
 		websocketSessions.add(session);
-		logger.info("WebSocket connection opened. Session ID: " + session.getId());
-
 		// Send current file content to newly connected client
 		try {
 			String fileContent = readFromFile();
@@ -79,8 +77,6 @@ public class FileManagerServlet extends HttpServlet {
 
 	@OnMessage
 	public void onMessage(String message, Session session) {
-		logger.info("Received WebSocket message: " + message);
-
 		try {
 			JsonNode jsonNode = objectMapper.readTree(message);
 			String action = jsonNode.get("action").asText();
@@ -137,7 +133,6 @@ public class FileManagerServlet extends HttpServlet {
 				String saveContent = jsonNode.get("content").asText();
 				saveConfigFile(saveFile, saveContent);
 				sendMessageToSession(session, createMessage("save_success", "File saved successfully"));
-				logger.info("Saved configuration file: " + saveFile);
 				break;
 
 			case "list_versions":
@@ -151,7 +146,6 @@ public class FileManagerServlet extends HttpServlet {
 				String versionTimestamp = jsonNode.get("timestamp").asText();
 				String restoredContent = restoreVersion(restoreFile, versionTimestamp);
 				sendMessageToSession(session, createMessage("version_restored", restoredContent));
-				logger.info("Restored version " + versionTimestamp + " of file: " + restoreFile);
 				break;
 
 			case "get_version_content":
@@ -169,7 +163,6 @@ public class FileManagerServlet extends HttpServlet {
 				String reloadApp = jsonNode.get("appName").asText();
 				reloadViaMBean(reloadApp);
 				sendMessageToSession(session, createMessage("reload_success", "Configuration reloaded for " + reloadApp));
-				logger.info("Reloaded configuration for: " + reloadApp);
 				break;
 
 			case "list_schemas":
@@ -202,7 +195,6 @@ public class FileManagerServlet extends HttpServlet {
 	@OnClose
 	public void onClose(Session session) {
 		websocketSessions.remove(session);
-		logger.info("WebSocket connection closed. Session ID: " + session.getId());
 	}
 
 	@OnError
@@ -304,7 +296,6 @@ public class FileManagerServlet extends HttpServlet {
 		for (ObjectInstance mbean : mbeans) {
 			SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, mbean.getObjectName(), SettingsMXBean.class);
 			settings.reload();
-			logger.info("Reloaded MBean: " + mbean.getObjectName());
 		}
 	}
 
@@ -371,7 +362,6 @@ public class FileManagerServlet extends HttpServlet {
 			throw new IOException("File does not exist: " + relativePath);
 		}
 
-		logger.info("Loading config file: " + realPath);
 		return new String(Files.readAllBytes(filePath));
 	}
 
@@ -381,7 +371,6 @@ public class FileManagerServlet extends HttpServlet {
 		// If path points to a sample file, convert to primary location
 		if (realPath.contains("/_samples/") && realPath.endsWith(".json.SAMPLE")) {
 			realPath = realPath.replace("/_samples/", "/").replace(".json.SAMPLE", ".json");
-			logger.info("Converted sample path to primary: " + realPath);
 		}
 
 		Path filePath = Paths.get(realPath);
@@ -397,7 +386,6 @@ public class FileManagerServlet extends HttpServlet {
 		}
 
 		Files.write(filePath, content.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-		logger.info("Saved config file: " + realPath);
 	}
 
 	private void createVersionBackup(Path filePath) throws IOException {
@@ -412,7 +400,6 @@ public class FileManagerServlet extends HttpServlet {
 		Path versionPath = versionsDir.resolve(versionFileName);
 
 		Files.copy(filePath, versionPath, StandardCopyOption.REPLACE_EXISTING);
-		logger.info("Created version backup: " + versionPath);
 
 		cleanupOldVersions(versionsDir, fileName);
 	}
@@ -434,7 +421,6 @@ public class FileManagerServlet extends HttpServlet {
 		if (versions.size() > MAX_VERSIONS) {
 			for (int i = MAX_VERSIONS; i < versions.size(); i++) {
 				Files.delete(versions.get(i));
-				logger.info("Deleted old version: " + versions.get(i));
 			}
 		}
 	}
@@ -498,7 +484,6 @@ public class FileManagerServlet extends HttpServlet {
 		}
 
 		Files.write(filePath, content.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-		logger.info("Restored version " + timestampStr + " to file: " + realPath);
 
 		return content;
 	}
@@ -608,7 +593,6 @@ public class FileManagerServlet extends HttpServlet {
 	private synchronized void writeToFile(String content) throws IOException {
 		Path filePath = Paths.get(DATA_FILE_PATH);
 		Files.write(filePath, content.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-		logger.info("File written with content: " + content);
 	}
 
 	private synchronized void appendToFile(String content) throws IOException {
@@ -617,7 +601,6 @@ public class FileManagerServlet extends HttpServlet {
 			Files.createFile(filePath);
 		}
 		Files.write(filePath, (content + System.lineSeparator()).getBytes(), StandardOpenOption.APPEND);
-		logger.info("Content appended to file: " + content);
 	}
 
 	// WebSocket Communication Methods

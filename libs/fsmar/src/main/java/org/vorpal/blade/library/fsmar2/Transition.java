@@ -28,13 +28,16 @@ import java.io.Serializable;
 
 import org.vorpal.blade.framework.v2.config.Condition;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
+@JsonPropertyOrder({ "id", "condition", "action", "next" })
 public class Transition implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 	public String id;
-	public String next;
 	public Condition condition;
 	public Action action;
+	public String next;
 
 	public Transition() {
 	}

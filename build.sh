@@ -22,7 +22,6 @@
 #   e.g. vorpal-blade-services-production.ear, vorpal-blade-services-minimal.ear
 #
 # Dist management:
-#   On success: previous dist directories are zipped; current build stays unzipped.
 #   On failure: the current build's dist directory is deleted.
 # ============================================================================
 
@@ -87,18 +86,18 @@ cleanup_failed_dist() {
 }
 
 # --- Zip previous dist directories (not the current build) ---
-zip_previous_dist() {
-    local dist_parent="${SCRIPT_DIR}/dist"
-    [ -d "$dist_parent" ] || return 0
-    for dir in "$dist_parent"/*/; do
-        [ -d "$dir" ] || continue
-        local base=$(basename "$dir")
-        # Skip the current build's directory
-        [ "$base" = "${REVISION}-${BUILD_NUM}" ] && continue
-        (cd "$dist_parent" && zip -qr "${base}.zip" "$base" && rm -rf "$base")
-        echo "Zipped dist/${base}.zip"
-    done
-}
+# zip_previous_dist() {
+#     local dist_parent="${SCRIPT_DIR}/dist"
+#     [ -d "$dist_parent" ] || return 0
+#     for dir in "$dist_parent"/*/; do
+#         [ -d "$dir" ] || continue
+#         local base=$(basename "$dir")
+#         # Skip the current build's directory
+#         [ "$base" = "${REVISION}-${BUILD_NUM}" ] && continue
+#         (cd "$dist_parent" && zip -qr "${base}.zip" "$base" && rm -rf "$base")
+#         echo "Zipped dist/${base}.zip"
+#     done
+# }
 
 # --- Parse arguments: collect multiple profiles, one platform, and Maven args ---
 PROFILES=()
@@ -225,7 +224,7 @@ if [ ${#PROFILES[@]} -eq 1 ]; then
         exit $MVN_EXIT
     fi
 
-    zip_previous_dist
+    # zip_previous_dist
 else
     # =====================================================================
     # Multiple profiles: build modules first, then EAR per profile
@@ -312,5 +311,5 @@ else
         echo "  vorpal-blade-services-${profile}.ear"
     done
 
-    zip_previous_dist
+    # zip_previous_dist
 fi

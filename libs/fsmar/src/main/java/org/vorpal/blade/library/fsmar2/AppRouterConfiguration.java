@@ -29,11 +29,9 @@ import java.util.HashMap;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
 
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+@JsonPropertyOrder({ "defaultApplication", "previous" })
 public class AppRouterConfiguration extends Configuration implements Serializable {
 
 	private static final long serialVersionUID = 1L;
@@ -59,20 +57,6 @@ public class AppRouterConfiguration extends Configuration implements Serializabl
 
 	public void setDefaultApplication(String defaultApplication) {
 		this.defaultApplication = defaultApplication;
-	}
-
-	public static void main(String[] args) throws JsonProcessingException {
-
-		AppRouterConfiguration configuration = new AppRouterConfiguration();
-
-		ObjectMapper mapper = new ObjectMapper();
-		mapper.setSerializationInclusion(Include.NON_NULL);
-		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
-
-		String output = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(configuration);
-
-		System.out.println(output);
-
 	}
 
 }
