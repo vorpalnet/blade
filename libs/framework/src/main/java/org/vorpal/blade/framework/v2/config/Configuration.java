@@ -2,35 +2,26 @@ package org.vorpal.blade.framework.v2.config;
 
 import java.io.Serializable;
 import java.text.ParseException;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
-import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /**
  * Base configuration class with logging, session parameters, and utility
  * methods.
  */
+@JsonPropertyOrder({ "logging", "session", "analytics" })
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
-
-//	public enum Events{servletCreated, servletDestroyed };
-//	public Events 
-
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
-
-	// Maximum iterations to prevent infinite loops in resolveVariables
-	private static final int MAX_VARIABLE_RESOLUTION_ITERATIONS = 25;
+	private static final int MAX_VARIABLE_RESOLUTION_ITERATIONS = 5; // prevent loops
 
 	@JsonPropertyDescription("Logging parameters")
 	protected LogParameters logging;

@@ -337,7 +337,7 @@ public class FileManagerServlet extends HttpServlet {
 	}
 
 	private String loadSampleFromFilesystem(String appName) throws IOException {
-		Path samplePath = Paths.get(SAMPLES_DIR + "/" + appName + ".json");
+		Path samplePath = Paths.get(SAMPLES_DIR + "/" + appName + ".json.SAMPLE");
 		if (!Files.exists(samplePath)) {
 			return null;
 		}

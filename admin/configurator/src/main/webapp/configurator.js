@@ -267,6 +267,11 @@ function onTargetDirectoryChange(path) {
 
     selectedTargetDirectory = targetDirectories.find(t => t.path === path);
     showSchemaLoadStatus('Target: ' + (selectedTargetDirectory ? selectedTargetDirectory.displayName : 'None'), 'success');
+
+    // Reload current schema's JSON file from the new target
+    if (currentSchemaName && selectedTargetDirectory) {
+        loadSchema(currentSchemaName);
+    }
 }
 
 // Populate the schema dropdown
@@ -660,12 +665,6 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
             // Remove empty header row
             group.removeChild(headerRow);
             group.appendChild(checkboxGroup);
-            if (description) {
-                const desc = document.createElement('div');
-                desc.className = 'description';
-                desc.textContent = description;
-                group.appendChild(desc);
-            }
         } else {
             group.appendChild(element);
         }
@@ -1754,8 +1753,11 @@ function clearDirty() {
 }
 
 function checkUnsavedChanges() {
-    if (isDirty) {
-        return confirm('You have unsaved changes. Do you want to discard them?');
+    if (isDirty && savedDataSnapshot !== null) {
+        const currentData = JSON.stringify(getFormData());
+        if (currentData !== savedDataSnapshot) {
+            return confirm('You have unsaved changes. Do you want to discard them?');
+        }
     }
     return true;
 }
@@ -2127,6 +2129,39 @@ document.addEventListener('DOMContentLoaded', function() {
     loadRecentFiles(); // Load recent files from localStorage
     setupDirtyTracking(); // Set up unsaved changes tracking
 
+    // Position help tooltips using fixed positioning to avoid overflow clipping
+    document.addEventListener('mouseenter', function(e) {
+        const icon = e.target.closest('.field-help-icon');
+        if (!icon) return;
+        const tooltip = icon.querySelector('.field-help-tooltip');
+        if (!tooltip) return;
+        const rect = icon.getBoundingClientRect();
+        tooltip.style.display = 'block';
+        // Position above the icon, centered
+        const tooltipRect = tooltip.getBoundingClientRect();
+        let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+        let top = rect.top - tooltipRect.height - 8;
+        // Keep within viewport
+        if (left < 4) left = 4;
+        if (left + tooltipRect.width > window.innerWidth - 4) left = window.innerWidth - tooltipRect.width - 4;
+        if (top < 4) {
+            // Show below if no room above
+            top = rect.bottom + 8;
+            tooltip.classList.add('below');
+        } else {
+            tooltip.classList.remove('below');
+        }
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+    }, true);
+
+    document.addEventListener('mouseleave', function(e) {
+        const icon = e.target.closest('.field-help-icon');
+        if (!icon) return;
+        const tooltip = icon.querySelector('.field-help-tooltip');
+        if (tooltip) tooltip.style.display = 'none';
+    }, true);
+
     // Add tab click handlers using data-tab attribute
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', function(e) {
@@ -2408,6 +2443,8 @@ function restoreVersionFromHistory(timestamp) {
     const entry = schemaRegistry.find(e => e.name === currentSchemaName);
     if (!entry || !entry.jsonFile) return;
 
+    pendingRequests.set('restoreTimestamp', timestamp);
+
     sendWebSocketMessage('restore_version', {
         file: entry.jsonFile,
         timestamp: timestamp
@@ -2419,6 +2456,10 @@ function restoreVersionFromHistory(timestamp) {
 function handleVersionRestored(content) {
     try {
         const data = JSON.parse(content);
+        const timestamp = pendingRequests.get('restoreTimestamp');
+        pendingRequests.delete('restoreTimestamp');
+        const dateStr = timestamp ? new Date(Number(timestamp)).toLocaleString() : '';
+
         currentData = data;
         initialData = data;
 
@@ -2428,8 +2469,8 @@ function handleVersionRestored(content) {
             jsonEditor.setValue(JSON.stringify(data, null, 2), -1);
         }
 
-        showSyncStatus('Version restored successfully', 'success');
-        showSchemaLoadStatus('Restored', 'success');
+        showSyncStatus('Restored: ' + dateStr, 'success');
+        showSchemaLoadStatus('Restored: ' + dateStr, 'success');
         closeVersionHistory();
     } catch (e) {
         showSyncStatus('Error restoring version: ' + e.message, 'error');
@@ -2439,6 +2480,8 @@ function handleVersionRestored(content) {
 function previewVersion(timestamp) {
     const entry = schemaRegistry.find(e => e.name === currentSchemaName);
     if (!entry || !entry.jsonFile) return;
+
+    pendingRequests.set('versionTimestamp', timestamp);
 
     sendWebSocketMessage('get_version_content', {
         file: entry.jsonFile,
@@ -2451,6 +2494,9 @@ function previewVersion(timestamp) {
 function handleVersionContent(content) {
     try {
         const data = JSON.parse(content);
+        const timestamp = pendingRequests.get('versionTimestamp');
+        pendingRequests.delete('versionTimestamp');
+        const dateStr = timestamp ? new Date(Number(timestamp)).toLocaleString() : '';
 
         // Switch to JSON tab
         switchTab('json');
@@ -2460,7 +2506,8 @@ function handleVersionContent(content) {
             jsonEditor.setValue(JSON.stringify(data, null, 2), -1);
         }
 
-        showSyncStatus('Preview loaded (not saved)', 'warning');
+        showSyncStatus('Preview: ' + dateStr + ' (not saved)', 'warning');
+        showSchemaLoadStatus('Preview: ' + dateStr, 'warning');
         closeVersionHistory();
     } catch (e) {
         showSyncStatus('Error loading preview: ' + e.message, 'error');

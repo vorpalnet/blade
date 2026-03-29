@@ -651,7 +651,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .field-help-tooltip {
-    position: absolute;
+    position: fixed;
     background: #1e293b;
     color: white;
     padding: 10px 12px;
@@ -660,13 +660,11 @@ input:focus, select:focus, textarea:focus {
     font-weight: normal;
     line-height: 1.4;
     max-width: 300px;
-    z-index: 1000;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%);
+    z-index: 10000;
     white-space: normal;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     display: none;
+    pointer-events: none;
 }
 
 .field-help-tooltip::after {
@@ -679,8 +677,11 @@ input:focus, select:focus, textarea:focus {
     border-top-color: #1e293b;
 }
 
-.field-help-icon:hover .field-help-tooltip {
-    display: block;
+.field-help-tooltip.below::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: #1e293b;
 }
 
 /* Feature: Validation Indicators */

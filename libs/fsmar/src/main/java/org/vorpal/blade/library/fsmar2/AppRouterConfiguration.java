@@ -29,8 +29,9 @@ import java.util.HashMap;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
 
+@JsonSchemaTitle(value = "FSMAR (2)")
 public class AppRouterConfiguration extends Configuration implements Serializable {
 
 	private static final long serialVersionUID = 1L;

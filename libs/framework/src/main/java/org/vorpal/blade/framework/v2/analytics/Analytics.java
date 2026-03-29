@@ -28,17 +28,16 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.databind.JsonNode;
 
-@JsonPropertyOrder({ "enabled", "loggingLevel", "events" })
+@JsonPropertyOrder({ "enabled", "events" })
 public class Analytics implements Serializable {
+    private static final long serialVersionUID = 1L;
 
-	private static final long serialVersionUID = 1L;
+    private Boolean enabled = false;
+    private Map<String, EventSelector> events = new HashMap<>();
 
-	// For associating SIP with HTTP
+    // For associating SIP with HTTP
+    @JsonIgnore
 	public static final ThreadLocal<SipServletRequest> sipServletRequest = new ThreadLocal<>();
-
-	private Boolean enabled = false;
-
-	private Map<String, EventSelector> events = new HashMap<>();
 
 	@JsonIgnore
 	private static Integer appInstanceId = null;

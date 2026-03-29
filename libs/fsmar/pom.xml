@@ -36,6 +36,20 @@
 			<groupId>com.github.seancfoley</groupId>
 			<artifactId>ipaddress</artifactId>
 		</dependency>
+		<!-- Override provided scope from framework — FSMAR is a fat JAR, not a deployed WAR,
+		     so all framework runtime deps must be bundled explicitly. -->
+		<dependency>
+			<groupId>com.kjetland</groupId>
+			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.jayway.jsonpath</groupId>
+			<artifactId>json-path</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-collections4</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>
