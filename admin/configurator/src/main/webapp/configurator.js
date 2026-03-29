@@ -1164,6 +1164,12 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
     const header = document.createElement('div');
     header.className = 'map-entry-header';
 
+    // Collapse arrow
+    const arrow = document.createElement('span');
+    arrow.className = 'collapsible-arrow';
+    arrow.textContent = '▼';
+    header.appendChild(arrow);
+
     // Key input directly in header
     const keyInput = createFormElement({ type: 'string' }, '', key, true);
     keyInput.placeholder = 'Key';
@@ -1186,6 +1192,10 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
 
     entry.appendChild(header);
 
+    // Collapsible content wrapper for the entry's values
+    const entryContent = document.createElement('div');
+    entryContent.className = 'map-entry-content';
+
     const valuePath = basePath ? `${basePath}.${key}` : key;
 
     if (valueSchema.$ref) {
@@ -1202,20 +1212,52 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
             const propDescription = propSchema.description;
 
             if (!hasValue(propValue)) {
-                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, entry, true);
-                entry.appendChild(placeholder);
+                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, entryContent, true);
+                entryContent.appendChild(placeholder);
             } else {
                 const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
-                entry.appendChild(propGroup);
+                entryContent.appendChild(propGroup);
             }
         });
     } else if (valueSchema.type === 'array') {
         const valueGroup = createFormGroup(valueSchema, null, null, valuePath, value, true);
-        entry.appendChild(valueGroup);
+        entryContent.appendChild(valueGroup);
     } else {
         const valueInput = createFormElement(valueSchema, valuePath, value);
-        entry.appendChild(valueInput);
+        entryContent.appendChild(valueInput);
     }
+
+    entry.appendChild(entryContent);
+
+    // Wire up collapse toggle on the header
+    header.style.cursor = 'pointer';
+    header.onclick = (e) => {
+        // Don't toggle when clicking input, button, or inside them
+        if (e.target.closest('input, button')) return;
+        toggleCollapse(header, entryContent, arrow);
+
+        // When expanding, ensure inner non-toggleable sections are also expanded
+        if (!header.classList.contains('collapsed')) {
+            entryContent.querySelectorAll('.collapsible-header.collapsed').forEach(innerHeader => {
+                const innerArrow = innerHeader.querySelector('.collapsible-arrow');
+                if (innerArrow && innerArrow.style.display === 'none') {
+                    const innerContent = innerHeader.nextElementSibling;
+                    innerHeader.classList.remove('collapsed');
+                    innerContent.classList.remove('collapsed');
+                    innerContent.style.maxHeight = 'none';
+                }
+            });
+        }
+    };
+
+    // Remove redundant collapse arrows from direct child collapsible sections —
+    // the map entry's own arrow already handles collapsing all content.
+    entryContent.querySelectorAll(':scope > .collapsible-section > .collapsible-header').forEach(innerHeader => {
+        const innerArrow = innerHeader.querySelector('.collapsible-arrow');
+        if (innerArrow) innerArrow.style.display = 'none';
+        innerHeader.onclick = null;
+        innerHeader.style.cursor = 'default';
+    });
 
     container.appendChild(entry);
 
@@ -1394,8 +1436,8 @@ function getFormData() {
                 const result = {};
 
                 // When extracting from array-items or map-entries, form content might be
-                // inside a .collapsible-content child (from the moved collapsible section)
-                const collapsibleContent = container.querySelector(':scope > .collapsible-content');
+                // inside a .collapsible-content or .map-entry-content child
+                const collapsibleContent = container.querySelector(':scope > .collapsible-content, :scope > .map-entry-content');
                 const searchContainer = collapsibleContent || container;
 
                 Object.keys(schemaNode.properties).forEach(propName => {
@@ -1676,44 +1718,60 @@ function resetForm() {
 }
 
 function expandAll() {
-    const headers = document.querySelectorAll('.collapsible-header.collapsed');
-    headers.forEach(header => {
+    // Expand collapsible sections
+    document.querySelectorAll('.collapsible-header.collapsed').forEach(header => {
         const content = header.nextElementSibling;
         const arrow = header.querySelector('.collapsible-arrow');
-
         header.classList.remove('collapsed');
         content.classList.remove('collapsed');
-        arrow.classList.remove('collapsed');
+        if (arrow) arrow.classList.remove('collapsed');
+        content.style.maxHeight = 'none';
+    });
+    // Expand map entries
+    document.querySelectorAll('.map-entry-header.collapsed').forEach(header => {
+        const content = header.nextElementSibling;
+        const arrow = header.querySelector('.collapsible-arrow');
+        header.classList.remove('collapsed');
+        content.classList.remove('collapsed');
+        if (arrow) arrow.classList.remove('collapsed');
         content.style.maxHeight = 'none';
     });
 }
 
 function collapseAll() {
-    const headers = document.querySelectorAll('.collapsible-header:not(.collapsed)');
-    headers.forEach(header => {
+    // Collapse map entries (these handle their inner sections)
+    document.querySelectorAll('.map-entry-header:not(.collapsed)').forEach(header => {
         const content = header.nextElementSibling;
         const arrow = header.querySelector('.collapsible-arrow');
-
         header.classList.add('collapsed');
         content.classList.add('collapsed');
-        arrow.classList.add('collapsed');
+        if (arrow) arrow.classList.add('collapsed');
+        content.style.maxHeight = '0px';
+    });
+    // Collapse collapsible sections (skip ones inside map-entry-content whose arrow is hidden)
+    document.querySelectorAll('.collapsible-header:not(.collapsed)').forEach(header => {
+        const arrow = header.querySelector('.collapsible-arrow');
+        if (arrow && arrow.style.display === 'none') return;
+        const content = header.nextElementSibling;
+        header.classList.add('collapsed');
+        content.classList.add('collapsed');
+        if (arrow) arrow.classList.add('collapsed');
         content.style.maxHeight = '0px';
     });
 }
 
 function collapseEmpty() {
-    const sections = document.querySelectorAll('.collapsible-section');
-    sections.forEach(section => {
+    document.querySelectorAll('.collapsible-section').forEach(section => {
         const badge = section.querySelector('.collapsible-badge.null');
         if (badge) {
             const header = section.querySelector('.collapsible-header');
-            const content = header.nextElementSibling;
             const arrow = header.querySelector('.collapsible-arrow');
-
+            if (arrow && arrow.style.display === 'none') return;
+            const content = header.nextElementSibling;
             if (!header.classList.contains('collapsed')) {
                 header.classList.add('collapsed');
                 content.classList.add('collapsed');
-                arrow.classList.add('collapsed');
+                if (arrow) arrow.classList.add('collapsed');
                 content.style.maxHeight = '0px';
             }
         }

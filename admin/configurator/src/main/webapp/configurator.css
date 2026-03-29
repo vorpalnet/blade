@@ -367,6 +367,24 @@ input:focus, select:focus, textarea:focus {
     align-items: center;
     gap: 8px;
     margin-bottom: 8px;
+    cursor: pointer;
+}
+
+.map-entry-header.collapsed {
+    margin-bottom: 0;
+}
+
+.map-entry-content {
+    padding: 0 0 0 12px;
+    transition: max-height 0.3s ease-out, overflow 0s 0.3s;
+    overflow: visible;
+}
+
+.map-entry-content.collapsed {
+    max-height: 0 !important;
+    padding: 0 0 0 12px;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, overflow 0s;
 }
 
 .map-entry-header .map-key-input {
@@ -375,8 +393,6 @@ input:focus, select:focus, textarea:focus {
 }
 
 .map-key-input {
-    background: #fef3c7;
-    border-color: #f59e0b;
     font-weight: 500;
 }
 
