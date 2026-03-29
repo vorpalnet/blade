@@ -25,6 +25,8 @@ import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -32,7 +34,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 public class Analytics implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    @JsonPropertyDescription("Enable or disable analytics event collection")
+    @JsonProperty(defaultValue = "false")
     private Boolean enabled = false;
+
+    @JsonPropertyDescription("Map of analytics event definitions keyed by event name")
     private Map<String, EventSelector> events = new HashMap<>();
 
     // For associating SIP with HTTP

@@ -111,6 +111,7 @@ public class AttributeSelector implements Serializable {
 	 * @param additionalExpressions the additional expressions map
 	 * @return this AttributeSelector for method chaining
 	 */
+	@JsonPropertyDescription("Additional named expressions for extracting multiple values from the attribute")
 	public AttributeSelector setAdditionalExpressions(Map<String, String> additionalExpressions) {
 		this.additionalExpressions = additionalExpressions;
 		return this;
@@ -153,6 +154,7 @@ public class AttributeSelector implements Serializable {
 	 *
 	 * @param id the selector ID
 	 */
+	@JsonPropertyDescription("Unique identifier for this selector")
 	public void setId(String id) {
 		this.id = id;
 	}
@@ -171,6 +173,7 @@ public class AttributeSelector implements Serializable {
 	 *
 	 * @param description the description
 	 */
+	@JsonPropertyDescription("Description of this selector's purpose")
 	public void setDescription(String description) {
 		this.description = description;
 	}
@@ -193,6 +196,7 @@ public class AttributeSelector implements Serializable {
 	 *
 	 * @param attribute the attribute name
 	 */
+	@JsonPropertyDescription("SIP message attribute to extract, e.g. From, To, Request-URI")
 	public void setAttribute(String attribute) {
 		this.attribute = attribute;
 	}
@@ -213,6 +217,7 @@ public class AttributeSelector implements Serializable {
 	 *
 	 * @param expression the replacement expression
 	 */
+	@JsonPropertyDescription("Regular expression applied to the attribute value for extraction or matching")
 	public void setExpression(String expression) {
 		this.expression = expression;
 	}

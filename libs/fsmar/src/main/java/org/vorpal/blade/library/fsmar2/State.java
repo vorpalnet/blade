@@ -27,8 +27,14 @@ package org.vorpal.blade.library.fsmar2;
 import java.io.Serializable;
 import java.util.HashMap;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 public class State implements Serializable {
 	private static final long serialVersionUID = 1L;
+
+	@JsonPropertyDescription("Map of SIP request methods (e.g. INVITE, REGISTER) to their trigger definitions")
+	@JsonProperty(defaultValue = "{}")
 	public HashMap<String, Trigger> triggers = new HashMap<>();
 
 	public Trigger getTrigger(String name) {

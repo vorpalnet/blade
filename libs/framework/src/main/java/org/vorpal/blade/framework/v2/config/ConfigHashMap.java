@@ -5,6 +5,7 @@ import java.util.HashMap;
 
 import javax.servlet.sip.SipServletRequest;
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 /**
@@ -14,6 +15,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 public class ConfigHashMap extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	@JsonPropertyDescription("Hash map of translation entries keyed by lookup value")
 	public HashMap<String, Translation> map = new HashMap<>();
 
 	public int size() {

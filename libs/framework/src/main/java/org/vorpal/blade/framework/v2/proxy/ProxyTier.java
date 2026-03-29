@@ -6,6 +6,9 @@ import java.util.List;
 
 import javax.servlet.sip.URI;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 /**
  * Represents a routing tier within a proxy plan.
  * A tier contains endpoints that can be tried in parallel or serial mode with an optional timeout.
@@ -26,9 +29,18 @@ public class ProxyTier implements Serializable {
 	/** Default timeout value in seconds */
 	private static final Integer DEFAULT_TIMEOUT = 0;
 
+	@JsonPropertyDescription("Unique identifier for this proxy tier")
 	private String id = null;
+
+	@JsonPropertyDescription("Proxy mode: parallel sends to all endpoints simultaneously, serial tries each in order")
+	@JsonProperty(defaultValue = "serial")
 	private Mode mode = Mode.serial;
+
+	@JsonPropertyDescription("Timeout in seconds before failing over to the next tier")
+	@JsonProperty(defaultValue = "0")
 	private Integer timeout = DEFAULT_TIMEOUT;
+
+	@JsonPropertyDescription("List of SIP endpoint URIs to proxy requests to in this tier")
 	private List<URI> endpoints = new ArrayList<>();
 
 	/**

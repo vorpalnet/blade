@@ -10,49 +10,63 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
-//public class PRegistrarSettings extends Configuration{
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
+
+@JsonSchemaTitle("Proxy Registrar")
 public class Settings extends Configuration implements Serializable {
 	private static final long serialVersionUID = -3362129920431974760L;
-	
+
 	/**
 	 * Specifies the SIP messages this container supports.
 	 */
+	@JsonPropertyDescription("Specifies the SIP methods this container supports, used in the Allow header")
 	protected String allowHeader;
 
 	/**
 	 * Specifies whether branches initiated in this proxy operation should include a
 	 * Path header for the REGISTER request for this servlet container or not.
 	 */
+	@JsonPropertyDescription("Whether proxy branches should include a Path header for REGISTER requests")
+	@JsonProperty(defaultValue = "false")
 	protected Boolean addToPath;
 
 	/**
 	 * Proxy the request to the 'To' header instead of issuing a 404 Not Found
 	 * error.
 	 */
+	@JsonPropertyDescription("Proxy the request to the To header instead of issuing a 404 Not Found error")
+	@JsonProperty(defaultValue = "false")
 	public Boolean proxyOnUnregistered;
 
 	/**
 	 * In multi-homed environment this method can be used to select the outbound
 	 * interface to use when sending requests for proxy branches.
 	 */
+	@JsonPropertyDescription("Outbound interface address for proxy branches in a multi-homed environment")
 	public InetAddress outboundInterfaceAddress;
 
 	/**
 	 * In multi-homed environment this method can be used to select the outbound
 	 * interface and port number to use for proxy branches.
 	 */
+	@JsonPropertyDescription("Outbound interface address and port for proxy branches in a multi-homed environment")
 	public InetSocketAddress outboundInterfaceSocketAddress;
 
 	/**
 	 * Specifies whether to proxy in parallel or sequentially.
 	 */
+	@JsonPropertyDescription("Whether to proxy in parallel (true) or sequentially (false)")
+	@JsonProperty(defaultValue = "true")
 	public Boolean parallel;
 
 	/**
 	 * Sets the overall proxy timeout in seconds.
 	 */
-
+	@JsonPropertyDescription("Overall proxy timeout in seconds")
 	public Integer proxyTimeout;
+
 	/**
 	 * Specifies whether branches initiated in this proxy operation should include a
 	 * Record-Route header for this servlet engine or not. This shall affect all the
@@ -60,17 +74,22 @@ public class Settings extends Configuration implements Serializable {
 	 * this servlet engine must stay on the signaling path of subsequent requests. Set to
 	 * 'false' to enable 'loose-routing'.
 	 */
+	@JsonPropertyDescription("Whether to include a Record-Route header to stay on the signaling path; set to false for loose-routing")
+	@JsonProperty(defaultValue = "true")
 	public Boolean recordRoute;
 
 	/**
 	 * Sets the proxy timeout in seconds.
 	 */
+	@JsonPropertyDescription("Proxy timeout in seconds for individual branches")
 	public Integer timeout = null;
 
 	/**
 	 * Specifies whether the application will be invoked on incoming responses
 	 * related to this proxying.
 	 */
+	@JsonPropertyDescription("Whether the application will be invoked on incoming responses related to this proxying")
+	@JsonProperty(defaultValue = "true")
 	public Boolean supervised = null;
 
 	/**

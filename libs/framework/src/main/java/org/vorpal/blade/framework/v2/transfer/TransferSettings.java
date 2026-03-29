@@ -6,6 +6,9 @@ import java.util.List;
 
 import org.vorpal.blade.framework.v2.config.RouterConfig;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 /**
  * Configuration settings for transfer operations.
  *
@@ -22,12 +25,24 @@ public class TransferSettings extends RouterConfig implements Serializable {
 		blind, attended, conference, refer
 	}
 
+	@JsonPropertyDescription("When true, all requests are eligible for transfer, not just INVITE")
+	@JsonProperty(defaultValue = "false")
 	protected Boolean transferAllRequests;
+
+	@JsonPropertyDescription("Default transfer method: blind, attended, conference, or refer")
+	@JsonProperty(defaultValue = "attended")
 	protected TransferStyle defaultTransferStyle;
+
+	@JsonPropertyDescription("SIP application name to handle conference calls")
 	protected String conferenceApp;
 
+	@JsonPropertyDescription("Comma-separated list of allowed SIP methods for transfer operations")
 	protected String allow = DEFAULT_ALLOW;
+
+	@JsonPropertyDescription("List of SIP header names to preserve when forwarding INVITE requests during transfer")
 	protected List<String> preserveInviteHeaders = new ArrayList<>();
+
+	@JsonPropertyDescription("List of SIP header names to preserve when forwarding REFER requests during transfer")
 	protected List<String> preserveReferHeaders = new ArrayList<>();
 
 	public List<String> getPreserveReferHeaders() {

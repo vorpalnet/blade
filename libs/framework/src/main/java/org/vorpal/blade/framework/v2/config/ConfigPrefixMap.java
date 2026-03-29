@@ -6,6 +6,7 @@ import java.util.HashMap;
 import javax.servlet.sip.SipServletRequest;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 /**
@@ -15,6 +16,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 public class ConfigPrefixMap extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	@JsonPropertyDescription("Prefix-matching map of translation entries for longest-prefix lookups")
 	public HashMap<String, Translation> map = new HashMap<>();
 
 	public int size() {

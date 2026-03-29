@@ -16,6 +16,7 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
@@ -36,8 +37,11 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 public abstract class TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	@JsonPropertyDescription("Unique identifier for this translation map")
 	public String id;
+	@JsonPropertyDescription("Description of this translation map's purpose")
 	public String description;
+	@JsonPropertyDescription("Selectors that extract lookup keys from SIP messages")
 	public List<Selector> selectors = new LinkedList<>();
 
 	public abstract Translation createTranslation(String key);

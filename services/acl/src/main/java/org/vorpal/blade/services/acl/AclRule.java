@@ -23,6 +23,8 @@
  */
 package org.vorpal.blade.services.acl;
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 /**
  * @author Jeff McDonald
  *
@@ -32,7 +34,10 @@ public class AclRule {
 		allow, deny
 	};
 
+	@JsonPropertyDescription("IP address or CIDR range to match, e.g. '192.168.1.0/24'")
 	String address;
+
+	@JsonPropertyDescription("Permission to apply when the address matches: 'allow' or 'deny'")
 	Permission permission;
 
 	public AclRule() {

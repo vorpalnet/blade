@@ -27,9 +27,15 @@ package org.vorpal.blade.library.fsmar2;
 import java.io.Serializable;
 import java.util.ArrayList;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 public class Trigger implements Serializable {
 
 	private static final long serialVersionUID = 1L;
+
+	@JsonPropertyDescription("Ordered list of transitions evaluated when this trigger fires; first matching transition wins")
+	@JsonProperty(defaultValue = "[]")
 	public ArrayList<Transition> transitions = new ArrayList<>();
 
 	public Transition createTransition(String next) {

@@ -12,15 +12,21 @@ import javax.servlet.sip.URI;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 /**
  * Router configuration with selectors, translation maps and a default route.
  */
 public class RouterConfig extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
+	@JsonPropertyDescription("List of selectors that extract values from SIP messages for routing lookups")
 	public LinkedList<Selector> selectors = new LinkedList<>();
+	@JsonPropertyDescription("Translation maps used for routing lookups and address resolution")
 	public LinkedList<TranslationsMap> maps = new LinkedList<>();
+	@JsonPropertyDescription("Ordered routing plan that defines the sequence of translation map lookups")
 	public LinkedList<TranslationsMap> plan = new LinkedList<>();
 
+	@JsonPropertyDescription("Default route used when no translation map matches")
 	public Translation defaultRoute = null;
 
 	public RouterConfig() {

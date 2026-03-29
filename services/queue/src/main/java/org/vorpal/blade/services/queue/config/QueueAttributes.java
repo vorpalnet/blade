@@ -4,14 +4,25 @@ import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 public class QueueAttributes implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	@JsonPropertyDescription("Interval in milliseconds between polling the queue for new calls.")
 	public Integer period;
+
+	@JsonPropertyDescription("Number of transactions processed per polling cycle.")
 	public Integer rate;
 //	public Integer limit;
+
+	@JsonPropertyDescription("Duration in milliseconds to wait for an announcement or agent response before re-queuing the call.")
 	public Integer ringDuration;
+
+	@JsonPropertyDescription("Interval in milliseconds between ring attempts to an agent.")
 	public Integer ringPeriod;
+
+	@JsonPropertyDescription("SIP URI of the announcement server to play while callers wait in the queue.")
 	public String announcement;
 
 	public QueueAttributes() {

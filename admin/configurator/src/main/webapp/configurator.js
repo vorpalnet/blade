@@ -32,9 +32,6 @@ const PONG_TIMEOUT = 10000; // Expect pong within 10 seconds
 let isDirty = false;
 let savedDataSnapshot = null;
 
-// Feature: Recent Files
-const MAX_RECENT_FILES = 10;
-let recentFiles = [];
 
 // Feature: Validation
 let validationErrors = new Map();
@@ -340,13 +337,6 @@ function loadSchema(schemaName) {
 
     showSchemaLoadStatus('Loading schema...', 'warning');
     currentSchemaName = schemaName;
-
-    // Feature: Add to recent files
-    addToRecentFiles(
-        selectedTargetDirectory.path,
-        selectedTargetDirectory.displayName,
-        schemaName
-    );
 
     // Store the entry in a pending request
     pendingRequests.set('schema', entry);
@@ -657,7 +647,6 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
             const checkboxGroup = document.createElement('div');
             checkboxGroup.className = 'checkbox-group';
             checkboxGroup.appendChild(element);
-            // Move label and delete button into checkbox group
             headerRow.removeChild(label);
             checkboxGroup.appendChild(label);
             headerRow.removeChild(deleteBtn);
@@ -700,11 +689,14 @@ function createCollapsibleSection(title, description, content, hasData = false, 
     badgeContainer.style.alignItems = 'center';
 
     if (description) {
-        const descBadge = document.createElement('span');
-        descBadge.className = 'collapsible-badge';
-        descBadge.textContent = description.length > 30 ? description.substring(0, 30) + '...' : description;
-        descBadge.title = description;
-        badgeContainer.appendChild(descBadge);
+        const helpIcon = document.createElement('span');
+        helpIcon.className = 'field-help-icon';
+        helpIcon.innerHTML = '?';
+        const tooltip = document.createElement('div');
+        tooltip.className = 'field-help-tooltip';
+        tooltip.textContent = description;
+        helpIcon.appendChild(tooltip);
+        titleContainer.appendChild(helpIcon);
     }
 
     const statusBadge = document.createElement('span');
@@ -1425,7 +1417,7 @@ function getFormData() {
                         let targetContainer = null;
                         const sections = searchContainer.querySelectorAll(':scope > .collapsible-section, :scope > div > .collapsible-section');
                         sections.forEach(section => {
-                            const header = section.querySelector('.collapsible-header .collapsible-title span:last-child');
+                            const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.field-help-icon):not(.collapsible-arrow)');
                             if (header && header.textContent === propTitle) {
                                 targetContainer = section.querySelector('.collapsible-content');
                             }
@@ -1533,7 +1525,7 @@ function getFormData() {
                 let targetSection = null;
 
                 sections.forEach(section => {
-                    const header = section.querySelector('.collapsible-header .collapsible-title span:last-child');
+                    const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.field-help-icon):not(.collapsible-arrow)');
                     if (header && header.textContent === propTitle) {
                         targetSection = section;
                     }
@@ -1789,110 +1781,6 @@ function setupDirtyTracking() {
 }
 
 // ========================================
-// Feature 4: Recent Files List
-// ========================================
-
-function loadRecentFiles() {
-    try {
-        const stored = localStorage.getItem('recentFiles');
-        if (stored) {
-            recentFiles = JSON.parse(stored);
-            displayRecentFiles();
-        }
-    } catch (e) {
-        console.error('Error loading recent files:', e);
-        recentFiles = [];
-    }
-}
-
-function saveRecentFilesToStorage() {
-    try {
-        localStorage.setItem('recentFiles', JSON.stringify(recentFiles));
-    } catch (e) {
-        console.error('Error saving recent files:', e);
-    }
-}
-
-function addToRecentFiles(targetPath, targetName, schemaName) {
-    if (!targetPath || !schemaName) return;
-
-    // Create recent file entry
-    const entry = {
-        targetPath: targetPath,
-        targetName: targetName || targetPath,
-        schemaName: schemaName,
-        timestamp: Date.now()
-    };
-
-    // Remove duplicates
-    recentFiles = recentFiles.filter(f =>
-        !(f.targetPath === targetPath && f.schemaName === schemaName)
-    );
-
-    // Add to beginning
-    recentFiles.unshift(entry);
-
-    // Keep only MAX_RECENT_FILES
-    if (recentFiles.length > MAX_RECENT_FILES) {
-        recentFiles = recentFiles.slice(0, MAX_RECENT_FILES);
-    }
-
-    saveRecentFilesToStorage();
-    displayRecentFiles();
-}
-
-function displayRecentFiles() {
-    const container = document.getElementById('recent-files-container');
-    const list = document.getElementById('recent-files-list');
-
-    if (!list || recentFiles.length === 0) {
-        if (container) container.style.display = 'none';
-        return;
-    }
-
-    list.innerHTML = '';
-    recentFiles.forEach(file => {
-        const chip = document.createElement('div');
-        chip.className = 'recent-file-chip';
-        chip.onclick = () => loadFromRecent(file);
-
-        const badge = document.createElement('span');
-        badge.className = 'target-badge';
-        badge.textContent = file.targetName.length > 15 ?
-            file.targetName.substring(0, 15) + '...' : file.targetName;
-
-        const schemaText = document.createTextNode(file.schemaName);
-
-        chip.appendChild(badge);
-        chip.appendChild(schemaText);
-        list.appendChild(chip);
-    });
-
-    container.style.display = 'block';
-}
-
-function loadFromRecent(file) {
-    // Check for unsaved changes
-    if (!checkUnsavedChanges()) return;
-
-    // Find and select the target
-    const targetSelect = document.getElementById('target-directory-select');
-    if (targetSelect) {
-        targetSelect.value = file.targetPath;
-        onTargetDirectoryChange(file.targetPath);
-    }
-
-    // Wait a bit for target to load, then select schema
-    setTimeout(() => {
-        const schemaSelect = document.getElementById('schema-select');
-        if (schemaSelect) {
-            schemaSelect.value = file.schemaName;
-            loadSchema(file.schemaName);
-        }
-    }, 100);
-}
-
-// ========================================
 // Feature 6: Clone Configuration
 // ========================================
 
@@ -2126,7 +2014,6 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeJsonEditor();
 
     // Feature: Initialize enhancements
-    loadRecentFiles(); // Load recent files from localStorage
     setupDirtyTracking(); // Set up unsaved changes tracking
 
     // Position help tooltips using fixed positioning to avoid overflow clipping

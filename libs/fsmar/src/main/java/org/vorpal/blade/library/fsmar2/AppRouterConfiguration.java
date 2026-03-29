@@ -29,13 +29,20 @@ import java.util.HashMap;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
 
 @JsonSchemaTitle(value = "FSMAR (2)")
 public class AppRouterConfiguration extends Configuration implements Serializable {
 
 	private static final long serialVersionUID = 1L;
+
+	@JsonPropertyDescription("Default application to route to when no state machine transition matches")
 	public String defaultApplication = null;
+
+	@JsonPropertyDescription("Map of previous application names to their routing states in the state machine")
+	@JsonProperty(defaultValue = "{}")
 	public HashMap<String, State> previous = new HashMap<>();
 
 	public State getPrevious(String name) {

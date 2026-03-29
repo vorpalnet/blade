@@ -578,56 +578,6 @@ input:focus, select:focus, textarea:focus {
     50% { opacity: 0.7; }
 }
 
-/* Feature: Recent Files */
-.recent-files-container {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    padding: 8px 12px;
-    margin-bottom: 10px;
-}
-
-.recent-files-header {
-    font-weight: 600;
-    color: #374151;
-    margin-bottom: 6px;
-    font-size: 12px;
-}
-
-.recent-files-list {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
-
-.recent-file-chip {
-    background: white;
-    border: 1px solid #cbd5e1;
-    border-radius: 4px;
-    padding: 3px 8px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.recent-file-chip:hover {
-    border-color: #3b82f6;
-    background: #eff6ff;
-    transform: translateY(-1px);
-}
-
-.recent-file-chip .target-badge {
-    background: #e0e7ff;
-    color: #3730a3;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: 600;
-}
-
 /* Feature: Field Help Tooltips */
 .field-help-icon {
     display: inline-flex;
@@ -830,7 +780,7 @@ input:focus, select:focus, textarea:focus {
     padding: 0;
     border: none;
     border-radius: 4px;
-    background: #3b82f6;
+    background: #e879a0;
     color: white;
     cursor: pointer;
     transition: all 0.2s;
@@ -839,7 +789,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .delete-property-btn:hover {
-    background: #2563eb;
+    background: #d4527b;
     transform: scale(1.05);
 }
 

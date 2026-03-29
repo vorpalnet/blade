@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import javax.servlet.sip.SipServletRequest;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 /**
@@ -16,6 +17,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 public class ConfigLinkedHashMap extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	@JsonPropertyDescription("Ordered map of translation entries keyed by lookup value")
 	public LinkedHashMap<String, Translation> map = new LinkedHashMap<>();
 
 	public int size() {
