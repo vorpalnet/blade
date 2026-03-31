@@ -78,6 +78,7 @@
 		</manifest>
 
 		<war destfile="${build}/${ant.project.name}.war" manifest="${build}/MANIFEST.MF" basedir="${webapp}" webxml="${webapp}/WEB-INF/web.xml" needxmlfile="true">
+			<classes dir="${classes}" />
 		</war>
 		<echo message="war, copying ${build}/${ant.project.name}.war to ${dist}" />
 		<copy file="${build}/${ant.project.name}.war" todir="${dist}" />
