@@ -843,6 +843,7 @@ public abstract class Callflow implements Serializable {
 								? keepAliveParams.getKeepAlive()
 								: null;
 						boolean keepAliveEnabled = (kap != null
+								&& kap.getStyle() != null
 								&& !KeepAlive.DISABLED.equals(kap.getStyle()));
 
 						if (keepAliveEnabled && //
@@ -869,9 +870,10 @@ public abstract class Callflow implements Serializable {
 								}
 							}
 
-							int sessionExpiresInSeconds = (int) (((appSession.getExpirationTime()
-									- System.currentTimeMillis()) / 1000) + 1);
-							int minSEinSeconds = sessionExpiresInSeconds / 2;
+							int sessionExpiresInSeconds = (kap.getSessionExpires() != null)
+									? kap.getSessionExpires() : 1800; // default 30 minutes
+							int minSEinSeconds = (kap.getMinSE() != null)
+									? kap.getMinSE() : 900; // default 15 minutes
 
 							String refresher = null;
 							boolean uas = false;
