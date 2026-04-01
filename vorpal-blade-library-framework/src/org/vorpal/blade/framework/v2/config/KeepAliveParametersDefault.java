@@ -10,8 +10,8 @@ public class KeepAliveParametersDefault extends KeepAliveParameters implements S
 
 	public KeepAliveParametersDefault() {
 		this.style = KeepAlive.DISABLED;
-		this.sessionExpires = 3600;
-		this.minSE = 1800;
+		this.sessionExpires = 1800;
+		this.minSE = 900;
 	}
 
 }

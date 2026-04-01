@@ -117,6 +117,7 @@ import java.io.IOException;
 import java.util.logging.Level;
 
 import javax.servlet.ServletException;
+import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
@@ -188,7 +189,12 @@ public class BlindTransfer extends Transfer {
 			// SipSession linkedSession = getLinkedSession(sipSession);
 
 			// save X-Previous-DN-Tmp for use later
-			URI referTo = referRequest.getAddressHeader(REFER_TO).getURI();
+			Address referToAddr = referRequest.getAddressHeader(REFER_TO);
+			if (referToAddr == null) {
+				sipLogger.severe(referRequest, "BlindTransfer.process - Missing Refer-To header");
+				return;
+			}
+			URI referTo = referToAddr.getURI();
 			appSession.setAttribute(REFER_TO, referTo);
 
 			// User is notified a transfer is requested

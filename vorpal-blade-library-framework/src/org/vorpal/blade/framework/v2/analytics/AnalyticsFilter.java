@@ -61,11 +61,10 @@ public class AnalyticsFilter implements Filter {
 
 			event.setSessionId(Analytics.getSessionId(sipRequest.getApplicationSession()));
 			Analytics.sipServletRequest.remove();
+			sipLogger.logEvent(sipRequest.getSession(), event);
 		}else {
 			sipLogger.severe("AnalyticsFilter.doFilter - Could not find sipServletRequest.");
 		}
-
-		sipLogger.logEvent(sipRequest.getSession(), event);
 		analytics.sendEvent(event);
 
 		// Now build and send events with both request and response attributes

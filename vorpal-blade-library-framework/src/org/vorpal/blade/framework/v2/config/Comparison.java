@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.logging.Level;
 
+import javax.servlet.sip.Address;
 import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipServletRequest;
@@ -110,7 +111,10 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				break;
 
 			case "uri":
-				value = (value != null) ? value : request.getAddressHeader(name).getURI().toString();
+				if (value == null) {
+					Address addr = request.getAddressHeader(name);
+					value = (addr != null) ? addr.getURI().toString() : null;
+				}
 				match = match && value.matches(expression);
 
 				if (sipLogger.isLoggable(Level.FINER)) {
@@ -119,9 +123,12 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				break;
 
 			case "user":
-
-				value = (sipUri != null) ? sipUri.getUser()
-						: ((SipURI) request.getAddressHeader(name).getURI()).getUser();
+				if (sipUri != null) {
+					value = sipUri.getUser();
+				} else {
+					Address addr = request.getAddressHeader(name);
+					value = (addr != null) ? ((SipURI) addr.getURI()).getUser() : null;
+				}
 
 				if (value != null) {
 					match = match && value.equalsIgnoreCase(expression);
@@ -135,9 +142,12 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				break;
 
 			case "host":
-
-				value = (sipUri != null) ? sipUri.getHost()
-						: ((SipURI) request.getAddressHeader(name).getURI()).getHost();
+				if (sipUri != null) {
+					value = sipUri.getHost();
+				} else {
+					Address addr = request.getAddressHeader(name);
+					value = (addr != null) ? ((SipURI) addr.getURI()).getHost() : null;
+				}
 				match = match && value.equalsIgnoreCase(expression);
 
 				if (sipLogger.isLoggable(Level.FINER)) {

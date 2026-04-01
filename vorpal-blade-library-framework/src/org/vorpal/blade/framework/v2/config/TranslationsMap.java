@@ -95,7 +95,7 @@ public abstract class TranslationsMap implements Serializable {
 					}
 
 					for (String name : request.getSession().getAttributeNameSet()) {
-						objValue = request.getApplicationSession().getAttribute(name);
+						objValue = request.getSession().getAttribute(name);
 						if (objValue instanceof String) {
 							Callflow.getSipLogger().finest(request,
 									"TranslationsMap.applyTranslations - SipSession attrMap name=" + name + ", value="

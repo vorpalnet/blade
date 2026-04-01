@@ -46,7 +46,7 @@ public class RouterConfig2 extends Configuration implements Serializable {
 			// copy all SIP URI parameters (if not already present in new request URI)
 			for (String name : request.getRequestURI().getParameterNameSet()) {
 				if (uri.getParameter(name) == null) {
-					uri.setParameter(name, uri.getParameter(name));
+					uri.setParameter(name, request.getRequestURI().getParameter(name));
 				}
 			}
 

@@ -315,6 +315,13 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					Address transferee = (Address) transfereeSession.getAttribute(SIP_ADDRESS_ATTR);
 					Address target = null;
 
+					if (transferRequest.target == null) {
+						TransferResponse errorResponse = new TransferResponse();
+						errorResponse.description = "Missing target in transfer request";
+						asyncResponse.resume(Response.status(Status.BAD_REQUEST).entity(errorResponse).build());
+						return;
+					}
+
 					if (transferRequest.target.sipAddress != null) {
 						target = sipFactory.createAddress(transferRequest.target.sipAddress);
 					} else if (transferRequest.target.sipUri != null) {
@@ -335,6 +342,12 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 					if (target != null) {
 
 						SipSession transferorSession = getLinkedSession(transfereeSession);
+						if (transferorSession == null) {
+							TransferResponse errorResponse = new TransferResponse();
+							errorResponse.description = "No linked session found for transferee";
+							asyncResponse.resume(Response.status(Status.CONFLICT).entity(errorResponse).build());
+							return;
+						}
 
 						Address transferor = (Address) transferorSession.getAttribute(SIP_ADDRESS_ATTR);
 

@@ -70,6 +70,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
@@ -169,7 +170,12 @@ public class Transfer extends Callflow {
 		sipLogger.finer(request, "Transfer transferee=" + transferee + ", target=" + target);
 
 		targetRequest = sipFactory.createRequest(appSession, INVITE, transferee, target);
-		transfereeRequest = getLinkedSession(request.getSession()).createRequest(INVITE);
+		SipSession linkedSession = getLinkedSession(request.getSession());
+		if (linkedSession == null) {
+			sipLogger.severe(request, "Transfer.process - No linked session found");
+			return;
+		}
+		transfereeRequest = linkedSession.createRequest(INVITE);
 		linkSession(transfereeRequest, targetRequest);
 
 		if (transferSettings != null) {

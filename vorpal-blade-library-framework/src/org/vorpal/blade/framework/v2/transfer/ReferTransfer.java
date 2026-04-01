@@ -70,6 +70,7 @@ package org.vorpal.blade.framework.v2.transfer;
 import java.io.IOException;
 
 import javax.servlet.ServletException;
+import javax.servlet.sip.Address;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
@@ -114,6 +115,10 @@ public class ReferTransfer extends Transfer {
 
 			SipSession transferorSession = transferorRequest.getSession();
 			SipSession transfereeSession = getLinkedSession(transferorSession);
+			if (transfereeSession == null) {
+				sipLogger.severe(transferorRequest, "ReferTransfer.process - No linked session found");
+				return;
+			}
 
 			transfereeRequest = transfereeSession.createRequest(REFER);
 			copyContentAndHeaders(transferorRequest, transfereeRequest);
@@ -127,7 +132,12 @@ public class ReferTransfer extends Transfer {
 			}
 
 			// save X-Previous-DN-Tmp for use later
-			URI referTo = transferorRequest.getAddressHeader(REFER_TO).getURI();
+			Address referToAddr = transferorRequest.getAddressHeader(REFER_TO);
+			if (referToAddr == null) {
+				sipLogger.severe(transferorRequest, "ReferTransfer.process - Missing Refer-To header");
+				return;
+			}
+			URI referTo = referToAddr.getURI();
 			transferorRequest.setAttribute(REFER_TO, referTo);
 
 			// User is notified a transfer is requested
