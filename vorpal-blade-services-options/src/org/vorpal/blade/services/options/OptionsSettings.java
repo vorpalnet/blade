@@ -28,14 +28,29 @@ import java.io.Serializable;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
+
+@JsonSchemaTitle("Options")
 public class OptionsSettings extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	@JsonPropertyDescription("Media types accepted by this server, used in the Accept header of OPTIONS responses")
 	protected String accept;
+
+	@JsonPropertyDescription("Preferred languages for the response, used in the Accept-Language header of OPTIONS responses")
 	protected String acceptLanguage;
+
+	@JsonPropertyDescription("SIP methods supported by this server, used in the Allow header of OPTIONS responses")
 	protected String allow;
+
+	@JsonPropertyDescription("SIP extensions supported by this server, used in the Supported header of OPTIONS responses")
 	protected String supported;
+
+	@JsonPropertyDescription("Identifies this SIP user agent, used in the User-Agent header of OPTIONS responses")
 	protected String userAgent;
+
+	@JsonPropertyDescription("Event packages supported by this server, used in the Allow-Events header of OPTIONS responses")
 	protected String allowEvents;
 
 	public String getAllow() {

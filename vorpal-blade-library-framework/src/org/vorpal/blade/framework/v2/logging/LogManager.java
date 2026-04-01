@@ -117,23 +117,26 @@ public class LogManager implements ServletContextListener {
 				filename = effectiveBasename + LOG_FILE_SUFFIX;
 			}
 
-			String directory = effectiveLogParameters.resolveDirectory(context);
-			int fileCount = effectiveLogParameters.resolveFileCount();
-			int fileSize = effectiveLogParameters.resolveFileSize();
-			boolean fileAppend = effectiveLogParameters.resolveFileAppend();
 			boolean useParentLogging = effectiveLogParameters.resolveUseParentLogging();
 			Level loggingLevel = effectiveLogParameters.resolveLoggingLevel();
 
-			File file = new File(directory);
-			file.mkdirs();
-			String filepath = directory + PATH_SEPARATOR + filename;
-			Formatter formatter = new LogFormatter();
-			Handler handler = new FileHandler(filepath, fileSize, fileCount, fileAppend);
-			handler.setFormatter(formatter);
-
 			logger = new Logger(effectiveBasename, null);
 
-			logger.addHandler(handler);
+			if (!useParentLogging) {
+				String directory = effectiveLogParameters.resolveDirectory(context);
+				int fileCount = effectiveLogParameters.resolveFileCount();
+				int fileSize = effectiveLogParameters.resolveFileSize();
+				boolean fileAppend = effectiveLogParameters.resolveFileAppend();
+
+				File file = new File(directory);
+				file.mkdirs();
+				String filepath = directory + PATH_SEPARATOR + filename;
+				Formatter formatter = new LogFormatter();
+				Handler handler = new FileHandler(filepath, fileSize, fileCount, fileAppend);
+				handler.setFormatter(formatter);
+
+				logger.addHandler(handler);
+			}
 
 			java.util.logging.Logger parentLogger = KernelLogManager.getLogger();
 			if (parentLogger == null) {

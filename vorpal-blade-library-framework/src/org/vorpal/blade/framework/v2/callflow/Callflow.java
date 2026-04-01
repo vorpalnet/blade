@@ -75,8 +75,6 @@ import org.vorpal.blade.framework.v2.testing.DummyResponse;
 
 public abstract class Callflow implements Serializable {
 
-	boolean keepAliveEnabled = false;
-
 	public enum GlareState {
 		ALLOW, // no glare, process all messages
 		QUEUE, // okay to queue requests that come in out of order
@@ -629,9 +627,8 @@ public abstract class Callflow implements Serializable {
 						vorpalTimestamp = xVorpalId.getParameter(TIMESTAMP_PARAM);
 					}
 				} catch (Exception ex) {
-					sipLogger.warning(request,
-							"Callflow.getVorpalSessionId - Unable to parse header '" + X_VORPAL_ID + "': "
-									+ ex.getClass().getSimpleName() + " " + ex.getMessage());
+					sipLogger.warning(request, "Callflow.getVorpalSessionId - Unable to parse header '" + X_VORPAL_ID
+							+ "': " + ex.getClass().getSimpleName() + " " + ex.getMessage());
 				}
 
 				// Fall back to X-Vorpal-Session (old colon format) + X-Vorpal-Timestamp
@@ -795,8 +792,6 @@ public abstract class Callflow implements Serializable {
 					}
 
 //					// begin KeepAlive logic...
-
-if(keepAliveEnabled){
 					try {
 						if (request.isInitial() //
 								&& request.getMethod().equals(INVITE) //
@@ -838,11 +833,11 @@ if(keepAliveEnabled){
 							boolean uas = false;
 							if (sessionExpires != null) {
 								refresher = sessionExpires.getParameter("refresher");
-								if(refresher!=null){
+								if (refresher != null) {
 									uas = refresher.equals("uas");
 								}
-								sessionExpires.setParameter("refresher", "uac"); // changing it to uac so no other app
-																					// operates on it
+								// important, so no other app operates on it.
+								sessionExpires.setParameter("refresher", "uac");
 							}
 
 							if (sessionExpires == null || uas == true) { // create Session-Expires
@@ -914,7 +909,6 @@ if(keepAliveEnabled){
 								"Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
 					}
 					// end KeepAlive logic.
-}
 
 					if (lambdaFunction != null) {
 						request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
@@ -1199,7 +1193,7 @@ if(keepAliveEnabled){
 		String method = response.getMethod();
 		int status = response.getStatus();
 
-		if (false == Boolean.TRUE.equals(response.getAttribute(WITHHOLD_RESPONSE))) {
+		if (false == Boolean.TRUE.equals((Boolean)response.getAttribute(WITHHOLD_RESPONSE))) {
 
 			// Glare logic
 			switch (method) {
@@ -2098,7 +2092,7 @@ if(keepAliveEnabled){
 			Callback<SipServletResponse> lambdaFunction) throws IOException, ServletException {
 
 		SipApplicationSession appSession = inboundRequest.getApplicationSession();
-		boolean isProxy = Boolean.TRUE.equals(appSession.getAttribute(IS_PROXY_ATTR));
+		boolean isProxy = Boolean.TRUE.equals((Boolean)appSession.getAttribute(IS_PROXY_ATTR));
 
 		if (!proxyPlan.isEmpty()) {
 

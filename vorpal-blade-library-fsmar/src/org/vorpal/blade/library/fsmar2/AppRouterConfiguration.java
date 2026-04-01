@@ -29,15 +29,20 @@ import java.util.HashMap;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
 
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
 
+@JsonSchemaTitle(value = "FSMAR (2)")
 public class AppRouterConfiguration extends Configuration implements Serializable {
 
 	private static final long serialVersionUID = 1L;
+
+	@JsonPropertyDescription("Default application to route to when no state machine transition matches")
 	public String defaultApplication = null;
+
+	@JsonPropertyDescription("Map of previous application names to their routing states in the state machine")
+	@JsonProperty(defaultValue = "{}")
 	public HashMap<String, State> previous = new HashMap<>();
 
 	public State getPrevious(String name) {
@@ -59,20 +64,6 @@ public class AppRouterConfiguration extends Configuration implements Serializabl
 
 	public void setDefaultApplication(String defaultApplication) {
 		this.defaultApplication = defaultApplication;
-	}
-
-	public static void main(String[] args) throws JsonProcessingException {
-
-		AppRouterConfiguration configuration = new AppRouterConfiguration();
-
-		ObjectMapper mapper = new ObjectMapper();
-		mapper.setSerializationInclusion(Include.NON_NULL);
-		mapper.disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
-
-		String output = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(configuration);
-
-		System.out.println(output);
-
 	}
 
 }

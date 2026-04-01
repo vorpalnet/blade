@@ -28,13 +28,25 @@ import java.io.Serializable;
 
 import org.vorpal.blade.framework.v2.config.Condition;
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+
+@JsonPropertyOrder({ "id", "condition", "action", "next" })
 public class Transition implements Serializable {
 
 	private static final long serialVersionUID = 1L;
+
+	@JsonPropertyDescription("Optional identifier for this transition, used in logging and diagnostics")
 	public String id;
-	public String next;
+
+	@JsonPropertyDescription("Condition that must match the SIP request for this transition to fire; null means unconditional match")
 	public Condition condition;
+
+	@JsonPropertyDescription("Routing action to perform when this transition fires, including region and route modifiers")
 	public Action action;
+
+	@JsonPropertyDescription("Name of the next application to route to when this transition matches")
+	public String next;
 
 	public Transition() {
 	}

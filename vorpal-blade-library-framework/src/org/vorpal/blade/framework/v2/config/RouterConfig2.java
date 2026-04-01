@@ -8,17 +8,21 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
 /**
  * Router configuration with selectors, translation maps and a routing plan.
  */
 public class RouterConfig2 extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
+	@JsonPropertyDescription("List of selectors that extract values from SIP messages for routing lookups")
 	public LinkedList<Selector> selectors = new LinkedList<>();
+	@JsonPropertyDescription("Translation maps used for routing lookups and address resolution")
 	public LinkedList<TranslationsMap> maps = new LinkedList<>();
+	@JsonPropertyDescription("Ordered routing plan that defines the sequence of translation map lookups")
 	public LinkedList<TranslationsMap> plan = new LinkedList<>();
 
+	@JsonPropertyDescription("Default route used when no translation map matches")
 	public Translation defaultRoute = null;
 
 	public RouterConfig2() {
@@ -52,12 +56,13 @@ public class RouterConfig2 extends Configuration implements Serializable {
 	}
 
 	public Translation findTranslation(SipServletRequest request) throws ServletParseException {
+		org.vorpal.blade.framework.v2.logging.Logger sipLogger = SettingsManager.getSipLogger();
 		Translation t = null;
 
-		Callflow.getSipLogger().finer(request, "Translation.findTranslation() searching maps size: " + plan.size());
+		sipLogger.finer(request, "Translation.findTranslation() searching maps size: " + plan.size());
 
 		for (TranslationsMap map : plan) {
-			Callflow.getSipLogger().finer(request, "Translation.findTranslation() searching map: " + map.getId());
+			sipLogger.finer(request, "Translation.findTranslation() searching map: " + map.getId());
 			t = map.applyTranslations(request);
 			if (t != null) {
 				break;
@@ -65,11 +70,11 @@ public class RouterConfig2 extends Configuration implements Serializable {
 		}
 
 		if (t != null) {
-			Callflow.getSipLogger().finer(request, "Found translation id: " + t.getId() + //
+			sipLogger.finer(request, "Found translation id: " + t.getId() + //
 					", desc: " + t.getDescription() + //
 					", route-group: " + t.getAttribute("route-group"));
 		} else {
-			Callflow.getSipLogger().finer(request, "No match found, using default.");
+			sipLogger.finer(request, "No match found, using default.");
 		}
 
 		return (t != null) ? t : defaultRoute;

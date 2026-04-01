@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<faceted-project>
-  <runtime name="Oracle WebLogic Server 14.1.1.0"/>
-  <fixed facet="java"/>
-  <fixed facet="jst.appclient"/>
-  <installed facet="jst.appclient" version="5.0"/>
-  <installed facet="java" version="11"/>
-</faceted-project>

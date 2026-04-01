@@ -133,7 +133,7 @@ public class InitialInvite extends Callflow {
 
 		// Sometimes you want to arrest the processing of the transaction.
 		// If either the callflow or the request are marked as 'doNotProcess', we won't
-		boolean _doNotProcess = Boolean.TRUE.equals(bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
+		boolean _doNotProcess = Boolean.TRUE.equals((Boolean)bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
 		this.doNotProcess = (this.doNotProcess || _doNotProcess);
 		if (!this.doNotProcess) {
 			// This gives the developer a chance to halt processing and 'continue' later.
@@ -208,7 +208,7 @@ public class InitialInvite extends Callflow {
 
 				// Sometimes you want to arrest the processing of the transaction.
 				// If either the callflow or the request are marked as 'doNotProcess', we won't
-				boolean _doNotProcess = Boolean.TRUE.equals(bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
+				boolean _doNotProcess = Boolean.TRUE.equals((Boolean)bobRequest.getAttribute(ATTR_DO_NOT_PROCESS));
 				this.doNotProcess = (this.doNotProcess || _doNotProcess);
 				if (!this.doNotProcess) {
 

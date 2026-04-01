@@ -74,6 +74,8 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.transfer.api.Header;
 
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
+
 /**
  * Base class for SIP call transfer operations.
  *
@@ -81,6 +83,7 @@ import org.vorpal.blade.framework.v2.transfer.api.Header;
  * Provides common functionality for constructing transfer requests, preserving
  * headers, and managing the transferor, transferee, and target SIP sessions.
  */
+@JsonSchemaTitle(value = "Transfer")
 public class Transfer extends Callflow {
 	private static final long serialVersionUID = 1L;
 

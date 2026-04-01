@@ -7,10 +7,12 @@ import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipApplicationSessionEvent;
+import javax.servlet.sip.SipApplicationSessionListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionEvent;
+import javax.servlet.sip.SipSessionListener;
 import javax.servlet.sip.annotation.SipApplicationKey;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
@@ -22,8 +24,8 @@ import org.vorpal.blade.framework.v2.logging.Color;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-//public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener {
-public class PRServlet extends AsyncSipServlet {
+public class PRServlet extends AsyncSipServlet implements SipApplicationSessionListener, SipSessionListener {
+//public class PRServlet extends AsyncSipServlet {
 	private static final long serialVersionUID = 2804504496149776315L;
 	public static SettingsManager<Settings> settingsManager;
 
@@ -43,6 +45,9 @@ public class PRServlet extends AsyncSipServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
+		System.out.println("PRServlet.servletCreated - " + event.getServletContext().getContextPath());
+		System.out.println("PRServlet.servletCreated - " + event.getSipServlet().getServletName());
+
 		settingsManager = new SettingsManager<Settings>(event, Settings.class, new SettingsSample());
 		sipLogger.finer("PRServlet.servletCreated");
 	}
@@ -68,11 +73,13 @@ public class PRServlet extends AsyncSipServlet {
 			break;
 		}
 
+		System.out.println("PRServlet.servletCreated - chooseCallflow, callflow=" + callflow);
 		return callflow;
 	}
 
 //	@Override
 	public void sessionCreated(SipSessionEvent event) {
+		System.out.println("PRServlet.servletCreated - sessionCreated");
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
 			sipLogger.finer(sipSession, "PRServlet.sessionCreated - sipSession id=" + sipSession.getId());
@@ -81,6 +88,8 @@ public class PRServlet extends AsyncSipServlet {
 
 //	@Override
 	public void sessionDestroyed(SipSessionEvent event) {
+		System.out.println("PRServlet.servletCreated - sessionDestroyed");
+
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
 			sipLogger.finer(sipSession, "PRServlet.sessionDestroyed - sipSession id=" + sipSession.getId());
@@ -89,6 +98,8 @@ public class PRServlet extends AsyncSipServlet {
 
 //	@Override
 	public void sessionReadyToInvalidate(SipSessionEvent event) {
+		System.out.println("PRServlet.servletCreated - sessionReadyToInvalidate");
+
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipSession sipSession = event.getSession();
 			sipLogger.finer(sipSession, "PRServlet.sessionReadyToInvalidate - sipSession id=" + sipSession.getId());
@@ -97,6 +108,8 @@ public class PRServlet extends AsyncSipServlet {
 
 //	@Override
 	public void sessionCreated(SipApplicationSessionEvent event) {
+		System.out.println("PRServlet.servletCreated - sessionCreated");
+
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
 			sipLogger.finer(appSession,
@@ -106,6 +119,8 @@ public class PRServlet extends AsyncSipServlet {
 
 //	@Override
 	public void sessionDestroyed(SipApplicationSessionEvent event) {
+		System.out.println("PRServlet.servletCreated - sessionDestroyed");
+
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
 			sipLogger.finer(appSession,
@@ -115,6 +130,8 @@ public class PRServlet extends AsyncSipServlet {
 
 //	@Override
 	public void sessionExpired(SipApplicationSessionEvent event) {
+		System.out.println("PRServlet.servletCreated - sessionExpired");
+
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
 			sipLogger.finer(appSession, "PRServlet.sessionExpired - appSession id=" + appSession.getId());
@@ -123,6 +140,8 @@ public class PRServlet extends AsyncSipServlet {
 
 //	@Override
 	public void sessionReadyToInvalidate(SipApplicationSessionEvent event) {
+		System.out.println("PRServlet.servletCreated - sessionReadyToInvalidate");
+
 		if (sipLogger.isLoggable(Level.FINER)) {
 			SipApplicationSession appSession = event.getApplicationSession();
 			sipLogger.finer(appSession, "PRServlet.sessionReadyToInvalidate - appSession id=" + appSession.getId());

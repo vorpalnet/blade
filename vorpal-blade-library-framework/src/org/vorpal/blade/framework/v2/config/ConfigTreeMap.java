@@ -7,6 +7,7 @@ import java.util.TreeMap;
 import javax.servlet.sip.SipServletRequest;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 /**
@@ -16,6 +17,7 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 public class ConfigTreeMap extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	@JsonPropertyDescription("Sorted map of translation entries keyed by lookup value")
 	public TreeMap<String, Translation> map = new TreeMap<>();
 
 	public int size() {

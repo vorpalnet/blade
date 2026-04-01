@@ -8,7 +8,6 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.apache.commons.collections4.trie.PatriciaTrie;
 import org.vorpal.blade.framework.v2.logging.Logger;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
@@ -19,6 +18,8 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigPrefixMapApache extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;
+
+	Logger sipLogger = SettingsManager.getSipLogger();
 
 	public PatriciaTrie<Translation> map = new PatriciaTrie<>();
 
@@ -50,7 +51,7 @@ public class ConfigPrefixMapApache extends TranslationsMap implements Serializab
 					for (int i = regexRoute.key.length(); i > 0; --i) {
 						substring = regexRoute.key.substring(0, i);
 
-						Callflow.getSipLogger().finer(request, "prefix=" + substring);
+						sipLogger.finer(request, "prefix=" + substring);
 
 						sortedMap = map.prefixMap(substring);
 						if (!sortedMap.isEmpty()) {
@@ -77,7 +78,7 @@ public class ConfigPrefixMapApache extends TranslationsMap implements Serializab
 			}
 
 		} catch (Exception e) {
-			Callflow.getSipLogger().logStackTrace(e);
+			sipLogger.logStackTrace(e);
 		}
 
 		return value;
@@ -101,7 +102,7 @@ public class ConfigPrefixMapApache extends TranslationsMap implements Serializab
 					for (int i = regexRoute.key.length(); i > 0; --i) {
 						substring = regexRoute.key.substring(0, i);
 
-						Callflow.getSipLogger().finer(request, "prefix=" + substring);
+						sipLogger.finer(request, "prefix=" + substring);
 
 						sortedMap = map.prefixMap(substring);
 
@@ -128,7 +129,7 @@ public class ConfigPrefixMapApache extends TranslationsMap implements Serializab
 			}
 
 		} catch (Exception e) {
-			Callflow.getSipLogger().logStackTrace(e);
+			sipLogger.logStackTrace(e);
 		}
 
 		return value;

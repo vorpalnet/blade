@@ -33,13 +33,24 @@ import javax.servlet.sip.ar.SipRouteModifier;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 public class Action implements Serializable {
 	private static final long serialVersionUID = 1L;
+
+	@JsonPropertyDescription("SIP header name (e.g. To) whose URI identifies the subscriber in the terminating routing region")
 	public String terminating;
+
+	@JsonPropertyDescription("SIP header name (e.g. From) whose URI identifies the subscriber in the originating routing region")
 	public String originating;
 
+	@JsonPropertyDescription("Array of SIP route URIs applied with ROUTE modifier")
 	public String[] route;
+
+	@JsonPropertyDescription("Array of SIP route URIs applied with ROUTE_BACK modifier")
 	public String[] route_back;
+
+	@JsonPropertyDescription("Array of SIP route URIs applied with ROUTE_FINAL modifier")
 	public String[] route_final;
 
 	public SipApplicationRouterInfo createRouterInfo(String next, AppRouterConfiguration config,

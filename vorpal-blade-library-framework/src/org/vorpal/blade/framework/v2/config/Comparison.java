@@ -35,8 +35,6 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.v2.logging.Logger;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
-
 
 /**
  * Comparison operation mapping operator names to expressions for request matching.
@@ -55,8 +53,10 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 	@Override
 	public boolean check(String id, String name, SipServletRequest request) throws ServletParseException {
 
-		if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-			Callflow.getSipLogger().finer(request,
+		Logger sipLogger = SettingsManager.getSipLogger();
+
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(request,
 					"Comparison.check... id: " + id + ", name: " + name);
 		}
 
@@ -88,8 +88,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 			operator = entry.getKey();
 			expression = entry.getValue();
 
-			if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-				Callflow.getSipLogger().finer(request, "Comparison.check... operator: " + operator + ", expression: " + expression);
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(request, "Comparison.check... operator: " + operator + ", expression: " + expression);
 			}
 
 			switch (operator) {
@@ -103,8 +103,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 					match = false;
 				}
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
 				}
 
 				break;
@@ -113,8 +113,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				value = (value != null) ? value : request.getAddressHeader(name).getURI().toString();
 				match = match && value.matches(expression);
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
 				}
 				break;
 
@@ -129,8 +129,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 					match = false;
 				}
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
 				}
 				break;
 
@@ -140,8 +140,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 						: ((SipURI) request.getAddressHeader(name).getURI()).getHost();
 				match = match && value.equalsIgnoreCase(expression);
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
 				}
 				break;
 
@@ -153,8 +153,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 					match = false;
 				}
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "Comparison.check... value: " + value + ", match: " + match);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... value: " + value + ", match: " + match);
 				}
 				break;
 
@@ -170,8 +170,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 						contains = value.contains(expression);
 
-						if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-							Callflow.getSipLogger().finer(request, "Comparison.check... value: " + value);
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(request, "Comparison.check... value: " + value);
 						}
 
 						if (contains) {
@@ -182,8 +182,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 				match = match && contains;
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "Comparison.check... contains: " + contains + ", match: " + match);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... contains: " + contains + ", match: " + match);
 				}
 
 				break;
@@ -198,8 +198,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 					while (inc_itr.hasNext()) {
 						value = inc_itr.next();
 
-						if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-							Callflow.getSipLogger().finer(request, "Comparison.check... value: " + value + ", includes: " + includes);
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(request, "Comparison.check... value: " + value + ", includes: " + includes);
 						}
 						if (includes) {
 							break;
@@ -209,8 +209,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 				match = match && includes;
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "Comparison.check... includes: " + includes + ", match: " + match);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... includes: " + includes + ", match: " + match);
 				}
 
 				break;
@@ -227,8 +227,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 						hasValue = value.equalsIgnoreCase(expression);
 
-						if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-							Callflow.getSipLogger().finer(request, "Comparison.check... value: " + value + ", hasValue: " + hasValue);
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(request, "Comparison.check... value: " + value + ", hasValue: " + hasValue);
 						}
 
 						if (hasValue) {
@@ -239,8 +239,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 				}
 
 				match = match && hasValue;
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "Comparison.check... includes: " + hasValue + ", hasValue: " + hasValue);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... includes: " + hasValue + ", hasValue: " + hasValue);
 				}
 
 				break;
@@ -255,8 +255,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 						hasParam = param.equalsIgnoreCase(expression);
 
-						if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-							Callflow.getSipLogger().finer(request, "Comparison.check... param: " + param + ", hasParam: " + hasParam);
+						if (sipLogger.isLoggable(Level.FINER)) {
+							sipLogger.finer(request, "Comparison.check... param: " + param + ", hasParam: " + hasParam);
 						}
 
 					}
@@ -271,8 +271,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 						if (value != null) {
 							hasParam = value.equalsIgnoreCase(expression);
 
-							if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-								Callflow.getSipLogger().finer(request,
+							if (sipLogger.isLoggable(Level.FINER)) {
+								sipLogger.finer(request,
 										"Comparison.check... value: " + value + ", hasParam: " + hasParam);
 							}
 
@@ -287,8 +287,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 				match = match && hasParam;
 
-				if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-					Callflow.getSipLogger().finer(request, "Comparison.check... match: " + match+ ", hasParam: " + hasParam);
+				if (sipLogger.isLoggable(Level.FINER)) {
+					sipLogger.finer(request, "Comparison.check... match: " + match+ ", hasParam: " + hasParam);
 				}
 
 				break;
@@ -301,8 +301,8 @@ public class Comparison extends HashMap<String, String> implements RequestCondit
 
 		}
 
-		if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-			Callflow.getSipLogger().finer(request, "Comparison.check... match: " + match);
+		if (sipLogger.isLoggable(Level.FINER)) {
+			sipLogger.finer(request, "Comparison.check... match: " + match);
 		}
 
 		return match;

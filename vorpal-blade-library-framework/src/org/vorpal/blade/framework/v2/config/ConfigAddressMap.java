@@ -30,6 +30,7 @@ import java.util.HashMap;
 import javax.servlet.sip.SipServletRequest;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 import inet.ipaddr.IPAddressString;
@@ -40,6 +41,7 @@ import inet.ipaddr.IPAddressString;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class ConfigAddressMap extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;
+	@JsonPropertyDescription("IP address map for CIDR-based routing lookups")
 	public AddressMap map = new AddressMap();
 
 	public int size() {

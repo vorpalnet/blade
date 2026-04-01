@@ -254,14 +254,52 @@ public class Settings<T> implements SettingsMXBean {
 			if (config instanceof Configuration) {
 				Configuration cfg = (Configuration) config;
 
-				if (cfg.getLogging() != null //
-						&& !cfg.getLogging().resolveUseParentLogging() //
-						&& cfg.getLogging().resolveLoggingLevel() != null) {
-					AsyncSipServlet.getSipLogger().setLevel(cfg.getLogging().resolveLoggingLevel());
-					AsyncSipServlet.getSipLogger()
-							.setConfigurationLoggingLevel(cfg.getLogging().resolveConfigurationLoggingLevel());
-					AsyncSipServlet.getSipLogger()
-							.setSequenceDiagramLoggingLevel(cfg.getLogging().resolveSequenceDiagramLoggingLevel());
+				if (cfg.getLogging() != null) {
+					Logger logger = AsyncSipServlet.getSipLogger();
+					boolean useParentLogging = cfg.getLogging().resolveUseParentLogging();
+
+					// Update useParentHandlers flag
+					logger.setUseParentHandlers(useParentLogging);
+
+					// Toggle FileHandler based on useParentLogging
+					if (useParentLogging) {
+						// Remove any FileHandlers — log only to WebLogic
+						for (java.util.logging.Handler h : logger.getHandlers()) {
+							if (h instanceof java.util.logging.FileHandler) {
+								h.close();
+								logger.removeHandler(h);
+							}
+						}
+					} else {
+						// Ensure a FileHandler exists — add one if missing
+						boolean hasFileHandler = false;
+						for (java.util.logging.Handler h : logger.getHandlers()) {
+							if (h instanceof java.util.logging.FileHandler) {
+								hasFileHandler = true;
+								break;
+							}
+						}
+						if (!hasFileHandler) {
+							String directory = cfg.getLogging().resolveDirectory(settingsManager.getServletContext());
+							String filename = cfg.getLogging().resolveFilename(settingsManager.getServletContext());
+							int fileSize = cfg.getLogging().resolveFileSize();
+							int fileCount = cfg.getLogging().resolveFileCount();
+							boolean fileAppend = cfg.getLogging().resolveFileAppend();
+							new File(directory).mkdirs();
+							String filepath = directory + "/" + filename;
+							java.util.logging.FileHandler handler = new java.util.logging.FileHandler(
+									filepath, fileSize, fileCount, fileAppend);
+							handler.setFormatter(new org.vorpal.blade.framework.v2.logging.LogFormatter());
+							logger.addHandler(handler);
+						}
+					}
+
+					// Always apply the logging level
+					if (cfg.getLogging().resolveLoggingLevel() != null) {
+						logger.setLevel(cfg.getLogging().resolveLoggingLevel());
+					}
+					logger.setConfigurationLoggingLevel(cfg.getLogging().resolveConfigurationLoggingLevel());
+					logger.setSequenceDiagramLoggingLevel(cfg.getLogging().resolveSequenceDiagramLoggingLevel());
 				}
 
 				if (cfg.getSession() != null) {

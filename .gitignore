@@ -1,3 +1,5 @@
+.claude
+CLAUDE.md
 .DS_Store
 dist
 build
@@ -13,5 +15,7 @@ deps
 *.log.lck
 .WL_internal
 *.jar
+*.war
+*.ear
 .WL_internal
 .cache.ser

@@ -7,13 +7,26 @@ import java.util.Map;
 import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
+
+@JsonSchemaTitle("Proxy Block")
 public class SimpleBlockConfig extends Configuration {
 	private static final long serialVersionUID = 1L;
 
+	@JsonPropertyDescription("Selector for extracting the calling party address from the From header.")
 	public AttributeSelector fromSelector;
+
+	@JsonPropertyDescription("Selector for extracting the called party address from the To header.")
 	public AttributeSelector toSelector;
+
+	@JsonPropertyDescription("Selector for extracting the address from the Request-URI.")
 	public AttributeSelector ruriSelector;
+
+	@JsonPropertyDescription("List of calling number translation rules for blocking or routing.")
 	public List<SimpleTranslation> callingNumbers = new LinkedList<>();
+
+	@JsonPropertyDescription("Default routing rule applied when no calling number match is found.")
 	public SimpleTranslation defaultRoute;
 	
 	public SimpleBlockConfig() {

@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 /**
@@ -71,6 +72,7 @@ public class Translation implements Serializable {
 	 * @param attributes the attributes to set
 	 * @return this Translation for method chaining
 	 */
+	@JsonPropertyDescription("Key-value pairs to set as SIP session attributes on the routed message")
 	public Translation setAttributes(Map<String, String> attributes) {
 		this.attributes = new HashMap<>(attributes);
 		return this;
@@ -91,6 +93,7 @@ public class Translation implements Serializable {
 	 * @param id the translation ID
 	 * @return this Translation for method chaining
 	 */
+	@JsonPropertyDescription("Unique identifier for this translation entry")
 	public Translation setId(String id) {
 		this.id = id;
 		return this;
@@ -111,6 +114,7 @@ public class Translation implements Serializable {
 	 * @param list the list of translation maps
 	 * @return this Translation for method chaining
 	 */
+	@JsonPropertyDescription("Nested translation maps for multi-level routing lookups")
 	public Translation setList(List<TranslationsMap> list) {
 		this.list = list;
 		return this;
@@ -131,6 +135,7 @@ public class Translation implements Serializable {
 	 * @param requestUri the request URI
 	 * @return this Translation for method chaining
 	 */
+	@JsonPropertyDescription("Target SIP request URI to route the message to")
 	public Translation setRequestUri(String requestUri) {
 		this.requestUri = requestUri;
 		return this;
@@ -151,6 +156,7 @@ public class Translation implements Serializable {
 	 * @param description the description
 	 * @return this Translation for method chaining
 	 */
+	@JsonPropertyDescription("Description of this translation's purpose")
 	public Translation setDescription(String description) {
 		this.description = description;
 		return this;
