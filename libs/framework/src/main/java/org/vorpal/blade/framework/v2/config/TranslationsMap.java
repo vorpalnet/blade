@@ -37,11 +37,8 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 public abstract class TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	@JsonPropertyDescription("Unique identifier for this translation map")
 	public String id;
-	@JsonPropertyDescription("Description of this translation map's purpose")
 	public String description;
-	@JsonPropertyDescription("Selectors that extract lookup keys from SIP messages")
 	public List<Selector> selectors = new LinkedList<>();
 
 	public abstract Translation createTranslation(String key);
@@ -95,7 +92,7 @@ public abstract class TranslationsMap implements Serializable {
 					}
 
 					for (String name : request.getSession().getAttributeNameSet()) {
-						objValue = request.getApplicationSession().getAttribute(name);
+						objValue = request.getSession().getAttribute(name);
 						if (objValue instanceof String) {
 							Callflow.getSipLogger().finest(request,
 									"TranslationsMap.applyTranslations - SipSession attrMap name=" + name + ", value="
@@ -142,6 +139,7 @@ public abstract class TranslationsMap implements Serializable {
 
 	}
 
+	@JsonPropertyDescription("Unique identifier for this translation map")
 	public String getId() {
 		return id;
 	}
@@ -150,6 +148,7 @@ public abstract class TranslationsMap implements Serializable {
 		this.id = id;
 	}
 
+	@JsonPropertyDescription("Description of this translation map's purpose")
 	public String getDescription() {
 		return description;
 	}
@@ -158,6 +157,7 @@ public abstract class TranslationsMap implements Serializable {
 		this.description = description;
 	}
 
+	@JsonPropertyDescription("Selectors that extract lookup keys from SIP messages")
 	public List<Selector> getSelectors() {
 		return selectors;
 	}

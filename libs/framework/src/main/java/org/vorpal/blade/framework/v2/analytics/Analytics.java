@@ -34,11 +34,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 public class Analytics implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    @JsonPropertyDescription("Enable or disable analytics event collection")
     @JsonProperty(defaultValue = "false")
     private Boolean enabled = false;
 
-    @JsonPropertyDescription("Map of analytics event definitions keyed by event name")
     private Map<String, EventSelector> events = new HashMap<>();
 
     // For associating SIP with HTTP
@@ -215,6 +213,7 @@ public class Analytics implements Serializable {
 		return event;
 	}
 
+	@JsonPropertyDescription("Map of analytics event definitions keyed by event name")
 	public Map<String, EventSelector> getEvents() {
 		return events;
 	}
@@ -251,6 +250,7 @@ public class Analytics implements Serializable {
 		Analytics.jmsPublisher = jmsPublisher;
 	}
 
+	@JsonPropertyDescription("Enable or disable analytics event collection")
 	public Boolean isEnabled() {
 		return enabled;
 	}

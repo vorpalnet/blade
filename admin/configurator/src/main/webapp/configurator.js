@@ -13,7 +13,7 @@ let formIdCounter = 0;
 let jsonEditor;
 let schemaEditor;
 let currentData = {};
-let currentTheme = 'eclipse';
+let currentTheme = localStorage.getItem('blade-configurator-ace-theme') || 'eclipse';
 let currentSchemaName = null;
 let websocket = null;
 let pendingRequests = new Map();
@@ -113,7 +113,7 @@ function handleWebSocketMessage(message) {
 
         case 'reload_success':
             showSyncStatus(message.content, 'success');
-            showSchemaLoadStatus('Reloaded', 'success');
+            showSchemaLoadStatus('Published', 'success');
             break;
 
         case 'version_list':
@@ -502,6 +502,37 @@ function resolveRef(ref) {
     return null;
 }
 
+// Resolve oneOf schemas using a discriminator property (typically "type").
+// Checks options.multiple_editor_select_via_property or falls back to matching
+// the "type" field in the data against each variant's enum constraint.
+function resolveOneOf(schemaNode, value) {
+    if (!schemaNode || !schemaNode.oneOf) return schemaNode;
+
+    const variants = schemaNode.oneOf.map(v => v.$ref ? resolveRef(v.$ref) : v).filter(Boolean);
+
+    if (value && typeof value === 'object') {
+        // Try to match by discriminator property
+        for (const variant of variants) {
+            const opts = variant.options && variant.options.multiple_editor_select_via_property;
+            if (opts) {
+                if (value[opts.property] === opts.value) return variant;
+            }
+        }
+        // Fallback: match by "type" enum field
+        if (value.type) {
+            for (const variant of variants) {
+                const typeProp = variant.properties && variant.properties.type;
+                if (typeProp && typeProp.enum && typeProp.enum.includes(value.type)) {
+                    return variant;
+                }
+            }
+        }
+    }
+
+    // No data or no match — return first variant as default
+    return variants[0] || schemaNode;
+}
+
 function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
     const id = `field_${formIdCounter++}`;
 
@@ -584,6 +615,10 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
 
     if (fieldSchema.$ref) {
         fieldSchema = resolveRef(fieldSchema.$ref);
+    }
+
+    if (fieldSchema.oneOf) {
+        fieldSchema = resolveOneOf(fieldSchema, value);
     }
 
     if (fieldSchema.type === 'object') {
@@ -1019,7 +1054,12 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
             const propPath = path ? `${path}.${prop}` : prop;
             const propValue = value && value[prop] !== undefined ? value[prop] : null;
             const propTitle = propSchema.title || prop;
-            const propDescription = propSchema.description;
+            let propDescription = propSchema.description;
+
+            // Add description for discriminator "type" fields (single-value enum, often hidden)
+            if (!propDescription && prop === 'type' && propSchema.enum && propSchema.enum.length === 1) {
+                propDescription = 'Map type: ' + propSchema.enum[0];
+            }
 
             // If property has no value, show a placeholder with '+' icon
             if (!hasValue(propValue)) {
@@ -1111,15 +1151,46 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     const header = document.createElement('div');
     header.className = 'array-header';
 
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button';
-    addBtn.className = 'btn btn-primary';
-    addBtn.textContent = 'Add Item';
-    addBtn.onclick = () => {
-        addArrayItem(container, fieldSchema.items, path);
-        updateSectionStatus();
-    };
-    header.appendChild(addBtn);
+    // Resolve oneOf variants for the type selector
+    const oneOfVariants = fieldSchema.items && fieldSchema.items.oneOf
+        ? fieldSchema.items.oneOf.map(v => v.$ref ? resolveRef(v.$ref) : v).filter(Boolean)
+        : null;
+
+    if (oneOfVariants && oneOfVariants.length > 1) {
+        // oneOf — show a type selector + Add button
+        const typeSelect = document.createElement('select');
+        typeSelect.className = 'btn btn-secondary';
+        oneOfVariants.forEach((variant, i) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = variant.title || `Type ${i + 1}`;
+            typeSelect.appendChild(opt);
+        });
+        header.appendChild(typeSelect);
+
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn btn-primary';
+        addBtn.textContent = 'Add Item';
+        addBtn.onclick = () => {
+            const selectedVariant = oneOfVariants[typeSelect.value];
+            // Generate default value with the discriminator type field set
+            const defaultVal = generateDefaultValue(selectedVariant);
+            addArrayItem(container, fieldSchema.items, path, defaultVal);
+            updateSectionStatus();
+        };
+        header.appendChild(addBtn);
+    } else {
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn btn-primary';
+        addBtn.textContent = 'Add Item';
+        addBtn.onclick = () => {
+            addArrayItem(container, fieldSchema.items, path);
+            updateSectionStatus();
+        };
+        header.appendChild(addBtn);
+    }
 
     content.appendChild(header);
 
@@ -1276,6 +1347,10 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
 
     if (itemSchema.$ref) {
         itemSchema = resolveRef(itemSchema.$ref);
+    }
+
+    if (itemSchema.oneOf) {
+        itemSchema = resolveOneOf(itemSchema, value);
     }
 
     // Create remove button (shared across all item types)
@@ -1444,10 +1519,13 @@ function getFormData() {
                     let propSchema = schemaNode.properties[propName];
                     const propTitle = propSchema.title || propName;
 
-                    // Resolve $ref for type checking
+                    // Resolve $ref and oneOf for type checking
                     let resolvedSchema = propSchema;
                     if (propSchema.$ref) {
                         resolvedSchema = resolveRef(propSchema.$ref);
+                    }
+                    if (resolvedSchema && resolvedSchema.oneOf) {
+                        resolvedSchema = resolveOneOf(resolvedSchema, null);
                     }
 
                     const isComplexType = resolvedSchema &&
@@ -1517,7 +1595,14 @@ function getFormData() {
             const items = Array.from(arrayContainer.children).filter(el => el.classList.contains('array-item'));
 
             items.forEach((item, idx) => {
-                const itemData = extractData(item, schemaNode.items, `${debugPath}[${idx}]`);
+                let itemSchemaNode = schemaNode.items;
+                if (itemSchemaNode && itemSchemaNode.oneOf) {
+                    // Peek at the type discriminator to resolve the right variant
+                    const typeInput = item.querySelector('select[data-path$=".type"], input[data-path$=".type"]');
+                    const typeVal = typeInput ? typeInput.value : null;
+                    itemSchemaNode = resolveOneOf(itemSchemaNode, typeVal ? { type: typeVal } : null);
+                }
+                const itemData = extractData(item, itemSchemaNode, `${debugPath}[${idx}]`);
                 if (itemData !== null) {
                     result.push(itemData);
                 }
@@ -1698,14 +1783,24 @@ function saveData() {
     showSyncStatus('Saving data...', 'warning');
 }
 
-function reloadConfig() {
+function loadConfig() {
+    if (!currentSchemaName) {
+        showSyncStatus('Please select a schema first', 'warning');
+        return;
+    }
+
+    // Re-load the config file from disk into the editor
+    loadSchema(currentSchemaName);
+}
+
+function publishConfig() {
     if (!currentSchemaName) {
         showSyncStatus('Please select a schema first', 'warning');
         return;
     }
 
     sendWebSocketMessage('reload', { appName: currentSchemaName });
-    showSyncStatus('Reloading configuration...', 'warning');
+    showSyncStatus('Publishing configuration...', 'warning');
 }
 
 function resetForm() {
@@ -2064,6 +2159,16 @@ function clearValidationErrors() {
 
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+    // Restore saved theme
+    const savedTheme = localStorage.getItem('blade-configurator-theme');
+    if (savedTheme && savedTheme !== 'light') {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+    const themeSelect = document.getElementById('app-theme-select');
+    if (themeSelect && savedTheme) {
+        themeSelect.value = savedTheme;
+    }
+
     connectWebSocket();
     requestTargetDirectories(); // Request target directories (domain, clusters, servers)
     requestSchemaList(); // Request schemas from server instead of using hardcoded list
@@ -2152,12 +2257,34 @@ function initializeJsonEditor() {
     // Schema editor will be initialized lazily when first shown
 }
 
-function changeTheme(themeName) {
-    if (jsonEditor) {
-        currentTheme = themeName;
-        jsonEditor.setTheme("ace/theme/" + themeName);
-        showSyncStatus(`Theme changed to ${themeName}`, 'success');
+// App theme to Ace editor theme mapping
+const aceThemeMap = {
+    light: 'eclipse',
+    dark: 'tomorrow_night',
+    midnight: 'cobalt',
+    warm: 'chrome'
+};
+
+function switchAppTheme(themeName) {
+    if (themeName === 'light') {
+        document.documentElement.removeAttribute('data-theme');
+    } else {
+        document.documentElement.setAttribute('data-theme', themeName);
     }
+
+    // Update Ace editors to match
+    const aceTheme = aceThemeMap[themeName] || 'eclipse';
+    currentTheme = aceTheme;
+    if (jsonEditor) {
+        jsonEditor.setTheme('ace/theme/' + aceTheme);
+    }
+    if (schemaEditor) {
+        schemaEditor.setTheme('ace/theme/' + aceTheme);
+    }
+
+    // Persist
+    localStorage.setItem('blade-configurator-theme', themeName);
+    localStorage.setItem('blade-configurator-ace-theme', aceTheme);
 }
 
 function switchTab(tabName) {

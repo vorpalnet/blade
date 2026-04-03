@@ -403,7 +403,9 @@ public abstract class AsyncSipServlet extends SipServlet
 					break;
 				default:
 					String indexKey = Callflow.getVorpalSessionId(request);
-					appSession.addIndexKey(indexKey);
+					if (indexKey != null) {
+						appSession.addIndexKey(indexKey);
+					}
 					break;
 				}
 			}
@@ -667,7 +669,7 @@ public abstract class AsyncSipServlet extends SipServlet
 				} catch (Exception ex3) {
 					sipLogger.warning("AsyncSipServlet.doRequest - Exception #ex3");
 
-					Throwable cause = ex3.getCause();
+					Throwable cause = ex3.getCause() != null ? ex3.getCause() : ex3;
 					while (cause.getCause() != null) {
 						cause = cause.getCause();
 					}
@@ -968,11 +970,14 @@ public abstract class AsyncSipServlet extends SipServlet
 
 					try { // attempt to send error back upstream;
 
-						Throwable cause = ex3.getCause();
+						Throwable cause = ex3.getCause() != null ? ex3.getCause() : ex3;
 						while (cause.getCause() != null) {
 							cause = cause.getCause();
 						}
 						linkedSession = Callflow.getLinkedSession(response.getSession());
+						if (linkedSession == null) {
+							throw new ServletException("No linked session for error recovery", ex3);
+						}
 						SipServletRequest linkedRequest = linkedSession.getActiveInvite(UAMode.UAS);
 						SipServletResponse linkedResponse = linkedRequest.createResponse(500,
 								convertCamelCaseToRegularWords(

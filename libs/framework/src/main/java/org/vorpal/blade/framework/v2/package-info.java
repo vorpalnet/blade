@@ -1,7 +1,46 @@
-/// This package provides a comprehensive framework for building asynchronous SIP servlets with
-/// lambda expression support, designed for high-performance telecommunications applications.
-/// The framework implements advanced SIP call control patterns including B2BUA (Back-to-Back
-/// User Agent) functionality with sophisticated session management and error recovery.
+/// The Vorpal:BLADE framework — a lambda-based SIP servlet framework that transforms
+/// telecommunications application development.
+///
+/// ## The Problem
+///
+/// Traditional SIP servlet development requires writing dozens of disconnected handler
+/// methods — `doInvite()`, `doResponse()`, `doAck()`, `doBye()` — with call state
+/// scattered across session attributes. The developer must manually save and retrieve
+/// every variable, and mentally reconstruct the call flow by tracing attribute breadcrumbs
+/// across classes. It reads like a choose-your-own-adventure book.
+///
+/// ## The Solution
+///
+/// BLADE uses Java lambda expressions to express entire SIP conversations as readable,
+/// top-to-bottom code in a single class:
+///
+/// ```java
+/// sendRequest(bobInvite, (bobResponse) -> {
+///     SipServletResponse aliceResponse = createResponse(bobResponse, aliceRequest);
+///     sendResponse(aliceResponse, (aliceAck) -> {
+///         SipServletRequest bobAck = createAcknowlegement(bobResponse, aliceAck);
+///         sendRequest(bobAck);
+///     });
+/// });
+/// ```
+///
+/// The nested lambdas mirror the actual SIP message exchange. What once required a
+/// complicated collection of Java classes is now a single class. What once read like
+/// a choose-your-own-adventure book now reads like a poem.
+/// 
+/// Since there can be multiple responses, like 180 Ringing and 200 OK, the
+/// lambda expression within 'sendRequest' can be invoked multiple times. Only when an
+/// ACK (or PRACK) is returned will the lambda expression within 'sendResponse' be invoked.
+/// 
+/// The 'createResponse' and 'createAcknowlegement' methods simply helper functions aiding
+/// in copying the content and headers from one message to another.
+///
+/// **Automatic state serialization** is the key innovation. [org.vorpal.blade.framework.v2.callflow.Callflow]
+/// implements `Serializable`, so lambda callbacks and all variables they close over are
+/// transparently persisted into SIP session memory by the container. In a distributed
+/// cluster, if a node fails mid-call, the callflow resumes on another node with all
+/// state intact — without the developer writing a single `setAttribute()` or
+/// `getAttribute()` call.
 ///
 /// ## Core Components
 ///
@@ -12,12 +51,12 @@
 ///
 /// ## Key Features
 ///
-/// - **Asynchronous Processing**: Lambda-based callbacks for non-blocking SIP message handling using [org.vorpal.blade.framework.v2.callflow.Callback] objects
+/// - **Lambda Callflows**: Entire SIP conversations expressed as readable, sequential code using [org.vorpal.blade.framework.v2.callflow.Callback] lambdas
+/// - **Automatic State Persistence**: Callflow variables survive node failover in distributed clusters — no manual attribute management
 /// - **Glare Prevention**: Automatic queuing of conflicting requests to prevent 491 responses on UDP transport
 /// - **Session Management**: Sophisticated session linking and attribute extraction using configurable [org.vorpal.blade.framework.v2.config.AttributeSelector] objects
 /// - **Analytics Integration**: Optional JMS-based event publishing for call detail records and monitoring through [org.vorpal.blade.framework.v2.analytics.Analytics] framework
 /// - **Error Recovery**: Automatic upstream error notification and downstream call termination
-/// - **Hash-based Session Correlation**: MD5-based application session keying with collision detection via `getAppSessionHashKey()`
 ///
 /// ## Implementation Pattern
 ///
@@ -51,6 +90,69 @@
 /// The framework is designed for deployment in SIP servlet containers implementing the
 /// JSR 289 specification and provides both servlet context and SIP session lifecycle
 /// management with comprehensive error handling and recovery mechanisms.
+///
+/// ## Walkthrough
+///
+/// This guided walkthrough introduces the core BLADE classes in the order you'll encounter
+/// them when building a SIP application.
+///
+/// <ol>
+///   <li><b>{@link org.vorpal.blade.framework.v2.AsyncSipServlet AsyncSipServlet}</b>
+///       &mdash; The starting point for every BLADE application. Extend this class, implement
+///       {@code servletCreated()}, {@code servletDestroyed()}, and {@code chooseCallflow()},
+///       and the framework takes care of SIP message dispatching, session management, glare
+///       detection, and error recovery.</li>
+///
+///   <li><b>Config Files</b>
+///       &mdash; Each BLADE application is configured by a JSON file stored under the
+///       WebLogic domain's {@code config/custom/vorpal/} directory. The framework
+///       automatically loads and merges configuration from a three-tier hierarchy:
+///       <ul>
+///         <li><b>Domain</b> &mdash; {@code config/custom/vorpal/<i>app</i>.json}</li>
+///         <li><b>Cluster</b> &mdash; {@code config/custom/vorpal/_clusters/<i>cluster</i>/<i>app</i>.json}</li>
+///         <li><b>Server</b> &mdash; {@code config/custom/vorpal/_servers/<i>server</i>/<i>app</i>.json}</li>
+///       </ul>
+///       Server settings override cluster settings, which override domain settings.
+///       Every config file extends the base
+///       {@link org.vorpal.blade.framework.v2.config.Configuration Configuration} class,
+///       which defines three standard top-level sections:
+///       <pre>{@code
+/// {
+///   "logging":   { ... },
+///   "session":   { ... },
+///   "analytics": { ... }
+/// }
+///       }</pre>
+///       Applications add their own properties alongside these. For example, the
+///       transfer service adds {@code "selectors"}, {@code "maps"}, {@code "plan"},
+///       and {@code "defaultTransferStyle"}. A JSON Schema ({@code .jschema}) and
+///       sample configuration are auto-generated on first deployment for use by the
+///       <a href="https://vorpal.net/javadocs/configurator/index.html">Configurator</a>
+///       admin tool. Configuration can be reloaded at runtime via JMX without
+///       restarting the application.</li>
+///
+///   <li><b>{@link org.vorpal.blade.framework.v2.callflow.Callflow Callflow}</b>
+///       &mdash; The heart of BLADE. Subclass this to define your SIP conversation as
+///       sequential, top-to-bottom code using lambda callbacks. Implements
+///       {@code Serializable} so your entire call state survives cluster failover
+///       automatically.</li>
+///
+///   <li><b>{@link org.vorpal.blade.framework.v2.callflow.Callflow#sendRequest(javax.servlet.sip.SipServletRequest, org.vorpal.blade.framework.v2.callflow.Callback) sendRequest()}</b>
+///       &mdash; Send a SIP request and register a lambda callback that fires when the
+///       response arrives. This is how you advance the conversation forward &mdash; each
+///       nested {@code sendRequest()} represents the next step in the call flow.</li>
+///
+///   <li><b>{@link org.vorpal.blade.framework.v2.callflow.Callflow#sendResponse(javax.servlet.sip.SipServletResponse, org.vorpal.blade.framework.v2.callflow.Callback) sendResponse()}</b>
+///       &mdash; Send a SIP response and register a lambda callback for the subsequent
+///       request (e.g., ACK after a 200 OK). Together with {@code sendRequest()}, these
+///       two methods are all you need to express any SIP message exchange.</li>
+///
+///   <li><b>{@linkplain org.vorpal.blade.framework.v2.logging Logging}</b>
+///       &mdash; SIP-aware logging with session-correlated tracing, ANSI color output,
+///       and automatic sequence diagram generation. Configured through
+///       {@link org.vorpal.blade.framework.v2.config.SettingsManager SettingsManager}
+///       and available throughout the framework.</li>
+/// </ol>
 ///
 /// ## Sub-packages
 ///

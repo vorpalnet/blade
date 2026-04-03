@@ -80,9 +80,8 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- Strip multi-release classes above Java 11 from the shaded JAR.
-			     Only needed for Java 11; later JDKs handle multi-release JARs correctly.
-			     Preserves META-INF/versions/9/ and versions/11/. -->
+			<!-- Strip multi-release classes above the target Java version from
+			     the shaded JAR. Prevents UnsupportedClassVersionError on older JDKs. -->
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>exec-maven-plugin</artifactId>
@@ -97,17 +96,19 @@
 							<arguments>
 								<argument>-c</argument>
 								<argument>
-JAVA_VER="${java.version}";
-if [ "$JAVA_VER" = "11" ]; then
-  JARFILE="${project.build.directory}/${project.build.finalName}.jar";
-  for ver in $(jar tf "$JARFILE" 2>/dev/null | grep 'META-INF/versions/' | sed 's|META-INF/versions/||' | cut -d/ -f1 | sort -un); do
-    if [ "$ver" -gt 11 ]; then
-      zip -qd "$JARFILE" "META-INF/versions/$ver/*" 2>/dev/null || true
-    fi
-  done;
-  echo "Stripped multi-release classes above Java 11 from FSMAR JAR"
+TARGET_VER="${blade.java.version}";
+JARFILE="${project.build.directory}/${project.build.finalName}.jar";
+STRIPPED=0;
+for ver in $(jar tf "$JARFILE" 2>/dev/null | grep 'META-INF/versions/' | sed 's|META-INF/versions/||' | cut -d/ -f1 | sort -un); do
+  if [ "$ver" -gt "$TARGET_VER" ]; then
+    zip -qd "$JARFILE" "META-INF/versions/$ver/*" 2>/dev/null || true
+    STRIPPED=1
+  fi
+done;
+if [ "$STRIPPED" -eq 1 ]; then
+  echo "Stripped multi-release classes above Java $TARGET_VER from FSMAR JAR"
 else
-  echo "Skipping multi-release stripping (java.version=$JAVA_VER, only needed for 11)"
+  echo "No multi-release classes above Java $TARGET_VER found in FSMAR JAR"
 fi
 								</argument>
 							</arguments>

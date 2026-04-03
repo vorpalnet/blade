@@ -22,17 +22,16 @@
 		<module>admin/configurator</module>
 		<module>admin/dev-console</module>
 		<module>services</module>
-		<module>javadoc</module>
 
 		<!-- Service and test modules are controlled by profiles below.
 		     Exclude any module with -Dskip.<name>, e.g. -Dskip.analytics -->
 	</modules>
 
 	<properties>
-		<revision>2.9.4</revision>
+		<revision>2.9.5</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<java.version>11</java.version>
-		<maven.compiler.release>${java.version}</maven.compiler.release>
+		<blade.java.version>11</blade.java.version>
+		<maven.compiler.release>${blade.java.version}</maven.compiler.release>
 		<build.number>0</build.number>
 		<ear.profile>full</ear.profile>
 		<build.platform>occas-8.1</build.platform>
@@ -346,7 +345,7 @@
 					<artifactId>maven-compiler-plugin</artifactId>
 					<version>${maven-compiler-plugin.version}</version>
 					<configuration>
-						<release>${java.version}</release>
+						<release>${blade.java.version}</release>
 					</configuration>
 				</plugin>
 				<plugin>
@@ -512,6 +511,11 @@
 			<modules><module>services/transfer</module></modules>
 		</profile>
 		<profile>
+			<id>crud</id>
+			<activation><property><name>!skip.crud</name></property></activation>
+			<modules><module>services/crud</module></modules>
+		</profile>
+		<profile>
 			<id>test-b2bua</id>
 			<activation><property><name>!skip.test-b2bua</name></property></activation>
 			<modules><module>test/test-b2bua</module></modules>
@@ -529,6 +533,9 @@
 
 		<profile>
 			<id>javadocs</id>
+			<modules>
+				<module>javadoc</module>
+			</modules>
 			<build>
 				<plugins>
 					<plugin>
@@ -556,7 +563,9 @@
 							<additionalOptions>
 								<additionalOption>-failOnCyclicPackageDependencies false</additionalOption>
 								<additionalOption>--add-stylesheet ${maven.multiModuleProjectDirectory}/javadoc/src/main/resources/vorpal-theme.css</additionalOption>
+								<additionalOption>--add-script ${maven.multiModuleProjectDirectory}/javadoc/src/main/resources/overview-toc.js</additionalOption>
 							</additionalOptions>
+							<excludePackageNames>gov.nist.*:javax.sdp.*</excludePackageNames>
 							<show>public</show>
 							<doclint>none</doclint>
 							<links>
@@ -584,6 +593,7 @@
   </g>
 </svg>
 </a>
+<a href="https://vorpal.net/bin/view/BLADE/" style="color:#fff; font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:28px; font-weight:bold; text-decoration:none;">BLADE</a>
 <span style="color:rgba(255,255,255,0.7); font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:13px;">v${revision}</span>
 <div style="margin-left:auto; display:flex; gap:20px; font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:14px;">
 <a href="https://vorpal.net/javadocs/" style="color:#fff; text-decoration:none;">Documentation</a>

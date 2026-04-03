@@ -95,6 +95,11 @@
 						</webModule>
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-services-crud</artifactId>
+							<bundleFileName>crud.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
 							<artifactId>test-b2bua</artifactId>
 							<bundleFileName>test-b2bua.war</bundleFileName>
 						</webModule>
@@ -288,6 +293,18 @@
 				<dependency>
 					<groupId>org.vorpal.blade</groupId>
 					<artifactId>vorpal-blade-services-transfer</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+				</dependency>
+			</dependencies>
+		</profile>
+		<profile>
+			<id>ear-crud</id>
+			<activation><property><name>!skip.crud</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-services-crud</artifactId>
 					<version>${project.version}</version>
 					<type>war</type>
 				</dependency>

@@ -17,18 +17,38 @@ If this sounds insane, yes, it is!
 You can find more instructions at https://vorpal.net
 
 BLADE is a development framework and collection of pre-built
-applications build on the Java EE JSR-359 (SIP Servlet) specification.
+applications built on the Java EE JSR-359 (SIP Servlet) specification.
 
-What makes BLADE so great?
+## Why BLADE?
 
-It comes with a framework library that features:
-* Support for lambda expressions to simplify callflow design and readability
-* Prebuilt callflows for common use cases, B2BUA, Transfer & Proxy
-* Application templates
-* Support for dynamic configuration files
-* Improved logging capabilities
+Traditional SIP servlet development requires writing dozens of disconnected handler classes — `doInvite()`, `doResponse()`, `doAck()`, `doBye()` — with session state scattered across attributes that the developer must manually save and retrieve. It's like a choose-your-own-adventure book: the call logic jumps between methods, and you have to mentally trace attribute breadcrumbs to reconstruct the conversation flow.
 
-It also comes with a carrier-grade Finite State Machine Application Router, the FSMAR.
+BLADE replaces this with **lambda-based callflows** that read like a poem:
+
+```java
+sendRequest(bobRequest, (bobResponse) -> {
+    SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+    sendResponse(aliceResponse, (aliceAck) -> {
+        SipServletRequest bobAck = bobResponse.createAck();
+        sendRequest(bobAck);
+    });
+});
+```
+
+The entire call flow — INVITE, wait for response, forward it, wait for ACK, forward it — is expressed top-to-bottom in a single method. The nested lambdas mirror the actual SIP message exchange. You can read the code and *see* the call.
+
+The key innovation: **callflow state is automatically serialized.** The `Callflow` class implements `Serializable`, so the lambda callbacks and all local variables they close over (`aliceRequest`, `bobRequest`, etc.) are transparently persisted into SIP session memory by the OCCAS container. In a distributed cluster, if a node fails mid-call, the callflow resumes on another node with all its state intact — without the developer writing a single `setAttribute()` or `getAttribute()` call.
+
+What once required a complicated collection of Java classes is now a single class. What once read like a choose-your-own-adventure book now reads like a poem.
+
+### Features
+
+* **Lambda-based callflows** — express entire SIP conversations as readable, top-to-bottom code
+* **Automatic state serialization** — callflow variables survive failover in distributed clusters
+* **Pre-built callflow patterns** — B2BUA, Proxy, and Transfer patterns ready to extend
+* **JSON-driven configuration** — dynamic config with JSON Schema validation, hot-reload via JMX
+* **SIP-aware logging** — structured logs with sequence diagrams, ANSI color, per-application log files
+* **Carrier-grade FSMAR** — Finite State Machine Application Router chains applications together into sophisticated services
 
 ### Libraries
 

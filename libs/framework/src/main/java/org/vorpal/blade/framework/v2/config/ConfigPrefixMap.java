@@ -55,6 +55,9 @@ public class ConfigPrefixMap extends TranslationsMap implements Serializable {
 
 					if (value != null) {
 						value = new Translation(value);
+						if (value.getAttributes() == null) {
+							value.setAttributes(new HashMap<>());
+						}
 						if (regexRoute.attributes != null && !regexRoute.attributes.isEmpty()) {
 							value.getAttributes().putAll(regexRoute.attributes);
 						}

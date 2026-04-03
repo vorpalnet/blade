@@ -28,6 +28,15 @@
             <span id="schema-load-status" class="sync-status" style="display: none;"></span>
             <!-- Feature: Dirty Indicator -->
             <span id="dirty-indicator" class="dirty-indicator" style="display: none;">● Unsaved Changes</span>
+            <div class="theme-selector">
+                <label for="app-theme-select">Theme:</label>
+                <select id="app-theme-select" onchange="switchAppTheme(this.value)">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                    <option value="midnight">Midnight Blue</option>
+                    <option value="warm">Warm Sand</option>
+                </select>
+            </div>
         </div>
 
         <div class="tabs">
@@ -39,7 +48,8 @@
         <div id="form-tab" class="tab-content active">
             <div style="display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap;">
                 <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
-                <button type="button" class="btn btn-secondary" onclick="reloadConfig()">Reload</button>
+                <button type="button" class="btn btn-secondary" onclick="loadConfig()">Load</button>
+                <button type="button" class="btn btn-publish" onclick="publishConfig()">Publish</button>
                 <button type="button" class="clone-button" onclick="showCloneDialog()">Clone to Another Target</button>
                 <button type="button" class="btn btn-secondary" onclick="showVersionHistory()">Version History</button>
                 <button type="button" class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
@@ -65,35 +75,14 @@
         <div id="json-tab" class="tab-content">
             <div class="json-controls">
                 <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
-                <button type="button" class="btn btn-secondary" onclick="reloadConfig()">Reload</button>
+                <button type="button" class="btn btn-secondary" onclick="loadConfig()">Load</button>
+                <button type="button" class="btn btn-publish" onclick="publishConfig()">Publish</button>
                 <button type="button" class="clone-button" onclick="showCloneDialog()">Clone to Another Target</button>
                 <button type="button" class="btn btn-secondary" onclick="showVersionHistory()">Version History</button>
                 <button type="button" class="btn btn-secondary" onclick="formatJson()">Format JSON</button>
                 <button type="button" class="btn btn-secondary" onclick="validateJson()">Validate</button>
                 <button type="button" class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
                 <button type="button" class="btn btn-secondary" onclick="resetJson()">Reset JSON</button>
-                <div style="display: none;" class="theme-selector">
-                    <label for="theme-select">Theme:</label>
-                    <select id="theme-select" onchange="changeTheme(this.value)">
-                        <option value="monokai">Monokai</option>
-                        <option value="github">GitHub</option>
-                        <option value="tomorrow">Tomorrow</option>
-                        <option value="twilight">Twilight</option>
-                        <option value="textmate">TextMate</option>
-                        <option value="solarized_dark">Solarized Dark</option>
-                        <option value="solarized_light">Solarized Light</option>
-                        <option value="chrome">Chrome</option>
-                        <option value="clouds">Clouds</option>
-                        <option value="crimson_editor">Crimson Editor</option>
-                        <option value="eclipse" selected>Eclipse</option>
-                        <option value="tomorrow_night">Tomorrow Night</option>
-                        <option value="tomorrow_night_blue">Tomorrow Night Blue</option>
-                        <option value="tomorrow_night_bright">Tomorrow Night Bright</option>
-                        <option value="tomorrow_night_eighties">Tomorrow Night 80s</option>
-                        <option value="dracula">Dracula</option>
-                        <option value="cobalt">Cobalt</option>
-                    </select>
-                </div>
                 <div id="sync-status" class="sync-status" style="display: none;"></div>
             </div>
 
@@ -135,11 +124,11 @@
                 <p>Clone the current configuration to another target directory:</p>
                 <div class="form-group">
                     <label for="clone-target-select">Destination Target:</label>
-                    <select id="clone-target-select" style="width: 100%; padding: 8px; margin-top: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+                    <select id="clone-target-select" class="clone-target-select">
                         <option value="">-- Select Target --</option>
                     </select>
                 </div>
-                <div style="margin-top: 15px; padding: 12px; background: #fef3c7; border-radius: 6px; font-size: 13px;">
+                <div class="clone-warning-note">
                     <strong>Note:</strong> This will save the current configuration to the selected target directory.
                 </div>
             </div>

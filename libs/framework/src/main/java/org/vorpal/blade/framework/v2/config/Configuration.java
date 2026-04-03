@@ -23,13 +23,10 @@ public class Configuration implements Serializable {
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 	private static final int MAX_VARIABLE_RESOLUTION_ITERATIONS = 5; // prevent loops
 
-	@JsonPropertyDescription("Logging parameters")
 	protected LogParameters logging;
 
-	@JsonPropertyDescription("Session parameters")
 	protected SessionParameters session;
 
-	@JsonPropertyDescription("Analytics parameters")
 	protected Analytics analytics;
 
 	private final static long SECONDS_FACTOR = 1;
@@ -152,6 +149,7 @@ public class Configuration implements Serializable {
 
 	}
 
+	@JsonPropertyDescription("Logging parameters")
 	public LogParameters getLogging() {
 		return logging;
 	}
@@ -161,6 +159,7 @@ public class Configuration implements Serializable {
 		return this;
 	}
 
+	@JsonPropertyDescription("Session parameters")
 	public SessionParameters getSession() {
 		return session;
 	}
@@ -226,6 +225,7 @@ public class Configuration implements Serializable {
 		return outputString;
 	}
 
+	@JsonPropertyDescription("Analytics parameters")
 	public Analytics getAnalytics() {
 		return analytics;
 	}

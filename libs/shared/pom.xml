@@ -166,10 +166,9 @@ echo "Generated prefer-application-packages with $COUNT entries"
 							</arguments>
 						</configuration>
 					</execution>
-					<!-- Step 3: Strip multi-release classes above Java 11 from JARs
-					     inside the WAR (post-package). Only needed for Java 11;
-					     later JDKs handle multi-release JARs correctly.
-					     Preserves META-INF/versions/9/ and versions/11/. -->
+					<!-- Step 3: Strip multi-release classes above the target Java version
+					     from JARs inside the WAR (post-package). Prevents
+					     UnsupportedClassVersionError on older JDKs. -->
 					<execution>
 						<id>strip-multirelease</id>
 						<phase>verify</phase>
@@ -179,25 +178,27 @@ echo "Generated prefer-application-packages with $COUNT entries"
 							<arguments>
 								<argument>-c</argument>
 								<argument>
-JAVA_VER="${java.version}";
-if [ "$JAVA_VER" = "11" ]; then
-  WARFILE="${project.build.directory}/${project.build.finalName}.war";
-  TMPDIR="${project.build.directory}/war-strip-tmp";
-  mkdir -p "$TMPDIR" &amp;&amp; cd "$TMPDIR" &amp;&amp;
-  jar xf "$WARFILE" WEB-INF/lib/;
-  for jar in WEB-INF/lib/*.jar; do
-    for ver in $(jar tf "$jar" 2>/dev/null | grep 'META-INF/versions/' | sed 's|META-INF/versions/||' | cut -d/ -f1 | sort -un); do
-      if [ "$ver" -gt 11 ]; then
-        zip -qd "$jar" "META-INF/versions/$ver/*" 2>/dev/null || true
-      fi
-    done
-  done;
+TARGET_VER="${blade.java.version}";
+WARFILE="${project.build.directory}/${project.build.finalName}.war";
+TMPDIR="${project.build.directory}/war-strip-tmp";
+STRIPPED=0;
+mkdir -p "$TMPDIR" &amp;&amp; cd "$TMPDIR" &amp;&amp;
+jar xf "$WARFILE" WEB-INF/lib/;
+for jar in WEB-INF/lib/*.jar; do
+  for ver in $(jar tf "$jar" 2>/dev/null | grep 'META-INF/versions/' | sed 's|META-INF/versions/||' | cut -d/ -f1 | sort -un); do
+    if [ "$ver" -gt "$TARGET_VER" ]; then
+      zip -qd "$jar" "META-INF/versions/$ver/*" 2>/dev/null || true
+      STRIPPED=1
+    fi
+  done
+done;
+if [ "$STRIPPED" -eq 1 ]; then
   jar uf "$WARFILE" WEB-INF/lib/;
-  rm -rf "$TMPDIR";
-  echo "Stripped multi-release classes above Java 11 from shared WAR JARs"
+  echo "Stripped multi-release classes above Java $TARGET_VER from shared WAR JARs"
 else
-  echo "Skipping multi-release stripping (java.version=$JAVA_VER, only needed for 11)"
-fi
+  echo "No multi-release classes above Java $TARGET_VER found in shared WAR JARs"
+fi;
+rm -rf "$TMPDIR"
 								</argument>
 							</arguments>
 						</configuration>

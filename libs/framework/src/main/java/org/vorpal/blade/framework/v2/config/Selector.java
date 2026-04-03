@@ -25,14 +25,10 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
-	@JsonPropertyDescription("Unique identifier for this selector")
 	protected String id; // optional for JSON references
-	@JsonPropertyDescription("Description of this selector's purpose")
 	protected String description; // optional for human readable descriptions
-	@JsonPropertyDescription("SIP message attribute to extract, e.g. From, To, Request-URI")
 	protected String attribute; // location of the key data, like in the 'To' header
 	protected Pattern _pattern; // regular expression using capturing groups to parse the key data
-	@JsonPropertyDescription("Regular expression applied to the attribute value for extraction or matching")
 	protected String expression; // replacement pattern, like $1 to format the key data
 
 	@JsonIgnore
@@ -51,6 +47,7 @@ public class Selector implements Serializable {
 		this.setExpression(expression);
 	}
 
+	@JsonPropertyDescription("Unique identifier for this selector")
 	public String getId() {
 		return id;
 	}
@@ -59,6 +56,7 @@ public class Selector implements Serializable {
 		this.id = id;
 	}
 
+	@JsonPropertyDescription("Description of this selector's purpose")
 	public String getDescription() {
 		return description;
 	}
@@ -67,6 +65,7 @@ public class Selector implements Serializable {
 		this.description = description;
 	}
 
+	@JsonPropertyDescription("SIP message attribute to extract, e.g. From, To, Request-URI")
 	public String getAttribute() {
 		return attribute;
 	}
@@ -75,6 +74,7 @@ public class Selector implements Serializable {
 		this.attribute = attribute;
 	}
 
+	@JsonPropertyDescription("Regular expression replacement pattern, e.g. ${user}, applied to extracted groups")
 	public String getExpression() {
 		return expression;
 	}
@@ -83,6 +83,7 @@ public class Selector implements Serializable {
 		this.expression = expression;
 	}
 
+	@JsonPropertyDescription("Regular expression with named capturing groups for parsing the SIP attribute value")
 	public String getPattern() {
 		return _pattern.toString();
 	}

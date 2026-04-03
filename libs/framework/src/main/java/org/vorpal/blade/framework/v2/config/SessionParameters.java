@@ -11,18 +11,16 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 public class SessionParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	@JsonPropertyDescription("Set Application Session expiration in minutes.")
 	public Integer expiration = null;
 
 	@JsonPropertyDescription("Automatically index the session using Vorpal Session? Default is false.")
 	public Boolean indexVorpalSessionID = null;
 
-	@JsonPropertyDescription("Set Keep-Alive parameters.")
 	public KeepAliveParameters keepAlive = null;
 
-	@JsonPropertyDescription("List of selectors for creating session (SipApplicationSession) lookup keys.")
 	public List<AttributeSelector> sessionSelectors = null;
 
+	@JsonPropertyDescription("List of selectors for creating session (SipApplicationSession) lookup keys.")
 	public List<AttributeSelector> getSessionSelectors() {
 		return sessionSelectors;
 	}
@@ -31,6 +29,7 @@ public class SessionParameters implements Serializable {
 		this.sessionSelectors = sessionSelectors;
 	}
 
+	@JsonPropertyDescription("Set Application Session expiration in minutes.")
 	public Integer getExpiration() {
 		return expiration;
 	}
@@ -40,6 +39,7 @@ public class SessionParameters implements Serializable {
 		return this;
 	}
 
+	@JsonPropertyDescription("Set Keep-Alive parameters.")
 	public KeepAliveParameters getKeepAlive() {
 		return keepAlive;
 	}

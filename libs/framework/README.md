@@ -1,17 +1,39 @@
 # Framework Module
 
-A comprehensive Java framework module that provides core SIP/SDP functionality and the Vorpal Blade framework for building telecommunications applications. This module serves as the foundation for SIP-based services and applications.
+The BLADE framework library — the core of every BLADE application.
+
+## The Lambda Callflow Pattern
+
+Traditional SIP servlet development scatters call logic across disconnected handler methods (`doInvite`, `doResponse`, `doAck`, `doBye`), with state manually saved and retrieved from session attributes. It reads like a choose-your-own-adventure book — you jump between pages and follow attribute breadcrumbs to reconstruct the flow.
+
+BLADE's `Callflow` class replaces this with **lambda-based callflows** that express the entire SIP conversation top-to-bottom:
+
+```java
+// A complete B2BUA call setup in one method
+sendRequest(bobRequest, (bobResponse) -> {
+    SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
+    sendResponse(aliceResponse, (aliceAck) -> {
+        SipServletRequest bobAck = bobResponse.createAck();
+        sendRequest(bobAck);
+    });
+});
+```
+
+The nested lambdas mirror the actual SIP message exchange. Send INVITE to Bob, wait for his response, forward it to Alice, wait for her ACK, forward it to Bob. You read the code and see the call.
+
+**Automatic state serialization** is the key innovation. `Callflow` implements `Serializable`, so the lambda callbacks and all variables they close over (`aliceRequest`, `bobRequest`) are transparently persisted into SIP session memory by the container. In a distributed cluster, if a node fails mid-call, the callflow resumes on another node with all state intact — no `setAttribute()`/`getAttribute()` calls needed.
 
 ## Overview
 
-The `libs/framework` module combines NIST SIP/SDP libraries with the Vorpal Blade framework v2 to provide:
+The `libs/framework` module provides:
 
-- **SIP/SDP Protocol Support**: Complete implementation of SIP and SDP protocols based on NIST libraries
-- **Application Framework**: High-level abstractions for building SIP applications
-- **B2BUA Functionality**: Back-to-Back User Agent capabilities for call routing and manipulation
-- **Analytics and Logging**: Comprehensive monitoring and debugging tools
-- **Configuration Management**: Flexible configuration system with JSON Schema validation
-- **Testing Framework**: Tools for unit and integration testing of SIP applications
+- **Lambda-based callflows**: Express entire SIP conversations as readable, sequential code
+- **Automatic state persistence**: Callflow variables survive failover in distributed clusters
+- **B2BUA, Proxy, and Transfer patterns**: Pre-built callflow templates ready to extend
+- **JSON configuration**: Dynamic config with JSON Schema validation, hierarchical merging, hot-reload via JMX
+- **SIP-aware logging**: Structured logs with ANSI color, sequence diagrams, per-application log files
+- **SDP parsing**: Bundled NIST SDP implementation for media negotiation
+- **Analytics**: JMS-based event publishing for call detail records
 
 ## Package Structure
 

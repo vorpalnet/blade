@@ -292,6 +292,85 @@ public class ValidationAPI {
 		return result;
 	}
 
+	// --- Publish Logic (JMX reload only) ---
+
+	@POST
+	@javax.ws.rs.Path("publish/{app}")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Push config to cluster apps via JMX and reload")
+	public Response publishOne(@PathParam("app") String app) {
+		try {
+			Map<String, Object> result = publishApp(app);
+			boolean published = Boolean.TRUE.equals(result.get("published"));
+			if (!published) {
+				return Response.status(Response.Status.NOT_FOUND)
+						.entity(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result)).build();
+			}
+			return Response.ok(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(result)).build();
+		} catch (Exception e) {
+			logger.log(Level.SEVERE, "Publish failed for " + app, e);
+			return Response.serverError().entity("{\"error\":\"" + e.getMessage() + "\"}").build();
+		}
+	}
+
+	private Map<String, Object> publishApp(String app) {
+		Map<String, Object> result = new LinkedHashMap<>();
+		result.put("app", app);
+		List<String> actions = new ArrayList<>();
+
+		try {
+			InitialContext ctx = new InitialContext();
+			try {
+				MBeanServer mbeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
+				ObjectName pattern = new ObjectName("vorpal.blade:Name=" + app + ",Type=Configuration,*");
+				Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(pattern, null);
+
+				if (mbeans.isEmpty()) {
+					result.put("published", false);
+					result.put("message", "No MBeans found for " + app);
+					return result;
+				}
+
+				for (ObjectInstance mbean : mbeans) {
+					ObjectName name = mbean.getObjectName();
+					SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
+
+					// Push domain config
+					propagateConfig(settings, "domain", Paths.get(CONFIG_BASE + app + ".json"), actions);
+
+					// Push cluster configs
+					String clusterKey = name.getKeyProperty("Cluster");
+					if (clusterKey != null) {
+						Path clusterConfig = Paths.get(CLUSTERS_DIR + clusterKey + "/" + app + ".json");
+						propagateConfig(settings, "cluster", clusterConfig, actions);
+					}
+
+					// Push server configs
+					String locationKey = name.getKeyProperty("Location");
+					if (locationKey != null) {
+						Path serverConfig = Paths.get(SERVERS_DIR + locationKey + "/" + app + ".json");
+						propagateConfig(settings, "server", serverConfig, actions);
+					}
+
+					// Reload
+					settings.reload();
+					actions.add("Reloaded " + name);
+				}
+
+				result.put("published", true);
+				result.put("actions", actions);
+			} finally {
+				ctx.close();
+			}
+		} catch (Exception e) {
+			logger.log(Level.SEVERE, "Publish failed for " + app, e);
+			result.put("published", false);
+			result.put("error", e.getMessage());
+		}
+
+		return result;
+	}
+
 	// --- Deploy Logic ---
 
 	private Map<String, Object> deployApp(String app) {

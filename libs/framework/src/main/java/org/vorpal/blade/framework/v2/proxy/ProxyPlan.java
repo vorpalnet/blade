@@ -15,16 +15,12 @@ public class ProxyPlan implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	@JsonPropertyDescription("Unique identifier for this proxy plan")
 	private String id;
 
-	@JsonPropertyDescription("Description of this proxy plan's purpose")
 	private String description;
 
-	@JsonPropertyDescription("Optional context data associated with this proxy plan")
 	private Object context;
 
-	@JsonPropertyDescription("Ordered list of proxy tiers, tried sequentially until one succeeds")
 	private ArrayList<ProxyTier> tiers = new ArrayList<>();
 
 	/** Null-safe method to get tiers, never returns null */
@@ -90,6 +86,7 @@ public class ProxyPlan implements Serializable {
 	 *
 	 * @return the plan ID
 	 */
+	@JsonPropertyDescription("Unique identifier for this proxy plan")
 	public String getId() {
 		return id;
 	}
@@ -117,6 +114,7 @@ public class ProxyPlan implements Serializable {
 	 *
 	 * @return the list of tiers
 	 */
+	@JsonPropertyDescription("Ordered list of proxy tiers, tried sequentially until one succeeds")
 	public List<ProxyTier> getTiers() {
 		return tiers;
 	}
@@ -135,6 +133,7 @@ public class ProxyPlan implements Serializable {
 	 *
 	 * @return the description
 	 */
+	@JsonPropertyDescription("Description of this proxy plan's purpose")
 	public String getDescription() {
 		return description;
 	}
@@ -153,6 +152,7 @@ public class ProxyPlan implements Serializable {
 	 *
 	 * @return the context object, or null if not set
 	 */
+	@JsonPropertyDescription("Optional context data associated with this proxy plan")
 	public Object getContext() {
 		return context;
 	}

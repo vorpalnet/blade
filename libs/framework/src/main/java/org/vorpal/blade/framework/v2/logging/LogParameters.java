@@ -35,46 +35,36 @@ public class LogParameters implements Serializable {
 		KB, KiB, MB, MiB, GB, GiB
 	}
 
-	@JsonPropertyDescription("Write to parent logger, i.e. the WebLogic engine log file. Default: false")
 	@JsonProperty(defaultValue = "false")
 	protected Boolean useParentLogging = null;
 
-	@JsonPropertyDescription("Location of log files. Supports environment and servlet context variables. Default: ./servers/${weblogic.Name}/logs/vorpal")
 	@JsonProperty(defaultValue = "./servers/${weblogic.Name}/logs/vorpal")
 	protected String directory = null;
 
-	@JsonPropertyDescription("Name of the log file. Supports environment and servlet context variables. Default: ${sip.application.name}.%g.log")
 	@JsonProperty(defaultValue = "${sip.application.name}.%g.log")
 	protected String fileName = null;
 
-	@JsonPropertyDescription("Maximum file size written in human readable form. Default: 100MiB")
 	@JsonProperty(defaultValue = "100MiB")
 	protected String fileSize = null;
 
-	@JsonPropertyDescription("Maximum number of log files. Default: 25")
 	@JsonProperty(defaultValue = "25")
 	protected Integer fileCount = null;
 
-	@JsonPropertyDescription("Continue to use the same log file after reboot. Default: true")
 	@JsonProperty(defaultValue = "true")
 	protected Boolean appendFile = null;
 
-	@JsonPropertyDescription("Logging level. Levels include: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL. Default: INFO")
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel loggingLevel = null;
 
-	@JsonPropertyDescription("Level at which sequence diagrams will be logged. Default: FINE")
 	@JsonProperty(defaultValue = "FINE")
 	protected LoggingLevel sequenceDiagramLoggingLevel = null;
 
-	@JsonPropertyDescription("Level at which configuration changes will be logged. Default: INFO")
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel configurationLoggingLevel = null;
 
-	@JsonPropertyDescription("Level at which analytics (if enabled) will be logged. Default: INFO")
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel analyticsLoggingLevel = null;
-	
+
 	@JsonPropertyDescription("Support ANSI colors in logging? It's useful for debugging but can be annoying in production. Default: false")
 	@JsonProperty(defaultValue = "false")
 	protected Boolean colorsEnabled = false;
@@ -95,6 +85,7 @@ public class LogParameters implements Serializable {
 		this.configurationLoggingLevel = that.configurationLoggingLevel;
 	}
 
+	@JsonPropertyDescription("Logging level. Levels include: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL. Default: INFO")
 	public LoggingLevel getLoggingLevel() {
 		return loggingLevel;
 	}
@@ -105,6 +96,7 @@ public class LogParameters implements Serializable {
 	 * 
 	 * @return the useParentLogging
 	 */
+	@JsonPropertyDescription("Write to parent logger, i.e. the WebLogic engine log file. Default: false")
 	public Boolean getUseParentLogging() {
 		return useParentLogging;
 	}
@@ -124,6 +116,7 @@ public class LogParameters implements Serializable {
 	/**
 	 * @return the directory
 	 */
+	@JsonPropertyDescription("Location of log files. Supports environment and servlet context variables. Default: ./servers/${weblogic.Name}/logs/vorpal")
 	public String getDirectory() {
 		return directory;
 	}
@@ -140,6 +133,7 @@ public class LogParameters implements Serializable {
 	/**
 	 * @return the fileName
 	 */
+	@JsonPropertyDescription("Name of the log file. Supports environment and servlet context variables. Default: ${sip.application.name}.%g.log")
 	public String getFileName() {
 		return fileName;
 	}
@@ -156,6 +150,7 @@ public class LogParameters implements Serializable {
 	/**
 	 * @return the fileSize
 	 */
+	@JsonPropertyDescription("Maximum file size written in human readable form. Default: 100MiB")
 	public String getFileSize() {
 		return fileSize;
 	}
@@ -172,6 +167,7 @@ public class LogParameters implements Serializable {
 	/**
 	 * @return the fileCount
 	 */
+	@JsonPropertyDescription("Maximum number of log files. Default: 25")
 	public Integer getFileCount() {
 		return fileCount;
 	}
@@ -188,6 +184,7 @@ public class LogParameters implements Serializable {
 	/**
 	 * @return the appendFile
 	 */
+	@JsonPropertyDescription("Continue to use the same log file after reboot. Default: true")
 	public Boolean getAppendFile() {
 		return appendFile;
 	}
@@ -204,6 +201,7 @@ public class LogParameters implements Serializable {
 	/**
 	 * @return the sequenceDiagramLoggingLevel
 	 */
+	@JsonPropertyDescription("Level at which sequence diagrams will be logged. Default: FINE")
 	public LoggingLevel getSequenceDiagramLoggingLevel() {
 		return sequenceDiagramLoggingLevel;
 	}
@@ -254,6 +252,7 @@ public class LogParameters implements Serializable {
 	/**
 	 * @return the configurationLoggingLevel
 	 */
+	@JsonPropertyDescription("Level at which configuration changes will be logged. Default: INFO")
 	public LoggingLevel getConfigurationLoggingLevel() {
 		return configurationLoggingLevel;
 	}
@@ -351,6 +350,7 @@ public class LogParameters implements Serializable {
 		return parseLoggingLevel(this.getLoggingLevel());
 	}
 
+	@JsonPropertyDescription("Level at which analytics (if enabled) will be logged. Default: INFO")
 	public LoggingLevel getAnalyticsLoggingLevel() {
 		return analyticsLoggingLevel;
 	}

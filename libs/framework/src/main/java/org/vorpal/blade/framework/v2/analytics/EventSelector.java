@@ -11,13 +11,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 public class EventSelector implements Serializable{
 	private static final long serialVersionUID = 1L;
 	
-	@JsonPropertyDescription("Set of attribute selectors that extract data from SIP messages for this event")
 	private Set<AttributeSelector> attributes;
 
 	public EventSelector() {
 		attributes = new LinkedHashSet<>();
 	}
 
+	@JsonPropertyDescription("Set of attribute selectors that extract data from SIP messages for this event")
 	public Set<AttributeSelector> getAttributes() {
 		return attributes;
 	}

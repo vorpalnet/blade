@@ -138,7 +138,7 @@ fi
 JAVA_VERSION=$(grep '^java\.version=' "$PLATFORM_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')
 JAVA_FLAG=()
 if [ -n "$JAVA_VERSION" ]; then
-    JAVA_FLAG=("-Djava.version=${JAVA_VERSION}")
+    JAVA_FLAG=("-Dblade.java.version=${JAVA_VERSION}")
 fi
 
 # --- Auto-increment build number ---

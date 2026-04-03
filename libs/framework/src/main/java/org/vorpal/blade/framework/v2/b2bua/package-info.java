@@ -1,6 +1,32 @@
-/// This package provides a comprehensive framework for implementing Back-to-Back User Agent (B2BUA) 
-/// functionality in SIP servlet applications. A B2BUA acts as an intermediary that terminates incoming 
-/// SIP calls and creates corresponding outbound calls, enabling call routing, modification, and control.
+/// Back-to-Back User Agent (B2BUA) implementation built on BLADE's lambda callflow pattern.
+///
+/// A B2BUA sits between two call legs (Alice and Bob), terminating the inbound call and
+/// creating a corresponding outbound call. This enables call routing, header manipulation,
+/// SDP modification, and call control — all expressed as readable lambda-based callflows.
+///
+/// ## How It Works
+///
+/// Extend [B2buaServlet] and implement [B2buaListener] to intercept messages at every
+/// lifecycle point. The framework handles session linking, message forwarding, and state
+/// management automatically. Your code focuses on business logic:
+///
+/// ```java
+/// public class MyServlet extends B2buaServlet {
+///     public void callStarted(SipServletRequest outboundRequest) {
+///         // Modify the INVITE before it's sent to Bob
+///         outboundRequest.setHeader("X-Custom", "value");
+///     }
+///     public void callAnswered(SipServletResponse outboundResponse) {
+///         // Modify the 200 OK before it's sent back to Alice
+///     }
+/// }
+/// ```
+///
+/// Under the hood, each SIP message type is handled by a specialized callflow class
+/// that uses the lambda pattern. For example, [InitialInvite] expresses the entire
+/// INVITE/response/ACK exchange in a single `process()` method with nested lambdas.
+/// The callflow state — including references to both Alice and Bob's requests — is
+/// automatically serialized into SIP session memory for distributed cluster failover.
 ///
 /// ## Core Components
 ///
@@ -10,9 +36,9 @@
 /// - [B2buaListener] - Interface for handling B2BUA call lifecycle events and message modification
 /// - [B2buaConfiguration] - Configuration class extending the base Configuration for B2BUA-specific settings
 ///
-/// ### Active Callflow Handlers
+/// ### Callflow Handlers
 ///
-/// The package includes specialized callflow classes for handling different SIP message types:
+/// Each SIP message type has a dedicated callflow, all using the lambda pattern:
 ///
 /// - [InitialInvite] - Handles initial INVITE requests, creates outbound leg and links sessions
 /// - [Reinvite] - Processes re-INVITE requests for mid-call modifications with SDP exchange

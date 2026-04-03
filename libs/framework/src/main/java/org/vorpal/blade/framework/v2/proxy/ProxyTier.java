@@ -29,18 +29,14 @@ public class ProxyTier implements Serializable {
 	/** Default timeout value in seconds */
 	private static final Integer DEFAULT_TIMEOUT = 0;
 
-	@JsonPropertyDescription("Unique identifier for this proxy tier")
 	private String id = null;
 
-	@JsonPropertyDescription("Proxy mode: parallel sends to all endpoints simultaneously, serial tries each in order")
 	@JsonProperty(defaultValue = "serial")
 	private Mode mode = Mode.serial;
 
-	@JsonPropertyDescription("Timeout in seconds before failing over to the next tier")
 	@JsonProperty(defaultValue = "0")
 	private Integer timeout = DEFAULT_TIMEOUT;
 
-	@JsonPropertyDescription("List of SIP endpoint URIs to proxy requests to in this tier")
 	private List<URI> endpoints = new ArrayList<>();
 
 	/**
@@ -67,6 +63,7 @@ public class ProxyTier implements Serializable {
 	 *
 	 * @return the tier ID
 	 */
+	@JsonPropertyDescription("Unique identifier for this proxy tier")
 	public String getId() {
 		return id;
 	}
@@ -85,6 +82,7 @@ public class ProxyTier implements Serializable {
 	 *
 	 * @return the routing mode (parallel or serial)
 	 */
+	@JsonPropertyDescription("Proxy mode: parallel sends to all endpoints simultaneously, serial tries each in order")
 	public Mode getMode() {
 		return mode;
 	}
@@ -103,6 +101,7 @@ public class ProxyTier implements Serializable {
 	 *
 	 * @return the timeout value
 	 */
+	@JsonPropertyDescription("Timeout in seconds before failing over to the next tier")
 	public Integer getTimeout() {
 		return timeout;
 	}
@@ -121,6 +120,7 @@ public class ProxyTier implements Serializable {
 	 *
 	 * @return the list of endpoints
 	 */
+	@JsonPropertyDescription("List of SIP endpoint URIs to proxy requests to in this tier")
 	public List<URI> getEndpoints() {
 		return endpoints;
 	}

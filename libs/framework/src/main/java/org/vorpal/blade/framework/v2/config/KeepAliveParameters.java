@@ -14,15 +14,13 @@ public class KeepAliveParameters implements Serializable {
 		DISABLED, UPDATE, REINVITE
 	};
 
-	@JsonPropertyDescription("Sets keep alive style: DISABLED, UPDATE, REINVITE")
 	protected KeepAlive style = null;
 
-	@JsonPropertyDescription("Sets Session-Expires header, in seconds")
 	protected Integer sessionExpires = null;
 
-	@JsonPropertyDescription("Sets Min-SE header, in seconds")
 	protected Integer minSE = null;
 
+	@JsonPropertyDescription("Sets keep alive style: DISABLED, UPDATE, REINVITE")
 	public KeepAlive getStyle() {
 		return style;
 	}
@@ -32,6 +30,7 @@ public class KeepAliveParameters implements Serializable {
 		return this;
 	}
 
+	@JsonPropertyDescription("Sets Session-Expires header, in seconds")
 	public Integer getSessionExpires() {
 		return sessionExpires;
 	}
@@ -41,6 +40,7 @@ public class KeepAliveParameters implements Serializable {
 		return this;
 	}
 
+	@JsonPropertyDescription("Sets Min-SE header, in seconds")
 	public Integer getMinSE() {
 		return minSE;
 	}
