@@ -1,0 +1,98 @@
+package org.vorpal.blade.framework.v2.config;
+
+import java.io.Serializable;
+import java.util.LinkedList;
+
+import javax.servlet.sip.ServletParseException;
+import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipURI;
+import javax.servlet.sip.URI;
+
+import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
+/**
+ * Router configuration with selectors, translation maps and a routing plan.
+ */
+public class RouterConfig2 extends Configuration implements Serializable {
+	private static final long serialVersionUID = 1L;
+	@JsonPropertyDescription("List of selectors that extract values from SIP messages for routing lookups")
+	public LinkedList<Selector> selectors = new LinkedList<>();
+	@JsonPropertyDescription("Translation maps used for routing lookups and address resolution")
+	public LinkedList<TranslationsMap> maps = new LinkedList<>();
+	@JsonPropertyDescription("Ordered routing plan that defines the sequence of translation map lookups")
+	public LinkedList<TranslationsMap> plan = new LinkedList<>();
+
+	@JsonPropertyDescription("Default route used when no translation map matches")
+	public Translation defaultRoute = null;
+
+	public RouterConfig2() {
+
+	}
+
+	public static URI applyParameters(Translation t, SipServletRequest request) throws ServletParseException {
+		URI uri = null;
+
+		if (t != null && t.getRequestUri() != null) {
+
+			uri = SettingsManager.sipFactory.createURI(t.getRequestUri());
+
+			// copy the 'user' if necessary
+			SipURI tSipUri = (SipURI) uri;
+			SipURI rSipUri = (SipURI) request.getRequestURI();
+			if (tSipUri.getUser() == null && rSipUri.getUser() != null) {
+				tSipUri.setUser(rSipUri.getUser());
+			}
+
+			// copy all SIP URI parameters (if not already present in new request URI)
+			for (String name : request.getRequestURI().getParameterNameSet()) {
+				if (uri.getParameter(name) == null) {
+					uri.setParameter(name, request.getRequestURI().getParameter(name));
+				}
+			}
+
+		}
+
+		return uri;
+	}
+
+	public Translation findTranslation(SipServletRequest request) throws ServletParseException {
+		org.vorpal.blade.framework.v2.logging.Logger sipLogger = SettingsManager.getSipLogger();
+		Translation t = null;
+
+		sipLogger.finer(request, "Translation.findTranslation() searching maps size: " + plan.size());
+
+		for (TranslationsMap map : plan) {
+			sipLogger.finer(request, "Translation.findTranslation() searching map: " + map.getId());
+			t = map.applyTranslations(request);
+			if (t != null) {
+				break;
+			}
+		}
+
+		if (t != null) {
+			sipLogger.finer(request, "Found translation id: " + t.getId() + //
+					", desc: " + t.getDescription() + //
+					", route-group: " + t.getAttribute("route-group"));
+		} else {
+			sipLogger.finer(request, "No match found, using default.");
+		}
+
+		return (t != null) ? t : defaultRoute;
+	}
+
+	public URI findRoute(SipServletRequest request) throws ServletParseException {
+
+		Translation t = null;
+		URI uri = null;
+
+		t = findTranslation(request);
+		if (t != null && t.getRequestUri() != null) {
+			uri = applyParameters(t, request);
+		} else {
+			uri = request.getRequestURI();
+		}
+
+		return uri;
+	}
+
+}

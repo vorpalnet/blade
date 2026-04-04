@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-library-fsmar</artifactId>
+	<packaging>jar</packaging>
+	<name>BLADE FSMAR Library</name>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<artifactId>jackson-dataformat-xml</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.seancfoley</groupId>
+			<artifactId>ipaddress</artifactId>
+		</dependency>
+		<!-- Override provided scope from framework — FSMAR is a fat JAR, not a deployed WAR,
+		     so all framework runtime deps must be bundled explicitly. -->
+		<dependency>
+			<groupId>com.kjetland</groupId>
+			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.jayway.jsonpath</groupId>
+			<artifactId>json-path</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-collections4</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>vorpal-blade-library-fsmar</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>3.6.0</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals><goal>shade</goal></goals>
+						<configuration>
+							<!-- Exclude provided-scope deps (OCCAS/WebLogic JARs) -->
+							<artifactSet>
+								<excludes>
+									<exclude>javax:javaee-api</exclude>
+									<exclude>com.oracle.weblogic:*</exclude>
+									<exclude>com.oracle.occas:*</exclude>
+								</excludes>
+							</artifactSet>
+							<transformers>
+								<!-- Merge META-INF/services files from all JARs -->
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+							</transformers>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<!-- Strip multi-release classes above the target Java version from
+			     the shaded JAR. Prevents UnsupportedClassVersionError on older JDKs. -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.5.0</version>
+				<executions>
+					<execution>
+						<id>strip-multirelease</id>
+						<phase>package</phase>
+						<goals><goal>exec</goal></goals>
+						<configuration>
+							<executable>bash</executable>
+							<arguments>
+								<argument>-c</argument>
+								<argument>
+TARGET_VER="${blade.java.version}";
+JARFILE="${project.build.directory}/${project.build.finalName}.jar";
+STRIPPED=0;
+for ver in $(jar tf "$JARFILE" 2>/dev/null | grep 'META-INF/versions/' | sed 's|META-INF/versions/||' | cut -d/ -f1 | sort -un); do
+  if [ "$ver" -gt "$TARGET_VER" ]; then
+    zip -qd "$JARFILE" "META-INF/versions/$ver/*" 2>/dev/null || true
+    STRIPPED=1
+  fi
+done;
+if [ "$STRIPPED" -eq 1 ]; then
+  echo "Stripped multi-release classes above Java $TARGET_VER from FSMAR JAR"
+else
+  echo "No multi-release classes above Java $TARGET_VER found in FSMAR JAR"
+fi
+								</argument>
+							</arguments>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

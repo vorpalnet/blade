@@ -1,1 +1,0 @@
-package org.vorpal.blade.framework.v2.testing;

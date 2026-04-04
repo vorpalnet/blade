@@ -1,0 +1,86 @@
+/* Vorpal BLADE Javadoc Theme Override
+   Shifts the default javadoc blue accent to Vorpal purple (#602671) */
+
+/* === Override CSS variables === */
+:root {
+    --navbar-text-color: #602671;
+    --selected-background-color: #602671;
+    --selected-text-color: #ffffff;
+    --selected-link-color: #ffffff;
+    --link-color: #602671;
+    --link-color-active: #7a3a8f;
+    --subnav-link-color: #602671;
+}
+
+/* === Navigation bar === */
+div.top-nav, div.bottom-nav {
+    background: #f3edf5;
+}
+
+/* === Sub navigation === */
+div.sub-nav {
+    background: #faf7fb;
+}
+
+/* === TOC sidebar === */
+nav.toc {
+    border-right-color: #e0d4e6;
+}
+nav.toc .toc-header {
+    color: #602671;
+    font-weight: bold;
+}
+nav.toc a:hover {
+    color: #602671;
+}
+nav.toc li.active > a {
+    color: #602671;
+    font-weight: bold;
+}
+
+/* === Section headings === */
+section.package-description h2,
+section.package-description h3,
+section.class-description h2,
+section.class-description h3 {
+    color: #4a1d5c;
+}
+
+/* === Table headers === */
+div.table-header {
+    background: #602671;
+    color: #fff;
+}
+div.caption span {
+    background: #602671;
+    color: #fff;
+}
+
+/* === Summary table alternating rows === */
+.even-row-color {
+    background-color: #faf7fb;
+}
+.odd-row-color {
+    background-color: #fff;
+}
+
+/* === Search input === */
+#search-input {
+    border-color: #d0c0d8;
+}
+#search-input:focus {
+    border-color: #602671;
+    outline-color: #602671;
+}
+
+/* === Signature highlights === */
+.member-signature .return-type,
+.package-signature .element-name {
+    color: #602671;
+}
+
+/* === Selected/active elements === */
+.ui-state-active, .ui-widget-content .ui-state-active {
+    background: #602671;
+    border-color: #602671;
+}
