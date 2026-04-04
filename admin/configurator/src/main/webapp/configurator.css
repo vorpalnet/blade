@@ -340,6 +340,89 @@
     --add-label-text: #8a7560;
     --disabled-bg: #d4c4b0;
 }
+
+[data-theme="glossy"] {
+    color-scheme: dark;
+
+    --bg-page: #0a0a0a;
+    --bg-surface: #111111;
+    --bg-surface-alt: #191919;
+    --bg-inset: #1f2124;
+
+    --text-primary: #dddddd;
+    --text-secondary: #bbbbbb;
+    --text-muted: #888888;
+
+    --border-default: #2a2a2a;
+    --border-subtle: #1a1a1a;
+    --border-strong: #333333;
+    --border-item: #222222;
+
+    --btn-primary: #38a6f0;
+    --btn-primary-hover: #287db5;
+    --btn-secondary: #444444;
+    --btn-secondary-hover: #555555;
+    --btn-publish: #38a6f0;
+    --btn-publish-hover: #287db5;
+    --btn-clone: #8b5cf6;
+    --btn-clone-hover: #a78bfa;
+    --btn-delete: #e879a0;
+    --btn-delete-hover: #f0a0c0;
+    --btn-add: #38a6f0;
+    --btn-add-hover: #287db5;
+    --btn-text: #ffffff;
+
+    --tab-bg: #191919;
+    --tab-text: #888888;
+    --tab-hover-bg: #27292c;
+    --tab-hover-text: #cccccc;
+    --tab-active-bg: #111111;
+    --tab-active-text: #ffffff;
+    --tab-active-accent: #38a6f0;
+
+    --status-success-bg: #0a2618;
+    --status-success-text: #6ee7b7;
+    --status-error-bg: #2a0a0a;
+    --status-error-text: #fca5a5;
+    --status-error-border: #551111;
+    --status-warning-bg: #2a1a00;
+    --status-warning-text: #fde68a;
+
+    --badge-bg: #27292c;
+    --badge-text: #888888;
+
+    --focus-ring: rgba(56, 166, 240, 0.25);
+    --focus-border: #51cbee;
+
+    --dirty-bg: #d97706;
+    --dirty-text: #fef3c7;
+
+    --help-bg: #1a1a2e;
+    --help-text: #51cbee;
+    --help-bg-hover: #38a6f0;
+    --help-text-hover: #ffffff;
+
+    --tooltip-bg: #000000;
+    --tooltip-text: #dddddd;
+
+    --modal-backdrop: rgba(0, 0, 0, 0.8);
+    --modal-close-hover-bg: #27292c;
+
+    --shadow-sm: inset 0 0 2px 1px rgba(255, 255, 255, 0.08), 0 16px 10px -8px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.8), inset 0 0 2px 1px rgba(255, 255, 255, 0.08);
+    --shadow-tooltip: 0 4px 6px rgba(0, 0, 0, 0.6);
+
+    --label-required: #f87171;
+    --field-error-border: #ef4444;
+    --field-error-bg: #1a0505;
+    --field-error-text: #fca5a5;
+    --validation-list-text: #fca5a5;
+    --version-hover-bg: #1f2124;
+    --add-placeholder-hover-bg: #27292c;
+    --add-placeholder-hover-border: #494d54;
+    --add-label-text: #888888;
+    --disabled-bg: #333333;
+}
 /* =========== END THEME DEFINITIONS ========== */
 
 * {
@@ -1182,4 +1265,206 @@ input:focus, select:focus, textarea:focus {
 .form-group-header label {
     margin-bottom: 0;
     flex: 1;
+}
+
+/* Feature: Jackson Identity References */
+.reference-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg-inset);
+    border: 1px solid var(--focus-border);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.reference-link-icon {
+    color: var(--focus-border);
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.reference-link-anchor {
+    color: var(--focus-border);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.reference-link-anchor:hover {
+    text-decoration: underline;
+}
+
+.reference-highlight {
+    animation: reference-pulse 2s ease-out;
+}
+
+@keyframes reference-pulse {
+    0% { outline: 3px solid var(--focus-border); outline-offset: 2px; }
+    100% { outline: 3px solid transparent; outline-offset: 2px; }
+}
+
+/* Glossy Black theme — glass/reflection effects */
+[data-theme="glossy"] .container {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #191919;
+    border-radius: 0.4em;
+}
+
+/* Diagonal light reflection across the container */
+[data-theme="glossy"] .container::before {
+    content: "";
+    width: 300px;
+    height: 600px;
+    position: absolute;
+    top: -100px;
+    right: -60px;
+    transform: rotate(35deg);
+    background: linear-gradient(50deg, rgba(255,255,255,0.06), rgba(255,255,255,0));
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Top-edge light streak */
+[data-theme="glossy"] .container::after {
+    content: "";
+    height: 1px;
+    width: 40%;
+    position: absolute;
+    left: 30%;
+    top: 0;
+    background: linear-gradient(to right, transparent, #444, #b6b6b8, #444, transparent);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Ensure content sits above the reflection */
+[data-theme="glossy"] .container > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Glossy input fields — dark gradient matching .form-3 */
+[data-theme="glossy"] input,
+[data-theme="glossy"] select,
+[data-theme="glossy"] textarea {
+    background: linear-gradient(#1f2124, #27292c);
+    border-color: #000;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.1);
+    color: #fff;
+    text-shadow: none;
+}
+
+[data-theme="glossy"] input:hover,
+[data-theme="glossy"] select:hover,
+[data-theme="glossy"] textarea:hover {
+    background: #27292c;
+}
+
+[data-theme="glossy"] input:focus,
+[data-theme="glossy"] select:focus,
+[data-theme="glossy"] textarea:focus {
+    box-shadow: inset 0 0 2px #000;
+    background: #494d54;
+    border-color: #51cbee;
+}
+
+/* Glossy collapsible sections — subtle glass edge */
+[data-theme="glossy"] .collapsible-section {
+    border: 1px solid #191919;
+    box-shadow: inset 0 0 1px rgba(255,255,255,0.05);
+}
+
+[data-theme="glossy"] .collapsible-header {
+    background: linear-gradient(#1a1a1a, #141414);
+    border-bottom-color: #0a0a0a;
+}
+
+[data-theme="glossy"] .collapsible-header:hover {
+    background: linear-gradient(#222222, #1a1a1a);
+}
+
+/* Glossy tabs */
+[data-theme="glossy"] .tab {
+    background: linear-gradient(#1a1a1a, #111111);
+    border-right: 1px solid #0a0a0a;
+}
+
+[data-theme="glossy"] .tab:hover {
+    background: linear-gradient(#252525, #1a1a1a);
+}
+
+[data-theme="glossy"] .tab.active {
+    background: linear-gradient(#222222, #111111);
+    box-shadow: 0 -2px 0 #38a6f0, inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* Glossy buttons — inset glow like .form-3 submit */
+[data-theme="glossy"] .btn-primary,
+[data-theme="glossy"] .btn-publish {
+    border: 1px solid rgba(0,0,0,0.4);
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.3),
+        inset 0 10px 10px rgba(255,255,255,0.1);
+    text-shadow: 0 -1px 0 rgba(0,0,0,0.8);
+}
+
+[data-theme="glossy"] .btn-primary:hover,
+[data-theme="glossy"] .btn-publish:hover {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+[data-theme="glossy"] .btn-primary:active,
+[data-theme="glossy"] .btn-publish:active {
+    box-shadow: inset 0 0 3px rgba(0,0,0,0.6);
+}
+
+[data-theme="glossy"] .btn-secondary {
+    background: linear-gradient(#333, #222);
+    border: 1px solid #111;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.1),
+        0 1px 0 rgba(255,255,255,0.05);
+    text-shadow: 0 -1px 0 rgba(0,0,0,0.5);
+}
+
+[data-theme="glossy"] .btn-secondary:hover {
+    background: linear-gradient(#444, #333);
+}
+
+/* Glossy schema selector bar */
+[data-theme="glossy"] .schema-selector-container {
+    background: linear-gradient(#1a1a1a, #111111);
+    border: 1px solid #191919;
+    box-shadow: inset 0 0 1px rgba(255,255,255,0.05);
+}
+
+/* Glossy nested form groups */
+[data-theme="glossy"] .form-group.nested {
+    background: linear-gradient(#161616, #111111);
+    border: 1px solid #191919;
+    box-shadow: inset 0 0 1px rgba(255,255,255,0.03);
+}
+
+/* Glossy array sections */
+[data-theme="glossy"] .form-group.array {
+    background: linear-gradient(#181818, #131313);
+    border: 1px solid #222;
+}
+
+/* Glossy modal */
+[data-theme="glossy"] .modal-content {
+    border: 1px solid #191919;
+    box-shadow:
+        0 20px 60px rgba(0,0,0,0.8),
+        inset 0 0 2px 1px rgba(255,255,255,0.08);
+}
+
+/* Glossy labels — uppercase with letter spacing like .form-3 */
+[data-theme="glossy"] label {
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 0 #000;
+    font-size: 11px;
 }

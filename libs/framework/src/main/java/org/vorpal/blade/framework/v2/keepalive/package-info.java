@@ -1,55 +1,93 @@
-/// This package provides SIP session keep-alive functionality for maintaining active sessions
-/// and handling session expiry in SIP servlet applications. The keep-alive mechanism uses
-/// re-INVITE requests to refresh RTP streams and prevent session timeouts.
+/// SIP session keep-alive using re-INVITE requests to refresh RTP streams and
+/// prevent session timeouts.
 ///
-/// ## Key Classes
 ///
-/// - [KeepAlive] - Implements session keep-alive by sending re-INVITE requests to both call legs
-/// - [KeepAliveExpiry] - Handles session expiry by terminating calls with BYE requests
+/// ## Why Keep-Alive?
 ///
-/// ## Architecture
+/// SIP sessions can time out if no signaling activity occurs for an extended period.
+/// NAT bindings expire, firewalls close pinholes, and some endpoints disconnect idle
+/// sessions. The keep-alive mechanism sends periodic re-INVITE requests to both call
+/// legs, forcing SDP renegotiation and refreshing all intermediate network state.
 ///
-/// Both classes extend `ClientCallflow` and implement `SessionKeepAlive.Callback` to integrate
-/// with the SIP servlet container's session management system. Each class provides a `handle()`
-/// method that processes SIP sessions based on the specific keep-alive scenario:
 ///
-/// - **Session Refresh**: [KeepAlive] sends INVITE requests to refresh RTP streams and negotiates
-///   media parameters through SDP exchange between call participants
-/// - **Session Termination**: [KeepAliveExpiry] terminates expired sessions by sending BYE requests
-///   to both call legs when keep-alive timeouts occur
+/// ## Configuration
 ///
-/// ## Integration
+/// Keep-alive is controlled by the {@code "keepAlive"} section within the
+/// {@code "session"} configuration:
 ///
-/// Classes in this package are designed to work with the SIP servlet container's session management
-/// system through the `SessionKeepAlive.Callback` interface. The callflow implementations handle
-/// the specific SIP messaging required for each scenario while leveraging the broader framework
-/// infrastructure for call processing.
+/// <pre>{@code
+/// "session": {
+///   "expiration": 60,
+///   "keepAlive": {
+///     "style": "UPDATE",
+///     "sessionExpires": 1800,
+///     "minSE": 90
+///   }
+/// }
+/// }</pre>
 ///
-/// ### KeepAlive Re-INVITE Flow
+/// <table>
+///   <caption>Keep-Alive Styles</caption>
+///   <tr><th>Style</th><th>Behavior</th></tr>
+///   <tr>
+///     <td>{@code DISABLED}</td>
+///     <td>No keep-alive (default)</td>
+///   </tr>
+///   <tr>
+///     <td>{@code UPDATE}</td>
+///     <td>Use SIP UPDATE method for session refresh</td>
+///   </tr>
+///   <tr>
+///     <td>{@code REINVITE}</td>
+///     <td>Use re-INVITE with SDP renegotiation</td>
+///   </tr>
+/// </table>
 ///
-/// The [KeepAlive] callflow performs a three-step SDP exchange to refresh RTP media streams:
+/// The {@code sessionExpires} value (in seconds) controls how often the refresh
+/// fires. The {@code minSE} value is the minimum acceptable session interval
+/// negotiated with the remote endpoint.
 ///
-/// 1. Sends an INVITE to Alice (the first call leg) with no SDP body
-/// 2. On receiving Alice's 200 OK with SDP, copies that SDP into a new INVITE sent to Bob
-/// 3. On receiving Bob's 200 OK with SDP, copies Bob's SDP into the ACK sent back to Alice
 ///
-/// This ensures both endpoints renegotiate media parameters and keeps the RTP session alive.
-/// The linked session (Bob) is resolved via `getLinkedSession()` from the `ClientCallflow`
-/// superclass. If the linked session is null, no action is taken.
+/// ## Re-INVITE SDP Exchange
 ///
-/// ### KeepAliveExpiry Termination Flow
+/// When the keep-alive timer fires, {@link KeepAlive} performs a three-step SDP
+/// exchange across both call legs:
 ///
-/// The [KeepAliveExpiry] callflow terminates an expired call by sending BYE requests to both
-/// call legs independently:
+/// <pre>
+///   Alice                     BLADE                      Bob
+///     |                         |                         |
+///     |&lt;---INVITE (no SDP)------|                         |
+///     |----200 OK (SDP)--------&gt;|                         |
+///     |                         |---INVITE (Alice SDP)---&gt;|
+///     |                         |&lt;----200 OK (Bob SDP)----|
+///     |&lt;---ACK (Bob SDP)--------|                         |
+///     |                         |--------ACK-------------&gt;|
+///     |                         |                         |
+/// </pre>
 ///
-/// 1. Checks if the primary session is still valid, then sends BYE
-/// 2. Resolves the linked session and checks its validity, then sends BYE
+/// This forces both endpoints to renegotiate media parameters, refreshing RTP
+/// keep-alive timers on all intermediate network devices.
 ///
-/// Each BYE is wrapped in its own try-catch block so that a failure on one leg does not
-/// prevent termination of the other leg. Sessions that are no longer valid are silently
-/// skipped. Both handlers include a defensive null check on the incoming `sipSession`
-/// parameter to guard against container edge cases.
 ///
-/// @see javax.servlet.sip.SessionKeepAlive.Callback
-/// @see org.vorpal.blade.framework.v2.callflow.ClientCallflow
+/// ## Session Expiry
+///
+/// When the session timer expires without a successful refresh, {@link KeepAliveExpiry}
+/// terminates the call by sending BYE to both legs independently. Each BYE is wrapped
+/// in its own try-catch block so that a failure on one leg does not prevent termination
+/// of the other. Sessions that are no longer valid are silently skipped.
+///
+///
+/// ## Core Classes
+///
+/// - {@link KeepAlive} - Session refresh: re-INVITE with three-step SDP exchange
+/// - {@link KeepAliveExpiry} - Session termination: BYE to both legs on timeout
+///
+/// Both classes extend
+/// {@link org.vorpal.blade.framework.v2.callflow.ClientCallflow ClientCallflow} and
+/// implement {@code SessionKeepAlive.Callback}. The SIP container calls their
+/// {@code handle(SipSession)} method when the keep-alive timer fires or expires.
+///
+/// @see KeepAlive
+/// @see KeepAliveExpiry
+/// @see org.vorpal.blade.framework.v2.config.KeepAliveParameters
 package org.vorpal.blade.framework.v2.keepalive;

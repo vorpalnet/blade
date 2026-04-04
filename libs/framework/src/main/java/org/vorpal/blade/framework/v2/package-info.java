@@ -1,4 +1,4 @@
-/// The Vorpal:BLADE framework — a lambda-based SIP servlet framework that transforms
+/// BLADE framework — a Java Lambda Expressions based SIP Servlet framework that simplifies
 /// telecommunications application development.
 ///
 /// ## The Problem
@@ -26,8 +26,9 @@
 ///
 /// The nested lambdas mirror the actual SIP message exchange. What once required a
 /// complicated collection of Java classes is now a single class. What once read like
-/// a choose-your-own-adventure book now reads like a poem.
-/// 
+/// a [Choose Your Own Adventure](https://en.wikipedia.org/wiki/Choose_Your_Own_Adventure)
+/// book now reads like a [collection of poems](https://en.wikipedia.org/wiki/Leaves_of_Grass).
+///
 /// Since there can be multiple responses, like 180 Ringing and 200 OK, the
 /// lambda expression within 'sendRequest' can be invoked multiple times. Only when an
 /// ACK (or PRACK) is returned will the lambda expression within 'sendResponse' be invoked.
@@ -103,33 +104,13 @@
 ///       and the framework takes care of SIP message dispatching, session management, glare
 ///       detection, and error recovery.</li>
 ///
-///   <li><b>Config Files</b>
-///       &mdash; Each BLADE application is configured by a JSON file stored under the
-///       WebLogic domain's {@code config/custom/vorpal/} directory. The framework
-///       automatically loads and merges configuration from a three-tier hierarchy:
-///       <ul>
-///         <li><b>Domain</b> &mdash; {@code config/custom/vorpal/<i>app</i>.json}</li>
-///         <li><b>Cluster</b> &mdash; {@code config/custom/vorpal/_clusters/<i>cluster</i>/<i>app</i>.json}</li>
-///         <li><b>Server</b> &mdash; {@code config/custom/vorpal/_servers/<i>server</i>/<i>app</i>.json}</li>
-///       </ul>
-///       Server settings override cluster settings, which override domain settings.
-///       Every config file extends the base
-///       {@link org.vorpal.blade.framework.v2.config.Configuration Configuration} class,
-///       which defines three standard top-level sections:
-///       <pre>{@code
-/// {
-///   "logging":   { ... },
-///   "session":   { ... },
-///   "analytics": { ... }
-/// }
-///       }</pre>
-///       Applications add their own properties alongside these. For example, the
-///       transfer service adds {@code "selectors"}, {@code "maps"}, {@code "plan"},
-///       and {@code "defaultTransferStyle"}. A JSON Schema ({@code .jschema}) and
-///       sample configuration are auto-generated on first deployment for use by the
-///       <a href="https://vorpal.net/javadocs/configurator/index.html">Configurator</a>
-///       admin tool. Configuration can be reloaded at runtime via JMX without
-///       restarting the application.</li>
+///   <li><b>{@linkplain org.vorpal.blade.framework.v2.config Config Files}</b>
+///       &mdash; Each application is configured by a JSON file with a three-tier
+///       merge hierarchy (domain &rarr; cluster &rarr; server). The framework handles
+///       loading, merging, schema generation, and JMX-based runtime reload automatically.
+///       See the {@linkplain org.vorpal.blade.framework.v2.config config package}
+///       documentation for a full tutorial on configuration files, selectors,
+///       translation maps, and routing plans.</li>
 ///
 ///   <li><b>{@link org.vorpal.blade.framework.v2.callflow.Callflow Callflow}</b>
 ///       &mdash; The heart of BLADE. Subclass this to define your SIP conversation as
