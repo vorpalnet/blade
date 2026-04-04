@@ -1,55 +1,96 @@
-/// This package provides a comprehensive framework for building SIP proxy applications
-/// with support for multi-tier routing, failover mechanisms, and flexible routing policies.
+/// SIP proxy framework with multi-tier routing, parallel/serial forking,
+/// and automatic failover.
 ///
-/// ## Core Components
 ///
-/// - [ProxyServlet] - Abstract base servlet that extends [org.vorpal.blade.framework.v2.AsyncSipServlet] for proxy applications
-/// - [ProxyListener] - Callback interface for customizing proxy routing decisions and handling responses
-/// - [ProxyPlan] - Defines routing plans with multiple tiers, endpoints, and contextual information
-/// - [ProxyTier] - Represents individual routing tiers with parallel or serial execution modes and configurable timeouts
-/// - [ProxyInvite] - Callflow implementation for handling INVITE request proxying through configured tiers
-/// - [ProxyCancel] - Callflow implementation for CANCEL request handling (no-op as container handles automatically)
+/// ## What is a SIP Proxy?
 ///
-/// ## Routing Architecture
+/// Unlike a B2BUA (which terminates and recreates SIP dialogs), a proxy forwards
+/// requests on behalf of the caller without creating new dialogs. This is lighter
+/// weight but gives less control over the media path. Proxies are typically used
+/// for routing, load balancing, and registration.
 ///
-/// The framework uses a hierarchical tier-based routing system where each [ProxyPlan] contains
-/// multiple [ProxyTier] objects. Each tier can operate in `PARALLEL` or `SERIAL` mode,
-/// allowing for sophisticated routing strategies including load balancing and failover.
-/// Tiers support configurable timeouts and can contain multiple SIP URI endpoints.
 ///
-/// ### Routing Modes
+/// ## Quick Start
 ///
-/// - **PARALLEL** - All endpoints in a tier are tried simultaneously
-/// - **SERIAL** - Endpoints in a tier are tried sequentially in order
+/// Extend {@link ProxyServlet} and implement the {@link ProxyListener} callbacks
+/// to build routing plans dynamically:
 ///
-/// ## Implementation Pattern
+/// {@snippet :
+/// public class MyProxy extends ProxyServlet {
 ///
-/// Applications extend [ProxyServlet] and implement the [ProxyListener] interface
-/// to provide custom routing logic. The servlet automatically routes requests through
-/// appropriate callflow implementations:
+///     public void proxyRequest(SipServletRequest request, ProxyPlan plan) {
+///         // Build the routing plan for this request
+///         ProxyTier tier = new ProxyTier();
+///         tier.setMode(ProxyTier.Mode.parallel);
+///         tier.setTimeout(5);
+///         tier.addEndpoint(sipFactory.createURI("sip:server1@backend"));
+///         tier.addEndpoint(sipFactory.createURI("sip:server2@backend"));
+///         plan.getTiers().add(tier);
+///     }
 ///
-/// - INVITE requests are handled by [ProxyInvite] which executes the routing plan
-/// - CANCEL requests are handled by [ProxyCancel] which defers to container processing
+///     public void proxyResponse(SipServletResponse response, ProxyPlan plan) {
+///         // Called when a response arrives from a proxied destination
+///     }
+/// }
+/// }
 ///
-/// The [ProxyListener] interface provides two key callback methods for customizing
-/// proxy behavior: building routing plans for incoming requests and handling responses
-/// from proxied destinations.
 ///
-/// ## Key Features
+/// ## Routing Plans and Tiers
 ///
-/// - **Serializable Components** - Both [ProxyPlan] and [ProxyTier] implement `Serializable` for persistence and clustering
-/// - **Copy Constructors** - Safe plan modification and reuse through defensive copying
-/// - **Null-Safe Design** - Defensive programming practices throughout the API
-/// - **Context Support** - Application-specific context objects can be attached to routing plans
-/// - **Framework Integration** - Built on the Vorpal Blade callflow framework
-/// - **JSON Support** - Jackson annotations enable serialization of routing configurations
+/// A {@link ProxyPlan} contains an ordered list of {@link ProxyTier} objects.
+/// Each tier represents a group of endpoints to try, with a mode and timeout:
+///
+/// <table>
+///   <caption>Tier Modes</caption>
+///   <tr><th>Mode</th><th>Behavior</th></tr>
+///   <tr>
+///     <td>{@code parallel}</td>
+///     <td>All endpoints in the tier are tried simultaneously &mdash; the first
+///         successful response wins</td>
+///   </tr>
+///   <tr>
+///     <td>{@code serial}</td>
+///     <td>Endpoints are tried one at a time in order &mdash; the next is tried
+///         only if the previous fails or times out</td>
+///   </tr>
+/// </table>
+///
+/// Tiers are tried sequentially: if all endpoints in the first tier fail, the
+/// framework automatically moves to the next tier. If all tiers are exhausted,
+/// a 502 Bad Gateway response is sent upstream.
+///
+/// ### Example: Two-Tier Routing
+///
+/// <pre>{@code
+/// Tier 1 (parallel, 5s):  server1, server2    ← try both at once
+/// Tier 2 (serial, 10s):   backup1, backup2    ← fall back to backups in order
+/// }</pre>
+///
+///
+/// ## How Requests Are Routed
+///
+/// {@link ProxyServlet} overrides {@code chooseCallflow()} to select:
+///
+/// <ul>
+///   <li><b>Initial INVITE</b> &rarr; {@link ProxyInvite} &mdash; executes the
+///       routing plan by calling {@code proxyRequest()} to build the plan, then
+///       proxying through each tier with automatic failover</li>
+///   <li><b>CANCEL</b> &rarr; {@link ProxyCancel} &mdash; the SIP container handles
+///       CANCEL automatically; this class exists for consistency</li>
+/// </ul>
+///
+///
+/// ## Core Classes
+///
+/// - {@link ProxyServlet} - Abstract base servlet with {@link ProxyListener} integration
+/// - {@link ProxyListener} - Callback interface: {@code proxyRequest()} to build plans, {@code proxyResponse()} for responses
+/// - {@link ProxyPlan} - Ordered list of tiers with an optional context object for application data
+/// - {@link ProxyTier} - A group of endpoints with a mode (parallel/serial) and timeout
+/// - {@link ProxyInvite} - Callflow that executes the routing plan with tier-by-tier failover
+/// - {@link ProxyCancel} - No-op callflow for CANCEL (container handles it)
 ///
 /// @see ProxyServlet
 /// @see ProxyListener
 /// @see ProxyPlan
 /// @see ProxyTier
-/// @see ProxyInvite
-/// @see ProxyCancel
-/// @see org.vorpal.blade.framework.v2.AsyncSipServlet
-/// @see org.vorpal.blade.framework.v2.callflow.Callflow
 package org.vorpal.blade.framework.v2.proxy;

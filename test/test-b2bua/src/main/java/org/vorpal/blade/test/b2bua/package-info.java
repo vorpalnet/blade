@@ -1,72 +1,109 @@
-/// A sample Back-to-Back User Agent (B2BUA) SIP application that demonstrates
-/// how to build a B2BUA service using the BLADE framework. This module serves
-/// as both a functional test and a reference implementation for developers
-/// creating custom B2BUA applications.
+/// A sample B2BUA application that serves as both a functional test and a reference
+/// implementation. This is the template that most BLADE developers copy when starting
+/// a new B2BUA project.
 ///
-/// ## Key Components
 ///
-/// - [SampleB2buaServlet] - the main SIP servlet that extends {@code B2buaServlet}, handling the full call lifecycle
-/// - [SampleB2buaConfig] - configuration class defining custom properties ({@code value1}, {@code value2}) with JSON schema annotations
-/// - [ConfigSample] - default configuration provider that populates logging, session, and custom parameters
-/// - [CancelGlare] - specialized callflow for testing CANCEL glare conditions by deliberately suppressing CANCEL messages
+/// ## Purpose
 ///
-/// ## Servlet Lifecycle
+/// This application doesn't implement any real business logic&mdash;it simply passes
+/// calls through as a transparent B2BUA while logging every lifecycle event. Its value
+/// is threefold:
+///
+/// <ol>
+///   <li><b>Verification</b>&mdash;confirms that the B2BUA framework is working
+///       correctly on a given OCCAS deployment</li>
+///   <li><b>Template</b>&mdash;demonstrates the exact annotations, initialization
+///       pattern, and callback structure that all B2BUA applications follow</li>
+///   <li><b>Debugging aid</b>&mdash;the lifecycle logging makes it easy to trace
+///       call flow and diagnose issues</li>
+/// </ol>
+///
+///
+/// ## How to Use This as a Template
+///
+/// To create a new B2BUA application:
+///
+/// <ol>
+///   <li>Copy this module's directory structure</li>
+///   <li>Rename {@link SampleB2buaServlet} to your application name</li>
+///   <li>Replace {@link SampleB2buaConfig} with your own configuration class
+///       (add the properties your application needs)</li>
+///   <li>Replace {@link ConfigSample} with default values for your config</li>
+///   <li>Add your business logic to the lifecycle callbacks</li>
+/// </ol>
+///
+///
+/// ## The Servlet
+///
+/// {@link SampleB2buaServlet} demonstrates the standard annotation pattern:
+///
+/// {@snippet :
+/// @WebListener
+/// @SipApplication(distributable = true)
+/// @SipServlet(loadOnStartup = 1)
+/// @SipListener
+/// public class SampleB2buaServlet extends B2buaServlet {
+///     // ...
+/// }
+/// }
+///
+/// <ul>
+///   <li>{@code @WebListener} &mdash; receives servlet context lifecycle events</li>
+///   <li>{@code @SipApplication(distributable = true)} &mdash; enables cluster
+///       replication of SIP sessions (required for failover)</li>
+///   <li>{@code @SipServlet(loadOnStartup = 1)} &mdash; initializes immediately
+///       on deployment</li>
+///   <li>{@code @SipListener} &mdash; receives SIP session lifecycle events</li>
+/// </ul>
 ///
 /// ### Initialization
-/// [SampleB2buaServlet] is annotated with {@code @WebListener}, {@code @SipApplication},
-/// {@code @SipServlet}, and {@code @SipListener}. On startup, {@code servletCreated()} initializes
-/// a [SettingsManager][org.vorpal.blade.framework.v2.config.SettingsManager] with
-/// [SampleB2buaConfig] and a [ConfigSample] default instance.
 ///
-/// ### Call Lifecycle Callbacks
-/// The servlet overrides all B2BUA lifecycle methods to provide logging and
-/// extension points:
+/// The {@code servletCreated()} method creates a
+/// {@link org.vorpal.blade.framework.v2.config.SettingsManager SettingsManager} with
+/// the application's config class and default values:
 ///
-/// - {@code callStarted()} - outbound INVITE to Bob
-/// - {@code callAnswered()} - final response relayed to Alice
-/// - {@code callConnected()} - ACK processing
-/// - {@code callCompleted()} - BYE from either party
-/// - {@code callDeclined()} - error response from Bob
-/// - {@code callAbandoned()} - CANCEL from Alice
-/// - {@code requestEvent()} - mid-dialog requests (re-INVITE, INFO, UPDATE)
-/// - {@code responseEvent()} - mid-dialog responses
+/// {@snippet :
+/// public void servletCreated(SipServletContextEvent event) {
+///     new SettingsManager<>(event, SampleB2buaConfig.class, new ConfigSample());
+/// }
+/// }
 ///
-/// ### Session Monitoring
-/// The servlet includes session lifecycle logging at {@code FINER} level for both
-/// {@code SipApplicationSession} and {@code SipSession} events (created, destroyed,
-/// expired, readyToInvalidate).
+/// This single line handles loading config files from the three-tier hierarchy,
+/// generating a JSON Schema, registering a JMX MBean for runtime reload, and
+/// initializing the logging system.
+///
+/// ### Lifecycle Callbacks
+///
+/// All eight {@link org.vorpal.blade.framework.v2.b2bua.B2buaListener B2buaListener}
+/// callbacks are implemented with logging. In a real application, you would add
+/// your business logic here&mdash;routing decisions in {@code callStarted()},
+/// CDR logging in {@code callAnswered()} and {@code callCompleted()}, etc.
+///
 ///
 /// ## Configuration
 ///
-/// ### SampleB2buaConfig
-/// Extends the framework {@code Configuration} class and adds two custom string
-/// properties annotated with {@code @JsonPropertyDescription} and
-/// {@code @JsonSchemaTitle} for JSON schema generation.
+/// {@link SampleB2buaConfig} extends
+/// {@link org.vorpal.blade.framework.v2.config.Configuration Configuration} and adds
+/// two custom string properties ({@code value1}, {@code value2}) as a demonstration.
+/// In a real application, replace these with your own configuration properties.
 ///
-/// ### ConfigSample Defaults
-/// Provides default values using {@code LogParametersDefault} for logging and
-/// {@code SessionParametersDefault} for session management.
+/// {@link ConfigSample} provides the default values, including
+/// {@link org.vorpal.blade.framework.v2.logging.LogParametersDefault LogParametersDefault}
+/// and {@link org.vorpal.blade.framework.v2.config.SessionParametersDefault SessionParametersDefault}.
+///
 ///
 /// ## CANCEL Glare Testing
 ///
-/// ### CancelGlare Callflow
-/// [CancelGlare] extends {@code Callflow} and deliberately does not send a CANCEL
-/// message, instead logging a severe message and returning a 200 OK. This is used
-/// to test race conditions where a CANCEL and a final response cross in transit.
+/// {@link CancelGlare} is a specialized callflow that deliberately suppresses CANCEL
+/// messages (returning 200 OK instead of forwarding). This is used to test the
+/// framework's handling of the race condition where a CANCEL and a 200 OK cross
+/// on the wire&mdash;a scenario that the
+/// {@link org.vorpal.blade.framework.v2.callflow.CallflowAckBye CallflowAckBye}
+/// pre-built callflow is designed to handle.
 ///
-/// ## Related Packages
 ///
-/// ### org.vorpal.blade.applications.console.config.test
-/// Remote EJB interfaces for testing the BLADE console's configuration management
-/// capabilities. Defines [HelloBeanRemote][org.vorpal.blade.applications.console.config.test.HelloBeanRemote]
-/// for fire-and-forget service bean invocation and
-/// [HelloWorld][org.vorpal.blade.applications.console.config.test.HelloWorld] for
-/// request-response round-trip EJB communication with RMI error handling. These
-/// interfaces enable integration testing between the console administration module
-/// and deployed SIP services.
-///
-/// @see org.vorpal.blade.applications.console.config.test
+/// @see SampleB2buaServlet
+/// @see SampleB2buaConfig
+/// @see ConfigSample
 /// @see org.vorpal.blade.framework.v2.b2bua.B2buaServlet
-/// @see org.vorpal.blade.framework.v2.config.SettingsManager
-/// @see org.vorpal.blade.framework.v2.callflow.Callflow
 package org.vorpal.blade.test.b2bua;

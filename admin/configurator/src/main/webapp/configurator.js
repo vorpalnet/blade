@@ -36,6 +36,10 @@ let savedDataSnapshot = null;
 // Feature: Validation
 let validationErrors = new Map();
 
+// Feature: Jackson Identity References
+// Maps id strings to {path, object} for objects with an "id" field
+let identityRegistry = new Map();
+
 // WebSocket Connection Management
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -500,6 +504,111 @@ function resolveRef(ref) {
         return schema.definitions[defName];
     }
     return null;
+}
+
+// ---------------------------------------------------------------------------
+// Feature: Jackson Identity References
+// ---------------------------------------------------------------------------
+// BLADE framework classes (Selector, TranslationsMap subclasses, Translation)
+// use Jackson's @JsonIdentityInfo(generator = PropertyGenerator.class, property = "id").
+//
+// Jackson serializes the FIRST occurrence of an object with all its properties:
+//   { "id": "From-User", "attribute": "From", "pattern": "...", "expression": "..." }
+//
+// SUBSEQUENT references to the same object are serialized as just the id string:
+//   "From-User"
+//
+// The form editor detects these back-references by checking when the schema
+// expects an object (with an "id" property) but the data contains a plain string.
+// Instead of rendering editable form fields, it shows a clickable link that
+// navigates to the original definition. On save, reference links emit just the
+// id string, preserving the Jackson serialization format.
+//
+// See CLAUDE.md "Jackson Identity References" section for full documentation.
+// ---------------------------------------------------------------------------
+
+// Scan the entire JSON data tree and build a registry of all objects that
+// have a string "id" field. Called once when data is loaded into the form.
+// Result: identityRegistry maps id strings to { path, object }.
+function buildIdentityRegistry(data, path = '') {
+    identityRegistry = new Map();
+    scanForIdentities(data, path);
+}
+
+function scanForIdentities(data, path) {
+    if (data === null || data === undefined) return;
+
+    if (Array.isArray(data)) {
+        data.forEach((item, idx) => {
+            scanForIdentities(item, `${path}[${idx}]`);
+        });
+    } else if (typeof data === 'object') {
+        if (data.id && typeof data.id === 'string') {
+            identityRegistry.set(data.id, { path: path, object: data });
+        }
+        Object.keys(data).forEach(key => {
+            const childPath = path ? `${path}.${key}` : key;
+            scanForIdentities(data[key], childPath);
+        });
+    }
+}
+
+// Detect if a data value is a Jackson identity back-reference.
+// Returns true when: the value is a plain string AND the schema expects an
+// object type with an "id" property (indicating @JsonIdentityInfo usage).
+function isIdentityReference(value, fieldSchema) {
+    if (typeof value !== 'string') return false;
+    if (!fieldSchema) return false;
+
+    let resolved = fieldSchema;
+    if (resolved.$ref) resolved = resolveRef(resolved.$ref);
+    if (!resolved) return false;
+    if (resolved.oneOf) {
+        // Polymorphic: check if any variant is an identity-info object
+        const variants = resolved.oneOf.map(v => v.$ref ? resolveRef(v.$ref) : v).filter(Boolean);
+        return variants.some(v => v.type === 'object' && v.properties && v.properties.id);
+    }
+
+    return resolved.type === 'object' && resolved.properties && resolved.properties.id;
+}
+
+// Render a read-only reference link for a Jackson identity back-reference.
+// Displays as: ⇒ From-User (clickable, scrolls to original definition).
+// The data-reference-id attribute is read by getFormData() to emit the id
+// string when saving, preserving the Jackson serialization format.
+function createReferenceLink(id) {
+    const container = document.createElement('div');
+    container.className = 'reference-link';
+    container.setAttribute('data-reference-id', id);
+
+    const icon = document.createElement('span');
+    icon.className = 'reference-link-icon';
+    icon.textContent = '\u21D2'; // ⇒ arrow
+
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = 'reference-link-anchor';
+    link.textContent = id;
+    link.title = 'Go to definition of ' + id;
+    link.onclick = (e) => {
+        e.preventDefault();
+        scrollToIdentity(id);
+    };
+
+    container.appendChild(icon);
+    container.appendChild(link);
+    return container;
+}
+
+// Scroll to and briefly highlight the original object definition.
+// Full objects are tagged with DOM id="identity-{id}" during form generation.
+function scrollToIdentity(id) {
+    const target = document.getElementById('identity-' + CSS.escape(id));
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('reference-highlight');
+        setTimeout(() => target.classList.remove('reference-highlight'), 2000);
+    }
 }
 
 // Resolve oneOf schemas using a discriminator property (typically "type").
@@ -1081,7 +1190,14 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
         isNested: isNested
     };
 
-    return createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo);
+    const section = createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo);
+
+    // Tag objects that have an "id" field so identity references can link to them
+    if (value && typeof value === 'object' && typeof value.id === 'string') {
+        section.id = 'identity-' + value.id;
+    }
+
+    return section;
 }
 
 function createMapGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
@@ -1345,8 +1461,39 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
     const item = document.createElement('div');
     item.className = 'array-item';
 
+    // Save original schema before resolution for identity reference check
+    const originalItemSchema = itemSchema;
     if (itemSchema.$ref) {
         itemSchema = resolveRef(itemSchema.$ref);
+    }
+
+    // Check for Jackson identity reference (string value where object expected)
+    if (typeof value === 'string' && isIdentityReference(value, originalItemSchema)) {
+        const header = document.createElement('div');
+        header.className = 'array-item-header';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'delete-property-btn';
+        removeBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+        removeBtn.title = 'Remove item';
+        removeBtn.onclick = (e) => {
+            e.stopPropagation();
+            item.remove();
+            updateParentSectionStatus(container);
+            setTimeout(() => {
+                recalculateAllAncestorHeights(container.closest('.collapsible-section'));
+            }, 10);
+        };
+        header.appendChild(removeBtn);
+        item.appendChild(header);
+        item.appendChild(createReferenceLink(value));
+        container.appendChild(item);
+
+        setTimeout(() => {
+            recalculateAllAncestorHeights(container.closest('.collapsible-section'));
+        }, 10);
+        return;
     }
 
     if (itemSchema.oneOf) {
@@ -1405,6 +1552,11 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         header.className = 'array-item-header';
         header.appendChild(removeBtn);
         item.appendChild(header);
+
+        // Tag full objects with an "id" field for identity reference linking
+        if (value && typeof value === 'object' && typeof value.id === 'string') {
+            item.id = 'identity-' + value.id;
+        }
 
         Object.keys(itemSchema.properties).forEach(prop => {
             const propSchema = itemSchema.properties[prop];
@@ -1595,6 +1747,16 @@ function getFormData() {
             const items = Array.from(arrayContainer.children).filter(el => el.classList.contains('array-item'));
 
             items.forEach((item, idx) => {
+                // Check for identity reference link
+                const refLink = item.querySelector('.reference-link');
+                if (refLink) {
+                    const refId = refLink.getAttribute('data-reference-id');
+                    if (refId) {
+                        result.push(refId);
+                        return;
+                    }
+                }
+
                 let itemSchemaNode = schemaNode.items;
                 if (itemSchemaNode && itemSchemaNode.oneOf) {
                     // Peek at the type discriminator to resolve the right variant
@@ -2262,7 +2424,8 @@ const aceThemeMap = {
     light: 'eclipse',
     dark: 'tomorrow_night',
     midnight: 'cobalt',
-    warm: 'chrome'
+    warm: 'chrome',
+    glossy: 'tomorrow_night'
 };
 
 function switchAppTheme(themeName) {
@@ -2413,6 +2576,7 @@ function showSyncStatus(message, type) {
 
 function generateFormWithData(data) {
     currentData = data;
+    buildIdentityRegistry(data);
     const form = document.getElementById('dynamicForm');
     form.innerHTML = '';
 
