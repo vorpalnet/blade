@@ -1,4 +1,4 @@
-/// This package contains the JMX management interface used by the Blade console
+/// This package contains the JMX management interface used by the Blade configurator
 /// application to interact with remote service configurations at runtime.
 ///
 /// ## Key Classes
@@ -17,7 +17,7 @@
 /// The `configType` parameter accepted by most methods selects the configuration
 /// scope: domain-level, cluster-level, or server-level. The `getLastModified(configType)`
 /// method returns the timestamp of the last modification for a given scope, enabling
-/// the console to detect stale local copies and decide whether to fetch remotely.
+/// the configurator console to detect stale local copies.
 ///
 /// ### File I/O Operations
 /// The interface provides streaming file access:

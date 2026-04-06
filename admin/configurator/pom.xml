@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-admin-configurator</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Admin Configurator</name>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.taglibs</groupId>
+			<artifactId>taglibs-standard-impl</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>xalan</groupId>
+			<artifactId>xalan</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.networknt</groupId>
+			<artifactId>json-schema-validator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-jaxrs2</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
+		</dependency>
+		<!-- Override parent's provided scope — standalone WAR, no shared library -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<scope>compile</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>vorpal-blade-admin-configurator</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<!-- Standalone WAR (not in EAR) - include all JARs -->
+					<packagingExcludes>none</packagingExcludes>
+				</configuration>
+			</plugin>
+			<!-- Strip multi-release classes above the target Java version from
+			     JARs inside the WAR. Prevents UnsupportedClassVersionError on older JDKs. -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.5.0</version>
+				<executions>
+					<execution>
+						<id>strip-multirelease</id>
+						<phase>verify</phase>
+						<goals><goal>exec</goal></goals>
+						<configuration>
+							<executable>bash</executable>
+							<arguments>
+								<argument>-c</argument>
+								<argument>
+TARGET_VER="${blade.java.version}";
+WARFILE="${project.build.directory}/${project.build.finalName}.war";
+TMPDIR="${project.build.directory}/war-strip-tmp";
+STRIPPED=0;
+mkdir -p "$TMPDIR" &amp;&amp; cd "$TMPDIR" &amp;&amp;
+jar xf "$WARFILE" WEB-INF/lib/;
+for jar in WEB-INF/lib/*.jar; do
+  for ver in $(jar tf "$jar" 2>/dev/null | grep 'META-INF/versions/' | sed 's|META-INF/versions/||' | cut -d/ -f1 | sort -un); do
+    if [ "$ver" -gt "$TARGET_VER" ]; then
+      zip -qd "$jar" "META-INF/versions/$ver/*" 2>/dev/null || true
+      STRIPPED=1
+    fi
+  done
+done;
+if [ "$STRIPPED" -eq 1 ]; then
+  jar uf "$WARFILE" WEB-INF/lib/;
+  echo "Stripped multi-release classes above Java $TARGET_VER from configurator WAR JARs"
+else
+  echo "No multi-release classes above Java $TARGET_VER found in configurator WAR JARs"
+fi;
+rm -rf "$TMPDIR"
+								</argument>
+							</arguments>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

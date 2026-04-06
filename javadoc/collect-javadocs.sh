@@ -139,13 +139,6 @@ cat > "$DOCROOT/index.html" <<HEADER
     <style>
         * { box-sizing: border-box; }
         body { font-family: 'DejaVu Sans', 'Segoe UI', Arial, sans-serif; margin: 0; background: #f8f9fa; color: #333; }
-        .header-bar { background: #602671; padding: 8px 16px; display: flex; align-items: center; gap: 16px; }
-        .header-bar a.logo { display: flex; align-items: center; text-decoration: none; }
-        .header-bar .blade-title { color: #fff; font-size: 28px; font-weight: bold; text-decoration: none; }
-        .header-bar .version { color: rgba(255,255,255,0.7); font-size: 13px; }
-        .header-bar nav { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
-        .header-bar nav a { color: #fff; text-decoration: none; }
-        .header-bar nav a:hover { text-decoration: underline; }
         .content { max-width: 960px; margin: 0 auto; padding: 32px 40px; }
         h1 { color: #333; font-size: 28px; margin-bottom: 4px; }
         .subtitle { color: #666; font-size: 15px; margin-bottom: 36px; }
@@ -161,8 +154,8 @@ cat > "$DOCROOT/index.html" <<HEADER
     </style>
 </head>
 <body>
-    <div class="header-bar">
-        <a class="logo" href="https://vorpal.net">
+    <div style="background:#602671; padding:8px 16px; margin-bottom:4px; display:flex; align-items:center; gap:16px;">
+<a href="https://vorpal.net" style="display:flex; align-items:center; text-decoration:none;">
             <svg height="50" viewBox="0 0 514.19 263.37" xmlns="http://www.w3.org/2000/svg">
               <defs><style>.cls-1{fill:#fff;}</style></defs>
               <g id="boy">
@@ -180,13 +173,13 @@ cat > "$DOCROOT/index.html" <<HEADER
               </g>
             </svg>
         </a>
-        <a class="blade-title" href="framework/index.html">BLADE</a>
-        <span class="version">v${VERSION}</span>
-        <nav>
-            <a href="framework/index.html">Documentation</a>
-            <a href="https://github.com/vorpalnet/blade">GitHub</a>
-        </nav>
-    </div>
+<a href="index.html" style="color:#fff; font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:28px; font-weight:bold; text-decoration:none;">BLADE</a>
+<span style="color:rgba(255,255,255,0.7); font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:13px;">v${VERSION}</span>
+<div style="margin-left:auto; display:flex; gap:20px; font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:14px;">
+<a href="https://vorpal.net/javadocs/" style="color:#fff; text-decoration:none;">Documentation</a>
+<a href="https://github.com/vorpalnet/blade" style="color:#fff; text-decoration:none;">GitHub</a>
+</div>
+</div>
     <div class="content">
     <h1>BLADE API Reference</h1>
     <p class="subtitle">Version ${VERSION} &mdash; Blended Layer Application Development Environment</p>
@@ -203,7 +196,7 @@ echo '    </ul>' >> "$DOCROOT/index.html"
 # --- Admin ---
 echo '    <h2>Administration</h2>' >> "$DOCROOT/index.html"
 echo '    <ul class="module-grid">' >> "$DOCROOT/index.html"
-for mod in console configurator; do
+for mod in console configurator file-manager flow tuning explorer json-forms; do
     [ -d "$DOCROOT/$mod" ] && emit_module "$mod" >> "$DOCROOT/index.html"
 done
 echo '    </ul>' >> "$DOCROOT/index.html"
@@ -214,7 +207,7 @@ echo '    <ul class="module-grid">' >> "$DOCROOT/index.html"
 for dir in "$DOCROOT"/*/; do
     mod=$(basename "$dir")
     case "$mod" in
-        framework|fsmar|console|configurator|test-*|images) continue ;;
+        framework|fsmar|console|configurator|file-manager|flow|tuning|explorer|json-forms|test-*|images) continue ;;
     esac
     emit_module "$mod" >> "$DOCROOT/index.html"
 done

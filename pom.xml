@@ -24,6 +24,7 @@
 		<module>admin/file-manager</module>
 		<module>admin/explorer</module>
 		<module>admin/json-forms</module>
+		<module>admin/configurator</module>
 		<module>services</module>
 
 		<!-- Service and test modules are controlled by profiles below.
@@ -568,6 +569,7 @@
 								<additionalOption>-failOnCyclicPackageDependencies false</additionalOption>
 								<additionalOption>--add-stylesheet ${maven.multiModuleProjectDirectory}/javadoc/src/main/resources/vorpal-theme.css</additionalOption>
 								<additionalOption>--add-script ${maven.multiModuleProjectDirectory}/javadoc/src/main/resources/overview-toc.js</additionalOption>
+								<additionalOption>--allow-script-in-comments</additionalOption>
 							</additionalOptions>
 							<excludePackageNames>gov.nist.*:javax.sdp.*</excludePackageNames>
 							<show>public</show>
@@ -598,7 +600,10 @@
   </g>
 </svg>
 </a>
-<a href="https://vorpal.net/bin/view/BLADE/" style="color:#fff; font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:28px; font-weight:bold; text-decoration:none;">BLADE</a>
+<a id="blade-home" href="../index.html" style="color:#fff; font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:28px; font-weight:bold; text-decoration:none;">BLADE</a>
+<script>
+(function(){var s=document.querySelector('link[href$="stylesheet.css"]');if(s){var r=s.getAttribute('href').replace('stylesheet.css','');document.getElementById('blade-home').href=r+'../index.html';}})();
+</script>
 <span style="color:rgba(255,255,255,0.7); font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:13px;">v${revision}</span>
 <div style="margin-left:auto; display:flex; gap:20px; font-family:'DejaVu Sans',Arial,Helvetica,sans-serif; font-size:14px;">
 <a href="https://vorpal.net/javadocs/" style="color:#fff; text-decoration:none;">Documentation</a>

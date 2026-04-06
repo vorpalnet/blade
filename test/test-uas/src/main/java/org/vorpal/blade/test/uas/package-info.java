@@ -1,6 +1,6 @@
 /// A SIP test server built on the BLADE framework that answers incoming calls
 /// with configurable response behavior. The Test UAS is the counterpart to the
-/// [Test UAC][org.vorpal.blade.test.uac] — together they form a complete SIP
+/// Test UAC — together they form a complete SIP
 /// load testing tool for production call center performance tuning.
 ///
 /// ## Key Components
