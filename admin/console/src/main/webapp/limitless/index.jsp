@@ -9,10 +9,8 @@ Set<String> apps = AppDiscovery.queryApps();
 Principal principal = request.getUserPrincipal();
 String user = principal.getName();
 
-String configuratorRoot = "/vorpal-blade-admin-configurator";
-
 for (String app : apps) {
-	appsHtml.append("<li class=\"nav-item\"><a href=\"" + configuratorRoot + "/index.html?app=" + app
+	appsHtml.append("<li class=\"nav-item\"><a href=\"/flow/index.html?app=" + app
 	+ "\" class=\"nav-link\" target=\"content_iframe\">" + app + "</a></li>\n");
 }
 %>
@@ -234,7 +232,11 @@ for (String app : apps) {
 
 						<li class="nav-item nav-item-submenu nav-item-open nav-item-expanded"><a href="#" class="nav-link"><i class="icon-stack2"></i> <span>Tools</span></a>
 							<ul class="nav nav-group-sub" data-submenu-title="Tools">
-								<li class="nav-item"><a href="<%=configuratorRoot%>/index.html" class="nav-link" target="content_iframe">Configurator</a></li>
+								<li class="nav-item"><a href="/flow/index.html" class="nav-link" target="content_iframe">Flow</a></li>
+								<li class="nav-item"><a href="/tuning/index.html" class="nav-link" target="content_iframe">Tuning</a></li>
+								<li class="nav-item"><a href="/files/configurator/index.jsp" class="nav-link" target="content_iframe">Files</a></li>
+								<li class="nav-item"><a href="/explorer/index.html" class="nav-link" target="content_iframe">Explorer</a></li>
+								<li class="nav-item"><a href="/forms/index.jsp" class="nav-link" target="content_iframe">Forms</a></li>
 								<li class="nav-item"><a href="../swagger/index.html" class="nav-link" target="content_iframe">Swagger</a></li>
 								<!-- 	
 								<li class="nav-item"><a href="layout_navbar_fixed.html"

@@ -1,74 +1,74 @@
-/// A test B2BUA application that acts as a User Agent Client, injecting custom
-/// SIP headers into outbound INVITE requests. This module demonstrates how to
-/// modify outbound requests in the B2BUA call lifecycle, including session timer
-/// headers and custom vendor-specific headers.
+/// A SIP load generation tool and test UAC built on the BLADE framework.
+///
+/// This module generates outbound SIP calls at scale, supporting two modes:
+/// **CPS mode** (fire calls at a target calls-per-second rate) and
+/// **concurrent mode** (maintain N active calls with callback-driven replenishment).
+/// Designed for 1000+ CPS per node in an OCCAS cluster, with each node operating
+/// independently via REST commands.
 ///
 /// ## Key Components
 ///
-/// - [UserAgentClientServlet] - the main SIP servlet extending {@code B2buaServlet}, injecting configured headers into outbound requests
-/// - [UserAgentClientConfig] - configuration class with a {@code headers} map for defining custom SIP headers
-/// - [UserAgentClientConfigSample] - default configuration providing sample headers including session timers and a Genesys call UUID
+/// - [UserAgentClientServlet] - main SIP servlet extending `B2buaServlet`, injects
+///   configured headers into outbound requests and notifies the load generator
+///   on call lifecycle events (`callCompleted`, `callDeclined`)
+/// - [UserAgentClientConfig] - configuration with header map, address patterns
+///   (`fromAddressPattern`, `toAddressPattern`, `requestUriTemplate`), call
+///   `duration`, and `sdpContent`
+/// - [LoadGenerator] - per-node load generation engine using `java.util.Timer`
+///   for CPS pacing; concurrent mode is purely callback-driven with no timer
+/// - [LoadCallflow] - per-call lifecycle handler extending `ClientCallflow`
+///   (INVITE -> ACK -> auto-BYE timer -> completion notification)
+/// - [LoadTestAPI] - JAX-RS REST endpoints for start, stop, and status
+/// - [LoadTestRequest] - request model specifying mode, CPS/concurrent targets,
+///   address patterns, duration, max calls, and header overrides
+/// - [LoadTestStatus] - response model with state, counters, and elapsed time
 ///
-/// ## Header Injection
+/// ## Load Generation Architecture
 ///
-/// ### UserAgentClientServlet
-/// [UserAgentClientServlet] extends {@code B2buaServlet} and is annotated with
-/// {@code @WebListener}, {@code @SipApplication(distributable = true)},
-/// {@code @SipServlet(loadOnStartup = 1)}, and {@code @SipListener}. During
-/// {@code callStarted()}, it iterates over the configured header map and sets
-/// each header on the outbound SIP request. It also sets the {@code noKeepAlive}
-/// attribute to {@code Boolean.TRUE} for testing keep-alive behavior.
+/// Each cluster node creates its own [LoadGenerator] instance, stored on the
+/// `ServletContext`. There is no singleton or centralized coordinator. The REST
+/// API sends a start command which resolves effective parameters (merging
+/// [LoadTestRequest] overrides with [UserAgentClientConfig] defaults), resets
+/// counters, and begins generating calls.
 ///
-/// ### Configuration-Driven Headers
-/// All B2BUA lifecycle callbacks ({@code callAnswered}, {@code callConnected},
-/// {@code callCompleted}, {@code callDeclined}, {@code callAbandoned}) are
-/// implemented with info-level logging for tracing call flow.
+/// In **CPS mode**, a `java.util.Timer` fires at the target rate. At high CPS
+/// (above 1000), multiple calls are batched per timer tick. In **concurrent mode**,
+/// the initial batch of calls is fired immediately, and [LoadGenerator#onCallCompleted]
+/// triggers replacement calls as each one finishes.
 ///
-/// ## Configuration
+/// Each generated call runs through [LoadCallflow], which sends the INVITE, ACKs
+/// on 2xx, and schedules an auto-BYE via `Callflow.scheduleTimer()` tied to the
+/// `SipApplicationSession`. When the BYE completes, [UserAgentClientServlet#callCompleted]
+/// notifies the generator to update counters and replenish if in concurrent mode.
 ///
-/// ### UserAgentClientConfig
-/// Extends {@code Configuration} and defines a {@code headers} map
-/// ({@code Map<String, String>}) for specifying SIP headers to inject on
-/// outbound requests.
+/// ## Configuration Precedence
 ///
-/// ### UserAgentClientConfigSample Defaults
-/// Provides sample header values demonstrating common use cases:
-///
-/// - {@code Min-SE: 90} - minimum session expiration for session timers
-/// - {@code Session-Expires: 2400;refresher=uac} - session timer with UAC as refresher
-/// - {@code Supported: timer} - advertise session timer support
-/// - {@code X-Genesys-CallUUID: 123potatoXYZ} - vendor-specific call correlation header
-///
-/// The default logging level is set to FINEST with a 180-second session expiration.
+/// [LoadTestRequest] fields override [UserAgentClientConfig] defaults. Null or
+/// empty fields in the request fall back to config values. Headers are merged —
+/// request headers override config headers with the same name.
 ///
 /// ## Related Packages
 ///
 /// ### org.vorpal.blade.test.client
-/// A SIP test client with a REST API for initiating outbound SIP calls. Provides
-/// [TestClientServlet][org.vorpal.blade.test.client.TestClientServlet] extending
-/// {@code AsyncSipServlet} for SIP request routing,
-/// [TestClientAPI][org.vorpal.blade.test.client.TestClientAPI] as a JAX-RS endpoint
-/// ({@code POST /api/v1/connect}) that bridges HTTP REST requests to SIP INVITE
-/// sessions using asynchronous response handling, and data models
+/// A SIP test client with a REST API for initiating individual outbound SIP calls.
+/// [TestClientAPI][org.vorpal.blade.test.client.TestClientAPI] provides
+/// `POST /api/v1/connect` bridging HTTP REST requests to SIP INVITE sessions
+/// with asynchronous response handling. Data models include
 /// [MessageRequest][org.vorpal.blade.test.client.MessageRequest],
 /// [MessageResponse][org.vorpal.blade.test.client.MessageResponse], and
-/// [MessageSession][org.vorpal.blade.test.client.MessageSession] for REST-to-SIP
-/// bridging.
+/// [MessageSession][org.vorpal.blade.test.client.MessageSession].
 ///
 /// ### org.vorpal.blade.framework.tpcc
 /// Third-Party Call Control callflows and REST APIs enabling an external application
 /// to set up, modify, and tear down SIP calls between two endpoints.
-/// [Simple][org.vorpal.blade.framework.tpcc.Simple] implements the classic TPCC
-/// pattern using dual INVITE sequences with blackhole SDP,
-/// [TestReinvite][org.vorpal.blade.framework.tpcc.TestReinvite] handles mid-dialog
-/// re-INVITE with 200 OK, and
 /// [ThirdPartyCallControl][org.vorpal.blade.framework.tpcc.ThirdPartyCallControl]
-/// exposes {@code POST /api/v1/tpcc} with OpenAPI annotations and asynchronous
-/// HTTP response handling.
+/// exposes `POST /api/v1/tpcc` with OpenAPI annotations and asynchronous HTTP
+/// response handling.
 ///
 /// @see org.vorpal.blade.test.client
 /// @see org.vorpal.blade.framework.tpcc
 /// @see org.vorpal.blade.framework.v2.b2bua.B2buaServlet
+/// @see org.vorpal.blade.framework.v2.callflow.ClientCallflow
 /// @see org.vorpal.blade.framework.v2.config.SettingsManager
 /// @see org.vorpal.blade.framework.v2.config.Configuration
 package org.vorpal.blade.test.uac;

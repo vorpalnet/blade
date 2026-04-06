@@ -22,5 +22,10 @@ public class UserAgentClientConfigSample extends UserAgentClientConfig {
 		this.headers.put("Supported", "timer");
 		this.headers.put("X-Genesys-CallUUID", "123potatoXYZ");
 
+		this.fromAddressPattern = "sip:load-${index}@blade.test";
+		this.toAddressPattern = "sip:target@uas.test";
+		this.requestUriTemplate = "sip:target@uas.test";
+		this.duration = "30s";
+
 	}
 }

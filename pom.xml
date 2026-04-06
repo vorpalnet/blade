@@ -19,8 +19,11 @@
 		<module>libs/shared</module>
 		<module>libs/fsmar</module>
 		<module>admin/console</module>
-		<module>admin/configurator</module>
-		<module>admin/dev-console</module>
+		<module>admin/flow</module>
+		<module>admin/tuning</module>
+		<module>admin/file-manager</module>
+		<module>admin/explorer</module>
+		<module>admin/json-forms</module>
 		<module>services</module>
 
 		<!-- Service and test modules are controlled by profiles below.
@@ -31,6 +34,8 @@
 		<revision>2.9.5</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<blade.java.version>11</blade.java.version>
+		<blade.weblogic.version>14.1.1</blade.weblogic.version>
+		<blade.occas.version>8.1</blade.occas.version>
 		<maven.compiler.release>${blade.java.version}</maven.compiler.release>
 		<build.number>0</build.number>
 		<ear.profile>full</ear.profile>
@@ -260,31 +265,31 @@
 		<dependency>
 			<groupId>com.oracle.weblogic</groupId>
 			<artifactId>weblogic-server</artifactId>
-			<version>14.1.1</version>
+			<version>${blade.weblogic.version}</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.oracle.weblogic</groupId>
 			<artifactId>weblogic-logging</artifactId>
-			<version>14.1.1</version>
+			<version>${blade.weblogic.version}</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.oracle.occas</groupId>
 			<artifactId>sipservlet-api</artifactId>
-			<version>8.1</version>
+			<version>${blade.occas.version}</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.oracle.occas</groupId>
 			<artifactId>wlss</artifactId>
-			<version>8.1</version>
+			<version>${blade.occas.version}</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.oracle.occas</groupId>
 			<artifactId>wlssapi</artifactId>
-			<version>8.1</version>
+			<version>${blade.occas.version}</version>
 			<scope>provided</scope>
 		</dependency>
 		<!-- 3rd-party libs used by the framework and needed on the compile classpath

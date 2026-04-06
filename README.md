@@ -3,14 +3,12 @@
 **B**lended **L**ayer **A**pplication **D**evelopment **E**nvironment
 
 tl;dr...
-1) install Java 11 (from Oracle)
-2) download & install OCCAS
-2.1) install weblogic patches
-2.2) install occas patches
-3) run `./install-occas.sh /path/to/occas-8.1` (one-time setup)
+1) install Java (JDK 11 for OCCAS 8.1, JDK 21 for OCCAS 8.3)
+2) download & install OCCAS (with WebLogic and OCCAS patches)
+3) run `./install-occas.sh /path/to/occas` (one-time setup, auto-detects version)
 4) run `./build.sh` to build the EAR (produces `vorpal-blade-services-full.ear`)
 5) deploy the EAR to OCCAS
-6) install (and configure) the fsmar, it will allow you to string apps together during a callflow
+6) install (and configure) the FSMAR — it chains apps together into callflows
 7) nothing will work, everything will fail. check the logs in `<domain>/servers/engine(?)/logs/vorpal/<app>.log`
 
 If this sounds insane, yes, it is!
@@ -89,13 +87,13 @@ Deployed to the OCCAS cluster via the EAR. Each WAR includes the framework JAR; 
 
 ### Test Applications
 
-Deployed to the cluster alongside production applications. Excluded by the `production` build profile.
+Deployed to the cluster alongside production applications. Excluded by the `production` build profile. Together, the Test UAC and Test UAS form a complete SIP load testing tool that replaces SIPp for production performance tuning.
 
 | Module | Description |
 | --- | --- |
-| Test B2BUA | An example B2BUA application |
-| Test UAC | A REST-operated User Agent Client |
-| Test UAS | A test User Agent Server; controllable through SIP Request-URI parameters |
+| [Test B2BUA](test/test-b2bua) | An example B2BUA application |
+| [Test UAC](test/test-uac) | SIP load generator and test client; CPS and concurrent modes, REST API for start/stop/status, 1000+ CPS per node |
+| [Test UAS](test/test-uas) | Configurable test server; response status/delay/duration via REST API or SIP URI parameters, error map routing |
 
 
 
@@ -134,16 +132,26 @@ javadoc/        Javadoc WAR (always built; -Pjavadocs regenerates per-module jav
 
 ## Prerequisites
 
-1. Java 11 (from Oracle)
-2. Oracle OCCAS 8.1 installed locally
+1. Java (version depends on target OCCAS platform — see table below)
+2. Oracle OCCAS installed locally (8.0, 8.1, 8.2, or 8.3)
 
 ## One-Time Setup
 
-Install the OCCAS JARs into your local Maven repository:
+Install the OCCAS JARs into your local Maven repository. The script auto-detects the WebLogic and OCCAS versions from the installation directory:
 
 ```bash
-./install-occas.sh /path/to/occas-8.1
+./install-occas.sh /path/to/occas
 ```
+
+Example output:
+
+```
+Installing OCCAS JARs from: /home/jetty/occas-8.3
+  WebLogic version: 14.1.2
+  OCCAS version:    8.3
+```
+
+This only needs to be run once per OCCAS version. If you switch OCCAS versions, re-run the script pointing to the new installation.
 
 ## Build
 
@@ -237,12 +245,14 @@ Module profiles (`build-profiles/*.conf`):
 
 Platform profiles (`build-profiles/platforms/*.conf`):
 
-| Platform | Java Version |
-| --- | --- |
-| `occas-8.0` | JDK 8 |
-| `occas-8.1` | JDK 11 (default) |
-| `occas-8.2` | JDK 17 |
-| `occas-8.3` | JDK 21 (Beta) |
+| Platform | Java | WebLogic | OCCAS |
+| --- | --- | --- | --- |
+| `occas-8.0` | JDK 8 | 14.1.1 | 8.0 |
+| `occas-8.1` | JDK 11 (default) | 14.1.1 | 8.1 |
+| `occas-8.2` | JDK 17 | 14.1.2 | 8.2 |
+| `occas-8.3` | JDK 21 | 14.1.2 | 8.3 |
+
+The platform profile controls the Java compiler target, WebLogic dependency version, and OCCAS SIP API version. These are passed to Maven as `-Dblade.java.version`, `-Dblade.weblogic.version`, and `-Dblade.occas.version`.
 
 To create a custom module profile, copy an existing `build-profiles/*.conf` file and edit it. Add or remove project directory names to control which modules are included.
 

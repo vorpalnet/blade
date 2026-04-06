@@ -136,9 +136,18 @@ fi
 
 # --- Read properties from the platform ---
 JAVA_VERSION=$(grep '^java\.version=' "$PLATFORM_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')
-JAVA_FLAG=()
+WL_VERSION=$(grep '^weblogic\.version=' "$PLATFORM_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')
+OCCAS_VERSION=$(grep '^occas\.version=' "$PLATFORM_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')
+
+PLATFORM_FLAGS=()
 if [ -n "$JAVA_VERSION" ]; then
-    JAVA_FLAG=("-Dblade.java.version=${JAVA_VERSION}")
+    PLATFORM_FLAGS+=("-Dblade.java.version=${JAVA_VERSION}")
+fi
+if [ -n "$WL_VERSION" ]; then
+    PLATFORM_FLAGS+=("-Dblade.weblogic.version=${WL_VERSION}")
+fi
+if [ -n "$OCCAS_VERSION" ]; then
+    PLATFORM_FLAGS+=("-Dblade.occas.version=${OCCAS_VERSION}")
 fi
 
 # --- Auto-increment build number ---
@@ -198,6 +207,8 @@ if [ ${#PROFILES[@]} -eq 1 ]; then
     echo "Platform: ${PLATFORM}"
     echo "Build number: ${BUILD_NUM}"
     echo "Java version: ${JAVA_VERSION:-11 (default)}"
+    echo "WebLogic:     ${WL_VERSION:-14.1.1 (default)}"
+    echo "OCCAS:        ${OCCAS_VERSION:-8.1 (default)}"
     echo "Modules: ${INCLUDED_COUNT} of ${TOTAL_COUNT}"
     echo "EAR: vorpal-blade-services-${PROFILE}.ear"
 
@@ -212,7 +223,7 @@ if [ ${#PROFILES[@]} -eq 1 ]; then
         "${MAVEN_GOALS[@]}" \
         "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
         "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
-        "${JAVA_FLAG[@]+"${JAVA_FLAG[@]}"}" \
+        "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
         "-Dbuild.number=${BUILD_NUM}" \
         "-Dear.profile=${PROFILE}" \
         "-Dbuild.platform=${PLATFORM}"
@@ -253,6 +264,8 @@ else
     echo "Platform: ${PLATFORM}"
     echo "Build number: ${BUILD_NUM}"
     echo "Java version: ${JAVA_VERSION:-11 (default)}"
+    echo "WebLogic:     ${WL_VERSION:-14.1.1 (default)}"
+    echo "OCCAS:        ${OCCAS_VERSION:-8.1 (default)}"
     echo "Total modules: ${UNION_COUNT} of ${TOTAL_COUNT}"
     echo "EARs: $(printf 'vorpal-blade-services-%s.ear ' "${PROFILES[@]}")"
     echo ""
@@ -266,7 +279,7 @@ else
         "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
         -pl '!services' \
         "${UNION_SKIP_FLAGS[@]+"${UNION_SKIP_FLAGS[@]}"}" \
-        "${JAVA_FLAG[@]+"${JAVA_FLAG[@]}"}" \
+        "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
         "-Dbuild.number=${BUILD_NUM}" \
         "-Dblade.skip.install=false"
     MVN_EXIT=$?
@@ -292,7 +305,7 @@ else
             "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
             -pl services \
             "${PROFILE_SKIP_FLAGS[@]+"${PROFILE_SKIP_FLAGS[@]}"}" \
-            "${JAVA_FLAG[@]+"${JAVA_FLAG[@]}"}" \
+            "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
             "-Dbuild.number=${BUILD_NUM}" \
             "-Dear.profile=${profile}" \
             "-Dbuild.platform=${PLATFORM}"

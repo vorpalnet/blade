@@ -18,20 +18,25 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 @javax.servlet.sip.annotation.SipListener
 public class UserAgentClientServlet extends B2buaServlet {
 
-	public static SettingsManager<UserAgentClientConfig> settings;
+	public static SettingsManager<UserAgentClientConfig> settingsManager;
 
 	private static final long serialVersionUID = 1L;
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settings = new SettingsManager<>(event, UserAgentClientConfig.class, new UserAgentClientConfigSample());
+		settingsManager = new SettingsManager<>(event, UserAgentClientConfig.class, new UserAgentClientConfigSample());
 		sipLogger.info("UserAgentClientServlet.servletCreated");
 	}
 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
 		sipLogger.info("UserAgentClientServlet.servletDestroyed");
-		settings.unregister();
+		// Stop any running load generator on this node
+		Object gen = event.getServletContext().getAttribute("loadGenerator");
+		if (gen instanceof LoadGenerator) {
+			((LoadGenerator) gen).stop();
+		}
+		settingsManager.unregister();
 	}
 
 	@Override
@@ -40,7 +45,7 @@ public class UserAgentClientServlet extends B2buaServlet {
 
 		outboundRequest.setAttribute("noKeepAlive", Boolean.TRUE); // for testing keep alive
 
-		for (Entry<String, String> entry : settings.getCurrent().headers.entrySet()) {
+		for (Entry<String, String> entry : settingsManager.getCurrent().getHeaders().entrySet()) {
 			outboundRequest.setHeader(entry.getKey(), entry.getValue());
 		}
 	}
@@ -62,15 +67,19 @@ public class UserAgentClientServlet extends B2buaServlet {
 	@Override
 	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
 		sipLogger.info(outboundRequest, "UserAgentClientServlet.callCompleted");
-		// TODO Auto-generated method stub
-
+		Object gen = outboundRequest.getApplicationSession().getAttribute("loadGenerator");
+		if (gen instanceof LoadGenerator) {
+			((LoadGenerator) gen).onCallCompleted();
+		}
 	}
 
 	@Override
 	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
 		sipLogger.info(outboundResponse, "UserAgentClientServlet.callDeclined");
-		// TODO Auto-generated method stub
-
+		Object gen = outboundResponse.getRequest().getApplicationSession().getAttribute("loadGenerator");
+		if (gen instanceof LoadGenerator) {
+			((LoadGenerator) gen).onCallFailed();
+		}
 	}
 
 	@Override

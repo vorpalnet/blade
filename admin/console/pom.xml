@@ -37,8 +37,8 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-war-plugin</artifactId>
 				<configuration>
-					<!-- Standalone WAR (not in EAR) - include all JARs -->
-					<packagingExcludes>none</packagingExcludes>
+					<!-- Admin apps use the vorpal-blade shared library; no JARs in WAR -->
+					<packagingExcludes>WEB-INF/lib/*.jar</packagingExcludes>
 				</configuration>
 			</plugin>
 		</plugins>

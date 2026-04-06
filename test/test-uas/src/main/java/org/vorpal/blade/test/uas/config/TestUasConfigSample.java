@@ -12,10 +12,14 @@ public class TestUasConfigSample extends TestUasConfig {
 		this.session = new SessionParameters();
 		this.session.setExpiration(900);
 
+		this.defaultStatus = 200;
+		this.defaultDelay = "0s";
+		this.defaultDuration = "30s";
+		this.sdpContent = null; // uses built-in default
+
 		errorMap.put("18165550404", 404);
 		errorMap.put("18165550503", 503);
 		errorMap.put("18165550607", 607);
-
 	}
 
 }

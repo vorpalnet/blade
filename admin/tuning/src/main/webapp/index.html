@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Tuning</title>
+
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/css/bootstrap.min.css">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/js/bootstrap.bundle.min.js"></script>
+
+	<style>
+		body { padding: 20px; background: #f5f5f5; font-size: 14px; }
+		h4 { margin-bottom: 20px; }
+		.card { margin-bottom: 16px; }
+		.card-header { font-size: 14px; padding: 10px 15px; }
+		.card-body { padding: 15px; }
+		.mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 13px; }
+		.form-control-sm { font-size: 13px; }
+
+		/* Setting rows */
+		.setting-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+		.setting-row:last-child { border-bottom: none; }
+		.setting-label h6 { margin-bottom: 1px; font-size: 14px; }
+		.setting-label small { color: #888; font-size: 12px; }
+
+		/* Per-server cards */
+		.server-card { border-left: 3px solid #007bff; }
+		.nm-card { border-left: 3px solid #28a745; }
+		.wm-card { border-left: 3px solid #6f42c1; }
+		.cluster-card { border-left: 3px solid #fd7e14; }
+
+		/* Status badges */
+		.server-status { font-size: 13px; color: #666; margin-top: 6px; }
+
+		/* Warning box */
+		.info-box { background: #e8f4fd; border: 1px solid #b8daff; border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+		.warning-box { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+		.warning-box strong, .info-box strong { color: #856404; }
+		.info-box strong { color: #004085; }
+
+		/* Inline field groups */
+		.field-group { margin-bottom: 8px; }
+		.field-group label { font-weight: 600; font-size: 12px; margin-bottom: 1px; display: block; }
+		.field-group .hint { font-size: 11px; color: #999; }
+
+		/* Compact table */
+		.table-compact { font-size: 13px; margin-bottom: 0; }
+		.table-compact td, .table-compact th { padding: 6px 10px; vertical-align: middle; }
+		.table-compact .mono { font-size: 12px; }
+
+		/* Floating toast */
+		.alert-floating { position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 350px; max-width: 500px; }
+
+		/* Section anchor nav */
+		.section-nav { position: sticky; top: 0; z-index: 100; background: #f5f5f5; padding: 8px 0; margin-bottom: 12px; border-bottom: 1px solid #ddd; }
+		.section-nav a { font-size: 13px; margin-right: 16px; color: #555; }
+		.section-nav a:hover { color: #007bff; text-decoration: none; }
+
+		/* Tooltips — dotted underline on labels with tips */
+		[data-toggle="tooltip"], label[title], th[title], .tip { border-bottom: 1px dotted #999; cursor: help; }
+		.tooltip-inner { max-width: 320px; text-align: left; font-size: 12px; }
+	</style>
+</head>
+<body>
+
+	<div class="container-fluid">
+		<h4>OCCAS Performance Settings</h4>
+
+		<!-- Quick nav -->
+		<div class="section-nav">
+			<a href="#section-auth">Authentication</a>
+			<a href="#section-nm">Node Manager</a>
+			<a href="#section-jvm">JVM</a>
+			<a href="#section-server">Server Tuning</a>
+			<a href="#section-sip">SIP Timers</a>
+			<a href="#section-wm">OCCAS Threads</a>
+			<a href="#section-cluster">Cluster</a>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- AUTHENTICATION -->
+		<!-- ============================================================ -->
+		<div id="section-auth"></div>
+		<div class="card">
+			<div class="card-header"><strong>Authentication</strong></div>
+			<div class="card-body">
+				<div class="setting-row">
+					<div class="setting-label">
+						<h6>Enable Single Sign-On</h6>
+						<small>Share authentication across all BLADE admin apps. Users log in once.</small>
+						<div id="sso-status" class="server-status"></div>
+					</div>
+					<div class="custom-control custom-switch">
+						<input type="checkbox" class="custom-control-input" id="sso-toggle">
+						<label class="custom-control-label" for="sso-toggle"></label>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- NODE MANAGER -->
+		<!-- ============================================================ -->
+		<div id="section-nm"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>Node Manager</strong>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadNodeManagerSettings()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div class="warning-box">
+					<strong>Important:</strong> JVM settings only take effect when servers are started through Node Manager.
+					Verify NM is running and configured before changing JVM arguments.
+				</div>
+				<div id="nm-container"><span class="text-muted">Loading...</span></div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- JVM SETTINGS -->
+		<!-- ============================================================ -->
+		<div id="section-jvm"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>JVM Settings</strong>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadJvmSettings()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div class="info-box">
+					<strong>Note:</strong> Changes are saved to domain configuration. Restart servers via Node Manager for changes to take effect.
+				</div>
+				<div id="jvm-container"><span class="text-muted">Loading...</span></div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- SERVER TUNING -->
+		<!-- ============================================================ -->
+		<div id="section-server"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>Server Tuning</strong>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadServerTuning()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div id="server-tuning-container"><span class="text-muted">Loading...</span></div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- SIP TIMERS -->
+		<!-- ============================================================ -->
+		<div id="section-sip"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>SIP Protocol</strong>
+				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveSipTimers()">Save</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadSipTimers()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div class="info-box">
+					<strong>RFC 3261 Timers</strong> control SIP retransmission and transaction timeout behavior.
+					Changes apply to the SIP engine cluster and take effect on reload.
+				</div>
+
+				<!-- Timers -->
+				<h6 class="text-muted mb-2" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Transaction Timers</h6>
+				<div class="row mb-3">
+					<div class="col-md-3 field-group">
+						<label data-toggle="tooltip" title="RFC 3261 T1: Round-trip time estimate. Base interval for retransmitting SIP requests over unreliable transports (UDP). Retransmissions double from T1 up to T2. Lower values make retransmits more aggressive. Default: 500ms">T1 (ms)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-t1" placeholder="500">
+					</div>
+					<div class="col-md-3 field-group">
+						<label data-toggle="tooltip" title="RFC 3261 T2: Maximum retransmit interval. Retransmissions start at T1 and double each time, capping at T2. Applies to non-INVITE requests and INVITE responses. Default: 4000ms">T2 (ms)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-t2" placeholder="4000">
+					</div>
+					<div class="col-md-3 field-group">
+						<label data-toggle="tooltip" title="RFC 3261 T4: Maximum duration a SIP message can remain in the network. After T4, the message is considered lost. Used for Timer K (UDP response absorption) and Timer I (ACK absorption). Default: 5000ms">T4 (ms)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-t4" placeholder="5000">
+					</div>
+					<div class="col-md-3 field-group">
+						<label data-toggle="tooltip" title="Value (in seconds) included in the Retry-After header of 503 Service Unavailable responses. Tells the upstream to wait this long before retrying. Default: 180s">Retry-After (s)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-retryAfterValue" placeholder="180">
+					</div>
+				</div>
+
+				<div class="row mb-3">
+					<div class="col-md-2 field-group">
+						<label data-toggle="tooltip" title="RFC 3261 Timer B: INVITE client transaction timeout. How long the UAC waits for a response to an INVITE before giving up. Should be >= 64*T1. Default: 32000ms">Timer B (ms)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-timerB" placeholder="32000">
+					</div>
+					<div class="col-md-2 field-group">
+						<label data-toggle="tooltip" title="RFC 3261 Timer F: Non-INVITE client transaction timeout. How long the UAC waits for a response to non-INVITE requests (REGISTER, OPTIONS, etc.) before giving up. Should be >= 64*T1. Default: 32000ms">Timer F (ms)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-timerF" placeholder="32000">
+					</div>
+					<div class="col-md-2 field-group">
+						<label data-toggle="tooltip" title="RFC 6026 Timer L: Time a UAS INVITE server transaction stays in the Accepted state to absorb retransmitted ACKs. Default: 32000ms">Timer L (ms)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-timerL" placeholder="32000">
+					</div>
+					<div class="col-md-2 field-group">
+						<label data-toggle="tooltip" title="RFC 6026 Timer M: Time a UAC INVITE client transaction stays in the Accepted state to absorb retransmitted 2xx responses. Default: 32000ms">Timer M (ms)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-timerM" placeholder="32000">
+					</div>
+					<div class="col-md-2 field-group">
+						<label data-toggle="tooltip" title="Timer N: Time a proxy waits after sending a CANCEL to receive a response before cleaning up the transaction. Default: 32000ms">Timer N (ms)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-timerN" placeholder="32000">
+					</div>
+					<div class="col-md-2 field-group">
+						<label data-toggle="tooltip" title="Maximum lifetime (in seconds) for a SIP application session. After this time the session is invalidated regardless of activity. Set to -1 for no limit. Default: -1">Max Session (s)</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-maxAppSessionLifetime" placeholder="-1">
+					</div>
+				</div>
+
+				<!-- Behavior -->
+				<h6 class="text-muted mb-2 mt-3" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Protocol Behavior</h6>
+				<div class="row mb-3">
+					<div class="col-md-3 field-group">
+						<label data-toggle="tooltip" title="How the SIP container behaves when no application claims a request. 'Proxy' forwards the request; 'User Agent' terminates it locally.">Default Behavior</label>
+						<select class="form-control form-control-sm" id="sip-defaultBehavior">
+							<option value="proxy">Proxy</option>
+							<option value="ua">User Agent</option>
+						</select>
+					</div>
+					<div class="col-md-3 field-group">
+						<label data-toggle="tooltip" title="What happens when a SIP message arrives for a session that no longer exists. 'Error' returns a 481 Call/Transaction Does Not Exist. 'Drop' silently discards the message.">Stale Session Handling</label>
+						<select class="form-control form-control-sm" id="sip-staleSessionHandling">
+							<option value="error">Error</option>
+							<option value="drop">Drop</option>
+						</select>
+					</div>
+					<div class="col-md-3 field-group">
+						<label data-toggle="tooltip" title="SIP header encoding format. 'Long' uses full header names (e.g. 'Content-Type'). 'Compact' uses single-letter abbreviations (e.g. 'c'). Compact reduces message size on the wire.">Header Form</label>
+						<select class="form-control form-control-sm" id="sip-useHeaderForm">
+							<option value="long">Long</option>
+							<option value="compact">Compact</option>
+						</select>
+					</div>
+					<div class="col-md-3 field-group">
+						<label data-toggle="tooltip" title="Whether to include a Server header in SIP responses identifying the OCCAS server software. 'None' omits it for security. 'Include Header' adds the server identification string.">Server Header</label>
+						<select class="form-control form-control-sm" id="sip-serverHeader">
+							<option value="none">None</option>
+							<option value="header">Include Header</option>
+						</select>
+					</div>
+				</div>
+
+				<!-- Toggles -->
+				<h6 class="text-muted mb-2 mt-3" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Features</h6>
+				<div class="row">
+					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-engineCallStateCache"><label class="custom-control-label" for="sip-engineCallStateCache" data-toggle="tooltip" title="Cache call state in the local engine's memory for faster access. Reduces Coherence lookups during SIP processing. Recommended for high-traffic deployments.">Engine Call State Cache</label>
+					</div></div>
+					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableSipOutbound"><label class="custom-control-label" for="sip-enableSipOutbound" data-toggle="tooltip" title="RFC 5626: Enables SIP Outbound for clients behind NATs and firewalls. Allows persistent connections from UA to the server so inbound requests can be routed back through the same connection.">SIP Outbound (RFC 5626)</label>
+					</div></div>
+					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableDnsSrvLookup"><label class="custom-control-label" for="sip-enableDnsSrvLookup" data-toggle="tooltip" title="Use DNS SRV record lookups (RFC 3263) to discover SIP servers by domain. Enables proper SIP routing via NAPTR/SRV/A records instead of hardcoded addresses.">DNS SRV Lookup</label>
+					</div></div>
+					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableTimerAffinity"><label class="custom-control-label" for="sip-enableTimerAffinity" data-toggle="tooltip" title="When enabled, SIP timer callbacks are dispatched to the same server that created them. Improves cache locality but reduces load distribution flexibility. (TODO: confirm behavior in clustered deployments)">Timer Affinity</label>
+					</div></div>
+					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableRPort"><label class="custom-control-label" for="sip-enableRPort" data-toggle="tooltip" title="RFC 3581: Add rport parameter to Via header. Allows the server to send responses back to the port the request came from, which helps with NAT traversal.">RPort (RFC 3581)</label>
+					</div></div>
+					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableLocalDispatch"><label class="custom-control-label" for="sip-enableLocalDispatch" data-toggle="tooltip" title="When enabled, if a request targets a session that exists on the local server, dispatch it locally instead of going through the load balancer. Can reduce latency but may bypass load balancing. (TODO: confirm interaction with call state cache)">Local Dispatch</label>
+					</div></div>
+					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableSend100ForNonInvite"><label class="custom-control-label" for="sip-enableSend100ForNonInvite" data-toggle="tooltip" title="Automatically send a 100 Trying provisional response for non-INVITE requests. Normally only INVITE triggers 100 Trying, but enabling this prevents upstream retransmissions for slow-processing requests like REGISTER or SUBSCRIBE.">Send 100 for Non-INVITE</label>
+					</div></div>
+				</div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- OCCAS THREAD TUNING (WLSS Work Managers) -->
+		<!-- ============================================================ -->
+		<div id="section-wm"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>OCCAS Thread Tuning</strong>
+				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveWorkManagers()">Save All</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadWorkManagers()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div class="info-box">
+					<strong>WLSS Work Managers</strong> control how the SIP engine allocates threads to different processing functions.
+					<b>Fair Share</b> is a relative weight (higher = more CPU). <b>Min/Max Threads</b> set hard bounds.
+					<b>Capacity</b> is the max queued requests before the engine starts rejecting.
+					Changes take effect on server restart.
+				</div>
+				<div id="wm-container"><span class="text-muted">Loading...</span></div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- CLUSTER -->
+		<!-- ============================================================ -->
+		<div id="section-cluster"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>Cluster</strong>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadCluster()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div id="cluster-container"><span class="text-muted">Loading...</span></div>
+			</div>
+		</div>
+
+	</div>
+
+	<!-- Floating status message -->
+	<div id="status-message" class="alert alert-floating" style="display:none;" role="alert"></div>
+
+	<script>
+		// ================================================================
+		// GC collector options
+		// ================================================================
+		var gcCollectors = [
+			{ value: '',                       label: '(default)' },
+			{ value: '-XX:+UseG1GC',           label: 'G1 GC (recommended)' },
+			{ value: '-XX:+UseZGC',            label: 'ZGC (low latency)' },
+			{ value: '-XX:+UseShenandoahGC',   label: 'Shenandoah GC' },
+			{ value: '-XX:+UseParallelGC',     label: 'Parallel GC (throughput)' }
+		];
+
+		// ================================================================
+		// Init
+		// ================================================================
+		$(document).ready(function () {
+			// Enable Bootstrap tooltips on all elements with title attr
+			$('body').tooltip({ selector: '[data-toggle="tooltip"]', html: true });
+
+			loadSsoStatus();
+			loadNodeManagerSettings();
+			loadJvmSettings();
+			loadServerTuning();
+			loadSipTimers();
+			loadWorkManagers();
+			loadCluster();
+
+			$('#sso-toggle').on('change', function () {
+				setSsoStatus($(this).is(':checked'));
+			});
+		});
+
+		// ================================================================
+		// SSO
+		// ================================================================
+		function loadSsoStatus() {
+			$.getJSON('api/v1/sso', function (data) {
+				var allOn = true, anyOn = false, html = '';
+				$.each(data, function (i, s) {
+					var cls = s.ssoEnabled ? 'badge-success' : 'badge-secondary';
+					html += '<span class="badge ' + cls + '">' + s.server + ': ' + (s.ssoEnabled ? 'ON' : 'OFF') + '</span> ';
+					if (!s.ssoEnabled) allOn = false;
+					if (s.ssoEnabled) anyOn = true;
+				});
+				$('#sso-status').html(html);
+				$('#sso-toggle').prop('checked', allOn || anyOn);
+			}).fail(function () {
+				$('#sso-status').html('<span class="text-danger">Unable to retrieve SSO status</span>');
+			});
+		}
+
+		function setSsoStatus(enabled) {
+			$('#sso-toggle').prop('disabled', true);
+			showStatus('info', (enabled ? 'Enabling' : 'Disabling') + ' SSO...');
+			$.ajax({ url: 'api/v1/sso', method: 'PUT', contentType: 'application/json',
+				data: JSON.stringify({ enabled: enabled }), dataType: 'json',
+				success: function () {
+					showStatus('success', 'SSO ' + (enabled ? 'enabled' : 'disabled') + '. Restart servers for effect.');
+					$('#sso-toggle').prop('disabled', false);
+					loadSsoStatus();
+				},
+				error: function (xhr) {
+					showStatus('danger', 'SSO update failed. ' + parseError(xhr));
+					$('#sso-toggle').prop('disabled', false).prop('checked', !enabled);
+				}
+			});
+		}
+
+		// ================================================================
+		// Node Manager
+		// ================================================================
+		function loadNodeManagerSettings() {
+			$.getJSON('api/v1/nodemanager', function (data) {
+				if (!data || data.length === 0) { $('#nm-container').html('<span class="text-muted">No machines configured.</span>'); return; }
+				var html = '';
+				$.each(data, function (i, m) {
+					var badge = m.configured ? '<span class="badge badge-success">Configured</span>' : '<span class="badge badge-warning">Not Configured</span>';
+					html += '<div class="card nm-card mb-2"><div class="card-header d-flex justify-content-between align-items-center py-2">';
+					html += '<span><strong>' + m.machine + '</strong> ' + badge + '</span>';
+					if (m.servers && m.servers.length) html += '<span class="text-muted" style="font-size:12px">Servers: ' + m.servers.join(', ') + '</span>';
+					html += '</div>';
+					if (m.configured) {
+						html += '<div class="card-body py-2"><div class="row">';
+						html += '<div class="col-md-3"><small class="text-muted" data-toggle="tooltip" title="Network address and port where Node Manager listens for commands from the AdminServer. Must be reachable from the AdminServer for server lifecycle operations.">Address</small><div class="mono">' + (m.listenAddress || 'localhost') + ':' + m.listenPort + '</div></div>';
+						html += '<div class="col-md-2"><small class="text-muted" data-toggle="tooltip" title="Connection type between AdminServer and Node Manager. SSL (default) encrypts traffic. Plain is unencrypted — only use in secure networks. ssh uses SSH tunneling.">Type</small><div class="mono">' + m.type + '</div></div>';
+						html += '<div class="col-md-5"><small class="text-muted" data-toggle="tooltip" title="Filesystem path to the Node Manager installation directory. Contains nodemanager.properties, logs, and security files.">Home</small><div class="mono">' + (m.nodeManagerHome || '(default)') + '</div></div>';
+						html += '<div class="col-md-2"><small class="text-muted" data-toggle="tooltip" title="Enable verbose debug logging for Node Manager operations. Useful for troubleshooting server start failures.">Debug</small><div class="mono">' + (m.debugEnabled ? 'Yes' : 'No') + '</div></div>';
+						html += '</div></div>';
+					}
+					html += '</div>';
+				});
+				$('#nm-container').html(html);
+			}).fail(function (xhr) {
+				$('#nm-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		// ================================================================
+		// JVM Settings
+		// ================================================================
+		function loadJvmSettings() {
+			$.getJSON('api/v1/jvm', function (data) {
+				if (!data || data.length === 0) { $('#jvm-container').html('<span class="text-muted">No servers found.</span>'); return; }
+				var html = '';
+				$.each(data, function (i, s) { html += renderJvmCard(s); });
+				$('#jvm-container').html(html);
+			}).fail(function (xhr) {
+				$('#jvm-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		function renderJvmCard(s) {
+			var id = esc(s.server);
+			var html = '<div class="card server-card mb-2" id="jvm-' + id + '"><div class="card-header d-flex justify-content-between align-items-center py-2">';
+			html += '<strong>' + s.server + '</strong>';
+			html += '<div><button class="btn btn-sm btn-outline-primary" onclick="saveJvm(\'' + s.server + '\',\'' + id + '\')">Save</button>';
+			html += ' <a class="btn btn-sm btn-outline-secondary" data-toggle="collapse" href="#jvm-raw-' + id + '">Raw</a></div>';
+			html += '</div><div class="card-body">';
+
+			// Memory row
+			html += '<div class="row">';
+			html += tipField(id, 'heapInitial', '-Xms', s.heapInitial, '512m', 2, 'Initial heap size. JVM starts with this much memory allocated. Set equal to -Xmx to avoid runtime heap resizing. Example: 512m, 1g, 2g');
+			html += tipField(id, 'heapMax', '-Xmx', s.heapMax, '2g', 2, 'Maximum heap size. JVM will not exceed this. For SIP engines, 1-4G is typical. Too large increases GC pause times; too small causes OutOfMemoryError under load.');
+			html += tipField(id, 'metaspaceSize', 'Metaspace', s.metaspaceSize, '256m', 2, 'Initial Metaspace size for class metadata. Metaspace replaced PermGen in Java 8+. Setting this avoids early GC cycles as classes load at startup.');
+			html += tipField(id, 'maxMetaspaceSize', 'Max Meta', s.maxMetaspaceSize, '512m', 2, 'Maximum Metaspace size. Caps memory used for class metadata. If unset, Metaspace grows without bound. Set this to prevent runaway class loading from consuming all native memory.');
+			html += selectField(id, 'gcCollector', 'GC', s.gcCollector, gcCollectors, 2);
+			html += tipField(id, 'maxGcPauseMillis', 'GC Pause ms', s.maxGcPauseMillis, '200', 2, 'Target maximum GC pause time in milliseconds (-XX:MaxGCPauseMillis). The GC collector will try to keep pauses below this target. Lower values reduce latency spikes but may reduce throughput. Only applies to G1 and ZGC.');
+			html += '</div>';
+
+			// Flags row
+			html += '<div class="row mt-2">';
+			html += tipCb(id, '-server', 'Server Mode', s.flags, 'Run the JVM in server mode (-server). Enables aggressive optimizations: longer startup time, faster steady-state performance. Always recommended for production OCCAS servers.');
+			html += tipCb(id, '-XX:+UseCompressedOops', 'CompressedOops', s.flags, 'Use compressed object pointers in 64-bit JVMs. Reduces memory footprint by ~30% for heaps under 32GB. Enabled by default in most JVMs — only disable if heap exceeds 32GB.');
+			html += tipCb(id, '-XX:+HeapDumpOnOutOfMemoryError', 'HeapDump OOM', s.flags, 'Automatically dump the heap to a file when an OutOfMemoryError occurs. Essential for post-mortem analysis. The dump file can be large (equal to heap size).');
+			html += tipCb(id, '-XX:+UseStringDeduplication', 'StringDedup', s.flags, 'Deduplicate identical String objects in memory during GC. Can significantly reduce heap usage in SIP apps where many identical header values exist (e.g., Via, Contact). Only works with G1 GC.');
+			html += tipCb(id, '-XX:+DisableExplicitGC', 'DisableExplicitGC', s.flags, 'Ignore calls to System.gc(). Prevents application or library code from triggering full GC pauses. Recommended unless you have specific RMI distributed GC requirements.');
+			html += '</div>';
+
+			// Java home + additional
+			html += '<div class="row mt-2">';
+			html += tipField(id, 'javaHome', 'Java Home', s.javaHome, '/path/to/jdk', 5, 'Path to the JDK installation used to start this server. Must be a valid JDK (not JRE) directory. Leave empty to use the domain default from setDomainEnv.sh.');
+			html += '<div class="col-md-7 field-group"><label data-toggle="tooltip" title="Any additional JVM flags not covered by the fields above. These are appended verbatim to the server start arguments. Example: -Djava.net.preferIPv4Stack=true -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2">Additional Args</label>';
+			html += '<input type="text" class="form-control form-control-sm mono" id="' + id + '-additionalArgs" value="' + (s.additionalArgs || '') + '"></div>';
+			html += '</div>';
+
+			// Raw collapse
+			html += '<div class="collapse mt-2" id="jvm-raw-' + id + '"><div class="mono" style="background:#f8f9fa;padding:6px;border-radius:3px;word-break:break-all;color:#666;font-size:12px">' + (s.rawArguments || '(empty)') + '</div></div>';
+			html += '</div></div>';
+			return html;
+		}
+
+		function saveJvm(serverName, id) {
+			var data = {
+				heapInitial: v(id + '-heapInitial'), heapMax: v(id + '-heapMax'),
+				metaspaceSize: v(id + '-metaspaceSize'), maxMetaspaceSize: v(id + '-maxMetaspaceSize'),
+				maxGcPauseMillis: v(id + '-maxGcPauseMillis'),
+				parallelGcThreads: v(id + '-parallelGcThreads') || '',
+				concGcThreads: v(id + '-concGcThreads') || '',
+				gcCollector: v(id + '-gcCollector'), javaHome: v(id + '-javaHome'),
+				additionalArgs: v(id + '-additionalArgs'), flags: {}
+			};
+			$('#jvm-' + id + ' .jvm-flag').each(function () { data.flags[$(this).data('flag')] = $(this).is(':checked'); });
+			showStatus('info', 'Saving JVM settings for ' + serverName + '...');
+			$.ajax({ url: 'api/v1/jvm/' + encodeURIComponent(serverName), method: 'PUT',
+				contentType: 'application/json', data: JSON.stringify(data), dataType: 'json',
+				success: function () { showStatus('success', serverName + ' JVM saved. Restart via NM for effect.'); loadJvmSettings(); },
+				error: function (xhr) { showStatus('danger', 'JVM save failed: ' + parseError(xhr)); }
+			});
+		}
+
+		// ================================================================
+		// Server Tuning
+		// ================================================================
+		function loadServerTuning() {
+			$.getJSON('api/v1/server-tuning', function (data) {
+				if (!data || data.length === 0) { $('#server-tuning-container').html('<span class="text-muted">No servers found.</span>'); return; }
+				var html = '<table class="table table-compact table-bordered"><thead class="thead-light"><tr>';
+				html += '<th>Server</th><th>Port</th>';
+				html += '<th data-toggle="tooltip" title="Minimum size of the self-tuning thread pool. WebLogic dynamically adjusts thread count above this floor. Higher values guarantee more threads for SIP processing under load. Engine servers typically need 100+, AdminServer much less.">Thread Pool Min</th>';
+				html += '<th data-toggle="tooltip" title="Number of threads dedicated to reading from network sockets. Critical for high-throughput SIP — too few readers starves the transport layer. Increase when you see SIP message queueing at the network level. Each reader is a dedicated thread outside the self-tuning pool.">Socket Readers</th>';
+				html += '<th data-toggle="tooltip" title="Maximum allowed size (in bytes) for a single incoming message. Protects against oversized SIP messages consuming memory. 40MB default is generous — most SIP messages are under 10KB, but SDP with many media lines can grow larger.">Max Message (bytes)</th>';
+				html += '<th data-toggle="tooltip" title="Maximum time (in seconds) to wait for a complete message to arrive after the first bytes are received. Prevents slow-sender attacks and cleans up stalled connections.">Msg Timeout (s)</th>';
+				html += '<th data-toggle="tooltip" title="Time (in seconds) before an idle connection is closed. Applies to HTTP and SIP-over-TCP/TLS connections. Lower values free resources faster but may cause reconnection overhead for persistent SIP connections.">Idle Timeout (s)</th>';
+				html += '<th></th></tr></thead><tbody>';
+				$.each(data, function (i, s) {
+					var id = esc(s.server);
+					html += '<tr id="st-' + id + '">';
+					html += '<td><strong>' + s.server + '</strong><br><span class="text-muted" style="font-size:11px">' + (s.listenAddress || '*') + '</span></td>';
+					html += '<td class="mono">' + s.listenPort + '</td>';
+					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-threadPoolMin" value="' + s.threadPoolMin + '" style="width:80px"></td>';
+					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-socketReaders" value="' + s.socketReaders + '" style="width:70px"></td>';
+					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-maxMessageSize" value="' + s.maxMessageSize + '" style="width:120px"></td>';
+					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-completeMessageTimeout" value="' + s.completeMessageTimeout + '" style="width:70px"></td>';
+					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-idleConnectionTimeout" value="' + s.idleConnectionTimeout + '" style="width:70px"></td>';
+					html += '<td><button class="btn btn-sm btn-outline-primary" onclick="saveServerTuning(\'' + s.server + '\',\'' + id + '\')">Save</button></td>';
+					html += '</tr>';
+				});
+				html += '</tbody></table>';
+				$('#server-tuning-container').html(html);
+			}).fail(function (xhr) {
+				$('#server-tuning-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		function saveServerTuning(serverName, id) {
+			var data = {
+				threadPoolMin: parseInt(v('st-' + id + '-threadPoolMin')) || 0,
+				socketReaders: parseInt(v('st-' + id + '-socketReaders')) || 0,
+				maxMessageSize: parseInt(v('st-' + id + '-maxMessageSize')) || 0,
+				completeMessageTimeout: parseInt(v('st-' + id + '-completeMessageTimeout')) || 0,
+				idleConnectionTimeout: parseInt(v('st-' + id + '-idleConnectionTimeout')) || 0
+			};
+			showStatus('info', 'Saving server tuning for ' + serverName + '...');
+			$.ajax({ url: 'api/v1/server-tuning/' + encodeURIComponent(serverName), method: 'PUT',
+				contentType: 'application/json', data: JSON.stringify(data), dataType: 'json',
+				success: function () { showStatus('success', serverName + ' tuning saved. Restart for effect.'); },
+				error: function (xhr) { showStatus('danger', 'Save failed: ' + parseError(xhr)); }
+			});
+		}
+
+		// ================================================================
+		// SIP Timers
+		// ================================================================
+		function loadSipTimers() {
+			$.getJSON('api/v1/sip-timers', function (d) {
+				// Numeric fields
+				$.each(['t1','t2','t4','timerB','timerF','timerL','timerM','timerN','retryAfterValue','maxAppSessionLifetime'], function (i, f) {
+					$('#sip-' + f).val(d[f]);
+				});
+				// Selects
+				$.each(['defaultBehavior','staleSessionHandling','useHeaderForm','serverHeader'], function (i, f) {
+					$('#sip-' + f).val(d[f]);
+				});
+				// Checkboxes
+				$.each(['engineCallStateCache','enableSipOutbound','enableDnsSrvLookup','enableTimerAffinity','enableRPort','enableLocalDispatch','enableSend100ForNonInvite'], function (i, f) {
+					$('#sip-' + f).prop('checked', d[f]);
+				});
+			}).fail(function (xhr) {
+				showStatus('danger', 'Unable to load SIP timers. ' + parseError(xhr));
+			});
+		}
+
+		function saveSipTimers() {
+			var data = {};
+			$.each(['t1','t2','t4','timerB','timerF','timerL','timerM','timerN','retryAfterValue','maxAppSessionLifetime'], function (i, f) {
+				data[f] = $('#sip-' + f).val();
+			});
+			$.each(['defaultBehavior','staleSessionHandling','useHeaderForm','serverHeader'], function (i, f) {
+				data[f] = $('#sip-' + f).val();
+			});
+			$.each(['engineCallStateCache','enableSipOutbound','enableDnsSrvLookup','enableTimerAffinity','enableRPort','enableLocalDispatch','enableSend100ForNonInvite'], function (i, f) {
+				data[f] = $('#sip-' + f).is(':checked');
+			});
+			showStatus('info', 'Saving SIP protocol settings...');
+			$.ajax({ url: 'api/v1/sip-timers', method: 'PUT', contentType: 'application/json',
+				data: JSON.stringify(data), dataType: 'json',
+				success: function () { showStatus('success', 'SIP settings saved.'); },
+				error: function (xhr) { showStatus('danger', 'SIP save failed: ' + parseError(xhr)); }
+			});
+		}
+
+		// ================================================================
+		// OCCAS Thread Tuning (WLSS Work Managers)
+		// ================================================================
+
+		// Friendly labels and descriptions for each WLSS work manager
+		var wmMeta = {
+			'wlss.transport':        { label: 'Transport',          desc: 'SIP message I/O — reading and writing SIP messages on network channels' },
+			'wlss.timer':            { label: 'Timer',              desc: 'SIP timer events — retransmissions, transaction expirations, session timeouts' },
+			'wlss.replica.rmi':      { label: 'Replica RMI',        desc: 'Inter-server state replication via RMI calls' },
+			'wlss.replica.blocking': { label: 'Replica Blocking',   desc: 'Synchronous (blocking) replication operations between cluster members' },
+			'wlss.replica.geo':      { label: 'Replica Geo',        desc: 'Geographic site-to-site replication for disaster recovery' },
+			'wlss.tracing.domain':   { label: 'Tracing (Domain)',   desc: 'Domain-wide SIP message tracing and logging' },
+			'wlss.tracing.local':    { label: 'Tracing (Local)',    desc: 'Local server SIP message tracing and logging' },
+			'wlss.connect':          { label: 'Connect',            desc: 'SIP connection establishment and management' },
+			'wlss.cleanup':          { label: 'Cleanup',            desc: 'Session and resource cleanup — expired calls, stale state' }
+		};
+
+		var wmData = []; // cached for save
+
+		function loadWorkManagers() {
+			$.getJSON('api/v1/work-managers', function (data) {
+				wmData = data;
+				if (!data || data.length === 0) { $('#wm-container').html('<span class="text-muted">No WLSS work managers found.</span>'); return; }
+
+				var html = '<table class="table table-compact table-bordered mb-0">';
+				html += '<thead class="thead-light"><tr>';
+				html += '<th style="min-width:180px">Work Manager</th>';
+				html += '<th style="width:100px" title="Relative CPU weight — higher values get more scheduling priority">Fair Share</th>';
+				html += '<th style="width:100px" title="Guaranteed minimum threads for this work manager">Min Threads</th>';
+				html += '<th style="width:100px" title="Hard ceiling on concurrent threads">Max Threads</th>';
+				html += '<th style="width:100px" title="Maximum queued requests before rejection">Capacity</th>';
+				html += '</tr></thead><tbody>';
+
+				$.each(data, function (i, wm) {
+					var id = esc(wm.name);
+					var meta = wmMeta[wm.name] || { label: wm.name, desc: '' };
+
+					html += '<tr>';
+					html += '<td><strong>' + meta.label + '</strong><br><span class="text-muted" style="font-size:11px">' + wm.name + '</span>';
+					if (meta.desc) html += '<br><span style="font-size:11px;color:#999">' + meta.desc + '</span>';
+					html += '</td>';
+
+					// Fair share - always present for wlss
+					html += '<td>' + wmInput(id, 'fairShare', wm.fairShare, wm.fairShareName) + '</td>';
+
+					// Min threads - may not exist
+					html += '<td>' + wmInput(id, 'minThreads', wm.minThreads, wm.minThreadsName) + '</td>';
+
+					// Max threads
+					html += '<td>' + wmInput(id, 'maxThreads', wm.maxThreads, wm.maxThreadsName) + '</td>';
+
+					// Capacity
+					html += '<td>' + wmInput(id, 'capacity', wm.capacity, wm.capacityName) + '</td>';
+
+					html += '</tr>';
+				});
+
+				html += '</tbody></table>';
+				$('#wm-container').html(html);
+			}).fail(function (xhr) {
+				$('#wm-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		function wmInput(id, field, value, constraintName) {
+			if (constraintName === undefined || constraintName === null) {
+				return '<span class="text-muted mono" style="font-size:12px">—</span>';
+			}
+			return '<input type="number" class="form-control form-control-sm mono" id="wm-' + id + '-' + field + '" value="' + (value || 0)
+				+ '" style="width:80px" title="' + constraintName + '">';
+		}
+
+		function saveWorkManagers() {
+			if (!wmData || wmData.length === 0) { showStatus('warning', 'No work manager data loaded.'); return; }
+
+			var payload = [];
+			$.each(wmData, function (i, wm) {
+				var id = esc(wm.name);
+				var entry = { name: wm.name };
+
+				if (wm.fairShareName) {
+					entry.fairShareName = wm.fairShareName;
+					entry.fairShare = parseInt(v('wm-' + id + '-fairShare')) || 0;
+				}
+				if (wm.minThreadsName) {
+					entry.minThreadsName = wm.minThreadsName;
+					entry.minThreads = parseInt(v('wm-' + id + '-minThreads')) || 0;
+				}
+				if (wm.maxThreadsName) {
+					entry.maxThreadsName = wm.maxThreadsName;
+					entry.maxThreads = parseInt(v('wm-' + id + '-maxThreads')) || 0;
+				}
+				if (wm.capacityName) {
+					entry.capacityName = wm.capacityName;
+					entry.capacity = parseInt(v('wm-' + id + '-capacity')) || 0;
+				}
+
+				payload.push(entry);
+			});
+
+			showStatus('info', 'Saving OCCAS thread tuning...');
+			$.ajax({ url: 'api/v1/work-managers', method: 'PUT', contentType: 'application/json',
+				data: JSON.stringify(payload), dataType: 'json',
+				success: function () { showStatus('success', 'OCCAS thread tuning saved. Restart servers for effect.'); loadWorkManagers(); },
+				error: function (xhr) { showStatus('danger', 'Save failed: ' + parseError(xhr)); }
+			});
+		}
+
+		// ================================================================
+		// Cluster
+		// ================================================================
+		function loadCluster() {
+			$.getJSON('api/v1/cluster', function (data) {
+				var html = '';
+
+				// Clusters
+				if (data.clusters && data.clusters.length) {
+					$.each(data.clusters, function (i, c) {
+						html += '<div class="card cluster-card mb-2"><div class="card-header py-2">';
+						html += '<strong>' + c.name + '</strong>';
+						html += ' <span class="badge badge-info ml-2" data-toggle="tooltip" title="Time (in seconds) a new or restarted cluster member waits before accepting requests. Allows caches, sessions, and replication to stabilize before taking production traffic.">Warmup: ' + c.memberWarmupTimeout + 's</span>';
+						if (c.clusterMessagingMode) html += ' <span class="badge badge-secondary">' + c.clusterMessagingMode + '</span>';
+						html += '</div>';
+						if (c.members && c.members.length) {
+							html += '<div class="card-body py-2"><table class="table table-compact table-sm mb-0"><thead><tr><th>Server</th><th>Address</th><th>Port</th></tr></thead><tbody>';
+							$.each(c.members, function (j, m) {
+								html += '<tr><td>' + m.name + '</td><td class="mono">' + (m.listenAddress || '*') + '</td><td class="mono">' + m.listenPort + '</td></tr>';
+							});
+							html += '</tbody></table></div>';
+						}
+						html += '</div>';
+					});
+				}
+
+				// Migratable targets
+				if (data.migratableTargets && data.migratableTargets.length) {
+					html += '<h6 class="text-muted mt-3 mb-2" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Migratable Targets</h6>';
+					html += '<table class="table table-compact table-bordered"><thead class="thead-light"><tr><th>Name</th><th data-toggle="tooltip" title="The server where this migratable service will run by default. If this server fails, the service can migrate to another cluster member.">Preferred Server</th><th>Cluster</th><th data-toggle="tooltip" title="How migration is triggered. Manual requires admin intervention. Automatic migrates on server failure detection. Failure-Recovery only migrates services whose host has crashed.">Policy</th></tr></thead><tbody>';
+					$.each(data.migratableTargets, function (i, m) {
+						html += '<tr><td>' + m.name + '</td><td>' + m.preferredServer + '</td><td>' + m.cluster + '</td>';
+						html += '<td><span class="badge badge-' + (m.migrationPolicy === 'manual' ? 'secondary' : 'success') + '">' + m.migrationPolicy + '</span></td></tr>';
+					});
+					html += '</tbody></table>';
+				}
+
+				$('#cluster-container').html(html || '<span class="text-muted">No clusters configured.</span>');
+			}).fail(function (xhr) {
+				$('#cluster-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		// ================================================================
+		// Helpers
+		// ================================================================
+		function field(id, name, label, value, ph, cols) {
+			return '<div class="col-md-' + cols + ' field-group"><label>' + label + '</label>'
+				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + name + '" value="' + (value || '') + '" placeholder="' + ph + '"></div>';
+		}
+		function tipField(id, name, label, value, ph, cols, tip) {
+			return '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + tip + '">' + label + '</label>'
+				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + name + '" value="' + (value || '') + '" placeholder="' + ph + '"></div>';
+		}
+		function selectField(id, name, label, value, opts, cols) {
+			var h = '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="Garbage collection algorithm. G1 is the recommended default for OCCAS. ZGC offers lower pause times but higher CPU overhead. Parallel GC maximizes throughput at the cost of longer pauses.">' + label + '</label><select class="form-control form-control-sm" id="' + id + '-' + name + '">';
+			$.each(opts, function (i, o) { h += '<option value="' + o.value + '"' + (o.value === value ? ' selected' : '') + '>' + o.label + '</option>'; });
+			return h + '</select></div>';
+		}
+		function cb(id, flag, label, flags) {
+			var cbId = id + '-flag-' + flag.replace(/[^a-zA-Z0-9]/g, '_');
+			var checked = flags && flags[flag] ? ' checked' : '';
+			return '<div class="col-md-auto mb-1"><div class="custom-control custom-checkbox">'
+				+ '<input type="checkbox" class="custom-control-input jvm-flag" id="' + cbId + '" data-flag="' + flag + '"' + checked + '>'
+				+ '<label class="custom-control-label" for="' + cbId + '" style="font-size:12px">' + label + '</label></div></div>';
+		}
+		function tipCb(id, flag, label, flags, tip) {
+			var cbId = id + '-flag-' + flag.replace(/[^a-zA-Z0-9]/g, '_');
+			var checked = flags && flags[flag] ? ' checked' : '';
+			return '<div class="col-md-auto mb-1"><div class="custom-control custom-checkbox">'
+				+ '<input type="checkbox" class="custom-control-input jvm-flag" id="' + cbId + '" data-flag="' + flag + '"' + checked + '>'
+				+ '<label class="custom-control-label" for="' + cbId + '" style="font-size:12px" data-toggle="tooltip" title="' + tip + '">' + label + '</label></div></div>';
+		}
+		function v(id) { return $('#' + id).val(); }
+		function esc(s) { return s.replace(/[^a-zA-Z0-9]/g, '_'); }
+		function showStatus(type, msg) {
+			$('#status-message').removeClass('alert-info alert-success alert-danger alert-warning')
+				.addClass('alert-' + type).text(msg).show();
+			if (type === 'success') setTimeout(function () { $('#status-message').fadeOut(); }, 5000);
+		}
+		function parseError(xhr) {
+			try { var e = JSON.parse(xhr.responseText); return e.error || ''; } catch (x) { return ''; }
+		}
+	</script>
+
+</body>
+</html>

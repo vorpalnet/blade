@@ -1,68 +1,79 @@
-/// SIP callflow implementations for the Test UAS module, providing a variety of
-/// response behaviors for testing purposes. Each callflow handles a specific SIP
-/// scenario, from basic 200 OK responses to complex REFER-based call transfers
-/// with NOTIFY follow-ups.
+/// SIP callflow implementations for the Test UAS module, providing configurable
+/// response behaviors for load testing and functional testing. Each callflow
+/// handles a specific SIP scenario, from high-performance INVITE processing
+/// with configurable delays and auto-BYE to complex REFER-based call transfers.
 ///
 /// ## Key Components
 ///
-/// - [TestInvite] - handles initial INVITE requests with configurable delay, status codes, and call duration via URI parameters
-/// - [TestReinvite] - handles mid-dialog re-INVITE requests by responding with a blackhole SDP (inactive media)
-/// - [TestOkayResponse] - sends a simple 200 OK response for BYE, CANCEL, and INFO requests
-/// - [TestNotImplemented] - sends a 501 Not Implemented response for unsupported SIP methods
+/// - [TestInvite] - handles initial INVITE requests with configurable delay, status
+///   codes, call duration, error map lookup, and SDP content; the primary callflow
+///   for load testing
+/// - [TestReinvite] - handles mid-dialog re-INVITE requests by responding with a
+///   blackhole SDP (inactive media at 0.0.0.0)
+/// - [TestOkayResponse] - sends a simple 200 OK response for BYE, CANCEL, and INFO
+/// - [TestNotImplemented] - sends a 501 Not Implemented response for unsupported methods
 /// - [TestRefer] - implements a REFER-based call transfer flow with NOTIFY handshaking
-/// - [UasCallflow] - a generic callflow that responds with a configurable status code and waits for ACK
+/// - [UasCallflow] - a generic callflow that responds with a configurable status code
 ///
 /// ## Initial Call Handling
 ///
 /// ### TestInvite
-/// [TestInvite] extends {@code InitialInvite} and responds to initial INVITE requests
-/// with SDP content (a Qfiniti SIPREC response). It also supports an alternative
-/// processing mode using URI parameters:
+/// [TestInvite] extends `InitialInvite` and is the workhorse for load testing.
+/// On each incoming INVITE, it:
 ///
-/// - {@code status} - the SIP response code to send (default: 200)
-/// - {@code delay} - time to wait before sending the response, supporting suffixes: {@code s} (seconds), {@code m} (minutes), {@code h} (hours), {@code d} (days), {@code y} (years)
-/// - {@code duration} - how long to keep the call active before sending BYE (default: 30 seconds)
+/// 1. Reads default behavior from
+///    [TestUasConfig][org.vorpal.blade.test.uas.config.TestUasConfig] via
+///    [UasServlet.settingsManager][org.vorpal.blade.test.uas.UasServlet]
+/// 2. Checks for request URI parameter overrides:
+///    - `status` — SIP response code (default from config)
+///    - `delay` — time to wait before responding, supports suffixes: `s` (seconds),
+///      `m` (minutes), `h` (hours), `d` (days), `y` (years)
+///    - `duration` — call hold time before auto-BYE (same suffix format)
+/// 3. Checks the error map — if the called phone number matches, that status wins
+/// 4. If delay > 0, schedules a timer via `scheduleTimer()` before sending
+/// 5. Sends the response with SDP content for 2xx responses
+/// 6. For successful responses with duration > 0, schedules an auto-BYE timer
+///    to tear down the call after the configured period
 ///
-/// The class provides static utility methods {@code inSeconds()} and {@code inMilliseconds()}
+/// The class provides static utility methods `inSeconds()` and `inMilliseconds()`
 /// for parsing human-readable duration strings.
 ///
 /// ## Mid-Dialog Handling
 ///
 /// ### TestReinvite
-/// [TestReinvite] extends {@code InitialInvite} and responds to re-INVITE requests
-/// with a blackhole SDP ({@code c=IN IP4 0.0.0.0}, {@code a=inactive}), effectively
+/// [TestReinvite] extends `InitialInvite` and responds to re-INVITE requests
+/// with a blackhole SDP (`c=IN IP4 0.0.0.0`, `a=inactive`), effectively
 /// placing media on hold. This simulates a media renegotiation scenario.
 ///
 /// ## Simple Response Callflows
 ///
 /// ### TestOkayResponse
-/// [TestOkayResponse] sends a 200 OK for any request it processes. Used by the
-/// [UasServlet][org.vorpal.blade.test.uas.UasServlet] to handle BYE, CANCEL, and
-/// INFO methods.
+/// [TestOkayResponse] sends a 200 OK for any request. Used by
+/// [UasServlet][org.vorpal.blade.test.uas.UasServlet] for BYE, CANCEL, and INFO.
 ///
 /// ### TestNotImplemented
-/// [TestNotImplemented] sends a 501 Not Implemented response, used as the default
-/// handler for SIP methods not explicitly supported by the test UAS.
+/// [TestNotImplemented] sends 501 Not Implemented, the default handler for SIP
+/// methods not explicitly supported by the test UAS.
 ///
 /// ### UasCallflow
-/// [UasCallflow] is a configurable callflow that accepts a status code in its
-/// constructor and responds with that status. After sending the response, it
-/// registers an ACK callback for logging.
+/// [UasCallflow] accepts a status code in its constructor and responds with that
+/// status. After sending, it registers an ACK callback for logging.
 ///
 /// ## Call Transfer
 ///
 /// ### TestRefer
-/// [TestRefer] implements a SIP REFER-based call transfer scenario. It:
+/// [TestRefer] implements a SIP REFER-based call transfer scenario:
 ///
 /// 1. Answers the initial INVITE with 200 OK
-/// 2. Sends a REFER request to the caller with a {@code Refer-To} address extracted from the URI {@code refer} parameter
-/// 3. Expects a NOTIFY with "100 Trying" (implicit subscription)
-/// 4. Expects a second NOTIFY with the transfer outcome
-/// 5. If the transfer succeeds (200), sends BYE to tear down the original dialog
+/// 2. Sends REFER with `Refer-To` address from the URI `refer` parameter
+/// 3. Expects NOTIFY with "100 Trying" (implicit subscription)
+/// 4. Expects second NOTIFY with the transfer outcome
+/// 5. On success (200 in SIP fragment), sends BYE to tear down the original dialog
 ///
-/// The {@code status} URI parameter controls the expected response from the transfer target.
+/// The `status` URI parameter controls the expected response from the transfer target.
 ///
 /// @see org.vorpal.blade.test.uas.UasServlet
+/// @see org.vorpal.blade.test.uas.config.TestUasConfig
 /// @see org.vorpal.blade.framework.v2.callflow.Callflow
 /// @see org.vorpal.blade.framework.v2.b2bua.InitialInvite
 package org.vorpal.blade.test.uas.callflows;
