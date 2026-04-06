@@ -49,12 +49,22 @@ echo "  WebLogic version: $WL_VERSION"
 echo "  OCCAS version:    $OCCAS_VERSION"
 echo ""
 
+# OCCAS 8.3 ships javaee-api-8.0.1.jar instead of javax.javaee-api.jar
+if [ -f "$OCCAS_HOME/wlserver/server/lib/javax.javaee-api.jar" ]; then
+    JAVAEE_JAR="$OCCAS_HOME/wlserver/server/lib/javax.javaee-api.jar"
+elif [ -f "$OCCAS_HOME/wlserver/server/lib/javaee-api-8.0.1.jar" ]; then
+    JAVAEE_JAR="$OCCAS_HOME/wlserver/server/lib/javaee-api-8.0.1.jar"
+else
+    echo "Error: Cannot find javaee-api JAR in $OCCAS_HOME/wlserver/server/lib/"
+    exit 1
+fi
+
 mvn install:install-file \
     -DgroupId=javax \
     -DartifactId=javaee-api \
     -Dversion=8.0-occas \
     -Dpackaging=jar \
-    -Dfile="$OCCAS_HOME/wlserver/server/lib/javax.javaee-api.jar" \
+    -Dfile="$JAVAEE_JAR" \
     -DpomFile="$SCRIPT_DIR/javaee-api.pom"
 
 mvn install:install-file \
