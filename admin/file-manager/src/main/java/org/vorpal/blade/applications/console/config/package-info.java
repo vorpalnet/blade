@@ -22,9 +22,9 @@
 /// - [SaveDataServlet] - Dedicated servlet at `/saveData` for handling configuration data
 ///   persistence via POST requests
 ///
-/// ### API Integration
-/// - [RestAPI] - OpenAPI-documented REST service at `api/v1` providing application session
-///   examination capabilities with Swagger integration and MediaHub API definitions
+/// ### API and Filtering
+/// - [ConfiguratorAPI] - REST API for configurator operations
+/// - [CorsFilter] - Servlet filter for Cross-Origin Resource Sharing support
 ///
 /// ## Key Features
 ///
@@ -46,11 +46,6 @@
 /// Configuration changes are propagated through the system using JMX MBean notifications
 /// and WebSocket message broadcasting for real-time updates.
 ///
-/// The monitoring system uses Java NIO file watching capabilities to detect filesystem
-/// changes and automatically update corresponding configuration objects. Web-based
-/// interfaces provide both traditional HTTP and modern WebSocket communication channels
-/// for interactive configuration management with message-based communication protocols.
-///
 /// ## Sub-packages
 ///
 /// ### [org.vorpal.blade.applications.console.config.test]
@@ -66,26 +61,9 @@
 ///
 /// ## Related Packages
 ///
-/// The console module also contains the following packages outside this hierarchy:
-///
-/// ### [org.vorpal.blade.applications.console.webapp]
-/// Provides web servlet components for the console application's user interface,
-/// including the [Logout][org.vorpal.blade.applications.console.webapp.Logout] servlet
-/// that handles session invalidation with anti-caching headers and redirect to the login page.
-///
 /// ### [org.vorpal.blade.applications.console.mxgraph]
-/// Provides utilities and servlets for integrating with mxGraph diagramming functionality.
-/// Includes [OpenServlet][org.vorpal.blade.applications.console.mxgraph.OpenServlet] for
-/// file upload and diagram format processing (Gliffy, GraphML, PNG with embedded XML),
-/// [SaveServlet][org.vorpal.blade.applications.console.mxgraph.SaveServlet] for diagram
-/// export, and [Formatter][org.vorpal.blade.applications.console.mxgraph.Formatter] for
-/// XML pretty-printing and transformation.
-///
-/// ### [com.mxgraph.util]
-/// Bundled utility classes for the mxGraph library including
-/// [mxBase64][com.mxgraph.util.mxBase64] for high-performance BASE64 encoding/decoding,
-/// [Utils][com.mxgraph.util.Utils] for compression/decompression and geometric transformations,
-/// and [Constants][com.mxgraph.util.Constants] for application-wide size limits and configuration.
+/// Provides the [Formatter][org.vorpal.blade.applications.console.mxgraph.Formatter] utility
+/// for XML pretty-printing and transformation of configuration files.
 ///
 /// ### [org.vorpal.blade.framework.v2.config]
 /// Contains the [SettingsMXBean][org.vorpal.blade.framework.v2.config.SettingsMXBean] JMX
@@ -95,9 +73,10 @@
 ///
 /// @see ConfigurationMonitor
 /// @see ConfigurationMonitorStartup
+/// @see ConfiguratorAPI
+/// @see CorsFilter
 /// @see FileManagement
 /// @see FileManagerServlet
 /// @see WebSocketFileManager
 /// @see SaveDataServlet
-/// @see RestAPI
 package org.vorpal.blade.applications.console.config;
