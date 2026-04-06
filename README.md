@@ -2,20 +2,15 @@
 
 **B**lended **L**ayer **A**pplication **D**evelopment **E**nvironment
 
-tl;dr...
-1) install Java (JDK 11 for OCCAS 8.1, JDK 21 for OCCAS 8.3)
-2) download & install OCCAS (with WebLogic and OCCAS patches)
-3) run `./install-occas.sh /path/to/occas` (one-time setup, auto-detects version)
-4) run `./build.sh` to build the EAR (produces `vorpal-blade-services-full.ear`)
-5) deploy the EAR to OCCAS
-6) install (and configure) the FSMAR — it chains apps together into callflows
-7) nothing will work, everything will fail. check the logs in `<domain>/servers/engine(?)/logs/vorpal/<app>.log`
+BLADE is an open-source collection of libraries and applications that
+aide in the development real-time, audio-visual streaming applications.
 
-If this sounds insane, yes, it is!
-You can find more instructions at https://vorpal.net
+The latest documentation can be found here: https://vorpal.net/javadocs/blade/
+The company website can be found here: https://vorpal.net
 
-BLADE is a development framework and collection of pre-built
-applications built on the Java EE JSR-359 (SIP Servlet) specification.
+BLADE is built on the Java EE JSR-359 (SIP Servlet) specification
+and implemented / tested agains Oracle's OCCAS, a modified version of WebLogic
+designed to support the SIP protocol.
 
 ## Why BLADE?
 
@@ -35,7 +30,7 @@ sendRequest(bobRequest, (bobResponse) -> {
 
 The entire call flow — INVITE, wait for response, forward it, wait for ACK, forward it — is expressed top-to-bottom in a single method. The nested lambdas mirror the actual SIP message exchange. You can read the code and *see* the call.
 
-The key innovation: **callflow state is automatically serialized.** The `Callflow` class implements `Serializable`, so the lambda callbacks and all local variables they close over (`aliceRequest`, `bobRequest`, etc.) are transparently persisted into SIP session memory by the OCCAS container. In a distributed cluster, if a node fails mid-call, the callflow resumes on another node with all its state intact — without the developer writing a single `setAttribute()` or `getAttribute()` call.
+The key innovation: **callflow state is automatically serialized.** The `Callflow` class implements `Serializable`, so the lambda callbacks and all local variables they close over (`aliceRequest`, `bobRequest`, etc.) are transparently persisted into SIP session memory by the OCCAS container. In a distributed cluster, if a node fails mid-call, the callflow resumes on another node with all its state intact — without the developer ever knowing.
 
 What once required a complicated collection of Java classes is now a single class. What once read like a choose-your-own-adventure book now reads like a poem.
 
