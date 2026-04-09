@@ -15,6 +15,7 @@
 
 	<modules>
 		<!-- Always built -->
+		<module>libs/trie</module>
 		<module>libs/framework</module>
 		<module>libs/shared</module>
 		<module>libs/fsmar</module>
@@ -25,6 +26,7 @@
 		<module>admin/explorer</module>
 		<module>admin/json-forms</module>
 		<module>admin/configurator</module>
+		<module>admin/watcher</module>
 		<module>services</module>
 
 		<!-- Service and test modules are controlled by profiles below.
@@ -59,6 +61,7 @@
 		<xalan.version>2.7.3</xalan.version>
 		<jsonpath.version>2.10.0</jsonpath.version>
 		<jsonschema.version>1.0.39</jsonschema.version>
+		<victools.version>4.38.0</victools.version>
 		<json-schema-validator.version>1.5.6</json-schema-validator.version>
 		<findbugs.version>3.0.2</findbugs.version>
 		<gson-fire.version>1.9.0</gson-fire.version>
@@ -77,6 +80,11 @@
 	<dependencyManagement>
 		<dependencies>
 			<!-- Internal modules -->
+			<dependency>
+				<groupId>org.vorpal.blade</groupId>
+				<artifactId>vorpal-blade-library-trie</artifactId>
+				<version>${project.version}</version>
+			</dependency>
 			<dependency>
 				<groupId>org.vorpal.blade</groupId>
 				<artifactId>vorpal-blade-library-framework</artifactId>
@@ -139,6 +147,18 @@
 				<groupId>com.kjetland</groupId>
 				<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
 				<version>${jsonschema.version}</version>
+			</dependency>
+			<!-- victools jsonschema-generator: replaces kjetland in v3.
+			     See blade/libs/framework/pom.xml comment. -->
+			<dependency>
+				<groupId>com.github.victools</groupId>
+				<artifactId>jsonschema-generator</artifactId>
+				<version>${victools.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.github.victools</groupId>
+				<artifactId>jsonschema-module-jackson</artifactId>
+				<version>${victools.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>com.networknt</groupId>
