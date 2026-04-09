@@ -27,7 +27,7 @@ import org.apache.commons.fileupload.FileItemIterator;
 import org.apache.commons.fileupload.FileItemStream;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 import org.apache.commons.fileupload.util.Streams;
-import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang3.StringEscapeUtils;
 
 import com.mxgraph.util.Constants;
 import com.mxgraph.util.Utils;
@@ -191,8 +191,7 @@ public class OpenServlet extends HttpServlet {
 	 * @return result
 	 */
 	protected String encodeString(String s) {
-//		return StringEscapeUtils.escapeEcmaScript(Utils.encodeURIComponent(s, Utils.CHARSET_FOR_URL_ENCODING));
-		return StringEscapeUtils.escapeJavaScript(Utils.encodeURIComponent(s, Utils.CHARSET_FOR_URL_ENCODING));
+		return StringEscapeUtils.escapeEcmaScript(Utils.encodeURIComponent(s, Utils.CHARSET_FOR_URL_ENCODING));
 	};
 
 	/**
