@@ -25,17 +25,17 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 @JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
 public class Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
-	protected String id; // optional for JSON references
-	protected String description; // optional for human readable descriptions
-	protected String attribute; // location of the key data, like in the 'To' header
-	protected Pattern _pattern; // regular expression using capturing groups to parse the key data
-	protected String expression; // replacement pattern, like $1 to format the key data
+	protected String id;
+	protected String description;
+	protected String attribute;
+	protected String pattern;
+	protected String expression;
 
 	@JsonIgnore
-	private Pattern _p = Pattern.compile("\\<(?<name>[a-zA-Z0-9]+)\\>");
+	private transient Pattern compiledPattern;
 
 	@JsonIgnore
-	private String _strPattern;
+	private static final Pattern groupNameExtractor = Pattern.compile("\\<(?<name>[a-zA-Z0-9]+)\\>");
 
 	public Selector() {
 	}
@@ -85,12 +85,12 @@ public class Selector implements Serializable {
 
 	@JsonPropertyDescription("Regular expression with named capturing groups for parsing the SIP attribute value")
 	public String getPattern() {
-		return _pattern.toString();
+		return pattern;
 	}
 
 	public void setPattern(String pattern) {
-		this._strPattern = pattern;
-		this._pattern = Pattern.compile(pattern, Pattern.DOTALL);
+		this.pattern = pattern;
+		this.compiledPattern = Pattern.compile(pattern, Pattern.DOTALL);
 	}
 
 	public RegExRoute findKey(SipServletRequest request) {
@@ -156,7 +156,7 @@ public class Selector implements Serializable {
 
 			if (header != null) {
 
-				Matcher matcher = _pattern.matcher(header);
+				Matcher matcher = compiledPattern.matcher(header);
 
 				value = (attribute.matches("Content")) ? "[...]" : header;
 
@@ -176,7 +176,7 @@ public class Selector implements Serializable {
 					regexRoute.selector = this;
 
 					LinkedList<String> groups = new LinkedList<>();
-					Matcher m = _p.matcher(this._strPattern);
+					Matcher m = groupNameExtractor.matcher(this.pattern);
 					String __name;
 
 					while (m.find()) {
@@ -188,7 +188,7 @@ public class Selector implements Serializable {
 
 					// a__ variables. yucky! clean this up later.
 					// This builds regex named group pairs for use later
-					Matcher a__matcher = _pattern.matcher(header);
+					Matcher a__matcher = compiledPattern.matcher(header);
 					boolean a__matchFound = a__matcher.find();
 					if (a__matchFound) {
 						String a__name, a__value;

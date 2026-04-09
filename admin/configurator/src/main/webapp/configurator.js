@@ -499,11 +499,47 @@ function showSchemaLoadStatus(message, type) {
 }
 
 function resolveRef(ref) {
+    // victools (Draft 2020-12) emits "$defs"; legacy kjetland (Draft 4)
+    // emitted "definitions". Support both for now.
+    if (ref.startsWith('#/$defs/')) {
+        const defName = ref.substring('#/$defs/'.length);
+        return schema.$defs && schema.$defs[defName];
+    }
     if (ref.startsWith('#/definitions/')) {
         const defName = ref.substring('#/definitions/'.length);
-        return schema.definitions[defName];
+        return schema.definitions && schema.definitions[defName];
     }
     return null;
+}
+
+// Resolve a schema node that may carry $ref alongside other keywords
+// (the JSON Schema Draft 2019-09+ pattern that victools uses for
+// polymorphic subtype variants: { $ref: "#/$defs/Base", properties: {
+// type: { const: "hash" } } }). The referenced schema is the base; any
+// sibling keywords on the input node override or extend it. Returns a
+// fresh merged object — caller must not mutate it back into the schema.
+function deref(schemaNode) {
+    if (!schemaNode || !schemaNode.$ref) return schemaNode;
+    const target = resolveRef(schemaNode.$ref);
+    if (!target) return schemaNode;
+    // If the ref-target itself has a $ref (chained), recurse first.
+    const base = target.$ref ? deref(target) : target;
+    // Shallow-merge the input's siblings on top of the base. For
+    // 'properties', do a deep merge so the discriminator combines with
+    // the base properties.
+    const merged = Object.assign({}, base);
+    for (const key of Object.keys(schemaNode)) {
+        if (key === '$ref') continue;
+        if (key === 'properties' && base.properties) {
+            merged.properties = Object.assign({}, base.properties, schemaNode.properties);
+        } else if (key === 'required' && Array.isArray(base.required) && Array.isArray(schemaNode.required)) {
+            merged.required = base.required.concat(
+                schemaNode.required.filter(r => !base.required.includes(r)));
+        } else {
+            merged[key] = schemaNode[key];
+        }
+    }
+    return merged;
 }
 
 // ---------------------------------------------------------------------------
@@ -553,6 +589,182 @@ function scanForIdentities(data, path) {
     }
 }
 
+// Return the polymorphic variants of a schema node, regardless of whether
+// the generator emitted oneOf (kjetland) or anyOf (victools).
+function polymorphicVariants(schemaNode) {
+    if (!schemaNode) return null;
+    const branch = schemaNode.oneOf || schemaNode.anyOf;
+    if (!branch) return null;
+    return branch.map(v => v.$ref ? resolveRef(v.$ref) : v).filter(Boolean);
+}
+
+// Build a "Reference ▼" dropdown that lets the user add an existing
+// identity (a Jackson back-reference, rendered as a bare id string) to an
+// array. Returns null if the array can't accept references at all.
+//
+// Options come from the global identityRegistry which is rebuilt every
+// time the form is generated. We don't filter by type — the user picks
+// any id; the registry only knows about objects that have an `id` field.
+// If we ever want type-aware filtering we'd need to track the schema path
+// of each registered identity.
+function createReferencePicker(itemsSchema, container, path, updateStatus) {
+    if (!arrayItemsAcceptReferences(itemsSchema)) return null;
+
+    const select = document.createElement('select');
+    select.className = 'btn btn-secondary reference-picker';
+    select.title = 'Add a reference to an existing identity';
+
+    function rebuildOptions() {
+        select.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '+ Reference\u2026';
+        select.appendChild(placeholder);
+
+        // Walk the registry, filtering to identities whose structure is
+        // compatible with this array's item schema.
+        const compatible = [];
+        identityRegistry.forEach((reg, id) => {
+            if (identityMatchesItemsSchema(reg.object, itemsSchema)) {
+                compatible.push(id);
+            }
+        });
+        compatible.sort();
+
+        if (compatible.length === 0) {
+            const empty = document.createElement('option');
+            empty.value = '';
+            empty.textContent = '(no compatible identities)';
+            empty.disabled = true;
+            select.appendChild(empty);
+            return;
+        }
+        compatible.forEach(id => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = id;
+            const reg = identityRegistry.get(id);
+            if (reg && reg.path) opt.title = reg.path;
+            select.appendChild(opt);
+        });
+    }
+
+    rebuildOptions();
+    // Refresh on each focus so newly-added identities show up without a
+    // full form rebuild.
+    select.addEventListener('mousedown', rebuildOptions);
+
+    select.onchange = () => {
+        const id = select.value;
+        if (!id) return;
+        addArrayItem(container, itemsSchema, path, id, null, true);
+        if (updateStatus) updateStatus();
+        select.value = ''; // reset to placeholder for the next pick
+    };
+
+    return select;
+}
+
+// Decide whether a registered identity object is structurally compatible
+// with the schema describing what an array's items can hold. Used to filter
+// the "+ Reference ▼" picker so users only see identities of the right
+// type (e.g. only Selectors when picking for a `selectors:` array, not
+// every id in the document).
+//
+// An identity is compatible with a variant when ALL of these hold:
+//   1. The identity has at least one non-`id` key. An identity that's
+//      ONLY {id} can't be structurally distinguished from anything
+//      because every variant has `id` as a property — listing it in
+//      every picker is noise. We require at least one discriminating
+//      property; sparse `{id}`-only identities never appear in pickers.
+//   2. Every key on the identity is also in the variant's `properties`
+//      (i.e. the identity doesn't have extra fields the schema doesn't
+//      know about).
+//   3. If the variant carries a polymorphic discriminator
+//      (`properties.type.const`), the identity's `type` matches it.
+//
+// For polymorphic items (anyOf / oneOf), the identity is compatible if it
+// matches at least one variant.
+function identityMatchesItemsSchema(identity, itemsSchema) {
+    if (!identity || typeof identity !== 'object') return false;
+    if (!itemsSchema) return true;
+
+    const idKeys = Object.keys(identity);
+
+    // Rule 1: must have at least one non-id key. {id}-only identities
+    // don't carry enough information to filter on; better to hide than
+    // to over-suggest in every dropdown.
+    if (!idKeys.some(k => k !== 'id')) return false;
+
+    let s = itemsSchema;
+    if (s.$ref) s = deref(s);
+    if (!s) return true;
+
+    const variants = polymorphicVariants(s) || [s];
+
+    for (const variant of variants) {
+        const v = variant.$ref ? deref(variant) : variant;
+        if (!v || !v.properties) continue;
+        const vKeys = Object.keys(v.properties);
+
+        // Rule 2: every identity key must be a known property of the variant.
+        const allKeysKnown = idKeys.every(k => vKeys.includes(k));
+        if (!allKeysKnown) continue;
+
+        // Rule 3: if the variant has a const discriminator on `type`, enforce it.
+        const tp = v.properties.type;
+        if (tp && tp.const !== undefined) {
+            if (identity.type !== tp.const) continue;
+        }
+
+        return true;
+    }
+    return false;
+}
+
+// Returns true if the given items schema could accept a Jackson identity
+// reference (a bare id string). True when at least one resolved variant is
+// an object with an `id` property — the same predicate isIdentityReference
+// uses to decide on render.
+function arrayItemsAcceptReferences(itemsSchema) {
+    if (!itemsSchema) return false;
+    let s = itemsSchema;
+    if (s.$ref) s = deref(s);
+    if (!s) return false;
+    const variants = polymorphicVariants(s);
+    if (variants) {
+        return variants.some(v => {
+            const r = v.$ref ? deref(v) : v;
+            return r && r.type === 'object' && r.properties && r.properties.id;
+        });
+    }
+    return s.type === 'object' && s.properties && s.properties.id;
+}
+
+// Compute a human-friendly label for one polymorphic variant in a
+// type-selector dropdown. Looks for, in order:
+//   1. variant.title (kjetland sets this directly)
+//   2. base.title after deref (the underlying type may carry the title)
+//   3. variant.properties.type.const  (victools discriminator value)
+//   4. variant.properties.type.enum[0] (kjetland discriminator value)
+//   5. fallback "Type N"
+function variantLabel(variant, index) {
+    if (!variant) return `Type ${index + 1}`;
+    if (variant.title) return variant.title;
+
+    const merged = variant.$ref ? deref(variant) : variant;
+    if (merged && merged.title) return merged.title;
+
+    const typeProp = merged && merged.properties && merged.properties.type;
+    if (typeProp) {
+        if (typeProp.const !== undefined) return String(typeProp.const);
+        if (Array.isArray(typeProp.enum) && typeProp.enum.length > 0) {
+            return String(typeProp.enum[0]);
+        }
+    }
+    return `Type ${index + 1}`;
+}
+
 // Detect if a data value is a Jackson identity back-reference.
 // Returns true when: the value is a plain string AND the schema expects an
 // object type with an "id" property (indicating @JsonIdentityInfo usage).
@@ -563,9 +775,9 @@ function isIdentityReference(value, fieldSchema) {
     let resolved = fieldSchema;
     if (resolved.$ref) resolved = resolveRef(resolved.$ref);
     if (!resolved) return false;
-    if (resolved.oneOf) {
-        // Polymorphic: check if any variant is an identity-info object
-        const variants = resolved.oneOf.map(v => v.$ref ? resolveRef(v.$ref) : v).filter(Boolean);
+
+    const variants = polymorphicVariants(resolved);
+    if (variants) {
         return variants.some(v => v.type === 'object' && v.properties && v.properties.id);
     }
 
@@ -611,29 +823,36 @@ function scrollToIdentity(id) {
     }
 }
 
-// Resolve oneOf schemas using a discriminator property (typically "type").
-// Checks options.multiple_editor_select_via_property or falls back to matching
-// the "type" field in the data against each variant's enum constraint.
+// Resolve a polymorphic schema (oneOf or anyOf) to the variant matching
+// the actual data value's discriminator. Supports three discriminator
+// shapes:
+//   1. victools (Draft 2020-12): variant has properties.type.const = "..."
+//   2. kjetland legacy (Draft 4): variant has properties.type.enum = ["..."]
+//   3. kjetland legacy: variant.options.multiple_editor_select_via_property
 function resolveOneOf(schemaNode, value) {
-    if (!schemaNode || !schemaNode.oneOf) return schemaNode;
+    const variants = polymorphicVariants(schemaNode);
+    if (!variants) return schemaNode;
 
-    const variants = schemaNode.oneOf.map(v => v.$ref ? resolveRef(v.$ref) : v).filter(Boolean);
-
-    if (value && typeof value === 'object') {
-        // Try to match by discriminator property
+    if (value && typeof value === 'object' && value.type) {
+        // 1) victools const-based discriminator
         for (const variant of variants) {
-            const opts = variant.options && variant.options.multiple_editor_select_via_property;
-            if (opts) {
-                if (value[opts.property] === opts.value) return variant;
+            const typeProp = variant.properties && variant.properties.type;
+            if (typeProp && typeProp.const !== undefined && typeProp.const === value.type) {
+                return variant;
             }
         }
-        // Fallback: match by "type" enum field
-        if (value.type) {
-            for (const variant of variants) {
-                const typeProp = variant.properties && variant.properties.type;
-                if (typeProp && typeProp.enum && typeProp.enum.includes(value.type)) {
-                    return variant;
-                }
+        // 2) kjetland enum-based discriminator
+        for (const variant of variants) {
+            const typeProp = variant.properties && variant.properties.type;
+            if (typeProp && Array.isArray(typeProp.enum) && typeProp.enum.includes(value.type)) {
+                return variant;
+            }
+        }
+        // 3) kjetland multiple_editor_select_via_property extension
+        for (const variant of variants) {
+            const opts = variant.options && variant.options.multiple_editor_select_via_property;
+            if (opts && value[opts.property] === opts.value) {
+                return variant;
             }
         }
     }
@@ -652,10 +871,29 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
     if (isMapKey) {
         const input = document.createElement('input');
         input.type = 'text';
-        input.value = value || '';
+        const keyVal = value || '';
+        input.value = keyVal;
+        // Also mirror to the value attribute so outerHTML / DOM dumps
+        // reflect the actual displayed value (input.value alone only
+        // sets the DOM property, not the HTML attribute).
+        input.setAttribute('value', keyVal);
         input.className = 'map-key-input';
         input.setAttribute('data-path', path);
         return input;
+    }
+
+    // A schema with `const` is a fixed-value property — typically a
+    // polymorphic discriminator (e.g. {const: "hash"} on a TranslationsMap
+    // subtype's "type" property). Render as a hidden input pre-populated
+    // with the const value, so getFormData picks it up via data-path
+    // without exposing it for user editing.
+    if (fieldSchema.const !== undefined) {
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.id = id;
+        hidden.value = String(fieldSchema.const);
+        hidden.setAttribute('data-path', path);
+        return hidden;
     }
 
     if (fieldSchema.enum) {
@@ -696,7 +934,9 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             const numberInput = document.createElement('input');
             numberInput.type = 'number';
             numberInput.id = id;
-            numberInput.value = value !== null && value !== undefined ? value : '';
+            const numVal = value !== null && value !== undefined ? value : '';
+            numberInput.value = numVal;
+            numberInput.setAttribute('value', numVal);
             numberInput.setAttribute('data-path', path);
             return numberInput;
 
@@ -704,7 +944,9 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             const textInput = document.createElement('input');
             textInput.type = 'text';
             textInput.id = id;
-            textInput.value = value !== null && value !== undefined ? value : '';
+            const strVal = value !== null && value !== undefined ? value : '';
+            textInput.value = strVal;
+            textInput.setAttribute('value', strVal);
             textInput.setAttribute('data-path', path);
             return textInput;
 
@@ -722,15 +964,45 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
     // Store original schema for delete functionality (before $ref resolution)
     const schemaForDelete = originalSchema || fieldSchema;
 
+    // deref handles both bare $ref and the victools ref+properties idiom.
     if (fieldSchema.$ref) {
-        fieldSchema = resolveRef(fieldSchema.$ref);
+        fieldSchema = deref(fieldSchema);
     }
 
-    if (fieldSchema.oneOf) {
+    if (fieldSchema.oneOf || fieldSchema.anyOf) {
         fieldSchema = resolveOneOf(fieldSchema, value);
+        // Resolved variant may itself be a $ref+siblings node — deref again.
+        if (fieldSchema && fieldSchema.$ref) {
+            fieldSchema = deref(fieldSchema);
+        }
+    }
+
+    // Polymorphic discriminator (e.g. {const: "hash"} for a TranslationsMap
+    // subtype). Don't render a visible row — emit a hidden input wrapper so
+    // getFormData still picks up the value via the data-path attribute.
+    if (fieldSchema.const !== undefined) {
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'none';
+        const hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.value = String(fieldSchema.const);
+        hidden.setAttribute('data-path', path);
+        wrapper.appendChild(hidden);
+        return wrapper;
     }
 
     if (fieldSchema.type === 'object') {
+        // Opaque object: schema is just {type: "object"} with no properties
+        // and no usable additionalProperties (e.g. v2 Map<String, Object>).
+        // Render as a raw JSON textarea — the schema has nothing to drive a
+        // form, so let the user edit the JSON directly.
+        const hasProperties = fieldSchema.properties &&
+            Object.keys(fieldSchema.properties).length > 0;
+        const hasUsableAdditional = fieldSchema.additionalProperties &&
+            typeof fieldSchema.additionalProperties === 'object';
+        if (!hasProperties && !hasUsableAdditional) {
+            return createOpaqueObjectGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete);
+        }
         if (fieldSchema.additionalProperties) {
             // This is a map
             return createMapGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete);
@@ -1200,6 +1472,80 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
     return section;
 }
 
+// Render an opaque object (one with no schema-described properties) as a
+// raw JSON textarea. The schema can't drive a form for these — they're
+// usually leftover untyped Map<String, Object> fields from older code.
+// Let the user edit the JSON directly; getFormData parses it on save.
+function createOpaqueObjectGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
+    const schemaForDelete = originalSchema || fieldSchema;
+    const content = document.createElement('div');
+
+    const hasData = hasValue(value);
+    const autoCollapse = !hasData;
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'opaque-object-input';
+    textarea.setAttribute('data-path', path);
+    textarea.setAttribute('data-opaque-object', 'true');
+    textarea.spellcheck = false;
+    textarea.rows = Math.max(3, value ? Math.min(20,
+        JSON.stringify(value, null, 2).split('\n').length) : 3);
+
+    // Pretty-print the existing value (or empty object placeholder).
+    let initialText;
+    try {
+        initialText = (value !== undefined && value !== null)
+            ? JSON.stringify(value, null, 2)
+            : '{}';
+    } catch (e) {
+        initialText = '{}';
+    }
+    textarea.value = initialText;
+    textarea.textContent = initialText; // make outerHTML reflect the value
+
+    // Inline status line for parse errors so the user knows when their
+    // JSON is broken before they hit Save.
+    const status = document.createElement('div');
+    status.className = 'opaque-object-status';
+    status.style.fontSize = '11px';
+    status.style.marginTop = '4px';
+    status.style.minHeight = '14px';
+
+    function validate() {
+        const txt = textarea.value.trim();
+        if (txt === '' || txt === '{}' || txt === 'null') {
+            status.textContent = '';
+            textarea.classList.remove('opaque-object-invalid');
+            return;
+        }
+        try {
+            JSON.parse(txt);
+            status.textContent = '✓ valid JSON';
+            status.style.color = 'var(--text-secondary)';
+            textarea.classList.remove('opaque-object-invalid');
+        } catch (e) {
+            status.textContent = '✗ ' + e.message;
+            status.style.color = '#c43';
+            textarea.classList.add('opaque-object-invalid');
+        }
+    }
+    textarea.addEventListener('input', validate);
+    setTimeout(validate, 0);
+
+    content.appendChild(textarea);
+    content.appendChild(status);
+
+    const deleteInfo = {
+        schema: schemaForDelete,
+        title: title,
+        description: description,
+        path: path,
+        isNested: isNested
+    };
+
+    return createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo);
+}
+
 function createMapGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
     const schemaForDelete = originalSchema || fieldSchema;
     const content = document.createElement('div');
@@ -1215,7 +1561,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     addBtn.className = 'btn btn-primary';
     addBtn.textContent = 'Add Entry';
     addBtn.onclick = () => {
-        addMapEntry(container, fieldSchema.additionalProperties, path);
+        addMapEntry(container, fieldSchema.additionalProperties, path, '', null, true);
         updateSectionStatus();
     };
     header.appendChild(addBtn);
@@ -1267,22 +1613,48 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     const header = document.createElement('div');
     header.className = 'array-header';
 
-    // Resolve oneOf variants for the type selector
-    const oneOfVariants = fieldSchema.items && fieldSchema.items.oneOf
-        ? fieldSchema.items.oneOf.map(v => v.$ref ? resolveRef(v.$ref) : v).filter(Boolean)
+    // Container is declared early so the reference picker (built inside the
+    // header) can reference it before append order matters.
+    const container = document.createElement('div');
+    container.className = 'array-container';
+    container.setAttribute('data-path', path);
+
+    // Resolve polymorphic variants (oneOf/anyOf) for the type selector
+    const oneOfVariants = fieldSchema.items
+        ? polymorphicVariants(fieldSchema.items)
         : null;
 
     if (oneOfVariants && oneOfVariants.length > 1) {
-        // oneOf — show a type selector + Add button
+        // Polymorphic items (oneOf or anyOf) — show a type selector + Add button.
+        // Each "variant" in victools' schema is typically a thin
+        // {$ref: base, properties: {type: {const: "hash"}}} wrapper. Dropdown
+        // labels prefer (a) the variant's own title, (b) the deref'd base
+        // type's title, or (c) the discriminator const value (e.g. "hash").
         const typeSelect = document.createElement('select');
         typeSelect.className = 'btn btn-secondary';
         oneOfVariants.forEach((variant, i) => {
             const opt = document.createElement('option');
             opt.value = i;
-            opt.textContent = variant.title || `Type ${i + 1}`;
+            opt.textContent = variantLabel(variant, i);
             typeSelect.appendChild(opt);
         });
-        header.appendChild(typeSelect);
+        // Default the dropdown to the type of the first existing item
+        // (if any), so "Add Item" defaults to "more of the same" instead
+        // of always defaulting to whatever variant happens to be first
+        // in the @JsonSubTypes order.
+        if (Array.isArray(value) && value.length > 0 && value[0] && value[0].type) {
+            const firstType = String(value[0].type);
+            for (let i = 0; i < oneOfVariants.length; i++) {
+                const v = oneOfVariants[i];
+                const tp = v && v.properties && v.properties.type;
+                const variantType = tp && (tp.const !== undefined ? tp.const :
+                                          (Array.isArray(tp.enum) && tp.enum[0]));
+                if (String(variantType) === firstType) {
+                    typeSelect.value = String(i);
+                    break;
+                }
+            }
+        }
 
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
@@ -1292,27 +1664,33 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
             const selectedVariant = oneOfVariants[typeSelect.value];
             // Generate default value with the discriminator type field set
             const defaultVal = generateDefaultValue(selectedVariant);
-            addArrayItem(container, fieldSchema.items, path, defaultVal);
+            addArrayItem(container, fieldSchema.items, path, defaultVal, null, true);
             updateSectionStatus();
         };
+        // Order: Add button first (leftmost), then optional reference picker,
+        // then type selector. Project convention: all 'add' controls left,
+        // all 'remove' right.
         header.appendChild(addBtn);
+        const refSelect = createReferencePicker(fieldSchema.items, container, path,
+            () => updateSectionStatus());
+        if (refSelect) header.appendChild(refSelect);
+        header.appendChild(typeSelect);
     } else {
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'btn btn-primary';
         addBtn.textContent = 'Add Item';
         addBtn.onclick = () => {
-            addArrayItem(container, fieldSchema.items, path);
+            addArrayItem(container, fieldSchema.items, path, null, null, true);
             updateSectionStatus();
         };
         header.appendChild(addBtn);
+        const refSelect = createReferencePicker(fieldSchema.items, container, path,
+            () => updateSectionStatus());
+        if (refSelect) header.appendChild(refSelect);
     }
 
     content.appendChild(header);
-
-    const container = document.createElement('div');
-    container.className = 'array-container';
-    container.setAttribute('data-path', path);
     content.appendChild(container);
 
     // Add existing items
@@ -1344,9 +1722,17 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     return section;
 }
 
-function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
+function addMapEntry(container, valueSchema, basePath, key = '', value = null, prepend = false) {
     const entry = document.createElement('div');
     entry.className = 'map-entry';
+
+    // Tag map-entry values that have an id field so identity references
+    // pointing at them (e.g. plan: ["callers"] referencing maps[0].map.callers)
+    // can scroll/highlight on click. Without this, only top-level objects
+    // and array items got DOM identity tags — map values were silently missed.
+    if (value && typeof value === 'object' && typeof value.id === 'string') {
+        entry.id = 'identity-' + value.id;
+    }
 
     const header = document.createElement('div');
     header.className = 'map-entry-header';
@@ -1386,7 +1772,14 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
     const valuePath = basePath ? `${basePath}.${key}` : key;
 
     if (valueSchema.$ref) {
-        valueSchema = resolveRef(valueSchema.$ref);
+        valueSchema = deref(valueSchema);
+    }
+
+    if (valueSchema.oneOf || valueSchema.anyOf) {
+        valueSchema = resolveOneOf(valueSchema, value);
+        if (valueSchema && valueSchema.$ref) {
+            valueSchema = deref(valueSchema);
+        }
     }
 
     if (valueSchema.type === 'object' && valueSchema.properties) {
@@ -1446,7 +1839,11 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
         innerHeader.style.cursor = 'default';
     });
 
-    container.appendChild(entry);
+    if (prepend && container.firstChild) {
+        container.insertBefore(entry, container.firstChild);
+    } else {
+        container.appendChild(entry);
+    }
 
     // Update parent heights after adding
     setTimeout(() => {
@@ -1454,9 +1851,20 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null) {
     }, 10);
 }
 
-function addArrayItem(container, itemSchema, basePath, value = null, index = null) {
+function addArrayItem(container, itemSchema, basePath, value = null, index = null, prepend = false) {
     const currentIndex = index !== null ? index : container.children.length;
     const itemPath = `${basePath}[${currentIndex}]`;
+
+    // Helper: insert at top when user clicks "Add Item" so the new entry
+    // is visible right next to the button. Bulk-load (rendering existing
+    // data) keeps document order via plain append.
+    const placeItem = (el) => {
+        if (prepend && container.firstChild) {
+            container.insertBefore(el, container.firstChild);
+        } else {
+            container.appendChild(el);
+        }
+    };
 
     const item = document.createElement('div');
     item.className = 'array-item';
@@ -1464,7 +1872,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
     // Save original schema before resolution for identity reference check
     const originalItemSchema = itemSchema;
     if (itemSchema.$ref) {
-        itemSchema = resolveRef(itemSchema.$ref);
+        itemSchema = deref(itemSchema);
     }
 
     // Check for Jackson identity reference (string value where object expected)
@@ -1488,7 +1896,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         header.appendChild(removeBtn);
         item.appendChild(header);
         item.appendChild(createReferenceLink(value));
-        container.appendChild(item);
+        placeItem(item);
 
         setTimeout(() => {
             recalculateAllAncestorHeights(container.closest('.collapsible-section'));
@@ -1496,8 +1904,15 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         return;
     }
 
-    if (itemSchema.oneOf) {
+    if (itemSchema.oneOf || itemSchema.anyOf) {
         itemSchema = resolveOneOf(itemSchema, value);
+        // resolveOneOf returns the matching variant — which in victools'
+        // schema is a thin {$ref + properties} wrapper. Deref to merge
+        // the base type's id/description/translations into the visible
+        // schema, otherwise the form would only show the discriminator.
+        if (itemSchema && itemSchema.$ref) {
+            itemSchema = deref(itemSchema);
+        }
     }
 
     // Create remove button (shared across all item types)
@@ -1530,7 +1945,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         addBtn.className = 'btn btn-primary';
         addBtn.textContent = 'Add Entry';
         addBtn.onclick = () => {
-            addMapEntry(mapContainer, itemSchema.additionalProperties, itemPath);
+            addMapEntry(mapContainer, itemSchema.additionalProperties, itemPath, '', null, true);
         };
         mapHeader.appendChild(addBtn);
         item.appendChild(mapHeader);
@@ -1593,7 +2008,7 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         item.appendChild(header);
     }
 
-    container.appendChild(item);
+    placeItem(item);
 
     // Set all ancestor collapsible-content elements to max-height: none
     // so they grow to fit the new content
@@ -1630,10 +2045,52 @@ function getFormData() {
     function extractData(container, schemaNode, debugPath = '') {
         if (!schemaNode) return null;
 
-        // Resolve $ref if present
+        // Deref handles both bare $ref and the victools $ref+properties idiom.
+        // The merged schema is what we walk for property discovery — without
+        // this, polymorphic subtype wrappers would lose their base type's
+        // properties (id, description, map, etc.) AND the const discriminator.
         if (schemaNode.$ref) {
-            schemaNode = resolveRef(schemaNode.$ref);
+            schemaNode = deref(schemaNode);
             if (!schemaNode) return null;
+        }
+
+        // Resolve polymorphic schemas (anyOf/oneOf) using the actual type
+        // discriminator value from the form's hidden input. This preserves
+        // the correct variant (e.g. "hash" vs "prefix") during extraction.
+        // Use :scope > to find only direct-child type inputs, not nested ones.
+        if (schemaNode.oneOf || schemaNode.anyOf) {
+            const typeInput = container.querySelector(':scope > input[type="hidden"][data-path$=".type"], :scope > [style*="display: none"] > input[data-path$=".type"], :scope > div > input[type="hidden"][data-path$=".type"]');
+            const typeVal = typeInput ? typeInput.value : null;
+            schemaNode = resolveOneOf(schemaNode, typeVal ? { type: typeVal } : null);
+            if (schemaNode && schemaNode.$ref) {
+                schemaNode = deref(schemaNode);
+            }
+            if (!schemaNode) return null;
+        }
+
+        if (schemaNode.type === 'object') {
+            // Opaque object: rendered as a JSON textarea by createOpaqueObjectGroup.
+            // Find the textarea (direct or via wrapper) and parse its value.
+            const opaqueProps = schemaNode.properties &&
+                Object.keys(schemaNode.properties).length > 0;
+            const opaqueAdditional = schemaNode.additionalProperties &&
+                typeof schemaNode.additionalProperties === 'object';
+            if (!opaqueProps && !opaqueAdditional) {
+                const textarea = container.querySelector(
+                    ':scope > .opaque-object-input, :scope > div > .opaque-object-input, :scope > .collapsible-content > .opaque-object-input');
+                if (textarea) {
+                    const txt = textarea.value.trim();
+                    if (txt === '' || txt === '{}') return null;
+                    try {
+                        return JSON.parse(txt);
+                    } catch (e) {
+                        console.warn('extractData: invalid JSON in opaque object at ' +
+                            debugPath + ': ' + e.message);
+                        return null;
+                    }
+                }
+                return null;
+            }
         }
 
         if (schemaNode.type === 'object') {
@@ -1671,17 +2128,37 @@ function getFormData() {
                     let propSchema = schemaNode.properties[propName];
                     const propTitle = propSchema.title || propName;
 
-                    // Resolve $ref and oneOf for type checking
-                    let resolvedSchema = propSchema;
-                    if (propSchema.$ref) {
-                        resolvedSchema = resolveRef(propSchema.$ref);
-                    }
-                    if (resolvedSchema && resolvedSchema.oneOf) {
-                        resolvedSchema = resolveOneOf(resolvedSchema, null);
+                    // const-only property (e.g. polymorphic discriminator
+                    // {const: "hash"}). The form renders these as hidden
+                    // inputs without a visible form-group, so the
+                    // label-matching path below would never find them.
+                    // Emit the const value straight from the schema.
+                    if (propSchema.const !== undefined) {
+                        result[propName] = propSchema.const;
+                        return;
                     }
 
-                    const isComplexType = resolvedSchema &&
-                        (resolvedSchema.type === 'object' || resolvedSchema.type === 'array');
+                    // Check if any polymorphic variant is a complex type (object/array).
+                    // Do NOT resolve to a specific variant here — that would lose the
+                    // actual type discriminator. The recursive extractData call at
+                    // line ~2160 handles full resolution with real form data.
+                    let resolvedSchema = propSchema;
+                    if (propSchema.$ref) {
+                        resolvedSchema = deref(propSchema);
+                    }
+                    let isComplexType = false;
+                    if (resolvedSchema && (resolvedSchema.oneOf || resolvedSchema.anyOf)) {
+                        const variants = polymorphicVariants(resolvedSchema);
+                        if (variants) {
+                            isComplexType = variants.some(v => {
+                                const resolved = v.$ref ? deref(v) : v;
+                                return resolved && (resolved.type === 'object' || resolved.type === 'array');
+                            });
+                        }
+                    } else {
+                        isComplexType = resolvedSchema &&
+                            (resolvedSchema.type === 'object' || resolvedSchema.type === 'array');
+                    }
 
                     if (isComplexType) {
                         // Complex types (objects, arrays) - look for collapsible section
@@ -1690,7 +2167,12 @@ function getFormData() {
                         const sections = searchContainer.querySelectorAll(':scope > .collapsible-section, :scope > div > .collapsible-section');
                         sections.forEach(section => {
                             const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.field-help-icon):not(.collapsible-arrow)');
-                            if (header && header.textContent === propTitle) {
+                            if (!header) return;
+                            const headerText = (header.textContent || '').trim();
+                            // Match either the schema-driven title or the bare
+                            // property name (some sections render with the
+                            // propName when no title is set in the schema).
+                            if (headerText === propTitle || headerText === propName) {
                                 targetContainer = section.querySelector('.collapsible-content');
                             }
                         });
@@ -1747,8 +2229,16 @@ function getFormData() {
             const items = Array.from(arrayContainer.children).filter(el => el.classList.contains('array-item'));
 
             items.forEach((item, idx) => {
-                // Check for identity reference link
-                const refLink = item.querySelector('.reference-link');
+                // Check for identity reference link as a DIRECT child of the
+                // array item — not as a nested descendant. addArrayItem
+                // creates a reference link by appending it directly to the
+                // .array-item element when the item value is a bare id string.
+                // Without :scope-restricted matching, querySelector('.reference-link')
+                // would dive into nested object structures (e.g. a hash map's
+                // own selector list) and emit the first nested reference id
+                // as if it were the value of the outer array item — silently
+                // collapsing the entire item to a single nested reference.
+                const refLink = item.querySelector(':scope > .reference-link');
                 if (refLink) {
                     const refId = refLink.getAttribute('data-reference-id');
                     if (refId) {
@@ -1758,9 +2248,13 @@ function getFormData() {
                 }
 
                 let itemSchemaNode = schemaNode.items;
-                if (itemSchemaNode && itemSchemaNode.oneOf) {
-                    // Peek at the type discriminator to resolve the right variant
-                    const typeInput = item.querySelector('select[data-path$=".type"], input[data-path$=".type"]');
+                if (itemSchemaNode && (itemSchemaNode.oneOf || itemSchemaNode.anyOf)) {
+                    // Peek at the type discriminator to resolve the right variant.
+                    // Use :scope > to find only DIRECT child type inputs, not
+                    // nested ones from deeper objects (which would return a
+                    // wrong variant, e.g. "prefix" from a nested table instead
+                    // of "hash" from the current item).
+                    const typeInput = item.querySelector(':scope > input[data-path$=".type"], :scope > [style*="display: none"] > input[data-path$=".type"], :scope > div > input[data-path$=".type"]');
                     const typeVal = typeInput ? typeInput.value : null;
                     itemSchemaNode = resolveOneOf(itemSchemaNode, typeVal ? { type: typeVal } : null);
                 }
@@ -1799,10 +2293,16 @@ function getFormData() {
             let propSchema = schema.properties[propName];
             const propTitle = propSchema.title || propName;
 
-            // Resolve $ref for type checking
+            // const-only top-level property — emit straight from the schema.
+            if (propSchema.const !== undefined) {
+                result[propName] = propSchema.const;
+                return;
+            }
+
+            // deref handles both bare $ref and the victools $ref+properties idiom
             let resolvedSchema = propSchema;
             if (propSchema.$ref) {
-                resolvedSchema = resolveRef(propSchema.$ref);
+                resolvedSchema = deref(propSchema);
             }
 
             const isComplexType = resolvedSchema &&
@@ -1815,7 +2315,10 @@ function getFormData() {
 
                 sections.forEach(section => {
                     const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.field-help-icon):not(.collapsible-arrow)');
-                    if (header && header.textContent === propTitle) {
+                    if (!header) return;
+                    const headerText = (header.textContent || '').trim();
+                    // Match either the schema-driven title or the bare propName.
+                    if (headerText === propTitle || headerText === propName) {
                         targetSection = section;
                     }
                 });
@@ -2266,10 +2769,11 @@ function getFieldSchema(fieldPath) {
         if (current.properties && current.properties[part]) {
             current = current.properties[part];
         } else if (current.$ref) {
-            // Handle $ref - simplified version
-            const refPath = current.$ref.replace('#/definitions/', '');
-            if (schema.definitions && schema.definitions[refPath]) {
-                current = schema.definitions[refPath];
+            // Handle $ref - resolve via the shared resolveRef helper which
+            // supports both victools $defs and kjetland definitions.
+            const resolvedRef = resolveRef(current.$ref);
+            if (resolvedRef) {
+                current = resolvedRef;
                 if (current.properties && current.properties[part]) {
                     current = current.properties[part];
                 }
@@ -2396,8 +2900,13 @@ function initializeJsonEditor() {
         autoScrollEditorIntoView: true
     });
 
-    // Set the theme selector to the current theme
-    document.getElementById('theme-select').value = currentTheme;
+    // Set the (legacy) ace-editor theme selector if it's still in the HTML.
+    // The current build only ships an `app-theme-select` for the overall
+    // app theme; the standalone ace-editor theme dropdown was removed.
+    const aceThemeSelect = document.getElementById('theme-select');
+    if (aceThemeSelect) {
+        aceThemeSelect.value = currentTheme;
+    }
 
     // Set initial JSON content (empty until user selects a schema)
     jsonEditor.setValue('{\n  \n}', -1);

@@ -41,13 +41,16 @@ public class AttributeSelector implements Serializable {
 		origin, destination
 	};
 
-	private String id; // optional for JSON references
-	private String description; // optional for human readable descriptions
-	private String attribute; // location of the key data, like in the 'To' header
-	private Pattern _pattern; // regular expression using capturing groups to parse the key data
-	private String expression; // replacement pattern, like ${ucid} to format the key data
-	private DialogType dialog; // apply attributes to either origin or destination dialog (SipSession)
+	private String id;
+	private String description;
+	private String attribute;
+	private String pattern;
+	private String expression;
+	private DialogType dialog;
 	private Map<String, String> additionalExpressions;
+
+	@JsonIgnore
+	private transient Pattern compiledPattern;
 
 	/**
 	 * Default constructor for JSON deserialization.
@@ -135,10 +138,7 @@ public class AttributeSelector implements Serializable {
 	}
 
 	@JsonIgnore
-	private Pattern _p = Pattern.compile("\\<(?<name>[a-zA-Z0-9]+)\\>");
-
-	@JsonIgnore
-	private String _strPattern;
+	private static final Pattern groupNameExtractor = Pattern.compile("\\<(?<name>[a-zA-Z0-9]+)\\>");
 
 	/**
 	 * Returns the unique identifier for this selector, used for JSON references.
@@ -227,19 +227,14 @@ public class AttributeSelector implements Serializable {
 	 *
 	 * @return the pattern string
 	 */
+	@JsonPropertyDescription("Regular expression with named capturing groups for parsing the SIP attribute value")
 	public String getPattern() {
-		return _pattern.toString();
+		return pattern;
 	}
 
-	/**
-	 * Sets the regular expression pattern with named capturing groups. The pattern
-	 * is compiled with DOTALL flag to allow matching across lines.
-	 *
-	 * @param pattern the regular expression pattern
-	 */
 	public void setPattern(String pattern) {
-		this._strPattern = pattern;
-		this._pattern = Pattern.compile(pattern, Pattern.DOTALL);
+		this.pattern = pattern;
+		this.compiledPattern = Pattern.compile(pattern, Pattern.DOTALL);
 	}
 
 	/**
@@ -336,7 +331,7 @@ public class AttributeSelector implements Serializable {
 
 			if (header != null) {
 
-				Matcher matcher = _pattern.matcher(header);
+				Matcher matcher = compiledPattern.matcher(header);
 
 				value = (attribute.matches("Content")) ? "[...]" : header;
 
@@ -352,7 +347,7 @@ public class AttributeSelector implements Serializable {
 					attrsKey.key = key;
 
 					LinkedList<String> groups = new LinkedList<>();
-					Matcher m = _p.matcher(this._strPattern);
+					Matcher m = groupNameExtractor.matcher(this.pattern);
 					String __name;
 
 					while (m.find()) {
@@ -364,7 +359,7 @@ public class AttributeSelector implements Serializable {
 
 					// a__ variables. yucky! clean this up later.
 					// This builds regex named group pairs for use later
-					Matcher a__matcher = _pattern.matcher(header);
+					Matcher a__matcher = compiledPattern.matcher(header);
 					boolean a__matchFound = a__matcher.find();
 					if (a__matchFound) {
 						String a__name, a__value;
@@ -404,7 +399,7 @@ public class AttributeSelector implements Serializable {
 							", selector id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
 							", value=" + value + //
-							", pattern=" + _strPattern + //
+							", pattern=" + pattern + //
 							", expression=" + expression + //
 							", key=" + key);
 				}
@@ -417,7 +412,7 @@ public class AttributeSelector implements Serializable {
 					", selector id=" + id + //
 					", attribute=" + attribute + //
 					", value=" + value + //
-					", pattern=" + _strPattern + //
+					", pattern=" + pattern + //
 					", expression=" + expression + //
 					", key=" + key);
 			sipLogger.severe(message, message.toString());
@@ -467,7 +462,7 @@ public class AttributeSelector implements Serializable {
 
 			if (header != null) {
 
-				Matcher matcher = _pattern.matcher(header);
+				Matcher matcher = compiledPattern.matcher(header);
 
 				value = (attribute.matches("Content")) ? "[...]" : header;
 
@@ -483,7 +478,7 @@ public class AttributeSelector implements Serializable {
 					attrsKey.key = key;
 
 					LinkedList<String> groups = new LinkedList<>();
-					Matcher m = _p.matcher(this._strPattern);
+					Matcher m = groupNameExtractor.matcher(this.pattern);
 					String __name;
 
 					while (m.find()) {
@@ -495,7 +490,7 @@ public class AttributeSelector implements Serializable {
 
 					// a__ variables. yucky! clean this up later.
 					// This builds regex named group pairs for use later
-					Matcher a__matcher = _pattern.matcher(header);
+					Matcher a__matcher = compiledPattern.matcher(header);
 					boolean a__matchFound = a__matcher.find();
 					if (a__matchFound) {
 						String a__name, a__value;
@@ -535,7 +530,7 @@ public class AttributeSelector implements Serializable {
 							", selector id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
 							", value=" + value + //
-							", pattern=" + _strPattern + //
+							", pattern=" + pattern + //
 							", expression=" + expression + //
 							", key=" + key);
 				}
@@ -548,7 +543,7 @@ public class AttributeSelector implements Serializable {
 					", selector id=" + id + //
 					", attribute=" + attribute + //
 					", value=" + value + //
-					", pattern=" + _strPattern + //
+					", pattern=" + pattern + //
 					", expression=" + expression + //
 					", key=" + key);
 			sipLogger.severe(Logger.serializeObject(context));
@@ -580,7 +575,7 @@ public class AttributeSelector implements Serializable {
 
 			if (header != null) {
 
-				Matcher matcher = _pattern.matcher(header);
+				Matcher matcher = compiledPattern.matcher(header);
 
 				value = (attribute.matches("content|body")) ? "[...]" : header;
 
@@ -596,7 +591,7 @@ public class AttributeSelector implements Serializable {
 					attrsKey.key = key;
 
 					LinkedList<String> groups = new LinkedList<>();
-					Matcher m = _p.matcher(this._strPattern);
+					Matcher m = groupNameExtractor.matcher(this.pattern);
 					String __name;
 
 					while (m.find()) {
@@ -606,7 +601,7 @@ public class AttributeSelector implements Serializable {
 						}
 					}
 
-					Matcher a__matcher = _pattern.matcher(header);
+					Matcher a__matcher = compiledPattern.matcher(header);
 					boolean a__matchFound = a__matcher.find();
 					if (a__matchFound) {
 						String a__name, a__value;
@@ -640,7 +635,7 @@ public class AttributeSelector implements Serializable {
 							", selector id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
 							", value=" + value + //
-							", pattern=" + _strPattern + //
+							", pattern=" + pattern + //
 							", expression=" + expression + //
 							", key=" + key);
 				}
@@ -653,7 +648,7 @@ public class AttributeSelector implements Serializable {
 					", selector id=" + id + //
 					", attribute=" + attribute + //
 					", value=" + value + //
-					", pattern=" + _strPattern + //
+					", pattern=" + pattern + //
 					", expression=" + expression + //
 					", key=" + key);
 			sipLogger.logStackTrace(e);
@@ -702,7 +697,7 @@ public class AttributeSelector implements Serializable {
 
 			if (header != null) {
 
-				Matcher matcher = _pattern.matcher(header);
+				Matcher matcher = compiledPattern.matcher(header);
 
 				value = (attribute.matches("content|body")) ? "[...]" : header;
 
@@ -718,7 +713,7 @@ public class AttributeSelector implements Serializable {
 					attrsKey.key = key;
 
 					LinkedList<String> groups = new LinkedList<>();
-					Matcher m = _p.matcher(this._strPattern);
+					Matcher m = groupNameExtractor.matcher(this.pattern);
 					String __name;
 
 					while (m.find()) {
@@ -728,7 +723,7 @@ public class AttributeSelector implements Serializable {
 						}
 					}
 
-					Matcher a__matcher = _pattern.matcher(header);
+					Matcher a__matcher = compiledPattern.matcher(header);
 					boolean a__matchFound = a__matcher.find();
 					if (a__matchFound) {
 						String a__name, a__value;
@@ -762,7 +757,7 @@ public class AttributeSelector implements Serializable {
 							", selector id=" + this.getId() + //
 							", attribute=" + this.getAttribute() + //
 							", value=" + value + //
-							", pattern=" + _strPattern + //
+							", pattern=" + pattern + //
 							", expression=" + expression + //
 							", key=" + key);
 				}
@@ -775,7 +770,7 @@ public class AttributeSelector implements Serializable {
 					", selector id=" + id + //
 					", attribute=" + attribute + //
 					", value=" + value + //
-					", pattern=" + _strPattern + //
+					", pattern=" + pattern + //
 					", expression=" + expression + //
 					", key=" + key);
 			sipLogger.logStackTrace(e);
