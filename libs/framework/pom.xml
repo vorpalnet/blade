@@ -16,54 +16,70 @@
 	<name>BLADE Framework Library</name>
 
 	<dependencies>
-		<!-- 3rd-party deps are 'provided' so they don't leak transitively into
-		     service WARs. At runtime these come from the shared library WAR.
-		     Modules that bundle their own JARs (fsmar, shared, configurator)
-		     declare these dependencies explicitly. -->
+		<!-- Internal: pure-Java trie used by PrefixTranslationTable.
+		     Bundled into the framework JAR (compile scope) — no separate
+		     runtime artifact needed. -->
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-trie</artifactId>
+		</dependency>
+
+		<!-- 3rd-party deps at compile scope so they flow transitively to
+		     any module that depends on the framework. At runtime these
+		     come from the shared library WAR; the parent pom's WAR plugin
+		     packagingExcludes strips them from WEB-INF/lib. -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.dataformat</groupId>
 			<artifactId>jackson-dataformat-xml</artifactId>
-			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
-			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
-			<scope>provided</scope>
 		</dependency>
+		<!-- victools jsonschema-generator: replaces the legacy kjetland
+		     mbknor-jackson-jsonschema (Scala, Draft 4 only). Pure Java,
+		     active maintenance, modern JSON Schema drafts, customizable
+		     subtype resolvers. Configurator consumes its output. -->
+		<dependency>
+			<groupId>com.github.victools</groupId>
+			<artifactId>jsonschema-generator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.victools</groupId>
+			<artifactId>jsonschema-module-jackson</artifactId>
+		</dependency>
+		<!-- Kjetland's annotations (e.g. @JsonSchemaTitle) are still used
+		     by many service config classes. The generator code path is
+		     gone, but the annotations need to be on the compile classpath
+		     until services migrate to Jackson-native or victools-native
+		     metadata. They're no-ops at runtime under victools. -->
 		<dependency>
 			<groupId>com.kjetland</groupId>
 			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
-			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>io.swagger.core.v3</groupId>
 			<artifactId>swagger-jaxrs2</artifactId>
-			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.jayway.jsonpath</groupId>
 			<artifactId>json-path</artifactId>
-			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.github.seancfoley</groupId>
 			<artifactId>ipaddress</artifactId>
-			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-collections4</artifactId>
-			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-email</artifactId>
-			<scope>provided</scope>
 		</dependency>
 	</dependencies>
 
