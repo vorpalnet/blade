@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-admin-watcher</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Admin Watcher (Legacy)</name>
+	<description>
+		Legacy compatibility shim that watches the BLADE config directory and
+		auto-publishes *.json file changes via JMX. Replaces the auto-publish
+		behavior of the old console app for customers whose operations scripts
+		expect file changes to be picked up automatically. To be removed once
+		customers migrate to the Configurator (admin/configurator).
+	</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>vorpal-blade-admin-watcher</finalName>
+	</build>
+
+</project>
