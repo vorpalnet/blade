@@ -86,6 +86,13 @@ public class SampleB2buaServlet extends B2buaServlet {
 					new ConfigSample());
 			sipLogger.info("servletCreated...");
 
+			sipLogger.fine(
+					"Stop. Who would cross the Bridge of Death must answer me these questions three, ere the other side he see.");
+			sipLogger.info("What is your name? " + settingsManager.getCurrent().traveler);
+			sipLogger.info("What is your quest? " + settingsManager.getCurrent().quest);
+			sipLogger
+					.info("What is your favorite color? " + Color.BLUE_BOLD_BRIGHT(settingsManager.getCurrent().quest));
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -262,8 +269,7 @@ public class SampleB2buaServlet extends B2buaServlet {
 //			sipLogger.finer(aliceResponse, "SampleB2buaServlet.responseEvent - ");
 //			aliceResponse.setStatus(404);
 //		}
-	
-	
+
 	}
 
 }

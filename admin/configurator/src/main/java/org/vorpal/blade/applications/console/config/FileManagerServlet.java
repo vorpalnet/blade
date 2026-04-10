@@ -385,6 +385,18 @@ public class FileManagerServlet extends HttpServlet {
 			Files.createDirectories(filePath.getParent());
 		}
 
+		// Encrypt any {CLEARTEXT} credentials before writing to disk
+		try {
+			com.fasterxml.jackson.databind.ObjectMapper encMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			com.fasterxml.jackson.databind.JsonNode tree = encMapper.readTree(content);
+			if (org.vorpal.blade.framework.v2.config.CredentialEncryption.encryptTree(tree)) {
+				content = encMapper.writerWithDefaultPrettyPrinter().writeValueAsString(tree);
+				System.out.println("Encrypted {CLEARTEXT} credentials in " + filePath.getFileName());
+			}
+		} catch (Exception e) {
+			System.out.println("Warning: credential encryption skipped: " + e.getMessage());
+		}
+
 		Files.write(filePath, content.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 	}
 

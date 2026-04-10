@@ -96,15 +96,21 @@ public class ConfigHelper {
 			Path path = getPath(configType);
 
 			System.out.println("Saving " + path.getFileName());
-			System.out.println(json);
 
 			if (json != null && json.length() > 0) {
 
-				// java 11
-				// Files.writeString(path, json, StandardOpenOption.CREATE,
-				// StandardOpenOption.TRUNCATE_EXISTING);
+				// Encrypt any {CLEARTEXT} credentials before writing to disk
+				try {
+					com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+					com.fasterxml.jackson.databind.JsonNode tree = mapper.readTree(json);
+					if (org.vorpal.blade.framework.v2.config.CredentialEncryption.encryptTree(tree)) {
+						System.out.println("Encrypted {CLEARTEXT} credentials in " + path.getFileName());
+						json = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(tree);
+					}
+				} catch (Exception e) {
+					System.out.println("Warning: credential encryption failed, saving as-is: " + e.getMessage());
+				}
 
-				// java 1.8
 				Files.write(path, json.getBytes());
 
 			}

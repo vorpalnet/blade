@@ -16,14 +16,6 @@
 	<name>BLADE Framework Library</name>
 
 	<dependencies>
-		<!-- Internal: pure-Java trie used by PrefixTranslationTable.
-		     Bundled into the framework JAR (compile scope) — no separate
-		     runtime artifact needed. -->
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-library-trie</artifactId>
-		</dependency>
-
 		<!-- 3rd-party deps at compile scope so they flow transitively to
 		     any module that depends on the framework. At runtime these
 		     come from the shared library WAR; the parent pom's WAR plugin

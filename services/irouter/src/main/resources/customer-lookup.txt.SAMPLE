@@ -1,0 +1,15 @@
+Content-Type: application/json
+X-Correlation-ID: ${key}
+X-Source-App: irouter
+
+{
+  "query": {
+    "calledNumber": "${user}",
+    "callingNumber": "${callingNumber}",
+    "sourceHost": "${host}"
+  },
+  "options": {
+    "includeFailover": true,
+    "maxResults": 1
+  }
+}

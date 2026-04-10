@@ -39,6 +39,14 @@
 		<!-- Override provided scope from framework — FSMAR is a fat JAR, not a deployed WAR,
 		     so all framework runtime deps must be bundled explicitly. -->
 		<dependency>
+			<groupId>com.github.victools</groupId>
+			<artifactId>jsonschema-generator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.victools</groupId>
+			<artifactId>jsonschema-module-jackson</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>com.kjetland</groupId>
 			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
 		</dependency>
@@ -55,6 +63,20 @@
 	<build>
 		<finalName>vorpal-blade-library-fsmar</finalName>
 		<plugins>
+			<!-- FSMAR is NOT a typical Java library. It's a fat JAR that
+			     gets dropped into OCCAS's $DOMAIN_HOME/approuter/ directory
+			     and loaded by the WLSS Application Router at boot. Nothing
+			     depends on it via Maven coordinates, so installing it to
+			     ~/.m2 just clutters the repo and tempts other modules to
+			     accidentally pull it in. Hard-skip the install regardless
+			     of -Dblade.skip.install. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-install-plugin</artifactId>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>

@@ -46,6 +46,13 @@
 			<artifactId>slf4j-api</artifactId>
 			<scope>compile</scope>
 		</dependency>
+		<!-- CredentialEncryption for {CLEARTEXT} → {AES} on save.
+		     Bundled into the WAR since the Configurator is standalone
+		     (no shared library reference). -->
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -68,7 +75,7 @@
 				<executions>
 					<execution>
 						<id>strip-multirelease</id>
-						<phase>verify</phase>
+						<phase>package</phase>
 						<goals><goal>exec</goal></goals>
 						<configuration>
 							<executable>bash</executable>

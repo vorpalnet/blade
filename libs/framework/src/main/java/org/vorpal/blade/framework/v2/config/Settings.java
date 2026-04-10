@@ -214,6 +214,7 @@ public class Settings<T> implements SettingsMXBean {
 	public void reload() {
 		sipLogger.info("Reloading configuration file.");
 		boolean useSampleConfig = true;
+		String rawConfigJson = null;
 
 		try {
 
@@ -248,6 +249,14 @@ public class Settings<T> implements SettingsMXBean {
 				}
 
 			} else {
+				// Capture the raw JSON (with {AES} values) for safe logging
+				rawConfigJson = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonNode);
+
+				// Decrypt {AES} values in-memory for runtime use.
+				// Encryption happens in the Configurator (AdminServer) before
+				// the file is saved. The SettingsManager only decrypts.
+				decryptEncrypted(jsonNode);
+
 				config = (T) objectMapper.convertValue(jsonNode, clazz);
 			}
 
@@ -331,7 +340,12 @@ public class Settings<T> implements SettingsMXBean {
 
 			settingsManager.initialize(config);
 
-			sipLogger.logConfiguration(config);
+			// Log config with {AES} values intact (not decrypted plaintext)
+			if (rawConfigJson != null) {
+				sipLogger.logConfiguration(clazz.getSimpleName(), rawConfigJson);
+			} else {
+				sipLogger.logConfiguration(config);
+			}
 
 		} catch (Exception e) {
 			sipLogger.severe(e);
@@ -368,6 +382,12 @@ public class Settings<T> implements SettingsMXBean {
 		}
 
 		return path;
+	}
+
+	/// Decrypt all `{AES}` values in the JSON tree for runtime use.
+	/// Delegates to [CredentialEncryption.decryptTree].
+	private static void decryptEncrypted(JsonNode node) {
+		CredentialEncryption.decryptTree(node);
 	}
 
 }

@@ -375,6 +375,17 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		}
 	}
 
+	/// Log a pre-formatted configuration JSON string. Used to print
+	/// the config with `{AES}` encrypted values intact, before the
+	/// framework decrypts them for runtime use.
+	public void logConfiguration(String configName, String rawJson) {
+		if (this.configurationLoggingLevel != null) {
+			this.log(this.configurationLoggingLevel, configName + "=" + rawJson);
+		} else {
+			this.log(Level.FINE, configName + "=" + rawJson);
+		}
+	}
+
 	/**
 	 * Serializes an object as JSON and logs it at the specified level.
 	 * 

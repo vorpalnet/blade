@@ -1,0 +1,5 @@
+base: ou=Users,dc=corp,dc=example,dc=com
+scope: SUBTREE
+attributes: destinationURI,department,priority,displayName
+
+(&(objectClass=user)(telephoneNumber=${user}))

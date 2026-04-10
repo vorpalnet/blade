@@ -104,6 +104,13 @@ mvn install:install-file \
 
 mvn install:install-file \
     -DgroupId=com.oracle.weblogic \
+    -DartifactId=weblogic-security-encryption \
+    -Dversion="$WL_VERSION" \
+    -Dpackaging=jar \
+    -Dfile="$OCCAS_HOME/wlserver/modules/com.oracle.weblogic.security.encryption.jar"
+
+mvn install:install-file \
+    -DgroupId=com.oracle.weblogic \
     -DartifactId=weblogic-maven-plugin \
     -Dversion="$WL_VERSION" \
     -Dpackaging=maven-plugin \

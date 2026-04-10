@@ -1,0 +1,1 @@
+package org.vorpal.blade.framework.v3.configuration.translations.tables;

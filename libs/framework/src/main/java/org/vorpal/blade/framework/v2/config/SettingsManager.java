@@ -30,7 +30,6 @@ import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.logging.Level;
 
 import javax.management.InstanceAlreadyExistsException;
@@ -69,10 +68,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.NullNode;
-import com.kjetland.jackson.jsonSchema.JsonSchemaConfig;
-import com.kjetland.jackson.jsonSchema.JsonSchemaGenerator;
-import com.kjetland.jackson.jsonSchema.SubclassesResolver;
-import com.kjetland.jackson.jsonSchema.SubclassesResolverImpl;
+import com.github.victools.jsonschema.generator.Option;
+import com.github.victools.jsonschema.generator.OptionPreset;
+import com.github.victools.jsonschema.generator.SchemaGenerator;
+import com.github.victools.jsonschema.generator.SchemaGeneratorConfig;
+import com.github.victools.jsonschema.generator.SchemaGeneratorConfigBuilder;
+import com.github.victools.jsonschema.generator.SchemaVersion;
+import com.github.victools.jsonschema.module.jackson.JacksonModule;
+import com.github.victools.jsonschema.module.jackson.JacksonOption;
 
 import inet.ipaddr.IPAddress;
 import inet.ipaddr.ipv4.IPv4Address;
@@ -473,10 +476,29 @@ public class SettingsManager<T> {
 	}
 
 	public void saveSchema(T t) throws JsonGenerationException, JsonMappingException, IOException {
-		SubclassesResolver resolver = new SubclassesResolverImpl().withClassesToScan(Arrays.asList(clazz.getName()));
-		JsonSchemaConfig config = JsonSchemaConfig.html5EnabledSchema().withSubclassesResolver(resolver);
-		JsonSchemaGenerator jsonSchemaGenerator = new JsonSchemaGenerator(mapper, config);
-		JsonNode jsonSchema = jsonSchemaGenerator.generateJsonSchema(t.getClass());
+		// victools jsonschema-generator with the Jackson module:
+		//   - Reads @JsonSubTypes / @JsonTypeInfo for polymorphism (emitted as
+		//     anyOf variants in the schema)
+		//   - Reads @JsonPropertyDescription / @JsonProperty / @JsonIgnore
+		//   - Honors @JsonPropertyOrder
+		// PLAIN_JSON preset gives bean-getter introspection out of the box.
+		// We add only DEFINITIONS_FOR_ALL_OBJECTS (so nested types get a
+		// $defs entry instead of being inlined repeatedly) and
+		// MAP_VALUES_AS_ADDITIONAL_PROPERTIES (so Map<String, T> fields
+		// describe their value type via additionalProperties).
+		JacksonModule jacksonModule = new JacksonModule(
+				JacksonOption.RESPECT_JSONPROPERTY_REQUIRED,
+				JacksonOption.FLATTENED_ENUMS_FROM_JSONVALUE,
+				JacksonOption.RESPECT_JSONPROPERTY_ORDER,
+				JacksonOption.IGNORE_PROPERTY_NAMING_STRATEGY);
+		SchemaGeneratorConfigBuilder configBuilder = new SchemaGeneratorConfigBuilder(
+				SchemaVersion.DRAFT_2020_12, OptionPreset.PLAIN_JSON)
+				.with(jacksonModule)
+				.with(Option.DEFINITIONS_FOR_ALL_OBJECTS,
+						Option.MAP_VALUES_AS_ADDITIONAL_PROPERTIES);
+		SchemaGeneratorConfig config = configBuilder.build();
+		SchemaGenerator schemaGenerator = new SchemaGenerator(config);
+		JsonNode jsonSchema = schemaGenerator.generateSchema(t.getClass());
 		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
 		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, jsonSchema);
 	}

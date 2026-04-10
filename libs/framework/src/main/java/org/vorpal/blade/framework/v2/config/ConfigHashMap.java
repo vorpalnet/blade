@@ -6,12 +6,10 @@ import java.util.HashMap;
 import javax.servlet.sip.SipServletRequest;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 /**
  * Translation map using HashMap for key-based lookups.
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@type")
 public class ConfigHashMap extends TranslationsMap implements Serializable {
 	private static final long serialVersionUID = 1L;
 

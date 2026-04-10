@@ -15,7 +15,6 @@
 
 	<modules>
 		<!-- Always built -->
-		<module>libs/trie</module>
 		<module>libs/framework</module>
 		<module>libs/shared</module>
 		<module>libs/fsmar</module>
@@ -80,11 +79,6 @@
 	<dependencyManagement>
 		<dependencies>
 			<!-- Internal modules -->
-			<dependency>
-				<groupId>org.vorpal.blade</groupId>
-				<artifactId>vorpal-blade-library-trie</artifactId>
-				<version>${project.version}</version>
-			</dependency>
 			<dependency>
 				<groupId>org.vorpal.blade</groupId>
 				<artifactId>vorpal-blade-library-framework</artifactId>
@@ -296,6 +290,12 @@
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
+			<groupId>com.oracle.weblogic</groupId>
+			<artifactId>weblogic-security-encryption</artifactId>
+			<version>${blade.weblogic.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
 			<groupId>com.oracle.occas</groupId>
 			<artifactId>sipservlet-api</artifactId>
 			<version>${blade.occas.version}</version>
@@ -379,6 +379,7 @@
 					<artifactId>maven-war-plugin</artifactId>
 					<version>${maven-war-plugin.version}</version>
 					<configuration>
+						<warName>${project.artifactId}</warName>
 						<failOnMissingWebXml>false</failOnMissingWebXml>
 						<!-- Include only the framework JAR; 3rd-party JARs come from the shared library -->
 						<packagingExcludes>%regex[WEB-INF/lib/(?!vorpal-blade-library-framework).*\.jar]</packagingExcludes>
@@ -471,6 +472,37 @@
 				</executions>
 			</plugin>
 			<!-- Dist copy moved to services/pom.xml (EAR, built last) -->
+			<!-- Sync exploded WAR directory with the packaged WAR.
+			     The WAR plugin's packagingExcludes strips 3rd-party JARs from
+			     the .war archive but leaves them in the exploded directory.
+			     This re-syncs the exploded lib/ from the WAR so deploying
+			     the exploded directory works the same as deploying the WAR. -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.5.0</version>
+				<executions>
+					<execution>
+						<id>sync-exploded-lib</id>
+						<phase>package</phase>
+						<goals><goal>exec</goal></goals>
+						<configuration>
+							<executable>bash</executable>
+							<arguments>
+								<argument>-c</argument>
+								<argument>
+WARFILE="${project.build.directory}/${project.build.finalName}.war";
+EXPLODED="${project.build.directory}/${project.build.finalName}";
+if [ -f "$WARFILE" ] &amp;&amp; [ -d "$EXPLODED/WEB-INF/lib" ]; then
+  rm -rf "$EXPLODED/WEB-INF/lib";
+  cd "$EXPLODED" &amp;&amp; jar xf "$WARFILE" WEB-INF/lib/ 2>/dev/null || true;
+fi
+								</argument>
+							</arguments>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
 
@@ -520,6 +552,11 @@
 			<id>proxy-router</id>
 			<activation><property><name>!skip.proxy-router</name></property></activation>
 			<modules><module>services/proxy-router</module></modules>
+		</profile>
+		<profile>
+			<id>irouter</id>
+			<activation><property><name>!skip.irouter</name></property></activation>
+			<modules><module>services/irouter</module></modules>
 		</profile>
 		<profile>
 			<id>queue</id>

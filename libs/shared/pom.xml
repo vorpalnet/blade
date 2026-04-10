@@ -50,6 +50,17 @@
 			<artifactId>json-path</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>com.github.victools</groupId>
+			<artifactId>jsonschema-generator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.victools</groupId>
+			<artifactId>jsonschema-module-jackson</artifactId>
+		</dependency>
+		<!-- Retained transitionally so service-class @JsonSchemaTitle
+		     annotations resolve at runtime; the generator path itself
+		     is now victools. -->
+		<dependency>
 			<groupId>com.kjetland</groupId>
 			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
 		</dependency>
@@ -171,7 +182,7 @@ echo "Generated prefer-application-packages with $COUNT entries"
 					     UnsupportedClassVersionError on older JDKs. -->
 					<execution>
 						<id>strip-multirelease</id>
-						<phase>verify</phase>
+						<phase>package</phase>
 						<goals><goal>exec</goal></goals>
 						<configuration>
 							<executable>bash</executable>

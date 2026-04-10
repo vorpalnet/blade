@@ -712,6 +712,32 @@ input:focus, select:focus, textarea:focus {
     margin-bottom: 8px;
 }
 
+/* Opaque object fallback: schema is just {type: object} with no properties,
+   so the form can't drive a structured editor. Render as a JSON textarea. */
+.opaque-object-input {
+    width: 100%;
+    min-height: 60px;
+    padding: 8px;
+    border: 1px solid var(--border-item);
+    border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.45;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.opaque-object-input.opaque-object-invalid {
+    border-color: #c43;
+    background: rgba(204, 51, 51, 0.05);
+}
+
+.opaque-object-status {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
 .array-title {
     font-weight: 600;
     color: var(--text-secondary);
