@@ -52,14 +52,19 @@ What once required a complicated collection of Java classes is now a single clas
 
 ### Admin
 
-Deployed to the WebLogic AdminServer as standalone WARs.
+Deployed to the WebLogic AdminServer as skinny WARs that reference the `vorpal-blade` shared library.
 
 | Module | Context Root | Description |
 | --- | --- | --- |
-| Console | `/blade` | Admin dashboard; sidebar loads configurator and other tools via iframe |
-| Configurator | `/vorpal-blade-admin-configurator` | Configuration editor with JSON Schema forms, JMX-based schema discovery |
-| Dev Console | `/vorpal-blade-admin-dev-console` | Experimental tools: mxGraph diagrams, EasyUI, old JSON editor |
-| Javadoc | `/vorpal-blade-javadoc` | Browsable Javadoc site with UML class diagrams |
+| Console | `/blade` | Navigation shell — sidebar loads every other admin app via iframe |
+| Configurator | `/configurator` | Configuration editor with JSON Schema forms, JMX-based schema discovery |
+| Flow | `/flow` | FSMAR diagram editor (mxGraph) |
+| Tuning | `/tuning` | JVM / SIP / OCCAS tuning knobs |
+| File Manager | `/files` | WebSocket-based config file management |
+| Explorer | `/explorer` | Experimental EasyUI forms |
+| JSON Forms | `/forms` | Legacy JSON config form editor |
+| Watcher | `/watcher` | Log/event monitor |
+| Javadoc | `/javadoc` | Browsable Javadoc site with UML class diagrams |
 
 ### Services
 
@@ -91,6 +96,19 @@ Deployed to the cluster alongside production applications. Excluded by the `prod
 | [Test UAS](test/test-uas) | Configurable test server; response status/delay/duration via REST API or SIP URI parameters, error map routing |
 
 
+
+# Deployment Model
+
+BLADE deploys in **four tiers**, each with its own scope:
+
+```
+OCCAS Domain
+├── approuter/               ← (1) fsmar.jar         [engine-tier reboot]
+├── AdminServer              ← (2) shared library  + (3) admin WARs
+└── Cluster (engine tier)    ← (2) shared library  + (4) services EAR
+```
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full deployment guide, `./deploy.sh` reference, FSMAR install walkthrough, and troubleshooting.
 
 # Project Layout
 
@@ -192,23 +210,17 @@ dist/<version>-<build>/
 - On a successful build, any previous `dist/` directories are automatically zipped and the directories removed. The current build's directory is left unzipped.
 - On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
 
-### Deployment Options
+### Deployment
 
-There are two ways to deploy BLADE applications to the OCCAS cluster:
+BLADE deploys in four tiers — FSMAR, shared library, admin apps, and services EAR. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full guide. The short version:
 
-**Option 1: EAR deployment (recommended)**
-Deploy the EAR (e.g. `vorpal-blade-services-production.ear`) to the cluster. The EAR bundles all service WARs — each WAR includes the framework JAR, and 3rd-party libraries are provided by the shared library. No JARs in the EAR `lib/`. This is the simplest approach — one artifact, one deployment.
-
-**Option 2: Shared library + individual WARs**
-Deploy `vorpal-blade-library-shared.war` as a WebLogic shared library (contains 3rd-party JARs only), then deploy individual application WARs separately. Each WAR includes the framework JAR and references the shared library for 3rd-party dependencies in their `weblogic.xml`:
-
-```xml
-<library-ref>
-    <library-name>vorpal-blade</library-name>
-</library-ref>
+```bash
+./build.sh production                 # produce dist/<ver>-<build>/
+$EDITOR build-profiles/deploy/production.conf          # set host, targets, paths
+cp build-profiles/deploy/production.secret.example \
+   build-profiles/deploy/production.secret             # fill in wls.password
+./deploy.sh production                # deploy all four tiers
 ```
-
-This approach allows you to deploy, update, or remove individual applications without redeploying the entire suite. Individual WARs are self-sufficient (framework included) and only need the shared library for 3rd-party dependencies. This is also the required approach for customers building their own BLADE applications — deploy the shared library once, then deploy your custom WARs alongside it.
 
 ## Build Number
 
@@ -284,18 +296,9 @@ public SipSession getSession(boolean create) { ... }
 
 Traditional `/** */` comments remain fully compatible and can coexist with `///` comments — migrate gradually as you see fit.
 
-## Deploy to WebLogic/OCCAS
+## Deploy
 
-Manage the EAR on a running WebLogic/OCCAS server:
-
-```bash
-./build.sh -- verify -Pdeploy   -Dwls.password=secret   # deploy (or update)
-./build.sh -- verify -Pundeploy -Dwls.password=secret   # remove
-./build.sh -- verify -Pstop     -Dwls.password=secret   # stop without removing
-./build.sh -- verify -Pstart    -Dwls.password=secret   # start a stopped app
-```
-
-The defaults are `t3://localhost:7001`, user `weblogic`, and target `AdminServer`. Override with `-Dwls.adminurl=...`, `-Dwls.user=...`, `-Dwls.targets=...`.
+Use `./deploy.sh <env>` — see **[DEPLOYMENT.md](DEPLOYMENT.md)**. Per-tier Maven profiles (`-Pdeploy`, `-Pundeploy`, `-Pstop`, `-Pstart`) still exist under `services/pom.xml` as the underlying implementation; `deploy.sh` is the user-facing wrapper.
 
 ## Eclipse
 

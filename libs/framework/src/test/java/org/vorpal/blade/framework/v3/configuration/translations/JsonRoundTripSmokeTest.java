@@ -76,11 +76,11 @@ public final class JsonRoundTripSmokeTest {
 
 		Translation<CarrierTreatment> acme = table.createTranslation("acme");
 		acme.setDescription("Acme Inc");
-		acme.setTreatment(new CarrierTreatment("AT&T", 12000));
+		acme.setTreatment(new CarrierTreatment("AvocadoTelegraph", 12000));
 
 		Translation<CarrierTreatment> globex = table.createTranslation("globex");
 		globex.setDescription("Globex Corp");
-		globex.setTreatment(new CarrierTreatment("Verizon", 8000));
+		globex.setTreatment(new CarrierTreatment("BananaTelecom", 8000));
 
 		String json = mapper.writeValueAsString(table);
 		System.out.println("--- HashTranslationTable JSON ---");

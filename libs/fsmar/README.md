@@ -24,13 +24,13 @@ Key features include:
 
 #How does it work?
 
-1. Drop 'fsmar.jar' in your domain's "approuter" directory.
-1. Update the OCCAS admin console to use 'fsmar.jar'.
-1. Restart one (or all) of the engine tier servers.
-1. Check the ./config/custom/vorpal folder for FSMAR.SAMPLE (in the cluster)
-1. Rename FSMAR.SAMPLE to FSMAR.json end edit it to fit your needs.
+FSMAR is not a WebLogic deployment — it's a fat JAR that lives in the OCCAS domain's `approuter/` directory and is activated via the OCCAS admin console. See the **FSMAR install walkthrough** in [DEPLOYMENT.md](../../DEPLOYMENT.md#fsmar-install-walkthrough) for the full procedure.
 
-Please note: OCCAS 7.1 or older version require the 'fsmar.jar' file to also be in the leading CLASSPATH in addition to being in the 'approuter' directory. (This is due to version mismatches with the required Jackson JSON libraries.)
+For automated installs, use `./deploy.sh <env> fsmar` from the repository root, which copies `fsmar.jar` to the configured `approuter.dir` (locally or over SSH).
+
+On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory alongside samples from every other BLADE app. Copy it into place, rename, and edit — the JSON syntax is documented in the tutorial below.
+
+Please note: OCCAS 7.1 and older versions require `fsmar.jar` to also appear on the leading CLASSPATH in addition to `approuter/`, due to Jackson version mismatches. Newer OCCAS versions expose an `approuter/lib/` subdirectory for dependency JARs; BLADE avoids it by shipping FSMAR as a fat JAR.
 
 #Tutorial
 

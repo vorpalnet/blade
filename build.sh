@@ -85,6 +85,77 @@ cleanup_failed_dist() {
     fi
 }
 
+# --- Write dist/<ver>-<build>/DEPLOYMENT.txt after a successful build ---
+# Emits a four-column table (Artifact, Tier, Target, Purpose) describing every
+# artifact actually present in DISTDIR. Used by operators and by ./deploy.sh.
+write_deployment_manifest() {
+    [ -d "$DISTDIR" ] || return 0
+    local manifest="${DISTDIR}/DEPLOYMENT.txt"
+
+    # Classify an artifact by filename. Echoes: "<tier>|<target>|<purpose>"
+    classify_artifact() {
+        case "$1" in
+            vorpal-blade-library-fsmar.jar)
+                echo "fsmar|approuter/|SIP application router (reboot engine tier)" ;;
+            vorpal-blade-library-shared.war)
+                echo "shared-lib|admin+cluster|WebLogic shared library (3rd-party JARs)" ;;
+            vorpal-blade-library-framework.jar)
+                echo "framework|bundled in WARs|BLADE framework library (not deployed directly)" ;;
+            vorpal-blade-admin-console.war)
+                echo "admin|AdminServer|Admin dashboard (context: /blade)" ;;
+            vorpal-blade-admin-configurator.war)
+                echo "admin|AdminServer|Config editor (context: /configurator)" ;;
+            vorpal-blade-admin-flow.war)
+                echo "admin|AdminServer|FSMAR diagram editor (context: /flow)" ;;
+            vorpal-blade-admin-tuning.war)
+                echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /tuning)" ;;
+            vorpal-blade-admin-file-manager.war)
+                echo "admin|AdminServer|Config file manager (context: /files)" ;;
+            vorpal-blade-admin-explorer.war)
+                echo "admin|AdminServer|Experimental UI (context: /explorer)" ;;
+            vorpal-blade-admin-json-forms.war)
+                echo "admin|AdminServer|Legacy JSON form editor (context: /forms)" ;;
+            vorpal-blade-admin-watcher.war)
+                echo "admin|AdminServer|Log/event monitor (context: /watcher)" ;;
+            vorpal-blade-admin-dev-console.war)
+                echo "admin|AdminServer|(legacy dev-console — removed in 2.9.5)" ;;
+            vorpal-blade-javadoc.war)
+                echo "admin|AdminServer|Javadoc site (context: /javadoc)" ;;
+            vorpal-blade-services-*.ear)
+                local profile="${1#vorpal-blade-services-}"
+                profile="${profile%.ear}"
+                echo "services|cluster|Services EAR (profile: ${profile})" ;;
+            *.conf)
+                echo "metadata|n/a|Build profile used for this build" ;;
+            *)
+                echo "unknown|?|${1}" ;;
+        esac
+    }
+
+    {
+        echo "BLADE ${REVISION}-${BUILD_NUM} deployment manifest"
+        echo "See DEPLOYMENT.md for the four-tier deployment model."
+        echo ""
+        printf '%-42s  %-11s  %-15s  %s\n' "Artifact" "Tier" "Target" "Purpose"
+        printf '%-42s  %-11s  %-15s  %s\n' "------------------------------------------" \
+            "-----------" "---------------" "-------"
+        local files=()
+        while IFS= read -r f; do
+            files+=("$f")
+        done < <(cd "$DISTDIR" && ls -1 2>/dev/null | grep -v '^DEPLOYMENT\.txt$' | sort)
+        for f in "${files[@]}"; do
+            local line tier target purpose
+            line=$(classify_artifact "$f")
+            tier="${line%%|*}";       line="${line#*|}"
+            target="${line%%|*}";     line="${line#*|}"
+            purpose="$line"
+            printf '%-42s  %-11s  %-15s  %s\n' "$f" "$tier" "$target" "$purpose"
+        done
+    } > "$manifest"
+
+    echo "Wrote ${manifest#${SCRIPT_DIR}/}"
+}
+
 # --- Zip previous dist directories (not the current build) ---
 # zip_previous_dist() {
 #     local dist_parent="${SCRIPT_DIR}/dist"
@@ -235,6 +306,7 @@ if [ ${#PROFILES[@]} -eq 1 ]; then
         exit $MVN_EXIT
     fi
 
+    write_deployment_manifest
     # zip_previous_dist
 else
     # =====================================================================
@@ -324,5 +396,6 @@ else
         echo "  vorpal-blade-services-${profile}.ear"
     done
 
+    write_deployment_manifest
     # zip_previous_dist
 fi

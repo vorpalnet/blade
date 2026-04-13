@@ -1,0 +1,6 @@
+# Deployment secrets — NEVER commit.
+# This is a belt-and-suspenders guard; the top-level .gitignore also blocks *.secret.
+*.secret
+
+# Keep committed templates.
+!*.secret.example

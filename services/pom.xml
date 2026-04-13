@@ -347,21 +347,24 @@
 			</dependencies>
 		</profile>
 
-		<!-- WebLogic deployment profiles.
-		     Override connection defaults with -Dwls.adminurl=... -Dwls.user=... -Dwls.password=... -Dwls.targets=...
-		     Usage:
-		       ./build.sh -\- -Pdeploy -Dwls.password=secret
-		       ./build.sh -\- -Pundeploy -Dwls.password=secret
-		       ./build.sh -\- -Pstop -Dwls.password=secret
-		       ./build.sh -\- -Pstart -Dwls.password=secret
-		-->
+		<!-- WebLogic deployment profiles for the services EAR.
+		     Normal usage is via ./deploy.sh <env>, which sets every property correctly.
+		     These profiles exist as the underlying implementation and can be invoked directly:
+		       ./mvnw -pl services -Pdeploy   -Dwls.adminurl=t3://... -Dwls.user=... -Dwls.password=... -Dwls.targets=<cluster>
+		       ./mvnw -pl services -Pundeploy -Dwls.adminurl=... ...
+		       ./mvnw -pl services -Pstop     -Dwls.adminurl=... ...
+		       ./mvnw -pl services -Pstart    -Dwls.adminurl=... ...
+		     wls.targets has NO default — a services EAR belongs on the engine cluster,
+		     never on AdminServer. The caller must supply it. -->
+
 		<profile>
 			<id>deploy</id>
 			<properties>
 				<wls.adminurl>t3://localhost:7001</wls.adminurl>
 				<wls.user>weblogic</wls.user>
 				<wls.password></wls.password>
-				<wls.targets>AdminServer</wls.targets>
+				<!-- wls.targets deliberately has no default: a services EAR targets a cluster,
+				     not AdminServer. The caller must specify -Dwls.targets=<cluster-name>. -->
 			</properties>
 			<build>
 				<plugins>
@@ -397,7 +400,8 @@
 				<wls.adminurl>t3://localhost:7001</wls.adminurl>
 				<wls.user>weblogic</wls.user>
 				<wls.password></wls.password>
-				<wls.targets>AdminServer</wls.targets>
+				<!-- wls.targets deliberately has no default: a services EAR targets a cluster,
+				     not AdminServer. The caller must specify -Dwls.targets=<cluster-name>. -->
 			</properties>
 			<build>
 				<plugins>
@@ -431,7 +435,8 @@
 				<wls.adminurl>t3://localhost:7001</wls.adminurl>
 				<wls.user>weblogic</wls.user>
 				<wls.password></wls.password>
-				<wls.targets>AdminServer</wls.targets>
+				<!-- wls.targets deliberately has no default: a services EAR targets a cluster,
+				     not AdminServer. The caller must specify -Dwls.targets=<cluster-name>. -->
 			</properties>
 			<build>
 				<plugins>
@@ -465,7 +470,8 @@
 				<wls.adminurl>t3://localhost:7001</wls.adminurl>
 				<wls.user>weblogic</wls.user>
 				<wls.password></wls.password>
-				<wls.targets>AdminServer</wls.targets>
+				<!-- wls.targets deliberately has no default: a services EAR targets a cluster,
+				     not AdminServer. The caller must specify -Dwls.targets=<cluster-name>. -->
 			</properties>
 			<build>
 				<plugins>
