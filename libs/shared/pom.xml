@@ -88,9 +88,13 @@
 			<groupId>com.github.seancfoley</groupId>
 			<artifactId>ipaddress</artifactId>
 		</dependency>
+		<!-- Xalan is provided by the JDK and WebLogic; bundling it in the
+		     shared library conflicts with WebLogic's Admin Console
+		     (NoClassDefFoundError: OutputPropertiesFactory). -->
 		<dependency>
 			<groupId>xalan</groupId>
 			<artifactId>xalan</artifactId>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.google.code.findbugs</groupId>
