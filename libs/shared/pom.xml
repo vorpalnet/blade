@@ -209,7 +209,14 @@ if [ "$STRIPPED" -eq 1 ]; then
 else
   echo "No multi-release classes above Java $TARGET_VER found in shared WAR JARs"
 fi;
-rm -rf "$TMPDIR"
+rm -rf "$TMPDIR";
+# Re-sync the exploded directory from the (now stripped) WAR
+EXPLODED="${project.build.directory}/${project.build.finalName}";
+if [ -d "$EXPLODED/WEB-INF/lib" ]; then
+  rm -rf "$EXPLODED/WEB-INF/lib";
+  cd "$EXPLODED" &amp;&amp; jar xf "$WARFILE" WEB-INF/lib/ 2>/dev/null || true;
+  echo "Synced exploded WAR directory with stripped JARs"
+fi
 								</argument>
 							</arguments>
 						</configuration>
