@@ -21,16 +21,6 @@
 			<artifactId>jackson-databind</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.apache.xmlgraphics</groupId>
-			<artifactId>fop</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>xml-apis</groupId>
-			<artifactId>xml-apis</artifactId>
-			<version>1.4.01</version>
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
 			<groupId>com.github.vlsi.mxgraph</groupId>
 			<artifactId>jgraphx</artifactId>
 		</dependency>

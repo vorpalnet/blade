@@ -14,12 +14,16 @@ BLADE deploys in **four tiers**: FSMAR (`approuter/`), shared library (AdminServ
   - `<env>.secret.example` (committed) is a safe template.
 - **Secret safeguards** — four independent guards prevent password commits: top-level `.gitignore`, nested `build-profiles/deploy/.gitignore`, `deploy.sh` pre-flight `git check-ignore`, and a mode-600 warning. Password resolution order: `BLADE_WLS_PASSWORD` env var → `<env>.secret` → interactive prompt with save offer.
 - **Auto-generated `dist/<ver>-<build>/DEPLOYMENT.txt`** — `build.sh` writes a four-column manifest (Artifact, Tier, Target, Purpose) after every successful build, so operators can see at a glance what goes where.
-- **README refreshed** — admin app table updated against 2.9.5 reality (console/configurator/flow/tuning/file-manager/explorer/json-forms/watcher/javadoc), four-tier ASCII diagram added, redundant deploy sections collapsed into `DEPLOYMENT.md` pointers.
+- **README refreshed** — admin app table updated against 2.9.5 reality (console/configurator/flow/tuning/file-manager/explorer/watcher/javadoc), four-tier ASCII diagram added, redundant deploy sections collapsed into `DEPLOYMENT.md` pointers.
 - **`libs/fsmar/README.md`** — install steps replaced with a pointer to `DEPLOYMENT.md`; tutorial content kept.
 
 ### Breaking change
 
 - **`services/pom.xml` `-Pdeploy` no longer defaults `wls.targets=AdminServer`.** A services EAR belongs on the engine cluster, never on AdminServer, and the old default silently deployed it to the wrong place. The caller must now supply `-Dwls.targets=<cluster>` explicitly, or use `./deploy.sh <env> services` which sets it from the deploy profile. Same applies to `-Pundeploy`, `-Pstop`, `-Pstart`.
+
+### Removed
+
+- **`admin/json-forms/` module** — the `/forms` webapp (`vorpal-blade-admin-json-forms.war`) is removed. Its JSPs referenced `ConfigurationMonitor` / `ConfigHelper` classes that live in the configurator and file-manager WARs, so the app couldn't actually resolve them at runtime. It had no Java source of its own and was a dead scaffolding module. Its role is covered by `admin/configurator/`.
 
 ## 2.9.5
 

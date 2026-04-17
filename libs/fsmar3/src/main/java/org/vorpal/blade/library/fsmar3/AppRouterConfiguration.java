@@ -3,11 +3,10 @@ package org.vorpal.blade.library.fsmar3;
 import java.io.Serializable;
 import java.util.HashMap;
 
-import org.vorpal.blade.framework.v3.configuration.Configuration;
+import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.github.victools.jsonschema.generator.SchemaKeyword;
 
 /// FSMAR v3 configuration: a finite state machine that routes SIP requests
 /// to applications based on pattern matching.

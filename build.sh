@@ -115,8 +115,6 @@ write_deployment_manifest() {
                 echo "admin|AdminServer|Config file manager (context: /files)" ;;
             vorpal-blade-admin-explorer.war)
                 echo "admin|AdminServer|Experimental UI (context: /explorer)" ;;
-            vorpal-blade-admin-json-forms.war)
-                echo "admin|AdminServer|Legacy JSON form editor (context: /forms)" ;;
             vorpal-blade-admin-watcher.war)
                 echo "admin|AdminServer|Log/event monitor (context: /watcher)" ;;
             vorpal-blade-admin-dev-console.war)

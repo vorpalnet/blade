@@ -24,7 +24,6 @@
 		<module>admin/tuning</module>
 		<module>admin/file-manager</module>
 		<module>admin/explorer</module>
-		<module>admin/json-forms</module>
 		<module>admin/configurator</module>
 		<module>admin/watcher</module>
 		<module>services</module>
@@ -259,13 +258,9 @@
 				<artifactId>hsqldb</artifactId>
 				<version>2.7.3</version>
 			</dependency>
-			<dependency>
-				<groupId>jakarta.servlet.jsp.jstl</groupId>
-				<artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
-				<version>3.0.2</version>
-			</dependency>
-
-			<!-- Admin Configurator specific -->
+			<!-- JSTL: the javax.servlet.jsp.jstl.* API comes from javaee-api:8.0-occas (provided);
+			     taglibs-standard-impl 1.2.5 supplies the tag handlers and registers the legacy
+			     java.sun.com/jsp/jstl/* URIs used by WebLogic/OCCAS 14.1.1 (Jakarta EE 8). -->
 			<dependency>
 				<groupId>org.apache.taglibs</groupId>
 				<artifactId>taglibs-standard-impl</artifactId>

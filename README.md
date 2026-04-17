@@ -62,7 +62,6 @@ Deployed to the WebLogic AdminServer as skinny WARs that reference the `vorpal-b
 | Tuning | `/tuning` | JVM / SIP / OCCAS tuning knobs |
 | File Manager | `/files` | WebSocket-based config file management |
 | Explorer | `/explorer` | Experimental EasyUI forms |
-| JSON Forms | `/forms` | Legacy JSON config form editor |
 | Watcher | `/watcher` | Log/event monitor |
 | Javadoc | `/javadoc` | Browsable Javadoc site with UML class diagrams |
 

@@ -196,7 +196,7 @@ echo '    </ul>' >> "$DOCROOT/index.html"
 # --- Admin ---
 echo '    <h2>Administration</h2>' >> "$DOCROOT/index.html"
 echo '    <ul class="module-grid">' >> "$DOCROOT/index.html"
-for mod in console configurator file-manager flow tuning explorer json-forms; do
+for mod in console configurator file-manager flow tuning explorer; do
     [ -d "$DOCROOT/$mod" ] && emit_module "$mod" >> "$DOCROOT/index.html"
 done
 echo '    </ul>' >> "$DOCROOT/index.html"
@@ -207,7 +207,7 @@ echo '    <ul class="module-grid">' >> "$DOCROOT/index.html"
 for dir in "$DOCROOT"/*/; do
     mod=$(basename "$dir")
     case "$mod" in
-        framework|fsmar|fsmar3|console|configurator|file-manager|flow|tuning|explorer|json-forms|test-*|images) continue ;;
+        framework|fsmar|fsmar3|console|configurator|file-manager|flow|tuning|explorer|test-*|images) continue ;;
     esac
     emit_module "$mod" >> "$DOCROOT/index.html"
 done
