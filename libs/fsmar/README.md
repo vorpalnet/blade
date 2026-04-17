@@ -1,12 +1,10 @@
-# BLADE FSMAR 2.0
+# BLADE FSMAR 2 (legacy)
 
-Welcome to the one and only... FSMAR!
+**F**inite **S**tate **M**achine **A**pplication **R**outer.
 
-Finite  
-State  
-Machine  
-Application  
-Router  
+This module is the **legacy** FSMAR 2 library, retained for backward compatibility with existing deployments. For new work, use **FSMAR 3** (`libs/fsmar3/`) — it shares no code with this module and is the future of FSMAR. FSMAR 2 will eventually be phased out.
+
+FSMAR 2 and FSMAR 3 are shipped as separate fat JARs (`vorpal-blade-library-fsmar.jar` and `vorpal-blade-library-fsmar3.jar`). Both install side-by-side in OCCAS's `approuter/` directory; only one is activated at a time via the OCCAS admin console.
 
 ## The What Now?
 

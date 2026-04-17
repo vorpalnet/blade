@@ -188,7 +188,7 @@ HEADER
 # --- Libraries ---
 echo '    <h2>Libraries</h2>' >> "$DOCROOT/index.html"
 echo '    <ul class="module-grid">' >> "$DOCROOT/index.html"
-for mod in framework fsmar; do
+for mod in framework fsmar fsmar3; do
     [ -d "$DOCROOT/$mod" ] && emit_module "$mod" >> "$DOCROOT/index.html"
 done
 echo '    </ul>' >> "$DOCROOT/index.html"
@@ -207,7 +207,7 @@ echo '    <ul class="module-grid">' >> "$DOCROOT/index.html"
 for dir in "$DOCROOT"/*/; do
     mod=$(basename "$dir")
     case "$mod" in
-        framework|fsmar|console|configurator|file-manager|flow|tuning|explorer|json-forms|test-*|images) continue ;;
+        framework|fsmar|fsmar3|console|configurator|file-manager|flow|tuning|explorer|json-forms|test-*|images) continue ;;
     esac
     emit_module "$mod" >> "$DOCROOT/index.html"
 done

@@ -13,7 +13,9 @@
 #   shared-lib   Shared library → AdminServer + cluster (WebLogic library)
 #   admin        All admin WARs → AdminServer only
 #   services     Services EAR  → cluster only
-#   fsmar        fsmar.jar     → $DOMAIN/approuter/ (cp or scp); reboot engine tier
+#   fsmar        fsmar[3].jar  → $DOMAIN/approuter/ (cp or scp); reboot engine tier
+#                (both fsmar.jar and fsmar3.jar are deployed if present — OCCAS
+#                 activates whichever is configured in its admin console)
 #   (omitted)    All four tiers in order: shared-lib → admin → services → fsmar
 #
 # Actions:
@@ -191,6 +193,7 @@ DIST_NAME=$(basename "$DIST_DIR")
 SHARED_LIB_WAR="${DIST_DIR}/vorpal-blade-library-shared.war"
 SERVICES_EAR="${DIST_DIR}/vorpal-blade-services-${BUILD_PROFILE}.ear"
 FSMAR_JAR="${DIST_DIR}/vorpal-blade-library-fsmar.jar"
+FSMAR3_JAR="${DIST_DIR}/vorpal-blade-library-fsmar3.jar"
 SHARED_LIB_NAME="vorpal-blade"  # Extension-Name from libs/shared/pom.xml:239
 
 # --- Header ---
@@ -320,52 +323,68 @@ tier_services() {
 tier_fsmar() {
     local action="$1"
     info "Tier: fsmar → ${SSH_HOST:+${SSH_USER}@${SSH_HOST}:}${APPROUTER_DIR}"
-    [ -f "$FSMAR_JAR" ] || { err "Missing: ${FSMAR_JAR}"; return 1; }
 
-    local dest_file="${APPROUTER_DIR}/$(basename "$FSMAR_JAR")"
+    # FSMAR 2 (legacy) and FSMAR 3 are two distinct fat JARs that both live in
+    # OCCAS's approuter/ directory. Only one is activated at a time in the OCCAS
+    # admin console. We deploy whichever are present in DIST_DIR so operators
+    # can switch between them without a rebuild.
+    local jars=()
+    [ -f "$FSMAR_JAR" ]  && jars+=("$FSMAR_JAR")
+    [ -f "$FSMAR3_JAR" ] && jars+=("$FSMAR3_JAR")
+    if [ ${#jars[@]} -eq 0 ]; then
+        err "Missing: no FSMAR jars found in ${DIST_DIR}"
+        return 1
+    fi
+
+    for src in "${jars[@]}"; do
+        local dest_file="${APPROUTER_DIR}/$(basename "$src")"
+        log "  ${C_DIM}→ $(basename "$src")${C_RESET}"
+        case "$action" in
+            deploy)
+                if [ -n "$SSH_HOST" ]; then
+                    [ -n "$SSH_USER" ] || die "ssh.host set but ssh.user missing in ${CONF_FILE}"
+                    if [ "$DRY_RUN" = true ]; then
+                        log "${C_DIM}  [dry-run] scp ${src} ${SSH_USER}@${SSH_HOST}:${dest_file}${C_RESET}"
+                    else
+                        scp "$src" "${SSH_USER}@${SSH_HOST}:${dest_file}"
+                    fi
+                else
+                    if [ "$DRY_RUN" = true ]; then
+                        log "${C_DIM}  [dry-run] cp ${src} ${dest_file}${C_RESET}"
+                    else
+                        [ -d "$APPROUTER_DIR" ] || die "approuter.dir does not exist: ${APPROUTER_DIR}"
+                        cp "$src" "$dest_file"
+                    fi
+                fi
+                ;;
+            undeploy)
+                if [ -n "$SSH_HOST" ]; then
+                    if [ "$DRY_RUN" = true ]; then
+                        log "${C_DIM}  [dry-run] ssh ${SSH_USER}@${SSH_HOST} rm -f ${dest_file}${C_RESET}"
+                    else
+                        ssh "${SSH_USER}@${SSH_HOST}" rm -f "$dest_file"
+                    fi
+                else
+                    if [ "$DRY_RUN" = true ]; then
+                        log "${C_DIM}  [dry-run] rm -f ${dest_file}${C_RESET}"
+                    else
+                        rm -f "$dest_file"
+                    fi
+                fi
+                ;;
+            status)
+                if [ -n "$SSH_HOST" ]; then
+                    ssh "${SSH_USER}@${SSH_HOST}" ls -l "$dest_file" 2>&1 || warn "$(basename "$src") not present on ${SSH_HOST}"
+                else
+                    ls -l "$dest_file" 2>&1 || warn "$(basename "$src") not present at ${dest_file}"
+                fi
+                ;;
+        esac
+    done
 
     case "$action" in
-        deploy)
-            if [ -n "$SSH_HOST" ]; then
-                [ -n "$SSH_USER" ] || die "ssh.host set but ssh.user missing in ${CONF_FILE}"
-                if [ "$DRY_RUN" = true ]; then
-                    log "${C_DIM}  [dry-run] scp ${FSMAR_JAR} ${SSH_USER}@${SSH_HOST}:${dest_file}${C_RESET}"
-                else
-                    scp "$FSMAR_JAR" "${SSH_USER}@${SSH_HOST}:${dest_file}"
-                fi
-            else
-                if [ "$DRY_RUN" = true ]; then
-                    log "${C_DIM}  [dry-run] cp ${FSMAR_JAR} ${dest_file}${C_RESET}"
-                else
-                    [ -d "$APPROUTER_DIR" ] || die "approuter.dir does not exist: ${APPROUTER_DIR}"
-                    cp "$FSMAR_JAR" "$dest_file"
-                fi
-            fi
-            warn "Engine tier reboot required for FSMAR changes to take effect."
-            ;;
-        undeploy)
-            if [ -n "$SSH_HOST" ]; then
-                if [ "$DRY_RUN" = true ]; then
-                    log "${C_DIM}  [dry-run] ssh ${SSH_USER}@${SSH_HOST} rm -f ${dest_file}${C_RESET}"
-                else
-                    ssh "${SSH_USER}@${SSH_HOST}" rm -f "$dest_file"
-                fi
-            else
-                if [ "$DRY_RUN" = true ]; then
-                    log "${C_DIM}  [dry-run] rm -f ${dest_file}${C_RESET}"
-                else
-                    rm -f "$dest_file"
-                fi
-            fi
-            warn "Engine tier reboot required for FSMAR removal to take effect."
-            ;;
-        status)
-            if [ -n "$SSH_HOST" ]; then
-                ssh "${SSH_USER}@${SSH_HOST}" ls -l "$dest_file" 2>&1 || warn "fsmar.jar not present on ${SSH_HOST}"
-            else
-                ls -l "$dest_file" 2>&1 || warn "fsmar.jar not present at ${dest_file}"
-            fi
-            ;;
+        deploy)   warn "Engine tier reboot required for FSMAR changes to take effect." ;;
+        undeploy) warn "Engine tier reboot required for FSMAR removal to take effect." ;;
     esac
 }
 

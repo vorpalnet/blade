@@ -96,7 +96,9 @@ write_deployment_manifest() {
     classify_artifact() {
         case "$1" in
             vorpal-blade-library-fsmar.jar)
-                echo "fsmar|approuter/|SIP application router (reboot engine tier)" ;;
+                echo "fsmar|approuter/|SIP application router — v2 legacy (reboot engine tier)" ;;
+            vorpal-blade-library-fsmar3.jar)
+                echo "fsmar|approuter/|SIP application router — v3 (reboot engine tier)" ;;
             vorpal-blade-library-shared.war)
                 echo "shared-lib|admin+cluster|WebLogic shared library (3rd-party JARs)" ;;
             vorpal-blade-library-framework.jar)

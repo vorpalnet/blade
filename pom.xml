@@ -18,6 +18,7 @@
 		<module>libs/framework</module>
 		<module>libs/shared</module>
 		<module>libs/fsmar</module>
+		<module>libs/fsmar3</module>
 		<module>admin/console</module>
 		<module>admin/flow</module>
 		<module>admin/tuning</module>
@@ -87,6 +88,11 @@
 			<dependency>
 				<groupId>org.vorpal.blade</groupId>
 				<artifactId>vorpal-blade-library-fsmar</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.vorpal.blade</groupId>
+				<artifactId>vorpal-blade-library-fsmar3</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 
@@ -315,7 +321,7 @@
 		</dependency>
 		<!-- 3rd-party libs used by the framework and needed on the compile classpath
 		     for all modules. At runtime these come from the shared library WAR.
-		     Modules that bundle JARs (fsmar, shared, configurator) override scope. -->
+		     Modules that bundle JARs (fsmar, fsmar3, shared, configurator) override scope. -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
@@ -452,7 +458,7 @@
 			</plugin>
 			<!-- Install the parent POM and framework JAR to .m2; skip all others.
 		     The parent POM must be installed because the framework JAR references it,
-		     and downstream modules (fsmar, shared) need to resolve it. -->
+		     and downstream modules (fsmar, fsmar3, shared) need to resolve it. -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-install-plugin</artifactId>

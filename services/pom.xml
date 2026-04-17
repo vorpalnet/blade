@@ -137,6 +137,7 @@
 									cp -f "$ROOTDIR/libs/framework/target/vorpal-blade-library-framework.jar" "$DISTDIR/" 2>/dev/null;
 									cp -f "$ROOTDIR/libs/shared/target/vorpal-blade-library-shared.war" "$DISTDIR/" 2>/dev/null;
 									cp -f "$ROOTDIR/libs/fsmar/target/vorpal-blade-library-fsmar.jar" "$DISTDIR/" 2>/dev/null;
+									cp -f "$ROOTDIR/libs/fsmar3/target/vorpal-blade-library-fsmar3.jar" "$DISTDIR/" 2>/dev/null;
 									cp -f "$ROOTDIR/admin/console/target/vorpal-blade-admin-console.war" "$DISTDIR/" 2>/dev/null;
 									cp -f "$ROOTDIR/admin/configurator/target/vorpal-blade-admin-configurator.war" "$DISTDIR/" 2>/dev/null;
 									cp -f "$ROOTDIR/admin/dev-console/target/vorpal-blade-admin-dev-console.war" "$DISTDIR/" 2>/dev/null;

@@ -4,7 +4,7 @@ BLADE deploys in **four tiers**, each with its own scope. Once you see the pictu
 
 ```
 OCCAS Domain
-├── approuter/               ← (1) fsmar.jar         [engine-tier reboot]
+├── approuter/               ← (1) fsmar.jar / fsmar3.jar  [engine-tier reboot]
 ├── AdminServer              ← (2) shared library  + (3) admin WARs
 └── Cluster (engine tier)    ← (2) shared library  + (4) services EAR
 ```
@@ -13,13 +13,22 @@ The shared library appears in two rows on purpose: it is **deployed to both Admi
 
 ## The four tiers
 
-### 1. FSMAR — `fsmar.jar`
+### 1. FSMAR — `fsmar.jar` / `fsmar3.jar`
 
 **Not a WebLogic deployment.** FSMAR is the *Finite State Machine Application Router*, loaded by OCCAS before any servlet application sees a SIP message. It lives in a special OCCAS-specific directory (`$DOMAIN_HOME/approuter/`) and is activated in the OCCAS admin console, not in the WebLogic deployments view.
 
-- **Artifact:** `dist/<ver>-<build>/vorpal-blade-library-fsmar.jar` — a fat JAR with every dependency bundled in.
-- **Goes to:** `$DOMAIN_HOME/approuter/` on every engine-tier host. (Newer OCCAS versions support an `approuter/lib/` subdirectory for dependency JARs, but because BLADE ships FSMAR as a fat JAR you drop the single file directly into `approuter/`.)
-- **Activation:** configure OCCAS to use FSMAR via the admin console — the exact navigation changes between OCCAS versions, so check the OCCAS docs for your version.
+BLADE ships **two independent FSMAR libraries** as separate fat JARs:
+
+| Artifact | Library | Status |
+|---|---|---|
+| `vorpal-blade-library-fsmar.jar`  | FSMAR 2 | Legacy — retained for backward compatibility |
+| `vorpal-blade-library-fsmar3.jar` | FSMAR 3 | Current — the future of FSMAR |
+
+They share no code and install side-by-side in `approuter/`. Only one is activated at a time via the OCCAS admin console (the SPI entry in the activated JAR's `META-INF/services/javax.servlet.sip.ar.spi.SipApplicationRouterProvider` is what OCCAS loads).
+
+- **Artifact:** `dist/<ver>-<build>/vorpal-blade-library-fsmar.jar` and/or `vorpal-blade-library-fsmar3.jar` — fat JARs with every dependency bundled in.
+- **Goes to:** `$DOMAIN_HOME/approuter/` on every engine-tier host. (Newer OCCAS versions support an `approuter/lib/` subdirectory for dependency JARs, but because BLADE ships FSMAR as fat JARs you drop the single files directly into `approuter/`.)
+- **Activation:** configure OCCAS to use the chosen FSMAR via the admin console — the exact navigation changes between OCCAS versions, so check the OCCAS docs for your version.
 - **Takes effect after:** engine-tier server restart (not AdminServer).
 - **Why it's different:** FSMAR is code that runs *inside OCCAS itself*, not an application deployed on top of it. It cannot be hot-updated or targeted the way WARs/EARs can.
 
@@ -119,17 +128,20 @@ Password sourcing priority (highest wins):
 
 This is the one tier that isn't a WebLogic deployment, so it's worth spelling out.
 
-1. Build: `./build.sh production` produces `dist/<ver>-<build>/vorpal-blade-library-fsmar.jar` (a fat JAR with all dependencies bundled in).
-2. Put the JAR in the OCCAS domain's `approuter/` directory on every engine-tier host:
+1. Build: `./build.sh production` produces two fat JARs in `dist/<ver>-<build>/`:
+   - `vorpal-blade-library-fsmar.jar` — FSMAR 2 (legacy)
+   - `vorpal-blade-library-fsmar3.jar` — FSMAR 3 (current)
+2. Put the JAR(s) in the OCCAS domain's `approuter/` directory on every engine-tier host:
    ```
    $DOMAIN_HOME/approuter/vorpal-blade-library-fsmar.jar
+   $DOMAIN_HOME/approuter/vorpal-blade-library-fsmar3.jar
    ```
-   `./deploy.sh <env> fsmar` does this via `scp` (if `ssh.host` is set in the profile) or `cp` (local domain).
-3. Configure OCCAS to use FSMAR via the admin console. The exact navigation and field names change between OCCAS versions — check the OCCAS docs for your version.
+   `./deploy.sh <env> fsmar` copies whichever JARs are present in `dist/` via `scp` (if `ssh.host` is set in the profile) or `cp` (local domain). Having both on disk is fine — OCCAS only loads the one activated in its admin console.
+3. Configure OCCAS to use the chosen FSMAR via the admin console. The exact navigation and field names change between OCCAS versions — check the OCCAS docs for your version.
 4. Restart the engine tier (not AdminServer). Node Manager or a rolling restart works.
-5. On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory (same place every other BLADE app drops its samples). Copy it alongside your other BLADE app configs, rename appropriately, and edit — see `libs/fsmar/README.md` for the JSON schema.
+5. On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory (same place every other BLADE app drops its samples). FSMAR 2 and FSMAR 3 use distinct sample-file names so they don't collide. Copy the appropriate sample alongside your other BLADE app configs, rename appropriately, and edit — see `libs/fsmar/README.md` (v2) or `libs/fsmar3/README.md` (v3) for the JSON schema.
 
-`fsmar.jar` can be updated in place and re-activated by a rolling engine-tier restart; hot updates are not supported because the JAR is loaded into the OCCAS Application Router at server startup.
+The JARs can be updated in place and re-activated by a rolling engine-tier restart; hot updates are not supported because the JAR is loaded into the OCCAS Application Router at server startup.
 
 ## Troubleshooting
 
@@ -149,7 +161,8 @@ This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The s
 
 | Artifact | Tier | Target | Purpose |
 |---|---|---|---|
-| `vorpal-blade-library-fsmar.jar` | fsmar | `approuter/` | SIP application router (reboot engine tier) |
+| `vorpal-blade-library-fsmar.jar` | fsmar | `approuter/` | SIP application router — v2 legacy (reboot engine tier) |
+| `vorpal-blade-library-fsmar3.jar` | fsmar | `approuter/` | SIP application router — v3 (reboot engine tier) |
 | `vorpal-blade-library-shared.war` | shared-lib | AdminServer + cluster | WebLogic shared library (3rd-party JARs) |
 | `vorpal-blade-library-framework.jar` | framework | bundled in WARs | BLADE framework library (not deployed directly) |
 | `vorpal-blade-admin-console.war` | admin | AdminServer | Admin dashboard (`/blade`) |
