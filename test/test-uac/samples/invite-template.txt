@@ -1,0 +1,5 @@
+INVITE sip:target@uas.test SIP/2.0
+Min-SE: 90
+Session-Expires: 2400;refresher=uac
+Supported: timer
+X-Genesys-CallUUID: 123potatoXYZ

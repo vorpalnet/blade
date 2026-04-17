@@ -1,0 +1,3 @@
+Min-SE: 90
+Session-Expires: 2400;refresher=uas
+Supported: timer

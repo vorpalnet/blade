@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v3.routing;
+package org.vorpal.blade.framework.v3.configuration.routing;
 
 import com.bea.wcp.sip.engine.Container;
 import com.bea.wcp.sip.engine.server.Filter;

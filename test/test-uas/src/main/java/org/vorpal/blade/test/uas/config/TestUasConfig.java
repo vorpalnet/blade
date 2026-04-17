@@ -19,8 +19,26 @@ public class TestUasConfig extends Configuration {
 	protected String defaultDelay = "0s";
 	protected String defaultDuration = "30s";
 	protected String sdpContent;
+	protected String template;
 
 	public TestUasConfig() {
+	}
+
+	/// Returns the filename (in `_templates/`) of the SIP-message
+	/// template applied to the outbound leg when test-uas forwards
+	/// a call (B2BUA mode). Format: optional request-line, then
+	/// `Name: value` headers, blank line, optional body.
+	///
+	/// For test-uas this is typically headers-only — the multipart
+	/// body on the inbound leg is stripped to its SDP part before
+	/// being sent on to the softphone.
+	@JsonPropertyDescription("Template filename in _templates/ applied to the B2BUA outbound INVITE (headers; body optional)")
+	public String getTemplate() {
+		return template;
+	}
+
+	public void setTemplate(String template) {
+		this.template = template;
 	}
 
 	/// Returns the error map that maps phone numbers to SIP error codes.

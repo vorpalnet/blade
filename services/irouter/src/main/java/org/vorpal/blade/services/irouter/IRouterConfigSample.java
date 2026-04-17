@@ -2,85 +2,60 @@ package org.vorpal.blade.services.irouter;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
-import java.util.Map;
 
-import org.vorpal.blade.framework.v3.configuration.RestResolver;
-import org.vorpal.blade.framework.v3.configuration.Selector;
-import org.vorpal.blade.framework.v3.configuration.translations.Translation;
-import org.vorpal.blade.framework.v3.configuration.translations.tables.HashTranslationTable;
-import org.vorpal.blade.framework.v3.configuration.translations.tables.PrefixTranslationTable;
+import org.vorpal.blade.framework.v3.configuration.adapters.SipAdapter;
+import org.vorpal.blade.framework.v3.configuration.selectors.RegexSelector;
+import org.vorpal.blade.framework.v3.configuration.tables.HashRoutingTable;
+import org.vorpal.blade.framework.v3.configuration.tables.PrefixRoutingTable;
 
-/// Builds a sample configuration for the Intelligent Router.
+/// Sample iRouter configuration written to `_samples/` on first deploy.
 ///
-/// This gets written to the `_samples/` directory on first deploy
-/// so operators have a working template to copy and customize.
+/// Demonstrates a minimal pipeline: a [SipAdapter] extracts the user
+/// part of the To URI; a [HashRoutingTable] routes named users
+/// (sales, support) to their queues; a [PrefixRoutingTable] handles
+/// dial-plan prefixes (1800, 1, 44).
 public class IRouterConfigSample extends IRouterConfig {
 	private static final long serialVersionUID = 1L;
 
 	public IRouterConfigSample() {
+		String sipUri = "(?:sips?):(?:(?<user>[^@]+)@)*(?<host>[^:;>]*).*";
 
-		// Selector: extract the user part of the To header
-		Selector toUser = new Selector("to-user", "To",
-				"(?:sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*).*",
-				"${user}");
-		this.selectors = new LinkedList<>();
-		this.selectors.add(toUser);
+		// --- Adapters ---
+		SipAdapter sip = new SipAdapter();
+		sip.setId("sip");
+		sip.setDescription("Extract routing keys from the inbound SIP message");
+		sip.addSelector(new RegexSelector("to-user", "To", sipUri, "${user}"));
+		this.adapters = new LinkedList<>();
+		this.adapters.add(sip);
 
-		// Hash table: route by dialed number
-		HashTranslationTable<RoutingTreatment> routes = new HashTranslationTable<>();
-		routes.setId("routes");
-		routes.setDescription("Route calls by dialed number");
+		// --- Tables ---
+		HashRoutingTable named = new HashRoutingTable();
+		named.setId("named-routes");
+		named.setDescription("Route by dialed user name");
+		named.setKeyExpression("${to-user}");
+		named.getEntries().put("sales",   entry("requestUri", "sip:sales@queue.example.com"));
+		named.getEntries().put("support", entry("requestUri", "sip:support@queue.example.com",
+		                                       "X-Priority",  "high"));
 
-		Translation<RoutingTreatment> sales = routes.createTranslation("sales");
-		sales.setDescription("Sales queue");
-		sales.setTreatment(new RoutingTreatment("sip:sales@queue.example.com"));
+		PrefixRoutingTable dialPlan = new PrefixRoutingTable();
+		dialPlan.setId("dial-plan");
+		dialPlan.setDescription("Route by area code prefix");
+		dialPlan.setKeyExpression("${to-user}");
+		dialPlan.getEntries().put("1800", entry("requestUri", "sip:tollfree@carrier.example.com"));
+		dialPlan.getEntries().put("1",    entry("requestUri", "sip:domestic@carrier.example.com"));
+		dialPlan.getEntries().put("44",   entry("requestUri", "sip:uk@intl-carrier.example.com"));
 
-		Translation<RoutingTreatment> support = routes.createTranslation("support");
-		support.setDescription("Support queue");
-		Map<String, String> supportHeaders = new LinkedHashMap<>();
-		supportHeaders.put("X-Priority", "high");
-		support.setTreatment(new RoutingTreatment("sip:support@queue.example.com", supportHeaders));
+		this.tables = new LinkedList<>();
+		this.tables.add(named);
+		this.tables.add(dialPlan);
 
-		// Prefix table: route by area code
-		PrefixTranslationTable<RoutingTreatment> areaCodes = new PrefixTranslationTable<>();
-		areaCodes.setId("area-codes");
-		areaCodes.setDescription("Route by area code prefix");
+		// --- Default ---
+		this.defaultTreatment = entry("requestUri", "sip:operator@pbx.example.com");
+	}
 
-		areaCodes.createTranslation("1800")
-				.setTreatment(new RoutingTreatment("sip:tollfree@carrier.example.com"));
-		areaCodes.createTranslation("1")
-				.setTreatment(new RoutingTreatment("sip:domestic@carrier.example.com"));
-		areaCodes.createTranslation("44")
-				.setTreatment(new RoutingTreatment("sip:uk@intl-carrier.example.com"));
-
-		this.plan = new LinkedList<>();
-		this.plan.add(routes);
-		this.plan.add(areaCodes);
-
-		// REST resolver: query an external API when no local match
-		// Uses ${user} and ${host} extracted by the "to-user" selector.
-		// POST body comes from _templates/customer-lookup.txt
-		RestResolver<RoutingTreatment> restResolver = new RestResolver<>();
-		restResolver.setId("customer-api");
-		restResolver.setDescription("Customer routing API lookup");
-		restResolver.setUrl("https://api.example.com/v1/route");
-		restResolver.setMethod("POST");
-		restResolver.setBearerToken("your-api-token-here");
-		restResolver.setTimeoutSeconds(3);
-		restResolver.setBodyTemplate("customer-lookup.txt");
-
-		// Response selector: extract destination URI from JSON response
-		// e.g. response: {"route": {"destination": "sip:agent@queue.example.com"}}
-		Selector responseSelector = new Selector("route-dest", "$.route.destination",
-				"(?<uri>.*)", "${uri}");
-		restResolver.setResponseSelector(responseSelector);
-
-		this.resolvers = new LinkedList<>();
-		this.resolvers.add(restResolver);
-
-		// Default route: if nothing matches
-		this.defaultRoute = new Translation<>("default");
-		this.defaultRoute.setDescription("Default route when no match is found");
-		this.defaultRoute.setTreatment(new RoutingTreatment("sip:operator@pbx.example.com"));
+	private static LinkedHashMap<String, String> entry(String... pairs) {
+		LinkedHashMap<String, String> m = new LinkedHashMap<>();
+		for (int i = 0; i + 1 < pairs.length; i += 2) m.put(pairs[i], pairs[i + 1]);
+		return m;
 	}
 }

@@ -2,13 +2,14 @@ package org.vorpal.blade.services.irouter;
 
 import java.io.Serializable;
 
-import org.vorpal.blade.framework.v3.configuration.RouterConfiguration;
-
-/// Configuration for the Intelligent Router.
+/// Service-level alias for the framework's [org.vorpal.blade.framework.v3.configuration.IRouterConfig].
 ///
-/// Extends [RouterConfiguration] with `RoutingTreatment` as the
-/// treatment type. Future additions: REST endpoint config, JDBC
-/// data source, LDAP connection parameters for routing lookups.
-public class IRouterConfig extends RouterConfiguration<RoutingTreatment> implements Serializable {
+/// The iRouter has no service-specific config beyond what the
+/// framework provides (`adapters`, `tables`, `defaultTreatment`),
+/// so this is a thin pass-through. Other services that build on
+/// the iRouter pipeline (SecureLogix, etc.) do the same.
+public class IRouterConfig
+		extends org.vorpal.blade.framework.v3.configuration.IRouterConfig
+		implements Serializable {
 	private static final long serialVersionUID = 1L;
 }

@@ -1,0 +1,19 @@
+INVITE sip:target@uas.test SIP/2.0
+Min-SE: 90
+Session-Expires: 2400;refresher=uac
+Supported: timer
+Require: siprec
+Content-Type: multipart/mixed; boundary=unique-boundary-1
+
+--unique-boundary-1
+Content-Type: application/rs-metadata+xml
+Content-Disposition: recording-session
+
+<?xml version='1.0' encoding='UTF-8'?>
+<recording xmlns='urn:ietf:params:xml:ns:recording'>
+  <datamode>complete</datamode>
+  <session id="gxwzQvnlSSVhNe2DPctt4Q==">
+    <associate-time>2026-04-16T15:53:04</associate-time>
+  </session>
+</recording>
+--unique-boundary-1--

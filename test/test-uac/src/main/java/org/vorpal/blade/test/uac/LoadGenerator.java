@@ -223,7 +223,7 @@ public class LoadGenerator {
 		effectiveFromPattern = firstNonEmpty(request.getFromAddressPattern(), config.getFromAddressPattern());
 		effectiveToPattern = firstNonEmpty(request.getToAddressPattern(), config.getToAddressPattern());
 		effectiveRequestUri = firstNonEmpty(request.getRequestUriTemplate(), config.getRequestUriTemplate());
-		effectiveSdpContent = firstNonEmpty(null, config.getSdpContent());
+		effectiveSdpContent = null;
 
 		String durationStr = firstNonEmpty(request.getDuration(), config.getDuration());
 		try {
@@ -232,10 +232,10 @@ public class LoadGenerator {
 			effectiveDurationSeconds = 30;
 		}
 
+		// Per-test headers come from the REST request. Config-level
+		// header defaults were replaced by the template-file approach
+		// applied in UserAgentClientServlet.callStarted (softphone path).
 		effectiveHeaders = new HashMap<>();
-		if (config.getHeaders() != null) {
-			effectiveHeaders.putAll(config.getHeaders());
-		}
 		if (request.getHeaders() != null) {
 			effectiveHeaders.putAll(request.getHeaders());
 		}
