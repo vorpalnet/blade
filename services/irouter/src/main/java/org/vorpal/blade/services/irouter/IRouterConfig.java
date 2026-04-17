@@ -6,8 +6,7 @@ import java.io.Serializable;
 ///
 /// The iRouter has no service-specific config beyond what the
 /// framework provides (`adapters`, `tables`, `defaultTreatment`),
-/// so this is a thin pass-through. Other services that build on
-/// the iRouter pipeline (SecureLogix, etc.) do the same.
+/// so this is a thin pass-through.
 public class IRouterConfig
 		extends org.vorpal.blade.framework.v3.configuration.IRouterConfig
 		implements Serializable {
