@@ -1,8 +1,6 @@
 package org.vorpal.blade.test.uac;
 
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
@@ -10,27 +8,37 @@ import org.vorpal.blade.framework.v2.config.Configuration;
 
 /// Configuration for the BLADE Test UAC.
 ///
-/// Includes SIP header defaults and load test parameters.
-/// Load test fields provide defaults that can be overridden per-test
-/// via the LoadTestRequest REST API.
+/// On each inbound call from a softphone (the B2BUA outbound leg
+/// being constructed), the servlet loads the configured `template`
+/// file and applies it to the outbound INVITE: the first line
+/// (if present) becomes the outbound Request-URI; subsequent
+/// `Name: value` lines become SIP headers; and the body (if any)
+/// replaces the outbound content. An empty body leaves the
+/// original content alone.
+///
+/// The remaining load-test fields still control the programmatic
+/// [LoadGenerator] pathway.
 public class UserAgentClientConfig extends Configuration implements Serializable {
 
 	private static final long serialVersionUID = 1L;
-	protected Map<String, String> headers = new HashMap<>();
+
+	protected String template;
 	protected String fromAddressPattern;
 	protected String toAddressPattern;
 	protected String requestUriTemplate;
 	protected String duration = "30s";
-	protected String sdpContent;
 
-	/// Returns custom SIP headers applied to generated INVITE requests.
-	@JsonPropertyDescription("Custom SIP headers for INVITE requests")
-	public Map<String, String> getHeaders() {
-		return headers;
+	/// Returns the filename (in `_templates/`) of the SIP-message
+	/// template applied to outbound INVITEs on inbound softphone
+	/// calls. Format: optional request-line, `Name: value` headers,
+	/// blank line, optional body.
+	@JsonPropertyDescription("Template filename in _templates/ applied to outbound INVITEs (headers + optional body)")
+	public String getTemplate() {
+		return template;
 	}
 
-	public void setHeaders(Map<String, String> headers) {
-		this.headers = headers;
+	public void setTemplate(String template) {
+		this.template = template;
 	}
 
 	/// Returns the From address pattern. Supports `${index}` for per-call uniqueness.
@@ -72,15 +80,4 @@ public class UserAgentClientConfig extends Configuration implements Serializable
 	public void setDuration(String duration) {
 		this.duration = duration;
 	}
-
-	/// Returns the SDP content for INVITE requests, or null for no SDP.
-	@JsonPropertyDescription("SDP body for INVITE requests (null for no SDP)")
-	public String getSdpContent() {
-		return sdpContent;
-	}
-
-	public void setSdpContent(String sdpContent) {
-		this.sdpContent = sdpContent;
-	}
-
 }

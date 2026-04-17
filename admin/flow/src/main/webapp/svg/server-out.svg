@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512">
+  <!-- Network server chassis -->
+  <rect x="24" y="48" width="440" height="176" rx="16" ry="16" fill="none" stroke="currentColor" stroke-width="24"/>
+  <circle cx="72" cy="124" r="14" fill="currentColor"/>
+  <circle cx="120" cy="124" r="14" fill="currentColor"/>
+  <rect x="188" y="104" width="240" height="12" fill="currentColor"/>
+  <rect x="188" y="128" width="240" height="12" fill="currentColor"/>
+  <rect x="188" y="152" width="240" height="12" fill="currentColor"/>
+
+  <rect x="24" y="272" width="440" height="176" rx="16" ry="16" fill="none" stroke="currentColor" stroke-width="24"/>
+  <circle cx="72" cy="348" r="14" fill="currentColor"/>
+  <circle cx="120" cy="348" r="14" fill="currentColor"/>
+  <rect x="188" y="328" width="240" height="12" fill="currentColor"/>
+  <rect x="188" y="352" width="240" height="12" fill="currentColor"/>
+  <rect x="188" y="376" width="240" height="12" fill="currentColor"/>
+
+  <!-- Egress arrow: points right, out of the server -->
+  <path d="M488 232 L552 232 L552 196 L624 256 L552 316 L552 280 L488 280 Z" fill="currentColor"/>
+</svg>

@@ -1,167 +1,181 @@
 <html>
-
 <head>
-<title>ALICE - Microservice Broker</title>
+<title>Transition Properties</title>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
-
-<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
-<link rel="stylesheet" href="./css/jquery-ui.modified.css">
-<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css"
-	integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
-<script src="./js/aliceTasks.js" defer></script>
 
 <style>
 body {
 	font-family: Arial;
-	font-size: 12;
+	font-size: 12px;
 	background-color: #eef;
 }
-
+#transition-view {
+	padding: 4px;
+}
 #transition-tabs {
-	margin-left: auto;
-	margin-right: auto;
-	max-width: 300px;
+	font-size: 12px;
+}
+#transition-view > #transition-tabs > div > label {
+	display: block;
+	margin-top: 6px;
+	font-weight: bold;
+}
+#transition-view input[type=text],
+#transition-view select {
+	padding: 3px;
+	box-sizing: border-box;
+}
+#transition-view > #transition-tabs > div > input[type=text],
+#transition-view > #transition-tabs > div > select {
+	width: 100%;
+}
+#transition-view fieldset {
+	margin: 10px 0;
+	border: 1px solid #bbb;
+	padding: 6px 10px 12px 10px;
+	background: #f8f8ff;
+	border-radius: 4px;
+}
+#transition-view legend {
+	font-weight: bold;
+	font-size: 11px;
+	padding: 0 6px;
+}
+.selector-row legend .remove-btn {
+	cursor: pointer;
+	color: #c00;
+	margin-left: 6px;
+}
+/* Each selector field stacks vertically with breathing room */
+.sel-field {
+	margin-top: 10px;
+}
+.sel-field label {
+	display: block;
+	font-weight: bold;
+	font-size: 11px;
+	margin-bottom: 3px;
+	color: #444;
+}
+.sel-field input[type=text],
+.sel-field select {
+	width: 100%;
+}
+.route-row {
+	border: 1px dashed #aaa;
+	padding: 4px;
+	margin-top: 4px;
+	background: #f8f8ff;
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+.route-row input {
+	flex: 1;
+}
+.extract-row {
+	display: flex;
+	gap: 4px;
+	align-items: center;
+	margin-top: 4px;
+}
+.extract-row .ex-name {
+	flex: 1;
+	min-width: 0;
+}
+.extract-row .ex-path {
+	flex: 2;
+	min-width: 0;
+}
+.group-row {
+	margin: 8px 0;
+	border: 2px solid #88a;
+	padding: 6px 8px 10px 8px;
+	background: #f4f4ff;
+	border-radius: 6px;
+}
+.group-row > legend {
+	font-weight: bold;
+	font-size: 12px;
+	padding: 0 6px;
+	color: #446;
+}
+.or-divider {
+	text-align: center;
+	font-weight: bold;
+	font-size: 11px;
+	color: #888;
+	margin: 2px 0;
+}
+.add-btn {
+	color: green;
+	cursor: pointer;
+	font-size: 14px;
+}
+.remove-btn {
+	color: #c00;
+	cursor: pointer;
+}
+.hint {
+	color: #666;
+	font-size: 10px;
+	font-style: italic;
 }
 </style>
-
 </head>
-
 <body>
 
-	<div id="transition-view">
+<div id="transition-view">
 
-		<form>
+	<div id="transition-tabs">
+		<ul>
+			<li><a href="#transition-tabs-basic">Basic</a></li>
+			<li><a href="#transition-tabs-selectors">Selectors</a></li>
+			<li><a href="#transition-tabs-routing">Routing</a></li>
+		</ul>
 
-			<div id="transition-tabs">
-				<ul>
-					<li><a href="#transition-tabs-1">Trigger</a></li>
-					<li><a href="#transition-tabs-2">Action</a></li>
-				</ul>
-				<div id="transition-tabs-1">
+		<div id="transition-tabs-basic">
+			<label>SIP Method</label>
+			<select id="transition-method">
+				<option>INVITE</option>
+				<option>REGISTER</option>
+				<option>SUBSCRIBE</option>
+				<option>OPTIONS</option>
+				<option>MESSAGE</option>
+				<option>PUBLISH</option>
+				<option>REFER</option>
+				<option>NOTIFY</option>
+			</select>
 
-					<div class="ui-controlgroup">
-						<div class="ui-controlgroup-label">
+			<label>Transition ID <span class="hint">(for logging)</span></label>
+			<input id="transition-txid" type="text" placeholder="e.g. INV-1" />
 
-							<fieldset>
+			<label>Next Application <span class="hint">(edge target — read-only)</span></label>
+			<input id="transition-next" type="text" readonly />
+		</div>
 
-								<legend>Request</legend>
-
-
-								<div>
-									<label style="width: 100%">Method</label>
-								</div>
-								<div>
-									<select id="transition-request-method">
-									    <option selected disabled hidden>Select method...</option>
-										<option>INVITE</option>
-										<option>OPTIONS</option>
-										<option>REGISTER</option>
-										<option>SUBSCRIBE</option>
-										<option>NOTIFY</option>
-										<option>PUBLISH</option>
-										<option>INFO</option>
-										<option>REFER</option>
-										<option>MESSAGE</option>
-										<option>UPDATE</option>
-									</select>
-								</div>
-
-								<div>
-									<label style="width: 100%">Routing Directive</label>
-								</div>
-								<div>
-									<input id="checkboxCustom1" value="NEW" class="checkbox-template" type="checkbox"> <label for="checkboxCustom1">New</label>
-								</div>
-								<div>
-									<input id="checkboxCustom1" value="CONTINUE" class="checkbox-template" type="checkbox"> <label for="checkboxCustom1">Continue</label>
-								</div>
-								<div>
-									<input id="checkboxCustom1" value="REVERSE" class="checkbox-template" type="checkbox"> <label for="checkboxCustom1">Reverse</label>
-								</div>
-
-
-							</fieldset>
-
-
-						</div>
-
-					</div>
-
-					<div class="ui-controlgroup">
-						<div class="ui-controlgroup-label">
-							<fieldset>
-								<legend>Pattern Match</legend>
-								<div>
-									<label style="width: 100%">Request Line URI</label>
-								</div>
-								<div>
-									<input style="width: 100%" name="requestURI" type="text" placeholder="RegEx">
-								</div>
-								<div>
-									<label style="width: 100%">Header(s)</label>
-									<div class="patternMatch">
-										<i class="fas fa-plus-circle addPattern" style="display: inline; color: green;"></i>
-										<div style="display: inline;">
-											<input name="header" type="text" style="display: inline; width: 45%" placeholder="Header"> <input name="regex"
-												type="text" style="float: right; display: inline; width: 45%" placeholder="RegEx">
-										</div>
-									</div>
-								</div>
-							</fieldset>
-						</div>
-					</div>
-
-				</div>
-
-				<div id="transition-tabs-2">
-
-
-					<div class="ui-controlgroup">
-						<div class="ui-controlgroup-label">
-							<fieldset>
-								<legend>Subscriber</legend>
-
-
-								<div>
-									<label style="width: 100%">Routing Region</label>
-								</div>
-								<div>
-									<select id="region">
-										<option>Neutral</option>
-										<option>Originating</option>
-										<option>Terminating</option>
-									</select>
-									<div>
-										<label style="width: 100%">URI Header</label>
-									</div>
-									<div>
-										<input style="width: 100%" id="subscriberUri" type="text" placeholder="Header">
-									</div>
-								</div>
-
-
-							</fieldset>
-						</div>
-
-					</div>
-
-
-				</div>
-
-
+		<div id="transition-tabs-selectors">
+			<div style="margin-bottom: 4px;">
+				<i class="fas fa-plus-circle add-btn" id="add-group" title="Add selector group"></i>
+				<span class="hint">First matching group wins (OR)</span>
 			</div>
+			<div id="transition-groups"></div>
+		</div>
 
+		<div id="transition-tabs-routing">
+			<label>Subscriber Header <span class="hint">(e.g. From, To)</span></label>
+			<input id="transition-subscriber" type="text" placeholder="From" />
 
-		</form>
+			<label>Route URIs</label>
+			<div style="margin-bottom: 4px;">
+				<i class="fas fa-plus-circle add-btn" id="add-route" title="Add route"></i>
+				<span class="hint">Pushed as Route headers</span>
+			</div>
+			<div id="transition-routes"></div>
+		</div>
+
 	</div>
-	
-	<script>
-	$('#transition-tabs').tabs();
-	</script>
-	
+</div>
 
 </body>
-
 </html>

@@ -1,6 +1,6 @@
 <mxEditor>
 	<ui>
-		<resource basename="resources/app" />
+		<!-- resource bundle disabled; tooltips set via flowUtils.applyToolbarTooltips() -->
 	</ui>
 	<mxDefaultPopupMenu as="popupHandler">
 		<add as="cut" action="cut" icon="images/cut.gif" />
@@ -66,21 +66,25 @@
 		<add as="save"><![CDATA[
 			function (editor)
 			{
-			var filename = editor.filename || editor.getUrlPost() + "default.xml";
-			filename = mxUtils.prompt(mxResources.get('enterFilename'), filename)
-			editor.filename = filename;
-			editor.save( filename );
+				flowUtils.saveFile(editor);
 			}
 		]]></add>
 		<add as="open"><![CDATA[
 			function (editor)
 			{
-				
-				
-				aliceUtils.selectFile(editor);
-				
-				
-				
+				flowUtils.selectFile(editor);
+			}
+		]]></add>
+		<add as="exportFsmar"><![CDATA[
+			function (editor)
+			{
+				flowFsmar.exportToJson(editor);
+			}
+		]]></add>
+		<add as="importFsmar"><![CDATA[
+			function (editor)
+			{
+				flowFsmar.importFromJson(editor);
 			}
 		]]></add>
 		<add as="openHref"><![CDATA[

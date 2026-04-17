@@ -9,7 +9,8 @@
 		<welcome-file>index.html</welcome-file>
 	</welcome-file-list>
 
-	<!-- no security required -->
+	<!-- Security temporarily disabled for development -->
+	<!--
 	<security-constraint>
 		<web-resource-collection>
 			<web-resource-name>login</web-resource-name>
@@ -51,5 +52,6 @@
 	<security-role>
 		<role-name>Monitor</role-name>
 	</security-role>
+	-->
 
 </web-app>
