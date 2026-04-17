@@ -1,0 +1,46 @@
+<html>
+<head>
+<title>Node Properties</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<style>
+body {
+	font-family: Arial;
+	font-size: 12px;
+	background-color: #eef;
+}
+#state-view {
+	padding: 8px;
+}
+#state-view label {
+	display: block;
+	margin-top: 8px;
+	font-weight: bold;
+}
+#state-view input[type=text] {
+	width: 95%;
+	padding: 4px;
+	box-sizing: border-box;
+}
+.state-hint {
+	color: #666;
+	font-size: 11px;
+	margin-top: 4px;
+	font-style: italic;
+}
+</style>
+</head>
+<body>
+
+<div id="state-view">
+	<label>Name</label>
+	<input class="node-name" type="text" placeholder="e.g. b2bua, proxy-registrar, PSTN, SBC1" />
+	<div class="state-hint">
+		For a State, this is the BLADE application name (used as the JSON key).
+		For Ingress/Egress clouds, this is just a display label &mdash; both clouds always
+		map to the literal string <code>null</code> in FSMAR JSON.
+	</div>
+</div>
+
+</body>
+</html>

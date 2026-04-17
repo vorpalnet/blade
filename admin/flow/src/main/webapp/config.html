@@ -1,0 +1,50 @@
+<html>
+<head>
+<title>Flow Model Properties</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<style>
+body {
+	font-family: Arial;
+	font-size: 12px;
+	background-color: #eef;
+}
+#config-view {
+	padding: 8px;
+}
+#config-view label {
+	display: block;
+	margin-top: 8px;
+	font-weight: bold;
+}
+#config-view input[type=text] {
+	width: 95%;
+	padding: 4px;
+	box-sizing: border-box;
+}
+.config-hint {
+	color: #666;
+	font-size: 11px;
+	margin-top: 4px;
+	font-style: italic;
+}
+</style>
+</head>
+<body>
+
+<div id="config-view">
+	<h3 style="margin-top: 0;">FSMAR Flow Configuration</h3>
+
+	<label>Default Application</label>
+	<input id="config-default-app" type="text" placeholder="e.g. b2bua" />
+	<div class="config-hint">
+		Fallback application when no transition matches an initial request.
+	</div>
+
+	<div class="config-hint" style="margin-top: 16px;">
+		Select a state or transition on the canvas to edit its properties.
+	</div>
+</div>
+
+</body>
+</html>

@@ -1,4 +1,4 @@
-<mxEditor urlPost="../resources/microservices/">
+<mxEditor urlPost="save">
 	<include name="config/wfeditor-commons.xml"/>
 	<ui>
 		<add as="graph" element="graph"

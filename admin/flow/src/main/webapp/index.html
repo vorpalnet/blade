@@ -1,6 +1,6 @@
 <html>
 <head>
-	<title>ALICE - Microservice Broker</title>
+	<title>BLADE Flow Editor</title>
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
 <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
@@ -10,7 +10,7 @@
 	integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
 
 
-<script src="./js/aliceTasks.js" defer></script>
+<script src="./js/flowTasks.js" defer></script>
 
 
 
@@ -29,17 +29,57 @@
 			border-width: 1px;
 			background: url('images/grid.gif');
 		}
+		/* View filter panel inside the Tasks window */
+		.view-panel {
+			padding: 6px 8px 8px 8px;
+			font-family: Arial;
+			font-size: 12px;
+		}
+		.view-panel .view-header {
+			margin-bottom: 4px;
+		}
+		.view-panel .view-header a {
+			font-size: 11px;
+			color: #4679B6;
+			text-decoration: none;
+		}
+		.view-panel .view-header a:hover {
+			text-decoration: underline;
+		}
+		.view-panel .view-item {
+			display: block;
+			font-weight: normal;
+			padding: 2px 0;
+			cursor: pointer;
+		}
+		.view-panel .view-item input {
+			margin-right: 6px;
+			vertical-align: middle;
+		}
+		.view-panel .view-empty {
+			color: #888;
+			font-style: italic;
+			font-size: 11px;
+		}
+		hr.view-sep {
+			border: none;
+			border-top: 1px solid #ccc;
+			margin: 4px 0 6px 0;
+		}
 	</style>
 	<script type="text/javascript">
-		// mxBasePath = './';
-		// mxImageBasePath = './images';		
+		// Disable mxResources auto-load. The resource files (app.txt,
+		// editor.txt, graph.txt) are not reachable in this deployed
+		// environment and the 404s clutter the console. Tooltips are
+		// applied manually via flowUtils.applyToolbarTooltips().
+		var mxLoadResources = false;
 	</script>
-	
 
 
 	<script type="text/javascript" src="js/mxClient.js"></script>
 	<script type="text/javascript" src="js/app.js"></script>
-	<script type="text/javascript" src="js/aliceUtils.js"></script>
+	<script type="text/javascript" src="js/flowUtils.js"></script>
+	<script type="text/javascript" src="js/flowFsmar.js"></script>
 	
 	
 	<script type="text/javascript">
