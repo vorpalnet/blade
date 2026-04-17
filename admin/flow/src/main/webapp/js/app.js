@@ -55,6 +55,7 @@
 				
 				editor.graph.allowAutoPanning = true;
 				editor.graph.timerAutoScroll = true;
+				editor.graph.setEdgeLabelsMovable(true);
 				
 				// Updates the window title after opening new files
 				var title = document.title;
@@ -71,10 +72,48 @@
 				funct(editor);
 				
 				// Displays version in statusbar
-				//jwm
-				// editor.setStatus('mxGraph '+mxClient.VERSION);
-				editor.setStatus('ALICE v1.01a');
-				
+				editor.setStatus('BLADE Flow Editor — FSMAR 3');
+
+				// Apply hardcoded tooltips to toolbar buttons (mxResources/app.txt
+				// loading is unreliable in the deployed environment, so we set
+				// title attributes directly).
+				if (window.flowUtils && window.flowUtils.applyToolbarTooltips) {
+					window.flowUtils.applyToolbarTooltips();
+				}
+
+				// Blur any focused property-panel input when the user clicks on
+				// the canvas. Without this, focus stays on the input and the
+				// Delete key (and other keyboard shortcuts) get swallowed instead
+				// of being routed to mxKeyHandler.
+				if (editor.graph && editor.graph.container) {
+					mxEvent.addListener(editor.graph.container, 'mousedown', function() {
+						if (document.activeElement && document.activeElement !== document.body
+								&& typeof document.activeElement.blur === 'function') {
+							document.activeElement.blur();
+						}
+					});
+				}
+
+				// Auto-separate parallel edges between the same pair of nodes
+				var parallelLayout = new mxParallelEdgeLayout(editor.graph);
+				parallelLayout.spacing = 32;
+
+				editor.graph.addListener(mxEvent.CELL_CONNECTED, function(sender, evt) {
+					parallelLayout.execute(editor.graph.getDefaultParent());
+				});
+
+				// Also run after model decode (e.g. JSON import) so imported
+				// graphs get separated edges immediately.
+				editor.graph.getModel().addListener(mxEvent.CHANGE, function() {
+					if (!parallelLayout._running) {
+						parallelLayout._running = true;
+						try {
+							parallelLayout.execute(editor.graph.getDefaultParent());
+						} finally {
+							parallelLayout._running = false;
+						}
+					}
+				});
 
 				// Shows the application
 				hideSplash();

@@ -1,46 +1,21 @@
 <mxGraph alternateEdgeStyle="verticalEdge" dropEnabled="1">
-	<add as="isAutoSizeCell"><![CDATA[
-		function(cell)
-		{
-			return this.isSwimlane(cell);
-		}
-	]]></add>
-	<add as="isSwimlane"><![CDATA[
-		function (cell)
-		{
-			return mxUtils.isNode(this.model.getValue(cell), 'swimlane');
-		}
-	]]></add>
-	<add as="isAllowOverlapParent"><![CDATA[
-		function(cell)
-		{
-			return !this.isSwimlane(cell.parent);
-		}
-	]]></add>
 	<add as="getTooltipForCell"><![CDATA[
 		function(cell)
 		{
-			var href = cell.getAttribute('href');
-			href = (href != null && href.length > 0) ?
-				'<br>'+href : '';
-			var maxlen = 30;
-			var desc = cell.getAttribute('description');
-			if (desc == null || desc.length == 0)
-			{
-				desc = '';
+			var tag = cell.value ? cell.value.tagName : '';
+			var label = cell.getAttribute('label') || '';
+			var info = '';
+
+			if (tag === 'Transition') {
+				var txId = cell.getAttribute('txId') || '';
+				var subscriber = cell.getAttribute('subscriber') || '';
+				if (txId) info += '<br>id: ' + txId;
+				if (subscriber) info += '<br>subscriber: ' + subscriber;
 			}
-			else if (desc.length < maxlen)
-			{
-				desc = '<br>'+desc;
-			}
-			else
-			{
-				desc = '<br>'+desc.substring(0, maxlen)+'...';
-			}
-			return '<b>'+cell.getAttribute('label')+
-					'</b> ('+cell.getId()+')'+href+desc+
-					'<br>Edges: '+cell.getEdgeCount()+
-					'<br>Children: '+cell.getChildCount();
+
+			return '<b>' + tag + ': ' + label + '</b>' + info +
+					'<br>Edges: ' + cell.getEdgeCount() +
+					'<br>Children: ' + cell.getChildCount();
 		}
 	]]></add>
 	<add as="convertValueToString">
@@ -54,7 +29,7 @@
 			function(cell, value)
 			{
 				var previous = null;
-				
+
 				if (isNaN(value.nodeType))
 				{
 					previous = cell.getAttribute('label');
@@ -65,12 +40,12 @@
 					previous = cell.value;
 					cell.value = value;
 				}
-				
+
 				return previous;
 			}
 		]]></add>
 		<root>
-			<Workflow label="MyWorkflow" description="" href="" id="0"/>
+			<FlowModel label="FSMAR Flow" defaultApplication="" id="0"/>
 			<Layer label="Default Layer">
 				<mxCell parent="0"/>
 			</Layer>
@@ -81,7 +56,7 @@
 			<add as="shape" value="label"/>
 			<add as="perimeter" value="rectanglePerimeter"/>
 			<add as="labelBackgroundColor" value="white"/>
-			<add as="fontSize" value="10"/>
+			<add as="fontSize" value="11"/>
 			<add as="align" value="center"/>
 			<add as="verticalAlign" value="middle"/>
 			<add as="strokeColor" value="black"/>
@@ -92,10 +67,40 @@
 			<add as="rounded" value="1"/>
 			<add as="edgeStyle" value="elbowEdgeStyle"/>
 			<add as="endArrow" value="classic"/>
+			<add as="strokeWidth" value="2"/>
 			<add as="fontSize" value="10"/>
 			<add as="align" value="center"/>
 			<add as="verticalAlign" value="middle"/>
-			<add as="strokeColor" value="black"/>
+			<add as="strokeColor" value="#444444"/>
+		</add>
+		<add as="state">
+			<add as="shape" value="rectangle"/>
+			<add as="rounded" value="1"/>
+			<add as="fillColor" value="#DAE8FC"/>
+			<add as="strokeColor" value="#6C8EBF"/>
+			<add as="strokeWidth" value="2"/>
+			<add as="fontSize" value="12"/>
+			<add as="fontStyle" value="1"/>
+		</add>
+		<add as="ingressCloud">
+			<add as="shape" value="networkServer"/>
+			<add as="fillColor" value="#E1D5E7"/>
+			<add as="strokeColor" value="#9673A6"/>
+			<add as="strokeWidth" value="2"/>
+			<add as="fontSize" value="11"/>
+			<add as="fontStyle" value="1"/>
+			<add as="verticalLabelPosition" value="bottom"/>
+			<add as="verticalAlign" value="top"/>
+		</add>
+		<add as="egressCloud">
+			<add as="shape" value="networkServer"/>
+			<add as="fillColor" value="#FFE6CC"/>
+			<add as="strokeColor" value="#D79B00"/>
+			<add as="strokeWidth" value="2"/>
+			<add as="fontSize" value="11"/>
+			<add as="fontStyle" value="1"/>
+			<add as="verticalLabelPosition" value="bottom"/>
+			<add as="verticalAlign" value="top"/>
 		</add>
 		<add as="verticalEdge">
 			<add as="elbow" value="vertical"/>
@@ -104,19 +109,6 @@
 			<add as="shape" value="connector"/>
 			<add as="endArrow" value="classic"/>
 		</add>
-		<add as="arrowEdge">
-			<add as="shape" value="arrow"/>
-			<add as="fillColor" value="red"/>
-		</add>
-		<add as="swimlane">
-			<add as="shape" value="swimlane"/>
-			<add as="fontSize" value="12"/>
-			<add as="startSize" value="23"/>
-			<add as="horizontal" value="0"/>
-			<add as="verticalAlign" value="top"/>
-			<add as="fontColor" value="white"/>
-			<add as="labelBackgroundColor" value="none"/>
-		</add>
 		<add as="group">
 			<add as="shape" value="rectangle"/>
 			<add as="rounded" value="1"/>
@@ -124,29 +116,6 @@
 			<add as="strokeColor" value="black"/>
 			<add as="dashed" value="1"/>
 			<add as="opacity" value="50"/>
-		</add>
-		<add as="rounded">
-			<add as="rounded" value="1"/>
-		</add>
-		<add as="ellipse">
-			<add as="shape" value="ellipse"/>
-			<add as="perimeter" value="ellipsePerimeter"/>
-		</add>
-		<add as="rhombus">
-			<add as="shape" value="rhombus"/>
-			<add as="perimeter" value="rhombusPerimeter"/>
-		</add>
-		<add as="actor">
-			<add as="shape" value="actor"/>
-		</add>
-		<add as="symbol">
-			<add as="shape" value="image"/>
-			<add as="perimeter" value="rectanglePerimeter"/>
-			<add as="labelBackgroundColor" value="white"/>
-			<add as="fontSize" value="10"/>
-			<add as="align" value="center"/>
-			<add as="verticalAlign" value="top"/>
-			<add as="verticalLabelPosition" value="bottom"/>
 		</add>
 	</mxStylesheet>
 </mxGraph>

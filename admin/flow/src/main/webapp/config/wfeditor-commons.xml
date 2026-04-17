@@ -17,104 +17,37 @@
 	</Array>
 	<Array as="templates">
 		<add as="group">
-			<Group label="" description="" href="">
+			<Group label="" description="">
 				<mxCell vertex="1" style="group" connectable="0" />
 			</Group>
 		</add>
 		<add as="edge">
-			<Transition label="" description="">
+			<Transition label="INVITE" txId="" subscriber="">
 				<mxCell edge="1">
 					<mxGeometry as="geometry" relative="1" />
 				</mxCell>
 			</Transition>
 		</add>
-		<add as="swimlane">
-			<Swimlane label="Swimlane" description="" href="">
-				<mxCell vertex="1" style="swimlane" connectable="0">
-					<mxGeometry as="geometry" width="300" height="160" />
+		<add as="state">
+			<State label="app-name">
+				<mxCell vertex="1" style="state">
+					<mxGeometry as="geometry" width="120" height="48" />
 				</mxCell>
-			</Swimlane>
+			</State>
 		</add>
-		<add as="task">
-			<Task label="Task" description="" href="">
-				<mxCell vertex="1">
-					<mxGeometry as="geometry" width="72" height="32" />
-				</mxCell>
-			</Task>
-		</add>
-		<add as="microservice">
-			<Microservice label="" description=""
-				href="">
-				<mxCell vertex="1" style="rounded">
-					<mxGeometry as="geometry" width="72" height="46" />
-				</mxCell>
-			</Microservice>
-		</add>
-
-		<add as="inbound">
-			<Inbound label="Inbound Gateway" description="" href="">
-				<mxCell vertex="1" style="">
-					<mxGeometry as="geometry" width="72" height="46" />
-				</mxCell>
-			</Inbound>
-		</add>
-
-
 		<add as="ingress">
-			<Ingress label="" description="" href="">
-				<mxCell vertex="1" style="">
-					<mxGeometry as="geometry" width="72" height="46"/>
+			<Ingress label="ingress">
+				<mxCell vertex="1" style="ingressCloud">
+					<mxGeometry as="geometry" width="120" height="80" />
 				</mxCell>
 			</Ingress>
 		</add>
-
 		<add as="egress">
-			<Egress label="" description="" href="">
-				<mxCell vertex="1" style="">
-					<mxGeometry as="geometry" width="72" height="46" />
+			<Egress label="egress">
+				<mxCell vertex="1" style="egressCloud">
+					<mxGeometry as="geometry" width="120" height="80" />
 				</mxCell>
 			</Egress>
-		</add>
-
-		<add as="subscriber">
-			<Subscriber label="" description="" href="">
-				<mxCell vertex="1" style="">
-					<mxGeometry as="geometry" width="64" height="64" />
-				</mxCell>
-			</Subscriber>
-		</add>
-		
-		<add as="authentication">
-			<Authentication label="" description="" href="">
-				<mxCell vertex="1" style="">
-					<mxGeometry as="geometry" width="64" height="64" />
-				</mxCell>
-			</Authentication>
-		</add>	
-		
-		<add as="reference">
-			<Reference label="" description="" href="">
-				<mxCell vertex="1" style="">
-					<mxGeometry as="geometry" width="64" height="64" />
-				</mxCell>
-			</Reference>
-		</add>			
-
-
-		<add as="shape">
-			<Shape label="" description="" href="">
-				<mxCell vertex="1" style="ellipse">
-					<mxGeometry as="geometry" width="32" height="32" />
-				</mxCell>
-			</Shape>
-		</add>
-		<add as="symbol">
-			<Symbol label="Symbol" description="" href="">
-				<mxCell vertex="1"
-					style="symbol;image=images/symbols/event.png">
-					<mxGeometry as="geometry" width="32" height="32" />
-				</mxCell>
-			</Symbol>
 		</add>
 	</Array>
 
@@ -122,129 +55,141 @@
 		function (div)
 		{
 			console.log('createTasks...');
-			
-		// transition
-		var transition = document.createElement('div');
-		transition.id = 'Transition';
-		transition.className = 'task';
-		transition.style.display = 'none';
-		div.appendChild(transition)
-		$('#Transition').load('./transition.html #transition-view', function() {
-			$('#transition-tabs').tabs();
-		});
 
-		// microservice
-		var microservice = document.createElement('div');
-		microservice.id = 'Microservice';
-		microservice.className = 'task';
-		microservice.style.display = 'none';
-		div.appendChild(microservice)
-		$('#Microservice').load('./microservice.html #microservice-view',
-				function() {
-					// initialize jquery tabs only after page has loaded
-					$('#microservice-tabs').tabs();
-				});
+			// View filter panel — always visible, not a .task.
+			// One checkbox per distinct Transition method name. Unchecking hides
+			// edges of that type so overlapping flows are easier to read.
+			var view = document.createElement('div');
+			view.id = 'ViewFilter';
+			view.className = 'view-panel';
+			view.innerHTML =
+				'<div class="view-header">' +
+					'<b>View</b> ' +
+					'<a href="#" id="view-show-all">all</a> | ' +
+					'<a href="#" id="view-hide-all">none</a>' +
+				'</div>' +
+				'<div id="view-methods"></div>';
+			div.appendChild(view);
 
-		// ingress
-		var ingress = document.createElement('div');
-		ingress.className = 'task';
-		ingress.id = 'Ingress';
-		ingress.style.display = 'none';
-		div.appendChild(ingress)
-		$('#Ingress').load('./ingress.html #ingress-view');
+			if (window.flowTasks && window.flowTasks.initView) {
+				window.flowTasks.initView(this.graph);
+			}
 
-		// egress
-		var egress = document.createElement('div');
-		egress.className = 'task';
-		egress.id = 'Egress';
-		egress.style.display = 'none';
-		div.appendChild(egress)
-		$('#Egress').load('./egress.html #egress-view');			
-			
-			
+			var sep = document.createElement('hr');
+			sep.className = 'view-sep';
+			div.appendChild(sep);
+
+			// State properties panel
+			var state = document.createElement('div');
+			state.id = 'State';
+			state.className = 'task';
+			state.style.display = 'none';
+			div.appendChild(state);
+			$('#State').load('./state.html #state-view');
+
+			// Ingress cloud properties panel (same template as State)
+			var ingress = document.createElement('div');
+			ingress.id = 'Ingress';
+			ingress.className = 'task';
+			ingress.style.display = 'none';
+			div.appendChild(ingress);
+			$('#Ingress').load('./state.html #state-view');
+
+			// Egress cloud properties panel (same template as State)
+			var egress = document.createElement('div');
+			egress.id = 'Egress';
+			egress.className = 'task';
+			egress.style.display = 'none';
+			div.appendChild(egress);
+			$('#Egress').load('./state.html #state-view');
+
+			// Transition properties panel
+			var transition = document.createElement('div');
+			transition.id = 'Transition';
+			transition.className = 'task';
+			transition.style.display = 'none';
+			div.appendChild(transition);
+			$('#Transition').load('./transition.html #transition-view', function() {
+				$('#transition-tabs').tabs();
+			});
+
+			// Global config panel (FlowModel root)
+			var config = document.createElement('div');
+			config.id = 'FlowModel';
+			config.className = 'task';
+			config.style.display = 'none';
+			div.appendChild(config);
+			$('#FlowModel').load('./config.html #config-view');
 		}
 	]]></add>
 
-
-
 	<add as="refreshTasks"><![CDATA[
-	function (div)
-{			
+		function (div)
+		{
+			console.log('refreshTasks...');
+			if (this.tasks != null)
+			{
+				var title = 'FlowModel';
 
-	console.log('refreshTasks...');
-	if (this.tasks != null)
-	{
-		var title;
-		
-		$('.task').css('display','none');
+				$('.task').css('display','none');
 
-		var selectedCell = this.graph.getSelectionCell();
-		if(selectedCell != null){					
-			title = this.graph.getSelectionCell().getValue().tagName;					
-			this.tasks.setTitle( title );						
-			// toggle visibility
-			$('#'+title).css('display','block');
-		
-			aliceSelectedCell = selectedCell;
-			aliceGraph = this.graph;
+				var selectedCell = this.graph.getSelectionCell();
+				window.flowGraph = this.graph;
+
+				if (selectedCell != null && selectedCell.value != null) {
+					title = selectedCell.value.tagName;
+					window.flowSelectedCell = selectedCell;
+				} else {
+					// Nothing selected — show the global FlowModel config
+					var rootCell = this.graph.getModel().getCell('0');
+					window.flowSelectedCell = rootCell;
+					title = 'FlowModel';
+				}
+
+				this.tasks.setTitle(title);
+				$('#'+title).css('display','block');
+
+				if (typeof window.flowTasks !== 'undefined' && window.flowTasks.loadFromCell) {
+					window.flowTasks.loadFromCell(window.flowSelectedCell);
+				}
+			}
 		}
-		
-		if(typeof previousTask !== 'undefined'){
-			// save old task values
-			console.log('saving values for task: '+previousTitle);
-		}else{
-			console.log('previousTask is undefined');
-		}
-		previousTask = div;
-		previousTitle = title;
-						
-	}			
-}
 	]]></add>
 
 	<add as="showTasks"><![CDATA[
 		function (div)
-{
-	console.log('showTasks...');
+		{
+			console.log('showTasks...');
 
-	if (this.tasks == null) {
-		var div = document.createElement('div');
-		div.style.padding = '8px';
+			if (this.tasks == null) {
+				var div = document.createElement('div');
+				div.style.padding = '8px';
 
-		var w = document.body.clientWidth;
-		var wnd = new mxWindow(mxResources.get(this.tasksResource)
-				|| this.tasksResource, div, w - 270, this.tasksTop, 250);
-		wnd.setClosable(true);
-		wnd.destroyOnClose = false;
+				var w = document.body.clientWidth;
+				var wnd = new mxWindow(mxResources.get(this.tasksResource)
+						|| this.tasksResource, div, w - 320, this.tasksTop, 300);
+				wnd.setClosable(true);
+				wnd.destroyOnClose = false;
 
-		// Installs a function to update the contents
-		// of the tasks window on every change of the
-		// model, selection or root.
-		var funct = mxUtils.bind(this, function(sender) {
-			// mxEvent.release(div);
-			// div.innerHTML = '';
-			this.refreshTasks(div);
-		});
+				var funct = mxUtils.bind(this, function(sender) {
+					this.refreshTasks(div);
+				});
 
-		this.graph.getModel().addListener(mxEvent.CHANGE, funct);
-		this.graph.getSelectionModel().addListener(mxEvent.CHANGE, funct);
-		this.graph.addListener(mxEvent.ROOT, funct);
+				this.graph.getModel().addListener(mxEvent.CHANGE, funct);
+				this.graph.getSelectionModel().addListener(mxEvent.CHANGE, funct);
+				this.graph.addListener(mxEvent.ROOT, funct);
 
-		// Assigns the icon to the tasks window
-		if (this.tasksWindowImage != null) {
-			wnd.setImage(this.tasksWindowImage);
+				if (this.tasksWindowImage != null) {
+					wnd.setImage(this.tasksWindowImage);
+				}
+
+				this.tasks = wnd;
+
+				this.createTasks(div);
+			}
+
+			this.tasks.setVisible(true);
 		}
-
-		this.tasks = wnd;
-
-		this.createTasks(div);
-
-	}
-
-	this.tasks.setVisible(true);
-
-}
 	]]></add>
-
 
 </mxEditor>
