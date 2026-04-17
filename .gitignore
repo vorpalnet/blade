@@ -16,13 +16,14 @@ bin/
 classes/
 deps/
 
-# Eclipse (M2Eclipse regenerates these from pom.xml)
-.classpath
-.project
-.settings/
-.externalToolBuilders/
+# Eclipse — commit .project, .classpath, .settings/ (portable, team-friendly).
+# Keep machine-specific artifacts ignored.
 .factorypath
 .apt_src
+.apt_generated/
+.apt_generated_tests/
+.externalToolBuilders/
+*.launch
 
 # Java
 *.class
