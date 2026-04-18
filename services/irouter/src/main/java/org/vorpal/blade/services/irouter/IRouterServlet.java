@@ -6,7 +6,6 @@ import java.util.concurrent.CompletableFuture;
 
 import javax.annotation.Resource;
 import javax.servlet.ServletException;
-import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.Proxy;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
@@ -20,7 +19,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.adapters.Adapter;
-import org.vorpal.blade.framework.v3.configuration.tables.RoutingTable;
+import org.vorpal.blade.framework.v3.configuration.translations.Translation;
 
 /// Intelligent Router — orchestrates the v3 iRouter pipeline
 /// asynchronously.
@@ -44,7 +43,6 @@ import org.vorpal.blade.framework.v3.configuration.tables.RoutingTable;
 /// Other request types (ACK, BYE, UPDATE, INFO, …) are handled
 /// automatically by the SIP container's proxy machinery once
 /// `proxy.proxyTo` has been called for the initial INVITE.
-@WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
@@ -91,9 +89,12 @@ public class IRouterServlet extends SipServlet implements SipServletListener {
 		IRouterConfig config = settings.getCurrent();
 		Context ctx = new Context(request);
 
-		// Chain every adapter; each runs after the previous completes.
+		// Chain every pipeline step; each runs after the previous completes.
+		// Pipeline mixes enrichment adapters (SIP/REST/JDBC/...) and table
+		// adapters freely — a TableAdapter earlier in the list can inject
+		// values a later RestAdapter interpolates into its URL / auth / body.
 		CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
-		for (Adapter adapter : config.adapters) {
+		for (Adapter adapter : config.getPipeline()) {
 			final Adapter a = adapter;
 			chain = chain.thenCompose(v -> safeInvoke(a, ctx, sipLogger));
 		}
@@ -118,17 +119,15 @@ public class IRouterServlet extends SipServlet implements SipServletListener {
 
 	private void applyTreatment(SipServletRequest request, Context ctx,
 			IRouterConfig config, Logger sipLogger) {
-		Map<String, String> treatment = null;
-		for (RoutingTable table : config.tables) {
-			treatment = table.match(ctx);
-			if (treatment != null) {
-				sipLogger.fine(request, "iRouter table " + table.getId() + " matched");
-				break;
-			}
+		// Pipeline already ran asynchronously above. Just read the final
+		// match from the context (the last TableAdapter to match set it).
+		Translation<RoutingTreatment> match = config.getFinalTranslation(ctx);
+		RoutingTreatment treatment = (match != null) ? match.getTreatment() : null;
+		if (match != null) {
+			sipLogger.fine(request, "iRouter matched translation " + match.getId());
 		}
-		if (treatment == null) treatment = config.defaultTreatment;
 
-		String ruri = (treatment != null) ? ctx.resolve(treatment.get("requestUri")) : null;
+		String ruri = (treatment != null) ? ctx.resolve(treatment.getRequestUri()) : null;
 
 		try {
 			Proxy proxy = request.getProxy();
@@ -141,10 +140,24 @@ public class IRouterServlet extends SipServlet implements SipServletListener {
 				Callflow.copyParameters(request.getRequestURI(), destination);
 				sipLogger.fine(request, "iRouter routing to " + destination);
 			}
+			applyHeaders(request, treatment, ctx, sipLogger);
 			proxy.proxyTo(destination);
 		} catch (Exception e) {
 			sipLogger.severe(request, "iRouter proxyTo failed: " + e.getMessage());
 			safeSend(request, 500);
+		}
+	}
+
+	private static void applyHeaders(SipServletRequest request, RoutingTreatment treatment,
+			Context ctx, Logger sipLogger) {
+		if (treatment == null || treatment.getHeaders() == null) return;
+		for (Map.Entry<String, String> h : treatment.getHeaders().entrySet()) {
+			try {
+				request.setHeader(h.getKey(), ctx.resolve(h.getValue()));
+			} catch (Exception e) {
+				sipLogger.warning(request, "iRouter header " + h.getKey()
+						+ " failed to apply: " + e.getMessage());
+			}
 		}
 	}
 

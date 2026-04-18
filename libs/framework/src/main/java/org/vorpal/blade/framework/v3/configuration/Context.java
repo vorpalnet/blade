@@ -38,10 +38,34 @@ import javax.servlet.sip.SipSession;
 public class Context {
 	private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{([^}]+)\\}");
 
+	/// Reserved attachment key: the last matched
+	/// [org.vorpal.blade.framework.v3.configuration.translations.Translation]
+	/// produced by any [org.vorpal.blade.framework.v3.configuration.adapters.TableAdapter]
+	/// that ran during this pipeline invocation. The outer
+	/// [org.vorpal.blade.framework.v3.configuration.RouterConfiguration]
+	/// uses this to return the final routing decision.
+	public static final String LAST_MATCH = "__lastMatch";
+
 	private final SipServletRequest request;
+
+	/// Per-call scratch space for non-serializable, non-String values
+	/// (notably the last matched Translation). Deliberately kept off
+	/// the SipSession to avoid cluster-serialization cost — attachments
+	/// live only for the duration of one pipeline invocation.
+	private final Map<String, Object> attachments = new HashMap<>();
 
 	public Context(SipServletRequest request) {
 		this.request = request;
+	}
+
+	// ---- transient per-call attachments ----
+
+	public void setAttachment(String name, Object value) {
+		if (name != null) attachments.put(name, value);
+	}
+
+	public Object getAttachment(String name) {
+		return (name == null) ? null : attachments.get(name);
 	}
 
 	// ---- session state ----

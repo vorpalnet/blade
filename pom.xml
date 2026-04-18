@@ -33,7 +33,7 @@
 	</modules>
 
 	<properties>
-		<revision>2.9.5</revision>
+		<revision>2.9.6</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<blade.java.version>11</blade.java.version>
 		<blade.weblogic.version>14.1.1</blade.weblogic.version>
@@ -72,6 +72,7 @@
 		<maven-war-plugin.version>3.4.0</maven-war-plugin.version>
 		<maven-ear-plugin.version>3.4.0</maven-ear-plugin.version>
 		<maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
+		<maven-install-plugin.version>3.1.4</maven-install-plugin.version>
 		<maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
 		<umldoclet.version>2.2.1</umldoclet.version>
 	</properties>
@@ -427,6 +428,11 @@
 						</archive>
 					</configuration>
 				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-install-plugin</artifactId>
+					<version>${maven-install-plugin.version}</version>
+				</plugin>
 			</plugins>
 		</pluginManagement>
 		<plugins>
@@ -477,7 +483,13 @@
 			     The WAR plugin's packagingExcludes strips 3rd-party JARs from
 			     the .war archive but leaves them in the exploded directory.
 			     This re-syncs the exploded lib/ from the WAR so deploying
-			     the exploded directory works the same as deploying the WAR. -->
+			     the exploded directory works the same as deploying the WAR.
+
+			     The packaged WAR's filename follows the war-plugin's warName
+			     setting (above: ${project.artifactId}.war), while the exploded
+			     directory uses Maven's default finalName. Services set a short
+			     finalName (e.g. proxy-registrar) so the two differ — this script
+			     addresses both explicitly. -->
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>exec-maven-plugin</artifactId>
@@ -492,7 +504,7 @@
 							<arguments>
 								<argument>-c</argument>
 								<argument>
-WARFILE="${project.build.directory}/${project.build.finalName}.war";
+WARFILE="${project.build.directory}/${project.artifactId}.war";
 EXPLODED="${project.build.directory}/${project.build.finalName}";
 if [ -f "$WARFILE" ] &amp;&amp; [ -d "$EXPLODED/WEB-INF/lib" ]; then
   rm -rf "$EXPLODED/WEB-INF/lib";

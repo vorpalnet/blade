@@ -45,7 +45,8 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 		@JsonSubTypes.Type(value = MapAdapter.class, name = "map"),
 		@JsonSubTypes.Type(value = RestAdapter.class, name = "rest"),
 		@JsonSubTypes.Type(value = JdbcAdapter.class, name = "jdbc"),
-		@JsonSubTypes.Type(value = LdapAdapter.class, name = "ldap")
+		@JsonSubTypes.Type(value = LdapAdapter.class, name = "ldap"),
+		@JsonSubTypes.Type(value = TableAdapter.class, name = "table")
 })
 @JsonPropertyOrder({ "type", "id", "description", "selectors" })
 public abstract class Adapter implements Serializable {

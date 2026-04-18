@@ -80,6 +80,11 @@
 						</webModule>
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-services-irouter</artifactId>
+							<bundleFileName>irouter.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-services-queue</artifactId>
 							<bundleFileName>queue.war</bundleFileName>
 						</webModule>
@@ -258,6 +263,18 @@
 				<dependency>
 					<groupId>org.vorpal.blade</groupId>
 					<artifactId>vorpal-blade-services-proxy-router</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+				</dependency>
+			</dependencies>
+		</profile>
+		<profile>
+			<id>ear-irouter</id>
+			<activation><property><name>!skip.irouter</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-services-irouter</artifactId>
 					<version>${project.version}</version>
 					<type>war</type>
 				</dependency>

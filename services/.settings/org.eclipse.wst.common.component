@@ -1,54 +1,59 @@
 <?xml version="1.0" encoding="UTF-8"?><project-modules id="moduleCoreId" project-version="1.5.0">
+        
     <wb-module deploy-name="vorpal-blade-services-full">
+                
         <wb-resource deploy-path="/" source-path="/target/m2e-wtp/ear-resources"/>
+                
         <wb-resource deploy-path="/" source-path="/src/main/application" tag="defaultRootSource"/>
-        <dependent-module archiveName="acl.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-acl/vorpal-blade-services-acl">
+        <dependent-module archiveName="acl.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-acl/2.9.5/vorpal-blade-services-acl-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="analytics.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-analytics/vorpal-blade-services-analytics">
+        <dependent-module archiveName="analytics.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-analytics/2.9.5/vorpal-blade-services-analytics-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="hold.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-hold/vorpal-blade-services-hold">
+        <dependent-module archiveName="hold.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-hold/2.9.5/vorpal-blade-services-hold-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="options.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-options/vorpal-blade-services-options">
+        <dependent-module archiveName="options.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-options/2.9.5/vorpal-blade-services-options-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="presence.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-presence/vorpal-blade-services-presence">
+        <dependent-module archiveName="presence.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-presence/2.9.5/vorpal-blade-services-presence-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="proxy-balancer.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-proxy-balancer/vorpal-blade-services-proxy-balancer">
+        <dependent-module archiveName="proxy-balancer.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-proxy-balancer/2.9.5/vorpal-blade-services-proxy-balancer-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="proxy-block.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-proxy-block/vorpal-blade-services-proxy-block">
+        <dependent-module archiveName="proxy-block.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-proxy-block/2.9.5/vorpal-blade-services-proxy-block-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="proxy-registrar.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-proxy-registrar/vorpal-blade-services-proxy-registrar">
+        <dependent-module archiveName="proxy-registrar.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-proxy-registrar/2.9.5/vorpal-blade-services-proxy-registrar-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="proxy-router.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-proxy-router/vorpal-blade-services-proxy-router">
+        <dependent-module archiveName="proxy-router.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-proxy-router/2.9.5/vorpal-blade-services-proxy-router-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="queue.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-queue/vorpal-blade-services-queue">
+        <dependent-module archiveName="queue.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-queue/2.9.5/vorpal-blade-services-queue-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="tpcc.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-tpcc/vorpal-blade-services-tpcc">
+        <dependent-module archiveName="tpcc.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-tpcc/2.9.5/vorpal-blade-services-tpcc-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="transfer.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-transfer/vorpal-blade-services-transfer">
+        <dependent-module archiveName="transfer.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-transfer/2.9.5/vorpal-blade-services-transfer-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="crud.war" deploy-path="/" handle="module:/resource/vorpal-blade-services-crud/vorpal-blade-services-crud">
+        <dependent-module archiveName="crud.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/vorpal-blade-services-crud/2.9.5/vorpal-blade-services-crud-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="test-b2bua.war" deploy-path="/" handle="module:/resource/test-b2bua/test-b2bua">
+        <dependent-module archiveName="test-b2bua.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/test-b2bua/2.9.5/test-b2bua-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="test-uac.war" deploy-path="/" handle="module:/resource/test-uac/test-uac">
+        <dependent-module archiveName="test-uac.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/test-uac/2.9.5/test-uac-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
-        <dependent-module archiveName="test-uas.war" deploy-path="/" handle="module:/resource/test-uas/test-uas">
+        <dependent-module archiveName="test-uas.war" deploy-path="/" handle="module:/classpath/var/M2_REPO/org/vorpal/blade/test-uas/2.9.5/test-uas-2.9.5.war">
             <dependency-type>uses</dependency-type>
         </dependent-module>
+            
     </wb-module>
+    
 </project-modules>
