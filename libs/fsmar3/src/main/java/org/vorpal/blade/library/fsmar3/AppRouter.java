@@ -113,7 +113,7 @@ public class AppRouter implements SipApplicationRouter {
 					if (itr.hasNext()) {
 						while (itr.hasNext()) {
 							Transition t = itr.next();
-							if (t.matches(request)) {
+							if (t.matches(request, config)) {
 								matched = t;
 								sipLogger.fine("Transition matched: " + t.getId());
 								break;

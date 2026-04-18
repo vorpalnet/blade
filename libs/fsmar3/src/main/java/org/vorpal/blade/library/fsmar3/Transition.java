@@ -21,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// optional route pushing, and the target application into a single flat
 /// structure. Selector groups are evaluated with OR logic — the first matching
 /// group wins. Within a group, selectors are ANDed together.
-@JsonPropertyOrder({ "id", "selectorGroups", "subscriber", "routes", "next" })
+@JsonPropertyOrder({ "id", "selectorGroups", "subscriber", "routes", "routeModifier", "next" })
 public class Transition implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -29,6 +29,7 @@ public class Transition implements Serializable {
 	private List<SelectorGroup> selectorGroups;
 	private String subscriber;
 	private String[] routes;
+	private SipRouteModifier routeModifier;
 	private String next;
 
 	/// Optional identifier for logging and diagnostics.
@@ -80,7 +81,8 @@ public class Transition implements Serializable {
 		return this;
 	}
 
-	/// Optional SIP route URIs pushed as Route headers (SipRouteModifier.ROUTE).
+	/// Optional SIP route URIs pushed as Route headers.
+	/// Interpreted according to [getRouteModifier] (ROUTE by default).
 	@JsonPropertyDescription("Optional SIP route URIs pushed as Route headers")
 	public String[] getRoutes() {
 		return routes;
@@ -88,6 +90,34 @@ public class Transition implements Serializable {
 
 	public Transition setRoutes(String[] routes) {
 		this.routes = routes;
+		return this;
+	}
+
+	/// How the routes array is applied: ROUTE (default), ROUTE_BACK, or ROUTE_FINAL.
+	/// ROUTE_BACK pushes the routes behind the destination application so they
+	/// are visited on the response path (see SIP Servlet spec §15.4.2). Only
+	/// meaningful when [routes] is non-empty.
+	@JsonPropertyDescription("How the routes array is applied: ROUTE (default), ROUTE_BACK, or ROUTE_FINAL. Ignored when routes is empty.")
+	public SipRouteModifier getRouteModifier() {
+		return routeModifier;
+	}
+
+	public Transition setRouteModifier(SipRouteModifier routeModifier) {
+		this.routeModifier = routeModifier;
+		return this;
+	}
+
+	/// Convenience: set routes and mark them ROUTE_BACK in one call.
+	public Transition setRouteBack(String[] routes) {
+		this.routes = routes;
+		this.routeModifier = SipRouteModifier.ROUTE_BACK;
+		return this;
+	}
+
+	/// Convenience: set routes and mark them ROUTE_FINAL in one call.
+	public Transition setRouteFinal(String[] routes) {
+		this.routes = routes;
+		this.routeModifier = SipRouteModifier.ROUTE_FINAL;
 		return this;
 	}
 
@@ -103,13 +133,15 @@ public class Transition implements Serializable {
 	}
 
 	/// Evaluates selector groups with OR logic. Returns true if any group matches,
-	/// or if no groups are defined (unconditional match).
-	public boolean matches(SipServletRequest request) {
+	/// or if no groups are defined (unconditional match). The [config] is threaded
+	/// in so groups can resolve named `selectorRefs` against the top-level
+	/// selector library.
+	public boolean matches(SipServletRequest request, AppRouterConfiguration config) {
 		if (selectorGroups == null || selectorGroups.isEmpty()) {
 			return true;
 		}
 		for (SelectorGroup group : selectorGroups) {
-			if (group.matches(request)) {
+			if (group.matches(request, config == null ? null : config.getSelectors())) {
 				return true;
 			}
 		}
@@ -119,7 +151,8 @@ public class Transition implements Serializable {
 	/// Builds the SipApplicationRouterInfo for this transition.
 	///
 	/// Uses NEUTRAL_REGION. If [subscriber] is set, extracts the URI from that
-	/// header. If [routes] is set, uses SipRouteModifier.ROUTE.
+	/// header. If [routes] is set, applies [routeModifier] (defaulting to
+	/// SipRouteModifier.ROUTE when unspecified).
 	public SipApplicationRouterInfo createRouterInfo(String deployedAppName, AppRouterConfiguration config,
 			SipServletRequest request) {
 
@@ -139,7 +172,7 @@ public class Transition implements Serializable {
 		// Set up routes
 		if (routes != null && routes.length > 0) {
 			routeArray = routes;
-			modifier = SipRouteModifier.ROUTE;
+			modifier = (routeModifier != null) ? routeModifier : SipRouteModifier.ROUTE;
 		}
 
 		return new SipApplicationRouterInfo(deployedAppName, SipApplicationRoutingRegion.NEUTRAL_REGION, subscriberURI,
