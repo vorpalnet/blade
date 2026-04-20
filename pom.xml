@@ -19,17 +19,11 @@
 		<module>libs/shared</module>
 		<module>libs/fsmar</module>
 		<module>libs/fsmar3</module>
-		<module>admin/console</module>
-		<module>admin/flow</module>
-		<module>admin/tuning</module>
-		<module>admin/file-manager</module>
-		<module>admin/explorer</module>
-		<module>admin/configurator</module>
-		<module>admin/watcher</module>
 		<module>services</module>
 
-		<!-- Service and test modules are controlled by profiles below.
-		     Exclude any module with -Dskip.<name>, e.g. -Dskip.analytics -->
+		<!-- Admin, service, and test modules are controlled by profiles
+		     below. Exclude any module with -Dskip.<name>,
+		     e.g. -Dskip.analytics, -Dskip.configurator. -->
 	</modules>
 
 	<properties>
@@ -43,6 +37,7 @@
 		<ear.profile>full</ear.profile>
 		<build.platform>occas-8.1</build.platform>
 		<blade.skip.install>true</blade.skip.install>
+		<blade.skip.dist>false</blade.skip.dist>
 		<maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
 
 		<!-- Manifest metadata -->
@@ -66,6 +61,7 @@
 		<gson-fire.version>1.9.0</gson-fire.version>
 		<okhttp.version>4.12.0</okhttp.version>
 		<oauth2.version>1.0.2</oauth2.version>
+		<nimbus-oauth2-oidc-sdk.version>11.10.1</nimbus-oauth2-oidc-sdk.version>
 
 		<!-- Plugin versions -->
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
@@ -235,6 +231,15 @@
 				<groupId>org.apache.oltu.oauth2</groupId>
 				<artifactId>org.apache.oltu.oauth2.client</artifactId>
 				<version>${oauth2.version}</version>
+			</dependency>
+			<!-- Nimbus OAuth 2.0 + OIDC SDK: the comprehensive OAuth/OIDC
+			     client library. Drives every RestConnector Authentication
+			     subtype (password, client credentials, refresh token,
+			     JWT bearer, SAML bearer, token exchange). -->
+			<dependency>
+				<groupId>com.nimbusds</groupId>
+				<artifactId>oauth2-oidc-sdk</artifactId>
+				<version>${nimbus-oauth2-oidc-sdk.version}</version>
 			</dependency>
 
 			<!-- Admin Console specific -->
@@ -605,6 +610,45 @@ fi
 			<id>test-uas</id>
 			<activation><property><name>!skip.test-uas</name></property></activation>
 			<modules><module>test/test-uas</module></modules>
+		</profile>
+
+		<!-- Admin app profiles. Active by default; exclude with -Dskip.<name>.
+		     Build-profiles/*.conf files select which admin apps to include
+		     alongside services and test apps. -->
+		<profile>
+			<id>console</id>
+			<activation><property><name>!skip.console</name></property></activation>
+			<modules><module>admin/console</module></modules>
+		</profile>
+		<profile>
+			<id>configurator</id>
+			<activation><property><name>!skip.configurator</name></property></activation>
+			<modules><module>admin/configurator</module></modules>
+		</profile>
+		<profile>
+			<id>flow</id>
+			<activation><property><name>!skip.flow</name></property></activation>
+			<modules><module>admin/flow</module></modules>
+		</profile>
+		<profile>
+			<id>tuning</id>
+			<activation><property><name>!skip.tuning</name></property></activation>
+			<modules><module>admin/tuning</module></modules>
+		</profile>
+		<profile>
+			<id>file-manager</id>
+			<activation><property><name>!skip.file-manager</name></property></activation>
+			<modules><module>admin/file-manager</module></modules>
+		</profile>
+		<profile>
+			<id>explorer</id>
+			<activation><property><name>!skip.explorer</name></property></activation>
+			<modules><module>admin/explorer</module></modules>
+		</profile>
+		<profile>
+			<id>watcher</id>
+			<activation><property><name>!skip.watcher</name></property></activation>
+			<modules><module>admin/watcher</module></modules>
 		</profile>
 
 		<profile>

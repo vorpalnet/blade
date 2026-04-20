@@ -26,10 +26,14 @@ package org.vorpal.blade.framework.v2.config;
 import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Map;
 import java.util.logging.Level;
 
 import javax.management.InstanceAlreadyExistsException;
@@ -59,7 +63,9 @@ import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -68,6 +74,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.victools.jsonschema.generator.ConfigFunction;
+import com.github.victools.jsonschema.generator.MemberScope;
 import com.github.victools.jsonschema.generator.Option;
 import com.github.victools.jsonschema.generator.OptionPreset;
 import com.github.victools.jsonschema.generator.SchemaGenerator;
@@ -496,11 +506,113 @@ public class SettingsManager<T> {
 				.with(jacksonModule)
 				.with(Option.DEFINITIONS_FOR_ALL_OBJECTS,
 						Option.MAP_VALUES_AS_ADDITIONAL_PROPERTIES);
+
+		// @JsonAnyGetter-annotated Map methods (e.g. Translation.getExtras())
+		// serialize as top-level properties, but the default schema generator
+		// doesn't describe them. Emit `additionalProperties` with the Map's
+		// value type so the configurator can render and round-trip the extras.
+		configBuilder.forTypesInGeneral().withAdditionalPropertiesResolver(scope -> {
+			Class<?> rawClass = scope.getType().getErasedType();
+			if (rawClass == null) return null;
+			for (Method m : rawClass.getMethods()) {
+				if (!m.isAnnotationPresent(JsonAnyGetter.class)) continue;
+				if (!Map.class.isAssignableFrom(m.getReturnType())) continue;
+				Type generic = m.getGenericReturnType();
+				if (generic instanceof ParameterizedType) {
+					Type[] args = ((ParameterizedType) generic).getActualTypeArguments();
+					if (args.length >= 2) return args[1];
+				}
+				return String.class;
+			}
+			return null;
+		});
+
+		// Honor @JsonProperty(defaultValue = "...") on fields/getters. victools'
+		// JacksonModule ignores this annotation; the Configurator reads the
+		// schema's "default" to pre-fill inputs when the user clicks "+" to add
+		// a field, so surfacing it here removes a dead-end in the UX.
+		ConfigFunction<MemberScope<?, ?>, Object> extractDefault = member -> {
+			JsonProperty jp = member.getAnnotationConsideringFieldAndGetter(JsonProperty.class);
+			if (jp == null) return null;
+			String raw = jp.defaultValue();
+			if (raw == null || raw.isEmpty()) return null;
+			return parseJsonPropertyDefault(raw, member.getType().getErasedType());
+		};
+		configBuilder.forFields().withDefaultResolver(extractDefault::apply);
+		configBuilder.forMethods().withDefaultResolver(extractDefault::apply);
+
+		// @FormLayout — per-property layout/rendering hints. Emitted as an
+		// x-form attribute on the property's schema; the Configurator keys off
+		// x-wide, format="password"/"textarea", x-readonly.
+		ConfigFunction<MemberScope<?, ?>, ObjectNode> formLayoutAttrs = member -> {
+			FormLayout fl = member.getAnnotationConsideringFieldAndGetter(FormLayout.class);
+			if (fl == null) return null;
+			ObjectNode extras = mapper.createObjectNode();
+			if (fl.multiline()) extras.put("format", "textarea");
+			else if (fl.password()) extras.put("format", "password");
+			if (fl.wide() || fl.multiline()) extras.put("x-wide", true);
+			if (fl.readOnly()) extras.put("x-readonly", true);
+			return extras.size() == 0 ? null : extras;
+		};
+		configBuilder.forFields().withInstanceAttributeOverride((node, field, ctx) -> {
+			ObjectNode extras = formLayoutAttrs.apply(field);
+			if (extras != null) node.setAll(extras);
+		});
+		configBuilder.forMethods().withInstanceAttributeOverride((node, method, ctx) -> {
+			ObjectNode extras = formLayoutAttrs.apply(method);
+			if (extras != null) node.setAll(extras);
+		});
+
+		// @FormLayoutGroup and @FormSection — class-level grouping hints.
+		// Emitted on the type node so the Configurator can render
+		// horizontal rows (x-form-groups) and titled subsections (x-form-sections).
+		configBuilder.forTypesInGeneral().withTypeAttributeOverride((node, scope, ctx) -> {
+			Class<?> raw = scope.getType().getErasedType();
+			if (raw == null) return;
+			FormLayoutGroup[] groups = raw.getAnnotationsByType(FormLayoutGroup.class);
+			if (groups != null && groups.length > 0) {
+				ArrayNode outer = mapper.createArrayNode();
+				for (FormLayoutGroup g : groups) {
+					ArrayNode row = mapper.createArrayNode();
+					for (String f : g.value()) row.add(f);
+					outer.add(row);
+				}
+				node.set("x-form-groups", outer);
+			}
+			FormSection[] sections = raw.getAnnotationsByType(FormSection.class);
+			if (sections != null && sections.length > 0) {
+				ArrayNode outer = mapper.createArrayNode();
+				for (FormSection s : sections) {
+					ObjectNode section = mapper.createObjectNode();
+					section.put("title", s.title());
+					ArrayNode fields = mapper.createArrayNode();
+					for (String f : s.fields()) fields.add(f);
+					section.set("fields", fields);
+					outer.add(section);
+				}
+				node.set("x-form-sections", outer);
+			}
+		});
+
 		SchemaGeneratorConfig config = configBuilder.build();
 		SchemaGenerator schemaGenerator = new SchemaGenerator(config);
 		JsonNode jsonSchema = schemaGenerator.generateSchema(t.getClass());
 		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
 		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, jsonSchema);
+	}
+
+	/// Convert the String from @JsonProperty(defaultValue = "...") to a typed
+	/// value matching the property. Falls back to the raw string so String
+	/// fields, enums, and any type the schema represents textually pass through.
+	private static Object parseJsonPropertyDefault(String raw, Class<?> type) {
+		try {
+			if (type == Boolean.class || type == boolean.class) return Boolean.valueOf(raw);
+			if (type == Integer.class || type == int.class)     return Integer.valueOf(raw);
+			if (type == Long.class    || type == long.class)    return Long.valueOf(raw);
+			if (type == Double.class  || type == double.class)  return Double.valueOf(raw);
+			if (type == Float.class   || type == float.class)   return Float.valueOf(raw);
+		} catch (NumberFormatException ignored) { /* fall through to raw */ }
+		return raw;
 	}
 
 	public void saveSampleConfigFile(T t) throws JsonGenerationException, JsonMappingException, IOException {

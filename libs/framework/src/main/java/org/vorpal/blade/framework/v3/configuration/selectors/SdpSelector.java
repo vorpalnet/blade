@@ -5,6 +5,7 @@ import java.util.logging.Level;
 
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
@@ -20,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// — it can read `attribute=<thisId>` from the session and apply a
 /// regex like `IN IP4 (?<ip>[\d.]+)` with `expression=${ip}`.
 @JsonPropertyOrder({ "type", "id", "description", "attribute", "index", "applicationSession" })
+@FormLayoutGroup({ "id", "attribute" })
 public class SdpSelector extends Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
 

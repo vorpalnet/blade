@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v3.configuration.adapters;
+package org.vorpal.blade.framework.v3.configuration.connectors;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -10,49 +10,66 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 
+import org.vorpal.blade.framework.v2.config.FormLayout;
+import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
+import org.vorpal.blade.framework.v3.configuration.auth.Authentication;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/// HTTP/REST adapter. Asynchronously calls a remote API (`url`,
+/// HTTP/REST connector. Asynchronously calls a remote API (`url`,
 /// optionally with a `bodyTemplate` for POST), then passes the
 /// response body to each
 /// [org.vorpal.blade.framework.v3.configuration.selectors.Selector]
 /// — typically a `JsonSelector` or `XmlSelector`.
 ///
-/// Auth options (`bearerToken`, `basicAuth`) and the URL/body
-/// template all support `${var}` substitution from session state
-/// — so values extracted by an upstream `SipAdapter` or
-/// `MapAdapter` (e.g. `customerId`, `apiKey`) flow into the call.
+/// The optional [#getAuthentication] field is a polymorphic
+/// [Authentication] — static credentials (basic, bearer, apikey) or one
+/// of five Nimbus-backed OAuth 2.0 grants (oauth2-password,
+/// oauth2-client, oauth2-refresh-token, oauth2-jwt-bearer,
+/// oauth2-saml-bearer). OAuth token caching + refresh are handled
+/// inside the Authentication subtype.
+///
+/// URL, body template, and every auth field support `${var}`
+/// substitution from session state — so values extracted by an upstream
+/// `SipConnector` or `TableConnector` (e.g. `customerId`, `apiKey`)
+/// flow directly into the call.
+///
+/// ## Body-template format
+///
+/// The file is HTTP-message-style: any number of `Name: Value`
+/// header lines, a blank line, then the body. Lines whose first
+/// non-whitespace character is `#` are treated as comments and
+/// stripped at load time — use them to annotate the template
+/// without ending up in the wire payload.
 ///
 /// ## Asynchronous
 ///
 /// Uses [HttpClient#sendAsync] so the SIP container thread is
 /// released immediately. When the HTTP response arrives (on the
 /// shared HttpClient executor), selectors run and the returned
-/// future completes. The iRouter's adapter chain then proceeds to
-/// the next adapter (or the routing decision).
-@JsonPropertyOrder({ "type", "id", "description", "url", "method", "basicAuth", "bearerToken",
+/// future completes. The iRouter's connector chain then proceeds to
+/// the next connector (or the routing decision).
+@JsonPropertyOrder({ "type", "id", "description", "url", "method", "authentication",
 		"timeoutSeconds", "bodyTemplate", "selectors" })
-public class RestAdapter extends Adapter implements Serializable {
+@FormLayoutGroup({ "id", "method", "timeoutSeconds" })
+public class RestConnector extends Connector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private static final String TEMPLATES_DIR = "./config/custom/vorpal/_templates/";
 
 	protected String url;
 	protected String method = "GET";
-	protected String basicAuth;
-	protected String bearerToken;
+	protected Authentication authentication;
 	protected Integer timeoutSeconds = 5;
 	protected String bodyTemplate;
 
@@ -61,10 +78,11 @@ public class RestAdapter extends Adapter implements Serializable {
 	@JsonIgnore
 	private transient String cachedTemplate;
 
-	public RestAdapter() {
+	public RestConnector() {
 	}
 
 	@JsonPropertyDescription("URL template; supports ${var}")
+	@FormLayout(wide = true)
 	public String getUrl() { return url; }
 	public void setUrl(String url) { this.url = url; }
 
@@ -72,19 +90,16 @@ public class RestAdapter extends Adapter implements Serializable {
 	public String getMethod() { return method; }
 	public void setMethod(String method) { this.method = method; }
 
-	@JsonPropertyDescription("user:password Basic auth credentials; supports ${var}")
-	public String getBasicAuth() { return basicAuth; }
-	public void setBasicAuth(String basicAuth) { this.basicAuth = basicAuth; }
-
-	@JsonPropertyDescription("Bearer token for the Authorization header; supports ${var}")
-	public String getBearerToken() { return bearerToken; }
-	public void setBearerToken(String bearerToken) { this.bearerToken = bearerToken; }
+	@JsonPropertyDescription("Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)")
+	public Authentication getAuthentication() { return authentication; }
+	public void setAuthentication(Authentication authentication) { this.authentication = authentication; }
 
 	@JsonPropertyDescription("Request timeout in seconds (default 5)")
 	public Integer getTimeoutSeconds() { return timeoutSeconds; }
 	public void setTimeoutSeconds(Integer timeoutSeconds) { this.timeoutSeconds = timeoutSeconds; }
 
 	@JsonPropertyDescription("Filename in _templates/ — HTTP-message format (headers + blank line + body)")
+	@FormLayout(wide = true)
 	public String getBodyTemplate() { return bodyTemplate; }
 	public void setBodyTemplate(String bodyTemplate) { this.bodyTemplate = bodyTemplate; }
 
@@ -93,7 +108,7 @@ public class RestAdapter extends Adapter implements Serializable {
 		if (url == null) return CompletableFuture.completedFuture(null);
 
 		Logger sipLogger = SettingsManager.getSipLogger();
-		final String adapterId = id;
+		final String connectorId = id;
 
 		try {
 			String resolvedUrl = ctx.resolve(url);
@@ -121,12 +136,8 @@ public class RestAdapter extends Adapter implements Serializable {
 				reqBuilder.GET();
 			}
 
-			if (bearerToken != null) {
-				reqBuilder.header("Authorization", "Bearer " + ctx.resolve(bearerToken));
-			} else if (basicAuth != null) {
-				String resolvedAuth = ctx.resolve(basicAuth);
-				String encoded = Base64.getEncoder().encodeToString(resolvedAuth.getBytes());
-				reqBuilder.header("Authorization", "Basic " + encoded);
+			if (authentication != null) {
+				authentication.applyTo(reqBuilder, ctx);
 			}
 
 			if (templateHeaders != null) {
@@ -142,31 +153,31 @@ public class RestAdapter extends Adapter implements Serializable {
 			}
 
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("RestAdapter[" + adapterId + "] " + method + " " + resolvedUrl);
+				sipLogger.finer("RestConnector[" + connectorId + "] " + method + " " + resolvedUrl);
 			}
 
 			return httpClient.sendAsync(reqBuilder.build(), HttpResponse.BodyHandlers.ofString())
 					.thenAccept(httpResp -> {
 						try {
 							if (httpResp.statusCode() < 200 || httpResp.statusCode() >= 300) {
-								sipLogger.warning("RestAdapter[" + adapterId + "] HTTP "
+								sipLogger.warning("RestConnector[" + connectorId + "] HTTP "
 										+ httpResp.statusCode());
 								return;
 							}
 							runSelectors(ctx, httpResp.body());
 						} catch (Exception e) {
-							sipLogger.warning("RestAdapter[" + adapterId + "] response handling failed: "
+							sipLogger.warning("RestConnector[" + connectorId + "] response handling failed: "
 									+ e.getMessage());
 						}
 					})
 					.exceptionally(t -> {
-						sipLogger.warning("RestAdapter[" + adapterId + "] request failed: "
+						sipLogger.warning("RestConnector[" + connectorId + "] request failed: "
 								+ t.getMessage());
 						return null;
 					});
 
 		} catch (Exception e) {
-			sipLogger.warning("RestAdapter[" + adapterId + "] failed to build request: "
+			sipLogger.warning("RestConnector[" + connectorId + "] failed to build request: "
 					+ e.getMessage());
 			return CompletableFuture.completedFuture(null);
 		}
@@ -179,13 +190,22 @@ public class RestAdapter extends Adapter implements Serializable {
 		String body = "";
 	}
 
+	// Any line whose first non-whitespace character is `#` is a comment.
+	// The whole line — including its terminator — is stripped at load time,
+	// BEFORE the cached template is substituted, so `${…}` placeholders
+	// inside a commented line never resolve (and can't accidentally leak
+	// secrets into a debug rendering). Horizontal whitespace only (`[ \t]`)
+	// so the regex can't swallow line separators.
+	private static final java.util.regex.Pattern COMMENT_LINE =
+			java.util.regex.Pattern.compile("(?m)^[ \\t]*#.*(?:\\r?\\n)?");
+
 	private TemplateResult loadAndResolveTemplate(String filename, Context ctx) throws IOException {
 		if (cachedTemplate == null) {
 			Path p = Paths.get(TEMPLATES_DIR, filename);
 			if (!Files.exists(p)) {
 				throw new IOException("Template not found: " + p);
 			}
-			cachedTemplate = Files.readString(p);
+			cachedTemplate = COMMENT_LINE.matcher(Files.readString(p)).replaceAll("");
 		}
 
 		String resolved = ctx.resolve(cachedTemplate);

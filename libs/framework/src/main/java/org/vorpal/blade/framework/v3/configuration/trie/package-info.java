@@ -7,4 +7,4 @@
 /// (Apache `commons-collections4` `PatriciaTrie` sometimes failed to
 /// match). [Trie] is a clean from-scratch alternative that delivers
 /// O(L) longest-prefix matching for telco-style dial plan lookups.
-package org.vorpal.blade.framework.v2.config.trie;
+package org.vorpal.blade.framework.v3.configuration.trie;

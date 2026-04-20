@@ -12,6 +12,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathFactory;
 
+import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
@@ -31,6 +32,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// request body when the payload is a [SipServletRequest].
 @JsonPropertyOrder({ "type", "id", "description", "attribute", "namespaces",
 		"index", "applicationSession" })
+@FormLayoutGroup({ "id", "attribute" })
 public class XmlSelector extends Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
 

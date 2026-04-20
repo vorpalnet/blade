@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.config.trie;
+package org.vorpal.blade.framework.v3.configuration.trie;
 
 import java.io.Serializable;
 import java.util.AbstractMap;

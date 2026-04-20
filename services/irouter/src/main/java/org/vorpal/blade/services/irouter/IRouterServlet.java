@@ -3,9 +3,11 @@ package org.vorpal.blade.services.irouter;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
 
 import javax.annotation.Resource;
 import javax.servlet.ServletException;
+import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.Proxy;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServlet;
@@ -18,8 +20,9 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
-import org.vorpal.blade.framework.v3.configuration.adapters.Adapter;
-import org.vorpal.blade.framework.v3.configuration.translations.Translation;
+import org.vorpal.blade.framework.v3.configuration.connectors.Connector;
+import org.vorpal.blade.framework.v3.configuration.routing.Route;
+import org.vorpal.blade.framework.v3.configuration.routing.Routing;
 
 /// Intelligent Router — orchestrates the v3 iRouter pipeline
 /// asynchronously.
@@ -28,13 +31,13 @@ import org.vorpal.blade.framework.v3.configuration.translations.Translation;
 ///
 /// 1. Builds a [Context] around the request (hides the
 ///    `SipServletRequest` from the pipeline).
-/// 2. Chains every [Adapter] in `config.adapters` via
-///    [CompletableFuture#thenCompose]. Sync adapters (SIP, Map)
+/// 2. Chains every [Connector] in `config.pipeline` via
+///    [CompletableFuture#thenCompose]. Sync connectors (SIP, Map)
 ///    complete instantly; REST fires its HTTP call and returns a
 ///    real future; JDBC/LDAP run on a bounded thread pool. The SIP
 ///    container thread is released as soon as the chain starts.
-/// 3. When the chain completes, walks `config.tables` to find a
-///    Treatment, resolves `${requestUri}`, and calls
+/// 3. When the chain completes, consults `config.routing` for the
+///    routing decision — a concrete [Route] — and calls
 ///    `proxy.proxyTo(destination)`.
 ///
 /// Re-INVITEs on an established dialog pass through unchanged —
@@ -89,17 +92,49 @@ public class IRouterServlet extends SipServlet implements SipServletListener {
 		IRouterConfig config = settings.getCurrent();
 		Context ctx = new Context(request);
 
+		// FINER: dump everything useful for diagnosing a table miss.
+		//  - vorpalOrigin: X-Vorpal-ID;origin — stamped by Callflow on the
+		//    first BLADE service to see the request and propagated downstream.
+		//    When non-null, the selector resolves to this and the table
+		//    lookup should just work.
+		//  - initialRemoteAddr: container-derived original sender; often null
+		//    for internally-dispatched requests.
+		//  - remoteAddr: immediate transport peer — another OCCAS service
+		//    when iRouter isn't first in the chain.
+		//  - via: the full Via stack, numbered from the top.
+		if (sipLogger.isLoggable(Level.FINER)) {
+			String vorpalOrigin = null;
+			try {
+				Parameterable xVorpalId = request.getParameterableHeader(Callflow.X_VORPAL_ID);
+				if (xVorpalId != null) vorpalOrigin = xVorpalId.getParameter(Callflow.ORIGIN_PARAM);
+			} catch (Exception ignore) {
+				// malformed header — leave vorpalOrigin null for the log line
+			}
+			StringBuilder vias = new StringBuilder();
+			@SuppressWarnings("unchecked")
+			java.util.ListIterator<String> it = request.getHeaders("Via");
+			int i = 0;
+			while (it.hasNext()) {
+				if (vias.length() > 0) vias.append(" | ");
+				vias.append("[").append(i++).append("] ").append(it.next());
+			}
+			sipLogger.finer(request, "iRouter vorpalOrigin=" + vorpalOrigin
+					+ " initialRemoteAddr=" + request.getInitialRemoteAddr()
+					+ " remoteAddr=" + request.getRemoteAddr()
+					+ " via=" + vias);
+		}
+
 		// Chain every pipeline step; each runs after the previous completes.
-		// Pipeline mixes enrichment adapters (SIP/REST/JDBC/...) and table
-		// adapters freely — a TableAdapter earlier in the list can inject
-		// values a later RestAdapter interpolates into its URL / auth / body.
+		// The pipeline is pure enrichment — every connector writes values
+		// into the Context. The routing decision is a separate top-level
+		// phase that runs once the chain completes.
 		CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
-		for (Adapter adapter : config.getPipeline()) {
-			final Adapter a = adapter;
+		for (Connector connector : config.getPipeline()) {
+			final Connector a = connector;
 			chain = chain.thenCompose(v -> safeInvoke(a, ctx, sipLogger));
 		}
 
-		chain.thenRun(() -> applyTreatment(request, ctx, config, sipLogger))
+		chain.thenRun(() -> applyRouting(request, ctx, config, sipLogger))
 				.exceptionally(t -> {
 					sipLogger.severe(request, "iRouter pipeline failed: " + t.getMessage());
 					safeSend(request, 500);
@@ -107,27 +142,28 @@ public class IRouterServlet extends SipServlet implements SipServletListener {
 				});
 	}
 
-	private static CompletableFuture<Void> safeInvoke(Adapter adapter, Context ctx, Logger sipLogger) {
+	private static CompletableFuture<Void> safeInvoke(Connector connector, Context ctx, Logger sipLogger) {
 		try {
-			CompletableFuture<Void> f = adapter.invoke(ctx);
+			CompletableFuture<Void> f = connector.invoke(ctx);
 			return (f != null) ? f : CompletableFuture.completedFuture(null);
 		} catch (Exception e) {
-			sipLogger.warning("iRouter adapter " + adapter.getId() + " threw: " + e.getMessage());
+			sipLogger.warning("iRouter connector " + connector.getId() + " threw: " + e.getMessage());
 			return CompletableFuture.completedFuture(null);
 		}
 	}
 
-	private void applyTreatment(SipServletRequest request, Context ctx,
+	private void applyRouting(SipServletRequest request, Context ctx,
 			IRouterConfig config, Logger sipLogger) {
-		// Pipeline already ran asynchronously above. Just read the final
-		// match from the context (the last TableAdapter to match set it).
-		Translation<RoutingTreatment> match = config.getFinalTranslation(ctx);
-		RoutingTreatment treatment = (match != null) ? match.getTreatment() : null;
-		if (match != null) {
-			sipLogger.fine(request, "iRouter matched translation " + match.getId());
+		Routing routing = config.getRouting();
+		Route route = (routing != null) ? routing.decide(ctx) : null;
+
+		if (route == null) {
+			sipLogger.warning(request, "iRouter no routing decision; rejecting with 503");
+			safeSend(request, 503);
+			return;
 		}
 
-		String ruri = (treatment != null) ? ctx.resolve(treatment.getRequestUri()) : null;
+		String ruri = (route.getRequestUri() != null) ? ctx.resolve(route.getRequestUri()) : null;
 
 		try {
 			Proxy proxy = request.getProxy();
@@ -140,7 +176,7 @@ public class IRouterServlet extends SipServlet implements SipServletListener {
 				Callflow.copyParameters(request.getRequestURI(), destination);
 				sipLogger.fine(request, "iRouter routing to " + destination);
 			}
-			applyHeaders(request, treatment, ctx, sipLogger);
+			applyHeaders(request, route, ctx, sipLogger);
 			proxy.proxyTo(destination);
 		} catch (Exception e) {
 			sipLogger.severe(request, "iRouter proxyTo failed: " + e.getMessage());
@@ -148,10 +184,10 @@ public class IRouterServlet extends SipServlet implements SipServletListener {
 		}
 	}
 
-	private static void applyHeaders(SipServletRequest request, RoutingTreatment treatment,
+	private static void applyHeaders(SipServletRequest request, Route route,
 			Context ctx, Logger sipLogger) {
-		if (treatment == null || treatment.getHeaders() == null) return;
-		for (Map.Entry<String, String> h : treatment.getHeaders().entrySet()) {
+		if (route == null || route.getHeaders() == null) return;
+		for (Map.Entry<String, String> h : route.getHeaders().entrySet()) {
 			try {
 				request.setHeader(h.getKey(), ctx.resolve(h.getValue()));
 			} catch (Exception e) {

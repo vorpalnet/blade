@@ -3,7 +3,7 @@
 # build.sh - Profile-driven build wrapper for BLADE
 #
 # Usage:
-#   ./build.sh [profile...] [platform] [maven-args...]
+#   ./build.sh [profile...] [platform] [--no-dist] [maven-args...]
 #
 # Examples:
 #   ./build.sh                              # full build, OCCAS 8.1
@@ -12,6 +12,7 @@
 #   ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
 #   ./build.sh production minimal           # two EARs: production + minimal
 #   ./build.sh production clean package     # with explicit Maven goals
+#   ./build.sh --no-dist                    # full build, skip dist/ copy
 #   ./build.sh -- -Pjavadocs                # full build with extra Maven flags
 #
 # Module profiles:   build-profiles/*.conf
@@ -23,6 +24,8 @@
 #
 # Dist management:
 #   On failure: the current build's dist directory is deleted.
+#   --no-dist: skip copying artifacts to dist/<ver>-<build>/ entirely
+#              (also skips DEPLOYMENT.txt). Useful for local dev loops.
 # ============================================================================
 
 set -euo pipefail
@@ -36,9 +39,9 @@ DEFAULT_PLATFORM="occas-8.1"
 # --- Parse project version from pom.xml ---
 REVISION=$(grep '<revision>' "${SCRIPT_DIR}/pom.xml" | head -1 | sed 's/.*<revision>\(.*\)<\/revision>.*/\1/')
 
-# --- Discover all available service/test modules from directory names ---
+# --- Discover all available admin/service/test modules from directory names ---
 discover_modules() {
-    for subdir in services test; do
+    for subdir in admin services test; do
         for dir in "${SCRIPT_DIR}/${subdir}"/*/; do
             local name=$(basename "$dir")
             # Skip always-built modules
@@ -174,10 +177,13 @@ write_deployment_manifest() {
 PROFILES=()
 PLATFORM=""
 MAVEN_ARGS=()
+SKIP_DIST=false
 
 for arg in "$@"; do
     if [ "$arg" = "--" ]; then
         continue
+    elif [ "$arg" = "--no-dist" ]; then
+        SKIP_DIST=true
     elif [[ "$arg" == -* ]]; then
         MAVEN_ARGS+=("$arg")
     elif [ -f "${PROFILES_DIR}/${arg}.conf" ]; then
@@ -188,6 +194,13 @@ for arg in "$@"; do
         MAVEN_ARGS+=("$arg")
     fi
 done
+
+# --- Dist flag: passed to Maven so services/pom.xml skips its copy-dist
+# exec step, and also gates the DEPLOYMENT.txt writer below.
+DIST_FLAGS=()
+if [ "$SKIP_DIST" = true ]; then
+    DIST_FLAGS+=("-Dblade.skip.dist=true")
+fi
 
 if [ ${#PROFILES[@]} -eq 0 ]; then
     PROFILES=("$DEFAULT_PROFILE")
@@ -295,6 +308,7 @@ if [ ${#PROFILES[@]} -eq 1 ]; then
         "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
         "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
         "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
+        "${DIST_FLAGS[@]+"${DIST_FLAGS[@]}"}" \
         "-Dbuild.number=${BUILD_NUM}" \
         "-Dear.profile=${PROFILE}" \
         "-Dbuild.platform=${PLATFORM}"
@@ -302,11 +316,11 @@ if [ ${#PROFILES[@]} -eq 1 ]; then
     set -e
 
     if [ $MVN_EXIT -ne 0 ]; then
-        cleanup_failed_dist
+        [ "$SKIP_DIST" = true ] || cleanup_failed_dist
         exit $MVN_EXIT
     fi
 
-    write_deployment_manifest
+    [ "$SKIP_DIST" = true ] || write_deployment_manifest
     # zip_previous_dist
 else
     # =====================================================================
@@ -352,13 +366,14 @@ else
         -pl '!services' \
         "${UNION_SKIP_FLAGS[@]+"${UNION_SKIP_FLAGS[@]}"}" \
         "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
+        "${DIST_FLAGS[@]+"${DIST_FLAGS[@]}"}" \
         "-Dbuild.number=${BUILD_NUM}" \
         "-Dblade.skip.install=false"
     MVN_EXIT=$?
     set -e
 
     if [ $MVN_EXIT -ne 0 ]; then
-        cleanup_failed_dist
+        [ "$SKIP_DIST" = true ] || cleanup_failed_dist
         exit $MVN_EXIT
     fi
 
@@ -378,6 +393,7 @@ else
             -pl services \
             "${PROFILE_SKIP_FLAGS[@]+"${PROFILE_SKIP_FLAGS[@]}"}" \
             "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
+            "${DIST_FLAGS[@]+"${DIST_FLAGS[@]}"}" \
             "-Dbuild.number=${BUILD_NUM}" \
             "-Dear.profile=${profile}" \
             "-Dbuild.platform=${PLATFORM}"
@@ -385,7 +401,7 @@ else
         set -e
 
         if [ $MVN_EXIT -ne 0 ]; then
-            cleanup_failed_dist
+            [ "$SKIP_DIST" = true ] || cleanup_failed_dist
             exit $MVN_EXIT
         fi
     done
@@ -396,6 +412,6 @@ else
         echo "  vorpal-blade-services-${profile}.ear"
     done
 
-    write_deployment_manifest
+    [ "$SKIP_DIST" = true ] || write_deployment_manifest
     # zip_previous_dist
 fi

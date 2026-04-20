@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v3.configuration.adapters;
+package org.vorpal.blade.framework.v3.configuration.connectors;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -28,7 +28,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/// LDAP adapter. Searches a directory and passes the first matching
+/// LDAP connector. Searches a directory and passes the first matching
 /// entry's attributes as a `Map<String,String>` (LDAP attribute →
 /// first value) to each
 /// [org.vorpal.blade.framework.v3.configuration.selectors.Selector].
@@ -45,7 +45,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// thread is released for the duration of the LDAP round trip.
 @JsonPropertyOrder({ "type", "id", "description", "ldapUrl", "bindDn", "bindPassword",
 		"searchTemplate", "selectors" })
-public class LdapAdapter extends Adapter implements Serializable {
+public class LdapConnector extends Connector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private static final String TEMPLATES_DIR = "./config/custom/vorpal/_templates/";
@@ -60,7 +60,7 @@ public class LdapAdapter extends Adapter implements Serializable {
 	@JsonIgnore
 	private transient String cachedTemplate;
 
-	public LdapAdapter() {
+	public LdapConnector() {
 	}
 
 	@JsonPropertyDescription("LDAP server URL, e.g. ldap://ad.corp.example.com:389")
@@ -85,7 +85,7 @@ public class LdapAdapter extends Adapter implements Serializable {
 			return CompletableFuture.completedFuture(null);
 		}
 
-		final String adapterId = id;
+		final String connectorId = id;
 		final Logger sipLogger = SettingsManager.getSipLogger();
 
 		// Template resolution is cheap — do it on the calling thread.
@@ -98,12 +98,12 @@ public class LdapAdapter extends Adapter implements Serializable {
 			}
 			params = parseTemplate(ctx.resolve(cachedTemplate));
 		} catch (Exception e) {
-			sipLogger.warning("LdapAdapter[" + adapterId + "] template load failed: " + e.getMessage());
+			sipLogger.warning("LdapConnector[" + connectorId + "] template load failed: " + e.getMessage());
 			return CompletableFuture.completedFuture(null);
 		}
 
 		if (params.filter == null || params.filter.isEmpty()) {
-			sipLogger.warning("LdapAdapter[" + adapterId + "] empty filter");
+			sipLogger.warning("LdapConnector[" + connectorId + "] empty filter");
 			return CompletableFuture.completedFuture(null);
 		}
 
@@ -141,18 +141,18 @@ public class LdapAdapter extends Adapter implements Serializable {
 					results.close();
 				}
 			} catch (Exception e) {
-				sipLogger.warning("LdapAdapter[" + adapterId + "] search failed: " + e.getMessage());
+				sipLogger.warning("LdapConnector[" + connectorId + "] search failed: " + e.getMessage());
 			}
 			return null;
 		}, Executors.DB).thenAccept(entry -> {
 			if (entry == null) {
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer("LdapAdapter[" + adapterId + "] no entries");
+					sipLogger.finer("LdapConnector[" + connectorId + "] no entries");
 				}
 				return;
 			}
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("LdapAdapter[" + adapterId + "] entry=" + entry.keySet());
+				sipLogger.finer("LdapConnector[" + connectorId + "] entry=" + entry.keySet());
 			}
 			runSelectors(ctx, entry);
 		});

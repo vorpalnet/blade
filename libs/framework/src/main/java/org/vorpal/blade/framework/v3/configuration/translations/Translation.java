@@ -1,52 +1,39 @@
 package org.vorpal.blade.framework.v3.configuration.translations;
 
 import java.io.Serializable;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
-/// A single entry in a [TranslationTable]. Carries an application-defined
-/// payload (the `treatment`) of type `T`, plus an optional list of nested
-/// [TranslationTable]s for hierarchical lookups (e.g. area code → prefix).
+/// A single entry in a table connector's translations map.
 ///
-/// Translations are emitted with `@JsonIdentityInfo` so that any second
-/// occurrence in the JSON output is rendered as a reference to the first
-/// by `id`, keeping config files compact and readable.
+/// Carries a `description` for human reading plus an arbitrary bag of
+/// string key/value pairs. When the parent table's lookup matches, every
+/// entry in that bag is written into the session [org.vorpal.blade.framework.v3.configuration.Context]
+/// so that later pipeline stages (REST bodies, JDBC templates, routing
+/// keys, …) can interpolate the values with `${name}`.
 ///
-/// @param <T> the application-defined treatment type
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
-@JsonPropertyOrder({ "id", "description", "treatment", "tables" })
-public class Translation<T> implements Serializable {
+/// Jackson `@JsonAnySetter` / `@JsonAnyGetter` let the bag serialize
+/// inline — any JSON property that isn't `description` flows into the
+/// extras map on deserialization and back out as a top-level property on
+/// serialization, matching the config-file convention that a Translation
+/// "is" its payload rather than wrapping it.
+@JsonPropertyOrder({ "description" })
+public class Translation implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	private String id;
 	private String description;
-	private T treatment;
-	private List<TranslationTable<T>> tables;
+	private final Map<String, String> extras = new LinkedHashMap<>();
 
 	public Translation() {
 	}
 
-	public Translation(String id) {
-		this.id = id;
-	}
-
-	public Translation(String id, T treatment) {
-		this.id = id;
-		this.treatment = treatment;
-	}
-
-	@JsonPropertyDescription("Unique identifier for this translation")
-	public String getId() {
-		return id;
-	}
-
-	public void setId(String id) {
-		this.id = id;
+	public Translation(String description) {
+		this.description = description;
 	}
 
 	@JsonPropertyDescription("Human-readable description of this translation")
@@ -58,30 +45,24 @@ public class Translation<T> implements Serializable {
 		this.description = description;
 	}
 
-	@JsonPropertyDescription("Application-defined payload (treatment) for this translation")
-	public T getTreatment() {
-		return treatment;
+	/// Serializes every entry as a top-level property alongside
+	/// `description`.
+	@JsonAnyGetter
+	public Map<String, String> getExtras() {
+		return extras;
 	}
 
-	public void setTreatment(T treatment) {
-		this.treatment = treatment;
+	/// Captures any JSON property not otherwise recognized. Values are
+	/// stringified (Jackson will hand us the raw scalar).
+	@JsonAnySetter
+	public void putExtra(String name, Object value) {
+		if (name == null) return;
+		extras.put(name, (value == null) ? null : value.toString());
 	}
 
-	@JsonPropertyDescription("Nested translation tables searched after this translation matches; deepest match wins")
-	public List<TranslationTable<T>> getTables() {
-		return tables;
-	}
-
-	public void setTables(List<TranslationTable<T>> tables) {
-		this.tables = tables;
-	}
-
-	/// Convenience: append a nested table, allocating the list if needed.
-	public TranslationTable<T> addTable(TranslationTable<T> table) {
-		if (tables == null) {
-			tables = new LinkedList<>();
-		}
-		tables.add(table);
-		return table;
+	/// Convenience for programmatic construction (e.g. `IRouterConfigSample`).
+	public Translation put(String name, String value) {
+		if (name != null) extras.put(name, value);
+		return this;
 	}
 }

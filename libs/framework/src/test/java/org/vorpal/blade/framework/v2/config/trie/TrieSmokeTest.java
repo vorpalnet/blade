@@ -5,6 +5,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import org.vorpal.blade.framework.v3.configuration.trie.Trie;
+
 /// Lightweight smoke driver for [Trie]. Run with:
 ///
 ///     mvn -pl libs/framework -am test-compile

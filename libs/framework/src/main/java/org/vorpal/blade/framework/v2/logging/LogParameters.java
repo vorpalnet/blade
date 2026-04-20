@@ -8,6 +8,9 @@ import javax.servlet.ServletContext;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
 
+import org.vorpal.blade.framework.v2.config.FormLayout;
+import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
@@ -15,6 +18,9 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
  * Configuration parameters for the logging system. Supports file-based logging
  * with configurable directory, filename, size, and rotation settings.
  */
+@FormLayoutGroup({ "fileSize", "fileCount" })
+@FormLayoutGroup({ "loggingLevel", "sequenceDiagramLoggingLevel", "configurationLoggingLevel", "analyticsLoggingLevel" })
+@FormLayoutGroup({ "useParentLogging", "appendFile", "colorsEnabled" })
 public class LogParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -65,7 +71,7 @@ public class LogParameters implements Serializable {
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel analyticsLoggingLevel = null;
 
-	@JsonPropertyDescription("Support ANSI colors in logging? It's useful for debugging but can be annoying in production. Default: false")
+	@JsonPropertyDescription("Support ANSI colors in logging?")
 	@JsonProperty(defaultValue = "false")
 	protected Boolean colorsEnabled = false;
 	
@@ -117,6 +123,7 @@ public class LogParameters implements Serializable {
 	 * @return the directory
 	 */
 	@JsonPropertyDescription("Location of log files. Supports environment and servlet context variables. Default: ./servers/${weblogic.Name}/logs/vorpal")
+	@FormLayout(wide = true)
 	public String getDirectory() {
 		return directory;
 	}
@@ -134,6 +141,7 @@ public class LogParameters implements Serializable {
 	 * @return the fileName
 	 */
 	@JsonPropertyDescription("Name of the log file. Supports environment and servlet context variables. Default: ${sip.application.name}.%g.log")
+	@FormLayout(wide = true)
 	public String getFileName() {
 		return fileName;
 	}
@@ -357,6 +365,14 @@ public class LogParameters implements Serializable {
 
 	public void setAnalyticsLoggingLevel(LoggingLevel analyticsLoggingLevel) {
 		this.analyticsLoggingLevel = analyticsLoggingLevel;
+	}
+
+	public Boolean getColorsEnabled() {
+		return colorsEnabled;
+	}
+
+	public void setColorsEnabled(Boolean colorsEnabled) {
+		this.colorsEnabled = colorsEnabled;
 	}
 
 }

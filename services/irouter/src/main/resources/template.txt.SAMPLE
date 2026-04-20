@@ -1,0 +1,23 @@
+# RestConnector body template.
+# - HTTP-message format: headers, blank line, body.
+# - Lines starting with `#` are comments (stripped at load time).
+# - `${var}` placeholders resolve from the pipeline Context at send time —
+#   session attributes, env vars, system properties, plus the reserved
+#   meta-vars ${now}, ${now:FORMAT}, ${uuid}.
+
+# --- headers ---
+Content-Type: application/json
+X-Request-ID: ${uuid}
+Authorization: Bearer ${apiKey}
+
+# --- body ---
+{
+  "callId": "${callId}",
+  "srcNum": "${srcNum}",
+  "destNum": "${destNum}",
+  "callDirection": "in",
+  "customerId": "${customerId}",
+  "callStartTs": "${now}",
+  "strategy": 0,
+  "timeout": 5000
+}

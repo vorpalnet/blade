@@ -29,96 +29,12 @@
 				<artifactId>maven-ear-plugin</artifactId>
 				<configuration>
 					<generateApplicationXml>false</generateApplicationXml>
-					<modules>
-						<!-- WAR modules: bundleFileName ensures the WAR filename inside
-						     the EAR matches the service directory name, so the SipServlet
-						     context name resolves correctly. -->
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-acl</artifactId>
-							<bundleFileName>acl.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-analytics</artifactId>
-							<bundleFileName>analytics.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-hold</artifactId>
-							<bundleFileName>hold.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-options</artifactId>
-							<bundleFileName>options.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-presence</artifactId>
-							<bundleFileName>presence.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-proxy-balancer</artifactId>
-							<bundleFileName>proxy-balancer.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-proxy-block</artifactId>
-							<bundleFileName>proxy-block.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-proxy-registrar</artifactId>
-							<bundleFileName>proxy-registrar.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-proxy-router</artifactId>
-							<bundleFileName>proxy-router.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-irouter</artifactId>
-							<bundleFileName>irouter.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-queue</artifactId>
-							<bundleFileName>queue.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-tpcc</artifactId>
-							<bundleFileName>tpcc.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-transfer</artifactId>
-							<bundleFileName>transfer.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-services-crud</artifactId>
-							<bundleFileName>crud.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>test-b2bua</artifactId>
-							<bundleFileName>test-b2bua.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>test-uac</artifactId>
-							<bundleFileName>test-uac.war</bundleFileName>
-						</webModule>
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>test-uas</artifactId>
-							<bundleFileName>test-uas.war</bundleFileName>
-						</webModule>
-					</modules>
+					<!-- WAR modules are contributed profile-by-profile below
+					     (ear-acl, ear-analytics, …). Each profile deactivates
+					     via -Dskip.<name> and also drops both its dependency
+					     AND its webModule entry, so a trimmed-down
+					     build-profiles/*.conf doesn't reference artifacts
+					     that aren't in the reactor. -->
 				</configuration>
 			</plugin>
 			<plugin>
@@ -131,6 +47,7 @@
 						<phase>verify</phase>
 						<goals><goal>exec</goal></goals>
 						<configuration>
+							<skip>${blade.skip.dist}</skip>
 							<executable>bash</executable>
 							<arguments>
 								<argument>-c</argument>
@@ -171,6 +88,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-acl</artifactId>
+									<bundleFileName>acl.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-analytics</id>
@@ -183,6 +117,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-analytics</artifactId>
+									<bundleFileName>analytics.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-hold</id>
@@ -195,6 +146,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-hold</artifactId>
+									<bundleFileName>hold.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 <profile>
 			<id>ear-options</id>
@@ -207,6 +175,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-options</artifactId>
+									<bundleFileName>options.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-presence</id>
@@ -219,6 +204,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-presence</artifactId>
+									<bundleFileName>presence.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-proxy-balancer</id>
@@ -231,6 +233,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-proxy-balancer</artifactId>
+									<bundleFileName>proxy-balancer.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-proxy-block</id>
@@ -243,6 +262,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-proxy-block</artifactId>
+									<bundleFileName>proxy-block.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-proxy-registrar</id>
@@ -255,6 +291,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-proxy-registrar</artifactId>
+									<bundleFileName>proxy-registrar.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-proxy-router</id>
@@ -267,6 +320,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-proxy-router</artifactId>
+									<bundleFileName>proxy-router.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-irouter</id>
@@ -279,6 +349,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-irouter</artifactId>
+									<bundleFileName>irouter.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-queue</id>
@@ -291,6 +378,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-queue</artifactId>
+									<bundleFileName>queue.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-tpcc</id>
@@ -303,6 +407,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-tpcc</artifactId>
+									<bundleFileName>tpcc.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-transfer</id>
@@ -315,6 +436,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-transfer</artifactId>
+									<bundleFileName>transfer.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-crud</id>
@@ -327,6 +465,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>vorpal-blade-services-crud</artifactId>
+									<bundleFileName>crud.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-test-b2bua</id>
@@ -339,6 +494,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>test-b2bua</artifactId>
+									<bundleFileName>test-b2bua.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-test-uac</id>
@@ -351,6 +523,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>test-uac</artifactId>
+									<bundleFileName>test-uac.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 		<profile>
 			<id>ear-test-uas</id>
@@ -363,6 +552,23 @@
 					<type>war</type>
 				</dependency>
 			</dependencies>
+					<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-ear-plugin</artifactId>
+						<configuration>
+							<modules combine.children="append">
+								<webModule>
+									<groupId>org.vorpal.blade</groupId>
+									<artifactId>test-uas</artifactId>
+									<bundleFileName>test-uas.war</bundleFileName>
+								</webModule>
+							</modules>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 
 		<!-- WebLogic deployment profiles for the services EAR.

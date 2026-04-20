@@ -2,15 +2,22 @@ package org.vorpal.blade.framework.v3.configuration.selectors;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ListIterator;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.annotation.JsonIdentityInfo;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -18,7 +25,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 /// Pulls a value out of whatever payload its parent
-/// [org.vorpal.blade.framework.v3.configuration.adapters.Adapter]
+/// [org.vorpal.blade.framework.v3.configuration.connectors.Connector]
 /// produced and writes it to the SIP session via the [Context].
 ///
 /// Concrete selectors choose their own extraction technique:
@@ -43,15 +50,18 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 		@JsonSubTypes.Type(value = SdpSelector.class, name = "sdp"),
 		@JsonSubTypes.Type(value = RegexSelector.class, name = "regex")
 })
-@JsonPropertyOrder({ "type", "id", "description", "attribute", "index", "applicationSession" })
+@JsonPropertyOrder({ "type", "id", "description", "attribute" })
+// Tolerate the legacy `index` and `applicationSession` fields in older
+// configs: they moved out of the per-selector schema (they're now a
+// session-level concern; see SessionParameters). This annotation lets
+// existing irouter.json files keep loading without an edit pass.
+@JsonIgnoreProperties(value = { "index", "applicationSession" }, ignoreUnknown = false)
 public abstract class Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	protected String id;
 	protected String description;
 	protected String attribute;
-	protected boolean index = false;
-	protected boolean applicationSession = false;
 
 	public Selector() {
 	}
@@ -61,6 +71,7 @@ public abstract class Selector implements Serializable {
 	public void setId(String id) { this.id = id; }
 
 	@JsonPropertyDescription("Human-readable description")
+	@FormLayout(wide = true)
 	public String getDescription() { return description; }
 	public void setDescription(String description) { this.description = description; }
 
@@ -68,47 +79,29 @@ public abstract class Selector implements Serializable {
 	public String getAttribute() { return attribute; }
 	public void setAttribute(String attribute) { this.attribute = attribute; }
 
-	@JsonPropertyDescription("If true, register the extracted value as a SipApplicationSession index key")
-	public boolean isIndex() { return index; }
-	public void setIndex(boolean index) { this.index = index; }
-
-	@JsonPropertyDescription("If true, write to SipApplicationSession; otherwise to SipSession")
-	public boolean isApplicationSession() { return applicationSession; }
-	public void setApplicationSession(boolean applicationSession) { this.applicationSession = applicationSession; }
-
 	/// Subclasses implement this to read from `payload` (whatever the
-	/// parent adapter provided) and call [#store] with the resulting
-	/// value. Errors are swallowed by the parent adapter.
+	/// parent connector provided) and call [#store] with the resulting
+	/// value. Errors are swallowed by the parent connector.
 	public abstract void extract(Context ctx, Object payload);
 
-	/// Write a value to the session (App or Sip depending on
-	/// `applicationSession`), and optionally register it as a
-	/// SipApplicationSession index key.
+	/// Write a value to the SIP session. `${var}` placeholders in the
+	/// value are resolved against the current session state (via
+	/// [Context#resolve]) before storage.
 	///
-	/// `${var}` placeholders in the value are resolved against the
-	/// current session state (via [Context#resolve]) before storage.
+	/// Application-session storage and session-index keying are now a
+	/// session-level concern — they're configured on `SessionParameters`
+	/// rather than per-selector. Future work.
 	protected void store(Context ctx, String name, String value) {
 		if (name == null || value == null || ctx == null) return;
-
-		if (applicationSession) {
-			ctx.putAppSession(name, value);
-		} else {
-			ctx.put(name, value);
-		}
-
-		if (index) {
-			// "_index_<name>" — the Configurator's REST lookup uses
-			// these keys to find sessions by attribute.
-			ctx.putAppSession("_index_" + name, value);
-		}
+		ctx.put(name, value);
 	}
 
-	/// Read a raw string value identified by `name` from the adapter
+	/// Read a raw string value identified by `name` from the connector
 	/// payload:
 	///
-	/// - `Map<String,String>` payload (REST/JDBC/LDAP/Map adapters):
+	/// - `Map<String,String>` payload (REST/JDBC/LDAP/Map connectors):
 	///   name is a map key.
-	/// - [SipServletRequest] payload (SipAdapter): name is a SIP
+	/// - [SipServletRequest] payload (SipConnector): name is a SIP
 	///   header name, with special pseudo-headers `Request-URI`,
 	///   `Remote-IP`, `content`/`body` handled directly.
 	///
@@ -135,8 +128,16 @@ public abstract class Selector implements Serializable {
 
 				case "Remote-IP":
 				case "remoteIP":
-					String addr = request.getRemoteAddr();
-					return (addr != null) ? addr : "127.0.0.1";
+					return resolveOriginalSourceIp(request);
+				case "Peer-IP":
+				case "peerIP": {
+					// Raw transport-level peer of the immediate socket —
+					// whatever sent THIS hop. Only useful when you
+					// specifically want to know your upstream neighbor
+					// (rarely). For "who dialed the call?", use remoteIP.
+					String peer = request.getRemoteAddr();
+					return (peer != null) ? peer : "127.0.0.1";
+				}
 
 				case "content":
 				case "Content":
@@ -165,5 +166,86 @@ public abstract class Selector implements Serializable {
 	protected static SipApplicationSession appSessionOf(Context ctx) {
 		if (ctx == null || ctx.getRequest() == null) return null;
 		return ctx.getRequest().getApplicationSession();
+	}
+
+	// ---- "remoteIP" resolution ----
+	//
+	// Goal: identify the UA that sent the ORIGINAL request even when the
+	// consumer lives several proxy / B2BUA hops downstream.
+	//
+	// Fallback chain (first non-null wins):
+	//   1. X-Vorpal-ID `origin` parameter — stamped by Callflow on the
+	//      first BLADE service to see the request and propagated through
+	//      every forward. This is the reliable, position-independent
+	//      answer; the remaining steps are fallbacks for flows that
+	//      didn't go through Callflow (e.g. iRouter uses the proxy API,
+	//      not Callflow.sendRequest, so it has no X-Vorpal-ID to read
+	//      when it's first-in-chain).
+	//   2. SipServletRequest#getInitialRemoteAddr() — when the container
+	//      can derive it. OCCAS sometimes returns null for
+	//      internally-synthesized requests, so we can't rely on it.
+	//   3. Bottom-most Via header's `received` parameter — per RFC 3261
+	//      §18.2.1, the first proxy that received the request stamps
+	//      the real source IP here when `sent-by` doesn't match. Most
+	//      reliable for NAT'd external callers.
+	//   4. Bottom-most Via header's `sent-by` host — what the UA
+	//      claimed about itself. Works when the UA isn't NAT'd.
+	//   5. SipServletRequest#getRemoteAddr() — immediate transport peer;
+	//      last-ditch fallback. When iRouter is first-in-chain (reached
+	//      via the proxy API without an upstream Callflow-using BLADE
+	//      app), this IS the external sender, so the chain resolves
+	//      correctly without any special-case code.
+
+	// sent-by host is either a bracketed IPv6 literal `[2001:db8::1]` or
+	// a plain host/IPv4 that stops at whitespace / `:` / `;` / `,`.
+	private static final Pattern VIA_SENT_BY = Pattern.compile(
+			"^\\s*SIP/2\\.0/[A-Za-z0-9._-]+\\s+(\\[[^\\]]+\\]|[^\\s:;,]+)"
+	);
+	private static final Pattern VIA_RECEIVED = Pattern.compile(
+			"(?:^|;)\\s*received\\s*=\\s*([^;,\\s]+)"
+	);
+
+	static String resolveOriginalSourceIp(SipServletRequest request) {
+		if (request == null) return "127.0.0.1";
+
+		// 1. X-Vorpal-ID;origin=<ip> — the preferred answer when present.
+		try {
+			Parameterable xVorpalId = request.getParameterableHeader(Callflow.X_VORPAL_ID);
+			if (xVorpalId != null) {
+				String origin = xVorpalId.getParameter(Callflow.ORIGIN_PARAM);
+				if (origin != null && !origin.isEmpty()) return origin;
+			}
+		} catch (Exception ignore) {
+			// Malformed header must not break the pipeline — fall through.
+		}
+
+		// 2. Container-derived initial remote addr
+		String initial = request.getInitialRemoteAddr();
+		if (initial != null && !initial.isEmpty()) return initial;
+
+		// 3/4. Walk Via stack to the bottom; prefer received, else sent-by
+		String bottomVia = bottomOfViaStack(request);
+		if (bottomVia != null) {
+			Matcher rcv = VIA_RECEIVED.matcher(bottomVia);
+			if (rcv.find()) return rcv.group(1);
+			Matcher sb = VIA_SENT_BY.matcher(bottomVia);
+			if (sb.find()) return sb.group(1);
+		}
+
+		// 5. Hop-by-hop peer
+		String peer = request.getRemoteAddr();
+		return (peer != null && !peer.isEmpty()) ? peer : "127.0.0.1";
+	}
+
+	/// Returns the last (bottom-most) Via header value, or null if none.
+	/// The bottom Via is the one added by the originating UA; every
+	/// proxy prepends its own on top.
+	private static String bottomOfViaStack(SipServletRequest request) {
+		@SuppressWarnings("unchecked")
+		ListIterator<String> vias = request.getHeaders("Via");
+		if (vias == null) return null;
+		String last = null;
+		while (vias.hasNext()) last = vias.next();
+		return last;
 	}
 }

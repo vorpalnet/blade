@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v3.configuration.adapters;
+package org.vorpal.blade.framework.v3.configuration.connectors;
 
 import java.io.Serializable;
 import java.util.LinkedHashMap;
@@ -22,13 +22,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// dumped wholesale into the SIP session — the common case for
 /// credential lookups (customerId, apiKey, etc.).
 @JsonPropertyOrder({ "type", "id", "description", "keyExpression", "entries", "selectors" })
-public class MapAdapter extends Adapter implements Serializable {
+public class MapConnector extends Connector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	protected String keyExpression;
 	protected Map<String, Map<String, String>> entries = new LinkedHashMap<>();
 
-	public MapAdapter() {
+	public MapConnector() {
 	}
 
 	@JsonPropertyDescription("${var} template that resolves to the lookup key, e.g. ${to-host}")
@@ -49,7 +49,7 @@ public class MapAdapter extends Adapter implements Serializable {
 		String key = ctx.resolve(keyExpression);
 		if (key == null || key.equals(keyExpression)) {
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("MapAdapter[" + id + "] key resolved to null; skipping");
+				sipLogger.finer("MapConnector[" + id + "] key resolved to null; skipping");
 			}
 			return CompletableFuture.completedFuture(null);
 		}
@@ -57,13 +57,13 @@ public class MapAdapter extends Adapter implements Serializable {
 		Map<String, String> matched = entries.get(key);
 		if (matched == null) {
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("MapAdapter[" + id + "] no entry for key=" + key);
+				sipLogger.finer("MapConnector[" + id + "] no entry for key=" + key);
 			}
 			return CompletableFuture.completedFuture(null);
 		}
 
 		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer("MapAdapter[" + id + "] matched key=" + key + " → " + matched.keySet());
+			sipLogger.finer("MapConnector[" + id + "] matched key=" + key + " → " + matched.keySet());
 		}
 
 		if (selectors == null || selectors.isEmpty()) {

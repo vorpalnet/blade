@@ -518,6 +518,186 @@ function resolveRef(ref) {
 // type: { const: "hash" } } }). The referenced schema is the base; any
 // sibling keywords on the input node override or extend it. Returns a
 // fresh merged object — caller must not mutate it back into the schema.
+/// Stable-sorts property names so const-valued props (polymorphic
+/// discriminators like `type: {const: "hash"}`) come first. After deref
+/// merges a variant wrapper onto its base, the discriminator lands at the
+/// tail of iteration order — this restores it to the front so serialized
+/// JSON shows the discriminator at the top of each object, matching
+/// Jackson's usual output.
+function orderedPropertyNames(properties) {
+    const names = Object.keys(properties);
+    const constNames = [];
+    const others = [];
+    names.forEach(name => {
+        if (properties[name] && properties[name].const !== undefined) {
+            constNames.push(name);
+        } else {
+            others.push(name);
+        }
+    });
+    return constNames.concat(others);
+}
+
+/// Read a primitive input's current value for JSON extraction. For inputs
+/// marked data-password="true", cleartext values get the BLADE {CLEARTEXT}
+/// prefix so the FileManagerServlet encrypts them on save. Values that
+/// already carry an encrypted prefix ({AES}, {3DES}) or have been marked
+/// {CLEARTEXT} already are passed through unchanged.
+function readInputValue(input) {
+    if (!input) return null;
+    if (input.type === 'checkbox') return input.checked;
+    if (input.type === 'number') return input.value ? parseInt(input.value, 10) : null;
+    let v = input.value;
+    if (v == null || v === '') return null;
+    if (input.dataset && input.dataset.password === 'true') {
+        if (!v.startsWith('{CLEARTEXT}') && !v.startsWith('{AES}') && !v.startsWith('{3DES}')) {
+            v = '{CLEARTEXT}' + v;
+        }
+    }
+    return v;
+}
+
+/// Attach live validation to an input/textarea based on its schema. Paints
+/// an `.invalid` class when the value fails `pattern` / min/maxLength /
+/// minimum / maximum. The tooltip is the reason, for quick inspection.
+function attachFieldValidation(input, schema) {
+    if (!schema) return;
+    const hasRules =
+        schema.pattern || schema.minLength != null || schema.maxLength != null ||
+        schema.minimum != null || schema.maximum != null;
+    if (!hasRules) return;
+    let regex = null;
+    if (schema.pattern) {
+        try { regex = new RegExp(schema.pattern); } catch (e) { /* skip invalid */ }
+    }
+    const validate = () => {
+        const raw = input.value;
+        let err = null;
+        if (raw && raw !== '') {
+            if (regex && !regex.test(raw)) err = "doesn't match pattern " + schema.pattern;
+            if (!err && schema.minLength != null && raw.length < schema.minLength) err = 'min length ' + schema.minLength;
+            if (!err && schema.maxLength != null && raw.length > schema.maxLength) err = 'max length ' + schema.maxLength;
+            if (!err && (schema.type === 'integer' || schema.type === 'number')) {
+                const n = parseFloat(raw);
+                if (!isNaN(n)) {
+                    if (schema.minimum != null && n < schema.minimum) err = 'minimum ' + schema.minimum;
+                    if (!err && schema.maximum != null && n > schema.maximum) err = 'maximum ' + schema.maximum;
+                }
+            }
+        }
+        input.classList.toggle('invalid', !!err);
+        if (err) input.title = err; else input.removeAttribute('title');
+    };
+    input.addEventListener('input', validate);
+    input.addEventListener('blur', validate);
+    validate();
+}
+
+/// Harvest `${var}` names available in the current form — every `id` field
+/// across all selectors/connectors/routes/etc. These become autocomplete
+/// candidates in template-style inputs.
+function availableContextVars() {
+    const names = new Set();
+    document.querySelectorAll('input[data-path$=".id"]').forEach(input => {
+        const v = (input.value || '').trim();
+        if (v) names.add(v);
+    });
+    return Array.from(names).sort();
+}
+
+/// Attach ${var} autocomplete to a text input / textarea. Shows a floating
+/// popup when the caret is inside an unterminated `${...` sequence.
+function attachContextAutocomplete(input) {
+    let popup = null;
+    const close = () => { if (popup) { popup.remove(); popup = null; } };
+    const onInput = () => {
+        const caret = input.selectionStart;
+        const before = (input.value || '').slice(0, caret);
+        const m = before.match(/\$\{([^}]*)$/);
+        if (!m) { close(); return; }
+        const prefix = m[1];
+        const opts = availableContextVars().filter(n => n.startsWith(prefix));
+        if (opts.length === 0) { close(); return; }
+        if (!popup) {
+            popup = document.createElement('div');
+            popup.className = 'context-var-popup';
+            document.body.appendChild(popup);
+        }
+        popup.innerHTML = '';
+        opts.forEach(name => {
+            const opt = document.createElement('div');
+            opt.className = 'context-var-option';
+            opt.textContent = name;
+            opt.onmousedown = (e) => {
+                e.preventDefault(); // keep focus on the input
+                const start = caret - prefix.length;
+                const before2 = input.value.slice(0, start);
+                const after2 = input.value.slice(caret);
+                const insertion = name + '}';
+                input.value = before2 + insertion + after2;
+                const newCaret = start + insertion.length;
+                input.setSelectionRange(newCaret, newCaret);
+                input.focus();
+                setDirty();
+                close();
+            };
+            popup.appendChild(opt);
+        });
+        const rect = input.getBoundingClientRect();
+        popup.style.position = 'absolute';
+        popup.style.top = (rect.bottom + window.scrollY + 2) + 'px';
+        popup.style.left = (rect.left + window.scrollX) + 'px';
+    };
+    input.addEventListener('input', onInput);
+    input.addEventListener('blur', () => setTimeout(close, 150));
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close();
+    });
+}
+
+/// Extract a type name from a $ref path, stripping victools' numeric
+/// variant suffix. e.g. "#/$defs/AttributeSelector-2" -> "AttributeSelector".
+function refTypeName(ref) {
+    const parts = String(ref).split('/');
+    const last = parts[parts.length - 1] || '';
+    return last.replace(/-\d+$/, '') || null;
+}
+
+/// Human-readable name for a schema node. Prefers explicit `title`, falls
+/// back to the last segment of `$ref`.
+function schemaDisplayName(schema) {
+    if (!schema) return null;
+    if (schema.title) return schema.title;
+    if (schema.$ref) return refTypeName(schema.$ref);
+    return null;
+}
+
+/// Derive a human label for an array's item type — the base class of all
+/// variants if polymorphic, or the single type if not. Used to label
+/// "Add <type>" buttons. Returns null when no good name can be inferred.
+function arrayItemTypeName(itemsSchema) {
+    if (!itemsSchema) return null;
+    if (itemsSchema.title) return itemsSchema.title;
+    if (itemsSchema.$ref) return refTypeName(itemsSchema.$ref);
+    const variants = polymorphicVariants(itemsSchema);
+    if (!variants || variants.length === 0) return null;
+    const names = variants.map(v => {
+        if (v.title) return v.title;
+        if (v.$ref) return refTypeName(v.$ref);
+        return null;
+    }).filter(Boolean);
+    if (names.length === 0) return null;
+    // Longest common suffix across all variant names is the base class.
+    const first = names[0];
+    let i = 0;
+    while (i < first.length &&
+           names.every(n => i < n.length && n[n.length - 1 - i] === first[first.length - 1 - i])) {
+        i++;
+    }
+    const suffix = first.slice(first.length - i);
+    return /^[A-Z][A-Za-z0-9]+$/.test(suffix) ? suffix : null;
+}
+
 function deref(schemaNode) {
     if (!schemaNode || !schemaNode.$ref) return schemaNode;
     const target = resolveRef(schemaNode.$ref);
@@ -611,14 +791,14 @@ function createReferencePicker(itemsSchema, container, path, updateStatus) {
     if (!arrayItemsAcceptReferences(itemsSchema)) return null;
 
     const select = document.createElement('select');
-    select.className = 'btn btn-secondary reference-picker';
+    select.className = 'btn btn-primary reference-picker add-menu-select';
     select.title = 'Add a reference to an existing identity';
 
     function rebuildOptions() {
         select.innerHTML = '';
         const placeholder = document.createElement('option');
         placeholder.value = '';
-        placeholder.textContent = '+ Reference\u2026';
+        placeholder.textContent = '+ Add Reference';
         select.appendChild(placeholder);
 
         // Walk the registry, filtering to identities whose structure is
@@ -938,16 +1118,65 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             numberInput.value = numVal;
             numberInput.setAttribute('value', numVal);
             numberInput.setAttribute('data-path', path);
+            if (fieldSchema.default !== undefined && fieldSchema.default !== null) {
+                numberInput.placeholder = String(fieldSchema.default);
+            }
+            if (fieldSchema['x-readonly']) numberInput.disabled = true;
+            attachFieldValidation(numberInput, fieldSchema);
             return numberInput;
 
         case 'string':
-            const textInput = document.createElement('input');
-            textInput.type = 'text';
+            let textInput;
+            if (fieldSchema.format === 'textarea') {
+                // Multi-line editor for long strings (regex, templates, body).
+                textInput = document.createElement('textarea');
+                textInput.rows = 3;
+            } else {
+                textInput = document.createElement('input');
+                textInput.type = fieldSchema.format === 'password' ? 'password' : 'text';
+            }
             textInput.id = id;
             const strVal = value !== null && value !== undefined ? value : '';
             textInput.value = strVal;
-            textInput.setAttribute('value', strVal);
+            if (textInput.tagName === 'INPUT') {
+                textInput.setAttribute('value', strVal);
+            } else {
+                textInput.textContent = strVal;
+            }
             textInput.setAttribute('data-path', path);
+            // Use `default` (from @JsonProperty(defaultValue)) as the placeholder
+            // hint so the user sees the expected format even before typing.
+            if (fieldSchema.default !== undefined && fieldSchema.default !== null) {
+                textInput.placeholder = String(fieldSchema.default);
+            }
+            if (fieldSchema['x-readonly']) textInput.disabled = true;
+            attachFieldValidation(textInput, fieldSchema);
+            // Password fields don't need ${var} autocomplete — and we don't
+            // want secrets flowing through the variable scanner.
+            if (fieldSchema.format !== 'password') {
+                attachContextAutocomplete(textInput);
+            }
+            if (fieldSchema.format === 'password') {
+                // Mark for {CLEARTEXT}-wrapping on save, and wrap in a span
+                // with an eye toggle so the user can briefly verify the secret.
+                textInput.dataset.password = 'true';
+                const wrapper = document.createElement('span');
+                wrapper.className = 'password-field';
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'password-toggle';
+                toggle.setAttribute('aria-label', 'Show/hide password');
+                toggle.title = 'Show/hide';
+                toggle.textContent = '\u{1F441}'; // 👁
+                toggle.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    textInput.type = textInput.type === 'password' ? 'text' : 'password';
+                };
+                wrapper.appendChild(textInput);
+                wrapper.appendChild(toggle);
+                return wrapper;
+            }
             return textInput;
 
         default:
@@ -970,6 +1199,19 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
     }
 
     if (fieldSchema.oneOf || fieldSchema.anyOf) {
+        // When the polymorphic variants are objects (e.g. Authentication:
+        // Basic / Bearer / ApiKey / OAuth2...), render a type-picker UI so
+        // the user can switch the variant. Without this, the form locks in
+        // whichever variant resolveOneOf picked first — the user can't
+        // actually choose.
+        const allVariants = polymorphicVariants(fieldSchema);
+        const anyObjectVariant = allVariants && allVariants.some(v => {
+            const r = v.$ref ? deref(v) : v;
+            return r && r.type === 'object';
+        });
+        if (anyObjectVariant) {
+            return createPolymorphicObjectGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete, allVariants);
+        }
         fieldSchema = resolveOneOf(fieldSchema, value);
         // Resolved variant may itself be a $ref+siblings node — deref again.
         if (fieldSchema && fieldSchema.$ref) {
@@ -1003,7 +1245,10 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
         if (!hasProperties && !hasUsableAdditional) {
             return createOpaqueObjectGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete);
         }
-        if (fieldSchema.additionalProperties) {
+        // Hybrid (properties + additionalProperties) routes to createObjectGroup,
+        // which renders defined props then an inline extras bag. A pure map (no
+        // properties) keeps the createMapGroup path.
+        if (hasUsableAdditional && !hasProperties) {
             // This is a map
             return createMapGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete);
         } else {
@@ -1016,6 +1261,11 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
         // Simple field
         const group = document.createElement('div');
         group.className = `form-group${isNested ? ' nested' : ''}`;
+        // @FormLayout(wide=true) / multiline → full-row tile. The CSS rule on
+        // .form-group.nested[data-wide="true"] overrides the default flex basis.
+        if (fieldSchema['x-wide'] || fieldSchema.format === 'textarea') {
+            group.dataset.wide = 'true';
+        }
 
         // Create header with label and delete button
         const headerRow = document.createElement('div');
@@ -1023,6 +1273,16 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
 
         const label = document.createElement('label');
         label.textContent = title || 'Field';
+
+        // Required-field asterisk. The parent schema sets `required: [propName]`;
+        // it's passed via originalSchema['x-required-here'] by createObjectGroup
+        // (see that function for the injection point).
+        if (fieldSchema['x-required-here']) {
+            const star = document.createElement('span');
+            star.className = 'required-marker';
+            star.textContent = '*';
+            label.appendChild(star);
+        }
 
         // Feature: Add help icon with tooltip if description exists
         if (description) {
@@ -1324,15 +1584,32 @@ function hasValue(value) {
 function generateDefaultValue(fieldSchema) {
     if (!fieldSchema) return null;
 
-    // Resolve $ref if present
+    // Resolve $ref if present. A variant wrapper like
+    // {$ref: base, properties: {type: {const: "json"}}} pins the discriminator;
+    // merge the wrapper's property overrides on top of the resolved base so
+    // those pins survive resolution.
     if (fieldSchema.$ref) {
-        fieldSchema = resolveRef(fieldSchema.$ref);
-        if (!fieldSchema) return null;
+        const base = resolveRef(fieldSchema.$ref);
+        if (!base) return null;
+        fieldSchema = {
+            ...base,
+            ...fieldSchema,
+            properties: {
+                ...(base.properties || {}),
+                ...(fieldSchema.properties || {})
+            }
+        };
+        delete fieldSchema.$ref;
     }
 
     // Use schema default if provided
     if (fieldSchema.default !== undefined) {
         return JSON.parse(JSON.stringify(fieldSchema.default));
+    }
+
+    // Pinned value via const (e.g. discriminator: {const: "json"})
+    if (fieldSchema.const !== undefined) {
+        return JSON.parse(JSON.stringify(fieldSchema.const));
     }
 
     // Generate based on type
@@ -1422,27 +1699,73 @@ function createAddPropertyPlaceholder(fieldSchema, title, description, path, con
     return placeholder;
 }
 
-function createObjectGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
-    const schemaForDelete = originalSchema || fieldSchema;
+/// Render a polymorphic object field (oneOf/anyOf of object variants) with a
+/// type-picker dropdown at the top so the user can switch which variant to
+/// edit. Used for fields like RestConnector.authentication where the schema
+/// offers several object shapes (Basic, Bearer, ApiKey, OAuth2...).
+function createPolymorphicObjectGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete, variants) {
     const content = document.createElement('div');
+    content.className = 'polymorphic-content';
 
-    const hasData = hasValue(value);
-    const autoCollapse = !hasData;
+    // Header row with type selector.
+    const typeRow = document.createElement('div');
+    typeRow.className = 'polymorphic-type-row';
+    const typeLabel = document.createElement('span');
+    typeLabel.className = 'polymorphic-type-label';
+    typeLabel.textContent = 'Type:';
+    const typeSelect = document.createElement('select');
+    typeSelect.className = 'polymorphic-type-select';
+    variants.forEach((v, i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = variantLabel(v, i);
+        typeSelect.appendChild(opt);
+    });
+    typeRow.appendChild(typeLabel);
+    typeRow.appendChild(typeSelect);
+    content.appendChild(typeRow);
 
-    if (fieldSchema.properties) {
-        Object.keys(fieldSchema.properties).forEach(prop => {
-            const propSchema = fieldSchema.properties[prop];
+    // Hidden input carrying the discriminator for extractData/resolveOneOf.
+    const hiddenType = document.createElement('input');
+    hiddenType.type = 'hidden';
+    hiddenType.className = 'polymorphic-type-hidden';
+    hiddenType.setAttribute('data-path', path ? `${path}.type` : 'type');
+    content.appendChild(hiddenType);
+
+    function variantTypeValue(variant) {
+        const tp = variant && variant.properties && variant.properties.type;
+        if (!tp) return '';
+        if (tp.const !== undefined) return String(tp.const);
+        if (Array.isArray(tp.enum) && tp.enum.length > 0) return String(tp.enum[0]);
+        return '';
+    }
+
+    // Pick the initial variant from the current value's type, else default to [0].
+    let initialIdx = 0;
+    if (value && typeof value === 'object' && value.type) {
+        for (let i = 0; i < variants.length; i++) {
+            if (variantTypeValue(variants[i]) === String(value.type)) { initialIdx = i; break; }
+        }
+    }
+
+    function renderVariant(idx, variantValue) {
+        // Clear everything after the typeRow + hiddenType (indices 0, 1).
+        while (content.children.length > 2) content.removeChild(content.lastChild);
+
+        typeSelect.value = String(idx);
+        hiddenType.value = variantTypeValue(variants[idx]);
+
+        let vs = variants[idx];
+        if (vs && vs.$ref) vs = deref(vs);
+        if (!vs || vs.type !== 'object' || !vs.properties) return;
+
+        Object.keys(vs.properties).forEach(prop => {
+            if (prop === 'type') return; // handled by hiddenType
+            const propSchema = vs.properties[prop];
             const propPath = path ? `${path}.${prop}` : prop;
-            const propValue = value && value[prop] !== undefined ? value[prop] : null;
+            const propValue = variantValue && variantValue[prop] !== undefined ? variantValue[prop] : null;
             const propTitle = propSchema.title || prop;
-            let propDescription = propSchema.description;
-
-            // Add description for discriminator "type" fields (single-value enum, often hidden)
-            if (!propDescription && prop === 'type' && propSchema.enum && propSchema.enum.length === 1) {
-                propDescription = 'Map type: ' + propSchema.enum[0];
-            }
-
-            // If property has no value, show a placeholder with '+' icon
+            const propDescription = propSchema.description;
             if (!hasValue(propValue)) {
                 const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, content, true);
                 content.appendChild(placeholder);
@@ -1451,6 +1774,150 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
                 content.appendChild(propGroup);
             }
         });
+    }
+
+    typeSelect.onchange = () => {
+        const newIdx = parseInt(typeSelect.value, 10);
+        renderVariant(newIdx, generateDefaultValue(variants[newIdx]));
+        setDirty();
+    };
+
+    renderVariant(initialIdx, value);
+
+    const hasData = hasValue(value);
+    const autoCollapse = !hasData;
+    const deleteInfo = {
+        schema: schemaForDelete || fieldSchema,
+        title: title,
+        description: description,
+        path: path,
+        isNested: isNested
+    };
+    return createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo);
+}
+
+function createObjectGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
+    const schemaForDelete = originalSchema || fieldSchema;
+    const content = document.createElement('div');
+    content.className = 'object-content';
+
+    const hasData = hasValue(value);
+    const autoCollapse = !hasData;
+
+    if (fieldSchema.properties) {
+        const requiredSet = new Set(Array.isArray(fieldSchema.required) ? fieldSchema.required : []);
+        const sections = Array.isArray(fieldSchema['x-form-sections']) ? fieldSchema['x-form-sections'] : [];
+        const groups = Array.isArray(fieldSchema['x-form-groups']) ? fieldSchema['x-form-groups'] : [];
+
+        // Fields claimed by any @FormSection render inside that section's
+        // bordered container; everything else renders at the top level.
+        const fieldsInSections = new Set();
+        sections.forEach(s => (s.fields || []).forEach(f => fieldsInSections.add(f)));
+
+        // Fields claimed by any @FormLayoutGroup render as a horizontal row;
+        // ungrouped fields render on their own line (full-width).
+        const groupOf = new Map();
+        groups.forEach((row, i) => {
+            (row || []).forEach(f => groupOf.set(f, i));
+        });
+
+        const renderPropInto = (container, prop, groupIndex) => {
+            const propSchema = fieldSchema.properties[prop];
+            if (!propSchema) return;
+            const propPath = path ? `${path}.${prop}` : prop;
+            const propValue = value && value[prop] !== undefined ? value[prop] : null;
+            const propTitle = propSchema.title || prop;
+            let propDescription = propSchema.description;
+            if (!propDescription && prop === 'type' && propSchema.enum && propSchema.enum.length === 1) {
+                propDescription = 'Map type: ' + propSchema.enum[0];
+            }
+            // Inject required marker via a shallow-cloned schema so we don't
+            // mutate the shared $defs schema.
+            const childSchema = requiredSet.has(prop)
+                ? Object.assign({}, propSchema, { 'x-required-here': true })
+                : propSchema;
+            // Fields in a @FormLayoutGroup row flow L-to-R and share the
+            // remaining width; standalone fields take a full row.
+            const target = container;
+            const wideTarget = groupIndex == null;
+            if (!hasValue(propValue)) {
+                const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, propPath, target, true);
+                if (wideTarget) placeholder.dataset.wide = 'true';
+                target.appendChild(placeholder);
+            } else {
+                const propGroup = createFormGroup(childSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
+                if (wideTarget) propGroup.dataset.wide = 'true';
+                target.appendChild(propGroup);
+            }
+        };
+
+        // Helper: render a flat list of prop names into a parent, honoring
+        // any @FormLayoutGroup rows that apply.
+        const renderPropList = (parent, propList) => {
+            // Collect group indices present in this subset, ordered by the
+            // first occurrence of any group member in propList.
+            const groupsHere = new Map(); // groupIndex -> [props in group, in schema order]
+            const standalone = [];
+            propList.forEach(p => {
+                const gi = groupOf.get(p);
+                if (gi == null) {
+                    standalone.push(p);
+                } else {
+                    if (!groupsHere.has(gi)) groupsHere.set(gi, []);
+                    groupsHere.get(gi).push(p);
+                }
+            });
+            // Render in order: walk propList, emit group rows at the first
+            // encounter of a group's props, skip subsequent members (already
+            // rendered with the row), emit standalone fields inline.
+            const seenGroups = new Set();
+            propList.forEach(p => {
+                const gi = groupOf.get(p);
+                if (gi == null) {
+                    renderPropInto(parent, p, null);
+                    return;
+                }
+                if (seenGroups.has(gi)) return;
+                seenGroups.add(gi);
+                const row = document.createElement('div');
+                row.className = 'form-layout-group';
+                groupsHere.get(gi).forEach(pp => renderPropInto(row, pp, gi));
+                parent.appendChild(row);
+            });
+        };
+
+        // Top-level (unsectioned) fields in schema order.
+        const topLevelProps = Object.keys(fieldSchema.properties)
+            .filter(p => !fieldsInSections.has(p));
+        renderPropList(content, topLevelProps);
+
+        // Then each @FormSection, in declaration order.
+        sections.forEach(section => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'form-section';
+            const heading = document.createElement('div');
+            heading.className = 'form-section-title';
+            heading.textContent = section.title || '';
+            wrapper.appendChild(heading);
+            const body = document.createElement('div');
+            body.className = 'form-section-body';
+            wrapper.appendChild(body);
+            renderPropList(body, (section.fields || []).filter(p => fieldSchema.properties[p]));
+            content.appendChild(wrapper);
+        });
+    }
+
+    // Hybrid bag: defined properties + additionalProperties (e.g. Jackson
+    // @JsonAnySetter). Render unknown keys as inline key/value rows.
+    if (fieldSchema.additionalProperties && typeof fieldSchema.additionalProperties === 'object') {
+        const defined = new Set(Object.keys(fieldSchema.properties || {}));
+        const extras = {};
+        if (value && typeof value === 'object') {
+            Object.keys(value).forEach(k => {
+                if (!defined.has(k)) extras[k] = value[k];
+            });
+        }
+        renderInlineExtras(content, fieldSchema.additionalProperties, path, extras);
     }
 
     // Create deleteInfo for the collapsible section
@@ -1559,8 +2026,11 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'btn btn-primary';
-    addBtn.textContent = 'Add Entry';
+    const valueTypeName = arrayItemTypeName(fieldSchema.additionalProperties);
+    addBtn.textContent = valueTypeName ? `Add ${valueTypeName}` : 'Add Entry';
     addBtn.onclick = () => {
+        const hint = container.querySelector(':scope > .empty-state-hint');
+        if (hint) hint.remove();
         addMapEntry(container, fieldSchema.additionalProperties, path, '', null, true);
         updateSectionStatus();
     };
@@ -1572,6 +2042,15 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     container.className = 'map-container';
     container.setAttribute('data-path', path);
     content.appendChild(container);
+
+    // Empty-state hint: when there are no entries, show the map's description
+    // (from @JsonPropertyDescription) so the user knows what to add.
+    if (!hasData && description) {
+        const hint = document.createElement('div');
+        hint.className = 'empty-state-hint';
+        hint.textContent = description;
+        container.appendChild(hint);
+    }
 
     // Add existing entries
     if (value) {
@@ -1624,62 +2103,42 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
         ? polymorphicVariants(fieldSchema.items)
         : null;
 
+    const itemTypeName = arrayItemTypeName(fieldSchema.items);
     if (oneOfVariants && oneOfVariants.length > 1) {
-        // Polymorphic items (oneOf or anyOf) — show a type selector + Add button.
-        // Each "variant" in victools' schema is typically a thin
-        // {$ref: base, properties: {type: {const: "hash"}}} wrapper. Dropdown
-        // labels prefer (a) the variant's own title, (b) the deref'd base
-        // type's title, or (c) the discriminator const value (e.g. "hash").
-        const typeSelect = document.createElement('select');
-        typeSelect.className = 'btn btn-secondary';
+        // Polymorphic items: a single "+ Add <Type> ▾" menu-select lists all
+        // variants. Picking one adds an item of that type. More obvious than
+        // the old split [Add Item button] + [type select] UI.
+        const addSelect = document.createElement('select');
+        addSelect.className = 'btn btn-primary add-menu-select';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = `+ Add ${itemTypeName || 'Item'}`;
+        addSelect.appendChild(placeholder);
         oneOfVariants.forEach((variant, i) => {
             const opt = document.createElement('option');
-            opt.value = i;
+            opt.value = String(i);
             opt.textContent = variantLabel(variant, i);
-            typeSelect.appendChild(opt);
+            addSelect.appendChild(opt);
         });
-        // Default the dropdown to the type of the first existing item
-        // (if any), so "Add Item" defaults to "more of the same" instead
-        // of always defaulting to whatever variant happens to be first
-        // in the @JsonSubTypes order.
-        if (Array.isArray(value) && value.length > 0 && value[0] && value[0].type) {
-            const firstType = String(value[0].type);
-            for (let i = 0; i < oneOfVariants.length; i++) {
-                const v = oneOfVariants[i];
-                const tp = v && v.properties && v.properties.type;
-                const variantType = tp && (tp.const !== undefined ? tp.const :
-                                          (Array.isArray(tp.enum) && tp.enum[0]));
-                if (String(variantType) === firstType) {
-                    typeSelect.value = String(i);
-                    break;
-                }
-            }
-        }
-
-        const addBtn = document.createElement('button');
-        addBtn.type = 'button';
-        addBtn.className = 'btn btn-primary';
-        addBtn.textContent = 'Add Item';
-        addBtn.onclick = () => {
-            const selectedVariant = oneOfVariants[typeSelect.value];
-            // Generate default value with the discriminator type field set
+        addSelect.onchange = () => {
+            const raw = addSelect.value;
+            if (raw === '') return;
+            const selectedVariant = oneOfVariants[parseInt(raw, 10)];
             const defaultVal = generateDefaultValue(selectedVariant);
             addArrayItem(container, fieldSchema.items, path, defaultVal, null, true);
             updateSectionStatus();
+            addSelect.value = '';
         };
-        // Order: Add button first (leftmost), then optional reference picker,
-        // then type selector. Project convention: all 'add' controls left,
-        // all 'remove' right.
-        header.appendChild(addBtn);
+        // Project convention: add controls on the left, remove controls on the right.
+        header.appendChild(addSelect);
         const refSelect = createReferencePicker(fieldSchema.items, container, path,
             () => updateSectionStatus());
         if (refSelect) header.appendChild(refSelect);
-        header.appendChild(typeSelect);
     } else {
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'btn btn-primary';
-        addBtn.textContent = 'Add Item';
+        addBtn.textContent = `+ Add ${itemTypeName || 'Item'}`;
         addBtn.onclick = () => {
             addArrayItem(container, fieldSchema.items, path, null, null, true);
             updateSectionStatus();
@@ -1692,6 +2151,15 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
 
     content.appendChild(header);
     content.appendChild(container);
+
+    // Empty-state hint for empty arrays — surfaces @JsonPropertyDescription
+    // as guidance so the user knows what this list is for before they add.
+    if ((!Array.isArray(value) || value.length === 0) && description) {
+        const hint = document.createElement('div');
+        hint.className = 'empty-state-hint';
+        hint.textContent = description;
+        container.appendChild(hint);
+    }
 
     // Add existing items
     if (Array.isArray(value)) {
@@ -1722,7 +2190,69 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     return section;
 }
 
+/// Render inline key/value rows for a hybrid object's "extras" bag —
+/// an object schema with both defined `properties` and `additionalProperties`
+/// (Jackson @JsonAnySetter / @JsonAnyGetter pattern). The extras live at the
+/// same JSON level as the defined props, so we don't wrap them in a sub-map.
+function renderInlineExtras(parent, valueTypeSchema, basePath, extras) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'extras-inline';
+    wrapper.setAttribute('data-extras-path', basePath || '');
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-primary extras-add-btn';
+    addBtn.textContent = '+ Add Extra';
+    addBtn.onclick = () => {
+        addExtraRow(wrapper, valueTypeSchema, basePath, '', null);
+        setDirty();
+    };
+    wrapper.appendChild(addBtn);
+
+    Object.keys(extras || {}).forEach(key => {
+        addExtraRow(wrapper, valueTypeSchema, basePath, key, extras[key]);
+    });
+
+    parent.appendChild(wrapper);
+}
+
+function addExtraRow(wrapper, valueTypeSchema, basePath, key, value) {
+    const row = document.createElement('div');
+    row.className = 'extras-row';
+
+    const keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.className = 'extras-key-input';
+    keyInput.placeholder = 'key';
+    const keyVal = key || '';
+    keyInput.value = keyVal;
+    keyInput.setAttribute('value', keyVal);
+    keyInput.oninput = () => setDirty();
+
+    const valueInput = createFormElement(valueTypeSchema || { type: 'string' },
+        basePath ? `${basePath}.${key}` : key, value);
+    valueInput.classList.add('extras-value-input');
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'delete-property-btn';
+    removeBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+    removeBtn.title = 'Remove extra';
+    removeBtn.onclick = () => {
+        row.remove();
+        setDirty();
+    };
+
+    row.appendChild(keyInput);
+    row.appendChild(valueInput);
+    row.appendChild(removeBtn);
+
+    wrapper.appendChild(row);
+}
+
 function addMapEntry(container, valueSchema, basePath, key = '', value = null, prepend = false) {
+    const hint = container.querySelector(':scope > .empty-state-hint');
+    if (hint) hint.remove();
     const entry = document.createElement('div');
     entry.className = 'map-entry';
 
@@ -1799,6 +2329,19 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
                 entryContent.appendChild(propGroup);
             }
         });
+        // Hybrid object: defined properties + additionalProperties (e.g. a
+        // Jackson @JsonAnySetter bag like Translation.extras). Render the
+        // unknown keys as inline key/value rows alongside the defined props.
+        if (valueSchema.additionalProperties && typeof valueSchema.additionalProperties === 'object') {
+            const defined = new Set(Object.keys(valueSchema.properties));
+            const extras = {};
+            if (value && typeof value === 'object') {
+                Object.keys(value).forEach(k => {
+                    if (!defined.has(k)) extras[k] = value[k];
+                });
+            }
+            renderInlineExtras(entryContent, valueSchema.additionalProperties, valuePath, extras);
+        }
     } else if (valueSchema.type === 'array') {
         const valueGroup = createFormGroup(valueSchema, null, null, valuePath, value, true);
         entryContent.appendChild(valueGroup);
@@ -1852,6 +2395,10 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
 }
 
 function addArrayItem(container, itemSchema, basePath, value = null, index = null, prepend = false) {
+    // Clear any empty-state hint — now that we're adding a real item, the
+    // hint's job is done.
+    const hint = container.querySelector(':scope > .empty-state-hint');
+    if (hint) hint.remove();
     const currentIndex = index !== null ? index : container.children.length;
     const itemPath = `${basePath}[${currentIndex}]`;
 
@@ -1904,7 +2451,12 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         return;
     }
 
+    // Snapshot variants BEFORE resolveOneOf mutates itemSchema — we use
+    // them to build an inline Type: dropdown that lets the user switch the
+    // array item's variant (e.g. change a RestConnector to a JdbcConnector).
+    let itemVariants = null;
     if (itemSchema.oneOf || itemSchema.anyOf) {
+        itemVariants = polymorphicVariants(itemSchema);
         itemSchema = resolveOneOf(itemSchema, value);
         // resolveOneOf returns the matching variant — which in victools'
         // schema is a thin {$ref + properties} wrapper. Deref to merge
@@ -1943,7 +2495,8 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'btn btn-primary';
-        addBtn.textContent = 'Add Entry';
+        const valueTypeName = arrayItemTypeName(itemSchema.additionalProperties);
+        addBtn.textContent = valueTypeName ? `Add ${valueTypeName}` : 'Add Entry';
         addBtn.onclick = () => {
             addMapEntry(mapContainer, itemSchema.additionalProperties, itemPath, '', null, true);
         };
@@ -1965,6 +2518,80 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         // Render object properties inline (no collapsible wrapper)
         const header = document.createElement('div');
         header.className = 'array-item-header';
+
+        const polymorphic = Array.isArray(itemVariants) && itemVariants.length > 1;
+        if (polymorphic) {
+            // Inline Type: dropdown matches the look of createPolymorphicObjectGroup.
+            const typeLabel = document.createElement('span');
+            typeLabel.className = 'polymorphic-type-label';
+            typeLabel.textContent = 'Type:';
+            const typeSelect = document.createElement('select');
+            typeSelect.className = 'polymorphic-type-select';
+            itemVariants.forEach((v, i) => {
+                const opt = document.createElement('option');
+                opt.value = String(i);
+                opt.textContent = variantLabel(v, i);
+                typeSelect.appendChild(opt);
+            });
+            // Sync to current value's type.
+            let currentIdx = 0;
+            if (value && typeof value === 'object' && value.type) {
+                for (let i = 0; i < itemVariants.length; i++) {
+                    const tp = itemVariants[i] && itemVariants[i].properties && itemVariants[i].properties.type;
+                    const vType = tp && (tp.const !== undefined ? tp.const : (Array.isArray(tp.enum) && tp.enum[0]));
+                    if (String(vType) === String(value.type)) { currentIdx = i; break; }
+                }
+            }
+            typeSelect.value = String(currentIdx);
+            header.appendChild(typeLabel);
+            header.appendChild(typeSelect);
+
+            typeSelect.onchange = () => {
+                const newIdx = parseInt(typeSelect.value, 10);
+                const newVariant = itemVariants[newIdx];
+                const defaultVal = generateDefaultValue(newVariant);
+                // Wipe the item's children except the header, then re-render
+                // this variant's properties inline.
+                Array.from(item.children).forEach(child => {
+                    if (child !== header) item.removeChild(child);
+                });
+                item.id = '';
+                let newSchema = newVariant;
+                if (newSchema && newSchema.$ref) newSchema = deref(newSchema);
+                if (newSchema && newSchema.type === 'object' && newSchema.properties) {
+                    Object.keys(newSchema.properties).forEach(prop => {
+                        const propSchema = newSchema.properties[prop];
+                        const propPath = itemPath ? `${itemPath}.${prop}` : prop;
+                        const propValue = defaultVal && defaultVal[prop] !== undefined ? defaultVal[prop] : null;
+                        const propTitle = propSchema.title || prop;
+                        const propDescription = propSchema.description;
+                        if (!hasValue(propValue)) {
+                            const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, item, true);
+                            item.appendChild(placeholder);
+                        } else {
+                            const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
+                            item.appendChild(propGroup);
+                        }
+                    });
+                }
+                setDirty();
+            };
+        } else {
+            // Non-polymorphic (or only one variant): keep the descriptive pill label.
+            const baseName = schemaDisplayName(originalItemSchema) || schemaDisplayName(itemSchema);
+            const labelParts = [];
+            if (baseName) labelParts.push(baseName);
+            if (value && typeof value === 'object' && typeof value.type === 'string' && value.type) {
+                labelParts.push(value.type);
+            }
+            if (labelParts.length > 0) {
+                const typeLabel = document.createElement('span');
+                typeLabel.className = 'array-item-type-label';
+                typeLabel.textContent = labelParts.join(': ');
+                header.appendChild(typeLabel);
+            }
+        }
+
         header.appendChild(removeBtn);
         item.appendChild(header);
 
@@ -2094,7 +2721,11 @@ function getFormData() {
         }
 
         if (schemaNode.type === 'object') {
-            if (schemaNode.additionalProperties) {
+            // Pure map (additionalProperties only). Hybrid objects
+            // (both properties AND additionalProperties, e.g. Jackson
+            // @JsonAnySetter) fall through to the properties branch, which
+            // now handles defined props + inline extras.
+            if (schemaNode.additionalProperties && !schemaNode.properties) {
                 // This is a map - find map container
                 // Note: map-container might be inside a wrapper div due to createCollapsibleSection structure
                 const mapContainer = container.querySelector(':scope > .map-container, :scope > div > .map-container, :scope > .collapsible-section > .collapsible-content > .map-container');
@@ -2124,15 +2755,15 @@ function getFormData() {
                 const collapsibleContent = container.querySelector(':scope > .collapsible-content, :scope > .map-entry-content');
                 const searchContainer = collapsibleContent || container;
 
-                Object.keys(schemaNode.properties).forEach(propName => {
+                // Emit const-valued props (polymorphic discriminators like
+                // `type: {const: "hash"}`) first so they appear at the top of
+                // the JSON output — matches Jackson's convention and avoids
+                // the variant-merge shuffle that pushes discriminators to the
+                // tail of the property iteration order.
+                orderedPropertyNames(schemaNode.properties).forEach(propName => {
                     let propSchema = schemaNode.properties[propName];
                     const propTitle = propSchema.title || propName;
 
-                    // const-only property (e.g. polymorphic discriminator
-                    // {const: "hash"}). The form renders these as hidden
-                    // inputs without a visible form-group, so the
-                    // label-matching path below would never find them.
-                    // Emit the const value straight from the schema.
                     if (propSchema.const !== undefined) {
                         result[propName] = propSchema.const;
                         return;
@@ -2164,7 +2795,12 @@ function getFormData() {
                         // Complex types (objects, arrays) - look for collapsible section
                         // Note: sections might be inside a wrapper div due to createObjectGroup structure
                         let targetContainer = null;
-                        const sections = searchContainer.querySelectorAll(':scope > .collapsible-section, :scope > div > .collapsible-section');
+                        const sections = searchContainer.querySelectorAll(
+                            ':scope > .collapsible-section, ' +
+                            ':scope > div > .collapsible-section, ' +
+                            ':scope > .form-layout-group > .collapsible-section, ' +
+                            ':scope > .form-section > .form-section-body > .collapsible-section, ' +
+                            ':scope > .form-section > .form-section-body > .form-layout-group > .collapsible-section');
                         sections.forEach(section => {
                             const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.field-help-icon):not(.collapsible-arrow)');
                             if (!header) return;
@@ -2186,7 +2822,14 @@ function getFormData() {
                     } else {
                         // Primitive types - look for form-group with matching label
                         // Note: form-groups might be inside a wrapper div due to createObjectGroup structure
-                        const formGroups = searchContainer.querySelectorAll(':scope > .form-group, :scope > .checkbox-group, :scope > div > .form-group, :scope > div > .checkbox-group');
+                        const formGroups = searchContainer.querySelectorAll(
+                            ':scope > .form-group, :scope > .checkbox-group, ' +
+                            ':scope > div > .form-group, :scope > div > .checkbox-group, ' +
+                            ':scope > .form-layout-group > .form-group, :scope > .form-layout-group > .checkbox-group, ' +
+                            ':scope > .form-section > .form-section-body > .form-group, ' +
+                            ':scope > .form-section > .form-section-body > .checkbox-group, ' +
+                            ':scope > .form-section > .form-section-body > .form-layout-group > .form-group, ' +
+                            ':scope > .form-section > .form-section-body > .form-layout-group > .checkbox-group');
                         let foundInput = null;
 
                         formGroups.forEach(group => {
@@ -2201,21 +2844,33 @@ function getFormData() {
                         });
 
                         if (foundInput) {
-                            let value;
-                            if (foundInput.type === 'checkbox') {
-                                value = foundInput.checked;
-                            } else if (foundInput.type === 'number') {
-                                value = foundInput.value ? parseInt(foundInput.value, 10) : null;
-                            } else {
-                                value = foundInput.value || null;
-                            }
-
+                            const value = readInputValue(foundInput);
                             if (value !== null && value !== '') {
                                 result[propName] = value;
                             }
                         }
                     }
                 });
+
+                // Hybrid object: collect inline extras (Jackson @JsonAnySetter)
+                // rendered by renderInlineExtras. They live at the same JSON
+                // level as defined props, so merge directly into `result`.
+                if (schemaNode.additionalProperties && typeof schemaNode.additionalProperties === 'object') {
+                    const defined = new Set(Object.keys(schemaNode.properties));
+                    const extrasWrapper = searchContainer.querySelector(':scope > .extras-inline, :scope > div > .extras-inline');
+                    if (extrasWrapper) {
+                        const rows = extrasWrapper.querySelectorAll(':scope > .extras-row');
+                        rows.forEach(row => {
+                            const keyInput = row.querySelector('.extras-key-input');
+                            const valueInput = row.querySelector('.extras-value-input');
+                            if (!keyInput || !valueInput) return;
+                            const key = keyInput.value.trim();
+                            if (!key || defined.has(key)) return;
+                            const v = readInputValue(valueInput);
+                            if (v !== null && v !== '') result[key] = v;
+                        });
+                    }
+                }
 
                 return Object.keys(result).length > 0 ? result : null;
             }
@@ -2270,15 +2925,7 @@ function getFormData() {
             const input = container.querySelector('input:not(.map-key-input), select, textarea');
             if (!input) return null;
 
-            let value;
-            if (input.type === 'checkbox') {
-                value = input.checked;
-            } else if (input.type === 'number') {
-                value = input.value ? parseInt(input.value, 10) : null;
-            } else {
-                value = input.value || null;
-            }
-
+            const value = readInputValue(input);
             return (value !== null && value !== '') ? value : null;
         }
 
@@ -2289,7 +2936,7 @@ function getFormData() {
     const result = {};
 
     if (schema && schema.properties) {
-        Object.keys(schema.properties).forEach(propName => {
+        orderedPropertyNames(schema.properties).forEach(propName => {
             let propSchema = schema.properties[propName];
             const propTitle = propSchema.title || propName;
 
@@ -2305,8 +2952,24 @@ function getFormData() {
                 resolvedSchema = deref(propSchema);
             }
 
-            const isComplexType = resolvedSchema &&
-                (resolvedSchema.type === 'object' || resolvedSchema.type === 'array');
+            // Polymorphic schemas (oneOf/anyOf) are rendered as collapsible
+            // sections just like plain objects, so treat them as complex when
+            // any variant resolves to an object/array. Without this, top-level
+            // polymorphic fields (e.g. `routing` = anyOf[TableRouting, DirectRouting])
+            // fall through to the primitive path and are silently dropped.
+            let isComplexType = false;
+            if (resolvedSchema && (resolvedSchema.oneOf || resolvedSchema.anyOf)) {
+                const variants = polymorphicVariants(resolvedSchema);
+                if (variants) {
+                    isComplexType = variants.some(v => {
+                        const resolved = v.$ref ? deref(v) : v;
+                        return resolved && (resolved.type === 'object' || resolved.type === 'array');
+                    });
+                }
+            } else {
+                isComplexType = resolvedSchema &&
+                    (resolvedSchema.type === 'object' || resolvedSchema.type === 'array');
+            }
 
             if (isComplexType) {
                 // Complex types - look for collapsible section
@@ -2348,15 +3011,7 @@ function getFormData() {
                 });
 
                 if (foundInput) {
-                    let value;
-                    if (foundInput.type === 'checkbox') {
-                        value = foundInput.checked;
-                    } else if (foundInput.type === 'number') {
-                        value = foundInput.value ? parseInt(foundInput.value, 10) : null;
-                    } else {
-                        value = foundInput.value || null;
-                    }
-
+                    const value = readInputValue(foundInput);
                     if (value !== null && value !== '') {
                         result[propName] = value;
                     }

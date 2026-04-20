@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v3.configuration.adapters;
+package org.vorpal.blade.framework.v3.configuration.connectors;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -26,7 +26,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/// JDBC adapter. Runs a SQL query through a JNDI-bound
+/// JDBC connector. Runs a SQL query through a JNDI-bound
 /// [DataSource] and passes the first row as a `Map<String,String>`
 /// (column name → string value) to each
 /// [org.vorpal.blade.framework.v3.configuration.selectors.Selector].
@@ -40,7 +40,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// the query runs on a DB worker; selectors run on that same
 /// worker when the row arrives.
 @JsonPropertyOrder({ "type", "id", "description", "dataSource", "queryTemplate", "selectors" })
-public class JdbcAdapter extends Adapter implements Serializable {
+public class JdbcConnector extends Connector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private static final String TEMPLATES_DIR = "./config/custom/vorpal/_templates/";
@@ -53,7 +53,7 @@ public class JdbcAdapter extends Adapter implements Serializable {
 	@JsonIgnore
 	private transient String cachedQuery;
 
-	public JdbcAdapter() {
+	public JdbcConnector() {
 	}
 
 	@JsonPropertyDescription("JNDI name of the WebLogic JDBC DataSource, e.g. jdbc/CustomerDS")
@@ -70,7 +70,7 @@ public class JdbcAdapter extends Adapter implements Serializable {
 			return CompletableFuture.completedFuture(null);
 		}
 
-		final String adapterId = id;
+		final String connectorId = id;
 		final Logger sipLogger = SettingsManager.getSipLogger();
 
 		// Resolve the SQL on the calling thread (cheap) but execute the query
@@ -84,7 +84,7 @@ public class JdbcAdapter extends Adapter implements Serializable {
 			}
 			sql = ctx.resolve(cachedQuery);
 		} catch (Exception e) {
-			sipLogger.warning("JdbcAdapter[" + adapterId + "] template load failed: " + e.getMessage());
+			sipLogger.warning("JdbcConnector[" + connectorId + "] template load failed: " + e.getMessage());
 			return CompletableFuture.completedFuture(null);
 		}
 
@@ -108,18 +108,18 @@ public class JdbcAdapter extends Adapter implements Serializable {
 					}
 				}
 			} catch (Exception e) {
-				sipLogger.warning("JdbcAdapter[" + adapterId + "] query failed: " + e.getMessage());
+				sipLogger.warning("JdbcConnector[" + connectorId + "] query failed: " + e.getMessage());
 			}
 			return null;
 		}, Executors.DB).thenAccept(row -> {
 			if (row == null) {
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer("JdbcAdapter[" + adapterId + "] no rows");
+					sipLogger.finer("JdbcConnector[" + connectorId + "] no rows");
 				}
 				return;
 			}
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("JdbcAdapter[" + adapterId + "] row=" + row.keySet());
+				sipLogger.finer("JdbcConnector[" + connectorId + "] row=" + row.keySet());
 			}
 			runSelectors(ctx, row);
 		});
