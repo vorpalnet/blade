@@ -1,76 +1,82 @@
 package org.vorpal.blade.framework.v3.configuration.routing;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.LinkedList;
+import java.util.List;
 
 import org.vorpal.blade.framework.v3.configuration.Context;
-import org.vorpal.blade.framework.v3.configuration.MatchStrategy;
-import org.vorpal.blade.framework.v3.configuration.trie.Trie;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/// [Routing] that picks a [Route] by looking up a resolved key in a map.
+/// [Routing] that picks a [Route] by consulting an ordered list of
+/// [RoutingTable]s — each with its own key expression and match
+/// strategy — and returning the first one that produces a match.
 ///
-/// - `keyExpression` is resolved against the session
-///   [Context] (`${var}` substitution, composition via `${a}:${b}`).
-/// - `match` selects the lookup strategy — exact hash (default) or
-///   longest-prefix (dial-plan).
-/// - If the resolved key is unset or produces no match, `default` is
-///   returned; if `default` is also null, [#decide] returns null and the
-///   servlet is expected to respond with a 503 (or similar).
+/// First-match-wins: on [#decide] the routing walks [#getTables] in
+/// order, calling [RoutingTable#lookup] against the current Context.
+/// The first table that returns a non-null Route wins. If no table
+/// matches, the top-level `default` Route is returned (or null, which
+/// the servlet treats as a 503 rejection).
 ///
-/// The prefix trie is built lazily on first prefix-mode call and
-/// invalidated whenever `routes` is replaced or `match` flips to
-/// PREFIX.
-@JsonPropertyOrder({ "type", "match", "keyExpression", "routes", "default" })
+/// This shape lets operators express fallback-chain routing — "route
+/// by specific action, else by dial-plan prefix, else by domain" — as
+/// one top-level decision.
+///
+/// ## Example
+///
+/// ```json
+/// "routing": {
+///   "type": "table",
+///   "tables": [
+///     {
+///       "match": "hash",
+///       "keyExpression": "${action}",
+///       "routes": {
+///         "block": { "requestUri": "sip:rejected@pbx.example.com" }
+///       }
+///     },
+///     {
+///       "match": "prefix",
+///       "keyExpression": "${destNum}",
+///       "routes": {
+///         "1800": { "requestUri": "sip:tollfree@carrier.example.com" },
+///         "1":    { "requestUri": "sip:${destNum}@nanp.carrier.example.com" },
+///         "44":   { "requestUri": "sip:${destNum}@uk.carrier.example.com" }
+///       }
+///     }
+///   ],
+///   "default": { "requestUri": "sip:${destNum}@intl.carrier.example.com" }
+/// }
+/// ```
+@JsonPropertyOrder({ "type", "tables", "default" })
 public class TableRouting extends Routing {
 	private static final long serialVersionUID = 1L;
 
-	private MatchStrategy match;
-	private String keyExpression;
-	private Map<String, Route> routes = new LinkedHashMap<>();
+	private List<RoutingTable> tables = new LinkedList<>();
 	private Route defaultRoute;
-
-	@JsonIgnore
-	private transient Trie<Route> prefixIndex;
 
 	public TableRouting() {
 	}
 
-	@JsonPropertyDescription("Lookup strategy: hash (exact match, default) or prefix (longest-prefix match)")
-	public MatchStrategy getMatch() {
-		return match;
+	@JsonPropertyDescription("Ordered list of routing tables; first lookup to match wins")
+	public List<RoutingTable> getTables() {
+		return tables;
 	}
 
-	public void setMatch(MatchStrategy match) {
-		this.match = match;
-		this.prefixIndex = null;
+	public void setTables(List<RoutingTable> tables) {
+		this.tables = (tables != null) ? tables : new LinkedList<>();
 	}
 
-	@JsonPropertyDescription("${var} template producing the lookup key for the routing decision, e.g. ${action}")
-	public String getKeyExpression() {
-		return keyExpression;
-	}
-
-	public void setKeyExpression(String keyExpression) {
-		this.keyExpression = keyExpression;
-	}
-
-	@JsonPropertyDescription("Map of route key to Route entry")
-	public Map<String, Route> getRoutes() {
-		return routes;
-	}
-
-	public void setRoutes(Map<String, Route> routes) {
-		this.routes = (routes != null) ? routes : new LinkedHashMap<>();
-		this.prefixIndex = null;
+	/// Convenience for programmatic construction — appends a new
+	/// [RoutingTable] and returns it for chaining.
+	public RoutingTable addTable(RoutingTable table) {
+		if (table != null) tables.add(table);
+		return table;
 	}
 
 	@JsonProperty("default")
-	@JsonPropertyDescription("Fallback Route used when no routes key matches")
+	@JsonPropertyDescription("Fallback Route used when no table matches")
 	public Route getDefaultRoute() {
 		return defaultRoute;
 	}
@@ -82,26 +88,13 @@ public class TableRouting extends Routing {
 
 	@Override
 	public Route decide(Context ctx) {
-		if (ctx == null || keyExpression == null) {
+		if (ctx == null || tables == null) {
 			return defaultRoute;
 		}
-		String key = ctx.resolve(keyExpression);
-		if (key == null || key.equals(keyExpression)) {
-			return defaultRoute;
+		for (RoutingTable t : tables) {
+			Route hit = t.lookup(ctx);
+			if (hit != null) return hit;
 		}
-		Route hit = (match == MatchStrategy.prefix) ? prefixLookup(key) : routes.get(key);
-		return (hit != null) ? hit : defaultRoute;
-	}
-
-	private Route prefixLookup(String key) {
-		Trie<Route> idx = prefixIndex;
-		if (idx == null) {
-			idx = new Trie<>();
-			for (Map.Entry<String, Route> e : routes.entrySet()) {
-				idx.put(e.getKey(), e.getValue());
-			}
-			prefixIndex = idx;
-		}
-		return idx.longestPrefixOf(key);
+		return defaultRoute;
 	}
 }

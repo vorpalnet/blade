@@ -89,14 +89,46 @@ Call transfer implementations supporting both attended and unattended transfer s
 #### `org.vorpal.blade.framework.v2.transfer.api`
 API definitions and interfaces for call transfer functionality.
 
+### Vorpal Blade Framework v3 Packages
+
+v3 introduces the **config-driven router model** used by the `irouter` service and any future service that routes calls by consulting external systems. A single JSON configuration file expresses the entire decision: how to parse the inbound request, which REST / JDBC / LDAP / table lookups to consult, how to combine their output, and where to proxy the call.
+
+The model has two phases — an ordered **enrichment pipeline** that writes values into a shared per-call `Context`, and a single **routing decision** that reads the enriched Context and produces a concrete `Route`. Every polymorphic type (connector, selector, authentication, routing) is driven by a `type` discriminator in JSON so the Configurator form editor can dynamically reshape forms as operators pick subtypes.
+
+#### `org.vorpal.blade.framework.v3.configuration`
+Root of the v3 model. Hosts [RouterConfiguration](../framework/src/main/java/org/vorpal/blade/framework/v3/configuration/RouterConfiguration.java) (the base class every v3 router service extends), [Context](../framework/src/main/java/org/vorpal/blade/framework/v3/configuration/Context.java) (per-call state wrapper with `${var}` substitution), and [MatchStrategy](../framework/src/main/java/org/vorpal/blade/framework/v3/configuration/MatchStrategy.java) (`hash` / `prefix` / `range` lookup modes shared by table connectors and table routing).
+
+#### `org.vorpal.blade.framework.v3.configuration.connectors`
+Pipeline enrichment stages — `Connector` polymorphic base with six concrete subtypes: `sip`, `rest`, `jdbc`, `ldap`, `map`, `table`. Each stage writes named values into the Context that downstream stages can interpolate via `${var}`.
+
+#### `org.vorpal.blade.framework.v3.configuration.selectors`
+Payload extraction helpers consumed by connectors. Five `Selector` subtypes — `attribute` (plain lookup), `regex` (named capture groups + expression template), `json` (JsonPath), `xml` (XPath), `sdp` (SDP field codes).
+
+#### `org.vorpal.blade.framework.v3.configuration.translations`
+`Translation` (a description plus arbitrary string extras spread into the Context on match) and `TranslationTable` (one lookup attempt: `match`, `keyExpression`, `translations` map). `TableConnector` holds a list of these for first-match-wins fallback chains.
+
+#### `org.vorpal.blade.framework.v3.configuration.routing`
+The routing decision. `Routing` polymorphic base with three concrete subtypes — `table` ([TableRouting](../framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/TableRouting.java) with multi-table fallback), `conditional` ([ConditionalRouting](../framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/ConditionalRouting.java) with if/elif/else boolean clauses), and `direct` ([DirectRouting](../framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/DirectRouting.java) always-the-same). `Route` is the decision payload; `ConditionalHeader` lets routes stamp headers only when a `when` expression evaluates true.
+
+#### `org.vorpal.blade.framework.v3.configuration.auth`
+Authentication schemes for `RestConnector`. Polymorphic `Authentication` base with eight subtypes — three static (`basic`, `bearer`, `apikey`) and five OAuth 2.0 grants (`oauth2-password`, `oauth2-client`, `oauth2-refresh-token`, `oauth2-jwt-bearer`, `oauth2-saml-bearer`) backed by the Nimbus OAuth 2.0/OIDC SDK. OAuth subtypes share `AbstractOAuth2Authentication` for token caching and synchronized refresh.
+
+#### `org.vorpal.blade.framework.v3.configuration.expressions`
+[Expression](../framework/src/main/java/org/vorpal/blade/framework/v3/configuration/expressions/Expression.java) — a small, safe-by-construction boolean expression parser and evaluator used by `ConditionalRouting` clauses and `ConditionalHeader.when`. Grammar supports `==`, `!=`, `<`, `>`, `<=`, `>=`, `&&`, `||`, `!`, `${var}`, numbers, `'single-quoted strings'`, bare words, and `true`/`false`. No method invocation, no scripting — config files cannot execute arbitrary code.
+
+#### `org.vorpal.blade.framework.v3.configuration.trie`
+Generic prefix trie backing `MatchStrategy.prefix` lookups. O(key-length) longest-prefix matching, used by both `TranslationTable` (pipeline) and `RoutingTable` (routing).
+
 ## Dependencies
 
 - **jackson-dataformat-xml**: XML serialization/deserialization for configuration and data exchange
 - **jackson-databind**: JSON data binding for configuration and API operations
 - **slf4j-api**: Logging abstraction layer for consistent logging across the framework
-- **mbknor-jackson-jsonschema**: JSON Schema generation and validation for configuration management
+- **victools/jsonschema-generator** + **jsonschema-module-jackson**: JSON Schema generation from Jackson-annotated classes for the Configurator form editor (v3 configuration)
+- **mbknor-jackson-jsonschema**: Legacy JSON Schema generation (v2 configuration; superseded by victools in v3)
 - **swagger-jaxrs2**: API documentation and validation for REST endpoints
-- **json-path**: JSONPath expressions for configuration queries and data extraction
+- **json-path**: JSONPath expressions for configuration queries and data extraction (v3 `JsonSelector`)
+- **nimbusds/oauth2-oidc-sdk**: Nimbus OAuth 2.0 + OpenID Connect SDK — drives every `RestConnector` OAuth grant (password, client_credentials, refresh_token, JWT bearer, SAML bearer)
 - **ipaddress**: IP address parsing and manipulation utilities
 - **commons-collections4**: Enhanced collection utilities and data structures
 - **commons-email**: Email functionality for notifications and alerts
@@ -132,6 +164,7 @@ Configure SLF4J-compatible loggers to take advantage of the framework's enhanced
 - [services/acl](../../services/acl) - Access Control Lists
 - [services/analytics](../../services/analytics) - Analytics collection service
 - [services/hold](../../services/hold) - Call hold functionality
+- [services/irouter](../../services/irouter) - **v3** — config-driven SIP proxy (universal router; the reference consumer of the v3 configuration model)
 - [services/options](../../services/options) - SIP OPTIONS handling
 - [services/presence](../../services/presence) - SIP presence server
 - [services/proxy-balancer](../../services/proxy-balancer) - Load balancing proxy

@@ -650,6 +650,11 @@ fi
 			<activation><property><name>!skip.watcher</name></property></activation>
 			<modules><module>admin/watcher</module></modules>
 		</profile>
+		<profile>
+			<id>logs</id>
+			<activation><property><name>!skip.logs</name></property></activation>
+			<modules><module>admin/logs</module></modules>
+		</profile>
 
 		<profile>
 			<id>javadocs</id>

@@ -472,7 +472,6 @@ h2 {
 }
 
 .object-content,
-.array-item,
 .map-entry-content {
     display: flex;
     flex-wrap: wrap;
@@ -566,6 +565,512 @@ textarea {
     background: var(--bg-surface-alt);
 }
 
+/* Form toolbar — Save/Load/Publish + filter inline; grouped actions behind
+   File / History / View dropdowns keep the header uncluttered. */
+.form-toolbar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.toolbar-menu {
+    position: relative;
+    display: inline-block;
+}
+.toolbar-menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.toolbar-chev {
+    font-size: 10px;
+    opacity: 0.7;
+}
+.toolbar-menu-items {
+    display: none;
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    min-width: 200px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    box-shadow: var(--shadow-sm);
+    padding: 4px 0;
+    z-index: 200;
+}
+.toolbar-menu.open .toolbar-menu-items {
+    display: block;
+}
+.toolbar-menu-items > button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px 14px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.toolbar-menu-items > button:hover {
+    background: var(--bg-surface-alt);
+}
+.toolbar-menu-items > hr {
+    margin: 4px 0;
+    border: 0;
+    border-top: 1px solid var(--border-subtle);
+}
+
+/* Files tab — left rail lists templates, right pane is the Ace editor. */
+.files-layout {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    min-height: 400px;
+    height: calc(100vh - 220px);
+}
+.files-rail {
+    flex: 0 0 240px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    background: var(--bg-surface);
+    overflow: hidden;
+}
+.files-rail-title {
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--bg-surface-alt);
+    border-bottom: 1px solid var(--border-subtle);
+}
+.files-rail-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+.files-rail-body em {
+    display: block;
+    padding: 10px 12px;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+.files-rail-body code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    background: var(--bg-surface-alt);
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+.files-rail-entry {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 6px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    transition: background-color 0.1s;
+}
+.files-rail-entry:hover {
+    background: var(--bg-surface-alt);
+}
+.files-rail-entry.active {
+    background: var(--btn-primary);
+    color: var(--btn-text);
+    font-weight: 500;
+}
+.files-layout > .json-editor-container {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Template library modal — "New from Template…" picker list. */
+.template-modal {
+    max-width: 520px;
+}
+.template-modal-intro {
+    margin: 0 0 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+.template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+.template-list em {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+.template-list code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    background: var(--bg-surface-alt);
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+.template-entry {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+.template-entry:hover {
+    background: var(--btn-primary);
+    color: var(--btn-text);
+    border-color: var(--btn-primary);
+}
+.template-entry-name {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Diff modal — structural change list against the last-loaded server copy. */
+.diff-modal {
+    max-width: 780px;
+    max-height: 85vh;
+}
+.diff-summary {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.diff-body {
+    max-height: 55vh;
+    overflow-y: auto;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+}
+.diff-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 6px;
+    border-bottom: 1px dotted var(--border-subtle);
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+.diff-row:hover {
+    background: var(--bg-surface-alt);
+}
+.diff-sign {
+    flex: 0 0 14px;
+    font-weight: 700;
+    text-align: center;
+}
+.diff-path {
+    flex: 0 0 38%;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+.diff-val {
+    flex: 1 1 auto;
+    color: var(--text-secondary);
+    word-break: break-word;
+}
+.diff-arrow {
+    margin: 0 6px;
+    color: var(--text-secondary);
+}
+.diff-added .diff-sign { color: #2a8; }
+.diff-removed .diff-sign { color: #c43; }
+.diff-changed .diff-sign { color: #d8a73c; }
+.diff-old { text-decoration: line-through; opacity: 0.75; }
+.diff-new { color: var(--text-primary); font-weight: 500; }
+
+.diff-highlight {
+    outline: 2px solid #d8a73c !important;
+    outline-offset: 2px;
+    transition: outline-color 0.4s;
+}
+
+/* Read-only / view mode — disables form mutation but keeps the structure
+   browsable (collapse/expand, filter, inspector all still work). */
+body.view-mode #dynamicForm input,
+body.view-mode #dynamicForm select,
+body.view-mode #dynamicForm textarea {
+    pointer-events: none;
+    opacity: 0.85;
+    background: var(--bg-inset);
+}
+body.view-mode #dynamicForm .delete-property-btn,
+body.view-mode #dynamicForm .duplicate-item-btn,
+body.view-mode #dynamicForm .drag-handle,
+body.view-mode #dynamicForm .add-property-placeholder,
+body.view-mode #dynamicForm .add-menu-select,
+body.view-mode #dynamicForm .reference-picker,
+body.view-mode #dynamicForm .array-header > button,
+body.view-mode #dynamicForm .extras-add-btn {
+    display: none !important;
+}
+
+/* Draft banner — appears when localStorage holds a newer draft than the
+   server copy of the current schema/target. */
+.draft-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-strong);
+    border-left: 4px solid #d8a73c;
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+/* Right-side inspector panel: schema docs for the focused field + a
+   palette of every ${var} available. Toggled via the toolbar button. */
+.inspector-panel {
+    position: fixed;
+    top: 70px;
+    right: 10px;
+    width: 280px;
+    max-height: calc(100vh - 90px);
+    overflow-y: auto;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    box-shadow: var(--shadow-sm);
+    padding: 8px 10px 12px;
+    z-index: 100;
+    display: none;
+    font-size: 12px;
+}
+body.inspector-open .inspector-panel {
+    display: block;
+}
+.inspector-section {
+    margin-bottom: 12px;
+}
+.inspector-section:last-child {
+    margin-bottom: 0;
+}
+.inspector-title {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.inspector-count {
+    font-weight: 400;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.inspector-body {
+    color: var(--text-primary);
+}
+.inspector-body em {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+.inspector-row {
+    display: flex;
+    gap: 8px;
+    padding: 3px 0;
+    border-bottom: 1px dotted var(--border-subtle);
+    align-items: flex-start;
+}
+.inspector-row:last-child {
+    border-bottom: none;
+}
+.inspector-key {
+    flex: 0 0 80px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+.inspector-val {
+    flex: 1 1 auto;
+    color: var(--text-primary);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    word-break: break-word;
+}
+.inspector-var {
+    display: inline-block;
+    margin: 2px 4px 2px 0;
+    padding: 3px 8px;
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+.inspector-var:hover {
+    background: var(--btn-primary);
+    color: var(--btn-text);
+    border-color: var(--btn-primary);
+}
+
+/* Regex tester — little "test" button on the pattern field, plus modal. */
+.regex-test-btn {
+    background: var(--bg-surface-alt);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+.regex-test-btn:hover {
+    background: var(--btn-primary);
+    color: var(--btn-text);
+    border-color: var(--btn-primary);
+}
+.regex-test-modal {
+    max-width: 600px;
+}
+.regex-test-row {
+    margin-bottom: 10px;
+}
+.regex-test-row label {
+    display: block;
+    margin-bottom: 3px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+.regex-test-pattern {
+    display: block;
+    padding: 6px 10px;
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+.regex-test-result {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    min-height: 30px;
+}
+.regex-test-hit {
+    color: #2a8;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.regex-test-nomatch {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+.regex-test-error {
+    color: #c43;
+}
+
+/* Breadcrumb bar — shows the data-path of the focused field. Click copies. */
+.field-breadcrumb {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    background: var(--bg-surface-alt);
+    cursor: pointer;
+    user-select: text;
+    transition: background-color 0.2s, color 0.2s;
+}
+.field-breadcrumb:hover {
+    background: var(--bg-inset);
+    color: var(--text-primary);
+}
+.field-breadcrumb.copied {
+    background: var(--btn-primary);
+    color: var(--btn-text);
+}
+
+/* Drag-to-reorder handle on array-item headers. */
+.drag-handle {
+    cursor: grab;
+    color: var(--text-secondary);
+    font-size: 14px;
+    padding: 2px 4px;
+    line-height: 1;
+    user-select: none;
+}
+.drag-handle:active {
+    cursor: grabbing;
+}
+.array-item.dragging {
+    opacity: 0.5;
+    outline: 2px dashed var(--border-strong);
+}
+
+/* Duplicate-item button — sits beside the delete button in the header. */
+.duplicate-item-btn {
+    background: var(--bg-surface-alt);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    border-radius: 4px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    transition: background-color 0.2s, color 0.2s;
+}
+.duplicate-item-btn:hover {
+    background: var(--btn-primary);
+    color: var(--btn-text);
+    border-color: var(--btn-primary);
+}
+.duplicate-item-icon {
+    display: inline-block;
+    font-size: 14px;
+}
+
+/* Form filter input — sits in the form toolbar with the action buttons. */
+.form-filter-input {
+    flex: 0 0 220px;
+    padding: 5px 10px;
+    font-size: 12px;
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    width: auto;
+}
+.filtered-out {
+    display: none !important;
+}
+
 /* Password input + eye-toggle button. */
 .password-field {
     position: relative;
@@ -609,10 +1114,10 @@ textarea {
 }
 
 .object-content > .collapsible-section,
-.array-item > .collapsible-section,
+.array-item-body > .collapsible-section,
 .map-entry-content > .collapsible-section,
 .object-content > .array-item-header,
-.array-item > .array-item-header,
+.array-item-body > .array-item-header,
 .map-entry-content > .map-entry-header {
     flex: 1 0 100%;
 }
@@ -946,6 +1451,34 @@ button.btn {
     align-items: center;
     gap: 8px;
     margin-bottom: 4px;
+    user-select: none;
+}
+
+/* The body wraps every field of a polymorphic-object array item so the
+   whole item collapses/expands as a unit, same way .collapsible-content
+   does for sections. */
+.array-item-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-start;
+    transition: max-height 0.3s ease-out, overflow 0s 0.3s;
+    overflow: visible;
+}
+.array-item-body.collapsed {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, overflow 0s;
+}
+
+/* Arrow leading the array-item-header, following .collapsible-arrow style. */
+.array-item-header > .collapsible-arrow {
+    transform: rotate(0deg);
+    transition: transform 0.2s;
+}
+.array-item-header.collapsed > .collapsible-arrow,
+.array-item-header > .collapsible-arrow.collapsed {
+    transform: rotate(-90deg);
 }
 
 .array-item-header input,

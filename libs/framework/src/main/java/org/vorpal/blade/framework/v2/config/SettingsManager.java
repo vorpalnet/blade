@@ -552,6 +552,7 @@ public class SettingsManager<T> {
 			else if (fl.password()) extras.put("format", "password");
 			if (fl.wide() || fl.multiline()) extras.put("x-wide", true);
 			if (fl.readOnly()) extras.put("x-readonly", true);
+			if (fl.regexTest()) extras.put("x-regex-test", true);
 			return extras.size() == 0 ? null : extras;
 		};
 		configBuilder.forFields().withInstanceAttributeOverride((node, field, ctx) -> {

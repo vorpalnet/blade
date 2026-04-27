@@ -102,8 +102,17 @@ public abstract class Selector implements Serializable {
 	/// - `Map<String,String>` payload (REST/JDBC/LDAP/Map connectors):
 	///   name is a map key.
 	/// - [SipServletRequest] payload (SipConnector): name is a SIP
-	///   header name, with special pseudo-headers `Request-URI`,
-	///   `Remote-IP`, `content`/`body` handled directly.
+	///   header name, with special pseudo-headers handled directly:
+	///   - `Request-URI`, `requestURI`, `RequestURI`, `ruri` — request URI
+	///   - `Remote-IP`, `remoteIP` — original caller (fallback chain)
+	///   - `Peer-IP`, `peerIP` — immediate transport peer
+	///   - `content`, `body` — message body
+	///   - `Transport`, `transport` — `UDP` / `TCP` / `TLS` / `WS` / `WSS`
+	///   - `IsSecure`, `isSecure` — `true` if transport is `TLS` or `WSS`
+	///   - `ClientCertSubject`, `clientCertSubject` — subject DN of the
+	///     client's X.509 cert (TLS/WSS with mutual auth)
+	///   - `ClientCertIssuer`, `clientCertIssuer` — issuer DN of that cert
+	///   - `TlsCipher`, `tlsCipher` — negotiated TLS cipher suite
 	///
 	/// Returns null if `payload` isn't recognized or the name isn't
 	/// present.
@@ -147,6 +156,31 @@ public abstract class Selector implements Serializable {
 					if (request.getContent() instanceof String) return (String) request.getContent();
 					return new String((byte[]) request.getContent());
 
+				case "Transport":
+				case "transport":
+					return request.getInitialTransport();
+
+				case "IsSecure":
+				case "isSecure": {
+					String t = request.getInitialTransport();
+					boolean secure = "TLS".equalsIgnoreCase(t) || "WSS".equalsIgnoreCase(t);
+					return Boolean.toString(secure);
+				}
+
+				case "ClientCertSubject":
+				case "clientCertSubject":
+					return firstClientCert(request, /*subject=*/true);
+
+				case "ClientCertIssuer":
+				case "clientCertIssuer":
+					return firstClientCert(request, /*subject=*/false);
+
+				case "TlsCipher":
+				case "tlsCipher": {
+					Object cipher = request.getAttribute("javax.servlet.request.cipher_suite");
+					return (cipher != null) ? cipher.toString() : null;
+				}
+
 				default:
 					return request.getHeader(name);
 				}
@@ -157,6 +191,21 @@ public abstract class Selector implements Serializable {
 		}
 
 		return null;
+	}
+
+	/// Resolves the peer-presented client certificate (TLS/WSS mutual
+	/// auth) and returns either its subject DN or its issuer DN.
+	/// Returns null if the connection wasn't TLS, if no client cert was
+	/// presented, or if the container didn't populate the standard
+	/// `javax.servlet.request.X509Certificate` attribute.
+	private static String firstClientCert(SipServletRequest request, boolean subject) {
+		Object attr = request.getAttribute("javax.servlet.request.X509Certificate");
+		if (!(attr instanceof java.security.cert.X509Certificate[])) return null;
+		java.security.cert.X509Certificate[] chain = (java.security.cert.X509Certificate[]) attr;
+		if (chain.length == 0 || chain[0] == null) return null;
+		return subject
+				? chain[0].getSubjectX500Principal().getName()
+				: chain[0].getIssuerX500Principal().getName();
 	}
 
 	// Kept for convenience — some subclasses need to know the

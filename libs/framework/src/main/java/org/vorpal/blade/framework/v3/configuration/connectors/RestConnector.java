@@ -137,7 +137,8 @@ public class RestConnector extends Connector implements Serializable {
 			}
 
 			if (authentication != null) {
-				authentication.applyTo(reqBuilder, ctx);
+				authentication.applyTo(reqBuilder, ctx,
+						new Authentication.RequestSignature(method, resolvedUrl, resolvedBody));
 			}
 
 			if (templateHeaders != null) {

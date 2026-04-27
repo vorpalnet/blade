@@ -21,6 +21,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.connectors.Connector;
+import org.vorpal.blade.framework.v3.configuration.routing.ConditionalHeader;
 import org.vorpal.blade.framework.v3.configuration.routing.Route;
 import org.vorpal.blade.framework.v3.configuration.routing.Routing;
 
@@ -186,13 +187,26 @@ public class IRouterServlet extends SipServlet implements SipServletListener {
 
 	private static void applyHeaders(SipServletRequest request, Route route,
 			Context ctx, Logger sipLogger) {
-		if (route == null || route.getHeaders() == null) return;
-		for (Map.Entry<String, String> h : route.getHeaders().entrySet()) {
-			try {
-				request.setHeader(h.getKey(), ctx.resolve(h.getValue()));
-			} catch (Exception e) {
-				sipLogger.warning(request, "iRouter header " + h.getKey()
-						+ " failed to apply: " + e.getMessage());
+		if (route == null) return;
+		if (route.getHeaders() != null) {
+			for (Map.Entry<String, String> h : route.getHeaders().entrySet()) {
+				try {
+					request.setHeader(h.getKey(), ctx.resolve(h.getValue()));
+				} catch (Exception e) {
+					sipLogger.warning(request, "iRouter header " + h.getKey()
+							+ " failed to apply: " + e.getMessage());
+				}
+			}
+		}
+		if (route.getConditionalHeaders() != null) {
+			for (ConditionalHeader ch : route.getConditionalHeaders()) {
+				if (!ch.shouldApply(ctx)) continue;
+				try {
+					request.setHeader(ch.getName(), ctx.resolve(ch.getValue()));
+				} catch (Exception e) {
+					sipLogger.warning(request, "iRouter conditional header " + ch.getName()
+							+ " failed to apply: " + e.getMessage());
+				}
 			}
 		}
 	}

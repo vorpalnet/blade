@@ -16,6 +16,9 @@ import java.lang.annotation.Target;
 /// - `password = true` — render as a masked &lt;input type="password"&gt;.
 /// - `readOnly = true` — render the input in disabled state. Useful for
 ///   computed/derived fields that should be visible but not editable.
+/// - `regexTest = true` — surface a "test" button beside the field that
+///   opens the configurator's regex-tester modal (sample input →
+///   named/numbered capture groups).
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.FIELD, ElementType.METHOD })
 public @interface FormLayout {
@@ -23,4 +26,5 @@ public @interface FormLayout {
     boolean multiline() default false;
     boolean password() default false;
     boolean readOnly() default false;
+    boolean regexTest() default false;
 }

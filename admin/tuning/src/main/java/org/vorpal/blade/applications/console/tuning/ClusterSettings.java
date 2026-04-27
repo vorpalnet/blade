@@ -31,7 +31,17 @@ public class ClusterSettings {
 	public Response get() {
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
-			ObjectName domainConfig = new ObjectName("com.bea:Name=DomainConfiguration,Type=Domain");
+
+			// Canonical WLS bootstrap: DomainRuntimeServiceMBean is the
+			// well-known entry point on the federated DomainRuntime
+			// MBeanServer; it exposes the (named) DomainMBean as the
+			// "DomainConfiguration" attribute. The previous direct lookup of
+			// `com.bea:Name=DomainConfiguration,Type=Domain` is wrong — the
+			// real MBean is named after the actual domain (e.g. base_domain)
+			// and that lookup throws InstanceNotFoundException on WLS 14.1.1.
+			ObjectName service = new ObjectName(
+					"com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean");
+			ObjectName domainConfig = (ObjectName) mbs.getAttribute(service, "DomainConfiguration");
 
 			ObjectNode result = mapper.createObjectNode();
 

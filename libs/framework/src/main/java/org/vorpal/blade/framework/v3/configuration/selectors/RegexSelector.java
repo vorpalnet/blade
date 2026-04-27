@@ -8,6 +8,7 @@ import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
@@ -62,6 +63,7 @@ public class RegexSelector extends Selector implements Serializable {
 	}
 
 	@JsonPropertyDescription("Regex with named capturing groups, e.g. sips?:(?<user>[^@]+)@(?<host>[^;>]+)")
+	@FormLayout(regexTest = true)
 	public String getPattern() { return pattern; }
 	public void setPattern(String pattern) {
 		this.pattern = pattern;

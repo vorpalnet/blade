@@ -51,6 +51,7 @@ public class FileManagerServlet extends HttpServlet {
 	private static final String CONFIG_BASE = DOMAIN_HOME + "/config/custom/vorpal";
 	private static final String SCHEMAS_DIR = CONFIG_BASE + "/_schemas";
 	private static final String SAMPLES_DIR = CONFIG_BASE + "/_samples";
+	private static final String TEMPLATES_DIR = CONFIG_BASE + "/_templates";
 
 	private static MBeanServer server;
 	private static String domainName;
@@ -126,6 +127,49 @@ public class FileManagerServlet extends HttpServlet {
 				} else {
 					sendMessageToSession(session, createMessage("sample_loaded", sampleContent));
 				}
+				break;
+
+			case "list_templates":
+				String listSchema = jsonNode.get("schemaName").asText();
+				String templateList = listTemplates(listSchema);
+				sendMessageToSession(session, createMessage("template_list", templateList));
+				break;
+
+			case "load_template":
+				String templateSchema = jsonNode.get("schemaName").asText();
+				String templateName = jsonNode.get("templateName").asText();
+				String templateContent = loadTemplateFromFilesystem(templateSchema, templateName);
+				if (templateContent == null || templateContent.trim().isEmpty()) {
+					sendMessageToSession(session, createMessage("error", "Template not found: " + templateName));
+				} else {
+					sendMessageToSession(session, createMessage("template_loaded", templateContent));
+				}
+				break;
+
+			case "list_text_files":
+				String listedFiles = listTextFiles();
+				sendMessageToSession(session, createMessage("text_file_list", listedFiles));
+				break;
+
+			case "load_text_file":
+				String textFileName = jsonNode.get("fileName").asText();
+				String textContent = loadTextFile(textFileName);
+				if (textContent == null) {
+					sendMessageToSession(session, createMessage("error", "File not found: " + textFileName));
+				} else {
+					com.fasterxml.jackson.databind.node.ObjectNode payload = objectMapper.createObjectNode();
+					payload.put("fileName", textFileName);
+					payload.put("content", textContent);
+					sendMessageToSession(session, createMessage("text_file_loaded",
+							objectMapper.writeValueAsString(payload)));
+				}
+				break;
+
+			case "save_text_file":
+				String saveName = jsonNode.get("fileName").asText();
+				String saveText = jsonNode.get("content").asText();
+				saveTextFile(saveName, saveText);
+				sendMessageToSession(session, createMessage("text_file_saved", saveName));
 				break;
 
 			case "save_json":
@@ -342,6 +386,118 @@ public class FileManagerServlet extends HttpServlet {
 			return null;
 		}
 		return new String(Files.readAllBytes(samplePath));
+	}
+
+	/// List *.json starter templates under _templates/<schemaName>/. Returns
+	/// a JSON array of {"name": "<filename-without-extension>"} — the
+	/// configurator renders a pick-list from this and asks the server for
+	/// the full contents when the user selects one.
+	private String listTemplates(String schemaName) throws IOException {
+		Path dir = Paths.get(TEMPLATES_DIR, sanitizeName(schemaName));
+		com.fasterxml.jackson.databind.node.ArrayNode arr = objectMapper.createArrayNode();
+		if (!Files.exists(dir) || !Files.isDirectory(dir)) {
+			return objectMapper.writeValueAsString(arr);
+		}
+		try (java.util.stream.Stream<Path> files = Files.list(dir)) {
+			files.filter(p -> p.getFileName().toString().toLowerCase().endsWith(".json"))
+				.sorted()
+				.forEach(p -> {
+					String fname = p.getFileName().toString();
+					String name = fname.substring(0, fname.length() - ".json".length());
+					com.fasterxml.jackson.databind.node.ObjectNode entry = objectMapper.createObjectNode();
+					entry.put("name", name);
+					arr.add(entry);
+				});
+		}
+		return objectMapper.writeValueAsString(arr);
+	}
+
+	/// Read the raw JSON content of a named template under _templates/<schemaName>/.
+	/// Null return means "not found"; caller signals an error to the client.
+	private String loadTemplateFromFilesystem(String schemaName, String templateName) throws IOException {
+		Path templatePath = Paths.get(TEMPLATES_DIR, sanitizeName(schemaName),
+				sanitizeName(templateName) + ".json");
+		if (!Files.exists(templatePath)) {
+			return null;
+		}
+		return new String(Files.readAllBytes(templatePath));
+	}
+
+	/// Defensive: never allow "../" escape out of the templates directory.
+	private static String sanitizeName(String name) {
+		if (name == null) return "";
+		return name.replace("/", "").replace("\\", "").replace("..", "").trim();
+	}
+
+	// ---------------------------------------------------------------------
+	// Generic text-file editor for _templates/ contents — REST body templates
+	// (HTTP-message format), LDAP query files, JDBC SQL, etc. The configurator
+	// exposes a "Files" tab that lists everything under _templates/ (flat;
+	// subdirs shown with their relative path) and loads/saves raw text.
+
+	private static final java.util.Set<String> TEXT_FILE_EXTENSIONS = new java.util.HashSet<>(
+			java.util.Arrays.asList("txt", "sql", "ldap", "json", "xml", "properties", "yml", "yaml", "conf"));
+
+	/// Walk _templates/ recursively and return every regular file whose
+	/// extension is in TEXT_FILE_EXTENSIONS as a JSON array of
+	/// {"path": "relative/path"}. Subdirectories are included so the
+	/// configurator can show a flat list with full relative paths.
+	private String listTextFiles() throws IOException {
+		Path root = Paths.get(TEMPLATES_DIR);
+		com.fasterxml.jackson.databind.node.ArrayNode arr = objectMapper.createArrayNode();
+		if (!Files.exists(root) || !Files.isDirectory(root)) {
+			return objectMapper.writeValueAsString(arr);
+		}
+		try (java.util.stream.Stream<Path> walk = Files.walk(root)) {
+			walk.filter(Files::isRegularFile)
+				.filter(p -> {
+					String n = p.getFileName().toString().toLowerCase();
+					int dot = n.lastIndexOf('.');
+					if (dot < 0) return false;
+					return TEXT_FILE_EXTENSIONS.contains(n.substring(dot + 1));
+				})
+				.sorted()
+				.forEach(p -> {
+					String rel = root.relativize(p).toString().replace('\\', '/');
+					com.fasterxml.jackson.databind.node.ObjectNode entry = objectMapper.createObjectNode();
+					entry.put("path", rel);
+					arr.add(entry);
+				});
+		}
+		return objectMapper.writeValueAsString(arr);
+	}
+
+	/// Read the raw text content of a file under _templates/. The file name
+	/// is resolved through sanitizePath to keep the read inside the templates
+	/// tree — no "../" escape.
+	private String loadTextFile(String relPath) throws IOException {
+		Path p = resolveTextFilePath(relPath);
+		if (p == null || !Files.exists(p) || !Files.isRegularFile(p)) return null;
+		return new String(Files.readAllBytes(p));
+	}
+
+	/// Write text content to a file under _templates/. Creates parent dirs if
+	/// needed; overwrites existing files (no version backup for templates — they
+	/// are ancillary to the JSON configs that do get versioned).
+	private void saveTextFile(String relPath, String content) throws IOException {
+		Path p = resolveTextFilePath(relPath);
+		if (p == null) throw new IOException("Invalid path: " + relPath);
+		if (p.getParent() != null && !Files.exists(p.getParent())) {
+			Files.createDirectories(p.getParent());
+		}
+		Files.write(p, content == null ? new byte[0] : content.getBytes());
+	}
+
+	/// Resolve a caller-supplied relative path inside _templates/, rejecting
+	/// any attempt to escape the root directory. Returns null for empty or
+	/// obviously-bad input.
+	private Path resolveTextFilePath(String relPath) {
+		if (relPath == null || relPath.trim().isEmpty()) return null;
+		if (relPath.contains("..")) return null;
+		Path root = Paths.get(TEMPLATES_DIR).toAbsolutePath().normalize();
+		Path candidate = root.resolve(relPath).toAbsolutePath().normalize();
+		if (!candidate.startsWith(root)) return null;
+		return candidate;
 	}
 
 	// File Operation Methods

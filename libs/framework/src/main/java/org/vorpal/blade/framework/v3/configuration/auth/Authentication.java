@@ -44,7 +44,9 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 		@JsonSubTypes.Type(value = OAuth2ClientCredentialsAuthentication.class, name = "oauth2-client"),
 		@JsonSubTypes.Type(value = OAuth2RefreshTokenAuthentication.class, name = "oauth2-refresh-token"),
 		@JsonSubTypes.Type(value = OAuth2JwtBearerAuthentication.class, name = "oauth2-jwt-bearer"),
-		@JsonSubTypes.Type(value = OAuth2SamlBearerAuthentication.class, name = "oauth2-saml-bearer")
+		@JsonSubTypes.Type(value = OAuth2SamlBearerAuthentication.class, name = "oauth2-saml-bearer"),
+		@JsonSubTypes.Type(value = HmacAuthentication.class, name = "hmac"),
+		@JsonSubTypes.Type(value = AwsSigV4Authentication.class, name = "aws-sigv4")
 })
 public abstract class Authentication implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -54,5 +56,43 @@ public abstract class Authentication implements Serializable {
 	/// dispatches the request; OAuth subtypes may block briefly on a
 	/// token-endpoint call. Runs on a worker thread, never the SIP
 	/// container thread.
+	///
+	/// The simple overload is all most schemes need — they only care
+	/// about `${var}` resolution and stamping an `Authorization`
+	/// header. Schemes that must incorporate the full request into the
+	/// signature (HMAC of the body, AWS SigV4 of the canonical request)
+	/// override the three-arg [#applyTo(HttpRequest.Builder, Context, RequestSignature)]
+	/// below; RestConnector calls that one, and the default delegates
+	/// to this simpler form.
 	public abstract void applyTo(HttpRequest.Builder reqBuilder, Context ctx);
+
+	/// Extended overload for request-signing schemes that need access
+	/// to the HTTP method, resolved URL, and resolved body. Default
+	/// implementation delegates to [#applyTo(HttpRequest.Builder, Context)]
+	/// — override only when the signature covers request content.
+	public void applyTo(HttpRequest.Builder reqBuilder, Context ctx, RequestSignature request) {
+		applyTo(reqBuilder, ctx);
+	}
+
+	/// The resolved HTTP method / URL / body visible to a request-signing
+	/// [Authentication] subtype at stamp time. Kept as a tiny value
+	/// object so future signing schemes can add fields (query string,
+	/// timestamp, canonical headers) without widening the [#applyTo]
+	/// signature.
+	public static final class RequestSignature implements Serializable {
+		private static final long serialVersionUID = 1L;
+		private final String method;
+		private final String url;
+		private final String body;
+
+		public RequestSignature(String method, String url, String body) {
+			this.method = (method == null) ? "GET" : method.toUpperCase();
+			this.url = (url == null) ? "" : url;
+			this.body = (body == null) ? "" : body;
+		}
+
+		public String method() { return method; }
+		public String url()    { return url; }
+		public String body()   { return body; }
+	}
 }
