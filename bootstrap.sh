@@ -61,12 +61,21 @@ echo "  WebLogic version: $WL_VERSION"
 echo "  OCCAS version:    $OCCAS_VERSION"
 echo ""
 
-# javaee-api filename: javax.javaee-api.jar in 8.0/8.1; javaee-api-<ver>.jar in 8.2+
-JAVAEE_JAR="$OCCAS_HOME/wlserver/server/lib/javax.javaee-api.jar"
-if [ ! -f "$JAVAEE_JAR" ]; then
-    JAVAEE_JAR=$(ls -1 "$OCCAS_HOME/wlserver/server/lib/"javaee-api-*.jar 2>/dev/null | head -1)
-fi
-if [ -z "$JAVAEE_JAR" ] || [ ! -f "$JAVAEE_JAR" ]; then
+# javaee-api filename varies: javax.javaee-api.jar in 8.0/8.1; in 8.2+ that name
+# is an empty stub and the real classes live in javaee-api-<ver>.jar. Pick the
+# largest matching candidate so we always install the real jar.
+JAVAEE_JAR=""
+JAVAEE_SIZE=0
+for candidate in "$OCCAS_HOME/wlserver/server/lib/javax.javaee-api.jar" \
+                 "$OCCAS_HOME/wlserver/server/lib/"javaee-api-*.jar; do
+    [ -f "$candidate" ] || continue
+    size=$(wc -c < "$candidate" | tr -d '[:space:]')
+    if [ "$size" -gt "$JAVAEE_SIZE" ]; then
+        JAVAEE_JAR="$candidate"
+        JAVAEE_SIZE="$size"
+    fi
+done
+if [ -z "$JAVAEE_JAR" ]; then
     echo "Error: Cannot find javaee-api JAR in $OCCAS_HOME/wlserver/server/lib/"
     exit 1
 fi
