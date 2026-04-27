@@ -31,7 +31,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="${SCRIPT_DIR}/build-profiles"
 PLATFORMS_DIR="${PROFILES_DIR}/platforms"
 DEFAULT_PROFILE="full"
+
+# --- Default platform: if exactly one OCCAS version is bootstrapped in the
+#     local Maven repo, use it. Otherwise (zero or multiple) fall back to 8.1. ---
 DEFAULT_PLATFORM="occas-8.1"
+WLSS_DIR="${HOME}/.m2/repository/com/oracle/occas/wlss"
+if [ -d "$WLSS_DIR" ]; then
+    bootstrapped=()
+    for vdir in "$WLSS_DIR"/*/; do
+        [ -d "$vdir" ] || continue
+        v=$(basename "$vdir")
+        [ -f "${vdir}wlss-${v}.jar" ] || continue
+        [ -f "${PLATFORMS_DIR}/occas-${v}.conf" ] || continue
+        bootstrapped+=("occas-${v}")
+    done
+    if [ ${#bootstrapped[@]} -eq 1 ]; then
+        DEFAULT_PLATFORM="${bootstrapped[0]}"
+    fi
+fi
 
 # --- Parse project version from pom.xml ---
 REVISION=$(grep '<revision>' "${SCRIPT_DIR}/pom.xml" | head -1 | sed 's/.*<revision>\(.*\)<\/revision>.*/\1/')
@@ -234,7 +251,7 @@ if [ ${#missing_libs[@]} -gt 0 ]; then
     echo "Error: OCCAS/WebLogic libraries not found in local Maven repo for platform ${PLATFORM}:"
     printf '  %s\n' "${missing_libs[@]}"
     echo ""
-    echo "Run ./bootstrap.sh /path/to/${PLATFORM} first to install them."
+    echo "Run ./bootstrap.sh /path/to/occas first to install them."
     exit 1
 fi
 
