@@ -223,6 +223,21 @@ if [ -n "$OCCAS_VERSION" ]; then
     PLATFORM_FLAGS+=("-Dblade.occas.version=${OCCAS_VERSION}")
 fi
 
+# --- Verify OCCAS/WebLogic libraries are installed in the local Maven repo ---
+M2_REPO="${HOME}/.m2/repository"
+WLS_JAR="${M2_REPO}/com/oracle/weblogic/weblogic-server/${WL_VERSION}/weblogic-server-${WL_VERSION}.jar"
+WLSS_JAR="${M2_REPO}/com/oracle/occas/wlss/${OCCAS_VERSION}/wlss-${OCCAS_VERSION}.jar"
+missing_libs=()
+[ -f "$WLS_JAR" ]  || missing_libs+=("$WLS_JAR")
+[ -f "$WLSS_JAR" ] || missing_libs+=("$WLSS_JAR")
+if [ ${#missing_libs[@]} -gt 0 ]; then
+    echo "Error: OCCAS/WebLogic libraries not found in local Maven repo for platform ${PLATFORM}:"
+    printf '  %s\n' "${missing_libs[@]}"
+    echo ""
+    echo "Run ./bootstrap.sh /path/to/${PLATFORM} first to install them."
+    exit 1
+fi
+
 # --- Auto-increment build number ---
 BUILD_NUMBER_FILE="${SCRIPT_DIR}/build.number"
 if [ -f "$BUILD_NUMBER_FILE" ]; then

@@ -150,10 +150,10 @@ javadoc/        Javadoc WAR (always built; -Pjavadocs regenerates per-module jav
 
 ## One-Time Setup
 
-Install the OCCAS JARs into your local Maven repository. The script auto-detects the WebLogic and OCCAS versions from the installation directory:
+Install the OCCAS JARs into your local Maven repository. The script auto-detects the WebLogic and OCCAS versions from the installation's `inventory/registry.xml`:
 
 ```bash
-./install-occas.sh /path/to/occas
+./bootstrap.sh /path/to/occas
 ```
 
 Example output:

@@ -3,10 +3,11 @@
 # Install OCCAS JARs into the local Maven repository.
 # Run this once before building with Maven.
 #
-# Usage: ./install-occas.sh /path/to/occas
+# Usage: ./bootstrap.sh /path/to/occas
 #
-# Supports OCCAS 8.0, 8.1, 8.2, and 8.3. Auto-detects the WebLogic
-# version from the installed maven plugin directory.
+# Supports OCCAS 8.0, 8.1, 8.2, and 8.3 (and forward-compatible with later
+# versions). Auto-detects OCCAS and WebLogic versions from the install's
+# inventory/registry.xml. Override by exporting OCCAS_VERSION or WL_VERSION.
 #
 
 OCCAS_HOME="${1:-$OCCAS}"
@@ -24,24 +25,35 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# --- Auto-detect WebLogic version from the maven plugin directory ---
 PLUGIN_BASE="$OCCAS_HOME/wlserver/plugins/maven/com/oracle/weblogic/weblogic-maven-plugin"
-if [ -d "$PLUGIN_BASE" ]; then
-    WL_VERSION=$(ls -1 "$PLUGIN_BASE" | head -1)
-else
-    echo "Warning: weblogic-maven-plugin not found at $PLUGIN_BASE"
-    echo "         Defaulting to 14.1.1 — set WL_VERSION manually if needed."
-    WL_VERSION="14.1.1"
+
+# --- Auto-detect OCCAS and WebLogic versions from inventory/registry.xml ---
+# Pre-set OCCAS_VERSION / WL_VERSION env vars are honored as overrides.
+REGISTRY="$OCCAS_HOME/inventory/registry.xml"
+if [ -f "$REGISTRY" ]; then
+    if [ -z "$OCCAS_VERSION" ]; then
+        OCCAS_VERSION=$(grep -oE 'name="Converged Application Server" version="[0-9]+\.[0-9]+' "$REGISTRY" \
+                        | grep -oE '[0-9]+\.[0-9]+$' | head -1)
+    fi
+    if [ -z "$WL_VERSION" ]; then
+        WL_VERSION=$(grep -oE 'name="cieCfg_wls_shared_external" version="[0-9]+\.[0-9]+\.[0-9]+' "$REGISTRY" \
+                     | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+    fi
 fi
 
-# --- Auto-detect OCCAS SIP version from the sipservlet-api jar ---
-if [ -f "$OCCAS_HOME/wlserver/sip/server/lib/sipservlet-api.jar" ]; then
-    # Derive OCCAS version from the directory name (e.g. occas-8.1 -> 8.1)
-    OCCAS_DIR=$(basename "$OCCAS_HOME")
-    OCCAS_VERSION=$(echo "$OCCAS_DIR" | grep -oE '[0-9]+\.[0-9]+' | head -1)
+# Fall back to heuristics if registry.xml is missing or did not yield a version.
+if [ -z "$OCCAS_VERSION" ]; then
+    echo "Warning: could not read OCCAS version from $REGISTRY; falling back to directory name."
+    OCCAS_VERSION=$(basename "$OCCAS_HOME" | grep -oE '[0-9]+\.[0-9]+' | head -1)
     OCCAS_VERSION="${OCCAS_VERSION:-8.1}"
-else
-    OCCAS_VERSION="8.1"
+fi
+if [ -z "$WL_VERSION" ]; then
+    echo "Warning: could not read WebLogic version from $REGISTRY; falling back to plugin directory."
+    if [ -d "$PLUGIN_BASE" ]; then
+        WL_VERSION=$(ls -1 "$PLUGIN_BASE" | head -1)
+    else
+        WL_VERSION="14.1.1"
+    fi
 fi
 
 echo "Installing OCCAS JARs from: $OCCAS_HOME"
@@ -49,13 +61,32 @@ echo "  WebLogic version: $WL_VERSION"
 echo "  OCCAS version:    $OCCAS_VERSION"
 echo ""
 
-# OCCAS 8.3 ships javaee-api-8.0.1.jar instead of javax.javaee-api.jar
-if [ -f "$OCCAS_HOME/wlserver/server/lib/javax.javaee-api.jar" ]; then
-    JAVAEE_JAR="$OCCAS_HOME/wlserver/server/lib/javax.javaee-api.jar"
-elif [ -f "$OCCAS_HOME/wlserver/server/lib/javaee-api-8.0.1.jar" ]; then
-    JAVAEE_JAR="$OCCAS_HOME/wlserver/server/lib/javaee-api-8.0.1.jar"
-else
+# javaee-api filename: javax.javaee-api.jar in 8.0/8.1; javaee-api-<ver>.jar in 8.2+
+JAVAEE_JAR="$OCCAS_HOME/wlserver/server/lib/javax.javaee-api.jar"
+if [ ! -f "$JAVAEE_JAR" ]; then
+    JAVAEE_JAR=$(ls -1 "$OCCAS_HOME/wlserver/server/lib/"javaee-api-*.jar 2>/dev/null | head -1)
+fi
+if [ -z "$JAVAEE_JAR" ] || [ ! -f "$JAVAEE_JAR" ]; then
     echo "Error: Cannot find javaee-api JAR in $OCCAS_HOME/wlserver/server/lib/"
+    exit 1
+fi
+
+# --- Pre-flight: verify all source JARs exist before any mvn invocations ---
+declare -a SRC_JARS=(
+    "$JAVAEE_JAR"
+    "$OCCAS_HOME/wlserver/server/lib/weblogic.jar"
+    "$OCCAS_HOME/wlserver/modules/com.oracle.weblogic.logging.jar"
+    "$OCCAS_HOME/wlserver/modules/com.oracle.weblogic.security.encryption.jar"
+    "$OCCAS_HOME/wlserver/sip/server/lib/sipservlet-api.jar"
+    "$OCCAS_HOME/wlserver/sip/server/lib/wlss.jar"
+    "$OCCAS_HOME/wlserver/sip/server/lib/wlssapi.jar"
+    "$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.jar"
+)
+missing=()
+for f in "${SRC_JARS[@]}"; do [ -f "$f" ] || missing+=("$f"); done
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "Error: required JARs not found in $OCCAS_HOME:"
+    printf '  %s\n' "${missing[@]}"
     exit 1
 fi
 

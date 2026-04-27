@@ -275,7 +275,7 @@
 	</dependencyManagement>
 
 	<!-- OCCAS/WebLogic dependencies (provided by the app server at runtime).
-	     Run ./install-occas.sh to install these into your local Maven repository. -->
+	     Run ./bootstrap.sh to install these into your local Maven repository. -->
 	<dependencies>
 		<dependency>
 			<groupId>javax</groupId>
