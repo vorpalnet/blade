@@ -7,8 +7,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /// Framework-level executors for blocking work that must not run on
 /// the SIP container thread.
 ///
-/// The [#DB] executor backs [org.vorpal.blade.framework.v3.configuration.adapters.JdbcAdapter]
-/// and [org.vorpal.blade.framework.v3.configuration.adapters.LdapAdapter]
+/// The [#DB] executor backs [org.vorpal.blade.framework.v3.configuration.connectors.JdbcConnector]
+/// and [org.vorpal.blade.framework.v3.configuration.connectors.LdapConnector]
 /// — both are synchronous under the hood (JDBC's `Statement.execute`,
 /// JNDI LDAP's `DirContext.search`), so they run off the SIP thread
 /// on a bounded pool sized to roughly match typical JDBC connection

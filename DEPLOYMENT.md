@@ -53,7 +53,6 @@ Management tools that run **only on AdminServer**. Each is a skinny WAR (no JARs
 | tuning | `/tuning` | JVM / SIP / OCCAS tuning knobs |
 | file-manager | `/files` | WebSocket-based config file management |
 | explorer | `/explorer` | Experimental EasyUI forms |
-| json-forms | `/forms` | Legacy JSON config form editor |
 | watcher | `/watcher` | Log/event monitor |
 | javadoc | `/javadoc` | Browsable Javadoc with UML diagrams |
 
@@ -171,7 +170,6 @@ This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The s
 | `vorpal-blade-admin-tuning.war` | admin | AdminServer | Tuning UI (`/tuning`) |
 | `vorpal-blade-admin-file-manager.war` | admin | AdminServer | File manager (`/files`) |
 | `vorpal-blade-admin-explorer.war` | admin | AdminServer | Experimental UI (`/explorer`) |
-| `vorpal-blade-admin-json-forms.war` | admin | AdminServer | Legacy JSON forms (`/forms`) |
 | `vorpal-blade-admin-watcher.war` | admin | AdminServer | Log/event monitor (`/watcher`) |
 | `vorpal-blade-javadoc.war` | admin | AdminServer | Javadoc (`/javadoc`) |
 | `vorpal-blade-services-<profile>.ear` | services | cluster | Services EAR (one per build profile) |

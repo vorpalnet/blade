@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>BLADE Logs</title>
+	<link rel="stylesheet" href="logs.css">
+</head>
+<body>
+	<header>
+		<h1>BLADE Cluster Logs</h1>
+		<div class="controls">
+			<label>Server
+				<select id="server"></select>
+			</label>
+			<label>Log file
+				<select id="logFile"></select>
+			</label>
+			<label>Tail bytes
+				<input id="tailBytes" type="number" min="1024" step="1024" value="65536">
+			</label>
+			<button id="load">Load tail</button>
+		</div>
+	</header>
+	<main>
+		<div id="status" class="status"></div>
+		<pre id="output" class="output">Pick a server and a log file, then click <strong>Load tail</strong>.</pre>
+	</main>
+	<script src="logs.js"></script>
+</body>
+</html>

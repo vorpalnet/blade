@@ -134,6 +134,13 @@ public abstract class Callflow implements Serializable {
 
 	public static final String TIMESTAMP_PARAM = "ts";
 	public static final String DIALOG_PARAM = "dialog";
+	/// Parameterable key on X-Vorpal-ID carrying the transport-level
+	/// address of whoever sent the original INVITE into OCCAS. Populated
+	/// by the first BLADE service to see a new request; propagated by
+	/// downstream forwards. Absent for purely-internally-originated
+	/// requests (test-uac etc.) — consumers must tolerate the absence.
+	public static final String ORIGIN_PARAM = "origin";
+	private static final String VORPAL_ORIGIN = "VORPAL_ORIGIN";
 
 //	private static final String EXPECT_ACK = "EXPECT_ACK";
 	private static final String USER_AGENT_ATTR = "userAgent";
@@ -626,6 +633,13 @@ public abstract class Callflow implements Serializable {
 						indexKey = xVorpalId.getValue();
 						dialogId = xVorpalId.getParameter(DIALOG_PARAM);
 						vorpalTimestamp = xVorpalId.getParameter(TIMESTAMP_PARAM);
+						// Propagate the `origin` param from upstream BLADE
+						// services — they already captured the real external
+						// sender when they were first-in-chain.
+						String origin = xVorpalId.getParameter(ORIGIN_PARAM);
+						if (origin != null && !origin.isEmpty()) {
+							appSession.setAttribute(VORPAL_ORIGIN, origin);
+						}
 					}
 				} catch (Exception ex) {
 					sipLogger.warning(request, "Callflow.getVorpalSessionId - Unable to parse header '" + X_VORPAL_ID
@@ -660,6 +674,16 @@ public abstract class Callflow implements Serializable {
 				appSession.setAttribute(VORPAL_SESSION, indexKey);
 			} else {
 				indexKey = createVorpalSessionId(appSession);
+				// This is the first BLADE service to see this request —
+				// nobody upstream stamped an X-Vorpal-ID header. At this
+				// exact moment, request.getRemoteAddr() IS the actual
+				// upstream sender (whoever just reached us over the wire).
+				// Cache it so sendRequest can stamp `origin` on outbound
+				// forwards, and so getVorpalOrigin() can read it later.
+				String remote = request.getRemoteAddr();
+				if (remote != null && !remote.isEmpty()) {
+					appSession.setAttribute(VORPAL_ORIGIN, remote);
+				}
 			}
 
 		}
@@ -773,6 +797,15 @@ public abstract class Callflow implements Serializable {
 								Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
 								xVorpalId.setParameter(DIALOG_PARAM, dialogId);
 								xVorpalId.setParameter(TIMESTAMP_PARAM, timestamp);
+								// Propagate the origin when we've got one. Cached
+								// by getVorpalSessionId either from an inbound
+								// X-Vorpal-ID header or from request.getRemoteAddr()
+								// at first-touch. Absent for purely-internal
+								// UAC originations — that's fine, stamp is skipped.
+								String origin = (String) appSession.getAttribute(VORPAL_ORIGIN);
+								if (origin != null && !origin.isEmpty()) {
+									xVorpalId.setParameter(ORIGIN_PARAM, origin);
+								}
 								request.setParameterableHeader(X_VORPAL_ID, xVorpalId);
 							}
 						}
@@ -1262,6 +1295,12 @@ public abstract class Callflow implements Serializable {
 						Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
 						xVorpalId.setParameter(DIALOG_PARAM, dialogId);
 						xVorpalId.setParameter(TIMESTAMP_PARAM, timestamp);
+						// Keep origin on responses too — useful for downstream
+						// services tracing a call back to its entry point.
+						String origin = (String) appSession.getAttribute(VORPAL_ORIGIN);
+						if (origin != null && !origin.isEmpty()) {
+							xVorpalId.setParameter(ORIGIN_PARAM, origin);
+						}
 						response.setParameterableHeader(X_VORPAL_ID, xVorpalId);
 					}
 				}

@@ -1,0 +1,17 @@
+#
+# iRouter REST Call Screening
+#
+X-API-Key: ${apiKey}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "callId": "${callId}",
+  "srcNum": "${srcNum}",
+  "destNum": "${destNum}",
+  "callDirection": "${direction}",
+  "customerId": "${customerId}",
+  "callStartTs": "${now}",
+  "strategy": 0,
+  "timeout": 5000
+}

@@ -8,6 +8,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 public class OptionsCallflow extends Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -16,7 +17,11 @@ public class OptionsCallflow extends Callflow implements Serializable {
 	public void process(SipServletRequest request) throws ServletException, IOException {
 		try {
 
-			OptionsSettings settings = OptionsSipServlet.settingsManager.getCurrent();
+			SettingsManager<OptionsSettings> manager = OptionsSipServlet.settingsManager;
+			OptionsSettings settings = (manager != null) ? manager.getCurrent() : null;
+			if (settings == null) {
+				settings = new OptionsSettingsSample();
+			}
 
 			SipServletResponse response = request.createResponse(200);
 			response.setHeader("Accept", settings.getAccept());

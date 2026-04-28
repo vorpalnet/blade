@@ -8,9 +8,9 @@ public class TestUasConfigSample extends TestUasConfig {
 
 	public TestUasConfigSample() {
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINER);
+		this.logging.setLoggingLevel(LoggingLevel.FINEST);
 		this.session = new SessionParameters();
-		this.session.setExpiration(900);
+		this.session.setExpiration(60);
 
 		this.defaultStatus = 200;
 		this.defaultDelay = "0s";

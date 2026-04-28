@@ -5,6 +5,7 @@ import java.util.logging.Level;
 
 import javax.servlet.sip.SipServletRequest;
 
+import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
@@ -28,6 +29,7 @@ import com.jayway.jsonpath.spi.mapper.JacksonMappingProvider;
 /// - SIP request body (`getContent()`) when the payload is a
 ///   [SipServletRequest]
 @JsonPropertyOrder({ "type", "id", "description", "attribute", "index", "applicationSession" })
+@FormLayoutGroup({ "id", "attribute" })
 public class JsonSelector extends Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
 

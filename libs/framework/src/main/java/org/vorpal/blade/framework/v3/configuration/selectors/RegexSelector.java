@@ -3,12 +3,13 @@ package org.vorpal.blade.framework.v3.configuration.selectors;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.vorpal.blade.framework.v2.config.FormLayout;
+import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
@@ -19,10 +20,17 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /// Reads a source value (the same way [AttributeSelector] does — a
 /// SIP header by name, a `Map` payload field, or a special
-/// pseudo-header) and runs a regex with named capturing groups
-/// against it. Each named group becomes its own session attribute.
-/// An optional `expression` template (`${user}@${host}`) builds a
-/// final value stored under this selector's `id`.
+/// pseudo-header) and runs a regex against it.
+///
+/// Each **named** capturing group becomes its own session attribute.
+/// Numbered groups (`0` = whole match, `1`, `2`, …) are **not** copied
+/// to the session (that'd clutter it with cryptic keys) but are
+/// available inside this selector's `expression` template —
+/// so `${0}`, `${1}`, `${user}`, and `${host}` all work side by
+/// side. The rendered expression is stored under this selector's `id`.
+///
+/// Reserved meta-variables like `${now}` (see [Context]) also resolve
+/// inside the `expression` template.
 ///
 /// Use this when extraction requires regex parsing — the canonical
 /// case for SIP headers, SDP lines, anything with embedded
@@ -31,6 +39,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// without regex, prefer the dedicated selector.
 @JsonPropertyOrder({ "type", "id", "description", "attribute", "pattern", "expression",
 		"index", "applicationSession" })
+@FormLayoutGroup({ "id", "attribute", "pattern", "expression" })
 public class RegexSelector extends Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -54,6 +63,7 @@ public class RegexSelector extends Selector implements Serializable {
 	}
 
 	@JsonPropertyDescription("Regex with named capturing groups, e.g. sips?:(?<user>[^@]+)@(?<host>[^;>]+)")
+	@FormLayout(regexTest = true)
 	public String getPattern() { return pattern; }
 	public void setPattern(String pattern) {
 		this.pattern = pattern;
@@ -83,15 +93,20 @@ public class RegexSelector extends Selector implements Serializable {
 		Matcher m = compiledPattern.matcher(raw);
 		if (!m.matches()) return;
 
-		// Named groups → session attributes
-		Map<String, String> groups = extractNamedGroups(raw);
+		// Harvest every group the match produced — numbered AND named.
+		Map<String, String> groups = extractGroups(m);
+
+		// Only *named* groups go into the session. Numbered keys would
+		// collide with real attribute names and surprise later selectors.
 		for (Map.Entry<String, String> e : groups.entrySet()) {
+			if (isNumericKey(e.getKey())) continue;
 			store(ctx, e.getKey(), e.getValue());
 		}
 
-		// Final value (under this selector's id) is either the
-		// expression template resolved against groups + session, or
-		// the raw value.
+		// Expression template sees both kinds — ${0}, ${1}, ${user}, ${host}
+		// all work. Session snapshot is folded in so templates can also
+		// reference attributes set by upstream selectors/connectors. Reserved
+		// meta-variables like ${now} are handled by Context.substitute.
 		String value;
 		if (expression != null) {
 			Map<String, String> vars = new HashMap<>(ctx.snapshot());
@@ -103,29 +118,50 @@ public class RegexSelector extends Selector implements Serializable {
 		if (value != null) store(ctx, id, value);
 
 		Logger sipLogger = SettingsManager.getSipLogger();
-		if (sipLogger.isLoggable(Level.FINER)) {
+		if (sipLogger != null && sipLogger.isLoggable(Level.FINER)) {
 			sipLogger.finer("RegexSelector[" + id + "] attribute=" + attribute
 					+ " key=" + value + " groups=" + groups);
 		}
 	}
 
-	private Map<String, String> extractNamedGroups(String raw) {
+	/// Collects every group the matched `Matcher` produced:
+	/// numbered (`"0"` = whole match, `"1"`, `"2"`, …) plus any
+	/// `(?<name>…)` named groups discovered by scanning [#pattern].
+	/// Null group values (optional groups that didn't match) are
+	/// skipped; empty-string matches are preserved — they're legitimate.
+	private Map<String, String> extractGroups(Matcher m) {
 		Map<String, String> out = new LinkedHashMap<>();
-		if (compiledPattern == null || pattern == null) return out;
-		LinkedList<String> names = new LinkedList<>();
-		Matcher gm = GROUP_NAME.matcher(pattern);
-		while (gm.find()) names.add(gm.group("name"));
-		Matcher m = compiledPattern.matcher(raw);
-		if (m.find()) {
-			for (String n : names) {
+
+		// Numbered: 0..N
+		for (int i = 0; i <= m.groupCount(); i++) {
+			String v = m.group(i);
+			if (v != null) out.put(String.valueOf(i), v);
+		}
+
+		// Named: re-scan the pattern for (?<name>…) tokens and look
+		// each up on the same Matcher.
+		if (pattern != null) {
+			Matcher gm = GROUP_NAME.matcher(pattern);
+			while (gm.find()) {
+				String n = gm.group("name");
 				try {
 					String v = m.group(n);
-					if (v != null && !v.isEmpty()) out.put(n, v);
+					if (v != null) out.put(n, v);
 				} catch (IllegalArgumentException ignore) {
-					// group name not in the regex (shouldn't happen)
+					// pattern had (?<name>…) but the Matcher doesn't know
+					// the group — shouldn't happen with a compiled pattern.
 				}
 			}
 		}
+
 		return out;
+	}
+
+	private static boolean isNumericKey(String s) {
+		if (s == null || s.isEmpty()) return false;
+		for (int i = 0; i < s.length(); i++) {
+			if (!Character.isDigit(s.charAt(i))) return false;
+		}
+		return true;
 	}
 }

@@ -3,6 +3,7 @@ package org.vorpal.blade.framework.v3.configuration.selectors;
 import java.io.Serializable;
 import java.util.logging.Level;
 
+import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.Context;
@@ -14,15 +15,16 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// Payload sources (via [Selector#readSource]):
 ///
-/// - `Map<String,String>` (REST/JDBC/LDAP/Map adapters) — `attribute`
+/// - `Map<String,String>` (REST/JDBC/LDAP/Map connectors) — `attribute`
 ///   is the map key.
-/// - [javax.servlet.sip.SipServletRequest] (SipAdapter) —
+/// - [javax.servlet.sip.SipServletRequest] (SipConnector) —
 ///   `attribute` is a SIP header name, with pseudo-headers
 ///   `Request-URI`, `Remote-IP`, `content`/`body` handled directly.
 ///
 /// If you need regex parsing on top of the raw value, chain a
-/// [RegexSelector] after this one in the same adapter's selectors.
+/// [RegexSelector] after this one in the same connector's selectors.
 @JsonPropertyOrder({ "type", "id", "description", "attribute", "index", "applicationSession" })
+@FormLayoutGroup({ "id", "attribute" })
 public class AttributeSelector extends Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
 

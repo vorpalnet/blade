@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wls:weblogic-web-app xmlns:wls="http://xmlns.oracle.com/weblogic/weblogic-web-app"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd
+	                    http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd">
+
+	<wls:weblogic-version>14.1.1.0</wls:weblogic-version>
+	<wls:context-root>logs</wls:context-root>
+
+	<wls:library-ref>
+		<wls:library-name>vorpal-blade</wls:library-name>
+		<wls:specification-version>2.0</wls:specification-version>
+		<wls:exact-match>false</wls:exact-match>
+	</wls:library-ref>
+
+	<!-- No <prefer-web-inf-classes> here: admin/logs ships zero JARs in
+	     WEB-INF/lib (the war plugin strips them via packagingExcludes), so
+	     it's a no-op, and combining it with the shared library's
+	     auto-generated <prefer-application-packages> trips WLS's "neither
+	     can be specified when prefer-web-inf-classes is on" check. -->
+
+	<wls:session-descriptor>
+		<wls:timeout-secs>3600</wls:timeout-secs>
+		<wls:cookie-name>BLADELOGSSESSION</wls:cookie-name>
+		<wls:cookie-path>/</wls:cookie-path>
+		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
+	</wls:session-descriptor>
+
+	<wls:security-permission>
+		<wls:security-permission-spec>grant { permission java.security.AllPermission ; } ;</wls:security-permission-spec>
+	</wls:security-permission>
+
+</wls:weblogic-web-app>

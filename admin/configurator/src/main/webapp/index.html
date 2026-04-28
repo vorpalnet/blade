@@ -44,21 +44,67 @@
             <button class="tab active" data-tab="form">Form Editor</button>
             <button class="tab" data-tab="json">JSON Editor</button>
             <button class="tab" data-tab="schema">JSON Schema</button>
+            <button class="tab" data-tab="files">Files</button>
         </div>
         
         <div id="form-tab" class="tab-content active">
-            <div style="display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap;">
+            <div class="form-toolbar">
                 <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
                 <button type="button" class="btn btn-secondary" onclick="loadConfig()">Load</button>
                 <button type="button" class="btn btn-publish" onclick="publishConfig()">Publish</button>
-                <button type="button" class="clone-button" onclick="showCloneDialog()">Clone to Another Target</button>
-                <button type="button" class="btn btn-secondary" onclick="showVersionHistory()">Version History</button>
-                <button type="button" class="btn btn-secondary" onclick="loadSample()">Load Sample</button>
-                <button type="button" class="btn btn-secondary" onclick="resetForm()">Reset Form</button>
-                <button type="button" class="btn btn-secondary" onclick="expandAll()">Expand All</button>
-                <button type="button" class="btn btn-secondary" onclick="collapseAll()">Collapse All</button>
-                <button type="button" class="btn btn-secondary" onclick="collapseEmpty()">Collapse Empty</button>
+
+                <input id="form-filter" class="form-filter-input" type="search"
+                       placeholder="Filter fields..." aria-label="Filter form fields"
+                       oninput="filterForm(this.value)">
+
+                <div class="toolbar-menu">
+                    <button type="button" class="btn btn-secondary toolbar-menu-trigger">File <span class="toolbar-chev">▾</span></button>
+                    <div class="toolbar-menu-items" role="menu">
+                        <button type="button" onclick="showTemplateLibrary()">New from Template…</button>
+                        <button type="button" onclick="loadSample()">Load Sample</button>
+                        <hr>
+                        <button type="button" onclick="importConfig()">Import…</button>
+                        <button type="button" onclick="exportConfig()">Export</button>
+                        <hr>
+                        <button type="button" onclick="resetForm()">Reset Form</button>
+                    </div>
+                </div>
+
+                <div class="toolbar-menu">
+                    <button type="button" class="btn btn-secondary toolbar-menu-trigger">History <span class="toolbar-chev">▾</span></button>
+                    <div class="toolbar-menu-items" role="menu">
+                        <button type="button" onclick="showVersionHistory()">Version History</button>
+                        <button type="button" onclick="showDiff()">Diff…</button>
+                        <hr>
+                        <button type="button" onclick="showCloneDialog()">Clone to Another Target</button>
+                    </div>
+                </div>
+
+                <div class="toolbar-menu">
+                    <button type="button" class="btn btn-secondary toolbar-menu-trigger">View <span class="toolbar-chev">▾</span></button>
+                    <div class="toolbar-menu-items" role="menu">
+                        <button type="button" onclick="expandAll()">Expand All</button>
+                        <button type="button" onclick="collapseAll()">Collapse All</button>
+                        <button type="button" onclick="collapseEmpty()">Collapse Empty</button>
+                        <hr>
+                        <button type="button" id="inspector-toggle" onclick="toggleInspector()">Inspector</button>
+                        <button type="button" id="view-mode-toggle" onclick="toggleViewMode()">View Mode</button>
+                    </div>
+                </div>
+
+                <input id="import-file" type="file" accept="application/json,.json" style="display:none"
+                       onchange="handleImportFile(event)">
             </div>
+
+            <!-- Auto-save draft banner — appears when a localStorage draft is newer than the server copy. -->
+            <div id="draft-banner" class="draft-banner" style="display:none">
+                <span id="draft-banner-text"></span>
+                <button type="button" class="btn btn-primary" onclick="restoreDraft()">Restore</button>
+                <button type="button" class="btn btn-secondary" onclick="discardDraft()">Discard</button>
+            </div>
+
+            <!-- Breadcrumb: shows the data-path of the currently-focused field, click to copy. -->
+            <div id="field-breadcrumb" class="field-breadcrumb" title="Click to copy" style="display:none"></div>
 
             <!-- Feature: Validation Summary -->
             <div id="validation-summary" class="validation-summary">
@@ -95,6 +141,103 @@
                 <span class="sync-status success" style="display: inline-flex;">Read-only view of the JSON Schema</span>
             </div>
             <div id="schema-editor" class="json-editor-container"></div>
+        </div>
+
+        <!-- Files tab: free-form text editor for template files under the
+             domain's _templates/ directory (REST body templates, LDAP
+             queries, JDBC SQL, etc.). Left rail lists files; right pane is
+             an Ace editor. -->
+        <div id="files-tab" class="tab-content">
+            <div class="json-controls">
+                <button type="button" class="btn btn-primary" onclick="saveTextFile()" id="save-text-file-btn" disabled>Save</button>
+                <button type="button" class="btn btn-secondary" onclick="reloadTextFile()" id="reload-text-file-btn" disabled>Revert</button>
+                <span id="text-file-status" class="sync-status" style="display:none"></span>
+            </div>
+            <div class="files-layout">
+                <aside class="files-rail">
+                    <div class="files-rail-title">Template files</div>
+                    <div id="files-rail-body" class="files-rail-body"><em>Loading…</em></div>
+                </aside>
+                <div id="text-editor" class="json-editor-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inspector side panel: schema docs + ${var} palette for the focused field. -->
+    <aside id="inspector-panel" class="inspector-panel" aria-hidden="true">
+        <div class="inspector-section">
+            <div class="inspector-title">Schema</div>
+            <div id="inspector-schema-body" class="inspector-body">
+                <em>Focus a field to see its schema.</em>
+            </div>
+        </div>
+        <div class="inspector-section">
+            <div class="inspector-title">Variables <span id="inspector-vars-count" class="inspector-count"></span></div>
+            <div id="inspector-vars-body" class="inspector-body">
+                <em>No variables defined yet. Add selectors with an <code>id</code>.</em>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Template library modal — "New from Template…" picker. -->
+    <div id="templateModal" class="modal">
+        <div class="modal-content template-modal">
+            <div class="modal-header">
+                <h2>New from Template</h2>
+                <button class="modal-close" onclick="closeTemplateLibrary()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="template-modal-intro">Pick a starter config to load into the form. You'll review and Save to keep it.</p>
+                <div id="template-list" class="template-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeTemplateLibrary()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diff modal — shows per-path changes vs. the last-loaded server copy. -->
+    <div id="diffModal" class="modal">
+        <div class="modal-content diff-modal">
+            <div class="modal-header">
+                <h2>Diff — unsaved changes</h2>
+                <button class="modal-close" onclick="closeDiffModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="diff-summary" class="diff-summary"></div>
+                <div id="diff-body" class="diff-body"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeDiffModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Regex tester modal — opened by the "test" button next to RegexSelector.pattern. -->
+    <div id="regexTestModal" class="modal">
+        <div class="modal-content regex-test-modal">
+            <div class="modal-header">
+                <h2>Regex Tester</h2>
+                <button class="modal-close" onclick="closeRegexTest()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="regex-test-row">
+                    <label>Pattern</label>
+                    <code id="regex-test-pattern" class="regex-test-pattern"></code>
+                </div>
+                <div class="regex-test-row">
+                    <label for="regex-test-sample">Sample text</label>
+                    <textarea id="regex-test-sample" rows="5" spellcheck="false"
+                              placeholder="Paste a sample value that the regex should match..."></textarea>
+                </div>
+                <div class="regex-test-row">
+                    <button type="button" class="btn btn-primary" onclick="runRegexTest()">Test</button>
+                </div>
+                <div id="regex-test-result" class="regex-test-result"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeRegexTest()">Close</button>
+            </div>
         </div>
     </div>
 

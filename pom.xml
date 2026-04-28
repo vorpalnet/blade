@@ -19,22 +19,15 @@
 		<module>libs/shared</module>
 		<module>libs/fsmar</module>
 		<module>libs/fsmar3</module>
-		<module>admin/console</module>
-		<module>admin/flow</module>
-		<module>admin/tuning</module>
-		<module>admin/file-manager</module>
-		<module>admin/explorer</module>
-		<module>admin/json-forms</module>
-		<module>admin/configurator</module>
-		<module>admin/watcher</module>
 		<module>services</module>
 
-		<!-- Service and test modules are controlled by profiles below.
-		     Exclude any module with -Dskip.<name>, e.g. -Dskip.analytics -->
+		<!-- Admin, service, and test modules are controlled by profiles
+		     below. Exclude any module with -Dskip.<name>,
+		     e.g. -Dskip.analytics, -Dskip.configurator. -->
 	</modules>
 
 	<properties>
-		<revision>2.9.5</revision>
+		<revision>2.9.6</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<blade.java.version>11</blade.java.version>
 		<blade.weblogic.version>14.1.1</blade.weblogic.version>
@@ -44,6 +37,7 @@
 		<ear.profile>full</ear.profile>
 		<build.platform>occas-8.1</build.platform>
 		<blade.skip.install>true</blade.skip.install>
+		<blade.skip.dist>false</blade.skip.dist>
 		<maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
 
 		<!-- Manifest metadata -->
@@ -67,12 +61,14 @@
 		<gson-fire.version>1.9.0</gson-fire.version>
 		<okhttp.version>4.12.0</okhttp.version>
 		<oauth2.version>1.0.2</oauth2.version>
+		<nimbus-oauth2-oidc-sdk.version>11.10.1</nimbus-oauth2-oidc-sdk.version>
 
 		<!-- Plugin versions -->
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<maven-war-plugin.version>3.4.0</maven-war-plugin.version>
 		<maven-ear-plugin.version>3.4.0</maven-ear-plugin.version>
 		<maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
+		<maven-install-plugin.version>3.1.4</maven-install-plugin.version>
 		<maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
 		<umldoclet.version>2.2.1</umldoclet.version>
 	</properties>
@@ -236,6 +232,15 @@
 				<artifactId>org.apache.oltu.oauth2.client</artifactId>
 				<version>${oauth2.version}</version>
 			</dependency>
+			<!-- Nimbus OAuth 2.0 + OIDC SDK: the comprehensive OAuth/OIDC
+			     client library. Drives every RestConnector Authentication
+			     subtype (password, client credentials, refresh token,
+			     JWT bearer, SAML bearer, token exchange). -->
+			<dependency>
+				<groupId>com.nimbusds</groupId>
+				<artifactId>oauth2-oidc-sdk</artifactId>
+				<version>${nimbus-oauth2-oidc-sdk.version}</version>
+			</dependency>
 
 			<!-- Admin Console specific -->
 			<dependency>
@@ -259,13 +264,9 @@
 				<artifactId>hsqldb</artifactId>
 				<version>2.7.3</version>
 			</dependency>
-			<dependency>
-				<groupId>jakarta.servlet.jsp.jstl</groupId>
-				<artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
-				<version>3.0.2</version>
-			</dependency>
-
-			<!-- Admin Configurator specific -->
+			<!-- JSTL: the javax.servlet.jsp.jstl.* API comes from javaee-api:8.0-occas (provided);
+			     taglibs-standard-impl 1.2.5 supplies the tag handlers and registers the legacy
+			     java.sun.com/jsp/jstl/* URIs used by WebLogic/OCCAS 14.1.1 (Jakarta EE 8). -->
 			<dependency>
 				<groupId>org.apache.taglibs</groupId>
 				<artifactId>taglibs-standard-impl</artifactId>
@@ -432,6 +433,11 @@
 						</archive>
 					</configuration>
 				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-install-plugin</artifactId>
+					<version>${maven-install-plugin.version}</version>
+				</plugin>
 			</plugins>
 		</pluginManagement>
 		<plugins>
@@ -482,7 +488,13 @@
 			     The WAR plugin's packagingExcludes strips 3rd-party JARs from
 			     the .war archive but leaves them in the exploded directory.
 			     This re-syncs the exploded lib/ from the WAR so deploying
-			     the exploded directory works the same as deploying the WAR. -->
+			     the exploded directory works the same as deploying the WAR.
+
+			     The packaged WAR's filename follows the war-plugin's warName
+			     setting (above: ${project.artifactId}.war), while the exploded
+			     directory uses Maven's default finalName. Services set a short
+			     finalName (e.g. proxy-registrar) so the two differ — this script
+			     addresses both explicitly. -->
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>exec-maven-plugin</artifactId>
@@ -497,7 +509,7 @@
 							<arguments>
 								<argument>-c</argument>
 								<argument>
-WARFILE="${project.build.directory}/${project.build.finalName}.war";
+WARFILE="${project.build.directory}/${project.artifactId}.war";
 EXPLODED="${project.build.directory}/${project.build.finalName}";
 if [ -f "$WARFILE" ] &amp;&amp; [ -d "$EXPLODED/WEB-INF/lib" ]; then
   rm -rf "$EXPLODED/WEB-INF/lib";
@@ -598,6 +610,50 @@ fi
 			<id>test-uas</id>
 			<activation><property><name>!skip.test-uas</name></property></activation>
 			<modules><module>test/test-uas</module></modules>
+		</profile>
+
+		<!-- Admin app profiles. Active by default; exclude with -Dskip.<name>.
+		     Build-profiles/*.conf files select which admin apps to include
+		     alongside services and test apps. -->
+		<profile>
+			<id>console</id>
+			<activation><property><name>!skip.console</name></property></activation>
+			<modules><module>admin/console</module></modules>
+		</profile>
+		<profile>
+			<id>configurator</id>
+			<activation><property><name>!skip.configurator</name></property></activation>
+			<modules><module>admin/configurator</module></modules>
+		</profile>
+		<profile>
+			<id>flow</id>
+			<activation><property><name>!skip.flow</name></property></activation>
+			<modules><module>admin/flow</module></modules>
+		</profile>
+		<profile>
+			<id>tuning</id>
+			<activation><property><name>!skip.tuning</name></property></activation>
+			<modules><module>admin/tuning</module></modules>
+		</profile>
+		<profile>
+			<id>file-manager</id>
+			<activation><property><name>!skip.file-manager</name></property></activation>
+			<modules><module>admin/file-manager</module></modules>
+		</profile>
+		<profile>
+			<id>explorer</id>
+			<activation><property><name>!skip.explorer</name></property></activation>
+			<modules><module>admin/explorer</module></modules>
+		</profile>
+		<profile>
+			<id>watcher</id>
+			<activation><property><name>!skip.watcher</name></property></activation>
+			<modules><module>admin/watcher</module></modules>
+		</profile>
+		<profile>
+			<id>logs</id>
+			<activation><property><name>!skip.logs</name></property></activation>
+			<modules><module>admin/logs</module></modules>
 		</profile>
 
 		<profile>

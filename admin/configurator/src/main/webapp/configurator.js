@@ -113,6 +113,27 @@ function handleWebSocketMessage(message) {
             showSyncStatus('Data saved successfully', 'success');
             showSchemaLoadStatus('Saved', 'success');
             clearDirty(); // Feature: Clear dirty state after successful save
+            if (typeof clearDraft === 'function') clearDraft();
+            break;
+
+        case 'template_list':
+            handleTemplateList(message.content);
+            break;
+
+        case 'template_loaded':
+            handleTemplateLoaded(message.content);
+            break;
+
+        case 'text_file_list':
+            handleTextFileList(message.content);
+            break;
+
+        case 'text_file_loaded':
+            handleTextFileLoaded(message.content);
+            break;
+
+        case 'text_file_saved':
+            handleTextFileSaved(message.content);
             break;
 
         case 'reload_success':
@@ -518,6 +539,200 @@ function resolveRef(ref) {
 // type: { const: "hash" } } }). The referenced schema is the base; any
 // sibling keywords on the input node override or extend it. Returns a
 // fresh merged object — caller must not mutate it back into the schema.
+/// Stable-sorts property names so const-valued props (polymorphic
+/// discriminators like `type: {const: "hash"}`) come first. After deref
+/// merges a variant wrapper onto its base, the discriminator lands at the
+/// tail of iteration order — this restores it to the front so serialized
+/// JSON shows the discriminator at the top of each object, matching
+/// Jackson's usual output.
+function orderedPropertyNames(properties) {
+    const names = Object.keys(properties);
+    const constNames = [];
+    const others = [];
+    names.forEach(name => {
+        if (properties[name] && properties[name].const !== undefined) {
+            constNames.push(name);
+        } else {
+            others.push(name);
+        }
+    });
+    return constNames.concat(others);
+}
+
+/// Walk a dotted-bracket path (e.g. "pipeline[2].selectors[0].id") into a
+/// JSON object and return the value at that path, or undefined if any
+/// segment is missing. Used for features like array-item duplication.
+function resolveJsonPath(obj, path) {
+    if (!path) return obj;
+    const parts = String(path).replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+    let cur = obj;
+    for (const p of parts) {
+        if (cur == null) return undefined;
+        cur = cur[p];
+    }
+    return cur;
+}
+
+/// Read a primitive input's current value for JSON extraction. For inputs
+/// marked data-password="true", cleartext values get the BLADE {CLEARTEXT}
+/// prefix so the FileManagerServlet encrypts them on save. Values that
+/// already carry an encrypted prefix ({AES}, {3DES}) or have been marked
+/// {CLEARTEXT} already are passed through unchanged.
+function readInputValue(input) {
+    if (!input) return null;
+    if (input.type === 'checkbox') return input.checked;
+    if (input.type === 'number') return input.value ? parseInt(input.value, 10) : null;
+    let v = input.value;
+    if (v == null || v === '') return null;
+    if (input.dataset && input.dataset.password === 'true') {
+        if (!v.startsWith('{CLEARTEXT}') && !v.startsWith('{AES}') && !v.startsWith('{3DES}')) {
+            v = '{CLEARTEXT}' + v;
+        }
+    }
+    return v;
+}
+
+/// Attach live validation to an input/textarea based on its schema. Paints
+/// an `.invalid` class when the value fails `pattern` / min/maxLength /
+/// minimum / maximum. The tooltip is the reason, for quick inspection.
+function attachFieldValidation(input, schema) {
+    if (!schema) return;
+    const hasRules =
+        schema.pattern || schema.minLength != null || schema.maxLength != null ||
+        schema.minimum != null || schema.maximum != null;
+    if (!hasRules) return;
+    let regex = null;
+    if (schema.pattern) {
+        try { regex = new RegExp(schema.pattern); } catch (e) { /* skip invalid */ }
+    }
+    const validate = () => {
+        const raw = input.value;
+        let err = null;
+        if (raw && raw !== '') {
+            if (regex && !regex.test(raw)) err = "doesn't match pattern " + schema.pattern;
+            if (!err && schema.minLength != null && raw.length < schema.minLength) err = 'min length ' + schema.minLength;
+            if (!err && schema.maxLength != null && raw.length > schema.maxLength) err = 'max length ' + schema.maxLength;
+            if (!err && (schema.type === 'integer' || schema.type === 'number')) {
+                const n = parseFloat(raw);
+                if (!isNaN(n)) {
+                    if (schema.minimum != null && n < schema.minimum) err = 'minimum ' + schema.minimum;
+                    if (!err && schema.maximum != null && n > schema.maximum) err = 'maximum ' + schema.maximum;
+                }
+            }
+        }
+        input.classList.toggle('invalid', !!err);
+        if (err) input.title = err; else input.removeAttribute('title');
+    };
+    input.addEventListener('input', validate);
+    input.addEventListener('blur', validate);
+    validate();
+}
+
+/// Harvest `${var}` names available in the current form — every `id` field
+/// across all selectors/connectors/routes/etc. These become autocomplete
+/// candidates in template-style inputs.
+function availableContextVars() {
+    const names = new Set();
+    document.querySelectorAll('input[data-path$=".id"]').forEach(input => {
+        const v = (input.value || '').trim();
+        if (v) names.add(v);
+    });
+    return Array.from(names).sort();
+}
+
+/// Attach ${var} autocomplete to a text input / textarea. Shows a floating
+/// popup when the caret is inside an unterminated `${...` sequence.
+function attachContextAutocomplete(input) {
+    let popup = null;
+    const close = () => { if (popup) { popup.remove(); popup = null; } };
+    const onInput = () => {
+        const caret = input.selectionStart;
+        const before = (input.value || '').slice(0, caret);
+        const m = before.match(/\$\{([^}]*)$/);
+        if (!m) { close(); return; }
+        const prefix = m[1];
+        const opts = availableContextVars().filter(n => n.startsWith(prefix));
+        if (opts.length === 0) { close(); return; }
+        if (!popup) {
+            popup = document.createElement('div');
+            popup.className = 'context-var-popup';
+            document.body.appendChild(popup);
+        }
+        popup.innerHTML = '';
+        opts.forEach(name => {
+            const opt = document.createElement('div');
+            opt.className = 'context-var-option';
+            opt.textContent = name;
+            opt.onmousedown = (e) => {
+                e.preventDefault(); // keep focus on the input
+                const start = caret - prefix.length;
+                const before2 = input.value.slice(0, start);
+                const after2 = input.value.slice(caret);
+                const insertion = name + '}';
+                input.value = before2 + insertion + after2;
+                const newCaret = start + insertion.length;
+                input.setSelectionRange(newCaret, newCaret);
+                input.focus();
+                setDirty();
+                close();
+            };
+            popup.appendChild(opt);
+        });
+        const rect = input.getBoundingClientRect();
+        popup.style.position = 'absolute';
+        popup.style.top = (rect.bottom + window.scrollY + 2) + 'px';
+        popup.style.left = (rect.left + window.scrollX) + 'px';
+    };
+    input.addEventListener('input', onInput);
+    input.addEventListener('blur', () => setTimeout(close, 150));
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close();
+    });
+}
+
+/// Extract a type name from a $ref path, stripping victools' numeric
+/// variant suffix. e.g. "#/$defs/AttributeSelector-2" -> "AttributeSelector".
+function refTypeName(ref) {
+    const parts = String(ref).split('/');
+    const last = parts[parts.length - 1] || '';
+    return last.replace(/-\d+$/, '') || null;
+}
+
+/// Human-readable name for a schema node. Prefers explicit `title`, falls
+/// back to the last segment of `$ref`.
+function schemaDisplayName(schema) {
+    if (!schema) return null;
+    if (schema.title) return schema.title;
+    if (schema.$ref) return refTypeName(schema.$ref);
+    return null;
+}
+
+/// Derive a human label for an array's item type — the base class of all
+/// variants if polymorphic, or the single type if not. Used to label
+/// "Add <type>" buttons. Returns null when no good name can be inferred.
+function arrayItemTypeName(itemsSchema) {
+    if (!itemsSchema) return null;
+    if (itemsSchema.title) return itemsSchema.title;
+    if (itemsSchema.$ref) return refTypeName(itemsSchema.$ref);
+    const variants = polymorphicVariants(itemsSchema);
+    if (!variants || variants.length === 0) return null;
+    const names = variants.map(v => {
+        if (v.title) return v.title;
+        if (v.$ref) return refTypeName(v.$ref);
+        return null;
+    }).filter(Boolean);
+    if (names.length === 0) return null;
+    // Longest common suffix across all variant names is the base class.
+    const first = names[0];
+    let i = 0;
+    while (i < first.length &&
+           names.every(n => i < n.length && n[n.length - 1 - i] === first[first.length - 1 - i])) {
+        i++;
+    }
+    const suffix = first.slice(first.length - i);
+    return /^[A-Z][A-Za-z0-9]+$/.test(suffix) ? suffix : null;
+}
+
 function deref(schemaNode) {
     if (!schemaNode || !schemaNode.$ref) return schemaNode;
     const target = resolveRef(schemaNode.$ref);
@@ -611,14 +826,14 @@ function createReferencePicker(itemsSchema, container, path, updateStatus) {
     if (!arrayItemsAcceptReferences(itemsSchema)) return null;
 
     const select = document.createElement('select');
-    select.className = 'btn btn-secondary reference-picker';
+    select.className = 'btn btn-primary reference-picker add-menu-select';
     select.title = 'Add a reference to an existing identity';
 
     function rebuildOptions() {
         select.innerHTML = '';
         const placeholder = document.createElement('option');
         placeholder.value = '';
-        placeholder.textContent = '+ Reference\u2026';
+        placeholder.textContent = '+ Add Reference';
         select.appendChild(placeholder);
 
         // Walk the registry, filtering to identities whose structure is
@@ -928,6 +1143,7 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             checkbox.id = id;
             checkbox.checked = value === true;
             checkbox.setAttribute('data-path', path);
+            checkbox._schema = fieldSchema;
             return checkbox;
 
         case 'integer':
@@ -938,16 +1154,67 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
             numberInput.value = numVal;
             numberInput.setAttribute('value', numVal);
             numberInput.setAttribute('data-path', path);
+            numberInput._schema = fieldSchema;
+            if (fieldSchema.default !== undefined && fieldSchema.default !== null) {
+                numberInput.placeholder = String(fieldSchema.default);
+            }
+            if (fieldSchema['x-readonly']) numberInput.disabled = true;
+            attachFieldValidation(numberInput, fieldSchema);
             return numberInput;
 
         case 'string':
-            const textInput = document.createElement('input');
-            textInput.type = 'text';
+            let textInput;
+            if (fieldSchema.format === 'textarea') {
+                // Multi-line editor for long strings (regex, templates, body).
+                textInput = document.createElement('textarea');
+                textInput.rows = 3;
+            } else {
+                textInput = document.createElement('input');
+                textInput.type = fieldSchema.format === 'password' ? 'password' : 'text';
+            }
             textInput.id = id;
             const strVal = value !== null && value !== undefined ? value : '';
             textInput.value = strVal;
-            textInput.setAttribute('value', strVal);
+            if (textInput.tagName === 'INPUT') {
+                textInput.setAttribute('value', strVal);
+            } else {
+                textInput.textContent = strVal;
+            }
             textInput.setAttribute('data-path', path);
+            textInput._schema = fieldSchema;
+            // Use `default` (from @JsonProperty(defaultValue)) as the placeholder
+            // hint so the user sees the expected format even before typing.
+            if (fieldSchema.default !== undefined && fieldSchema.default !== null) {
+                textInput.placeholder = String(fieldSchema.default);
+            }
+            if (fieldSchema['x-readonly']) textInput.disabled = true;
+            attachFieldValidation(textInput, fieldSchema);
+            // Password fields don't need ${var} autocomplete — and we don't
+            // want secrets flowing through the variable scanner.
+            if (fieldSchema.format !== 'password') {
+                attachContextAutocomplete(textInput);
+            }
+            if (fieldSchema.format === 'password') {
+                // Mark for {CLEARTEXT}-wrapping on save, and wrap in a span
+                // with an eye toggle so the user can briefly verify the secret.
+                textInput.dataset.password = 'true';
+                const wrapper = document.createElement('span');
+                wrapper.className = 'password-field';
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'password-toggle';
+                toggle.setAttribute('aria-label', 'Show/hide password');
+                toggle.title = 'Show/hide';
+                toggle.textContent = '\u{1F441}'; // 👁
+                toggle.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    textInput.type = textInput.type === 'password' ? 'text' : 'password';
+                };
+                wrapper.appendChild(textInput);
+                wrapper.appendChild(toggle);
+                return wrapper;
+            }
             return textInput;
 
         default:
@@ -970,6 +1237,19 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
     }
 
     if (fieldSchema.oneOf || fieldSchema.anyOf) {
+        // When the polymorphic variants are objects (e.g. Authentication:
+        // Basic / Bearer / ApiKey / OAuth2...), render a type-picker UI so
+        // the user can switch the variant. Without this, the form locks in
+        // whichever variant resolveOneOf picked first — the user can't
+        // actually choose.
+        const allVariants = polymorphicVariants(fieldSchema);
+        const anyObjectVariant = allVariants && allVariants.some(v => {
+            const r = v.$ref ? deref(v) : v;
+            return r && r.type === 'object';
+        });
+        if (anyObjectVariant) {
+            return createPolymorphicObjectGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete, allVariants);
+        }
         fieldSchema = resolveOneOf(fieldSchema, value);
         // Resolved variant may itself be a $ref+siblings node — deref again.
         if (fieldSchema && fieldSchema.$ref) {
@@ -1003,7 +1283,10 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
         if (!hasProperties && !hasUsableAdditional) {
             return createOpaqueObjectGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete);
         }
-        if (fieldSchema.additionalProperties) {
+        // Hybrid (properties + additionalProperties) routes to createObjectGroup,
+        // which renders defined props then an inline extras bag. A pure map (no
+        // properties) keeps the createMapGroup path.
+        if (hasUsableAdditional && !hasProperties) {
             // This is a map
             return createMapGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete);
         } else {
@@ -1016,6 +1299,11 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
         // Simple field
         const group = document.createElement('div');
         group.className = `form-group${isNested ? ' nested' : ''}`;
+        // @FormLayout(wide=true) / multiline → full-row tile. The CSS rule on
+        // .form-group.nested[data-wide="true"] overrides the default flex basis.
+        if (fieldSchema['x-wide'] || fieldSchema.format === 'textarea') {
+            group.dataset.wide = 'true';
+        }
 
         // Create header with label and delete button
         const headerRow = document.createElement('div');
@@ -1023,6 +1311,16 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
 
         const label = document.createElement('label');
         label.textContent = title || 'Field';
+
+        // Required-field asterisk. The parent schema sets `required: [propName]`;
+        // it's passed via originalSchema['x-required-here'] by createObjectGroup
+        // (see that function for the injection point).
+        if (fieldSchema['x-required-here']) {
+            const star = document.createElement('span');
+            star.className = 'required-marker';
+            star.textContent = '*';
+            label.appendChild(star);
+        }
 
         // Feature: Add help icon with tooltip if description exists
         if (description) {
@@ -1054,6 +1352,24 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
             setDirty();
         };
         headerRow.appendChild(deleteBtn);
+
+        // Regex-tester button — surfaced whenever the schema carries
+        // x-regex-test=true (emitted by @FormLayout(regexTest=true)). Click
+        // opens a modal that runs the regex against a sample input and
+        // shows named/numbered capture groups.
+        if (fieldSchema['x-regex-test']) {
+            const testBtn = document.createElement('button');
+            testBtn.type = 'button';
+            testBtn.className = 'regex-test-btn';
+            testBtn.title = 'Test this regex against a sample string';
+            testBtn.textContent = 'test';
+            testBtn.onclick = (e) => {
+                e.stopPropagation();
+                const input = group.querySelector('input, textarea');
+                if (input) openRegexTest(input);
+            };
+            headerRow.insertBefore(testBtn, deleteBtn);
+        }
 
         group.appendChild(headerRow);
 
@@ -1324,15 +1640,32 @@ function hasValue(value) {
 function generateDefaultValue(fieldSchema) {
     if (!fieldSchema) return null;
 
-    // Resolve $ref if present
+    // Resolve $ref if present. A variant wrapper like
+    // {$ref: base, properties: {type: {const: "json"}}} pins the discriminator;
+    // merge the wrapper's property overrides on top of the resolved base so
+    // those pins survive resolution.
     if (fieldSchema.$ref) {
-        fieldSchema = resolveRef(fieldSchema.$ref);
-        if (!fieldSchema) return null;
+        const base = resolveRef(fieldSchema.$ref);
+        if (!base) return null;
+        fieldSchema = {
+            ...base,
+            ...fieldSchema,
+            properties: {
+                ...(base.properties || {}),
+                ...(fieldSchema.properties || {})
+            }
+        };
+        delete fieldSchema.$ref;
     }
 
     // Use schema default if provided
     if (fieldSchema.default !== undefined) {
         return JSON.parse(JSON.stringify(fieldSchema.default));
+    }
+
+    // Pinned value via const (e.g. discriminator: {const: "json"})
+    if (fieldSchema.const !== undefined) {
+        return JSON.parse(JSON.stringify(fieldSchema.const));
     }
 
     // Generate based on type
@@ -1422,27 +1755,73 @@ function createAddPropertyPlaceholder(fieldSchema, title, description, path, con
     return placeholder;
 }
 
-function createObjectGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
-    const schemaForDelete = originalSchema || fieldSchema;
+/// Render a polymorphic object field (oneOf/anyOf of object variants) with a
+/// type-picker dropdown at the top so the user can switch which variant to
+/// edit. Used for fields like RestConnector.authentication where the schema
+/// offers several object shapes (Basic, Bearer, ApiKey, OAuth2...).
+function createPolymorphicObjectGroup(fieldSchema, title, description, path, value, isNested, schemaForDelete, variants) {
     const content = document.createElement('div');
+    content.className = 'polymorphic-content';
 
-    const hasData = hasValue(value);
-    const autoCollapse = !hasData;
+    // Header row with type selector.
+    const typeRow = document.createElement('div');
+    typeRow.className = 'polymorphic-type-row';
+    const typeLabel = document.createElement('span');
+    typeLabel.className = 'polymorphic-type-label';
+    typeLabel.textContent = 'Type:';
+    const typeSelect = document.createElement('select');
+    typeSelect.className = 'polymorphic-type-select';
+    variants.forEach((v, i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = variantLabel(v, i);
+        typeSelect.appendChild(opt);
+    });
+    typeRow.appendChild(typeLabel);
+    typeRow.appendChild(typeSelect);
+    content.appendChild(typeRow);
 
-    if (fieldSchema.properties) {
-        Object.keys(fieldSchema.properties).forEach(prop => {
-            const propSchema = fieldSchema.properties[prop];
+    // Hidden input carrying the discriminator for extractData/resolveOneOf.
+    const hiddenType = document.createElement('input');
+    hiddenType.type = 'hidden';
+    hiddenType.className = 'polymorphic-type-hidden';
+    hiddenType.setAttribute('data-path', path ? `${path}.type` : 'type');
+    content.appendChild(hiddenType);
+
+    function variantTypeValue(variant) {
+        const tp = variant && variant.properties && variant.properties.type;
+        if (!tp) return '';
+        if (tp.const !== undefined) return String(tp.const);
+        if (Array.isArray(tp.enum) && tp.enum.length > 0) return String(tp.enum[0]);
+        return '';
+    }
+
+    // Pick the initial variant from the current value's type, else default to [0].
+    let initialIdx = 0;
+    if (value && typeof value === 'object' && value.type) {
+        for (let i = 0; i < variants.length; i++) {
+            if (variantTypeValue(variants[i]) === String(value.type)) { initialIdx = i; break; }
+        }
+    }
+
+    function renderVariant(idx, variantValue) {
+        // Clear everything after the typeRow + hiddenType (indices 0, 1).
+        while (content.children.length > 2) content.removeChild(content.lastChild);
+
+        typeSelect.value = String(idx);
+        hiddenType.value = variantTypeValue(variants[idx]);
+
+        let vs = variants[idx];
+        if (vs && vs.$ref) vs = deref(vs);
+        if (!vs || vs.type !== 'object' || !vs.properties) return;
+
+        Object.keys(vs.properties).forEach(prop => {
+            if (prop === 'type') return; // handled by hiddenType
+            const propSchema = vs.properties[prop];
             const propPath = path ? `${path}.${prop}` : prop;
-            const propValue = value && value[prop] !== undefined ? value[prop] : null;
+            const propValue = variantValue && variantValue[prop] !== undefined ? variantValue[prop] : null;
             const propTitle = propSchema.title || prop;
-            let propDescription = propSchema.description;
-
-            // Add description for discriminator "type" fields (single-value enum, often hidden)
-            if (!propDescription && prop === 'type' && propSchema.enum && propSchema.enum.length === 1) {
-                propDescription = 'Map type: ' + propSchema.enum[0];
-            }
-
-            // If property has no value, show a placeholder with '+' icon
+            const propDescription = propSchema.description;
             if (!hasValue(propValue)) {
                 const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, content, true);
                 content.appendChild(placeholder);
@@ -1451,6 +1830,150 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
                 content.appendChild(propGroup);
             }
         });
+    }
+
+    typeSelect.onchange = () => {
+        const newIdx = parseInt(typeSelect.value, 10);
+        renderVariant(newIdx, generateDefaultValue(variants[newIdx]));
+        setDirty();
+    };
+
+    renderVariant(initialIdx, value);
+
+    const hasData = hasValue(value);
+    const autoCollapse = !hasData;
+    const deleteInfo = {
+        schema: schemaForDelete || fieldSchema,
+        title: title,
+        description: description,
+        path: path,
+        isNested: isNested
+    };
+    return createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo);
+}
+
+function createObjectGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
+    const schemaForDelete = originalSchema || fieldSchema;
+    const content = document.createElement('div');
+    content.className = 'object-content';
+
+    const hasData = hasValue(value);
+    const autoCollapse = !hasData;
+
+    if (fieldSchema.properties) {
+        const requiredSet = new Set(Array.isArray(fieldSchema.required) ? fieldSchema.required : []);
+        const sections = Array.isArray(fieldSchema['x-form-sections']) ? fieldSchema['x-form-sections'] : [];
+        const groups = Array.isArray(fieldSchema['x-form-groups']) ? fieldSchema['x-form-groups'] : [];
+
+        // Fields claimed by any @FormSection render inside that section's
+        // bordered container; everything else renders at the top level.
+        const fieldsInSections = new Set();
+        sections.forEach(s => (s.fields || []).forEach(f => fieldsInSections.add(f)));
+
+        // Fields claimed by any @FormLayoutGroup render as a horizontal row;
+        // ungrouped fields render on their own line (full-width).
+        const groupOf = new Map();
+        groups.forEach((row, i) => {
+            (row || []).forEach(f => groupOf.set(f, i));
+        });
+
+        const renderPropInto = (container, prop, groupIndex) => {
+            const propSchema = fieldSchema.properties[prop];
+            if (!propSchema) return;
+            const propPath = path ? `${path}.${prop}` : prop;
+            const propValue = value && value[prop] !== undefined ? value[prop] : null;
+            const propTitle = propSchema.title || prop;
+            let propDescription = propSchema.description;
+            if (!propDescription && prop === 'type' && propSchema.enum && propSchema.enum.length === 1) {
+                propDescription = 'Map type: ' + propSchema.enum[0];
+            }
+            // Inject required marker via a shallow-cloned schema so we don't
+            // mutate the shared $defs schema.
+            const childSchema = requiredSet.has(prop)
+                ? Object.assign({}, propSchema, { 'x-required-here': true })
+                : propSchema;
+            // Fields in a @FormLayoutGroup row flow L-to-R and share the
+            // remaining width; standalone fields take a full row.
+            const target = container;
+            const wideTarget = groupIndex == null;
+            if (!hasValue(propValue)) {
+                const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, propPath, target, true);
+                if (wideTarget) placeholder.dataset.wide = 'true';
+                target.appendChild(placeholder);
+            } else {
+                const propGroup = createFormGroup(childSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
+                if (wideTarget) propGroup.dataset.wide = 'true';
+                target.appendChild(propGroup);
+            }
+        };
+
+        // Helper: render a flat list of prop names into a parent, honoring
+        // any @FormLayoutGroup rows that apply.
+        const renderPropList = (parent, propList) => {
+            // Collect group indices present in this subset, ordered by the
+            // first occurrence of any group member in propList.
+            const groupsHere = new Map(); // groupIndex -> [props in group, in schema order]
+            const standalone = [];
+            propList.forEach(p => {
+                const gi = groupOf.get(p);
+                if (gi == null) {
+                    standalone.push(p);
+                } else {
+                    if (!groupsHere.has(gi)) groupsHere.set(gi, []);
+                    groupsHere.get(gi).push(p);
+                }
+            });
+            // Render in order: walk propList, emit group rows at the first
+            // encounter of a group's props, skip subsequent members (already
+            // rendered with the row), emit standalone fields inline.
+            const seenGroups = new Set();
+            propList.forEach(p => {
+                const gi = groupOf.get(p);
+                if (gi == null) {
+                    renderPropInto(parent, p, null);
+                    return;
+                }
+                if (seenGroups.has(gi)) return;
+                seenGroups.add(gi);
+                const row = document.createElement('div');
+                row.className = 'form-layout-group';
+                groupsHere.get(gi).forEach(pp => renderPropInto(row, pp, gi));
+                parent.appendChild(row);
+            });
+        };
+
+        // Top-level (unsectioned) fields in schema order.
+        const topLevelProps = Object.keys(fieldSchema.properties)
+            .filter(p => !fieldsInSections.has(p));
+        renderPropList(content, topLevelProps);
+
+        // Then each @FormSection, in declaration order.
+        sections.forEach(section => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'form-section';
+            const heading = document.createElement('div');
+            heading.className = 'form-section-title';
+            heading.textContent = section.title || '';
+            wrapper.appendChild(heading);
+            const body = document.createElement('div');
+            body.className = 'form-section-body';
+            wrapper.appendChild(body);
+            renderPropList(body, (section.fields || []).filter(p => fieldSchema.properties[p]));
+            content.appendChild(wrapper);
+        });
+    }
+
+    // Hybrid bag: defined properties + additionalProperties (e.g. Jackson
+    // @JsonAnySetter). Render unknown keys as inline key/value rows.
+    if (fieldSchema.additionalProperties && typeof fieldSchema.additionalProperties === 'object') {
+        const defined = new Set(Object.keys(fieldSchema.properties || {}));
+        const extras = {};
+        if (value && typeof value === 'object') {
+            Object.keys(value).forEach(k => {
+                if (!defined.has(k)) extras[k] = value[k];
+            });
+        }
+        renderInlineExtras(content, fieldSchema.additionalProperties, path, extras);
     }
 
     // Create deleteInfo for the collapsible section
@@ -1559,8 +2082,11 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'btn btn-primary';
-    addBtn.textContent = 'Add Entry';
+    const valueTypeName = arrayItemTypeName(fieldSchema.additionalProperties);
+    addBtn.textContent = valueTypeName ? `Add ${valueTypeName}` : 'Add Entry';
     addBtn.onclick = () => {
+        const hint = container.querySelector(':scope > .empty-state-hint');
+        if (hint) hint.remove();
         addMapEntry(container, fieldSchema.additionalProperties, path, '', null, true);
         updateSectionStatus();
     };
@@ -1572,6 +2098,15 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     container.className = 'map-container';
     container.setAttribute('data-path', path);
     content.appendChild(container);
+
+    // Empty-state hint: when there are no entries, show the map's description
+    // (from @JsonPropertyDescription) so the user knows what to add.
+    if (!hasData && description) {
+        const hint = document.createElement('div');
+        hint.className = 'empty-state-hint';
+        hint.textContent = description;
+        container.appendChild(hint);
+    }
 
     // Add existing entries
     if (value) {
@@ -1619,67 +2154,70 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     container.className = 'array-container';
     container.setAttribute('data-path', path);
 
+    // Drag-to-reorder. Only .array-item children participate; the .dragging
+    // class is set on the item whose drag handle is active. The cursor's
+    // vertical position picks the insertion point among the siblings.
+    container.addEventListener('dragover', (e) => {
+        const dragging = container.querySelector(':scope > .array-item.dragging');
+        if (!dragging) return;
+        e.preventDefault();
+        const siblings = Array.from(container.children)
+            .filter(c => c.classList.contains('array-item') && c !== dragging);
+        let afterEl = null;
+        let closestOffset = Number.NEGATIVE_INFINITY;
+        for (const sib of siblings) {
+            const box = sib.getBoundingClientRect();
+            const offset = e.clientY - box.top - box.height / 2;
+            if (offset < 0 && offset > closestOffset) {
+                closestOffset = offset;
+                afterEl = sib;
+            }
+        }
+        if (afterEl) container.insertBefore(dragging, afterEl);
+        else container.appendChild(dragging);
+    });
+
     // Resolve polymorphic variants (oneOf/anyOf) for the type selector
     const oneOfVariants = fieldSchema.items
         ? polymorphicVariants(fieldSchema.items)
         : null;
 
+    const itemTypeName = arrayItemTypeName(fieldSchema.items);
     if (oneOfVariants && oneOfVariants.length > 1) {
-        // Polymorphic items (oneOf or anyOf) — show a type selector + Add button.
-        // Each "variant" in victools' schema is typically a thin
-        // {$ref: base, properties: {type: {const: "hash"}}} wrapper. Dropdown
-        // labels prefer (a) the variant's own title, (b) the deref'd base
-        // type's title, or (c) the discriminator const value (e.g. "hash").
-        const typeSelect = document.createElement('select');
-        typeSelect.className = 'btn btn-secondary';
+        // Polymorphic items: a single "+ Add <Type> ▾" menu-select lists all
+        // variants. Picking one adds an item of that type. More obvious than
+        // the old split [Add Item button] + [type select] UI.
+        const addSelect = document.createElement('select');
+        addSelect.className = 'btn btn-primary add-menu-select';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = `+ Add ${itemTypeName || 'Item'}`;
+        addSelect.appendChild(placeholder);
         oneOfVariants.forEach((variant, i) => {
             const opt = document.createElement('option');
-            opt.value = i;
+            opt.value = String(i);
             opt.textContent = variantLabel(variant, i);
-            typeSelect.appendChild(opt);
+            addSelect.appendChild(opt);
         });
-        // Default the dropdown to the type of the first existing item
-        // (if any), so "Add Item" defaults to "more of the same" instead
-        // of always defaulting to whatever variant happens to be first
-        // in the @JsonSubTypes order.
-        if (Array.isArray(value) && value.length > 0 && value[0] && value[0].type) {
-            const firstType = String(value[0].type);
-            for (let i = 0; i < oneOfVariants.length; i++) {
-                const v = oneOfVariants[i];
-                const tp = v && v.properties && v.properties.type;
-                const variantType = tp && (tp.const !== undefined ? tp.const :
-                                          (Array.isArray(tp.enum) && tp.enum[0]));
-                if (String(variantType) === firstType) {
-                    typeSelect.value = String(i);
-                    break;
-                }
-            }
-        }
-
-        const addBtn = document.createElement('button');
-        addBtn.type = 'button';
-        addBtn.className = 'btn btn-primary';
-        addBtn.textContent = 'Add Item';
-        addBtn.onclick = () => {
-            const selectedVariant = oneOfVariants[typeSelect.value];
-            // Generate default value with the discriminator type field set
+        addSelect.onchange = () => {
+            const raw = addSelect.value;
+            if (raw === '') return;
+            const selectedVariant = oneOfVariants[parseInt(raw, 10)];
             const defaultVal = generateDefaultValue(selectedVariant);
             addArrayItem(container, fieldSchema.items, path, defaultVal, null, true);
             updateSectionStatus();
+            addSelect.value = '';
         };
-        // Order: Add button first (leftmost), then optional reference picker,
-        // then type selector. Project convention: all 'add' controls left,
-        // all 'remove' right.
-        header.appendChild(addBtn);
+        // Project convention: add controls on the left, remove controls on the right.
+        header.appendChild(addSelect);
         const refSelect = createReferencePicker(fieldSchema.items, container, path,
             () => updateSectionStatus());
         if (refSelect) header.appendChild(refSelect);
-        header.appendChild(typeSelect);
     } else {
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'btn btn-primary';
-        addBtn.textContent = 'Add Item';
+        addBtn.textContent = `+ Add ${itemTypeName || 'Item'}`;
         addBtn.onclick = () => {
             addArrayItem(container, fieldSchema.items, path, null, null, true);
             updateSectionStatus();
@@ -1692,6 +2230,15 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
 
     content.appendChild(header);
     content.appendChild(container);
+
+    // Empty-state hint for empty arrays — surfaces @JsonPropertyDescription
+    // as guidance so the user knows what this list is for before they add.
+    if ((!Array.isArray(value) || value.length === 0) && description) {
+        const hint = document.createElement('div');
+        hint.className = 'empty-state-hint';
+        hint.textContent = description;
+        container.appendChild(hint);
+    }
 
     // Add existing items
     if (Array.isArray(value)) {
@@ -1722,7 +2269,69 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     return section;
 }
 
+/// Render inline key/value rows for a hybrid object's "extras" bag —
+/// an object schema with both defined `properties` and `additionalProperties`
+/// (Jackson @JsonAnySetter / @JsonAnyGetter pattern). The extras live at the
+/// same JSON level as the defined props, so we don't wrap them in a sub-map.
+function renderInlineExtras(parent, valueTypeSchema, basePath, extras) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'extras-inline';
+    wrapper.setAttribute('data-extras-path', basePath || '');
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-primary extras-add-btn';
+    addBtn.textContent = '+ Add Extra';
+    addBtn.onclick = () => {
+        addExtraRow(wrapper, valueTypeSchema, basePath, '', null);
+        setDirty();
+    };
+    wrapper.appendChild(addBtn);
+
+    Object.keys(extras || {}).forEach(key => {
+        addExtraRow(wrapper, valueTypeSchema, basePath, key, extras[key]);
+    });
+
+    parent.appendChild(wrapper);
+}
+
+function addExtraRow(wrapper, valueTypeSchema, basePath, key, value) {
+    const row = document.createElement('div');
+    row.className = 'extras-row';
+
+    const keyInput = document.createElement('input');
+    keyInput.type = 'text';
+    keyInput.className = 'extras-key-input';
+    keyInput.placeholder = 'key';
+    const keyVal = key || '';
+    keyInput.value = keyVal;
+    keyInput.setAttribute('value', keyVal);
+    keyInput.oninput = () => setDirty();
+
+    const valueInput = createFormElement(valueTypeSchema || { type: 'string' },
+        basePath ? `${basePath}.${key}` : key, value);
+    valueInput.classList.add('extras-value-input');
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'delete-property-btn';
+    removeBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+    removeBtn.title = 'Remove extra';
+    removeBtn.onclick = () => {
+        row.remove();
+        setDirty();
+    };
+
+    row.appendChild(keyInput);
+    row.appendChild(valueInput);
+    row.appendChild(removeBtn);
+
+    wrapper.appendChild(row);
+}
+
 function addMapEntry(container, valueSchema, basePath, key = '', value = null, prepend = false) {
+    const hint = container.querySelector(':scope > .empty-state-hint');
+    if (hint) hint.remove();
     const entry = document.createElement('div');
     entry.className = 'map-entry';
 
@@ -1799,6 +2408,19 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
                 entryContent.appendChild(propGroup);
             }
         });
+        // Hybrid object: defined properties + additionalProperties (e.g. a
+        // Jackson @JsonAnySetter bag like Translation.extras). Render the
+        // unknown keys as inline key/value rows alongside the defined props.
+        if (valueSchema.additionalProperties && typeof valueSchema.additionalProperties === 'object') {
+            const defined = new Set(Object.keys(valueSchema.properties));
+            const extras = {};
+            if (value && typeof value === 'object') {
+                Object.keys(value).forEach(k => {
+                    if (!defined.has(k)) extras[k] = value[k];
+                });
+            }
+            renderInlineExtras(entryContent, valueSchema.additionalProperties, valuePath, extras);
+        }
     } else if (valueSchema.type === 'array') {
         const valueGroup = createFormGroup(valueSchema, null, null, valuePath, value, true);
         entryContent.appendChild(valueGroup);
@@ -1852,6 +2474,10 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
 }
 
 function addArrayItem(container, itemSchema, basePath, value = null, index = null, prepend = false) {
+    // Clear any empty-state hint — now that we're adding a real item, the
+    // hint's job is done.
+    const hint = container.querySelector(':scope > .empty-state-hint');
+    if (hint) hint.remove();
     const currentIndex = index !== null ? index : container.children.length;
     const itemPath = `${basePath}[${currentIndex}]`;
 
@@ -1931,6 +2557,30 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         }, 10);
     };
 
+    // Duplicate button — extracts the current item's value, then renders a
+    // fresh clone right after it. Only shown on object-with-properties items.
+    const duplicateBtn = document.createElement('button');
+    duplicateBtn.type = 'button';
+    duplicateBtn.className = 'duplicate-item-btn';
+    duplicateBtn.innerHTML = '<span class="duplicate-item-icon">\u29C9</span>'; // ⧉
+    duplicateBtn.title = 'Duplicate item';
+    duplicateBtn.onclick = (e) => {
+        e.stopPropagation();
+        const idx = Array.from(container.children).filter(c => c.classList.contains('array-item')).indexOf(item);
+        if (idx < 0) return;
+        const all = getFormData();
+        const arr = resolveJsonPath(all, basePath);
+        if (!Array.isArray(arr) || idx >= arr.length) return;
+        const clone = JSON.parse(JSON.stringify(arr[idx]));
+        // Render at the end, then move right after the source item.
+        const childrenBefore = container.children.length;
+        addArrayItem(container, originalItemSchema, basePath, clone, null, false);
+        const added = container.children[childrenBefore] || container.lastElementChild;
+        if (added && added !== item) item.insertAdjacentElement('afterend', added);
+        setDirty();
+        updateParentSectionStatus(container);
+    };
+
     if (itemSchema.type === 'object' && itemSchema.additionalProperties) {
         // Map type — render as inline key-value pairs within the array item
         const header = document.createElement('div');
@@ -1943,7 +2593,8 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.className = 'btn btn-primary';
-        addBtn.textContent = 'Add Entry';
+        const valueTypeName = arrayItemTypeName(itemSchema.additionalProperties);
+        addBtn.textContent = valueTypeName ? `Add ${valueTypeName}` : 'Add Entry';
         addBtn.onclick = () => {
             addMapEntry(mapContainer, itemSchema.additionalProperties, itemPath, '', null, true);
         };
@@ -1962,11 +2613,61 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
             });
         }
     } else if (itemSchema.type === 'object' && itemSchema.properties) {
-        // Render object properties inline (no collapsible wrapper)
+        // Collapsible header with arrow + read-only type pill + duplicate/delete.
         const header = document.createElement('div');
         header.className = 'array-item-header';
+
+        const arrow = document.createElement('span');
+        arrow.className = 'collapsible-arrow';
+        arrow.textContent = '\u25BC'; // ▼
+        header.appendChild(arrow);
+
+        // Drag handle — only element that initiates reorder. Kept narrow so
+        // it doesn't steal clicks from the header's collapse toggle.
+        const dragHandle = document.createElement('span');
+        dragHandle.className = 'drag-handle';
+        dragHandle.draggable = true;
+        dragHandle.title = 'Drag to reorder';
+        dragHandle.textContent = '\u2630'; // ☰
+        dragHandle.addEventListener('dragstart', (e) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', '');
+            item.classList.add('dragging');
+        });
+        dragHandle.addEventListener('dragend', () => {
+            if (item.classList.contains('dragging')) {
+                item.classList.remove('dragging');
+                setDirty();
+            }
+        });
+        header.appendChild(dragHandle);
+
+        // Read-only pill — e.g. "Selector: sdp" — identifies the item's
+        // variant. Users who want a different type delete this item and
+        // pick from the "+ Add <Type> ▾" menu at the top of the array.
+        {
+            const baseName = schemaDisplayName(originalItemSchema) || schemaDisplayName(itemSchema);
+            const labelParts = [];
+            if (baseName) labelParts.push(baseName);
+            if (value && typeof value === 'object' && typeof value.type === 'string' && value.type) {
+                labelParts.push(value.type);
+            }
+            if (labelParts.length > 0) {
+                const typeLabel = document.createElement('span');
+                typeLabel.className = 'array-item-type-label';
+                typeLabel.textContent = labelParts.join(': ');
+                header.appendChild(typeLabel);
+            }
+        }
+
+        header.appendChild(duplicateBtn);
         header.appendChild(removeBtn);
         item.appendChild(header);
+
+        // Body wraps all rendered fields so the whole item collapses as a unit.
+        const body = document.createElement('div');
+        body.className = 'array-item-body';
+        item.appendChild(body);
 
         // Tag full objects with an "id" field for identity reference linking
         if (value && typeof value === 'object' && typeof value.id === 'string') {
@@ -1981,13 +2682,21 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
             const propDescription = propSchema.description;
 
             if (!hasValue(propValue)) {
-                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, item, true);
-                item.appendChild(placeholder);
+                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, body, true);
+                body.appendChild(placeholder);
             } else {
                 const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
-                item.appendChild(propGroup);
+                body.appendChild(propGroup);
             }
         });
+
+        // Clicking the header toggles the body — but let clicks on the
+        // delete button, inputs, or the pill pass through without toggling.
+        header.style.cursor = 'pointer';
+        header.onclick = (e) => {
+            if (e.target.closest('input, button, select, textarea')) return;
+            toggleCollapse(header, body, arrow);
+        };
     } else if (itemSchema.type === 'array') {
         const header = document.createElement('div');
         header.className = 'array-item-header';
@@ -2094,7 +2803,11 @@ function getFormData() {
         }
 
         if (schemaNode.type === 'object') {
-            if (schemaNode.additionalProperties) {
+            // Pure map (additionalProperties only). Hybrid objects
+            // (both properties AND additionalProperties, e.g. Jackson
+            // @JsonAnySetter) fall through to the properties branch, which
+            // now handles defined props + inline extras.
+            if (schemaNode.additionalProperties && !schemaNode.properties) {
                 // This is a map - find map container
                 // Note: map-container might be inside a wrapper div due to createCollapsibleSection structure
                 const mapContainer = container.querySelector(':scope > .map-container, :scope > div > .map-container, :scope > .collapsible-section > .collapsible-content > .map-container');
@@ -2124,15 +2837,15 @@ function getFormData() {
                 const collapsibleContent = container.querySelector(':scope > .collapsible-content, :scope > .map-entry-content');
                 const searchContainer = collapsibleContent || container;
 
-                Object.keys(schemaNode.properties).forEach(propName => {
+                // Emit const-valued props (polymorphic discriminators like
+                // `type: {const: "hash"}`) first so they appear at the top of
+                // the JSON output — matches Jackson's convention and avoids
+                // the variant-merge shuffle that pushes discriminators to the
+                // tail of the property iteration order.
+                orderedPropertyNames(schemaNode.properties).forEach(propName => {
                     let propSchema = schemaNode.properties[propName];
                     const propTitle = propSchema.title || propName;
 
-                    // const-only property (e.g. polymorphic discriminator
-                    // {const: "hash"}). The form renders these as hidden
-                    // inputs without a visible form-group, so the
-                    // label-matching path below would never find them.
-                    // Emit the const value straight from the schema.
                     if (propSchema.const !== undefined) {
                         result[propName] = propSchema.const;
                         return;
@@ -2164,7 +2877,12 @@ function getFormData() {
                         // Complex types (objects, arrays) - look for collapsible section
                         // Note: sections might be inside a wrapper div due to createObjectGroup structure
                         let targetContainer = null;
-                        const sections = searchContainer.querySelectorAll(':scope > .collapsible-section, :scope > div > .collapsible-section');
+                        const sections = searchContainer.querySelectorAll(
+                            ':scope > .collapsible-section, ' +
+                            ':scope > div > .collapsible-section, ' +
+                            ':scope > .form-layout-group > .collapsible-section, ' +
+                            ':scope > .form-section > .form-section-body > .collapsible-section, ' +
+                            ':scope > .form-section > .form-section-body > .form-layout-group > .collapsible-section');
                         sections.forEach(section => {
                             const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.field-help-icon):not(.collapsible-arrow)');
                             if (!header) return;
@@ -2186,7 +2904,14 @@ function getFormData() {
                     } else {
                         // Primitive types - look for form-group with matching label
                         // Note: form-groups might be inside a wrapper div due to createObjectGroup structure
-                        const formGroups = searchContainer.querySelectorAll(':scope > .form-group, :scope > .checkbox-group, :scope > div > .form-group, :scope > div > .checkbox-group');
+                        const formGroups = searchContainer.querySelectorAll(
+                            ':scope > .form-group, :scope > .checkbox-group, ' +
+                            ':scope > div > .form-group, :scope > div > .checkbox-group, ' +
+                            ':scope > .form-layout-group > .form-group, :scope > .form-layout-group > .checkbox-group, ' +
+                            ':scope > .form-section > .form-section-body > .form-group, ' +
+                            ':scope > .form-section > .form-section-body > .checkbox-group, ' +
+                            ':scope > .form-section > .form-section-body > .form-layout-group > .form-group, ' +
+                            ':scope > .form-section > .form-section-body > .form-layout-group > .checkbox-group');
                         let foundInput = null;
 
                         formGroups.forEach(group => {
@@ -2201,21 +2926,33 @@ function getFormData() {
                         });
 
                         if (foundInput) {
-                            let value;
-                            if (foundInput.type === 'checkbox') {
-                                value = foundInput.checked;
-                            } else if (foundInput.type === 'number') {
-                                value = foundInput.value ? parseInt(foundInput.value, 10) : null;
-                            } else {
-                                value = foundInput.value || null;
-                            }
-
+                            const value = readInputValue(foundInput);
                             if (value !== null && value !== '') {
                                 result[propName] = value;
                             }
                         }
                     }
                 });
+
+                // Hybrid object: collect inline extras (Jackson @JsonAnySetter)
+                // rendered by renderInlineExtras. They live at the same JSON
+                // level as defined props, so merge directly into `result`.
+                if (schemaNode.additionalProperties && typeof schemaNode.additionalProperties === 'object') {
+                    const defined = new Set(Object.keys(schemaNode.properties));
+                    const extrasWrapper = searchContainer.querySelector(':scope > .extras-inline, :scope > div > .extras-inline');
+                    if (extrasWrapper) {
+                        const rows = extrasWrapper.querySelectorAll(':scope > .extras-row');
+                        rows.forEach(row => {
+                            const keyInput = row.querySelector('.extras-key-input');
+                            const valueInput = row.querySelector('.extras-value-input');
+                            if (!keyInput || !valueInput) return;
+                            const key = keyInput.value.trim();
+                            if (!key || defined.has(key)) return;
+                            const v = readInputValue(valueInput);
+                            if (v !== null && v !== '') result[key] = v;
+                        });
+                    }
+                }
 
                 return Object.keys(result).length > 0 ? result : null;
             }
@@ -2254,7 +2991,18 @@ function getFormData() {
                     // nested ones from deeper objects (which would return a
                     // wrong variant, e.g. "prefix" from a nested table instead
                     // of "hash" from the current item).
-                    const typeInput = item.querySelector(':scope > input[data-path$=".type"], :scope > [style*="display: none"] > input[data-path$=".type"], :scope > div > input[data-path$=".type"]');
+                    // Reach through the new .array-item-body wrapper and
+                    // through the const hidden-input wrapper. Without these
+                    // paths, the polymorphic discriminator is never found
+                    // and resolveOneOf defaults to the first variant,
+                    // silently converting every item's type.
+                    const typeInput = item.querySelector(
+                        ':scope > input[data-path$=".type"], ' +
+                        ':scope > [style*="display: none"] > input[data-path$=".type"], ' +
+                        ':scope > div > input[data-path$=".type"], ' +
+                        ':scope > .array-item-body > input[data-path$=".type"], ' +
+                        ':scope > .array-item-body > [style*="display: none"] > input[data-path$=".type"], ' +
+                        ':scope > .array-item-body > div > input[data-path$=".type"]');
                     const typeVal = typeInput ? typeInput.value : null;
                     itemSchemaNode = resolveOneOf(itemSchemaNode, typeVal ? { type: typeVal } : null);
                 }
@@ -2270,15 +3018,7 @@ function getFormData() {
             const input = container.querySelector('input:not(.map-key-input), select, textarea');
             if (!input) return null;
 
-            let value;
-            if (input.type === 'checkbox') {
-                value = input.checked;
-            } else if (input.type === 'number') {
-                value = input.value ? parseInt(input.value, 10) : null;
-            } else {
-                value = input.value || null;
-            }
-
+            const value = readInputValue(input);
             return (value !== null && value !== '') ? value : null;
         }
 
@@ -2289,7 +3029,7 @@ function getFormData() {
     const result = {};
 
     if (schema && schema.properties) {
-        Object.keys(schema.properties).forEach(propName => {
+        orderedPropertyNames(schema.properties).forEach(propName => {
             let propSchema = schema.properties[propName];
             const propTitle = propSchema.title || propName;
 
@@ -2305,8 +3045,24 @@ function getFormData() {
                 resolvedSchema = deref(propSchema);
             }
 
-            const isComplexType = resolvedSchema &&
-                (resolvedSchema.type === 'object' || resolvedSchema.type === 'array');
+            // Polymorphic schemas (oneOf/anyOf) are rendered as collapsible
+            // sections just like plain objects, so treat them as complex when
+            // any variant resolves to an object/array. Without this, top-level
+            // polymorphic fields (e.g. `routing` = anyOf[TableRouting, DirectRouting])
+            // fall through to the primitive path and are silently dropped.
+            let isComplexType = false;
+            if (resolvedSchema && (resolvedSchema.oneOf || resolvedSchema.anyOf)) {
+                const variants = polymorphicVariants(resolvedSchema);
+                if (variants) {
+                    isComplexType = variants.some(v => {
+                        const resolved = v.$ref ? deref(v) : v;
+                        return resolved && (resolved.type === 'object' || resolved.type === 'array');
+                    });
+                }
+            } else {
+                isComplexType = resolvedSchema &&
+                    (resolvedSchema.type === 'object' || resolvedSchema.type === 'array');
+            }
 
             if (isComplexType) {
                 // Complex types - look for collapsible section
@@ -2348,15 +3104,7 @@ function getFormData() {
                 });
 
                 if (foundInput) {
-                    let value;
-                    if (foundInput.type === 'checkbox') {
-                        value = foundInput.checked;
-                    } else if (foundInput.type === 'number') {
-                        value = foundInput.value ? parseInt(foundInput.value, 10) : null;
-                    } else {
-                        value = foundInput.value || null;
-                    }
-
+                    const value = readInputValue(foundInput);
                     if (value !== null && value !== '') {
                         result[propName] = value;
                     }
@@ -2475,6 +3223,792 @@ function resetForm() {
         jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
     }
     showSyncStatus('Form reset to initial data', 'success');
+}
+
+// ---------------------------------------------------------------------------
+// Export / Import — one-click JSON download/upload of the current config.
+
+function exportConfig() {
+    let data;
+    const activeTab = document.querySelector('.tab-content.active');
+    if (activeTab && activeTab.id === 'form-tab') {
+        data = getFormData();
+    } else if (jsonEditor) {
+        try { data = JSON.parse(jsonEditor.getValue()); }
+        catch (e) { showSyncStatus('Cannot export invalid JSON', 'error'); return; }
+    } else {
+        data = currentData;
+    }
+    const filename = (currentSchemaName || 'config') + '.json';
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSyncStatus('Exported ' + filename, 'success');
+}
+
+function importConfig() {
+    const picker = document.getElementById('import-file');
+    if (picker) { picker.value = ''; picker.click(); }
+}
+
+function handleImportFile(event) {
+    const file = event.target && event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        let data;
+        try { data = JSON.parse(reader.result); }
+        catch (e) {
+            showSyncStatus('Import failed: ' + e.message, 'error');
+            return;
+        }
+        currentData = data;
+        generateFormWithData(currentData);
+        if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
+        setDirty();
+        showSyncStatus('Imported ' + file.name + ' — review and Save', 'success');
+    };
+    reader.onerror = () => showSyncStatus('Import failed: could not read file', 'error');
+    reader.readAsText(file);
+}
+
+// ---------------------------------------------------------------------------
+// Read-only / view mode — disables form inputs and hides mutation controls.
+
+function toggleViewMode() {
+    const on = !document.body.classList.contains('view-mode');
+    document.body.classList.toggle('view-mode', on);
+    const btn = document.getElementById('view-mode-toggle');
+    if (btn) btn.textContent = on ? 'Edit Mode' : 'View Mode';
+}
+
+// ---------------------------------------------------------------------------
+// Auto-save draft to localStorage — snapshot every 2s when dirty; restore
+// banner on load when a draft exists. Cheap insurance against accidental tab
+// closes and power outages.
+
+function draftStorageKey() {
+    const target = (selectedTargetDirectory && selectedTargetDirectory.path) || '';
+    const schemaName = currentSchemaName || '';
+    if (!target || !schemaName) return null;
+    return 'configurator-draft:' + target + ':' + schemaName;
+}
+
+function saveDraft() {
+    const key = draftStorageKey();
+    if (!key) return;
+    if (!document.getElementById('dirty-indicator') ||
+        document.getElementById('dirty-indicator').style.display === 'none') {
+        return; // only persist when the form is dirty
+    }
+    try {
+        const data = getFormData();
+        localStorage.setItem(key, JSON.stringify({
+            data: data,
+            savedAt: Date.now(),
+            schema: currentSchemaName
+        }));
+    } catch (e) { /* localStorage full or unavailable — ignore */ }
+}
+
+function clearDraft() {
+    const key = draftStorageKey();
+    if (key) {
+        try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+    }
+    hideDraftBanner();
+}
+
+function maybeOfferDraftRestore() {
+    const key = draftStorageKey();
+    if (!key) { hideDraftBanner(); return; }
+    let rec;
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) { hideDraftBanner(); return; }
+        rec = JSON.parse(raw);
+    } catch (e) { hideDraftBanner(); return; }
+    if (!rec || !rec.data) { hideDraftBanner(); return; }
+    const banner = document.getElementById('draft-banner');
+    const text = document.getElementById('draft-banner-text');
+    if (banner && text) {
+        const when = rec.savedAt ? new Date(rec.savedAt).toLocaleString() : 'recently';
+        text.textContent = 'Unsaved draft from ' + when + ' — restore?';
+        banner.style.display = 'flex';
+    }
+}
+
+function hideDraftBanner() {
+    const banner = document.getElementById('draft-banner');
+    if (banner) banner.style.display = 'none';
+}
+
+function restoreDraft() {
+    const key = draftStorageKey();
+    if (!key) return;
+    try {
+        const rec = JSON.parse(localStorage.getItem(key) || 'null');
+        if (rec && rec.data) {
+            currentData = rec.data;
+            generateFormWithData(currentData);
+            if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
+            setDirty();
+            showSyncStatus('Draft restored', 'success');
+        }
+    } catch (e) { /* ignore */ }
+    hideDraftBanner();
+}
+
+function discardDraft() {
+    clearDraft();
+    showSyncStatus('Draft discarded', 'success');
+}
+
+(function initAutoSave() {
+    if (typeof window === 'undefined') return;
+    // Drive on a cheap timer rather than setDirty() hooks — avoids coupling.
+    setInterval(saveDraft, 2000);
+})();
+
+// ---------------------------------------------------------------------------
+// Files tab — free-form text editor for everything under _templates/. Used
+// to maintain REST body templates, LDAP queries, JDBC SQL, and other plain-
+// text artifacts the iRouter (and other services) load at runtime.
+
+let textEditor = null;           // Ace instance
+let currentTextFile = null;      // relative path currently loaded
+let currentTextFileBaseline = ''; // last-saved content, for Revert + dirty detection
+
+function initTextEditorIfNeeded() {
+    if (textEditor || typeof ace === 'undefined') return;
+    const el = document.getElementById('text-editor');
+    if (!el) return;
+    textEditor = ace.edit('text-editor');
+    textEditor.setTheme('ace/theme/' + (currentTheme || 'eclipse'));
+    textEditor.session.setMode('ace/mode/text');
+    textEditor.setOptions({
+        fontSize: 13,
+        showPrintMargin: false,
+        wrap: true,
+        autoScrollEditorIntoView: true
+    });
+    textEditor.session.on('change', () => updateTextEditorDirtyState());
+}
+
+function updateTextEditorDirtyState() {
+    const saveBtn = document.getElementById('save-text-file-btn');
+    const revertBtn = document.getElementById('reload-text-file-btn');
+    const dirty = textEditor && currentTextFile &&
+        textEditor.getValue() !== currentTextFileBaseline;
+    if (saveBtn) saveBtn.disabled = !dirty;
+    if (revertBtn) revertBtn.disabled = !dirty;
+}
+
+function refreshTextFileList() {
+    const body = document.getElementById('files-rail-body');
+    if (body) body.innerHTML = '<em>Loading…</em>';
+    sendWebSocketMessage('list_text_files', {});
+}
+
+function handleTextFileList(raw) {
+    const body = document.getElementById('files-rail-body');
+    if (!body) return;
+    let items = [];
+    try { items = JSON.parse(raw); } catch (e) { items = []; }
+    if (!Array.isArray(items) || items.length === 0) {
+        body.innerHTML = '<em>No template files found under <code>_templates/</code>. ' +
+            'Drop <code>.txt</code>, <code>.sql</code>, <code>.ldap</code>, etc. into that directory.</em>';
+        return;
+    }
+    body.innerHTML = items.map(it =>
+        '<button type="button" class="files-rail-entry" data-path="' + escapeHtml(it.path) + '">' +
+        escapeHtml(it.path) + '</button>'
+    ).join('');
+    body.querySelectorAll('.files-rail-entry').forEach(btn => {
+        btn.onclick = () => {
+            body.querySelectorAll('.files-rail-entry.active').forEach(a => a.classList.remove('active'));
+            btn.classList.add('active');
+            sendWebSocketMessage('load_text_file', { fileName: btn.dataset.path });
+        };
+    });
+}
+
+function handleTextFileLoaded(raw) {
+    let payload;
+    try { payload = JSON.parse(raw); } catch (e) { return; }
+    if (!payload || typeof payload.content !== 'string') return;
+    initTextEditorIfNeeded();
+    if (!textEditor) return;
+    currentTextFile = payload.fileName;
+    currentTextFileBaseline = payload.content;
+    textEditor.session.setMode('ace/mode/' + aceModeForFile(payload.fileName));
+    textEditor.setValue(payload.content, -1);
+    updateTextEditorDirtyState();
+    showTextFileStatus('Loaded ' + currentTextFile, 'success');
+}
+
+function aceModeForFile(name) {
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    const map = {
+        sql: 'sql', json: 'json', xml: 'xml', yml: 'yaml', yaml: 'yaml',
+        properties: 'properties', ldap: 'text', txt: 'text', conf: 'text'
+    };
+    return map[ext] || 'text';
+}
+
+function saveTextFile() {
+    if (!textEditor || !currentTextFile) return;
+    sendWebSocketMessage('save_text_file', {
+        fileName: currentTextFile,
+        content: textEditor.getValue()
+    });
+}
+
+function handleTextFileSaved(name) {
+    if (!textEditor) return;
+    currentTextFileBaseline = textEditor.getValue();
+    updateTextEditorDirtyState();
+    showTextFileStatus('Saved ' + name, 'success');
+}
+
+function reloadTextFile() {
+    if (!currentTextFile) return;
+    sendWebSocketMessage('load_text_file', { fileName: currentTextFile });
+}
+
+function showTextFileStatus(text, kind) {
+    const el = document.getElementById('text-file-status');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'sync-status ' + (kind || '');
+    el.style.display = 'inline-flex';
+    setTimeout(() => { el.style.display = 'none'; }, 2500);
+}
+
+// ---------------------------------------------------------------------------
+// Template library — "New from Template…" loads a starter config from
+// _templates/<schemaName>/*.json into the form. The file becomes a draft —
+// user reviews and Saves to persist.
+
+function showTemplateLibrary() {
+    if (!currentSchemaName) {
+        showSyncStatus('Please select a schema first', 'warning');
+        return;
+    }
+    const list = document.getElementById('template-list');
+    if (list) list.innerHTML = '<em>Loading…</em>';
+    const modal = document.getElementById('templateModal');
+    if (modal) modal.style.display = 'flex';
+    sendWebSocketMessage('list_templates', { schemaName: currentSchemaName });
+}
+
+function closeTemplateLibrary() {
+    const modal = document.getElementById('templateModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function handleTemplateList(raw) {
+    const list = document.getElementById('template-list');
+    if (!list) return;
+    let items = [];
+    try { items = JSON.parse(raw); } catch (e) { items = []; }
+    if (!Array.isArray(items) || items.length === 0) {
+        list.innerHTML = '<em>No templates found. Drop *.json files into ' +
+            '<code>_templates/' + escapeHtml(currentSchemaName || '&lt;schema&gt;') + '/</code> ' +
+            'in the domain config directory.</em>';
+        return;
+    }
+    list.innerHTML = items.map(entry =>
+        '<button type="button" class="template-entry" data-name="' + escapeHtml(entry.name) + '">' +
+        '<span class="template-entry-name">' + escapeHtml(entry.name) + '</span>' +
+        '</button>'
+    ).join('');
+    list.querySelectorAll('.template-entry').forEach(btn => {
+        btn.onclick = () => {
+            const name = btn.dataset.name;
+            sendWebSocketMessage('load_template', {
+                schemaName: currentSchemaName,
+                templateName: name
+            });
+        };
+    });
+}
+
+function handleTemplateLoaded(raw) {
+    let data;
+    try { data = JSON.parse(raw); }
+    catch (e) {
+        showSyncStatus('Template contained invalid JSON: ' + e.message, 'error');
+        return;
+    }
+    currentData = data;
+    generateFormWithData(currentData);
+    if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
+    setDirty();
+    closeTemplateLibrary();
+    showSyncStatus('Template loaded — review and Save', 'success');
+}
+
+// ---------------------------------------------------------------------------
+// Diff viewer — structural diff of the current form state vs. the last-loaded
+// server copy (initialData). Reports added/removed/changed paths; clicking a
+// change scrolls to and focuses the matching form element via its data-path.
+
+/// Walk two JSON values in parallel, collecting per-path differences.
+/// For arrays, index-aligned (no fancy move detection). For objects,
+/// union of keys.
+function diffObjects(a, b, path) {
+    path = path || '';
+    const out = [];
+    if (a === b) return out;
+    const bothObj = a && b && typeof a === 'object' && typeof b === 'object';
+    const aArr = Array.isArray(a);
+    const bArr = Array.isArray(b);
+    if (!bothObj || aArr !== bArr) {
+        out.push({ path: path, kind: 'changed', from: a, to: b });
+        return out;
+    }
+    if (aArr) {
+        const n = Math.max(a.length, b.length);
+        for (let i = 0; i < n; i++) {
+            const child = path + '[' + i + ']';
+            if (i >= a.length) out.push({ path: child, kind: 'added', to: b[i] });
+            else if (i >= b.length) out.push({ path: child, kind: 'removed', from: a[i] });
+            else for (const d of diffObjects(a[i], b[i], child)) out.push(d);
+        }
+        return out;
+    }
+    const keys = new Set(Object.keys(a).concat(Object.keys(b)));
+    keys.forEach(k => {
+        const child = path ? path + '.' + k : k;
+        if (!(k in a)) out.push({ path: child, kind: 'added', to: b[k] });
+        else if (!(k in b)) out.push({ path: child, kind: 'removed', from: a[k] });
+        else for (const d of diffObjects(a[k], b[k], child)) out.push(d);
+    });
+    return out;
+}
+
+function showDiff() {
+    const current = (() => {
+        const tab = document.querySelector('.tab-content.active');
+        if (tab && tab.id === 'form-tab') return getFormData();
+        if (jsonEditor) {
+            try { return JSON.parse(jsonEditor.getValue()); } catch (e) { return null; }
+        }
+        return currentData;
+    })();
+    if (current == null) { showSyncStatus('Cannot diff invalid JSON', 'error'); return; }
+    const baseline = initialData || {};
+    const diffs = diffObjects(baseline, current);
+    const summary = document.getElementById('diff-summary');
+    const body = document.getElementById('diff-body');
+    if (!summary || !body) return;
+
+    if (diffs.length === 0) {
+        summary.textContent = 'No changes vs. the last-loaded server copy.';
+        body.innerHTML = '';
+    } else {
+        const counts = { added: 0, removed: 0, changed: 0 };
+        diffs.forEach(d => counts[d.kind]++);
+        summary.textContent =
+            diffs.length + ' change' + (diffs.length === 1 ? '' : 's') +
+            ' (' + counts.added + ' added, ' + counts.removed + ' removed, ' + counts.changed + ' modified)';
+        body.innerHTML = diffs.map((d, i) => renderDiffRow(d, i)).join('');
+        body.querySelectorAll('.diff-row').forEach(row => {
+            row.onclick = () => jumpToPath(row.dataset.path);
+        });
+    }
+    const modal = document.getElementById('diffModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function renderDiffRow(d, i) {
+    const cls = 'diff-row diff-' + d.kind;
+    const sign = d.kind === 'added' ? '+' : d.kind === 'removed' ? '\u2212' : '~';
+    const valFrom = d.from === undefined ? '' : renderDiffValue(d.from);
+    const valTo = d.to === undefined ? '' : renderDiffValue(d.to);
+    let rhs;
+    if (d.kind === 'added') rhs = '<span class="diff-val">' + valTo + '</span>';
+    else if (d.kind === 'removed') rhs = '<span class="diff-val">' + valFrom + '</span>';
+    else rhs = '<span class="diff-val diff-old">' + valFrom + '</span>' +
+        '<span class="diff-arrow">\u2192</span>' +
+        '<span class="diff-val diff-new">' + valTo + '</span>';
+    return '<div class="' + cls + '" data-path="' + escapeHtml(d.path) + '" title="Click to jump">' +
+        '<span class="diff-sign">' + sign + '</span>' +
+        '<span class="diff-path">' + escapeHtml(d.path || '(root)') + '</span>' +
+        rhs + '</div>';
+}
+
+function renderDiffValue(v) {
+    let s;
+    try { s = JSON.stringify(v); } catch (e) { s = String(v); }
+    if (s === undefined) s = 'undefined';
+    if (s.length > 120) s = s.slice(0, 117) + '\u2026';
+    return escapeHtml(s);
+}
+
+function jumpToPath(path) {
+    if (!path) return;
+    // Try the exact path first (works for primitive fields and array items
+    // whose input carries the leaf data-path).
+    let el = document.querySelector('[data-path="' + cssEscape(path) + '"]');
+    if (!el) {
+        // Fallback: find any descendant whose data-path begins with this path
+        // (useful when the diff is at a whole-object level, e.g. a new item).
+        const all = document.querySelectorAll('[data-path]');
+        for (const c of all) {
+            const p = c.getAttribute('data-path') || '';
+            if (p === path || p.indexOf(path + '.') === 0 || p.indexOf(path + '[') === 0) {
+                el = c; break;
+            }
+        }
+    }
+    if (!el) return;
+    // Close the modal so the scroll target is visible.
+    closeDiffModal();
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Briefly highlight the target so it's obvious.
+    el.classList.add('diff-highlight');
+    setTimeout(() => el.classList.remove('diff-highlight'), 1600);
+    if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+}
+
+function cssEscape(s) {
+    // CSS attribute selector needs " and \ escaped. Keep it simple.
+    return String(s).replace(/["\\]/g, '\\$&');
+}
+
+function closeDiffModal() {
+    const modal = document.getElementById('diffModal');
+    if (modal) modal.style.display = 'none';
+}
+
+/// Remember the last text input/textarea the user focused. The variable
+/// palette uses this to know where to insert `${name}` when the user picks.
+let lastFocusedTextInput = null;
+
+/// Show/hide the right-side inspector panel.
+function toggleInspector() {
+    document.body.classList.toggle('inspector-open');
+    const panel = document.getElementById('inspector-panel');
+    const open = document.body.classList.contains('inspector-open');
+    if (panel) panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (open) refreshInspectorVars();
+}
+
+/// Render the focused field's schema into the inspector panel. Runs on
+/// every focusin; cheap because it walks one object's keys.
+function renderInspectorSchema(input) {
+    const body = document.getElementById('inspector-schema-body');
+    if (!body) return;
+    const schema = input && input._schema;
+    const path = input ? input.getAttribute('data-path') : null;
+    if (!schema) {
+        body.innerHTML = '<em>Focus a field to see its schema.</em>';
+        return;
+    }
+    const rows = [];
+    const push = (k, v) => { if (v !== undefined && v !== null && v !== '') rows.push([k, v]); };
+    if (path) push('Path', path);
+    push('Type', schema.type);
+    if (schema.format) push('Format', schema.format);
+    if (Array.isArray(schema.enum)) push('Enum', schema.enum.join(' | '));
+    if (schema['default'] !== undefined) push('Default', JSON.stringify(schema['default']));
+    if (schema.pattern) push('Pattern', schema.pattern);
+    if (schema.minLength != null) push('Min length', schema.minLength);
+    if (schema.maxLength != null) push('Max length', schema.maxLength);
+    if (schema.minimum != null) push('Minimum', schema.minimum);
+    if (schema.maximum != null) push('Maximum', schema.maximum);
+    if (schema['x-wide']) push('Wide', 'yes');
+    if (schema['x-readonly']) push('Read-only', 'yes');
+    if (schema.description) push('Description', schema.description);
+    if (rows.length === 0) { body.innerHTML = '<em>No schema details.</em>'; return; }
+    body.innerHTML = rows.map(([k, v]) =>
+        `<div class="inspector-row"><span class="inspector-key">${escapeHtml(k)}</span>` +
+        `<span class="inspector-val">${escapeHtml(String(v))}</span></div>`
+    ).join('');
+}
+
+/// Render the variable palette — every ${var} currently defined by any
+/// `.id` field in the form. Clicking a variable inserts it at the caret
+/// of the last-focused text input.
+function refreshInspectorVars() {
+    const body = document.getElementById('inspector-vars-body');
+    const countEl = document.getElementById('inspector-vars-count');
+    if (!body) return;
+    const vars = availableContextVars();
+    if (countEl) countEl.textContent = vars.length ? '(' + vars.length + ')' : '';
+    if (vars.length === 0) {
+        body.innerHTML = '<em>No variables defined yet. Add selectors with an <code>id</code>.</em>';
+        return;
+    }
+    body.innerHTML = vars.map(v =>
+        '<button type="button" class="inspector-var" data-var="' + escapeHtml(v) + '">${' + escapeHtml(v) + '}</button>'
+    ).join('');
+    body.querySelectorAll('.inspector-var').forEach(btn => {
+        btn.onclick = () => insertVariableIntoFocused(btn.dataset.var);
+    });
+}
+
+function insertVariableIntoFocused(name) {
+    const input = lastFocusedTextInput;
+    if (!input) return;
+    const insertion = '${' + name + '}';
+    const start = input.selectionStart != null ? input.selectionStart : (input.value || '').length;
+    const end = input.selectionEnd != null ? input.selectionEnd : start;
+    const before = (input.value || '').slice(0, start);
+    const after = (input.value || '').slice(end);
+    input.value = before + insertion + after;
+    const caret = start + insertion.length;
+    input.focus();
+    if (input.setSelectionRange) input.setSelectionRange(caret, caret);
+    setDirty();
+}
+
+/// Minimal HTML escape for inspector strings.
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[ch]);
+}
+
+/// Regex-tester modal. Opened from the "test" button beside any
+/// RegexSelector.pattern input; runs the pattern against a sample string
+/// and shows matched groups (numbered + named).
+let regexTestBoundPatternInput = null;
+function openRegexTest(patternInput) {
+    regexTestBoundPatternInput = patternInput;
+    const modal = document.getElementById('regexTestModal');
+    const patternEl = document.getElementById('regex-test-pattern');
+    const sampleEl = document.getElementById('regex-test-sample');
+    const resultEl = document.getElementById('regex-test-result');
+    if (!modal) return;
+    if (patternEl) patternEl.textContent = (patternInput.value || '').trim() || '(empty)';
+    if (sampleEl && !sampleEl.value) sampleEl.value = '';
+    if (resultEl) resultEl.innerHTML = '';
+    modal.style.display = 'flex';
+}
+function closeRegexTest() {
+    const modal = document.getElementById('regexTestModal');
+    if (modal) modal.style.display = 'none';
+    regexTestBoundPatternInput = null;
+}
+function runRegexTest() {
+    const sampleEl = document.getElementById('regex-test-sample');
+    const resultEl = document.getElementById('regex-test-result');
+    if (!sampleEl || !resultEl) return;
+    const pattern = regexTestBoundPatternInput ? (regexTestBoundPatternInput.value || '').trim() : '';
+    const sample = sampleEl.value || '';
+    if (!pattern) { resultEl.innerHTML = '<em>No pattern set.</em>'; return; }
+    // Anchor for parity with RegexSelector.extract (which uses Matcher.matches()
+    // — require the whole input to match, not a substring). Wrap in (?:...) so
+    // existing numbered/named capture groups keep their indices.
+    let re;
+    try { re = new RegExp('^(?:' + pattern + ')$', 's'); }
+    catch (err) { resultEl.innerHTML = '<span class="regex-test-error">Invalid pattern: ' + escapeHtml(err.message) + '</span>'; return; }
+    const m = re.exec(sample);
+    if (!m) { resultEl.innerHTML = '<span class="regex-test-nomatch">No match. (full-string match, same as iRouter)</span>'; return; }
+    const rows = [];
+    rows.push('<div class="regex-test-hit">Matched.</div>');
+    for (let i = 0; i < m.length; i++) {
+        rows.push('<div class="inspector-row"><span class="inspector-key">$' + i + '</span>' +
+            '<span class="inspector-val">' + escapeHtml(String(m[i])) + '</span></div>');
+    }
+    if (m.groups) {
+        Object.keys(m.groups).forEach(name => {
+            rows.push('<div class="inspector-row"><span class="inspector-key">${' + escapeHtml(name) + '}</span>' +
+                '<span class="inspector-val">' + escapeHtml(String(m.groups[name] == null ? '(null)' : m.groups[name])) + '</span></div>');
+        });
+    }
+    resultEl.innerHTML = rows.join('');
+}
+
+/// Wire inspector + lastFocusedTextInput once at startup.
+(function initInspector() {
+    if (typeof document === 'undefined') return;
+    document.addEventListener('focusin', (e) => {
+        const t = e.target;
+        if (!t) return;
+        if ((t.tagName === 'INPUT' && (t.type === 'text' || t.type === 'password' || t.type === 'search' || t.type === 'number')) ||
+            t.tagName === 'TEXTAREA') {
+            lastFocusedTextInput = t;
+        }
+        if (t._schema) {
+            renderInspectorSchema(t);
+            if (document.body.classList.contains('inspector-open')) refreshInspectorVars();
+        }
+    });
+})();
+
+/// Global keyboard shortcuts. Ctrl/Cmd-S saves; Ctrl/Cmd-F focuses the
+/// field-filter input; Escape clears it. Scoped to the configurator so
+/// other typing inside inputs is untouched.
+(function initShortcuts() {
+    if (typeof document === 'undefined') return;
+    document.addEventListener('keydown', (e) => {
+        const mod = e.metaKey || e.ctrlKey;
+        if (!mod) {
+            if (e.key === 'Escape') {
+                const f = document.getElementById('form-filter');
+                if (f && f.value) {
+                    f.value = '';
+                    if (typeof filterForm === 'function') filterForm('');
+                }
+            }
+            return;
+        }
+        if (e.key === 's' || e.key === 'S') {
+            e.preventDefault();
+            if (typeof saveData === 'function') saveData();
+        } else if (e.key === 'f' || e.key === 'F') {
+            const f = document.getElementById('form-filter');
+            if (f) {
+                e.preventDefault();
+                f.focus();
+                f.select();
+            }
+        }
+    });
+})();
+
+/// Wire the toolbar dropdown menus. One menu is open at a time; any click
+/// inside the menu (on an action button) or outside the menu closes it.
+(function initToolbarMenus() {
+    if (typeof document === 'undefined') return;
+    const bind = () => {
+        document.querySelectorAll('.toolbar-menu-trigger').forEach(trigger => {
+            if (trigger.dataset.wired === 'true') return;
+            trigger.dataset.wired = 'true';
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const menu = trigger.closest('.toolbar-menu');
+                if (!menu) return;
+                const wasOpen = menu.classList.contains('open');
+                document.querySelectorAll('.toolbar-menu.open').forEach(m => m.classList.remove('open'));
+                if (!wasOpen) menu.classList.add('open');
+            });
+        });
+        document.querySelectorAll('.toolbar-menu-items > button').forEach(btn => {
+            if (btn.dataset.wired === 'true') return;
+            btn.dataset.wired = 'true';
+            btn.addEventListener('click', () => {
+                const menu = btn.closest('.toolbar-menu');
+                if (menu) menu.classList.remove('open');
+            });
+        });
+        if (!document._toolbarMenuGlobal) {
+            document._toolbarMenuGlobal = true;
+            document.addEventListener('click', () => {
+                document.querySelectorAll('.toolbar-menu.open').forEach(m => m.classList.remove('open'));
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    document.querySelectorAll('.toolbar-menu.open').forEach(m => m.classList.remove('open'));
+                }
+            });
+        }
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
+    }
+})();
+
+/// Wire the breadcrumb bar once at startup. Tracks the focused field's
+/// data-path so the user can see where they are in a large config, with
+/// click-to-copy for pasting into bug reports / docs.
+(function initBreadcrumb() {
+    if (typeof document === 'undefined') return;
+    const bind = () => {
+        const crumb = document.getElementById('field-breadcrumb');
+        if (!crumb || crumb.dataset.wired === 'true') return;
+        crumb.dataset.wired = 'true';
+        document.addEventListener('focusin', (e) => {
+            const el = e.target.closest('[data-path]');
+            const path = el ? (el.getAttribute('data-path') || '') : '';
+            if (path) {
+                crumb.textContent = path;
+                crumb.style.display = '';
+            }
+        });
+        crumb.addEventListener('click', () => {
+            const txt = crumb.textContent || '';
+            if (!txt || !navigator.clipboard) return;
+            navigator.clipboard.writeText(txt).then(() => {
+                crumb.classList.add('copied');
+                setTimeout(() => crumb.classList.remove('copied'), 800);
+            }).catch(() => { /* ignore */ });
+        });
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
+    }
+})();
+
+/// Live form filter. Hides every leaf (.form-group, .add-property-placeholder,
+/// .extras-row, .map-entry) whose label / data-path / input value doesn't
+/// contain the query substring. Collapsible containers (sections, map-entries,
+/// array-items) stay visible whenever any descendant matched, and auto-expand
+/// to surface the hit. Empty query → clear all filters.
+function filterForm(query) {
+    const form = document.getElementById('dynamicForm');
+    if (!form) return;
+    const q = (query || '').trim().toLowerCase();
+    // Clear previous filter state on every keystroke; we reapply from scratch.
+    form.querySelectorAll('.filtered-out').forEach(el => el.classList.remove('filtered-out'));
+    if (!q) return;
+
+    // Build a searchable string for a leaf element.
+    const leafMatches = (el) => {
+        const path = el.querySelector('[data-path]') ?
+            (el.querySelector('[data-path]').getAttribute('data-path') || '') : '';
+        const label = (el.querySelector('label, .add-property-label') || {}).textContent || '';
+        const inputVals = Array.from(el.querySelectorAll('input, textarea, select'))
+            .map(i => i.value || '').join(' ');
+        const key = (el.querySelector('.map-key-input, .extras-key-input') || {}).value || '';
+        const title = el.querySelector('.collapsible-title, .array-item-type-label');
+        const titleText = title ? (title.textContent || '') : '';
+        return (path + ' ' + label + ' ' + inputVals + ' ' + key + ' ' + titleText).toLowerCase().includes(q);
+    };
+
+    // Hide every leaf that doesn't match. Track which containers hold a hit.
+    const keepers = new Set();
+    const leafSelector = '.form-group, .add-property-placeholder, .extras-row, .map-entry';
+    form.querySelectorAll(leafSelector).forEach(leaf => {
+        if (leafMatches(leaf)) {
+            // Walk up: mark every collapsible ancestor as a keeper.
+            let cur = leaf.parentElement;
+            while (cur && cur !== form) {
+                keepers.add(cur);
+                cur = cur.parentElement;
+            }
+        } else {
+            leaf.classList.add('filtered-out');
+        }
+    });
+
+    // Hide any collapsible container that didn't have a matching descendant.
+    form.querySelectorAll('.collapsible-section, .array-item').forEach(c => {
+        if (!keepers.has(c) && !leafMatches(c)) c.classList.add('filtered-out');
+    });
+
+    // Auto-expand surviving collapsed containers so the matches are visible.
+    form.querySelectorAll('.collapsible-header.collapsed, .array-item-header.collapsed').forEach(h => {
+        const body = h.classList.contains('array-item-header')
+            ? h.parentElement.querySelector(':scope > .array-item-body')
+            : h.nextElementSibling;
+        const arrow = h.querySelector('.collapsible-arrow');
+        if (body && arrow) toggleCollapse(h, body, arrow);
+    });
 }
 
 function expandAll() {
@@ -3014,6 +4548,12 @@ function switchTab(tabName) {
             if (schemaEditor) {
                 setTimeout(() => schemaEditor.resize(), 100);
             }
+        } else if (tabName === 'files') {
+            // Lazy-init the text editor, then refresh the file list every
+            // time the tab is shown so newly-added templates appear.
+            initTextEditorIfNeeded();
+            if (textEditor) setTimeout(() => textEditor.resize(), 100);
+            refreshTextFileList();
         }
     } catch (e) {
         console.error('Error in switchTab:', e);
@@ -3105,6 +4645,11 @@ function generateFormWithData(data) {
                 form.appendChild(group);
             }
         });
+    }
+    // After a fresh render, offer to restore any locally-saved draft that
+    // survives from a prior session.
+    if (typeof maybeOfferDraftRestore === 'function') {
+        setTimeout(maybeOfferDraftRestore, 0);
     }
 }
 
