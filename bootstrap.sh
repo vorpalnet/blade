@@ -25,6 +25,10 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Use the project's Maven wrapper so we don't depend on the system `mvn`
+# version (some hosts ship Maven < 3.6.3, which trips maven-install-plugin).
+MVN="$SCRIPT_DIR/mvnw"
+
 PLUGIN_BASE="$OCCAS_HOME/wlserver/plugins/maven/com/oracle/weblogic/weblogic-maven-plugin"
 
 # --- Auto-detect OCCAS and WebLogic versions from inventory/registry.xml ---
@@ -99,7 +103,7 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
 fi
 
-mvn install:install-file \
+"$MVN" install:install-file \
     -DgroupId=javax \
     -DartifactId=javaee-api \
     -Dversion=8.0-occas \
@@ -107,49 +111,49 @@ mvn install:install-file \
     -Dfile="$JAVAEE_JAR" \
     -DpomFile="$SCRIPT_DIR/javaee-api.pom"
 
-mvn install:install-file \
+"$MVN" install:install-file \
     -DgroupId=com.oracle.weblogic \
     -DartifactId=weblogic-server \
     -Dversion="$WL_VERSION" \
     -Dpackaging=jar \
     -Dfile="$OCCAS_HOME/wlserver/server/lib/weblogic.jar"
 
-mvn install:install-file \
+"$MVN" install:install-file \
     -DgroupId=com.oracle.weblogic \
     -DartifactId=weblogic-logging \
     -Dversion="$WL_VERSION" \
     -Dpackaging=jar \
     -Dfile="$OCCAS_HOME/wlserver/modules/com.oracle.weblogic.logging.jar"
 
-mvn install:install-file \
+"$MVN" install:install-file \
     -DgroupId=com.oracle.occas \
     -DartifactId=sipservlet-api \
     -Dversion="$OCCAS_VERSION" \
     -Dpackaging=jar \
     -Dfile="$OCCAS_HOME/wlserver/sip/server/lib/sipservlet-api.jar"
 
-mvn install:install-file \
+"$MVN" install:install-file \
     -DgroupId=com.oracle.occas \
     -DartifactId=wlss \
     -Dversion="$OCCAS_VERSION" \
     -Dpackaging=jar \
     -Dfile="$OCCAS_HOME/wlserver/sip/server/lib/wlss.jar"
 
-mvn install:install-file \
+"$MVN" install:install-file \
     -DgroupId=com.oracle.occas \
     -DartifactId=wlssapi \
     -Dversion="$OCCAS_VERSION" \
     -Dpackaging=jar \
     -Dfile="$OCCAS_HOME/wlserver/sip/server/lib/wlssapi.jar"
 
-mvn install:install-file \
+"$MVN" install:install-file \
     -DgroupId=com.oracle.weblogic \
     -DartifactId=weblogic-security-encryption \
     -Dversion="$WL_VERSION" \
     -Dpackaging=jar \
     -Dfile="$OCCAS_HOME/wlserver/modules/com.oracle.weblogic.security.encryption.jar"
 
-mvn install:install-file \
+"$MVN" install:install-file \
     -DgroupId=com.oracle.weblogic \
     -DartifactId=weblogic-maven-plugin \
     -Dversion="$WL_VERSION" \
