@@ -24,6 +24,45 @@
 
 	<build>
 		<finalName>irouter</finalName>
+		<plugins>
+			<!-- Publish a -classes.jar alongside the WAR so commercial
+			     extensions (e.g. connect/securelogix) can depend on
+			     IRouterServlet/IRouterInvite for Java inheritance.
+
+			     We DON'T use war-plugin's <attachClasses>true</attachClasses>
+			     because that would scoop up IRouterApp.class — the
+			     @SipApplication-annotated leaf that activates iRouter as
+			     the standalone WAR's SIP servlet. Bundling that leaf into
+			     a downstream WAR (SecureLogix) makes WLS see TWO
+			     @SipApplication classes in one app and refuse to deploy
+			     ("Redundant annotation @SipApplication in one module").
+
+			     Instead, we drive maven-jar-plugin directly with an
+			     explicit `exclude` for IRouterApp.class. The resulting
+			     -classes.jar carries only the inheritable base classes. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>inheritable-classes-jar</id>
+						<phase>package</phase>
+						<goals><goal>jar</goal></goals>
+						<configuration>
+							<classifier>classes</classifier>
+							<excludes>
+								<!-- Annotated leaf classes belong only in the
+								     standalone iRouter WAR, never in the
+								     inheritable JAR (see class Javadoc on
+								     IRouterServlet). Add new leaves here when
+								     they're added to this module. -->
+								<exclude>**/IRouterApp.class</exclude>
+							</excludes>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
 	</build>
 
 </project>

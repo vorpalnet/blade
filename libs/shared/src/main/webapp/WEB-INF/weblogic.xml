@@ -9,6 +9,13 @@
         <wls:prefer-application-packages>
             <!-- AUTO-GENERATED: rebuilt at build time from dependency JARs -->
         </wls:prefer-application-packages>
+        <wls:prefer-application-resources>
+            <!-- OCCAS 8.2/8.3 ship slf4j-nop-2.0.12.jar in wlserver/modules/, whose
+                 META-INF/services/org.slf4j.spi.SLF4JServiceProvider registration
+                 fails the SLF4J 2.x subtype check and pre-empts our slf4j-simple.
+                 Force the app's SPI registration to win for this lookup. -->
+            <wls:resource-name>META-INF/services/org.slf4j.spi.SLF4JServiceProvider</wls:resource-name>
+        </wls:prefer-application-resources>
     </wls:container-descriptor>
     <wls:context-root>vorpal-blade-library-shared</wls:context-root>
 

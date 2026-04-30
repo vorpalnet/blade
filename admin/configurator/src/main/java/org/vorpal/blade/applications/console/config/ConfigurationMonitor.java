@@ -114,6 +114,18 @@ public class ConfigurationMonitor extends Thread {
 		this.trace = true;
 	}
 
+	/// Stop the watch loop and release the WatchService.
+	public void shutdown() {
+		this.interrupt();
+		if (watcher != null) {
+			try {
+				watcher.close();
+			} catch (IOException e) {
+				// best effort
+			}
+		}
+	}
+
 //	/**
 //	 * Process all events for keys queued to the watcher
 //	 */

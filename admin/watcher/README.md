@@ -55,6 +55,23 @@ To the **AdminServer**, not to a managed cluster engine. The JMX MBean
 lookups for `SettingsMXBean` resolve through `java:comp/env/jmx/domainRuntime`,
 which is only available on the AdminServer.
 
+## Configuration
+
+The watcher reads `./config/custom/vorpal/watcher.json` at startup:
+
+| Field     | Type    | Default | Meaning |
+|-----------|---------|---------|---------|
+| `enabled` | boolean | `true`  | When `false`, the WAR stays deployed but the watch thread is never started — the WAR is inert. Useful for silencing auto-publish during a maintenance window without an undeploy. |
+
+The flag is read **once at startup**. Flipping it requires the
+AdminServer to be restarted (or the WAR redeployed). There is no hot
+toggle — by design, since the long-term migration is to remove this
+WAR entirely.
+
+The same auto-publish behavior is also available inside the
+[Configurator](../configurator/) via its `autoPublish` setting; once
+your customers are on the Configurator, undeploy this WAR.
+
 ## Migration path
 
 When all your operations scripts use the Configurator's Save + Publish

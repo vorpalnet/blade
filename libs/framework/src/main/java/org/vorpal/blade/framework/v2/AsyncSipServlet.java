@@ -123,6 +123,14 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// Application session attribute key for hash collision detection
 	private static final String HASHKEY_COLLISION = "HASHKEY_COLLISION";
 
+	/// Application session attribute key for the per-call 3xx auto-follow counter
+	private static final String AUTO_REDIRECT_COUNT = "AUTO_REDIRECT_COUNT";
+
+	/// Maximum number of 3xx redirects the framework will auto-follow on a single
+	/// AppSession before giving up and delivering the redirect response to the
+	/// developer's callback. Bounds chained or looped redirects.
+	private static final int MAX_AUTO_REDIRECTS = 5;
+
 	/// SIP CANCEL method constant
 	private static final String CANCEL = "CANCEL";
 	
@@ -802,7 +810,11 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			// For GLARE
 			if (method.equals(INVITE)) {
-				if (Callflow.failure(response)) {
+				// Release glare on any non-2xx final (3xx redirect or 4xx+ failure).
+				// 2xx is intentionally excluded — the ACK arriving in doRequest releases
+				// glare in that branch. The container auto-ACKs 3xx/4xx/5xx/6xx so the
+				// request branch never sees one for those.
+				if (Callflow.redirection(response) || Callflow.failure(response)) {
 					Callflow.setGlareState(sipSession, GlareState.ALLOW);
 				}
 			} else {
@@ -946,6 +958,31 @@ public abstract class AsyncSipServlet extends SipServlet
 						}
 
 						if (callback != null && !isProxy) {
+
+							// Auto-follow 3xx redirects on outbound INVITEs so the developer
+							// doesn't have to. Non-INVITE 3xx and proxy mode bypass naturally.
+							// Failure (no Contact, send error, etc.) falls through to the
+							// existing callback dispatch — the developer always gets exactly
+							// one final-response callback.
+							if (method.equals(INVITE) && Callflow.redirection(response)) {
+								Integer prior = (Integer) appSession.getAttribute(AUTO_REDIRECT_COUNT);
+								int count = (prior == null ? 0 : prior) + 1;
+								appSession.setAttribute(AUTO_REDIRECT_COUNT, count);
+
+								if (shouldFollowRedirect(response, count)) {
+									try {
+										followRedirect(response, callback);
+										return; // -- RETURN, response handled by auto-follow
+									} catch (Exception followEx) {
+										sipLogger.warning(response,
+												"AsyncSipServlet.doResponse - auto-follow failed at attempt "
+														+ count + ", delivering 3xx to callback: "
+														+ followEx.getMessage());
+										// fall through to existing dispatch
+									}
+								}
+							}
+
 							Callflow.getLogger().superArrow(Direction.RECEIVE, null, response,
 									callback.getClass().getSimpleName());
 							callback.accept(response);
@@ -1226,11 +1263,82 @@ public abstract class AsyncSipServlet extends SipServlet
 		return (sipUri.getUser() + "@" + sipUri.getHost()).toLowerCase();
 	}
 
+	/// Decides whether the framework should automatically follow a 3xx redirect
+	/// response by issuing a new INVITE to the response's `Contact` header.
+	///
+	/// Default returns true while the per-AppSession redirect budget
+	/// ([MAX_AUTO_REDIRECTS] = 5) has not been exhausted. Subclasses that want
+	/// to receive the 3xx response in their own callback — for example, to
+	/// implement custom q-value selection or special-case handling for
+	/// particular Contact targets — should override this method and return
+	/// false (either always or based on the response).
+	///
+	/// Only called for INVITE responses with status 300–399 in non-proxy mode.
+	///
+	/// @param response the 3xx redirect response
+	/// @param count the redirect attempt number (1-based) for this AppSession
+	/// @return true to have the framework auto-follow the redirect; false to
+	///         deliver the response to the registered callback as today
+	protected boolean shouldFollowRedirect(SipServletResponse response, int count) {
+		return count <= MAX_AUTO_REDIRECTS;
+	}
+
+	/// Builds and sends a new INVITE to the redirect target named by the 3xx
+	/// response's `Contact` header, on the same SipApplicationSession, and
+	/// re-registers the original callback so the developer transparently
+	/// receives the eventual non-3xx final response.
+	///
+	/// Throws if the response has no Contact header, the original request
+	/// can't be reached via [SipServletResponse#getRequest()], or the new
+	/// INVITE fails to send. The caller in [doResponse] catches and falls
+	/// through to the existing callback dispatch on any exception, so failure
+	/// is never silent — the developer always gets exactly one final-response
+	/// callback.
+	///
+	/// The container auto-ACKs the original 3xx, so this method does not.
+	private void followRedirect(SipServletResponse response, Callback<SipServletResponse> callback)
+			throws ServletException, IOException {
+		Address contact = response.getAddressHeader("Contact");
+		if (contact == null) {
+			throw new ServletException("auto-follow: 3xx response has no Contact header");
+		}
+
+		SipServletRequest origInvite = response.getRequest();
+		if (origInvite == null) {
+			throw new ServletException("auto-follow: response has no associated original request");
+		}
+
+		SipServletRequest newInvite = sipFactory.createRequest(
+				origInvite.getApplicationSession(),
+				INVITE,
+				origInvite.getFrom(),
+				origInvite.getTo());
+		newInvite.setRequestURI(contact.getURI());
+		Callflow.copyContentAndHeaders(origInvite, newInvite);
+
+		if (sipLogger.isLoggable(Level.INFO)) {
+			sipLogger.info(response, "AsyncSipServlet.followRedirect - "
+					+ "redirecting from " + origInvite.getRequestURI()
+					+ " to " + contact.getURI());
+		}
+
+		// Anonymous Callflow because sendRequest is an instance method.
+		// Using AsyncSipServlet's class for the log line origin would be wrong;
+		// this stand-in is intentional and limited to one call site.
+		new Callflow() {
+			private static final long serialVersionUID = 1L;
+			@Override
+			public void process(SipServletRequest request) {
+				// never invoked — we only need sendRequest's behavior
+			}
+		}.sendRequest(newInvite, callback);
+	}
+
 	/// Sends a SIP response with centralized logging and error handling
-	/// 
+	///
 	/// This method provides a central point for response transmission with automatic
 	/// logging and consistent error handling across the application.
-	/// 
+	///
 	/// @param response the SIP response to send
 	/// @throws ServletException if a servlet error occurs while sending
 	/// @throws IOException if an I/O error occurs while sending

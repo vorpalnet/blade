@@ -52,6 +52,37 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// stripped at load time — use them to annotate the template
 /// without ending up in the wire payload.
 ///
+/// ## Body-template bootstrap (self-materializing)
+///
+/// At runtime templates are read from
+/// `./config/custom/vorpal/_templates/<filename>` (relative to the
+/// WLS server's working directory). If a template referenced by
+/// [#getBodyTemplate] is missing on disk, the connector looks for a
+/// bundled copy on the WAR's classpath at `_templates/<filename>` —
+/// i.e. shipped via `src/main/resources/_templates/<filename>` in the
+/// service module — and copies it to the disk path on the first
+/// invocation. The parent directory is created if needed. After that,
+/// reads come from disk normally.
+///
+/// **The bootstrap never overwrites an existing file.** Once the
+/// template is on disk, operators can edit it (via the Configurator's
+/// file editor or directly) and subsequent WAR redeploys will not
+/// stomp those edits. To re-pull the WAR-bundled copy, delete the
+/// disk file; the next call will re-materialize it.
+///
+/// **For module authors:** ship templates by placing them under
+/// `src/main/resources/_templates/<filename>`. Maven copies them into
+/// the WAR at `WEB-INF/classes/_templates/<filename>`; the WAR
+/// classloader exposes them via `getResourceAsStream` and the
+/// connector takes care of the rest. No deploy-time copy step is
+/// required.
+///
+/// **For operators:** if the template ever changes shape between WAR
+/// versions, delete the on-disk copy after upgrade so the new
+/// bundled version takes its place. The startup log will record:
+/// `RestConnector[<id>] bootstrapped template from WAR: <path>
+/// (source: classpath:_templates/<filename>)`.
+///
 /// ## Asynchronous
 ///
 /// Uses [HttpClient#sendAsync] so the SIP container thread is
@@ -98,7 +129,7 @@ public class RestConnector extends Connector implements Serializable {
 	public Integer getTimeoutSeconds() { return timeoutSeconds; }
 	public void setTimeoutSeconds(Integer timeoutSeconds) { this.timeoutSeconds = timeoutSeconds; }
 
-	@JsonPropertyDescription("Filename in _templates/ — HTTP-message format (headers + blank line + body)")
+	@JsonPropertyDescription("Filename in _templates/ — HTTP-message format (headers + blank line + body). If the file is missing on disk, the WAR's bundled copy at classpath:_templates/<filename> is auto-materialized on first use; never overwrites an existing file.")
 	@FormLayout(wide = true)
 	public String getBodyTemplate() { return bodyTemplate; }
 	public void setBodyTemplate(String bodyTemplate) { this.bodyTemplate = bodyTemplate; }
@@ -204,7 +235,11 @@ public class RestConnector extends Connector implements Serializable {
 		if (cachedTemplate == null) {
 			Path p = Paths.get(TEMPLATES_DIR, filename);
 			if (!Files.exists(p)) {
-				throw new IOException("Template not found: " + p);
+				// First-run bootstrap from the WAR (see class Javadoc).
+				materializeBundledTemplate(filename, p);
+				if (!Files.exists(p)) {
+					throw new IOException("Template not found on disk and not bundled in WAR: " + p);
+				}
 			}
 			cachedTemplate = COMMENT_LINE.matcher(Files.readString(p)).replaceAll("");
 		}
@@ -228,6 +263,57 @@ public class RestConnector extends Connector implements Serializable {
 			result.body = resolved.trim();
 		}
 		return result;
+	}
+
+	/// Copy the WAR-bundled body template at
+	/// `classpath:_templates/<filename>` to the on-disk location
+	/// `destination`, creating parent directories as needed. Called
+	/// only when the disk file is missing — never overwrites an
+	/// existing file. Silently no-ops if no bundled copy is on the
+	/// classpath; the caller will then surface a "template not found"
+	/// error.
+	///
+	/// Uses the **thread context classloader** rather than this class's
+	/// own loader: the framework JAR (where this class lives) is
+	/// bundled inside each WAR, but `WEB-INF/classes/_templates/` is
+	/// owned by the WAR-level WebappClassLoader. The context loader is
+	/// the WAR's loader at SIP-container request time, so it can see
+	/// both `WEB-INF/classes/` and `WEB-INF/lib/*.jar`. Falls back to
+	/// `getClass().getClassLoader()` when no context loader is set
+	/// (e.g. a static unit test).
+	///
+	/// Logs at INFO on successful bootstrap (one line per template
+	/// per JVM lifetime, since the result is cached in
+	/// `cachedTemplate` thereafter), at FINE when no bundled copy
+	/// exists, and at WARNING on I/O failure.
+	///
+	/// @param filename     bare filename, e.g. `securelogix.txt`
+	/// @param destination  absolute path under
+	///                     `./config/custom/vorpal/_templates/`
+	private void materializeBundledTemplate(String filename, Path destination) {
+		Logger sipLogger = SettingsManager.getSipLogger();
+		String resourcePath = "_templates/" + filename;
+		ClassLoader cl = Thread.currentThread().getContextClassLoader();
+		if (cl == null) cl = getClass().getClassLoader();
+		try (java.io.InputStream in = cl.getResourceAsStream(resourcePath)) {
+			if (in == null) {
+				if (sipLogger != null && sipLogger.isLoggable(Level.FINE)) {
+					sipLogger.fine("RestConnector[" + id + "] no bundled template at classpath:" + resourcePath);
+				}
+				return;
+			}
+			Files.createDirectories(destination.getParent());
+			Files.copy(in, destination);
+			if (sipLogger != null) {
+				sipLogger.info("RestConnector[" + id + "] bootstrapped template from WAR: "
+						+ destination + " (source: classpath:" + resourcePath + ")");
+			}
+		} catch (IOException e) {
+			if (sipLogger != null) {
+				sipLogger.warning("RestConnector[" + id + "] failed to materialize bundled template "
+						+ resourcePath + " to " + destination + ": " + e.getMessage());
+			}
+		}
 	}
 
 	private static int findBlankLine(String text) {
