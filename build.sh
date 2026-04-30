@@ -282,11 +282,16 @@ EOB
 # --- Dist directory for this build ---
 DISTDIR="${SCRIPT_DIR}/dist/${REVISION}-${BUILD_NUM}"
 
-# --- Default to 'install' if no Maven goals specified ---
-# Uses 'install' so the framework JAR is installed to the local .m2 repository.
-# All other modules have maven-install-plugin skipped; only the framework JAR is installed.
-# Check for actual goals (non-flag args) since flags like -Pjavadocs don't count.
+# --- Always install ---
+# Downstream repos (optum, connect) resolve BLADE artifacts via Maven version
+# ranges (e.g. [1.0.0,)) against the local .m2 repository. If we don't install
+# here, those builds silently resolve to whatever older BLADE was installed
+# previously. So even when the user passes explicit goals like `clean package`,
+# we append `install` so the framework JAR (and other BLADE artifacts) land in
+# .m2. All non-framework modules have maven-install-plugin skipped, so this is
+# cheap.
 HAS_GOALS=false
+HAS_INSTALL=false
 MAVEN_GOALS=()
 MAVEN_FLAGS=()
 for arg in "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}"; do
@@ -295,10 +300,13 @@ for arg in "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}"; do
     else
         MAVEN_GOALS+=("$arg")
         HAS_GOALS=true
+        case "$arg" in install|deploy) HAS_INSTALL=true ;; esac
     fi
 done
 if [ "$HAS_GOALS" = false ]; then
     MAVEN_GOALS=("install")
+elif [ "$HAS_INSTALL" = false ]; then
+    MAVEN_GOALS+=("install")
 fi
 
 ALL_MODULES=$(discover_modules)
@@ -343,7 +351,8 @@ if [ ${#PROFILES[@]} -eq 1 ]; then
         "${DIST_FLAGS[@]+"${DIST_FLAGS[@]}"}" \
         "-Dbuild.number=${BUILD_NUM}" \
         "-Dear.profile=${PROFILE}" \
-        "-Dbuild.platform=${PLATFORM}"
+        "-Dbuild.platform=${PLATFORM}" \
+        "-Dblade.skip.install=false"
     MVN_EXIT=$?
     set -e
 

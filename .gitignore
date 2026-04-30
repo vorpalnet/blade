@@ -16,14 +16,17 @@ bin/
 classes/
 deps/
 
-# Eclipse — commit .project, .classpath, .settings/ (portable, team-friendly).
-# Keep machine-specific artifacts ignored.
+# Eclipse / VS Code — IDE settings are not tracked.
+.project
+.classpath
+.settings/
 .factorypath
 .apt_src
 .apt_generated/
 .apt_generated_tests/
 .externalToolBuilders/
 *.launch
+.vscode/
 
 # Java
 *.class
