@@ -19,11 +19,13 @@
 # Platform profiles: build-profiles/platforms/*.conf
 #
 # Default platform resolution (when none given on the command line):
-#   1. $OCCAS env var → parse inventory/registry.xml for the active install
+#   1. $MW_HOME env var → parse inventory/registry.xml for the active install
+#      ($MW_HOME is the Oracle "Middleware Home" convention shared with OPatch
+#      and other Oracle tooling.)
 #   2. Exactly one OCCAS version bootstrapped in ~/.m2
 #   3. Hardcoded fallback: occas-8.1
 # The chosen source is shown in parentheses next to "Platform:" in the build
-# header (e.g. "Platform: occas-8.3 ($OCCAS)").
+# header (e.g. "Platform: occas-8.3 ($MW_HOME)").
 #
 # EAR naming:
 #   Each profile produces its own EAR named vorpal-blade-services-<profile>.ear
@@ -56,34 +58,35 @@ PLATFORMS_DIR="${PROFILES_DIR}/platforms"
 DEFAULT_PROFILE="default"
 
 # --- Default platform resolution, in order:
-#       1. $OCCAS env var → parse inventory/registry.xml for the active install
-#          (same convention bootstrap.sh uses).
+#       1. $MW_HOME env var → parse inventory/registry.xml for the active install
+#          (same convention bootstrap.sh uses; this is the Oracle Middleware
+#          Home variable required by OPatch and other Oracle tooling).
 #       2. Exactly one OCCAS version bootstrapped in the local Maven repo.
 #       3. Hardcoded fallback: occas-8.1.
 #     User can always override on the command line: ./build.sh occas-8.3
-#     If $OCCAS is unset and the user didn't pass a platform on the CLI, we
+#     If $MW_HOME is unset and the user didn't pass a platform on the CLI, we
 #     emit a warning further down (after argument parsing) so the user knows
 #     we're guessing.
 DEFAULT_PLATFORM="occas-8.1"
 DEFAULT_PLATFORM_SOURCE="fallback"
-OCCAS_WARNING=""
+MW_HOME_WARNING=""
 
-if [ -n "${OCCAS:-}" ]; then
-    if [ -f "${OCCAS}/inventory/registry.xml" ]; then
+if [ -n "${MW_HOME:-}" ]; then
+    if [ -f "${MW_HOME}/inventory/registry.xml" ]; then
         occas_v=$(grep -oE 'name="Converged Application Server" version="[0-9]+\.[0-9]+' \
-                  "${OCCAS}/inventory/registry.xml" \
+                  "${MW_HOME}/inventory/registry.xml" \
                   | grep -oE '[0-9]+\.[0-9]+$' | head -1)
         if [ -n "$occas_v" ] && [ -f "${PLATFORMS_DIR}/occas-${occas_v}.conf" ]; then
             DEFAULT_PLATFORM="occas-${occas_v}"
-            DEFAULT_PLATFORM_SOURCE="\$OCCAS"
+            DEFAULT_PLATFORM_SOURCE="\$MW_HOME"
         else
-            OCCAS_WARNING="\$OCCAS=${OCCAS} → registry.xml present but version '${occas_v:-?}' has no matching build-profiles/platforms/occas-*.conf"
+            MW_HOME_WARNING="\$MW_HOME=${MW_HOME} → registry.xml present but version '${occas_v:-?}' has no matching build-profiles/platforms/occas-*.conf"
         fi
     else
-        OCCAS_WARNING="\$OCCAS=${OCCAS} → ${OCCAS}/inventory/registry.xml not found (is this a valid OCCAS install?)"
+        MW_HOME_WARNING="\$MW_HOME=${MW_HOME} → ${MW_HOME}/inventory/registry.xml not found (is this a valid OCCAS install?)"
     fi
 else
-    OCCAS_WARNING="\$OCCAS environment variable is not set"
+    MW_HOME_WARNING="\$MW_HOME environment variable is not set"
 fi
 
 if [ "$DEFAULT_PLATFORM_SOURCE" = "fallback" ]; then
@@ -345,15 +348,17 @@ else
     PLATFORM_SOURCE="cli"
 fi
 
-# --- $OCCAS warning ---
-# Print only when we fell back to autodetection and $OCCAS didn't resolve.
+# --- $MW_HOME warning ---
+# Print only when we fell back to autodetection and $MW_HOME didn't resolve.
 # If the user passed a platform on the CLI they made an explicit choice — stay quiet.
-# If $OCCAS resolved cleanly there's nothing to warn about either.
-if [ "$PLATFORM_SOURCE" != "cli" ] && [ "$DEFAULT_PLATFORM_SOURCE" != "\$OCCAS" ] && [ -n "$OCCAS_WARNING" ]; then
-    echo "WARNING: ${OCCAS_WARNING}"
+# If $MW_HOME resolved cleanly there's nothing to warn about either.
+if [ "$PLATFORM_SOURCE" != "cli" ] && [ "$DEFAULT_PLATFORM_SOURCE" != "\$MW_HOME" ] && [ -n "$MW_HOME_WARNING" ]; then
+    echo "WARNING: ${MW_HOME_WARNING}"
     echo "         Falling back to ${PLATFORM} (${PLATFORM_SOURCE})."
-    echo "         To silence this and pin the platform automatically, add to your shell rc:"
-    echo "             export OCCAS=/path/to/your/occas/install"
+    echo "         \$MW_HOME is the Oracle Middleware Home convention — required by OPatch"
+    echo "         and other Oracle tooling. To silence this and pin the platform"
+    echo "         automatically, add to your shell rc:"
+    echo "             export MW_HOME=/path/to/your/occas/install"
     echo "         build.sh will then read inventory/registry.xml to pick the matching platform."
     echo ""
 fi

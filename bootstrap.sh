@@ -4,23 +4,24 @@
 # Run this once per OCCAS version before building with Maven.
 #
 # Usage: ./bootstrap.sh /path/to/occas
-#    or: export OCCAS=/path/to/occas && ./bootstrap.sh
+#    or: export MW_HOME=/path/to/occas && ./bootstrap.sh
 #
-# The $OCCAS environment variable is the recommended convention — both this
-# script and build.sh read it. Set it once in your shell rc (~/.zshrc, etc.)
-# and you'll never need to type a path or version number again. See README.md
-# "One-Time Setup" for the full walkthrough.
+# The $MW_HOME environment variable is the standard Oracle "Middleware Home"
+# convention used by OPatch, deployment tooling, and other Oracle utilities.
+# Both this script and build.sh read it. Set it once in your shell rc
+# (~/.zshrc, etc.) and you'll never need to type a path or version number
+# again. See README.md "One-Time Setup" for the full walkthrough.
 #
 # Supports OCCAS 8.0, 8.1, 8.2, and 8.3 (and forward-compatible with later
 # versions). Auto-detects OCCAS and WebLogic versions from the install's
 # inventory/registry.xml. Override by exporting OCCAS_VERSION or WL_VERSION.
 #
 
-OCCAS_HOME="${1:-$OCCAS}"
+OCCAS_HOME="${1:-$MW_HOME}"
 
 if [ -z "$OCCAS_HOME" ]; then
     echo "Usage: $0 /path/to/occas"
-    echo "   or: export OCCAS=/path/to/occas && $0"
+    echo "   or: export MW_HOME=/path/to/occas && $0"
     exit 1
 fi
 

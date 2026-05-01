@@ -149,26 +149,28 @@ javadoc/        Javadoc WAR (always built; -Pjavadocs regenerates per-module jav
 
 ## One-Time Setup
 
-### 1. Set the `$OCCAS` environment variable
+### 1. Set the `$MW_HOME` environment variable
 
-`bootstrap.sh` and `build.sh` both look for an `OCCAS` env var pointing at your OCCAS installation root. Add this to your shell rc (`~/.zshrc`, `~/.bashrc`, etc.):
+`bootstrap.sh` and `build.sh` both look for an `MW_HOME` env var pointing at your OCCAS installation root. `MW_HOME` is the standard Oracle "Middleware Home" convention — the same variable required by OPatch and other Oracle tooling, so setting it once gives you a single source of truth across BLADE builds, patching, and deployment scripts.
+
+Add this to your shell rc (`~/.zshrc`, `~/.bashrc`, etc.):
 
 ```bash
-export OCCAS=/path/to/your/occas/install     # e.g. /Users/jeff/Oracle/occas-8.3
+export MW_HOME=/path/to/your/occas/install     # e.g. /Users/jeff/Oracle/occas-8.3
 ```
 
-This is the **single source of truth** for "which OCCAS am I using right now." Both scripts read `$OCCAS/inventory/registry.xml` to derive the OCCAS and WebLogic versions automatically — you never need to type a version number.
+Both scripts read `$MW_HOME/inventory/registry.xml` to derive the OCCAS and WebLogic versions automatically — you never need to type a version number.
 
-To switch OCCAS versions, just point `$OCCAS` at a different install. No edits to build configs required.
+To switch OCCAS versions, just point `$MW_HOME` at a different install. No edits to build configs required.
 
-You can keep multiple OCCAS installs side-by-side (e.g. `/Users/jeff/Oracle/occas-8.1`, `.../occas-8.3`) and switch between them by re-exporting `$OCCAS`.
+You can keep multiple OCCAS installs side-by-side (e.g. `/Users/jeff/Oracle/occas-8.1`, `.../occas-8.3`) and switch between them by re-exporting `$MW_HOME`.
 
 ### 2. Bootstrap OCCAS into your local Maven repo
 
 ```bash
-./bootstrap.sh                  # uses $OCCAS
+./bootstrap.sh                  # uses $MW_HOME
 # or
-./bootstrap.sh /path/to/occas   # explicit path overrides $OCCAS
+./bootstrap.sh /path/to/occas   # explicit path overrides $MW_HOME
 ```
 
 Example output:
@@ -179,7 +181,7 @@ Installing OCCAS JARs from: /home/jetty/occas-8.3
   OCCAS version:    8.3
 ```
 
-This only needs to be run once per OCCAS version. The artifacts are installed into `~/.m2/repository/com/oracle/occas/` and `~/.m2/repository/com/oracle/weblogic/`, keyed by version. Multiple bootstrapped versions can coexist; the active one is determined at build time by `$OCCAS` (see "Platform auto-detection" below).
+This only needs to be run once per OCCAS version. The artifacts are installed into `~/.m2/repository/com/oracle/occas/` and `~/.m2/repository/com/oracle/weblogic/`, keyed by version. Multiple bootstrapped versions can coexist; the active one is determined at build time by `$MW_HOME` (see "Platform auto-detection" below).
 
 ## Build
 
@@ -261,10 +263,10 @@ The `build.sh` script accepts one or more **module profiles** (which apps to bui
 Each profile produces its own EAR named `vorpal-blade-services-<profile>.ear`. When multiple profiles are specified, all required modules are built once, then each profile's EAR is packaged separately.
 
 ```bash
-./build.sh                              # full build, platform from $OCCAS
+./build.sh                              # full build, platform from $MW_HOME
 ./build.sh production                   # vorpal-blade-services-production.ear
-./build.sh production occas-8.2         # production services, OCCAS 8.2 (overrides $OCCAS)
-./build.sh minimal occas-8.3            # core routing, OCCAS 8.3 (overrides $OCCAS)
+./build.sh production occas-8.2         # production services, OCCAS 8.2 (overrides $MW_HOME)
+./build.sh minimal occas-8.3            # core routing, OCCAS 8.3 (overrides $MW_HOME)
 ./build.sh production minimal           # two EARs: production + minimal
 ./build.sh production clean package     # with explicit Maven goals
 ./build.sh -- -Pjavadocs                # full build with extra Maven flags
@@ -274,20 +276,20 @@ Each profile produces its own EAR named `vorpal-blade-services-<profile>.ear`. W
 
 When you don't pass a platform on the command line, `build.sh` resolves it in this order:
 
-1. **`$OCCAS` env var** (recommended). The script reads `$OCCAS/inventory/registry.xml` and picks the matching `build-profiles/platforms/occas-X.Y.conf`.
+1. **`$MW_HOME` env var** (recommended). The script reads `$MW_HOME/inventory/registry.xml` and picks the matching `build-profiles/platforms/occas-X.Y.conf`.
 2. **Single bootstrapped version**. If exactly one OCCAS version is installed in `~/.m2/repository/com/oracle/occas/wlss/`, use that.
 3. **Hardcoded fallback**: `occas-8.1`.
 
 The chosen source is shown in parentheses in the build header so you can always tell where the platform came from:
 
 ```
-Platform: occas-8.3 ($OCCAS)        # from environment
+Platform: occas-8.3 ($MW_HOME)        # from environment
 Platform: occas-8.3 (bootstrapped)  # only one bootstrapped, used by elimination
 Platform: occas-8.3 (cli)           # passed as a build.sh argument
 Platform: occas-8.1 (fallback)      # nothing else worked — printed with a warning
 ```
 
-If `$OCCAS` is unset (or points somewhere invalid) **and** you didn't pass a platform on the CLI, `build.sh` prints a warning explaining how to fix it. To silence it, either export `$OCCAS` in your shell rc or always pass a platform on the command line.
+If `$MW_HOME` is unset (or points somewhere invalid) **and** you didn't pass a platform on the CLI, `build.sh` prints a warning explaining how to fix it. To silence it, either export `$MW_HOME` in your shell rc or always pass a platform on the command line.
 
 A CLI platform always wins. This is intentional — useful for one-off cross-builds (e.g. you're pointed at OCCAS 8.3 but want to build for 8.1 without re-exporting).
 
