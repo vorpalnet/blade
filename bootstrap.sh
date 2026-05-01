@@ -1,9 +1,15 @@
 #!/bin/bash
 #
 # Install OCCAS JARs into the local Maven repository.
-# Run this once before building with Maven.
+# Run this once per OCCAS version before building with Maven.
 #
 # Usage: ./bootstrap.sh /path/to/occas
+#    or: export OCCAS=/path/to/occas && ./bootstrap.sh
+#
+# The $OCCAS environment variable is the recommended convention — both this
+# script and build.sh read it. Set it once in your shell rc (~/.zshrc, etc.)
+# and you'll never need to type a path or version number again. See README.md
+# "One-Time Setup" for the full walkthrough.
 #
 # Supports OCCAS 8.0, 8.1, 8.2, and 8.3 (and forward-compatible with later
 # versions). Auto-detects OCCAS and WebLogic versions from the install's

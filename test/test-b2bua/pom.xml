@@ -22,4 +22,25 @@
 		</dependency>
 	</dependencies>
 
+	<!-- TEMP: omit WebLogic-Application-Version to test Remote Console delete bug.
+	     Revert with: git checkout pom.xml -->
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifestEntries combine.self="override">
+							<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
+							<Copyright>${blade.copyright}</Copyright>
+							<License>${blade.license}</License>
+							<Built-By>${user.name}</Built-By>
+						</manifestEntries>
+					</archive>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
 </project>

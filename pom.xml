@@ -14,16 +14,12 @@
 	<url>https://vorpal.net</url>
 
 	<modules>
-		<!-- Always built -->
-		<module>libs/framework</module>
-		<module>libs/shared</module>
-		<module>libs/fsmar</module>
-		<module>libs/fsmar3</module>
+		<!-- Always built: services aggregator (the EAR module). -->
 		<module>services</module>
 
-		<!-- Admin, service, and test modules are controlled by profiles
-		     below. Exclude any module with -Dskip.<name>,
-		     e.g. -Dskip.analytics, -Dskip.configurator. -->
+		<!-- Libraries, admin, service, and test modules are controlled by
+		     profiles below. Exclude any module with -Dskip.<name>,
+		     e.g. -Dskip.fsmar3, -Dskip.analytics, -Dskip.configurator. -->
 	</modules>
 
 	<properties>
@@ -525,6 +521,32 @@ fi
 	</build>
 
 	<profiles>
+		<!-- Library module profiles. Active by default; exclude with -Dskip.<name>.
+		     Build-profiles/*.conf files select which libraries to include.
+		     Note: most service/admin/test modules depend on `framework` and
+		     `shared` at compile time. If you skip them here, they must already
+		     be installed in your local Maven repo from a prior build. -->
+		<profile>
+			<id>framework</id>
+			<activation><property><name>!skip.framework</name></property></activation>
+			<modules><module>libs/framework</module></modules>
+		</profile>
+		<profile>
+			<id>shared</id>
+			<activation><property><name>!skip.shared</name></property></activation>
+			<modules><module>libs/shared</module></modules>
+		</profile>
+		<profile>
+			<id>fsmar</id>
+			<activation><property><name>!skip.fsmar</name></property></activation>
+			<modules><module>libs/fsmar</module></modules>
+		</profile>
+		<profile>
+			<id>fsmar3</id>
+			<activation><property><name>!skip.fsmar3</name></property></activation>
+			<modules><module>libs/fsmar3</module></modules>
+		</profile>
+
 		<!-- Service/test module profiles. Active by default; exclude with -Dskip.<name> -->
 		<profile>
 			<id>acl</id>

@@ -149,10 +149,26 @@ javadoc/        Javadoc WAR (always built; -Pjavadocs regenerates per-module jav
 
 ## One-Time Setup
 
-Install the OCCAS JARs into your local Maven repository. The script auto-detects the WebLogic and OCCAS versions from the installation's `inventory/registry.xml`:
+### 1. Set the `$OCCAS` environment variable
+
+`bootstrap.sh` and `build.sh` both look for an `OCCAS` env var pointing at your OCCAS installation root. Add this to your shell rc (`~/.zshrc`, `~/.bashrc`, etc.):
 
 ```bash
-./bootstrap.sh /path/to/occas
+export OCCAS=/path/to/your/occas/install     # e.g. /Users/jeff/Oracle/occas-8.3
+```
+
+This is the **single source of truth** for "which OCCAS am I using right now." Both scripts read `$OCCAS/inventory/registry.xml` to derive the OCCAS and WebLogic versions automatically — you never need to type a version number.
+
+To switch OCCAS versions, just point `$OCCAS` at a different install. No edits to build configs required.
+
+You can keep multiple OCCAS installs side-by-side (e.g. `/Users/jeff/Oracle/occas-8.1`, `.../occas-8.3`) and switch between them by re-exporting `$OCCAS`.
+
+### 2. Bootstrap OCCAS into your local Maven repo
+
+```bash
+./bootstrap.sh                  # uses $OCCAS
+# or
+./bootstrap.sh /path/to/occas   # explicit path overrides $OCCAS
 ```
 
 Example output:
@@ -163,7 +179,7 @@ Installing OCCAS JARs from: /home/jetty/occas-8.3
   OCCAS version:    8.3
 ```
 
-This only needs to be run once per OCCAS version. If you switch OCCAS versions, re-run the script pointing to the new installation.
+This only needs to be run once per OCCAS version. The artifacts are installed into `~/.m2/repository/com/oracle/occas/` and `~/.m2/repository/com/oracle/weblogic/`, keyed by version. Multiple bootstrapped versions can coexist; the active one is determined at build time by `$OCCAS` (see "Platform auto-detection" below).
 
 ## Build
 
@@ -189,25 +205,38 @@ If the framework hasn't changed since your last full build, you can skip the ins
 
 ## Output
 
-All deployable artifacts are copied to `dist/<version>-<build>/`:
+Every WAR/JAR built by the active profile is copied to `dist/<version>-<build>/`, along with the profile and platform conf files used. Example for the `default` profile:
 
 ```
 dist/<version>-<build>/
-  vorpal-blade-services-<profile>.ear    # EAR named after build profile (deploy to engine targets)
-  vorpal-blade-library-framework.jar     # Framework library
-  vorpal-blade-library-shared.war        # WebLogic shared library (alternative to EAR)
-  vorpal-blade-library-fsmar.jar         # FSMAR (copy to OCCAS approuter lib/)
-  vorpal-blade-admin-console.war         # Admin Console (deploy to AdminServer, context: /blade)
-  vorpal-blade-admin-configurator.war    # Admin Configurator (deploy to AdminServer)
-  vorpal-blade-admin-dev-console.war     # Dev Console (deploy to AdminServer, experimental)
-  <profile>.conf                         # Build profile used for this build
-  <platform>.conf                        # Platform profile used for this build
+  vorpal-blade-library-framework.jar         # Framework library
+  vorpal-blade-library-shared.war            # WebLogic shared library
+  vorpal-blade-library-fsmar.jar             # FSMAR (copy to OCCAS approuter lib/)
+  vorpal-blade-admin-configurator.war        # Admin Configurator
+  vorpal-blade-admin-watcher.war             # Admin Watcher
+  vorpal-blade-services-<service>.war        # one WAR per service in the profile
+  test-<name>.war                            # test apps if included
+  default.conf                               # build profile used
+  occas-<ver>.conf                           # platform profile used
+  DEPLOYMENT.txt                             # generated manifest classifying every artifact
 ```
 
+- The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
+- **EAR (currently disabled)**: the `services/` aggregator no longer produces a `vorpal-blade-services-<profile>.ear`. Services are deployed individually as WARs while the EAR logic is offline. See `services/pom.xml` for the TODO marker.
 - **FSMAR JAR** must be installed manually into the OCCAS approuter `lib/` folder.
 - **Admin WARs** are standalone (include all dependency JARs) and are deployed separately to AdminServer.
-- On a successful build, any previous `dist/` directories are automatically zipped and the directories removed. The current build's directory is left unzipped.
 - On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
+
+### Skipping the dist copy (dev mode)
+
+The dist copy can get noisy during fast inner-loop development. Two ways to skip it:
+
+```bash
+./build.sh --no-dist             # one-off
+export BLADE_SKIP_DIST=1         # sticky for the current shell
+```
+
+`--no-dist` on the CLI always wins, so you can opt back in for a single build even with the env var set: just don't pass `--no-dist`. (To force the env var off temporarily, run `BLADE_SKIP_DIST=0 ./build.sh ...`.)
 
 ### Deployment
 
@@ -232,22 +261,48 @@ The `build.sh` script accepts one or more **module profiles** (which apps to bui
 Each profile produces its own EAR named `vorpal-blade-services-<profile>.ear`. When multiple profiles are specified, all required modules are built once, then each profile's EAR is packaged separately.
 
 ```bash
-./build.sh                              # full build, OCCAS 8.1 (defaults)
+./build.sh                              # full build, platform from $OCCAS
 ./build.sh production                   # vorpal-blade-services-production.ear
-./build.sh production occas-8.2         # production services, OCCAS 8.2
-./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
+./build.sh production occas-8.2         # production services, OCCAS 8.2 (overrides $OCCAS)
+./build.sh minimal occas-8.3            # core routing, OCCAS 8.3 (overrides $OCCAS)
 ./build.sh production minimal           # two EARs: production + minimal
 ./build.sh production clean package     # with explicit Maven goals
 ./build.sh -- -Pjavadocs                # full build with extra Maven flags
 ```
 
+### Platform auto-detection
+
+When you don't pass a platform on the command line, `build.sh` resolves it in this order:
+
+1. **`$OCCAS` env var** (recommended). The script reads `$OCCAS/inventory/registry.xml` and picks the matching `build-profiles/platforms/occas-X.Y.conf`.
+2. **Single bootstrapped version**. If exactly one OCCAS version is installed in `~/.m2/repository/com/oracle/occas/wlss/`, use that.
+3. **Hardcoded fallback**: `occas-8.1`.
+
+The chosen source is shown in parentheses in the build header so you can always tell where the platform came from:
+
+```
+Platform: occas-8.3 ($OCCAS)        # from environment
+Platform: occas-8.3 (bootstrapped)  # only one bootstrapped, used by elimination
+Platform: occas-8.3 (cli)           # passed as a build.sh argument
+Platform: occas-8.1 (fallback)      # nothing else worked — printed with a warning
+```
+
+If `$OCCAS` is unset (or points somewhere invalid) **and** you didn't pass a platform on the CLI, `build.sh` prints a warning explaining how to fix it. To silence it, either export `$OCCAS` in your shell rc or always pass a platform on the command line.
+
+A CLI platform always wins. This is intentional — useful for one-off cross-builds (e.g. you're pointed at OCCAS 8.3 but want to build for 8.1 without re-exporting).
+
 Module profiles (`build-profiles/*.conf`):
 
 | Profile | Description |
 | --- | --- |
-| `full` | All 15 service and test modules (default) → `vorpal-blade-services-full.ear` |
-| `production` | 12 production services, no test apps → `vorpal-blade-services-production.ear` |
-| `minimal` | Just proxy-registrar and proxy-router → `vorpal-blade-services-minimal.ear` |
+| `default` | Used when no profile is specified. Builds `framework`, `shared`, `fsmar`, configurator + watcher, most services (no `irouter`/`crud`), test apps. Notably **excludes `fsmar3`**. → `vorpal-blade-services-default.ear` |
+| `full` | Every library, admin, service, and test module → `vorpal-blade-services-full.ear` |
+| `production` | All libraries + admin apps + services (no test apps) → `vorpal-blade-services-production.ear` |
+| `minimal` | `framework` + `shared` + proxy-registrar/proxy-router → `vorpal-blade-services-minimal.ear` |
+
+Each conf file is a flat list of module directory names. Anything **not** listed is excluded with `-Dskip.<name>`. The four module categories — `libs/`, `admin/`, `services/`, `test/` — are all treated uniformly: any of them can be opted in or out.
+
+> **Note**: most WARs depend on `framework` and `shared` at compile time. If you skip them in a build profile, they must already be installed in your local `~/.m2` from a prior build, or compilation will fail.
 
 Platform profiles (`build-profiles/platforms/*.conf`):
 

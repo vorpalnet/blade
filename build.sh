@@ -6,8 +6,8 @@
 #   ./build.sh [profile...] [platform] [--no-dist] [maven-args...]
 #
 # Examples:
-#   ./build.sh                              # full build, OCCAS 8.1
-#   ./build.sh production                   # production services, OCCAS 8.1
+#   ./build.sh                              # full build, auto-detected platform
+#   ./build.sh production                   # production services, auto-detected
 #   ./build.sh production occas-8.2         # production services, OCCAS 8.2
 #   ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
 #   ./build.sh production minimal           # two EARs: production + minimal
@@ -18,14 +18,34 @@
 # Module profiles:   build-profiles/*.conf
 # Platform profiles: build-profiles/platforms/*.conf
 #
+# Default platform resolution (when none given on the command line):
+#   1. $OCCAS env var → parse inventory/registry.xml for the active install
+#   2. Exactly one OCCAS version bootstrapped in ~/.m2
+#   3. Hardcoded fallback: occas-8.1
+# The chosen source is shown in parentheses next to "Platform:" in the build
+# header (e.g. "Platform: occas-8.3 ($OCCAS)").
+#
 # EAR naming:
 #   Each profile produces its own EAR named vorpal-blade-services-<profile>.ear
 #   e.g. vorpal-blade-services-production.ear, vorpal-blade-services-minimal.ear
 #
 # Dist management:
+#   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/
+#   (plus the active build profile and platform conf files for traceability).
 #   On failure: the current build's dist directory is deleted.
-#   --no-dist: skip copying artifacts to dist/<ver>-<build>/ entirely
-#              (also skips DEPLOYMENT.txt). Useful for local dev loops.
+#
+#   To skip the copy entirely (useful in local dev loops where you don't need
+#   the dist/ folder rewritten on every build):
+#     ./build.sh --no-dist                  # one-off
+#     export BLADE_SKIP_DIST=1              # sticky for the current shell
+#
+#   --no-dist on the CLI overrides BLADE_SKIP_DIST=0 from the environment.
+#
+# EAR (currently disabled):
+#   The services EAR is intentionally offline — see services/pom.xml. While
+#   disabled, services are deployed individually as WARs (the dist/ folder
+#   contains every WAR built). Re-enable via the TODO(EAR) markers in
+#   services/pom.xml and this script.
 # ============================================================================
 
 set -euo pipefail
@@ -33,32 +53,66 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="${SCRIPT_DIR}/build-profiles"
 PLATFORMS_DIR="${PROFILES_DIR}/platforms"
-DEFAULT_PROFILE="full"
+DEFAULT_PROFILE="default"
 
-# --- Default platform: if exactly one OCCAS version is bootstrapped in the
-#     local Maven repo, use it. Otherwise (zero or multiple) fall back to 8.1. ---
+# --- Default platform resolution, in order:
+#       1. $OCCAS env var → parse inventory/registry.xml for the active install
+#          (same convention bootstrap.sh uses).
+#       2. Exactly one OCCAS version bootstrapped in the local Maven repo.
+#       3. Hardcoded fallback: occas-8.1.
+#     User can always override on the command line: ./build.sh occas-8.3
+#     If $OCCAS is unset and the user didn't pass a platform on the CLI, we
+#     emit a warning further down (after argument parsing) so the user knows
+#     we're guessing.
 DEFAULT_PLATFORM="occas-8.1"
-WLSS_DIR="${HOME}/.m2/repository/com/oracle/occas/wlss"
-if [ -d "$WLSS_DIR" ]; then
-    bootstrapped=()
-    for vdir in "$WLSS_DIR"/*/; do
-        [ -d "$vdir" ] || continue
-        v=$(basename "$vdir")
-        [ -f "${vdir}wlss-${v}.jar" ] || continue
-        [ -f "${PLATFORMS_DIR}/occas-${v}.conf" ] || continue
-        bootstrapped+=("occas-${v}")
-    done
-    if [ ${#bootstrapped[@]} -eq 1 ]; then
-        DEFAULT_PLATFORM="${bootstrapped[0]}"
+DEFAULT_PLATFORM_SOURCE="fallback"
+OCCAS_WARNING=""
+
+if [ -n "${OCCAS:-}" ]; then
+    if [ -f "${OCCAS}/inventory/registry.xml" ]; then
+        occas_v=$(grep -oE 'name="Converged Application Server" version="[0-9]+\.[0-9]+' \
+                  "${OCCAS}/inventory/registry.xml" \
+                  | grep -oE '[0-9]+\.[0-9]+$' | head -1)
+        if [ -n "$occas_v" ] && [ -f "${PLATFORMS_DIR}/occas-${occas_v}.conf" ]; then
+            DEFAULT_PLATFORM="occas-${occas_v}"
+            DEFAULT_PLATFORM_SOURCE="\$OCCAS"
+        else
+            OCCAS_WARNING="\$OCCAS=${OCCAS} → registry.xml present but version '${occas_v:-?}' has no matching build-profiles/platforms/occas-*.conf"
+        fi
+    else
+        OCCAS_WARNING="\$OCCAS=${OCCAS} → ${OCCAS}/inventory/registry.xml not found (is this a valid OCCAS install?)"
+    fi
+else
+    OCCAS_WARNING="\$OCCAS environment variable is not set"
+fi
+
+if [ "$DEFAULT_PLATFORM_SOURCE" = "fallback" ]; then
+    WLSS_DIR="${HOME}/.m2/repository/com/oracle/occas/wlss"
+    if [ -d "$WLSS_DIR" ]; then
+        bootstrapped=()
+        for vdir in "$WLSS_DIR"/*/; do
+            [ -d "$vdir" ] || continue
+            v=$(basename "$vdir")
+            [ -f "${vdir}wlss-${v}.jar" ] || continue
+            [ -f "${PLATFORMS_DIR}/occas-${v}.conf" ] || continue
+            bootstrapped+=("occas-${v}")
+        done
+        if [ ${#bootstrapped[@]} -eq 1 ]; then
+            DEFAULT_PLATFORM="${bootstrapped[0]}"
+            DEFAULT_PLATFORM_SOURCE="bootstrapped"
+        fi
     fi
 fi
 
 # --- Parse project version from pom.xml ---
 REVISION=$(grep '<revision>' "${SCRIPT_DIR}/pom.xml" | head -1 | sed 's/.*<revision>\(.*\)<\/revision>.*/\1/')
 
-# --- Discover all available admin/service/test modules from directory names ---
+# --- Discover all available libs/admin/service/test modules from directory names ---
+# All four categories are profile-activated in the parent pom.xml via !skip.<name>,
+# so a module that's discovered here but not listed in the active build-profiles/*.conf
+# will be excluded with -Dskip.<name>.
 discover_modules() {
-    for subdir in admin services test; do
+    for subdir in libs admin services test; do
         for dir in "${SCRIPT_DIR}/${subdir}"/*/; do
             local name=$(basename "$dir")
             # Skip always-built modules
@@ -105,6 +159,61 @@ cleanup_failed_dist() {
     fi
 }
 
+# --- Locate a module's source directory (libs/<X>, admin/<X>, ...) ---
+# Echoes the path relative to SCRIPT_DIR; empty string if not found.
+module_dir() {
+    local name="$1"
+    for d in libs admin services test; do
+        if [ -d "${SCRIPT_DIR}/${d}/${name}" ]; then
+            echo "${d}/${name}"
+            return
+        fi
+    done
+}
+
+# --- Copy every built WAR/JAR to dist/<ver>-<build>/ ---
+# Iterates the active profile's INCLUDED_MODULES list (not a blind glob), so
+# stale artifacts from previous builds in unrelated target/ directories don't
+# leak into this build's dist. Excludes Maven side-artifacts (sources, javadoc,
+# tests, the war-plugin's intermediate -classes.jar). Also copies the active
+# build profile and platform conf files for traceability.
+copy_all_to_dist() {
+    [ "$SKIP_DIST" = true ] && return 0
+    mkdir -p "$DISTDIR"
+    local copied=0 missing=0
+    local mod mdir target f produced
+    while IFS= read -r mod; do
+        [ -n "$mod" ] || continue
+        mdir=$(module_dir "$mod")
+        if [ -z "$mdir" ]; then
+            echo "  warn: module '$mod' listed in ${PROFILE}.conf has no source directory"
+            continue
+        fi
+        target="${SCRIPT_DIR}/${mdir}/target"
+        [ -d "$target" ] || { missing=$((missing + 1)); continue; }
+        produced=0
+        for f in "$target"/*.war "$target"/*.jar; do
+            [ -f "$f" ] || continue
+            case "$(basename "$f")" in
+                *-sources.jar|*-javadoc.jar|*-tests.jar|*-classes.jar) continue ;;
+                original-*.jar) continue ;;
+            esac
+            cp -f "$f" "$DISTDIR/"
+            copied=$((copied + 1))
+            produced=$((produced + 1))
+        done
+        [ $produced -eq 0 ] && missing=$((missing + 1))
+    done <<< "$INCLUDED_MODULES"
+
+    cp -f "${PROFILES_DIR}/${PROFILE}.conf"   "$DISTDIR/" 2>/dev/null && copied=$((copied + 1))
+    cp -f "${PLATFORMS_DIR}/${PLATFORM}.conf" "$DISTDIR/" 2>/dev/null && copied=$((copied + 1))
+
+    echo "Copied ${copied} artifacts to dist/${REVISION}-${BUILD_NUM}/"
+    if [ $missing -gt 0 ]; then
+        echo "  (${missing} modules in ${PROFILE}.conf produced no artifact — first build, or build failure)"
+    fi
+}
+
 # --- Write dist/<ver>-<build>/DEPLOYMENT.txt after a successful build ---
 # Emits a four-column table (Artifact, Tier, Target, Purpose) describing every
 # artifact actually present in DISTDIR. Used by operators and by ./deploy.sh.
@@ -113,6 +222,7 @@ write_deployment_manifest() {
     local manifest="${DISTDIR}/DEPLOYMENT.txt"
 
     # Classify an artifact by filename. Echoes: "<tier>|<target>|<purpose>"
+    # Specific names take precedence; broader glob patterns catch the rest.
     classify_artifact() {
         case "$1" in
             vorpal-blade-library-fsmar.jar)
@@ -137,16 +247,19 @@ write_deployment_manifest() {
                 echo "admin|AdminServer|Experimental UI (context: /explorer)" ;;
             vorpal-blade-admin-watcher.war)
                 echo "admin|AdminServer|Log/event monitor (context: /watcher)" ;;
-            vorpal-blade-admin-dev-console.war)
-                echo "admin|AdminServer|(legacy dev-console — removed in 2.9.5)" ;;
+            vorpal-blade-admin-logs.war)
+                echo "admin|AdminServer|Log viewer (context: /logs)" ;;
             vorpal-blade-javadoc.war)
                 echo "admin|AdminServer|Javadoc site (context: /javadoc)" ;;
-            vorpal-blade-services-*.ear)
-                local profile="${1#vorpal-blade-services-}"
-                profile="${profile%.ear}"
-                echo "services|cluster|Services EAR (profile: ${profile})" ;;
+            vorpal-blade-admin-*.war)
+                echo "admin|AdminServer|Admin app: ${1#vorpal-blade-admin-}" ;;
+            vorpal-blade-services-*.war)
+                local svc="${1#vorpal-blade-services-}"; svc="${svc%.war}"
+                echo "service|cluster|SIP service (deploy as standalone WAR while EAR is disabled): ${svc}" ;;
+            test-*.war)
+                echo "test|cluster|SIP test app: ${1%.war}" ;;
             *.conf)
-                echo "metadata|n/a|Build profile used for this build" ;;
+                echo "metadata|n/a|Build profile / platform used for this build" ;;
             *)
                 echo "unknown|?|${1}" ;;
         esac
@@ -194,7 +307,13 @@ write_deployment_manifest() {
 PROFILES=()
 PLATFORM=""
 MAVEN_ARGS=()
+
+# Sticky dev-mode switch: BLADE_SKIP_DIST=1 in the env disables dist copying.
+# The CLI flag --no-dist always wins (for one-off explicit override).
 SKIP_DIST=false
+case "${BLADE_SKIP_DIST:-}" in
+    1|true|yes|on) SKIP_DIST=true ;;
+esac
 
 for arg in "$@"; do
     if [ "$arg" = "--" ]; then
@@ -212,17 +331,32 @@ for arg in "$@"; do
     fi
 done
 
-# --- Dist flag: passed to Maven so services/pom.xml skips its copy-dist
-# exec step, and also gates the DEPLOYMENT.txt writer below.
-DIST_FLAGS=()
-if [ "$SKIP_DIST" = true ]; then
-    DIST_FLAGS+=("-Dblade.skip.dist=true")
-fi
+# Note: the old -Dblade.skip.dist flag (read by services/pom.xml's copy-dist
+# exec step) is no longer passed — that exec step is commented out along with
+# the EAR. The dist copy is now done entirely from build.sh, gated by SKIP_DIST.
 
 if [ ${#PROFILES[@]} -eq 0 ]; then
     PROFILES=("$DEFAULT_PROFILE")
 fi
-PLATFORM="${PLATFORM:-$DEFAULT_PLATFORM}"
+if [ -z "$PLATFORM" ]; then
+    PLATFORM="$DEFAULT_PLATFORM"
+    PLATFORM_SOURCE="$DEFAULT_PLATFORM_SOURCE"
+else
+    PLATFORM_SOURCE="cli"
+fi
+
+# --- $OCCAS warning ---
+# Print only when we fell back to autodetection and $OCCAS didn't resolve.
+# If the user passed a platform on the CLI they made an explicit choice — stay quiet.
+# If $OCCAS resolved cleanly there's nothing to warn about either.
+if [ "$PLATFORM_SOURCE" != "cli" ] && [ "$DEFAULT_PLATFORM_SOURCE" != "\$OCCAS" ] && [ -n "$OCCAS_WARNING" ]; then
+    echo "WARNING: ${OCCAS_WARNING}"
+    echo "         Falling back to ${PLATFORM} (${PLATFORM_SOURCE})."
+    echo "         To silence this and pin the platform automatically, add to your shell rc:"
+    echo "             export OCCAS=/path/to/your/occas/install"
+    echo "         build.sh will then read inventory/registry.xml to pick the matching platform."
+    echo ""
+fi
 
 # --- Validate platform ---
 PLATFORM_FILE="${PLATFORMS_DIR}/${PLATFORM}.conf"
@@ -312,147 +446,71 @@ fi
 ALL_MODULES=$(discover_modules)
 TOTAL_COUNT=$(echo "$ALL_MODULES" | wc -l | tr -d ' ')
 
-if [ ${#PROFILES[@]} -eq 1 ]; then
-    # =====================================================================
-    # Single profile: run Maven once (same as before, plus ear.profile)
-    # =====================================================================
-    PROFILE="${PROFILES[0]}"
-    CONF_FILE="${PROFILES_DIR}/${PROFILE}.conf"
-    INCLUDED_MODULES=$(read_modules "$CONF_FILE")
-
-    SKIP_FLAGS=()
-    while IFS= read -r flag; do
-        [ -n "$flag" ] && SKIP_FLAGS+=("$flag")
-    done < <(compute_skip_flags "$CONF_FILE" "$ALL_MODULES")
-
-    INCLUDED_COUNT=$(echo "$INCLUDED_MODULES" | wc -l | tr -d ' ')
-
-    echo "Build profile: ${PROFILE}"
-    echo "Platform: ${PLATFORM}"
-    echo "Build number: ${BUILD_NUM}"
-    echo "Java version: ${JAVA_VERSION:-11 (default)}"
-    echo "WebLogic:     ${WL_VERSION:-14.1.1 (default)}"
-    echo "OCCAS:        ${OCCAS_VERSION:-8.1 (default)}"
-    echo "Modules: ${INCLUDED_COUNT} of ${TOTAL_COUNT}"
-    echo "EAR: vorpal-blade-services-${PROFILE}.ear"
-
-    if [ "${#SKIP_FLAGS[@]}" -gt 0 ]; then
-        EXCLUDED=$(printf '%s\n' "${SKIP_FLAGS[@]}" | sed 's/-Dskip\.//' | tr '\n' ' ')
-        echo "Excluding: ${EXCLUDED}"
-    fi
-    echo ""
-
-    set +e
-    "${SCRIPT_DIR}/mvnw" \
-        "${MAVEN_GOALS[@]}" \
-        "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
-        "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
-        "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
-        "${DIST_FLAGS[@]+"${DIST_FLAGS[@]}"}" \
-        "-Dbuild.number=${BUILD_NUM}" \
-        "-Dear.profile=${PROFILE}" \
-        "-Dbuild.platform=${PLATFORM}" \
-        "-Dblade.skip.install=false"
-    MVN_EXIT=$?
-    set -e
-
-    if [ $MVN_EXIT -ne 0 ]; then
-        [ "$SKIP_DIST" = true ] || cleanup_failed_dist
-        exit $MVN_EXIT
-    fi
-
-    [ "$SKIP_DIST" = true ] || write_deployment_manifest
-    # zip_previous_dist
-else
-    # =====================================================================
-    # Multiple profiles: build modules first, then EAR per profile
-    # =====================================================================
-
-    # Compute union of all included modules across all profiles
-    UNION_MODULES=""
-    for profile in "${PROFILES[@]}"; do
-        conf="${PROFILES_DIR}/${profile}.conf"
-        modules=$(read_modules "$conf")
-        UNION_MODULES=$(printf '%s\n%s' "$UNION_MODULES" "$modules" | sort -u | grep -v '^$' || true)
-    done
-
-    # Skip flags for union (exclude modules not in ANY profile)
-    UNION_SKIP_FLAGS=()
-    while IFS= read -r dir; do
-        if ! echo "$UNION_MODULES" | grep -qx "$dir"; then
-            prop=$(dir_to_skip_prop "$dir")
-            [ -n "$prop" ] && UNION_SKIP_FLAGS+=("-D${prop}")
-        fi
-    done <<< "$ALL_MODULES"
-
-    UNION_COUNT=$(echo "$UNION_MODULES" | wc -l | tr -d ' ')
-
-    echo "Build profiles: ${PROFILES[*]}"
-    echo "Platform: ${PLATFORM}"
-    echo "Build number: ${BUILD_NUM}"
-    echo "Java version: ${JAVA_VERSION:-11 (default)}"
-    echo "WebLogic:     ${WL_VERSION:-14.1.1 (default)}"
-    echo "OCCAS:        ${OCCAS_VERSION:-8.1 (default)}"
-    echo "Total modules: ${UNION_COUNT} of ${TOTAL_COUNT}"
-    echo "EARs: $(printf 'vorpal-blade-services-%s.ear ' "${PROFILES[@]}")"
-    echo ""
-
-    # --- Phase 1: Build all modules except EAR ---
-    # Install all artifacts to .m2 so the EAR module can find WARs in phase 2.
-    echo "=== Phase 1: Building modules ==="
-    set +e
-    "${SCRIPT_DIR}/mvnw" \
-        "${MAVEN_GOALS[@]}" \
-        "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
-        -pl '!services' \
-        "${UNION_SKIP_FLAGS[@]+"${UNION_SKIP_FLAGS[@]}"}" \
-        "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
-        "${DIST_FLAGS[@]+"${DIST_FLAGS[@]}"}" \
-        "-Dbuild.number=${BUILD_NUM}" \
-        "-Dblade.skip.install=false"
-    MVN_EXIT=$?
-    set -e
-
-    if [ $MVN_EXIT -ne 0 ]; then
-        [ "$SKIP_DIST" = true ] || cleanup_failed_dist
-        exit $MVN_EXIT
-    fi
-
-    # --- Phase 2: Build EAR for each profile ---
-    for profile in "${PROFILES[@]}"; do
-        echo ""
-        echo "=== Phase 2: Packaging EAR for '${profile}' ==="
-        PROFILE_SKIP_FLAGS=()
-        while IFS= read -r flag; do
-            [ -n "$flag" ] && PROFILE_SKIP_FLAGS+=("$flag")
-        done < <(compute_skip_flags "${PROFILES_DIR}/${profile}.conf" "$ALL_MODULES")
-
-        set +e
-        "${SCRIPT_DIR}/mvnw" \
-            verify \
-            "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
-            -pl services \
-            "${PROFILE_SKIP_FLAGS[@]+"${PROFILE_SKIP_FLAGS[@]}"}" \
-            "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
-            "${DIST_FLAGS[@]+"${DIST_FLAGS[@]}"}" \
-            "-Dbuild.number=${BUILD_NUM}" \
-            "-Dear.profile=${profile}" \
-            "-Dbuild.platform=${PLATFORM}"
-        MVN_EXIT=$?
-        set -e
-
-        if [ $MVN_EXIT -ne 0 ]; then
-            [ "$SKIP_DIST" = true ] || cleanup_failed_dist
-            exit $MVN_EXIT
-        fi
-    done
-
-    echo ""
-    echo "Built ${#PROFILES[@]} EAR files:"
-    for profile in "${PROFILES[@]}"; do
-        echo "  vorpal-blade-services-${profile}.ear"
-    done
-
-    [ "$SKIP_DIST" = true ] || write_deployment_manifest
-    # zip_previous_dist
+# --- Multi-profile builds were only meaningful for per-profile EARs.
+#     With the EAR disabled, refuse them up front. ---
+if [ ${#PROFILES[@]} -gt 1 ]; then
+    echo "Error: multiple profiles (${PROFILES[*]}) only made sense when each one"
+    echo "       produced its own EAR. The EAR logic is currently disabled — see"
+    echo "       services/pom.xml. Pick a single profile and run again."
+    exit 1
 fi
+
+PROFILE="${PROFILES[0]}"
+CONF_FILE="${PROFILES_DIR}/${PROFILE}.conf"
+INCLUDED_MODULES=$(read_modules "$CONF_FILE")
+
+SKIP_FLAGS=()
+while IFS= read -r flag; do
+    [ -n "$flag" ] && SKIP_FLAGS+=("$flag")
+done < <(compute_skip_flags "$CONF_FILE" "$ALL_MODULES")
+
+INCLUDED_COUNT=$(echo "$INCLUDED_MODULES" | wc -l | tr -d ' ')
+
+echo "Build profile: ${PROFILE}"
+echo "Platform: ${PLATFORM} (${PLATFORM_SOURCE})"
+echo "Build number: ${BUILD_NUM}"
+echo "Java version: ${JAVA_VERSION:-11 (default)}"
+echo "WebLogic:     ${WL_VERSION:-14.1.1 (default)}"
+echo "OCCAS:        ${OCCAS_VERSION:-8.1 (default)}"
+echo "Modules: ${INCLUDED_COUNT} of ${TOTAL_COUNT}"
+if [ "$SKIP_DIST" = true ]; then
+    echo "Dist:    SKIPPED (--no-dist or BLADE_SKIP_DIST set)"
+else
+    echo "Dist:    dist/${REVISION}-${BUILD_NUM}/"
+fi
+
+if [ "${#SKIP_FLAGS[@]}" -gt 0 ]; then
+    EXCLUDED=$(printf '%s\n' "${SKIP_FLAGS[@]}" | sed 's/-Dskip\.//' | tr '\n' ' ')
+    echo "Excluding: ${EXCLUDED}"
+fi
+echo ""
+
+set +e
+"${SCRIPT_DIR}/mvnw" \
+    "${MAVEN_GOALS[@]}" \
+    "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
+    "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
+    "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
+    "-Dbuild.number=${BUILD_NUM}" \
+    "-Dblade.skip.install=false"
+MVN_EXIT=$?
+set -e
+
+if [ $MVN_EXIT -ne 0 ]; then
+    [ "$SKIP_DIST" = true ] || cleanup_failed_dist
+    exit $MVN_EXIT
+fi
+
+if [ "$SKIP_DIST" != true ]; then
+    copy_all_to_dist
+    write_deployment_manifest
+fi
+
+# =============================================================================
+# TODO(EAR): multi-profile / per-profile-EAR branch removed. The original logic
+# ran two Maven phases (build modules, then build one EAR per profile) and was
+# the only consumer of -Dear.profile and -Dbuild.platform. Recover from git
+# history when re-enabling the EAR. Look for the block under
+# `if [ ${#PROFILES[@]} -eq 1 ]; then ... else ... fi` in the previous version
+# of this file.
+# =============================================================================
