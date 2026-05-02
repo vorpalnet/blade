@@ -65,6 +65,7 @@
 		<maven-ear-plugin.version>3.4.0</maven-ear-plugin.version>
 		<maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
 		<maven-install-plugin.version>3.1.4</maven-install-plugin.version>
+		<maven-source-plugin.version>3.3.1</maven-source-plugin.version>
 		<maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
 		<umldoclet.version>2.2.1</umldoclet.version>
 	</properties>
@@ -367,6 +368,23 @@
 	</dependencies>
 
 	<build>
+		<!-- Bundle .java sources alongside .class files in every module's
+		     output (target/classes/, then WEB-INF/classes/ in WARs). Lets
+		     us read source straight out of a deployed artifact when
+		     troubleshooting on a customer cluster. The framework library
+		     opts out of this and emits a separate -sources.jar instead;
+		     see libs/framework/pom.xml. -->
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+			</resource>
+			<resource>
+				<directory>${project.build.sourceDirectory}</directory>
+				<includes>
+					<include>**/*.java</include>
+				</includes>
+			</resource>
+		</resources>
 		<pluginManagement>
 			<plugins>
 				<plugin>
