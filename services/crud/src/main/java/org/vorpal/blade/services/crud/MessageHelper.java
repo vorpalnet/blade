@@ -11,6 +11,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.selectors.Selector;
 
 /**
  * Static utility methods for reading and writing SIP message attributes.
@@ -64,14 +65,44 @@ public class MessageHelper implements Serializable {
 			}
 			return null;
 
-		case "remoteIP":
-		case "RemoteIP":
-		case "Remote-IP":
+		case "originIP":
+		case "OriginIP":
+		case "Origin-IP":
+			// Original caller across proxy / B2BUA hops. Delegates to v3
+			// Selector, which walks X-Vorpal-ID;origin → InitialRemoteAddr →
+			// bottom Via received/sent-by → transport peer.
+			return Selector.readSource(asRequest(msg), "Remote-IP");
+
+		case "peerIP":
+		case "PeerIP":
+		case "Peer-IP":
+			// Immediate transport peer — whoever sent THIS hop. Use this
+			// when you specifically want the upstream neighbor; for
+			// "who dialed?" use originIP.
 			return msg.getRemoteAddr();
+
+		case "transport":
+		case "Transport":
+			// UDP / TCP / TLS / WS / WSS, taken from the initial request
+			// regardless of whether `msg` is the request or its response.
+			SipServletRequest tReq = asRequest(msg);
+			return tReq != null ? tReq.getInitialTransport() : null;
+
+		case "isSecure":
+		case "IsSecure":
+			SipServletRequest sReq = asRequest(msg);
+			String t = (sReq != null) ? sReq.getInitialTransport() : null;
+			return Boolean.toString("TLS".equalsIgnoreCase(t) || "WSS".equalsIgnoreCase(t));
 
 		default:
 			return msg.getHeader(attribute);
 		}
+	}
+
+	private static SipServletRequest asRequest(SipServletMessage msg) {
+		if (msg instanceof SipServletRequest) return (SipServletRequest) msg;
+		if (msg instanceof SipServletResponse) return ((SipServletResponse) msg).getRequest();
+		return null;
 	}
 
 	/// Adds a body part. If the message already has a body, it is wrapped

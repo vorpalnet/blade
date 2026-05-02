@@ -83,7 +83,7 @@ public class ReadOperation implements Operation {
 		return compiledPattern;
 	}
 
-	@JsonPropertyDescription("SIP attribute to read from: a header name, Request-URI, status, reason, remoteIP, or body.")
+	@JsonPropertyDescription("SIP attribute to read from: a header name, Request-URI, status, reason, originIP, peerIP, transport, isSecure, or body.")
 	public String getAttribute() {
 		return attribute;
 	}

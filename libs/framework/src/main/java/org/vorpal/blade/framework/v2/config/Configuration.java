@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
+import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -21,7 +22,6 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
-	private static final int MAX_VARIABLE_RESOLUTION_ITERATIONS = 5; // prevent loops
 
 	protected LogParameters logging;
 
@@ -169,60 +169,16 @@ public class Configuration implements Serializable {
 		return this;
 	}
 
-	@SuppressWarnings("el-syntax")
+	/// `${var}` substitution against an arbitrary attribute map.
+	///
+	/// Delegates to [Context#substitute], which iteratively re-resolves
+	/// up to its configured cap, honours the reserved meta-variables
+	/// (`${now}`, `${now:fmt}`, `${uuid}`), and falls back to environment
+	/// variables and system properties before leaving a placeholder
+	/// literal. Behaviour for the simple "lookup a name in `attributes`"
+	/// case is unchanged from the historical implementation.
 	public static String resolveVariables(Map<String, String> attributes, String expression) {
-		int openIndex;
-		int closeIndex;
-		String variable;
-		String key;
-		String value;
-		String outputString = new String(expression);
-
-		Callflow.getSipLogger().finer(
-				"Configuration.resolveVariables - begin... expression=" + expression + ", attributes=" + attributes);
-
-		try {
-
-			int counter = 0;
-			while ((openIndex = outputString.indexOf("${")) >= 0) {
-				counter++;
-				closeIndex = outputString.indexOf("}", openIndex);
-				variable = outputString.substring(openIndex, closeIndex + 1);
-
-				key = variable.substring(2, variable.length() - 1);
-				value = (String) attributes.get(key);
-
-				if (value != null) { // leave it alone in case we need to call this method again
-					outputString = outputString.replace(variable, value);
-				} else {
-					outputString = outputString.replace(variable, "?{" + key + "}");
-				}
-
-				if (counter >= MAX_VARIABLE_RESOLUTION_ITERATIONS) {
-					Callflow.getSipLogger()
-							.warning("Configuration.resolveVariables - INFINITE LOOP, CHECK CONFIGURATION, counter="
-									+ counter + ", expression=" + expression + ", attributes=" + attributes);
-					return expression;
-				}
-
-			}
-
-		} catch (Exception ex) {
-			Callflow.getSipLogger()
-					.severe("Configuration.resolveVariables - " + ex.getClass().getSimpleName() + " " + ex.getMessage()
-							+ ", CHECK CONFIGURATION, expression=" + expression + ", attributes=" + attributes);
-			Callflow.getSipLogger().severe(ex);
-			Callflow.getSipLogger().getParent()
-					.severe("Configuration.resolveVariables - " + ex.getClass().getSimpleName() + " " + ex.getMessage()
-							+ ", CHECK CONFIGURATION, expression=" + expression + ", attributes=" + attributes);
-			return expression;
-		}
-
-		outputString = outputString.replace("?{", "${");
-
-		Callflow.getSipLogger().finer("Configuration.resolveVariables - end. outputString=" + outputString);
-
-		return outputString;
+		return Context.substitute(expression, attributes);
 	}
 
 	@JsonPropertyDescription("Analytics parameters")

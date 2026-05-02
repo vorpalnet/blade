@@ -4,9 +4,9 @@ import java.util.Map;
 
 import javax.servlet.sip.SipServletMessage;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.Context;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
@@ -36,7 +36,7 @@ public class XPathCreateOperation implements Operation {
 
 			Document doc = XmlHelper.parse(xml);
 			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = (value != null) ? Configuration.resolveVariables(vars, value) : null;
+			String resolved = (value != null) ? Context.substitute(value, vars) : null;
 
 			boolean modified = false;
 			if (elementName != null) {

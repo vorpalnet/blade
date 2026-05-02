@@ -24,7 +24,6 @@
 	</wls:jsp-descriptor>
 
 	<wls:container-descriptor>
-		<wls:prefer-web-inf-classes>true</wls:prefer-web-inf-classes>
 		<wls:referer-validation>STRICT</wls:referer-validation>
 	</wls:container-descriptor>
 

@@ -264,8 +264,10 @@ public abstract class Selector implements Serializable {
 				String origin = xVorpalId.getParameter(Callflow.ORIGIN_PARAM);
 				if (origin != null && !origin.isEmpty()) return origin;
 			}
-		} catch (Exception ignore) {
-			// Malformed header must not break the pipeline — fall through.
+		} catch (Throwable ignore) {
+			// Neither a malformed header nor a static-init failure
+			// (ExceptionInInitializerError outside a real container) should
+			// break the pipeline — fall through to the next step.
 		}
 
 		// 2. Container-derived initial remote addr

@@ -4,9 +4,9 @@ import java.util.Map;
 
 import javax.servlet.sip.SipServletMessage;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
@@ -38,7 +38,7 @@ public class JsonPathUpdateOperation implements Operation {
 			if (json == null || json.isEmpty()) return;
 
 			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = Configuration.resolveVariables(vars, value);
+			String resolved = Context.substitute(value, vars);
 
 			DocumentContext ctx = JsonPath.parse(json);
 			ctx.set(jsonPath, MessageHelper.jsonOrString(resolved));

@@ -71,7 +71,6 @@
 	</security-constraint>
 
 
-	<!-- TEMPORARILY DISABLED (fsmar3 testing, 2026-04-17) — re-enable before merging to main.
 	<security-constraint>
 		<web-resource-collection>
 			<web-resource-name>blade</web-resource-name>
@@ -93,8 +92,6 @@
 			<form-error-page>/login.jsp</form-error-page>
 		</form-login-config>
 	</login-config>
-	-->
-	<!-- END TEMPORARILY DISABLED -->
 
 	<security-role>
 		<role-name>Admin</role-name>

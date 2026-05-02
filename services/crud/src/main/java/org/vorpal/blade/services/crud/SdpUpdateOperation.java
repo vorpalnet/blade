@@ -4,9 +4,9 @@ import java.util.Map;
 
 import javax.servlet.sip.SipServletMessage;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -36,7 +36,7 @@ public class SdpUpdateOperation implements Operation {
 			if (sdp == null || sdp.isEmpty()) return;
 
 			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = Configuration.resolveVariables(vars, value);
+			String resolved = Context.substitute(value, vars);
 
 			String result = SdpHelper.updateValue(sdp, jsonPath, resolved);
 			MessageHelper.setAttributeValue(msg, "body", result, contentType);

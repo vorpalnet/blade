@@ -14,10 +14,6 @@
 		<wls:timeout-secs>1800</wls:timeout-secs>
 	</wls:session-descriptor>
 
-	<wls:container-descriptor>
-		<wls:prefer-web-inf-classes>true</wls:prefer-web-inf-classes>
-	</wls:container-descriptor>
-
 	<wls:security-role-assignment>
 		<wls:role-name>Admin</wls:role-name>
 		<wls:externally-defined/>

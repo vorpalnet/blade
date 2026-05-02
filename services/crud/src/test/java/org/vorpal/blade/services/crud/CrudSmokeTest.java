@@ -9,11 +9,13 @@ import java.util.Map;
 import javax.servlet.sip.SipApplicationSession;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
 import org.vorpal.blade.framework.v2.testing.DummyRequest;
 import org.vorpal.blade.framework.v2.testing.DummyResponse;
+import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -63,6 +65,27 @@ public final class CrudSmokeTest {
 		testOperationsPolymorphicRoundTrip();
 		testRuleProcessOrder();
 		testRuleResetVariables();
+
+		testNowMetaVar();
+		testUuidMetaVar();
+		testEnvFallback();
+		testIterativeSubstitution();
+		testV2DelegatesToV3();
+		testOriginIpFallback();
+		testPeerIpPseudoHeader();
+		testTransportPseudoHeader();
+		testIsSecurePseudoHeader();
+
+		testMethodOrFilter();
+		testMethodNegationFilter();
+		testMethodMixedFilter();
+		testEventOrFilter();
+		testStatusRangeExact();
+		testStatusRangeRange();
+		testStatusRangeShorthand();
+		testStatusRangeNegation();
+		testStatusRangeRequiresResponse();
+		testStatusRangeMalformedIgnored();
 
 		System.out.println();
 		System.out.println("Passed: " + passed + " / " + (passed + failed));
@@ -461,6 +484,184 @@ public final class CrudSmokeTest {
 		check("reset.cleared-stale", !"stale-value".equals(req.getHeader("X-User")));
 	}
 
+	// --- v3 Context: meta-vars, env fallback, iteration ---
+
+	private static void testNowMetaVar() throws Exception {
+		DummyRequest req = invite();
+		new CreateOperation("X-Stamp", "${now}").process(req);
+		String stamped = req.getHeader("X-Stamp");
+		check("now.numeric", stamped != null && stamped.matches("\\d+"));
+	}
+
+	private static void testUuidMetaVar() throws Exception {
+		DummyRequest req = invite();
+		new CreateOperation("X-Trace", "${uuid}").process(req);
+		String stamped = req.getHeader("X-Trace");
+		check("uuid.shape",
+				stamped != null && stamped.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"));
+	}
+
+	private static void testEnvFallback() throws Exception {
+		String home = System.getenv("HOME");
+		if (home == null) home = System.getProperty("user.home");
+		check("env.fallback-precondition", home != null);
+
+		DummyRequest req = invite();
+		new CreateOperation("X-User-Home", "${HOME:-}${user.home}").process(req);
+		// `${HOME:-}` isn't a valid form (we ignore unknown args on plain
+		// names), so it lookups env "HOME" directly. `${user.home}` falls
+		// back to System.getProperty.
+		String stamped = req.getHeader("X-User-Home");
+		check("env.user-home-resolved", stamped != null && stamped.contains(home));
+	}
+
+	/// `${a}` resolves to "Hello ${b}!", which after one pass still contains
+	/// `${b}` — Context must keep iterating until stable.
+	private static void testIterativeSubstitution() throws Exception {
+		java.util.Map<String, String> vars = new java.util.HashMap<>();
+		vars.put("greeting", "Hello ${name}!");
+		vars.put("name", "World");
+		String result = Context.substitute("${greeting}", vars);
+		check("iterative.fully-resolved", "Hello World!".equals(result));
+	}
+
+	/// v2's Configuration.resolveVariables now delegates to Context.substitute,
+	/// so v2 callers (e.g. transfer service) automatically get the new
+	/// behaviour. Verify the semantics are wired through.
+	private static void testV2DelegatesToV3() throws Exception {
+		java.util.Map<String, String> vars = new java.util.HashMap<>();
+		vars.put("user", "alice");
+		String result = Configuration.resolveVariables(vars, "sip:${user}@example.com");
+		check("v2.delegate.simple", "sip:alice@example.com".equals(result));
+
+		String now = Configuration.resolveVariables(vars, "${now}");
+		check("v2.delegate.now", now != null && now.matches("\\d+"));
+	}
+
+	// --- new pseudo-headers ---
+
+	private static void testOriginIpFallback() throws Exception {
+		DummyRequest req = invite();
+		String origin = MessageHelper.getAttributeValue(req, "originIP", null);
+		// DummyRequest has no X-Vorpal-ID, no Via stack, no remote addr;
+		// the v3 Selector fallback chain bottoms out at "127.0.0.1".
+		check("originIP.fallback", "127.0.0.1".equals(origin));
+	}
+
+	private static void testPeerIpPseudoHeader() throws Exception {
+		DummyRequest req = invite();
+		// DummyMessage.getRemoteAddr returns null; the test confirms the
+		// pseudo-header is wired (no exception, no header-lookup fallthrough).
+		String peer = MessageHelper.getAttributeValue(req, "peerIP", null);
+		check("peerIP.no-throw", peer == null);
+	}
+
+	private static void testTransportPseudoHeader() throws Exception {
+		DummyRequest req = invite();
+		String transport = MessageHelper.getAttributeValue(req, "transport", null);
+		check("transport.no-throw", transport == null);
+	}
+
+	private static void testIsSecurePseudoHeader() throws Exception {
+		DummyRequest req = invite();
+		String secure = MessageHelper.getAttributeValue(req, "isSecure", null);
+		// Null transport → derives "false".
+		check("isSecure.derives-false", "false".equals(secure));
+	}
+
+	// --- expanded filtering: method / event OR + negation, statusRange ---
+
+	private static void testMethodOrFilter() throws Exception {
+		Rule r = new Rule();
+		r.setMethod("INVITE,REGISTER");
+		check("method.or.invite-matches", r.matches(invite(), null));
+		check("method.or.bye-no-match", !r.matches(bye(), null));
+
+		DummyRequest reg = new DummyRequest("REGISTER", "<sip:a@x>", "<sip:b@y>");
+		reg.setApplicationSession(new DummyApplicationSession("test"));
+		check("method.or.register-matches", r.matches(reg, null));
+	}
+
+	private static void testMethodNegationFilter() throws Exception {
+		Rule r = new Rule();
+		r.setMethod("!BYE");
+		check("method.neg.invite-matches", r.matches(invite(), null));
+		check("method.neg.bye-no-match", !r.matches(bye(), null));
+	}
+
+	private static void testMethodMixedFilter() throws Exception {
+		Rule r = new Rule();
+		r.setMethod("INVITE,!OPTIONS");
+		check("method.mixed.invite-matches", r.matches(invite(), null));
+		check("method.mixed.bye-no-match", !r.matches(bye(), null));
+
+		DummyRequest opt = new DummyRequest("OPTIONS", "<sip:a@x>", "<sip:b@y>");
+		opt.setApplicationSession(new DummyApplicationSession("test"));
+		check("method.mixed.options-no-match", !r.matches(opt, null));
+	}
+
+	private static void testEventOrFilter() throws Exception {
+		Rule r = new Rule();
+		r.setEvent("callStarted,callAnswered");
+		check("event.or.started-matches", r.matches(invite(), "callStarted"));
+		check("event.or.answered-matches", r.matches(invite(), "callAnswered"));
+		check("event.or.connected-no-match", !r.matches(invite(), "callConnected"));
+	}
+
+	private static void testStatusRangeExact() throws Exception {
+		Rule r = new Rule();
+		r.setStatusRange("200");
+		check("status.exact.200-match", r.matches(responseStatus(200), null));
+		check("status.exact.201-no-match", !r.matches(responseStatus(201), null));
+	}
+
+	private static void testStatusRangeRange() throws Exception {
+		Rule r = new Rule();
+		r.setStatusRange("200-299");
+		check("status.range.200", r.matches(responseStatus(200), null));
+		check("status.range.250", r.matches(responseStatus(250), null));
+		check("status.range.299", r.matches(responseStatus(299), null));
+		check("status.range.300-no-match", !r.matches(responseStatus(300), null));
+		check("status.range.199-no-match", !r.matches(responseStatus(199), null));
+	}
+
+	private static void testStatusRangeShorthand() throws Exception {
+		Rule r = new Rule();
+		r.setStatusRange("4xx");
+		check("status.shorthand.400", r.matches(responseStatus(400), null));
+		check("status.shorthand.404", r.matches(responseStatus(404), null));
+		check("status.shorthand.499", r.matches(responseStatus(499), null));
+		check("status.shorthand.500-no-match", !r.matches(responseStatus(500), null));
+
+		Rule rUpper = new Rule();
+		rUpper.setStatusRange("4XX");
+		check("status.shorthand.case-insensitive", rUpper.matches(responseStatus(404), null));
+	}
+
+	private static void testStatusRangeNegation() throws Exception {
+		Rule r = new Rule();
+		r.setStatusRange("!5xx");
+		check("status.neg.200-match", r.matches(responseStatus(200), null));
+		check("status.neg.500-no-match", !r.matches(responseStatus(500), null));
+		check("status.neg.503-no-match", !r.matches(responseStatus(503), null));
+	}
+
+	private static void testStatusRangeRequiresResponse() throws Exception {
+		Rule r = new Rule();
+		r.setStatusRange("200-299");
+		// statusRange implicitly restricts to responses — requests fail the
+		// filter regardless of value.
+		check("status.requires-response", !r.matches(invite(), null));
+	}
+
+	private static void testStatusRangeMalformedIgnored() throws Exception {
+		Rule r = new Rule();
+		r.setStatusRange("not-a-number,200");
+		// Malformed token is skipped; the second token still matches.
+		check("status.malformed.200-still-matches", r.matches(responseStatus(200), null));
+		check("status.malformed.500-no-match", !r.matches(responseStatus(500), null));
+	}
+
 	// --- helpers ---
 
 	private static DummyRequest invite() throws Exception {
@@ -477,6 +678,10 @@ public final class CrudSmokeTest {
 
 	private static DummyResponse response200() throws Exception {
 		return new DummyResponse(invite(), 200);
+	}
+
+	private static DummyResponse responseStatus(int status) throws Exception {
+		return new DummyResponse(invite(), status);
 	}
 
 	private static void check(String name, boolean condition) {

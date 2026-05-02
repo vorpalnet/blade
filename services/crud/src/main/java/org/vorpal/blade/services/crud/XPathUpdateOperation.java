@@ -4,9 +4,9 @@ import java.util.Map;
 
 import javax.servlet.sip.SipServletMessage;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.Context;
 import org.w3c.dom.Document;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -37,7 +37,7 @@ public class XPathUpdateOperation implements Operation {
 
 			Document doc = XmlHelper.parse(xml);
 			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = Configuration.resolveVariables(vars, value);
+			String resolved = Context.substitute(value, vars);
 
 			if (XmlHelper.setNodeValue(doc, xpath, resolved)) {
 				MessageHelper.setAttributeValue(msg, "body", XmlHelper.serialize(doc), contentType);

@@ -333,7 +333,14 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public Parameterable getParameterableHeader(String key) throws ServletParseException {
-		return AsyncSipServlet.getSipFactory().createParameterable(headers.get(key));
+		// Match getHeader semantics: absent header → null, with no need to
+		// touch SipFactory. Otherwise tests that probe a missing header
+		// trigger AsyncSipServlet → GenericServlet class init, which fails
+		// on the missing javax.servlet LocalStrings ResourceBundle outside
+		// a real container.
+		String value = headers.get(key);
+		if (value == null) return null;
+		return AsyncSipServlet.getSipFactory().createParameterable(value);
 	}
 
 	@Override

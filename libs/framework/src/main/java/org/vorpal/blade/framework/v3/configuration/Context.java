@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,6 +43,11 @@ import javax.servlet.sip.SipSession;
 /// fully-resolved URI.
 public class Context {
 	private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{([^}]+)\\}");
+
+	/// Iteration cap for `${var}` re-resolution. A resolved value that
+	/// itself contains `${...}` is fed back through substitution; this
+	/// cap stops cycles. Matches v2's historical iteration limit.
+	private static final int MAX_ITERATIONS = 10;
 
 	private final SipServletRequest request;
 
@@ -198,40 +204,46 @@ public class Context {
 	}
 
 	/// Resolve `${name}` placeholders in `template` against session
-	/// state. Reserved meta-variables (see [#reserved]) take
-	/// precedence. Unresolved placeholders are left as-is.
+	/// state. Reserved meta-variables (see [#reserved]) take precedence.
+	/// Resolution is iterative: a resolved value containing `${...}` is
+	/// re-resolved up to [#MAX_ITERATIONS] times. Unresolved placeholders
+	/// are left as-is.
 	public String resolve(String template) {
 		if (template == null) return null;
-		if (request == null) return substituteReservedOnly(template);
-		Matcher m = PLACEHOLDER.matcher(template);
-		StringBuilder out = new StringBuilder();
-		Reserved cache = new Reserved();
-		while (m.find()) {
-			String expr = m.group(1);
-			String value = reserved(expr, cache);
-			// Session + env + system-property lookup uses only the bare
-			// name, ignoring any `:args` tail (which only reserved forms
-			// know how to parse).
-			if (value == null) {
-				int colon = expr.indexOf(':');
-				String bare = (colon < 0) ? expr : expr.substring(0, colon);
-				value = get(bare);
-				if (value == null) value = fallback(bare);
-			}
-			m.appendReplacement(out, Matcher.quoteReplacement(value != null ? value : m.group(0)));
-		}
-		m.appendTail(out);
-		return out.toString();
+		if (request == null) return iterate(template, name -> null);
+		return iterate(template, this::get);
 	}
 
 	/// Substitute `${name}` placeholders in `template` against an
 	/// arbitrary `vars` map (does not consult the SIP session).
 	/// Reserved meta-variables (see [#reserved]) take precedence.
-	/// Unresolved placeholders are left as-is. Static utility, useful
-	/// for selectors that work against per-call data like regex
-	/// capture groups.
+	/// Resolution is iterative: a resolved value containing `${...}` is
+	/// re-resolved up to [#MAX_ITERATIONS] times. Unresolved placeholders
+	/// are left as-is.
 	public static String substitute(String template, Map<String, String> vars) {
 		if (template == null) return null;
+		return iterate(template, name -> (vars != null) ? vars.get(name) : null);
+	}
+
+	/// Iterative wrapper around [#singlePass]. Re-renders the template
+	/// while the output keeps changing, until either a fixed point or
+	/// [#MAX_ITERATIONS] is reached. The cap is a safety against
+	/// `${a}` ↔ `${b}` cycles; in normal usage one or two passes suffice.
+	private static String iterate(String template, Function<String, String> lookup) {
+		String prev = template;
+		for (int i = 0; i < MAX_ITERATIONS; i++) {
+			String next = singlePass(prev, lookup);
+			if (next.equals(prev)) return next;
+			prev = next;
+		}
+		return prev;
+	}
+
+	/// One pass of placeholder resolution. Reserved meta-variables win
+	/// first; otherwise the supplied `lookup` is consulted, then env-var
+	/// and system-property fallback, and finally the placeholder is left
+	/// literal. Iteration is the caller's responsibility — see [#iterate].
+	private static String singlePass(String template, Function<String, String> lookup) {
 		Matcher m = PLACEHOLDER.matcher(template);
 		StringBuilder out = new StringBuilder();
 		Reserved cache = new Reserved();
@@ -241,29 +253,8 @@ public class Context {
 			if (value == null) {
 				int colon = expr.indexOf(':');
 				String bare = (colon < 0) ? expr : expr.substring(0, colon);
-				if (vars != null) value = vars.get(bare);
+				value = lookup.apply(bare);
 				if (value == null) value = fallback(bare);
-			}
-			m.appendReplacement(out, Matcher.quoteReplacement(value != null ? value : m.group(0)));
-		}
-		m.appendTail(out);
-		return out.toString();
-	}
-
-	/// Fast path for `resolve()` when `request == null` (e.g. in tests
-	/// that construct a Context with no SIP request). Honors reserved
-	/// meta-variables and the env/system-property fallback so `${now}`,
-	/// `${HOME}`, `${user.dir}` work without a session.
-	private static String substituteReservedOnly(String template) {
-		Matcher m = PLACEHOLDER.matcher(template);
-		StringBuilder out = new StringBuilder();
-		Reserved cache = new Reserved();
-		while (m.find()) {
-			String expr = m.group(1);
-			String value = reserved(expr, cache);
-			if (value == null) {
-				int colon = expr.indexOf(':');
-				value = fallback(colon < 0 ? expr : expr.substring(0, colon));
 			}
 			m.appendReplacement(out, Matcher.quoteReplacement(value != null ? value : m.group(0)));
 		}

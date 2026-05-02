@@ -53,6 +53,41 @@
 			<groupId>org.vorpal.blade</groupId>
 			<artifactId>vorpal-blade-library-framework</artifactId>
 		</dependency>
+		<!-- Framework transitives that the parent declares as <scope>provided</scope>
+		     (shared library provides them for normal service WARs). The Configurator
+		     is standalone, so re-scope to compile or they get stripped from WEB-INF/lib.
+		     ipaddress in particular is touched at deploy time by framework v2.config
+		     JSON (de)serializers during schema scan. -->
+		<dependency>
+			<groupId>com.github.seancfoley</groupId>
+			<artifactId>ipaddress</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<artifactId>jackson-dataformat-xml</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.kjetland</groupId>
+			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.jayway.jsonpath</groupId>
+			<artifactId>json-path</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-collections4</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-email</artifactId>
+			<scope>compile</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

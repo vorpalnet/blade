@@ -4,9 +4,9 @@ import java.util.Map;
 
 import javax.servlet.sip.SipServletMessage;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
@@ -44,7 +44,7 @@ public class JsonPathCreateOperation implements Operation {
 			if (json == null || json.isEmpty()) return;
 
 			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
-			String resolved = (value != null) ? Configuration.resolveVariables(vars, value) : null;
+			String resolved = (value != null) ? Context.substitute(value, vars) : null;
 			Object inserted = (resolved != null) ? MessageHelper.jsonOrString(resolved) : null;
 
 			DocumentContext ctx = JsonPath.parse(json);

@@ -7,9 +7,9 @@ import java.util.regex.Pattern;
 
 import javax.servlet.sip.SipServletMessage;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -67,7 +67,7 @@ public class UpdateOperation implements Operation {
 				}
 			}
 
-			String resolved = Configuration.resolveVariables(vars, replacement);
+			String resolved = Context.substitute(replacement, vars);
 			MessageHelper.setAttributeValue(msg, attribute, resolved, contentType);
 			SettingsManager.getSipLogger().finer(msg,
 					"UpdateOperation - updated " + attribute + "=" + resolved);
