@@ -1,25 +1,22 @@
 package org.vorpal.blade.services.crud;
 
-import java.io.Serializable;
 import java.util.Map;
 
 import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/**
- * Modifies JSON body content by setting the value at a JsonPath location.
- * Supports ${variable} substitution from SipApplicationSession attributes.
- */
-@JsonPropertyOrder({ "contentType", "jsonPath", "value" })
-public class JsonPathUpdateOperation implements Serializable {
+/// Updates a JSON value at a JsonPath location with `${variable}` substitution.
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+public class JsonPathUpdateOperation implements Operation {
 	private static final long serialVersionUID = 1L;
 
 	private String contentType;
@@ -34,35 +31,27 @@ public class JsonPathUpdateOperation implements Serializable {
 		this.value = value;
 	}
 
-	/**
-	 * Parses the JSON body, sets the value at the JsonPath location
-	 * with variable substitution, and writes the JSON back.
-	 */
+	@Override
 	public void process(SipServletMessage msg) {
 		try {
 			String json = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (json == null || json.isEmpty()) {
-				return;
-			}
+			if (json == null || json.isEmpty()) return;
 
 			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
 			String resolved = Configuration.resolveVariables(vars, value);
 
 			DocumentContext ctx = JsonPath.parse(json);
-			ctx.set(jsonPath, resolved);
-			String result = ctx.jsonString();
-
-			MessageHelper.setAttributeValue(msg, "body", result, contentType);
+			ctx.set(jsonPath, MessageHelper.jsonOrString(resolved));
+			MessageHelper.setAttributeValue(msg, "body", ctx.jsonString(), contentType);
 
 			SettingsManager.getSipLogger().finer(msg,
 					"JsonPathUpdateOperation - updated " + jsonPath + "=" + resolved);
-
 		} catch (Exception e) {
 			SettingsManager.getSipLogger().logStackTrace(msg, e);
 		}
 	}
 
-	@JsonPropertyDescription("Content type of the JSON MIME part to target, e.g. application/json. Null targets entire body.")
+	@JsonPropertyDescription("Optional MIME content type, e.g. application/json. Null targets the entire body.")
 	public String getContentType() {
 		return contentType;
 	}
@@ -71,7 +60,8 @@ public class JsonPathUpdateOperation implements Serializable {
 		this.contentType = contentType;
 	}
 
-	@JsonPropertyDescription("JsonPath expression selecting the value to update, e.g. $.agent.name")
+	@JsonPropertyDescription("JsonPath of the value to update, e.g. $.agent.name")
+	@FormLayout(wide = true)
 	public String getJsonPath() {
 		return jsonPath;
 	}
@@ -80,7 +70,7 @@ public class JsonPathUpdateOperation implements Serializable {
 		this.jsonPath = jsonPath;
 	}
 
-	@JsonPropertyDescription("New value, supports ${variable} substitution")
+	@JsonPropertyDescription("New value. Supports ${variable} substitution.")
 	public String getValue() {
 		return value;
 	}

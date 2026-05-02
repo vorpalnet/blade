@@ -672,19 +672,23 @@ public abstract class Callflow implements Serializable {
 				sipSession.setAttribute(VORPAL_DIALOG, dialogId);
 				appSession.setAttribute(VORPAL_TIMESTAMP, vorpalTimestamp);
 				appSession.setAttribute(VORPAL_SESSION, indexKey);
-			} else {
+			} else if (indexKey == null) {
+				// True first-touch: appSession has no VORPAL_SESSION and no
+				// upstream BLADE stamped an X-Vorpal-ID header. Generate one
+				// and cache request.getRemoteAddr() as the upstream sender so
+				// sendRequest can stamp `origin` on outbound forwards.
 				indexKey = createVorpalSessionId(appSession);
-				// This is the first BLADE service to see this request —
-				// nobody upstream stamped an X-Vorpal-ID header. At this
-				// exact moment, request.getRemoteAddr() IS the actual
-				// upstream sender (whoever just reached us over the wire).
-				// Cache it so sendRequest can stamp `origin` on outbound
-				// forwards, and so getVorpalOrigin() can read it later.
 				String remote = request.getRemoteAddr();
 				if (remote != null && !remote.isEmpty()) {
 					appSession.setAttribute(VORPAL_ORIGIN, remote);
 				}
 			}
+			// else: appSession already has VORPAL_SESSION — preserve it.
+			// Skipping this branch used to clobber it with a fresh random
+			// value on every initial inbound INVITE that arrived on an
+			// established appSession (e.g. shuffle's pac-man back-INVITE),
+			// causing logs and wire to disagree. The dialog ID for this new
+			// SipSession is filled in lazily by getVorpalDialogId on demand.
 
 		}
 

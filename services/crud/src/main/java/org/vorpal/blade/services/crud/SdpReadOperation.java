@@ -1,7 +1,8 @@
 package org.vorpal.blade.services.crud;
 
-import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.servlet.sip.SipApplicationSession;
@@ -9,24 +10,15 @@ import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/**
- * Extracts values from SDP body content by converting SDP to JSON
- * and evaluating JsonPath expressions. Results are saved as
- * SipApplicationSession attributes.
- *
- * <p>Example expressions:
- * <ul>
- *   <li>{@code $.connection.address} — session-level connection address</li>
- *   <li>{@code $.media[0].port} — first media line port</li>
- *   <li>{@code $.media[0].attributes[?(@.name=='label')].value} — label attribute of first media</li>
- *   <li>{@code $.origin.address} — origin address</li>
- * </ul>
- */
-@JsonPropertyOrder({ "contentType", "expressions" })
-public class SdpReadOperation implements Serializable {
+/// Reads values from an SDP body. The SDP is parsed to a JSON tree (using
+/// the framework's native [org.vorpal.blade.framework.v2.sdp.Sdp] model) so
+/// expressions like `$.media[0].port` and
+/// `$.media[0].attributes[?(@.name=='rtpmap')].value` work directly.
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+public class SdpReadOperation implements Operation {
 	private static final long serialVersionUID = 1L;
 
 	private String contentType;
@@ -35,36 +27,32 @@ public class SdpReadOperation implements Serializable {
 	public SdpReadOperation() {
 	}
 
-	/**
-	 * Converts the SDP body to JSON, evaluates each JsonPath expression,
-	 * and saves results to the SipApplicationSession.
-	 */
+	@Override
 	public void process(SipServletMessage msg) {
 		try {
 			String sdp = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (sdp == null || sdp.isEmpty()) {
-				return;
-			}
+			if (sdp == null || sdp.isEmpty()) return;
 
 			SipApplicationSession appSession = msg.getApplicationSession();
-
 			for (Map.Entry<String, String> entry : expressions.entrySet()) {
-				String attrName = entry.getKey();
-				String jsonPath = entry.getValue();
-				String value = SdpHelper.readValue(sdp, jsonPath);
+				String value = SdpHelper.readValue(sdp, entry.getValue());
 				if (value != null && !value.isEmpty()) {
-					appSession.setAttribute(attrName, value);
+					appSession.setAttribute(entry.getKey(), value);
 					SettingsManager.getSipLogger().finer(msg,
-							"SdpReadOperation - saved " + attrName + "=" + value);
+							"SdpReadOperation - saved " + entry.getKey() + "=" + value);
 				}
 			}
-
 		} catch (Exception e) {
 			SettingsManager.getSipLogger().logStackTrace(msg, e);
 		}
 	}
 
-	@JsonPropertyDescription("Content type for targeting a specific MIME part, e.g. application/sdp. Null reads entire body.")
+	@Override
+	public List<String> variableNames() {
+		return new ArrayList<>(expressions.keySet());
+	}
+
+	@JsonPropertyDescription("Optional MIME content type, e.g. application/sdp. Null reads the entire body.")
 	public String getContentType() {
 		return contentType;
 	}
@@ -73,7 +61,7 @@ public class SdpReadOperation implements Serializable {
 		this.contentType = contentType;
 	}
 
-	@JsonPropertyDescription("Map of attribute name to JsonPath expression on the SDP-as-JSON, e.g. {\"mediaAddr\": \"$.media[0].connection.address\"}")
+	@JsonPropertyDescription("Map of variable name to JsonPath against the SDP-as-JSON, e.g. {\"port\": \"$.media[0].port\"}")
 	public Map<String, String> getExpressions() {
 		return expressions;
 	}

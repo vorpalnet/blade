@@ -74,6 +74,37 @@ public class MessageHelper implements Serializable {
 		}
 	}
 
+	/// Adds a body part. If the message already has a body, it is wrapped
+	/// (or extended) into multipart/mixed and the new part is appended;
+	/// otherwise the new part becomes the entire body.
+	public static void addBodyPart(SipServletMessage msg, String contentType, String body) throws Exception {
+		if (msg == null || contentType == null) return;
+		MimeHelper.addPart(msg, contentType, body);
+	}
+
+	/// If `value` is a JSON-shaped string (starts with `{` or `[`), parse it
+	/// to a JsonNode so JsonPath / SDP create and update can splice in
+	/// objects and arrays — not the literal string. Otherwise returns the
+	/// original string. This makes the save/restore pattern work: read a
+	/// media block on the INVITE, save it as a session variable, then write
+	/// `${videoMedia}` back into `$.media` on the 200 OK.
+	public static Object jsonOrString(String value) {
+		if (value == null) return null;
+		int i = 0;
+		while (i < value.length() && Character.isWhitespace(value.charAt(i))) i++;
+		if (i >= value.length()) return value;
+		char c = value.charAt(i);
+		if (c == '{' || c == '[') {
+			try {
+				return JSON.readTree(value);
+			} catch (Exception ignore) {
+			}
+		}
+		return value;
+	}
+
+	private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
 	/**
 	 * Writes a value to a SIP message attribute (header, body, Request-URI).
 	 * When contentType is specified and attribute is body/Content, delegates to

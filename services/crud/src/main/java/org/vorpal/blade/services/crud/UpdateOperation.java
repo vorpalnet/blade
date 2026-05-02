@@ -1,40 +1,39 @@
 package org.vorpal.blade.services.crud;
 
-import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/**
- * Modifies a SIP message attribute using regex pattern matching and replacement.
- * Extracts named groups from the current value, merges with session variables,
- * and applies ${variable} substitution to the replacement template.
- */
-@JsonPropertyOrder({ "attribute", "pattern", "replacement", "contentType" })
-public class UpdateOperation implements Serializable {
+/// Find-and-replace on a SIP attribute. Captures from `pattern` are merged
+/// with session variables, then `replacement` is rendered with
+/// `${variable}` substitution and written back. Captures from this op stay
+/// local to the rule — they are not exported to the session.
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+@JsonPropertyOrder({ "attribute", "contentType", "pattern", "replacement" })
+public class UpdateOperation implements Operation {
 	private static final long serialVersionUID = 1L;
 
+	private static final Pattern GROUP_NAME_PATTERN = Pattern.compile("\\(\\?<(?<name>[a-zA-Z][a-zA-Z0-9]*)>");
+
 	private String attribute;
-	private String contentType;
+	private String pattern;
 	private String replacement;
+	private String contentType;
 
 	@JsonIgnore
 	private transient Pattern compiledPattern;
-	private String pattern;
-
-	@JsonIgnore
-	private static final Pattern GROUP_NAME_PATTERN = Pattern.compile("\\<(?<name>[a-zA-Z0-9]+)\\>");
 
 	public UpdateOperation() {
 	}
@@ -45,57 +44,46 @@ public class UpdateOperation implements Serializable {
 		this.replacement = replacement;
 	}
 
-	/**
-	 * Reads the current value, extracts regex groups, merges with session variables,
-	 * resolves the replacement template, and writes the result back.
-	 */
+	@Override
 	public void process(SipServletMessage msg) {
 		try {
 			String value = MessageHelper.getAttributeValue(msg, attribute, contentType);
-			if (value == null) {
-				return;
-			}
+			if (value == null) return;
 
-			SipApplicationSession appSession = msg.getApplicationSession();
+			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
 
-			// Start with session variables
-			Map<String, String> vars = MessageHelper.getSessionVariables(appSession);
-
-			// Extract named groups from the current value and merge
 			LinkedList<String> groupNames = new LinkedList<>();
-			Matcher groupMatcher = GROUP_NAME_PATTERN.matcher(pattern);
-			while (groupMatcher.find()) {
-				String name = groupMatcher.group("name");
-				if (name != null) {
-					groupNames.add(name);
-				}
-			}
+			Matcher gn = GROUP_NAME_PATTERN.matcher(pattern);
+			while (gn.find()) groupNames.add(gn.group("name"));
 
-			Matcher matcher = getCompiledPattern().matcher(value);
+			Matcher matcher = compiled().matcher(value);
 			if (matcher.find()) {
 				for (String name : groupNames) {
-					String extracted = matcher.group(name);
-					if (extracted != null) {
-						vars.put(name, extracted);
+					try {
+						String extracted = matcher.group(name);
+						if (extracted != null) vars.put(name, extracted);
+					} catch (IllegalArgumentException ignore) {
 					}
 				}
 			}
 
-			// Resolve ${variables} in the replacement template
 			String resolved = Configuration.resolveVariables(vars, replacement);
-
-			// Write back
 			MessageHelper.setAttributeValue(msg, attribute, resolved, contentType);
-
 			SettingsManager.getSipLogger().finer(msg,
 					"UpdateOperation - updated " + attribute + "=" + resolved);
-
 		} catch (Exception e) {
 			SettingsManager.getSipLogger().logStackTrace(msg, e);
 		}
 	}
 
-	@JsonPropertyDescription("SIP message attribute to update, e.g. From, To, Request-URI, body")
+	private Pattern compiled() {
+		if (compiledPattern == null && pattern != null) {
+			compiledPattern = Pattern.compile(pattern, Pattern.DOTALL);
+		}
+		return compiledPattern;
+	}
+
+	@JsonPropertyDescription("SIP attribute to update — header name, Request-URI, or body.")
 	public String getAttribute() {
 		return attribute;
 	}
@@ -104,17 +92,19 @@ public class UpdateOperation implements Serializable {
 		this.attribute = attribute;
 	}
 
-	@JsonPropertyDescription("Regex pattern with named capturing groups to match the current value")
+	@JsonPropertyDescription("Regex with optional named groups; matches against the current attribute value.")
+	@FormLayout(wide = true, regexTest = true)
 	public String getPattern() {
 		return pattern;
 	}
 
 	public void setPattern(String pattern) {
 		this.pattern = pattern;
-		this.compiledPattern = Pattern.compile(pattern, Pattern.DOTALL);
+		this.compiledPattern = (pattern != null) ? Pattern.compile(pattern, Pattern.DOTALL) : null;
 	}
 
-	@JsonPropertyDescription("Replacement template with ${variable} references")
+	@JsonPropertyDescription("Replacement template; supports ${name} from session variables and from this op's named groups.")
+	@FormLayout(wide = true)
 	public String getReplacement() {
 		return replacement;
 	}
@@ -123,19 +113,12 @@ public class UpdateOperation implements Serializable {
 		this.replacement = replacement;
 	}
 
-	@JsonPropertyDescription("Content type for targeting a specific MIME part, e.g. application/sdp")
+	@JsonPropertyDescription("Optional MIME content type when targeting one part of a multipart body.")
 	public String getContentType() {
 		return contentType;
 	}
 
 	public void setContentType(String contentType) {
 		this.contentType = contentType;
-	}
-
-	private Pattern getCompiledPattern() {
-		if (compiledPattern == null && pattern != null) {
-			compiledPattern = Pattern.compile(pattern, Pattern.DOTALL);
-		}
-		return compiledPattern;
 	}
 }

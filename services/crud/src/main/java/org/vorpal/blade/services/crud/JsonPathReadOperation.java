@@ -1,7 +1,8 @@
 package org.vorpal.blade.services.crud;
 
-import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.servlet.sip.SipApplicationSession;
@@ -12,15 +13,12 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/**
- * Extracts values from JSON body content using JsonPath expressions
- * and saves them as SipApplicationSession attributes.
- */
-@JsonPropertyOrder({ "contentType", "expressions" })
-public class JsonPathReadOperation implements Serializable {
+/// Reads values from a JSON body via JsonPath into session attributes.
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+public class JsonPathReadOperation implements Operation {
 	private static final long serialVersionUID = 1L;
 
 	private String contentType;
@@ -29,38 +27,34 @@ public class JsonPathReadOperation implements Serializable {
 	public JsonPathReadOperation() {
 	}
 
-	/**
-	 * Parses the JSON body, evaluates each JsonPath expression, and saves
-	 * the results as SipApplicationSession attributes.
-	 */
+	@Override
 	public void process(SipServletMessage msg) {
 		try {
 			String json = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (json == null || json.isEmpty()) {
-				return;
-			}
+			if (json == null || json.isEmpty()) return;
 
 			DocumentContext ctx = JsonPath.parse(json);
 			SipApplicationSession appSession = msg.getApplicationSession();
 
 			for (Map.Entry<String, String> entry : expressions.entrySet()) {
-				String attrName = entry.getKey();
-				String jsonPath = entry.getValue();
-				Object result = ctx.read(jsonPath);
-				if (result != null) {
-					String value = result.toString();
-					appSession.setAttribute(attrName, value);
-					SettingsManager.getSipLogger().finer(msg,
-							"JsonPathReadOperation - saved " + attrName + "=" + value);
-				}
+				Object result = ctx.read(entry.getValue());
+				if (result == null) continue;
+				String value = (result instanceof String) ? (String) result : result.toString();
+				appSession.setAttribute(entry.getKey(), value);
+				SettingsManager.getSipLogger().finer(msg,
+						"JsonPathReadOperation - saved " + entry.getKey() + "=" + value);
 			}
-
 		} catch (Exception e) {
 			SettingsManager.getSipLogger().logStackTrace(msg, e);
 		}
 	}
 
-	@JsonPropertyDescription("Content type of the JSON MIME part to target, e.g. application/json. Null reads entire body.")
+	@Override
+	public List<String> variableNames() {
+		return new ArrayList<>(expressions.keySet());
+	}
+
+	@JsonPropertyDescription("Optional MIME content type, e.g. application/json. Null reads the entire body.")
 	public String getContentType() {
 		return contentType;
 	}
@@ -69,7 +63,7 @@ public class JsonPathReadOperation implements Serializable {
 		this.contentType = contentType;
 	}
 
-	@JsonPropertyDescription("Map of attribute name to JsonPath expression, e.g. {\"agentId\": \"$.agent.id\"}")
+	@JsonPropertyDescription("Map of variable name to JsonPath expression, e.g. {\"agentId\": \"$.agent.id\"}")
 	public Map<String, String> getExpressions() {
 		return expressions;
 	}

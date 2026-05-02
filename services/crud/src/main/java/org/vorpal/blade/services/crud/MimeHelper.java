@@ -1,207 +1,240 @@
 package org.vorpal.blade.services.crud;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.servlet.sip.SipServletMessage;
 
-/**
- * Utility for parsing and reassembling MIME multipart SIP message bodies.
- * Uses simple boundary-based parsing (no javax.mail dependency).
- */
+/// Parses and reassembles MIME multipart SIP message bodies. Per-part headers
+/// (Content-ID, Content-Disposition, Content-Length, custom MIME headers) are
+/// preserved through the round trip — only the targeted part's body is
+/// rewritten.
 public class MimeHelper implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private MimeHelper() {
 	}
 
-	/**
-	 * A single part of a MIME multipart message.
-	 */
+	/// One section of a multipart body: every header (case-preserving,
+	/// insertion-ordered) plus the body text.
 	public static class MimePart implements Serializable {
 		private static final long serialVersionUID = 1L;
-		public String contentType;
+		public Map<String, String> headers = new LinkedHashMap<>();
 		public String body;
 
+		public MimePart() {
+		}
+
 		public MimePart(String contentType, String body) {
-			this.contentType = contentType;
+			if (contentType != null) headers.put("Content-Type", contentType);
 			this.body = body;
+		}
+
+		public String getContentType() {
+			for (Map.Entry<String, String> e : headers.entrySet()) {
+				if ("content-type".equalsIgnoreCase(e.getKey())) return e.getValue();
+			}
+			return null;
 		}
 	}
 
-	/**
-	 * Parses a multipart message body into individual parts.
-	 */
 	public static List<MimePart> parseParts(SipServletMessage msg) throws IOException {
 		List<MimePart> parts = new ArrayList<>();
-		if (msg.getContent() == null || msg.getContentType() == null) {
-			return parts;
-		}
+		if (msg.getContent() == null || msg.getContentType() == null) return parts;
 
-		String msgContentType = msg.getContentType();
-		String boundary = extractBoundary(msgContentType);
-		if (boundary == null) {
-			return parts;
-		}
+		String boundary = extractBoundary(msg.getContentType());
+		if (boundary == null) return parts;
 
-		String body;
-		Object content = msg.getContent();
-		if (content instanceof String) {
-			body = (String) content;
-		} else if (content instanceof byte[]) {
-			body = new String((byte[]) content);
-		} else {
-			return parts;
-		}
+		String body = bodyAsString(msg.getContent());
+		if (body == null) return parts;
 
 		String delimiter = "--" + boundary;
-		String[] sections = body.split(delimiter);
+		String[] sections = body.split(java.util.regex.Pattern.quote(delimiter));
 
 		for (int i = 1; i < sections.length; i++) {
 			String section = sections[i];
-			if (section.startsWith("--")) {
-				break; // closing delimiter
+			if (section.startsWith("--")) break;
+
+			section = stripLeadingNewlines(section);
+			section = stripTrailingNewlines(section);
+			if (section.isEmpty()) continue;
+
+			int blank = section.indexOf("\r\n\r\n");
+			int blankSep = 4;
+			if (blank < 0) {
+				blank = section.indexOf("\n\n");
+				blankSep = 2;
 			}
 
-			section = section.trim();
-			if (section.isEmpty()) {
-				continue;
-			}
-
-			// Split headers from body at first blank line
-			int blankLine = section.indexOf("\r\n\r\n");
-			if (blankLine < 0) {
-				blankLine = section.indexOf("\n\n");
-			}
-
-			String partHeaders;
-			String partBody;
-			if (blankLine >= 0) {
-				partHeaders = section.substring(0, blankLine);
-				partBody = section.substring(blankLine).trim();
+			MimePart part = new MimePart();
+			String headerBlock;
+			if (blank >= 0) {
+				headerBlock = section.substring(0, blank);
+				part.body = section.substring(blank + blankSep);
 			} else {
-				partHeaders = "";
-				partBody = section;
+				headerBlock = "";
+				part.body = section;
 			}
-
-			String partContentType = extractPartContentType(partHeaders);
-			parts.add(new MimePart(partContentType, partBody));
+			parseHeaders(headerBlock, part.headers);
+			parts.add(part);
 		}
 
 		return parts;
 	}
 
-	/**
-	 * Gets the body text of the first MIME part matching the given content type.
-	 */
 	public static String getPartBody(SipServletMessage msg, String contentType) throws IOException {
-		List<MimePart> parts = parseParts(msg);
-		for (MimePart part : parts) {
-			if (part.contentType != null && part.contentType.startsWith(contentType)) {
-				return part.body;
-			}
+		for (MimePart part : parseParts(msg)) {
+			if (matches(part.getContentType(), contentType)) return part.body;
 		}
 		return null;
 	}
 
-	/**
-	 * Replaces the body of the first MIME part matching the given content type
-	 * and writes the reassembled multipart back to the message.
-	 */
 	public static void setPartBody(SipServletMessage msg, String contentType, String newBody) throws Exception {
 		List<MimePart> parts = parseParts(msg);
-		boolean found = false;
 		for (MimePart part : parts) {
-			if (part.contentType != null && part.contentType.startsWith(contentType)) {
+			if (matches(part.getContentType(), contentType)) {
 				part.body = newBody;
-				found = true;
-				break;
-			}
-		}
-
-		if (found) {
-			String boundary = extractBoundary(msg.getContentType());
-			String reassembled = reassemble(parts, boundary);
-			msg.setContent(reassembled, msg.getContentType());
-		}
-	}
-
-	/**
-	 * Removes the first MIME part matching the given content type
-	 * and writes the reassembled multipart back to the message.
-	 */
-	public static void removePart(SipServletMessage msg, String contentType) throws Exception {
-		List<MimePart> parts = parseParts(msg);
-		boolean removed = parts.removeIf(
-				part -> part.contentType != null && part.contentType.startsWith(contentType));
-
-		if (removed) {
-			String boundary = extractBoundary(msg.getContentType());
-			if (parts.size() == 1) {
-				// Only one part left — unwrap from multipart
-				msg.setContent(parts.get(0).body, parts.get(0).contentType);
-			} else if (parts.isEmpty()) {
-				msg.setContent(null, null);
-			} else {
-				String reassembled = reassemble(parts, boundary);
-				msg.setContent(reassembled, msg.getContentType());
+				rewrite(msg, parts);
+				return;
 			}
 		}
 	}
 
-	/**
-	 * Reassembles MIME parts into a multipart body string.
-	 */
-	public static String reassemble(List<MimePart> parts, String boundary) {
+	/// Adds a new MIME part to the message. If the body is empty, the new
+	/// part becomes the entire body. If the body is currently single-part,
+	/// it is wrapped in `multipart/mixed` with a fresh boundary and the new
+	/// part is appended. If the body is already multipart, the new part is
+	/// appended in place.
+	public static void addPart(SipServletMessage msg, String contentType, String body) throws Exception {
+		if (msg.getContent() == null) {
+			msg.setContent(body, contentType);
+			return;
+		}
+
+		String existingType = msg.getContentType();
+		if (existingType != null && existingType.toLowerCase().startsWith("multipart/")) {
+			List<MimePart> parts = parseParts(msg);
+			parts.add(new MimePart(contentType, body));
+			rewrite(msg, parts);
+			return;
+		}
+
+		String boundary = newBoundary();
+		List<MimePart> parts = new ArrayList<>();
+		parts.add(new MimePart(existingType, bodyAsString(msg.getContent())));
+		parts.add(new MimePart(contentType, body));
+		String wrappedType = "multipart/mixed;boundary=" + boundary;
 		StringBuilder sb = new StringBuilder();
 		for (MimePart part : parts) {
 			sb.append("--").append(boundary).append("\r\n");
-			if (part.contentType != null) {
-				sb.append("Content-Type: ").append(part.contentType).append("\r\n");
+			for (Map.Entry<String, String> h : part.headers.entrySet()) {
+				sb.append(h.getKey()).append(": ").append(h.getValue()).append("\r\n");
 			}
 			sb.append("\r\n");
-			sb.append(part.body).append("\r\n");
+			sb.append(part.body != null ? part.body : "").append("\r\n");
 		}
 		sb.append("--").append(boundary).append("--\r\n");
-		return sb.toString();
+		msg.setContent(sb.toString(), wrappedType);
+	}
+
+	public static void removePart(SipServletMessage msg, String contentType) throws Exception {
+		List<MimePart> parts = parseParts(msg);
+		boolean removed = parts.removeIf(p -> matches(p.getContentType(), contentType));
+		if (!removed) return;
+
+		if (parts.isEmpty()) {
+			msg.setContent(null, null);
+		} else if (parts.size() == 1) {
+			MimePart sole = parts.get(0);
+			msg.setContent(sole.body, sole.getContentType());
+		} else {
+			rewrite(msg, parts);
+		}
+	}
+
+	private static void rewrite(SipServletMessage msg, List<MimePart> parts) throws Exception {
+		String boundary = extractBoundary(msg.getContentType());
+		StringBuilder sb = new StringBuilder();
+		for (MimePart part : parts) {
+			sb.append("--").append(boundary).append("\r\n");
+			for (Map.Entry<String, String> h : part.headers.entrySet()) {
+				sb.append(h.getKey()).append(": ").append(h.getValue()).append("\r\n");
+			}
+			sb.append("\r\n");
+			sb.append(part.body != null ? part.body : "").append("\r\n");
+		}
+		sb.append("--").append(boundary).append("--\r\n");
+		msg.setContent(sb.toString(), msg.getContentType());
+	}
+
+	private static void parseHeaders(String block, Map<String, String> out) {
+		if (block == null || block.isEmpty()) return;
+		String currentName = null;
+		StringBuilder currentValue = new StringBuilder();
+		for (String line : block.split("\\r?\\n")) {
+			if (line.isEmpty()) continue;
+			if ((line.startsWith(" ") || line.startsWith("\t")) && currentName != null) {
+				currentValue.append(' ').append(line.trim());
+				continue;
+			}
+			if (currentName != null) {
+				out.put(currentName, currentValue.toString());
+				currentValue.setLength(0);
+			}
+			int colon = line.indexOf(':');
+			if (colon < 0) {
+				currentName = null;
+				continue;
+			}
+			currentName = line.substring(0, colon).trim();
+			currentValue.append(line.substring(colon + 1).trim());
+		}
+		if (currentName != null) out.put(currentName, currentValue.toString());
+	}
+
+	private static boolean matches(String partContentType, String wanted) {
+		if (partContentType == null || wanted == null) return false;
+		return partContentType.toLowerCase().startsWith(wanted.toLowerCase());
+	}
+
+	private static String bodyAsString(Object content) {
+		if (content instanceof String) return (String) content;
+		if (content instanceof byte[]) return new String((byte[]) content);
+		return null;
+	}
+
+	private static String stripLeadingNewlines(String s) {
+		int i = 0;
+		while (i < s.length() && (s.charAt(i) == '\r' || s.charAt(i) == '\n')) i++;
+		return s.substring(i);
+	}
+
+	private static String stripTrailingNewlines(String s) {
+		int i = s.length();
+		while (i > 0 && (s.charAt(i - 1) == '\r' || s.charAt(i - 1) == '\n')) i--;
+		return s.substring(0, i);
+	}
+
+	private static String newBoundary() {
+		return "blade-" + Long.toHexString(System.nanoTime()) + Long.toHexString(Double.doubleToLongBits(Math.random()));
 	}
 
 	private static String extractBoundary(String contentType) {
-		if (contentType == null) {
-			return null;
-		}
+		if (contentType == null) return null;
 		String lower = contentType.toLowerCase();
 		int idx = lower.indexOf("boundary=");
-		if (idx < 0) {
-			return null;
+		if (idx < 0) return null;
+		String value = contentType.substring(idx + 9).trim();
+		if (value.startsWith("\"")) {
+			int end = value.indexOf('"', 1);
+			return end > 0 ? value.substring(1, end) : null;
 		}
-		String boundary = contentType.substring(idx + 9).trim();
-		// Remove quotes if present
-		if (boundary.startsWith("\"") && boundary.endsWith("\"")) {
-			boundary = boundary.substring(1, boundary.length() - 1);
-		}
-		// Remove any trailing parameters
-		int semi = boundary.indexOf(';');
-		if (semi >= 0) {
-			boundary = boundary.substring(0, semi).trim();
-		}
-		return boundary;
-	}
-
-	private static String extractPartContentType(String partHeaders) {
-		if (partHeaders == null || partHeaders.isEmpty()) {
-			return null;
-		}
-		for (String line : partHeaders.split("\\r?\\n")) {
-			if (line.toLowerCase().startsWith("content-type:")) {
-				return line.substring("content-type:".length()).trim();
-			}
-		}
-		return null;
+		int semi = value.indexOf(';');
+		if (semi >= 0) value = value.substring(0, semi).trim();
+		return value;
 	}
 }

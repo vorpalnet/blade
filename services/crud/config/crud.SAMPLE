@@ -1,0 +1,190 @@
+{
+  "logging" : {
+    "useParentLogging" : false,
+    "directory" : "./servers/${weblogic.Name}/logs/vorpal",
+    "fileName" : "${sip.application.name}.%g.log",
+    "fileSize" : "100MiB",
+    "fileCount" : 25,
+    "appendFile" : true,
+    "loggingLevel" : "FINER",
+    "sequenceDiagramLoggingLevel" : "FINE",
+    "configurationLoggingLevel" : "INFO",
+    "analyticsLoggingLevel" : "INFO",
+    "colorsEnabled" : false
+  },
+  "selectors" : [ {
+    "id" : "dialed-number",
+    "description" : "Extract dialed number from To header",
+    "attribute" : "To",
+    "pattern" : "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$",
+    "expression" : "${user}"
+  } ],
+  "ruleSets" : {
+    "example-create" : {
+      "id" : "example-create",
+      "description" : "Stamp routing headers and attach recording metadata XML",
+      "rules" : [ {
+        "id" : "stamp-and-attach",
+        "method" : "INVITE",
+        "event" : "callStarted",
+        "operations" : [ {
+          "type" : "create",
+          "attribute" : "X-Caller-Region",
+          "value" : "us-west-2"
+        }, {
+          "type" : "create",
+          "attribute" : "X-Trace-Id",
+          "value" : "trace-${userPart}"
+        }, {
+          "type" : "create",
+          "attribute" : "body",
+          "contentType" : "application/recording-metadata+xml",
+          "value" : "<recording><session id=\"abc-123\" tenant=\"acme\"/></recording>"
+        } ]
+      } ]
+    },
+    "example-read" : {
+      "id" : "example-read",
+      "description" : "Capture values from headers, XML, JSON, and SDP into session variables",
+      "rules" : [ {
+        "id" : "harvest-everything",
+        "method" : "INVITE",
+        "event" : "callStarted",
+        "operations" : [ {
+          "type" : "read",
+          "attribute" : "From",
+          "pattern" : "sip:(?<callerUser>[^@]+)@(?<callerHost>[^;>]+)"
+        }, {
+          "type" : "xmlRead",
+          "contentType" : "application/recording-metadata+xml",
+          "expressions" : {
+            "tenantId" : "//session/@tenant",
+            "sessionId" : "//session/@id"
+          }
+        }, {
+          "type" : "jsonRead",
+          "contentType" : "application/json",
+          "expressions" : {
+            "agentId" : "$.agent.id"
+          }
+        }, {
+          "type" : "sdpRead",
+          "contentType" : "application/sdp",
+          "expressions" : {
+            "mediaAddr" : "$.connection.address",
+            "mediaPort" : "$.media[0].port"
+          }
+        } ]
+      } ]
+    },
+    "example-update" : {
+      "id" : "example-update",
+      "description" : "Anonymize the From header and rewrite values across XML, JSON, and SDP",
+      "rules" : [ {
+        "id" : "rewrite-everything",
+        "method" : "INVITE",
+        "event" : "callStarted",
+        "operations" : [ {
+          "type" : "update",
+          "attribute" : "From",
+          "pattern" : "sip:(?<u>[^@]+)@(?<h>[^;>]+)",
+          "replacement" : "sip:anonymous@${h}"
+        }, {
+          "type" : "xmlUpdate",
+          "contentType" : "application/recording-metadata+xml",
+          "xpath" : "//session/@tenant",
+          "value" : "redacted"
+        }, {
+          "type" : "jsonUpdate",
+          "contentType" : "application/json",
+          "jsonPath" : "$.agent.id",
+          "value" : "MASKED"
+        }, {
+          "type" : "sdpUpdate",
+          "contentType" : "application/sdp",
+          "jsonPath" : "$.connection.address",
+          "value" : "10.99.0.1"
+        } ]
+      } ]
+    },
+    "example-delete" : {
+      "id" : "example-delete",
+      "description" : "Strip private values across headers, XML, JSON, and SDP",
+      "rules" : [ {
+        "id" : "scrub-everything",
+        "method" : "INVITE",
+        "event" : "callStarted",
+        "operations" : [ {
+          "type" : "delete",
+          "attribute" : "P-Asserted-Identity"
+        }, {
+          "type" : "xmlDelete",
+          "contentType" : "application/recording-metadata+xml",
+          "xpath" : "//session/@tenant"
+        }, {
+          "type" : "jsonDelete",
+          "contentType" : "application/json",
+          "jsonPath" : "$.agent.id"
+        }, {
+          "type" : "sdpDelete",
+          "contentType" : "application/sdp",
+          "jsonPath" : "$.media[0].attributes[?(@.name=='sendrecv')]"
+        } ]
+      } ]
+    }
+  },
+  "defaultRoute" : {
+    "id" : "default",
+    "description" : null,
+    "list" : null,
+    "requestUri" : null,
+    "attributes" : {
+      "ruleSet" : "example-create"
+    }
+  },
+  "maps" : [ {
+    "type" : "hash",
+    "id" : "dialed-number-map",
+    "description" : "Map dialed numbers to rule sets",
+    "selectors" : [ "dialed-number" ],
+    "map" : {
+      "8002" : {
+        "id" : null,
+        "description" : null,
+        "list" : null,
+        "requestUri" : null,
+        "attributes" : {
+          "ruleSet" : "example-read"
+        }
+      },
+      "8003" : {
+        "id" : null,
+        "description" : null,
+        "list" : null,
+        "requestUri" : null,
+        "attributes" : {
+          "ruleSet" : "example-update"
+        }
+      },
+      "8001" : {
+        "id" : null,
+        "description" : null,
+        "list" : null,
+        "requestUri" : null,
+        "attributes" : {
+          "ruleSet" : "example-create"
+        }
+      },
+      "8004" : {
+        "id" : null,
+        "description" : null,
+        "list" : null,
+        "requestUri" : null,
+        "attributes" : {
+          "ruleSet" : "example-delete"
+        }
+      }
+    }
+  } ],
+  "plan" : [ "dialed-number-map" ]
+}

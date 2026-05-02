@@ -1,25 +1,26 @@
 package org.vorpal.blade.services.crud;
 
-import java.io.Serializable;
 import java.util.Map;
 
 import javax.servlet.sip.SipServletMessage;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/**
- * Adds a new property to JSON body content at a JsonPath location.
- * Supports ${variable} substitution from SipApplicationSession attributes.
- */
-@JsonPropertyOrder({ "contentType", "parentPath", "key", "value" })
-public class JsonPathCreateOperation implements Serializable {
+/// Adds a property at a JsonPath location. If `parentPath` resolves to an
+/// object, sets `key=value`; if it resolves to an array, appends `value` and
+/// `key` is ignored. Supports `${variable}` substitution from session
+/// attributes.
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+public class JsonPathCreateOperation implements Operation {
 	private static final long serialVersionUID = 1L;
 
 	private String contentType;
@@ -36,26 +37,27 @@ public class JsonPathCreateOperation implements Serializable {
 		this.value = value;
 	}
 
-	/**
-	 * Parses the JSON body, adds a new property at the parent path,
-	 * and writes the JSON back.
-	 */
+	@Override
 	public void process(SipServletMessage msg) {
 		try {
 			String json = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (json == null || json.isEmpty()) {
-				return;
-			}
+			if (json == null || json.isEmpty()) return;
 
 			Map<String, String> vars = MessageHelper.getSessionVariables(msg.getApplicationSession());
 			String resolved = (value != null) ? Configuration.resolveVariables(vars, value) : null;
+			Object inserted = (resolved != null) ? MessageHelper.jsonOrString(resolved) : null;
 
 			DocumentContext ctx = JsonPath.parse(json);
-			ctx.put(parentPath, key, resolved);
-			String result = ctx.jsonString();
+			try {
+				if (key != null) ctx.put(parentPath, key, inserted);
+				else ctx.add(parentPath, inserted);
+			} catch (PathNotFoundException e) {
+				SettingsManager.getSipLogger().warning(msg,
+						"JsonPathCreateOperation - parent path does not exist: " + parentPath);
+				return;
+			}
 
-			MessageHelper.setAttributeValue(msg, "body", result, contentType);
-
+			MessageHelper.setAttributeValue(msg, "body", ctx.jsonString(), contentType);
 			SettingsManager.getSipLogger().finer(msg,
 					"JsonPathCreateOperation - added " + key + "=" + resolved + " at " + parentPath);
 
@@ -64,7 +66,7 @@ public class JsonPathCreateOperation implements Serializable {
 		}
 	}
 
-	@JsonPropertyDescription("Content type of the JSON MIME part to target, e.g. application/json. Null targets entire body.")
+	@JsonPropertyDescription("Content type of the JSON MIME part to target, e.g. application/json. Null targets the entire body.")
 	public String getContentType() {
 		return contentType;
 	}
@@ -73,7 +75,8 @@ public class JsonPathCreateOperation implements Serializable {
 		this.contentType = contentType;
 	}
 
-	@JsonPropertyDescription("JsonPath to the parent object where the new property will be added, e.g. $.agent")
+	@JsonPropertyDescription("JsonPath of the parent object or array, e.g. $.agent")
+	@FormLayout(wide = true)
 	public String getParentPath() {
 		return parentPath;
 	}
@@ -82,7 +85,7 @@ public class JsonPathCreateOperation implements Serializable {
 		this.parentPath = parentPath;
 	}
 
-	@JsonPropertyDescription("Property name to add")
+	@JsonPropertyDescription("Property key to add when the parent is an object. Leave null to append to an array parent.")
 	public String getKey() {
 		return key;
 	}
@@ -91,7 +94,7 @@ public class JsonPathCreateOperation implements Serializable {
 		this.key = key;
 	}
 
-	@JsonPropertyDescription("Property value, supports ${variable} substitution")
+	@JsonPropertyDescription("Value to add. Supports ${variable} substitution.")
 	public String getValue() {
 		return value;
 	}

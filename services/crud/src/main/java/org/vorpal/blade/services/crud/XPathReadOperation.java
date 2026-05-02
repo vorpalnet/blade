@@ -1,7 +1,8 @@
 package org.vorpal.blade.services.crud;
 
-import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.servlet.sip.SipApplicationSession;
@@ -10,15 +11,13 @@ import javax.servlet.sip.SipServletMessage;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.w3c.dom.Document;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/**
- * Extracts values from XML body content using XPath expressions
- * and saves them as SipApplicationSession attributes.
- */
-@JsonPropertyOrder({ "contentType", "expressions" })
-public class XPathReadOperation implements Serializable {
+/// Reads values from an XML body via XPath into session attributes. The map
+/// key is the attribute name; the value is the XPath expression.
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+public class XPathReadOperation implements Operation {
 	private static final long serialVersionUID = 1L;
 
 	private String contentType;
@@ -27,37 +26,34 @@ public class XPathReadOperation implements Serializable {
 	public XPathReadOperation() {
 	}
 
-	/**
-	 * Parses the XML body, evaluates each XPath expression, and saves
-	 * the results as SipApplicationSession attributes.
-	 */
+	@Override
 	public void process(SipServletMessage msg) {
 		try {
 			String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (xml == null || xml.isEmpty()) {
-				return;
-			}
+			if (xml == null || xml.isEmpty()) return;
 
 			Document doc = XmlHelper.parse(xml);
 			SipApplicationSession appSession = msg.getApplicationSession();
 
 			for (Map.Entry<String, String> entry : expressions.entrySet()) {
-				String attrName = entry.getKey();
-				String xpath = entry.getValue();
-				String value = XmlHelper.evaluateString(doc, xpath);
+				String value = XmlHelper.evaluateString(doc, entry.getValue());
 				if (value != null && !value.isEmpty()) {
-					appSession.setAttribute(attrName, value);
+					appSession.setAttribute(entry.getKey(), value);
 					SettingsManager.getSipLogger().finer(msg,
-							"XPathReadOperation - saved " + attrName + "=" + value);
+							"XPathReadOperation - saved " + entry.getKey() + "=" + value);
 				}
 			}
-
 		} catch (Exception e) {
 			SettingsManager.getSipLogger().logStackTrace(msg, e);
 		}
 	}
 
-	@JsonPropertyDescription("Content type of the XML MIME part to target, e.g. application/xml. Null reads entire body.")
+	@Override
+	public List<String> variableNames() {
+		return new ArrayList<>(expressions.keySet());
+	}
+
+	@JsonPropertyDescription("Optional MIME content type, e.g. application/xml. Null reads the entire body.")
 	public String getContentType() {
 		return contentType;
 	}
@@ -66,7 +62,7 @@ public class XPathReadOperation implements Serializable {
 		this.contentType = contentType;
 	}
 
-	@JsonPropertyDescription("Map of attribute name to XPath expression, e.g. {\"sessionId\": \"//recording/@session-id\"}")
+	@JsonPropertyDescription("Map of variable name to XPath expression, e.g. {\"sessionId\": \"//recording/@session-id\"}")
 	public Map<String, String> getExpressions() {
 		return expressions;
 	}

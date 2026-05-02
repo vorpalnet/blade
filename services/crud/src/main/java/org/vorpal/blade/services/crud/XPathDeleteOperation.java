@@ -1,20 +1,17 @@
 package org.vorpal.blade.services.crud;
 
-import java.io.Serializable;
-
 import javax.servlet.sip.SipServletMessage;
 
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.w3c.dom.Document;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/**
- * Removes nodes from XML body content using XPath selection.
- */
-@JsonPropertyOrder({ "contentType", "xpath" })
-public class XPathDeleteOperation implements Serializable {
+/// Removes XML nodes selected by XPath.
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
+public class XPathDeleteOperation implements Operation {
 	private static final long serialVersionUID = 1L;
 
 	private String contentType;
@@ -27,32 +24,24 @@ public class XPathDeleteOperation implements Serializable {
 		this.xpath = xpath;
 	}
 
-	/**
-	 * Parses the XML body, removes all nodes matching the XPath expression,
-	 * and writes the XML back.
-	 */
+	@Override
 	public void process(SipServletMessage msg) {
 		try {
 			String xml = MessageHelper.getAttributeValue(msg, "body", contentType);
-			if (xml == null || xml.isEmpty()) {
-				return;
-			}
+			if (xml == null || xml.isEmpty()) return;
 
 			Document doc = XmlHelper.parse(xml);
-
 			if (XmlHelper.removeNodes(doc, xpath)) {
-				String result = XmlHelper.serialize(doc);
-				MessageHelper.setAttributeValue(msg, "body", result, contentType);
+				MessageHelper.setAttributeValue(msg, "body", XmlHelper.serialize(doc), contentType);
 				SettingsManager.getSipLogger().finer(msg,
-						"XPathDeleteOperation - removed nodes matching " + xpath);
+						"XPathDeleteOperation - removed " + xpath);
 			}
-
 		} catch (Exception e) {
 			SettingsManager.getSipLogger().logStackTrace(msg, e);
 		}
 	}
 
-	@JsonPropertyDescription("Content type of the XML MIME part to target, e.g. application/xml. Null targets entire body.")
+	@JsonPropertyDescription("Optional MIME content type, e.g. application/xml. Null targets the entire body.")
 	public String getContentType() {
 		return contentType;
 	}
@@ -61,7 +50,8 @@ public class XPathDeleteOperation implements Serializable {
 		this.contentType = contentType;
 	}
 
-	@JsonPropertyDescription("XPath expression selecting nodes to remove, e.g. //extension[@name='private']")
+	@JsonPropertyDescription("XPath selecting nodes to remove, e.g. //extension[@name='private']")
+	@FormLayout(wide = true)
 	public String getXpath() {
 		return xpath;
 	}
