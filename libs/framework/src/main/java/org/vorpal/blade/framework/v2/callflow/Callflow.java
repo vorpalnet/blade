@@ -1342,14 +1342,23 @@ public abstract class Callflow implements Serializable {
 					}
 
 				} else {
-					response.send();
+					// Log before send: a final response invalidates the session,
+					// after which superArrow's hexHash → getGlareState →
+					// session.getAttribute path throws "Invalid attribute store!"
+					// and the diagram + FINEST raw-message dump are lost.
+					// AsyncSipServlet.sendResponse (this same module, ~line 1346)
+					// already follows this order — keep them consistent.
 					sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+					response.send();
 
 				}
 
 			} else {
-				response.send();
+				// Same reasoning as above — log before send so the final-response
+				// case (3xx/4xx/5xx/6xx on initial INVITEs) doesn't lose its log
+				// entry to a post-send "Invalid attribute store!".
 				sipLogger.superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
+				response.send();
 
 			}
 		}
