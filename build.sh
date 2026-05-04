@@ -431,6 +431,7 @@ DISTDIR="${SCRIPT_DIR}/dist/${REVISION}-${BUILD_NUM}"
 # cheap.
 HAS_GOALS=false
 HAS_INSTALL=false
+HAS_BUILD_GOAL=false
 MAVEN_GOALS=()
 MAVEN_FLAGS=()
 for arg in "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}"; do
@@ -439,13 +440,30 @@ for arg in "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}"; do
     else
         MAVEN_GOALS+=("$arg")
         HAS_GOALS=true
-        case "$arg" in install|deploy) HAS_INSTALL=true ;; esac
+        # Goals in the clean lifecycle don't compile anything, so they
+        # shouldn't trigger the install-append below. Anything else is
+        # treated as a build goal.
+        case "$arg" in
+            clean|pre-clean|post-clean) ;;
+            install|deploy) HAS_INSTALL=true; HAS_BUILD_GOAL=true ;;
+            *) HAS_BUILD_GOAL=true ;;
+        esac
     fi
 done
 if [ "$HAS_GOALS" = false ]; then
     MAVEN_GOALS=("install")
-elif [ "$HAS_INSTALL" = false ]; then
+    HAS_BUILD_GOAL=true
+elif [ "$HAS_INSTALL" = false ] && [ "$HAS_BUILD_GOAL" = true ]; then
+    # See header comment: downstream repos resolve BLADE artifacts via Maven
+    # version ranges, so we install on every build that produces artifacts.
+    # Clean-only runs (./build.sh clean) skip this — nothing to install.
     MAVEN_GOALS+=("install")
+fi
+
+# Clean-only runs have no dist to copy. Force SKIP_DIST so we don't write
+# an empty dist/<ver>-<build>/ directory containing only the .conf files.
+if [ "$HAS_BUILD_GOAL" = false ]; then
+    SKIP_DIST=true
 fi
 
 ALL_MODULES=$(discover_modules)
@@ -505,11 +523,16 @@ if [ -n "${JAVA_VERSION:-}" ] && [ -n "${BUILD_JDK_MAJOR:-}" ] \
     echo "         Set JAVA_HOME to a JDK >= ${JAVA_VERSION} and re-run."
 fi
 echo "Modules: ${INCLUDED_COUNT} of ${TOTAL_COUNT}"
-if [ "$SKIP_DIST" = true ]; then
-    echo "Dist:    SKIPPED (--no-dist or BLADE_SKIP_DIST set)"
+# DIST_MSG distinguishes "user told us to skip" from "nothing to dist anyway",
+# and is reused below in the post-build summary so both lines match.
+if [ "$HAS_BUILD_GOAL" = false ]; then
+    DIST_MSG="n/a (clean-only run)"
+elif [ "$SKIP_DIST" = true ]; then
+    DIST_MSG="SKIPPED (--no-dist or BLADE_SKIP_DIST set)"
 else
-    echo "Dist:    dist/${REVISION}-${BUILD_NUM}/"
+    DIST_MSG="dist/${REVISION}-${BUILD_NUM}/"
 fi
+echo "Dist:    ${DIST_MSG}"
 
 if [ "${#SKIP_FLAGS[@]}" -gt 0 ]; then
     EXCLUDED=$(printf '%s\n' "${SKIP_FLAGS[@]}" | sed 's/-Dskip\.//' | tr '\n' ' ')
@@ -544,11 +567,7 @@ fi
 echo ""
 echo "================================ BUILD SUMMARY ================================"
 print_build_info
-if [ "$SKIP_DIST" = true ]; then
-    echo "Dist:          SKIPPED (--no-dist or BLADE_SKIP_DIST set)"
-else
-    echo "Dist:          dist/${REVISION}-${BUILD_NUM}/"
-fi
+echo "Dist:          ${DIST_MSG}"
 echo "==============================================================================="
 
 # =============================================================================

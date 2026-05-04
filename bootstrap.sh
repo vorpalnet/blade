@@ -110,63 +110,43 @@ if [ ${#missing[@]} -gt 0 ]; then
     exit 1
 fi
 
-"$MVN" install:install-file \
-    -DgroupId=javax \
-    -DartifactId=javaee-api \
-    -Dversion=8.0-occas \
-    -Dpackaging=jar \
-    -Dfile="$JAVAEE_JAR" \
-    -DpomFile="$SCRIPT_DIR/javaee-api.pom"
+# Install one JAR into the local Maven repo. Using:
+#   --non-recursive   so Maven doesn't enumerate the 30+ child modules and
+#                     print "SKIPPED" for each — install-file only acts on
+#                     the parent pom.
+#   -q                so we get errors only; we print our own status line.
+# The 7th arg (pomFile) is optional.
+install_jar() {
+    local group="$1" artifact="$2" version="$3" packaging="$4" file="$5" pom="${6:-}"
+    printf '  %-32s  %s:%s:%s\n' "$(basename "$file")" "$group" "$artifact" "$version"
+    local args=(
+        -DgroupId="$group"
+        -DartifactId="$artifact"
+        -Dversion="$version"
+        -Dpackaging="$packaging"
+        -Dfile="$file"
+    )
+    [ -n "$pom" ] && args+=(-DpomFile="$pom")
+    "$MVN" --non-recursive -q install:install-file "${args[@]}"
+}
 
-"$MVN" install:install-file \
-    -DgroupId=com.oracle.weblogic \
-    -DartifactId=weblogic-server \
-    -Dversion="$WL_VERSION" \
-    -Dpackaging=jar \
-    -Dfile="$OCCAS_HOME/wlserver/server/lib/weblogic.jar"
-
-"$MVN" install:install-file \
-    -DgroupId=com.oracle.weblogic \
-    -DartifactId=weblogic-logging \
-    -Dversion="$WL_VERSION" \
-    -Dpackaging=jar \
-    -Dfile="$OCCAS_HOME/wlserver/modules/com.oracle.weblogic.logging.jar"
-
-"$MVN" install:install-file \
-    -DgroupId=com.oracle.occas \
-    -DartifactId=sipservlet-api \
-    -Dversion="$OCCAS_VERSION" \
-    -Dpackaging=jar \
-    -Dfile="$OCCAS_HOME/wlserver/sip/server/lib/sipservlet-api.jar"
-
-"$MVN" install:install-file \
-    -DgroupId=com.oracle.occas \
-    -DartifactId=wlss \
-    -Dversion="$OCCAS_VERSION" \
-    -Dpackaging=jar \
-    -Dfile="$OCCAS_HOME/wlserver/sip/server/lib/wlss.jar"
-
-"$MVN" install:install-file \
-    -DgroupId=com.oracle.occas \
-    -DartifactId=wlssapi \
-    -Dversion="$OCCAS_VERSION" \
-    -Dpackaging=jar \
-    -Dfile="$OCCAS_HOME/wlserver/sip/server/lib/wlssapi.jar"
-
-"$MVN" install:install-file \
-    -DgroupId=com.oracle.weblogic \
-    -DartifactId=weblogic-security-encryption \
-    -Dversion="$WL_VERSION" \
-    -Dpackaging=jar \
-    -Dfile="$OCCAS_HOME/wlserver/modules/com.oracle.weblogic.security.encryption.jar"
-
-"$MVN" install:install-file \
-    -DgroupId=com.oracle.weblogic \
-    -DartifactId=weblogic-maven-plugin \
-    -Dversion="$WL_VERSION" \
-    -Dpackaging=maven-plugin \
-    -Dfile="$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.jar" \
-    -DpomFile="$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.pom"
+install_jar javax javaee-api 8.0-occas jar \
+    "$JAVAEE_JAR" "$SCRIPT_DIR/javaee-api.pom"
+install_jar com.oracle.weblogic weblogic-server "$WL_VERSION" jar \
+    "$OCCAS_HOME/wlserver/server/lib/weblogic.jar"
+install_jar com.oracle.weblogic weblogic-logging "$WL_VERSION" jar \
+    "$OCCAS_HOME/wlserver/modules/com.oracle.weblogic.logging.jar"
+install_jar com.oracle.weblogic weblogic-security-encryption "$WL_VERSION" jar \
+    "$OCCAS_HOME/wlserver/modules/com.oracle.weblogic.security.encryption.jar"
+install_jar com.oracle.occas sipservlet-api "$OCCAS_VERSION" jar \
+    "$OCCAS_HOME/wlserver/sip/server/lib/sipservlet-api.jar"
+install_jar com.oracle.occas wlss "$OCCAS_VERSION" jar \
+    "$OCCAS_HOME/wlserver/sip/server/lib/wlss.jar"
+install_jar com.oracle.occas wlssapi "$OCCAS_VERSION" jar \
+    "$OCCAS_HOME/wlserver/sip/server/lib/wlssapi.jar"
+install_jar com.oracle.weblogic weblogic-maven-plugin "$WL_VERSION" maven-plugin \
+    "$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.jar" \
+    "$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.pom"
 
 echo ""
 echo "Done. OCCAS JARs and plugins installed to local Maven repository."
