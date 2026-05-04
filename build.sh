@@ -471,12 +471,39 @@ done < <(compute_skip_flags "$CONF_FILE" "$ALL_MODULES")
 
 INCLUDED_COUNT=$(echo "$INCLUDED_MODULES" | wc -l | tr -d ' ')
 
-echo "Build profile: ${PROFILE}"
-echo "Platform: ${PLATFORM} (${PLATFORM_SOURCE})"
-echo "Build number: ${BUILD_NUM}"
-echo "Java version: ${JAVA_VERSION:-11 (default)}"
-echo "WebLogic:     ${WL_VERSION:-14.1.1 (default)}"
-echo "OCCAS:        ${OCCAS_VERSION:-8.1 (default)}"
+# Detect the JDK that will run the build (mvnw uses $JAVA_HOME if set, else
+# the `java` on PATH). Surfaces both "what's compiling" and "what bytecode
+# you're producing" so people stop confusing the two.
+BUILD_JDK_VERSION=$(java -version 2>&1 | head -1 \
+    | sed 's/^[^ ]* version //;s/"//g' | awk '{print $1}')
+BUILD_JDK_MAJOR=$(printf '%s' "$BUILD_JDK_VERSION" \
+    | awk -F. '{if ($1 == "1") print $2; else print $1}')
+if [ -n "${JAVA_HOME:-}" ]; then
+    BUILD_JDK_SOURCE="\$JAVA_HOME=${JAVA_HOME}"
+else
+    BUILD_JDK_SOURCE="PATH: $(command -v java 2>/dev/null || echo 'not found')"
+fi
+
+# Reusable so the same block prints in the header and the post-build summary.
+print_build_info() {
+    echo "Build profile: ${PROFILE}"
+    echo "Platform:      ${PLATFORM} (${PLATFORM_SOURCE})"
+    echo "Build number:  ${BUILD_NUM}"
+    echo "Build JDK:     ${BUILD_JDK_VERSION:-unknown} (${BUILD_JDK_SOURCE})"
+    echo "Target:        Java ${JAVA_VERSION:-11} bytecode (--release ${JAVA_VERSION:-11})"
+    echo "WebLogic:      ${WL_VERSION:-14.1.1 (default)}"
+    echo "OCCAS:         ${OCCAS_VERSION:-8.1 (default)}"
+}
+
+print_build_info
+
+# Friendly heads-up: maven-compiler-plugin is configured with --release, which
+# requires the build JDK >= the target. JDK 8 doesn't know --release at all.
+if [ -n "${JAVA_VERSION:-}" ] && [ -n "${BUILD_JDK_MAJOR:-}" ] \
+        && [ "$BUILD_JDK_MAJOR" -lt "$JAVA_VERSION" ] 2>/dev/null; then
+    echo "WARNING: build JDK ${BUILD_JDK_MAJOR} is older than target ${JAVA_VERSION} — compile will fail."
+    echo "         Set JAVA_HOME to a JDK >= ${JAVA_VERSION} and re-run."
+fi
 echo "Modules: ${INCLUDED_COUNT} of ${TOTAL_COUNT}"
 if [ "$SKIP_DIST" = true ]; then
     echo "Dist:    SKIPPED (--no-dist or BLADE_SKIP_DIST set)"
@@ -510,6 +537,19 @@ if [ "$SKIP_DIST" != true ]; then
     copy_all_to_dist
     write_deployment_manifest
 fi
+
+# Re-print the build header at the end. Maven's reactor summary runs to
+# dozens of lines; without this people scroll up to figure out what JDK
+# compiled what against which platform.
+echo ""
+echo "================================ BUILD SUMMARY ================================"
+print_build_info
+if [ "$SKIP_DIST" = true ]; then
+    echo "Dist:          SKIPPED (--no-dist or BLADE_SKIP_DIST set)"
+else
+    echo "Dist:          dist/${REVISION}-${BUILD_NUM}/"
+fi
+echo "==============================================================================="
 
 # =============================================================================
 # TODO(EAR): multi-profile / per-profile-EAR branch removed. The original logic
