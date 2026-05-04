@@ -94,9 +94,44 @@
 									<exclude>com.oracle.occas:*</exclude>
 								</excludes>
 							</artifactSet>
+							<filters>
+								<filter>
+									<artifact>*:*</artifact>
+									<excludes>
+										<!-- Java 9+ module descriptors are meaningless in a
+										     shaded uber-jar (modules don't apply to a flattened
+										     classpath). Excluding silences the "Discovered
+										     module-info.class. Shading will break its strong
+										     encapsulation" warnings, plus the META-INF.versions.9
+										     overlap warning from Jackson, classgraph, etc. -->
+										<exclude>module-info.class</exclude>
+										<exclude>META-INF/versions/*/module-info.class</exclude>
+										<!-- Signature files from signed JARs would invalidate
+										     the uber-jar at runtime; harmless to drop here. -->
+										<exclude>META-INF/*.SF</exclude>
+										<exclude>META-INF/*.DSA</exclude>
+										<exclude>META-INF/*.RSA</exclude>
+										<!-- Each input jar has a MANIFEST.MF; the
+										     ManifestResourceTransformer below builds the
+										     uber-jar's manifest from scratch using the project's
+										     own properties. Excluding here silences the noisy
+										     "38 jars define 1 overlapping resource: MANIFEST.MF"
+										     warning. -->
+										<exclude>META-INF/MANIFEST.MF</exclude>
+									</excludes>
+								</filter>
+							</filters>
 							<transformers>
-								<!-- Merge META-INF/services files from all JARs -->
+								<!-- Merge META-INF/services files from all JARs. -->
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+								<!-- Merge LICENSE / NOTICE / DEPENDENCIES from each dep so
+								     attribution is preserved AND the per-jar overlap warnings
+								     stop firing. -->
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"/>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer"/>
+								<!-- Use the project's own manifest for the uber-jar so shade
+								     doesn't warn about every dep's MANIFEST.MF overlapping. -->
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer"/>
 							</transformers>
 						</configuration>
 					</execution>
