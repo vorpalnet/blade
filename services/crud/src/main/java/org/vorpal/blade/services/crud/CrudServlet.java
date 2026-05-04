@@ -15,6 +15,9 @@ import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
+import org.vorpal.blade.framework.v3.crud.CrudConfiguration;
+import org.vorpal.blade.framework.v3.crud.CrudConfigurationSample;
+import org.vorpal.blade.framework.v3.crud.RuleSet;
 
 /**
  * B2BUA servlet that applies configurable CRUD rules to SIP messages

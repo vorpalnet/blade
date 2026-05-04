@@ -139,8 +139,9 @@ public class Selector implements Serializable {
 				header = request.getRequestURI().toString();
 				break;
 
-			case "Remote-IP":
-			case "remoteIP":
+			case "Origin-IP":
+			case "OriginIP":
+			case "originIP":
 				header = request.getRemoteAddr();
 
 				if (header == null) { // test case only

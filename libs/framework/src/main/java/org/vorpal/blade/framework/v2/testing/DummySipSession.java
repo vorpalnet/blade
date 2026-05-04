@@ -4,7 +4,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Enumeration;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,7 +38,9 @@ public class DummySipSession implements SipSession {
 
 	private SipApplicationSession appSession;
 
-	private Map<String, Object> attributes = new HashMap<>();
+	// LinkedHashMap so getAttributeNameSet returns attributes in insertion
+	// order — gives tests that snapshot session state a stable iteration.
+	private Map<String, Object> attributes = new LinkedHashMap<>();
 
 	/**
 	 * Constructs a DummySipSession associated with the specified application session.

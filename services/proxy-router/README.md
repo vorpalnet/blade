@@ -58,8 +58,8 @@ Consider these two examples in the JSON config file.
     "pattern" : "^(sips?):([^@]+)(?:@(.+))?$",
     "expression" : "$2"
   }, {
-    "id" : "remote-ip",
-    "attribute" : "Remote-IP",
+    "id" : "origin-ip",
+    "attribute" : "Origin-IP",
     "pattern" : "^(.*)$",
     "expression" : "$1"
   } ]
@@ -68,7 +68,7 @@ Consider these two examples in the JSON config file.
 The 'to-user' selector will look at the value of the 'To' header, parse it into groupings
 and use the 2nd grouping which represents the 'user' part of the SIP address to define the map key.
 
-The 'remote-ip' selector look at the "SipServletRequest.getRemoteAddress()" value and use the first and only grouping
+The 'origin-ip' selector look at the "SipServletRequest.getRemoteAddress()" value and use the first and only grouping
 to define the map key (which is the IP address).
 
 ## Example Map
@@ -82,7 +82,7 @@ Consider this example:
     "type" : "address",
     "id" : "address-map-1",
     "description" : "Translations Map for Remote IP addresses",
-    "selector" : "remote-ip",
+    "selector" : "origin-ip",
     "map" : {
       "10.28.82.132" : {
         "description" : "CL2 STG OB",
@@ -123,7 +123,7 @@ Consider this variation:
     "type" : "address",
     "id" : "address-map-2",
     "description" : "Translations Map for Remote IP addresses",
-    "selector" : "remote-ip",
+    "selector" : "origin-ip",
     "map" : {
       "10.28.82.132" : {
         "description" : "CL2 STG OB",
@@ -224,8 +224,8 @@ jeff@mothra vorpal % cat R3.SAMPLE
     "pattern" : "^(sips?):([^@]+)(?:@(.+))?$",
     "expression" : "$2"
   }, {
-    "id" : "remote-ip",
-    "attribute" : "Remote-IP",
+    "id" : "origin-ip",
+    "attribute" : "Origin-IP",
     "pattern" : "^(.*)$",
     "expression" : "$1"
   } ],
@@ -233,7 +233,7 @@ jeff@mothra vorpal % cat R3.SAMPLE
     "type" : "address",
     "id" : "address-map-1",
     "description" : "Translations Map for Remote IP addresses",
-    "selector" : "remote-ip",
+    "selector" : "origin-ip",
     "map" : {
       "10.28.82.132" : {
         "description" : "CL2 STG OB",

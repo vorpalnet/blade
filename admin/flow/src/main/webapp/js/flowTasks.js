@@ -147,8 +147,8 @@ window.flowTasks = (function() {
 				return { type: 'Request-URI', name: '' };
 			case 'body': case 'Body': case 'content': case 'Content':
 				return { type: 'Body', name: '' };
-			case 'Remote-IP': case 'RemoteIP': case 'remoteIP':
-				return { type: 'Remote-IP', name: '' };
+			case 'Origin-IP': case 'OriginIP': case 'originIP':
+				return { type: 'Origin-IP', name: '' };
 			default:
 				return { type: 'Header', name: attr };
 		}
@@ -159,7 +159,7 @@ window.flowTasks = (function() {
 		switch (type) {
 			case 'Request-URI': return 'Request-URI';
 			case 'Body':        return 'body';
-			case 'Remote-IP':   return 'Remote-IP';
+			case 'Origin-IP':   return 'Origin-IP';
 			case 'Header':
 			default:
 				return name || '';
@@ -193,7 +193,7 @@ window.flowTasks = (function() {
 		var hidePattern = (mode !== 'REGEX') ? ' style="display:none;"' : '';
 		var hideExtractions = (mode === 'REGEX') ? ' style="display:none;"' : '';
 
-		var sourceOptions = ['Header', 'Request-URI', 'Body', 'Remote-IP'].map(function(opt) {
+		var sourceOptions = ['Header', 'Request-URI', 'Body', 'Origin-IP'].map(function(opt) {
 			return '<option' + (opt === t.type ? ' selected' : '') + '>' + opt + '</option>';
 		}).join('');
 

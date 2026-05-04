@@ -180,7 +180,7 @@ public class AttributeSelector implements Serializable {
 
 	/**
 	 * Returns the SIP message attribute to extract data from. Supported values
-	 * include: "To", "From", "body", "Content", "ruri", "Request-URI", "remoteIP",
+	 * include: "To", "From", "body", "Content", "ruri", "Request-URI", "originIP",
 	 * or any standard SIP header name.
 	 *
 	 * @return the attribute name
@@ -191,7 +191,7 @@ public class AttributeSelector implements Serializable {
 
 	/**
 	 * Sets the SIP message attribute to extract data from. Supported values
-	 * include: "To", "From", "body", "Content", "ruri", "Request-URI", "remoteIP",
+	 * include: "To", "From", "body", "Content", "ruri", "Request-URI", "originIP",
 	 * or any standard SIP header name.
 	 *
 	 * @param attribute the attribute name
@@ -314,9 +314,9 @@ public class AttributeSelector implements Serializable {
 
 				break;
 
-			case "remoteIP":
-			case "RemoteIP":
-			case "Remote-IP":
+			case "originIP":
+			case "OriginIP":
+			case "Origin-IP":
 				header = message.getRemoteAddr();
 
 				if (header == null) { // test case only

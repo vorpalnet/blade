@@ -104,7 +104,7 @@ public abstract class Selector implements Serializable {
 	/// - [SipServletRequest] payload (SipConnector): name is a SIP
 	///   header name, with special pseudo-headers handled directly:
 	///   - `Request-URI`, `requestURI`, `RequestURI`, `ruri` — request URI
-	///   - `Remote-IP`, `remoteIP` — original caller (fallback chain)
+	///   - `Origin-IP`, `OriginIP`, `originIP` — original caller (fallback chain)
 	///   - `Peer-IP`, `peerIP` — immediate transport peer
 	///   - `content`, `body` — message body
 	///   - `Transport`, `transport` — `UDP` / `TCP` / `TLS` / `WS` / `WSS`
@@ -135,15 +135,16 @@ public abstract class Selector implements Serializable {
 				case "ruri":
 					return request.getRequestURI() != null ? request.getRequestURI().toString() : null;
 
-				case "Remote-IP":
-				case "remoteIP":
+				case "Origin-IP":
+				case "OriginIP":
+				case "originIP":
 					return resolveOriginalSourceIp(request);
 				case "Peer-IP":
 				case "peerIP": {
 					// Raw transport-level peer of the immediate socket —
 					// whatever sent THIS hop. Only useful when you
 					// specifically want to know your upstream neighbor
-					// (rarely). For "who dialed the call?", use remoteIP.
+					// (rarely). For "who dialed the call?", use originIP.
 					String peer = request.getRemoteAddr();
 					return (peer != null) ? peer : "127.0.0.1";
 				}
@@ -217,7 +218,7 @@ public abstract class Selector implements Serializable {
 		return ctx.getRequest().getApplicationSession();
 	}
 
-	// ---- "remoteIP" resolution ----
+	// ---- "originIP" resolution ----
 	//
 	// Goal: identify the UA that sent the ORIGINAL request even when the
 	// consumer lives several proxy / B2BUA hops downstream.

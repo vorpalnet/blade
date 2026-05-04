@@ -66,7 +66,7 @@ public class IRouterConfigSample extends IRouterConfig {
 		SipConnector sip = new SipConnector();
 		sip.setId("sip");
 		sip.setDescription("Extract remote IP, caller, callee, and From-domain");
-		sip.addSelector(new RegexSelector("remoteIP", "remoteIP", ".*", "${0}"));
+		sip.addSelector(new RegexSelector("originIP", "originIP", ".*", "${0}"));
 		sip.addSelector(new RegexSelector("srcNum", "From", ".*<sips?:\\+?(?<ani>\\d+).*", "${ani}"));
 		sip.addSelector(new RegexSelector("destNum", "To", ".*<sips?:\\+?(?<did>\\d+).*", "${did}"));
 		sip.addSelector(new RegexSelector("fromHost", "From", ".*@(?<host>[^:;>]+).*", "${host}"));
@@ -76,21 +76,21 @@ public class IRouterConfigSample extends IRouterConfig {
 		customers.setId("customers");
 		customers.setDescription("Find this customer via IP, else source number, else From-domain");
 
-		TranslationTable byRemoteIp = new TranslationTable();
-		byRemoteIp.setDescription("Known customer IPs (most specific)");
-		byRemoteIp.setMatch(MatchStrategy.hash);
-		byRemoteIp.setKeyExpression("${remoteIP}");
-		byRemoteIp.createTranslation("172.16.32.173")
+		TranslationTable byOriginIp = new TranslationTable();
+		byOriginIp.setDescription("Known customer IPs (most specific)");
+		byOriginIp.setMatch(MatchStrategy.hash);
+		byOriginIp.setKeyExpression("${originIP}");
+		byOriginIp.createTranslation("172.16.32.173")
 				.put("customerId", "acme")
 				.put("customerTier", "premium")
 				.put("apiKey", "acme-api-key-redacted")
 				.put("screeningUrl", "https://acme.screening.example.com");
-		byRemoteIp.createTranslation("10.4.5.6")
+		byOriginIp.createTranslation("10.4.5.6")
 				.put("customerId", "globex")
 				.put("customerTier", "standard")
 				.put("apiKey", "globex-api-key-redacted")
 				.put("screeningUrl", "https://globex.screening.example.com");
-		customers.addTable(byRemoteIp);
+		customers.addTable(byOriginIp);
 
 		TranslationTable bySrcAreaCode = new TranslationTable();
 		bySrcAreaCode.setDescription("Customers identified by source area code (longest-prefix match)");

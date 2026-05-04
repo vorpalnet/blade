@@ -666,6 +666,11 @@ fi
 			<modules><module>admin/configurator</module></modules>
 		</profile>
 		<profile>
+			<id>crud-editor</id>
+			<activation><property><name>!skip.crud-editor</name></property></activation>
+			<modules><module>admin/crud-editor</module></modules>
+		</profile>
+		<profile>
 			<id>flow</id>
 			<activation><property><name>!skip.flow</name></property></activation>
 			<modules><module>admin/flow</module></modules>

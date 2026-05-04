@@ -567,9 +567,18 @@ public class SettingsManager<T> {
 		// @FormLayoutGroup and @FormSection — class-level grouping hints.
 		// Emitted on the type node so the Configurator can render
 		// horizontal rows (x-form-groups) and titled subsections (x-form-sections).
+		// Also emits x-java-class (FQN) on user-defined types so the
+		// Configurator can show the backing class name on each card.
 		configBuilder.forTypesInGeneral().withTypeAttributeOverride((node, scope, ctx) -> {
 			Class<?> raw = scope.getType().getErasedType();
 			if (raw == null) return;
+			// Surface the backing Java class name. Skip JDK collections, java.lang.*,
+			// arrays, primitives — those are noise on the form.
+			String pkg = raw.getPackage() != null ? raw.getPackage().getName() : "";
+			if (!raw.isArray() && !raw.isPrimitive()
+					&& !pkg.startsWith("java.") && !pkg.startsWith("javax.")) {
+				node.put("x-java-class", raw.getName());
+			}
 			FormLayoutGroup[] groups = raw.getAnnotationsByType(FormLayoutGroup.class);
 			if (groups != null && groups.length > 0) {
 				ArrayNode outer = mapper.createArrayNode();

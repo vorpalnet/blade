@@ -1197,6 +1197,17 @@ body.inspector-open .inspector-panel {
     font-weight: 500;
 }
 
+.collapsible-java-class {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    cursor: help;
+}
+
+.collapsible-java-class.hidden {
+    display: none;
+}
+
 .collapsible-badge.null {
     background: var(--status-warning-bg);
     color: var(--status-warning-text);

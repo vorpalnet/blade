@@ -6,7 +6,7 @@ import java.io.UnsupportedEncodingException;
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -37,9 +37,12 @@ import org.vorpal.blade.framework.v2.AsyncSipServlet;
 public class DummyMessage implements SipServletMessage, Serializable {
 	private static final long serialVersionUID = 1L;
 
-	protected Map<String, Object> attributes = new HashMap<>();
+	protected Map<String, Object> attributes = new LinkedHashMap<>();
 	protected Locale locale;
-	protected Map<String, String> headers = new HashMap<>();
+	// LinkedHashMap so getHeaderNameList returns headers in insertion
+	// order — tests that round-trip a message through the Dummy* mocks
+	// rely on stable header ordering for diff/serialization.
+	protected Map<String, String> headers = new LinkedHashMap<>();
 	protected Locale acceptLanguage;
 	protected String characterEncoding;
 	protected Object content;

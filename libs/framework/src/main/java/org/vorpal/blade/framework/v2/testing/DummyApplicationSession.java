@@ -2,7 +2,7 @@ package org.vorpal.blade.framework.v2.testing;
 
 import java.net.URL;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -22,7 +22,9 @@ import javax.servlet.sip.URI;
  * The attribute-related methods are fully functional for testing attribute storage.
  */
 public class DummyApplicationSession implements SipApplicationSession {
-	private Map<String, Object> attributes = new HashMap<>();
+	// LinkedHashMap so getAttributeNameSet returns attributes in insertion
+	// order — gives tests that snapshot session state a stable iteration.
+	private Map<String, Object> attributes = new LinkedHashMap<>();
 	long creationTime = System.currentTimeMillis();
 	int expires = 3;
 	String appName = "Dummy";

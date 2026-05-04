@@ -62,7 +62,7 @@ public class TranslationTable implements Serializable {
 		this.prefixIndex = null;
 	}
 
-	@JsonPropertyDescription("${var} template producing the lookup key, e.g. ${remoteIP}")
+	@JsonPropertyDescription("${var} template producing the lookup key, e.g. ${originIP}")
 	public String getKeyExpression() {
 		return keyExpression;
 	}
@@ -99,7 +99,22 @@ public class TranslationTable implements Serializable {
 		if (key == null || key.equals(keyExpression)) return null;
 		if (match == MatchStrategy.prefix) return prefixLookup(key);
 		if (match == MatchStrategy.range)  return rangeLookup(key);
-		return translations.get(key);
+
+		// Hash: try direct match first (the common case), then resolve any
+		// ${var}-templated keys against the Context. This lets sample/live
+		// configs use env-var keys like "${SECURELOGIX_ORIGIN_IP}" without
+		// baking real values into the JSON — Context.resolve falls back to
+		// System.getenv / System.getProperty when no session attribute matches.
+		Translation t = translations.get(key);
+		if (t != null) return t;
+		for (Map.Entry<String, Translation> e : translations.entrySet()) {
+			String entryKey = e.getKey();
+			if (entryKey != null && entryKey.indexOf("${") >= 0
+					&& key.equals(ctx.resolve(entryKey))) {
+				return e.getValue();
+			}
+		}
+		return null;
 	}
 
 	private Translation prefixLookup(String key) {

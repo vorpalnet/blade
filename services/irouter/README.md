@@ -50,7 +50,7 @@ In a `SipConnector`, selectors typically read a named SIP header (`To`, `From`, 
 | Name (either casing) | Value |
 |---|---|
 | `Request-URI` / `requestURI` / `RequestURI` / `ruri` | Request URI of the inbound INVITE |
-| `Remote-IP` / `remoteIP` | Original caller IP with the five-step fallback chain (X-Vorpal-ID origin → `getInitialRemoteAddr` → Via `received` → Via `sent-by` → `getRemoteAddr`) |
+| `Origin-IP` / `OriginIP` / `originIP` | Original caller IP with the five-step fallback chain (X-Vorpal-ID origin → `getInitialRemoteAddr` → Via `received` → Via `sent-by` → `getRemoteAddr`) |
 | `Peer-IP` / `peerIP` | Immediate transport peer — typically the upstream OCCAS service when iRouter isn't first in the chain |
 | `content` / `Content` / `body` / `Body` | INVITE message body (SDP, MIME, whatever) |
 | `Transport` / `transport` | Inbound transport: `UDP`, `TCP`, `TLS`, `WS`, `WSS` |
@@ -73,7 +73,7 @@ That enables `"find the customer by remote IP, else by source number, else by do
   "id": "customers",
   "description": "Fetch this customer's credentials from whichever hint they gave us",
   "tables": [
-    { "match": "hash",   "keyExpression": "${remoteIP}", "translations": { "172.16.32.173": { "customerId": "acme" } } },
+    { "match": "hash",   "keyExpression": "${originIP}", "translations": { "172.16.32.173": { "customerId": "acme" } } },
     { "match": "prefix", "keyExpression": "${srcNum}",   "translations": { "1816": { "customerId": "kcco" } } },
     { "match": "hash",   "keyExpression": "${fromHost}", "translations": { "example.com": { "customerId": "exampleCo" } } }
   ]

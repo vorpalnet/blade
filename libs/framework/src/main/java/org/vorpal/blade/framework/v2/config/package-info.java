@@ -83,7 +83,7 @@
 /// The {@code attribute} field specifies where to extract from: any standard SIP header
 /// name (e.g. {@code "To"}, {@code "From"}, {@code "P-Charge-Info"}), plus the special
 /// values {@code "Request-URI"}, {@code "Content"} (the message body), and
-/// {@code "Remote-IP"} (the sender's IP address).
+/// {@code "Origin-IP"} (the sender's IP address).
 ///
 ///
 /// ## Translation Maps

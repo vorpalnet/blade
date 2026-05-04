@@ -188,9 +188,17 @@ public class RestConnector extends Connector implements Serializable {
 				sipLogger.finer("RestConnector[" + connectorId + "] " + method + " " + resolvedUrl);
 			}
 
-			return httpClient.sendAsync(reqBuilder.build(), HttpResponse.BodyHandlers.ofString())
+			HttpRequest httpReq = reqBuilder.build();
+			if (sipLogger.isLoggable(Level.FINEST)) {
+				sipLogger.finest(formatHttpRequest(connectorId, method, resolvedUrl, httpReq, resolvedBody));
+			}
+
+			return httpClient.sendAsync(httpReq, HttpResponse.BodyHandlers.ofString())
 					.thenAccept(httpResp -> {
 						try {
+							if (sipLogger.isLoggable(Level.FINEST)) {
+								sipLogger.finest(formatHttpResponse(connectorId, httpResp));
+							}
 							if (httpResp.statusCode() < 200 || httpResp.statusCode() >= 300) {
 								sipLogger.warning("RestConnector[" + connectorId + "] HTTP "
 										+ httpResp.statusCode());
@@ -314,6 +322,34 @@ public class RestConnector extends Connector implements Serializable {
 						+ resourcePath + " to " + destination + ": " + e.getMessage());
 			}
 		}
+	}
+
+	/// HTTP-message-style render of the outbound request for FINEST logs.
+	/// Includes Authorization / api-key headers verbatim — FINEST is a
+	/// debug-only level, so operators opting in have accepted that.
+	private static String formatHttpRequest(String connectorId, String method,
+			String resolvedUrl, HttpRequest httpReq, String body) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("RestConnector[").append(connectorId).append("] HTTP request:\n");
+		sb.append(method).append(' ').append(resolvedUrl).append('\n');
+		httpReq.headers().map().forEach((k, vs) -> {
+			for (String v : vs) sb.append(k).append(": ").append(v).append('\n');
+		});
+		sb.append('\n');
+		if (body != null) sb.append(body);
+		return sb.toString();
+	}
+
+	private static String formatHttpResponse(String connectorId, HttpResponse<String> httpResp) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("RestConnector[").append(connectorId).append("] HTTP response:\n");
+		sb.append("HTTP/").append(httpResp.version()).append(' ').append(httpResp.statusCode()).append('\n');
+		httpResp.headers().map().forEach((k, vs) -> {
+			for (String v : vs) sb.append(k).append(": ").append(v).append('\n');
+		});
+		sb.append('\n');
+		if (httpResp.body() != null) sb.append(httpResp.body());
+		return sb.toString();
 	}
 
 	private static int findBlankLine(String text) {

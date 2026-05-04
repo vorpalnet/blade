@@ -1038,6 +1038,25 @@ function scrollToIdentity(id) {
     }
 }
 
+// Does any variant claim this value's discriminator? Returns true when
+// value has no `type` (creating-new is fine — first variant is the default)
+// or when at least one variant matches. Returns false only on a real
+// schema/value mismatch — caller should preserve the value as opaque JSON
+// rather than letting resolveOneOf silently coerce it to variants[0].
+function polymorphicMatches(variants, value) {
+    if (!variants || variants.length === 0) return true;
+    if (!value || typeof value !== 'object' || value.type === undefined) return true;
+    const t = String(value.type);
+    for (const variant of variants) {
+        const typeProp = variant.properties && variant.properties.type;
+        if (typeProp && typeProp.const !== undefined && String(typeProp.const) === t) return true;
+        if (typeProp && Array.isArray(typeProp.enum) && typeProp.enum.map(String).includes(t)) return true;
+        const opts = variant.options && variant.options.multiple_editor_select_via_property;
+        if (opts && value[opts.property] === opts.value) return true;
+    }
+    return false;
+}
+
 // Resolve a polymorphic schema (oneOf or anyOf) to the variant matching
 // the actual data value's discriminator. Supports three discriminator
 // shapes:
@@ -1243,6 +1262,14 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
         // whichever variant resolveOneOf picked first — the user can't
         // actually choose.
         const allVariants = polymorphicVariants(fieldSchema);
+        // Schema/data mismatch: the value carries a `type` no variant claims
+        // (e.g. data uses a subtype the deployed schema predates). Preserve
+        // the value as opaque JSON so it round-trips intact rather than
+        // letting resolveOneOf silently coerce it to variants[0] and drop
+        // every field that variant doesn't recognize.
+        if (allVariants && !polymorphicMatches(allVariants, value)) {
+            return createOpaqueObjectGroup({ type: 'object' }, title, description, path, value, isNested, schemaForDelete);
+        }
         const anyObjectVariant = allVariants && allVariants.some(v => {
             const r = v.$ref ? deref(v) : v;
             return r && r.type === 'object';
@@ -1394,7 +1421,24 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
     }
 }
 
-function createCollapsibleSection(title, description, content, hasData = false, autoCollapse = false, deleteInfo = null) {
+/// Update the small grey class-name label on a collapsible header.
+/// Pass the FQN (e.g. "org.vorpal.blade.framework.v3.RouterConfiguration").
+/// Visible text is the simple name; tooltip is the FQN. Falsy fqn hides the label.
+function setJavaClassOnSection(labelEl, fqn) {
+    if (!labelEl) return;
+    if (!fqn) {
+        labelEl.textContent = '';
+        labelEl.removeAttribute('title');
+        labelEl.classList.add('hidden');
+        return;
+    }
+    const dot = fqn.lastIndexOf('.');
+    labelEl.textContent = dot >= 0 ? fqn.substring(dot + 1) : fqn;
+    labelEl.title = fqn;
+    labelEl.classList.remove('hidden');
+}
+
+function createCollapsibleSection(title, description, content, hasData = false, autoCollapse = false, deleteInfo = null, javaClass = null) {
     const section = document.createElement('div');
     section.className = 'collapsible-section';
 
@@ -1430,6 +1474,14 @@ function createCollapsibleSection(title, description, content, hasData = false, 
         helpIcon.appendChild(tooltip);
         titleContainer.appendChild(helpIcon);
     }
+
+    // Backing Java class label (small grey text on the right). FQN as tooltip;
+    // simple name as the visible text. Created always so polymorphic sections
+    // can update the text in-place when the variant changes; .hidden when empty.
+    const javaClassLabel = document.createElement('span');
+    javaClassLabel.className = 'collapsible-java-class';
+    setJavaClassOnSection(javaClassLabel, javaClass);
+    badgeContainer.appendChild(javaClassLabel);
 
     const statusBadge = document.createElement('span');
     statusBadge.className = `collapsible-badge ${hasData ? 'has-data' : 'null'}`;
@@ -1796,6 +1848,12 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
         return '';
     }
 
+    function variantJavaClass(idx) {
+        let vs = variants[idx];
+        if (vs && vs.$ref) vs = deref(vs);
+        return (vs && vs['x-java-class']) || null;
+    }
+
     // Pick the initial variant from the current value's type, else default to [0].
     let initialIdx = 0;
     if (value && typeof value === 'object' && value.type) {
@@ -1804,12 +1862,18 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
         }
     }
 
+    // Captured after section creation; used to refresh the class label
+    // on the section header when the user picks a different variant.
+    let javaClassLabelRef = null;
+
     function renderVariant(idx, variantValue) {
         // Clear everything after the typeRow + hiddenType (indices 0, 1).
         while (content.children.length > 2) content.removeChild(content.lastChild);
 
         typeSelect.value = String(idx);
         hiddenType.value = variantTypeValue(variants[idx]);
+
+        if (javaClassLabelRef) setJavaClassOnSection(javaClassLabelRef, variantJavaClass(idx));
 
         let vs = variants[idx];
         if (vs && vs.$ref) vs = deref(vs);
@@ -1849,7 +1913,9 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
         path: path,
         isNested: isNested
     };
-    return createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo);
+    const section = createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo, variantJavaClass(initialIdx));
+    javaClassLabelRef = section.querySelector('.collapsible-java-class');
+    return section;
 }
 
 function createObjectGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
@@ -1985,7 +2051,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
         isNested: isNested
     };
 
-    const section = createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo);
+    const section = createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo, fieldSchema['x-java-class'] || null);
 
     // Tag objects that have an "id" field so identity references can link to them
     if (value && typeof value === 'object' && typeof value.id === 'string') {
@@ -2531,13 +2597,21 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
     }
 
     if (itemSchema.oneOf || itemSchema.anyOf) {
-        itemSchema = resolveOneOf(itemSchema, value);
-        // resolveOneOf returns the matching variant — which in victools'
-        // schema is a thin {$ref + properties} wrapper. Deref to merge
-        // the base type's id/description/translations into the visible
-        // schema, otherwise the form would only show the discriminator.
-        if (itemSchema && itemSchema.$ref) {
-            itemSchema = deref(itemSchema);
+        // Schema/data mismatch (see createFormGroup for the full rationale):
+        // preserve the value as opaque JSON instead of letting resolveOneOf
+        // silently coerce to variants[0] and drop unrecognized fields.
+        const itemVariants = polymorphicVariants(itemSchema);
+        if (itemVariants && !polymorphicMatches(itemVariants, value)) {
+            itemSchema = { type: 'object' };
+        } else {
+            itemSchema = resolveOneOf(itemSchema, value);
+            // resolveOneOf returns the matching variant — which in victools'
+            // schema is a thin {$ref + properties} wrapper. Deref to merge
+            // the base type's id/description/translations into the visible
+            // schema, otherwise the form would only show the discriminator.
+            if (itemSchema && itemSchema.$ref) {
+                itemSchema = deref(itemSchema);
+            }
         }
     }
 
@@ -2660,6 +2734,13 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
             }
         }
 
+        // Backing Java class label (small grey monospace, FQN as tooltip).
+        // Same x-java-class attribute used by createCollapsibleSection.
+        const javaClassLabel = document.createElement('span');
+        javaClassLabel.className = 'collapsible-java-class';
+        setJavaClassOnSection(javaClassLabel, itemSchema['x-java-class'] || null);
+        header.appendChild(javaClassLabel);
+
         header.appendChild(duplicateBtn);
         header.appendChild(removeBtn);
         item.appendChild(header);
@@ -2707,6 +2788,30 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
         while (itemGroup.firstChild) {
             item.appendChild(itemGroup.firstChild);
         }
+    } else if (itemSchema.type === 'object') {
+        // Opaque object (no properties, no additionalProperties). Reached
+        // either for v2 untyped Map<String,Object> fields or for the
+        // polymorphic schema/data-mismatch fallback set just above. Render
+        // an inline JSON textarea so the value round-trips intact; getFormData
+        // parses it on save via the same .opaque-object-input branch.
+        const header = document.createElement('div');
+        header.className = 'array-item-header';
+        header.appendChild(removeBtn);
+        item.appendChild(header);
+
+        const textarea = document.createElement('textarea');
+        textarea.className = 'opaque-object-input';
+        textarea.setAttribute('data-path', itemPath);
+        textarea.setAttribute('data-opaque-object', 'true');
+        textarea.spellcheck = false;
+        let initialText = '';
+        if (value !== null && value !== undefined) {
+            try { initialText = JSON.stringify(value, null, 2); } catch (e) { initialText = ''; }
+        }
+        textarea.value = initialText;
+        textarea.rows = Math.max(3, Math.min(20, initialText.split('\n').length));
+        textarea.addEventListener('input', () => setDirty());
+        item.appendChild(textarea);
     } else {
         // Simple value — put input and remove button on same row
         const header = document.createElement('div');
@@ -2768,6 +2873,20 @@ function getFormData() {
         // the correct variant (e.g. "hash" vs "prefix") during extraction.
         // Use :scope > to find only direct-child type inputs, not nested ones.
         if (schemaNode.oneOf || schemaNode.anyOf) {
+            // Schema/data-mismatch fallback (createFormGroup, addArrayItem):
+            // we rendered an opaque textarea instead of a polymorphic form.
+            // Parse the textarea directly so the value round-trips intact.
+            const opaqueTa = container.querySelector(
+                ':scope > .opaque-object-input, :scope > div > .opaque-object-input, :scope > .collapsible-content > .opaque-object-input');
+            if (opaqueTa) {
+                const txt = opaqueTa.value.trim();
+                if (txt === '' || txt === '{}') return null;
+                try { return JSON.parse(txt); }
+                catch (e) {
+                    console.warn('extractData: invalid JSON in opaque polymorphic at ' + debugPath + ': ' + e.message);
+                    return null;
+                }
+            }
             const typeInput = container.querySelector(':scope > input[type="hidden"][data-path$=".type"], :scope > [style*="display: none"] > input[data-path$=".type"], :scope > div > input[type="hidden"][data-path$=".type"]');
             const typeVal = typeInput ? typeInput.value : null;
             schemaNode = resolveOneOf(schemaNode, typeVal ? { type: typeVal } : null);
@@ -2986,6 +3105,21 @@ function getFormData() {
 
                 let itemSchemaNode = schemaNode.items;
                 if (itemSchemaNode && (itemSchemaNode.oneOf || itemSchemaNode.anyOf)) {
+                    // Schema/data-mismatch fallback: addArrayItem rendered an
+                    // opaque JSON textarea when no variant matched the value's
+                    // type. Read it back as-is so the item round-trips intact.
+                    const opaqueTa = item.querySelector(':scope > .opaque-object-input');
+                    if (opaqueTa) {
+                        const txt = opaqueTa.value.trim();
+                        if (txt !== '' && txt !== '{}') {
+                            try { result.push(JSON.parse(txt)); }
+                            catch (e) {
+                                console.warn('extractData: invalid JSON in opaque array item at ' +
+                                    debugPath + '[' + idx + ']: ' + e.message);
+                            }
+                        }
+                        return;
+                    }
                     // Peek at the type discriminator to resolve the right variant.
                     // Use :scope > to find only DIRECT child type inputs, not
                     // nested ones from deeper objects (which would return a

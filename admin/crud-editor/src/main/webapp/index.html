@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>CRUD rule preview</title>
+	<style>
+		:root {
+			--bg: #0f1419;
+			--panel: #1a1f29;
+			--text: #d4d4d4;
+			--muted: #7d8590;
+			--accent: #58a6ff;
+			--good: #56d364;
+			--bad: #f85149;
+			--border: #30363d;
+		}
+		* { box-sizing: border-box; }
+		body {
+			font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+			background: var(--bg);
+			color: var(--text);
+			margin: 0;
+			padding: 24px;
+		}
+		h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+		.subtitle { color: var(--muted); margin-bottom: 24px; }
+		.grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 16px;
+			max-width: 1400px;
+		}
+		.controls {
+			grid-column: 1 / -1;
+			display: flex;
+			gap: 12px;
+			align-items: end;
+			flex-wrap: wrap;
+		}
+		label {
+			display: block;
+			color: var(--muted);
+			font-size: 12px;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin-bottom: 4px;
+		}
+		input, select, textarea, button {
+			background: var(--panel);
+			color: var(--text);
+			border: 1px solid var(--border);
+			border-radius: 4px;
+			padding: 8px 10px;
+			font: inherit;
+		}
+		textarea {
+			width: 100%;
+			min-height: 320px;
+			font: 12px/1.45 "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
+			tab-size: 2;
+			resize: vertical;
+		}
+		button {
+			background: var(--accent);
+			color: #0d1117;
+			font-weight: 600;
+			border: none;
+			cursor: pointer;
+			padding: 8px 18px;
+		}
+		button:hover { filter: brightness(1.1); }
+		button:disabled { opacity: 0.5; cursor: not-allowed; }
+		.panel {
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			padding: 12px;
+		}
+		.panel h2 {
+			font-size: 13px;
+			color: var(--muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin: 0 0 8px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		.fired {
+			margin-top: 12px;
+			padding: 8px 12px;
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			font-size: 13px;
+		}
+		.fired .label { color: var(--muted); margin-right: 8px; }
+		.postrun {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 12px;
+			max-width: 1400px;
+			margin-top: 12px;
+		}
+		.postrun .fired { margin-top: 0; }
+		.vars-table {
+			width: 100%;
+			border-collapse: collapse;
+			margin-top: 6px;
+			font-family: "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
+			font-size: 12px;
+		}
+		.vars-table tr + tr td { border-top: 1px solid var(--border); }
+		.vars-table td {
+			padding: 4px 8px;
+			vertical-align: top;
+		}
+		.vars-table td.name { color: var(--accent); white-space: nowrap; }
+		.vars-table td.value { color: var(--text); word-break: break-all; }
+		.vars-empty { color: var(--muted); font-style: italic; padding: 6px 0; }
+		.vars-grid {
+			display: grid;
+			grid-template-columns: 220px 1fr 28px;
+			gap: 4px 8px;
+			margin-top: 6px;
+			align-items: center;
+			font-family: "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
+			font-size: 12px;
+		}
+		.vars-grid .header {
+			color: var(--muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			font-size: 11px;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+			padding: 0 2px;
+		}
+		.vars-grid input {
+			background: var(--bg);
+			border: 1px solid var(--border);
+			border-radius: 3px;
+			padding: 4px 6px;
+			font: inherit;
+			color: var(--text);
+			width: 100%;
+		}
+		.vars-grid input.name { color: var(--accent); }
+		.vars-grid input:focus {
+			outline: none;
+			border-color: var(--accent);
+		}
+		.vars-grid .remove {
+			background: transparent;
+			color: var(--muted);
+			border: none;
+			cursor: pointer;
+			padding: 0;
+			font-size: 16px;
+			line-height: 1;
+		}
+		.vars-grid .remove:hover { color: var(--bad); }
+		.vars-toolbar {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+			margin-top: 8px;
+		}
+		.vars-toolbar button {
+			background: var(--panel);
+			color: var(--text);
+			border: 1px solid var(--border);
+			font-size: 11px;
+			padding: 4px 10px;
+			cursor: pointer;
+			font-weight: 400;
+		}
+		.vars-toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+		.vars-toolbar .clear-btn:hover { border-color: var(--bad); color: var(--bad); }
+		.chip {
+			display: inline-block;
+			background: rgba(88, 166, 255, 0.15);
+			color: var(--accent);
+			padding: 2px 8px;
+			border-radius: 12px;
+			margin: 2px 4px 2px 0;
+			font-size: 12px;
+			font-family: "JetBrains Mono", Menlo, monospace;
+		}
+		.error {
+			background: rgba(248, 81, 73, 0.12);
+			border-color: var(--bad);
+			color: var(--bad);
+		}
+		.status {
+			font-size: 13px;
+			color: var(--muted);
+		}
+		.status.ok { color: var(--good); }
+		.status.err { color: var(--bad); }
+		.diag {
+			margin-top: 12px;
+			padding: 12px;
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			font-size: 12px;
+		}
+		.diag.err { border-color: var(--bad); }
+		.diag summary {
+			cursor: pointer;
+			color: var(--muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			font-size: 12px;
+			user-select: none;
+		}
+		.diag.err summary { color: var(--bad); }
+		.diag-grid {
+			display: grid;
+			grid-template-columns: 140px 1fr;
+			gap: 6px 12px;
+			margin-top: 10px;
+			font-family: "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
+		}
+		.diag-grid .k { color: var(--muted); }
+		.diag-grid .v { color: var(--text); word-break: break-all; }
+		.diag pre {
+			background: var(--bg);
+			border: 1px solid var(--border);
+			border-radius: 4px;
+			padding: 8px 10px;
+			margin: 4px 0 0;
+			max-height: 240px;
+			overflow: auto;
+			font: 11px/1.4 "JetBrains Mono", Menlo, monospace;
+			white-space: pre-wrap;
+			word-break: break-all;
+			color: var(--text);
+		}
+		.diff-panel {
+			margin-top: 12px;
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			padding: 0;
+			overflow: hidden;
+		}
+		.diff-panel h2 {
+			font-size: 13px;
+			color: var(--muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin: 0;
+			padding: 10px 12px;
+			border-bottom: 1px solid var(--border);
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		.diff-panel h2 .summary {
+			font-size: 11px;
+			color: var(--muted);
+			text-transform: none;
+			letter-spacing: 0;
+			font-weight: 400;
+		}
+		.diff-body {
+			margin: 0;
+			padding: 10px 0;
+			max-height: 480px;
+			overflow: auto;
+			font: 12px/1.5 "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
+			background: var(--bg);
+		}
+		.diff-line {
+			display: flex;
+			padding: 0 12px;
+			white-space: pre-wrap;
+			word-break: break-all;
+		}
+		.diff-line .marker {
+			flex: 0 0 16px;
+			user-select: none;
+			color: var(--muted);
+		}
+		.diff-line.add { background: rgba(86, 211, 100, 0.10); }
+		.diff-line.add .marker { color: var(--good); }
+		.diff-line.add .text { color: var(--good); }
+		.diff-line.del { background: rgba(248, 81, 73, 0.10); }
+		.diff-line.del .marker { color: var(--bad); }
+		.diff-line.del .text { color: var(--bad); }
+		.diff-line.ctx .text { color: var(--text); opacity: 0.55; }
+		.diff-empty {
+			color: var(--muted);
+			font-style: italic;
+			padding: 10px 12px;
+		}
+	</style>
+</head>
+<body>
+	<h1>CRUD rule preview</h1>
+	<p class="subtitle">
+		Paste a SIP message, pick a rule set, and click Run. The transformation runs
+		in-process on the AdminServer against the live <code>crud.json</code> — nothing
+		touches the wire.
+	</p>
+
+	<div class="grid">
+		<div class="controls">
+			<div>
+				<label for="ruleSet">Rule set</label>
+				<select id="ruleSet"><option value="">(loading…)</option></select>
+			</div>
+			<div>
+				<label for="event">Lifecycle event</label>
+				<select id="event">
+					<option value="callStarted" selected>callStarted</option>
+					<option value="callAnswered">callAnswered</option>
+					<option value="callConnected">callConnected</option>
+					<option value="callCompleted">callCompleted</option>
+					<option value="callDeclined">callDeclined</option>
+					<option value="callAbandoned">callAbandoned</option>
+					<option value="requestEvent">requestEvent</option>
+					<option value="responseEvent">responseEvent</option>
+					<option value="">(none)</option>
+				</select>
+			</div>
+			<button id="run">Run</button>
+			<span id="status" class="status"></span>
+		</div>
+
+		<div class="panel">
+			<h2>
+				<span>Input message</span>
+				<button id="loadSample" style="font-size:11px;padding:3px 8px;">Load sample INVITE</button>
+			</h2>
+			<textarea id="input" spellcheck="false" placeholder="INVITE sip:bob@example.com SIP/2.0&#10;From: ...&#10;To: ...&#10;..."></textarea>
+		</div>
+
+		<div class="panel">
+			<h2>Output message</h2>
+			<textarea id="output" readonly spellcheck="false" placeholder="(run to see output)"></textarea>
+		</div>
+
+		<div class="panel" style="grid-column: 1 / -1;">
+			<h2>
+				<span>Variables</span>
+				<span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">
+					editable · persists across runs · simulates Attribute Selectors / env-var overrides
+				</span>
+			</h2>
+			<div id="varsGrid" class="vars-grid">
+				<div class="header">Name</div>
+				<div class="header">Value</div>
+				<div></div>
+			</div>
+			<div id="varsEmpty" class="vars-empty">no variables — click Add, or run a rule with a read operation</div>
+			<div class="vars-toolbar">
+				<button id="addVar" type="button">+ Add</button>
+				<button id="clearVars" type="button" class="clear-btn">Clear</button>
+			</div>
+		</div>
+	</div>
+
+	<div id="diffPanel" class="diff-panel" style="display:none;">
+		<h2>
+			<span>Diff (input → output)</span>
+			<span class="summary" id="diffSummary"></span>
+		</h2>
+		<div id="diffBody" class="diff-body"></div>
+	</div>
+
+	<div id="firedPanel" class="fired" style="display:none; margin-top:12px;">
+		<span class="label">Rules fired:</span><span id="firedList"></span>
+	</div>
+
+	<div id="warnPanel" class="diag err" style="display:none; margin-top:12px;">
+		<div style="color:var(--bad);text-transform:uppercase;letter-spacing:0.5px;font-size:12px;font-weight:600;">
+			Warnings (operation errors swallowed by the engine)
+		</div>
+		<pre id="warnBody" style="border-color:var(--bad);"></pre>
+	</div>
+
+	<details id="diagPanel" class="diag" style="display:none;">
+		<summary id="diagSummary">Diagnostics</summary>
+		<div class="diag-grid">
+			<div class="k">Request URL</div><div class="v" id="diagUrl">—</div>
+			<div class="k">HTTP status</div><div class="v" id="diagStatus">—</div>
+			<div class="k">Content-Type</div><div class="v" id="diagCt">—</div>
+		</div>
+		<div style="margin-top:10px;">
+			<div class="k" style="font-family:'JetBrains Mono',Menlo,monospace;color:var(--muted);">Request body</div>
+			<pre id="diagReq"></pre>
+		</div>
+		<div style="margin-top:10px;">
+			<div class="k" style="font-family:'JetBrains Mono',Menlo,monospace;color:var(--muted);">Response body (raw)</div>
+			<pre id="diagResp"></pre>
+		</div>
+		<div id="diagStackWrap" style="margin-top:10px; display:none;">
+			<div class="k" style="font-family:'JetBrains Mono',Menlo,monospace;color:var(--bad);">Server stack trace</div>
+			<pre id="diagStack" style="border-color:var(--bad);"></pre>
+		</div>
+	</details>
+
+	<script>
+		// Compute the API base from the document URL so the fetches work
+		// regardless of how the operator landed on the page (with or
+		// without a trailing slash, via a redirect, etc.). Pulls the
+		// first path segment and treats it as the webapp context root.
+		// Declared first so the dropdown-loader IIFE below can reference it.
+		const API_BASE = (function() {
+			const m = location.pathname.match(/^\/([^\/]+)/);
+			return (m ? '/' + m[1] : '') + '/resources/api/';
+		})();
+
+		const SAMPLE_INVITE = `INVITE sip:bob@example.com SIP/2.0
+From: <sip:alice@vorpal.net>;tag=1
+To: <sip:bob@example.com>
+Call-ID: abc-123@vorpal.net
+CSeq: 1 INVITE
+Contact: <sip:alice@10.0.0.1>
+P-Asserted-Identity: <sip:secret@internal>
+Content-Type: application/sdp
+
+v=0
+o=- 0 0 IN IP4 1.1.1.1
+s=-
+c=IN IP4 1.1.1.1
+t=0 0
+m=audio 8000 RTP/AVP 0
+a=rtpmap:0 PCMU/8000
+a=sendrecv
+`;
+
+		document.getElementById('loadSample').addEventListener('click', () => {
+			document.getElementById('input').value = SAMPLE_INVITE;
+		});
+
+		// Populate the rule-set dropdown from the live config on page load.
+		(async () => {
+			const sel = document.getElementById('ruleSet');
+			try {
+				const resp = await fetch(API_BASE + 'ruleSets');
+				if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+				const data = await resp.json();
+				const ids = data.ruleSets || [];
+				sel.innerHTML = ids.length === 0
+					? '<option value="">(no rule sets in config)</option>'
+					: ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
+			} catch (e) {
+				sel.innerHTML = '<option value="">(failed to load — ' + escapeHtml(e.message) + ')</option>';
+			}
+		})();
+
+		// --- Variables grid ---
+		// One source of truth: the DOM rows. Each row has two <input>s
+		// (name, value) plus a remove button. Reads merge captured values
+		// into existing rows by name (or append new ones), preserving any
+		// the operator typed in by hand.
+
+		const varsGrid = document.getElementById('varsGrid');
+		const varsEmpty = document.getElementById('varsEmpty');
+
+		function rowCount() {
+			return varsGrid.querySelectorAll('input.name').length;
+		}
+
+		function updateVarsEmpty() {
+			varsEmpty.style.display = rowCount() === 0 ? '' : 'none';
+		}
+
+		function addVarRow(name, value) {
+			// Three children share a data-row-id so the × button can scrub
+			// all of them at once (CSS Grid lays out each child directly;
+			// display:contents wrappers don't participate, so the simplest
+			// path is to tag each cell).
+			addVarRow._next = (addVarRow._next || 0) + 1;
+			const rowId = 'r' + addVarRow._next;
+
+			const nameInput = document.createElement('input');
+			nameInput.className = 'name';
+			nameInput.placeholder = 'name';
+			nameInput.value = name || '';
+			nameInput.dataset.rowId = rowId;
+
+			const valueInput = document.createElement('input');
+			valueInput.className = 'value';
+			valueInput.placeholder = 'value';
+			valueInput.value = value || '';
+			valueInput.dataset.rowId = rowId;
+
+			const removeBtn = document.createElement('button');
+			removeBtn.type = 'button';
+			removeBtn.className = 'remove';
+			removeBtn.title = 'Remove this variable';
+			removeBtn.textContent = '×';
+			removeBtn.dataset.rowId = rowId;
+			removeBtn.addEventListener('click', () => {
+				varsGrid.querySelectorAll(`[data-row-id="${rowId}"]`).forEach(el => el.remove());
+				updateVarsEmpty();
+			});
+
+			varsGrid.appendChild(nameInput);
+			varsGrid.appendChild(valueInput);
+			varsGrid.appendChild(removeBtn);
+			updateVarsEmpty();
+			return { nameInput, valueInput };
+		}
+
+		function clearAllVars() {
+			varsGrid.querySelectorAll('[data-row-id]').forEach(el => el.remove());
+			updateVarsEmpty();
+		}
+
+
+		function getVarsMap() {
+			// Read every name input, pair with its value sibling. Skip rows
+			// with empty name (operator left a placeholder unfilled).
+			const out = {};
+			const seen = new Set();
+			varsGrid.querySelectorAll('input.name').forEach(nameEl => {
+				const name = nameEl.value.trim();
+				if (!name || seen.has(name)) return;
+				seen.add(name);
+				const valueEl = varsGrid.querySelector(
+					`input.value[data-row-id="${nameEl.dataset.rowId}"]`);
+				out[name] = valueEl ? valueEl.value : '';
+			});
+			return out;
+		}
+
+		function mergeCapturedVars(captured) {
+			// Update existing rows by name; append rows for new names.
+			if (!captured) return;
+			const existing = {};
+			varsGrid.querySelectorAll('input.name').forEach(nameEl => {
+				const n = nameEl.value.trim();
+				if (n) existing[n] = nameEl;
+			});
+			for (const [name, value] of Object.entries(captured)) {
+				const nameEl = existing[name];
+				if (nameEl) {
+					const valueEl = varsGrid.querySelector(
+						`input.value[data-row-id="${nameEl.dataset.rowId}"]`);
+					if (valueEl) valueEl.value = value;
+				} else {
+					addVarRow(name, value);
+				}
+			}
+		}
+
+		document.getElementById('addVar').addEventListener('click', () => {
+			const { nameInput } = addVarRow('', '');
+			nameInput.focus();
+		});
+		document.getElementById('clearVars').addEventListener('click', () => {
+			if (rowCount() > 0 && !confirm('Clear all variables?')) return;
+			clearAllVars();
+		});
+		updateVarsEmpty();
+
+		// LCS-based line diff. Returns an array of {op, line} where op is
+		// ' ' (context), '+' (added), or '-' (removed). Quadratic in line
+		// count and memory — fine for SIP messages (tens to low hundreds
+		// of lines), bounded below by an explicit guard for safety.
+		function diffLines(a, b) {
+			const MAX = 4000;
+			if (a.length > MAX || b.length > MAX) {
+				// Fall back to coarse all-removed-then-all-added for absurd inputs.
+				return a.map(l => ({ op: '-', line: l }))
+					.concat(b.map(l => ({ op: '+', line: l })));
+			}
+			const m = a.length, n = b.length;
+			const dp = new Array(m + 1);
+			for (let i = 0; i <= m; i++) dp[i] = new Int32Array(n + 1);
+			for (let i = 1; i <= m; i++) {
+				for (let j = 1; j <= n; j++) {
+					dp[i][j] = a[i - 1] === b[j - 1]
+						? dp[i - 1][j - 1] + 1
+						: Math.max(dp[i - 1][j], dp[i][j - 1]);
+				}
+			}
+			const out = [];
+			let i = m, j = n;
+			while (i > 0 || j > 0) {
+				if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
+					out.push({ op: ' ', line: a[i - 1] });
+					i--; j--;
+				} else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+					out.push({ op: '+', line: b[j - 1] });
+					j--;
+				} else {
+					out.push({ op: '-', line: a[i - 1] });
+					i--;
+				}
+			}
+			out.reverse();
+			return out;
+		}
+
+		function renderDiff(input, output) {
+			const panel = document.getElementById('diffPanel');
+			const body = document.getElementById('diffBody');
+			const summary = document.getElementById('diffSummary');
+
+			if (input == null || output == null) {
+				panel.style.display = 'none';
+				return;
+			}
+			// Normalise line endings — the engine emits \r\n; the input
+			// pane stores \n. Treat them as equal for the diff.
+			const a = input.replace(/\r\n/g, '\n').split('\n');
+			const b = output.replace(/\r\n/g, '\n').split('\n');
+			const ops = diffLines(a, b);
+
+			let added = 0, removed = 0;
+			const html = ops.map(({ op, line }) => {
+				const cls = op === '+' ? 'add' : op === '-' ? 'del' : 'ctx';
+				if (op === '+') added++;
+				if (op === '-') removed++;
+				const marker = op === '+' ? '+' : op === '-' ? '−' : ' ';
+				return `<div class="diff-line ${cls}">` +
+					`<span class="marker">${marker}</span>` +
+					`<span class="text">${escapeHtml(line)}</span>` +
+					`</div>`;
+			}).join('');
+
+			panel.style.display = '';
+			if (added === 0 && removed === 0) {
+				body.innerHTML = '<div class="diff-empty">no changes — message is byte-identical to the input</div>';
+				summary.textContent = '';
+			} else {
+				body.innerHTML = html;
+				summary.textContent = `+${added} / −${removed} line(s)`;
+			}
+		}
+
+		function showDiagnostics({ url, requestBody, status, contentType, rawResponse, stack, isError, autoOpen }) {
+			const panel = document.getElementById('diagPanel');
+			document.getElementById('diagUrl').textContent = url || '—';
+			document.getElementById('diagStatus').textContent = status != null ? status : '(no response received)';
+			document.getElementById('diagCt').textContent = contentType || '—';
+			document.getElementById('diagReq').textContent = requestBody || '';
+			document.getElementById('diagResp').textContent = rawResponse || '';
+			const stackWrap = document.getElementById('diagStackWrap');
+			if (stack) {
+				stackWrap.style.display = '';
+				document.getElementById('diagStack').textContent = stack;
+			} else {
+				stackWrap.style.display = 'none';
+			}
+			panel.classList.toggle('err', !!isError);
+			panel.style.display = '';
+			if (autoOpen) panel.open = true;
+		}
+
+		document.getElementById('run').addEventListener('click', async () => {
+			const ruleSet = document.getElementById('ruleSet').value.trim();
+			const event = document.getElementById('event').value;
+			const message = document.getElementById('input').value;
+			const initVars = getVarsMap();
+			const status = document.getElementById('status');
+			const firedPanel = document.getElementById('firedPanel');
+			const firedList = document.getElementById('firedList');
+			const warnPanel = document.getElementById('warnPanel');
+			const warnBody = document.getElementById('warnBody');
+			const output = document.getElementById('output');
+
+			if (!ruleSet) {
+				status.textContent = 'Pick a rule set first.';
+				status.className = 'status err';
+				return;
+			}
+
+			status.textContent = 'Running…';
+			status.className = 'status';
+			document.getElementById('run').disabled = true;
+
+			const url = API_BASE + 'preview';
+			const requestPayload = {
+				ruleSet: ruleSet,
+				lifecycleEvent: event || null,
+				message: message,
+				variables: initVars,
+			};
+			const requestBody = JSON.stringify(requestPayload, null, 2);
+
+			let resp = null;
+			let rawResponse = '';
+			let contentType = null;
+
+			try {
+				resp = await fetch(url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: requestBody,
+				});
+			} catch (e) {
+				// Pre-response failure: never reached the server. URL bad,
+				// CORS, network down, etc.
+				status.textContent = 'Could not reach the server (' + (e.name || 'Error') + '): ' + e.message;
+				status.className = 'status err';
+				firedPanel.style.display = 'none';
+				warnPanel.style.display = 'none';
+				document.getElementById('diffPanel').style.display = 'none';
+				output.value = '';
+				showDiagnostics({
+					url: url, requestBody: requestBody, status: null,
+					contentType: null, rawResponse: '(no response)',
+					isError: true, autoOpen: true,
+				});
+				document.getElementById('run').disabled = false;
+				return;
+			}
+
+			contentType = resp.headers.get('Content-Type') || '';
+			try {
+				rawResponse = await resp.text();
+			} catch (e) {
+				rawResponse = '(failed to read response body: ' + e.message + ')';
+			}
+
+			let data = null;
+			let parseError = null;
+			if (contentType.includes('application/json') || rawResponse.trim().startsWith('{')) {
+				try {
+					data = JSON.parse(rawResponse);
+				} catch (e) {
+					parseError = e;
+				}
+			} else {
+				parseError = new Error('response was ' + (contentType || 'unknown content-type') +
+					', not application/json');
+			}
+
+			if (parseError) {
+				status.textContent = 'Server returned non-JSON (HTTP ' + resp.status + '): ' + parseError.message;
+				status.className = 'status err';
+				firedPanel.style.display = 'none';
+				warnPanel.style.display = 'none';
+				document.getElementById('diffPanel').style.display = 'none';
+				output.value = '';
+				showDiagnostics({
+					url: url, requestBody: requestBody, status: resp.status + ' ' + resp.statusText,
+					contentType: contentType, rawResponse: rawResponse,
+					isError: true, autoOpen: true,
+				});
+				document.getElementById('run').disabled = false;
+				return;
+			}
+
+			const warnings = (data.warnings || []);
+			if (warnings.length > 0) {
+				warnPanel.style.display = '';
+				warnBody.textContent = warnings.join('\n\n');
+			} else {
+				warnPanel.style.display = 'none';
+			}
+
+			if (data.error) {
+				status.textContent = 'Error: ' + data.error;
+				status.className = 'status err';
+				output.value = '';
+				firedPanel.style.display = 'none';
+				document.getElementById('diffPanel').style.display = 'none';
+				showDiagnostics({
+					url: url, requestBody: requestBody, status: resp.status + ' ' + resp.statusText,
+					contentType: contentType, rawResponse: rawResponse,
+					stack: data.stack,
+					isError: true, autoOpen: true,
+				});
+				document.getElementById('run').disabled = false;
+				return;
+			}
+
+			output.value = data.output || '';
+			renderDiff(message, data.output || '');
+			const fired = data.rulesFired || [];
+			firedPanel.style.display = '';
+			firedList.innerHTML = fired.length === 0
+				? '<span class="label" style="font-style:italic;">none — no rule matched</span>'
+				: fired.map(id => `<span class="chip">${escapeHtml(id)}</span>`).join('');
+
+			const vars = data.variables || {};
+			const varNames = Object.keys(vars);
+			mergeCapturedVars(vars);
+
+			status.textContent = 'OK · ' + fired.length + ' rule(s) fired · ' +
+				varNames.length + ' var(s) captured' +
+				(warnings.length > 0 ? ' · ' + warnings.length + ' warning(s)' : '');
+			status.className = warnings.length > 0 ? 'status err' : 'status ok';
+			showDiagnostics({
+				url: url, requestBody: requestBody, status: resp.status + ' ' + resp.statusText,
+				contentType: contentType, rawResponse: rawResponse,
+				isError: false, autoOpen: false,
+			});
+			document.getElementById('run').disabled = false;
+		});
+
+		function escapeHtml(s) {
+			return String(s).replace(/[&<>"']/g, c =>
+				({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+		}
+	</script>
+</body>
+</html>
