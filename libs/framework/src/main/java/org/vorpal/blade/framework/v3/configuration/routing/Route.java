@@ -18,7 +18,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// - **Forward** — `requestUri` is set, `statusCode` is null. The
 ///   call goes downstream; how depends on the subclass of
-///   [org.vorpal.blade.services.irouter.IRouterInvite] handling it.
+///   [org.vorpal.blade.framework.v3.irouter.IRouterInvite] handling it.
 ///   Plain iRouter proxies to the URI; SecureLogix returns
 ///   `302 Moved Temporarily` with the URI in `Contact`.
 ///

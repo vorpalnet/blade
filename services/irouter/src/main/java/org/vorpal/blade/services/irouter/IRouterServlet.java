@@ -9,6 +9,9 @@ import javax.servlet.sip.SipServletRequest;
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.irouter.IRouterConfig;
+import org.vorpal.blade.framework.v3.irouter.IRouterConfigSample;
+import org.vorpal.blade.framework.v3.irouter.IRouterInvite;
 
 /// Intelligent Router — orchestrates the v3 iRouter pipeline
 /// asynchronously.
@@ -52,7 +55,7 @@ public class IRouterServlet extends AsyncSipServlet {
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		if ("INVITE".equals(request.getMethod()) && request.isInitial()) {
-			return new IRouterInvite();
+			return new IRouterInvite(settings.getCurrent());
 		}
 		return null;
 	}

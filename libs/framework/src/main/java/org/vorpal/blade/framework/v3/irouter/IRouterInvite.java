@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.irouter;
+package org.vorpal.blade.framework.v3.irouter;
 
 import java.io.IOException;
 import java.util.Map;
@@ -36,9 +36,19 @@ import org.vorpal.blade.framework.v3.configuration.routing.Routing;
 public class IRouterInvite extends Callflow {
 	private static final long serialVersionUID = 1L;
 
+	/// Snapshot of the active routing config, captured by the leaf
+	/// servlet (IRouterServlet, SecureLogixServlet, …) at instantiation
+	/// time and passed in here. Per-request snapshot avoids mid-request
+	/// reload races and decouples the framework-resident IRouterInvite
+	/// from any one servlet's static `settings` field.
+	protected final IRouterConfig config;
+
+	public IRouterInvite(IRouterConfig config) {
+		this.config = config;
+	}
+
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-		IRouterConfig config = IRouterServlet.settings.getCurrent();
 		Context ctx = new Context(request);
 
 		// Subclass extension point: write any pre-pipeline values into ctx
@@ -176,8 +186,15 @@ public class IRouterInvite extends Callflow {
 				? request.createResponse(code, reason)
 				: request.createResponse(code);
 		applyHeaders(response, route, ctx);
-		response.send();
+		// Log before send — a final non-2xx response invalidates the session,
+		// after which the logger's hexHash → getGlareState → session.getAttribute
+		// path throws "Invalid attribute store!". Same reasoning as
+		// SecureLogixInvite.executeRoute and Callflow.sendResponse.
 		sipLogger.fine(request, "iRouter responded " + code + (reason != null ? " " + reason : ""));
+		// Route through the framework's sendResponse rather than response.send()
+		// so we pick up X-Vorpal-* header injection and the Logger.superArrow
+		// diagram-arrow + FINEST raw-response dump.
+		sendResponse(response);
 	}
 
 	/// Subclass hook: act on the chosen [Route] + resolved destination

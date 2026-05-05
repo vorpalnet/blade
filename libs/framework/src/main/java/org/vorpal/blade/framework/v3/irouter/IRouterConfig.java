@@ -1,4 +1,4 @@
-package org.vorpal.blade.services.irouter;
+package org.vorpal.blade.framework.v3.irouter;
 
 import java.io.Serializable;
 

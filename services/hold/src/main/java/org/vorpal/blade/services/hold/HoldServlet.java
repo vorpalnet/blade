@@ -10,6 +10,8 @@ import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.CallflowHoldRelease;
+import org.vorpal.blade.framework.v2.callflow.CallflowHold;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 /**
@@ -48,22 +50,22 @@ public class HoldServlet extends B2buaServlet {
 
 		switch (request.getMethod()) {
 		case "INVITE":
-			if (request.isInitial()) {
-				callflow = new HoldInvite();
-			}
+			callflow = new CallflowHold();
 			break;
 
 		case "CANCEL":
 		case "BYE":
-			callflow = new HoldBye();
+			callflow = new CallflowHoldRelease();
+			break;
+
+		case "ACK":
+			// In-dialog ACKs are absorbed by the parked sendResponse callback;
+			// any ACK that reaches chooseCallflow is an orphan — let the
+			// framework drop it silently (it special-cases null + ACK).
 			break;
 
 		default:
-			callflow = super.chooseCallflow(request);
-		}
-		
-		if(callflow==null) {
-			callflow = new NotImplemented();
+			callflow = new HoldMethodNotAllowed();
 		}
 
 		return callflow;
