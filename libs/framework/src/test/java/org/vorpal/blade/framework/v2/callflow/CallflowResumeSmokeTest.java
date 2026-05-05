@@ -9,7 +9,7 @@ import javax.mail.util.ByteArrayDataSource;
 
 /// Smoke test for [CallflowResume]'s SDP-direction transform: every m-line
 /// must end up `a=sendrecv` regardless of input direction. Mirrors
-/// [CallflowHoldSmokeTest] structure.
+/// [SdpDirectionSmokeTest] structure.
 public final class CallflowResumeSmokeTest {
 	private static int passed;
 	private static int failed;

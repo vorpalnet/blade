@@ -8,11 +8,13 @@ import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMultipart;
 import javax.mail.util.ByteArrayDataSource;
 
-/// Smoke test for [CallflowHold]'s SDP-direction transform. Verifies every
+/// Smoke test for [SdpDirection]'s SDP-direction transform. Verifies every
 /// m-line in the output ends up `a=inactive` regardless of the input
 /// direction, and that multipart bodies are unwrapped, transformed, and
 /// repackaged so the response Content-Type's boundary still matches the body.
-public final class CallflowHoldSmokeTest {
+/// Used by [CallflowMute], [CallflowUnmute], [CallflowResume], and
+/// [AbstractCallflow3PCC] to rewrite a peer-leg offer mid-flow.
+public final class SdpDirectionSmokeTest {
 	private static int passed;
 	private static int failed;
 
