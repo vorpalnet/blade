@@ -9,7 +9,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Level;
 
@@ -92,34 +91,34 @@ public abstract class AsyncSipServlet extends SipServlet
 		implements SipServletListener, ServletContextListener, TimerListener {
 
 	private static final long serialVersionUID = 1L;
-	
+
 	/// Initial SIP servlet context event, preserved for cleanup operations
 	private static SipServletContextEvent initialSipServletContextEvent;
-	
+
 	/// Global SIP logger instance for message and event logging
 	protected static Logger sipLogger;
-	
+
 	/// SIP factory for creating SIP messages, addresses, and URIs
 	protected static SipFactory sipFactory;
-	
+
 	/// SIP sessions utility for looking up application sessions by key
 	protected static SipSessionsUtil sipUtil;
-	
+
 	/// Timer service for creating and managing servlet timers
 	protected static TimerService timerService;
-	
+
 	/// Session attribute key for INVITE response callbacks
 	private static final String RESPONSE_CALLBACK_INVITE = "RESPONSE_CALLBACK_INVITE";
-	
+
 	/// Session attribute key for glare request queue
 	private static final String GLARE_QUEUE = "GLARE_QUEUE";
-	
+
 	/// Session attribute key for linked session references
 	private static final String LINKED_SESSION = "LINKED_SESSION";
-	
+
 	/// Application session attribute key for hash key storage
 	private static final String HASHKEY = "HASHKEY";
-	
+
 	/// Application session attribute key for hash collision detection
 	private static final String HASHKEY_COLLISION = "HASHKEY_COLLISION";
 
@@ -133,16 +132,16 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	/// SIP CANCEL method constant
 	private static final String CANCEL = "CANCEL";
-	
+
 	/// SIP INVITE method constant
 	private static final String INVITE = "INVITE";
-	
+
 	/// SIP BYE method constant
 	private static final String BYE = "BYE";
-	
+
 	/// SIP ACK method constant
 	private static final String ACK = "ACK";
-	
+
 	/// SIP REFER method constant
 	private static final String REFER = "REFER";
 
@@ -150,44 +149,53 @@ public abstract class AsyncSipServlet extends SipServlet
 	protected static SessionParameters sessionParameters;
 
 	/// Called when the SipServlet has been created and initialized
-	/// 
+	///
 	/// Implement this method to perform application-specific initialization tasks
-	/// such as loading configuration, setting up resources, or registering services.
-	/// 
-	/// @param event the SIP servlet context event containing initialization information
+	/// such as loading configuration, setting up resources, or registering
+	/// services.
+	///
+	/// @param event the SIP servlet context event containing initialization
+	/// information
 	/// @throws ServletException if servlet initialization fails
 	/// @throws IOException if an I/O error occurs during initialization
 	protected abstract void servletCreated(SipServletContextEvent event) throws ServletException, IOException;
 
 	/// Called when the SipServlet is being destroyed
-	/// 
+	///
 	/// Implement this method to perform cleanup tasks such as releasing resources,
 	/// closing connections, or persisting state before servlet shutdown.
-	/// 
-	/// @param event the SIP servlet context event containing destruction information
+	///
+	/// @param event the SIP servlet context event containing destruction
+	/// information
 	/// @throws ServletException if servlet destruction fails
 	/// @throws IOException if an I/O error occurs during destruction
 	protected abstract void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException;
 
 	/// Selects the appropriate callflow for processing incoming SIP requests
-	/// 
-	/// Implement this method to choose different [Callflow] objects based on request
-	/// characteristics such as method, headers, or routing logic. This method is only
+	///
+	/// Implement this method to choose different [Callflow] objects based on
+	/// request
+	/// characteristics such as method, headers, or routing logic. This method is
+	/// only
 	/// called for requests that don't already have an associated callflow.
-	/// 
+	///
 	/// @param request the incoming SIP request requiring callflow assignment
-	/// @return the selected [Callflow] instance, or null to send a 501 Not Implemented response
+	/// @return the selected [Callflow] instance, or null to send a 501 Not
+	/// Implemented response
 	/// @throws ServletException if callflow selection fails
 	/// @throws IOException if an I/O error occurs during selection
 	protected abstract Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException;
 
 	/// Initializes the servlet when the SIP container starts
-	/// 
-	/// This method sets up the SIP factory, session utilities, timer service, and logger.
-	/// It also invokes the abstract servletCreated method for application-specific initialization,
+	///
+	/// This method sets up the SIP factory, session utilities, timer service, and
+	/// logger.
+	/// It also invokes the abstract servletCreated method for application-specific
+	/// initialization,
 	/// configures analytics if enabled, and logs system configuration parameters.
-	/// 
-	/// @param event the SIP servlet context event containing initialization information
+	///
+	/// @param event the SIP servlet context event containing initialization
+	/// information
 	@Override
 	public void servletInitialized(SipServletContextEvent event) {
 		initialSipServletContextEvent = event;
@@ -281,33 +289,33 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Customizes the analytics start event before it is published
-	/// 
+	///
 	/// Override this method to add application-specific data to the analytics
 	/// event that is sent when the servlet starts. The event will be automatically
 	/// published after this method returns.
-	/// 
+	///
 	/// @param event the analytics start event to customize
 	public void start(Event event) {
 		// override by user
 	}
 
 	/// Customizes the analytics stop event before it is published
-	/// 
+	///
 	/// Override this method to add application-specific data to the analytics
 	/// event that is sent when the servlet stops. The event will be automatically
 	/// published after this method returns.
-	/// 
+	///
 	/// @param event the analytics stop event to customize
 	public void stop(Event event) {
 		// override by user
 	}
 
 	/// Handles SIP request events that fall outside the scope of defined callflows
-	/// 
+	///
 	/// Override this method to process requests that don't match any registered
 	/// callflow or callback. This is useful for handling OPTIONS pings, MESSAGE
 	/// requests, or other out-of-dialog messages.
-	/// 
+	///
 	/// @param request the SIP request to handle
 	/// @throws ServletException if request processing fails
 	/// @throws IOException if an I/O error occurs
@@ -316,11 +324,11 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Handles SIP response events that fall outside the scope of defined callflows
-	/// 
+	///
 	/// Override this method to process responses that don't match any registered
 	/// callflow or callback. This is useful for handling responses to OPTIONS
 	/// requests or other out-of-dialog responses.
-	/// 
+	///
 	/// @param response the SIP response to handle
 	/// @throws ServletException if response processing fails
 	/// @throws IOException if an I/O error occurs
@@ -329,9 +337,9 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Handles servlet context initialization
-	/// 
+	///
 	/// This implementation is empty by default. Override in subclasses if needed.
-	/// 
+	///
 	/// @param sce the servlet context event
 	@Override
 	public void contextInitialized(ServletContextEvent sce) {
@@ -339,10 +347,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Handles servlet context destruction and cleanup
-	/// 
+	///
 	/// Invokes the servletDestroyed method for application-specific cleanup
 	/// and shuts down analytics publisher if configured.
-	/// 
+	///
 	/// @param sce the servlet context event
 	@Override
 	public void contextDestroyed(ServletContextEvent sce) {
@@ -372,17 +380,24 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Processes incoming SIP requests with glare detection and callback handling
-	/// 
-	/// This method handles initial INVITE session setup, glare detection and queuing,
-	/// callback invocation for expected requests, callflow selection and processing,
-	/// session attribute extraction based on configured selectors, and proxy request logging.
-	/// 
+	///
+	/// This method handles initial INVITE session setup, glare detection and
+	/// queuing,
+	/// callback invocation for expected requests, callflow selection and
+	/// processing,
+	/// session attribute extraction based on configured selectors, and proxy
+	/// request logging.
+	///
 	/// @param _request the incoming SIP request
 	/// @throws ServletException if a servlet error occurs during processing
 	/// @throws IOException if an I/O error occurs during processing
 	@SuppressWarnings("unchecked")
 	@Override
 	protected void doRequest(SipServletRequest _request) throws ServletException, IOException {
+
+		if (_request == null) {
+			return; // nothing to do
+		}
 
 		try {
 			SipServletRequest request = _request;
@@ -486,16 +501,6 @@ public abstract class AsyncSipServlet extends SipServlet
 				// attempt to keep track of who called whom
 				request.getSession().setAttribute("userAgent", "caller");
 				request.getSession().setAttribute("_diagramLeft", Boolean.TRUE);
-
-				String user = ((SipURI) request.getTo().getURI()).getUser();
-				if (user != null) {
-					request.getSession().setAttribute("_DID", user);
-				}
-
-				String ani = ((SipURI) request.getFrom().getURI()).getUser();
-				if (ani != null) {
-					request.getSession().setAttribute("_ANI", ani);
-				}
 
 				// save keep-alive information
 				Parameterable sessionExpires = request.getParameterableHeader("Session-Expires");
@@ -717,11 +722,6 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			} else { // isProxy, for logging purposes only
 				boolean diagramLeft = true;
-				String proxyDid = (String) request.getSession().getAttribute("_DID");
-				String fromUser = ((SipURI) request.getFrom().getURI()).getUser();
-				if (Objects.equals(proxyDid, fromUser)) {
-					diagramLeft = false;
-				}
 				Callflow.getLogger().superArrow(Direction.RECEIVE, diagramLeft, request, null, "proxy", null);
 				Callflow.getLogger().superArrow(Direction.SEND, !diagramLeft, request, null, "proxy", null);
 			}
@@ -749,12 +749,15 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Processes incoming SIP responses with callback handling and error recovery
-	/// 
+	///
 	/// This method handles detection of responses arriving after call cancellation,
-	/// callback invocation for pending response handlers, early dialog session merging
-	/// when To-tag changes, proxy response logging and session invalidation for loose routing,
-	/// and error recovery including upstream error notification and downstream call termination.
-	/// 
+	/// callback invocation for pending response handlers, early dialog session
+	/// merging
+	/// when To-tag changes, proxy response logging and session invalidation for
+	/// loose routing,
+	/// and error recovery including upstream error notification and downstream call
+	/// termination.
+	///
 	/// @param response the incoming SIP response
 	/// @throws ServletException if a servlet error occurs during processing
 	/// @throws IOException if an I/O error occurs during processing
@@ -975,9 +978,8 @@ public abstract class AsyncSipServlet extends SipServlet
 										return; // -- RETURN, response handled by auto-follow
 									} catch (Exception followEx) {
 										sipLogger.warning(response,
-												"AsyncSipServlet.doResponse - auto-follow failed at attempt "
-														+ count + ", delivering 3xx to callback: "
-														+ followEx.getMessage());
+												"AsyncSipServlet.doResponse - auto-follow failed at attempt " + count
+														+ ", delivering 3xx to callback: " + followEx.getMessage());
 										// fall through to existing dispatch
 									}
 								}
@@ -1063,11 +1065,6 @@ public abstract class AsyncSipServlet extends SipServlet
 
 				// For logging purposes
 				boolean diagramLeft = false;
-				String proxyDid = (String) response.getSession().getAttribute("_DID");
-				String fromUser = ((SipURI) response.getFrom().getURI()).getUser();
-				if (Objects.equals(proxyDid, fromUser)) {
-					diagramLeft = true;
-				}
 				Callflow.getLogger().superArrow(Direction.RECEIVE, diagramLeft, null, response, "proxy", null);
 				Callflow.getLogger().superArrow(Direction.SEND, !diagramLeft, null, response, "proxy", null);
 
@@ -1097,12 +1094,15 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Handles servlet timer expiration events
-	/// 
-	/// Retrieves and invokes the callback function stored in the timer's info object
-	/// when the timer was created. Callbacks are executed using the acceptThrows method
+	///
+	/// Retrieves and invokes the callback function stored in the timer's info
+	/// object
+	/// when the timer was created. Callbacks are executed using the acceptThrows
+	/// method
 	/// to handle exceptions properly.
-	/// 
-	/// @param timer the expired servlet timer containing the callback in its info object
+	///
+	/// @param timer the expired servlet timer containing the callback in its info
+	/// object
 	@SuppressWarnings("unchecked")
 	@Override
 	final public void timeout(ServletTimer timer) {
@@ -1125,58 +1125,58 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Returns the global SIP logger instance used for message and event logging
-	/// 
+	///
 	/// @return the SIP logger instance
 	final public static Logger getSipLogger() {
 		return sipLogger;
 	}
 
 	/// Sets the global SIP logger instance used for message and event logging
-	/// 
+	///
 	/// @param _sipLogger the SIP logger instance to set
 	final public static void setSipLogger(Logger _sipLogger) {
 		sipLogger = _sipLogger;
 	}
 
 	/// Returns the SIP factory used for creating SIP messages, addresses, and URIs
-	/// 
+	///
 	/// @return the SIP factory instance
 	final public static SipFactory getSipFactory() {
 		return sipFactory;
 	}
 
 	/// Sets the SIP factory used for creating SIP messages, addresses, and URIs
-	/// 
+	///
 	/// @param _sipFactory the SIP factory instance to set
 	final public static void setSipFactory(SipFactory _sipFactory) {
 		sipFactory = _sipFactory;
 	}
 
 	/// Returns the SIP sessions utility for looking up application sessions by key
-	/// 
+	///
 	/// @return the SIP sessions utility instance
 	final public static SipSessionsUtil getSipUtil() {
 		return sipUtil;
 	}
 
 	/// Sets the SIP sessions utility for looking up application sessions by key
-	/// 
+	///
 	/// @param _sipUtil the SIP sessions utility instance to set
 	final public static void setSipUtil(SipSessionsUtil _sipUtil) {
 		sipUtil = _sipUtil;
 	}
 
 	/// Returns the timer service used for creating and managing servlet timers
-	/// 
+	///
 	/// @return the timer service instance
 	final public static TimerService getTimerService() {
 		return timerService;
 	}
 
 	/// Converts a byte array to an alphanumeric string representation
-	/// 
+	///
 	/// Uses a 62-character alphabet (0-9, a-z, A-Z) for compact encoding.
-	/// 
+	///
 	/// @param bytes the byte array to convert
 	/// @return an alphanumeric string representation of the bytes
 	private static String byteArray2Text(byte[] bytes) {
@@ -1196,11 +1196,13 @@ public abstract class AsyncSipServlet extends SipServlet
 		return sb.toString();
 	}
 
-	/// Computes an MD5 hash of the input string and returns it as an alphanumeric string
-	/// 
+	/// Computes an MD5 hash of the input string and returns it as an alphanumeric
+	/// string
+	///
 	/// Note: MD5 is used here for hash distribution, not cryptographic security.
-	/// This method is useful for generating unique keys for SIP application sessions.
-	/// 
+	/// This method is useful for generating unique keys for SIP application
+	/// sessions.
+	///
 	/// @param stringToHash the string to hash
 	/// @return the hashed string in alphanumeric format, or null if hashing fails
 	public static String hash(String stringToHash) {
@@ -1219,11 +1221,14 @@ public abstract class AsyncSipServlet extends SipServlet
 		return stringHash;
 	}
 
-	/// Gets or creates a SIP application session using a hashed key derived from the input string
-	/// 
-	/// This method detects and logs hash collisions when different input strings produce
-	/// the same hash. Useful in `@SipApplicationKey` methods for correlating related SIP sessions.
-	/// 
+	/// Gets or creates a SIP application session using a hashed key derived from
+	/// the input string
+	///
+	/// This method detects and logs hash collisions when different input strings
+	/// produce
+	/// the same hash. Useful in `@SipApplicationKey` methods for correlating
+	/// related SIP sessions.
+	///
 	/// @param stringToHash the string to hash for generating the session key
 	/// @return the hashed string used as the application session key
 	public static String getAppSessionHashKey(String stringToHash) {
@@ -1247,7 +1252,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Extracts the account name from a SIP address in the format "user@host"
-	/// 
+	///
 	/// @param address the SIP address to extract the account name from
 	/// @return the account name in lowercase (user@host format)
 	public static String getAccountName(Address address) {
@@ -1255,7 +1260,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Extracts the account name from a SIP URI in the format "user@host"
-	/// 
+	///
 	/// @param uri the SIP URI to extract the account name from
 	/// @return the account name in lowercase (user@host format)
 	public static String getAccountName(URI uri) {
@@ -1278,7 +1283,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// @param response the 3xx redirect response
 	/// @param count the redirect attempt number (1-based) for this AppSession
 	/// @return true to have the framework auto-follow the redirect; false to
-	///         deliver the response to the registered callback as today
+	/// deliver the response to the registered callback as today
 	protected boolean shouldFollowRedirect(SipServletResponse response, int count) {
 		return count <= MAX_AUTO_REDIRECTS;
 	}
@@ -1308,18 +1313,14 @@ public abstract class AsyncSipServlet extends SipServlet
 			throw new ServletException("auto-follow: response has no associated original request");
 		}
 
-		SipServletRequest newInvite = sipFactory.createRequest(
-				origInvite.getApplicationSession(),
-				INVITE,
-				origInvite.getFrom(),
-				origInvite.getTo());
+		SipServletRequest newInvite = sipFactory.createRequest(origInvite.getApplicationSession(), INVITE,
+				origInvite.getFrom(), origInvite.getTo());
 		newInvite.setRequestURI(contact.getURI());
 		Callflow.copyContentAndHeaders(origInvite, newInvite);
 
 		if (sipLogger.isLoggable(Level.INFO)) {
-			sipLogger.info(response, "AsyncSipServlet.followRedirect - "
-					+ "redirecting from " + origInvite.getRequestURI()
-					+ " to " + contact.getURI());
+			sipLogger.info(response, "AsyncSipServlet.followRedirect - " + "redirecting from "
+					+ origInvite.getRequestURI() + " to " + contact.getURI());
 		}
 
 		// Anonymous Callflow because sendRequest is an instance method.
@@ -1327,6 +1328,7 @@ public abstract class AsyncSipServlet extends SipServlet
 		// this stand-in is intentional and limited to one call site.
 		new Callflow() {
 			private static final long serialVersionUID = 1L;
+
 			@Override
 			public void process(SipServletRequest request) {
 				// never invoked — we only need sendRequest's behavior
@@ -1336,7 +1338,8 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	/// Sends a SIP response with centralized logging and error handling
 	///
-	/// This method provides a central point for response transmission with automatic
+	/// This method provides a central point for response transmission with
+	/// automatic
 	/// logging and consistent error handling across the application.
 	///
 	/// @param response the SIP response to send
@@ -1356,36 +1359,41 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Determines if the SIP message is being handled in proxy mode
-	/// 
-	/// Returns true if `proxyRequest` was previously invoked on this application session.
-	/// 
+	///
+	/// Returns true if `proxyRequest` was previously invoked on this application
+	/// session.
+	///
 	/// @param msg the SIP message to check
 	/// @return true if the message is in proxy mode, false otherwise
 	public static boolean isProxy(SipServletMessage msg) {
-		return Boolean.TRUE.equals((Boolean)msg.getApplicationSession().getAttribute("isProxy"));
+		return Boolean.TRUE.equals((Boolean) msg.getApplicationSession().getAttribute("isProxy"));
 	}
 
-	/// Returns the session parameters configuration used for session attribute extraction
-	/// 
+	/// Returns the session parameters configuration used for session attribute
+	/// extraction
+	///
 	/// @return the current session parameters, or null if not configured
 	public static SessionParameters getSessionParameters() {
 		return sessionParameters;
 	}
 
-	/// Sets the session parameters configuration used for session attribute extraction
-	/// 
+	/// Sets the session parameters configuration used for session attribute
+	/// extraction
+	///
 	/// @param _sessionParameters the session parameters to set
 	public static void setSessionParameters(SessionParameters _sessionParameters) {
 		sessionParameters = _sessionParameters;
 	}
 
 	/// Converts a camelCase string to regular words separated by spaces
-	/// 
-	/// For example, "myVariableName" becomes "My Variable Name". Used for generating
+	///
+	/// For example, "myVariableName" becomes "My Variable Name". Used for
+	/// generating
 	/// human-readable error messages from exception class names.
-	/// 
+	///
 	/// @param camelCaseString the camelCase string to convert
-	/// @return the string with spaces inserted before uppercase letters and first letter capitalized
+	/// @return the string with spaces inserted before uppercase letters and first
+	/// letter capitalized
 	public static String convertCamelCaseToRegularWords(String camelCaseString) {
 		// Regex explanation:
 		// (?<=[a-z]) looks for an uppercase letter that is preceded by a lowercase
@@ -1404,7 +1412,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Retrieves the analytics event associated with a SIP message
-	/// 
+	///
 	/// @param message the SIP message to get the event from
 	/// @return the associated analytics event, or null if none exists
 	public static Event getEvent(SipServletMessage message) {
@@ -1412,7 +1420,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Retrieves the analytics event associated with a servlet context event
-	/// 
+	///
 	/// @param contextEvent the context event to get the event from
 	/// @return the associated analytics event, or null if none exists
 	public static Event getEvent(SipServletContextEvent contextEvent) {
@@ -1420,7 +1428,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Associates an analytics event with a SIP message
-	/// 
+	///
 	/// @param event the analytics event to associate
 	/// @param message the SIP message to associate the event with
 	public static void setEvent(Event event, SipServletMessage message) {
@@ -1428,18 +1436,20 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Associates an analytics event with a servlet context event
-	/// 
+	///
 	/// @param event the analytics event to associate
 	/// @param contextEvent the context event to associate the event with
 	public static void setEvent(Event event, SipServletContextEvent contextEvent) {
 		contextEvent.getServletContext().setAttribute("event", event);
 	}
 
-	/// Extracts the Vorpal session ID from a SIP message using either X-Vorpal-ID or X-Vorpal-Session headers
-	/// 
-	/// Tries the newer X-Vorpal-ID parameterable format first, then falls back to the
+	/// Extracts the Vorpal session ID from a SIP message using either X-Vorpal-ID
+	/// or X-Vorpal-Session headers
+	///
+	/// Tries the newer X-Vorpal-ID parameterable format first, then falls back to
+	/// the
 	/// legacy X-Vorpal-Session colon-separated format for backwards compatibility.
-	/// 
+	///
 	/// @param msg the SIP message to extract the session ID from
 	/// @return the Vorpal session ID, or null if not found
 	public static String getVorpalSessionIdFromMessage(SipServletMessage msg) {
@@ -1471,11 +1481,13 @@ public abstract class AsyncSipServlet extends SipServlet
 		return vorpalSessionId;
 	}
 
-	/// Extracts the Vorpal dialog ID from a SIP message using either X-Vorpal-ID or X-Vorpal-Session headers
-	/// 
-	/// Tries the newer X-Vorpal-ID parameterable format first, then falls back to the
+	/// Extracts the Vorpal dialog ID from a SIP message using either X-Vorpal-ID or
+	/// X-Vorpal-Session headers
+	///
+	/// Tries the newer X-Vorpal-ID parameterable format first, then falls back to
+	/// the
 	/// legacy X-Vorpal-Session colon-separated format for backwards compatibility.
-	/// 
+	///
 	/// @param msg the SIP message to extract the dialog ID from
 	/// @return the Vorpal dialog ID, or null if not found
 	public static String getVorpalDialogIdFromMessage(SipServletMessage msg) {
@@ -1509,11 +1521,13 @@ public abstract class AsyncSipServlet extends SipServlet
 		return dialog;
 	}
 
-	/// Extracts the Vorpal timestamp from a SIP message using either X-Vorpal-ID or X-Vorpal-Timestamp headers
-	/// 
-	/// Tries the newer X-Vorpal-ID parameterable format first, then falls back to the
+	/// Extracts the Vorpal timestamp from a SIP message using either X-Vorpal-ID or
+	/// X-Vorpal-Timestamp headers
+	///
+	/// Tries the newer X-Vorpal-ID parameterable format first, then falls back to
+	/// the
 	/// legacy X-Vorpal-Timestamp header for backwards compatibility.
-	/// 
+	///
 	/// @param msg the SIP message to extract the timestamp from
 	/// @return the Vorpal timestamp, or null if not found
 	public static String getVorpalTimestampFromMessage(SipServletMessage msg) {

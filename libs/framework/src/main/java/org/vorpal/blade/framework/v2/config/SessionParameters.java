@@ -11,7 +11,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 public class SessionParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	public Integer expiration = null;
+	public Integer expiration = 60; //
 
 	@JsonPropertyDescription("Automatically index the session using Vorpal Session? Default is false.")
 	public Boolean indexVorpalSessionID = null;

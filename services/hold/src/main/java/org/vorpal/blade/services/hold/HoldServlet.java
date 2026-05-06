@@ -8,9 +8,9 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.v2.b2bua.Terminate;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.callflow.CallflowHoldRelease;
 import org.vorpal.blade.framework.v2.callflow.CallflowHold;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
@@ -23,7 +23,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
 @javax.servlet.sip.annotation.SipListener
-public class HoldServlet extends B2buaServlet {
+public class HoldServlet extends AsyncSipServlet {
 
 	private static final long serialVersionUID = 1L;
 	public static SettingsManager<HoldSettings> settingsManager;
@@ -55,13 +55,10 @@ public class HoldServlet extends B2buaServlet {
 
 		case "CANCEL":
 		case "BYE":
-			callflow = new CallflowHoldRelease();
+			callflow = new Terminate(null);
 			break;
 
 		case "ACK":
-			// In-dialog ACKs are absorbed by the parked sendResponse callback;
-			// any ACK that reaches chooseCallflow is an orphan — let the
-			// framework drop it silently (it special-cases null + ACK).
 			break;
 
 		default:
@@ -69,42 +66,6 @@ public class HoldServlet extends B2buaServlet {
 		}
 
 		return callflow;
-	}
-
-	@Override
-	public void callStarted(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void callAnswered(SipServletResponse outboundResponse) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void callConnected(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void callCompleted(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void callDeclined(SipServletResponse outboundResponse) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void callAbandoned(SipServletRequest outboundRequest) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
 	}
 
 }

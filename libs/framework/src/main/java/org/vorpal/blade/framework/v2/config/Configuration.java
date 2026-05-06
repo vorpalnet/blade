@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
+import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -23,9 +24,8 @@ public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 
-	protected LogParameters logging;
-
-	protected SessionParameters session;
+	protected LogParameters logging = new LogParametersDefault();
+	protected SessionParameters session = new SessionParameters();
 
 	protected Analytics analytics;
 
