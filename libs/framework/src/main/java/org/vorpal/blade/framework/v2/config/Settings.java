@@ -311,10 +311,12 @@ public class Settings<T> implements SettingsMXBean {
 					logger.setSequenceDiagramLoggingLevel(cfg.getLogging().resolveSequenceDiagramLoggingLevel());
 				}
 
-				if (cfg.getSession() != null) {
-					Callflow.setSessionParameters(cfg.getSession());
-					AsyncSipServlet.setSessionParameters(cfg.getSession());
+				SessionParameters sessionParams = cfg.getSession();
+				if (sessionParams == null) {
+					sessionParams = new SessionParametersDefault();
 				}
+				Callflow.setSessionParameters(sessionParams);
+				AsyncSipServlet.setSessionParameters(sessionParams);
 
 			}
 
