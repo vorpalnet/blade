@@ -2,15 +2,20 @@ package org.vorpal.blade.framework.v2.callflow;
 
 import java.io.IOException;
 
+import javax.mail.MessagingException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-/// Answer a (re-)INVITE with `200 OK` carrying a fixed "blackhole" SDP
-/// (`c=IN IP4 0.0.0.0` + `a=inactive`), putting the leg on hold without
-/// echoing the caller's offer. Always replies `application/sdp`; any
-/// multipart parts (e.g. SIPREC `application/rs-metadata+xml`) in the
-/// request are dropped from the response.
+/// Answer a (re-)INVITE with `200 OK` carrying a "blackhole" SDP that
+/// puts the leg on hold. When the request carries an offer, [Callflow#hold]
+/// derives the answer from it: every `m=` port → 0, every `c=` →
+/// `0.0.0.0` (or `::`), every direction attribute → `inactive`. Multipart
+/// SIPREC (`application/sdp` + `application/rs-metadata+xml`) is accepted
+/// on input; non-SDP parts are dropped and the response is always plain
+/// `application/sdp`. If the request has no body (e.g. a re-INVITE asking
+/// us to make the offer) we fall back to a fixed minimal blackhole SDP so
+/// the caller still gets a well-formed answer.
 public class CallflowHold extends Callflow {
 
 	private static final long serialVersionUID = 1L;
@@ -21,7 +26,7 @@ public class CallflowHold extends Callflow {
 			+ "s=-\r\n"
 			+ "c=IN IP4 0.0.0.0\r\n"
 			+ "t=0 0\r\n"
-			+ "m=audio 23348 RTP/AVP 0\r\n"
+			+ "m=audio 0 RTP/AVP 0\r\n"
 			+ "a=rtpmap:0 PCMU/8000\r\n"
 			+ "a=inactive\r\n";
 
@@ -38,7 +43,17 @@ public class CallflowHold extends Callflow {
 			response.setHeader("Session-Expires", sessionExpires);
 		}
 
-		response.setContent(BLACKHOLE_SDP.getBytes(), "application/sdp");
+		try {
+			hold(request, response);
+		} catch (MessagingException e) {
+			throw new IOException("CallflowHold: failed to extract SDP from multipart body", e);
+		}
+
+		// No offer in the request — fall back to a static blackhole so the
+		// caller still gets a well-formed answer and stays on hold.
+		if (response.getContent() == null) {
+			response.setContent(BLACKHOLE_SDP.getBytes(), "application/sdp");
+		}
 
 		sendResponse(response, (ack) -> {
 			// do nothing

@@ -24,9 +24,12 @@
 
 package org.vorpal.blade.framework.v2.callflow;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -36,6 +39,10 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 
+import javax.mail.MessagingException;
+import javax.mail.internet.MimeBodyPart;
+import javax.mail.internet.MimeMultipart;
+import javax.mail.util.ByteArrayDataSource;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.Parameterable;
@@ -72,6 +79,7 @@ import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
 import org.vorpal.blade.framework.v2.proxy.ProxyTier;
 import org.vorpal.blade.framework.v2.proxy.ProxyTier.Mode;
+import org.vorpal.blade.framework.v2.sdp.Sdp;
 import org.vorpal.blade.framework.v2.testing.DummyResponse;
 
 public abstract class Callflow implements Serializable {
@@ -1681,6 +1689,123 @@ public abstract class Callflow implements Serializable {
 
 		}
 		return copyTo;
+	}
+
+	/// Build a "hold" / blackhole answer from the request's offer and write it
+	/// onto `response`. Every `m=` port is set to `0`, the connection address
+	/// (`c=`, both session-level and per-m-line) is set to `0.0.0.0` (or `::`
+	/// for IPv6), and every direction attribute is replaced with `a=inactive`.
+	/// Multipart input (e.g. SIPREC `application/sdp` + `application/rs-metadata+xml`)
+	/// is accepted; the SDP part is extracted and any other parts are dropped.
+	/// The response body is always plain `application/sdp`.
+	///
+	/// The caller is responsible for creating the response (status code,
+	/// `Allow`, `Session-Expires`, etc.) and for sending it. This method only
+	/// fills the body.
+	///
+	/// @param request  the incoming (re-)INVITE carrying the offer
+	/// @param response the response to populate
+	/// @return the same `response`, for fluent chaining
+	public static SipServletResponse hold(SipServletRequest request, SipServletResponse response)
+			throws IOException, MessagingException {
+		return rewriteSdpDirection(request, response, "inactive", true);
+	}
+
+	private static SipServletResponse rewriteSdpDirection(SipServletRequest request, SipServletResponse response,
+			String direction, boolean blackhole) throws IOException, MessagingException {
+
+		String sdpText = extractSdpBody(request);
+		if (sdpText == null) {
+			sipLogger.warning(request, "Callflow.rewriteSdpDirection - no application/sdp body found in request");
+			return response;
+		}
+
+		Sdp sdp;
+		try {
+			sdp = Sdp.parse(sdpText);
+		} catch (RuntimeException e) {
+			// Sdp.parse throws IllegalArgumentException for malformed m= lines and
+			// NumberFormatException for non-numeric ports. Fall back to the no-SDP
+			// path so callers (e.g. CallflowHold) can emit a safe static answer
+			// rather than the handler crashing on hostile input.
+			sipLogger.warning(request,
+					"Callflow.rewriteSdpDirection - failed to parse SDP body: " + e.getMessage());
+			return response;
+		}
+
+		// Session-level: drop any inherited direction attribute; for blackhole, zero c=.
+		if (sdp.getAttributes() != null) {
+			sdp.getAttributes().removeIf(a -> isDirectionAttribute(a.getName()));
+		}
+		if (blackhole) {
+			zeroConnection(sdp.getConnection());
+		}
+
+		// Per-m-line: replace direction; for blackhole, also zero port and connection.
+		if (sdp.getMedia() != null) {
+			for (Sdp.Media m : sdp.getMedia()) {
+				if (blackhole) {
+					m.setPort(0);
+					zeroConnection(m.getConnection());
+				}
+				List<Sdp.Attribute> attrs = m.getAttributes();
+				if (attrs == null) {
+					attrs = new ArrayList<>();
+					m.setAttributes(attrs);
+				} else {
+					attrs.removeIf(a -> isDirectionAttribute(a.getName()));
+				}
+				attrs.add(new Sdp.Attribute(direction, null));
+			}
+		}
+
+		response.setContent(sdp.toString().getBytes("UTF-8"), "application/sdp");
+		return response;
+	}
+
+	private static void zeroConnection(Sdp.Connection c) {
+		if (c == null) {
+			return;
+		}
+		c.setAddress("IP6".equalsIgnoreCase(c.getAddressType()) ? "::" : "0.0.0.0");
+	}
+
+	private static boolean isDirectionAttribute(String name) {
+		return "sendrecv".equalsIgnoreCase(name)
+				|| "sendonly".equalsIgnoreCase(name)
+				|| "recvonly".equalsIgnoreCase(name)
+				|| "inactive".equalsIgnoreCase(name);
+	}
+
+	private static String extractSdpBody(SipServletRequest request) throws IOException, MessagingException {
+		byte[] body = request.getRawContent();
+		String contentType = request.getContentType();
+		if (body == null || body.length == 0 || contentType == null) {
+			return null;
+		}
+		String ctLower = contentType.toLowerCase();
+		if (ctLower.startsWith("application/sdp")) {
+			return new String(body, "UTF-8");
+		}
+		if (ctLower.startsWith("multipart/")) {
+			MimeMultipart mp = new MimeMultipart(new ByteArrayDataSource(body, contentType));
+			for (int i = 0; i < mp.getCount(); i++) {
+				MimeBodyPart part = (MimeBodyPart) mp.getBodyPart(i);
+				String partType = part.getContentType();
+				if (partType != null && partType.toLowerCase().startsWith("application/sdp")) {
+					ByteArrayOutputStream baos = new ByteArrayOutputStream();
+					try (InputStream is = part.getInputStream()) {
+						byte[] buf = new byte[4096];
+						int n;
+						while ((n = is.read(buf)) > 0) {
+							baos.write(buf, 0, n);
+						}
+					}
+					return baos.toString("UTF-8");
+				}
+			}
+		}
+		return null;
 	}
 
 	/**
