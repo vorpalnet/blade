@@ -1,11 +1,13 @@
 package org.vorpal.blade.framework.v2.callflow;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import javax.mail.MessagingException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.SipSession;
 
 /// Answer a (re-)INVITE with `200 OK` carrying a "blackhole" SDP that
 /// puts the leg on hold. When the request carries an offer, [Callflow#hold]
@@ -13,12 +15,22 @@ import javax.servlet.sip.SipServletResponse;
 /// `0.0.0.0` (or `::`), every direction attribute → `inactive`. Multipart
 /// SIPREC (`application/sdp` + `application/rs-metadata+xml`) is accepted
 /// on input; non-SDP parts are dropped and the response is always plain
-/// `application/sdp`. If the request has no body (e.g. a re-INVITE asking
-/// us to make the offer) we fall back to a fixed minimal blackhole SDP so
-/// the caller still gets a well-formed answer.
+/// `application/sdp`.
+///
+/// **Offerless re-INVITEs** (RFC 6337 §5, e.g. RFC 4028 keep-alive
+/// refreshes) carry no SDP body and require us to replay the same answer
+/// we last gave on this dialog — sending a different SDP would advertise
+/// a different media negotiation and strict SBCs reject it. We cache the
+/// last sent SDP on the per-dialog [SipSession] and replay it when the
+/// request body is empty. If no cached SDP exists yet (very first INVITE
+/// happened to be offerless) we fall back to a fixed minimal blackhole.
 public class CallflowHold extends Callflow {
 
 	private static final long serialVersionUID = 1L;
+
+	/// Per-dialog cache of the SDP body we last sent on this [SipSession],
+	/// used to satisfy offerless re-INVITEs without renegotiating media.
+	private static final String LAST_SDP_ATTR = "org.vorpal.blade.callflowHold.lastSdp";
 
 	private static final String BLACKHOLE_SDP = ""
 			+ "v=0\r\n"
@@ -49,10 +61,31 @@ public class CallflowHold extends Callflow {
 			throw new IOException("CallflowHold: failed to extract SDP from multipart body", e);
 		}
 
-		// No offer in the request — fall back to a static blackhole so the
-		// caller still gets a well-formed answer and stays on hold.
+		SipSession dialog = request.getSession();
+
+		// Offerless / unparseable: replay the SDP we last sent on this dialog
+		// so the keep-alive sees the same media negotiation as before.
+		if (response.getContent() == null) {
+			String cached = (String) dialog.getAttribute(LAST_SDP_ATTR);
+			if (cached != null) {
+				response.setContent(cached.getBytes(StandardCharsets.UTF_8), "application/sdp");
+			}
+		}
+
+		// Nothing to replay (first INVITE on this dialog had no body) —
+		// emit the static blackhole so the caller still gets an answer.
 		if (response.getContent() == null) {
 			response.setContent(BLACKHOLE_SDP.getBytes(), "application/sdp");
+		}
+
+		// Cache whatever we end up sending so the next offerless re-INVITE
+		// on this dialog can replay it.
+		Object body = response.getContent();
+		if (body != null) {
+			String sdp = (body instanceof String)
+					? (String) body
+					: new String((byte[]) body, StandardCharsets.UTF_8);
+			dialog.setAttribute(LAST_SDP_ATTR, sdp);
 		}
 
 		sendResponse(response, (ack) -> {
