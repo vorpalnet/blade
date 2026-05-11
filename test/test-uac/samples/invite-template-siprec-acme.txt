@@ -1,0 +1,83 @@
+INVITE sip:target@uas.test SIP/2.0
+Require: siprec
+Supported: siprec
+Contact: <sip:acmeSrc@10.173.188.16:5060;transport=tcp>;+sip.src
+Cisco-Gucid: 00071252811778010124
+X-Acme-Call-ID: wlss-64071c05-73fde93a6638f450@152.190.6.22
+User-to-User: 04FA08004762C169FA480CC8143030303731323532383131373738303130313234;encoding=hex
+Content-Type: multipart/mixed; boundary=unique-boundary-1
+
+--unique-boundary-1
+Content-Type: application/sdp
+
+v=0
+o=- 4767439 382445 IN IP4 10.173.188.16
+s=-
+c=IN IP4 10.173.188.16
+t=0 0
+m=audio 34866 RTP/AVP 0 101
+b=AS:80
+a=rtpmap:0 pcmu/8000
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-15
+a=label:739440565
+a=sendonly
+m=audio 34870 RTP/AVP 0 101
+a=rtpmap:0 PCMU/8000
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-15
+a=ptime:20
+a=label:739440566
+a=sendonly
+
+--unique-boundary-1
+Content-Type: application/rs-metadata+xml
+Content-Disposition: recording-session
+
+<?xml version='1.0' encoding='UTF-8'?>
+<recording xmlns='urn:ietf:params:xml:ns:recording'>
+<datamode>complete</datamode>
+<session id="tgfh2ko3QLdt5TI44tJGIg==">
+<associate-time>2026-05-05T14:41:56</associate-time>
+<extensiondata xmlns:apkt="http:/acmepacket.com/siprec/extensiondata">
+<apkt:ucid>004762BD69FA4805</apkt:ucid>
+<apkt:callerOrig>true</apkt:callerOrig>
+</extensiondata>
+</session>
+<participant id="gXnUad4yRbxolQd+Vq1Nrw==" session="tgfh2ko3QLdt5TI44tJGIg==">
+<nameID aor="sip:+19195184357@vzb.int">
+<name>+19195184357</name>
+</nameID>
+<send>1VE+elttRGdu+waJ7Ij1mw==</send>
+<associate-time>2026-05-05T14:41:56</associate-time>
+<extensiondata xmlns:apkt="http://acmepacket.com/siprec/extensiondata">
+<apkt:callingParty>true</apkt:callingParty>
+<apkt:request-uri>sip:1970900410@elr11.uhgvcc.globalipcom.com</apkt:request-uri>
+<apkt:realm>peerVZBSR1</apkt:realm>
+<apkt:header label="Call-ID">
+<value>wlss-64071c05-73fde93a6638f450@152.190.6.22</value>
+</apkt:header>
+</extensiondata>
+</participant>
+<participant id="r3jmmJrDTL50Rpog/r9DQg==" session="tgfh2ko3QLdt5TI44tJGIg==">
+<nameID aor="sip:+18442820485@uhc.com">
+<name>+18442820485</name>
+</nameID>
+<send>WQ4ngjQpSmNkf81ApBb0kw==</send>
+<associate-time>2026-05-05T14:41:56</associate-time>
+<extensiondata xmlns:apkt="http://acmepacket.com/siprec/extensiondata">
+<apkt:callingParty>false</apkt:callingParty>
+</extensiondata>
+</participant>
+<stream id="1VE+elttRGdu+waJ7Ij1mw==" session="tgfh2ko3QLdt5TI44tJGIg==">
+<label>739440565</label>
+<mode>separate</mode>
+<associate-time>2026-05-05T14:41:56</associate-time>
+</stream>
+<stream id="WQ4ngjQpSmNkf81ApBb0kw==" session="tgfh2ko3QLdt5TI44tJGIg==">
+<label>739440566</label>
+<mode>separate</mode>
+<associate-time>2026-05-05T14:42:04</associate-time>
+</stream>
+</recording>
+--unique-boundary-1--

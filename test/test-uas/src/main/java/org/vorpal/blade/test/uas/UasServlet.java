@@ -42,24 +42,31 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 	private String cachedTemplateName;
 	private String cachedTemplate;
 
+	/// Two-mode dispatch:
+	///
+	/// - `b2bua=true` → return `null` so `B2buaServlet`'s default
+	///   forwarding kicks in, which fires `callStarted` (where
+	///   `stripMultipartToSdp` and `applyTemplate` run) and proxies
+	///   the request to the resolved Request-URI.
+	/// - `b2bua=false` → return one of the responder callflows
+	///   (`TestInvite`, `TestReinvite`, `TestOkayResponse`,
+	///   `TestNotImplemented`) which answer locally instead of forwarding.
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
-		Callflow callflow = null;
+		if (settingsManager.getCurrent().isB2bua()) {
+			return null;
+		}
 
 		switch (request.getMethod()) {
 		case "INVITE":
-			callflow = request.isInitial() ? new TestInvite() : new TestReinvite();
-			break;
+			return request.isInitial() ? new TestInvite() : new TestReinvite();
 		case "CANCEL":
 		case "INFO":
 		case "BYE":
-			callflow = new TestOkayResponse();
-			break;
+			return new TestOkayResponse();
 		default:
-			callflow = new TestNotImplemented();
+			return new TestNotImplemented();
 		}
-
-		return callflow;
 	}
 
 	@Override
@@ -150,7 +157,10 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 	/// `Content-Type: application/sdp`, and return its body.
 	private static String extractSdpPart(String body, String boundary) {
 		String separator = "--" + boundary;
-		String[] parts = body.split("\\r?\\n" + Pattern.quote(separator));
+		// Prepend CRLF when body starts at the boundary directly, otherwise the
+		// first part lands in parts[0] and gets dropped as preamble.
+		String working = body.startsWith(separator) ? "\r\n" + body : body;
+		String[] parts = working.split("\\r?\\n" + Pattern.quote(separator));
 		// parts[0] is the preamble before the first boundary.
 		for (int i = 1; i < parts.length; i++) {
 			String part = parts[i];

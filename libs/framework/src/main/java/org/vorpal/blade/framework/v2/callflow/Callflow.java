@@ -1691,6 +1691,39 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
+	/// Build a hold-answer SDP body from the request's offer and return it as a
+	/// `String`. Multipart input (e.g. SIPREC `application/sdp` +
+	/// `application/rs-metadata+xml`) is accepted; the SDP part is extracted
+	/// and any other parts are dropped. The returned SDP has `c=` zeroed,
+	/// direction attributes replaced with `a=inactive`, and ports preserved
+	/// from the offer. Returns `null` if the request has no parseable SDP body.
+	///
+	/// Use this when a servlet wants to answer a (re-)INVITE locally with a
+	/// hold body — it bundles `extractSdpBody` + `Sdp.parse` +
+	/// [#rewriteSdpDirectionInPlace] in one call.
+	public static String buildHoldAnswerSdp(SipServletRequest request) {
+		try {
+			String sdpText = extractSdpBody(request);
+			if (sdpText == null) {
+				return null;
+			}
+			Sdp sdp;
+			try {
+				sdp = Sdp.parse(sdpText);
+			} catch (RuntimeException e) {
+				sipLogger.warning(request,
+						"Callflow.buildHoldAnswerSdp - failed to parse SDP body: " + e.getMessage());
+				return null;
+			}
+			rewriteSdpDirectionInPlace(sdp, "inactive", true);
+			return sdp.toString();
+		} catch (IOException | MessagingException e) {
+			sipLogger.warning(request,
+					"Callflow.buildHoldAnswerSdp - failed to extract SDP: " + e.getMessage());
+			return null;
+		}
+	}
+
 	/// Build a "hold" / blackhole answer from the request's offer and write it
 	/// onto `response`. Every `m=` port is set to `0`, the connection address
 	/// (`c=`, both session-level and per-m-line) is set to `0.0.0.0` (or `::`
@@ -1733,7 +1766,21 @@ public abstract class Callflow implements Serializable {
 			return response;
 		}
 
-		// Session-level: drop any inherited direction attribute; for blackhole, zero c=.
+		rewriteSdpDirectionInPlace(sdp, direction, blackhole);
+
+		response.setContent(sdp.toString().getBytes("UTF-8"), "application/sdp");
+		return response;
+	}
+
+	/// Apply the direction-rewrite to a parsed [Sdp] in place. Session-level
+	/// and per-m-line direction attributes are replaced with `direction`; if
+	/// `blackhole` is true, every `c=` line is zeroed to `0.0.0.0` (or `::`).
+	/// **Ports are preserved from the offer.** Per RFC 3264 §6.1, port 0 in an
+	/// answer means the stream is rejected — and §8 says rejected streams can't
+	/// be reused without a new offer with new m= lines. Hold needs "paused,
+	/// recoverable", which is non-zero-port + `a=inactive` (the RFC 2543 hold
+	/// pattern updated with explicit direction).
+	static void rewriteSdpDirectionInPlace(Sdp sdp, String direction, boolean blackhole) {
 		if (sdp.getAttributes() != null) {
 			sdp.getAttributes().removeIf(a -> isDirectionAttribute(a.getName()));
 		}
@@ -1741,11 +1788,9 @@ public abstract class Callflow implements Serializable {
 			zeroConnection(sdp.getConnection());
 		}
 
-		// Per-m-line: replace direction; for blackhole, also zero port and connection.
 		if (sdp.getMedia() != null) {
 			for (Sdp.Media m : sdp.getMedia()) {
 				if (blackhole) {
-					m.setPort(0);
 					zeroConnection(m.getConnection());
 				}
 				List<Sdp.Attribute> attrs = m.getAttributes();
@@ -1758,9 +1803,6 @@ public abstract class Callflow implements Serializable {
 				attrs.add(new Sdp.Attribute(direction, null));
 			}
 		}
-
-		response.setContent(sdp.toString().getBytes("UTF-8"), "application/sdp");
-		return response;
 	}
 
 	private static void zeroConnection(Sdp.Connection c) {

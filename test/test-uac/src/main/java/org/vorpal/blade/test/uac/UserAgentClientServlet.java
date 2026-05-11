@@ -11,6 +11,8 @@ import java.util.regex.Pattern;
 import javax.annotation.Resource;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
+import javax.servlet.sip.Address;
+import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
@@ -75,15 +77,17 @@ public class UserAgentClientServlet extends B2buaServlet {
 	/// - `Name: value` headers → `setHeader`
 	/// - body handling depends on template Content-Type:
 	///   - empty body → leave existing content alone
-	///   - `multipart/*` body → preserve the existing SDP and wrap
-	///     it with the template's non-SDP parts (e.g. SIPREC XML)
-	///     into a new multipart body
+	///   - `multipart/*` body → rebuild the body as a multipart whose
+	///     first part is the SDP (from the template if it has one, else
+	///     from the softphone) followed by the template's non-SDP parts
+	///     (e.g. SIPREC `application/rs-metadata+xml`)
 	///   - any other body → leave existing content alone
 	///
-	/// **The outbound SDP (from the softphone) is never overwritten.**
-	/// A template can *add* non-SDP attachments via multipart, but
-	/// the SDP is preserved verbatim so downstream endpoints can
-	/// establish media with the softphone.
+	/// **SDP precedence**: a template's `application/sdp` part — present
+	/// in SIPREC samples whose `a=label:…` lines must match the metadata
+	/// — overrides the softphone's SDP. Templates without an SDP part
+	/// fall back to the softphone's SDP so non-SIPREC flows still
+	/// negotiate media against the softphone end-to-end.
 	private void applyTemplate(SipServletRequest request, String filename) {
 		try {
 			String raw = loadTemplate(filename);
@@ -119,7 +123,26 @@ public class UserAgentClientServlet extends B2buaServlet {
 					continue;
 				}
 
-				request.setHeader(name, value);
+				if ("Contact".equalsIgnoreCase(name)) {
+					// `Contact` is a SIP system header — `setHeader` throws.
+					// The container manages the Contact URI; what the template
+					// can usefully contribute is header parameters (notably
+					// `+sip.src` for SIPREC role advertisement). Parse the
+					// template Contact, copy its parameters onto the outbound.
+					applyContactParameters(request, value);
+					continue;
+				}
+
+				// Per-header try/catch so a single rejected header (e.g. another
+				// system header someone added to a template) doesn't abort the
+				// rest of the template, including the multipart-body handling
+				// further down.
+				try {
+					request.setHeader(name, value);
+				} catch (Exception e) {
+					sipLogger.warning(request, "UserAgentClientServlet template '" + filename
+							+ "' skipping header '" + name + "': " + e.getMessage());
+				}
 			}
 
 			// Body handling — SDP is sacred.
@@ -135,11 +158,38 @@ public class UserAgentClientServlet extends B2buaServlet {
 		}
 	}
 
-	/// Rebuild the outbound request body as a multipart message whose
-	/// first part is the original SDP (extracted from the existing
-	/// content) and whose subsequent parts come from the template.
-	/// Any `application/sdp` parts in the template are dropped —
-	/// the preserved SDP always wins.
+	/// Parse a template `Contact` header value and copy its header
+	/// parameters onto the outbound request's container-managed Contact
+	/// (which `setHeader` would reject as a system header). The template
+	/// Contact URI is discarded — only the parameters survive, since
+	/// the container owns the host:port and contact-URI shape. The
+	/// SIPREC `+sip.src` parameter is the load-bearing one for our
+	/// tests; `transport`, custom params, etc. ride along.
+	private void applyContactParameters(SipServletRequest request, String templateContactValue) {
+		try {
+			Parameterable templateContact = sipFactory.createParameterable(templateContactValue);
+			Address outboundContact = request.getAddressHeader("Contact");
+			if (outboundContact == null) {
+				sipLogger.warning(request, "Contact header missing on outbound; cannot apply template parameters");
+				return;
+			}
+			java.util.Iterator<String> names = templateContact.getParameterNames();
+			while (names.hasNext()) {
+				String pname = names.next();
+				String pvalue = templateContact.getParameter(pname);
+				outboundContact.setParameter(pname, pvalue == null ? "" : pvalue);
+			}
+		} catch (Exception e) {
+			sipLogger.warning(request, "failed to apply template Contact parameters: " + e.getMessage());
+		}
+	}
+
+	/// Rebuild the outbound request body as a multipart whose first part
+	/// is the SDP and whose subsequent parts are the template's non-SDP
+	/// parts. SDP precedence: if the template carries its own
+	/// `application/sdp` part (e.g. a SIPREC sample with `a=label:…`
+	/// that has to line up with the metadata) it wins; otherwise the
+	/// softphone's existing SDP is preserved.
 	private void wrapSdpInMultipart(SipServletRequest request, String newContentType,
 			String templateBody) {
 		String boundary = extractBoundary(newContentType);
@@ -149,30 +199,44 @@ public class UserAgentClientServlet extends B2buaServlet {
 			return;
 		}
 
-		String existingSdp;
-		try {
-			existingSdp = extractExistingSdp(request);
-		} catch (Exception e) {
-			sipLogger.warning(request, "failed to read existing content: " + e.getMessage());
-			return;
-		}
-		if (existingSdp == null) {
-			sipLogger.warning(request, "no SDP in request; leaving body alone");
-			return;
-		}
-
 		List<MultipartPart> templateParts = parseMultipartParts(templateBody, boundary);
 
+		// SDP source: template's SDP if present (SIPREC case where labels
+		// must match the metadata), otherwise the softphone's SDP.
+		String sdp = null;
+		String sdpPartHeaders = "Content-Type: application/sdp";
+		for (MultipartPart p : templateParts) {
+			if (p.isSdp) {
+				sdp = p.body;
+				sdpPartHeaders = p.headers;
+				break;
+			}
+		}
+		if (sdp == null) {
+			try {
+				sdp = extractExistingSdp(request);
+			} catch (Exception e) {
+				sipLogger.warning(request, "failed to read existing content: " + e.getMessage());
+				return;
+			}
+			if (sdp == null) {
+				sipLogger.warning(request, "no SDP in template or request; leaving body alone");
+				return;
+			}
+		}
+
 		StringBuilder out = new StringBuilder();
-		// 1. Preserved SDP part, first
+		// 1. SDP part, first
 		out.append("--").append(boundary).append("\r\n");
-		out.append("Content-Type: application/sdp\r\n\r\n");
-		out.append(existingSdp);
-		if (!endsWithNewline(existingSdp)) out.append("\r\n");
+		out.append(sdpPartHeaders);
+		if (!endsWithNewline(sdpPartHeaders)) out.append("\r\n");
+		out.append("\r\n");
+		out.append(sdp);
+		if (!endsWithNewline(sdp)) out.append("\r\n");
 
 		// 2. Template's non-SDP parts, in their declared order
 		for (MultipartPart p : templateParts) {
-			if (p.isSdp) continue; // the preserved SDP already covers this
+			if (p.isSdp) continue;
 			out.append("--").append(boundary).append("\r\n");
 			out.append(p.headers);
 			if (!endsWithNewline(p.headers)) out.append("\r\n");
@@ -264,9 +328,14 @@ public class UserAgentClientServlet extends B2buaServlet {
 		if (body == null || body.isEmpty() || boundary == null) return out;
 
 		String separator = "--" + boundary;
-		String[] segments = body.split("\\r?\\n" + Pattern.quote(separator));
+		// If the body starts at the first boundary directly (no preamble), prepend
+		// a CRLF so the split regex `\r?\n<sep>` matches the leading boundary too;
+		// otherwise the first part lands in segments[0] and gets skipped as preamble.
+		String working = body.startsWith(separator) ? "\r\n" + body : body;
+		String[] segments = working.split("\\r?\\n" + Pattern.quote(separator));
 
-		// segments[0] is the preamble before the first boundary.
+		// segments[0] is the preamble before the first boundary (empty when the
+		// body starts at the boundary, since we prepended CRLF above).
 		for (int i = 1; i < segments.length; i++) {
 			String segment = segments[i];
 			if (segment.startsWith("\r\n")) segment = segment.substring(2);

@@ -20,8 +20,32 @@ public class TestUasConfig extends Configuration {
 	protected String defaultDuration = "30s";
 	protected String sdpContent;
 	protected String template;
+	protected boolean b2bua = false;
 
 	public TestUasConfig() {
+	}
+
+	/// When `true`, test-uas runs as a forwarding B2BUA: inbound INVITEs
+	/// are proxied to the resolved Request-URI (typically a softphone),
+	/// the multipart body is stripped down to just its `application/sdp`
+	/// part so non-SIPREC endpoints can parse it, and the `template`
+	/// (if set) supplies headers for the outbound leg.
+	///
+	/// When `false` (default), test-uas runs as a configurable UAS
+	/// responder: incoming INVITEs are answered locally with
+	/// `defaultStatus` after `defaultDelay`, auto-BYE'd after
+	/// `defaultDuration`, with per-call overrides via Request-URI
+	/// parameters (`?status=503&delay=5s&duration=60s`) and per-DN
+	/// overrides via `errorMap`.
+	///
+	/// One app, two modes — pick at startup or hot-swap via the REST API.
+	@JsonPropertyDescription("If true, forward as B2BUA (stripping multipart to SDP); if false, respond locally as a UAS")
+	public boolean isB2bua() {
+		return b2bua;
+	}
+
+	public void setB2bua(boolean b2bua) {
+		this.b2bua = b2bua;
 	}
 
 	/// Returns the filename (in `_templates/`) of the SIP-message

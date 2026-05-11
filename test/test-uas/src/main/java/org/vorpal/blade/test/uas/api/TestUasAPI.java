@@ -40,11 +40,26 @@ public class TestUasAPI {
 	@Operation(summary = "Replace entire UAS configuration")
 	public Response setConfig(TestUasConfig config) {
 		TestUasConfig current = UasServlet.settingsManager.getCurrent();
+		current.setB2bua(config.isB2bua());
 		current.setDefaultStatus(config.getDefaultStatus());
 		current.setDefaultDelay(config.getDefaultDelay());
 		current.setDefaultDuration(config.getDefaultDuration());
 		current.setSdpContent(config.getSdpContent());
 		current.setErrorMap(config.getErrorMap());
+		return Response.ok(current).build();
+	}
+
+	/// Toggles B2BUA forwarding mode. `true` makes test-uas strip
+	/// multipart down to SDP and proxy to the Request-URI; `false`
+	/// makes it respond locally with the configured status/delay/SDP.
+	@PUT
+	@Path("/b2bua")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Toggle B2BUA forwarding mode (true) vs UAS responder mode (false)")
+	public Response setB2bua(TestUasConfig partial) {
+		TestUasConfig current = UasServlet.settingsManager.getCurrent();
+		current.setB2bua(partial.isB2bua());
 		return Response.ok(current).build();
 	}
 

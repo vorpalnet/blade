@@ -38,7 +38,7 @@ public class CallflowHold extends Callflow {
 			+ "s=-\r\n"
 			+ "c=IN IP4 0.0.0.0\r\n"
 			+ "t=0 0\r\n"
-			+ "m=audio 0 RTP/AVP 0\r\n"
+			+ "m=audio 9 RTP/AVP 0\r\n"
 			+ "a=rtpmap:0 PCMU/8000\r\n"
 			+ "a=inactive\r\n";
 

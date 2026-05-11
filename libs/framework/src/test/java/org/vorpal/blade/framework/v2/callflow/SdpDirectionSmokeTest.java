@@ -8,6 +8,8 @@ import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMultipart;
 import javax.mail.util.ByteArrayDataSource;
 
+import org.vorpal.blade.framework.v2.sdp.Sdp;
+
 /// Smoke test for [SdpDirection]'s SDP-direction transform. Verifies every
 /// m-line in the output ends up `a=inactive` regardless of the input
 /// direction, and that multipart bodies are unwrapped, transformed, and
@@ -28,6 +30,9 @@ public final class SdpDirectionSmokeTest {
 		testMultipleMediaLines();
 		testMultipartSiprec();
 		testMultipartTwoSdpParts();
+		testHoldPreservesPort();
+		testHoldZerosConnection();
+		testHoldMultiStream();
 
 		System.out.println();
 		System.out.println("Passed: " + passed + " / " + (passed + failed));
@@ -145,6 +150,70 @@ public final class SdpDirectionSmokeTest {
 		check("two-sdp.both-transformed", countOccurrences(out, "a=inactive") == 2);
 		check("two-sdp.no-sendrecv", !out.contains("a=sendrecv"));
 		check("two-sdp.no-recvonly", !out.contains("a=recvonly"));
+	}
+
+	private static void testHoldPreservesPort() {
+		String sdp = "v=0\r\n"
+				+ "o=- 4767439 382445 IN IP4 10.173.188.16\r\n"
+				+ "s=-\r\n"
+				+ "c=IN IP4 10.173.188.16\r\n"
+				+ "t=0 0\r\n"
+				+ "m=audio 34866 RTP/AVP 0 101\r\n"
+				+ "b=AS:80\r\n"
+				+ "a=rtpmap:0 pcmu/8000\r\n"
+				+ "a=label:739440565\r\n"
+				+ "a=sendonly\r\n";
+		Sdp parsed = Sdp.parse(sdp);
+		Callflow.rewriteSdpDirectionInPlace(parsed, "inactive", true);
+		String out = parsed.toString();
+		check("hold.port-preserved", out.contains("m=audio 34866"));
+		check("hold.no-port-zero", !out.contains("m=audio 0 "));
+		check("hold.session-c-zeroed", out.contains("c=IN IP4 0.0.0.0"));
+		check("hold.no-real-c", !out.contains("c=IN IP4 10.173.188.16"));
+		check("hold.inactive-added", out.contains("a=inactive"));
+		check("hold.no-sendonly", !out.contains("a=sendonly"));
+		check("hold.label-preserved", out.contains("a=label:739440565"));
+		check("hold.rtpmap-preserved", out.contains("a=rtpmap:0 pcmu/8000"));
+		check("hold.bandwidth-preserved", out.contains("b=AS:80"));
+	}
+
+	private static void testHoldZerosConnection() {
+		String sdp = "v=0\r\n"
+				+ "o=- 0 0 IN IP4 192.168.1.1\r\n"
+				+ "s=-\r\n"
+				+ "c=IN IP4 192.168.1.1\r\n"
+				+ "t=0 0\r\n"
+				+ "m=audio 5004 RTP/AVP 0\r\n"
+				+ "c=IN IP4 192.168.1.2\r\n"
+				+ "a=sendrecv\r\n";
+		Sdp parsed = Sdp.parse(sdp);
+		Callflow.rewriteSdpDirectionInPlace(parsed, "inactive", true);
+		String out = parsed.toString();
+		check("hold.both-c-zeroed", countOccurrences(out, "c=IN IP4 0.0.0.0") == 2);
+		check("hold.port-still-preserved", out.contains("m=audio 5004"));
+	}
+
+	private static void testHoldMultiStream() {
+		String sdp = "v=0\r\n"
+				+ "o=- 4767439 382445 IN IP4 10.173.188.16\r\n"
+				+ "s=-\r\n"
+				+ "c=IN IP4 10.173.188.16\r\n"
+				+ "t=0 0\r\n"
+				+ "m=audio 34866 RTP/AVP 0 101\r\n"
+				+ "a=label:739440565\r\n"
+				+ "a=sendonly\r\n"
+				+ "m=audio 34870 RTP/AVP 0 101\r\n"
+				+ "a=label:739440566\r\n"
+				+ "a=sendonly\r\n";
+		Sdp parsed = Sdp.parse(sdp);
+		Callflow.rewriteSdpDirectionInPlace(parsed, "inactive", true);
+		String out = parsed.toString();
+		check("hold.multi.both-ports-preserved",
+				out.contains("m=audio 34866") && out.contains("m=audio 34870"));
+		check("hold.multi.both-inactive", countOccurrences(out, "a=inactive") == 2);
+		check("hold.multi.both-labels-preserved",
+				out.contains("a=label:739440565") && out.contains("a=label:739440566"));
+		check("hold.multi.no-sendonly", !out.contains("a=sendonly"));
 	}
 
 	// ----- helpers ---------------------------------------------------
