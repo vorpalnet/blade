@@ -810,21 +810,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			hash = sb.toString();
 		} else {
 			hash = hexHash(message.getSession());
-
-			// jwm - remove in the future
-			// Color coding for understanding glare
-			switch (Callflow.getGlareState(message.getSession())) {
-			case PROTECT:
-				hash = Color.YELLOW_BOLD_BRIGHT(hash);
-				break;
-			case QUEUE:
-				hash = Color.YELLOW_BOLD_BRIGHT(hash);
-				break;
-			case ALLOW:
-				hash = Color.GREEN_BOLD_BRIGHT(hash);
-				break;
-			}
-
 		}
 
 		return hash;
@@ -858,22 +843,6 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 			sb.append(" ").append(SettingsManager.getApplicationName());
 
 			hash = sb.toString();
-
-			// jwm - remove in the future
-			// Color coding for understanding glare
-			if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-				switch (Callflow.getGlareState(sipSession)) {
-				case PROTECT:
-					hash = Color.RED_BOLD_BRIGHT(hash);
-					break;
-				case QUEUE:
-					hash = Color.YELLOW_BOLD_BRIGHT(hash);
-					break;
-				case ALLOW:
-					hash = Color.GREEN_BOLD_BRIGHT(hash);
-					break;
-				}
-			}
 		}
 
 		return hash;
@@ -957,10 +926,17 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 					log(getSequenceDiagramLoggingLevel(), hexHash(request) + " " + line);
 				}
 
-				if (request != null) {
-					leftSide = Boolean.TRUE.equals((Boolean)request.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
-				} else {
-					leftSide = Boolean.TRUE.equals((Boolean)response.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
+				// Defensive: attribute store can be invalid in the cleanup
+				// window between BYE/2xx and session removal. A log line
+				// must never crash its caller — fall back to leftSide=false.
+				try {
+					if (request != null) {
+						leftSide = Boolean.TRUE.equals((Boolean)request.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
+					} else {
+						leftSide = Boolean.TRUE.equals((Boolean)response.getSession().getAttribute(DIAGRAM_LEFT_ATTR));
+					}
+				} catch (IllegalStateException e) {
+					leftSide = false;
 				}
 
 				if (response != null) {

@@ -611,7 +611,15 @@ public abstract class Callflow implements Serializable {
 		if (appSession == null) {
 			return null;
 		}
-		return (String) appSession.getAttribute(VORPAL_SESSION);
+		// `getAttribute` throws IllegalStateException once the container has
+		// invalidated the attribute store (cleanup window between BYE/2xx and
+		// session removal). This helper is on the hot logging path via
+		// `Logger.hexHash` — a log line must never crash the calling thread.
+		try {
+			return (String) appSession.getAttribute(VORPAL_SESSION);
+		} catch (IllegalStateException e) {
+			return null;
+		}
 	}
 
 	/**
@@ -739,8 +747,24 @@ public abstract class Callflow implements Serializable {
 		String dialog = null;
 
 		if (sipSession != null && sipSession.isValid()) {
-			dialog = (String) sipSession.getAttribute(VORPAL_DIALOG);
-			dialog = (dialog != null) ? dialog : createVorpalDialogId(sipSession);
+			// `getAttribute` can still throw IllegalStateException even after
+			// `isValid()` returns true — there's a cleanup window between
+			// BYE/2xx processing (when the attribute store goes invalid) and
+			// the SipSession being removed from the SAS. On the hot logging
+			// path via `Logger.hexHash`, falling back to null lets the caller
+			// emit a default hash instead of crashing the calling thread.
+			try {
+				dialog = (String) sipSession.getAttribute(VORPAL_DIALOG);
+			} catch (IllegalStateException e) {
+				return null;
+			}
+			if (dialog == null) {
+				try {
+					dialog = createVorpalDialogId(sipSession);
+				} catch (IllegalStateException e) {
+					return null;
+				}
+			}
 		}
 
 		return dialog;

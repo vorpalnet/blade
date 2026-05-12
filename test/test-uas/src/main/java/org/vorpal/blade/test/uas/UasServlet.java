@@ -44,17 +44,21 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 
 	/// Two-mode dispatch:
 	///
-	/// - `b2bua=true` → return `null` so `B2buaServlet`'s default
-	///   forwarding kicks in, which fires `callStarted` (where
-	///   `stripMultipartToSdp` and `applyTemplate` run) and proxies
-	///   the request to the resolved Request-URI.
+	/// - `b2bua=true` → delegate to `B2buaServlet.chooseCallflow`, which
+	///   returns `InitialInvite` / `Reinvite` / `Terminate` / `Passthru`
+	///   and drives the B2BUA forwarding pipeline (which fires
+	///   `callStarted`, where `stripMultipartToSdp` and `applyTemplate`
+	///   run, and proxies the request to the resolved Request-URI).
+	///   Returning `null` here would cause the framework to emit a
+	///   `501 Not Implemented` — it's "no handler", not "fall through to
+	///   default forwarding."
 	/// - `b2bua=false` → return one of the responder callflows
 	///   (`TestInvite`, `TestReinvite`, `TestOkayResponse`,
 	///   `TestNotImplemented`) which answer locally instead of forwarding.
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
 		if (settingsManager.getCurrent().isB2bua()) {
-			return null;
+			return super.chooseCallflow(request);
 		}
 
 		switch (request.getMethod()) {
