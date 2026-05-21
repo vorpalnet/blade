@@ -580,8 +580,14 @@ fi
 			<modules><module>services/analytics</module></modules>
 		</profile>
 		<profile>
+			<!-- services/context is WIP and only present on developer machines that
+			     have started the work; not yet committed to git. Activate this
+			     module only when its directory exists on disk so test servers
+			     and clean checkouts don't fail with "child module does not
+			     exist". Once services/context is committed, restore the
+			     `!skip.context` activation to match the rest of the services. -->
 			<id>context</id>
-			<activation><property><name>!skip.context</name></property></activation>
+			<activation><file><exists>services/context/pom.xml</exists></file></activation>
 			<modules><module>services/context</module></modules>
 		</profile>
 		<profile>
