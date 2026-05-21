@@ -280,9 +280,23 @@ Every routing subtype ultimately produces a `Route`:
 | Field | Type | Purpose |
 |---|---|---|
 | `description` | string | Human-readable label |
-| `requestUri` | string (`${var}`-resolvable) | Destination SIP URI for the outbound INVITE. If null, the INVITE's original Request-URI is preserved (pass-through). |
-| `headers` | `Map<String, String>` (values `${var}`-resolvable) | Outbound INVITE headers stamped unconditionally |
-| `conditionalHeaders` | list of `ConditionalHeader` (optional) | Headers stamped only when their `when` expression evaluates true |
+| `requestUri` | string (`${var}`-resolvable) | Destination SIP URI for the outbound INVITE (proxy forward). If null and no `statusCode`, the INVITE's original Request-URI is preserved (pass-through). |
+| `statusCode` | integer (optional) | When set, iRouter answers the inbound INVITE itself with this SIP status code instead of forwarding. `requestUri` is ignored. |
+| `reasonPhrase` | string (optional, `${var}`-resolvable) | Reason phrase for the `statusCode` response. Defaults to whatever the container picks for the code. |
+| `headers` | `Map<String, String>` (values `${var}`-resolvable) | Headers stamped on whichever message the route produces — outbound INVITE for a forward, the response itself for a direct-response route. |
+| `conditionalHeaders` | list of `ConditionalHeader` (optional) | Headers stamped only when their `when` expression evaluates true. Same dispatch rules as `headers`. |
+
+### Route shapes
+
+The combination of `requestUri` and `statusCode` selects one of three behaviors at runtime:
+
+| `requestUri` | `statusCode` | Framework behavior | Use case |
+|---|---|---|---|
+| set | unset | Forward — base class proxies to `requestUri` via the JSR 289 Proxy API | Plain iRouter proxy decision |
+| unset | unset | Forward (pass-through) — base class proxies to the INVITE's original Request-URI | Pipeline-enrichment-only flows; the routing decision adds headers but doesn't change the destination |
+| any | **set** | Direct response — `request.createResponse(statusCode, reasonPhrase)`, then `headers` and `conditionalHeaders` are applied to that response | Rejections (`new Route(403, "Forbidden")`), redirects (`new Route(302, "Moved Temporarily").addHeader("Contact", "sip:…")`), success responses (`new Route(200, "OK")`) |
+
+The direct-response shape is how a service like SecureLogix expresses "I'm a redirect server, not a proxy" entirely in config — set `statusCode: 302` plus a `Contact` header, and the framework's `sendStatus` path does the rest. No subclass override required.
 
 ### Conditional headers
 
