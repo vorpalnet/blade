@@ -87,9 +87,16 @@ public class TableConnector extends Connector implements Serializable {
 				if (match == null) continue;
 
 				if (sipLogger != null && sipLogger.isLoggable(Level.FINE)) {
+					String resolvedKey = ctx.resolve(table.getKeyExpression());
+					StringBuilder stamped = new StringBuilder();
+					for (Map.Entry<String, String> e : match.getExtras().entrySet()) {
+						if (stamped.length() > 0) stamped.append(", ");
+						stamped.append(e.getKey()).append("=").append(e.getValue());
+					}
 					sipLogger.fine(ctx.getRequest(),
-							"TableConnector[" + id + "] matched key via "
-									+ table.getKeyExpression());
+							"TableConnector[" + id + "] matched "
+									+ table.getKeyExpression() + "=" + resolvedKey
+									+ " → " + stamped);
 				}
 				for (Map.Entry<String, String> e : match.getExtras().entrySet()) {
 					ctx.put(e.getKey(), e.getValue());
@@ -98,9 +105,14 @@ public class TableConnector extends Connector implements Serializable {
 			}
 
 			if (sipLogger != null && sipLogger.isLoggable(Level.FINER)) {
+				StringBuilder triedKeys = new StringBuilder();
+				for (TranslationTable t : tables) {
+					if (triedKeys.length() > 0) triedKeys.append(", ");
+					triedKeys.append(t.getKeyExpression()).append("=").append(ctx.resolve(t.getKeyExpression()));
+				}
 				sipLogger.finer(ctx.getRequest(),
 						"TableConnector[" + id + "] no match across " + tables.size()
-								+ " table(s)");
+								+ " table(s) — tried " + triedKeys);
 			}
 		} catch (Exception e) {
 			if (sipLogger != null) {
