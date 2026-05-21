@@ -30,11 +30,16 @@
 # EAR naming:
 #   Each profile produces its own EAR named vorpal-blade-services-<profile>.ear
 #   e.g. vorpal-blade-services-production.ear, vorpal-blade-services-minimal.ear
+#   (EAR is currently disabled — see services/pom.xml.)
 #
 # Dist management:
-#   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/
-#   (plus the active build profile and platform conf files for traceability).
-#   On failure: the current build's dist directory is deleted.
+#   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/ into
+#   a tier subdirectory matching its deployment target:
+#     dist/<ver>-<build>/admin/      Admin apps + javadoc (→ AdminServer)
+#     dist/<ver>-<build>/services/   Services + test apps (→ cluster)
+#     dist/<ver>-<build>/            Libraries + build conf files (special)
+#   Plus the active build profile + platform conf files at the root for
+#   traceability. On failure: the current build's dist directory is deleted.
 #
 #   To skip the copy entirely (useful in local dev loops where you don't need
 #   the dist/ folder rewritten on every build):
@@ -174,17 +179,31 @@ module_dir() {
     done
 }
 
-# --- Copy every built WAR/JAR to dist/<ver>-<build>/ ---
+# --- Map module source dir to a dist subdir ---
+# Apps go in tier subdirs so operators can see at a glance where each one
+# deploys. Libraries stay at dist root — they have their own special-cased
+# deployment paths (WebLogic shared library, approuter/ JAR drop) that don't
+# fit the generic admin/services tier model.
+dist_subdir_for() {
+    case "$1" in
+        admin/*)             echo "admin" ;;
+        services/*|test/*)   echo "services" ;;  # test apps live with services
+        libs/*|javadoc)      echo "" ;;          # libraries (+ legacy) at root
+        *)                   echo "" ;;
+    esac
+}
+
+# --- Copy every built WAR/JAR to dist/<ver>-<build>/<tier>/ ---
 # Iterates the active profile's INCLUDED_MODULES list (not a blind glob), so
 # stale artifacts from previous builds in unrelated target/ directories don't
 # leak into this build's dist. Excludes Maven side-artifacts (sources, javadoc,
 # tests, the war-plugin's intermediate -classes.jar). Also copies the active
-# build profile and platform conf files for traceability.
+# build profile and platform conf files to the dist root for traceability.
 copy_all_to_dist() {
     [ "$SKIP_DIST" = true ] && return 0
     mkdir -p "$DISTDIR"
     local copied=0 missing=0
-    local mod mdir target f produced
+    local mod mdir target f produced subdir destdir
     while IFS= read -r mod; do
         [ -n "$mod" ] || continue
         mdir=$(module_dir "$mod")
@@ -194,6 +213,13 @@ copy_all_to_dist() {
         fi
         target="${SCRIPT_DIR}/${mdir}/target"
         [ -d "$target" ] || { missing=$((missing + 1)); continue; }
+        subdir=$(dist_subdir_for "$mdir")
+        if [ -n "$subdir" ]; then
+            destdir="$DISTDIR/$subdir"
+            mkdir -p "$destdir"
+        else
+            destdir="$DISTDIR"
+        fi
         produced=0
         for f in "$target"/*.war "$target"/*.jar; do
             [ -f "$f" ] || continue
@@ -201,7 +227,7 @@ copy_all_to_dist() {
                 *-sources.jar|*-javadoc.jar|*-tests.jar|*-classes.jar) continue ;;
                 original-*.jar) continue ;;
             esac
-            cp -f "$f" "$DISTDIR/"
+            cp -f "$f" "$destdir/"
             copied=$((copied + 1))
             produced=$((produced + 1))
         done
@@ -219,14 +245,41 @@ copy_all_to_dist() {
 
 # --- Write dist/<ver>-<build>/DEPLOYMENT.txt after a successful build ---
 # Emits a four-column table (Artifact, Tier, Target, Purpose) describing every
-# artifact actually present in DISTDIR. Used by operators and by ./deploy.sh.
+# artifact actually present in DISTDIR. Walks each tier subdirectory plus the
+# dist root (for libraries and the build conf files).
 write_deployment_manifest() {
     [ -d "$DISTDIR" ] || return 0
     local manifest="${DISTDIR}/DEPLOYMENT.txt"
 
-    # Classify an artifact by filename. Echoes: "<tier>|<target>|<purpose>"
-    # Specific names take precedence; broader glob patterns catch the rest.
-    classify_artifact() {
+    # Classify an admin/-tier WAR by its short context-root filename.
+    classify_admin_war() {
+        local name="$1" base="${1%.war}"
+        case "$name" in
+            blade.war)        echo "admin|AdminServer|Admin dashboard (context: /blade)" ;;
+            configurator.war) echo "admin|AdminServer|Config editor (context: /configurator)" ;;
+            flow.war)         echo "admin|AdminServer|FSMAR diagram editor (context: /flow)" ;;
+            tuning.war)       echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /tuning)" ;;
+            files.war)        echo "admin|AdminServer|Config file manager (context: /files)" ;;
+            explorer.war)     echo "admin|AdminServer|Experimental UI (context: /explorer)" ;;
+            watcher.war)      echo "admin|AdminServer|Log/event monitor (context: /watcher)" ;;
+            logs.war)         echo "admin|AdminServer|Log viewer (context: /logs)" ;;
+            javadoc.war)      echo "admin|AdminServer|Javadoc site (context: /javadoc)" ;;
+            crud-editor.war)  echo "admin|AdminServer|CRUD editor (context: /crud-editor)" ;;
+            *)                echo "admin|AdminServer|Admin app (context: /${base})" ;;
+        esac
+    }
+
+    # Classify a services/-tier WAR (services + test apps both live here).
+    classify_services_war() {
+        local name="$1" base="${1%.war}"
+        case "$name" in
+            test-*.war) echo "test|cluster|SIP test app (context: /${base})" ;;
+            *)          echo "service|cluster|SIP service (context: /${base})" ;;
+        esac
+    }
+
+    # Classify a root-level artifact (libraries + build conf files).
+    classify_root_artifact() {
         case "$1" in
             vorpal-blade-library-fsmar.jar)
                 echo "fsmar|approuter/|SIP application router — v2 legacy (reboot engine tier)" ;;
@@ -236,31 +289,6 @@ write_deployment_manifest() {
                 echo "shared-lib|admin+cluster|WebLogic shared library (3rd-party JARs)" ;;
             vorpal-blade-library-framework.jar)
                 echo "framework|bundled in WARs|BLADE framework library (not deployed directly)" ;;
-            vorpal-blade-admin-console.war)
-                echo "admin|AdminServer|Admin dashboard (context: /blade)" ;;
-            vorpal-blade-admin-configurator.war)
-                echo "admin|AdminServer|Config editor (context: /configurator)" ;;
-            vorpal-blade-admin-flow.war)
-                echo "admin|AdminServer|FSMAR diagram editor (context: /flow)" ;;
-            vorpal-blade-admin-tuning.war)
-                echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /tuning)" ;;
-            vorpal-blade-admin-file-manager.war)
-                echo "admin|AdminServer|Config file manager (context: /files)" ;;
-            vorpal-blade-admin-explorer.war)
-                echo "admin|AdminServer|Experimental UI (context: /explorer)" ;;
-            vorpal-blade-admin-watcher.war)
-                echo "admin|AdminServer|Log/event monitor (context: /watcher)" ;;
-            vorpal-blade-admin-logs.war)
-                echo "admin|AdminServer|Log viewer (context: /logs)" ;;
-            vorpal-blade-javadoc.war)
-                echo "admin|AdminServer|Javadoc site (context: /javadoc)" ;;
-            vorpal-blade-admin-*.war)
-                echo "admin|AdminServer|Admin app: ${1#vorpal-blade-admin-}" ;;
-            vorpal-blade-services-*.war)
-                local svc="${1#vorpal-blade-services-}"; svc="${svc%.war}"
-                echo "service|cluster|SIP service (deploy as standalone WAR while EAR is disabled): ${svc}" ;;
-            test-*.war)
-                echo "test|cluster|SIP test app: ${1%.war}" ;;
             *.conf)
                 echo "metadata|n/a|Build profile / platform used for this build" ;;
             *)
@@ -268,25 +296,62 @@ write_deployment_manifest() {
         esac
     }
 
+    print_row() {
+        printf '%-32s  %-11s  %-15s  %s\n' "$1" "$2" "$3" "$4"
+    }
+
+    list_dir() {
+        ( cd "$1" 2>/dev/null && ls -1 2>/dev/null | grep -v '^DEPLOYMENT\.txt$' | sort )
+    }
+
+    print_section() {
+        # $1 = relative path (e.g. "admin/"), $2 = classifier function name
+        local rel="$1" classifier="$2"
+        local abs="${DISTDIR}/${rel%/}"
+        [ -d "$abs" ] || return 0
+        local files=()
+        while IFS= read -r f; do files+=("$f"); done < <(list_dir "$abs")
+        [ ${#files[@]} -eq 0 ] && return 0
+        echo ""
+        echo "[ ${rel} ]"
+        local f line tier target purpose
+        for f in "${files[@]}"; do
+            line=$("$classifier" "$f")
+            tier="${line%%|*}";       line="${line#*|}"
+            target="${line%%|*}";     line="${line#*|}"
+            purpose="$line"
+            print_row "$f" "$tier" "$target" "$purpose"
+        done
+    }
+
+    print_root_section() {
+        local files=()
+        while IFS= read -r f; do
+            [ -f "${DISTDIR}/${f}" ] || continue
+            files+=("$f")
+        done < <(list_dir "$DISTDIR")
+        [ ${#files[@]} -eq 0 ] && return 0
+        echo ""
+        echo "[ libraries + build metadata ]"
+        local f line tier target purpose
+        for f in "${files[@]}"; do
+            line=$(classify_root_artifact "$f")
+            tier="${line%%|*}";       line="${line#*|}"
+            target="${line%%|*}";     line="${line#*|}"
+            purpose="$line"
+            print_row "$f" "$tier" "$target" "$purpose"
+        done
+    }
+
     {
         echo "BLADE ${REVISION}-${BUILD_NUM} deployment manifest"
         echo "See DEPLOYMENT.md for the four-tier deployment model."
         echo ""
-        printf '%-42s  %-11s  %-15s  %s\n' "Artifact" "Tier" "Target" "Purpose"
-        printf '%-42s  %-11s  %-15s  %s\n' "------------------------------------------" \
-            "-----------" "---------------" "-------"
-        local files=()
-        while IFS= read -r f; do
-            files+=("$f")
-        done < <(cd "$DISTDIR" && ls -1 2>/dev/null | grep -v '^DEPLOYMENT\.txt$' | sort)
-        for f in "${files[@]}"; do
-            local line tier target purpose
-            line=$(classify_artifact "$f")
-            tier="${line%%|*}";       line="${line#*|}"
-            target="${line%%|*}";     line="${line#*|}"
-            purpose="$line"
-            printf '%-42s  %-11s  %-15s  %s\n' "$f" "$tier" "$target" "$purpose"
-        done
+        print_row "Artifact" "Tier" "Target" "Purpose"
+        print_row "--------------------------------" "-----------" "---------------" "-------"
+        print_root_section
+        print_section "admin/"    classify_admin_war
+        print_section "services/" classify_services_war
     } > "$manifest"
 
     echo "Wrote ${manifest#${SCRIPT_DIR}/}"

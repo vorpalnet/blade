@@ -96,8 +96,9 @@ public abstract class Connector implements Serializable {
 				selector.extract(ctx, payload);
 			} catch (Exception e) {
 				if (sipLogger.isLoggable(Level.WARNING)) {
-					sipLogger.warning(getClass().getSimpleName() + "[" + id + "] selector "
-							+ selector.getId() + " failed: " + e.getMessage());
+					sipLogger.warning(ctx != null ? ctx.getRequest() : null,
+							getClass().getSimpleName() + "[" + id + "] selector "
+									+ selector.getId() + " failed: " + e.getMessage());
 				}
 			}
 		}

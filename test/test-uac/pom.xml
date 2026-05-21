@@ -22,4 +22,8 @@
 		</dependency>
 	</dependencies>
 
+	<build>
+		<finalName>test-uac</finalName>
+	</build>
+
 </project>

@@ -72,10 +72,12 @@ public class XmlSelector extends Selector implements Serializable {
 			store(ctx, id, raw);
 
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("XmlSelector[" + id + "] xpath=" + attribute + " value=" + raw);
+				sipLogger.finer(ctx != null ? ctx.getRequest() : null,
+						"XmlSelector[" + id + "] xpath=" + attribute + " value=" + raw);
 			}
 		} catch (Exception e) {
-			sipLogger.warning("XmlSelector[" + id + "] failed: " + e.getMessage());
+			sipLogger.warning(ctx != null ? ctx.getRequest() : null,
+					"XmlSelector[" + id + "] failed: " + e.getMessage());
 		}
 	}
 

@@ -207,21 +207,33 @@ If the framework hasn't changed since your last full build, you can skip the ins
 
 ## Output
 
-Every WAR/JAR built by the active profile is copied to `dist/<version>-<build>/`, along with the profile and platform conf files used. Example for the `default` profile:
+Every WAR/JAR built by the active profile is copied to `dist/<version>-<build>/`, organized into tier subdirectories matching where each artifact deploys. Library artifacts and build conf files stay at the root.
 
 ```
 dist/<version>-<build>/
-  vorpal-blade-library-framework.jar         # Framework library
-  vorpal-blade-library-shared.war            # WebLogic shared library
-  vorpal-blade-library-fsmar.jar             # FSMAR (copy to OCCAS approuter lib/)
-  vorpal-blade-admin-configurator.war        # Admin Configurator
-  vorpal-blade-admin-watcher.war             # Admin Watcher
-  vorpal-blade-services-<service>.war        # one WAR per service in the profile
-  test-<name>.war                            # test apps if included
+  vorpal-blade-library-framework.jar         # Framework library (bundled in WARs; not deployed)
+  vorpal-blade-library-shared.war            # WebLogic shared library (admin + cluster)
+  vorpal-blade-library-fsmar.jar             # FSMAR (copy to OCCAS approuter/)
+  admin/
+    configurator.war                         # /configurator    → AdminServer
+    blade.war                                # /blade           (admin console)
+    flow.war                                 # /flow
+    files.war                                # /files           (file-manager)
+    watcher.war                              # /watcher
+    tuning.war                               # /tuning
+    logs.war                                 # /logs
+    javadoc.war                              # /javadoc
+  services/
+    proxy-router.war                         # one WAR per service → cluster
+    hold.war
+    ...
+    test-uac.war                             # test apps live here too
   default.conf                               # build profile used
   occas-<ver>.conf                           # platform profile used
   DEPLOYMENT.txt                             # generated manifest classifying every artifact
 ```
+
+Each WAR's filename matches its `<wls:context-root>` from `weblogic.xml`, so `configurator.war` deploys at `/configurator`. Two exceptions: `admin/console` builds as `blade.war` (its context-root is `/blade`) and `admin/file-manager` builds as `files.war` (its context-root is `/files`).
 
 - The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
 - **EAR (currently disabled)**: the `services/` aggregator no longer produces a `vorpal-blade-services-<profile>.ear`. Services are deployed individually as WARs while the EAR logic is offline. See `services/pom.xml` for the TODO marker.
@@ -242,14 +254,18 @@ export BLADE_SKIP_DIST=1         # sticky for the current shell
 
 ### Deployment
 
-BLADE deploys in four tiers — FSMAR, shared library, admin apps, and services EAR. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full guide. The short version:
+BLADE deploys in four tiers — shared library, admin apps, services (+ test apps), and FSMAR. `deploy.sh` is now a single-tier-per-invocation tool: you specify which dist subdir to push and the WebLogic target it goes to. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full guide. The short version:
 
 ```bash
 ./build.sh production                 # produce dist/<ver>-<build>/
-$EDITOR build-profiles/deploy/production.conf          # set host, targets, paths
+$EDITOR build-profiles/deploy/production.conf          # set adminurl, user, etc.
 cp build-profiles/deploy/production.secret.example \
    build-profiles/deploy/production.secret             # fill in wls.password
-./deploy.sh production                # deploy all four tiers
+
+./deploy.sh production shared                              # WebLogic shared library
+./deploy.sh production admin AdminServer                   # all admin/*.war → AdminServer
+./deploy.sh production services BEA_ENGINE_TIER_CLUST      # all services/*.war → cluster
+./deploy.sh production fsmar                               # FSMAR jars → approuter/
 ```
 
 ## Build Number
@@ -330,7 +346,7 @@ The javadoc module is always built and its WAR is copied to the `dist/` folder a
 This uses the [UML Doclet](https://github.com/talsma-ict/umldoclet) to generate class diagrams (SVG) alongside the standard Javadoc HTML, with Vorpal purple branding. All module javadocs are bundled into a deployable WAR:
 
 ```
-dist/<version>-<build>/vorpal-blade-javadoc.war
+dist/<version>-<build>/admin/javadoc.war
 ```
 
 Deploy this WAR to the AdminServer to browse javadocs at `/javadoc`. The index page links to each module's javadoc automatically — no build changes needed when adding new modules.

@@ -25,6 +25,7 @@
 	<!-- TEMP: omit WebLogic-Application-Version to test Remote Console delete bug.
 	     Revert with: git checkout pom.xml -->
 	<build>
+		<finalName>test-b2bua</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

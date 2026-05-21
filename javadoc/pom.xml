@@ -15,7 +15,7 @@
 	<name>BLADE Javadoc</name>
 
 	<build>
-		<finalName>vorpal-blade-javadoc</finalName>
+		<finalName>javadoc</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -47,8 +47,9 @@
 								<argument>
 DISTDIR="${project.basedir}/../dist/${revision}-${build.number}";
 if [ -d "$DISTDIR" ]; then
-  cp -f "${project.build.directory}/${project.build.finalName}.war" "$DISTDIR/";
-  echo "Javadoc WAR copied to dist/${revision}-${build.number}/${project.build.finalName}.war"
+  mkdir -p "$DISTDIR/admin";
+  cp -f "${project.build.directory}/${project.build.finalName}.war" "$DISTDIR/admin/";
+  echo "Javadoc WAR copied to dist/${revision}-${build.number}/admin/${project.build.finalName}.war"
 else
   echo "Dist directory not found, skipping javadoc WAR copy"
 fi

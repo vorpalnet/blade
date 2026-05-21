@@ -119,8 +119,9 @@ public class RegexSelector extends Selector implements Serializable {
 
 		Logger sipLogger = SettingsManager.getSipLogger();
 		if (sipLogger != null && sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer("RegexSelector[" + id + "] attribute=" + attribute
-					+ " key=" + value + " groups=" + groups);
+			sipLogger.finer(ctx != null ? ctx.getRequest() : null,
+					"RegexSelector[" + id + "] attribute=" + attribute
+							+ " key=" + value + " groups=" + groups);
 		}
 	}
 

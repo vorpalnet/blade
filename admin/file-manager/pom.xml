@@ -40,7 +40,8 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-admin-file-manager</finalName>
+		<!-- WAR name matches context-root /files (see weblogic.xml). -->
+		<finalName>files</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

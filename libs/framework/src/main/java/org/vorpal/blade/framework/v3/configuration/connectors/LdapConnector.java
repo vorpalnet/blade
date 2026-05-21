@@ -88,6 +88,7 @@ public class LdapConnector extends Connector implements Serializable {
 		final String connectorId = id;
 		final Logger sipLogger = SettingsManager.getSipLogger();
 
+		final javax.servlet.sip.SipServletRequest sipReq = ctx.getRequest();
 		// Template resolution is cheap — do it on the calling thread.
 		final SearchParams params;
 		try {
@@ -98,12 +99,12 @@ public class LdapConnector extends Connector implements Serializable {
 			}
 			params = parseTemplate(ctx.resolve(cachedTemplate));
 		} catch (Exception e) {
-			sipLogger.warning("LdapConnector[" + connectorId + "] template load failed: " + e.getMessage());
+			sipLogger.warning(sipReq, "LdapConnector[" + connectorId + "] template load failed: " + e.getMessage());
 			return CompletableFuture.completedFuture(null);
 		}
 
 		if (params.filter == null || params.filter.isEmpty()) {
-			sipLogger.warning("LdapConnector[" + connectorId + "] empty filter");
+			sipLogger.warning(sipReq, "LdapConnector[" + connectorId + "] empty filter");
 			return CompletableFuture.completedFuture(null);
 		}
 
@@ -141,18 +142,18 @@ public class LdapConnector extends Connector implements Serializable {
 					results.close();
 				}
 			} catch (Exception e) {
-				sipLogger.warning("LdapConnector[" + connectorId + "] search failed: " + e.getMessage());
+				sipLogger.warning(sipReq, "LdapConnector[" + connectorId + "] search failed: " + e.getMessage());
 			}
 			return null;
 		}, Executors.DB).thenAccept(entry -> {
 			if (entry == null) {
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer("LdapConnector[" + connectorId + "] no entries");
+					sipLogger.finer(sipReq, "LdapConnector[" + connectorId + "] no entries");
 				}
 				return;
 			}
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("LdapConnector[" + connectorId + "] entry=" + entry.keySet());
+				sipLogger.finer(sipReq, "LdapConnector[" + connectorId + "] entry=" + entry.keySet());
 			}
 			runSelectors(ctx, entry);
 		});

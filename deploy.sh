@@ -3,24 +3,30 @@
 # deploy.sh - Profile-driven deployment wrapper for BLADE
 #
 # Usage:
-#   ./deploy.sh <env> [tier|action] [--build VERSION] [--dry-run]
+#   ./deploy.sh <env> <subdir> <target> [action] [--build VER] [--dry-run]
+#   ./deploy.sh <env> shared                     [action] [--build VER] [--dry-run]
+#   ./deploy.sh <env> fsmar                      [action] [--build VER] [--dry-run]
+#
+# Subdirs map directly to dist/<ver>/<subdir>/:
+#   admin        Admin apps + javadoc — typically deploy to AdminServer
+#   services     SIP services + test apps — typically deploy to your cluster
+#   shared       Special: the WebLogic shared library (targets read from conf
+#                wls.targets.both — needs both AdminServer + cluster)
+#   fsmar        Special: copies FSMAR jars to <approuter.dir> on disk
+#
+# Target is the WebLogic deployment target name (server or cluster):
+#   AdminServer                  (admin tier in most setups)
+#   BEA_ENGINE_TIER_CLUST        (your SIP cluster — name varies per install)
+# Required for `admin` and `services`; ignored for `shared` and `fsmar`.
 #
 # Environments:
-#   build-profiles/deploy/<env>.conf        — connection, targets, paths (committed)
+#   build-profiles/deploy/<env>.conf        — connection + paths (committed)
 #   build-profiles/deploy/<env>.secret      — wls.password only (gitignored)
 #
-# Tiers:
-#   shared-lib   Shared library → AdminServer + cluster (WebLogic library)
-#   admin        All admin WARs → AdminServer only
-#   services     Services EAR  → cluster only
-#   fsmar        fsmar[3].jar  → $DOMAIN/approuter/ (cp or scp); reboot engine tier
-#                (both fsmar.jar and fsmar3.jar are deployed if present — OCCAS
-#                 activates whichever is configured in its admin console)
-#   (omitted)    All four tiers in order: shared-lib → admin → services → fsmar
-#
 # Actions:
-#   undeploy     Tear down the selected tier(s)
-#   status       Query WebLogic for deployment state of each tier
+#   deploy       (default) push artifacts to the target
+#   undeploy     tear down the matching apps from the target
+#   status       query WebLogic for deployment state
 #
 # Options:
 #   --build VER  Pin to dist/<VER>/ instead of the newest build directory
@@ -32,12 +38,12 @@
 #   3. Interactive prompt (read -s), with offer to save
 #
 # Examples:
-#   ./deploy.sh production
-#   ./deploy.sh production admin
-#   ./deploy.sh production services --build 2.9.5-320
-#   ./deploy.sh production undeploy
-#   ./deploy.sh production status
-#   ./deploy.sh production --dry-run
+#   ./deploy.sh prod admin AdminServer
+#   ./deploy.sh prod services BEA_ENGINE_TIER_CLUST
+#   ./deploy.sh prod admin AdminServer undeploy
+#   ./deploy.sh prod services BEA_ENGINE_TIER_CLUST --build 2.9.5-320
+#   ./deploy.sh prod shared
+#   ./deploy.sh prod fsmar
 # ============================================================================
 
 set -euo pipefail
@@ -62,33 +68,67 @@ warn() { printf '%s⚠%s %s\n'   "$C_YELLOW" "$C_RESET" "$*"; }
 err()  { printf '%s✗%s %s\n'   "$C_RED" "$C_RESET" "$*" >&2; }
 die()  { err "$*"; exit 1; }
 
-# --- Parse args ---
-ENV_NAME=""
-TIER=""          # shared-lib | admin | services | fsmar | "" (all)
-ACTION="deploy"  # deploy | undeploy | status
-BUILD_VER=""
-DRY_RUN=false
-
 show_usage() {
-    sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,50p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     exit "${1:-0}"
 }
 
+# --- Parse args ---
+# Positional: <env> <subdir> [target] [action]
+# Special subdirs (shared, fsmar) skip <target>; admin/services require it.
+ENV_NAME=""
+SUBDIR=""
+TARGET=""
+ACTION="deploy"
+BUILD_VER=""
+DRY_RUN=false
+
+POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
         -h|--help) show_usage 0 ;;
         --build)   shift; BUILD_VER="${1:-}"; [ -n "$BUILD_VER" ] || die "--build requires a version argument" ;;
         --build=*) BUILD_VER="${1#--build=}" ;;
         --dry-run) DRY_RUN=true ;;
-        undeploy|status) ACTION="$1" ;;
-        shared-lib|admin|services|fsmar) TIER="$1" ;;
-        -*) die "Unknown option: $1" ;;
-        *)  if [ -z "$ENV_NAME" ]; then ENV_NAME="$1"; else die "Unexpected argument: $1"; fi ;;
+        -*)        die "Unknown option: $1" ;;
+        *)         POSITIONAL+=("$1") ;;
     esac
     shift
 done
 
-[ -n "$ENV_NAME" ] || { err "Environment name required."; show_usage 1; }
+[ ${#POSITIONAL[@]} -ge 1 ] || { err "Environment name required."; show_usage 1; }
+ENV_NAME="${POSITIONAL[0]}"
+SUBDIR="${POSITIONAL[1]:-}"
+
+# undeploy/status can show up in different positions depending on subdir:
+#   admin AdminServer undeploy   → POSITIONAL = (env, admin, AdminServer, undeploy)
+#   shared undeploy              → POSITIONAL = (env, shared, undeploy)
+# Detect the action token wherever it lands and remove it from the positional list.
+remaining=()
+for i in "${!POSITIONAL[@]}"; do
+    [ "$i" -eq 0 ] && continue
+    case "${POSITIONAL[$i]}" in
+        deploy|undeploy|status) ACTION="${POSITIONAL[$i]}" ;;
+        *) remaining+=("${POSITIONAL[$i]}") ;;
+    esac
+done
+
+SUBDIR="${remaining[0]:-}"
+TARGET="${remaining[1]:-}"
+
+[ -n "$SUBDIR" ] || { err "Subdir required: admin | services | shared | fsmar"; show_usage 1; }
+
+case "$SUBDIR" in
+    admin|services)
+        [ -n "$TARGET" ] || die "Target required for '${SUBDIR}'. e.g. ./deploy.sh ${ENV_NAME} ${SUBDIR} AdminServer"
+        ;;
+    shared|fsmar)
+        [ -z "$TARGET" ] || die "'${SUBDIR}' does not take a target argument (got: ${TARGET})"
+        ;;
+    *)
+        die "Unknown subdir: ${SUBDIR}. Use admin | services | shared | fsmar"
+        ;;
+esac
 
 CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
 SECRET_FILE="${DEPLOY_DIR}/${ENV_NAME}.secret"
@@ -106,40 +146,40 @@ if [ ! -f "$CONF_FILE" ]; then
 fi
 
 # --- Load non-secret properties ---
-# Same pattern build.sh uses: grep '^key=' | cut -d= -f2-
 read_prop() {
     local file="$1" key="$2"
     grep "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
-BUILD_PROFILE=$(read_prop "$CONF_FILE" "build.profile")
+BUILD_PROFILE=$(read_prop  "$CONF_FILE" "build.profile")
 WLS_ADMINURL=$(read_prop   "$CONF_FILE" "wls.adminurl")
 WLS_USER=$(read_prop       "$CONF_FILE" "wls.user")
-WLS_TGT_ADMIN=$(read_prop  "$CONF_FILE" "wls.targets.admin")
-WLS_TGT_CLUSTER=$(read_prop "$CONF_FILE" "wls.targets.cluster")
 WLS_TGT_BOTH=$(read_prop   "$CONF_FILE" "wls.targets.both")
 SSH_HOST=$(read_prop       "$CONF_FILE" "ssh.host")
 SSH_USER=$(read_prop       "$CONF_FILE" "ssh.user")
 APPROUTER_DIR=$(read_prop  "$CONF_FILE" "approuter.dir")
 
-[ -n "$BUILD_PROFILE" ]   || die "${CONF_FILE}: missing build.profile"
-[ -n "$WLS_ADMINURL" ]    || die "${CONF_FILE}: missing wls.adminurl"
-[ -n "$WLS_USER" ]        || die "${CONF_FILE}: missing wls.user"
-[ -n "$WLS_TGT_ADMIN" ]   || die "${CONF_FILE}: missing wls.targets.admin"
-[ -n "$WLS_TGT_CLUSTER" ] || die "${CONF_FILE}: missing wls.targets.cluster"
-[ -n "$WLS_TGT_BOTH" ]    || die "${CONF_FILE}: missing wls.targets.both"
-[ -n "$APPROUTER_DIR" ]   || die "${CONF_FILE}: missing approuter.dir"
+[ -n "$BUILD_PROFILE" ] || die "${CONF_FILE}: missing build.profile"
+[ -n "$WLS_ADMINURL" ]  || die "${CONF_FILE}: missing wls.adminurl"
+[ -n "$WLS_USER" ]      || die "${CONF_FILE}: missing wls.user"
+
+# wls.targets.both is only needed when deploying the shared library.
+if [ "$SUBDIR" = "shared" ]; then
+    [ -n "$WLS_TGT_BOTH" ] || die "${CONF_FILE}: missing wls.targets.both (required for 'shared')"
+fi
+# approuter.dir is only needed for the fsmar subdir.
+if [ "$SUBDIR" = "fsmar" ]; then
+    [ -n "$APPROUTER_DIR" ] || die "${CONF_FILE}: missing approuter.dir (required for 'fsmar')"
+fi
 
 # --- Secret safeguards ---
 check_secret_safety() {
     local f="$1"
-    # 1) Must be gitignored. `git check-ignore -q` returns 0 iff the file is ignored.
     if ! git -C "$SCRIPT_DIR" check-ignore -q "$f" 2>/dev/null; then
         err "REFUSING: ${f} is not gitignored. This file contains passwords."
         err "Fix .gitignore or build-profiles/deploy/.gitignore before proceeding."
         exit 1
     fi
-    # 2) Must be mode 600 (warn only; deploy still proceeds).
     if [ -f "$f" ]; then
         local mode
         mode=$(stat -f '%Lp' "$f" 2>/dev/null || stat -c '%a' "$f" 2>/dev/null || echo "")
@@ -151,25 +191,28 @@ check_secret_safety() {
 check_secret_safety "$SECRET_FILE"
 
 # --- Resolve password (env var > secret file > interactive prompt) ---
+# fsmar doesn't talk to WebLogic, so it skips password resolution entirely.
 WLS_PASSWORD=""
-if [ -n "${BLADE_WLS_PASSWORD:-}" ]; then
-    WLS_PASSWORD="$BLADE_WLS_PASSWORD"
-elif [ -f "$SECRET_FILE" ]; then
-    WLS_PASSWORD=$(read_prop "$SECRET_FILE" "wls.password")
-fi
+if [ "$SUBDIR" != "fsmar" ]; then
+    if [ -n "${BLADE_WLS_PASSWORD:-}" ]; then
+        WLS_PASSWORD="$BLADE_WLS_PASSWORD"
+    elif [ -f "$SECRET_FILE" ]; then
+        WLS_PASSWORD=$(read_prop "$SECRET_FILE" "wls.password")
+    fi
 
-if [ -z "$WLS_PASSWORD" ] && [ "$DRY_RUN" = false ] && [ "$ACTION" != "status" ]; then
-    printf 'WebLogic password for %s@%s: ' "$WLS_USER" "$WLS_ADMINURL"
-    read -rs WLS_PASSWORD
-    printf '\n'
-    [ -n "$WLS_PASSWORD" ] || die "No password provided."
-    printf 'Save to %s? [y/N] ' "$SECRET_FILE"
-    read -r save_choice
-    if [[ "$save_choice" =~ ^[Yy]$ ]]; then
-        printf 'wls.password=%s\n' "$WLS_PASSWORD" > "$SECRET_FILE"
-        chmod 600 "$SECRET_FILE"
-        ok "Saved password to ${SECRET_FILE} (mode 600)"
-        check_secret_safety "$SECRET_FILE"
+    if [ -z "$WLS_PASSWORD" ] && [ "$DRY_RUN" = false ] && [ "$ACTION" != "status" ]; then
+        printf 'WebLogic password for %s@%s: ' "$WLS_USER" "$WLS_ADMINURL"
+        read -rs WLS_PASSWORD
+        printf '\n'
+        [ -n "$WLS_PASSWORD" ] || die "No password provided."
+        printf 'Save to %s? [y/N] ' "$SECRET_FILE"
+        read -r save_choice
+        if [[ "$save_choice" =~ ^[Yy]$ ]]; then
+            printf 'wls.password=%s\n' "$WLS_PASSWORD" > "$SECRET_FILE"
+            chmod 600 "$SECRET_FILE"
+            ok "Saved password to ${SECRET_FILE} (mode 600)"
+            check_secret_safety "$SECRET_FILE"
+        fi
     fi
 fi
 
@@ -189,23 +232,27 @@ else
 fi
 DIST_NAME=$(basename "$DIST_DIR")
 
-# --- Artifact paths ---
 SHARED_LIB_WAR="${DIST_DIR}/vorpal-blade-library-shared.war"
-SERVICES_EAR="${DIST_DIR}/vorpal-blade-services-${BUILD_PROFILE}.ear"
 FSMAR_JAR="${DIST_DIR}/vorpal-blade-library-fsmar.jar"
 FSMAR3_JAR="${DIST_DIR}/vorpal-blade-library-fsmar3.jar"
-SHARED_LIB_NAME="vorpal-blade"  # Extension-Name from libs/shared/pom.xml:239
+SHARED_LIB_NAME="vorpal-blade"  # Extension-Name from libs/shared/pom.xml
 
 # --- Header ---
 log "${C_BOLD}BLADE deploy${C_RESET}"
 log "  environment:  ${ENV_NAME}"
 log "  build:        ${DIST_NAME} (${BUILD_PROFILE})"
-log "  WebLogic:     ${WLS_USER}@${WLS_ADMINURL}"
-log "  action:       ${ACTION}${TIER:+ (${TIER} only)}"
+case "$SUBDIR" in
+    admin|services) log "  subdir:       ${SUBDIR}/ → ${TARGET}" ;;
+    shared)         log "  subdir:       ${SUBDIR} → ${WLS_TGT_BOTH} (shared library)" ;;
+    fsmar)          log "  subdir:       ${SUBDIR} → ${SSH_HOST:+${SSH_USER}@${SSH_HOST}:}${APPROUTER_DIR}" ;;
+esac
+if [ "$SUBDIR" != "fsmar" ]; then
+    log "  WebLogic:     ${WLS_USER}@${WLS_ADMINURL}"
+fi
+log "  action:       ${ACTION}"
 [ "$DRY_RUN" = true ] && log "  ${C_YELLOW}** DRY RUN — no changes will be made **${C_RESET}"
 log ""
 
-# --- mvnw wrapper ---
 MVNW="${SCRIPT_DIR}/mvnw"
 
 run_mvn() {
@@ -216,30 +263,64 @@ run_mvn() {
     "$MVNW" -q "$@"
 }
 
-# Common weblogic-maven-plugin properties (password passed only at exec time).
-mvn_wls_base() {
-    printf -- '-Dadminurl=%s -Duser=%s -Dpassword=%s -Dupload=true' \
-        "$WLS_ADMINURL" "$WLS_USER" "$WLS_PASSWORD"
+# Deploy / undeploy every WAR in dist/<ver>/<subdir>/ to <target>.
+# App name = WAR basename (e.g. configurator.war → "configurator"), so it
+# matches the context-root operators see in the WebLogic console.
+deploy_subdir() {
+    local sub="$1" target="$2" action="$3"
+    local src_dir="${DIST_DIR}/${sub}"
+    [ -d "$src_dir" ] || die "Source dir not found: ${src_dir}. Run ./build.sh ${BUILD_PROFILE} first."
+
+    info "Subdir: ${sub}/ → ${target}"
+    shopt -s nullglob
+    local wars=("$src_dir"/*.war)
+    shopt -u nullglob
+
+    if [ ${#wars[@]} -eq 0 ]; then
+        warn "No WARs found in ${src_dir}. Nothing to ${action}."
+        return 0
+    fi
+
+    local rc=0 war app
+    for war in "${wars[@]}"; do
+        app=$(basename "$war" .war)
+        log "  ${C_DIM}→ ${app}${C_RESET}"
+        case "$action" in
+            deploy)
+                run_mvn "${WLS_PLUGIN}:deploy" \
+                    -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" \
+                    -Dtargets="$target" -Dsource="$war" -Dname="$app" -Dupload=true || rc=$?
+                ;;
+            undeploy)
+                run_mvn "${WLS_PLUGIN}:undeploy" \
+                    -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" \
+                    -Dname="$app" || rc=$?
+                ;;
+            status)
+                # Single list-apps covers the whole server; called once outside the loop below.
+                :
+                ;;
+        esac
+    done
+
+    if [ "$action" = "status" ]; then
+        run_mvn "${WLS_PLUGIN}:list-apps" \
+            -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD"
+    fi
+    return $rc
 }
 
-# --- Tier implementations ---
-# Each tier function takes one arg: the action (deploy|undeploy|status).
-
-tier_shared_lib() {
+deploy_shared() {
     local action="$1"
-    info "Tier: shared-lib → ${WLS_TGT_BOTH}"
-    [ -f "$SHARED_LIB_WAR" ] || { err "Missing: ${SHARED_LIB_WAR}"; return 1; }
+    info "Subdir: shared → ${WLS_TGT_BOTH}"
+    [ -f "$SHARED_LIB_WAR" ] || die "Missing: ${SHARED_LIB_WAR}"
 
     case "$action" in
         deploy)
-            # shellcheck disable=SC2046
             run_mvn "${WLS_PLUGIN}:deploy" \
                 -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" \
-                -Dtargets="$WLS_TGT_BOTH" \
-                -Dsource="$SHARED_LIB_WAR" \
-                -Dname="$SHARED_LIB_NAME" \
-                -DlibraryModule=true \
-                -Dupload=true
+                -Dtargets="$WLS_TGT_BOTH" -Dsource="$SHARED_LIB_WAR" \
+                -Dname="$SHARED_LIB_NAME" -DlibraryModule=true -Dupload=true
             ;;
         undeploy)
             run_mvn "${WLS_PLUGIN}:undeploy" \
@@ -253,81 +334,13 @@ tier_shared_lib() {
     esac
 }
 
-tier_admin() {
+deploy_fsmar() {
     local action="$1"
-    local any_found=false
-
-    info "Tier: admin → ${WLS_TGT_ADMIN}"
-    shopt -s nullglob
-    local wars=("$DIST_DIR"/vorpal-blade-admin-*.war "$DIST_DIR"/vorpal-blade-javadoc.war)
-    shopt -u nullglob
-
-    for war in "${wars[@]}"; do
-        [ -f "$war" ] || continue
-        any_found=true
-        local app
-        app=$(basename "$war" .war)
-        log "  ${C_DIM}→ ${app}${C_RESET}"
-        case "$action" in
-            deploy)
-                run_mvn "${WLS_PLUGIN}:deploy" \
-                    -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" \
-                    -Dtargets="$WLS_TGT_ADMIN" \
-                    -Dsource="$war" \
-                    -Dname="$app" \
-                    -Dupload=true
-                ;;
-            undeploy)
-                run_mvn "${WLS_PLUGIN}:undeploy" \
-                    -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" \
-                    -Dname="$app"
-                ;;
-            status) : ;;  # covered by shared_lib's list-apps
-        esac
-    done
-
-    if [ "$any_found" = false ]; then
-        warn "No admin WARs found in ${DIST_DIR}. Nothing to ${action}."
-    fi
-}
-
-tier_services() {
-    local action="$1"
-    local name="vorpal-blade-services"
-    info "Tier: services → ${WLS_TGT_CLUSTER}"
-    if [ ! -f "$SERVICES_EAR" ]; then
-        err "Missing: $(basename "$SERVICES_EAR")"
-        err "  in ${DIST_DIR}"
-        err "  Run: ./build.sh ${BUILD_PROFILE}"
-        return 1
-    fi
-
-    case "$action" in
-        deploy)
-            run_mvn "${WLS_PLUGIN}:deploy" \
-                -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" \
-                -Dtargets="$WLS_TGT_CLUSTER" \
-                -Dsource="$SERVICES_EAR" \
-                -Dname="$name" \
-                -Dupload=true
-            ;;
-        undeploy)
-            run_mvn "${WLS_PLUGIN}:undeploy" \
-                -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" \
-                -Dname="$name"
-            ;;
-        status) : ;;
-    esac
-}
-
-tier_fsmar() {
-    local action="$1"
-    info "Tier: fsmar → ${SSH_HOST:+${SSH_USER}@${SSH_HOST}:}${APPROUTER_DIR}"
+    info "Subdir: fsmar → ${SSH_HOST:+${SSH_USER}@${SSH_HOST}:}${APPROUTER_DIR}"
 
     # FSMAR 2 (legacy) and FSMAR 3 are two distinct fat JARs that both live in
-    # OCCAS's approuter/ directory. Only one is activated at a time in the OCCAS
-    # admin console. We deploy whichever are present in DIST_DIR so operators
-    # can switch between them without a rebuild.
+    # OCCAS's approuter/. Only one is activated at a time in the admin console.
+    # Deploy whichever are present so operators can switch without a rebuild.
     local jars=()
     [ -f "$FSMAR_JAR" ]  && jars+=("$FSMAR_JAR")
     [ -f "$FSMAR3_JAR" ] && jars+=("$FSMAR3_JAR")
@@ -336,8 +349,9 @@ tier_fsmar() {
         return 1
     fi
 
+    local src dest_file
     for src in "${jars[@]}"; do
-        local dest_file="${APPROUTER_DIR}/$(basename "$src")"
+        dest_file="${APPROUTER_DIR}/$(basename "$src")"
         log "  ${C_DIM}→ $(basename "$src")${C_RESET}"
         case "$action" in
             deploy)
@@ -388,48 +402,20 @@ tier_fsmar() {
     esac
 }
 
-# --- Tier selection & execution order ---
-# Full deploy order: shared-lib first (needed by admin/services), then admin, then services, then fsmar last (reboot).
-# Full undeploy order: reverse — fsmar → services → admin → shared-lib.
-declare -a TIERS_TO_RUN
-if [ -z "$TIER" ]; then
-    if [ "$ACTION" = "undeploy" ]; then
-        TIERS_TO_RUN=(fsmar services admin shared-lib)
-    else
-        TIERS_TO_RUN=(shared-lib admin services fsmar)
-    fi
+# --- Dispatch ---
+set +e
+case "$SUBDIR" in
+    admin|services) deploy_subdir "$SUBDIR" "$TARGET" "$ACTION" ;;
+    shared)         deploy_shared "$ACTION" ;;
+    fsmar)          deploy_fsmar  "$ACTION" ;;
+esac
+RC=$?
+set -e
+
+log ""
+if [ $RC -eq 0 ]; then
+    ok "${SUBDIR} ${ACTION}: done"
 else
-    TIERS_TO_RUN=("$TIER")
+    err "${SUBDIR} ${ACTION}: failed (exit ${RC})"
+    exit $RC
 fi
-
-# Bash 3.2 compatible: track per-tier results in parallel arrays.
-RESULT_TIERS=()
-RESULT_STATUS=()
-for t in "${TIERS_TO_RUN[@]}"; do
-    fn_name="tier_${t//-/_}"
-    set +e
-    "$fn_name" "$ACTION"
-    rc=$?
-    set -e
-    RESULT_TIERS+=("$t")
-    if [ $rc -eq 0 ]; then
-        RESULT_STATUS+=("ok")
-    else
-        RESULT_STATUS+=("fail")
-    fi
-    log ""
-done
-
-# --- Summary ---
-log "${C_BOLD}Summary:${C_RESET}"
-any_failed=false
-for i in "${!RESULT_TIERS[@]}"; do
-    t="${RESULT_TIERS[$i]}"
-    s="${RESULT_STATUS[$i]}"
-    case "$s" in
-        ok)   ok   "$t" ;;
-        fail) err  "$t"; any_failed=true ;;
-    esac
-done
-
-[ "$any_failed" = false ] || exit 1

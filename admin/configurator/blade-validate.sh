@@ -11,7 +11,7 @@
 #   --host <host:port> AdminServer host (default: localhost:7001)
 #   --user <user>      WebLogic username (default: weblogic)
 #   --password <pass>  WebLogic password (required)
-#   --context <path>   Configurator context root (default: vorpal-blade-admin-configurator)
+#   --context <path>   Configurator context root (default: configurator)
 #
 # Examples:
 #   blade-validate.sh --password secret
@@ -25,7 +25,7 @@ set -euo pipefail
 HOST="localhost:7001"
 USER="weblogic"
 PASSWORD=""
-CONTEXT="vorpal-blade-admin-configurator"
+CONTEXT="configurator"
 APP=""
 DEPLOY=false
 

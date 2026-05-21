@@ -71,19 +71,25 @@ public class IRouterInvite extends Callflow {
 				Parameterable xVorpalId = request.getParameterableHeader(Callflow.X_VORPAL_ID);
 				if (xVorpalId != null) vorpalOrigin = xVorpalId.getParameter(Callflow.ORIGIN_PARAM);
 			} catch (Exception ignore) {
-				// malformed header — leave vorpalOrigin null for the log line
+				// malformed header — leave vorpalOrigin null
 			}
-			StringBuilder vias = new StringBuilder();
-			java.util.ListIterator<String> it = request.getHeaders("Via");
-			int i = 0;
-			while (it.hasNext()) {
-				if (vias.length() > 0) vias.append(" | ");
-				vias.append("[").append(i++).append("] ").append(it.next());
+			// Only emit this BLADE-chain diagnostic when the upstream is
+			// actually a prior BLADE service (i.e. X-Vorpal-ID is present).
+			// For external upstreams the line is just `vorpalOrigin=null …`
+			// noise on every call.
+			if (vorpalOrigin != null) {
+				StringBuilder vias = new StringBuilder();
+				java.util.ListIterator<String> it = request.getHeaders("Via");
+				int i = 0;
+				while (it.hasNext()) {
+					if (vias.length() > 0) vias.append(" | ");
+					vias.append("[").append(i++).append("] ").append(it.next());
+				}
+				sipLogger.finer(request, "iRouter vorpalOrigin=" + vorpalOrigin
+						+ " initialRemoteAddr=" + request.getInitialRemoteAddr()
+						+ " remoteAddr=" + request.getRemoteAddr()
+						+ " via=" + vias);
 			}
-			sipLogger.finer(request, "iRouter vorpalOrigin=" + vorpalOrigin
-					+ " initialRemoteAddr=" + request.getInitialRemoteAddr()
-					+ " remoteAddr=" + request.getRemoteAddr()
-					+ " via=" + vias);
 		}
 
 		// Chain every pipeline step; each runs after the previous completes.

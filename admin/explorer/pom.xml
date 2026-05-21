@@ -16,7 +16,7 @@
 	<name>BLADE Admin Explorer</name>
 
 	<build>
-		<finalName>vorpal-blade-admin-explorer</finalName>
+		<finalName>explorer</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

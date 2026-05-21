@@ -49,7 +49,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-admin-flow</finalName>
+		<finalName>flow</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

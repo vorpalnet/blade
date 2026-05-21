@@ -559,6 +559,26 @@ function orderedPropertyNames(properties) {
     return constNames.concat(others);
 }
 
+/// Same shape as orderedPropertyNames, but preserves the original
+/// JSON's key order for keys that appeared in the source object —
+/// then appends any schema-only keys at the end. Without this, the
+/// form/JSON round-trip rewrites every object's property order to
+/// match the schema's declaration order, which is jarring for
+/// hand-edited files (e.g. moves `session` to position 2 because the
+/// schema lists it second). Const-valued properties (polymorphic
+/// discriminators) still float to the top, matching orderedPropertyNames.
+function mergedKeyOrder(properties, sourceObj) {
+    if (!sourceObj || typeof sourceObj !== 'object') return orderedPropertyNames(properties);
+    const schemaKeys = Object.keys(properties);
+    const schemaSet = new Set(schemaKeys);
+    const constNames = schemaKeys.filter(k => properties[k] && properties[k].const !== undefined);
+    const seen = new Set(constNames);
+    const sourceFirst = Object.keys(sourceObj).filter(k => schemaSet.has(k) && !seen.has(k));
+    sourceFirst.forEach(k => seen.add(k));
+    const trailing = schemaKeys.filter(k => !seen.has(k));
+    return constNames.concat(sourceFirst).concat(trailing);
+}
+
 /// Walk a dotted-bracket path (e.g. "pipeline[2].selectors[0].id") into a
 /// JSON object and return the value at that path, or undefined if any
 /// segment is missing. Used for features like array-item duplication.
@@ -2855,8 +2875,10 @@ function generateForm() {
 function getFormData() {
     const form = document.getElementById('dynamicForm');
 
-    // Recursively extract data from a container element
-    function extractData(container, schemaNode, debugPath = '') {
+    // Recursively extract data from a container element. sourceData is
+    // the original JSON value at this path (when known) — used to
+    // preserve the source file's key order on output.
+    function extractData(container, schemaNode, debugPath = '', sourceData = null) {
         if (!schemaNode) return null;
 
         // Deref handles both bare $ref and the victools $ref+properties idiom.
@@ -2939,7 +2961,8 @@ function getFormData() {
                     const keyInput = entry.querySelector('.map-key-input');
                     const key = keyInput ? keyInput.value.trim() : '';
                     if (key) {
-                        const valueData = extractData(entry, schemaNode.additionalProperties, `${debugPath}.${key}`);
+                        const childSource = (sourceData && typeof sourceData === 'object') ? sourceData[key] : null;
+                        const valueData = extractData(entry, schemaNode.additionalProperties, `${debugPath}.${key}`, childSource);
                         if (valueData !== null && (typeof valueData !== 'object' || Object.keys(valueData).length > 0)) {
                             result[key] = valueData;
                         }
@@ -2961,7 +2984,7 @@ function getFormData() {
                 // the JSON output — matches Jackson's convention and avoids
                 // the variant-merge shuffle that pushes discriminators to the
                 // tail of the property iteration order.
-                orderedPropertyNames(schemaNode.properties).forEach(propName => {
+                mergedKeyOrder(schemaNode.properties, sourceData).forEach(propName => {
                     let propSchema = schemaNode.properties[propName];
                     const propTitle = propSchema.title || propName;
 
@@ -3000,6 +3023,7 @@ function getFormData() {
                             ':scope > .collapsible-section, ' +
                             ':scope > div > .collapsible-section, ' +
                             ':scope > .form-layout-group > .collapsible-section, ' +
+                            ':scope > div > .form-layout-group > .collapsible-section, ' +
                             ':scope > .form-section > .form-section-body > .collapsible-section, ' +
                             ':scope > .form-section > .form-section-body > .form-layout-group > .collapsible-section');
                         sections.forEach(section => {
@@ -3015,7 +3039,8 @@ function getFormData() {
                         });
 
                         if (targetContainer) {
-                            const propData = extractData(targetContainer, propSchema, `${debugPath}.${propName}`);
+                            const childSource = (sourceData && typeof sourceData === 'object') ? sourceData[propName] : null;
+                            const propData = extractData(targetContainer, propSchema, `${debugPath}.${propName}`, childSource);
                             if (propData !== null && (typeof propData !== 'object' || Object.keys(propData).length > 0 || Array.isArray(propData))) {
                                 result[propName] = propData;
                             }
@@ -3023,10 +3048,15 @@ function getFormData() {
                     } else {
                         // Primitive types - look for form-group with matching label
                         // Note: form-groups might be inside a wrapper div due to createObjectGroup structure
+                        // createObjectGroup wraps fields in an intermediate .object-content
+                        // div before createCollapsibleSection wraps that in .collapsible-content.
+                        // The `:scope > div >` variants reach through that wrapper; without
+                        // them, primitives inside x-form-groups silently round-trip to nothing.
                         const formGroups = searchContainer.querySelectorAll(
                             ':scope > .form-group, :scope > .checkbox-group, ' +
                             ':scope > div > .form-group, :scope > div > .checkbox-group, ' +
                             ':scope > .form-layout-group > .form-group, :scope > .form-layout-group > .checkbox-group, ' +
+                            ':scope > div > .form-layout-group > .form-group, :scope > div > .form-layout-group > .checkbox-group, ' +
                             ':scope > .form-section > .form-section-body > .form-group, ' +
                             ':scope > .form-section > .form-section-body > .checkbox-group, ' +
                             ':scope > .form-section > .form-section-body > .form-layout-group > .form-group, ' +
@@ -3140,7 +3170,8 @@ function getFormData() {
                     const typeVal = typeInput ? typeInput.value : null;
                     itemSchemaNode = resolveOneOf(itemSchemaNode, typeVal ? { type: typeVal } : null);
                 }
-                const itemData = extractData(item, itemSchemaNode, `${debugPath}[${idx}]`);
+                const itemSource = Array.isArray(sourceData) ? sourceData[idx] : null;
+                const itemData = extractData(item, itemSchemaNode, `${debugPath}[${idx}]`, itemSource);
                 if (itemData !== null) {
                     result.push(itemData);
                 }
@@ -3163,7 +3194,7 @@ function getFormData() {
     const result = {};
 
     if (schema && schema.properties) {
-        orderedPropertyNames(schema.properties).forEach(propName => {
+        mergedKeyOrder(schema.properties, currentData).forEach(propName => {
             let propSchema = schema.properties[propName];
             const propTitle = propSchema.title || propName;
 
@@ -3216,7 +3247,8 @@ function getFormData() {
                 if (targetSection) {
                     const content = targetSection.querySelector('.collapsible-content');
                     if (content) {
-                        const propData = extractData(content, propSchema, propName);
+                        const childSource = (currentData && typeof currentData === 'object') ? currentData[propName] : null;
+                        const propData = extractData(content, propSchema, propName, childSource);
                         if (propData !== null && (typeof propData !== 'object' || Object.keys(propData).length > 0 || Array.isArray(propData))) {
                             result[propName] = propData;
                         }

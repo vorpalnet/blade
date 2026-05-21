@@ -400,7 +400,12 @@
 					<artifactId>maven-war-plugin</artifactId>
 					<version>${maven-war-plugin.version}</version>
 					<configuration>
-						<warName>${project.artifactId}</warName>
+						<!-- WAR filename follows finalName so it matches the context-root.
+						     Each child WAR pom sets finalName to its <wls:context-root>
+						     value (e.g. configurator → configurator.war, hold → hold.war).
+						     Customers prefer short context-matching names over the long
+						     artifactId-based names (e.g. vorpal-blade-admin-configurator.war). -->
+						<warName>${project.build.finalName}</warName>
 						<failOnMissingWebXml>false</failOnMissingWebXml>
 						<!-- Include only the framework JAR; 3rd-party JARs come from the shared library -->
 						<packagingExcludes>%regex[WEB-INF/lib/(?!vorpal-blade-library-framework).*\.jar]</packagingExcludes>
@@ -504,11 +509,9 @@
 			     This re-syncs the exploded lib/ from the WAR so deploying
 			     the exploded directory works the same as deploying the WAR.
 
-			     The packaged WAR's filename follows the war-plugin's warName
-			     setting (above: ${project.artifactId}.war), while the exploded
-			     directory uses Maven's default finalName. Services set a short
-			     finalName (e.g. proxy-registrar) so the two differ — this script
-			     addresses both explicitly. -->
+			     Both the WAR filename and the exploded directory derive from
+			     finalName (warName=${project.build.finalName} above), so they
+			     share a basename. -->
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>exec-maven-plugin</artifactId>
@@ -523,7 +526,7 @@
 							<arguments>
 								<argument>-c</argument>
 								<argument>
-WARFILE="${project.build.directory}/${project.artifactId}.war";
+WARFILE="${project.build.directory}/${project.build.finalName}.war";
 EXPLODED="${project.build.directory}/${project.build.finalName}";
 if [ -f "$WARFILE" ] &amp;&amp; [ -d "$EXPLODED/WEB-INF/lib" ]; then
   rm -rf "$EXPLODED/WEB-INF/lib";
@@ -575,6 +578,11 @@ fi
 			<id>analytics</id>
 			<activation><property><name>!skip.analytics</name></property></activation>
 			<modules><module>services/analytics</module></modules>
+		</profile>
+		<profile>
+			<id>context</id>
+			<activation><property><name>!skip.context</name></property></activation>
+			<modules><module>services/context</module></modules>
 		</profile>
 		<profile>
 			<id>hold</id>

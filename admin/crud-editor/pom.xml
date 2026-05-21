@@ -25,7 +25,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-admin-crud-editor</finalName>
+		<finalName>crud-editor</finalName>
 	</build>
 
 </project>

@@ -23,6 +23,7 @@
 	</dependencies>
 
 	<build>
+		<finalName>test-uas</finalName>
 	</build>
 
 </project>

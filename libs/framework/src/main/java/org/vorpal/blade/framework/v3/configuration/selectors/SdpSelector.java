@@ -49,7 +49,8 @@ public class SdpSelector extends Selector implements Serializable {
 
 		Logger sipLogger = SettingsManager.getSipLogger();
 		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer("SdpSelector[" + id + "] field=" + attribute + " value=" + raw);
+			sipLogger.finer(ctx != null ? ctx.getRequest() : null,
+					"SdpSelector[" + id + "] field=" + attribute + " value=" + raw);
 		}
 	}
 

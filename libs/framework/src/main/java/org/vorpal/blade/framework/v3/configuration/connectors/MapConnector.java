@@ -46,10 +46,11 @@ public class MapConnector extends Connector implements Serializable {
 		Logger sipLogger = SettingsManager.getSipLogger();
 		if (keyExpression == null) return CompletableFuture.completedFuture(null);
 
+		javax.servlet.sip.SipServletRequest sipReq = ctx.getRequest();
 		String key = ctx.resolve(keyExpression);
 		if (key == null || key.equals(keyExpression)) {
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("MapConnector[" + id + "] key resolved to null; skipping");
+				sipLogger.finer(sipReq, "MapConnector[" + id + "] key resolved to null; skipping");
 			}
 			return CompletableFuture.completedFuture(null);
 		}
@@ -57,13 +58,13 @@ public class MapConnector extends Connector implements Serializable {
 		Map<String, String> matched = entries.get(key);
 		if (matched == null) {
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("MapConnector[" + id + "] no entry for key=" + key);
+				sipLogger.finer(sipReq, "MapConnector[" + id + "] no entry for key=" + key);
 			}
 			return CompletableFuture.completedFuture(null);
 		}
 
 		if (sipLogger.isLoggable(Level.FINER)) {
-			sipLogger.finer("MapConnector[" + id + "] matched key=" + key + " → " + matched.keySet());
+			sipLogger.finer(sipReq, "MapConnector[" + id + "] matched key=" + key + " → " + matched.keySet());
 		}
 
 		if (selectors == null || selectors.isEmpty()) {

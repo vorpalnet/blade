@@ -30,7 +30,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-admin-watcher</finalName>
+		<finalName>watcher</finalName>
 	</build>
 
 </project>

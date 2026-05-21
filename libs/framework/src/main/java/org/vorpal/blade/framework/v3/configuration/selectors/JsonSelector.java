@@ -60,10 +60,22 @@ public class JsonSelector extends Selector implements Serializable {
 			store(ctx, id, raw);
 
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("JsonSelector[" + id + "] path=" + attribute + " value=" + raw);
+				sipLogger.finer(ctx != null ? ctx.getRequest() : null,
+						"JsonSelector[" + id + "] path=" + attribute + " value=" + raw);
+			}
+		} catch (com.jayway.jsonpath.PathNotFoundException e) {
+			// Path absent in the document — common for optional fields whose
+			// presence varies with the upstream's response shape (e.g. HUCS
+			// `detail.actionBasis` only appears on `block` verdicts). Not a
+			// failure; downgrade to FINER so it doesn't pollute the WARNING
+			// channel on every otherwise-clean request.
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(ctx != null ? ctx.getRequest() : null,
+						"JsonSelector[" + id + "] path absent: " + attribute);
 			}
 		} catch (Exception e) {
-			sipLogger.warning("JsonSelector[" + id + "] failed: " + e.getMessage());
+			sipLogger.warning(ctx != null ? ctx.getRequest() : null,
+					"JsonSelector[" + id + "] failed: " + e.getMessage());
 		}
 	}
 

@@ -73,6 +73,7 @@ public class JdbcConnector extends Connector implements Serializable {
 		final String connectorId = id;
 		final Logger sipLogger = SettingsManager.getSipLogger();
 
+		final javax.servlet.sip.SipServletRequest sipReq = ctx.getRequest();
 		// Resolve the SQL on the calling thread (cheap) but execute the query
 		// on the DB executor so the SIP container thread is released.
 		final String sql;
@@ -84,7 +85,7 @@ public class JdbcConnector extends Connector implements Serializable {
 			}
 			sql = ctx.resolve(cachedQuery);
 		} catch (Exception e) {
-			sipLogger.warning("JdbcConnector[" + connectorId + "] template load failed: " + e.getMessage());
+			sipLogger.warning(sipReq, "JdbcConnector[" + connectorId + "] template load failed: " + e.getMessage());
 			return CompletableFuture.completedFuture(null);
 		}
 
@@ -108,18 +109,18 @@ public class JdbcConnector extends Connector implements Serializable {
 					}
 				}
 			} catch (Exception e) {
-				sipLogger.warning("JdbcConnector[" + connectorId + "] query failed: " + e.getMessage());
+				sipLogger.warning(sipReq, "JdbcConnector[" + connectorId + "] query failed: " + e.getMessage());
 			}
 			return null;
 		}, Executors.DB).thenAccept(row -> {
 			if (row == null) {
 				if (sipLogger.isLoggable(Level.FINER)) {
-					sipLogger.finer("JdbcConnector[" + connectorId + "] no rows");
+					sipLogger.finer(sipReq, "JdbcConnector[" + connectorId + "] no rows");
 				}
 				return;
 			}
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("JdbcConnector[" + connectorId + "] row=" + row.keySet());
+				sipLogger.finer(sipReq, "JdbcConnector[" + connectorId + "] row=" + row.keySet());
 			}
 			runSelectors(ctx, row);
 		});

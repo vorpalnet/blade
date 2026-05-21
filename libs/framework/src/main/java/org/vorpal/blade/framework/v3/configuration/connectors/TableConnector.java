@@ -87,8 +87,9 @@ public class TableConnector extends Connector implements Serializable {
 				if (match == null) continue;
 
 				if (sipLogger != null && sipLogger.isLoggable(Level.FINE)) {
-					sipLogger.fine("TableConnector[" + id + "] matched key via "
-							+ table.getKeyExpression());
+					sipLogger.fine(ctx.getRequest(),
+							"TableConnector[" + id + "] matched key via "
+									+ table.getKeyExpression());
 				}
 				for (Map.Entry<String, String> e : match.getExtras().entrySet()) {
 					ctx.put(e.getKey(), e.getValue());
@@ -97,12 +98,14 @@ public class TableConnector extends Connector implements Serializable {
 			}
 
 			if (sipLogger != null && sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("TableConnector[" + id + "] no match across " + tables.size()
-						+ " table(s)");
+				sipLogger.finer(ctx.getRequest(),
+						"TableConnector[" + id + "] no match across " + tables.size()
+								+ " table(s)");
 			}
 		} catch (Exception e) {
 			if (sipLogger != null) {
-				sipLogger.warning("TableConnector[" + id + "] failed: " + e.getMessage());
+				sipLogger.warning(ctx.getRequest(),
+						"TableConnector[" + id + "] failed: " + e.getMessage());
 			}
 		}
 		return CompletableFuture.completedFuture(null);

@@ -5,8 +5,8 @@ BLADE deploys in **four tiers**, each with its own scope. Once you see the pictu
 ```
 OCCAS Domain
 ├── approuter/               ← (1) fsmar.jar / fsmar3.jar  [engine-tier reboot]
-├── AdminServer              ← (2) shared library  + (3) admin WARs
-└── Cluster (engine tier)    ← (2) shared library  + (4) services EAR
+├── AdminServer              ← (2) shared library  + (3) admin/*.war
+└── Cluster (engine tier)    ← (2) shared library  + (4) services/*.war
 ```
 
 The shared library appears in two rows on purpose: it is **deployed to both AdminServer and the cluster**, because both sets of apps reference it.
@@ -41,64 +41,75 @@ A WebLogic shared library with `Extension-Name: vorpal-blade`, containing every 
 - **Why it's deployed twice:** WebLogic shared libraries are scoped to deployment targets. An admin app on AdminServer can only resolve a library that's also deployed to AdminServer, and the same goes for the cluster.
 - **Updating:** bumping a 3rd-party version requires one shared-library redeploy, not a rebuild of every service.
 
-### 3. Admin apps — `vorpal-blade-admin-*.war`
+### 3. Admin apps — `dist/<ver>/admin/*.war`
 
-Management tools that run **only on AdminServer**. Each is a skinny WAR (no JARs in `WEB-INF/lib/`) that `<library-ref>`s the shared library.
+Management tools that run **only on AdminServer**. Each is a skinny WAR (no JARs in `WEB-INF/lib/`) that `<library-ref>`s the shared library. WAR filenames match the context-root so an operator looking at `/configurator` in a browser sees `configurator.war` on disk.
 
-| App | Context root | Purpose |
-|---|---|---|
-| console | `/blade` | Navigation shell — sidebar links to every other admin app |
-| configurator | `/configurator` | JSON Schema-based config editor, JMX-backed |
-| flow | `/flow` | Visual FSMAR diagram editor (mxGraph) |
-| tuning | `/tuning` | JVM / SIP / OCCAS tuning knobs |
-| file-manager | `/files` | WebSocket-based config file management |
-| explorer | `/explorer` | Experimental EasyUI forms |
-| watcher | `/watcher` | Log/event monitor |
-| javadoc | `/javadoc` | Browsable Javadoc with UML diagrams |
+| Source module | WAR filename | Context root | Purpose |
+|---|---|---|---|
+| `admin/console` | `blade.war` | `/blade` | Navigation shell — sidebar links to every other admin app |
+| `admin/configurator` | `configurator.war` | `/configurator` | JSON Schema-based config editor, JMX-backed |
+| `admin/flow` | `flow.war` | `/flow` | Visual FSMAR diagram editor (mxGraph) |
+| `admin/tuning` | `tuning.war` | `/tuning` | JVM / SIP / OCCAS tuning knobs |
+| `admin/file-manager` | `files.war` | `/files` | WebSocket-based config file management |
+| `admin/explorer` | `explorer.war` | `/explorer` | Experimental EasyUI forms |
+| `admin/watcher` | `watcher.war` | `/watcher` | Log/event monitor |
+| `admin/crud-editor` | `crud-editor.war` | `/crud-editor` | CRUD service config editor |
+| `javadoc` | `javadoc.war` | `/javadoc` | Browsable Javadoc with UML diagrams |
 
 - **Why AdminServer only:** admin apps expose management endpoints; deploying them to the cluster would expose those endpoints on every engine node and duplicate state.
 
-### 4. Services — `vorpal-blade-services-<profile>.ear`
+### 4. Services + test apps — `dist/<ver>/services/*.war`
 
-The production SIP applications themselves (ACL, Analytics, Hold, Proxy-Registrar, Proxy-Router, etc.), packaged as a single EAR named after the build profile. Each WAR inside bundles the framework JAR and references the shared library for 3rd-party code.
+The production SIP applications themselves (ACL, Analytics, Hold, Proxy-Registrar, Proxy-Router, etc.) plus the test apps (`test-uac`, `test-uas`, `test-b2bua`). Each WAR bundles the framework JAR and references the shared library for 3rd-party code. WAR filenames match the context-root (`hold.war`, `proxy-router.war`, `test-uac.war`).
 
-- **Artifact:** `dist/<ver>-<build>/vorpal-blade-services-<profile>.ear` (e.g. `-production.ear`, `-minimal.ear`)
+- **Artifacts:** every WAR under `dist/<ver>-<build>/services/`
 - **Goes to:** the **cluster only** (engine tier).
 - **Why cluster only:** services handle live SIP traffic; AdminServer doesn't.
-- **Which profile:** chosen at build time (`./build.sh production`), recorded in `build-profiles/deploy/<env>.conf` so `./deploy` knows which EAR to grab.
+- **Test apps live here too:** they target the cluster just like real services — no need for a separate tier.
+- **EAR (currently disabled):** the historical packaging was a single `vorpal-blade-services-<profile>.ear`. While that's offline (see `services/pom.xml`), services are deployed as individual WARs.
 
 ## Quick start
 
 ```bash
-./build.sh production                 # produce dist/<ver>-<build>/
+./build.sh production                 # produce dist/<ver>-<build>/{admin,services}/
 cp build-profiles/deploy/production.secret.example \
    build-profiles/deploy/production.secret
 chmod 600 build-profiles/deploy/production.secret
 $EDITOR build-profiles/deploy/production.secret        # fill in wls.password
-$EDITOR build-profiles/deploy/production.conf          # adjust host, targets, approuter.dir
-./deploy.sh production --dry-run      # sanity check
-./deploy.sh production                # deploy all four tiers
+$EDITOR build-profiles/deploy/production.conf          # adminurl, user, approuter.dir
+
+./deploy.sh production shared --dry-run                       # sanity check
+./deploy.sh production shared                                 # WebLogic shared library
+./deploy.sh production admin    AdminServer                   # all admin/*.war → AdminServer
+./deploy.sh production services BEA_ENGINE_TIER_CLUST         # all services/*.war → your cluster
+./deploy.sh production fsmar                                  # FSMAR jars → approuter/
 ```
 
-After `./deploy.sh production` completes, **restart the engine tier** so FSMAR picks up the new `fsmar.jar`.
+After the FSMAR step, **restart the engine tier** so the new `fsmar.jar` is picked up.
 
 ## `./deploy.sh` reference
 
 ```
-./deploy.sh <env> [tier|action] [--build VERSION] [--dry-run]
+./deploy.sh <env> <subdir> [target] [action] [--build VER] [--dry-run]
 ```
+
+`<subdir>` is what you'd run for that step — it maps directly to `dist/<ver>/<subdir>/`. `<target>` is the WebLogic deploy target name. `<action>` defaults to `deploy`.
 
 | Invocation | Effect |
 |---|---|
-| `./deploy.sh production` | All four tiers in order: shared-lib → admin → services → fsmar |
-| `./deploy.sh production shared-lib` | Just the shared library (both AdminServer and cluster) |
-| `./deploy.sh production admin` | Every `vorpal-blade-admin-*.war` in dist, to AdminServer |
-| `./deploy.sh production services` | The services EAR to the cluster |
-| `./deploy.sh production fsmar` | `cp`/`scp` `fsmar.jar` to `approuter/` |
-| `./deploy.sh production undeploy` | Reverse order — undeploy all four tiers |
-| `./deploy.sh production status` | `list-apps` against the AdminServer |
-| `./deploy.sh production --build 2.9.5-320` | Pin to a specific dist build (default: newest) |
-| `./deploy.sh production --dry-run` | Print what would happen; run nothing |
+| `./deploy.sh production shared` | WebLogic shared library → both AdminServer and the cluster (target read from `wls.targets.both` in the conf) |
+| `./deploy.sh production admin AdminServer` | Every `dist/<ver>/admin/*.war` to AdminServer |
+| `./deploy.sh production services BEA_ENGINE_TIER_CLUST` | Every `dist/<ver>/services/*.war` (services + test apps) to your cluster |
+| `./deploy.sh production fsmar` | `cp`/`scp` FSMAR jars to `approuter/` (path from `approuter.dir` / `ssh.host` in the conf) |
+| `./deploy.sh production admin AdminServer undeploy` | Tear down every admin app from AdminServer |
+| `./deploy.sh production services BEA_ENGINE_TIER_CLUST status` | `list-apps` against WebLogic |
+| `./deploy.sh production admin AdminServer --build 2.9.5-320` | Pin to a specific dist build (default: newest) |
+| `./deploy.sh production admin AdminServer --dry-run` | Print what would happen; run nothing |
+
+The target argument is **required** for `admin` and `services` — no defaults, so there's no surprise about which WebLogic target gets hit. `shared` and `fsmar` derive their target from the conf file or from disk paths, so they don't take one.
+
+Each WAR is registered in WebLogic with `name = basename(war)` — so `configurator.war` becomes the app `configurator`. The deploy app name matches the context-root, which matches the WAR filename, which matches what you see in the browser.
 
 ### Deploy profiles
 
@@ -146,17 +157,19 @@ The JARs can be updated in place and re-activated by a rolling engine-tier resta
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `NoClassDefFoundError` on an admin app | Shared library not deployed to AdminServer | `./deploy.sh <env> shared-lib` |
-| `NoClassDefFoundError` on a service in the cluster | Shared library not deployed to the cluster | `./deploy.sh <env> shared-lib` (both targets) |
+| `NoClassDefFoundError` on an admin app | Shared library not deployed to AdminServer | `./deploy.sh <env> shared` |
+| `NoClassDefFoundError` on a service in the cluster | Shared library not deployed to the cluster | `./deploy.sh <env> shared` (`wls.targets.both` covers both) |
 | `ClassCastException: class X cannot be cast to class X` | Two copies of a class are visible — usually because a service WAR bundles a JAR that's also in the shared library | Rebuild the service WAR; check its `pom.xml` excludes 3rd-party JARs via `packagingExcludes` |
-| `-Pdeploy` fails with "wls.targets is not set" | The old broken `AdminServer` default was removed (2.9.6) | Use `./deploy.sh <env> services`, or pass `-Dwls.targets=<cluster>` explicitly |
+| `Target required for 'admin'` from `deploy.sh` | The target arg is mandatory for `admin`/`services` — no default | `./deploy.sh <env> admin AdminServer` (or whatever your admin target is called) |
 | `REFUSING: <env>.secret is not gitignored` | The secret file is tracked by git | Add to `.gitignore` and `git rm --cached <env>.secret` |
 | FSMAR config changes ignored | Engine tier not restarted | Rolling restart of the engine tier |
-| Services EAR deploys to AdminServer | `wls.targets.cluster` misconfigured in deploy profile | Check `build-profiles/deploy/<env>.conf` |
+| Service deployed to wrong target | Wrong target passed on the command line | Re-run with the correct target; the conf file no longer defaults a target for the generic admin/services tiers |
 
 ## Appendix: artifact-to-target map
 
 This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The static view:
+
+**Dist root (libraries):**
 
 | Artifact | Tier | Target | Purpose |
 |---|---|---|---|
@@ -164,12 +177,24 @@ This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The s
 | `vorpal-blade-library-fsmar3.jar` | fsmar | `approuter/` | SIP application router — v3 (reboot engine tier) |
 | `vorpal-blade-library-shared.war` | shared-lib | AdminServer + cluster | WebLogic shared library (3rd-party JARs) |
 | `vorpal-blade-library-framework.jar` | framework | bundled in WARs | BLADE framework library (not deployed directly) |
-| `vorpal-blade-admin-console.war` | admin | AdminServer | Admin dashboard (`/blade`) |
-| `vorpal-blade-admin-configurator.war` | admin | AdminServer | Config editor (`/configurator`) |
-| `vorpal-blade-admin-flow.war` | admin | AdminServer | FSMAR diagram editor (`/flow`) |
-| `vorpal-blade-admin-tuning.war` | admin | AdminServer | Tuning UI (`/tuning`) |
-| `vorpal-blade-admin-file-manager.war` | admin | AdminServer | File manager (`/files`) |
-| `vorpal-blade-admin-explorer.war` | admin | AdminServer | Experimental UI (`/explorer`) |
-| `vorpal-blade-admin-watcher.war` | admin | AdminServer | Log/event monitor (`/watcher`) |
-| `vorpal-blade-javadoc.war` | admin | AdminServer | Javadoc (`/javadoc`) |
-| `vorpal-blade-services-<profile>.ear` | services | cluster | Services EAR (one per build profile) |
+
+**`dist/<ver>/admin/`** (deploy to AdminServer):
+
+| Artifact | Context |
+|---|---|
+| `blade.war` | `/blade` (admin console) |
+| `configurator.war` | `/configurator` |
+| `flow.war` | `/flow` |
+| `tuning.war` | `/tuning` |
+| `files.war` | `/files` (file-manager) |
+| `explorer.war` | `/explorer` |
+| `watcher.war` | `/watcher` |
+| `crud-editor.war` | `/crud-editor` |
+| `javadoc.war` | `/javadoc` |
+
+**`dist/<ver>/services/`** (deploy to the cluster):
+
+| Artifact | Notes |
+|---|---|
+| `<service>.war` | one WAR per SIP service (`hold.war`, `proxy-router.war`, etc.) — context-root matches filename |
+| `test-uac.war`, `test-uas.war`, `test-b2bua.war` | test apps (cluster, same as services) |

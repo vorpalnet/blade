@@ -31,7 +31,8 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-admin-console</finalName>
+		<!-- WAR name matches context-root /blade (see weblogic.xml). -->
+		<finalName>blade</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

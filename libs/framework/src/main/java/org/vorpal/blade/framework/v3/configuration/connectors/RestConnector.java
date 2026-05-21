@@ -184,41 +184,42 @@ public class RestConnector extends Connector implements Serializable {
 						.build();
 			}
 
+			javax.servlet.sip.SipServletRequest sipReq = ctx.getRequest();
 			if (sipLogger.isLoggable(Level.FINER)) {
-				sipLogger.finer("RestConnector[" + connectorId + "] " + method + " " + resolvedUrl);
+				sipLogger.finer(sipReq, "RestConnector[" + connectorId + "] " + method + " " + resolvedUrl);
 			}
 
 			HttpRequest httpReq = reqBuilder.build();
 			if (sipLogger.isLoggable(Level.FINEST)) {
-				sipLogger.finest(formatHttpRequest(connectorId, method, resolvedUrl, httpReq, resolvedBody));
+				sipLogger.finest(sipReq, formatHttpRequest(connectorId, method, resolvedUrl, httpReq, resolvedBody));
 			}
 
 			return httpClient.sendAsync(httpReq, HttpResponse.BodyHandlers.ofString())
 					.thenAccept(httpResp -> {
 						try {
 							if (sipLogger.isLoggable(Level.FINEST)) {
-								sipLogger.finest(formatHttpResponse(connectorId, httpResp));
+								sipLogger.finest(sipReq, formatHttpResponse(connectorId, httpResp));
 							}
 							if (httpResp.statusCode() < 200 || httpResp.statusCode() >= 300) {
-								sipLogger.warning("RestConnector[" + connectorId + "] HTTP "
+								sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] HTTP "
 										+ httpResp.statusCode());
 								return;
 							}
 							runSelectors(ctx, httpResp.body());
 						} catch (Exception e) {
-							sipLogger.warning("RestConnector[" + connectorId + "] response handling failed: "
+							sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] response handling failed: "
 									+ e.getMessage());
 						}
 					})
 					.exceptionally(t -> {
-						sipLogger.warning("RestConnector[" + connectorId + "] request failed: "
+						sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] request failed: "
 								+ t.getMessage());
 						return null;
 					});
 
 		} catch (Exception e) {
-			sipLogger.warning("RestConnector[" + connectorId + "] failed to build request: "
-					+ e.getMessage());
+			sipLogger.warning(ctx != null ? ctx.getRequest() : null,
+					"RestConnector[" + connectorId + "] failed to build request: " + e.getMessage());
 			return CompletableFuture.completedFuture(null);
 		}
 	}
