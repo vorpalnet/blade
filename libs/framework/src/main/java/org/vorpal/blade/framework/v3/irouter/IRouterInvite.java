@@ -14,6 +14,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.connectors.Connector;
 import org.vorpal.blade.framework.v3.configuration.routing.ConditionalHeader;
@@ -49,16 +50,13 @@ public class IRouterInvite extends Callflow {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-		// Defensive: a null `config` means the SettingsManager could not
-		// produce an IRouterConfig from the live JSON — most commonly a
-		// schema-version drift (e.g. an old v2 file lingering after a v3
-		// deploy). Without a config we have no pipeline to run; the SIP-
-		// correct answer is 503 with a clear log line, not an opaque NPE
-		// stack trace dumped into the SIP response body.
+		// Defensive: a null `config` means the SettingsManager couldn't
+		// produce an IRouterConfig from the live JSON. Without a config
+		// we have no pipeline to run; respond 503 with a log line that
+		// points at the actual files an operator needs to inspect, not
+		// an opaque NPE stack trace in the SIP body.
 		if (config == null) {
-			sipLogger.severe(request, "iRouter config is null — likely a config parse failure. "
-					+ "Check <domain>/config/custom/vorpal/<context-root>.json against the "
-					+ "regenerated _schemas/<context-root>.jschema for schema-version drift.");
+			sipLogger.severe(request, buildNullConfigMessage());
 			safeSend(request, 503);
 			return;
 		}
@@ -138,6 +136,38 @@ public class IRouterInvite extends Callflow {
 	/// formatting of the SIP request itself.
 	protected void enrichContext(SipServletRequest request, Context ctx) {
 		// no-op by default
+	}
+
+	/// Compose the diagnostic for the null-config 503. Points the operator
+	/// at the three live-config tiers that `Settings.reload()` merges, with
+	/// the actual app / cluster / server names from `SettingsManager`
+	/// filled in so the suggested paths are copy-pasteable. The real
+	/// root-cause line is the Jackson SEVERE that `Settings.reload()`'s
+	/// catch block logged just above this one — typically an
+	/// `Already had POJO for id …` from a duplicate entry across tiers,
+	/// or a `UnrecognizedPropertyException` from a stale field name.
+	private static String buildNullConfigMessage() {
+		String app = SettingsManager.getApplicationName();
+		String cluster = SettingsManager.getClusterName();
+		String server = SettingsManager.getServerName();
+		StringBuilder sb = new StringBuilder(
+				"iRouter config is null — config did not deserialize. Read the SEVERE Jackson "
+				+ "exception logged above this line for the root cause, then check the live-config "
+				+ "tiers (all three are merged at load time; a stale or duplicate entry in ANY "
+				+ "tier breaks the whole load):\n");
+		sb.append("  ./config/custom/vorpal/").append(app).append(".json  (domain)\n");
+		if (cluster != null) {
+			sb.append("  ./config/custom/vorpal/_clusters/").append(cluster)
+					.append("/").append(app).append(".json  (cluster)\n");
+		}
+		if (server != null) {
+			sb.append("  ./config/custom/vorpal/_servers/").append(server)
+					.append("/").append(app).append(".json  (server)\n");
+		}
+		sb.append("The cluster and server tiers are usually empty — operators only need them when ")
+				.append("intentionally overriding the domain config. Stale leftovers there (e.g. ")
+				.append("from earlier Configurator publishes) cause silent merge corruption.");
+		return sb.toString();
 	}
 
 	private static CompletableFuture<Void> safeInvoke(Connector connector, Context ctx) {
