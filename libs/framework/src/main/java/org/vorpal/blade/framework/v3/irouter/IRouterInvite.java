@@ -49,6 +49,26 @@ public class IRouterInvite extends Callflow {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
+		// Defensive: a null `config` means the SettingsManager could not
+		// produce an IRouterConfig from the live JSON — most commonly a
+		// schema-version drift (e.g. an old v2 file lingering after a v3
+		// deploy). Without a config we have no pipeline to run; the SIP-
+		// correct answer is 503 with a clear log line, not an opaque NPE
+		// stack trace dumped into the SIP response body.
+		if (config == null) {
+			sipLogger.severe(request, "iRouter config is null — likely a config parse failure. "
+					+ "Check <domain>/config/custom/vorpal/<context-root>.json against the "
+					+ "regenerated _schemas/<context-root>.jschema for schema-version drift.");
+			safeSend(request, 503);
+			return;
+		}
+		if (config.getPipeline() == null || config.getPipeline().isEmpty()) {
+			sipLogger.severe(request, "iRouter config has no pipeline — pipeline JSON is "
+					+ "missing or empty in the live config file");
+			safeSend(request, 503);
+			return;
+		}
+
 		Context ctx = new Context(request);
 
 		// Subclass extension point: write any pre-pipeline values into ctx
