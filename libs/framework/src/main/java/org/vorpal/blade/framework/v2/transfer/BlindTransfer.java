@@ -103,7 +103,7 @@ alice <-- blade                 : 200 OK
           blade ->        carol : CANCEL
           blade <--       carol : 487 Request Terminated
           blade ->  bob         : NOTIFY
-                                  note right: Event: refer \nSubscription-State: terminated;reason=giveup \nSIP/2.0 200 OK
+                                  note right: Event: refer \nSubscription-State: terminated;reason=giveup \nSIP/2.0 487 Request Terminated
           blade <-- bob         : 200 OK
           blade <-  bob         : BYE
           blade --> bob         : 200 OK                                  
@@ -347,9 +347,10 @@ public class BlindTransfer extends Transfer {
 						sendRequest(transfereeResponse.createAck());
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck())); // transferee to
 																									// target
-						// Send the SIP/2.0 200 OK to the transferor (bob)
-						// Sometimes bob returns a 404 on the first notify, so we have to ignore him
-						if (referRequest.getSession().isValid() == true) { 
+						// Send the SIP/2.0 200 OK to the transferor (bob).
+						// Bob's REFER session can already be TERMINATED here if his UA 4xx'd the
+						// initial 100 Trying NOTIFY (RFC 3265 §3.2.4 terminates the subscription).
+						if (referRequest.getSession().isValid() == true) {
 							if (sendNotify) {
 								SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
 								notify200.setHeader(EVENT, "refer");
@@ -360,11 +361,11 @@ public class BlindTransfer extends Transfer {
 
 								sendRequest(notify200);
 							} else {
-								// Send a BYE to transferor (bob) if necessary
-								if (referRequest.getSession().isValid()) {
-									sendRequest(referRequest.getSession().createRequest(BYE));
-								}
+								sendRequest(referRequest.getSession().createRequest(BYE));
 							}
+						} else {
+							sipLogger.warning(referRequest,
+									"BlindTransfer.process - Cannot send terminating NOTIFY (success); bob's REFER session is invalid (likely 4xx to initial NOTIFY).");
 						}
 
 						// User is notified of a successful transfer
@@ -399,15 +400,21 @@ public class BlindTransfer extends Transfer {
 						sipLogger.finer("BlindTransfer.process - SettingsManager.sendEvent(referRequest); #5");
 						SettingsManager.sendEvent(referRequest);
 
-						// Instead of sending the failure notice, we pretend everything is successful so
-						// Bob will hang up
+						// reason=giveup tells Bob this was an early abandonment; the real status
+						// line lets his UA report the actual outcome.
 						if (sendNotify) {
-							SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
-							String sipFrag = OK_200;
-							notifyFailure.setHeader(EVENT, "refer");
-							notifyFailure.setHeader(SUBSCRIPTION_STATE, SUBSCRIPTION_TERMINATED_GIVEUP);
-							notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
-							sendRequest(notifyFailure);
+							if (referRequest.getSession().isValid()) {
+								SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
+								String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
+										+ targetResponse.getReasonPhrase();
+								notifyFailure.setHeader(EVENT, "refer");
+								notifyFailure.setHeader(SUBSCRIPTION_STATE, SUBSCRIPTION_TERMINATED_GIVEUP);
+								notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
+								sendRequest(notifyFailure);
+							} else {
+								sipLogger.warning(referRequest,
+										"BlindTransfer.process - Cannot send terminating NOTIFY (giveup); bob's REFER session is invalid (likely 4xx to initial NOTIFY).");
+							}
 						}
 
 					} else {
@@ -431,13 +438,18 @@ public class BlindTransfer extends Transfer {
 						aliceExpectation.clear();
 
 						if (sendNotify) {
-							SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
-							String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
-									+ targetResponse.getReasonPhrase();
-							notifyFailure.setHeader(EVENT, "refer");
-							notifyFailure.setHeader(SUBSCRIPTION_STATE, SUBSCRIPTION_TERMINATED_REJECTED);
-							notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
-							sendRequest(notifyFailure);
+							if (referRequest.getSession().isValid()) {
+								SipServletRequest notifyFailure = referRequest.getSession().createRequest(NOTIFY);
+								String sipFrag = "SIP/2.0 " + targetResponse.getStatus() + " "
+										+ targetResponse.getReasonPhrase();
+								notifyFailure.setHeader(EVENT, "refer");
+								notifyFailure.setHeader(SUBSCRIPTION_STATE, SUBSCRIPTION_TERMINATED_REJECTED);
+								notifyFailure.setContent(sipFrag.getBytes(), SIPFRAG);
+								sendRequest(notifyFailure);
+							} else {
+								sipLogger.warning(referRequest,
+										"BlindTransfer.process - Cannot send terminating NOTIFY (rejected); bob's REFER session is invalid (likely 4xx to initial NOTIFY).");
+							}
 						}
 					}
 
