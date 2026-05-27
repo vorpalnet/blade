@@ -348,8 +348,10 @@ public class BlindTransfer extends Transfer {
 						sendRequest(copyContent(transfereeResponse, targetResponse.createAck())); // transferee to
 																									// target
 						// Send the SIP/2.0 200 OK to the transferor (bob).
-						// Bob's REFER session can already be TERMINATED here if his UA 4xx'd the
-						// initial 100 Trying NOTIFY (RFC 3265 §3.2.4 terminates the subscription).
+						// Bob's REFER rides his existing INVITE dialog, so the session only goes
+						// TERMINATED once that dialog is torn down (Bob's BYE) - emptying the REFER
+						// subscription alone does not invalidate an INVITE-based session. If Bob
+						// hung up early, this session is already invalid, so skip the NOTIFY.
 						if (referRequest.getSession().isValid() == true) {
 							if (sendNotify) {
 								SipServletRequest notify200 = referRequest.getSession().createRequest(NOTIFY);
@@ -365,7 +367,7 @@ public class BlindTransfer extends Transfer {
 							}
 						} else {
 							sipLogger.warning(referRequest,
-									"BlindTransfer.process - Cannot send terminating NOTIFY (success); bob's REFER session is invalid (likely 4xx to initial NOTIFY).");
+									"BlindTransfer.process - Cannot send terminating NOTIFY (success); bob's INVITE dialog is already torn down (he likely sent BYE early).");
 						}
 
 						// User is notified of a successful transfer
@@ -413,7 +415,7 @@ public class BlindTransfer extends Transfer {
 								sendRequest(notifyFailure);
 							} else {
 								sipLogger.warning(referRequest,
-										"BlindTransfer.process - Cannot send terminating NOTIFY (giveup); bob's REFER session is invalid (likely 4xx to initial NOTIFY).");
+										"BlindTransfer.process - Cannot send terminating NOTIFY (giveup); bob's INVITE dialog is already torn down (he likely sent BYE early).");
 							}
 						}
 
@@ -448,7 +450,7 @@ public class BlindTransfer extends Transfer {
 								sendRequest(notifyFailure);
 							} else {
 								sipLogger.warning(referRequest,
-										"BlindTransfer.process - Cannot send terminating NOTIFY (rejected); bob's REFER session is invalid (likely 4xx to initial NOTIFY).");
+										"BlindTransfer.process - Cannot send terminating NOTIFY (rejected); bob's INVITE dialog is already torn down (he likely sent BYE early).");
 							}
 						}
 					}

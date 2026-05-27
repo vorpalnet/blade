@@ -29,7 +29,9 @@ public class TransferRequest implements Serializable {
 //	@Schema(description = "Transferee dialog (SipSession) matching attribute", defaultValue = "ABCD1234", nullable = true)
 	public DialogKey dialogKey;
 
-	@Schema(description = "Type of notification: none, async, callback, jms", defaultValue = "async", nullable = true)
+	@Schema(description = "Notification delivery settings. Set 'style' to none (immediate response), "
+			+ "async (hang until final response), callback (REST webhook), or jms (JMS queue); "
+			+ "optionally include uid, callbackName, or jmsQueueName.", nullable = true)
 	public Notification notification;
 
 //	public Transferee transferee;
