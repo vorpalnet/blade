@@ -36,6 +36,12 @@ let savedDataSnapshot = null;
 // Feature: Validation
 let validationErrors = new Map();
 
+// Initial selection driven by query string (?domain=…&schema=…&theme=…).
+// Read once at DOMContentLoaded; consumed and cleared after the target +
+// schema lists arrive, so they only apply on the first WebSocket handshake.
+let urlInitialDomain = null;
+let urlInitialSchema = null;
+
 // Feature: Jackson Identity References
 // Maps id strings to {path, object} for objects with an "id" field
 let identityRegistry = new Map();
@@ -43,8 +49,11 @@ let identityRegistry = new Map();
 // WebSocket Connection Management
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Get the context path from the current location
-    const contextPath = window.location.pathname.substring(0, window.location.pathname.indexOf('/', 1));
+    // Get the context path from the current location. The context-root is the
+    // path up to (but not including) the current file — works for both
+    // single-segment context roots (`/configurator`) and multi-segment ones
+    // (`/blade/configurator`) since we go to the last slash, not the first.
+    const contextPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
     const wsUrl = protocol + '//' + window.location.host + contextPath + '/websocket';
 
     updateWebSocketStatus('Connecting...', 'warning');
@@ -244,12 +253,27 @@ function handleTargetDirectoriesList(content) {
         targetDirectories = JSON.parse(content);
         populateTargetDirectoriesDropdown();
 
-        // Auto-select domain if available
-        const domain = targetDirectories.find(t => t.type === 'domain');
-        if (domain) {
-            document.getElementById('target-directory-select').value = domain.path;
-            onTargetDirectoryChange(domain.path);
+        // ?domain=… in the URL wins over the default domain auto-select.
+        // Match against path first, then displayName (case-insensitive),
+        // then type — whichever matches first.
+        let initial = null;
+        if (urlInitialDomain) {
+            const wanted = urlInitialDomain;
+            const wantedLc = wanted.toLowerCase();
+            initial = targetDirectories.find(t => t.path === wanted)
+                   || targetDirectories.find(t => (t.displayName || '').toLowerCase() === wantedLc)
+                   || targetDirectories.find(t => (t.type || '').toLowerCase() === wantedLc);
+            urlInitialDomain = null;
         }
+        if (!initial) {
+            initial = targetDirectories.find(t => t.type === 'domain');
+        }
+        if (initial) {
+            document.getElementById('target-directory-select').value = initial.path;
+            onTargetDirectoryChange(initial.path);
+        }
+
+        maybeAutoLoadFromUrl();
     } catch (e) {
         console.error('Error parsing target directories list:', e);
         showSchemaLoadStatus('Error loading target directories', 'error');
@@ -311,10 +335,33 @@ function handleSchemasList(content) {
     try {
         schemaRegistry = JSON.parse(content);
         populateSchemaDropdown();
+        maybeAutoLoadFromUrl();
     } catch (e) {
         console.error('Error parsing schemas list:', e);
         showSchemaLoadStatus('Error loading schema list', 'error');
     }
+}
+
+// Apply ?schema=… once both the schema list and the target directory have
+// arrived. Called from both handlers; whichever lands second triggers the
+// load. Self-clears so the URL only affects the initial render.
+function maybeAutoLoadFromUrl() {
+    if (!urlInitialSchema) return;
+    if (!selectedTargetDirectory) return;
+    if (!schemaRegistry || schemaRegistry.length === 0) return;
+
+    const wanted = urlInitialSchema;
+    const wantedLc = wanted.toLowerCase();
+    const entry = schemaRegistry.find(e => e.name === wanted)
+               || schemaRegistry.find(e => (e.name || '').toLowerCase() === wantedLc);
+    urlInitialSchema = null;
+    if (!entry) {
+        showSchemaLoadStatus('Schema "' + wanted + '" from URL not found', 'error');
+        return;
+    }
+    const select = document.getElementById('schema-select');
+    if (select) select.value = entry.name;
+    loadSchema(entry.name);
 }
 
 function populateSchemaDropdown() {
@@ -1950,6 +1997,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
         const requiredSet = new Set(Array.isArray(fieldSchema.required) ? fieldSchema.required : []);
         const sections = Array.isArray(fieldSchema['x-form-sections']) ? fieldSchema['x-form-sections'] : [];
         const groups = Array.isArray(fieldSchema['x-form-groups']) ? fieldSchema['x-form-groups'] : [];
+        const columnRows = Array.isArray(fieldSchema['x-form-columns']) ? fieldSchema['x-form-columns'] : [];
 
         // Fields claimed by any @FormSection render inside that section's
         // bordered container; everything else renders at the top level.
@@ -1957,10 +2005,20 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
         sections.forEach(s => (s.fields || []).forEach(f => fieldsInSections.add(f)));
 
         // Fields claimed by any @FormLayoutGroup render as a horizontal row;
-        // ungrouped fields render on their own line (full-width).
+        // ungrouped fields render on their own line (full-width). Flat rows
+        // (x-form-groups) and column rows (x-form-columns) share one contiguous
+        // group-index space so renderPropList's first-encounter walk orders them
+        // together. columnsOf holds the per-row stacks; flat rows are absent from it.
         const groupOf = new Map();
+        const columnsOf = new Map();
         groups.forEach((row, i) => {
             (row || []).forEach(f => groupOf.set(f, i));
+        });
+        columnRows.forEach((entry, j) => {
+            const gi = groups.length + j;
+            const cols = (entry && Array.isArray(entry.columns)) ? entry.columns : [];
+            cols.forEach(col => (col || []).forEach(f => groupOf.set(f, gi)));
+            columnsOf.set(gi, cols);
         });
 
         const renderPropInto = (container, prop, groupIndex) => {
@@ -2023,7 +2081,19 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
                 seenGroups.add(gi);
                 const row = document.createElement('div');
                 row.className = 'form-layout-group';
-                groupsHere.get(gi).forEach(pp => renderPropInto(row, pp, gi));
+                const cols = columnsOf.get(gi);
+                if (cols) {
+                    // Column row: each stack is a vertical .form-layout-column;
+                    // the columns sit side-by-side in the horizontal row.
+                    cols.forEach(colFields => {
+                        const colDiv = document.createElement('div');
+                        colDiv.className = 'form-layout-column';
+                        (colFields || []).forEach(f => renderPropInto(colDiv, f, gi));
+                        row.appendChild(colDiv);
+                    });
+                } else {
+                    groupsHere.get(gi).forEach(pp => renderPropInto(row, pp, gi));
+                }
                 parent.appendChild(row);
             });
         };
@@ -4525,14 +4595,27 @@ function clearValidationErrors() {
 
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    // Restore saved theme
+    // ?domain=…&schema=…&theme=… on the page URL — read once, applied as the
+    // initial selection. The view-driven theme is NOT persisted to
+    // localStorage, so a link with ?theme=dark doesn't pin the saved
+    // preference for subsequent visits.
+    const urlParams = new URLSearchParams(window.location.search);
+    urlInitialDomain = urlParams.get('domain');
+    urlInitialSchema = urlParams.get('schema');
+    const urlTheme = urlParams.get('theme');
+
+    const knownThemes = ['light', 'dark', 'midnight', 'warm'];
     const savedTheme = localStorage.getItem('blade-configurator-theme');
-    if (savedTheme && savedTheme !== 'light') {
-        document.documentElement.setAttribute('data-theme', savedTheme);
+    const effectiveTheme = (urlTheme && knownThemes.includes(urlTheme)) ? urlTheme : savedTheme;
+    if (effectiveTheme && effectiveTheme !== 'light') {
+        document.documentElement.setAttribute('data-theme', effectiveTheme);
+    }
+    if (effectiveTheme) {
+        currentTheme = aceThemeMap[effectiveTheme] || 'eclipse';
     }
     const themeSelect = document.getElementById('app-theme-select');
-    if (themeSelect && savedTheme) {
-        themeSelect.value = savedTheme;
+    if (themeSelect && effectiveTheme) {
+        themeSelect.value = effectiveTheme;
     }
 
     connectWebSocket();

@@ -4,6 +4,8 @@ import java.io.Serializable;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import javax.jms.JMSException;
 import javax.jms.ObjectMessage;
@@ -23,6 +25,13 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 
 /**
  * Utility class for publishing JPA entities to a JMS queue as ObjectMessages.
+ *
+ * The shared {@link QueueConnection} is created once in {@link #init()} and
+ * reused across threads (Connection objects are thread-safe per the JMS spec).
+ * A separate {@link QueueSession} + {@link QueueSender} pair is created
+ * lazily per calling thread, because WebLogic JMS sessions are not thread-safe:
+ * "A session and its message producers and consumers can only be accessed by
+ * one thread at a time" (WLS JMS Programming Guide, Session Guidelines).
  */
 public class JmsPublisher implements ServletContextListener {
 
@@ -32,9 +41,19 @@ public class JmsPublisher implements ServletContextListener {
 	private InitialContext ctx;
 	private QueueConnectionFactory qconFactory;
 	private QueueConnection qcon;
-	private QueueSession qsession;
 	private Queue queue;
-	private QueueSender qsender;
+
+	private final ConcurrentMap<Thread, ThreadResources> threadResources = new ConcurrentHashMap<>();
+
+	private static final class ThreadResources {
+		final QueueSession session;
+		final QueueSender sender;
+
+		ThreadResources(QueueSession session, QueueSender sender) {
+			this.session = session;
+			this.sender = sender;
+		}
+	}
 
 	public JmsPublisher() {
 	}
@@ -45,7 +64,8 @@ public class JmsPublisher implements ServletContextListener {
 	}
 
 	/**
-	 * Initialize the JMS connection and session.
+	 * Initialize the shared JMS connection and queue handle. Per-thread
+	 * sessions and senders are created lazily on first use.
 	 *
 	 * @throws NamingException if JNDI lookup fails
 	 * @throws JMSException    if JMS initialization fails
@@ -54,10 +74,25 @@ public class JmsPublisher implements ServletContextListener {
 		ctx = new InitialContext();
 		qconFactory = (QueueConnectionFactory) ctx.lookup(jmsFactory);
 		qcon = qconFactory.createQueueConnection();
-		qsession = qcon.createQueueSession(false, javax.jms.Session.AUTO_ACKNOWLEDGE);
 		queue = (Queue) ctx.lookup(jmsQueue);
-		qsender = qsession.createSender(queue);
 		qcon.start();
+	}
+
+	private ThreadResources getThreadResources() throws JMSException {
+		Thread me = Thread.currentThread();
+		ThreadResources tr = threadResources.get(me);
+		if (tr == null) {
+			QueueSession session = qcon.createQueueSession(false, javax.jms.Session.AUTO_ACKNOWLEDGE);
+			QueueSender sender = session.createSender(queue);
+			tr = new ThreadResources(session, sender);
+			ThreadResources existing = threadResources.putIfAbsent(me, tr);
+			if (existing != null) {
+				sender.close();
+				session.close();
+				tr = existing;
+			}
+		}
+		return tr;
 	}
 
 	public String getJmsFactory() {
@@ -93,9 +128,10 @@ public class JmsPublisher implements ServletContextListener {
 				application.setServer(SettingsManager.getServerName());
 				application.setCreated(Date.from(Instant.now()));
 
-				ObjectMessage message = qsession.createObjectMessage();
+				ThreadResources tr = getThreadResources();
+				ObjectMessage message = tr.session.createObjectMessage();
 				message.setObject(application);
-				qsender.send(message);
+				tr.sender.send(message);
 			}
 		} catch (Exception ex) {
 			ex.printStackTrace();
@@ -109,9 +145,10 @@ public class JmsPublisher implements ServletContextListener {
 			application.setId(Analytics.getAppInstanceId());
 			application.setDestroyed(Date.from(Instant.now()));
 			if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
-				ObjectMessage message = qsession.createObjectMessage();
+				ThreadResources tr = getThreadResources();
+				ObjectMessage message = tr.session.createObjectMessage();
 				message.setObject(application);
-				qsender.send(message);
+				tr.sender.send(message);
 			}
 		} catch (Exception ex) {
 			Callflow.getSipLogger().severe(ex);
@@ -126,9 +163,10 @@ public class JmsPublisher implements ServletContextListener {
 			if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
 				session = Analytics.createSession(msg);
 				if (session != null && Analytics.jmsPublisher != null) {
-					ObjectMessage message = qsession.createObjectMessage();
+					ThreadResources tr = getThreadResources();
+					ObjectMessage message = tr.session.createObjectMessage();
 					message.setObject(session);
-					qsender.send(message);
+					tr.sender.send(message);
 				}
 			}
 		} catch (Exception ex) {
@@ -148,9 +186,10 @@ public class JmsPublisher implements ServletContextListener {
 				session.setDestroyed(Timestamp.from(Instant.now()));
 
 				if (session != null && Analytics.jmsPublisher != null) {
-					ObjectMessage message = qsession.createObjectMessage();
+					ThreadResources tr = getThreadResources();
+					ObjectMessage message = tr.session.createObjectMessage();
 					message.setObject(session);
-					qsender.send(message);
+					tr.sender.send(message);
 				}
 
 			}
@@ -169,9 +208,10 @@ public class JmsPublisher implements ServletContextListener {
 	 * @throws JMSException if sending fails
 	 */
 	public void send(Serializable object) throws JMSException {
-		ObjectMessage message = qsession.createObjectMessage();
+		ThreadResources tr = getThreadResources();
+		ObjectMessage message = tr.session.createObjectMessage();
 		message.setObject(object);
-		qsender.send(message);
+		tr.sender.send(message);
 	}
 
 	/**
@@ -182,25 +222,37 @@ public class JmsPublisher implements ServletContextListener {
 	 * @throws JMSException if sending fails
 	 */
 	public void send(Serializable object, String type) throws JMSException {
-		ObjectMessage message = qsession.createObjectMessage();
+		ThreadResources tr = getThreadResources();
+		ObjectMessage message = tr.session.createObjectMessage();
 		message.setObject(object);
 		message.setStringProperty("type", type);
-		qsender.send(message);
+		tr.sender.send(message);
 	}
 
 	/**
-	 * Close JMS resources.
+	 * Close all per-thread JMS sessions/senders and the shared connection.
 	 */
 	public void close() {
+		for (ThreadResources tr : threadResources.values()) {
+			try {
+				if (tr.sender != null)
+					tr.sender.close();
+			} catch (JMSException e) {
+				e.printStackTrace();
+			}
+			try {
+				if (tr.session != null)
+					tr.session.close();
+			} catch (JMSException e) {
+				e.printStackTrace();
+			}
+		}
+		threadResources.clear();
+
 		try {
-			if (qsender != null)
-				qsender.close();
-			if (qsession != null)
-				qsession.close();
 			if (qcon != null)
 				qcon.close();
 		} catch (JMSException e) {
-			// log but don't throw
 			e.printStackTrace();
 		}
 	}

@@ -1,0 +1,13 @@
+@scalar/api-reference standalone bundle
+Pinned version: 1.57.5
+Source: https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.57.5/dist/browser/standalone.js
+License: MIT
+
+Vendored (not loaded from a CDN) so the API Explorer works on air-gapped
+on-prem installs. To update, bump the version and re-download:
+
+  VER=<new-version>
+  curl -o standalone.js \
+    "https://cdn.jsdelivr.net/npm/@scalar/api-reference@${VER}/dist/browser/standalone.js"
+
+The bundle exposes the global `Scalar.createApiReference(selector, config)`.

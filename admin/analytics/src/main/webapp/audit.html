@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Analytics · Audit</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="audit.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Analytics</span>
+				<span class="vorpal-brand-tagline">Pipeline Status &amp; Config</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="audit.html" class="vorpal-active">Audit</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span id="overall-pill" class="vorpal-pill">Loading…</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>Resource Audit</h1>
+					<p>
+						The analytics pipeline needs five WebLogic resources to
+						function end-to-end: a JMS Server hosting a Distributed
+						Queue and Connection Factory inside a JMS Module, and a
+						JDBC Data Source pointing at the analytics MySQL
+						instance. This page walks the DomainConfiguration
+						MBean tree and reports what's wired.
+					</p>
+				</div>
+				<div class="vorpal-hero-meta">
+					<button id="refresh-btn" class="audit-refresh" type="button">Refresh</button>
+				</div>
+			</section>
+
+			<section class="audit-expected">
+				<h2>Expected JNDI bindings</h2>
+				<dl id="expected-list">
+					<dt>Connection Factory</dt><dd id="exp-cf">—</dd>
+					<dt>Distributed Queue</dt><dd id="exp-q">—</dd>
+					<dt>Data Source</dt><dd id="exp-ds">—</dd>
+				</dl>
+			</section>
+
+			<section class="audit-results">
+				<h2>Findings</h2>
+				<div id="findings"></div>
+				<div id="error" class="audit-error" hidden></div>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+<script src="audit.js"></script>
+</body>
+</html>

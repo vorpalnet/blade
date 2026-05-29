@@ -14,13 +14,13 @@ public class SessionKeyPK implements Serializable {
 	//default serial version id, required for serializable classes.
 	private static final long serialVersionUID = 1L;
 
-	@Column(name="session_id", insertable=true, updatable=false, unique=true, nullable=false)
+	@Column(name="session_id", insertable=true, updatable=false, nullable=false)
 	private long sessionId;
 
-	@Column(unique=true, nullable=false, length=64)
+	@Column(nullable=false, length=64)
 	private String name;
 
-	@Column(unique=true, nullable=false, length=256)
+	@Column(nullable=false, length=128)
 	private String value;
 
 	public SessionKeyPK() {

@@ -211,6 +211,19 @@ public class Settings<T> implements SettingsMXBean {
 	}
 
 	@Override
+	public String getCurrentJson() {
+		if (config == null) {
+			return null;
+		}
+		try {
+			return objectMapper.writeValueAsString(config);
+		} catch (JsonProcessingException e) {
+			sipLogger.severe(e);
+			return null;
+		}
+	}
+
+	@Override
 	public void reload() {
 		sipLogger.info("Reloading configuration file.");
 		boolean useSampleConfig = true;

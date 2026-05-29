@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-library-stir-spike</artifactId>
+	<packaging>jar</packaging>
+	<name>BLADE STIR/SHAKEN Spike</name>
+	<description>Project Bond Week-1 spike: PASSporT verify round-trip with Nimbus JOSE+JWT. Not a deployable library; pure JAR used to validate the verifier shape before promoting to libs/stir/.</description>
+
+	<properties>
+		<nimbus-jose-jwt.version>9.37.3</nimbus-jose-jwt.version>
+		<bouncycastle.version>1.78.1</bouncycastle.version>
+		<junit.version>5.10.3</junit.version>
+		<maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.nimbusds</groupId>
+			<artifactId>nimbus-jose-jwt</artifactId>
+			<version>${nimbus-jose-jwt.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcpkix-jdk18on</artifactId>
+			<version>${bouncycastle.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>${bouncycastle.version}</version>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${junit.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<!-- Spike module: don't pollute ~/.m2 with this artifact. Promotion
+			     to libs/stir/ will drop this. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-install-plugin</artifactId>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>${maven-surefire-plugin.version}</version>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

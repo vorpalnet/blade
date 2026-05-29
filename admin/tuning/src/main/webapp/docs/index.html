@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Documentation · BLADE Tuning</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/tuning/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Tuning</span>
+				<span class="vorpal-brand-tagline">OCCAS Performance Dashboard</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../tuning.html">Dashboard</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation</div>
+				<h1 class="vorpal-page-title">Tuning Handbook</h1>
+				<p class="vorpal-page-subtitle">
+					Operator reference for the BLADE Tuning dashboard. Per-
+					section knob explanations, runtime-vs-restart behavior,
+					and the underlying MBean mapping.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html" class="vorpal-active-doc">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="sections.html">Sections Reference</a></li>
+						<li><a href="edit-sessions.html">Edit Sessions</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Welcome</h1>
+					<p>
+						The BLADE Tuning dashboard is a curated view of the
+						WLS / OCCAS performance knobs that BLADE operators
+						most often need to change. Every knob maps to a
+						WebLogic MBean attribute; the dashboard reads on page
+						load and writes through the WLS edit session.
+					</p>
+
+					<h2>Reading order</h2>
+					<ol>
+						<li><a href="overview.html">Overview</a> — what the dashboard is curating and why.</li>
+						<li><a href="sections.html">Sections Reference</a> — every section, every knob.</li>
+						<li><a href="edit-sessions.html">Edit Sessions</a> — how WLS edit-and-activate works, and how the dashboard threads it.</li>
+					</ol>
+
+					<h2>At a glance</h2>
+					<table>
+						<tr><th>Reads from</th><td>DomainRuntime MBean server (federated, read-only)</td></tr>
+						<tr><th>Writes via</th><td>Edit MBean server (start-edit / activate cycle)</td></tr>
+						<tr><th>Sections</th><td>JVM, SIP timers, Work Manager, Node Manager, Cluster, SSO, Server tuning</td></tr>
+						<tr><th>Restart-required</th><td>JVM, most NodeManager knobs. Marked explicitly in each section.</td></tr>
+						<tr><th>Runtime-tunable</th><td>SIP timers, Work Manager thresholds, most Server tuning. Take effect on Activate.</td></tr>
+					</table>
+
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Quick action</div>
+						<p>
+							Open the <a href="../tuning.html">Dashboard</a>,
+							scroll to the section you want, change a value,
+							press Save. Restart-required knobs are flagged in
+							yellow.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

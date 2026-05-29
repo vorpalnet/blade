@@ -1,0 +1,51 @@
+/* Glue on top of the shared brand.css. The topbar, brand, and callout classes
+   come from /blade/portal/brand/brand.css; this file only makes the page a
+   full-height column so Scalar can fill everything under the topbar, and
+   styles the service pulldown that sits in the topbar nav slot. */
+
+html, body {
+	height: 100%;
+	margin: 0;
+}
+
+.vorpal-app {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+}
+
+.api-main {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+/* Scalar renders its own full reference UI (sidebar + content) in here. */
+#scalar {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.api-picker {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.api-picker label {
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.api-picker select {
+	min-width: 220px;
+	max-width: 360px;
+	padding: 6px 10px;
+	border-radius: 6px;
+	font: inherit;
+}
+
+#api-notice {
+	margin: 16px;
+}

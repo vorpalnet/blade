@@ -5,26 +5,25 @@ import java.io.Serializable;
 import javax.persistence.Column;
 import javax.persistence.Embeddable;
 
-/**
- * The primary key class for the attribute database table.
- * 
- */
+/// Composite primary key for the `attribute` table: `(event_id,
+/// attribute_name_id)`. The string name lives on [Attribute] as a wire-only
+/// transient field; the consumer translates name → id before persist.
 @Embeddable
 public class AttributePK implements Serializable {
-	// default serial version id, required for serializable classes.
 	private static final long serialVersionUID = 1L;
 
-	@Column(name = "event_id", insertable = true, updatable = false, unique = true, nullable = false)
+	@Column(name = "event_id", insertable = true, updatable = false, nullable = false)
 	private long eventId;
 
-	@Column(unique = true, nullable = false, length = 64)
-	private String name;
+	@Column(name = "attribute_name_id", insertable = true, updatable = false, nullable = false)
+	private short attributeNameId;
 
 	public AttributePK() {
 	}
 
-	public AttributePK(String name) {
-		this.name = name;
+	public AttributePK(long eventId, short attributeNameId) {
+		this.eventId = eventId;
+		this.attributeNameId = attributeNameId;
 	}
 
 	public long getEventId() {
@@ -35,14 +34,15 @@ public class AttributePK implements Serializable {
 		this.eventId = eventId;
 	}
 
-	public String getName() {
-		return this.name;
+	public short getAttributeNameId() {
+		return this.attributeNameId;
 	}
 
-	public void setName(String name) {
-		this.name = name;
+	public void setAttributeNameId(short attributeNameId) {
+		this.attributeNameId = attributeNameId;
 	}
 
+	@Override
 	public boolean equals(Object other) {
 		if (this == other) {
 			return true;
@@ -51,15 +51,15 @@ public class AttributePK implements Serializable {
 			return false;
 		}
 		AttributePK castOther = (AttributePK) other;
-		return (this.eventId == castOther.eventId) && this.name.equals(castOther.name);
+		return (this.eventId == castOther.eventId) && (this.attributeNameId == castOther.attributeNameId);
 	}
 
+	@Override
 	public int hashCode() {
 		final int prime = 31;
 		int hash = 17;
 		hash = hash * prime + ((int) (this.eventId ^ (this.eventId >>> 32)));
-		hash = hash * prime + this.name.hashCode();
-
+		hash = hash * prime + this.attributeNameId;
 		return hash;
 	}
 }

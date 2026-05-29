@@ -25,7 +25,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * Manages per-server settings: thread pool sizing, socket readers,
  * message size limits, and connection timeouts.
  */
-@Path("/api/v1/server-tuning")
+@Path("/server-tuning")
 @Tag(name = "Server Tuning", description = "Per-server thread pool, network, and timeout settings")
 public class ServerTuningSettings {
 
@@ -37,7 +37,12 @@ public class ServerTuningSettings {
 	public Response getAll() {
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
-			ObjectName domainConfig = new ObjectName("com.bea:Name=DomainConfiguration,Type=Domain");
+			// Use DomainRuntimeServiceMBean.DomainConfiguration — direct
+			// "Name=DomainConfiguration,Type=Domain" lookup throws on WLS 14.1.1.
+			// Memory: [[wls-domain-jmx-bootstrap]].
+			ObjectName service = new ObjectName(
+					"com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean");
+			ObjectName domainConfig = (ObjectName) mbs.getAttribute(service, "DomainConfiguration");
 			ObjectName[] servers = (ObjectName[]) mbs.getAttribute(domainConfig, "Servers");
 
 			ArrayNode result = mapper.createArrayNode();

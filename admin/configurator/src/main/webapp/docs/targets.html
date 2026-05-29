@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Target Scopes · BLADE Configurator</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="../index.html">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Configurator</span>
+				<span class="vorpal-brand-tagline">Schema-Driven Configuration Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../configurator.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Target Scopes</h1>
+				<p class="vorpal-page-subtitle">
+					Every BLADE app's configuration can be set at three scopes
+					— domain, cluster, and per-server. Knowing which to use
+					(and how they combine) is the single most important thing
+					to understand before editing.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="features.html">Feature Reference</a></li>
+						<li><a href="targets.html" class="vorpal-active-doc">Target Scopes</a></li>
+						<li><a href="schema-discovery.html">Schema Discovery</a></li>
+						<li><a href="form-layout.html">Form Layout</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="cli.html">Command-Line Validation</a></li>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Target Scopes</h1>
+
+					<h2>The three scopes</h2>
+					<dl class="vorpal-kv">
+						<dt>Domain</dt>
+						<dd>One JSON file per app, read by every server in the domain. The base layer — almost everything you edit will be at this scope.</dd>
+						<dt>Cluster</dt>
+						<dd>One JSON file per app, per named cluster. Overrides the domain file for servers in that cluster. Use this when one cluster needs different behavior (e.g. a canary cluster with stricter logging).</dd>
+						<dt>Server</dt>
+						<dd>One JSON file per app, per server. Overrides both cluster and domain. Reserved for the rare per-server tweak — usually a debug session or a one-off observation node.</dd>
+					</dl>
+
+					<h2>Precedence</h2>
+					<p>The receiving application's <code>SettingsManager</code> merges all three layers at read time. Conflict resolution: <strong>Server &gt; Cluster &gt; Domain</strong>. Each layer is a JSON document; the merge is field-by-field, not file-replacing — a Cluster file that sets only one field overrides only that field, leaving the rest of the Domain config in place.</p>
+
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Mental model</div>
+						<p>
+							Think of Domain as the default settings sheet, Cluster
+							as a sparse override sheet, and Server as a one-off
+							override sheet. The application sees the layered
+							result, not the individual sheets.
+						</p>
+					</div>
+
+					<h2>On-disk layout</h2>
+					<pre><code>$DOMAIN_HOME/
+└── config/custom/vorpal/
+    ├── &lt;app&gt;.json                       ← Domain scope
+    ├── _clusters/
+    │   └── &lt;cluster-name&gt;/
+    │       └── &lt;app&gt;.json               ← Cluster scope
+    └── _servers/
+        └── &lt;server-name&gt;/
+            └── &lt;app&gt;.json               ← Server scope</code></pre>
+
+					<p>
+						The <em>Target</em> dropdown in the editor enumerates
+						every directory it finds under
+						<code>config/custom/vorpal/</code> — the bare directory
+						(Domain), each <code>_clusters/&lt;name&gt;</code>, and
+						each <code>_servers/&lt;name&gt;</code>. A target only
+						appears if its directory exists, so to add a new cluster
+						override you must first create the cluster directory.
+					</p>
+
+					<h2>Choosing a scope</h2>
+					<table>
+						<tr><th>Scenario</th><th>Recommended scope</th></tr>
+						<tr>
+							<td>Production-wide setting change (new ACL entry, new route)</td>
+							<td>Domain</td>
+						</tr>
+						<tr>
+							<td>One cluster is acting as a canary for a new behavior</td>
+							<td>Cluster — set the change there and let it bake before rolling to Domain</td>
+						</tr>
+						<tr>
+							<td>One server is exhibiting a specific issue and needs a temporary debug log level</td>
+							<td>Server — flip the logging knob, observe, then delete the file</td>
+						</tr>
+						<tr>
+							<td>Permanent split (cluster A handles internal calls, cluster B handles external — different rule sets)</td>
+							<td>Two distinct apps, both at Domain scope. Cluster overrides become a maintenance nightmare for permanent differences.</td>
+						</tr>
+					</table>
+
+					<h2>Cleaning up overrides</h2>
+					<p>
+						To remove a Cluster or Server override, delete its JSON
+						file from disk and the layered read drops back to the
+						lower scope. The editor does not currently expose
+						delete from the form; use the Configurator's
+						<strong>Files</strong> tab to find the file, or
+						<code>rm</code> it directly from the domain home.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">Be deliberate with Server scope</div>
+						<p>
+							Per-server overrides leave one server behaving
+							differently from its peers. If you forget the
+							override exists, traffic-anomaly debugging gets very
+							confusing. Treat Server scope as a transient
+							debugging tool, not a long-term configuration
+							mechanism.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

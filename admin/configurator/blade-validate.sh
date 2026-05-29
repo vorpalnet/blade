@@ -11,7 +11,7 @@
 #   --host <host:port> AdminServer host (default: localhost:7001)
 #   --user <user>      WebLogic username (default: weblogic)
 #   --password <pass>  WebLogic password (required)
-#   --context <path>   Configurator context root (default: configurator)
+#   --context <path>   Configurator context root (default: blade/configurator)
 #
 # Examples:
 #   blade-validate.sh --password secret
@@ -25,7 +25,7 @@ set -euo pipefail
 HOST="localhost:7001"
 USER="weblogic"
 PASSWORD=""
-CONTEXT="configurator"
+CONTEXT="blade/configurator"
 APP=""
 DEPLOY=false
 
@@ -53,22 +53,6 @@ if [ -z "$PASSWORD" ]; then
 fi
 
 BASE_URL="http://${HOST}/${CONTEXT}"
-COOKIE_JAR=$(mktemp)
-trap 'rm -f "$COOKIE_JAR"' EXIT
-
-# Authenticate via form login
-echo "Authenticating to ${HOST}..."
-HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
-    -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
-    -L -d "j_username=${USER}&j_password=${PASSWORD}" \
-    "${BASE_URL}/j_security_check")
-
-if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "302" ]; then
-    echo "Authentication failed (HTTP ${HTTP_CODE})" >&2
-    exit 1
-fi
-echo "Authenticated."
-echo ""
 
 # Build API path
 if [ "$DEPLOY" = true ]; then
@@ -89,8 +73,8 @@ else
     fi
 fi
 
-# Call API
-RESPONSE=$(curl -s $METHOD -b "$COOKIE_JAR" "${BASE_URL}/${API_PATH}")
+# Call API (HTTP basic auth in the Authorization header — no form login)
+RESPONSE=$(curl -s -u "${USER}:${PASSWORD}" $METHOD "${BASE_URL}/${API_PATH}")
 
 # Pretty-print if python3 is available, otherwise raw output
 if command -v python3 &>/dev/null; then

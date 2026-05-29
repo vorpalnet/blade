@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Feature Reference · BLADE Configurator</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Configurator</span>
+				<span class="vorpal-brand-tagline">Schema-Driven Configuration Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../configurator.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Feature Reference</h1>
+				<p class="vorpal-page-subtitle">
+					Per-tab and per-menu reference for every feature in the
+					editor. Skim for what's available; jump to the relevant
+					section when you need details.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="features.html" class="vorpal-active-doc">Feature Reference</a></li>
+						<li><a href="targets.html">Target Scopes</a></li>
+						<li><a href="schema-discovery.html">Schema Discovery</a></li>
+						<li><a href="form-layout.html">Form Layout</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="cli.html">Command-Line Validation</a></li>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Feature Reference</h1>
+
+					<h2>Header controls</h2>
+					<dl class="vorpal-kv">
+						<dt>Target</dt>
+						<dd>Which scope's JSON file you are editing. See <a href="targets.html">Target Scopes</a>.</dd>
+						<dt>Schema</dt>
+						<dd>Which deployed BLADE app's settings you are editing. See <a href="schema-discovery.html">Schema Discovery</a>.</dd>
+						<dt>WebSocket status</dt>
+						<dd>Live indicator: green means the editor is connected to the WAR's WebSocket and will see remote file-system changes (e.g. another operator saving). Yellow during reconnect.</dd>
+						<dt>Dirty indicator</dt>
+						<dd>The orange dot + "Unsaved Changes" appears any time form state diverges from the last loaded JSON. Save or Load clears it.</dd>
+						<dt>Theme</dt>
+						<dd>Light, Dark, Midnight Blue, or Warm Sand. Theme is per-browser (localStorage), not per-user or per-deployment.</dd>
+					</dl>
+
+					<h2>Tabs</h2>
+					<h3>Form Editor</h3>
+					<p>
+						The primary editing surface. The form is generated from
+						the schema: every property becomes a labeled field,
+						every nested object becomes a collapsible section,
+						every array becomes a repeatable group. Field
+						descriptions come from <code>@JsonPropertyDescription</code>
+						annotations on the Java class.
+					</p>
+					<p>Sub-features:</p>
+					<ul>
+						<li><strong>Filter</strong> — search box narrows visible fields to those whose label or path matches.</li>
+						<li><strong>Breadcrumb</strong> — when a field is focused, shows its full dotted path. Click to copy.</li>
+						<li><strong>Auto-save draft</strong> — uncommitted form state is mirrored to localStorage every few seconds. If you close the tab and reopen later, the Draft banner offers to restore.</li>
+						<li><strong>Validation summary</strong> — schema-driven validation errors are listed at the top with click-to-jump links.</li>
+					</ul>
+
+					<h3>JSON Editor</h3>
+					<p>
+						Raw JSON view of the same document, in an Ace editor
+						with JSON syntax + bracket matching + format-on-button.
+						Useful for surgical edits that are awkward in the form
+						(deleting a whole sub-tree, pasting in a known-good
+						snippet).
+					</p>
+					<p>
+						<strong>Format JSON</strong> reformats with two-space
+						indentation. <strong>Validate</strong> runs both
+						syntactic JSON parsing and schema validation. Save
+						from this tab persists the same way as Form Editor.
+					</p>
+
+					<h3>JSON Schema</h3>
+					<p>
+						Read-only view of the schema itself. Same Ace editor.
+						Useful for tracing why a field validates a certain way
+						or what enum values are permitted.
+					</p>
+
+					<h3>Files</h3>
+					<p>
+						Free-form text editor for the auxiliary template files
+						that live under
+						<code>$DOMAIN_HOME/_templates/</code>. These are not
+						JSON config — they are body templates for REST
+						connectors, SQL for JDBC connectors, LDAP filter
+						strings, etc. Variable substitution at runtime uses
+						the BLADE <code>${var}</code> syntax.
+					</p>
+					<p>
+						The Files tab has a left rail listing every template
+						file and an Ace editor on the right with mode chosen
+						from the file extension.
+					</p>
+
+					<h2>Toolbar menus (Form Editor tab)</h2>
+					<h3>File</h3>
+					<dl class="vorpal-kv">
+						<dt>New from Template…</dt>
+						<dd>Pick a starter config from the template library. Loaded into the form but not saved until you press Save.</dd>
+						<dt>Load Sample</dt>
+						<dd>Reloads the framework-generated SAMPLE for this app. Useful as a known-good baseline.</dd>
+						<dt>Import…</dt>
+						<dd>Choose a JSON file from your local disk. Replaces the form contents (with confirmation).</dd>
+						<dt>Export</dt>
+						<dd>Downloads the current form state as a JSON file.</dd>
+						<dt>Reset Form</dt>
+						<dd>Reverts unsaved changes back to the last loaded JSON.</dd>
+					</dl>
+
+					<h3>History</h3>
+					<dl class="vorpal-kv">
+						<dt>Version History</dt>
+						<dd>Lists every saved revision for the current target + schema, with timestamps and operator info. Click to view; "Restore" promotes an old revision to current.</dd>
+						<dt>Diff…</dt>
+						<dd>Side-by-side diff of the current unsaved state against the last-loaded server copy. Useful before pressing Save to confirm you're shipping what you think you're shipping.</dd>
+						<dt>Clone to Another Target</dt>
+						<dd>Copies the current form state to a different target scope (Domain → Cluster, Cluster A → Cluster B, etc.). Convenient for promoting a tested cluster override to domain.</dd>
+					</dl>
+
+					<h3>View</h3>
+					<dl class="vorpal-kv">
+						<dt>Expand All / Collapse All</dt>
+						<dd>Open/close every collapsible section in the form.</dd>
+						<dt>Collapse Empty</dt>
+						<dd>Collapses only sections whose fields are all null/default. Useful for hiding noise.</dd>
+						<dt>Inspector</dt>
+						<dd>Toggles the right-side panel showing focused-field schema + variable palette.</dd>
+						<dt>View Mode</dt>
+						<dd>Toggle between expanded (default) and compact form density.</dd>
+					</dl>
+
+					<h2>Inspector side panel</h2>
+					<p>
+						Toggled from View → Inspector. When a field has focus,
+						the panel shows that field's schema fragment (type,
+						description, validation rules, enum values) and the
+						list of available <code>${variables}</code> defined in
+						the current document (selectors with an <code>id</code>).
+						Click a variable to insert it at the cursor.
+					</p>
+
+					<h2>Modals</h2>
+					<dl class="vorpal-kv">
+						<dt>Template Library</dt>
+						<dd>Opened by File → New from Template. Picker of starter configs.</dd>
+						<dt>Diff</dt>
+						<dd>Per-path change list with old → new value.</dd>
+						<dt>Regex Tester</dt>
+						<dd>Opened by the test button next to any field bound to <code>RegexSelector.pattern</code>. Paste sample text, see whether the regex matches.</dd>
+						<dt>Version History</dt>
+						<dd>Time-ordered revisions with diff and restore.</dd>
+						<dt>Clone Configuration</dt>
+						<dd>Pick a destination target, confirm, and the current form state is written there.</dd>
+					</dl>
+
+					<h2>Embed mode</h2>
+					<p>
+						Loading the editor with <code>?embed=1</code> hides the
+						brand topbar and the page title heading, and tightens
+						top padding. The portal uses this when iframing the
+						editor so the operator doesn't see a chrome-on-chrome
+						stack.
+					</p>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

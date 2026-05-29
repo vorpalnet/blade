@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wls:weblogic-web-app
+	xmlns:wls="http://xmlns.oracle.com/weblogic/weblogic-web-app"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd">
+
+	<wls:context-root>blade/api</wls:context-root>
+
+	<wls:library-ref>
+		<wls:library-name>vorpal-blade</wls:library-name>
+		<wls:specification-version>2.0</wls:specification-version>
+		<wls:exact-match>false</wls:exact-match>
+	</wls:library-ref>
+
+	<!-- Shared session cookie across BLADE admin webapps. Same cookie-name
+	     + path=/ in every admin WAR gives WebLogic's realm-level SSO a single
+	     session to recognize, so a user authenticates once across the whole
+	     admin tier. See memory: reference_wls_webapp_sso.md. -->
+	<wls:session-descriptor>
+		<wls:timeout-secs>3600</wls:timeout-secs>
+		<wls:cookie-name>BLADEADMINSESSION</wls:cookie-name>
+		<wls:cookie-path>/</wls:cookie-path>
+		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
+	</wls:session-descriptor>
+
+	<wls:security-role-assignment>
+		<wls:role-name>Admin</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+
+	<wls:security-role-assignment>
+		<wls:role-name>Operator</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+
+	<wls:security-role-assignment>
+		<wls:role-name>Monitor</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+
+	<wls:security-role-assignment>
+		<wls:role-name>Deployer</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+
+</wls:weblogic-web-app>

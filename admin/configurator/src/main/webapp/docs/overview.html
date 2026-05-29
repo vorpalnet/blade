@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Overview · BLADE Configurator</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Configurator</span>
+				<span class="vorpal-brand-tagline">Schema-Driven Configuration Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../configurator.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Architecture</div>
+				<h1 class="vorpal-page-title">Overview</h1>
+				<p class="vorpal-page-subtitle">
+					What the Configurator does, how edits flow from the browser
+					all the way to a running application, and how the schemas
+					come into existence in the first place.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html" class="vorpal-active-doc">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="features.html">Feature Reference</a></li>
+						<li><a href="targets.html">Target Scopes</a></li>
+						<li><a href="schema-discovery.html">Schema Discovery</a></li>
+						<li><a href="form-layout.html">Form Layout</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="cli.html">Command-Line Validation</a></li>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Overview</h1>
+
+					<h2>What it does</h2>
+					<p>
+						Every BLADE service has a configuration POJO with
+						<code>@JsonPropertyDescription</code> annotations on its
+						fields. The framework generates a JSON Schema from that
+						POJO at deploy time and writes it out alongside the
+						current configuration JSON. The Configurator reads
+						those schemas, builds a form for each, and gives an
+						operator a single place to edit every service's settings
+						without hand-editing files.
+					</p>
+
+					<h2>End-to-end edit flow</h2>
+					<p>The journey of a single field change:</p>
+					<ol>
+						<li>Operator picks a <em>target</em> (Domain, Cluster, or Server scope) and a <em>schema</em> (one BLADE app's settings).</li>
+						<li>Editor fetches the current JSON from <code>config/custom/vorpal/[scope]/&lt;app&gt;.json</code> and renders a form from the matching <code>SCHEMA.json</code>.</li>
+						<li>Operator edits the form. The dirty indicator appears; an auto-save draft is kept in browser localStorage.</li>
+						<li>Operator presses <strong>Save</strong>. The browser POSTs the updated JSON to a servlet in this WAR, which writes it to disk and timestamps the previous copy under <code>versions/</code>.</li>
+						<li>This WAR's <code>ConfigurationMonitor</code> sees the file-system change event and matches it to a deployed app's <code>SettingsMXBean</code> by Name + scope. It opens the MBean for write, streams the new JSON line by line, closes, and calls <code>reload()</code>.</li>
+						<li>The receiving application's <code>SettingsManager</code> re-parses the JSON into its POJO and swaps the new <code>current</code> reference. Subsequent SIP messages see the new config.</li>
+					</ol>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Save vs. Publish</div>
+						<p>
+							<strong>Save</strong> writes the JSON to disk and
+							triggers the MBean update for the scope you are
+							currently editing. <strong>Publish</strong>
+							additionally promotes a draft into the active
+							revision lineage — used when you want to record a
+							deliberate milestone rather than an incremental
+							edit.
+						</p>
+					</div>
+
+					<h2>Why JSON Schema</h2>
+					<p>
+						Every editable surface in the Configurator is generated.
+						The form fields, the validation rules, the inspector
+						descriptions, and the JSON-vs-Form view all derive from
+						the same JSON Schema. Adding a new BLADE service or a
+						new field to an existing one requires zero changes to
+						the Configurator — only adding the annotation to the
+						service's settings class.
+					</p>
+					<p>
+						This is the
+						<a href="/blade/portal/docs/about.html">config-first design</a>
+						principle: the configuration shape is the source of
+						truth, and the Java code falls out from it.
+					</p>
+
+					<h2>Where it fits in the admin tier</h2>
+					<table>
+						<tr><th>Configurator</th><td>Edits service configuration JSON. Where you spend most of your operator time.</td></tr>
+						<tr><th>Flow Editor</th><td>Edits FSMAR routing flows (visual, not JSON-form).</td></tr>
+						<tr><th>Logs</th><td>Reads logs from every cluster node.</td></tr>
+						<tr><th>Tuning</th><td>Edits server-tier WLS / OCCAS tuning knobs (work-managers, SSO, node-manager, SIP timers).</td></tr>
+						<tr><th>CRUD Editor</th><td>Edits service-side resource tables (CRUD service rows, not config).</td></tr>
+					</table>
+
+					<h2>Next steps</h2>
+					<ul>
+						<li>Read <a href="targets.html">Target Scopes</a> for the Domain / Cluster / Server model.</li>
+						<li>Read <a href="schema-discovery.html">Schema Discovery</a> for why an app appears (or doesn't) in the schema dropdown.</li>
+						<li>Read <a href="features.html">Feature Reference</a> for what every tab and menu does.</li>
+					</ul>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

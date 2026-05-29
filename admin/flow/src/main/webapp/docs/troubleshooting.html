@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Troubleshooting · BLADE Flow Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/flow/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Flow Editor</span>
+				<span class="vorpal-brand-tagline">Visual FSMAR Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../flow.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Operations</div>
+				<h1 class="vorpal-page-title">Troubleshooting</h1>
+				<p class="vorpal-page-subtitle">
+					Known gotchas with the mxGraph integration and the FSMAR
+					servlet round-trip. Most symptoms in here are
+					well-understood — the table is a fast lookup.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="fsmar-concepts.html">FSMAR Concepts</a></li>
+						<li><a href="editor-guide.html">Editor Guide</a></li>
+						<li><a href="round-trip.html">Import / Export Round-Trip</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html" class="vorpal-active-doc">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Troubleshooting</h1>
+
+					<h2>Symptom-to-cause table</h2>
+					<table>
+						<tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+						<tr>
+							<td>Stencil icons are broken (alt-text instead of glyphs)</td>
+							<td>mxGraph stencil PNGs failed to load — usually a 404 on <code>stencils/</code> or <code>resources/</code></td>
+							<td>Verify those directories were packaged into the WAR (<code>jar tf flow.war | grep stencils/</code>). If missing, the war-plugin's <code>packagingExcludes</code> may be too aggressive.</td>
+						</tr>
+						<tr>
+							<td>Console error: <code>mxResources: cannot get string for key …</code></td>
+							<td>mxGraph i18n bundle didn't load. Harmless cosmetic — the editor falls back to the key as the label.</td>
+							<td>Usually safe to ignore. If you want the right labels, ensure <code>resources/editor.txt</code> is reachable.</td>
+						</tr>
+						<tr>
+							<td>Save / Export silently does nothing</td>
+							<td>Save servlet path mismatch — the editor POSTs to a relative URL that doesn't resolve to <code>FsmarExportServlet</code></td>
+							<td>Browser devtools → Network. Look for a 404 on the Export action. Confirm the WAR's <code>web.xml</code> has <code>FsmarExportServlet</code> mapped to the path the editor uses.</td>
+						</tr>
+						<tr>
+							<td>Editor steals focus from other windows (e.g. Confirm dialogs)</td>
+							<td>jQuery UI window focus-trap quirk — a known mxGraph + jQuery UI interaction</td>
+							<td>Click the canvas once to dismiss the trap, then operate the modal.</td>
+						</tr>
+						<tr>
+							<td>ClassNotFoundException during deploy / runtime</td>
+							<td>Classloader conflict — usually <code>prefer-web-inf-classes</code> on while using the shared lib's <code>prefer-application-packages</code></td>
+							<td>Remove <code>&lt;prefer-web-inf-classes&gt;</code> from this WAR's <code>weblogic.xml</code>. See the project memory note <em>weblogic-no-prefer-web-inf-classes</em>.</td>
+						</tr>
+						<tr>
+							<td>Imported flow has all states in a vertical stack</td>
+							<td>FSMAR XML was edited outside the editor — layout side-car got dropped</td>
+							<td>Re-arrange in the canvas, Export. The layout side-car will be re-emitted.</td>
+						</tr>
+						<tr>
+							<td>Ingress / Egress clouds appear at unexpected positions on import</td>
+							<td>They are synthesized on Import; their position is not stored in the descriptor</td>
+							<td>Move them to wherever you want, Export, re-Import. The positions are sticky once exported via the layout side-car.</td>
+						</tr>
+						<tr>
+							<td>Active routing not changing after Export</td>
+							<td>Engine-tier needs a reboot to pick up the new descriptor</td>
+							<td>Roll the engine-tier servers per the project DEPLOYMENT.md.</td>
+						</tr>
+					</table>
+
+					<h2>Log signatures</h2>
+					<h3>FsmarImportServlet exception</h3>
+					<pre><code>org.vorpal.blade.applications.console.mxgraph.FsmarImportServlet
+    java.io.IOException: cannot read fsmar descriptor</code></pre>
+					<p>FSMAR JAR not where expected, or descriptor file inside it has the wrong name. Verify <code>$DOMAIN_HOME/approuter/</code> contents and the JAR's internal layout.</p>
+
+					<h3>FsmarExportServlet exception</h3>
+					<pre><code>org.vorpal.blade.applications.console.mxgraph.FsmarExportServlet
+    org.xml.sax.SAXException: bad mxGraph payload</code></pre>
+					<p>Editor sent malformed XML — usually a JS error mid-save corrupted the payload. Reload the editor, re-import, and try again.</p>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">Backup before Export</div>
+						<p>
+							The editor overwrites the active descriptor on
+							Export. Keep a copy of the prior XML before
+							experimenting — recovery is easier than reverse-
+							engineering a broken flow.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

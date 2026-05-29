@@ -41,7 +41,7 @@ import io.swagger.v3.oas.annotations.info.Info;
 import org.vorpal.blade.framework.v2.config.SettingsMXBean;
 
 @OpenAPIDefinition(info = @Info(title = "BLADE Configurator", version = "1", description = "Configuration Validation and Deployment APIs"))
-@javax.ws.rs.Path("api/v1")
+@javax.ws.rs.Path("/")
 public class ValidationAPI {
 
 	private static final Logger logger = Logger.getLogger(ValidationAPI.class.getName());

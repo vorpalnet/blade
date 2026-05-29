@@ -14,7 +14,7 @@ public class SettingsSample extends Settings implements Serializable {
 		this.logging = new LogParametersDefault();
 		this.session = new SessionParametersDefault();
 		this.session.setSessionSelectors(null);
-		this.logging.setLoggingLevel(LoggingLevel.FINER);
+		this.logging.setLoggingLevel(LoggingLevel.INFO);
 
 		this.allowHeader = "INVITE, ACK, CANCEL, BYE, NOTIFY, REFER, MESSAGE, OPTIONS, INFO, SUBSCRIBE";
 		this.addToPath = false;

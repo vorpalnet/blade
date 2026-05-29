@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wls:weblogic-web-app
+	xmlns:wls="http://xmlns.oracle.com/weblogic/weblogic-web-app"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd">
+
+	<wls:weblogic-version>14.1.1.0</wls:weblogic-version>
+
+	<!-- Context-root "/" makes this the virtual host's DEFAULT web application,
+	     so it owns bare "/" and every path no other WAR claims. WLS
+	     longest-prefix-match still routes /blade/portal/, /blade/configurator/,
+	     etc. to their own (more specific) WARs; only unowned paths — "/",
+	     "/blade", typos — fall through here, where index.jsp (mapped /*)
+	     302-redirects them to /blade/portal/.
+	     NOTE: only one default web app is allowed per virtual host. -->
+	<wls:context-root>/</wls:context-root>
+
+</wls:weblogic-web-app>

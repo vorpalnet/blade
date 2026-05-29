@@ -5,31 +5,33 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.EntityManager;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
-import javax.persistence.JoinColumn;
-import javax.persistence.MapKeyColumn;
 import javax.persistence.NamedQuery;
-import javax.persistence.OneToMany;
 import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
+import javax.persistence.Transient;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-/**
- * The persistent class for the event database table.
- * 
- */
+/// Persistent class for the `event` database table.
+///
+/// The `name` field is wire-only (`@Transient` for JPA, still serialized
+/// over JMS by Java Serialization). The consumer translates it to
+/// `event_type_id` via the [EventType] lookup table before persist.
+///
+/// Attributes are held in a transient `Map<String, Attribute>` at the
+/// wire level; the consumer persists them explicitly with the resolved
+/// `event_id` and `attribute_name_id` rather than relying on JPA's
+/// cascade.
 @Entity
 @Table(name = "event")
 @NamedQuery(name = "Event.findAll", query = "SELECT e FROM Event e")
-@JsonPropertyOrder({"name", "attributes", "id", "application_id","sessionId", "created"})
+@JsonPropertyOrder({ "name", "attributes", "id", "application_id", "sessionId", "created" })
 public class Event implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -39,29 +41,35 @@ public class Event implements Serializable {
 	private long id;
 
 	@Column(name = "application_id", nullable = false)
-	private int applicationId;
+	private long applicationId;
 
 	@Temporal(TemporalType.TIMESTAMP)
 	@Column(updatable = false, nullable = false)
 	private Date created;
 
-	@Column(nullable = false, length = 64)
-	private String name;
+	@Column(name = "event_type_id", nullable = false)
+	private short eventTypeId;
 
 	@Column(name = "session_id")
 	private Long sessionId;
 
-	// unidirectional one-to-many association to Attribute
-	@OneToMany(cascade = { CascadeType.ALL }, orphanRemoval = true)
-	@JoinColumn(name = "event_id", nullable = false)
-	@MapKeyColumn(name = "name", insertable = false, updatable = false)
+	/// Wire-side event-name string (e.g. "callStarted"). Not stored;
+	/// translated to [#eventTypeId] by the consumer.
+	@Transient
+	private String name;
+
+	/// Wire-side attribute collection. Not persisted via JPA cascade —
+	/// the consumer iterates these and persists each [Attribute]
+	/// explicitly after the event row is inserted and `event_id` is
+	/// known.
+	@Transient
 	private Map<String, Attribute> attributes = new HashMap<>();
 
 	public Event() {
 		this.setCreated(new Date());
 	}
 
-	public Event(int applicationId, long sessionId, String name) {
+	public Event(long applicationId, long sessionId, String name) {
 		this.applicationId = applicationId;
 		this.sessionId = sessionId;
 		this.name = name;
@@ -73,24 +81,14 @@ public class Event implements Serializable {
 		return this;
 	}
 
-	// jwm - handcoded method to update the AttributePK to include the latest
-	// Event.id
-	public void persistEvent(EntityManager em) {
+	public Attribute addAttribute(Attribute attribute) {
+		getAttributes().put(attribute.getName(), attribute);
+		return attribute;
+	}
 
-		// save and remove the attributes
-		Map<String, Attribute> _attributes = this.getAttributes();
-		this.attributes = new HashMap<>();
-
-		// persist just the event and flush to get the generated id
-		em.persist(this);
-		em.flush();
-
-		// persist each attribute individually with the correct event id
-		for (Attribute attr : _attributes.values()) {
-			attr.getId().setEventId(id);
-			em.persist(attr);
-		}
-
+	public Attribute removeAttribute(Attribute attribute) {
+		getAttributes().remove(attribute.getName());
+		return attribute;
 	}
 
 	public long getId() {
@@ -101,11 +99,11 @@ public class Event implements Serializable {
 		this.id = id;
 	}
 
-	public int getApplicationId() {
+	public long getApplicationId() {
 		return this.applicationId;
 	}
 
-	public void setApplicationId(int applicationId) {
+	public void setApplicationId(long applicationId) {
 		this.applicationId = applicationId;
 	}
 
@@ -115,6 +113,14 @@ public class Event implements Serializable {
 
 	public void setCreated(Date created) {
 		this.created = created;
+	}
+
+	public short getEventTypeId() {
+		return this.eventTypeId;
+	}
+
+	public void setEventTypeId(short eventTypeId) {
+		this.eventTypeId = eventTypeId;
 	}
 
 	public String getName() {
@@ -140,15 +146,4 @@ public class Event implements Serializable {
 	public void setAttributes(Map<String, Attribute> attributes) {
 		this.attributes = attributes;
 	}
-
-	public Attribute addAttribute(Attribute attribute) {
-		getAttributes().put(attribute.getId().getName(), attribute);
-		return attribute;
-	}
-
-	public Attribute removeAttribute(Attribute attribute) {
-		getAttributes().remove(attribute.getId().getName());
-		return attribute;
-	}
-
 }

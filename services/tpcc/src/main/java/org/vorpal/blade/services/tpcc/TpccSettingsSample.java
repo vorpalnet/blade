@@ -10,7 +10,7 @@ public class TpccSettingsSample extends TpccSettings {
 
 	public TpccSettingsSample() {
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINE);
+		this.logging.setLoggingLevel(LoggingLevel.INFO);
 		
 		this.session = new SessionParameters();
 		this.session.setExpiration(900);

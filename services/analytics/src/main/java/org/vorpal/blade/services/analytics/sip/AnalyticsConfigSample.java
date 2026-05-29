@@ -11,7 +11,7 @@ public class AnalyticsConfigSample extends AnalyticsConfig {
 
 	public AnalyticsConfigSample() {
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINER);
+		this.logging.setLoggingLevel(LoggingLevel.INFO);
 		this.session = new SessionParametersDefault();
 		this.analytics = new AnalyticsB2buaSample();
 		

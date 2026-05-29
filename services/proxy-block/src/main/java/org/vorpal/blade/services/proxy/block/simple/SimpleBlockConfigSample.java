@@ -25,7 +25,7 @@ public class SimpleBlockConfigSample extends SimpleBlockConfig {
 
 	public SimpleBlockConfigSample() {
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINER);
+		this.logging.setLoggingLevel(LoggingLevel.INFO);
 
 		this.fromSelector = new AttributeSelector();
 		fromSelector.setId("fromSel");

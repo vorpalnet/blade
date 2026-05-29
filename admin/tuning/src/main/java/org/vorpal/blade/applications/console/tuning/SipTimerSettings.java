@@ -33,7 +33,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * timeouts per RFC 3261. They directly affect call setup times and
  * retransmission behavior.
  */
-@Path("/api/v1/sip-timers")
+@Path("/sip-timers")
 @Tag(name = "SIP Timers", description = "SIP protocol timeout and behavior settings")
 public class SipTimerSettings {
 

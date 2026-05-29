@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Curly braces (the API/JSON glyph) around a magnifying glass — exploring an API. -->
+  <g fill="none" stroke="#1f3a66" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 5C6 5 7 14 4 16 7 18 6 27 9 27"/>
+    <path d="M23 5C26 5 25 14 28 16 25 18 26 27 23 27"/>
+    <circle cx="15" cy="14" r="4.5"/>
+    <path d="M18.4 17.4 21.5 20.5"/>
+  </g>
+</svg>

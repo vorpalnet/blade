@@ -32,16 +32,13 @@
 
 	<build>
 		<finalName>logs</finalName>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-war-plugin</artifactId>
-				<configuration>
-					<!-- Admin apps use the vorpal-blade shared library; no JARs in WAR -->
-					<packagingExcludes>WEB-INF/lib/*.jar</packagingExcludes>
-				</configuration>
-			</plugin>
-		</plugins>
+		<!-- Inherits the parent pom's maven-war-plugin packagingExcludes regex,
+		     which excludes every JAR EXCEPT vorpal-blade-library-framework.
+		     LogReaderListener (and indirectly LogQueryAPI) calls into
+		     framework classes that aren't in the shared library — the
+		     framework JAR is bundled per-WAR by design. Don't override
+		     packagingExcludes with `*.jar` here; that's what caused the
+		     `NoClassDefFoundError: LogReaderRegistrar` regression. -->
 	</build>
 
 </project>

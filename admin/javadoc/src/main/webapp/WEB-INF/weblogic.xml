@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wls:weblogic-web-app xmlns:wls="http://xmlns.oracle.com/weblogic/weblogic-web-app" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd">
+
+	<!-- blade/* context-root is required for the portal launcher to list this
+	     app as a card (PortalCardsResource only walks blade/* context-roots). -->
+	<wls:context-root>blade/javadoc</wls:context-root>
+
+	<!-- Shared library supplies the framework's 3rd-party transitives (Jackson,
+	     etc.) used by the SettingsManager. No <prefer-web-inf-classes>: it
+	     conflicts with the shared lib's auto-generated prefer-application-packages. -->
+	<wls:library-ref>
+		<wls:library-name>vorpal-blade</wls:library-name>
+		<wls:specification-version>2.0</wls:specification-version>
+		<wls:exact-match>false</wls:exact-match>
+	</wls:library-ref>
+
+	<!-- No security-constraint / login-config: the Javadoc site is public. -->
+
+</wls:weblogic-web-app>

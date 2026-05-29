@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>FSMAR Concepts · BLADE Flow Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/flow/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Flow Editor</span>
+				<span class="vorpal-brand-tagline">Visual FSMAR Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../flow.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">FSMAR Concepts</h1>
+				<p class="vorpal-page-subtitle">
+					The state-machine model behind the visual editor. Read
+					this before authoring; the vocabulary becomes second
+					nature after.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="fsmar-concepts.html" class="vorpal-active-doc">FSMAR Concepts</a></li>
+						<li><a href="editor-guide.html">Editor Guide</a></li>
+						<li><a href="round-trip.html">Import / Export Round-Trip</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>FSMAR Concepts</h1>
+
+					<h2>The four primitives</h2>
+					<dl class="vorpal-kv">
+						<dt>State</dt>
+						<dd>A node in the graph. Represents either an application invocation (e.g. "run analytics") or a control point (start, end, decision). Rendered as a labeled shape.</dd>
+						<dt>Transition</dt>
+						<dd>A directed edge between two states. Carries an optional condition and an optional trigger. Traversed when the runtime matches.</dd>
+						<dt>Trigger</dt>
+						<dd>An event that activates the start of a flow — typically a SIP method on an initial request. Triggers live on the edge from the Ingress cloud.</dd>
+						<dt>Condition</dt>
+						<dd>A predicate evaluated against the in-flight message. Boolean expressions over message attributes (From-URI, To-URI, headers, etc.). A transition with a condition only fires when the condition is true.</dd>
+					</dl>
+
+					<h2>Ingress and egress</h2>
+					<p>
+						Every flow has two terminal clouds:
+					</p>
+					<ul>
+						<li><strong>Ingress</strong> — the entry point. Transitions out of Ingress carry triggers that match incoming SIP messages.</li>
+						<li><strong>Egress</strong> — the exit point. When the flow walks to Egress, FSMAR returns the accumulated application chain to OCCAS.</li>
+					</ul>
+					<p>
+						Both clouds round-trip to FSMAR XML as the literal
+						string <code>null</code> — there's no Ingress or Egress
+						node per se; the clouds are visual stand-ins for "start
+						of the chain" and "end of the chain."
+					</p>
+
+					<h2>Initial vs. non-initial requests</h2>
+					<p>
+						FSMAR only consults the descriptor on the
+						<em>initial</em> request of a SIP dialog. The methods
+						that can be initial — and therefore the methods that
+						can appear in a trigger — are:
+					</p>
+					<table>
+						<tr><th>Method</th><th>Typical use</th></tr>
+						<tr><td><code>INVITE</code></td><td>Establish a call</td></tr>
+						<tr><td><code>REGISTER</code></td><td>Endpoint registration</td></tr>
+						<tr><td><code>SUBSCRIBE</code></td><td>Event subscription (BLF, dialog-info, etc.)</td></tr>
+						<tr><td><code>OPTIONS</code></td><td>Capabilities query / keepalive ping</td></tr>
+						<tr><td><code>MESSAGE</code></td><td>SIP IM</td></tr>
+						<tr><td><code>PUBLISH</code></td><td>Presence publication</td></tr>
+						<tr><td><code>REFER</code></td><td>Out-of-dialog transfer</td></tr>
+						<tr><td><code>NOTIFY</code></td><td>Out-of-dialog notify (rare)</td></tr>
+					</table>
+					<p>
+						In-dialog messages (ACK, BYE, re-INVITE, in-dialog
+						NOTIFY, etc.) follow the chain established for the
+						initial — FSMAR is not re-consulted.
+					</p>
+
+					<h2>Application chains</h2>
+					<p>
+						FSMAR's return value is an ordered list of application
+						names. OCCAS invokes them in order; each application
+						decides what to do with the message and either passes
+						it along or terminates the chain. A typical chain for
+						an inbound INVITE might be:
+					</p>
+					<pre><code>[ acl → analytics → proxy-router ]</code></pre>
+					<p>
+						Each application's name in the chain corresponds to a
+						deployed BLADE service. The chain is constructed by
+						walking the flow from Ingress to Egress, accumulating
+						state names along the way.
+					</p>
+
+					<h2>Conditions</h2>
+					<p>
+						Conditions are expressions over the inbound message.
+						The canonical syntax depends on FSMAR version (2
+						versus 3). Common building blocks:
+					</p>
+					<ul>
+						<li>Method match: <code>method == "INVITE"</code></li>
+						<li>URI regex: <code>from.uri ~= ".*@trusted-domain\\.com"</code></li>
+						<li>Header presence: <code>headers["X-Customer-ID"] != null</code></li>
+						<li>Boolean composition: <code>cond1 &amp;&amp; (cond2 || cond3)</code></li>
+					</ul>
+
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Naming convention</div>
+						<p>
+							Name states after the application they invoke
+							(e.g. <code>acl</code>, <code>proxy-router</code>).
+							Name transitions after the condition they
+							represent (e.g. "trusted realm",
+							"emergency-call"). Future-you will thank
+							present-you for the descriptive labels.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

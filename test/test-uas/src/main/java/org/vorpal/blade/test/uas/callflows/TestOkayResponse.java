@@ -30,9 +30,13 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 
-public class TestOkayResponse extends InitialInvite {
+/// Answers `200 OK` to an in-dialog request (BYE, CANCEL, INFO) on an
+/// endpoint-mode dialog. Used by
+/// [UasServlet][org.vorpal.blade.test.uas.UasServlet] for requests that need
+/// no further handling beyond acknowledgement.
+public class TestOkayResponse extends Callflow {
 	static final long serialVersionUID = 1L;
 
 	@Override

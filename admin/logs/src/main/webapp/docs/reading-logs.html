@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Reading Log Files · BLADE Logs</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/logs/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Logs</span>
+				<span class="vorpal-brand-tagline">Cluster Log Tail Viewer</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../logs.html">Viewer</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Reading Log Files</h1>
+				<p class="vorpal-page-subtitle">
+					The slice semantics — what offset and max-bytes mean, why
+					the viewer reads bytes (not lines), and what the response
+					headers tell you about the read.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="cluster-discovery.html">Cluster Discovery</a></li>
+						<li><a href="reading-logs.html" class="vorpal-active-doc">Reading Log Files</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Reading Log Files</h1>
+
+					<h2>Listing logs</h2>
+					<p>
+						Once a server is selected, the viewer calls
+						<code>GET api/servers/{name}/logs</code>. The response
+						is a list of log file descriptors:
+					</p>
+					<pre><code>[
+  {
+    "relativePath": "AdminServer.log",
+    "sizeBytes": 1284733,
+    "lastModifiedMs": 1742480123000,
+    "kind": "WLS_SERVER"
+  },
+  {
+    "relativePath": "AdminServer-diagnostic.log",
+    "sizeBytes": 92340,
+    "lastModifiedMs": 1742479000000,
+    "kind": "WLS_DIAGNOSTIC"
+  },
+  ...
+]</code></pre>
+
+					<dl class="vorpal-kv">
+						<dt>relativePath</dt>
+						<dd>Path relative to the server's log directory. The viewer uses this as the URL path component for reads — slashes are allowed (and the JAX-RS path is <code>{path:.+}</code> to accept them).</dd>
+						<dt>sizeBytes</dt>
+						<dd>Current file size. Used to compute "where is the end" for tail reads.</dd>
+						<dt>lastModifiedMs</dt>
+						<dd>Last-modified time. Useful for sorting most-recently-written first.</dd>
+						<dt>kind</dt>
+						<dd>Coarse-grained classification (server log, access log, diagnostic, GC log, etc.). Drives UI grouping or filtering if added later.</dd>
+					</dl>
+
+					<h2>Reading a slice</h2>
+					<p>
+						The read endpoint is
+						<code>GET api/servers/{name}/logs/{path:.+}?offset=N&amp;max=M</code>.
+						The response body is plain text (the bytes of the slice
+						as UTF-8). Three response headers describe the slice:
+					</p>
+					<dl class="vorpal-kv">
+						<dt><code>X-Log-NewOffset</code></dt>
+						<dd>Byte offset to use for the next read to continue from where this one left off. Use this for follow-mode polling.</dd>
+						<dt><code>X-Log-EofReached</code></dt>
+						<dd><code>true</code> if the slice reached the current end of file.</dd>
+						<dt><code>X-Log-TruncatedAtStart</code></dt>
+						<dd><code>true</code> if the requested slice was clipped at the start (e.g. <code>offset=-1</code> tail of a file smaller than <code>max</code>).</dd>
+					</dl>
+
+					<h2>Tail mode</h2>
+					<p>
+						Pass <code>offset=-1</code> to read the <em>last</em>
+						<code>max</code> bytes of the file. This is the
+						standard "tail -c" semantics. The response's
+						<code>X-Log-NewOffset</code> header gives you the
+						current EOF position — use it for subsequent
+						follow-mode reads.
+					</p>
+
+					<h2>Why bytes, not lines</h2>
+					<p>
+						Lines are a UI concern; the wire protocol is bytes.
+						This keeps the slice deterministic and avoids edge
+						cases like "how do you tail N lines of a file with
+						300-character lines?" The viewer renders bytes as text
+						in the browser, where a trailing partial line is
+						visible but harmless.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Encoding</div>
+						<p>
+							Reads assume UTF-8. Logs that contain raw bytes
+							outside the UTF-8 range will show replacement
+							characters in the viewer but the byte slice
+							itself is faithful.
+						</p>
+					</div>
+
+					<h2>Follow-mode loop</h2>
+					<p>
+						A polling follow-mode is straightforward:
+					</p>
+					<ol>
+						<li>Read with <code>offset=-1, max=&lt;tail-size&gt;</code> to seed the viewer.</li>
+						<li>Note <code>X-Log-NewOffset</code> from the response.</li>
+						<li>Wait briefly (1–3s).</li>
+						<li>Read again with <code>offset=&lt;newOffset&gt;, max=&lt;big-enough&gt;</code>.</li>
+						<li>If response body is non-empty, append; update <code>newOffset</code>.</li>
+						<li>Loop.</li>
+					</ol>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

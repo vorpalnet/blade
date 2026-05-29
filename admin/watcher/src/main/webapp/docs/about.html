@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>About · BLADE Watcher</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/watcher/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Watcher</span>
+				<span class="vorpal-brand-tagline">Legacy Configuration Monitor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Running</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation</div>
+				<h1 class="vorpal-page-title">About this build</h1>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html" class="vorpal-active-doc">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>About this build</h1>
+
+					<dl class="vorpal-kv">
+						<dt>Product</dt>
+						<dd>BLADE Watcher (Legacy)</dd>
+						<dt>Module</dt>
+						<dd><code>blade/admin/watcher</code></dd>
+						<dt>WAR</dt>
+						<dd><code>watcher.war</code> at <code>/blade/watcher</code></dd>
+						<dt>License</dt>
+						<dd>MIT</dd>
+					</dl>
+
+					<h2>Java classes</h2>
+					<ul>
+						<li><code>WatcherStartup</code> — @WebListener that boots the monitor on contextInitialized and stops it on contextDestroyed.</li>
+						<li><code>ConfigurationMonitor</code> — file-system watch thread.</li>
+						<li><code>WatcherSettings</code> + <code>WatcherSettingsSample</code> — own SettingsMXBean for the watcher's own knobs (watch-path roots, debounce intervals).</li>
+					</ul>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

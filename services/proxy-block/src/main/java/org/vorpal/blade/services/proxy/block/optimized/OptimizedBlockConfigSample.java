@@ -38,7 +38,7 @@ public class OptimizedBlockConfigSample extends OptimizedBlockConfig {
 
 	public OptimizedBlockConfigSample() {
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINE);
+		this.logging.setLoggingLevel(LoggingLevel.INFO);
 
 		this.fromSelector = new AttributeSelector();
 		fromSelector.setId("fromSel");

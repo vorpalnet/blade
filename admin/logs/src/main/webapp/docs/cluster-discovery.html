@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Cluster Discovery · BLADE Logs</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/logs/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Logs</span>
+				<span class="vorpal-brand-tagline">Cluster Log Tail Viewer</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../logs.html">Viewer</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Cluster Discovery</h1>
+				<p class="vorpal-page-subtitle">
+					How the server dropdown gets populated, why a server might
+					be missing, and the JMX path the viewer walks.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="cluster-discovery.html" class="vorpal-active-doc">Cluster Discovery</a></li>
+						<li><a href="reading-logs.html">Reading Log Files</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Cluster Discovery</h1>
+
+					<h2>The JMX walk</h2>
+					<p>
+						Server discovery is a four-step walk through the
+						federated DomainRuntime MBean server. The viewer's
+						<code>ClusterDiscovery</code> class does it on every
+						page load (cached briefly):
+					</p>
+					<ol>
+						<li>JNDI lookup <code>java:comp/env/jmx/domainRuntime</code> → MBeanServer reference.</li>
+						<li>Resolve <code>com.bea:Name=DomainRuntimeService,Type=...DomainRuntimeServiceMBean</code> → service ObjectName.</li>
+						<li>Read its <code>DomainConfiguration</code> attribute → DomainMBean ObjectName (note: not "Domain" — the attribute is literally <code>DomainConfiguration</code>).</li>
+						<li>Read <code>Servers</code> from the DomainMBean → array of ServerMBean ObjectNames.</li>
+					</ol>
+					<p>
+						For each ServerMBean, the viewer reads <code>Name</code>, <code>ListenAddress</code>, <code>ListenPort</code>, and the linked <code>Cluster</code> MBean's <code>Name</code>. That tuple populates the dropdown.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">The DomainConfiguration trap</div>
+						<p>
+							On WLS 14.1.1, the literal lookup
+							<code>com.bea:Name=DomainConfiguration,Type=Domain</code>
+							throws <code>InstanceNotFoundException</code>. The
+							correct path is to start at
+							<code>DomainRuntimeService</code> and read its
+							<code>DomainConfiguration</code> attribute (which
+							resolves to the actual DomainMBean ObjectName).
+						</p>
+					</div>
+
+					<h2>What's listed</h2>
+					<p>
+						Every server defined in the WLS domain — AdminServer
+						plus every managed/engine-tier server — appears in the
+						dropdown, whether it's currently running or not.
+						The viewer doesn't filter by reachability; an unreachable
+						server's log requests will return errors at read time.
+					</p>
+
+					<h2>Why a server might be missing</h2>
+					<table>
+						<tr><th>Symptom</th><th>Cause</th></tr>
+						<tr>
+							<td>Dropdown is empty</td>
+							<td>The JMX walk failed entirely. Check AdminServer log for <code>ClusterDiscovery</code> exceptions.</td>
+						</tr>
+						<tr>
+							<td>One server missing</td>
+							<td>It's defined in <code>config.xml</code> but the WLS Servers attribute didn't enumerate it — extremely rare; almost always means the WLS config is malformed.</td>
+						</tr>
+						<tr>
+							<td>Server appears but log requests fail with "no such MBean"</td>
+							<td>The per-server <code>LogReader</code> MBean isn't registered on that server. The server is up but no BLADE WAR has started (or every WAR's <code>LogReaderRegistrar</code> failed). See <a href="troubleshooting.html">Troubleshooting</a>.</td>
+						</tr>
+					</table>
+
+					<h2>The per-node MBean side</h2>
+					<p>
+						For each server that appears in the dropdown to actually
+						be readable, that server must have at least one
+						BLADE-framework WAR deployed and active. The framework's
+						<code>LogReaderRegistrar</code> (in <code>libs/framework</code>)
+						is wired via <code>web-fragment.xml</code> into every
+						WAR — so any service WAR's deployment is enough. The
+						registration is idempotent across multiple WARs on the
+						same JVM.
+					</p>
+
+					<h2>Inspecting MBeans directly</h2>
+					<p>
+						To verify the chain works, query the federated
+						DomainRuntime MBeanServer for
+						<code>vorpal.blade:Type=LogReader,Name=*</code> from
+						the AdminServer side — you should see one MBean per
+						active node. If a node is missing, that's where the
+						problem lives.
+					</p>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

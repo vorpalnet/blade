@@ -22,9 +22,14 @@
 /// A `@MessageDriven` EJB with `@TransactionManagement(BEAN)` that listens on the
 /// `jms/BladeAnalyticsDistributedQueue`. Handles three JPA entity types:
 ///
-/// - `Application` -- merged via `em.merge(application)`
+/// - `Application` -- merged via `em.merge(application)` (lazy-upsert by id)
 /// - `Session` -- merged via `em.merge(session)`
-/// - `Event` -- persisted via `event.persistEvent(em)` to handle `AttributePK.eventId` updates
+/// - `Event` -- the listener translates the wire-side `name` to an
+///   `event_type_id` via the [org.vorpal.blade.framework.v2.analytics.EventType]
+///   lookup, persists the event, then iterates each [org.vorpal.blade.framework.v2.analytics.Attribute],
+///   translates its `name` to an `attribute_name_id` via
+///   [org.vorpal.blade.framework.v2.analytics.AttributeName], and persists each with
+///   the resolved `event_id`. Translation caches sit on the listener instance.
 ///
 /// ### Database Resilience
 ///

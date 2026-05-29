@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="BLADE">
+  <defs>
+    <linearGradient id="portal-blade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f3a66"/>
+      <stop offset="100%" stop-color="#0b1320"/>
+    </linearGradient>
+    <linearGradient id="portal-edge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#c89b3a"/>
+      <stop offset="100%" stop-color="#e7c477"/>
+    </linearGradient>
+  </defs>
+  <circle cx="24" cy="24" r="20" fill="url(#portal-blade)" stroke="#c89b3a" stroke-width="0.8"/>
+  <path d="M16 12 L32 24 L16 36 Z" fill="url(#portal-edge)"/>
+  <path d="M16 12 L32 24 L16 36 Z" fill="none" stroke="#0b1320" stroke-width="0.6"/>
+  <circle cx="16" cy="12" r="1.4" fill="#fff"/>
+  <circle cx="16" cy="36" r="1.4" fill="#fff"/>
+  <circle cx="32" cy="24" r="1.4" fill="#fff"/>
+</svg>

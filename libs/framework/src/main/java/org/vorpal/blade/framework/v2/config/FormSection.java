@@ -18,6 +18,14 @@ import java.lang.annotation.Target;
 /// @FormSection(title = "Authentication", fields = { "authentication" })
 /// public class RestConnector extends Connector { ... }
 /// ```
+///
+/// A section's fields still honor [FormLayoutGroup] — listing a section field
+/// in a group renders that group's row (flat or columns) inside the section's
+/// bordered body.
+///
+/// @see FormLayoutGroup
+/// @see FormLayoutColumn
+/// @see FormLayout
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 @Repeatable(FormSections.class)

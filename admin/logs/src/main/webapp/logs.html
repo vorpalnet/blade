@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Viewer · BLADE Logs</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="logs.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/logs/favicon.svg">
+	<!-- Embed mode (?embed=1): tightens the in-page heading when iframed
+	     by the portal but keeps the brand topbar visible so navigation
+	     parity (Overview / Viewer / Documentation) is preserved whether
+	     the user reaches the app via the portal or directly. -->
+	<style>
+		body.embedded > header > h1 { display: none; }
+		body.embedded > header { padding-top: 8px; }
+	</style>
+	<script>
+		if (new URLSearchParams(location.search).get('embed') === '1') {
+			document.addEventListener('DOMContentLoaded', () => document.body.classList.add('embedded'));
+		}
+	</script>
+</head>
+<body>
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Logs</span>
+				<span class="vorpal-brand-tagline">Cluster Log Tail Viewer</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="logs.html" class="vorpal-active">Viewer</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+	<header>
+		<h1>BLADE Cluster Logs</h1>
+		<div class="controls">
+			<label>Server
+				<select id="server"></select>
+			</label>
+			<label>Log file
+				<select id="logFile"></select>
+			</label>
+			<label>Tail bytes
+				<input id="tailBytes" type="number" min="1024" step="1024" value="65536">
+			</label>
+			<button id="load">Load tail</button>
+		</div>
+	</header>
+	<main>
+		<div id="status" class="status"></div>
+		<pre id="output" class="output">Pick a server and a log file, then click <strong>Load tail</strong>.</pre>
+	</main>
+	<script src="logs.js"></script>
+</body>
+</html>

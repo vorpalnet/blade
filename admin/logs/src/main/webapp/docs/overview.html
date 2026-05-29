@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Overview · BLADE Logs</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/logs/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Logs</span>
+				<span class="vorpal-brand-tagline">Cluster Log Tail Viewer</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../logs.html">Viewer</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Architecture</div>
+				<h1 class="vorpal-page-title">Overview</h1>
+				<p class="vorpal-page-subtitle">
+					What the viewer does and the three things that make it
+					work: domain runtime discovery, per-node MBean
+					registration, and federated JMX reads.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html" class="vorpal-active-doc">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="cluster-discovery.html">Cluster Discovery</a></li>
+						<li><a href="reading-logs.html">Reading Log Files</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Overview</h1>
+
+					<h2>The problem this solves</h2>
+					<p>
+						In a clustered OCCAS deployment, every engine-tier
+						server writes its own log files into its own per-server
+						directory. When an operator needs to investigate an
+						incident — "what did the proxy-router on
+						<code>cluster1_server3</code> log at 14:32?" — the
+						traditional answer is to SSH to the host, find the
+						domain home, navigate to the per-server logs directory,
+						and <code>tail</code> the file. Multiply by N hosts and
+						the operator's time investment grows linearly with
+						cluster size.
+					</p>
+					<p>
+						This viewer collapses the workflow into a single
+						browser page. The AdminServer holds the UI and the REST
+						endpoints; each cluster node exposes its log
+						directory via a per-JVM MBean; WebLogic's DomainRuntime
+						MBeanServer federates the per-node MBeans so the
+						AdminServer can read any of them.
+					</p>
+
+					<h2>The three pieces</h2>
+					<dl class="vorpal-kv">
+						<dt>Per-node MBean</dt>
+						<dd>Every WAR that bundles the framework JAR registers a <code>LogReader</code> MBean via the framework's <code>LogReaderRegistrar</code> @WebListener. The MBean is named <code>vorpal.blade:Type=LogReader,Name=&lt;serverName&gt;</code>, so each server has exactly one. The MBean exposes a small API: list logs and read a slice of a named log file.</dd>
+						<dt>WLS federation</dt>
+						<dd>WLS automatically federates every engine-tier server's platform MBeanServer into the AdminServer's DomainRuntime MBeanServer. The AdminServer can query the federated tree by ObjectName pattern and invoke MBean operations on remote servers transparently — no manual JMX URL, no credentials beyond the WLS user the page is authenticated as.</dd>
+						<dt>The viewer REST + UI</dt>
+						<dd>This WAR's <code>LogQueryAPI</code> exposes three JAX-RS endpoints: list servers, list a server's logs, read a slice. The HTML page calls them, populates the server / log dropdowns, and tails the chosen file. The implementation is in <code>blade/admin/logs/</code>.</dd>
+					</dl>
+
+					<h2>Why this design</h2>
+					<ul>
+						<li><strong>No SSH</strong> — operators don't need shell access to every cluster host.</li>
+						<li><strong>No log shipper</strong> — no Filebeat, no Fluentd, no copy-to-central indexer. Logs stay where the server wrote them.</li>
+						<li><strong>No per-host paths in code</strong> — the MBean knows its own server's log directory, so adding a new server requires no viewer config change.</li>
+						<li><strong>Same auth as the rest of the admin tier</strong> — protected by the same WLS realm / FORM auth as every other admin WAR.</li>
+					</ul>
+
+					<h2>What's NOT in scope</h2>
+					<ul>
+						<li>Aggregation — there's no merged-across-servers view. Pick one server at a time.</li>
+						<li>Indexed search — the read is byte-offset slicing, not a search index. For full-text search across history, point Splunk / Loki / OpenSearch at the same files on disk.</li>
+						<li>Real-time streaming — the viewer polls; it doesn't hold a long-lived WebSocket. Adequate for incident triage; not adequate for a wall-of-logs dashboard.</li>
+					</ul>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Hot path</div>
+						<p>
+							The viewer is intentionally read-only. There's no
+							"clear log" or "rotate now" — those are
+							server-side concerns owned by WLS log rotation
+							policy.
+						</p>
+					</div>
+
+					<h2>Next steps</h2>
+					<ul>
+						<li>Read <a href="cluster-discovery.html">Cluster Discovery</a> for how the server dropdown is populated.</li>
+						<li>Read <a href="reading-logs.html">Reading Log Files</a> for slice / tail semantics.</li>
+					</ul>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

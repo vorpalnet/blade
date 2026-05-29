@@ -1,30 +1,42 @@
 package org.vorpal.blade.test.uas;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.regex.Pattern;
 
-import javax.annotation.Resource;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
-import javax.servlet.sip.SipFactory;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.callflow.CallflowHold;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.test.uas.callflows.TestInvite;
 import org.vorpal.blade.test.uas.callflows.TestNotImplemented;
 import org.vorpal.blade.test.uas.callflows.TestOkayResponse;
-import org.vorpal.blade.test.uas.callflows.TestReinvite;
+import org.vorpal.blade.test.uas.callflows.TestRefer;
 import org.vorpal.blade.test.uas.config.TestUasConfig;
 import org.vorpal.blade.test.uas.config.TestUasConfigSample;
 
+/// SIP test server with two modes, chosen per-call from the initial INVITE's
+/// Request-URI — no configuration toggle:
+///
+/// - **Strip-and-forward (B2BUA)** — when the INVITE carries none of
+///   `status`, `delay`, or `refer`, the request is forwarded to its
+///   Request-URI by [B2buaServlet]. [#callStarted] strips a multipart
+///   (e.g. SIPREC) body down to just its `application/sdp` part so a plain
+///   softphone can parse it.
+/// - **Endpoint (UAS)** — when the INVITE carries `status`, `delay`, or
+///   `refer`, the call is answered locally: [TestInvite] applies the
+///   `status`/`delay` behavior, or [TestRefer] runs a transfer when `refer`
+///   is present.
+///
+/// The chosen mode is stamped on the application session so in-dialog
+/// requests (re-INVITE, BYE, …) route the same way as the initial INVITE.
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
@@ -32,50 +44,50 @@ import org.vorpal.blade.test.uas.config.TestUasConfigSample;
 public class UasServlet extends B2buaServlet implements B2buaListener {
 	private static final long serialVersionUID = 1L;
 
-	private static final String TEMPLATES_DIR = "./config/custom/vorpal/_templates/";
+	/// App-session attribute marking a dialog as endpoint-mode (answered
+	/// locally) vs. B2BUA-mode (forwarded). Set on the initial INVITE.
+	private static final String ENDPOINT_ATTR = "test-uas.endpoint";
 
 	public static SettingsManager<TestUasConfig> settingsManager;
 
-	@Resource
-	private SipFactory sipFactory;
-
-	private String cachedTemplateName;
-	private String cachedTemplate;
-
-	/// Two-mode dispatch:
-	///
-	/// - `b2bua=true` → delegate to `B2buaServlet.chooseCallflow`, which
-	///   returns `InitialInvite` / `Reinvite` / `Terminate` / `Passthru`
-	///   and drives the B2BUA forwarding pipeline (which fires
-	///   `callStarted`, where `stripMultipartToSdp` and `applyTemplate`
-	///   run, and proxies the request to the resolved Request-URI).
-	///   Returning `null` here would cause the framework to emit a
-	///   `501 Not Implemented` — it's "no handler", not "fall through to
-	///   default forwarding."
-	/// - `b2bua=false` → return one of the responder callflows
-	///   (`TestInvite`, `TestReinvite`, `TestOkayResponse`,
-	///   `TestNotImplemented`) which answer locally instead of forwarding.
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
-		if (settingsManager.getCurrent().isB2bua()) {
-			return super.chooseCallflow(request);
+
+		if (request.getMethod().equals("INVITE") && request.isInitial()) {
+			URI ruri = request.getRequestURI();
+			boolean hasRefer = ruri.getParameter("refer") != null;
+			boolean endpoint = hasRefer //
+					|| ruri.getParameter("status") != null //
+					|| ruri.getParameter("delay") != null;
+
+			request.getApplicationSession().setAttribute(ENDPOINT_ATTR, endpoint);
+
+			if (!endpoint) {
+				return super.chooseCallflow(request); // B2BUA: strip + forward
+			}
+			return hasRefer ? new TestRefer() : new TestInvite();
+		}
+
+		// In-dialog / non-initial: route by the mode stamped on the INVITE.
+		Boolean endpoint = (Boolean) request.getApplicationSession().getAttribute(ENDPOINT_ATTR);
+		if (!Boolean.TRUE.equals(endpoint)) {
+			return super.chooseCallflow(request); // B2BUA: in-dialog forwarding
 		}
 
 		switch (request.getMethod()) {
 		case "INVITE":
-			return request.isInitial() ? new TestInvite() : new TestReinvite();
+			return new CallflowHold(); // re-INVITE → blackhole hold
+		case "BYE":
 		case "CANCEL":
 		case "INFO":
-		case "BYE":
-			return new TestOkayResponse();
+			return new TestOkayResponse(); // 200 OK
 		default:
-			return new TestNotImplemented();
+			return new TestNotImplemented(); // 501
 		}
 	}
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		this.sipFactory = (SipFactory) event.getServletContext().getAttribute("javax.servlet.sip.SipFactory");
 		settingsManager = new SettingsManager<>(event, TestUasConfig.class, new TestUasConfigSample());
 		sipLogger.logConfiguration(settingsManager.getCurrent());
 	}
@@ -93,11 +105,6 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 		// part from the incoming multipart content so the downstream
 		// softphone sees a clean application/sdp body.
 		stripMultipartToSdp(outboundRequest);
-
-		String template = settingsManager.getCurrent().getTemplate();
-		if (template != null && !template.isEmpty()) {
-			applyTemplate(outboundRequest, template);
-		}
 	}
 
 	// ------------------------------------------------------------
@@ -125,10 +132,9 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 			}
 
 			Object content = request.getContent();
-			if (content == null) return;
-			String body = (content instanceof String)
-					? (String) content
-					: new String((byte[]) content);
+			if (content == null)
+				return;
+			String body = (content instanceof String) ? (String) content : new String((byte[]) content);
 
 			String sdp = extractSdpPart(body, boundary);
 			if (sdp == null) {
@@ -147,7 +153,8 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 	/// both quoted and unquoted forms.
 	private static String extractBoundary(String contentType) {
 		int idx = contentType.toLowerCase().indexOf("boundary=");
-		if (idx < 0) return null;
+		if (idx < 0)
+			return null;
 		String b = contentType.substring(idx + "boundary=".length()).trim();
 		if (b.startsWith("\"")) {
 			int end = b.indexOf('"', 1);
@@ -170,21 +177,26 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 			String part = parts[i];
 
 			// Remove CRLF right after the boundary marker.
-			if (part.startsWith("\r\n")) part = part.substring(2);
-			else if (part.startsWith("\n")) part = part.substring(1);
+			if (part.startsWith("\r\n"))
+				part = part.substring(2);
+			else if (part.startsWith("\n"))
+				part = part.substring(1);
 
 			// End boundary: "--boundary--" → the leading "--" is on
 			// the part here, indicating we're past the last part.
-			if (part.startsWith("--")) break;
+			if (part.startsWith("--"))
+				break;
 
 			int blank = findBlankLine(part);
-			if (blank < 0) continue;
+			if (blank < 0)
+				continue;
 
 			String partHeaders = part.substring(0, blank);
 			String partBody = part.substring(blank).trim();
 
 			// Trim trailing CRLF that precedes the next boundary.
-			if (partBody.endsWith("\r\n")) partBody = partBody.substring(0, partBody.length() - 2);
+			if (partBody.endsWith("\r\n"))
+				partBody = partBody.substring(0, partBody.length() - 2);
 
 			if (isSdpPart(partHeaders)) {
 				return partBody;
@@ -203,89 +215,14 @@ public class UasServlet extends B2buaServlet implements B2buaListener {
 		return false;
 	}
 
-	// ------------------------------------------------------------
-	// Template application (same shape as test-uac)
-	// ------------------------------------------------------------
-
-	private void applyTemplate(SipServletRequest request, String filename) {
-		try {
-			String raw = loadTemplate(filename);
-			int blank = findBlankLine(raw);
-			String headerSection = (blank >= 0) ? raw.substring(0, blank) : raw;
-			String body = (blank >= 0) ? raw.substring(blank).trim() : "";
-
-			String contentType = null;
-			boolean firstLine = true;
-
-			for (String line : headerSection.split("\\r?\\n")) {
-				line = line.trim();
-				if (line.isEmpty()) continue;
-
-				if (firstLine) {
-					firstLine = false;
-					if (isRequestLine(line)) {
-						String uri = requestLineUri(line);
-						if (uri != null) {
-							request.setRequestURI(sipFactory.createURI(uri));
-						}
-						continue;
-					}
-				}
-
-				int colon = line.indexOf(':');
-				if (colon <= 0) continue;
-				String name = line.substring(0, colon).trim();
-				String value = line.substring(colon + 1).trim();
-
-				if ("Content-Type".equalsIgnoreCase(name)) {
-					contentType = value;
-					continue;
-				}
-
-				request.setHeader(name, value);
-			}
-
-			if (!body.isEmpty()) {
-				if (contentType == null) contentType = "application/sdp";
-				request.setContent(body, contentType);
-			}
-		} catch (Exception e) {
-			sipLogger.warning(request, "UasServlet template '" + filename + "' failed: " + e.getMessage());
-		}
-	}
-
-	private String loadTemplate(String filename) throws IOException {
-		if (cachedTemplate == null || !filename.equals(cachedTemplateName)) {
-			Path p = Paths.get(TEMPLATES_DIR, filename);
-			if (!Files.exists(p)) {
-				throw new IOException("Template not found: " + p);
-			}
-			cachedTemplate = Files.readString(p);
-			cachedTemplateName = filename;
-		}
-		return cachedTemplate;
-	}
-
-	private static boolean isRequestLine(String line) {
-		return line.contains(" SIP/") && line.split("\\s+").length >= 3;
-	}
-
-	private static String requestLineUri(String line) {
-		String[] parts = line.split("\\s+", 3);
-		return (parts.length >= 3) ? parts[1] : null;
-	}
-
 	private static int findBlankLine(String text) {
 		int idx = text.indexOf("\n\n");
 		int idx2 = text.indexOf("\r\n\r\n");
-		if (idx < 0) return idx2;
-		if (idx2 < 0) return idx;
+		if (idx < 0)
+			return idx2;
+		if (idx2 < 0)
+			return idx;
 		return Math.min(idx, idx2);
-	}
-
-	public void invalidateTemplateCache() {
-		cachedTemplate = null;
-		cachedTemplateName = null;
 	}
 
 	// ------------------------------------------------------------

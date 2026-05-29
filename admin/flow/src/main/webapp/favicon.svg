@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Three connected nodes — Flow's FSMAR state graph. -->
+  <g fill="none" stroke="#1f3a66" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="9" height="7" rx="1.5"/>
+    <rect x="20" y="3" width="9" height="7" rx="1.5"/>
+    <rect x="11" y="22" width="10" height="7" rx="1.5"/>
+    <path d="M7.5 10v4a3 3 0 0 0 3 3h11a3 3 0 0 0 3-3v-4"/>
+    <path d="M16 17v5"/>
+  </g>
+</svg>

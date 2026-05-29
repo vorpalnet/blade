@@ -1,0 +1,1004 @@
+/*
+ * BLADE brand layer — the canonical Vorpal look-and-feel.
+ *
+ * Served at /blade/portal/brand/brand.css. Every admin app references this
+ * file via absolute URL. Three layers:
+ *
+ *   1. Tokens      — :root custom properties. Apps opt in via var(--vorpal-*).
+ *   2. Resets      — minimal baseline so every app feels like family.
+ *   3. Primitives  — .vorpal-* classes for the admin-console vocabulary:
+ *                    topbar, hero, card grid, iframe wrap, docs layout,
+ *                    callouts, tables, login.
+ *
+ * THEME: light + purple (matches vorpal.net). Two registers:
+ *   - App surfaces (topbar, hero, cards, docs, tables, buttons): LIGHT.
+ *     White / off-white backgrounds, dark ink text, purple as a sparing
+ *     accent for buttons, links, focus rings, active states.
+ *   - Login screen: deliberate DARK-GLASS exception (`.vorpal-login*`).
+ *     A "front door" moment — small ceremonial surface, blurred backdrop,
+ *     translucent glass card. Doesn't apply to dense work surfaces (the
+ *     reason we dropped dark-on-everything in the first place).
+ *
+ * Dark mode is a future task — would swap tokens under
+ * @media (prefers-color-scheme: dark).
+ */
+
+/* ============================================================
+ * 1. TOKENS
+ * ============================================================ */
+
+:root {
+	/* Brand purple — the Vorpal Boy logo color. Used sparingly: buttons,
+	   focus rings, links, active nav, accent borders. NOT for large
+	   surfaces. */
+	--vorpal-purple:        #602671;
+	--vorpal-purple-700:    #4a1c58;  /* hover / active darker */
+	--vorpal-purple-100:    #ece1f0;  /* soft tints (chip bg, hover state) */
+	--vorpal-purple-soft:   #f6f0f9;  /* even softer surface */
+
+	/* Surfaces and slates */
+	--vorpal-surface:       #ffffff;
+	--vorpal-surface-alt:   #fafbfd;
+	--vorpal-slate-100:     #f4f6fa;
+	--vorpal-slate-200:     #e6eaf2;
+	--vorpal-slate-300:     #d0d6e2;
+	--vorpal-slate-400:     #9aa5b8;
+	--vorpal-slate-600:     #5a6677;
+	--vorpal-divider:       #dde2ec;
+
+	/* Text */
+	--vorpal-ink-900:       #1a2434;
+	--vorpal-ink-700:       #2c374b;
+
+	/* Status colors */
+	--vorpal-success:       #1f8a4c;
+	--vorpal-warn:          #c46a2c;
+	--vorpal-warn-soft:     #fcf3eb;
+	--vorpal-error:         #a8431f;
+	--vorpal-error-soft:    #fcf0ea;
+
+	/* Typography */
+	--vorpal-font-sans:     "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+	--vorpal-font-mono:     "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+
+	/* Geometry */
+	--vorpal-radius-sm:     4px;
+	--vorpal-radius-md:     6px;
+	--vorpal-radius-lg:     10px;
+	--vorpal-shadow-sm:     0 1px 2px rgba(26, 36, 52, 0.06);
+	--vorpal-shadow-md:     0 4px 14px rgba(26, 36, 52, 0.08);
+	--vorpal-shadow-lg:     0 16px 40px rgba(26, 36, 52, 0.10);
+
+	/* Standard dimensions */
+	--vorpal-topbar-height: 64px;
+	--vorpal-rail-width:    92px;
+}
+
+/* ============================================================
+ * 2. RESETS — baseline so every app looks like the same product
+ * ============================================================ */
+
+* { box-sizing: border-box; }
+
+html, body {
+	margin: 0;
+	padding: 0;
+	min-height: 100%;
+	background: var(--vorpal-slate-100);
+	color: var(--vorpal-ink-900);
+	font-family: var(--vorpal-font-sans);
+	font-size: 14px;
+	line-height: 1.55;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+a {
+	color: var(--vorpal-purple);
+	text-decoration: none;
+	border-bottom: 1px solid transparent;
+	transition: border-color 120ms ease, color 120ms ease;
+}
+a:hover, a:focus {
+	color: var(--vorpal-purple-700);
+	border-bottom-color: var(--vorpal-purple);
+}
+
+code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
+
+/* ============================================================
+ * 3. PRIMITIVES — admin-console layout vocabulary
+ * ============================================================ */
+
+/* ---- App shell ---------------------------------------------- */
+
+.vorpal-app {
+	display: grid;
+	grid-template-rows: auto 1fr;
+	min-height: 100vh;
+}
+
+/* ---- Topbar — LIGHT --------------------------------------- */
+
+.vorpal-topbar {
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
+	border-bottom: 1px solid var(--vorpal-slate-200);
+	box-shadow: var(--vorpal-shadow-sm);
+	display: flex;
+	align-items: stretch;
+	height: var(--vorpal-topbar-height);
+	z-index: 10;
+}
+
+.vorpal-brand {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 0 24px;
+	border-right: 1px solid var(--vorpal-slate-200);
+	text-decoration: none;
+	color: inherit;
+}
+.vorpal-brand:hover { border-bottom-color: transparent; }
+
+.vorpal-brand-mark {
+	height: 36px;
+	width: auto;
+	flex-shrink: 0;
+}
+
+.vorpal-brand-text {
+	display: flex;
+	flex-direction: column;
+	line-height: 1.1;
+}
+
+.vorpal-brand-product {
+	font-size: 15px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--vorpal-ink-900);
+}
+
+.vorpal-brand-tagline {
+	font-size: 11px;
+	color: var(--vorpal-slate-600);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	margin-top: 2px;
+}
+
+.vorpal-nav {
+	display: flex;
+	align-items: stretch;
+	flex: 1;
+	padding: 0 8px;
+}
+
+.vorpal-nav a {
+	display: inline-flex;
+	align-items: center;
+	padding: 0 18px;
+	color: var(--vorpal-slate-600);
+	font-size: 13.5px;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+	border-bottom: 2px solid transparent;
+	transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.vorpal-nav a:hover {
+	color: var(--vorpal-ink-900);
+	border-bottom-color: var(--vorpal-slate-300);
+}
+.vorpal-nav a.vorpal-active {
+	color: var(--vorpal-purple);
+	border-bottom-color: var(--vorpal-purple);
+}
+
+.vorpal-topbar-right {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 0 22px;
+	border-left: 1px solid var(--vorpal-slate-200);
+	color: var(--vorpal-slate-600);
+	font-size: 12.5px;
+}
+
+.vorpal-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: var(--vorpal-purple-100);
+	border: 1px solid var(--vorpal-purple-soft);
+	color: var(--vorpal-purple-700);
+	font-size: 11px;
+	letter-spacing: 0.04em;
+}
+.vorpal-pill::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--vorpal-success);
+}
+
+.vorpal-topbar-link {
+	color: var(--vorpal-slate-600);
+	text-decoration: none;
+	font-size: 12.5px;
+	padding: 4px 10px;
+	border-radius: var(--vorpal-radius-md);
+	border: 1px solid var(--vorpal-slate-300);
+	background: var(--vorpal-surface);
+	transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.vorpal-topbar-link:hover {
+	color: var(--vorpal-purple);
+	background: var(--vorpal-purple-soft);
+	border-color: var(--vorpal-purple-100);
+	border-bottom-color: var(--vorpal-purple-100);
+}
+
+/* ---- Main layout -------------------------------------------- */
+
+.vorpal-main {
+	display: block;
+	background: var(--vorpal-slate-100);
+	overflow: auto;
+}
+
+.vorpal-page {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 36px 32px 64px;
+}
+
+.vorpal-page-narrow {
+	max-width: 880px;
+}
+
+.vorpal-page-header {
+	margin-bottom: 28px;
+}
+
+.vorpal-eyebrow {
+	color: var(--vorpal-slate-600);
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	font-weight: 600;
+}
+
+.vorpal-page-title {
+	font-size: 28px;
+	font-weight: 600;
+	margin: 6px 0 6px;
+	color: var(--vorpal-ink-900);
+	letter-spacing: -0.01em;
+}
+
+.vorpal-page-subtitle {
+	color: var(--vorpal-slate-600);
+	font-size: 15.5px;
+	margin: 0;
+	max-width: 720px;
+}
+
+/* ---- Hero (landing pages) — LIGHT with purple accent ------ */
+
+.vorpal-hero {
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
+	border: 1px solid var(--vorpal-slate-200);
+	border-left: 4px solid var(--vorpal-purple);
+	border-radius: var(--vorpal-radius-lg);
+	padding: 36px 40px;
+	box-shadow: var(--vorpal-shadow-sm);
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: 24px;
+	margin-bottom: 28px;
+	position: relative;
+	overflow: hidden;
+}
+
+.vorpal-hero::after {
+	content: "";
+	position: absolute;
+	right: -60px;
+	bottom: -60px;
+	width: 240px;
+	height: 240px;
+	background: radial-gradient(closest-side, var(--vorpal-purple-soft), transparent);
+	pointer-events: none;
+}
+
+.vorpal-hero h1 {
+	margin: 0 0 8px;
+	font-size: 26px;
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
+	letter-spacing: -0.01em;
+}
+
+.vorpal-hero p {
+	margin: 0;
+	color: var(--vorpal-slate-600);
+	font-size: 15px;
+	max-width: 620px;
+}
+
+.vorpal-hero-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-size: 12px;
+	color: var(--vorpal-slate-400);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	text-align: right;
+}
+
+/* ---- Card grid (landing tiles) ------------------------------ */
+
+.vorpal-card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 20px;
+}
+
+.vorpal-card {
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	padding: 24px 26px;
+	box-shadow: var(--vorpal-shadow-sm);
+	transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	text-decoration: none;
+	color: inherit;
+}
+.vorpal-card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--vorpal-shadow-md);
+	border-color: var(--vorpal-purple-100);
+}
+
+/* Default card icon (the favicon-driven override lives in
+   portal/assets/portal.css and only applies on the portal landing). */
+.vorpal-card-icon {
+	width: 36px;
+	height: 36px;
+	border-radius: var(--vorpal-radius-md);
+	background: var(--vorpal-purple-soft);
+	color: var(--vorpal-purple);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 18px;
+	font-weight: 700;
+	font-family: var(--vorpal-font-mono);
+}
+
+.vorpal-card h3 {
+	margin: 6px 0 0;
+	font-size: 17px;
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
+}
+
+.vorpal-card p {
+	margin: 0;
+	color: var(--vorpal-slate-600);
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.vorpal-card-link {
+	margin-top: auto;
+	color: var(--vorpal-purple);
+	font-weight: 600;
+	font-size: 13.5px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+.vorpal-card-link::after {
+	content: "→";
+	transition: transform 160ms ease;
+}
+.vorpal-card:hover .vorpal-card-link::after { transform: translateX(3px); }
+
+/* ---- Iframe wrap (for embedding tools / editors) ------------ */
+
+.vorpal-iframe-wrap {
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	overflow: hidden;
+	box-shadow: var(--vorpal-shadow-md);
+	height: calc(100vh - var(--vorpal-topbar-height) - 44px);
+	min-height: 600px;
+}
+
+.vorpal-iframe-wrap iframe {
+	width: 100%;
+	height: 100%;
+	border: 0;
+	display: block;
+}
+
+.vorpal-iframe-toolbar {
+	background: var(--vorpal-surface-alt);
+	border-bottom: 1px solid var(--vorpal-divider);
+	padding: 8px 14px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-size: 12.5px;
+	color: var(--vorpal-slate-600);
+}
+
+.vorpal-iframe-toolbar a {
+	font-weight: 600;
+	color: var(--vorpal-purple);
+}
+
+/* ---- Documentation layout ----------------------------------- */
+
+.vorpal-docs {
+	display: grid;
+	grid-template-columns: 240px 1fr;
+	gap: 36px;
+	margin-top: 8px;
+}
+
+.vorpal-docs-nav {
+	position: sticky;
+	top: 24px;
+	align-self: start;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	padding: 18px 14px;
+	box-shadow: var(--vorpal-shadow-sm);
+}
+
+.vorpal-docs-nav h4 {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	margin: 14px 8px 6px;
+	color: var(--vorpal-slate-600);
+}
+.vorpal-docs-nav h4:first-child { margin-top: 0; }
+
+.vorpal-docs-nav ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.vorpal-docs-nav li a {
+	display: block;
+	padding: 6px 10px;
+	color: var(--vorpal-ink-700);
+	border-radius: var(--vorpal-radius-sm);
+	border-bottom: none;
+	font-size: 13.5px;
+	border-left: 3px solid transparent;
+}
+.vorpal-docs-nav li a:hover {
+	background: var(--vorpal-slate-100);
+	color: var(--vorpal-ink-900);
+}
+.vorpal-docs-nav li a.vorpal-active-doc {
+	background: var(--vorpal-purple-soft);
+	color: var(--vorpal-purple-700);
+	font-weight: 600;
+	border-left-color: var(--vorpal-purple);
+}
+
+.vorpal-docs-content {
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	padding: 36px 44px;
+	box-shadow: var(--vorpal-shadow-sm);
+	min-width: 0;
+}
+
+.vorpal-docs-content h1 {
+	margin: 0 0 8px;
+	font-size: 28px;
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
+	letter-spacing: -0.01em;
+}
+
+.vorpal-docs-content h2 {
+	margin: 32px 0 10px;
+	font-size: 19px;
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--vorpal-divider);
+}
+
+.vorpal-docs-content h3 {
+	margin: 22px 0 6px;
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--vorpal-ink-700);
+}
+
+.vorpal-docs-content p { margin: 10px 0; color: var(--vorpal-ink-700); }
+
+.vorpal-docs-content ul, .vorpal-docs-content ol {
+	margin: 8px 0 12px;
+	padding-left: 22px;
+	color: var(--vorpal-ink-700);
+}
+
+.vorpal-docs-content li { margin: 4px 0; }
+
+.vorpal-docs-content code:not(pre code) {
+	background: var(--vorpal-slate-100);
+	border: 1px solid var(--vorpal-slate-200);
+	color: var(--vorpal-purple-700);
+	padding: 1px 6px;
+	border-radius: 3px;
+	font-size: 12.5px;
+}
+
+/* Light slate code block — readable for long reads, no eye strain */
+.vorpal-docs-content pre {
+	background: var(--vorpal-surface-alt);
+	border: 1px solid var(--vorpal-slate-200);
+	color: var(--vorpal-ink-900);
+	padding: 18px 22px;
+	border-radius: var(--vorpal-radius-md);
+	overflow-x: auto;
+	font-size: 12.5px;
+	line-height: 1.55;
+	margin: 12px 0;
+}
+
+.vorpal-docs-content pre code {
+	background: transparent;
+	border: 0;
+	color: inherit;
+	padding: 0;
+	font-size: inherit;
+}
+
+.vorpal-docs-content blockquote {
+	border-left: 3px solid var(--vorpal-purple);
+	background: var(--vorpal-purple-soft);
+	margin: 14px 0;
+	padding: 12px 18px;
+	border-radius: 0 var(--vorpal-radius-md) var(--vorpal-radius-md) 0;
+	color: var(--vorpal-ink-700);
+}
+
+/* ---- Callouts (admonitions) --------------------------------- */
+
+.vorpal-callout {
+	margin: 16px 0;
+	padding: 14px 18px;
+	border-radius: var(--vorpal-radius-md);
+	border: 1px solid var(--vorpal-divider);
+	background: var(--vorpal-surface-alt);
+}
+
+.vorpal-callout-title {
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
+	margin-bottom: 4px;
+	font-size: 13px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.vorpal-callout.vorpal-callout-note { border-left: 3px solid var(--vorpal-slate-400); }
+.vorpal-callout.vorpal-callout-tip  { border-left: 3px solid var(--vorpal-purple); background: var(--vorpal-purple-soft); }
+.vorpal-callout.vorpal-callout-warn { border-left: 3px solid var(--vorpal-warn); background: var(--vorpal-warn-soft); }
+
+/* ---- Tables ------------------------------------------------- */
+
+.vorpal-docs-content table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 14px 0;
+	font-size: 13.5px;
+}
+
+.vorpal-docs-content th, .vorpal-docs-content td {
+	text-align: left;
+	padding: 9px 12px;
+	border-bottom: 1px solid var(--vorpal-divider);
+	vertical-align: top;
+}
+
+.vorpal-docs-content th {
+	background: var(--vorpal-slate-100);
+	color: var(--vorpal-ink-900);
+	font-weight: 600;
+	border-bottom: 2px solid var(--vorpal-slate-200);
+	font-size: 12.5px;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.vorpal-docs-content tr:hover td { background: var(--vorpal-surface-alt); }
+
+/* ---- Key-value blocks --------------------------------------- */
+
+.vorpal-kv {
+	display: grid;
+	grid-template-columns: 160px 1fr;
+	gap: 8px 16px;
+	margin: 12px 0;
+	font-size: 13.5px;
+}
+
+.vorpal-kv dt {
+	color: var(--vorpal-slate-600);
+	font-weight: 600;
+}
+
+.vorpal-kv dd {
+	margin: 0;
+	color: var(--vorpal-ink-700);
+}
+
+/* ---- Footer — Vorpal brand strip --------------------------- */
+
+.vorpal-footer {
+	max-width: 1200px;
+	margin: 48px auto 0;
+	padding: 22px 32px 28px;
+	color: var(--vorpal-slate-600);
+	font-size: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 18px;
+	border-top: 1px solid var(--vorpal-divider);
+}
+.vorpal-footer img {
+	height: 22px;
+	width: auto;
+	opacity: 0.7;
+	transition: opacity 120ms ease;
+}
+.vorpal-footer a {
+	color: var(--vorpal-purple);
+	border-bottom-color: transparent;
+}
+.vorpal-footer a:hover {
+	color: var(--vorpal-purple-700);
+	border-bottom-color: transparent;
+}
+.vorpal-footer a:hover img { opacity: 1; }
+.vorpal-footer span { color: var(--vorpal-slate-600); }
+
+/* Legacy .vorpal-footer-meta — kept (empty) for backward compatibility with
+   any per-app footer markup we haven't migrated yet. The unified brand
+   footer doesn't use it. */
+.vorpal-footer-meta { display: flex; gap: 18px; }
+
+/* ---- Buttons — PURPLE primary ------------------------------ */
+
+.vorpal-btn {
+	background: var(--vorpal-purple);
+	color: #fff;
+	border: 0;
+	border-radius: var(--vorpal-radius-md);
+	padding: 10px 18px;
+	font-size: 14px;
+	font-weight: 600;
+	font-family: inherit;
+	cursor: pointer;
+	transition: background 120ms ease, transform 80ms ease, box-shadow 120ms ease;
+	box-shadow: 0 1px 2px rgba(96, 38, 113, 0.25);
+}
+.vorpal-btn:hover {
+	background: var(--vorpal-purple-700);
+	box-shadow: 0 2px 6px rgba(96, 38, 113, 0.32);
+}
+.vorpal-btn:active { transform: translateY(1px); }
+.vorpal-btn-block { width: 100%; padding: 12px 18px; }
+
+.vorpal-btn-secondary {
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-700);
+	border: 1px solid var(--vorpal-slate-300);
+	box-shadow: none;
+}
+.vorpal-btn-secondary:hover {
+	background: var(--vorpal-purple-soft);
+	color: var(--vorpal-purple-700);
+	border-color: var(--vorpal-purple-100);
+	box-shadow: none;
+}
+
+/* ============================================================
+ * LOGIN — the dark-glass exception
+ * ============================================================
+ *
+ * Deliberately NOT light. Login is the ceremonial "front door" surface:
+ * small, centered, brief. Dark glass is perfect here. Once authenticated,
+ * the operator lands in a light work surface (the rest of brand.css).
+ *
+ * Ported from the original `.form-3` look that lived in
+ * admin/configurator/assets/style.css — translucent dark card with
+ * backdrop-filter blur, inset edge highlight, a blurred image backdrop,
+ * and a purple "lit-from-inside" submit button. Inputs and labels keep
+ * the dark-on-darker gradient feel.
+ */
+
+.vorpal-login {
+	min-height: 100vh;
+	background:
+		linear-gradient(135deg, rgba(96, 38, 113, 0.45) 0%, rgba(11, 19, 32, 0.65) 100%),
+		url('/blade/portal/brand/blurred.jpg') center / cover no-repeat fixed;
+	display: grid;
+	place-items: center;
+	padding: 24px;
+}
+
+/* Wordmark block ABOVE the card — mirrors the original .form-3 layout
+   where "Vorpal BLADE" + tagline floated above the form, lots of breathing
+   room. Stacks vertically inside .vorpal-login (which is now a flex/grid
+   column container — see below). */
+.vorpal-login-stack {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 36px;
+}
+
+.vorpal-login-header {
+	text-align: center;
+	color: #fff;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.vorpal-login-header h1 {
+	margin: 0 0 6px;
+	font-family: var(--vorpal-font-sans);
+	font-weight: 300;
+	font-size: 44px;
+	letter-spacing: 0.02em;
+	color: #fff;
+}
+.vorpal-login-header h1 strong {
+	font-weight: 700;
+	letter-spacing: 0.04em;
+}
+.vorpal-login-header p {
+	margin: 0;
+	font-style: italic;
+	font-size: 15px;
+	color: rgba(255, 255, 255, 0.78);
+	letter-spacing: 0.01em;
+}
+
+.vorpal-login-card {
+	position: relative;
+	width: 100%;
+	max-width: 380px;
+	/* Charcoal (#1f1f24-ish) with enough translucency that the purple
+	   backdrop tints through softly — reads as "smoky glass on a
+	   purple haze," lighter than the previous near-black version. */
+	background: rgba(31, 31, 36, 0.78);
+	backdrop-filter: blur(16px) saturate(140%);
+	-webkit-backdrop-filter: blur(16px) saturate(140%);
+	border: 1px solid rgba(255, 255, 255, 0.10);
+	border-radius: var(--vorpal-radius-lg);
+	padding: 28px 30px 24px;
+	box-shadow:
+		inset 0 0 2px 1px rgba(255, 255, 255, 0.10),
+		0 24px 60px -12px rgba(0, 0, 0, 0.55);
+	color: #e8eaef;
+}
+
+/* Metallic highlight strip across the top of the card — the
+   "light catching glass" detail from the original .form-3. Bright
+   white center fading to transparent on both ends. Sits ~6px inside
+   the card top so it's clearly visible against the dark background
+   rather than fighting the border edge. */
+.vorpal-login-card::after {
+	content: "";
+	position: absolute;
+	left: 12%;
+	top: 8px;
+	width: 76%;
+	height: 1px;
+	background: linear-gradient(90deg,
+		transparent 0%,
+		rgba(255, 255, 255, 0.0) 8%,
+		rgba(220, 220, 235, 0.85) 35%,
+		rgba(255, 255, 255, 1.0) 50%,
+		rgba(220, 220, 235, 0.85) 65%,
+		rgba(255, 255, 255, 0.0) 92%,
+		transparent 100%);
+	box-shadow:
+		0 0 4px rgba(255, 255, 255, 0.7),
+		0 0 10px rgba(255, 255, 255, 0.35);
+	pointer-events: none;
+	z-index: 3;
+}
+
+/* Small "light source" glow just above the highlight strip — the
+   suggestion of a lamp pointing at the card. */
+.vorpal-login-card::before {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: -5px;
+	width: 12px;
+	height: 6px;
+	margin-left: -6px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.7);
+	box-shadow:
+		0 0 12px 4px rgba(255, 255, 255, 0.6),
+		0 0 24px 8px rgba(255, 255, 255, 0.25);
+	pointer-events: none;
+	z-index: 4;
+}
+
+.vorpal-login-brand {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 22px;
+}
+
+.vorpal-login-brand .vorpal-brand-mark {
+	height: 40px;
+}
+
+.vorpal-login-brand-text {
+	display: flex;
+	flex-direction: column;
+	line-height: 1.15;
+}
+.vorpal-login-brand-text .vorpal-brand-product {
+	color: #fff;
+	font-size: 16px;
+	font-weight: 600;
+}
+.vorpal-login-brand-text .vorpal-brand-tagline {
+	color: rgba(232, 234, 239, 0.65);
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.vorpal-login h1 {
+	font-size: 18px;
+	color: #fff;
+	margin: 0 0 4px;
+	font-weight: 600;
+}
+.vorpal-login p.vorpal-login-sub {
+	color: rgba(232, 234, 239, 0.65);
+	margin: 0 0 22px;
+	font-size: 13.5px;
+}
+
+.vorpal-form-row { margin-bottom: 14px; }
+.vorpal-form-row label {
+	display: block;
+	font-size: 11px;
+	color: rgba(232, 234, 239, 0.7);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	margin-bottom: 5px;
+	font-weight: 600;
+}
+.vorpal-form-row input[type=text],
+.vorpal-form-row input[type=password] {
+	width: 100%;
+	padding: 10px 12px;
+	border: 1px solid rgba(0, 0, 0, 0.5);
+	border-radius: var(--vorpal-radius-md);
+	font-size: 14px;
+	font-family: inherit;
+	color: #fff;
+	background: linear-gradient(180deg, rgba(31, 33, 36, 0.85), rgba(39, 41, 44, 0.85));
+	box-shadow:
+		0 1px 0 rgba(255, 255, 255, 0.08),
+		inset 0 1px 2px rgba(0, 0, 0, 0.35);
+	transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.vorpal-form-row input::placeholder {
+	color: rgba(232, 234, 239, 0.35);
+}
+.vorpal-form-row input:focus {
+	outline: 0;
+	border-color: var(--vorpal-purple);
+	box-shadow:
+		inset 0 1px 2px rgba(0, 0, 0, 0.4),
+		0 0 0 3px rgba(96, 38, 113, 0.35);
+}
+
+/* Submit button — purple "lit from inside" glow. */
+.vorpal-login .vorpal-btn,
+.vorpal-login button[type=submit],
+.vorpal-login input[type=submit] {
+	width: 100%;
+	margin-top: 4px;
+	padding: 11px 18px;
+	background: linear-gradient(180deg, #7c3a90 0%, var(--vorpal-purple) 100%);
+	color: #fff;
+	border: 1px solid rgba(0, 0, 0, 0.4);
+	border-radius: var(--vorpal-radius-md);
+	font-size: 14px;
+	font-weight: 600;
+	font-family: inherit;
+	cursor: pointer;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.25),
+		inset 0 -8px 12px rgba(0, 0, 0, 0.18),
+		0 4px 14px rgba(96, 38, 113, 0.4);
+	text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.45);
+	transition: filter 120ms ease, transform 80ms ease;
+}
+.vorpal-login .vorpal-btn:hover,
+.vorpal-login button[type=submit]:hover,
+.vorpal-login input[type=submit]:hover {
+	filter: brightness(1.08);
+}
+.vorpal-login .vorpal-btn:active,
+.vorpal-login button[type=submit]:active,
+.vorpal-login input[type=submit]:active {
+	transform: translateY(1px);
+}
+
+.vorpal-login-error {
+	color: #ffb3a0;
+	background: rgba(168, 67, 31, 0.18);
+	border: 1px solid rgba(168, 67, 31, 0.4);
+	padding: 10px 14px;
+	border-radius: var(--vorpal-radius-md);
+	font-size: 13px;
+	margin-bottom: 16px;
+}
+
+.vorpal-login-footer {
+	margin-top: 18px;
+	padding-top: 14px;
+	border-top: 1px solid rgba(255, 255, 255, 0.10);
+	color: rgba(232, 234, 239, 0.55);
+	font-size: 11.5px;
+	letter-spacing: 0.04em;
+	text-align: center;
+}
+
+/* ---- Responsive --------------------------------------------- */
+
+@media (max-width: 980px) {
+	.vorpal-docs { grid-template-columns: 1fr; }
+	.vorpal-docs-nav { position: static; }
+	.vorpal-hero { grid-template-columns: 1fr; }
+	.vorpal-hero-meta { text-align: left; }
+}
+
+@media (max-width: 720px) {
+	.vorpal-topbar { height: auto; flex-wrap: wrap; }
+	.vorpal-brand { padding: 12px 18px; }
+	.vorpal-nav { padding: 0 6px; overflow-x: auto; }
+	.vorpal-nav a { padding: 12px 14px; }
+	.vorpal-page { padding: 22px 18px 40px; }
+	.vorpal-docs-content { padding: 24px 22px; }
+}

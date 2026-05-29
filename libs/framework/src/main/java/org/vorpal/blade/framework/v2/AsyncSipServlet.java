@@ -38,6 +38,8 @@ import javax.servlet.sip.URI;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.analytics.JmsPublisher;
+import org.vorpal.blade.framework.v2.analytics.SessionKey;
+import org.vorpal.blade.framework.v2.analytics.SessionKeyPK;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
 import org.vorpal.blade.framework.v2.callflow.Callback;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
@@ -580,6 +582,26 @@ public abstract class AsyncSipServlet extends SipServlet
 																		+ rr.key);
 													}
 													request.getApplicationSession().addIndexKey(rr.key);
+
+													// Publish a SessionKey row for post-call DB lookups.
+													// Composite PK (session_id, name, value) makes this
+													// naturally idempotent on retransmissions.
+													if (Analytics.jmsPublisher != null) {
+														try {
+															SessionKey sk = new SessionKey();
+															SessionKeyPK pk = new SessionKeyPK();
+															pk.setSessionId(Analytics.getSessionId(
+																	request.getApplicationSession()));
+															pk.setName(selector.getId());
+															pk.setValue(rr.key);
+															sk.setId(pk);
+															Analytics.jmsPublisher.send(sk);
+														} catch (Exception ex) {
+															sipLogger.warning(request,
+																	"AsyncSipServlet - failed to publish SessionKey: "
+																			+ ex.getMessage());
+														}
+													}
 												}
 
 												// Add named groups to SipSession
@@ -1519,40 +1541,6 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 
 		return dialog;
-	}
-
-	/// Extracts the Vorpal timestamp from a SIP message using either X-Vorpal-ID or
-	/// X-Vorpal-Timestamp headers
-	///
-	/// Tries the newer X-Vorpal-ID parameterable format first, then falls back to
-	/// the
-	/// legacy X-Vorpal-Timestamp header for backwards compatibility.
-	///
-	/// @param msg the SIP message to extract the timestamp from
-	/// @return the Vorpal timestamp, or null if not found
-	public static String getVorpalTimestampFromMessage(SipServletMessage msg) {
-		String timestamp = null;
-
-		try {
-			// Try X-Vorpal-ID (new parameterable format) first
-			Parameterable xVorpalId = msg.getParameterableHeader(Callflow.X_VORPAL_ID);
-			if (xVorpalId != null) {
-				timestamp = xVorpalId.getParameter(Callflow.TIMESTAMP_PARAM);
-			}
-		} catch (Exception ex) {
-			sipLogger.severe(msg, ex);
-		}
-
-		// Fall back to X-Vorpal-Timestamp header
-		if (timestamp == null) {
-			try {
-				timestamp = msg.getHeader(Callflow.X_VORPAL_TIMESTAMP);
-			} catch (Exception ex) {
-				sipLogger.severe(msg, ex);
-			}
-		}
-
-		return timestamp;
 	}
 
 }

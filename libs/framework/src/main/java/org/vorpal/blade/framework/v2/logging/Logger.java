@@ -776,7 +776,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	public static String hexHash(SipApplicationSession appSession) {
 		StringBuilder sb = new StringBuilder();
 
-		if (appSession != null) {
+		if (appSession != null && appSession.isValid()) {
 
 			String hash1 = Callflow.getVorpalSessionId(appSession);
 			if (hash1 == null) {

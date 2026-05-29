@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-admin-redirect</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Admin Root Redirect</name>
+	<description>
+		The virtual host's default web app (context-root "/"). 302-redirects
+		"/", "/blade", and any unowned path to /blade/portal/, so users can
+		type either / or /blade and land in the admin portal. Zero deps; just
+		a JSP mapped to /*. WLS longest-prefix-match keeps /blade/portal/,
+		/blade/configurator/, etc. routing to their own WARs unchanged.
+	</description>
+
+	<build>
+		<finalName>blade-redirect</finalName>
+	</build>
+
+</project>

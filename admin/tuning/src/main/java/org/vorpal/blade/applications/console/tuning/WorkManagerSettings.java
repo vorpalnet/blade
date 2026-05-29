@@ -49,7 +49,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  *   <li><b>cleanup</b> — Session and resource cleanup</li>
  * </ul>
  */
-@Path("/api/v1/work-managers")
+@Path("/work-managers")
 @Tag(name = "Work Managers", description = "OCCAS thread scheduling and capacity configuration")
 public class WorkManagerSettings {
 
@@ -81,8 +81,13 @@ public class WorkManagerSettings {
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
 
-			// Read all constraint values into maps for fast lookup
-			ObjectName domainConfig = new ObjectName("com.bea:Name=DomainConfiguration,Type=Domain");
+			// Read all constraint values into maps for fast lookup.
+			// DomainConfiguration MBean is named after the actual domain, not
+			// "DomainConfiguration" — direct lookup throws on WLS 14.1.1.
+			// Memory: [[wls-domain-jmx-bootstrap]].
+			ObjectName service = new ObjectName(
+					"com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean");
+			ObjectName domainConfig = (ObjectName) mbs.getAttribute(service, "DomainConfiguration");
 			ObjectName selfTuning = (ObjectName) mbs.getAttribute(domainConfig, "SelfTuning");
 
 			Map<String, Integer> fairShares = readConstraints(mbs, selfTuning, "FairShareRequestClasses", "FairShare");
@@ -162,7 +167,13 @@ public class WorkManagerSettings {
 					new Object[]{0, 120000}, new String[]{"int", "int"});
 
 			try {
-				ObjectName domainConfig = new ObjectName("com.bea:Name=DomainConfiguration,Type=Domain");
+				// On the EDIT MBean server, use EditServiceMBean.DomainConfiguration
+				// to reach the editable Domain — same problem and same shape as the
+				// read-side fix in this file, just on a different well-known service
+				// MBean. Memory: [[wls-domain-jmx-bootstrap]].
+				ObjectName editService = new ObjectName(
+						"com.bea:Name=EditService,Type=weblogic.management.mbeanservers.edit.EditServiceMBean");
+				ObjectName domainConfig = (ObjectName) editMbs.getAttribute(editService, "DomainConfiguration");
 				ObjectName selfTuning = (ObjectName) editMbs.getAttribute(domainConfig, "SelfTuning");
 
 				for (JsonNode wmNode : input) {

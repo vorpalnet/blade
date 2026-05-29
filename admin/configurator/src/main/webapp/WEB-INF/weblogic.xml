@@ -1,17 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <wls:weblogic-web-app xmlns:wls="http://xmlns.oracle.com/weblogic/weblogic-web-app" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd">
     <wls:weblogic-version>14.1.1.0</wls:weblogic-version>
-    <wls:context-root>configurator</wls:context-root>
+    <wls:context-root>blade/configurator</wls:context-root>
 
+	<!-- Shared session cookie across BLADE admin webapps. Same cookie-name
+	     + path=/ in every admin WAR (configurator, securelogix-admin, …)
+	     gives WebLogic's realm-level SSO a single session to recognize,
+	     so a user authenticates once across the whole admin tier. -->
 	<wls:session-descriptor>
-		<wls:timeout-secs>1800</wls:timeout-secs>
+		<wls:timeout-secs>3600</wls:timeout-secs>
+		<wls:invalidation-interval-secs>60</wls:invalidation-interval-secs>
+		<wls:cookie-name>BLADEADMINSESSION</wls:cookie-name>
+		<wls:cookie-path>/</wls:cookie-path>
+		<wls:cookie-max-age-secs>-1</wls:cookie-max-age-secs>
+		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
 	</wls:session-descriptor>
-
-	<wls:container-descriptor>
-		<wls:prefer-web-inf-classes>true</wls:prefer-web-inf-classes>
-	</wls:container-descriptor>
-
-
 
 	<wls:security-role-assignment>
 		<wls:role-name>Admin</wls:role-name>
@@ -33,16 +36,6 @@
 		<wls:externally-defined/>
 	</wls:security-role-assignment>
 
-
-	<wls:session-descriptor>
-		<wls:timeout-secs>3600</wls:timeout-secs>
-		<wls:invalidation-interval-secs>60</wls:invalidation-interval-secs>
-		<wls:cookie-name>BLADECONSOLESESSION</wls:cookie-name>
-		<wls:cookie-path>/blade/</wls:cookie-path>
-		<wls:cookie-max-age-secs>-1</wls:cookie-max-age-secs>
-		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
-	</wls:session-descriptor>
-
 	<wls:jsp-descriptor>
 		<wls:keepgenerated>false</wls:keepgenerated>
 		<wls:page-check-seconds>-1</wls:page-check-seconds>
@@ -50,13 +43,17 @@
 		<wls:debug>true</wls:debug>
 	</wls:jsp-descriptor>
 
+	<!-- prefer-web-inf-classes and prefer-application-packages are mutually
+	     exclusive on WLS 14.1.1+. The Configurator is a standalone WAR
+	     (no library-ref), so prefer-web-inf-classes=true is the right
+	     classloader policy — it makes every bundled JAR in WEB-INF/lib
+	     take precedence, which subsumes what the prior
+	     prefer-application-packages org.xmlsoap.schemas.* entry was doing. -->
 	<wls:container-descriptor>
+		<wls:prefer-web-inf-classes>true</wls:prefer-web-inf-classes>
 		<wls:referer-validation>STRICT</wls:referer-validation>
 		<wls:filter-dispatched-requests-enabled>false</wls:filter-dispatched-requests-enabled>
 		<wls:servlet-reload-check-secs>-1</wls:servlet-reload-check-secs>
-		<wls:prefer-application-packages>
-			<wls:package-name>org.xmlsoap.schemas.*</wls:package-name>
-		</wls:prefer-application-packages>
 	</wls:container-descriptor>
 
 

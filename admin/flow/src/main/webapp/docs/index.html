@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Documentation · BLADE Flow Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/flow/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Flow Editor</span>
+				<span class="vorpal-brand-tagline">Visual FSMAR Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../flow.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation</div>
+				<h1 class="vorpal-page-title">Flow Editor Handbook</h1>
+				<p class="vorpal-page-subtitle">
+					Operator reference for the BLADE Flow Editor. Visual
+					authoring for FSMAR — the Finite-State-Machine
+					Application Router that OCCAS consults before any servlet
+					sees a SIP message.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html" class="vorpal-active-doc">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="fsmar-concepts.html">FSMAR Concepts</a></li>
+						<li><a href="editor-guide.html">Editor Guide</a></li>
+						<li><a href="round-trip.html">Import / Export Round-Trip</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Welcome</h1>
+					<p>
+						This handbook covers the Flow Editor, which is a visual
+						front-end for FSMAR descriptors. If you have ever
+						hand-edited an <code>fsmar.xml</code> file, this is
+						the GUI equivalent — same source of truth, much
+						friendlier authoring.
+					</p>
+
+					<h2>Reading order</h2>
+					<p>If you are new to flow authoring, read in this order:</p>
+					<ol>
+						<li><a href="overview.html">Overview</a> — what the editor produces and where it sits in OCCAS request handling.</li>
+						<li><a href="fsmar-concepts.html">FSMAR Concepts</a> — states, transitions, triggers, conditions, initial vs. non-initial requests.</li>
+						<li><a href="editor-guide.html">Editor Guide</a> — the canvas, palette, inspectors, and the Tasks window.</li>
+						<li><a href="round-trip.html">Import / Export Round-Trip</a> — how the visual graph becomes the deployed XML and back again.</li>
+					</ol>
+
+					<h2>At a glance</h2>
+					<table>
+						<tr><th>Produces</th><td>FSMAR XML descriptor, shipped in <code>fsmar.jar</code> at <code>$DOMAIN_HOME/approuter/</code></td></tr>
+						<tr><th>Canvas engine</th><td>mxGraph (jgraphx 4.2.2)</td></tr>
+						<tr><th>Backend</th><td><code>FsmarExportServlet</code> (graph → XML) and <code>FsmarImportServlet</code> (XML → graph) in this WAR</td></tr>
+						<tr><th>Activation</th><td>FSMAR is loaded by OCCAS via the SPI <code>javax.servlet.sip.ar.spi.SipApplicationRouterProvider</code>; the engine tier reboots to pick up a new descriptor.</td></tr>
+						<tr><th>Triggers fire on</th><td>Initial SIP requests only — see <a href="fsmar-concepts.html">FSMAR Concepts</a> for the full method list.</td></tr>
+					</table>
+
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Quick action</div>
+						<p>
+							The <a href="../flow.html">Editor</a> tab opens the
+							canvas with the last-imported flow loaded. Drag a
+							stencil from the palette, double-click a state to
+							edit, drag from state-edge to state-edge to add a
+							transition. Press Export to round-trip changes
+							back to the FSMAR XML.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

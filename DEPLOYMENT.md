@@ -47,15 +47,15 @@ Management tools that run **only on AdminServer**. Each is a skinny WAR (no JARs
 
 | Source module | WAR filename | Context root | Purpose |
 |---|---|---|---|
-| `admin/console` | `blade.war` | `/blade` | Navigation shell — sidebar links to every other admin app |
-| `admin/configurator` | `configurator.war` | `/configurator` | JSON Schema-based config editor, JMX-backed |
-| `admin/flow` | `flow.war` | `/flow` | Visual FSMAR diagram editor (mxGraph) |
-| `admin/tuning` | `tuning.war` | `/tuning` | JVM / SIP / OCCAS tuning knobs |
-| `admin/file-manager` | `files.war` | `/files` | WebSocket-based config file management |
-| `admin/explorer` | `explorer.war` | `/explorer` | Experimental EasyUI forms |
-| `admin/watcher` | `watcher.war` | `/watcher` | Log/event monitor |
-| `admin/crud-editor` | `crud-editor.war` | `/crud-editor` | CRUD service config editor |
-| `javadoc` | `javadoc.war` | `/javadoc` | Browsable Javadoc with UML diagrams |
+| `admin/portal` | `portal.war` | `/blade/portal` | Unified admin shell — left rail hosts every other admin app via iframe |
+| `admin/redirect` | `blade-redirect.war` | `/blade` | 302s bare `/blade` to `/blade/portal/` |
+| `admin/configurator` | `configurator.war` | `/blade/configurator` | JSON Schema-based config editor, JMX-backed |
+| `admin/flow` | `flow.war` | `/blade/flow` | Visual FSMAR diagram editor (mxGraph) |
+| `admin/tuning` | `tuning.war` | `/blade/tuning` | JVM / SIP / OCCAS tuning knobs |
+| `admin/logs` | `logs.war` | `/blade/logs` | Cluster log tail viewer |
+| `admin/watcher` | `watcher.war` | `/blade/watcher` | Log/event monitor |
+| `admin/crud-editor` | `crud-editor.war` | `/blade/crud-editor` | CRUD service config editor |
+| `admin/javadoc` | `javadoc.war` | `/blade/javadoc` | Browsable Javadoc with UML diagrams |
 
 - **Why AdminServer only:** admin apps expose management endpoints; deploying them to the cluster would expose those endpoints on every engine node and duplicate state.
 
@@ -182,15 +182,15 @@ This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The s
 
 | Artifact | Context |
 |---|---|
-| `blade.war` | `/blade` (admin console) |
-| `configurator.war` | `/configurator` |
-| `flow.war` | `/flow` |
-| `tuning.war` | `/tuning` |
-| `files.war` | `/files` (file-manager) |
-| `explorer.war` | `/explorer` |
-| `watcher.war` | `/watcher` |
-| `crud-editor.war` | `/crud-editor` |
-| `javadoc.war` | `/javadoc` |
+| `portal.war` | `/blade/portal` (unified admin shell) |
+| `blade-redirect.war` | `/blade` (302s to /blade/portal/) |
+| `configurator.war` | `/blade/configurator` |
+| `flow.war` | `/blade/flow` |
+| `tuning.war` | `/blade/tuning` |
+| `logs.war` | `/blade/logs` |
+| `watcher.war` | `/blade/watcher` |
+| `crud-editor.war` | `/blade/crud-editor` |
+| `javadoc.war` | `/blade/javadoc` |
 
 **`dist/<ver>/services/`** (deploy to the cluster):
 

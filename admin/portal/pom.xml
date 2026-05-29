@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-admin-portal</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Admin Portal</name>
+	<description>
+		Unified admin shell. Owns the top bar, left-rail navigation, and
+		content area; loads each admin app (Configurator, Flow, Explorer,
+		JSON Forms, Logs, Tuning, Files, CRUD Editor, Watcher) into the
+		content area based on a customer-editable manifest. Replaces the
+		retired blade/admin/console iframe shell.
+
+		Carries a small JAX-RS surface at /api/* that queries the
+		AdminServer's DomainRuntime MBean tree to tell the shell which
+		admin apps are currently deployed and ACTIVE. The shell
+		intersects that with manifest.json so only present apps appear.
+	</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>portal</finalName>
+		<!-- Inherits the parent pom's maven-war-plugin packagingExcludes regex,
+		     which excludes every JAR EXCEPT vorpal-blade-library-framework.
+		     Portal's Java (PortalStartupListener) instantiates SettingsManager
+		     from that JAR, so it must be bundled into the WAR — the shared
+		     library holds only 3rd-party JARs and does NOT contain the
+		     framework JAR. -->
+	</build>
+
+</project>

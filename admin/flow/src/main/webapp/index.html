@@ -1,151 +1,115 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>BLADE Flow Editor</title>
-	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
-<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
-<link rel="stylesheet" href="./css/jquery-ui.modified.css">
-<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css"
-	integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
-
-
-<script src="./js/flowTasks.js" defer></script>
-
-
-
-
-
-	<style type="text/css" media="screen">
-		div.base {
-			position: absolute;
-			overflow: hidden;
-			font-family: Arial;
-			font-size: 8pt;
-		}
-		div.base#graph {
-			border-style: solid;
-			border-color: #F2F2F2;
-			border-width: 1px;
-			background: url('images/grid.gif');
-		}
-		/* View filter panel inside the Tasks window */
-		.view-panel {
-			padding: 6px 8px 8px 8px;
-			font-family: Arial;
-			font-size: 12px;
-		}
-		.view-panel .view-header {
-			margin-bottom: 4px;
-		}
-		.view-panel .view-header a {
-			font-size: 11px;
-			color: #4679B6;
-			text-decoration: none;
-		}
-		.view-panel .view-header a:hover {
-			text-decoration: underline;
-		}
-		.view-panel .view-item {
-			display: block;
-			font-weight: normal;
-			padding: 2px 0;
-			cursor: pointer;
-		}
-		.view-panel .view-item input {
-			margin-right: 6px;
-			vertical-align: middle;
-		}
-		.view-panel .view-empty {
-			color: #888;
-			font-style: italic;
-			font-size: 11px;
-		}
-		hr.view-sep {
-			border: none;
-			border-top: 1px solid #ccc;
-			margin: 4px 0 6px 0;
-		}
-	</style>
-	<script type="text/javascript">
-		// Disable mxResources auto-load. The resource files (app.txt,
-		// editor.txt, graph.txt) are not reachable in this deployed
-		// environment and the 404s clutter the console. Tooltips are
-		// applied manually via flowUtils.applyToolbarTooltips().
-		var mxLoadResources = false;
-	</script>
-
-
-	<script type="text/javascript" src="js/mxClient.js"></script>
-	<script type="text/javascript" src="js/app.js"></script>
-	<script type="text/javascript" src="js/flowUtils.js"></script>
-	<script type="text/javascript" src="js/flowFsmar.js"></script>
-	
-	
-	<script type="text/javascript">
-	
-		mxGraph.prototype.htmlLabels = true;
-	
-		mxGraph.prototype.isWrapping = function(cell)
-		{
-			return true;
-		};
-		
-		mxConstants.DEFAULT_HOTSPOT = 1;
-		
-		// Enables guides
-		mxGraphHandler.prototype.guidesEnabled = true;
-		
-	    // Alt disables guides
-	    mxGuide.prototype.isEnabledForEvent = function(evt)
-	    {
-	    	return !mxEvent.isAltDown(evt);
-	    };
-		
-		// Enables snapping waypoints to terminals
-		mxEdgeHandler.prototype.snapToTerminals = true;
-		
-		window.onbeforeunload = function() { return mxResources.get('changesLost'); };
-	</script>
-	
-	
-	
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/flow/favicon.svg">
 </head>
-<body onload="createEditor('config/workfloweditor.xml');">
-	<table id="splash" width="100%" height="100%"
-		style="background:white;position:absolute;top:0px;left:0px;z-index:4;">
-		<tr>
-			<td align="center" valign="middle">
-				<img src="images/loading.gif">
-			</td>
-		</tr>
-	</table>
-	<div id="graph" class="base">
-		<!-- Graph Here -->
-	</div>
-	<div id="status" class="base" align="right" style="white-space:nowrap;">
-		<!-- Status Here -->
-	</div>
-	
-	<script>
-	
-		// Loads the stencils into the registry
-  		var req = mxUtils.load('./stencils/microservices.xml');
-   		var root = req.getDocumentElement();
-   		var shape = root.firstChild;
+<body>
+<div class="vorpal-app">
 
-   		while (shape != null){
-      		if (shape.nodeType == mxConstants.NODETYPE_ELEMENT){
-         		mxStencilRegistry.addStencil(shape.getAttribute('name'), new mxStencil(shape));
-      		}         
-   			shape = shape.nextSibling;
-		}
-				
-		
-	</script>
-	
-	
-	
-	
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Flow Editor</span>
+				<span class="vorpal-brand-tagline">Visual FSMAR Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html" class="vorpal-active">Overview</a>
+			<a href="flow.html">Editor</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>BLADE Flow Editor</h1>
+					<p>
+						Author and edit FSMAR routing flows visually. Drag states
+						onto the canvas, connect them with transitions, attach
+						triggers and conditions, and export the result as the
+						FSMAR descriptor that ships in the application router
+						JAR. Round-trips with the running router via the
+						<code>fsmar.xml</code> exchange.
+					</p>
+				</div>
+				<div class="vorpal-hero-meta">
+					<span>Engine · mxGraph</span>
+					<span>Format · FSMAR XML</span>
+				</div>
+			</section>
+
+			<section class="vorpal-card-grid">
+				<a href="flow.html" class="vorpal-card">
+					<span class="vorpal-card-icon">⬡</span>
+					<h3>Open Editor</h3>
+					<p>
+						Launch the visual canvas. Drag stencils from the palette,
+						wire transitions, and export to FSMAR. Includes the
+						Tasks window for filtered overviews, the State and
+						Transition inspectors, and the import/export round-trip.
+					</p>
+					<span class="vorpal-card-link">Open Flow Editor</span>
+				</a>
+
+				<a href="docs/index.html" class="vorpal-card">
+					<span class="vorpal-card-icon">📖</span>
+					<h3>Documentation</h3>
+					<p>
+						Operator handbook — FSMAR concepts (state / transition /
+						trigger / condition), the canvas vocabulary, import /
+						export round-trip semantics, and the relationship
+						between the visual graph and the deployed FSMAR JAR.
+					</p>
+					<span class="vorpal-card-link">Browse Documentation</span>
+				</a>
+
+				<a href="docs/fsmar-concepts.html" class="vorpal-card">
+					<span class="vorpal-card-icon">≡</span>
+					<h3>FSMAR Concepts</h3>
+					<p>
+						The state machine model under the visual editor.
+						Ingress / egress clouds, initial-request triggers,
+						non-initial routing, and how the BLADE framework
+						interprets the exported descriptor at request time.
+					</p>
+					<span class="vorpal-card-link">Read Concepts</span>
+				</a>
+
+				<a href="docs/troubleshooting.html" class="vorpal-card">
+					<span class="vorpal-card-icon">⚠</span>
+					<h3>Troubleshooting</h3>
+					<p>
+						Stencil 404s? mxResources strings missing? Save not
+						persisting? Editor focus stealing? Known gotchas with
+						the mxGraph integration and the FSMAR servlet
+						round-trip.
+					</p>
+					<span class="vorpal-card-link">View Runbook</span>
+				</a>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
 </body>
 </html>

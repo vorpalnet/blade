@@ -5,14 +5,15 @@ import java.io.Serializable;
 import javax.persistence.Column;
 import javax.persistence.EmbeddedId;
 import javax.persistence.Entity;
-import javax.persistence.Lob;
 import javax.persistence.NamedQuery;
 import javax.persistence.Table;
+import javax.persistence.Transient;
 
-/**
- * The persistent class for the attribute database table.
- * 
- */
+/// Persistent class for the `attribute` database table.
+///
+/// The `name` field is wire-only (`@Transient` for JPA; still serialized
+/// over JMS by Java Serialization) — the consumer translates it to
+/// `attribute_name_id` via the [AttributeName] lookup table before persist.
 @Entity
 @Table(name = "attribute")
 @NamedQuery(name = "Attribute.findAll", query = "SELECT a FROM Attribute a")
@@ -22,15 +23,20 @@ public class Attribute implements Serializable {
 	@EmbeddedId
 	private AttributePK id;
 
-	@Lob
-	@Column(nullable = false)
+	@Column(nullable = false, length = 1024)
 	private String value;
+
+	/// Wire-side string name (e.g. "From", "To", "caller"). Not stored;
+	/// translated to [AttributePK#attributeNameId] by the consumer.
+	@Transient
+	private String name;
 
 	public Attribute() {
 	}
 
-	public Attribute(String name, String value) {		
-		this.setId(new AttributePK(name));
+	public Attribute(String name, String value) {
+		this.name = name;
+		this.id = new AttributePK();
 		this.value = value;
 	}
 
@@ -50,4 +56,11 @@ public class Attribute implements Serializable {
 		this.value = value;
 	}
 
+	public String getName() {
+		return this.name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
 }

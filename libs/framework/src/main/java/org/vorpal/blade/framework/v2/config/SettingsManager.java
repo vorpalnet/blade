@@ -469,12 +469,19 @@ public class SettingsManager<T> {
 			NotCompliantMBeanException, JsonGenerationException, JsonMappingException, InstantiationException,
 			IllegalAccessException, IOException, ServletParseException {
 
-//		sipLogger.fine("Registering MBean: " + objectName.toString());
-		oi = server.registerMBean(settings, objectName);
-		// what is this for?
+		// Wrap Settings in StandardMBean with the SettingsMXBean interface
+		// explicitly named, and isMXBean=true. This bypasses JMX's
+		// auto-detection of the MBean interface — which on WLS 14.1.1 was
+		// silently dropping the no-arg getter `getCurrentJson()` from the
+		// computed MBeanInfo even though it's clearly present on the interface
+		// (verified 2026-05-24 via classloader+method-count diagnostic). Explicit
+		// StandardMBean registration forces JMX to introspect EXACTLY this
+		// interface and include all its methods. See memory
+		// `[[settingsmxbean-introspection-bug]]`.
+		javax.management.StandardMBean mxbean =
+				new javax.management.StandardMBean(settings, SettingsMXBean.class, true);
+		oi = server.registerMBean(mxbean, objectName);
 		objectName = oi.getObjectName();
-//		sipLogger.fine("object name is now: " + objectName.toString());
-
 	}
 
 	public void unregister() throws ServletException, IOException {
@@ -581,13 +588,30 @@ public class SettingsManager<T> {
 			}
 			FormLayoutGroup[] groups = raw.getAnnotationsByType(FormLayoutGroup.class);
 			if (groups != null && groups.length > 0) {
-				ArrayNode outer = mapper.createArrayNode();
+				// Each @FormLayoutGroup is one of two forms: a flat row (value)
+				// emitted to x-form-groups as [field...], or a row of vertical
+				// stacks (columns) emitted to x-form-columns as {columns:[[field...]]}.
+				ArrayNode flatRows = mapper.createArrayNode();
+				ArrayNode columnRows = mapper.createArrayNode();
 				for (FormLayoutGroup g : groups) {
-					ArrayNode row = mapper.createArrayNode();
-					for (String f : g.value()) row.add(f);
-					outer.add(row);
+					if (g.columns().length > 0) {
+						ObjectNode entry = mapper.createObjectNode();
+						ArrayNode columns = mapper.createArrayNode();
+						for (FormLayoutColumn col : g.columns()) {
+							ArrayNode stack = mapper.createArrayNode();
+							for (String f : col.value()) stack.add(f);
+							columns.add(stack);
+						}
+						entry.set("columns", columns);
+						columnRows.add(entry);
+					} else {
+						ArrayNode row = mapper.createArrayNode();
+						for (String f : g.value()) row.add(f);
+						flatRows.add(row);
+					}
 				}
-				node.set("x-form-groups", outer);
+				if (flatRows.size() > 0) node.set("x-form-groups", flatRows);
+				if (columnRows.size() > 0) node.set("x-form-columns", columnRows);
 			}
 			FormSection[] sections = raw.getAnnotationsByType(FormSection.class);
 			if (sections != null && sections.length > 0) {

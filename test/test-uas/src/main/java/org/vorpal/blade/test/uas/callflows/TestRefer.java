@@ -8,52 +8,57 @@ import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 
-/**
- * This is a simple Third-Party Call-Control callflow.
- * 
- * <pre>{@code
- * 
- *  TestUAC             Transfer            TestRefer          TestInvite
- *  transferee                              transferor         target
- * ----------           --------            ---------          ----------
- *     |                   |                   |                   |
- *     | INVITE            |                   |                   |
- *     |------------------>|                   |                   |
- *     |                   | INVITE            |                   |
- *     |                   |------------------>|                   |
- *     |                   |            200 OK |                   |
- *     |                   |<------------------|                   |
- *     |            200 OK |                   |                   |
- *     |<------------------|                   |                   |
- *     | ACK               |                   |                   |
- *     |------------------>|                   |                   |
- *     |                   | ACK               |                   |
- *     |                   |------------------>|                   |
- *     |                   |             REFER |                   |
- *     |                   |<------------------|                   |
- *     |                   | 202 Accepted      |                   |
- *     |                   |------------------>|                   |
- *     |                   | NOTIFY            |                   |
- *     |                   |------------------>|                   |      ; SIP/2.0 100 Trying
- *     |                   |            200 OK |                   |
- *     |                   |<------------------|                   |
- *     |                   | INVITE            |                   |
- *     |                   |-------------------------------------->|
- *     |                   |                   |         500 Error |
- *     |                   |<--------------------------------------|
- *     |                   | NOTIFY            |                   |
- *     |                   |------------------>|                   |      ; SIP/2.0 500 Server Internal Error
- *     |                   |            200 OK |                   |
- *     |                   |<------------------|                   |
- *     |                   |                   |                   |
- *     |                   |                   |                   |
- *       
- * }</pre>
- */
+/// Transfer (REFER) test, in endpoint mode. Triggered when the initial INVITE
+/// carries a `refer` Request-URI parameter (see
+/// [UasServlet][org.vorpal.blade.test.uas.UasServlet]).
+///
+/// It answers the INVITE `200 OK`, then sends a `REFER` whose `Refer-To` is the
+/// address from the `refer` parameter — with a `status` parameter appended
+/// (default `200`) so the transfer target can be told what to respond. It then
+/// drives the implicit-subscription NOTIFY handshake and, on a successful
+/// transfer outcome (a `200` in the final NOTIFY's `message/sipfrag` body),
+/// sends `BYE` to tear down the original dialog.
+///
+/// Example: `INVITE sip:bob@uas.test;refer=sip:carol@uas.test;status=200`
+///
+/// ```text
+///  TestUAC             Transfer            TestRefer          TestInvite
+///  transferee                              transferor         target
+/// ----------           --------            ---------          ----------
+///     |                   |                   |                   |
+///     | INVITE            |                   |                   |
+///     |------------------>|                   |                   |
+///     |                   | INVITE            |                   |
+///     |                   |------------------>|                   |
+///     |                   |            200 OK |                   |
+///     |                   |<------------------|                   |
+///     |            200 OK |                   |                   |
+///     |<------------------|                   |                   |
+///     | ACK               |                   |                   |
+///     |------------------>|                   |                   |
+///     |                   | ACK               |                   |
+///     |                   |------------------>|                   |
+///     |                   |             REFER |                   |
+///     |                   |<------------------|                   |
+///     |                   | 202 Accepted      |                   |
+///     |                   |------------------>|                   |
+///     |                   | NOTIFY            |                   |
+///     |                   |------------------>|                   |      ; SIP/2.0 100 Trying
+///     |                   |            200 OK |                   |
+///     |                   |<------------------|                   |
+///     |                   | INVITE            |                   |
+///     |                   |-------------------------------------->|
+///     |                   |                   |         500 Error |
+///     |                   |<--------------------------------------|
+///     |                   | NOTIFY            |                   |
+///     |                   |------------------>|                   |      ; SIP/2.0 500 Server Internal Error
+///     |                   |            200 OK |                   |
+///     |                   |<------------------|                   |
+///     |                   |                   |                   |
+/// ```
 public class TestRefer extends Callflow {
 
 	private static final long serialVersionUID = 1L;
-	String referTo;
 
 	@Override
 	public void process(SipServletRequest aliceRequest) throws ServletException, IOException {
@@ -69,8 +74,6 @@ public class TestRefer extends Callflow {
 
 		sendResponse(aliceRequest.createResponse(200), (aliceAck) -> {
 			SipServletRequest aliceRefer = aliceAck.getSession().createRequest(REFER);
-//			aliceRefer.setHeader("Refer-To", referTo);
-
 			aliceRefer.setAddressHeader("Refer-To", referTo);
 			aliceRefer.setAddressHeader("Referred-By", aliceRequest.getTo());
 			sendRequest(aliceRefer);

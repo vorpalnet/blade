@@ -16,7 +16,7 @@ public class QueueConfigSample extends QueueConfig {
 	public QueueConfigSample() {
 
 		this.logging = new LogParametersDefault();
-		this.logging.setLoggingLevel(LoggingLevel.FINER);
+		this.logging.setLoggingLevel(LoggingLevel.INFO);
 
 		this.session = new SessionParameters();
 		this.session.setExpiration(900);

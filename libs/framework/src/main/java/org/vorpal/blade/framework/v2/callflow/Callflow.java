@@ -68,6 +68,7 @@ import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
+import org.vorpal.blade.framework.v2.analytics.SnowflakeId;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters.KeepAlive;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
@@ -127,7 +128,6 @@ public abstract class Callflow implements Serializable {
 	public static final String MIN_SE = "Min-SE";
 	public static final String X_VORPAL_SESSION = "X-Vorpal-Session";
 	public static final String X_VORPAL_ID = "X-Vorpal-ID";
-	public static final String X_VORPAL_TIMESTAMP = "X-Vorpal-Timestamp";
 
 	protected static final String REQUEST_CALLBACK_ = "REQUEST_CALLBACK_";
 	protected static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
@@ -137,10 +137,19 @@ public abstract class Callflow implements Serializable {
 	protected static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
 
 	private static final String VORPAL_SESSION = "VORPAL_SESSION";
-	private static final String VORPAL_TIMESTAMP = "VORPAL_TIMESTAMP";
 	private static final String VORPAL_DIALOG = "VORPAL_DIALOG";
 
-	public static final String TIMESTAMP_PARAM = "ts";
+	/// SipApplicationSession attribute key holding the 64-bit snowflake
+	/// analytics session ID (a `Long`). Set at first-touch session creation
+	/// and propagated downstream via the `sid` parameter on `X-Vorpal-ID`.
+	public static final String ANALYTICS_SESSION = "ANALYTICS_SESSION";
+
+	/// Parameterable key on `X-Vorpal-ID` carrying the 64-bit snowflake
+	/// analytics session ID as an unsigned hex string (up to 16 chars).
+	/// Set by the first-touch BLADE service and propagated by downstream
+	/// forwards so all services in a chain reference the same analytics
+	/// session row.
+	public static final String SID_PARAM = "sid";
 	public static final String DIALOG_PARAM = "dialog";
 	/// Parameterable key on X-Vorpal-ID carrying the transport-level
 	/// address of whoever sent the original INVITE into OCCAS. Populated
@@ -589,12 +598,11 @@ public abstract class Callflow implements Serializable {
 
 		appSession.setAttribute(VORPAL_SESSION, indexKey);
 
-		// Vorpal Session + Timestamp will be unique.
-		// Use this for a database primary key in future designs.
-		String timestamp = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-		if (timestamp != null) {
-			appSession.setAttribute(VORPAL_TIMESTAMP, timestamp);
-		}
+		// Mint the analytics session ID at first-touch. Carried downstream
+		// on X-Vorpal-ID as the `sid` parameter so every service in the
+		// chain references the same row.
+		long analyticsSessionId = SnowflakeId.shared().nextId();
+		appSession.setAttribute(ANALYTICS_SESSION, analyticsSessionId);
 
 		return indexKey;
 	}
@@ -625,14 +633,14 @@ public abstract class Callflow implements Serializable {
 	/**
 	 * Returns the Vorpal session ID for the given request, creating one if
 	 * necessary and storing it in memory. If they exist, this method will save the
-	 * 'dialog' and 'timestamp' parameters in memory.
+	 * 'dialog' parameter and the analytics session ID in memory.
 	 *
 	 * @param request the SIP request
 	 * @return the Vorpal session ID
 	 */
 	public static String getVorpalSessionId(SipServletRequest request) {
 		String indexKey = null;
-		String vorpalTimestamp = null;
+		String sidHex = null;
 		String dialogId = null;
 
 		if (request != null) {
@@ -648,7 +656,7 @@ public abstract class Callflow implements Serializable {
 					if (xVorpalId != null) {
 						indexKey = xVorpalId.getValue();
 						dialogId = xVorpalId.getParameter(DIALOG_PARAM);
-						vorpalTimestamp = xVorpalId.getParameter(TIMESTAMP_PARAM);
+						sidHex = xVorpalId.getParameter(SID_PARAM);
 						// Propagate the `origin` param from upstream BLADE
 						// services — they already captured the real external
 						// sender when they were first-in-chain.
@@ -662,16 +670,22 @@ public abstract class Callflow implements Serializable {
 							+ "': " + ex.getClass().getSimpleName() + " " + ex.getMessage());
 				}
 
-				// Fall back to X-Vorpal-Session (old colon format) + X-Vorpal-Timestamp
+				// Fall back to X-Vorpal-Session (legacy colon format). Optum
+				// still has clusters emitting this in cluster-to-cluster
+				// traffic; X-Vorpal-Timestamp is no longer read or written.
+				// Without a snowflake from upstream, we mint a fresh one
+				// locally below — no analytics-session continuity from old
+				// peers, but the Vorpal-ID + dialog chain is preserved.
 				if (indexKey == null) {
 					try {
 						String session = request.getHeader(X_VORPAL_SESSION);
 						if (session != null) {
-							vorpalTimestamp = request.getHeader(X_VORPAL_TIMESTAMP);
-							if (vorpalTimestamp != null) {
-								int colonIndex = session.indexOf(':');
+							int colonIndex = session.indexOf(':');
+							if (colonIndex >= 0) {
 								indexKey = session.substring(0, colonIndex);
 								dialogId = session.substring(colonIndex + 1);
+							} else {
+								indexKey = session;
 							}
 						}
 					} catch (Exception ex) {
@@ -684,10 +698,23 @@ public abstract class Callflow implements Serializable {
 
 			}
 
-			if (indexKey != null && dialogId != null && vorpalTimestamp != null) {
+			if (indexKey != null && dialogId != null) {
 				sipSession.setAttribute(VORPAL_DIALOG, dialogId);
-				appSession.setAttribute(VORPAL_TIMESTAMP, vorpalTimestamp);
 				appSession.setAttribute(VORPAL_SESSION, indexKey);
+				if (sidHex != null) {
+					try {
+						appSession.setAttribute(ANALYTICS_SESSION, Long.parseUnsignedLong(sidHex, 16));
+					} catch (NumberFormatException ex) {
+						sipLogger.warning(request, "Callflow.getVorpalSessionId - Unparseable sid '" + sidHex
+								+ "', minting a fresh snowflake locally.");
+						appSession.setAttribute(ANALYTICS_SESSION, SnowflakeId.shared().nextId());
+					}
+				} else if (appSession.getAttribute(ANALYTICS_SESSION) == null) {
+					// Inbound from legacy X-Vorpal-Session peer (no sid param).
+					// Mint a fresh snowflake so analytics has a valid session
+					// ID — chain continuity with the legacy peer is lost.
+					appSession.setAttribute(ANALYTICS_SESSION, SnowflakeId.shared().nextId());
+				}
 			} else if (indexKey == null) {
 				// True first-touch: appSession has no VORPAL_SESSION and no
 				// upstream BLADE stamped an X-Vorpal-ID header. Generate one
@@ -823,16 +850,25 @@ public abstract class Callflow implements Serializable {
 							String vorpalSessionId = getVorpalSessionId(appSession);
 							if (vorpalSessionId != null) { // if it's null, let's not worry about it.
 								String dialogId = getVorpalDialogId(sipSession);
-								String timestamp = getVorpalTimestamp(appSession);
 
-								// Old format: X-Vorpal-Session + X-Vorpal-Timestamp
+								// Legacy format: X-Vorpal-Session colon-pair.
+								// Kept for backward compat with Optum clusters
+								// that haven't yet upgraded to X-Vorpal-ID.
+								// X-Vorpal-Timestamp is no longer emitted.
 								request.setHeader(X_VORPAL_SESSION, vorpalSessionId + ":" + dialogId);
-								request.setHeader(X_VORPAL_TIMESTAMP, timestamp);
 
 								// New format: X-Vorpal-ID (parameterable)
 								Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
 								xVorpalId.setParameter(DIALOG_PARAM, dialogId);
-								xVorpalId.setParameter(TIMESTAMP_PARAM, timestamp);
+
+								// Stamp the analytics session ID so downstream
+								// services in the chain bind their Events to
+								// the same session row.
+								Long analyticsSid = (Long) appSession.getAttribute(ANALYTICS_SESSION);
+								if (analyticsSid != null) {
+									xVorpalId.setParameter(SID_PARAM, Long.toHexString(analyticsSid).toUpperCase());
+								}
+
 								// Propagate the origin when we've got one. Cached
 								// by getVorpalSessionId either from an inbound
 								// X-Vorpal-ID header or from request.getRemoteAddr()
@@ -1321,16 +1357,21 @@ public abstract class Callflow implements Serializable {
 					if (indexKey != null) {
 						String vorpalSessionId = getVorpalSessionId(appSession);
 						String dialogId = getVorpalDialogId(sipSession);
-						String timestamp = getVorpalTimestamp(appSession);
 
-						// Old format: X-Vorpal-Session + X-Vorpal-Timestamp
+						// Legacy format: X-Vorpal-Session colon-pair, retained
+						// for cluster-to-cluster compat with peers that haven't
+						// upgraded to X-Vorpal-ID. X-Vorpal-Timestamp dropped.
 						response.setHeader(X_VORPAL_SESSION, vorpalSessionId + ":" + dialogId);
-						response.setHeader(X_VORPAL_TIMESTAMP, timestamp);
 
 						// New format: X-Vorpal-ID (parameterable)
 						Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
 						xVorpalId.setParameter(DIALOG_PARAM, dialogId);
-						xVorpalId.setParameter(TIMESTAMP_PARAM, timestamp);
+
+						Long analyticsSid = (Long) appSession.getAttribute(ANALYTICS_SESSION);
+						if (analyticsSid != null) {
+							xVorpalId.setParameter(SID_PARAM, Long.toHexString(analyticsSid).toUpperCase());
+						}
+
 						// Keep origin on responses too — useful for downstream
 						// services tracing a call back to its entry point.
 						String origin = (String) appSession.getAttribute(VORPAL_ORIGIN);
@@ -2488,27 +2529,6 @@ public abstract class Callflow implements Serializable {
 			return null;
 		}
 		return linkedSession.getActiveInvite(UAMode.UAS);
-	}
-
-	/**
-	 * Returns the Vorpal timestamp for the given application session. The timestamp
-	 * is a hexadecimal representation of the session creation time, used in
-	 * combination with the Vorpal session ID for unique identification.
-	 *
-	 * @param appSession the SIP application session
-	 * @return the Vorpal timestamp, or null if session is null or invalid
-	 */
-	public static String getVorpalTimestamp(SipApplicationSession appSession) {
-		String timestamp = null;
-
-		if (appSession != null && appSession.isValid()) {
-			timestamp = (String) appSession.getAttribute(VORPAL_TIMESTAMP);
-			if (timestamp == null) {
-				timestamp = Long.toHexString(System.currentTimeMillis()).toUpperCase();
-			}
-		}
-
-		return timestamp;
 	}
 
 	public static void setGlareState(SipSession sipSession, GlareState state) {

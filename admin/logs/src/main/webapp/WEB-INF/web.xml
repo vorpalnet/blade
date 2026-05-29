@@ -4,7 +4,7 @@
 	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
 	id="WebApp_Logs" version="4.0">
 
-	<display-name>blade-logs</display-name>
+	<display-name>logs</display-name>
 
 	<welcome-file-list>
 		<welcome-file>index.html</welcome-file>

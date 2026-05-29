@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Overview · BLADE Flow Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/flow/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Flow Editor</span>
+				<span class="vorpal-brand-tagline">Visual FSMAR Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../flow.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Architecture</div>
+				<h1 class="vorpal-page-title">Overview</h1>
+				<p class="vorpal-page-subtitle">
+					What the Flow Editor produces, what FSMAR does in OCCAS,
+					and why authoring is visual instead of hand-XML.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html" class="vorpal-active-doc">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="fsmar-concepts.html">FSMAR Concepts</a></li>
+						<li><a href="editor-guide.html">Editor Guide</a></li>
+						<li><a href="round-trip.html">Import / Export Round-Trip</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Overview</h1>
+
+					<h2>What FSMAR is</h2>
+					<p>
+						FSMAR — the <em>Finite-State-Machine Application
+						Router</em> — is the OCCAS-side component that decides
+						which BLADE application gets each initial SIP request.
+						Before any servlet sees the message, FSMAR pattern-
+						matches the request against a state-machine descriptor
+						and emits an ordered list of applications to invoke.
+						The decision happens once per dialog, at the
+						initial-INVITE (or REGISTER, SUBSCRIBE, MESSAGE,
+						PUBLISH, REFER, OPTIONS, NOTIFY) — subsequent in-dialog
+						messages follow the same chain by stickiness.
+					</p>
+
+					<h2>Why a state machine</h2>
+					<p>
+						The natural shape of "route this call" is conditional:
+						"if From-URI matches ACL X, run the analytics service
+						then the proxy-router; if it matches Y, run the
+						hold service first." Expressing that as a single
+						deeply-nested rule list is brittle. Expressing it as
+						a directed graph of states and transitions reads cleanly
+						and composes well — adding a new branch is adding a
+						new edge, not refactoring the rules tree.
+					</p>
+
+					<h2>What the editor produces</h2>
+					<p>
+						An FSMAR XML descriptor. That descriptor ships inside
+						the FSMAR JAR (<code>vorpal-blade-library-fsmar.jar</code>
+						or <code>vorpal-blade-library-fsmar3.jar</code>) at
+						<code>$DOMAIN_HOME/approuter/</code>. Activation in
+						OCCAS is via the admin console; the engine tier
+						reboots to pick up the new descriptor.
+					</p>
+					<p>
+						The editor reads the descriptor on load, lets you edit
+						it visually, and writes it back on Export. Round-trip
+						is via two servlets in this WAR:
+						<code>FsmarImportServlet</code> (XML → mxGraph cells)
+						and <code>FsmarExportServlet</code> (cells → XML).
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Two FSMAR generations</div>
+						<p>
+							The framework ships two FSMAR libraries side by
+							side: FSMAR 2 (legacy, kept for backward
+							compatibility) and FSMAR 3 (current, ongoing
+							development). They share zero code and are
+							activated one-at-a-time via the OCCAS admin
+							console. The editor works with either; pick the
+							descriptor format your domain currently runs.
+						</p>
+					</div>
+
+					<h2>Where it fits in OCCAS request handling</h2>
+					<ol>
+						<li>SIP message arrives at the engine tier.</li>
+						<li>OCCAS asks the active SipApplicationRouter (FSMAR) to compute the application chain.</li>
+						<li>FSMAR runs its state machine against the message and returns the chain.</li>
+						<li>OCCAS invokes each application in order; the dialog is bound to that chain for its lifetime.</li>
+					</ol>
+
+					<h2>What's NOT in the editor</h2>
+					<ul>
+						<li>Per-application configuration (lives in the <a href="/blade/configurator/">Configurator</a>).</li>
+						<li>Cluster topology / server tuning (lives in the <a href="/blade/tuning/">Tuning</a> app).</li>
+						<li>Active call inspection / live state (FSMAR is stateless per-request; there is no "current calls" view here).</li>
+					</ul>
+
+					<h2>Next steps</h2>
+					<ul>
+						<li>Read <a href="fsmar-concepts.html">FSMAR Concepts</a> for the state / transition / trigger / condition model.</li>
+						<li>Read <a href="editor-guide.html">Editor Guide</a> for the canvas, palette, and inspector mechanics.</li>
+						<li>Read <a href="round-trip.html">Import / Export Round-Trip</a> for how to deploy what you've edited.</li>
+					</ul>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

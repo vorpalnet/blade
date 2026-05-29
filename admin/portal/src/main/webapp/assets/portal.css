@@ -1,0 +1,81 @@
+/*
+ * BLADE Portal launcher — minimal styles.
+ *
+ * The portal page uses the shared brand layer's .vorpal-topbar /
+ * .vorpal-hero / .vorpal-card-grid primitives directly. This file
+ * adds only the launcher-specific tweaks: card icons render as
+ * <img> from each app's favicon, and the card tagline gets a small
+ * dedicated style.
+ *
+ * Everything else (iframe wrap, embed-mode CSS, rail variants, login
+ * card, in-portal loading spinner, etc.) was dropped when the portal
+ * became a launcher. Each admin app is now a full-page navigation
+ * target with its own header; login uses the brand layer's
+ * .vorpal-login* classes directly.
+ */
+
+/* The launcher scrolls naturally — don't lock viewport overflow like
+   the old iframe-host layout did. */
+html, body {
+	overflow: auto;
+}
+
+/* ============ CARD LAYOUT (horizontal: icon + content) ============ */
+
+/* Override the brand layer's vertical .vorpal-card stack with a horizontal
+   icon-left / content-right layout. Better at scanning a long deck and
+   gives the description room to breathe. */
+.vorpal-card {
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 18px;
+}
+
+/* Each card's icon is an <img> tag pointing at /<contextRoot>/favicon.svg.
+   Override the brand layer's default .vorpal-card-icon styling (dark navy
+   box, gold tint) — favicons typically have their own colors, so render
+   them directly on the white card without a tinted container. */
+img.vorpal-card-icon {
+	width: 44px;
+	height: 44px;
+	background: transparent;
+	border-radius: 0;
+	display: block;
+	object-fit: contain;
+	flex: 0 0 auto;
+	margin-top: 2px;
+}
+
+/* The text column (everything after the icon) is wrapped in this div by
+   shell.js so the row layout can flex it independently of the icon. */
+.p-card-body {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* h3 already has top margin from brand.css; remove it so the title sits
+   on the same visual baseline as the icon. */
+.vorpal-card .p-card-body h3 {
+	margin: 0;
+}
+
+/* ============ CARD TAGLINE ============ */
+
+.p-card-tagline {
+	font-size: 12.5px;
+	color: var(--vorpal-slate-600);
+	letter-spacing: 0.02em;
+	margin: 0;
+}
+
+/* Cards for apps whose metadata is unpopulated render slightly muted
+   so it's obvious which apps have full metadata and which don't. */
+.vorpal-card.p-card-barebones {
+	opacity: 0.85;
+}
+.vorpal-card.p-card-barebones:hover {
+	opacity: 1;
+}

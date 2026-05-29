@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Command-Line Validation · BLADE Configurator</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Configurator</span>
+				<span class="vorpal-brand-tagline">Schema-Driven Configuration Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../configurator.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Operations</div>
+				<h1 class="vorpal-page-title">Command-Line Validation</h1>
+				<p class="vorpal-page-subtitle">
+					Validate and deploy BLADE configuration from a shell — no
+					browser. The same checks the Editor runs before Publish,
+					exposed as a REST API and a wrapper script for CI pipelines
+					and scripted rollouts.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="features.html">Feature Reference</a></li>
+						<li><a href="targets.html">Target Scopes</a></li>
+						<li><a href="schema-discovery.html">Schema Discovery</a></li>
+						<li><a href="form-layout.html">Form Layout</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="cli.html" class="vorpal-active-doc">Command-Line Validation</a></li>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Command-Line Validation</h1>
+					<p>
+						The Configurator ships a REST API that validates every
+						app's config files against their JSON Schema, and
+						optionally deploys them to the running cluster (propagate
+						via JMX + reload). <code>blade-validate.sh</code>, in the
+						module root, is a thin wrapper over that API for use in
+						CI pipelines and scripted rollouts.
+					</p>
+
+					<h2>REST API</h2>
+					<p>
+						The endpoints live under the Configurator's context root,
+						<code>/blade/configurator/api/v1/</code>:
+					</p>
+					<table>
+						<tr><th>Method &amp; path</th><th>Does</th></tr>
+						<tr><td><code>GET&nbsp;/api/v1/validate</code></td><td>Validate every discovered app's config files against its <code>.jschema</code>.</td></tr>
+						<tr><td><code>GET&nbsp;/api/v1/validate/{app}</code></td><td>Validate one app's configs.</td></tr>
+						<tr><td><code>POST&nbsp;/api/v1/deploy</code></td><td>Validate all; if all pass, propagate to the cluster via JMX and reload.</td></tr>
+						<tr><td><code>POST&nbsp;/api/v1/deploy/{app}</code></td><td>Validate one app; if it passes, propagate and reload it.</td></tr>
+						<tr><td><code>POST&nbsp;/api/v1/publish/{app}</code></td><td>Push one app's config to the cluster and reload, without the validate gate.</td></tr>
+					</table>
+					<p>
+						Validation walks all three target scopes
+						(<a href="targets.html">domain, cluster, server</a>) and
+						reports each file's result. <code>deploy</code> only
+						writes a tier over JMX when the on-disk file differs from
+						what the node already has (timestamp check), so a
+						shared-filesystem cluster is a no-op rather than a
+						needless rewrite.
+					</p>
+
+					<h2>Authentication — HTTP Basic, not the login form</h2>
+					<p>
+						The browser Editor authenticates with the FORM login page
+						and the shared admin-tier session cookie. Command-line
+						clients can't drive a login form, so the
+						<code>/api/v1/*</code> paths are authenticated separately:
+						pass credentials in the standard
+						<code>Authorization: Basic</code> header.
+					</p>
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">How it works</div>
+						<p>
+							<code>/api/v1/*</code> is carved out of the WAR's FORM
+							security-constraint and authenticated by an in-WAR
+							filter (<code>BasicAuthFilter</code>) that validates
+							the header against the same WebLogic realm and
+							requires one of the admin roles
+							(<code>Admin</code>, <code>Operator</code>,
+							<code>Deployer</code>, <code>Monitor</code>). The
+							browser app is untouched — it still uses FORM login.
+							A request with no valid credentials gets
+							<code>401</code> (with a <code>WWW-Authenticate</code>
+							challenge), not the login page.
+						</p>
+					</div>
+					<p>Call it directly with <code>curl</code>:</p>
+					<pre><code>curl -u 'weblogic:secret' \
+     http://localhost:7001/blade/configurator/api/v1/validate</code></pre>
+
+					<h2>The wrapper: <code>blade-validate.sh</code></h2>
+					<pre><code>blade-validate.sh [options]
+
+  --deploy           Validate and deploy (propagate + reload via JMX)
+  --app &lt;name&gt;       Target a specific app (default: all apps)
+  --host &lt;host:port&gt; AdminServer host (default: localhost:7001)
+  --user &lt;user&gt;      WebLogic username (default: weblogic)
+  --password &lt;pass&gt;  WebLogic password (required)
+  --context &lt;path&gt;   Configurator context root (default: blade/configurator)</code></pre>
+					<p>Examples:</p>
+					<pre><code># Validate everything
+blade-validate.sh --password secret
+
+# Validate one app
+blade-validate.sh --app proxy-registrar --password secret
+
+# Validate and roll out all configs to the cluster
+blade-validate.sh --deploy --password secret
+
+# Against a remote AdminServer
+blade-validate.sh --deploy --app transfer \
+    --host admin.example.com:7001 --password secret</code></pre>
+					<p>
+						The script authenticates with the Basic header, pretty-prints
+						the JSON response, and <strong>exits non-zero</strong> when
+						any result reports <code>"valid": false</code> or
+						<code>"deployed": false</code> — so it gates a CI step
+						directly.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">Passwords with shell metacharacters</div>
+						<p>
+							Wrap the password in <em>single</em> quotes so the shell
+							doesn't expand <code>!</code>, <code>$</code>, etc.
+							Inside single quotes nothing is escaped — write the
+							literal password, no backslashes:
+							<code>--password '!Secret$1'</code>, not
+							<code>"\!Secret\$1"</code>.
+						</p>
+					</div>
+
+					<h2>Reading the output</h2>
+					<p>
+						Each file checked appears in <code>results[]</code> with its
+						<code>app</code>, <code>level</code> (domain / cluster/&lt;name&gt;
+						/ server/&lt;name&gt;), and either <code>"valid": true</code> or a
+						<code>"valid": false</code> with an <code>errors</code> list of
+						schema messages. An app with a schema but no config files
+						reports <code>level: "none"</code> and is valid (it runs on
+						its sample/default). The top-level <code>valid</code> is the
+						AND of every file.
+					</p>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

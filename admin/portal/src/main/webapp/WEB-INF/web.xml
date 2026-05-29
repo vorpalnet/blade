@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_ID" version="4.0">
+
+	<!-- display-name becomes the SettingsManager applicationName, which in
+	     turn becomes the MBean key: vorpal.blade:Name=portal,Type=Configuration.
+	     Keep it short and single-word so the Configurator app dropdown is clean. -->
+	<display-name>portal</display-name>
+
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+
+	<servlet>
+		<servlet-name>logout</servlet-name>
+		<servlet-class>org.vorpal.blade.applications.portal.Logout</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>logout</servlet-name>
+		<url-pattern>/logout</url-pattern>
+	</servlet-mapping>
+
+	<!-- Unprotected static assets — must be reachable WITHOUT auth so the
+	     login page can render its CSS, logo, and favicon before the user
+	     has a session. Both /assets/* (legacy portal.css) and /brand/*
+	     (canonical brand layer served from this WAR) need this. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>public-assets</web-resource-name>
+			<url-pattern>/assets/*</url-pattern>
+			<url-pattern>/brand/*</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>app</web-resource-name>
+			<url-pattern>/</url-pattern>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+			<role-name>Deployer</role-name>
+			<role-name>Monitor</role-name>
+		</auth-constraint>
+	</security-constraint>
+
+	<login-config>
+		<auth-method>CLIENT-CERT,FORM</auth-method>
+		<realm-name>default</realm-name>
+		<form-login-config>
+			<form-login-page>/login.jsp</form-login-page>
+			<form-error-page>/login.jsp</form-error-page>
+		</form-login-config>
+	</login-config>
+
+	<security-role><role-name>Admin</role-name></security-role>
+	<security-role><role-name>Operator</role-name></security-role>
+	<security-role><role-name>Deployer</role-name></security-role>
+	<security-role><role-name>Monitor</role-name></security-role>
+
+</web-app>

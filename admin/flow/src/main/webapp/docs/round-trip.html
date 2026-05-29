@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Import / Export Round-Trip · BLADE Flow Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/flow/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Flow Editor</span>
+				<span class="vorpal-brand-tagline">Visual FSMAR Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../flow.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Import / Export Round-Trip</h1>
+				<p class="vorpal-page-subtitle">
+					How the visual graph becomes the deployed FSMAR XML and
+					back again. The mechanism is two servlets in this WAR.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="fsmar-concepts.html">FSMAR Concepts</a></li>
+						<li><a href="editor-guide.html">Editor Guide</a></li>
+						<li><a href="round-trip.html" class="vorpal-active-doc">Import / Export Round-Trip</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Import / Export Round-Trip</h1>
+
+					<h2>Two servlets, one descriptor</h2>
+					<dl class="vorpal-kv">
+						<dt><code>FsmarImportServlet</code></dt>
+						<dd>GET endpoint. Reads the current FSMAR XML from the deployed JAR and translates it into mxGraph cells the editor consumes.</dd>
+						<dt><code>FsmarExportServlet</code></dt>
+						<dd>POST endpoint. Accepts the editor's serialized graph, translates it back to FSMAR XML, and writes the result.</dd>
+					</dl>
+
+					<h2>What happens on Import</h2>
+					<ol>
+						<li>Browser hits the Import endpoint.</li>
+						<li>Servlet locates the active FSMAR JAR under <code>$DOMAIN_HOME/approuter/</code> and extracts the descriptor XML.</li>
+						<li>Each state element in the XML becomes an mxCell with the state's name as the cell's user-object value.</li>
+						<li>Each transition element becomes a directed edge with source and target resolved by name.</li>
+						<li>The Ingress and Egress clouds are synthesized — there is no XML element for them; they are visual stand-ins for the start and end of every chain.</li>
+						<li>The Tasks window is populated from the same data.</li>
+					</ol>
+
+					<h2>What happens on Export</h2>
+					<ol>
+						<li>Editor serializes the current graph to mxGraph XML and POSTs it.</li>
+						<li>Servlet walks the graph, identifies states and transitions, and emits the FSMAR XML element tree.</li>
+						<li>The synthesized Ingress and Egress clouds are dropped (they round-trip as the literal string <code>null</code> in the descriptor).</li>
+						<li>The result is written back to the FSMAR JAR (or to a staging file, depending on configuration).</li>
+					</ol>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Reboot to activate</div>
+						<p>
+							FSMAR is loaded by OCCAS via SPI at engine-tier
+							startup. A new descriptor does not take effect
+							until the engine-tier servers are restarted — see
+							the project DEPLOYMENT.md for the rolling-reboot
+							sequence.
+						</p>
+					</div>
+
+					<h2>XML shape (FSMAR 2)</h2>
+					<p>
+						An FSMAR 2 descriptor is essentially a list of
+						state-transition tuples wrapped in a header. Simplified
+						example:
+					</p>
+					<pre><code>&lt;fsmar&gt;
+  &lt;state name="start"/&gt;
+  &lt;state name="acl"/&gt;
+  &lt;state name="proxy-router"/&gt;
+
+  &lt;transition from="null" to="acl"&gt;
+    &lt;trigger method="INVITE"/&gt;
+  &lt;/transition&gt;
+
+  &lt;transition from="acl" to="proxy-router"/&gt;
+  &lt;transition from="proxy-router" to="null"/&gt;
+&lt;/fsmar&gt;</code></pre>
+
+					<p>
+						Note that <code>from="null"</code> is the Ingress
+						cloud and <code>to="null"</code> is Egress — the same
+						literal string in both places.
+					</p>
+
+					<h2>XML shape (FSMAR 3)</h2>
+					<p>
+						FSMAR 3 adds richer condition semantics and clean-up
+						of the legacy idioms. It is not source-compatible with
+						FSMAR 2; the editor detects which generation a
+						descriptor uses from the root element and adjusts its
+						export accordingly.
+					</p>
+
+					<h2>Edits that don't round-trip cleanly</h2>
+					<p>
+						The visual editor's coordinate / size information for
+						each cell is preserved on round-trip in a separate
+						side-car region of the descriptor. Pure-text edits to
+						the descriptor (hand-editing the XML outside the
+						editor) will lose the layout — re-importing in the
+						editor produces an auto-layout. Avoid manual XML edits
+						unless you're prepared to re-arrange the canvas after
+						re-importing.
+					</p>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

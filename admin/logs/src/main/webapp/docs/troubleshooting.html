@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Troubleshooting · BLADE Logs</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/logs/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Logs</span>
+				<span class="vorpal-brand-tagline">Cluster Log Tail Viewer</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../logs.html">Viewer</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Operations</div>
+				<h1 class="vorpal-page-title">Troubleshooting</h1>
+				<p class="vorpal-page-subtitle">
+					Common failure modes, what they look like, and what to do
+					about them.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="cluster-discovery.html">Cluster Discovery</a></li>
+						<li><a href="reading-logs.html">Reading Log Files</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html" class="vorpal-active-doc">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Troubleshooting</h1>
+
+					<h2>Symptom-to-cause table</h2>
+					<table>
+						<tr><th>Symptom</th><th>Likely cause</th><th>Where to look</th></tr>
+						<tr>
+							<td>Server dropdown is empty</td>
+							<td>JMX walk failed — usually means the page isn't running on the AdminServer (no DomainRuntime there)</td>
+							<td>Verify the deploy target. <code>logs.war</code> belongs on the AdminServer, not the engine-tier cluster.</td>
+						</tr>
+						<tr>
+							<td>Server dropdown has servers, but one is missing</td>
+							<td>WLS config doesn't list it, or the federation hasn't caught up after a recent topology change</td>
+							<td>WLS Admin Console → Servers. If it's listed there but not here, restart this WAR; the discovery cache may need refresh.</td>
+						</tr>
+						<tr>
+							<td>Selected a server, log dropdown is empty</td>
+							<td>That server has no <code>LogReader</code> MBean — no BLADE-framework WAR is deployed/active on it</td>
+							<td>Verify a BLADE WAR is actually running on that server. Even a single service WAR is enough — the framework wires the listener via web-fragment.xml automatically.</td>
+						</tr>
+						<tr>
+							<td>Log dropdown populated, read returns 500 / "MBean operation failed"</td>
+							<td>The remote MBean threw — probably a file-permission issue on the target server</td>
+							<td>Check the target server's stdout for stack traces from <code>LogReaderClient</code> / <code>VorpalLogReader</code>.</td>
+						</tr>
+						<tr>
+							<td>Read returns blank body but no error</td>
+							<td><code>offset=-1</code> tail of a file shorter than the requested size, plus <code>EofReached=true</code></td>
+							<td>Normal. The file is shorter than the tail you asked for; you're seeing all of it.</td>
+						</tr>
+						<tr>
+							<td>Tail mode shows old content; new lines don't appear</td>
+							<td>WLS log buffering — the file isn't flushed yet</td>
+							<td>WLS flushes on its own schedule (configurable per server). For high-urgency real-time, lower the flush interval in the server's logging config, or read the diagnostic logs which flush more eagerly.</td>
+						</tr>
+						<tr>
+							<td>HTTP 401 / login redirect on every API call</td>
+							<td>Session expired — every API call is auth-protected by the same realm as the page</td>
+							<td>Re-login via the portal.</td>
+						</tr>
+					</table>
+
+					<h2>Sanity checks</h2>
+					<h3>Is my MBean registered on a given server?</h3>
+					<p>From the AdminServer, query the federated DomainRuntime MBeanServer:</p>
+					<pre><code>vorpal.blade:Type=LogReader,Name=&lt;serverName&gt;</code></pre>
+					<p>One result = MBean is there. Zero = the listener didn't register on that server.</p>
+
+					<h3>Is the AdminServer's domain runtime tree healthy?</h3>
+					<p>Query <code>com.bea:*Domain*</code> from a JMX client on the AdminServer. You should see <code>DomainRuntimeService</code> and the federated DomainConfiguration. If those are missing, the federation is broken (rare; usually means WLS itself is in an unhealthy state).</p>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">Reading huge files</div>
+						<p>
+							The slice mechanism handles arbitrary file sizes,
+							but the response body is the slice bytes —
+							asking for <code>max=10000000</code> sends 10 MB
+							through the AdminServer to your browser per
+							request. Keep <code>max</code> reasonable (a few
+							MB at most) for production sanity.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

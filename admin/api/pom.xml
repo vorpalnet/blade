@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-admin-api</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Admin API Explorer</name>
+	<description>
+		Standalone OpenAPI explorer for the admin tier. Discovers — live, over
+		the AdminServer's DomainRuntime MBean tree — every deployed app that
+		serves an OpenAPI document at /&lt;contextRoot&gt;/resources/openapi.yaml,
+		presents them in a pulldown, and renders the selected one with Scalar.
+
+		The target app is taken from the ?app=&lt;contextRoot&gt; query parameter
+		so the portal can deep-link a card straight to a service's docs.
+
+		Replaces the Swagger UI that used to live inside the retired
+		blade/admin/console.
+	</description>
+
+	<dependencies>
+		<!-- Same as portal/flow: the framework JAR (SettingsManager, Configuration)
+		     is the only compile dep; JAX-RS, Servlet, and Jackson come from the
+		     vorpal-blade shared library at runtime. Inherits the parent pom's
+		     packagingExcludes regex, which bundles ONLY the framework JAR. -->
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>api</finalName>
+	</build>
+
+</project>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Form Layout · BLADE Configurator</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Configurator</span>
+				<span class="vorpal-brand-tagline">Schema-Driven Configuration Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../configurator.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Form Layout</h1>
+				<p class="vorpal-page-subtitle">
+					A developer reference for shaping the generated form from
+					your settings class. The editor builds the form from the
+					JSON Schema; a handful of annotations control how fields are
+					grouped, ordered, and rendered — no per-schema UI code.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="features.html">Feature Reference</a></li>
+						<li><a href="targets.html">Target Scopes</a></li>
+						<li><a href="schema-discovery.html">Schema Discovery</a></li>
+						<li><a href="form-layout.html" class="vorpal-active-doc">Form Layout</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="cli.html">Command-Line Validation</a></li>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Form Layout</h1>
+					<p>
+						The Form Editor generates a labeled field for every
+						property in a settings class's JSON Schema. You influence
+						that layout with annotations from
+						<code>org.vorpal.blade.framework.v2.config</code> placed
+						on the settings class and its fields. At schema-generation
+						time <code>SettingsManager</code> emits these as
+						<code>x-*</code> hints, and the editor reads them when it
+						renders the form. The form code is fully generic — it
+						never hard-codes anything per schema.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">The default</div>
+						<p>
+							A field that is not placed in any group renders on its
+							own <strong>full-width row</strong>, and fields stack
+							top-to-bottom. You only reach for an annotation when
+							you want to deviate from that — group fields onto one
+							row, stack them into columns, or box them under a title.
+						</p>
+					</div>
+
+					<h2>Field-level: <code>@FormLayout</code></h2>
+					<p>
+						Placed on a field or — by convention, alongside
+						<code>@JsonPropertyDescription</code> — its getter. It
+						changes how one field is rendered or edited.
+					</p>
+					<table>
+						<tr><th>Flag</th><th>Effect</th></tr>
+						<tr><td><code>multiline = true</code></td><td>Render a <code>&lt;textarea&gt;</code> (implies wide).</td></tr>
+						<tr><td><code>password = true</code></td><td>Masked <code>&lt;input type="password"&gt;</code>.</td></tr>
+						<tr><td><code>readOnly = true</code></td><td>Disabled input — visible but not editable. Good for computed/derived values.</td></tr>
+						<tr><td><code>regexTest = true</code></td><td>Adds a "test" button beside the field that opens the regex-tester modal.</td></tr>
+						<tr><td><code>wide = true</code></td><td>Force the field onto a full row.</td></tr>
+					</table>
+
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">The <code>wide</code> gotcha</div>
+						<p>
+							<code>wide = true</code> <strong>only matters for a
+							field that is inside a <code>@FormLayoutGroup</code>
+							row</strong>, where it forces that one field to break
+							out to its own full row. An ungrouped field is already
+							full-width, so <code>wide</code> does nothing there —
+							don't add it expecting an effect.
+						</p>
+					</div>
+
+					<h2>Class-level: <code>@FormLayoutGroup</code></h2>
+					<p>
+						Repeatable, placed on the class. Each annotation defines
+						one horizontal row, in one of two mutually-exclusive forms.
+					</p>
+
+					<h3>Flat row</h3>
+					<p>Set <code>value</code> with field names; they flow left-to-right as compact tiles.</p>
+<pre><code>@FormLayoutGroup({ "loggingLevel", "sequenceDiagramLoggingLevel",
+                   "configurationLoggingLevel", "analyticsLoggingLevel" })</code></pre>
+<pre><code>[ loggingLevel ] [ sequenceDiagramLoggingLevel ] [ configurationLoggingLevel ] [ analyticsLoggingLevel ]</code></pre>
+
+					<h3>Row of columns</h3>
+					<p>
+						Set <code>columns</code> instead of <code>value</code>.
+						Each <code>@FormLayoutColumn</code> is a vertical stack of
+						fields; the columns sit side-by-side, so the row becomes a
+						grid of independently-stacked tiles.
+					</p>
+<pre><code>@FormLayoutGroup(columns = {
+    @FormLayoutColumn({ "fileSize", "fileCount" }),
+    @FormLayoutColumn({ "useParentLogging", "appendFile", "colorsEnabled" })
+})</code></pre>
+<pre><code>[ fileSize  ] [ useParentLogging ]
+[ fileCount ] [ appendFile       ]
+              [ colorsEnabled    ]</code></pre>
+					<p>
+						<code>value</code> and <code>columns</code> are mutually
+						exclusive — when both are set, <code>columns</code> wins.
+						The two forms emit different schema keys
+						(<code>x-form-groups</code> vs <code>x-form-columns</code>),
+						so introducing a column group never changes how your
+						existing flat groups render.
+					</p>
+
+					<h2>Class-level: <code>@FormSection</code></h2>
+					<p>
+						A titled, bordered sub-container. Fields you list render
+						inside its box; everything else renders at the top level.
+						Groups still apply <em>inside</em> a section — a section
+						field that is also in a <code>@FormLayoutGroup</code>
+						renders that group's row (flat or columns) within the
+						section's body.
+					</p>
+<pre><code>@FormSection(title = "Connection",     fields = { "url", "method" })
+@FormSection(title = "Authentication", fields = { "authentication" })</code></pre>
+
+					<h2>Ordering</h2>
+					<p>
+						Within a group or column, fields render in the order you
+						list them in the annotation. <strong>Group placement and
+						ungrouped-field order, however, follow the schema's
+						property order, which is alphabetical</strong> unless the
+						class carries <code>@JsonPropertyOrder</code>. Add that to
+						put fields — and therefore the rows they anchor — in a
+						deliberate order.
+					</p>
+<pre><code>@JsonPropertyOrder({
+    "directory", "fileName",
+    "loggingLevel", "sequenceDiagramLoggingLevel",
+    "configurationLoggingLevel", "analyticsLoggingLevel",
+    "fileSize", "fileCount", "useParentLogging", "appendFile", "colorsEnabled"
+})</code></pre>
+
+					<h2>Worked example</h2>
+					<p>
+						The framework's <code>LogParameters</code> class combines
+						all of the above — two flat rows, one row of columns, and
+						an explicit property order:
+					</p>
+<pre><code>@JsonPropertyOrder({ "directory", "fileName",
+    "loggingLevel", "sequenceDiagramLoggingLevel",
+    "configurationLoggingLevel", "analyticsLoggingLevel",
+    "fileSize", "fileCount", "useParentLogging", "appendFile", "colorsEnabled" })
+@FormLayoutGroup({ "directory", "fileName" })
+@FormLayoutGroup({ "loggingLevel", "sequenceDiagramLoggingLevel",
+                   "configurationLoggingLevel", "analyticsLoggingLevel" })
+@FormLayoutGroup(columns = {
+    @FormLayoutColumn({ "fileSize", "fileCount" }),
+    @FormLayoutColumn({ "useParentLogging", "appendFile", "colorsEnabled" })
+})
+public class LogParameters implements Serializable { ... }</code></pre>
+
+					<h2>Schema keys</h2>
+					<p>For the curious — what each annotation emits into the generated <code>.jschema</code>:</p>
+					<table>
+						<tr><th>Annotation</th><th>Schema key</th><th>Shape</th></tr>
+						<tr><td><code>@FormLayoutGroup(value=…)</code></td><td><code>x-form-groups</code></td><td><code>[ ["a","b"], … ]</code></td></tr>
+						<tr><td><code>@FormLayoutGroup(columns=…)</code></td><td><code>x-form-columns</code></td><td><code>[ { "columns": [ ["a","b"], … ] } ]</code></td></tr>
+						<tr><td><code>@FormSection</code></td><td><code>x-form-sections</code></td><td><code>[ { "title": "…", "fields": ["a"] } ]</code></td></tr>
+						<tr><td><code>@FormLayout</code></td><td><code>x-wide</code> / <code>format</code> / <code>x-readonly</code> / <code>x-regex-test</code></td><td>on the field's own schema node</td></tr>
+					</table>
+
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">See also</div>
+						<p>
+							The framework javadocs for <code>FormLayout</code>,
+							<code>FormLayoutGroup</code>,
+							<code>FormLayoutColumn</code>, and
+							<code>FormSection</code> are the authoritative
+							reference. For the editor's runtime behavior, see the
+							<a href="features.html">Feature Reference</a>.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

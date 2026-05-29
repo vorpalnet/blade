@@ -24,7 +24,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * When enabled, WebLogic sets a shared authentication cookie across
  * all web applications on the server, so users only log in once.
  */
-@Path("/api/v1/sso")
+@Path("/sso")
 @Tag(name = "SSO", description = "Single Sign-On configuration")
 public class SsoSettings {
 
@@ -40,14 +40,28 @@ public class SsoSettings {
 			ObjectName domainRuntime = new ObjectName("com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean");
 			ObjectName[] serverRuntimes = (ObjectName[]) mbeanServer.getAttribute(domainRuntime, "ServerRuntimes");
 
+			// Reach the Server CONFIG MBeans via DomainConfiguration.Servers
+			// rather than the direct `com.bea:Name=<server>,Type=Server` lookup,
+			// which throws InstanceNotFoundException on WLS 14.1.1 for the same
+			// reason the DomainConfiguration lookup does. Memory:
+			// [[wls-domain-jmx-bootstrap]].
+			ObjectName domainConfig = (ObjectName) mbeanServer.getAttribute(domainRuntime, "DomainConfiguration");
+			ObjectName[] serverConfigs = (ObjectName[]) mbeanServer.getAttribute(domainConfig, "Servers");
+			java.util.Map<String, ObjectName> serverConfigByName = new java.util.HashMap<>();
+			for (ObjectName sc : serverConfigs) {
+				serverConfigByName.put((String) mbeanServer.getAttribute(sc, "Name"), sc);
+			}
+
 			StringBuilder json = new StringBuilder("[");
 			boolean first = true;
 
 			for (ObjectName serverRuntime : serverRuntimes) {
 				String serverName = (String) mbeanServer.getAttribute(serverRuntime, "Name");
 
-				// Look up the server's WebAppContainerMBean
-				ObjectName serverConfig = new ObjectName("com.bea:Name=" + serverName + ",Type=Server");
+				// Look up the server's WebAppContainerMBean via the config MBean
+				// we pre-resolved through DomainConfiguration.
+				ObjectName serverConfig = serverConfigByName.get(serverName);
+				if (serverConfig == null) continue;
 				ObjectName webAppContainer = (ObjectName) mbeanServer.getAttribute(serverConfig, "WebAppContainer");
 
 				boolean ssoEnabled = false;

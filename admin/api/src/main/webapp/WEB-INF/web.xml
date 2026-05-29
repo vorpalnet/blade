@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_ID" version="4.0">
+
+	<!-- display-name becomes the SettingsManager applicationName, which in
+	     turn becomes the MBean key: vorpal.blade:Name=api,Type=Configuration.
+	     Keep it short and single-word so the Configurator app dropdown is clean. -->
+	<display-name>api</display-name>
+
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+
+	<servlet>
+		<servlet-name>logout</servlet-name>
+		<servlet-class>org.vorpal.blade.applications.api.Logout</servlet-class>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>logout</servlet-name>
+		<url-pattern>/logout</url-pattern>
+	</servlet-mapping>
+
+	<!-- login.jsp must be reachable WITHOUT auth, or the FORM login forward
+	     loops. Its CSS/logo/favicon come from /blade/portal/brand/* (served by
+	     the portal WAR, open there) — so nothing else needs to be public here.
+	     The spec proxy and discovery endpoints under /api/* therefore stay
+	     behind auth along with the rest of the app. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>public-login</web-resource-name>
+			<url-pattern>/login.jsp</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>app</web-resource-name>
+			<url-pattern>/*</url-pattern>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+			<role-name>Deployer</role-name>
+			<role-name>Monitor</role-name>
+		</auth-constraint>
+	</security-constraint>
+
+	<login-config>
+		<auth-method>CLIENT-CERT,FORM</auth-method>
+		<realm-name>default</realm-name>
+		<form-login-config>
+			<form-login-page>/login.jsp</form-login-page>
+			<form-error-page>/login.jsp</form-error-page>
+		</form-login-config>
+	</login-config>
+
+	<security-role><role-name>Admin</role-name></security-role>
+	<security-role><role-name>Operator</role-name></security-role>
+	<security-role><role-name>Deployer</role-name></security-role>
+	<security-role><role-name>Monitor</role-name></security-role>
+
+</web-app>

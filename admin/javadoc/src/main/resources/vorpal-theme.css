@@ -1,0 +1,157 @@
+/* Vorpal BLADE Javadoc theme — matches the Admin Portal brand layer
+ * (/blade/portal/brand/brand.css): light surfaces, purple as a sparing accent.
+ * Appended after javadoc's own stylesheet via --add-stylesheet, so these rules
+ * win the cascade. The white topbar markup is injected by the javadoc -top
+ * banner (see the maven-javadoc-plugin <top> in the root pom).
+ */
+
+/* === Brand tokens (mirror brand.css :root) === */
+:root {
+    --vorpal-purple:      #602671;
+    --vorpal-purple-700:  #4a1c58;
+    --vorpal-purple-100:  #ece1f0;
+    --vorpal-purple-soft: #f6f0f9;
+    --vorpal-surface:     #ffffff;
+    --vorpal-surface-alt: #fafbfd;
+    --vorpal-slate-100:   #f4f6fa;
+    --vorpal-slate-200:   #e6eaf2;
+    --vorpal-slate-300:   #d0d6e2;
+    --vorpal-slate-400:   #9aa5b8;
+    --vorpal-slate-600:   #5a6677;
+    --vorpal-divider:     #dde2ec;
+    --vorpal-ink-900:     #1a2434;
+    --vorpal-radius-md:   6px;
+    --vorpal-font-sans:   "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    --vorpal-font-mono:   "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
+
+    /* Retheme javadoc's own accent + typography variables. Names reconciled
+       against the JDK 25 generated stylesheet; the element selectors below
+       remain the reliable path for anything the variables don't cover. */
+    --body-font-family:          var(--vorpal-font-sans);
+    --block-font-family:         var(--vorpal-font-sans);
+    --code-font-family:          var(--vorpal-font-mono);
+    --navbar-background-color:   var(--vorpal-surface);
+    --navbar-text-color:         var(--vorpal-slate-600);
+    --subnav-background-color:   var(--vorpal-surface-alt);
+    --selected-background-color: var(--vorpal-purple);
+    --selected-text-color:       #ffffff;
+    --selected-link-color:       #ffffff;
+    --link-color:                var(--vorpal-purple);
+    --link-color-active:         var(--vorpal-purple-700);
+    --subnav-link-color:         var(--vorpal-purple);
+    --table-header-color:        var(--vorpal-purple);
+    --even-row-color:            var(--vorpal-surface);
+    --odd-row-color:             var(--vorpal-purple-soft);
+    --border-color:              var(--vorpal-divider);
+    --toc-highlight-color:       var(--vorpal-purple-100);
+}
+
+/* === Light page background, brand typography === */
+body {
+    background: var(--vorpal-slate-100);
+    font-family: var(--vorpal-font-sans);
+}
+
+/* === Portal-style topbar (markup injected by the javadoc -top banner) === */
+.blade-jd-topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 60px;
+    padding: 0 24px;
+    background: var(--vorpal-surface);
+    border-bottom: 1px solid var(--vorpal-slate-200);
+    box-shadow: 0 1px 2px rgba(26, 36, 52, 0.06);
+    font-family: var(--vorpal-font-sans);
+}
+.blade-jd-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    border: 0;
+}
+.blade-jd-mark { height: 34px; width: auto; flex-shrink: 0; }
+.blade-jd-brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.blade-jd-product {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--vorpal-ink-900);
+    letter-spacing: 0.02em;
+}
+.blade-jd-tagline {
+    font-size: 11px;
+    color: var(--vorpal-slate-600);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-top: 2px;
+}
+.blade-jd-ver { font-size: 12px; color: var(--vorpal-slate-400); letter-spacing: 0.04em; }
+.blade-jd-links { margin-left: auto; display: flex; gap: 10px; }
+.blade-jd-links a {
+    color: var(--vorpal-slate-600);
+    text-decoration: none;
+    font-size: 12.5px;
+    padding: 5px 12px;
+    border: 1px solid var(--vorpal-slate-300);
+    border-radius: var(--vorpal-radius-md);
+    background: var(--vorpal-surface);
+}
+.blade-jd-links a:hover {
+    color: var(--vorpal-purple);
+    background: var(--vorpal-purple-soft);
+    border-color: var(--vorpal-purple-100);
+}
+
+/* === Navigation bar — light, purple active tab === */
+div.top-nav {
+    background: var(--vorpal-surface);
+    border-bottom: 1px solid var(--vorpal-slate-200);
+}
+div.sub-nav {
+    background: var(--vorpal-surface-alt);
+    border-bottom: 1px solid var(--vorpal-divider);
+}
+
+/* === TOC sidebar === */
+nav.toc { border-right-color: var(--vorpal-slate-200); }
+nav.toc .toc-header { color: var(--vorpal-purple); font-weight: 600; }
+nav.toc a:hover { color: var(--vorpal-purple); }
+nav.toc li.active > a { color: var(--vorpal-purple); font-weight: 600; }
+
+/* === Headings === */
+.title { color: var(--vorpal-ink-900); }
+section.package-description h2,
+section.package-description h3,
+section.class-description h2,
+section.class-description h3 { color: var(--vorpal-purple-700); }
+
+/* === Tables === */
+div.table-header,
+div.caption span {
+    background: var(--vorpal-purple);
+    color: #fff;
+}
+.even-row-color { background-color: var(--vorpal-surface); }
+.odd-row-color { background-color: var(--vorpal-purple-soft); }
+
+/* === Search input === */
+#search-input, input.search-input {
+    border-color: var(--vorpal-slate-300);
+    border-radius: var(--vorpal-radius-md);
+}
+#search-input:focus, input.search-input:focus {
+    border-color: var(--vorpal-purple);
+    outline-color: var(--vorpal-purple);
+}
+
+/* === Signature highlights === */
+.member-signature .return-type,
+.package-signature .element-name { color: var(--vorpal-purple); }
+
+/* === Search autocomplete (jQuery UI) active item === */
+.ui-state-active,
+.ui-widget-content .ui-state-active {
+    background: var(--vorpal-purple);
+    border-color: var(--vorpal-purple);
+}

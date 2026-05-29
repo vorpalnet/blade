@@ -3,7 +3,7 @@
 # build.sh - Profile-driven build wrapper for BLADE
 #
 # Usage:
-#   ./build.sh [profile...] [platform] [--no-dist] [maven-args...]
+#   ./build.sh [profile...] [platform] [--no-dist] [--no-javadoc] [maven-args...]
 #
 # Examples:
 #   ./build.sh                              # full build, auto-detected platform
@@ -13,7 +13,8 @@
 #   ./build.sh production minimal           # two EARs: production + minimal
 #   ./build.sh production clean package     # with explicit Maven goals
 #   ./build.sh --no-dist                    # full build, skip dist/ copy
-#   ./build.sh -- -Pjavadocs                # full build with extra Maven flags
+#   ./build.sh --no-javadoc                 # full build, skip javadoc generation
+#   ./build.sh -- -Pfoo                     # full build with extra Maven flags
 #
 # Module profiles:   build-profiles/*.conf
 # Platform profiles: build-profiles/platforms/*.conf
@@ -47,6 +48,16 @@
 #     export BLADE_SKIP_DIST=1              # sticky for the current shell
 #
 #   --no-dist on the CLI overrides BLADE_SKIP_DIST=0 from the environment.
+#
+# Javadoc generation:
+#   BLADE's source uses Java 23+ Markdown '///' doc comments (JEP 467), so docs
+#   are generated automatically (via the -Pjavadocs profile) whenever the build
+#   JDK is >= 23 — even though bytecode still targets Java 11 (--release). The
+#   resulting javadoc.war is copied to dist/<ver>-<build>/admin/. On an older
+#   build JDK the docs are skipped with a warning; the build itself is fine.
+#   To skip generation deliberately (e.g. fast dev loops):
+#     ./build.sh --no-javadoc               # one-off
+#     export BLADE_SKIP_JAVADOC=1           # sticky for the current shell
 #
 # EAR (currently disabled):
 #   The services EAR is intentionally offline — see services/pom.xml. While
@@ -188,22 +199,27 @@ dist_subdir_for() {
     case "$1" in
         admin/*)             echo "admin" ;;
         services/*|test/*)   echo "services" ;;  # test apps live with services
-        libs/*|javadoc)      echo "" ;;          # libraries (+ legacy) at root
+        libs/*)              echo "" ;;          # libraries at root
         *)                   echo "" ;;
     esac
 }
 
 # --- Copy every built WAR/JAR to dist/<ver>-<build>/<tier>/ ---
-# Iterates the active profile's INCLUDED_MODULES list (not a blind glob), so
-# stale artifacts from previous builds in unrelated target/ directories don't
-# leak into this build's dist. Excludes Maven side-artifacts (sources, javadoc,
-# tests, the war-plugin's intermediate -classes.jar). Also copies the active
-# build profile and platform conf files to the dist root for traceability.
+# Iterates the active profile's INCLUDED_MODULES list, and within each module
+# copies only the artifact the module *declares* via <finalName> (which the
+# parent POM maps to <warName>). A blind target/*.war glob would also sweep up
+# a stale WAR left by an earlier build under a different finalName — e.g. a
+# leftover vorpal-blade-services-transfer.war beside the current transfer.war —
+# shipping two copies of one service to dist, since the default `./build.sh`
+# does not `clean` between runs. Modules with no finalName fall back to a
+# filtered glob that excludes Maven side-artifacts (sources, javadoc, tests,
+# the war-plugin's intermediate -classes.jar). Also copies the active build
+# profile and platform conf files to the dist root for traceability.
 copy_all_to_dist() {
     [ "$SKIP_DIST" = true ] && return 0
     mkdir -p "$DISTDIR"
     local copied=0 missing=0
-    local mod mdir target f produced subdir destdir
+    local mod mdir target f produced subdir destdir final_name
     while IFS= read -r mod; do
         [ -n "$mod" ] || continue
         mdir=$(module_dir "$mod")
@@ -221,16 +237,32 @@ copy_all_to_dist() {
             destdir="$DISTDIR"
         fi
         produced=0
-        for f in "$target"/*.war "$target"/*.jar; do
-            [ -f "$f" ] || continue
-            case "$(basename "$f")" in
-                *-sources.jar|*-javadoc.jar|*-tests.jar|*-classes.jar) continue ;;
-                original-*.jar) continue ;;
-            esac
-            cp -f "$f" "$destdir/"
-            copied=$((copied + 1))
-            produced=$((produced + 1))
-        done
+        # Copy the artifact the module declares via <finalName>, not whatever
+        # WARs happen to be in target/. See the function header for why a blind
+        # glob ships stale duplicates.
+        final_name=$(grep -o '<finalName>[^<]*</finalName>' \
+            "${SCRIPT_DIR}/${mdir}/pom.xml" 2>/dev/null \
+            | head -1 | sed 's/<[^>]*>//g')
+        if [ -n "$final_name" ]; then
+            for f in "$target/${final_name}.war" "$target/${final_name}.jar"; do
+                [ -f "$f" ] || continue
+                cp -f "$f" "$destdir/"
+                copied=$((copied + 1))
+                produced=$((produced + 1))
+            done
+        else
+            # No declared finalName — fall back to the filtered glob.
+            for f in "$target"/*.war "$target"/*.jar; do
+                [ -f "$f" ] || continue
+                case "$(basename "$f")" in
+                    *-sources.jar|*-javadoc.jar|*-tests.jar|*-classes.jar) continue ;;
+                    original-*.jar) continue ;;
+                esac
+                cp -f "$f" "$destdir/"
+                copied=$((copied + 1))
+                produced=$((produced + 1))
+            done
+        fi
         [ $produced -eq 0 ] && missing=$((missing + 1))
     done <<< "$INCLUDED_MODULES"
 
@@ -263,7 +295,7 @@ write_deployment_manifest() {
             explorer.war)     echo "admin|AdminServer|Experimental UI (context: /explorer)" ;;
             watcher.war)      echo "admin|AdminServer|Log/event monitor (context: /watcher)" ;;
             logs.war)         echo "admin|AdminServer|Log viewer (context: /logs)" ;;
-            javadoc.war)      echo "admin|AdminServer|Javadoc site (context: /javadoc)" ;;
+            javadoc.war)      echo "admin|AdminServer|Javadoc site (context: /blade/javadoc)" ;;
             crud-editor.war)  echo "admin|AdminServer|CRUD editor (context: /crud-editor)" ;;
             *)                echo "admin|AdminServer|Admin app (context: /${base})" ;;
         esac
@@ -383,11 +415,21 @@ case "${BLADE_SKIP_DIST:-}" in
     1|true|yes|on) SKIP_DIST=true ;;
 esac
 
+# Sticky dev-mode switch: BLADE_SKIP_JAVADOC=1 disables javadoc generation.
+# The CLI flag --no-javadoc always wins. Javadocs are generated by default when
+# the build JDK is >= 23 (see the javadoc decision block further down).
+SKIP_JAVADOC=false
+case "${BLADE_SKIP_JAVADOC:-}" in
+    1|true|yes|on) SKIP_JAVADOC=true ;;
+esac
+
 for arg in "$@"; do
     if [ "$arg" = "--" ]; then
         continue
     elif [ "$arg" = "--no-dist" ]; then
         SKIP_DIST=true
+    elif [ "$arg" = "--no-javadoc" ]; then
+        SKIP_JAVADOC=true
     elif [[ "$arg" == -* ]]; then
         MAVEN_ARGS+=("$arg")
     elif [ -f "${PROFILES_DIR}/${arg}.conf" ]; then
@@ -567,6 +609,43 @@ else
     BUILD_JDK_SOURCE="PATH: $(command -v java 2>/dev/null || echo 'not found')"
 fi
 
+# --- Javadoc generation (on by default) ---
+# BLADE source uses Java 23+ Markdown '///' doc comments (JEP 467), so the
+# javadoc tool must come from a JDK >= 23 — even though we compile to Java
+# ${JAVA_VERSION:-11} bytecode (--release). When the build JDK is older we
+# can't render the docs, so we skip them (the build itself is unaffected) and
+# warn below. Generating activates the -Pjavadocs profile, which adds the
+# admin/javadoc module; we append "javadoc" to the dist copy list so the
+# resulting javadoc.war lands in dist/<ver>-<build>/admin/.
+JAVADOC_MIN_JDK=23
+JAVADOC_FLAGS=()
+JAVADOC_OLD_JDK=false
+jdk_ok_for_javadoc=false
+if [ -n "${BUILD_JDK_MAJOR:-}" ] && [ "${BUILD_JDK_MAJOR}" -ge "$JAVADOC_MIN_JDK" ] 2>/dev/null; then
+    jdk_ok_for_javadoc=true
+fi
+# Was -Pjavadocs already passed by hand (the legacy `-- -Pjavadocs` form)?
+javadoc_manual=false
+for f in "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}"; do
+    case "$f" in -P*javadocs*) javadoc_manual=true ;; esac
+done
+
+if [ "$HAS_BUILD_GOAL" != true ]; then
+    JAVADOC_STATUS="n/a (clean-only run)"
+elif [ "$SKIP_JAVADOC" = true ]; then
+    JAVADOC_STATUS="SKIPPED (--no-javadoc or BLADE_SKIP_JAVADOC set)"
+elif [ "$javadoc_manual" = true ]; then
+    INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
+    JAVADOC_STATUS="generating (-Pjavadocs passed explicitly)"
+elif [ "$jdk_ok_for_javadoc" = true ]; then
+    JAVADOC_FLAGS+=("-Pjavadocs")
+    INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
+    JAVADOC_STATUS="generating (-Pjavadocs → admin/javadoc → javadoc.war)"
+else
+    JAVADOC_OLD_JDK=true
+    JAVADOC_STATUS="SKIPPED — needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown})"
+fi
+
 # Reusable so the same block prints in the header and the post-build summary.
 print_build_info() {
     echo "Build profile: ${PROFILE}"
@@ -574,6 +653,7 @@ print_build_info() {
     echo "Build number:  ${BUILD_NUM}"
     echo "Build JDK:     ${BUILD_JDK_VERSION:-unknown} (${BUILD_JDK_SOURCE})"
     echo "Target:        Java ${JAVA_VERSION:-11} bytecode (--release ${JAVA_VERSION:-11})"
+    echo "Javadocs:      ${JAVADOC_STATUS}"
     echo "WebLogic:      ${WL_VERSION:-14.1.1 (default)}"
     echo "OCCAS:         ${OCCAS_VERSION:-8.1 (default)}"
 }
@@ -586,6 +666,14 @@ if [ -n "${JAVA_VERSION:-}" ] && [ -n "${BUILD_JDK_MAJOR:-}" ] \
         && [ "$BUILD_JDK_MAJOR" -lt "$JAVA_VERSION" ] 2>/dev/null; then
     echo "WARNING: build JDK ${BUILD_JDK_MAJOR} is older than target ${JAVA_VERSION} — compile will fail."
     echo "         Set JAVA_HOME to a JDK >= ${JAVA_VERSION} and re-run."
+fi
+# Javadoc generation needs a JDK >= 23 for BLADE's Markdown '///' doc comments
+# (JEP 467). Warn — don't fail — when we wanted docs but the build JDK is older.
+if [ "$JAVADOC_OLD_JDK" = true ]; then
+    echo "WARNING: skipping Javadoc generation — the javadoc tool needs a JDK ${JAVADOC_MIN_JDK}+"
+    echo "         for BLADE's Markdown '///' doc comments (JEP 467); build JDK is ${BUILD_JDK_MAJOR:-unknown}."
+    echo "         This affects the docs only — bytecode still targets Java ${JAVA_VERSION:-11} (--release ${JAVA_VERSION:-11})."
+    echo "         Point JAVA_HOME at a JDK ${JAVADOC_MIN_JDK}+ to build docs, or pass --no-javadoc to silence this."
 fi
 echo "Modules: ${INCLUDED_COUNT} of ${TOTAL_COUNT}"
 # DIST_MSG distinguishes "user told us to skip" from "nothing to dist anyway",
@@ -609,6 +697,7 @@ set +e
 "${SCRIPT_DIR}/mvnw" \
     "${MAVEN_GOALS[@]}" \
     "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
+    "${JAVADOC_FLAGS[@]+"${JAVADOC_FLAGS[@]}"}" \
     "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
     "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
     "-Dbuild.number=${BUILD_NUM}" \

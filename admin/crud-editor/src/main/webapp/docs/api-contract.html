@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>API Contract · BLADE CRUD Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/crud-editor/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE CRUD Editor</span>
+				<span class="vorpal-brand-tagline">Service Resource Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../crud-editor.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">API Contract</h1>
+				<p class="vorpal-page-subtitle">
+					The REST shape the editor assumes. Any BLADE service
+					that implements this surface can be edited.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="api-contract.html" class="vorpal-active-doc">API Contract</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>API Contract</h1>
+
+					<h2>Base path</h2>
+					<p>
+						All endpoints are rooted at
+						<code>/&lt;app&gt;/resources/api/</code>. The editor
+						derives <code>&lt;app&gt;</code> from the page URL.
+					</p>
+
+					<h2>Endpoints</h2>
+					<table>
+						<tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
+						<tr><td><code>GET</code></td><td><code>{base}/{resource}</code></td><td>List all rows of the named resource.</td></tr>
+						<tr><td><code>GET</code></td><td><code>{base}/{resource}/{key}</code></td><td>Fetch one row by primary key.</td></tr>
+						<tr><td><code>PUT</code></td><td><code>{base}/{resource}/{key}</code></td><td>Create or update one row by primary key. Body is the row JSON.</td></tr>
+						<tr><td><code>DELETE</code></td><td><code>{base}/{resource}/{key}</code></td><td>Delete one row.</td></tr>
+						<tr><td><code>POST</code></td><td><code>{base}/{resource}/_preview</code></td><td>Dry-run preview of a mutating operation. Body describes the proposed change; response describes the effect without applying it.</td></tr>
+					</table>
+
+					<h2>Response shape</h2>
+					<p>List responses:</p>
+					<pre><code>{
+  "resource": "rules",
+  "rows": [
+    { "key": "...", "field1": "...", "field2": ... },
+    ...
+  ],
+  "schema": { /* JSON schema describing row shape */ }
+}</code></pre>
+
+					<p>The optional <code>schema</code> field lets the editor render typed form fields; without it, the editor falls back to free-form text editing.</p>
+
+					<h2>Dry-run preview</h2>
+					<p>
+						Mutating operations (PUT, DELETE) optionally route
+						through <code>POST {base}/{resource}/_preview</code>
+						first. The preview response describes the expected
+						effect:
+					</p>
+					<pre><code>{
+  "action": "update",
+  "key": "row-42",
+  "before": { ... },
+  "after":  { ... },
+  "diff":   [ { "field": "...", "from": ..., "to": ... } ],
+  "warnings": [ "..." ]
+}</code></pre>
+					<p>
+						The editor renders the diff in a confirmation modal
+						before sending the actual mutating request. This is
+						how an operator can sanity-check a change before
+						committing — particularly valuable for table-shaped
+						data where one bad row can affect every call that
+						matches.
+					</p>
+
+					<h2>Authentication</h2>
+					<p>
+						All endpoints inherit the BLADE admin tier's session
+						auth. No separate token; the same login that opens
+						the portal opens the CRUD API.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Server-side responsibility</div>
+						<p>
+							This page documents what the editor expects. The
+							actual REST handler lives in each BLADE service.
+							If a service doesn't implement these endpoints,
+							the editor will get 404s — that's the signal
+							that the service hasn't opted into CRUD-API
+							editability.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

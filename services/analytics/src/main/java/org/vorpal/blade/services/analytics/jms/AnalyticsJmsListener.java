@@ -3,7 +3,11 @@ package org.vorpal.blade.services.analytics.jms;
 import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -26,11 +30,17 @@ import javax.naming.InitialContext;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
+import javax.persistence.TypedQuery;
 import javax.sql.DataSource;
 
 import org.vorpal.blade.framework.v2.analytics.Application;
+import org.vorpal.blade.framework.v2.analytics.Attribute;
+import org.vorpal.blade.framework.v2.analytics.AttributeName;
+import org.vorpal.blade.framework.v2.analytics.AttributePK;
 import org.vorpal.blade.framework.v2.analytics.Event;
+import org.vorpal.blade.framework.v2.analytics.EventType;
 import org.vorpal.blade.framework.v2.analytics.Session;
+import org.vorpal.blade.framework.v2.analytics.SessionKey;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.services.analytics.sip.AnalyticsSipServlet;
@@ -95,12 +105,12 @@ public class AnalyticsJmsListener implements MessageListener {
 		// Safety net: if a message slips through during the brief window between
 		// setting databaseDown and the JMX suspend taking effect, discard it.
 		if (databaseDown) {
-			sipLogger.warning("AnalyticsJmsListener: Database unavailable, discarding message");
+			logWarning("AnalyticsJmsListener: Database unavailable, discarding message");
 			return;
 		}
 
 		if (!(message instanceof ObjectMessage)) {
-			sipLogger.warning("AnalyticsJmsListener: Received non-ObjectMessage, ignoring");
+			logWarning("AnalyticsJmsListener: Received non-ObjectMessage, ignoring");
 			return;
 		}
 
@@ -109,7 +119,7 @@ public class AnalyticsJmsListener implements MessageListener {
 			try {
 				emf = Persistence.createEntityManagerFactory("BladeAnalytics");
 			} catch (Exception e) {
-				sipLogger.severe("AnalyticsJmsListener: Cannot create EntityManagerFactory: " + e.getMessage());
+				logSevere("AnalyticsJmsListener: Cannot create EntityManagerFactory: " + e.getMessage(), e);
 				reportDatabaseDown();
 				return;
 			}
@@ -124,21 +134,24 @@ public class AnalyticsJmsListener implements MessageListener {
 			em.getTransaction().begin();
 
 			if (object instanceof Application) {
-				sipLogger.info("AnalyticsJmsListener.onMessage - persisting Application:\n"
-						+ Logger.serializeObject((Application) object));
+				logInfo("AnalyticsJmsListener.onMessage - persisting Application:\n"
+						+ safeSerialize(object));
 				persistApplication(em, (Application) object);
 			} else if (object instanceof Session) {
-				sipLogger.info("AnalyticsJmsListener.onMessage - persisting Session:\n"
-						+ Logger.serializeObject((Session) object));
+				logInfo("AnalyticsJmsListener.onMessage - persisting Session:\n"
+						+ safeSerialize(object));
 				persistSession(em, (Session) object);
 			} else if (object instanceof Event) {
-				sipLogger.info("AnalyticsJmsListener.onMessage - persisting Event:\n"
-						+ Logger.serializeObject((Event) object));
+				logInfo("AnalyticsJmsListener.onMessage - persisting Event:\n"
+						+ safeSerialize(object));
 				persistEvent(em, (Event) object);
+			} else if (object instanceof SessionKey) {
+				logInfo("AnalyticsJmsListener.onMessage - persisting SessionKey:\n"
+						+ safeSerialize(object));
+				persistSessionKey(em, (SessionKey) object);
 			} else {
-				sipLogger.severe(
-						"AnalyticsJmsListener: Unable to persist unknown object type: " + object.getClass().getName());
-				sipLogger.logConfiguration(object);
+				logSevere("AnalyticsJmsListener: Unable to persist unknown object type: "
+						+ (object == null ? "null" : object.getClass().getName()), null);
 			}
 
 			em.getTransaction().commit();
@@ -151,19 +164,18 @@ public class AnalyticsJmsListener implements MessageListener {
 						em.getTransaction().rollback();
 					}
 				} catch (Exception rollbackEx) {
-					sipLogger.severe("AnalyticsJmsListener: Rollback failed: " + rollbackEx.getMessage());
+					logSevere("AnalyticsJmsListener: Rollback failed: " + rollbackEx.getMessage(), rollbackEx);
 				}
 			}
 
 			if (isDatabaseConnectionError(ex)) {
-				sipLogger.severe("AnalyticsJmsListener: Database connection error: " + ex.getMessage());
+				logSevere("AnalyticsJmsListener: Database connection error: " + ex.getMessage(), ex);
 				closeEmf();
 				reportDatabaseDown();
 			} else {
 				// Non-connection error (bad data, constraint violation, etc.)
 				// Log it but let the message be consumed to avoid infinite redelivery
-				sipLogger.severe("AnalyticsJmsListener: Persist error: " + ex.getMessage());
-				sipLogger.severe(ex);
+				logSevere("AnalyticsJmsListener: Persist error: " + ex.getMessage(), ex);
 			}
 		} finally {
 			if (em != null && em.isOpen()) {
@@ -172,12 +184,71 @@ public class AnalyticsJmsListener implements MessageListener {
 		}
 	}
 
+	// ─── Defensive logging — sipLogger may be null if SettingsManager hasn't ────
+	// been initialized yet (the SIP servlet half of services/analytics owns it).
+	// All logging in onMessage and the persist helpers goes through these so a
+	// secondary NPE in the logger never masks the real underlying error.
+
+	private static void logSevere(String msg, Throwable t) {
+		Logger l = sipLogger;
+		if (l != null) {
+			try {
+				l.severe(msg);
+				if (t instanceof Exception) {
+					l.severe((Exception) t);
+				}
+				return;
+			} catch (Throwable inner) {
+				// fall through to System.err
+			}
+		}
+		System.err.println("[AnalyticsJmsListener] SEVERE: " + msg);
+		if (t != null) {
+			t.printStackTrace(System.err);
+		}
+	}
+
+	private static void logWarning(String msg) {
+		Logger l = sipLogger;
+		if (l != null) {
+			try {
+				l.warning(msg);
+				return;
+			} catch (Throwable inner) {
+				// fall through
+			}
+		}
+		System.err.println("[AnalyticsJmsListener] WARNING: " + msg);
+	}
+
+	private static void logInfo(String msg) {
+		Logger l = sipLogger;
+		if (l != null) {
+			try {
+				l.info(msg);
+				return;
+			} catch (Throwable inner) {
+				// fall through
+			}
+		}
+		System.out.println("[AnalyticsJmsListener] INFO: " + msg);
+	}
+
+	private static String safeSerialize(Object o) {
+		try {
+			return Logger.serializeObject(o);
+		} catch (Throwable t) {
+			return "<serializeObject failed: " + t.getClass().getSimpleName() + ": " + t.getMessage()
+					+ "; type=" + (o == null ? "null" : o.getClass().getName()) + ">";
+		}
+	}
+
 	private void closeEmf() {
 		if (emf != null && emf.isOpen()) {
 			try {
 				emf.close();
 			} catch (Exception e) {
-				sipLogger.warning("AnalyticsJmsListener: Error closing EntityManagerFactory: " + e.getMessage());
+				logWarning("AnalyticsJmsListener: Error closing EntityManagerFactory: " + e.getMessage());
 			}
 		}
 		emf = null;
@@ -187,11 +258,7 @@ public class AnalyticsJmsListener implements MessageListener {
 		synchronized (AnalyticsJmsListener.class) {
 			if (!databaseDown) {
 				databaseDown = true;
-				if (sipLogger != null) {
-					sipLogger.severe("AnalyticsJmsListener: Database failure detected, suspending message delivery");
-				} else {
-					System.err.println("AnalyticsJmsListener: Database failure detected, suspending message delivery");
-				}
+				logSevere("AnalyticsJmsListener: Database failure detected, suspending message delivery", null);
 				suspendMessageDelivery();
 				startHealthCheckTimer();
 			}
@@ -205,8 +272,7 @@ public class AnalyticsJmsListener implements MessageListener {
 
 			healthCheckTimer = timerService.createIntervalTimer(healthCheckInterval, healthCheckInterval,
 					new TimerConfig("dbHealthCheck", false));
-			sipLogger
-					.warning("AnalyticsJmsListener: Started health check timer (" + (healthCheckInterval) + " interval)");
+			logWarning("AnalyticsJmsListener: Started health check timer (" + (healthCheckInterval) + " interval)");
 		}
 	}
 
@@ -218,7 +284,7 @@ public class AnalyticsJmsListener implements MessageListener {
 				healthCheckTimer = null;
 				timer.cancel();
 				resumeMessageDelivery();
-				sipLogger.warning("AnalyticsJmsListener: Database connection restored, resumed message delivery");
+				logWarning("AnalyticsJmsListener: Database connection restored, resumed message delivery");
 			}
 		}
 	}
@@ -233,10 +299,10 @@ public class AnalyticsJmsListener implements MessageListener {
 			Set<ObjectName> mbeans = mbs.queryNames(new ObjectName(MDB_MBEAN_QUERY), null);
 			for (ObjectName name : mbeans) {
 				mbs.invoke(name, "suspend", null, null);
-				sipLogger.warning("AnalyticsJmsListener: JMS message delivery suspended via JMX (" + name + ")");
+				logWarning("AnalyticsJmsListener: JMS message delivery suspended via JMX (" + name + ")");
 			}
 		} catch (Exception e) {
-			sipLogger.severe("AnalyticsJmsListener: Failed to suspend message delivery via JMX: " + e.getMessage());
+			logSevere("AnalyticsJmsListener: Failed to suspend message delivery via JMX: " + e.getMessage(), e);
 		}
 	}
 
@@ -249,10 +315,10 @@ public class AnalyticsJmsListener implements MessageListener {
 			Set<ObjectName> mbeans = mbs.queryNames(new ObjectName(MDB_MBEAN_QUERY), null);
 			for (ObjectName name : mbeans) {
 				mbs.invoke(name, "resume", null, null);
-				sipLogger.warning("AnalyticsJmsListener: JMS message delivery resumed via JMX (" + name + ")");
+				logWarning("AnalyticsJmsListener: JMS message delivery resumed via JMX (" + name + ")");
 			}
 		} catch (Exception e) {
-			sipLogger.severe("AnalyticsJmsListener: Failed to resume message delivery via JMX: " + e.getMessage());
+			logSevere("AnalyticsJmsListener: Failed to resume message delivery via JMX: " + e.getMessage(), e);
 		}
 	}
 
@@ -264,7 +330,7 @@ public class AnalyticsJmsListener implements MessageListener {
 				return true;
 			}
 		} catch (Exception e) {
-			sipLogger.severe("AnalyticsJmsListener: Connection test failed: " + e.getMessage());
+			logSevere("AnalyticsJmsListener: Connection test failed: " + e.getMessage(), e);
 			return false;
 		}
 	}
@@ -298,18 +364,103 @@ public class AnalyticsJmsListener implements MessageListener {
 
 	private void persistApplication(EntityManager em, Application application) {
 		em.merge(application);
-		sipLogger.info("AnalyticsJmsListener: Persisted Application id=" + application.getId());
+		logInfo("AnalyticsJmsListener: Persisted Application id=" + application.getId());
 	}
 
 	private void persistSession(EntityManager em, Session session) {
 		em.merge(session);
-		sipLogger.info("AnalyticsJmsListener: Persisted Session id=" + session.getId());
+		logInfo("AnalyticsJmsListener: Persisted Session id=" + session.getId());
+	}
+
+	private void persistSessionKey(EntityManager em, SessionKey sk) {
+		// Composite PK (session_id, name, value) — em.merge is idempotent on retransmits.
+		em.merge(sk);
+		logInfo("AnalyticsJmsListener: Persisted SessionKey session_id="
+				+ sk.getId().getSessionId() + " name=" + sk.getId().getName()
+				+ " value=" + sk.getId().getValue());
 	}
 
 	private void persistEvent(EntityManager em, Event event) {
-		// Use the custom persistEvent method to handle AttributePK.eventId update
-		event.persistEvent(em);
-		sipLogger.info("AnalyticsJmsListener: Persisted Event id=" + event.getId());
+		// Translate the wire-side event name to an event_type_id.
+		event.setEventTypeId(lookupEventTypeId(em, event.getName()));
+
+		// Detach the wire-side attribute map so JPA doesn't try to cascade
+		// (Event.attributes is @Transient anyway, but be explicit).
+		Map<String, Attribute> incoming = event.getAttributes();
+		event.setAttributes(new java.util.HashMap<>());
+
+		// Persist the event itself; flush so the IDENTITY-generated id is
+		// available for the attribute rows.
+		em.persist(event);
+		em.flush();
+
+		long eventId = event.getId();
+		for (Attribute attr : incoming.values()) {
+			short nameId = lookupAttributeNameId(em, attr.getName());
+			attr.setId(new AttributePK(eventId, nameId));
+			em.persist(attr);
+		}
+
+		logInfo("AnalyticsJmsListener: Persisted Event id=" + eventId
+				+ " event_type_id=" + event.getEventTypeId()
+				+ " attribute_count=" + incoming.size());
+	}
+
+	// ─── Lookup caches for normalized name → id ─────────────────────────
+
+	private final ConcurrentMap<String, Short> eventTypeCache = new ConcurrentHashMap<>();
+	private final ConcurrentMap<String, Short> attributeNameCache = new ConcurrentHashMap<>();
+
+	private short lookupEventTypeId(EntityManager em, String name) {
+		Short id = eventTypeCache.get(name);
+		if (id != null) {
+			return id;
+		}
+		synchronized (eventTypeCache) {
+			id = eventTypeCache.get(name);
+			if (id != null) {
+				return id;
+			}
+			TypedQuery<EventType> q = em.createNamedQuery("EventType.findByName", EventType.class);
+			q.setParameter("name", name);
+			List<EventType> results = q.getResultList();
+			EventType et;
+			if (!results.isEmpty()) {
+				et = results.get(0);
+			} else {
+				et = new EventType(name);
+				em.persist(et);
+				em.flush();
+			}
+			eventTypeCache.put(name, et.getId());
+			return et.getId();
+		}
+	}
+
+	private short lookupAttributeNameId(EntityManager em, String name) {
+		Short id = attributeNameCache.get(name);
+		if (id != null) {
+			return id;
+		}
+		synchronized (attributeNameCache) {
+			id = attributeNameCache.get(name);
+			if (id != null) {
+				return id;
+			}
+			TypedQuery<AttributeName> q = em.createNamedQuery("AttributeName.findByName", AttributeName.class);
+			q.setParameter("name", name);
+			List<AttributeName> results = q.getResultList();
+			AttributeName an;
+			if (!results.isEmpty()) {
+				an = results.get(0);
+			} else {
+				an = new AttributeName(name);
+				em.persist(an);
+				em.flush();
+			}
+			attributeNameCache.put(name, an.getId());
+			return an.getId();
+		}
 	}
 
 }

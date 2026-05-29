@@ -498,6 +498,23 @@ h2 {
     align-items: flex-start;
 }
 
+/* @FormLayoutColumn — a vertical stack inside a @FormLayoutGroup(columns=...)
+   row. Columns sit side-by-side; their children stack top-to-bottom, each
+   taking the full column width. min-width:0 keeps a wide child from blocking
+   the side-by-side layout (flex items default to min-width:auto). */
+.form-layout-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1 1 220px;
+    min-width: 0;
+}
+.form-layout-column > .form-group,
+.form-layout-column > .add-property-placeholder {
+    flex: 1 0 100%;
+    margin-bottom: 0;
+}
+
 /* @FormSection — a titled bordered sub-container that takes a full row. */
 .form-section {
     flex: 1 0 100%;

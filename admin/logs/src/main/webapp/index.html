@@ -2,29 +2,113 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>BLADE Logs</title>
-	<link rel="stylesheet" href="logs.css">
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/logs/favicon.svg">
 </head>
 <body>
-	<header>
-		<h1>BLADE Cluster Logs</h1>
-		<div class="controls">
-			<label>Server
-				<select id="server"></select>
-			</label>
-			<label>Log file
-				<select id="logFile"></select>
-			</label>
-			<label>Tail bytes
-				<input id="tailBytes" type="number" min="1024" step="1024" value="65536">
-			</label>
-			<button id="load">Load tail</button>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Logs</span>
+				<span class="vorpal-brand-tagline">Cluster Log Tail Viewer</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html" class="vorpal-active">Overview</a>
+			<a href="logs.html">Viewer</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
 		</div>
 	</header>
-	<main>
-		<div id="status" class="status"></div>
-		<pre id="output" class="output">Pick a server and a log file, then click <strong>Load tail</strong>.</pre>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>BLADE Logs</h1>
+					<p>
+						Tail any log file on any cluster node from a single
+						page. Cluster topology is discovered live from the
+						WebLogic domain; log files are read through a per-node
+						<code>VorpalLogReader</code> MBean — no SSH, no
+						per-host file paths to remember, no log-shipper to
+						configure.
+					</p>
+				</div>
+				<div class="vorpal-hero-meta">
+					<span>Discovery · JMX</span>
+					<span>Read · MBean</span>
+				</div>
+			</section>
+
+			<section class="vorpal-card-grid">
+				<a href="logs.html" class="vorpal-card">
+					<span class="vorpal-card-icon">▤</span>
+					<h3>Open Viewer</h3>
+					<p>
+						Launch the log viewer. Pick a server, a log file, and a
+						tail size; the panel updates live. Supports
+						non-AdminServer engine-tier nodes via the federated
+						domain runtime MBean tree.
+					</p>
+					<span class="vorpal-card-link">Open Log Viewer</span>
+				</a>
+
+				<a href="docs/index.html" class="vorpal-card">
+					<span class="vorpal-card-icon">📖</span>
+					<h3>Documentation</h3>
+					<p>
+						Operator handbook — how cluster discovery works, what
+						the log file enumeration shows, the read-slice
+						semantics, and the per-node MBean registration that
+						makes it all federate.
+					</p>
+					<span class="vorpal-card-link">Browse Documentation</span>
+				</a>
+
+				<a href="docs/cluster-discovery.html" class="vorpal-card">
+					<span class="vorpal-card-icon">≡</span>
+					<h3>Cluster Discovery</h3>
+					<p>
+						How the server dropdown is populated — DomainRuntime
+						MBean walk, the same pattern used by the
+						Tuning dashboard's cluster view. Failure modes and
+						what's visible vs. hidden.
+					</p>
+					<span class="vorpal-card-link">Read Discovery Reference</span>
+				</a>
+
+				<a href="docs/troubleshooting.html" class="vorpal-card">
+					<span class="vorpal-card-icon">⚠</span>
+					<h3>Troubleshooting</h3>
+					<p>
+						Server missing from the list? Log file enumeration
+						empty? Reads returning 500s? Stale tail content?
+						Symptom-to-cause table plus the per-node MBean check.
+					</p>
+					<span class="vorpal-card-link">View Runbook</span>
+				</a>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
 	</main>
-	<script src="logs.js"></script>
+
+</div>
 </body>
 </html>

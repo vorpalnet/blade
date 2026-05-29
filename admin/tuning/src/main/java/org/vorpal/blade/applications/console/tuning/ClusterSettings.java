@@ -19,7 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 /**
  * REST API for cluster and Coherence settings.
  */
-@Path("/api/v1/cluster")
+@Path("/cluster")
 @Tag(name = "Cluster", description = "Cluster topology and Coherence cache settings")
 public class ClusterSettings {
 

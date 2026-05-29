@@ -1,67 +1,43 @@
-/// A SIP test server built on the BLADE framework that answers incoming calls
-/// with configurable response behavior. The Test UAS is the counterpart to the
-/// Test UAC — together they form a complete SIP
-/// load testing tool for production call center performance tuning.
+/// A SIP test server built on the BLADE framework. The Test UAS is the
+/// counterpart to the Test UAC — together they form a complete SIP load
+/// testing tool for production call center performance tuning.
 ///
-/// ## Key Components
+/// ## Two modes, chosen from the Request-URI
 ///
-/// - [UasServlet] - main SIP servlet extending `B2buaServlet` and implementing
-///   `B2buaListener`, dispatching incoming requests to test callflows based on
-///   SIP method
+/// [UasServlet] picks a mode per-call from the initial INVITE's Request-URI —
+/// there is no configuration toggle:
 ///
-/// ## Response Behavior
+/// - **Strip-and-forward (B2BUA)** — when the INVITE carries none of `status`,
+///   `delay`, or `refer`, it is forwarded to its Request-URI. A multipart
+///   (e.g. SIPREC) body is stripped down to just its `application/sdp` part so
+///   a plain softphone can parse it.
+/// - **Endpoint (UAS)** — when the INVITE carries `status`, `delay`, or
+///   `refer`, the call is answered locally:
+///   - `status` / `delay` →
+///     [TestInvite][org.vorpal.blade.test.uas.callflows.TestInvite]
+///   - `refer` → [TestRefer][org.vorpal.blade.test.uas.callflows.TestRefer]
 ///
-/// Response parameters are resolved in order of precedence:
+/// Example endpoint call: `sip:target@uas.test;status=200;delay=5s` answers
+/// with a muted (blackhole) SDP and sends `BYE` after 5 seconds.
 ///
-/// 1. **Error map** — phone number match overrides status code
-/// 2. **Request URI parameters** — `?status=`, `?delay=`, `?duration=` per-call overrides
-/// 3. **REST API configuration** — runtime defaults set via `PUT /api/v1/config/*`
-/// 4. **Configuration file** — startup defaults from `config/custom/vorpal/test-uas.json`
-///
-/// This layered approach lets the calling UAC control UAS behavior per-call by
-/// encoding parameters in the request URI (e.g.
-/// `sip:target@uas.test;status=503;delay=2s;duration=60s`), while the REST API
-/// provides a control plane for test orchestration.
-///
-/// ## Request Dispatching
-///
-/// [UasServlet] overrides `chooseCallflow()` to route requests:
-///
-/// - **INVITE** (initial) — [TestInvite][org.vorpal.blade.test.uas.callflows.TestInvite]
-///   with configurable status, delay, duration, error map lookup, and SDP content
-/// - **INVITE** (mid-dialog) — [TestReinvite][org.vorpal.blade.test.uas.callflows.TestReinvite]
-///   with blackhole SDP for media hold simulation
-/// - **CANCEL, INFO, BYE** — [TestOkayResponse][org.vorpal.blade.test.uas.callflows.TestOkayResponse]
-///   for simple 200 OK handling
-/// - **All other methods** — [TestNotImplemented][org.vorpal.blade.test.uas.callflows.TestNotImplemented]
-///   for 501 responses
+/// The chosen mode is stamped on the application session so in-dialog requests
+/// (re-INVITE, BYE, …) route the same way as the initial INVITE.
 ///
 /// ## Sub-packages
 ///
 /// ### [org.vorpal.blade.test.uas.callflows]
-/// SIP callflow implementations providing configurable response behaviors.
-/// [TestInvite][org.vorpal.blade.test.uas.callflows.TestInvite] is the primary
-/// callflow for load testing — it reads config defaults, checks URI parameter
-/// overrides and the error map, applies optional delay via `scheduleTimer()`,
-/// sends the response with SDP (for 2xx), and schedules auto-BYE for controlled
-/// call teardown. Also includes [TestRefer][org.vorpal.blade.test.uas.callflows.TestRefer]
-/// for REFER-based transfer testing with NOTIFY handshaking.
+/// The endpoint-mode callflows: [TestInvite][org.vorpal.blade.test.uas.callflows.TestInvite]
+/// (status/delay + auto-BYE), [TestRefer][org.vorpal.blade.test.uas.callflows.TestRefer]
+/// (transfer test), and simple 200/501 responders. Re-INVITEs reuse the
+/// framework's [CallflowHold][org.vorpal.blade.framework.v2.callflow.CallflowHold].
 ///
 /// ### [org.vorpal.blade.test.uas.config]
-/// Configuration classes defining response defaults, error mappings, and state
-/// management. [TestUasConfig][org.vorpal.blade.test.uas.config.TestUasConfig]
-/// provides `defaultStatus`, `defaultDelay`, `defaultDuration`, `sdpContent`,
-/// and `errorMap` with computed duration getters for human-readable parsing.
-///
-/// ### [org.vorpal.blade.test.uas.api]
-/// JAX-RS REST API for runtime configuration management.
-/// [TestUasAPI][org.vorpal.blade.test.uas.api.TestUasAPI] provides GET/PUT
-/// endpoints for modifying response behavior without redeployment.
+/// [TestUasConfig][org.vorpal.blade.test.uas.config.TestUasConfig] carries no
+/// app-specific settings — behavior comes from the Request-URI — only the
+/// inherited logging and session parameters.
 ///
 /// @see org.vorpal.blade.test.uas.callflows
 /// @see org.vorpal.blade.test.uas.config
-/// @see org.vorpal.blade.test.uas.api
-/// @see org.vorpal.blade.test.uas.config.TestUasConfig
 /// @see org.vorpal.blade.framework.v2.b2bua.B2buaServlet
 /// @see org.vorpal.blade.framework.v2.b2bua.B2buaListener
 package org.vorpal.blade.test.uas;

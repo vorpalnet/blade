@@ -43,8 +43,10 @@
 /// Sign-On across all servers via `WebAppContainerMBean`.
 ///
 /// ### Application Root
-/// [RestApplication] is the JAX-RS `@ApplicationPath("/")` entry point that registers
-/// all resource classes.
+/// [RestApplication] is the JAX-RS `@ApplicationPath("/api/v1")` entry point that
+/// registers all resource classes. Each resource declares a short `@Path` (e.g.
+/// `@Path("/jvm")`) and the application path is prepended automatically — externally
+/// URLs are `/blade/tuning/api/v1/jvm`, `/blade/tuning/api/v1/cluster`, and so on.
 ///
 /// @see JvmSettings
 /// @see SipTimerSettings

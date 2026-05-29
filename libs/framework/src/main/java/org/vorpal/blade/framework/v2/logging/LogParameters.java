@@ -8,19 +8,42 @@ import javax.servlet.ServletContext;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
 
-import org.vorpal.blade.framework.v2.config.FormLayout;
+import org.vorpal.blade.framework.v2.config.FormLayoutColumn;
 import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /**
  * Configuration parameters for the logging system. Supports file-based logging
  * with configurable directory, filename, size, and rotation settings.
  */
-@FormLayoutGroup({ "fileSize", "fileCount" })
-@FormLayoutGroup({ "loggingLevel", "sequenceDiagramLoggingLevel", "configurationLoggingLevel", "analyticsLoggingLevel" })
-@FormLayoutGroup({ "useParentLogging", "appendFile", "colorsEnabled" })
+
+
+//@FormLayout(
+//	      wide = true,        // full row
+//	      multiline = true,   // <textarea>, implies wide
+//	      password = true,    // masked input
+//	      readOnly = true,    // disabled input
+//	      regexTest = true    // adds the regex-tester button
+//	  )
+
+
+@JsonPropertyOrder({  // 
+	"directory", "fileName", //
+	 "loggingLevel", "sequenceDiagramLoggingLevel", "configurationLoggingLevel", "analyticsLoggingLevel", //
+	 "fileSize", "fileCount", "useParentLogging", "appendFile", "colorsEnabled" //
+})
+
+@FormLayoutGroup({ "directory", "fileName" })
+@FormLayoutGroup({ "loggingLevel", "sequenceDiagramLoggingLevel", "configurationLoggingLevel",
+		"analyticsLoggingLevel" })
+@FormLayoutGroup(columns = {
+		@FormLayoutColumn({ "fileSize", "fileCount" }),
+		@FormLayoutColumn({ "useParentLogging", "appendFile", "colorsEnabled" })
+})
+
 public class LogParameters implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -41,23 +64,11 @@ public class LogParameters implements Serializable {
 		KB, KiB, MB, MiB, GB, GiB
 	}
 
-	@JsonProperty(defaultValue = "false")
-	protected Boolean useParentLogging = null;
-
 	@JsonProperty(defaultValue = "./servers/${weblogic.Name}/logs/vorpal")
 	protected String directory = null;
 
 	@JsonProperty(defaultValue = "${sip.application.name}.%g.log")
 	protected String fileName = null;
-
-	@JsonProperty(defaultValue = "100MiB")
-	protected String fileSize = null;
-
-	@JsonProperty(defaultValue = "25")
-	protected Integer fileCount = null;
-
-	@JsonProperty(defaultValue = "true")
-	protected Boolean appendFile = null;
 
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel loggingLevel = null;
@@ -71,10 +82,22 @@ public class LogParameters implements Serializable {
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel analyticsLoggingLevel = null;
 
+	@JsonProperty(defaultValue = "false")
+	protected Boolean useParentLogging = null;
+
+	@JsonProperty(defaultValue = "100MiB")
+	protected String fileSize = null;
+
+	@JsonProperty(defaultValue = "25")
+	protected Integer fileCount = null;
+
+	@JsonProperty(defaultValue = "true")
+	protected Boolean appendFile = null;
+
 	@JsonPropertyDescription("Support ANSI colors in logging?")
 	@JsonProperty(defaultValue = "false")
 	protected Boolean colorsEnabled = false;
-	
+
 	public LogParameters() {
 
 	}
@@ -123,7 +146,6 @@ public class LogParameters implements Serializable {
 	 * @return the directory
 	 */
 	@JsonPropertyDescription("Location of log files. Supports environment and servlet context variables. Default: ./servers/${weblogic.Name}/logs/vorpal")
-	@FormLayout(wide = true)
 	public String getDirectory() {
 		return directory;
 	}
@@ -141,7 +163,6 @@ public class LogParameters implements Serializable {
 	 * @return the fileName
 	 */
 	@JsonPropertyDescription("Name of the log file. Supports environment and servlet context variables. Default: ${sip.application.name}.%g.log")
-	@FormLayout(wide = true)
 	public String getFileName() {
 		return fileName;
 	}

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Troubleshooting · BLADE Tuning</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/tuning/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Tuning</span>
+				<span class="vorpal-brand-tagline">OCCAS Performance Dashboard</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../tuning.html">Dashboard</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Operations</div>
+				<h1 class="vorpal-page-title">Troubleshooting</h1>
+				<p class="vorpal-page-subtitle">
+					Common failure modes — edit-session conflicts, stale
+					reads, and "Save succeeded but nothing changed."
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="sections.html">Sections Reference</a></li>
+						<li><a href="edit-sessions.html">Edit Sessions</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html" class="vorpal-active-doc">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Troubleshooting</h1>
+
+					<h2>Symptom-to-cause table</h2>
+					<table>
+						<tr><th>Symptom</th><th>Likely cause</th><th>What to do</th></tr>
+						<tr>
+							<td>Save fails with "Already in edit session"</td>
+							<td>Another operator has an open WLS edit session</td>
+							<td>Wait, or coordinate. As last resort, steal the lock from the WLS Admin Console — see <a href="edit-sessions.html">Edit Sessions</a>.</td>
+						</tr>
+						<tr>
+							<td>Save succeeds but the running server still shows the old value</td>
+							<td>Restart-required attribute; the new value is in <code>config.xml</code> but the JVM keeps the old one</td>
+							<td>Plan a rolling restart at a maintenance window. The dashboard shows a yellow banner for these.</td>
+						</tr>
+						<tr>
+							<td>Read returns a stale value (different from what was just saved by another tool)</td>
+							<td>Brief cache window in WLS; usually self-corrects within 10s</td>
+							<td>Wait and refresh. If persistent, restart the dashboard WAR — the cached MBean handle may be stale.</td>
+						</tr>
+						<tr>
+							<td>Dashboard fails to load any values</td>
+							<td>JMX walk failed — usually the WAR isn't on the AdminServer</td>
+							<td>Verify deployment target. <code>tuning.war</code> belongs on the AdminServer, not the cluster.</td>
+						</tr>
+						<tr>
+							<td>Save returns success but the value reverts on next read</td>
+							<td>An automated tool (Ansible, deploy pipeline) is overwriting your change shortly after</td>
+							<td>Check for orchestration that re-applies config — coordinate with whoever owns it.</td>
+						</tr>
+						<tr>
+							<td>Validation error on Save — value rejected by WLS</td>
+							<td>The value violates a WLS internal constraint (negative number, value out of range, malformed expression)</td>
+							<td>Error message names the offending attribute and constraint. Adjust and re-save.</td>
+						</tr>
+						<tr>
+							<td>NodeManager section shows "unreachable"</td>
+							<td>Node Manager isn't running on that host, or the listen address / port doesn't match the AdminServer's view</td>
+							<td>SSH to the host, check <code>nodemanager.log</code>. The WLS Machines configuration may need to align with the actual NM binding.</td>
+						</tr>
+					</table>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">Tuning under load</div>
+						<p>
+							Avoid tuning under live production load when
+							possible. Many runtime-tunable attributes
+							(thread pool sizes, queue depths) take effect
+							immediately and can destabilize an in-flight
+							service. Tune during low-traffic windows or in
+							staging first.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

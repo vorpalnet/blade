@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Edit Sessions · BLADE Tuning</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/tuning/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Tuning</span>
+				<span class="vorpal-brand-tagline">OCCAS Performance Dashboard</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../tuning.html">Dashboard</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Edit Sessions</h1>
+				<p class="vorpal-page-subtitle">
+					How WLS edit-and-activate works, how the dashboard threads
+					it, and what to do when an edit session is locked by
+					another operator.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="sections.html">Sections Reference</a></li>
+						<li><a href="edit-sessions.html" class="vorpal-active-doc">Edit Sessions</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Edit Sessions</h1>
+
+					<h2>The WLS edit-and-activate cycle</h2>
+					<p>
+						Every change to the WLS domain configuration goes
+						through an explicit cycle:
+					</p>
+					<ol>
+						<li><strong>Start an edit session.</strong> WLS gives you a writable view of the configuration. Only one edit session per domain at a time.</li>
+						<li><strong>Modify attributes.</strong> Your changes apply only inside the edit view; the live runtime sees nothing yet.</li>
+						<li><strong>Save.</strong> Validates the pending changes against WLS's internal rules. Failure here means the changes are syntactically wrong (e.g. negative heap size) — no harm done.</li>
+						<li><strong>Activate.</strong> Promotes the saved changes to the live runtime. WLS applies them, possibly with a delay for restart-required attributes.</li>
+					</ol>
+					<p>
+						If anything fails before Activate, you can
+						<strong>Undo</strong> — discards the edit session
+						entirely.
+					</p>
+
+					<h2>How the dashboard threads this</h2>
+					<p>
+						The dashboard wraps each Save action into a complete
+						start → modify → save → activate cycle. Operator
+						intent is "I changed this field; persist it" — they
+						shouldn't have to think about edit sessions. Behind
+						the scenes:
+					</p>
+					<ol>
+						<li>Browser POSTs the changed value(s).</li>
+						<li>Backend opens an edit session via the WLS Edit MBean server.</li>
+						<li>Backend writes the attributes to the matching ConfigurationMBean(s).</li>
+						<li>Backend saves and activates.</li>
+						<li>Backend returns success; UI clears the dirty state.</li>
+					</ol>
+
+					<h2>The lock problem</h2>
+					<p>
+						WLS allows only one edit session at a time. If
+						another operator is editing via the WLS Admin Console
+						and hasn't activated or undone, every Save from the
+						dashboard will fail with an "Already in edit session"
+						error.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">Stealing the lock</div>
+						<p>
+							WLS supports forcibly stealing an edit lock — but
+							only do this if you're certain the other session
+							is stale (operator left their browser open
+							overnight). Stealing discards their pending
+							changes irrecoverably. Coordinate first.
+						</p>
+					</div>
+
+					<h2>What "restart-required" means at activation time</h2>
+					<p>
+						Activate succeeds for both runtime and restart-
+						required attributes. The difference is:
+					</p>
+					<ul>
+						<li><strong>Runtime attributes</strong> take effect immediately on the live MBean.</li>
+						<li><strong>Restart-required attributes</strong> are written into the persisted <code>config.xml</code> but the running JVM keeps its current value until that server is restarted.</li>
+					</ul>
+					<p>
+						WLS reports restart-required after activation via the
+						<code>ServerLifeCycleRuntime</code> MBean. The
+						dashboard surfaces this as a yellow banner so you
+						know a planned restart is needed.
+					</p>
+
+					<h2>Multi-server attributes</h2>
+					<p>
+						Many tuning attributes are per-server (each server
+						has its own heap, its own work manager). For those,
+						the dashboard shows the value separately per server
+						and lets you Save per-server or "Save to all". Per-
+						server granularity is essential when a deployment
+						has heterogeneous hardware.
+					</p>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

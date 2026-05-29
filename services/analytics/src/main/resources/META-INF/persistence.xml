@@ -11,8 +11,10 @@
 		<non-jta-data-source>jdbc/BladeAnalytics</non-jta-data-source>
 		<class>org.vorpal.blade.framework.v2.analytics.Application</class>
 		<class>org.vorpal.blade.framework.v2.analytics.Attribute</class>
+		<class>org.vorpal.blade.framework.v2.analytics.AttributeName</class>
 		<class>org.vorpal.blade.framework.v2.analytics.AttributePK</class>
 		<class>org.vorpal.blade.framework.v2.analytics.Event</class>
+		<class>org.vorpal.blade.framework.v2.analytics.EventType</class>
 		<class>org.vorpal.blade.framework.v2.analytics.Session</class>
 		<class>org.vorpal.blade.framework.v2.analytics.SessionKey</class>
 		<class>org.vorpal.blade.framework.v2.analytics.SessionKeyPK</class>

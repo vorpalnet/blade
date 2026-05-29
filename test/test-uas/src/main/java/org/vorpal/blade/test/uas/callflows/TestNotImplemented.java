@@ -30,9 +30,12 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.b2bua.InitialInvite;
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 
-public class TestNotImplemented extends InitialInvite {
+/// Answers `501 Not Implemented`. The fallback for any method
+/// [UasServlet][org.vorpal.blade.test.uas.UasServlet] does not handle on an
+/// endpoint-mode dialog.
+public class TestNotImplemented extends Callflow {
 	static final long serialVersionUID = 1L;
 
 	@Override

@@ -36,7 +36,7 @@ import javax.management.MXBean;
 public interface SettingsMXBean {
 
 	public long getLastModified(String configType);
-	
+
 	public void openForWrite(String configType);
 
 	public void openForRead(String configType);
@@ -48,5 +48,12 @@ public interface SettingsMXBean {
 	public void close();
 
 	public void reload();
-	
+
+	/// Returns the current in-memory configuration as a JSON string,
+	/// or null if it hasn't been loaded yet. Side-effect-free — does not
+	/// touch the file system, doesn't change MBean state, safe to call
+	/// concurrently with reads/writes. Use this when you only need to
+	/// inspect the current settings (e.g. the BLADE Admin Portal reading
+	/// each app's name/tagline/description metadata for the launcher deck).
+	public String getCurrentJson();
 }

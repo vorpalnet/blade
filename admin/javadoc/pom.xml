@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>javadoc</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Javadoc</name>
+
+	<!-- Framework JAR for the SettingsManager that registers this app's
+	     name/tagline/description metadata MBean (the portal launcher card).
+	     The framework JAR is bundled per-WAR (the parent's packagingExcludes
+	     keeps it); its 3rd-party transitives come from the shared library
+	     via the library-ref in weblogic.xml. -->
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>javadoc</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.5.0</version>
+				<executions>
+					<execution>
+						<id>collect-javadocs</id>
+						<phase>prepare-package</phase>
+						<goals><goal>exec</goal></goals>
+						<configuration>
+							<executable>bash</executable>
+							<arguments>
+								<argument>${project.basedir}/collect-javadocs.sh</argument>
+								<argument>${project.basedir}/../..</argument>
+								<argument>${project.build.directory}/javadoc-content</argument>
+								<argument>${project.version}</argument>
+							</arguments>
+						</configuration>
+					</execution>
+					<execution>
+						<id>copy-dist</id>
+						<phase>verify</phase>
+						<goals><goal>exec</goal></goals>
+						<configuration>
+							<executable>bash</executable>
+							<arguments>
+								<argument>-c</argument>
+								<argument>
+DISTDIR="${project.basedir}/../../dist/${revision}-${build.number}";
+if [ -d "$DISTDIR" ]; then
+  mkdir -p "$DISTDIR/admin";
+  cp -f "${project.build.directory}/${project.build.finalName}.war" "$DISTDIR/admin/";
+  echo "Javadoc WAR copied to dist/${revision}-${build.number}/admin/${project.build.finalName}.war"
+else
+  echo "Dist directory not found, skipping javadoc WAR copy"
+fi
+								</argument>
+							</arguments>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<!-- Content comes from the collect script; WEB-INF + favicon
+					     from src/main/webapp. packagingExcludes is inherited from
+					     the parent (keep only the framework JAR, exclude 3rd-party
+					     transitives — those resolve via the shared library). -->
+					<warSourceDirectory>${project.build.directory}/javadoc-content</warSourceDirectory>
+					<webResources>
+						<resource>
+							<directory>src/main/webapp</directory>
+						</resource>
+					</webResources>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

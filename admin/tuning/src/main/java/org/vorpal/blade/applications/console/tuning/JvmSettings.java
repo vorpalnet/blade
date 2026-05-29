@@ -32,7 +32,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * This API parses known flags into structured fields and preserves any additional
  * flags the user has set manually.
  */
-@Path("/api/v1/jvm")
+@Path("/jvm")
 @Tag(name = "JVM", description = "JVM and server start configuration")
 public class JvmSettings {
 
@@ -66,7 +66,12 @@ public class JvmSettings {
 	public Response getAllJvmSettings() {
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
-			ObjectName domainConfig = new ObjectName("com.bea:Name=DomainConfiguration,Type=Domain");
+			// Use DomainRuntimeServiceMBean.DomainConfiguration — direct
+			// "Name=DomainConfiguration,Type=Domain" lookup throws on WLS 14.1.1.
+			// Memory: [[wls-domain-jmx-bootstrap]].
+			ObjectName service = new ObjectName(
+					"com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean");
+			ObjectName domainConfig = (ObjectName) mbs.getAttribute(service, "DomainConfiguration");
 			ObjectName[] servers = (ObjectName[]) mbs.getAttribute(domainConfig, "Servers");
 
 			ArrayNode result = mapper.createArrayNode();

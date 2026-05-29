@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Editor Guide · BLADE Flow Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/flow/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Flow Editor</span>
+				<span class="vorpal-brand-tagline">Visual FSMAR Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../flow.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Editor Guide</h1>
+				<p class="vorpal-page-subtitle">
+					Canvas mechanics, palette, inspectors, and the Tasks
+					window. The vocabulary maps directly to the FSMAR
+					concepts described in
+					<a href="fsmar-concepts.html">FSMAR Concepts</a>.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="fsmar-concepts.html">FSMAR Concepts</a></li>
+						<li><a href="editor-guide.html" class="vorpal-active-doc">Editor Guide</a></li>
+						<li><a href="round-trip.html">Import / Export Round-Trip</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Editor Guide</h1>
+
+					<h2>Layout</h2>
+					<p>
+						The editor uses mxGraph (jgraphx). The viewport is
+						divided into:
+					</p>
+					<dl class="vorpal-kv">
+						<dt>Canvas</dt>
+						<dd>Main drawing surface — grid background, panning with middle-mouse or right-drag, zoom with wheel + Ctrl.</dd>
+						<dt>Palette</dt>
+						<dd>Left rail with stencils (states, decision shapes, Ingress/Egress clouds). Drag onto the canvas to add.</dd>
+						<dt>Tasks window</dt>
+						<dd>Floating panel with filtered overviews — lists every state, every transition, and every condition in one scrollable list with click-to-jump.</dd>
+						<dt>Inspector</dt>
+						<dd>Side panel that updates with the selected cell — edit name, condition, trigger, and FSMAR-specific attributes there.</dd>
+					</dl>
+
+					<h2>Common actions</h2>
+					<h3>Adding a state</h3>
+					<ol>
+						<li>Drag a stencil from the palette onto the canvas. The default stencil is an application-invocation state.</li>
+						<li>Double-click to edit the label. The label becomes the application name that ends up in the application chain.</li>
+					</ol>
+
+					<h3>Adding a transition</h3>
+					<ol>
+						<li>Hover over a source state's edge — handles appear.</li>
+						<li>Drag from a handle to the target state. A directed edge is drawn.</li>
+						<li>Double-click the edge to set its label (typically the human-readable condition name).</li>
+						<li>Open the Inspector to set the actual condition expression and (for Ingress-originating edges) the trigger method.</li>
+					</ol>
+
+					<h3>Editing a trigger</h3>
+					<p>
+						Triggers attach to the transition <em>out of Ingress</em>.
+						Select that transition; in the Inspector, set the SIP
+						method (INVITE, REGISTER, etc.) and any additional
+						match criteria. The method dropdown is constrained to
+						the methods FSMAR supports — see
+						<a href="fsmar-concepts.html">FSMAR Concepts</a>.
+					</p>
+
+					<h3>Editing a condition</h3>
+					<p>
+						Conditions attach to any transition. Select the
+						transition; in the Inspector, type or paste the
+						condition expression. Syntax depends on FSMAR
+						version. The Tasks window's condition list is the
+						fastest way to audit every condition in the flow
+						without clicking each edge.
+					</p>
+
+					<h2>Tasks window</h2>
+					<p>
+						The Tasks window is a flat overview of the otherwise
+						deep graph. Useful for:
+					</p>
+					<ul>
+						<li>Finding orphan states (no incoming transitions).</li>
+						<li>Auditing every condition for a typo or stale predicate.</li>
+						<li>Jumping to a transition by name when you can't find it on the canvas.</li>
+					</ul>
+					<p>
+						Filter panel inside Tasks lets you scope by cell type
+						(state / transition / condition) and by name regex.
+					</p>
+
+					<h2>Sub-pages</h2>
+					<p>
+						The editor uses three additional HTML pages as
+						iframed inspectors when editing complex attributes:
+					</p>
+					<dl class="vorpal-kv">
+						<dt><code>state.html</code></dt>
+						<dd>Detailed state attribute editor — opened from a state's inspector when you need more form real estate.</dd>
+						<dt><code>transition.html</code></dt>
+						<dd>Detailed transition / condition editor.</dd>
+						<dt><code>config.html</code></dt>
+						<dd>Editor-wide settings (grid snap, autosave toggle, default styles).</dd>
+					</dl>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">Save vs. Export</div>
+						<p>
+							The editor's <em>Save</em> action mirrors the
+							canvas to localStorage so a reload restores your
+							work-in-progress. <em>Export</em> is what writes
+							the FSMAR XML back to the server-side servlet —
+							that's the action that ships a new descriptor.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

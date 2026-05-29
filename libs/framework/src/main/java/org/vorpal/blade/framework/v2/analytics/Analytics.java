@@ -44,7 +44,7 @@ public class Analytics implements Serializable {
 	public static final ThreadLocal<SipServletRequest> sipServletRequest = new ThreadLocal<>();
 
 	@JsonIgnore
-	private static Integer appInstanceId = null;
+	private static Long appInstanceId = null;
 
 	@JsonIgnore
 	public static JmsPublisher jmsPublisher;
@@ -235,9 +235,9 @@ public class Analytics implements Serializable {
 		}
 	}
 
-	public static int getAppInstanceId() {
+	public static long getAppInstanceId() {
 		if (appInstanceId == null) {
-			appInstanceId = ThreadLocalRandom.current().nextInt();
+			appInstanceId = ThreadLocalRandom.current().nextLong();
 		}
 		return appInstanceId;
 	}
@@ -259,38 +259,19 @@ public class Analytics implements Serializable {
 		this.enabled = enabled;
 	}
 
-	public static void setAppInstanceId(Integer appInstanceId) {
+	public static void setAppInstanceId(Long appInstanceId) {
 		Analytics.appInstanceId = appInstanceId;
 	}
 
-	private static long combineToLong(long timestamp, int sessionId) {
-		// Convert timestamp to 32 bits (takes the lower 32 bits)
-		int timestamp32 = (int) timestamp;
-
-		// Combine: shift timestamp to upper 32 bits, OR with other value in lower 32
-		// bits. Use 0xFFFFFFFFL mask to prevent sign extension of otherValue
-		return ((long) timestamp32 << 32) | (sessionId & 0xFFFFFFFFL);
-	}
-
-// Helper method to extract the timestamp back
-	private static int extractTimestamp(long combined) {
-		return (int) (combined >>> 32);
-	}
-
-// Helper method to extract the other value back
-	private static int extractSessionId(long combined) {
-		return (int) combined;
-	}
-
 	public static Long getSessionId(SipApplicationSession appSession) {
-
-		Long sessionId = (Long) appSession.getAttribute("ANALYTICS_SESSION");
+		Long sessionId = (Long) appSession.getAttribute(Callflow.ANALYTICS_SESSION);
 		if (sessionId == null) {
-			String vTimestamp = Callflow.getVorpalTimestamp(appSession);
-			Long timestamp = Long.parseLong(vTimestamp, 16);
-			Integer otherValue = Integer.parseUnsignedInt(Callflow.getVorpalSessionId(appSession), 16);
-			sessionId = combineToLong(timestamp, otherValue);
-			appSession.setAttribute("ANALYTICS_SESSION", sessionId);
+			// Defensive fallback: Callflow.createVorpalSessionId normally
+			// sets this attribute at first-touch. If we get here, something
+			// minted the appSession outside the standard Callflow path —
+			// generate a snowflake locally so analytics still has an ID.
+			sessionId = SnowflakeId.shared().nextId();
+			appSession.setAttribute(Callflow.ANALYTICS_SESSION, sessionId);
 		}
 		return sessionId;
 	}
@@ -299,16 +280,9 @@ public class Analytics implements Serializable {
 		Session session = new Session();
 		long sessionId = getSessionId(msg.getApplicationSession());
 		session.setId(sessionId);
-		String strTimestamp = Callflow.getVorpalTimestamp(msg.getApplicationSession());
-		long timestamp = Long.parseLong(strTimestamp, 16);
-		Date date = new Date(timestamp);
-
 		session.setApplicationId(getAppInstanceId());
-		session.setCreated(null);
-		session.setCreated(date);
-
+		session.setCreated(new Date(SnowflakeId.extractTimestamp(sessionId)));
 		return session;
-
 	}
 
 	public static void applicationStart() {

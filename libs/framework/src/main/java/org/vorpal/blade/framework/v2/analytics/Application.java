@@ -25,10 +25,7 @@ public class Application implements Serializable {
 
 	@Id
 	@Column(updatable = false, unique = true, nullable = false)
-	private int id;
-
-	@Lob
-	private String collisions;
+	private long id;
 
 	@Lob
 	private String comments;
@@ -62,20 +59,12 @@ public class Application implements Serializable {
 	public Application(SipServletContextEvent event) {
 	}
 
-	public int getId() {
+	public long getId() {
 		return this.id;
 	}
 
-	public void setId(int id) {
+	public void setId(long id) {
 		this.id = id;
-	}
-
-	public String getCollisions() {
-		return this.collisions;
-	}
-
-	public void setCollisions(String collisions) {
-		this.collisions = collisions;
 	}
 
 	public String getComments() {

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Sections Reference · BLADE Tuning</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/tuning/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Tuning</span>
+				<span class="vorpal-brand-tagline">OCCAS Performance Dashboard</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../tuning.html">Dashboard</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Sections Reference</h1>
+				<p class="vorpal-page-subtitle">
+					Per-section knob reference. Hover any field in the
+					dashboard for the same info inline; this page is the
+					authoritative print copy.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="sections.html" class="vorpal-active-doc">Sections Reference</a></li>
+						<li><a href="edit-sessions.html">Edit Sessions</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Sections Reference</h1>
+
+					<h2>JVM</h2>
+					<p>Per-server JVM arguments — what the JVM starts with on the next boot. <strong>All restart-required.</strong></p>
+					<table>
+						<tr><th>Knob</th><th>Typical value</th><th>Effect</th></tr>
+						<tr><td><code>-Xms</code></td><td>same as <code>-Xmx</code></td><td>Initial heap size; pinning to max avoids reallocation pauses.</td></tr>
+						<tr><td><code>-Xmx</code></td><td>4–16 GB for engine tier</td><td>Maximum heap. Sized for expected concurrent sessions × per-session overhead.</td></tr>
+						<tr><td>GC algorithm</td><td><code>-XX:+UseG1GC</code> for most</td><td>Picks the GC strategy. G1 for low-pause requirements; ZGC for very large heaps.</td></tr>
+						<tr><td>GC log</td><td><code>-Xlog:gc*:file=...</code></td><td>Where GC events get written; essential for any sizing investigation.</td></tr>
+					</table>
+
+					<h2>SIP Timer</h2>
+					<p>The SIP timer table per RFC 3261 §A. Tuning these affects retransmission cadence and dialog teardown. <strong>Runtime-tunable.</strong></p>
+					<table>
+						<tr><th>Timer</th><th>Default</th><th>What it controls</th></tr>
+						<tr><td>T1</td><td>500ms</td><td>Round-trip estimate. Floor for retransmission intervals.</td></tr>
+						<tr><td>T2</td><td>4s</td><td>Maximum retransmission interval for non-INVITE.</td></tr>
+						<tr><td>T4</td><td>5s</td><td>Maximum duration a message persists in the network.</td></tr>
+						<tr><td>Timer F</td><td>32s (64·T1)</td><td>Non-INVITE transaction timeout.</td></tr>
+					</table>
+					<p>Increase T1 on lossy / high-latency networks; decrease only if you've measured and know you can.</p>
+
+					<h2>Work Manager</h2>
+					<p>How WLS schedules incoming work across threads. <strong>Runtime-tunable.</strong></p>
+					<table>
+						<tr><th>Knob</th><th>Typical</th><th>Effect</th></tr>
+						<tr><td>Min threads</td><td>5</td><td>Lower bound on the work-manager pool.</td></tr>
+						<tr><td>Max threads</td><td>50–200</td><td>Upper bound. Set to roughly 4× CPU count for I/O-bound workloads.</td></tr>
+						<tr><td>Capacity constraint</td><td>50000</td><td>Max queue depth before requests are rejected. Backpressure setting.</td></tr>
+						<tr><td>Fair-share class</td><td>50</td><td>Relative scheduling weight when multiple work-managers compete.</td></tr>
+					</table>
+
+					<h2>Node Manager</h2>
+					<p>How the AdminServer talks to the per-host Node Manager for start/stop. <strong>Restart-required for listen port; debug toggle is runtime.</strong></p>
+					<dl class="vorpal-kv">
+						<dt>Listen address</dt>
+						<dd>The IP / hostname Node Manager listens on. Must match the AdminServer's NodeManager machine binding.</dd>
+						<dt>Listen port</dt>
+						<dd>Typically 5556 (SSL).</dd>
+						<dt>Debug</dt>
+						<dd>Verbose NodeManager logging; useful when start/stop sequences are misbehaving.</dd>
+						<dt>Log retention</dt>
+						<dd>How many historical NM logs to keep on disk.</dd>
+					</dl>
+
+					<h2>Cluster</h2>
+					<p>Cluster membership view (mostly read-only) plus the heartbeat knobs. <strong>Read-only members; heartbeat is runtime-tunable.</strong></p>
+					<dl class="vorpal-kv">
+						<dt>Members</dt>
+						<dd>Read-only list of servers in the cluster, including their listen address and current state.</dd>
+						<dt>Messaging mode</dt>
+						<dd>Unicast (preferred) or multicast. Unicast scales better and traverses routers; multicast needs a switched LAN.</dd>
+						<dt>Heartbeat interval</dt>
+						<dd>How often each member announces itself. Lower = faster failure detection but more network chatter.</dd>
+					</dl>
+
+					<h2>SSO</h2>
+					<p>Single-sign-on cookie configuration for the BLADE admin tier. <strong>Runtime-tunable.</strong></p>
+					<dl class="vorpal-kv">
+						<dt>Cookie name</dt>
+						<dd>Standard is <code>BLADEADMINSESSION</code>; every admin WAR shares this so a single login covers the whole admin tier.</dd>
+						<dt>Cookie path</dt>
+						<dd>Must be <code>/</code> for cross-WAR session sharing.</dd>
+						<dt>Cookie domain</dt>
+						<dd>Set only if the admin tier spans multiple subdomains.</dd>
+					</dl>
+
+					<h2>Server Tuning</h2>
+					<p>Per-server execute-queue and socket tuning. <strong>Mostly runtime; native-I/O toggle is restart-required.</strong></p>
+					<dl class="vorpal-kv">
+						<dt>Accept backlog</dt>
+						<dd>OS-level listen queue depth. Increase for high-burst clients (default 50 is low for production).</dd>
+						<dt>Socket receive/send buffer size</dt>
+						<dd>TCP buffer tuning. Defaults are usually fine; bump only after measuring.</dd>
+						<dt>Native I/O</dt>
+						<dd>Toggle WLS native socket muxer vs. pure-Java. Native wins for high concurrency; the toggle requires restart.</dd>
+					</dl>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">Always measure</div>
+						<p>
+							Every "typical value" above is a starting point.
+							Productionize tuning is workload-specific —
+							measure before and after every change. If the
+							change doesn't show on a graph, it didn't
+							happen.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

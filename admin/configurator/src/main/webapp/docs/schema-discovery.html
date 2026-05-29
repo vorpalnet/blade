@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Schema Discovery · BLADE Configurator</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Configurator</span>
+				<span class="vorpal-brand-tagline">Schema-Driven Configuration Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../configurator.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Reference</div>
+				<h1 class="vorpal-page-title">Schema Discovery</h1>
+				<p class="vorpal-page-subtitle">
+					How the Schema dropdown gets populated, and why a deployed
+					BLADE app sometimes does not appear there.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="features.html">Feature Reference</a></li>
+						<li><a href="targets.html">Target Scopes</a></li>
+						<li><a href="schema-discovery.html" class="vorpal-active-doc">Schema Discovery</a></li>
+						<li><a href="form-layout.html">Form Layout</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="cli.html">Command-Line Validation</a></li>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Schema Discovery</h1>
+
+					<h2>The contract</h2>
+					<p>
+						Each BLADE service that wants to appear in the
+						Configurator does one thing in its startup code:
+						instantiate a <code>SettingsManager</code> with a
+						Settings POJO class and (optionally) a sample. The
+						framework does the rest.
+					</p>
+
+					<pre><code>// In any service's @WebListener or SIP servlet contextInitialized:
+settingsManager = new SettingsManager&lt;&gt;(event, OptionsSettings.class, new OptionsSettingsSample());</code></pre>
+
+					<p>That single line causes the framework to:</p>
+					<ol>
+						<li>Generate a JSON Schema from the Settings POJO using <code>victools/jsonschema-generator</code> + Jackson annotations.</li>
+						<li>Write <code>SCHEMA.json</code> and <code>SAMPLE.json</code> for the app under <code>config/custom/vorpal/samples/&lt;app&gt;/</code>.</li>
+						<li>Register a <code>SettingsMXBean</code> at <code>vorpal.blade:Name=&lt;app&gt;,Type=Configuration</code> on the JVM's platform MBean server.</li>
+						<li>Federate that MBean into the OCCAS domain runtime MBean server (WLS handles this automatically).</li>
+					</ol>
+
+					<h2>How the editor finds it</h2>
+					<p>
+						When the Schema dropdown is opened, the Configurator
+						queries the OCCAS DomainRuntime MBean server for every
+						MBean matching the pattern:
+					</p>
+					<pre><code>vorpal.blade:Name=*,Type=Configuration,*</code></pre>
+					<p>
+						The list of <code>Name</code> attributes from the
+						matching MBeans becomes the dropdown's options. Click
+						a name and the editor reads
+						<code>SCHEMA.json</code> + the current
+						<code>&lt;app&gt;.json</code> for the selected target
+						and renders the form.
+					</p>
+
+					<h2>Why an app might not appear</h2>
+					<table>
+						<tr><th>Symptom</th><th>Likely cause</th></tr>
+						<tr>
+							<td>App is deployed but missing from the dropdown</td>
+							<td>The app didn't call <code>new SettingsManager(...)</code> on startup, or the call threw an exception. Check the application's server log for stack traces during deployment.</td>
+						</tr>
+						<tr>
+							<td>App appears but the form is empty</td>
+							<td>The Settings POJO has no <code>@JsonPropertyDescription</code>-annotated fields (rare), or the schema generation failed silently. Check the file-system: does <code>config/custom/vorpal/samples/&lt;app&gt;/SCHEMA.json</code> exist?</td>
+						</tr>
+						<tr>
+							<td>App was just deployed but doesn't appear yet</td>
+							<td>MBean registration happens during <code>contextInitialized</code>; depending on deploy order it can take a few seconds. Refresh the dropdown.</td>
+						</tr>
+						<tr>
+							<td>Two clusters show the same app, but only one is editable</td>
+							<td>The Configurator runs on the AdminServer and sees only MBeans that have been federated into the domain runtime. A managed server's MBean is visible; an AdminServer-only deploy of the app makes editing trivial. Cluster-only deploys also work because the cluster MBean federates up.</td>
+						</tr>
+					</table>
+
+					<h2>Inspecting the underlying MBeans</h2>
+					<p>
+						If you want to verify the MBean directly, point a JMX
+						client at the AdminServer's DomainRuntime MBean server
+						and query
+						<code>vorpal.blade:Name=*,Type=Configuration,*</code>.
+						Each result exposes the <code>SettingsMXBean</code>
+						interface (<code>openForWrite</code>,
+						<code>write</code>, <code>close</code>,
+						<code>reload</code>, plus getters for the current JSON
+						text and lastModified timestamps per scope).
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Convention</div>
+						<p>
+							The MBean <code>Name</code> is the app's
+							<code>web.xml</code> <code>&lt;display-name&gt;</code>
+							with anything after <code>#</code> stripped (the
+							basename). Keep display names short, single-word,
+							lowercase — that's the string operators see in the
+							Schema dropdown.
+						</p>
+					</div>
+
+					<h2>The other path: file-based discovery</h2>
+					<p>
+						The editor also scans the on-disk
+						<code>config/custom/vorpal/</code> directory tree for
+						JSON files. Files whose <code>basename</code> doesn't
+						match any registered MBean still appear in the Files
+						tab (for editing template files, REST body templates,
+						LDAP queries, SQL, etc.) but they do not get form view
+						— only the raw editor.
+					</p>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

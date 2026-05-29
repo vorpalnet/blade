@@ -56,14 +56,15 @@ Deployed to the WebLogic AdminServer as skinny WARs that reference the `vorpal-b
 
 | Module | Context Root | Description |
 | --- | --- | --- |
-| Console | `/blade` | Navigation shell — sidebar loads every other admin app via iframe |
-| Configurator | `/configurator` | Configuration editor with JSON Schema forms, JMX-based schema discovery |
-| Flow | `/flow` | FSMAR diagram editor (mxGraph) |
-| Tuning | `/tuning` | JVM / SIP / OCCAS tuning knobs |
-| File Manager | `/files` | WebSocket-based config file management |
-| Explorer | `/explorer` | Experimental EasyUI forms |
-| Watcher | `/watcher` | Log/event monitor |
-| Javadoc | `/javadoc` | Browsable Javadoc site with UML class diagrams |
+| Portal | `/blade/portal` | Unified admin shell — left-rail navigation, hosts every other admin app via iframe |
+| Redirect | `/blade` | 302s bare `/blade` to `/blade/portal/` |
+| Configurator | `/blade/configurator` | Configuration editor with JSON Schema forms, JMX-based schema discovery |
+| Flow | `/blade/flow` | FSMAR diagram editor (mxGraph) |
+| Tuning | `/blade/tuning` | JVM / SIP / OCCAS tuning knobs |
+| Watcher | `/blade/watcher` | Log/event monitor |
+| CRUD Editor | `/blade/crud-editor` | Generic CRUD editor for service resources |
+| Logs | `/blade/logs` | Cluster log tail viewer |
+| Javadoc | `/blade/javadoc` | Browsable Javadoc site with UML class diagrams |
 
 ### Services
 
@@ -117,9 +118,15 @@ libs/           Libraries
   shared/         WebLogic shared library WAR (3rd-party JARs only)
   fsmar/          Finite State Machine Application Router (fat JAR)
 admin/          Admin tools (deployed to AdminServer)
-  console/        Admin Console — super-console dashboard (WAR, context: /blade)
+  portal/         Unified admin shell (WAR, context: /blade/portal)
+  redirect/       Tiny WAR — 302s bare /blade to /blade/portal/
   configurator/   Configuration Editor (WAR)
-  dev-console/    Dev Console — experimental tools (WAR)
+  crud-editor/    CRUD Editor (WAR)
+  flow/           FSMAR diagram editor (WAR)
+  javadoc/        Browsable Javadoc site (WAR, context: /blade/javadoc)
+  logs/           Cluster log tail viewer (WAR)
+  tuning/         JVM / SIP / OCCAS tuning (WAR)
+  watcher/        Log/event monitor (WAR)
 services/       Services (deployed to cluster via EAR)
   acl/            Access Control List
   analytics/      Call detail records and analytics
@@ -137,7 +144,6 @@ test/           Test applications (excluded by production profile)
   test-b2bua/     Example B2BUA
   test-uac/       REST-operated User Agent Client
   test-uas/       Configurable User Agent Server
-javadoc/        Javadoc WAR (always built; -Pjavadocs regenerates per-module javadocs)
 ```
 
 # Compiling
@@ -215,14 +221,15 @@ dist/<version>-<build>/
   vorpal-blade-library-shared.war            # WebLogic shared library (admin + cluster)
   vorpal-blade-library-fsmar.jar             # FSMAR (copy to OCCAS approuter/)
   admin/
-    configurator.war                         # /configurator    → AdminServer
-    blade.war                                # /blade           (admin console)
-    flow.war                                 # /flow
-    files.war                                # /files           (file-manager)
-    watcher.war                              # /watcher
-    tuning.war                               # /tuning
-    logs.war                                 # /logs
-    javadoc.war                              # /javadoc
+    portal.war                               # /blade/portal    → AdminServer
+    blade-redirect.war                       # /blade           (302s to /blade/portal/)
+    configurator.war                         # /blade/configurator
+    crud-editor.war                          # /blade/crud-editor
+    flow.war                                 # /blade/flow
+    logs.war                                 # /blade/logs
+    tuning.war                               # /blade/tuning
+    watcher.war                              # /blade/watcher
+    javadoc.war                              # /blade/javadoc
   services/
     proxy-router.war                         # one WAR per service → cluster
     hold.war
@@ -233,7 +240,7 @@ dist/<version>-<build>/
   DEPLOYMENT.txt                             # generated manifest classifying every artifact
 ```
 
-Each WAR's filename matches its `<wls:context-root>` from `weblogic.xml`, so `configurator.war` deploys at `/configurator`. Two exceptions: `admin/console` builds as `blade.war` (its context-root is `/blade`) and `admin/file-manager` builds as `files.war` (its context-root is `/files`).
+Each WAR's filename matches the last segment of its `<wls:context-root>` from `weblogic.xml`, so `configurator.war` deploys at `/blade/configurator` and `portal.war` at `/blade/portal`. Exception: `admin/redirect` builds as `blade-redirect.war` (its context-root is bare `/blade`).
 
 - The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
 - **EAR (currently disabled)**: the `services/` aggregator no longer produces a `vorpal-blade-services-<profile>.ear`. Services are deployed individually as WARs while the EAR logic is offline. See `services/pom.xml` for the TODO marker.
@@ -349,7 +356,7 @@ This uses the [UML Doclet](https://github.com/talsma-ict/umldoclet) to generate 
 dist/<version>-<build>/admin/javadoc.war
 ```
 
-Deploy this WAR to the AdminServer to browse javadocs at `/javadoc`. The index page links to each module's javadoc automatically — no build changes needed when adding new modules.
+Deploy this WAR to the AdminServer to browse javadocs at `/blade/javadoc` (it appears as a card on the portal). The index page links to each module's javadoc automatically — no build changes needed when adding new modules.
 
 ### Markdown Javadoc Comments
 

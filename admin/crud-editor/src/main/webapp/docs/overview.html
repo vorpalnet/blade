@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Overview · BLADE CRUD Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/crud-editor/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE CRUD Editor</span>
+				<span class="vorpal-brand-tagline">Service Resource Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../crud-editor.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Architecture</div>
+				<h1 class="vorpal-page-title">Overview</h1>
+				<p class="vorpal-page-subtitle">
+					What a "resource table" is in BLADE, how the CRUD Editor
+					relates to the Configurator, and which services have CRUD
+					resources to edit.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html" class="vorpal-active-doc">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="api-contract.html">API Contract</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Overview</h1>
+
+					<h2>Configuration vs. resources</h2>
+					<p>
+						BLADE services have two kinds of editable state:
+					</p>
+					<dl class="vorpal-kv">
+						<dt>Configuration</dt>
+						<dd>One JSON document per service — settings, defaults, thresholds. Edited by the <a href="/blade/configurator/">Configurator</a>.</dd>
+						<dt>Resources</dt>
+						<dd>Table-shaped data — multiple rows. Each row is independent. Examples: ACL entries, routing rules, customer records, blocked-number lists. Edited by the CRUD Editor.</dd>
+					</dl>
+					<p>
+						The line between them is a design choice per service.
+						If a service exposes a small number of well-defined
+						knobs, those go in the Configurator. If it owns a
+						growing list of similarly-shaped rows, those go in
+						CRUD.
+					</p>
+
+					<h2>Which services expose CRUD</h2>
+					<p>
+						Any BLADE service can mount the CRUD REST API. The
+						editor doesn't have a pre-baked list — it discovers
+						the API base from the page URL and points there. Add
+						a new service that implements the contract, browse
+						to <code>/blade/crud-editor/?app=&lt;new-service&gt;</code>,
+						and the editor will work without changes.
+					</p>
+
+					<h2>What it doesn't do</h2>
+					<ul>
+						<li>Bulk import/export (use the service's own API directly for that).</li>
+						<li>Cross-service joins (the editor sees one resource table at a time).</li>
+						<li>Schema authoring (the form is generated from the API response shape, not edited here — for schema authoring use Configurator).</li>
+					</ul>
+
+					<h2>How the URL works</h2>
+					<p>
+						The editor's base API URL is computed from
+						<code>location.pathname</code>: the first path
+						segment becomes the app name, and the API base
+						becomes <code>/&lt;app&gt;/resources/api/</code>.
+						This means the editor doesn't need configuration
+						to know which app to edit — it picks up the app
+						from where it's deployed (or from a query string,
+						when iframed through the portal).
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Same WAR, many apps</div>
+						<p>
+							The editor WAR is generic. The browser-side
+							script derives the target API base from the URL.
+							So one CRUD Editor deployment can edit any
+							service's resources just by varying the URL.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

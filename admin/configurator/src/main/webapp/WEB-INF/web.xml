@@ -70,6 +70,19 @@
 		</web-resource-collection>
 	</security-constraint>
 
+	<!-- REST API: no container auth. Carved out of the FORM constraint below
+	     (more-specific pattern wins) so CLI clients can authenticate with an
+	     HTTP Basic Authorization header instead of j_security_check. The
+	     credentials are validated by BasicAuthFilter, which checks the same
+	     realm and admin roles the FORM constraint would. The browser app keeps
+	     FORM login. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>api</web-resource-name>
+			<url-pattern>/api/v1/*</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
 
 	<security-constraint>
 		<web-resource-collection>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Overview · BLADE Tuning</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/tuning/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Tuning</span>
+				<span class="vorpal-brand-tagline">OCCAS Performance Dashboard</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../tuning.html">Dashboard</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Architecture</div>
+				<h1 class="vorpal-page-title">Overview</h1>
+				<p class="vorpal-page-subtitle">
+					What the dashboard is and isn't. The relationship between
+					the dashboard, the WLS admin console, and the underlying
+					MBean tree.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html" class="vorpal-active-doc">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="sections.html">Sections Reference</a></li>
+						<li><a href="edit-sessions.html">Edit Sessions</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Overview</h1>
+
+					<h2>What it is</h2>
+					<p>
+						A curated dashboard for the WLS / OCCAS tuning knobs
+						that BLADE operators most often need to touch. Every
+						knob on the dashboard corresponds to a real WLS MBean
+						attribute. The dashboard is a thin presentation layer:
+						read on page load, write on Save.
+					</p>
+
+					<h2>What it isn't</h2>
+					<ul>
+						<li>A replacement for the WLS Admin Console — that remains the source of truth for the full WLS configuration surface.</li>
+						<li>A configuration store — values are read from / written to the live WLS configuration. The dashboard doesn't keep its own copy.</li>
+						<li>A monitoring tool — for live metrics (CPS, session counts, GC stats) see your platform's monitoring stack.</li>
+					</ul>
+
+					<h2>The sections</h2>
+					<dl class="vorpal-kv">
+						<dt>JVM</dt>
+						<dd>Heap min/max, GC selection, GC log destination, key flags. Restart-required.</dd>
+						<dt>SIP Timer</dt>
+						<dd>T1, T2, T4, timer F, expiration intervals — the timer table that governs SIP retransmission and dialog lifecycle.</dd>
+						<dt>Work Manager</dt>
+						<dd>Min/max threads, capacity constraints, fair-share request classes — how WLS schedules work across CPU.</dd>
+						<dt>Node Manager</dt>
+						<dd>Listen address, listen port, debug, log retention. Restart-required for most.</dd>
+						<dt>Cluster</dt>
+						<dd>Cluster membership view (read-only) and the unicast vs. multicast knobs for cluster heartbeat.</dd>
+						<dt>SSO</dt>
+						<dd>Single-sign-on cookie name / path / domain settings that let the BLADE admin tier share auth state.</dd>
+						<dt>Server Tuning</dt>
+						<dd>Per-server execute queues, socket receive/send buffer sizes, accept backlog, native I/O toggles.</dd>
+					</dl>
+
+					<h2>Why curated</h2>
+					<p>
+						WLS exposes thousands of MBean attributes. The vast
+						majority of them are either WLS-internal,
+						BLADE-irrelevant, or already at sensible defaults.
+						The dashboard collects the handful of knobs BLADE
+						operators actually reach for and presents them with
+						the right framing (units, ranges, runtime-vs-restart
+						warnings).
+					</p>
+
+					<h2>How writes happen</h2>
+					<p>
+						WLS configuration is edited through an explicit edit
+						session: start-edit → modify attributes → save →
+						activate. The dashboard threads this for every Save
+						automatically. See <a href="edit-sessions.html">Edit
+						Sessions</a> for the mechanics and the failure modes.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Restart-required knobs</div>
+						<p>
+							Some knobs (heap size, native I/O, listen ports)
+							take effect only on server restart. The dashboard
+							marks these explicitly with a yellow warning. The
+							Save will succeed and the new value will be in
+							<code>config.xml</code>, but the running JVM keeps
+							the old value until it restarts.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

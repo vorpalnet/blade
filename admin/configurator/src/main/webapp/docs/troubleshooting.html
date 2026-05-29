@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Troubleshooting · BLADE Configurator</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Configurator</span>
+				<span class="vorpal-brand-tagline">Schema-Driven Configuration Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../configurator.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Operations</div>
+				<h1 class="vorpal-page-title">Troubleshooting</h1>
+				<p class="vorpal-page-subtitle">
+					Symptom-to-cause table and the runbook for the common
+					failure modes. Start with the symptom row that matches
+					what you're seeing.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="features.html">Feature Reference</a></li>
+						<li><a href="targets.html">Target Scopes</a></li>
+						<li><a href="schema-discovery.html">Schema Discovery</a></li>
+						<li><a href="form-layout.html">Form Layout</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="cli.html">Command-Line Validation</a></li>
+						<li><a href="troubleshooting.html" class="vorpal-active-doc">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Troubleshooting</h1>
+
+					<h2>Symptom-to-cause table</h2>
+					<table>
+						<tr><th>Symptom</th><th>Likely cause</th><th>Where to look</th></tr>
+						<tr>
+							<td>Schema dropdown is empty</td>
+							<td>No BLADE apps deployed, or none registered a SettingsManager successfully</td>
+							<td>Check the AdminServer log for stack traces during deploy. Also see <a href="schema-discovery.html">Schema Discovery</a>.</td>
+						</tr>
+						<tr>
+							<td>Schema dropdown is missing a specific app</td>
+							<td>That app's startup did not call <code>new SettingsManager(...)</code>, or the call threw</td>
+							<td>App's server log around <code>contextInitialized</code>. Look for <code>Unable to load &lt;app&gt;.json configuration file</code>.</td>
+						</tr>
+						<tr>
+							<td>WebSocket status stuck on "Connecting…"</td>
+							<td>Firewall/proxy strips Upgrade headers, or the WAR's WebSocket endpoint isn't reachable</td>
+							<td>Browser devtools network tab — filter on <code>websocket</code>. The path is the WAR-relative <code>ws</code> upgrade endpoint.</td>
+						</tr>
+						<tr>
+							<td><code>blade-validate.sh</code> or an API <code>curl</code> redirects to the login page (302)</td>
+							<td>Credentials weren't sent in the <code>Authorization</code> header, so FORM auth took over</td>
+							<td>Pass <code>-u user:pass</code> (or <code>--password</code> to the script). The API uses HTTP Basic, not the login form — see <a href="cli.html">Command-Line Validation</a>.</td>
+						</tr>
+						<tr>
+							<td>API <code>curl</code> returns <code>401</code> / <code>403</code></td>
+							<td>401: bad credentials. 403: the user authenticated but holds none of the admin roles</td>
+							<td>Check the user/password (single-quote passwords with <code>!</code>/<code>$</code>). The user needs an <code>Admin</code>/<code>Operator</code>/<code>Deployer</code>/<code>Monitor</code> role in the WebLogic realm.</td>
+						</tr>
+						<tr>
+							<td>API <code>curl</code> returns <code>404</code></td>
+							<td>Wrong path — the context root is <code>blade/configurator</code>, not <code>configurator</code></td>
+							<td>Use <code>http://host:7001/blade/configurator/api/v1/validate</code>. The script's <code>--context</code> defaults to <code>blade/configurator</code>.</td>
+						</tr>
+						<tr>
+							<td>Form loads but fields are read-only / empty</td>
+							<td>Schema generation failed silently; no fields means no annotations were picked up</td>
+							<td>Check <code>config/custom/vorpal/samples/&lt;app&gt;/SCHEMA.json</code> on disk. If missing or trivially small, look in the app's deploy log.</td>
+						</tr>
+						<tr>
+							<td>Save returns success, but the running app's behavior doesn't change</td>
+							<td>The file is being written, but ConfigurationMonitor isn't picking it up — possibly running on the wrong node, or the MBean federation didn't activate</td>
+							<td>Verify the change appears on disk under <code>config/custom/vorpal/[scope]/&lt;app&gt;.json</code>. If yes, check the AdminServer log for <code>ConfigurationMonitor</code> log lines around that save time.</td>
+						</tr>
+						<tr>
+							<td>Validation Summary lists errors but the form looks fine</td>
+							<td>A nested array element fails a constraint that isn't visible until you expand it</td>
+							<td>Click an error in the summary; the editor scrolls + focuses the offending field.</td>
+						</tr>
+						<tr>
+							<td>Auto-save draft banner shows for a config you don't recognize</td>
+							<td>A previous session was abandoned mid-edit on this target + schema</td>
+							<td>If you don't want the draft: press Discard. If you do: Restore.</td>
+						</tr>
+						<tr>
+							<td>Two operators editing the same target overwrite each other</td>
+							<td>The Configurator is last-write-wins; there is no per-cell locking</td>
+							<td>Use the Diff modal before saving. Use Version History to recover an overwritten revision.</td>
+						</tr>
+					</table>
+
+					<h2>Common log signatures</h2>
+					<h3>Failed schema generation</h3>
+					<pre><code>java.lang.RuntimeException: Cannot generate schema for class ...
+    at org.vorpal.blade.framework.v2.config.SettingsManager.build(SettingsManager.java:...)</code></pre>
+					<p>Usually a cycle in the Settings POJO graph, or a Jackson serialization annotation that the schema generator can't reason about.</p>
+
+					<h3>Permission failure on save</h3>
+					<pre><code>java.nio.file.AccessDeniedException: ./config/custom/vorpal/&lt;app&gt;.json</code></pre>
+					<p>Filesystem-level permission problem. The user the AdminServer runs as needs write access to <code>$DOMAIN_HOME/config/custom/vorpal/</code> and every <code>_clusters/&lt;name&gt;</code> and <code>_servers/&lt;name&gt;</code> subdirectory.</p>
+
+					<h3>MBean reload exception</h3>
+					<pre><code>ConfigurationMonitor.updateManagedMBeans path=...
+    javax.management.RuntimeMBeanException: SettingsManager.reload threw IOException</code></pre>
+					<p>The JSON on disk is syntactically valid but failed to deserialize into the Settings POJO — usually a field-type mismatch after a schema change. Roll back via Version History.</p>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">If all else fails</div>
+						<p>
+							Roll back to the last known-good revision via
+							Version History → Restore. Always faster than
+							debugging in production.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

@@ -7,5 +7,22 @@
     <listener>
         <listener-class>org.vorpal.blade.framework.logs.LogReaderRegistrar</listener-class>
     </listener>
+
+    <!-- Cross-origin filter for REST endpoints. No-op until an operator sets
+         -Dblade.cors.allowedOrigins=<origin>[,<origin>...]; then it grants
+         credentialed CORS to those exact origins (e.g. the AdminServer origin
+         the API Explorer is served from, so its live "try it" can reach the
+         engine tier). HTTP-only and async-aware; SIP traffic never traverses
+         servlet filters, so there is no CPS-path impact. -->
+    <filter>
+        <filter-name>BladeCorsFilter</filter-name>
+        <filter-class>org.vorpal.blade.framework.cors.CorsFilter</filter-class>
+        <async-supported>true</async-supported>
+    </filter>
+    <filter-mapping>
+        <filter-name>BladeCorsFilter</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
     <distributable/>
 </web-fragment>

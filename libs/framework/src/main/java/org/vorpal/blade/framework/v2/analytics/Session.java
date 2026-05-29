@@ -23,7 +23,7 @@ import javax.persistence.TemporalType;
 public class Session implements Serializable {
 	private static final long serialVersionUID = 1L;
 	private long id;
-	private int applicationId;
+	private long applicationId;
 	private Date created;
 	private Timestamp destroyed;
 
@@ -43,11 +43,11 @@ public class Session implements Serializable {
 
 
 	@Column(name="application_id", nullable=false)
-	public int getApplicationId() {
+	public long getApplicationId() {
 		return this.applicationId;
 	}
 
-	public void setApplicationId(int applicationId) {
+	public void setApplicationId(long applicationId) {
 		this.applicationId = applicationId;
 	}
 

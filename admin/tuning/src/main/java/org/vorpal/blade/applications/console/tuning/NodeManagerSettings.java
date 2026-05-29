@@ -27,7 +27,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * domain so administrators can verify that Node Manager is properly configured
  * before relying on JVM setting changes.
  */
-@Path("/api/v1/nodemanager")
+@Path("/nodemanager")
 @Tag(name = "Node Manager", description = "Node Manager configuration and status")
 public class NodeManagerSettings {
 
@@ -39,7 +39,13 @@ public class NodeManagerSettings {
 	public Response getNodeManagerSettings() {
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
-			ObjectName domainConfig = new ObjectName("com.bea:Name=DomainConfiguration,Type=Domain");
+			// DomainConfiguration MBean is named after the actual domain (e.g.
+			// "base_domain"), not "DomainConfiguration" — the literal lookup
+			// throws InstanceNotFoundException on WLS 14.1.1. Use
+			// DomainRuntimeServiceMBean.DomainConfiguration. Memory: [[wls-domain-jmx-bootstrap]].
+			ObjectName service = new ObjectName(
+					"com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean");
+			ObjectName domainConfig = (ObjectName) mbs.getAttribute(service, "DomainConfiguration");
 			ObjectName[] machines = (ObjectName[]) mbs.getAttribute(domainConfig, "Machines");
 
 			ArrayNode result = mapper.createArrayNode();
