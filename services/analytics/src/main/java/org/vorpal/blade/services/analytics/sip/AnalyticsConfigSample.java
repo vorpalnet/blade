@@ -17,6 +17,7 @@ public class AnalyticsConfigSample extends AnalyticsConfig {
 		
 		this.healthCheckSql = "SELECT 1";
 		this.healthCheckInterval = 60;
-		
+		this.domainId = "SIPREC-03";
+
 	}
 }

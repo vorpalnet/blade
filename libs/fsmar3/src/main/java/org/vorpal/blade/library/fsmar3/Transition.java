@@ -1,36 +1,49 @@
 package org.vorpal.blade.library.fsmar3;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.ar.SipApplicationRouterInfo;
 import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 import javax.servlet.sip.ar.SipRouteModifier;
 
-import org.vorpal.blade.framework.v3.configuration.RequestSelector;
-import org.vorpal.blade.framework.v3.configuration.SelectorGroup;
+import org.vorpal.blade.framework.v2.config.FormLayout;
+import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
+import org.vorpal.blade.framework.v2.config.FormSection;
+import org.vorpal.blade.framework.v3.configuration.Context;
+import org.vorpal.blade.framework.v3.configuration.expressions.Expression;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /// A routing transition in the FSMAR state machine.
 ///
-/// Combines pattern matching (via selector groups), subscriber identification,
-/// optional route pushing, and the target application into a single flat
-/// structure. Selector groups are evaluated with OR logic — the first matching
-/// group wins. Within a group, selectors are ANDed together.
-@JsonPropertyOrder({ "id", "selectorGroups", "subscriber", "routes", "routeModifier", "next" })
+/// A transition fires when its [#when] condition evaluates true against the
+/// routing [Context] — the values its state's selectors extracted from the
+/// request. Transitions are evaluated in order; the first to fire wins. When it
+/// fires it routes to [#next], optionally identifying a [#subscriber] (by SIP
+/// header name, per the JSR-289 App Router contract) and pushing [#routes],
+/// which may contain `${}` placeholders resolved against the context.
+@JsonPropertyOrder({ "id", "when", "next", "subscriber", "routes", "routeModifier" })
+@FormSection(title = "Condition", fields = { "when" })
+@FormSection(title = "Route to", fields = { "next", "subscriber", "routes", "routeModifier" })
+@FormLayoutGroup({ "next", "subscriber" })
+@FormLayoutGroup({ "routes", "routeModifier" })
 public class Transition implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private String id;
-	private List<SelectorGroup> selectorGroups;
+	private String when;
+	private String next;
 	private String subscriber;
 	private String[] routes;
 	private SipRouteModifier routeModifier;
-	private String next;
+
+	/// Lazily-compiled form of [#when]. Transient: recompiled on first use after
+	/// deserialization (the App Router round-trips transitions via `stateInfo`).
+	@JsonIgnore
+	private transient Expression compiled;
 
 	/// Optional identifier for logging and diagnostics.
 	@JsonPropertyDescription("Optional identifier for logging and diagnostics")
@@ -43,34 +56,34 @@ public class Transition implements Serializable {
 		return this;
 	}
 
-	/// Selector groups evaluated with OR logic; first matching group wins.
-	/// Within each group, all selectors must match (AND logic).
-	/// If null or empty, the transition matches unconditionally.
-	@JsonPropertyDescription("Selector groups (OR logic); each group contains selectors (AND logic). Null or empty matches unconditionally.")
-	public List<SelectorGroup> getSelectorGroups() {
-		return selectorGroups;
+	/// Boolean condition over the routing context. Fires the transition when it
+	/// evaluates true. Empty/absent matches unconditionally. See the Expression
+	/// grammar — e.g. `${To.user} == 'bob' && ${From.user} == 'alice'`.
+	@JsonPropertyDescription("Boolean condition over extracted values; empty matches unconditionally. e.g. ${To.user} == 'bob'")
+	@FormLayout(wide = true)
+	public String getWhen() {
+		return when;
 	}
 
-	public void setSelectorGroups(List<SelectorGroup> selectorGroups) {
-		this.selectorGroups = selectorGroups;
-	}
-
-	public SelectorGroup addSelectorGroup() {
-		if (this.selectorGroups == null) {
-			this.selectorGroups = new ArrayList<>();
-		}
-		SelectorGroup group = new SelectorGroup();
-		this.selectorGroups.add(group);
-		return group;
-	}
-
-	/// Convenience: creates a single-selector group and adds it.
-	public Transition addSelector(RequestSelector selector) {
-		addSelectorGroup().addSelector(selector);
+	public Transition setWhen(String when) {
+		this.when = when;
+		this.compiled = null;
 		return this;
 	}
 
-	/// SIP header name whose URI identifies the subscriber (e.g. "From" or "To").
+	/// Target application name to route to.
+	@JsonPropertyDescription("Target application name to route to")
+	public String getNext() {
+		return next;
+	}
+
+	public Transition setNext(String next) {
+		this.next = next;
+		return this;
+	}
+
+	/// SIP header name whose URI identifies the subscriber (e.g. "From" or
+	/// "To"). The container resolves it for the application's subscriber-URI API.
 	@JsonPropertyDescription("SIP header name whose URI identifies the subscriber, e.g. From or To")
 	public String getSubscriber() {
 		return subscriber;
@@ -81,9 +94,10 @@ public class Transition implements Serializable {
 		return this;
 	}
 
-	/// Optional SIP route URIs pushed as Route headers.
-	/// Interpreted according to [getRouteModifier] (ROUTE by default).
-	@JsonPropertyDescription("Optional SIP route URIs pushed as Route headers")
+	/// Optional SIP route URIs pushed as Route headers. May contain `${}`
+	/// placeholders resolved against the context, e.g. `sip:${To.user}@proxy`.
+	/// Interpreted according to [#getRouteModifier] (ROUTE by default).
+	@JsonPropertyDescription("Optional SIP route URIs pushed as Route headers; may contain ${} placeholders, e.g. sip:${To.user}@proxy")
 	public String[] getRoutes() {
 		return routes;
 	}
@@ -93,10 +107,8 @@ public class Transition implements Serializable {
 		return this;
 	}
 
-	/// How the routes array is applied: ROUTE (default), ROUTE_BACK, or ROUTE_FINAL.
-	/// ROUTE_BACK pushes the routes behind the destination application so they
-	/// are visited on the response path (see SIP Servlet spec §15.4.2). Only
-	/// meaningful when [routes] is non-empty.
+	/// How the routes array is applied: ROUTE (default), ROUTE_BACK, or
+	/// ROUTE_FINAL. Only meaningful when [#routes] is non-empty.
 	@JsonPropertyDescription("How the routes array is applied: ROUTE (default), ROUTE_BACK, or ROUTE_FINAL. Ignored when routes is empty.")
 	public SipRouteModifier getRouteModifier() {
 		return routeModifier;
@@ -121,62 +133,57 @@ public class Transition implements Serializable {
 		return this;
 	}
 
-	/// Target application name to route to.
-	@JsonPropertyDescription("Target application name to route to")
-	public String getNext() {
-		return next;
-	}
-
-	public Transition setNext(String next) {
-		this.next = next;
-		return this;
-	}
-
-	/// Evaluates selector groups with OR logic. Returns true if any group matches,
-	/// or if no groups are defined (unconditional match). The [config] is threaded
-	/// in so groups can resolve named `selectorRefs` against the top-level
-	/// selector library.
-	public boolean matches(SipServletRequest request, AppRouterConfiguration config) {
-		if (selectorGroups == null || selectorGroups.isEmpty()) {
+	/// Evaluates [#when] against the context. Compiles lazily on first use;
+	/// parse errors resolve to false so a malformed condition can't abort the
+	/// routing decision (matches iRouter's `Clause` behavior). An empty/absent
+	/// condition matches unconditionally.
+	public boolean matches(Context ctx) {
+		if (when == null || when.isEmpty()) {
 			return true;
 		}
-		for (SelectorGroup group : selectorGroups) {
-			if (group.matches(request, config == null ? null : config.getSelectors())) {
-				return true;
+		try {
+			if (compiled == null) {
+				compiled = new Expression(when);
 			}
+			return compiled.evaluate(ctx);
+		} catch (Exception e) {
+			return false;
 		}
-		return false;
 	}
 
 	/// Builds the SipApplicationRouterInfo for this transition.
 	///
-	/// Uses NEUTRAL_REGION. If [subscriber] is set, extracts the URI from that
-	/// header. If [routes] is set, applies [routeModifier] (defaulting to
-	/// SipRouteModifier.ROUTE when unspecified).
-	public SipApplicationRouterInfo createRouterInfo(String deployedAppName, AppRouterConfiguration config,
-			SipServletRequest request) {
+	/// Uses NEUTRAL_REGION. If [#subscriber] is set, extracts the URI from that
+	/// named header (the container hands it to the app's subscriber-URI API).
+	/// Each route is `${}`-resolved against [ctx] before being pushed.
+	/// [stateInfo] is the wrapper carried across App Router invocations.
+	public SipApplicationRouterInfo createRouterInfo(String deployedAppName, Serializable stateInfo,
+			Context ctx, SipServletRequest request) {
 
 		String subscriberURI = null;
 		SipRouteModifier modifier = SipRouteModifier.NO_ROUTE;
 		String[] routeArray = null;
 
-		// Extract subscriber URI from the named header
+		// Extract subscriber URI from the named header.
 		if (subscriber != null) {
 			try {
 				subscriberURI = request.getAddressHeader(subscriber).getURI().toString();
 			} catch (Exception e) {
-				// Header not present or not an address header; leave subscriber null
+				// Header not present or not an address header; leave subscriber null.
 			}
 		}
 
-		// Set up routes
+		// Resolve ${} placeholders in each route against the context.
 		if (routes != null && routes.length > 0) {
-			routeArray = routes;
+			routeArray = new String[routes.length];
+			for (int i = 0; i < routes.length; i++) {
+				routeArray[i] = (ctx != null) ? ctx.resolve(routes[i]) : routes[i];
+			}
 			modifier = (routeModifier != null) ? routeModifier : SipRouteModifier.ROUTE;
 		}
 
-		return new SipApplicationRouterInfo(deployedAppName, SipApplicationRoutingRegion.NEUTRAL_REGION, subscriberURI,
-				routeArray, modifier, config);
+		return new SipApplicationRouterInfo(deployedAppName, SipApplicationRoutingRegion.NEUTRAL_REGION,
+				subscriberURI, routeArray, modifier, stateInfo);
 	}
 
 }

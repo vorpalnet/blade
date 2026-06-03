@@ -53,11 +53,25 @@ public class JvmSettings {
 			"-XX:+UseParallelGC", "-XX:+UseConcMarkSweepGC"
 	};
 
-	// Known boolean flags we track
+	// Known boolean flags we track. The egd setting is a fixed-value system
+	// property treated as an on/off toggle: pointing SecureRandom's seed source
+	// at the non-blocking /dev/urandom avoids entropy-starvation stalls on
+	// startup and TLS handshakes. The "/./" is the long-standing JDK workaround —
+	// "file:/dev/urandom" is read as the special token and silently falls back to
+	// blocking /dev/random, while "file:/dev/./urandom" is treated as a plain
+	// path and read non-blocking.
 	private static final String[] KNOWN_BOOLEAN_FLAGS = {
 			"-XX:+UseCompressedOops", "-XX:+UseCompressedClassPointers",
 			"-XX:+HeapDumpOnOutOfMemoryError", "-XX:+UseStringDeduplication",
-			"-server", "-XX:+DisableExplicitGC"
+			"-server", "-XX:+DisableExplicitGC",
+			"-Djava.security.egd=file:/dev/./urandom",
+			// Low-pause latency flags (JDK 21). ZGenerational opts ZGC into its
+			// generational mode — REQUIRED on JDK 21 (plain -XX:+UseZGC selects
+			// the legacy non-generational collector); it became default in JDK 23
+			// and is removed in JDK 24, so it's a JDK-21/22-only flag.
+			// AlwaysPreTouch pages the whole heap in at startup and, with
+			// -Xms=-Xmx, disables ZGC's runtime uncommit (both reduce pause jitter).
+			"-XX:+ZGenerational", "-XX:+AlwaysPreTouch"
 	};
 
 	@GET

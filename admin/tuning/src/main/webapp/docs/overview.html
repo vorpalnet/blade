@@ -87,7 +87,9 @@
 						<dt>JVM</dt>
 						<dd>Heap min/max, GC selection, GC log destination, key flags. Restart-required.</dd>
 						<dt>SIP Timer</dt>
-						<dd>T1, T2, T4, timer F, expiration intervals — the timer table that governs SIP retransmission and dialog lifecycle.</dd>
+						<dd>T1, T2, T4, timer F, expiration intervals — the timer table that governs SIP retransmission and dialog lifecycle. Restart-required.</dd>
+						<dt>JDBC Pools</dt>
+						<dd>Per-data-source Initial / Min / Max connection capacity. Min and Max resize on activate; Initial Capacity is restart-required.</dd>
 						<dt>Work Manager</dt>
 						<dd>Min/max threads, capacity constraints, fair-share request classes — how WLS schedules work across CPU.</dd>
 						<dt>Node Manager</dt>
@@ -118,6 +120,19 @@
 						activate. The dashboard threads this for every Save
 						automatically. See <a href="edit-sessions.html">Edit
 						Sessions</a> for the mechanics and the failure modes.
+					</p>
+
+					<h2>Recommended presets</h2>
+					<p>
+						The JVM, Server Tuning, OCCAS Threads, and JDBC Pools
+						sections each have a <strong>Recommended</strong> button.
+						It only <em>pre-fills</em> the standard high-CPS tuning
+						values — heap <code>-Xms = -Xmx</code>, Max Message Size
+						×4, <code>wlss.timer</code> Max Threads ≥ 200 with Min = Max
+						where both constraints exist, and JDBC
+						<code>Initial = Min = Max</code> (≥ 300). Nothing is
+						written until you review the filled-in values and Save, so
+						the preset is a starting point, not an auto-apply.
 					</p>
 
 					<div class="vorpal-callout vorpal-callout-note">

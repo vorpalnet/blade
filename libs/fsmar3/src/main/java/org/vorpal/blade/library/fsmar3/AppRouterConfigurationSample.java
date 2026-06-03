@@ -2,11 +2,10 @@ package org.vorpal.blade.library.fsmar3;
 
 import java.io.Serializable;
 
-import javax.servlet.sip.ar.SipRouteModifier;
-
 import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
-import org.vorpal.blade.framework.v3.configuration.RequestSelector;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
+import org.vorpal.blade.framework.v3.configuration.selectors.AttributeSelector;
+import org.vorpal.blade.framework.v3.configuration.selectors.RegexSelector;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -15,71 +14,75 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 
 /// Sample FSMAR v3 configuration used to generate the FSMAR3.SAMPLE file.
 ///
-/// Demonstrates the simplified v3 model using [RequestSelector] for pattern
-/// matching instead of v2 Conditions.
+/// Demonstrates the data-driven model: each state's selectors extract named
+/// values from the request into the routing context (accumulating across hops),
+/// and each transition fires on a `when` condition over those values, building
+/// `${}`-templated routes. The classic "route Bob differently from Alice" is a
+/// single transition, not one per subscriber.
 public class AppRouterConfigurationSample extends AppRouterConfiguration implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	private static final String SIP_USER = ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*";
+
 	public AppRouterConfigurationSample() {
+		this.about.setName("FSMAR 3")
+				.setTagline("Finite State Machine Application Router")
+				.setDescription("Routes initial SIP requests between applications using a finite state machine: "
+						+ "states keyed by the previous application, selectors that extract values from the "
+						+ "message, and transitions matched by conditions over those values. The future of FSMAR.");
+
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LoggingLevel.WARNING);
 
 		this.setDefaultApplication("b2bua");
 
-		// Reusable selector library. Each entry is referenced by name from
-		// any SelectorGroup via `selectorRefs`, keeping the transitions
-		// compact and the matching rules centralized.
-		this.addSelector("to-is-bob", new RequestSelector(
-				"to-is-bob", "To",
-				".*<sips?:(?<user>[^@]+)@(?<host>[^>]+)>.*",
-				"${user}",
-				"bob"));
-		this.addSelector("from-is-alice", new RequestSelector(
-				"from-is-alice", "From",
-				".*<sips?:(?<user>[^@]+)@(?<host>[^>]+)>.*",
-				"${user}",
-				"alice"));
+		// ----- Initial requests (previous = "null") -----
+		State init = this.getState("null");
+		// Capture caller/callee user-parts and the originating IP once, up front.
+		// These persist (via stateInfo) into every later state on this call.
+		init.addSelector(new RegexSelector("From", "From", SIP_USER, null));
+		init.addSelector(new RegexSelector("To", "To", SIP_USER, null));
+		init.addSelector(new AttributeSelector("callerIp", "Origin-IP"));
 
-		// Initial requests (previous = "null")
-		this.getState("null").getTrigger("REGISTER").createTransition("proxy-registrar");
-		this.getState("null").getTrigger("SUBSCRIBE").createTransition("presence");
-		this.getState("null").getTrigger("PUBLISH").createTransition("presence");
-		this.getState("null").getTrigger("OPTIONS").createTransition("options");
+		init.getTrigger("REGISTER").createTransition("proxy-registrar");
+		init.getTrigger("SUBSCRIBE").createTransition("presence");
+		init.getTrigger("PUBLISH").createTransition("presence");
+		init.getTrigger("OPTIONS").createTransition("options");
 
-		// INVITE with subscriber identification
-		this.getState("null").getTrigger("INVITE").createTransition("keep-alive")
-				.setId("INV-1")
+		// INVITE: a Bob-specific path built from the extracted callee, plus an
+		// unconditional fallback. ${To.user} / ${From.user} are namespaced by
+		// the selector id so two selectors capturing (?<user>…) don't collide.
+		init.getTrigger("INVITE").createTransition("b2bua")
+				.setId("INV-bob")
+				.setWhen("${To.user} == 'bob' && ${From.user} == 'alice'")
+				.setSubscriber("From")
+				.setRoutes(new String[] { "sip:${To.user}@special-proxy" });
+		init.getTrigger("INVITE").createTransition("screening")
+				.setId("INV-default")
 				.setSubscriber("From");
 
-		// INVITE from keep-alive when both named selectors match (to=bob AND from=alice).
-		// Uses `selectorRefs` instead of inlining the selector bodies.
-		Transition t1 = this.getState("keep-alive").getTrigger("INVITE").createTransition("b2bua");
-		t1.setId("INV-2");
-		t1.addSelectorGroup()
-				.addSelectorRef("to-is-bob")
-				.addSelectorRef("from-is-alice");
-		t1.setSubscriber("From");
-		t1.setRoutes(new String[] { "sip:proxy1", "sip:proxy2" });
+		// ----- After screening (a B2BUA that may rewrite From) -----
+		State screening = this.getState("screening");
+		// Re-capture From here: the screening app may have rewritten it. The
+		// original caller is still available as ${From.user} (carried); the
+		// post-screening value is ${callerNow.user}.
+		screening.addSelector(new RegexSelector("callerNow", "From", SIP_USER, null));
 
-		// Unconditional fallback from keep-alive
-		this.getState("keep-alive").getTrigger("INVITE").createTransition("b2bua")
-				.setId("INV-3");
+		screening.getTrigger("INVITE").createTransition("b2bua")
+				.setId("SCR-anon")
+				.setWhen("${callerNow.user} == 'anonymous'")
+				.setSubscriber("To")
+				.setRoutes(new String[] { "sip:${To.user}@anon-gw" });
+		screening.getTrigger("INVITE").createTransition("b2bua")
+				.setId("SCR-normal")
+				.setSubscriber("To");
 
-		// From b2bua, route to proxy-registrar
-		this.getState("b2bua").getTrigger("INVITE").createTransition("proxy-registrar");
-
-		// ROUTE_BACK example: pushes routes behind the destination application
-		// so they are visited on the response path. Either use the convenience
-		// helper setRouteBack(...) or call setRoutes(...) + setRouteModifier(ROUTE_BACK).
-		this.getState("b2bua").getTrigger("INVITE").createTransition("transfer")
-				.setId("INV-4")
-				.setRouteBack(new String[] { "sip:recorder1", "sip:recorder2" });
-
-		// ROUTE_FINAL example: equivalent shorthand using the explicit modifier.
-		this.getState("b2bua").getTrigger("INVITE").createTransition("hold")
-				.setId("INV-5")
-				.setRoutes(new String[] { "sip:finalproxy" })
-				.setRouteModifier(SipRouteModifier.ROUTE_FINAL);
+		// ----- After b2bua: deliver to the registrar, route built from the
+		// carried callee. -----
+		this.getState("b2bua").getTrigger("INVITE").createTransition("proxy-registrar")
+				.setId("B2B-deliver")
+				.setSubscriber("To")
+				.setRoutes(new String[] { "sip:${To.user}@registrar" });
 	}
 
 	public static void main(String[] args) throws JsonProcessingException {

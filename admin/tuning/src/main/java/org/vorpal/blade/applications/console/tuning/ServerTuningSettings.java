@@ -75,6 +75,7 @@ public class ServerTuningSettings {
 				ObjectName serverConfig = new ObjectName("com.bea:Name=" + serverName + ",Type=Server");
 
 				setIfPresent(editMbs, serverConfig, "SelfTuningThreadPoolSizeMin", input, "threadPoolMin", Integer.class);
+				setIfPresent(editMbs, serverConfig, "SelfTuningThreadPoolSizeMax", input, "threadPoolMax", Integer.class);
 				setIfPresent(editMbs, serverConfig, "SocketReaders", input, "socketReaders", Integer.class);
 				setIfPresent(editMbs, serverConfig, "MaxMessageSize", input, "maxMessageSize", Integer.class);
 				setIfPresent(editMbs, serverConfig, "CompleteMessageTimeout", input, "completeMessageTimeout", Integer.class);
@@ -103,6 +104,7 @@ public class ServerTuningSettings {
 		node.put("listenPort", attrInt(mbs, server, "ListenPort", 0));
 		node.put("listenAddress", attr(mbs, server, "ListenAddress", ""));
 		node.put("threadPoolMin", attrInt(mbs, server, "SelfTuningThreadPoolSizeMin", 0));
+		node.put("threadPoolMax", attrInt(mbs, server, "SelfTuningThreadPoolSizeMax", 0));
 		node.put("socketReaders", attrInt(mbs, server, "SocketReaders", 0));
 		node.put("maxMessageSize", attrInt(mbs, server, "MaxMessageSize", 0));
 		node.put("completeMessageTimeout", attrInt(mbs, server, "CompleteMessageTimeout", 0));

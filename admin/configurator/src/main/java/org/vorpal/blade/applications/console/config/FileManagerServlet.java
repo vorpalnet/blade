@@ -209,6 +209,16 @@ public class FileManagerServlet extends HttpServlet {
 				sendMessageToSession(session, createMessage("reload_success", "Configuration reloaded for " + reloadApp));
 				break;
 
+			case "get_autopublish":
+				sendMessageToSession(session, createMessage("autopublish_state", String.valueOf(getAutoPublish())));
+				break;
+
+			case "set_autopublish":
+				boolean enabled = jsonNode.get("enabled").asBoolean();
+				setAutoPublish(enabled);
+				sendMessageToSession(session, createMessage("autopublish_state", String.valueOf(enabled)));
+				break;
+
 			case "list_schemas":
 				String schemasList = listSchemasFromFilesystem();
 				sendMessageToSession(session, createMessage("schemas_list", schemasList));
@@ -341,6 +351,49 @@ public class FileManagerServlet extends HttpServlet {
 			SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, mbean.getObjectName(), SettingsMXBean.class);
 			settings.reload();
 		}
+	}
+
+	/// Read the live auto-publish state from the Configurator's own MBean.
+	/// Reads the merged in-memory config (which includes the shipped default
+	/// when no domain file exists yet), so the UI toggle reflects what the
+	/// running server is actually doing. Defaults to true if it can't be read.
+	private boolean getAutoPublish() {
+		try {
+			SettingsMXBean cfg = getMBeanProxy(getMBeanServer(), "configurator");
+			if (cfg != null) {
+				String json = cfg.getCurrentJson();
+				if (json != null) {
+					JsonNode ap = objectMapper.readTree(json).get("autoPublish");
+					if (ap != null) {
+						return ap.asBoolean(true);
+					}
+				}
+			}
+		} catch (Exception e) {
+			logger.log(Level.WARNING, "could not read configurator auto-publish state", e);
+		}
+		return true;
+	}
+
+	/// Persist the auto-publish flag and republish so it takes effect live.
+	/// Writes only `autoPublish` to the domain `configurator.json` (the rest
+	/// of the config comes from the shipped sample via merge), then reloads
+	/// the Configurator's MBean — which fires ConfiguratorSettingsManager's
+	/// initialize() hook and starts or stops the watcher thread.
+	private void setAutoPublish(boolean enabled) throws Exception {
+		Path file = Paths.get(CONFIG_BASE + "/configurator.json");
+		com.fasterxml.jackson.databind.node.ObjectNode node;
+		if (Files.exists(file)) {
+			JsonNode existing = objectMapper.readTree(Files.readAllBytes(file));
+			node = existing.isObject() ? (com.fasterxml.jackson.databind.node.ObjectNode) existing
+					: objectMapper.createObjectNode();
+		} else {
+			node = objectMapper.createObjectNode();
+		}
+		node.put("autoPublish", enabled);
+		String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
+		saveConfigFile(file.toString(), json);
+		reloadViaMBean("configurator");
 	}
 
 	private String listSchemasFromFilesystem() {

@@ -77,7 +77,7 @@
 					</table>
 
 					<h2>SIP Timer</h2>
-					<p>The SIP timer table per RFC 3261 §A. Tuning these affects retransmission cadence and dialog teardown. <strong>Runtime-tunable.</strong></p>
+					<p>The SIP timer table per RFC 3261 §A. Tuning these affects retransmission cadence and dialog teardown. <strong>Restart-required</strong> — the engine reads the timers once at startup (a static initializer in the transaction layer), so a change is persisted to <code>sipserver.xml</code> on activate but does not affect a running engine until that node restarts.</p>
 					<table>
 						<tr><th>Timer</th><th>Default</th><th>What it controls</th></tr>
 						<tr><td>T1</td><td>500ms</td><td>Round-trip estimate. Floor for retransmission intervals.</td></tr>

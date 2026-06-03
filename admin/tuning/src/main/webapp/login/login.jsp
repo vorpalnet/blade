@@ -1,83 +1,52 @@
-<%@ page language="java"%>
-
-<!-- %@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt"% -->
-<!-- %@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"% -->
-
+<%@ page language="java" pageEncoding="UTF-8" contentType="text/html; charset=UTF-8" %>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<title>BLADE Console</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Sign In · BLADE Tuning</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
-<meta charset="UTF-8" />
-<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="BLADE" />
-<link rel="stylesheet" type="text/css" href="./style.css" />
-<style>
-@import url(http://fonts.googleapis.com/css?family=Ubuntu:400,700);
-
-body {
-	background: #563c55 url(./blurred.jpg) no-repeat center top;
-	-webkit-background-size: cover;
-	-moz-background-size: cover;
-	background-size: cover;
-}
-
-.container>header h1, .container>header h2 {
-	color: #fff;
-	text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
-}
-</style>
+	<link rel="icon" type="image/svg+xml" href="/blade/tuning/favicon.svg">
 </head>
-<body onload="document.loginData.j_username.focus();">
+<body class="vorpal-login">
 
-	<c:choose>
-		<c:when test="${sessionScope.loginAttempts == null}">
-			<c:set var="loginAttempts" scope="session" value="0" />
-		</c:when>
-		<c:when test="${sessionScope.loginAttempts != null}">
-			<c:set var="loginAttempts" scope="session" value="${sessionScope.loginAttempts + 1}" />
-		</c:when>
-	</c:choose>
+	<%
+		Integer attempts = (Integer) session.getAttribute("loginAttempts");
+		attempts = (attempts == null) ? 0 : attempts + 1;
+		session.setAttribute("loginAttempts", attempts);
+	%>
 
-	<div class="container">
+	<div class="vorpal-login-stack">
 
-		<header>
-			<h1>
-				Vorpal <strong>BLADE</strong>
-			</h1>
-			<h2>Blended Layer, Appliance Development Environment</h2>
-		</header>
+		<div class="vorpal-login-header">
+			<h1>Vorpal <strong>BLADE</strong></h1>
+			<p>Tuning · Blended Layer Application Development Environment</p>
+		</div>
 
-		<section class="main">
-			<form class="form-3" action="j_security_check" method="post" enctype="application/x-www-form-urlencoded">
-				<p class="clearfix">
-					<label for="login">Username</label>
-					<input type="text" name="j_username" id="j_username" autocomplete="on" placeholder="Username">
-				</p>
-				<p class="clearfix">
-					<label for="password">Password</label>
-					<input type="password" name="j_password" id="j_password" placeholder="Password">
-				</p>
-				<p class="clearfix">
-					<input type="checkbox" name="remember" id="remember">
-					<label for="remember">Remember me</label>
-				</p>
-				<p class="clearfix">
-					<input type="submit" name="submit" value="Sign in"
-						onclick="form.submit();this.disabled=true;document.body.style.cursor = 'wait'; this.className='formButton-disabled';">
-				</p>
-			</form>
-		</section>
+		<form class="vorpal-login-card" action="j_security_check" method="post" autocomplete="on">
 
-		<header>
-			<h2>
-				<c:if test="${sessionScope.loginAttempts >0}">
-                                Authentication Denied.<br />
-                                Please Try Again.
-                    </c:if>
-			</h2>
-		</header>
+			<% if (attempts > 0) { %>
+				<div class="vorpal-login-error">Authentication failed. Verify your username and password, then try again.</div>
+			<% } %>
+
+			<div class="vorpal-form-row">
+				<label for="j_username">Username</label>
+				<input id="j_username" type="text" name="j_username" autocomplete="username" autofocus>
+			</div>
+
+			<div class="vorpal-form-row">
+				<label for="j_password">Password</label>
+				<input id="j_password" type="password" name="j_password" autocomplete="current-password">
+			</div>
+
+			<button class="vorpal-btn vorpal-btn-block" type="submit">Sign in</button>
+
+			<div class="vorpal-login-footer">
+				Authorized use only. All sessions are logged for audit purposes.
+			</div>
+		</form>
 
 	</div>
+
 </body>
 </html>

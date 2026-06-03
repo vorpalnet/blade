@@ -14,16 +14,74 @@
 	<style>
 		@import url(http://fonts.googleapis.com/css?family=Ubuntu:400,700);
 
+		/* Fill the whole viewport so the backdrop image covers the page
+		   (previously the body was only as tall as its content, so the image
+		   stopped partway down and bare white showed below). */
+		html, body {
+			min-height: 100vh;
+			margin: 0;
+		}
+
 		body {
-			background: #563c55 url(/blade/portal/assets/blurred.jpg) no-repeat center top;
-			-webkit-background-size: cover;
-			-moz-background-size: cover;
+			/* padding (not a child margin) creates the top breathing room —
+			   a child margin-top collapses through the body and exposes a
+			   white bar above the background. box-sizing keeps it within 100vh. */
+			box-sizing: border-box;
+			padding-top: 9vh;
+			background: #563c55 url(/blade/portal/assets/blurred.jpg) no-repeat center center fixed;
 			background-size: cover;
 		}
 
-		.container > header h1, .container > header h2 {
+		/* Match the gap above the panel to the gap below it (the panel's own
+		   30px bottom margin / the "Authentication Denied" line). style.css
+		   ships .form-3 with a 60px top margin; tighten it to 30px so the
+		   "BLADE Login" title sits the same distance above the panel. */
+		.form-3 {
+			margin-top: 30px;
+		}
+
+		/* "BLADE Login" title with the white VorpalBoy splotch to its left,
+		   centered above the panel. */
+		.container > header {
+			text-align: center;
+			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+		}
+		.container > header:first-child {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 14px;
+		}
+		.login-mark {
+			height: 40px;
+			width: auto;
+		}
+		.container > header h1 {
+			margin: 0;
+			font-weight: 300;
+			font-size: 30px;
+			letter-spacing: 0.04em;
 			color: #fff;
-			text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+		}
+		/* Retry message (second header, below the panel) */
+		.container > header h2 {
+			margin: 12px 0 0;
+			font-weight: 400;
+			font-size: 14px;
+			color: rgba(255, 255, 255, 0.85);
+		}
+
+		/* Standard copyright, pinned to the bottom over the backdrop. */
+		.login-copyright {
+			position: fixed;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			text-align: center;
+			padding: 14px;
+			font-size: 12px;
+			color: rgba(255, 255, 255, 0.6);
+			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 		}
 	</style>
 </head>
@@ -41,10 +99,8 @@
 	<div class="container">
 
 		<header>
-			<h1>
-				Vorpal <strong>BLADE</strong>
-			</h1>
-			<h2>Blended Layer Application Development Environment</h2>
+			<img class="login-mark" src="/blade/portal/brand/VorpalBoy_white.svg" alt="">
+			<h1>BLADE Login</h1>
 		</header>
 
 		<section class="main">
@@ -78,5 +134,9 @@
 		</header>
 
 	</div>
+
+	<footer class="login-copyright">
+		&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License
+	</footer>
 </body>
 </html>

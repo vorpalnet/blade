@@ -1464,6 +1464,66 @@ button.btn {
     background: var(--btn-publish-hover);
 }
 
+/* Auto-publish toggle — a sliding on/off switch. Pushed to the right of the
+   toolbar (margin-left:auto) because it controls a global Configurator
+   behavior, not the currently-loaded app. State is carried by thumb position
+   and the on/off text label, not by color alone. */
+.autopublish-switch {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.autopublish-caption {
+    font-weight: 500;
+}
+/* Hide the real checkbox; the track/thumb is the visible control. */
+.autopublish-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.autopublish-track {
+    position: relative;
+    width: 34px;
+    height: 18px;
+    border-radius: 9px;
+    background: var(--btn-secondary);
+    border: 1px solid var(--border-item);
+    transition: background 0.15s ease;
+}
+.autopublish-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--btn-text, #fff);
+    transition: transform 0.15s ease;
+}
+/* Checked = ON: track turns the publish color, thumb slides right. */
+.autopublish-switch input:checked + .autopublish-track {
+    background: var(--btn-publish);
+}
+.autopublish-switch input:checked + .autopublish-track .autopublish-thumb {
+    transform: translateX(16px);
+}
+.autopublish-switch input:focus-visible + .autopublish-track {
+    outline: 2px solid var(--btn-primary);
+    outline-offset: 1px;
+}
+.autopublish-state {
+    min-width: 1.8em;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
 .array-item {
     background: var(--bg-surface);
     border: 1px solid var(--border-item);
@@ -1832,6 +1892,23 @@ button.btn {
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
+}
+
+/* "Not Published" indicator — saved to disk, not yet live. Deliberately
+   distinct from the pulsing amber "Unsaved Changes" badge: steady (no pulse),
+   publish-colored, triangle glyph + its own label, so the two read apart
+   by shape/motion/text, not color alone. */
+.unpublished-indicator {
+    background: var(--btn-publish);
+    color: var(--btn-text, #fff);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--border-item);
 }
 
 /* Feature: Field Help Tooltips */

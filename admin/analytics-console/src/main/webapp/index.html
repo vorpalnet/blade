@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Analytics</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Analytics</span>
+				<span class="vorpal-brand-tagline">Pipeline Status &amp; Config</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html" class="vorpal-active">Overview</a>
+			<a href="audit.html">Audit</a>
+			<a href="sample.html">Sample Data</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>BLADE Analytics</h1>
+					<p>
+						The analytics pipeline captures call lifecycle events and
+						persists them to a relational database via JMS. This admin
+						app audits, configures, and observes the WebLogic resources
+						that make it work — without operators having to drop into
+						the AdminServer console or hand-edit WLST scripts.
+					</p>
+				</div>
+				<div class="vorpal-hero-meta">
+					<span>Discovery · JMX</span>
+					<span>Status · MBean</span>
+				</div>
+			</section>
+
+			<section class="vorpal-card-grid">
+				<a href="audit.html" class="vorpal-card">
+					<span class="vorpal-card-icon">▤</span>
+					<h3>Resource Audit</h3>
+					<p>
+						Inspect the domain for the JMS Server, Module,
+						Connection Factory, Distributed Queue, and JDBC Data
+						Source the analytics pipeline depends on. Each row
+						shows what was found and where, or what's missing and
+						how to fix it.
+					</p>
+					<span class="vorpal-card-link">Open Audit</span>
+				</a>
+
+				<a href="sample.html" class="vorpal-card">
+					<span class="vorpal-card-icon">⚗</span>
+					<h3>Sample Data</h3>
+					<p>
+						Generate randomized <code>transfer</code>-style calls
+						into the analytics database over a date range — abandons,
+						answers, and multi-transfer calls — to exercise reports
+						and dashboards with realistic test data.
+					</p>
+					<span class="vorpal-card-link">Open Generator</span>
+				</a>
+
+				<div class="vorpal-card vorpal-card-muted">
+					<span class="vorpal-card-icon">⊕</span>
+					<h3>Resource Provisioning</h3>
+					<p>
+						Create missing JMS / JDBC resources from the admin
+						app with preview-before-commit dialogs. Replaces
+						the manual WLST recipes under
+						<code>services/analytics/notes/</code>.
+					</p>
+					<span class="vorpal-card-link">Planned · next release</span>
+				</div>
+
+				<div class="vorpal-card vorpal-card-muted">
+					<span class="vorpal-card-icon">⤓</span>
+					<h3>Operational Insights</h3>
+					<p>
+						Live queue depth, MDB state, DB connection health,
+						throughput, and the registered-Applications view —
+						polled from the runtime MBeans and the analytics
+						database itself.
+					</p>
+					<span class="vorpal-card-link">Planned · next release</span>
+				</div>
+
+				<div class="vorpal-card vorpal-card-muted">
+					<span class="vorpal-card-icon">≣</span>
+					<h3>Data Console</h3>
+					<p>
+						Browse Application, Session, Event, and Attribute rows
+						from the analytics database. Filter by date range,
+						event type, or selector value.
+					</p>
+					<span class="vorpal-card-link">Planned · later release</span>
+				</div>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

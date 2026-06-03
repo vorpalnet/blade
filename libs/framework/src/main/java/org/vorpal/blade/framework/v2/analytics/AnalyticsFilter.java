@@ -59,7 +59,7 @@ public class AnalyticsFilter implements Filter {
 
 			sipLogger.severe(sipRequest.getSession(), "AnalyticsFilter.doFilter - sipRequest.id="+sipRequest.getId());
 
-			event.setSessionId(Analytics.getSessionId(sipRequest.getApplicationSession()));
+			event.setVorpalId(Analytics.getVorpalId(sipRequest.getApplicationSession()));
 			Analytics.sipServletRequest.remove();
 		}else {
 			sipLogger.severe("AnalyticsFilter.doFilter - Could not find sipServletRequest.");

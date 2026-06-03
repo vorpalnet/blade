@@ -3,7 +3,9 @@ package org.vorpal.blade.framework.v2.config;
 import java.io.Serializable;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+@JsonPropertyOrder({ "name", "tagline", "description", "notes" })
 @FormLayoutGroup({ "name", "tagline" })
 public class About implements Serializable {
 

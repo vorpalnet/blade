@@ -98,9 +98,15 @@ public class RegexSelector extends Selector implements Serializable {
 
 		// Only *named* groups go into the session. Numbered keys would
 		// collide with real attribute names and surprise later selectors.
+		// Each named group is stored twice:
+		//   - bare (${user}) — legacy behavior, retained for compatibility;
+		//   - namespaced under this selector's id (${To.user}) — so two
+		//     selectors both capturing (?<user>…) don't clobber each other,
+		//     and one selector can expose every group it captured. Preferred.
 		for (Map.Entry<String, String> e : groups.entrySet()) {
 			if (isNumericKey(e.getKey())) continue;
 			store(ctx, e.getKey(), e.getValue());
+			if (id != null) store(ctx, id + "." + e.getKey(), e.getValue());
 		}
 
 		// Expression template sees both kinds — ${0}, ${1}, ${user}, ${host}

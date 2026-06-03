@@ -1,4 +1,11 @@
 # This script configures a MySQL JDBC data source for writing analytics events.
+#
+# MySQL server note (my.cnf, not set here): for the consumer to batch event
+# inserts without taking a table-level AUTO_INCREMENT lock, set
+#     innodb_autoinc_lock_mode = 2
+# (interleaved). MySQL has no sequence object — AUTO_INCREMENT + interleaved
+# lock mode is the fast path for high-throughput inserts.
+#
 # Temporarily, set the following environment variables:
 
 wl_user = os.environ.get('WL_USER')   # weblogic

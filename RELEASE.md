@@ -2,6 +2,328 @@
 
 ## 2.9.6 (unreleased)
 
+### Options: drain the node via OPTIONS when OCCAS is overloaded
+
+The Options service now reflects OCCAS overload protection into its OPTIONS
+health check. When the engine's overload protection is actively rejecting
+traffic, OPTIONS answers **503 Service Unavailable** (with `Retry-After`) so a
+SIP-aware load balancer stops routing **new** calls here and drains the node —
+instead of the engine rejecting calls one at a time after they arrive. In-flight
+dialogs are unaffected.
+
+- `EngineOverload.isOverloaded()` reads OCCAS's own
+  `com.bea.wcp.sip.engine.server.olp.OverloadProtection.getInstance().isBusy()`
+  **reflectively** — no compile-time dependency on engine internals. If the class
+  is absent or changes, it fails closed to "available," so OPTIONS keeps
+  answering 200 exactly as before (verified: returns false off-engine).
+- No custom OCCAS overload *handler* / `OlpEventHandler` / ServiceLoader wiring
+  needed — OPTIONS simply reads the flag OCCAS already maintains.
+- Gated by two new `OptionsSettings`: `unavailableWhenOverloaded` (sample
+  default true) and `overloadRetryAfter` (sample default 5s). Existing
+  `options.json` without the field defaults to off, so deployed behavior is
+  unchanged until opted in. The 503 path can only fire when overload thresholds
+  are actually configured.
+- Built on the current v2 Options service; carries forward into the planned v3
+  OPTIONS rewrite (roadmap item 6, drain control).
+
+### Tuning: JDK 21 / OCCAS 8.3 latency tuning, Health Check, overload protection
+
+Driven by fact-checked research for the OCCAS 8.3 / WebLogic 14.1.2 / JDK 21 stack.
+
+- **JDK 21 low-pause GC, done correctly.** Added `-XX:+ZGenerational` and
+  `-XX:+AlwaysPreTouch` as known JVM flags, and a **"Low-Latency (ZGC)"** preset
+  that selects ZGC + Generational + AlwaysPreTouch + `-Xms=-Xmx`. Critical fix:
+  on JDK 21 plain `-XX:+UseZGC` selects the *legacy non-generational* collector —
+  Generational ZGC needs the extra flag. It is JDK-21/22-only (default in 23,
+  removed in 24), called out in the tooltip. Framed as predictable/bounded pause
+  times, never "guaranteed sub-ms" (a claim the research explicitly refuted).
+- **Health Check panel** (read-only): flags `-Xms ≠ -Xmx`, removed CMS/ParNew GC
+  flags (fatal on JDK 21), `-Xshare:off` (disables free CDS warmup), a non-default
+  socket muxer (14.1.2 default is the NIO muxer), ZGC-without-Generational, and a
+  best-effort sub-21 JDK detection from JavaHome. Pure diagnostics — fixes are
+  applied in the sections below.
+- **Server Tuning gains `SelfTuningThreadPoolSizeMax`** (default 400, max 65534);
+  the Recommended preset now also raises socket readers to ≥ 10 (OCCAS engine rec).
+- **Work Manager preset** now fills OCCAS engine capacities: `wlss.transport`
+  capacity 5,000,000 and `wlss.timer` capacity 150,000 (from the OCCAS 8.0 tuning
+  doc — stable across versions, re-confirm against the 8.3 guide).
+- **SIP overload protection** — new fields for the classic `<overload>` element
+  (`OverloadBean`: threshold-policy session-rate/queue-length, threshold value,
+  release value), created on first save if absent. NOTE: OCCAS also has a separate,
+  richer `<overload-protection>` framework that some domains scaffold instead;
+  these fields drive the classic element only.
+
+### Tuning: JDBC pool tab + per-section "Recommended" presets
+
+New **JDBC Connection Pools** tab (`JdbcSettings`, `@Path("/jdbc")`) reads/writes
+each data source's `InitialCapacity` / `MinCapacity` / `MaxCapacity` by
+navigating `DomainConfiguration → JDBCSystemResources → JDBCResource →
+JDBCConnectionPoolParams`, through the same edit-session path as the other tabs.
+
+Each tunable section (JVM, Server Tuning, OCCAS Threads, JDBC) gained a
+**"Recommended"** button that *pre-fills* values for the operator to review and
+Save — nothing auto-activates. The presets encode the standard high-CPS tuning
+heuristics:
+- **JVM** — `-Xms = -Xmx` (heap fully committed at startup, no resize pauses).
+- **Server Tuning** — Max Message Size × 4 (WLS default 10 MB → 40 MB).
+- **OCCAS Threads** — `wlss.timer` Max Threads ≥ 200, and Min = Max for any work
+  manager that defines both constraints (only `wlss.replica.blocking`,
+  `wlss.tracing.domain`, `wlss.tracing.local` in the OCCAS model — the rest
+  expose only one of the pair, so there's nothing to equalize).
+- **JDBC** — `Initial = Min = Max`, floored at 300, so the pool is fully
+  allocated at startup and never pays connection create/teardown latency.
+
+### Tuning: "Fast SecureRandom (urandom)" JVM flag
+
+The JVM tab gains a checkbox for `-Djava.security.egd=file:/dev/./urandom`,
+registered as a known boolean flag in `JvmSettings`. Seeding `SecureRandom` from
+non-blocking `/dev/urandom` removes entropy-starvation stalls on startup and TLS
+handshakes — a real throughput win for SIP-over-TLS. The `/./` is the standard
+JDK workaround (plain `file:/dev/urandom` is silently ignored and falls back to
+blocking `/dev/random`). Like all `ServerStart` arguments, it's restart-required
+and applied via Node Manager on the next boot.
+
+### Tuning: SIP timers edited through the JMX edit tree, not a raw file write
+
+The Tuning app's SIP Timers tab (`sipserver.xml`: T1/T2/T4, Timer B/F/L/M/N,
+default behavior, stale-session handling, etc.) previously wrote the file
+directly with a DOM transform. That only touched the node the admin app runs on,
+skipped the OCCAS descriptor validator, and could be silently reverted when the
+AdminServer re-serialized its in-memory `SipServerBean`.
+
+- **`SipTimerSettings` now reads and writes through the edit tree.**
+  `sipserver` is a WebLogic `<custom-resource>` whose descriptor bean is
+  `SipServerBean`; the resource is reached via
+  `DomainConfiguration → CustomResources[name=sipserver] → CustomResource`, and
+  each attribute (`T1TimeoutInterval`, `EnableSipOutBound`, `EnableRport`,
+  `EngineCallStateCacheEnabled`, …) is get/set inside a
+  `startEdit`/`save`/`activate` session — the same pattern the Server Tuning and
+  Work Manager tabs already use. `activate` persists `sipserver.xml` and runs the
+  descriptor validator, and each engine node picks the change up on its next
+  restart.
+- **"Requires restart" is now surfaced.** The engine snapshots the SIP timers in
+  a `static` initializer at class load (`Transaction.<clinit>`), so a timer
+  change does not affect a running engine. The API returns `requiresRestart`, and
+  the SIP Timers save now warns that timer changes take effect only after a
+  rolling restart of the engine tier (instead of the old unconditional "saved").
+
+
+### Analytics: schema cleanup + multi-tenant tenant column
+
+Groundwork for hosting one BLADE analytics database behind one Oracle Analytics
+Cloud instance serving many customers, each seeing only their own calls.
+
+- **`MySQL-database-schema.sql` is now the single source of truth.** The Oracle
+  and SQL Server dialect scripts were removed; they'll be regenerated from the
+  MySQL script when needed.
+- **Plural table names** — all analytics tables are plural (`sessions`,
+  `events`, `attributes`, `session_keys`, `event_types`, `attribute_names`,
+  `applications`). `session` (singular) is a reserved word in Oracle, so the
+  whole set is pluralized for portability. `sessions.id` is DB-assigned
+  (`AUTO_INCREMENT`); the call's cluster-unique vorpal-id rides in `vorpal_id`
+  (see the session identity note below).
+- **`application.tenant`** (`VARCHAR(64)`, nullable) — customer code stamped by
+  the producer (`JmsPublisher.applicationStart`) from `SettingsManager.getTenant()`,
+  which reads `-Dblade.tenant=<code>` or `BLADE_TENANT`. NULL on single-tenant
+  installs, so existing deployments are unaffected. `sessions`/`events` rows reach
+  their tenant by joining `applications(id)` — no hot-path change.
+  `idx_application_tenant` keeps the RLS predicate cheap.
+- *Note:* the analytics entities live in the frozen `framework/v2/analytics`
+  package (there is no v3 analytics); the tenant addition is nullable and
+  backward-compatible.
+
+> Oracle/OAC-specific artifacts (reporting views, row-level-security support) are
+> deferred — MySQL is the only supported database for now; the OAC dashboard layer
+> will be rebuilt when Oracle support returns.
+
+### Analytics: session identity is the vorpal-id; PK is DB-assigned
+
+The Snowflake session id and the entire worker-id subsystem are removed. The
+analytics `sessions` primary key is now DB-assigned (`AUTO_INCREMENT`); a call is
+correlated by its cluster-unique **vorpal-id** (the `X-Vorpal-ID` Callflow
+already mints at first-touch).
+
+- **Callflow** no longer mints or propagates a Snowflake `sid` parameter on
+  `X-Vorpal-ID`; the vorpal-id alone identifies the call across services in a
+  chain. `ANALYTICS_SESSION`, the `SID_PARAM` parameter, `SnowflakeId`, and
+  `WorkerIdAllocator` (with the `blade_worker_id` table) are deleted.
+- **Producer** sends only the vorpal-id on the `Session`/`Event`/`SessionKey` —
+  the JMS messages carry no environment id; nothing about the domain travels on
+  the wire.
+- **Consumer** (`AnalyticsJmsListener`) is the only writer to the database. It
+  reads its **domain id** from the analytics service config
+  (`AnalyticsConfig.domainId` in `analytics.json`, falling back to the WebLogic
+  domain name) and stamps it as `cluster_name` on every row it writes. It assigns
+  the PK on the session-started message, keeps an in-memory `vorpal-id → PK` map,
+  and resolves later events/keys through it — falling back to the open session
+  row in the DB, **scoped by its own domain id**, on a cold cache (restart /
+  second consumer instance). The domain id is required because customers run many
+  clusters sharing one WebLogic domain name (e.g. SIPREC × 10, VOICE × 10) all
+  feeding **one shared analytics DB**, so a vorpal-id is only unique within an
+  environment; `cluster_name` is what keeps rows distinct, enforced by the
+  `(cluster_name, vorpal_id)` `open_key` unique index.
+- **analytics-console:** the worker-allocation audit (`IdConfigAudit`) and the
+  Snowflake `/decode` endpoint are removed.
+
+### Files: new admin tool for schema-less domain files
+
+A new admin app, **BLADE Files** (`admin/files`, context-root `/blade/files`),
+edits domain files that have **no** JSON Schema — so the Configurator can't
+manage them — through the browser instead of over SSH: `sipserver.xml`,
+datasource descriptors, logging configs, plain `.properties`.
+
+- **Deny-by-default registry.** The editable set is an admin-defined whitelist
+  in the app's own settings (`config/custom/vorpal/files.json`) — `label` +
+  `path` (relative to `DOMAIN_HOME`) + `type` (`XML` / `PROPERTIES` / `TEXT`).
+  There is no filesystem browse; a path not in the registry is rejected before
+  any disk access, and a registered path that resolves outside `DOMAIN_HOME` is
+  rejected too (path-traversal guard).
+- **Well-formedness check on save.** XML is parsed (external entities disabled);
+  properties are parsed with `java.util.Properties`; text is saved as-is. A
+  malformed file is rejected and the on-disk copy is left untouched.
+- **Backups & restore.** Every overwrite first copies the current file into a
+  sibling `.versions/` directory (keep-last-20); the editor lists versions and
+  can restore one. This uses the new framework helper
+  `org.vorpal.blade.framework.io.VersionedFileStore` — the same backup
+  discipline the Configurator's `FileManagerServlet` grew, now factored out for
+  reuse. (Repointing the Configurator at the shared helper is a separate
+  follow-up.)
+
+### Analytics Console: renamed, audit fix, one-click JMS provisioning
+
+The admin Analytics app was renamed `analytics` → **`analytics-console`** (Maven
+artifact + web.xml `display-name`, so its JMX MBean is `Name=analytics-console`)
+to stop colliding with the analytics **cluster service** (also `Name=analytics`).
+Context-root stays `/blade/analytics`; the portal card resolves via a documented
+`SETTINGS_NAME_BY_SLUG` alias.
+
+- **Audit fix.** The resource audit now finds **Uniform** Distributed Queues
+  (`UniformDistributedQueues`) — and plain `Queues` — not just the legacy
+  weighted `DistributedQueues`. It was reporting a present UDQ as missing.
+- **"Create missing JMS resources" button.** When a JMS resource is missing, the
+  audit page offers a fix that provisions the whole JMS stack — file store, JMS
+  server, system module, subdeployment, connection factory, uniform distributed
+  queue — in-process via the WebLogic Edit MBean server (`WlsResourceProvisioner`,
+  the Java/JMX equivalent of `configure-jms.py`). Idempotent, auto-targets the
+  single engine cluster, rolls the edit back on failure. The JDBC data source is
+  out of scope (it needs DB credentials).
+
+### FSMAR 3: data-driven call-paths
+
+FSMAR transitions can now route on **any** data in the message and construct
+routes from extracted values — keeping FSMAR the stateful sequencer (state =
+previous application). Built by reusing the v3 `selectors` / `Context` /
+`Expression` stack rather than FSMAR's old header-only matcher.
+
+- **Per-state extraction.** Each state carries `selectors` (the existing
+  `Attribute`/`Json`/`Xml`/`Sdp`/`Regex` selectors) that run on entry and write
+  named values into a routing context. Selectors live on the state (not a
+  top-level pipeline) because the App Router sees the *evolving* request across
+  hops — per-state capture-and-carry avoids silently overwriting a value
+  mid-path.
+- **Condition + constructed routes.** A transition fires on a `when` expression
+  over the extracted values (the same `Expression` grammar iRouter uses); its
+  `routes[]` are `${}`-templated and resolved against the context, e.g.
+  `sip:${To.user}@proxy`. `next` stays a literal app (the FSM edge) and
+  `subscriber` stays a header name (the JSR-289 contract). Routing Bob
+  differently from Alice is one transition, not one per subscriber.
+- **State carried in `stateInfo`.** The extraction context rides the JSR-289
+  `stateInfo` alongside the pinned config snapshot (`RoutingState`), so values
+  captured in an early state remain available to later states and survive
+  cluster failover — without any SipSession (which the App Router doesn't have).
+- **New `MemoryContext`** (framework): a map-backed `Context` for use where no
+  SIP session exists. `Context.resolve` now routes through the overridable
+  `get()` (behavior-identical for session-backed contexts).
+- **Regex named groups** are now stored namespaced as `${selectorId.group}`
+  (e.g. `${To.user}`) in addition to the bare `${group}`, so two selectors
+  capturing the same group name no longer collide.
+- Retired FSMAR's header-only `RequestSelector` / `SelectorGroup` (superseded by
+  the extraction selectors + `Expression`).
+
+### FSMAR 3: routing fixes + bypass of undeployed applications
+
+- **Bypass undeployed targets.** When a matched transition's `next` application
+  isn't currently deployed, the router no longer hands the container a null
+  application name. It treats that application as the new "previous" state and
+  keeps evaluating the state machine, as if it had already run. When the chain
+  dead-ends it returns no router info, so OCCAS routes the request downstream.
+  A visited-state guard prevents a self-referential config from looping.
+- **`defaultApplication`** still applies only to an initial request that matched
+  nothing at all; a request that walked (and bypassed) the machine before
+  dead-ending goes downstream rather than to the default.
+- **Bug fixes.** `applicationUndeployed` now removes entries from the deployed
+  map (previously a no-op, leaving stale version names); the deployed map is a
+  `ConcurrentHashMap` (was an unsynchronized `HashMap` read/written across
+  engine threads); an init-time config failure no longer NPEs on a null logger
+  while reporting itself; and runtime evaluation uses read-only map lookups so
+  it no longer inserts empty states/triggers into the live config.
+
+### Configurator: guided editing for keyed config
+
+- **`@FormKeyEnum`** (new, generic) on a `Map` getter constrains its keys to a
+  fixed set, emitted as JSON Schema `propertyNames.enum`; the form renders the
+  map-entry key as a dropdown instead of free text, preserving an existing key
+  even if it's no longer in the set. FSMAR 3 uses it to limit a state's triggers
+  to known SIP methods.
+- **Selector reuse via identity, not a parallel ref list.** `RequestSelector`
+  now carries `@JsonIdentityInfo` (like `Connector`/`Selector`), so a selector
+  group's `selectors` list does double duty — define one inline, or use the
+  Configurator's existing "+ Add Reference" picker to point at one defined
+  elsewhere (e.g. the top-level `selectors` library) by `id`. The redundant
+  `SelectorGroup.selectorRefs` field is gone.
+- FSMAR 3's config classes also gained `@FormSection` / `@FormLayoutGroup` /
+  `@FormLayout` annotations for grouped, labeled, regex-testable fields, and the
+  inherited `session` block is hidden (FSMAR is an Application Router, not a
+  converged app).
+- Internal: `SettingsManager.saveSchema` now delegates schema construction to a
+  pure `generateSchemaNode(Class, ObjectMapper)`, separating it from file IO.
+
+### Admin tier: one deployable EAR (`blade-admin.ear`)
+
+The admin webapps now also ship bundled as a single `blade-admin.ear`, so the
+whole admin tier deploys to AdminServer in one step.
+
+- **Additive packaging, proven WARs.** Each WAR inside the EAR is self-contained
+  exactly as it deploys standalone — it carries the framework jar and references
+  the `vorpal-blade` shared library via its own `weblogic.xml`. The EAR bundles
+  no libraries of its own; nothing about how an individual WAR loads classes
+  changed.
+- **New `admin/ear`** module → `blade-admin.ear`, with explicit per-module
+  context-roots in the generated `application.xml` that match each WAR's
+  `weblogic.xml` exactly (incl. `redirect` at `/`).
+- **Build/deploy:** `./build.sh` builds the EAR by default (auto-skipped when
+  javadoc is skipped, since the EAR bundles `javadoc.war`) and still drops the
+  individual admin WARs in `dist/<ver>/admin/` for single-app test redeploys.
+  `./deploy.sh <env> admin AdminServer` deploys the EAR (when an EAR is present
+  in the tier dir it is the deploy unit; loose WARs there are for manual
+  individual redeploys).
+
+(A future optimization — hosting the framework once in the EAR's `APP-INF/lib`
+instead of per-WAR — needs the shared library repackaged as an EAR-referenceable
+library, since a WAR-packaged shared library is only visible at the WAR
+classloader level. Deferred.)
+
+### Configurator: auto-publish absorbed; standalone `watcher` WAR retired
+
+The Configurator now owns the file-system auto-publish behavior that the
+separate `watcher` WAR used to provide, and `watcher` has been removed from
+the build and the admin tier.
+
+- **Auto-publish on by default.** `ConfiguratorSettings.autoPublish` defaults to
+  `true` (via the shipped sample), so on-disk edits to
+  `./config/custom/vorpal/*.json` are republished to live services via JMX —
+  the same behavior ops scripts relied on under `watcher`.
+- **Live on/off toggle in the UI.** A sliding Auto-publish switch sits at the
+  right of the form toolbar. Flipping it writes `autoPublish` to
+  `configurator.json` and reloads the Configurator's own MBean; the watcher
+  thread starts/stops immediately — no redeploy. The lifecycle is owned by
+  `ConfiguratorSettingsManager.initialize()`, the framework's per-reload hook.
+- **`watcher` removed.** Deleted `admin/watcher`, its Maven profile, its entries
+  in every build profile, `build.sh`, the javadoc collector, and the README /
+  DEPLOYMENT tables. Its portal launcher card disappears automatically (the deck
+  is built from JMX). Customers migrating off `watcher` lose nothing: undeploy
+  it and leave Auto-publish on.
+
 ### Build: Javadocs are generated automatically (needs a JDK 23+ tool)
 
 `./build.sh` now generates the Javadoc site as part of a normal build, instead of requiring the `-- -Pjavadocs` flag by hand.

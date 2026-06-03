@@ -493,6 +493,18 @@ public class SettingsManager<T> {
 	}
 
 	public void saveSchema(T t) throws JsonGenerationException, JsonMappingException, IOException {
+		JsonNode jsonSchema = generateSchemaNode(t.getClass(), mapper);
+		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
+		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, jsonSchema);
+	}
+
+	/// Builds the JSON Schema node for a configuration class using victools +
+	/// the Jackson module, honoring BLADE's form-layout annotations
+	/// ([FormLayout], [FormLayoutGroup], [FormSection], [FormKeyEnum]). Pure —
+	/// no file IO and no SettingsManager state — so it can be exercised
+	/// standalone in tests/verifiers; [#saveSchema] wraps it to write the
+	/// `.jschema` file.
+	public static JsonNode generateSchemaNode(Class<?> clazz, ObjectMapper mapper) {
 		// victools jsonschema-generator with the Jackson module:
 		//   - Reads @JsonSubTypes / @JsonTypeInfo for polymorphism (emitted as
 		//     anyOf variants in the schema)
@@ -552,14 +564,29 @@ public class SettingsManager<T> {
 		// x-form attribute on the property's schema; the Configurator keys off
 		// x-wide, format="password"/"textarea", x-readonly.
 		ConfigFunction<MemberScope<?, ?>, ObjectNode> formLayoutAttrs = member -> {
-			FormLayout fl = member.getAnnotationConsideringFieldAndGetter(FormLayout.class);
-			if (fl == null) return null;
 			ObjectNode extras = mapper.createObjectNode();
-			if (fl.multiline()) extras.put("format", "textarea");
-			else if (fl.password()) extras.put("format", "password");
-			if (fl.wide() || fl.multiline()) extras.put("x-wide", true);
-			if (fl.readOnly()) extras.put("x-readonly", true);
-			if (fl.regexTest()) extras.put("x-regex-test", true);
+
+			FormLayout fl = member.getAnnotationConsideringFieldAndGetter(FormLayout.class);
+			if (fl != null) {
+				if (fl.multiline()) extras.put("format", "textarea");
+				else if (fl.password()) extras.put("format", "password");
+				if (fl.wide() || fl.multiline()) extras.put("x-wide", true);
+				if (fl.readOnly()) extras.put("x-readonly", true);
+				if (fl.regexTest()) extras.put("x-regex-test", true);
+			}
+
+			// @FormKeyEnum — constrain a map property's keys to a fixed set.
+			// Emitted as standard JSON Schema propertyNames.enum; the Configurator
+			// renders the map-entry key as a dropdown instead of free text.
+			FormKeyEnum fke = member.getAnnotationConsideringFieldAndGetter(FormKeyEnum.class);
+			if (fke != null && fke.value().length > 0) {
+				ObjectNode propertyNames = mapper.createObjectNode();
+				ArrayNode keyEnum = mapper.createArrayNode();
+				for (String k : fke.value()) keyEnum.add(k);
+				propertyNames.set("enum", keyEnum);
+				extras.set("propertyNames", propertyNames);
+			}
+
 			return extras.size() == 0 ? null : extras;
 		};
 		configBuilder.forFields().withInstanceAttributeOverride((node, field, ctx) -> {
@@ -630,9 +657,7 @@ public class SettingsManager<T> {
 
 		SchemaGeneratorConfig config = configBuilder.build();
 		SchemaGenerator schemaGenerator = new SchemaGenerator(config);
-		JsonNode jsonSchema = schemaGenerator.generateSchema(t.getClass());
-		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
-		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, jsonSchema);
+		return schemaGenerator.generateSchema(clazz);
 	}
 
 	/// Convert the String from @JsonProperty(defaultValue = "...") to a typed
@@ -772,6 +797,25 @@ public class SettingsManager<T> {
 
 	public static String getDomainName() {
 		return domainName;
+	}
+
+	private static String tenant = null;
+
+	/**
+	 * The customer/tenant code for this deployment, used to stamp analytics rows
+	 * for multi-tenant row-level security. Sourced from the {@code blade.tenant}
+	 * system property (e.g. {@code -Dblade.tenant=customer_a} on the WebLogic
+	 * server) or the {@code BLADE_TENANT} environment variable. Returns null on
+	 * single-tenant deployments, which leaves application.tenant NULL.
+	 *
+	 * @return the configured tenant code, or null if unset
+	 */
+	public static String getTenant() {
+		if (tenant == null) {
+			tenant = System.getProperty("blade.tenant");
+			tenant = (tenant != null) ? tenant : System.getenv("BLADE_TENANT");
+		}
+		return tenant;
 	}
 
 	private static String hostname = null;

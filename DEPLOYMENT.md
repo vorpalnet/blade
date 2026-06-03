@@ -5,7 +5,7 @@ BLADE deploys in **four tiers**, each with its own scope. Once you see the pictu
 ```
 OCCAS Domain
 ├── approuter/               ← (1) fsmar.jar / fsmar3.jar  [engine-tier reboot]
-├── AdminServer              ← (2) shared library  + (3) admin/*.war
+├── AdminServer              ← (2) shared library  + (3) blade-admin.ear
 └── Cluster (engine tier)    ← (2) shared library  + (4) services/*.war
 ```
 
@@ -41,23 +41,25 @@ A WebLogic shared library with `Extension-Name: vorpal-blade`, containing every 
 - **Why it's deployed twice:** WebLogic shared libraries are scoped to deployment targets. An admin app on AdminServer can only resolve a library that's also deployed to AdminServer, and the same goes for the cluster.
 - **Updating:** bumping a 3rd-party version requires one shared-library redeploy, not a rebuild of every service.
 
-### 3. Admin apps — `dist/<ver>/admin/*.war`
+### 3. Admin apps — `dist/<ver>/admin/blade-admin.ear`
 
-Management tools that run **only on AdminServer**. Each is a skinny WAR (no JARs in `WEB-INF/lib/`) that `<library-ref>`s the shared library. WAR filenames match the context-root so an operator looking at `/configurator` in a browser sees `configurator.war` on disk.
+Management tools that run **only on AdminServer**, packaged as a single EAR (`blade-admin.ear`) so the whole admin tier deploys in one step. Each bundled WAR is self-contained exactly as it deploys standalone — it carries the framework jar and references the `vorpal-blade` shared library via its own `weblogic.xml`. The EAR is a packaging convenience over those WARs; it bundles no libraries itself. `./build.sh` also drops the individual WARs in `dist/<ver>/admin/` so a single app can be redeployed on its own during testing; `deploy.sh` deploys the EAR. The bundled web modules and their (unchanged) context-roots:
 
-| Source module | WAR filename | Context root | Purpose |
+| Source module | WAR (in EAR) | Context root | Purpose |
 |---|---|---|---|
 | `admin/portal` | `portal.war` | `/blade/portal` | Unified admin shell — left rail hosts every other admin app via iframe |
-| `admin/redirect` | `blade-redirect.war` | `/blade` | 302s bare `/blade` to `/blade/portal/` |
+| `admin/redirect` | `blade-redirect.war` | `/` | Default web app; 302s bare `/blade` to `/blade/portal/` |
+| `admin/api` | `api.war` | `/blade/api` | Scalar-based OpenAPI explorer |
 | `admin/configurator` | `configurator.war` | `/blade/configurator` | JSON Schema-based config editor, JMX-backed |
+| `admin/crud-editor` | `crud-editor.war` | `/blade/crud-editor` | CRUD service config editor |
 | `admin/flow` | `flow.war` | `/blade/flow` | Visual FSMAR diagram editor (mxGraph) |
 | `admin/tuning` | `tuning.war` | `/blade/tuning` | JVM / SIP / OCCAS tuning knobs |
 | `admin/logs` | `logs.war` | `/blade/logs` | Cluster log tail viewer |
-| `admin/watcher` | `watcher.war` | `/blade/watcher` | Log/event monitor |
-| `admin/crud-editor` | `crud-editor.war` | `/blade/crud-editor` | CRUD service config editor |
+| `admin/analytics-console` | `analytics-console.war` | `/blade/analytics` | Analytics admin endpoints (distinct from the analytics cluster service) |
 | `admin/javadoc` | `javadoc.war` | `/blade/javadoc` | Browsable Javadoc with UML diagrams |
 
 - **Why AdminServer only:** admin apps expose management endpoints; deploying them to the cluster would expose those endpoints on every engine node and duplicate state.
+- **EAR vs. individual WAR:** `deploy.sh ... admin` deploys `blade-admin.ear` (the whole tier). For a quick single-app test, redeploy that one WAR (from `dist/<ver>/admin/` or its exploded `target/` dir) — each is independently deployable.
 
 ### 4. Services + test apps — `dist/<ver>/services/*.war`
 
@@ -81,7 +83,7 @@ $EDITOR build-profiles/deploy/production.conf          # adminurl, user, approut
 
 ./deploy.sh production shared --dry-run                       # sanity check
 ./deploy.sh production shared                                 # WebLogic shared library
-./deploy.sh production admin    AdminServer                   # all admin/*.war → AdminServer
+./deploy.sh production admin    AdminServer                   # blade-admin.ear → AdminServer
 ./deploy.sh production services BEA_ENGINE_TIER_CLUST         # all services/*.war → your cluster
 ./deploy.sh production fsmar                                  # FSMAR jars → approuter/
 ```
@@ -99,7 +101,7 @@ After the FSMAR step, **restart the engine tier** so the new `fsmar.jar` is pick
 | Invocation | Effect |
 |---|---|
 | `./deploy.sh production shared` | WebLogic shared library → both AdminServer and the cluster (target read from `wls.targets.both` in the conf) |
-| `./deploy.sh production admin AdminServer` | Every `dist/<ver>/admin/*.war` to AdminServer |
+| `./deploy.sh production admin AdminServer` | `dist/<ver>/admin/blade-admin.ear` to AdminServer |
 | `./deploy.sh production services BEA_ENGINE_TIER_CLUST` | Every `dist/<ver>/services/*.war` (services + test apps) to your cluster |
 | `./deploy.sh production fsmar` | `cp`/`scp` FSMAR jars to `approuter/` (path from `approuter.dir` / `ssh.host` in the conf) |
 | `./deploy.sh production admin AdminServer undeploy` | Tear down every admin app from AdminServer |
@@ -188,7 +190,6 @@ This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The s
 | `flow.war` | `/blade/flow` |
 | `tuning.war` | `/blade/tuning` |
 | `logs.war` | `/blade/logs` |
-| `watcher.war` | `/blade/watcher` |
 | `crud-editor.war` | `/blade/crud-editor` |
 | `javadoc.war` | `/blade/javadoc` |
 

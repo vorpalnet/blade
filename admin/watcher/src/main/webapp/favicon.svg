@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- Eye — Watcher monitors config files. -->
-  <g fill="none" stroke="#1f3a66" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3 16s4.5-9 13-9 13 9 13 9-4.5 9-13 9S3 16 3 16Z"/>
-    <circle cx="16" cy="16" r="4"/>
-  </g>
-</svg>

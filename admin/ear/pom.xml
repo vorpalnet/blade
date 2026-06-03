@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-admin-ear</artifactId>
+	<packaging>ear</packaging>
+	<name>BLADE Admin EAR</name>
+	<description>Single deployable that bundles every BLADE admin webapp, so the
+		whole admin tier deploys to AdminServer in one step. Each WAR is
+		self-contained exactly as it deploys on its own — it carries the
+		framework jar and references the `vorpal-blade` shared library via its
+		own weblogic.xml (the proven per-WAR model). This EAR is purely a
+		packaging convenience over those WARs; it bundles no libraries itself.
+		An individual admin app can still be redeployed on its own for testing.</description>
+
+	<dependencies>
+		<!-- The admin WARs, bundled as web modules. The wildcard exclusion keeps
+		     each WAR's transitive dependencies out of the EAR — every WAR is
+		     already self-contained (framework jar inside + shared-library
+		     reference in its weblogic.xml), so the EAR itself bundles nothing. -->
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-portal</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-redirect</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-api</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-configurator</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-files</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-crud-editor</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-flow</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-tuning</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-logs</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-admin-analytics-console</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>javadoc</artifactId>
+			<version>${project.version}</version>
+			<type>war</type>
+			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>blade-admin</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<!-- Jakarta EE 8 (OCCAS / WebLogic 14.1.1). -->
+					<version>8</version>
+					<generateApplicationXml>true</generateApplicationXml>
+					<displayName>BLADE Admin</displayName>
+					<!-- Context roots are stated explicitly so they exactly match
+					     each WAR's weblogic.xml (application.xml wins over
+					     weblogic.xml in an EAR). Never change these — they are
+					     fixed deployment identifiers. -->
+					<modules>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-portal</artifactId>
+							<contextRoot>blade/portal</contextRoot>
+							<bundleFileName>portal.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-redirect</artifactId>
+							<contextRoot>/</contextRoot>
+							<bundleFileName>blade-redirect.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-api</artifactId>
+							<contextRoot>blade/api</contextRoot>
+							<bundleFileName>api.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-configurator</artifactId>
+							<contextRoot>blade/configurator</contextRoot>
+							<bundleFileName>configurator.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-files</artifactId>
+							<contextRoot>blade/files</contextRoot>
+							<bundleFileName>files.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-crud-editor</artifactId>
+							<contextRoot>blade/crud-editor</contextRoot>
+							<bundleFileName>crud-editor.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-flow</artifactId>
+							<contextRoot>blade/flow</contextRoot>
+							<bundleFileName>flow.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-tuning</artifactId>
+							<contextRoot>blade/tuning</contextRoot>
+							<bundleFileName>tuning.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-logs</artifactId>
+							<contextRoot>blade/logs</contextRoot>
+							<bundleFileName>logs.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-analytics-console</artifactId>
+							<contextRoot>blade/analytics</contextRoot>
+							<bundleFileName>analytics-console.war</bundleFileName>
+						</webModule>
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>javadoc</artifactId>
+							<contextRoot>blade/javadoc</contextRoot>
+							<bundleFileName>javadoc.war</bundleFileName>
+						</webModule>
+					</modules>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

@@ -14,7 +14,7 @@ import javax.persistence.Table;
 /// table stores a 2-byte `attribute_name_id` instead of a repeated 64-char
 /// name.
 @Entity
-@Table(name = "attribute_name")
+@Table(name = "attribute_names")
 @NamedQuery(name = "AttributeName.findByName", query = "SELECT n FROM AttributeName n WHERE n.name = :name")
 public class AttributeName implements Serializable {
 	private static final long serialVersionUID = 1L;

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Analytics · Sample Data</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="sample.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Analytics</span>
+				<span class="vorpal-brand-tagline">Pipeline Status &amp; Config</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="audit.html">Audit</a>
+			<a href="sample.html" class="vorpal-active">Sample Data</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span id="overall-pill" class="vorpal-pill">Idle</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>Sample Data Generator</h1>
+					<p>
+						Write randomized <code>transfer</code>-style calls into the analytics
+						database for testing. Over the chosen date range it creates closed
+						sessions with realistic event streams — some abandoned while ringing,
+						most answered, and a configurable fraction transferred one or more
+						times. Rows are written directly with historical timestamps.
+					</p>
+				</div>
+			</section>
+
+			<form id="gen-form" class="sample-form">
+
+				<fieldset class="sample-fieldset">
+					<legend>Time window &amp; volume</legend>
+					<div class="sample-grid">
+						<label class="sample-field">Start date
+							<input type="date" id="startDate" name="startDate"></label>
+						<label class="sample-field">End date
+							<input type="date" id="endDate" name="endDate"></label>
+						<label class="sample-field">Number of calls
+							<input type="number" id="callCount" name="callCount" value="500" min="1"></label>
+					</div>
+				</fieldset>
+
+				<fieldset class="sample-fieldset">
+					<legend>Call shape</legend>
+					<div class="sample-grid">
+						<label class="sample-field">Cluster name
+							<input type="text" id="clusterName" name="clusterName" value="cluster1"></label>
+						<label class="sample-field">Tenant <span class="sample-hint">(customer code; blank = none)</span>
+							<input type="text" id="tenant" name="tenant" placeholder="(none)"></label>
+						<label class="sample-field">Engine servers <span class="sample-hint">(application rows)</span>
+							<input type="number" id="servers" name="servers" value="2" min="1"></label>
+						<label class="sample-field">Transfer probability <span class="sample-hint">(0–1, of answered)</span>
+							<input type="number" id="transferProbability" name="transferProbability" value="0.35" min="0" max="1" step="0.05"></label>
+						<label class="sample-field">Max transfers per call
+							<input type="number" id="maxTransfers" name="maxTransfers" value="3" min="1"></label>
+						<label class="sample-field">Abandon probability <span class="sample-hint">(0–1, ring no answer)</span>
+							<input type="number" id="abandonProbability" name="abandonProbability" value="0.10" min="0" max="1" step="0.05"></label>
+						<label class="sample-field">Transfer-fail probability <span class="sample-hint">(0–1, per attempt)</span>
+							<input type="number" id="transferFailProbability" name="transferFailProbability" value="0.10" min="0" max="1" step="0.05"></label>
+						<label class="sample-field">Min call duration (sec)
+							<input type="number" id="minDurationSec" name="minDurationSec" value="20" min="1"></label>
+						<label class="sample-field">Max call duration (sec)
+							<input type="number" id="maxDurationSec" name="maxDurationSec" value="1800" min="1"></label>
+					</div>
+				</fieldset>
+
+				<div class="sample-actions">
+					<button type="submit" id="generate-btn" class="vorpal-btn vorpal-btn-publish">Generate</button>
+					<span id="status" class="sample-status"></span>
+				</div>
+			</form>
+
+			<section class="sample-results" id="result-area" hidden>
+				<h2>Result</h2>
+				<div id="result-counts" class="sample-counts"></div>
+			</section>
+
+			<div id="error" class="sample-error" hidden></div>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+<script src="sample.js"></script>
+</body>
+</html>

@@ -368,19 +368,80 @@ public class AnalyticsJmsListener implements MessageListener {
 	}
 
 	private void persistSession(EntityManager em, Session session) {
-		em.merge(session);
-		logInfo("AnalyticsJmsListener: Persisted Session id=" + session.getId());
+		long vorpalId = session.getVorpalId();
+		if (session.getDestroyed() == null) {
+			// Session started: stamp this server's environment id, let the DB
+			// mint the primary key, then remember vorpal-id -> pk so this call's
+			// events and keys can resolve it. Ignore a duplicate start (retransmit).
+			if (sessionPkByVorpalId.containsKey(vorpalId)) {
+				logInfo("AnalyticsJmsListener: Session start ignored (duplicate vorpal_id=" + vorpalId + ")");
+				return;
+			}
+			session.setClusterName(domainId());
+			em.persist(session);
+			em.flush();
+			sessionPkByVorpalId.put(vorpalId, session.getId());
+			logInfo("AnalyticsJmsListener: Persisted Session id=" + session.getId()
+					+ " cluster=" + session.getClusterName() + " vorpal_id=" + vorpalId);
+		} else {
+			// Session stopped: resolve the open row and stamp destroyed.
+			Long pk = resolveSessionPk(em, vorpalId);
+			if (pk != null) {
+				Session managed = em.find(Session.class, pk);
+				if (managed != null) {
+					managed.setDestroyed(session.getDestroyed());
+				}
+				sessionPkByVorpalId.remove(vorpalId);
+				logInfo("AnalyticsJmsListener: Closed Session id=" + pk + " vorpal_id=" + vorpalId);
+			} else {
+				logWarning("AnalyticsJmsListener: Session stop for unknown vorpal_id=" + vorpalId);
+			}
+		}
+	}
+
+	/// Resolve a vorpal-id to its DB session primary key — from the in-memory map
+	/// first, falling back to the open session row for this server's environment
+	/// (covers a cold cache after a restart or a second consumer instance). The
+	/// DB lookup is scoped by domainId so a shared analytics DB never matches
+	/// another environment's open call that reused the same vorpal-id.
+	private Long resolveSessionPk(EntityManager em, long vorpalId) {
+		Long pk = sessionPkByVorpalId.get(vorpalId);
+		if (pk != null) {
+			return pk;
+		}
+		List<Session> rows = em.createNamedQuery("Session.findOpen", Session.class)
+				.setParameter("clusterName", domainId())
+				.setParameter("vorpalId", vorpalId).getResultList();
+		if (!rows.isEmpty()) {
+			pk = rows.get(0).getId();
+			sessionPkByVorpalId.put(vorpalId, pk);
+		}
+		return pk;
 	}
 
 	private void persistSessionKey(EntityManager em, SessionKey sk) {
+		// The wire object carries the vorpal-id in the PK's session_id slot;
+		// resolve it to the DB session PK for this server's environment.
+		long vorpalId = sk.getId().getSessionId();
+		Long pk = resolveSessionPk(em, vorpalId);
+		if (pk == null) {
+			logWarning("AnalyticsJmsListener: SessionKey for unknown vorpal_id=" + vorpalId
+					+ " (name=" + sk.getId().getName() + ") — skipped");
+			return;
+		}
+		sk.getId().setSessionId(pk);
 		// Composite PK (session_id, name, value) — em.merge is idempotent on retransmits.
 		em.merge(sk);
-		logInfo("AnalyticsJmsListener: Persisted SessionKey session_id="
-				+ sk.getId().getSessionId() + " name=" + sk.getId().getName()
-				+ " value=" + sk.getId().getValue());
+		logInfo("AnalyticsJmsListener: Persisted SessionKey session_id=" + pk
+				+ " name=" + sk.getId().getName() + " value=" + sk.getId().getValue());
 	}
 
 	private void persistEvent(EntityManager em, Event event) {
+		// Resolve the call's vorpal-id to the DB session PK (null => sessionless).
+		if (event.getVorpalId() != null) {
+			event.setSessionId(resolveSessionPk(em, event.getVorpalId()));
+		}
+
 		// Translate the wire-side event name to an event_type_id.
 		event.setEventTypeId(lookupEventTypeId(em, event.getName()));
 
@@ -406,6 +467,22 @@ public class AnalyticsJmsListener implements MessageListener {
 				+ " attribute_count=" + incoming.size());
 	}
 
+	// vorpal-id -> DB session primary key, for this server's environment. Each
+	// analytics server consumes one domain's queue and stamps its own domainId
+	// (cluster_name) on every row it writes, so vorpal-id is unique within the
+	// map. Populated on the session-started message; later events and keys
+	// resolve through it, falling back to the open session row in the DB
+	// on a cold cache (restart / clustered consumer) — see resolveSessionPk.
+	private static final ConcurrentMap<Long, Long> sessionPkByVorpalId = new ConcurrentHashMap<>();
+
+	/// This analytics server's hosting-environment id, from the service config
+	/// (analytics.json), falling back to the WebLogic domain name. Stamped as
+	/// cluster_name on every row written so a shared analytics DB can tell the
+	/// environments apart, and used to scope the open-session lookup.
+	private static String domainId() {
+		String id = AnalyticsSipServlet.settingsManager.getCurrent().domainId;
+		return (id != null && !id.isEmpty()) ? id : SettingsManager.getDomainName();
+	}
 	// ─── Lookup caches for normalized name → id ─────────────────────────
 
 	private final ConcurrentMap<String, Short> eventTypeCache = new ConcurrentHashMap<>();

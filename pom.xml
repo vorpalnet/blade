@@ -690,6 +690,11 @@ fi
 			<modules><module>admin/configurator</module></modules>
 		</profile>
 		<profile>
+			<id>files</id>
+			<activation><property><name>!skip.files</name></property></activation>
+			<modules><module>admin/files</module></modules>
+		</profile>
+		<profile>
 			<id>crud-editor</id>
 			<activation><property><name>!skip.crud-editor</name></property></activation>
 			<modules><module>admin/crud-editor</module></modules>
@@ -705,19 +710,26 @@ fi
 			<modules><module>admin/tuning</module></modules>
 		</profile>
 		<profile>
-			<id>watcher</id>
-			<activation><property><name>!skip.watcher</name></property></activation>
-			<modules><module>admin/watcher</module></modules>
-		</profile>
-		<profile>
 			<id>logs</id>
 			<activation><property><name>!skip.logs</name></property></activation>
 			<modules><module>admin/logs</module></modules>
 		</profile>
 		<profile>
-			<id>analytics-admin</id>
-			<activation><property><name>!skip.analytics-admin</name></property></activation>
-			<modules><module>admin/analytics</module></modules>
+			<id>analytics-console</id>
+			<activation><property><name>!skip.analytics-console</name></property></activation>
+			<modules><module>admin/analytics-console</module></modules>
+		</profile>
+
+		<!-- The admin EAR (admin/ear, module name "ear"): assembles every admin
+		     WAR + the framework jar into one deployable. Active by default;
+		     exclude with -Dskip.ear. It depends on the javadoc WAR, so it can
+		     only build when the `javadocs` profile is also active — build.sh
+		     skips it automatically when javadocs are skipped (the no-javadoc
+		     flag or BLADE_SKIP_JAVADOC). -->
+		<profile>
+			<id>ear</id>
+			<activation><property><name>!skip.ear</name></property></activation>
+			<modules><module>admin/ear</module></modules>
 		</profile>
 
 		<profile>

@@ -13,7 +13,7 @@ import javax.persistence.Table;
 /// Lookup row for normalized event-name strings. The hot `event` table
 /// stores a 2-byte `event_type_id` instead of a repeated 64-char name.
 @Entity
-@Table(name = "event_type")
+@Table(name = "event_types")
 @NamedQuery(name = "EventType.findByName", query = "SELECT t FROM EventType t WHERE t.name = :name")
 public class EventType implements Serializable {
 	private static final long serialVersionUID = 1L;

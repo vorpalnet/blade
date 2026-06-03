@@ -210,7 +210,6 @@ public class Context {
 	/// are left as-is.
 	public String resolve(String template) {
 		if (template == null) return null;
-		if (request == null) return iterate(template, name -> null);
 		return iterate(template, this::get);
 	}
 

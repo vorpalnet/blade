@@ -55,6 +55,17 @@ public class PortalCardsResource {
 	private static final String CTX_ROOT_PREFIX = "blade/";
 	private static final String SELF_CONTEXT_ROOT = "blade/portal";
 
+	/// Apps whose SettingsMXBean Name (their web.xml display-name) deliberately
+	/// differs from their context-root slug — so the join below looks up the
+	/// right MBean. The Analytics Console serves at /blade/analytics but
+	/// registers Name=analytics-console, so its MBean does not collide with the
+	/// analytics CLUSTER SERVICE (which also registers Name=analytics).
+	/// Maps context-root last-segment → SettingsMXBean Name.
+	private static final Map<String, String> SETTINGS_NAME_BY_SLUG = new HashMap<>();
+	static {
+		SETTINGS_NAME_BY_SLUG.put("analytics", "analytics-console");
+	}
+
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	public Response list() {
@@ -93,7 +104,8 @@ public class PortalCardsResource {
 				if (SELF_CONTEXT_ROOT.equals(ctxRoot)) {
 					continue;
 				}
-				String settingsKey = lastSegment(ctxRoot);
+				String slug = lastSegment(ctxRoot);
+				String settingsKey = SETTINGS_NAME_BY_SLUG.getOrDefault(slug, slug);
 				cards.add(buildCard(mbs, settingsKey, ctxRoot, settingsMBeans.get(settingsKey)));
 			}
 		}
@@ -137,11 +149,23 @@ public class PortalCardsResource {
 		for (ObjectInstance inst : mbs.queryMBeans(pattern, null)) {
 			ObjectName on = inst.getObjectName();
 			String name = on.getKeyProperty("Name");
-			if (name != null && !out.containsKey(name)) {
+			if (name == null) continue;
+			ObjectName existing = out.get(name);
+			// A Name can be registered twice across the domain: by an admin app
+			// (on AdminServer — domain-scoped, NO Cluster key) and by a
+			// like-named SIP SERVICE on the engine cluster (WITH a Cluster key).
+			// "analytics" is both an admin tool and a service. The deck is the
+			// admin tier, so prefer the AdminServer-local MBean; otherwise the
+			// service's metadata (or lack of it) leaks onto the admin card.
+			if (existing == null || (hasCluster(existing) && !hasCluster(on))) {
 				out.put(name, on);
 			}
 		}
 		return out;
+	}
+
+	private static boolean hasCluster(ObjectName on) {
+		return on.getKeyProperty("Cluster") != null;
 	}
 
 	private Card buildCard(MBeanServer mbs, String appName, String ctxRoot, ObjectName settingsMBean) {

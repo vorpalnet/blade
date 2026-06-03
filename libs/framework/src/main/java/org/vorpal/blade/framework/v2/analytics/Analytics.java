@@ -68,11 +68,11 @@ public class Analytics implements Serializable {
 	public Event createEvent(String eventName, SipServletMessage message) {
 		Event event = null;
 
-		Long sessionId = getSessionId(message.getApplicationSession());
+		Long vorpalId = getVorpalId(message.getApplicationSession());
 
 		event = new Event();
 		event.setName(eventName);
-		event.setSessionId(sessionId);
+		event.setVorpalId(vorpalId);
 
 		event.setApplicationId(getAppInstanceId());
 
@@ -263,25 +263,31 @@ public class Analytics implements Serializable {
 		Analytics.appInstanceId = appInstanceId;
 	}
 
-	public static Long getSessionId(SipApplicationSession appSession) {
-		Long sessionId = (Long) appSession.getAttribute(Callflow.ANALYTICS_SESSION);
-		if (sessionId == null) {
-			// Defensive fallback: Callflow.createVorpalSessionId normally
-			// sets this attribute at first-touch. If we get here, something
-			// minted the appSession outside the standard Callflow path —
-			// generate a snowflake locally so analytics still has an ID.
-			sessionId = SnowflakeId.shared().nextId();
-			appSession.setAttribute(Callflow.ANALYTICS_SESSION, sessionId);
+	/// The cluster-unique vorpal-id for the call (the X-Vorpal-ID Callflow mints
+	/// at first-touch), as a long. This is the correlator the analytics consumer
+	/// maps to the DB-assigned session primary key. Returns null if the
+	/// application session carries no vorpal-id.
+	public static Long getVorpalId(SipApplicationSession appSession) {
+		String hex = Callflow.getVorpalSessionId(appSession);
+		if (hex == null) {
+			return null;
 		}
-		return sessionId;
+		try {
+			return Long.parseLong(hex, 16);
+		} catch (NumberFormatException ex) {
+			Callflow.getSipLogger().warning("Analytics.getVorpalId - unparseable vorpal-id '" + hex + "'");
+			return null;
+		}
 	}
 
 	public static Session createSession(SipServletMessage msg) {
 		Session session = new Session();
-		long sessionId = getSessionId(msg.getApplicationSession());
-		session.setId(sessionId);
+		Long vorpalId = getVorpalId(msg.getApplicationSession());
+		if (vorpalId != null) {
+			session.setVorpalId(vorpalId);
+		}
 		session.setApplicationId(getAppInstanceId());
-		session.setCreated(new Date(SnowflakeId.extractTimestamp(sessionId)));
+		session.setCreated(new Date());
 		return session;
 	}
 

@@ -62,6 +62,9 @@
             <span id="schema-load-status" class="sync-status" style="display: none;"></span>
             <!-- Feature: Dirty Indicator -->
             <span id="dirty-indicator" class="dirty-indicator" style="display: none;">● Unsaved Changes</span>
+            <!-- Saved to disk but not yet pushed live. Only appears when auto-publish is off. -->
+            <span id="unpublished-indicator" class="unpublished-indicator" style="display: none;"
+                  title="These changes are saved to disk but not live yet. Click Publish to push them to running services.">▲ Not Published</span>
             <div class="theme-selector">
                 <label for="app-theme-select">Theme:</label>
                 <select id="app-theme-select" onchange="switchAppTheme(this.value)">
@@ -128,6 +131,16 @@
 
                 <input id="import-file" type="file" accept="application/json,.json" style="display:none"
                        onchange="handleImportFile(event)">
+
+                <!-- Auto-publish toggle. Global Configurator behavior, not tied to the
+                     currently-loaded app, so it sits apart at the right of the toolbar.
+                     State is shown by thumb position AND the on/off text label. -->
+                <label class="autopublish-switch" title="ON: files saved here are published to live services automatically (the old watcher behavior). OFF: click Publish to apply changes.">
+                    <span class="autopublish-caption">Auto-publish</span>
+                    <input type="checkbox" id="autopublish-toggle" onchange="setAutoPublish(this.checked)">
+                    <span class="autopublish-track"><span class="autopublish-thumb"></span></span>
+                    <span id="autopublish-state" class="autopublish-state">on</span>
+                </label>
             </div>
 
             <!-- Auto-save draft banner — appears when a localStorage draft is newer than the server copy. -->

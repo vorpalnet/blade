@@ -104,13 +104,33 @@
 
 		<!-- Quick nav -->
 		<div class="section-nav">
-			<a href="#section-auth">Authentication</a>
+			<a href="#section-health">Health Check</a>
+				<a href="#section-auth">Authentication</a>
 			<a href="#section-nm">Node Manager</a>
 			<a href="#section-jvm">JVM</a>
 			<a href="#section-server">Server Tuning</a>
+			<a href="#section-jdbc">JDBC Pools</a>
 			<a href="#section-sip">SIP Timers</a>
 			<a href="#section-wm">OCCAS Threads</a>
 			<a href="#section-cluster">Cluster</a>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- HEALTH CHECK -->
+		<!-- ============================================================ -->
+		<div id="section-health"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>Health Check</strong>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="runHealthCheck()">Re-run</button>
+			</div>
+			<div class="card-body">
+				<div class="info-box">
+					Read-only static checks against the current JVM configuration — predictable-latency
+					and JDK-21 readiness. Nothing here changes config; fixes are applied in the sections below.
+				</div>
+				<div id="health-container"><span class="text-muted">Loading...</span></div>
+			</div>
 		</div>
 
 		<!-- ============================================================ -->
@@ -159,7 +179,9 @@
 		<div class="card">
 			<div class="card-header">
 				<strong>JVM Settings</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadJvmSettings()">Refresh</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendJvmZgc()" title="Low-latency preset for JDK 21: select ZGC, enable Generational + AlwaysPreTouch, and set -Xms = -Xmx on every server. Pre-fill only — review, then Save each server. (JDK 21/22; do not use the Generational flag on JDK 24+.)">Low-Latency (ZGC)</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="recommendJvm()" title="Pre-fill -Xms = -Xmx on every server so the heap is fully committed at startup (no runtime resize pauses). Review, then Save each server.">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadJvmSettings()">Refresh</button>
 			</div>
 			<div class="card-body">
 				<div class="info-box">
@@ -176,10 +198,31 @@
 		<div class="card">
 			<div class="card-header">
 				<strong>Server Tuning</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadServerTuning()">Refresh</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendServerTuning()" title="Pre-fill Max Message Size to 4× its current value (the WLS default is 10 MB → 40 MB) on every server. Review, then Save each server.">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadServerTuning()">Refresh</button>
 			</div>
 			<div class="card-body">
 				<div id="server-tuning-container"><span class="text-muted">Loading...</span></div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- JDBC POOLS -->
+		<!-- ============================================================ -->
+		<div id="section-jdbc"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>JDBC Connection Pools</strong>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendJdbc()" title="Pre-fill Initial = Min = Max (≥ 300) for every pool so it is fully allocated at startup. Review, then Save each pool.">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadJdbc()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div class="info-box">
+					<strong>Pool sizing.</strong> For a high-CPS deployment, set <b>Initial = Min = Max</b> so the pool
+					is fully allocated at startup and never pays connection create/teardown latency under load.
+					Min/Max resize on activate; Initial Capacity is restart-required.
+				</div>
+				<div id="jdbc-container"><span class="text-muted">Loading...</span></div>
 			</div>
 		</div>
 
@@ -305,6 +348,30 @@
 						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableSend100ForNonInvite"><label class="custom-control-label" for="sip-enableSend100ForNonInvite" data-toggle="tooltip" title="Automatically send a 100 Trying provisional response for non-INVITE requests. Normally only INVITE triggers 100 Trying, but enabling this prevents upstream retransmissions for slow-processing requests like REGISTER or SUBSCRIBE.">Send 100 for Non-INVITE</label>
 					</div></div>
 				</div>
+				<!-- Overload protection (classic <overload> element: OverloadBean) -->
+				<h6 class="text-muted mb-2 mt-3" style="font-size:12px; text-transform:uppercase; letter-spacing:1px;">Overload Protection</h6>
+				<div class="info-box">
+					Throttles new SIP work when the engine is overloaded (the classic <code>&lt;overload&gt;</code> element). Leave the policy blank to keep it unconfigured.
+					<strong>Note:</strong> OCCAS also ships a separate, richer <code>&lt;overload-protection&gt;</code> framework that some domains scaffold instead &mdash; if your engine uses that, these fields are not the active control.
+				</div>
+				<div class="row mb-3">
+					<div class="col-md-4 field-group">
+						<label data-toggle="tooltip" title="What the engine measures to decide it is overloaded. Session Rate = rate of new SIP requests over the last 5 seconds. Queue Length = combined size of the wlss.transport + wlss.timer capacity-constraint queues. Blank leaves overload protection unconfigured.">Threshold Policy</label>
+						<select class="form-control form-control-sm" id="sip-overloadPolicy">
+							<option value="">(not configured)</option>
+							<option value="session-rate">Session Rate</option>
+							<option value="queue-length">Queue Length</option>
+						</select>
+					</div>
+					<div class="col-md-4 field-group">
+						<label data-toggle="tooltip" title="When the measured value crosses this, the engine starts throttling — rejecting new SIP requests with 503 Service Unavailable. Units depend on the policy (new sessions/sec for session-rate, queue entries for queue-length).">Throttle Threshold</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-overloadThreshold" placeholder="0">
+					</div>
+					<div class="col-md-4 field-group">
+						<label data-toggle="tooltip" title="When the measured value falls back below this, the engine stops throttling and resumes accepting requests. Set it below the throttle threshold to create hysteresis and avoid flapping.">Release Threshold</label>
+						<input type="number" class="form-control form-control-sm mono" id="sip-overloadRelease" placeholder="0">
+					</div>
+				</div>
 			</div>
 		</div>
 
@@ -316,7 +383,8 @@
 			<div class="card-header">
 				<strong>OCCAS Thread Tuning</strong>
 				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveWorkManagers()">Save All</button>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadWorkManagers()">Refresh</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendWorkManagers()" title="Pre-fill the timer Max Threads to 200, and set Min = Max for any work manager that defines both. Review, then Save All.">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadWorkManagers()">Refresh</button>
 			</div>
 			<div class="card-body">
 				<div class="info-box">
@@ -355,10 +423,12 @@
 		var gcCollectors = [
 			{ value: '',                       label: '(default)' },
 			{ value: '-XX:+UseG1GC',           label: 'G1 GC (recommended)' },
-			{ value: '-XX:+UseZGC',            label: 'ZGC (low latency)' },
+			{ value: '-XX:+UseZGC',            label: 'ZGC (low-pause — also check Generational on JDK 21)' },
 			{ value: '-XX:+UseShenandoahGC',   label: 'Shenandoah GC' },
 			{ value: '-XX:+UseParallelGC',     label: 'Parallel GC (throughput)' }
 		];
+
+		var jvmData = []; // cached for the ZGC preset + health check
 
 		// ================================================================
 		// Init
@@ -371,6 +441,7 @@
 			loadNodeManagerSettings();
 			loadJvmSettings();
 			loadServerTuning();
+			loadJdbc();
 			loadSipTimers();
 			loadWorkManagers();
 			loadCluster();
@@ -450,6 +521,8 @@
 		// ================================================================
 		function loadJvmSettings() {
 			$.getJSON('api/v1/jvm', function (data) {
+				jvmData = data || [];
+				runHealthCheck();
 				if (!data || data.length === 0) { $('#jvm-container').html('<span class="text-muted">No servers found.</span>'); return; }
 				var html = '';
 				$.each(data, function (i, s) { html += renderJvmCard(s); });
@@ -484,6 +557,9 @@
 			html += tipCb(id, '-XX:+HeapDumpOnOutOfMemoryError', 'HeapDump OOM', s.flags, 'Automatically dump the heap to a file when an OutOfMemoryError occurs. Essential for post-mortem analysis. The dump file can be large (equal to heap size).');
 			html += tipCb(id, '-XX:+UseStringDeduplication', 'StringDedup', s.flags, 'Deduplicate identical String objects in memory during GC. Can significantly reduce heap usage in SIP apps where many identical header values exist (e.g., Via, Contact). Only works with G1 GC.');
 			html += tipCb(id, '-XX:+DisableExplicitGC', 'DisableExplicitGC', s.flags, 'Ignore calls to System.gc(). Prevents application or library code from triggering full GC pauses. Recommended unless you have specific RMI distributed GC requirements.');
+			html += tipCb(id, '-Djava.security.egd=file:/dev/./urandom', 'Fast SecureRandom (urandom)', s.flags, 'Seed SecureRandom from the non-blocking /dev/urandom instead of /dev/random. Eliminates startup and TLS-handshake stalls caused by entropy starvation under load — a meaningful throughput win for SIP over TLS. The /./ is the standard JDK workaround: file:/dev/urandom is silently ignored (falls back to blocking /dev/random), while file:/dev/./urandom reads non-blocking. Restart-required.');
+			html += tipCb(id, '-XX:+ZGenerational', 'ZGC Generational (JDK 21)', s.flags, 'JDK 21/22 ONLY. Opts ZGC into its generational mode. On JDK 21 plain -XX:+UseZGC selects the legacy non-generational collector — this flag is required to get Generational ZGC. It became the default in JDK 23 and is REMOVED in JDK 24, so do not carry it forward past JDK 22. Use only with the ZGC collector selected above.');
+			html += tipCb(id, '-XX:+AlwaysPreTouch', 'AlwaysPreTouch', s.flags, 'Page in (touch) every heap page at startup instead of on first use, so the cost is paid once at boot rather than as latency spikes during calls. Pairs with -Xms = -Xmx; together they also disable ZGC runtime memory uncommit. Slightly slower startup, steadier pause times. Recommended for low-latency SIP nodes.');
 			html += '</div>';
 
 			// Java home + additional
@@ -527,6 +603,7 @@
 				var html = '<table class="table table-compact table-bordered"><thead class="thead-light"><tr>';
 				html += '<th>Server</th><th>Port</th>';
 				html += '<th data-toggle="tooltip" title="Minimum size of the self-tuning thread pool. WebLogic dynamically adjusts thread count above this floor. Higher values guarantee more threads for SIP processing under load. Engine servers typically need 100+, AdminServer much less.">Thread Pool Min</th>';
+				html += '<th data-toggle="tooltip" title="Maximum size of the self-tuning thread pool (KernelMBean SelfTuningThreadPoolSizeMax). WebLogic default is 400; can be raised to 65534. Set Min = Max to pin the pool and avoid thread ramp-up under sudden load.">Thread Pool Max</th>';
 				html += '<th data-toggle="tooltip" title="Number of threads dedicated to reading from network sockets. Critical for high-throughput SIP — too few readers starves the transport layer. Increase when you see SIP message queueing at the network level. Each reader is a dedicated thread outside the self-tuning pool.">Socket Readers</th>';
 				html += '<th data-toggle="tooltip" title="Maximum allowed size (in bytes) for a single incoming message. Protects against oversized SIP messages consuming memory. 40MB default is generous — most SIP messages are under 10KB, but SDP with many media lines can grow larger.">Max Message (bytes)</th>';
 				html += '<th data-toggle="tooltip" title="Maximum time (in seconds) to wait for a complete message to arrive after the first bytes are received. Prevents slow-sender attacks and cleans up stalled connections.">Msg Timeout (s)</th>';
@@ -538,6 +615,7 @@
 					html += '<td><strong>' + s.server + '</strong><br><span class="text-muted" style="font-size:11px">' + (s.listenAddress || '*') + '</span></td>';
 					html += '<td class="mono">' + s.listenPort + '</td>';
 					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-threadPoolMin" value="' + s.threadPoolMin + '" style="width:80px"></td>';
+					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-threadPoolMax" value="' + s.threadPoolMax + '" style="width:80px"></td>';
 					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-socketReaders" value="' + s.socketReaders + '" style="width:70px"></td>';
 					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-maxMessageSize" value="' + s.maxMessageSize + '" style="width:120px"></td>';
 					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-completeMessageTimeout" value="' + s.completeMessageTimeout + '" style="width:70px"></td>';
@@ -555,6 +633,7 @@
 		function saveServerTuning(serverName, id) {
 			var data = {
 				threadPoolMin: parseInt(v('st-' + id + '-threadPoolMin')) || 0,
+				threadPoolMax: parseInt(v('st-' + id + '-threadPoolMax')) || 0,
 				socketReaders: parseInt(v('st-' + id + '-socketReaders')) || 0,
 				maxMessageSize: parseInt(v('st-' + id + '-maxMessageSize')) || 0,
 				completeMessageTimeout: parseInt(v('st-' + id + '-completeMessageTimeout')) || 0,
@@ -585,6 +664,11 @@
 				$.each(['engineCallStateCache','enableSipOutbound','enableDnsSrvLookup','enableTimerAffinity','enableRPort','enableLocalDispatch','enableSend100ForNonInvite'], function (i, f) {
 					$('#sip-' + f).prop('checked', d[f]);
 				});
+				// Overload protection
+				var o = d.overload || {};
+				$('#sip-overloadPolicy').val(o.thresholdPolicy || '');
+				$('#sip-overloadThreshold').val(o.thresholdValue != null ? o.thresholdValue : '');
+				$('#sip-overloadRelease').val(o.releaseValue != null ? o.releaseValue : '');
 			}).fail(function (xhr) {
 				showStatus('danger', 'Unable to load SIP timers. ' + parseError(xhr));
 			});
@@ -601,10 +685,25 @@
 			$.each(['engineCallStateCache','enableSipOutbound','enableDnsSrvLookup','enableTimerAffinity','enableRPort','enableLocalDispatch','enableSend100ForNonInvite'], function (i, f) {
 				data[f] = $('#sip-' + f).is(':checked');
 			});
+			// Overload protection — only send (and create the element) when a policy is chosen
+			var pol = $('#sip-overloadPolicy').val();
+			if (pol) {
+				data.overload = {
+					thresholdPolicy: pol,
+					thresholdValue: parseInt($('#sip-overloadThreshold').val()) || 0,
+					releaseValue: parseInt($('#sip-overloadRelease').val()) || 0
+				};
+			}
 			showStatus('info', 'Saving SIP protocol settings...');
 			$.ajax({ url: 'api/v1/sip-timers', method: 'PUT', contentType: 'application/json',
 				data: JSON.stringify(data), dataType: 'json',
-				success: function () { showStatus('success', 'SIP settings saved.'); },
+				success: function (r) {
+					if (r && r.requiresRestart) {
+						showStatus('warning', 'SIP settings saved to sipserver.xml. Timer changes take effect only after each engine node is restarted (rolling restart).');
+					} else {
+						showStatus('success', 'SIP settings saved.');
+					}
+				},
 				error: function (xhr) { showStatus('danger', 'SIP save failed: ' + parseError(xhr)); }
 			});
 		}
@@ -716,6 +815,177 @@
 				error: function (xhr) { showStatus('danger', 'Save failed: ' + parseError(xhr)); }
 			});
 		}
+
+		// ================================================================
+		// JDBC Connection Pools
+		// ================================================================
+		var jdbcData = []; // cached for save + recommend
+
+		function loadJdbc() {
+			$.getJSON('api/v1/jdbc', function (data) {
+				jdbcData = data || [];
+				if (!jdbcData.length) { $('#jdbc-container').html('<span class="text-muted">No data sources found.</span>'); return; }
+				var html = '<table class="table table-compact table-bordered"><thead class="thead-light"><tr>';
+				html += '<th>Data Source</th>';
+				html += '<th data-toggle="tooltip" title="Connections created when the pool starts. Restart-required. Set equal to Max so the pool is fully allocated at startup.">Initial</th>';
+				html += '<th data-toggle="tooltip" title="Pool never shrinks below this. Resizes dynamically on activate. Set equal to Max to keep the pool pinned.">Min</th>';
+				html += '<th data-toggle="tooltip" title="Hard ceiling on pooled connections. Resizes dynamically on activate. For a high-CPS DB-backed deployment, 300+ is typical.">Max</th>';
+				html += '<th></th></tr></thead><tbody>';
+				$.each(jdbcData, function (i, p) {
+					var id = esc(p.name);
+					html += '<tr id="jdbc-row-' + id + '">';
+					html += '<td><strong>' + p.name + '</strong><br><span class="text-muted" style="font-size:11px">' + (p.jndiName || '') + '</span></td>';
+					html += '<td><input type="number" class="form-control form-control-sm mono" id="jdbc-' + id + '-initialCapacity" value="' + p.initialCapacity + '" style="width:90px"></td>';
+					html += '<td><input type="number" class="form-control form-control-sm mono" id="jdbc-' + id + '-minCapacity" value="' + p.minCapacity + '" style="width:90px"></td>';
+					html += '<td><input type="number" class="form-control form-control-sm mono" id="jdbc-' + id + '-maxCapacity" value="' + p.maxCapacity + '" style="width:90px"></td>';
+					html += '<td><button class="btn btn-sm btn-outline-primary" onclick="saveJdbc(\'' + p.name + '\',\'' + id + '\')">Save</button></td>';
+					html += '</tr>';
+				});
+				html += '</tbody></table>';
+				$('#jdbc-container').html(html);
+			}).fail(function (xhr) {
+				$('#jdbc-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		function saveJdbc(name, id) {
+			var data = {
+				initialCapacity: parseInt(v('jdbc-' + id + '-initialCapacity')) || 0,
+				minCapacity: parseInt(v('jdbc-' + id + '-minCapacity')) || 0,
+				maxCapacity: parseInt(v('jdbc-' + id + '-maxCapacity')) || 0
+			};
+			showStatus('info', 'Saving pool sizing for ' + name + '...');
+			$.ajax({ url: 'api/v1/jdbc/' + encodeURIComponent(name), method: 'PUT',
+				contentType: 'application/json', data: JSON.stringify(data), dataType: 'json',
+				success: function () { showStatus('success', name + ' pool saved. Initial Capacity change needs a restart.'); },
+				error: function (xhr) { showStatus('danger', 'Save failed: ' + parseError(xhr)); }
+			});
+		}
+
+		// ================================================================
+		// "Recommended" presets — pre-fill only; operator reviews and Saves
+		// ================================================================
+		function recommendJvm() {
+			$('#jvm-container input[id$="-heapMax"]').each(function () {
+				var max = $(this).val();
+				if (!max) return;
+				var base = this.id.substring(0, this.id.length - '-heapMax'.length);
+				$('#' + base + '-heapInitial').val(max); // -Xms = -Xmx
+			});
+			showStatus('warning', 'Filled -Xms = -Xmx on each server. Review, then Save each server. (Set Max Heap first on any server still blank.)');
+		}
+
+		function recommendJvmZgc() {
+			$('#jvm-container .server-card').each(function () {
+				var id = this.id.substring('jvm-'.length);
+				$('#' + id + '-gcCollector').val('-XX:+UseZGC');
+				$(this).find('.jvm-flag[data-flag="-XX:+ZGenerational"]').prop('checked', true);
+				$(this).find('.jvm-flag[data-flag="-XX:+AlwaysPreTouch"]').prop('checked', true);
+				var hm = $('#' + id + '-heapMax').val();
+				if (hm) $('#' + id + '-heapInitial').val(hm); // -Xms = -Xmx
+			});
+			showStatus('warning', 'Filled low-latency ZGC preset (ZGC + Generational + AlwaysPreTouch + -Xms=-Xmx) on each server — JDK 21/22 only. Review, then Save each server.');
+		}
+
+		// ================================================================
+		// Health Check — read-only static checks on current JVM config
+		// ================================================================
+		function runHealthCheck() {
+			var issues = [];
+			$.each(jvmData || [], function (i, s) {
+				var raw = s.rawArguments || '';
+				var name = s.server;
+				if (s.heapMax && s.heapInitial !== s.heapMax) {
+					issues.push({ server: name, msg: 'Heap not pinned: -Xms (' + (s.heapInitial || 'unset') + ') != -Xmx (' + s.heapMax + ')', fix: 'Set initial = max to avoid heap-resize pauses.' });
+				}
+				if (raw.indexOf('-XX:+UseConcMarkSweepGC') >= 0 || raw.indexOf('-XX:+UseParNewGC') >= 0) {
+					issues.push({ server: name, msg: 'CMS / ParNew GC flag present — removed in JDK 14, fatal on JDK 21', fix: 'Switch to G1, ZGC, or Shenandoah.' });
+				}
+				if (raw.indexOf('-Xshare:off') >= 0) {
+					issues.push({ server: name, msg: 'Class Data Sharing disabled (-Xshare:off) — slower warmup', fix: 'Remove it; the default CDS archive is enabled for free since JDK 12.' });
+				}
+				var mux = raw.match(/-Dweblogic\.MuxerClass=(\S+)/);
+				if (mux && mux[1].indexOf('NIOSocketMuxer') < 0) {
+					issues.push({ server: name, msg: 'Non-default socket muxer: ' + mux[1], fix: 'WLS 14.1.2 recommends the default NIO muxer; remove the override unless intentional.' });
+				}
+				if (raw.indexOf('-XX:+UseZGC') >= 0 && raw.indexOf('-XX:+ZGenerational') < 0) {
+					issues.push({ server: name, msg: 'ZGC selected without -XX:+ZGenerational — running the legacy non-generational collector on JDK 21', fix: 'Add -XX:+ZGenerational (JDK 21/22 only).' });
+				}
+				var vm = (s.javaHome || '').match(/(?:jdk-?|java-?|1\.)(\d{1,2})/i);
+				if (vm) {
+					var maj = parseInt(vm[1]);
+					if (maj === 1) issues.push({ server: name, msg: 'JDK appears to be 1.x (pre-Java 9) per JavaHome: ' + s.javaHome, fix: 'OCCAS 8.3 targets JDK 17 or 21.' });
+					else if (maj > 8 && maj < 21) issues.push({ server: name, msg: 'JDK appears to be ' + maj + ' per JavaHome — below the JDK 21 target', fix: 'OCCAS 8.3 supports JDK 17 or 21; 21 unlocks Generational ZGC.' });
+				}
+			});
+			renderHealth(issues);
+		}
+
+		function renderHealth(issues) {
+			var el = $('#health-container');
+			if (!el.length) return;
+			if (!issues.length) {
+				el.html('<span class="text-muted">&#10003; No configuration issues detected across ' + ((jvmData || []).length) + ' server(s).</span>');
+				return;
+			}
+			var html = '<ul class="mb-0" style="padding-left:18px">';
+			$.each(issues, function (i, it) {
+				html += '<li style="margin-bottom:4px"><strong>' + it.server + ':</strong> ' + it.msg + ' <span class="text-muted">&mdash; ' + it.fix + '</span></li>';
+			});
+			html += '</ul>';
+			el.html(html);
+		}
+
+		function recommendServerTuning() {
+			$('#server-tuning-container input[id$="-maxMessageSize"]').each(function () {
+				var cur = parseInt($(this).val()) || 10485760; // WLS default 10 MB
+				$(this).val(cur * 4); // quadruple
+			});
+			// OCCAS engine rec: raise socket readers from the default 2 to 10.
+			$('#server-tuning-container input[id$="-socketReaders"]').each(function () {
+				if ((parseInt($(this).val()) || 0) < 10) $(this).val(10);
+			});
+			showStatus('warning', 'Filled Max Message Size = 4x current and Socket Readers >= 10 on each server. Review, then Save each server.');
+		}
+
+		function recommendWorkManagers() {
+			if (!wmData || !wmData.length) { showStatus('warning', 'Work managers not loaded yet.'); return; }
+			$.each(wmData, function (i, wm) {
+				var id = esc(wm.name);
+				// 1) Timer pool needs headroom — 200+.
+				if (wm.name === 'wlss.timer' && wm.maxThreadsName) {
+					var cur = parseInt(v('wm-' + id + '-maxThreads')) || 0;
+					$('#wm-' + id + '-maxThreads').val(Math.max(cur, 200));
+				}
+				// 2) Pin Min = Max wherever BOTH constraints exist (kills thread
+				//    ramp-up). Only replica.blocking + tracing.* qualify.
+				if (wm.minThreadsName && wm.maxThreadsName) {
+					$('#wm-' + id + '-minThreads').val(v('wm-' + id + '-maxThreads'));
+				}
+				// 3) OCCAS engine capacity recs (per the 8.0 tuning doc; stable
+				//    across versions — confirm against the 8.3 guide).
+				if (wm.name === 'wlss.transport' && wm.capacityName) {
+					$('#wm-' + id + '-capacity').val(5000000);
+				}
+				if (wm.name === 'wlss.timer' && wm.capacityName) {
+					$('#wm-' + id + '-capacity').val(150000);
+				}
+			});
+			showStatus('warning', 'Filled timer Max = 200, Min = Max where both exist, and OCCAS transport/timer capacities. Review, then Save All.');
+		}
+
+		function recommendJdbc() {
+			if (!jdbcData.length) { showStatus('warning', 'Data sources not loaded yet.'); return; }
+			$.each(jdbcData, function (i, p) {
+				var id = esc(p.name);
+				var target = Math.max(parseInt(v('jdbc-' + id + '-maxCapacity')) || 0, 300);
+				$('#jdbc-' + id + '-maxCapacity').val(target);
+				$('#jdbc-' + id + '-minCapacity').val(target);
+				$('#jdbc-' + id + '-initialCapacity').val(target); // Initial = Min = Max
+			});
+			showStatus('warning', 'Filled Initial = Min = Max (>= 300) on each pool. Review, then Save each pool.');
+		}
+
 
 		// ================================================================
 		// Cluster

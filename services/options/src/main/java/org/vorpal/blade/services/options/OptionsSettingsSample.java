@@ -45,6 +45,9 @@ public class OptionsSettingsSample extends OptionsSettings implements Serializab
 		supported = "replaces";
 		userAgent = "OCCAS";
 		allowEvents = "talk, hold";
+
+		unavailableWhenOverloaded = true;
+		overloadRetryAfter = 5;
 	}
 
 }

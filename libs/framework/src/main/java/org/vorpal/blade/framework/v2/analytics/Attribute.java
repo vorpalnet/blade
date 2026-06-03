@@ -15,7 +15,7 @@ import javax.persistence.Transient;
 /// over JMS by Java Serialization) — the consumer translates it to
 /// `attribute_name_id` via the [AttributeName] lookup table before persist.
 @Entity
-@Table(name = "attribute")
+@Table(name = "attributes")
 @NamedQuery(name = "Attribute.findAll", query = "SELECT a FROM Attribute a")
 public class Attribute implements Serializable {
 	private static final long serialVersionUID = 1L;

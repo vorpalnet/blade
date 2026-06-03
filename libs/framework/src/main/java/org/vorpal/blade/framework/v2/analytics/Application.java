@@ -18,7 +18,7 @@ import javax.servlet.sip.SipServletContextEvent;
  * 
  */
 @Entity
-@Table(name = "application")
+@Table(name = "applications")
 @NamedQuery(name = "Application.findAll", query = "SELECT a FROM Application a")
 public class Application implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -49,6 +49,10 @@ public class Application implements Serializable {
 
 	@Column(length = 64)
 	private String server;
+
+	/** Customer code for multi-tenant RLS; null on single-tenant deployments. */
+	@Column(length = 64)
+	private String tenant;
 
 	@Column(length = 16)
 	private String version;
@@ -121,6 +125,14 @@ public class Application implements Serializable {
 
 	public void setServer(String server) {
 		this.server = server;
+	}
+
+	public String getTenant() {
+		return this.tenant;
+	}
+
+	public void setTenant(String tenant) {
+		this.tenant = tenant;
 	}
 
 	public String getVersion() {

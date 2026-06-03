@@ -68,7 +68,6 @@ import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.analytics.SnowflakeId;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters.KeepAlive;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
@@ -139,17 +138,6 @@ public abstract class Callflow implements Serializable {
 	private static final String VORPAL_SESSION = "VORPAL_SESSION";
 	private static final String VORPAL_DIALOG = "VORPAL_DIALOG";
 
-	/// SipApplicationSession attribute key holding the 64-bit snowflake
-	/// analytics session ID (a `Long`). Set at first-touch session creation
-	/// and propagated downstream via the `sid` parameter on `X-Vorpal-ID`.
-	public static final String ANALYTICS_SESSION = "ANALYTICS_SESSION";
-
-	/// Parameterable key on `X-Vorpal-ID` carrying the 64-bit snowflake
-	/// analytics session ID as an unsigned hex string (up to 16 chars).
-	/// Set by the first-touch BLADE service and propagated by downstream
-	/// forwards so all services in a chain reference the same analytics
-	/// session row.
-	public static final String SID_PARAM = "sid";
 	public static final String DIALOG_PARAM = "dialog";
 	/// Parameterable key on X-Vorpal-ID carrying the transport-level
 	/// address of whoever sent the original INVITE into OCCAS. Populated
@@ -598,12 +586,6 @@ public abstract class Callflow implements Serializable {
 
 		appSession.setAttribute(VORPAL_SESSION, indexKey);
 
-		// Mint the analytics session ID at first-touch. Carried downstream
-		// on X-Vorpal-ID as the `sid` parameter so every service in the
-		// chain references the same row.
-		long analyticsSessionId = SnowflakeId.shared().nextId();
-		appSession.setAttribute(ANALYTICS_SESSION, analyticsSessionId);
-
 		return indexKey;
 	}
 
@@ -640,7 +622,6 @@ public abstract class Callflow implements Serializable {
 	 */
 	public static String getVorpalSessionId(SipServletRequest request) {
 		String indexKey = null;
-		String sidHex = null;
 		String dialogId = null;
 
 		if (request != null) {
@@ -656,7 +637,6 @@ public abstract class Callflow implements Serializable {
 					if (xVorpalId != null) {
 						indexKey = xVorpalId.getValue();
 						dialogId = xVorpalId.getParameter(DIALOG_PARAM);
-						sidHex = xVorpalId.getParameter(SID_PARAM);
 						// Propagate the `origin` param from upstream BLADE
 						// services — they already captured the real external
 						// sender when they were first-in-chain.
@@ -673,9 +653,7 @@ public abstract class Callflow implements Serializable {
 				// Fall back to X-Vorpal-Session (legacy colon format). Optum
 				// still has clusters emitting this in cluster-to-cluster
 				// traffic; X-Vorpal-Timestamp is no longer read or written.
-				// Without a snowflake from upstream, we mint a fresh one
-				// locally below — no analytics-session continuity from old
-				// peers, but the Vorpal-ID + dialog chain is preserved.
+				// The Vorpal-ID + dialog chain is preserved.
 				if (indexKey == null) {
 					try {
 						String session = request.getHeader(X_VORPAL_SESSION);
@@ -701,20 +679,6 @@ public abstract class Callflow implements Serializable {
 			if (indexKey != null && dialogId != null) {
 				sipSession.setAttribute(VORPAL_DIALOG, dialogId);
 				appSession.setAttribute(VORPAL_SESSION, indexKey);
-				if (sidHex != null) {
-					try {
-						appSession.setAttribute(ANALYTICS_SESSION, Long.parseUnsignedLong(sidHex, 16));
-					} catch (NumberFormatException ex) {
-						sipLogger.warning(request, "Callflow.getVorpalSessionId - Unparseable sid '" + sidHex
-								+ "', minting a fresh snowflake locally.");
-						appSession.setAttribute(ANALYTICS_SESSION, SnowflakeId.shared().nextId());
-					}
-				} else if (appSession.getAttribute(ANALYTICS_SESSION) == null) {
-					// Inbound from legacy X-Vorpal-Session peer (no sid param).
-					// Mint a fresh snowflake so analytics has a valid session
-					// ID — chain continuity with the legacy peer is lost.
-					appSession.setAttribute(ANALYTICS_SESSION, SnowflakeId.shared().nextId());
-				}
 			} else if (indexKey == null) {
 				// True first-touch: appSession has no VORPAL_SESSION and no
 				// upstream BLADE stamped an X-Vorpal-ID header. Generate one
@@ -860,14 +824,6 @@ public abstract class Callflow implements Serializable {
 								// New format: X-Vorpal-ID (parameterable)
 								Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
 								xVorpalId.setParameter(DIALOG_PARAM, dialogId);
-
-								// Stamp the analytics session ID so downstream
-								// services in the chain bind their Events to
-								// the same session row.
-								Long analyticsSid = (Long) appSession.getAttribute(ANALYTICS_SESSION);
-								if (analyticsSid != null) {
-									xVorpalId.setParameter(SID_PARAM, Long.toHexString(analyticsSid).toUpperCase());
-								}
 
 								// Propagate the origin when we've got one. Cached
 								// by getVorpalSessionId either from an inbound
@@ -1366,11 +1322,6 @@ public abstract class Callflow implements Serializable {
 						// New format: X-Vorpal-ID (parameterable)
 						Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
 						xVorpalId.setParameter(DIALOG_PARAM, dialogId);
-
-						Long analyticsSid = (Long) appSession.getAttribute(ANALYTICS_SESSION);
-						if (analyticsSid != null) {
-							xVorpalId.setParameter(SID_PARAM, Long.toHexString(analyticsSid).toUpperCase());
-						}
 
 						// Keep origin on responses too — useful for downstream
 						// services tracing a call back to its entry point.

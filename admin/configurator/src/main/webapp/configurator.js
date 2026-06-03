@@ -32,6 +32,11 @@ const PONG_TIMEOUT = 10000; // Expect pong within 10 seconds
 let isDirty = false;
 let savedDataSnapshot = null;
 
+// Saved-to-disk-but-not-live state. Only relevant when auto-publish is off;
+// when on, a save is republished automatically so there is no unpublished gap.
+let isUnpublished = false;
+let autoPublishEnabled = true;
+
 
 // Feature: Validation
 let validationErrors = new Map();
@@ -65,6 +70,7 @@ function connectWebSocket() {
         reconnectAttempts = 0; // Reset on successful connection
         lastPongTime = Date.now();
         startHeartbeat(); // Start sending pings
+        sendWebSocketMessage('get_autopublish', {}); // sync the auto-publish toggle
     };
 
     websocket.onmessage = function(event) {
@@ -123,6 +129,13 @@ function handleWebSocketMessage(message) {
             showSchemaLoadStatus('Saved', 'success');
             clearDirty(); // Feature: Clear dirty state after successful save
             if (typeof clearDraft === 'function') clearDraft();
+            // With auto-publish off, a save is on disk but not live until Publish.
+            // With it on, the watcher republishes automatically — nothing pending.
+            if (autoPublishEnabled) {
+                clearUnpublished();
+            } else {
+                setUnpublished();
+            }
             break;
 
         case 'template_list':
@@ -148,6 +161,11 @@ function handleWebSocketMessage(message) {
         case 'reload_success':
             showSyncStatus(message.content, 'success');
             showSchemaLoadStatus('Published', 'success');
+            clearUnpublished(); // changes are now live
+            break;
+
+        case 'autopublish_state':
+            updateAutoPublishToggle(message.content === 'true');
             break;
 
         case 'version_list':
@@ -546,6 +564,7 @@ function finalizeSchemaLoad(newData) {
 
     // Feature: Clear dirty state and validation errors when loading new data
     clearDirty();
+    clearUnpublished(); // indicator tracks the current editing session, like dirty
     clearValidationErrors();
 
     // Clean up pending request
@@ -1170,9 +1189,33 @@ function createFormElement(fieldSchema, path, value = null, isMapKey = false) {
     }
 
     if (isMapKey) {
+        const keyVal = value || '';
+        // Constrained keys (schema `propertyNames.enum`, surfaced here as
+        // fieldSchema.enum) render as a dropdown so typos can't create dead
+        // entries. The current key is always offered even if it's no longer in
+        // the list, so editing never silently drops it.
+        if (Array.isArray(fieldSchema.enum) && fieldSchema.enum.length) {
+            const select = document.createElement('select');
+            select.className = 'map-key-input';
+            select.setAttribute('data-path', path);
+            const empty = document.createElement('option');
+            empty.value = '';
+            empty.textContent = '-- Select --';
+            if (!keyVal) empty.selected = true;
+            select.appendChild(empty);
+            const opts = fieldSchema.enum.slice();
+            if (keyVal && !opts.includes(keyVal)) opts.push(keyVal);
+            opts.forEach(o => {
+                const optionEl = document.createElement('option');
+                optionEl.value = o;
+                optionEl.textContent = o;
+                if (o === keyVal) optionEl.selected = true;
+                select.appendChild(optionEl);
+            });
+            return select;
+        }
         const input = document.createElement('input');
         input.type = 'text';
-        const keyVal = value || '';
         input.value = keyVal;
         // Also mirror to the value attribute so outerHTML / DOM dumps
         // reflect the actual displayed value (input.value alone only
@@ -2227,6 +2270,10 @@ function createOpaqueObjectGroup(fieldSchema, title, description, path, value = 
 
 function createMapGroup(fieldSchema, title, description, path, value = null, isNested = false, originalSchema = null) {
     const schemaForDelete = originalSchema || fieldSchema;
+    // Constrained map keys (schema `propertyNames.enum`) render the key as a
+    // dropdown rather than free text.
+    const keyEnum = (fieldSchema.propertyNames && Array.isArray(fieldSchema.propertyNames.enum))
+        ? fieldSchema.propertyNames.enum : null;
     const content = document.createElement('div');
 
     const hasData = hasValue(value);
@@ -2243,7 +2290,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     addBtn.onclick = () => {
         const hint = container.querySelector(':scope > .empty-state-hint');
         if (hint) hint.remove();
-        addMapEntry(container, fieldSchema.additionalProperties, path, '', null, true);
+        addMapEntry(container, fieldSchema.additionalProperties, path, '', null, true, keyEnum);
         updateSectionStatus();
     };
     header.appendChild(addBtn);
@@ -2267,7 +2314,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     // Add existing entries
     if (value) {
         Object.keys(value).forEach(key => {
-            addMapEntry(container, fieldSchema.additionalProperties, path, key, value[key]);
+            addMapEntry(container, fieldSchema.additionalProperties, path, key, value[key], false, keyEnum);
         });
     }
 
@@ -2485,7 +2532,7 @@ function addExtraRow(wrapper, valueTypeSchema, basePath, key, value) {
     wrapper.appendChild(row);
 }
 
-function addMapEntry(container, valueSchema, basePath, key = '', value = null, prepend = false) {
+function addMapEntry(container, valueSchema, basePath, key = '', value = null, prepend = false, keyEnum = null) {
     const hint = container.querySelector(':scope > .empty-state-hint');
     if (hint) hint.remove();
     const entry = document.createElement('div');
@@ -2508,8 +2555,10 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
     arrow.textContent = '▼';
     header.appendChild(arrow);
 
-    // Key input directly in header
-    const keyInput = createFormElement({ type: 'string' }, '', key, true);
+    // Key input directly in header. When the map declares a fixed key set
+    // (propertyNames.enum, threaded in as keyEnum), render a dropdown.
+    const keySchema = (keyEnum && keyEnum.length) ? { type: 'string', enum: keyEnum } : { type: 'string' };
+    const keyInput = createFormElement(keySchema, '', key, true);
     keyInput.placeholder = 'Key';
     header.appendChild(keyInput);
 
@@ -3452,6 +3501,25 @@ function publishConfig() {
     showSyncStatus('Publishing configuration...', 'warning');
 }
 
+// --- Auto-publish toggle ---------------------------------------------------
+// Global Configurator behavior: when ON, *.json files saved under
+// ./config/custom/vorpal/ are republished to live services automatically
+// (the behavior the retired watcher WAR provided). Writing the flag triggers
+// a server-side reload that starts/stops the watcher thread immediately.
+
+function setAutoPublish(enabled) {
+    sendWebSocketMessage('set_autopublish', { enabled: enabled });
+    showSyncStatus(enabled ? 'Auto-publish on…' : 'Auto-publish off…', 'warning');
+}
+
+function updateAutoPublishToggle(enabled) {
+    autoPublishEnabled = enabled;
+    const toggle = document.getElementById('autopublish-toggle');
+    const stateLabel = document.getElementById('autopublish-state');
+    if (toggle) toggle.checked = enabled;
+    if (stateLabel) stateLabel.textContent = enabled ? 'on' : 'off';
+}
+
 function resetForm() {
     currentData = { ...initialData };
     generateFormWithData(currentData);
@@ -4332,6 +4400,22 @@ function clearDirty() {
     savedDataSnapshot = JSON.stringify(getFormData());
 }
 
+function setUnpublished() {
+    isUnpublished = true;
+    const indicator = document.getElementById('unpublished-indicator');
+    if (indicator) {
+        indicator.style.display = 'inline-flex';
+    }
+}
+
+function clearUnpublished() {
+    isUnpublished = false;
+    const indicator = document.getElementById('unpublished-indicator');
+    if (indicator) {
+        indicator.style.display = 'none';
+    }
+}
+
 function checkUnsavedChanges() {
     if (isDirty && savedDataSnapshot !== null) {
         const currentData = JSON.stringify(getFormData());
@@ -4358,11 +4442,17 @@ function setupDirtyTracking() {
         });
     }
 
-    // Warn before leaving page
+    // Warn before leaving page — unsaved edits (data loss) or saved-but-not-live
+    // changes (auto-publish off, no Publish yet).
     window.addEventListener('beforeunload', function(e) {
         if (isDirty) {
             e.preventDefault();
             e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+            return e.returnValue;
+        }
+        if (isUnpublished) {
+            e.preventDefault();
+            e.returnValue = 'You have saved changes that are not published yet. Leave anyway?';
             return e.returnValue;
         }
     });

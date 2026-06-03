@@ -2,10 +2,11 @@ package org.vorpal.blade.library.fsmar3;
 
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 import javax.servlet.sip.SipServletRequest;
@@ -20,21 +21,26 @@ import javax.servlet.sip.ar.SipTargetedRequestInfo;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v3.configuration.Context;
+import org.vorpal.blade.framework.v3.configuration.MemoryContext;
 
 import com.bea.wcp.sip.engine.SipServletRequestAdapter;
 import com.bea.wcp.sip.engine.server.SipApplicationSessionImpl;
 
 /// FSMAR v3 Application Router implementation.
 ///
-/// Evaluates a finite state machine to determine which SIP application
-/// should handle each incoming request. Uses [RequestSelector][org.vorpal.blade.framework.v3.configuration.RequestSelector]
-/// for pattern matching instead of v2 Conditions.
+/// Evaluates a finite state machine to determine which SIP application should
+/// handle each incoming request. On entry to a state, its `Selector`s extract
+/// values from the request into a routing [Context]; transitions then fire on
+/// `when` conditions over those values and may build `${}`-templated routes.
+/// State (the config snapshot plus the accumulating context) is carried across
+/// hops in the JSR-289 `stateInfo` — see [RoutingState].
 public class AppRouter implements SipApplicationRouter {
 
 	protected static String FSMAR = "fsmar3";
 	public static Logger sipLogger;
 	private static SettingsManager<AppRouterConfiguration> settingsManager;
-	protected static HashMap<String, String> deployed = new HashMap<>();
+	protected static ConcurrentHashMap<String, String> deployed = new ConcurrentHashMap<>();
 
 	@Override
 	public void init() {
@@ -44,7 +50,9 @@ public class AppRouter implements SipApplicationRouter {
 			sipLogger = SettingsManager.getSipLogger();
 		} catch (Exception e) {
 			e.printStackTrace();
-			sipLogger.severe(e);
+			if (sipLogger != null) {
+				sipLogger.severe(e);
+			}
 		}
 	}
 
@@ -60,12 +68,21 @@ public class AppRouter implements SipApplicationRouter {
 		SipApplicationRouterInfo nextApp = null;
 
 		try {
-			AppRouterConfiguration config = (saved != null) ? (AppRouterConfiguration) saved
-					: settingsManager.getCurrent();
-
-			if (config == null) {
-				throw new Exception("Invalid FSMAR configuration file.");
+			// stateInfo carries the pinned config snapshot + the accumulating
+			// extraction context across every hop of this initial request.
+			RoutingState routingState = (saved instanceof RoutingState) ? (RoutingState) saved : null;
+			if (routingState == null) {
+				AppRouterConfiguration current = settingsManager.getCurrent();
+				if (current == null) {
+					throw new Exception("Invalid FSMAR configuration file.");
+				}
+				routingState = new RoutingState(current);
 			}
+			AppRouterConfiguration config = routingState.getConfig();
+
+			// Map-backed context over the carried map: selectors write here,
+			// conditions and ${} route templates read here.
+			Context ctx = new MemoryContext(routingState.getContext());
 
 			// Determine previous application
 			SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request)
@@ -87,7 +104,7 @@ public class AppRouter implements SipApplicationRouter {
 			if (requestInfo != null) {
 				String deployedApp = getDeployedApp(requestInfo.getApplicationName());
 				nextApp = new SipApplicationRouterInfo(deployedApp, region, null, null,
-						SipRouteModifier.NO_ROUTE, config);
+						SipRouteModifier.NO_ROUTE, routingState);
 			}
 
 			// URI-based direct routing (e.g. "sip:hold")
@@ -97,43 +114,82 @@ public class AppRouter implements SipApplicationRouter {
 					String app = getDeployedApp(sipUri.getHost());
 					if (app != null) {
 						nextApp = new SipApplicationRouterInfo(app, region, null, null,
-								SipRouteModifier.NO_ROUTE, config);
+								SipRouteModifier.NO_ROUTE, routingState);
 					}
 				}
 			}
 
-			// Evaluate the state machine
+			// Evaluate the state machine. If a matched transition targets an
+			// application that isn't currently deployed, bypass it: treat that
+			// application as the new "previous" state and keep evaluating, as
+			// though it had already run. Continue until we land on a deployed
+			// application or run out of matching transitions — in the latter
+			// case nextApp stays null and OCCAS routes the request downstream.
+			// The visited set guards against config that loops back on itself.
 			if (nextApp == null) {
-				State state = config.getState(previous);
-				Trigger trigger = state.getTrigger(request.getMethod());
-				if (trigger != null) {
-					Transition matched = null;
+				Set<String> visited = new HashSet<>();
+				visited.add(previous);
 
-					Iterator<Transition> itr = trigger.getTransitions().iterator();
-					if (itr.hasNext()) {
-						while (itr.hasNext()) {
-							Transition t = itr.next();
-							if (t.matches(request, config)) {
+				while (true) {
+					State state = config.getStates().get(previous);
+
+					// On entry to a state, run its selectors to populate the
+					// context from the request (best-effort; never aborts routing).
+					if (state != null) {
+						state.extract(ctx, request);
+					}
+
+					Trigger trigger = (state != null) ? state.getTriggers().get(request.getMethod()) : null;
+
+					Transition matched = null;
+					if (trigger != null) {
+						for (Transition t : trigger.getTransitions()) {
+							if (t.matches(ctx)) {
 								matched = t;
 								sipLogger.fine("Transition matched: " + t.getId());
 								break;
 							}
 						}
-					} else {
-						// No transitions defined — implicit match
-						sipLogger.fine("No transitions defined, implicit match.");
-						matched = new Transition();
+						if (matched == null && trigger.getTransitions().isEmpty()) {
+							// Trigger defined with no transitions — implicit match, no action.
+							sipLogger.fine("No transitions defined, implicit match.");
+							matched = new Transition();
+						}
 					}
 
-					if (matched != null) {
-						if (sipLogger.isLoggable(Level.FINE)) {
-							sipLogger.fine("Transition: id=" + matched.getId()
-									+ ", next=" + matched.getNext()
-									+ ", subscriber=" + matched.getSubscriber()
-									+ ", routes=" + Arrays.toString(matched.getRoutes()));
-						}
-						nextApp = matched.createRouterInfo(deployed.get(matched.getNext()), config, request);
+					if (matched == null) {
+						break;
 					}
+
+					if (sipLogger.isLoggable(Level.FINE)) {
+						sipLogger.fine("Transition: id=" + matched.getId()
+								+ ", next=" + matched.getNext()
+								+ ", subscriber=" + matched.getSubscriber()
+								+ ", routes=" + Arrays.toString(matched.getRoutes()));
+					}
+
+					String next = matched.getNext();
+					String deployedApp = (next != null) ? deployed.get(next) : null;
+					if (deployedApp != null) {
+						nextApp = matched.createRouterInfo(deployedApp, routingState, ctx, request);
+						break;
+					}
+
+					if (next == null) {
+						// Matched with no target application — nothing to route to.
+						break;
+					}
+
+					// 'next' names an undeployed application: bypass it and continue
+					// from that state. Stop if we'd revisit a state (config loop).
+					if (!visited.add(next)) {
+						sipLogger.warning("FSMAR routing cycle detected at undeployed application '"
+								+ next + "'; routing downstream.");
+						break;
+					}
+					sipLogger.fine("Bypassing undeployed application '" + next
+							+ "'; continuing as though it had already run.");
+					previous = next;
 				}
 			}
 
@@ -143,7 +199,7 @@ public class AppRouter implements SipApplicationRouter {
 				sipLogger.warning("Using defaultApplication: " + config.getDefaultApplication()
 						+ " for " + request.getMethod() + " " + request.getRequestURI());
 				nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null, null,
-						SipRouteModifier.NO_ROUTE, config);
+						SipRouteModifier.NO_ROUTE, routingState);
 			}
 
 			if (sipLogger.isLoggable(Level.FINE)) {
@@ -180,6 +236,9 @@ public class AppRouter implements SipApplicationRouter {
 	@Override
 	public void applicationUndeployed(List<String> apps) {
 		sipLogger.info("Application(s) undeployed: " + Arrays.toString(apps.toArray()));
+		for (String app : apps) {
+			deployed.remove(SettingsManager.basename(app));
+		}
 	}
 
 	@Override

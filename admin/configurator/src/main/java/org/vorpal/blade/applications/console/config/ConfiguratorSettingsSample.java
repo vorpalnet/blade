@@ -4,10 +4,11 @@ package org.vorpal.blade.applications.console.config;
 /// `./config/custom/vorpal/configurator.json` on first deployment when
 /// no operator-supplied file is present.
 ///
-/// Default `autoPublish=true` preserves the legacy `watcher` behavior
-/// for customers migrating off `watcher` to the Configurator. Once a
-/// customer's ops scripts are on the explicit Save + Publish flow, they
-/// can flip this to `false`.
+/// Default `autoPublish=true` preserves the behavior of the retired
+/// `watcher` WAR for customers whose ops scripts drop edited `*.json`
+/// files on disk and expect them to publish automatically. Once a
+/// customer's scripts move to the explicit Save + Publish flow, they can
+/// flip the Auto-publish toggle off.
 public class ConfiguratorSettingsSample extends ConfiguratorSettings {
 	private static final long serialVersionUID = 1L;
 

@@ -1,5 +1,7 @@
-@import url('demo.css');
-@import url('font-awesome.css');
+/* NOTE: removed `@import 'demo.css'` and `@import 'font-awesome.css'` — those
+   template files never shipped with BLADE, so they 404'd on every login. The
+   frosted-glass look comes from the rules in this file; nothing here depends on
+   font-awesome. */
 
 /* GLOBALS */
 

@@ -29,7 +29,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// `event_id` and `attribute_name_id` rather than relying on JPA's
 /// cascade.
 @Entity
-@Table(name = "event")
+@Table(name = "events")
 @NamedQuery(name = "Event.findAll", query = "SELECT e FROM Event e")
 @JsonPropertyOrder({ "name", "attributes", "id", "application_id", "sessionId", "created" })
 public class Event implements Serializable {
@@ -52,6 +52,13 @@ public class Event implements Serializable {
 
 	@Column(name = "session_id")
 	private Long sessionId;
+
+	/// Wire-side vorpal-id (the cluster-unique X-Vorpal-ID for this call).
+	/// The producer sets this; the consumer resolves it to the DB session
+	/// primary key and stores that in [#sessionId] before persisting. Null
+	/// for sessionless (application-level) events.
+	@Transient
+	private Long vorpalId;
 
 	/// Wire-side event-name string (e.g. "callStarted"). Not stored;
 	/// translated to [#eventTypeId] by the consumer.
@@ -137,6 +144,14 @@ public class Event implements Serializable {
 
 	public void setSessionId(Long sessionId) {
 		this.sessionId = sessionId;
+	}
+
+	public Long getVorpalId() {
+		return this.vorpalId;
+	}
+
+	public void setVorpalId(Long vorpalId) {
+		this.vorpalId = vorpalId;
 	}
 
 	public Map<String, Attribute> getAttributes() {

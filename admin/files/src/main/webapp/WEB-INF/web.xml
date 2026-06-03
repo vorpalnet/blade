@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_Files" version="4.0">
+
+	<display-name>files</display-name>
+
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+
+	<!-- Registers the SettingsManager so the editable-file registry materializes
+	     at ./config/custom/vorpal/files.json and the app's name/tagline appear
+	     on the Admin Portal launcher deck. -->
+	<listener>
+		<listener-class>org.vorpal.blade.applications.files.FilesSettingsStartup</listener-class>
+	</listener>
+
+</web-app>

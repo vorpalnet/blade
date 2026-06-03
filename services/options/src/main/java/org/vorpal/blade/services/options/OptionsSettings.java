@@ -53,6 +53,10 @@ public class OptionsSettings extends Configuration implements Serializable {
 	@JsonPropertyDescription("Event packages supported by this server, used in the Allow-Events header of OPTIONS responses")
 	protected String allowEvents;
 
+	protected boolean unavailableWhenOverloaded;
+
+	protected int overloadRetryAfter;
+
 	public String getAllow() {
 		return allow;
 	}
@@ -99,6 +103,24 @@ public class OptionsSettings extends Configuration implements Serializable {
 
 	public void setAllowEvents(String allowEvents) {
 		this.allowEvents = allowEvents;
+	}
+
+	@JsonPropertyDescription("When true, OPTIONS answers 503 Service Unavailable while OCCAS overload protection is actively rejecting traffic, so a SIP-aware load balancer drains this node. When false — or when no overload thresholds are configured — OPTIONS always answers 200 OK, exactly as before.")
+	public boolean isUnavailableWhenOverloaded() {
+		return unavailableWhenOverloaded;
+	}
+
+	public void setUnavailableWhenOverloaded(boolean unavailableWhenOverloaded) {
+		this.unavailableWhenOverloaded = unavailableWhenOverloaded;
+	}
+
+	@JsonPropertyDescription("Seconds advertised in the Retry-After header of the 503 sent while overloaded, telling the peer/load balancer how long to wait before retrying. 0 omits the header.")
+	public int getOverloadRetryAfter() {
+		return overloadRetryAfter;
+	}
+
+	public void setOverloadRetryAfter(int overloadRetryAfter) {
+		this.overloadRetryAfter = overloadRetryAfter;
 	}
 
 }

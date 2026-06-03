@@ -126,6 +126,7 @@ public class JmsPublisher implements ServletContextListener {
 				application.setHost(SettingsManager.getHostname());
 				application.setName(SettingsManager.getApplicationName());
 				application.setServer(SettingsManager.getServerName());
+				application.setTenant(SettingsManager.getTenant());
 				application.setCreated(Date.from(Instant.now()));
 
 				ThreadResources tr = getThreadResources();

@@ -1,0 +1,86 @@
+/* BLADE Files editor — layout on top of the shared brand layer (brand.css).
+   The editor fills the viewport below the toolbar; the toolbar carries the
+   file picker, version/restore controls, and Save. */
+
+.files-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.6rem 1rem;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+	flex-wrap: wrap;
+}
+
+.files-toolbar label {
+	font-weight: 600;
+	font-size: 0.85rem;
+}
+
+.files-toolbar select,
+.files-toolbar button {
+	font: inherit;
+	padding: 0.35rem 0.6rem;
+	border: 1px solid rgba(0, 0, 0, 0.25);
+	border-radius: 5px;
+	background: #fff;
+}
+
+.files-toolbar button {
+	cursor: pointer;
+}
+
+.files-toolbar button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.files-toolbar button.files-primary {
+	background: #1f3a66;
+	color: #fff;
+	border-color: #1f3a66;
+}
+
+.files-meta {
+	font-size: 0.8rem;
+	opacity: 0.75;
+	font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.files-spacer {
+	flex: 1 1 auto;
+}
+
+.files-message {
+	margin: 0;
+	padding: 0.5rem 1rem;
+	font-size: 0.85rem;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Outcome is conveyed by an explicit word ("Saved" / "Rejected") plus a left
+   border and icon — not by colour alone. */
+.files-message.files-ok {
+	background: #eef4ff;
+	border-left: 4px solid #1f3a66;
+}
+
+.files-message.files-ok::before {
+	content: "✔ ";
+	font-weight: 700;
+}
+
+.files-message.files-error {
+	background: #fbeaea;
+	border-left: 4px solid #a12b2b;
+}
+
+.files-message.files-error::before {
+	content: "✘ ";
+	font-weight: 700;
+}
+
+.files-editor {
+	width: 100%;
+	/* Fill the area below topbar (~64px) + toolbar (~52px). */
+	height: calc(100vh - 124px);
+}

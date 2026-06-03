@@ -263,9 +263,10 @@ run_mvn() {
     "$MVNW" -q "$@"
 }
 
-# Deploy / undeploy every WAR in dist/<ver>/<subdir>/ to <target>.
-# App name = WAR basename (e.g. configurator.war → "configurator"), so it
-# matches the context-root operators see in the WebLogic console.
+# Deploy / undeploy every deployable in dist/<ver>/<subdir>/ to <target>.
+# App name = artifact basename without extension (e.g. configurator.war →
+# "configurator", blade-admin.ear → "blade-admin"). The admin tier ships as a
+# single blade-admin.ear; services ship as individual WARs.
 deploy_subdir() {
     local sub="$1" target="$2" action="$3"
     local src_dir="${DIST_DIR}/${sub}"
@@ -273,17 +274,27 @@ deploy_subdir() {
 
     info "Subdir: ${sub}/ → ${target}"
     shopt -s nullglob
-    local wars=("$src_dir"/*.war)
+    # If the tier ships an EAR (admin → blade-admin.ear), that EAR is the deploy
+    # unit. Loose WARs may also sit alongside it for individual redeploys during
+    # testing, but deploying them here too would register the same context-roots
+    # twice — so prefer the EAR(s) when present, else deploy the WARs.
+    local ears=("$src_dir"/*.ear)
+    local wars
+    if [ ${#ears[@]} -gt 0 ]; then
+        wars=("${ears[@]}")
+    else
+        wars=("$src_dir"/*.war)
+    fi
     shopt -u nullglob
 
     if [ ${#wars[@]} -eq 0 ]; then
-        warn "No WARs found in ${src_dir}. Nothing to ${action}."
+        warn "No deployables found in ${src_dir}. Nothing to ${action}."
         return 0
     fi
 
     local rc=0 war app
     for war in "${wars[@]}"; do
-        app=$(basename "$war" .war)
+        app=$(basename "$war"); app="${app%.*}"
         log "  ${C_DIM}→ ${app}${C_RESET}"
         case "$action" in
             deploy)

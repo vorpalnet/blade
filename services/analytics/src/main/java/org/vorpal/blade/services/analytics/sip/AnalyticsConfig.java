@@ -21,4 +21,7 @@ public class AnalyticsConfig extends Configuration implements Serializable {
 	@JsonProperty(defaultValue = "SELECT 1 FROM DUAL")
 	public String healthCheckSql;
 
+	@JsonPropertyDescription("Stable id for this hosting environment (e.g. \"SIPREC-03\"), stamped on every analytics row this server writes as cluster_name. Differentiates domains that share a WebLogic domain name and feed one analytics database; defaults to the WebLogic domain name if unset.")
+	public String domainId;
+
 }

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Files</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/files/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Files</span>
+				<span class="vorpal-brand-tagline">Domain File Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html" class="vorpal-active">Overview</a>
+			<a href="files.html">Editor</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>BLADE Files</h1>
+					<p>
+						Edit the domain files that have no JSON Schema — so the
+						<a href="/blade/configurator/">Configurator</a> can't reach
+						them — from the browser instead of over SSH:
+						<code>sipserver.xml</code>, datasource descriptors,
+						logging configs, plain <code>.properties</code>. The
+						editable set is an administrator-defined whitelist; every
+						save is well-formedness-checked for its type and backed up
+						so a bad edit rolls back.
+					</p>
+				</div>
+				<div class="vorpal-hero-meta">
+					<span>Scope · Registry</span>
+					<span>Save · Backed up</span>
+				</div>
+			</section>
+
+			<section class="vorpal-card-grid">
+				<a href="files.html" class="vorpal-card">
+					<span class="vorpal-card-icon">✎</span>
+					<h3>Open Editor</h3>
+					<p>
+						Pick a registered file, edit it with syntax highlighting,
+						and save. XML and properties files are checked for
+						well-formedness before they're written.
+					</p>
+					<span class="vorpal-card-link">Open File Editor</span>
+				</a>
+
+				<a href="/blade/configurator/" class="vorpal-card">
+					<span class="vorpal-card-icon">⚙</span>
+					<h3>Configurator</h3>
+					<p>
+						For files that <em>do</em> have a JSON Schema, use the
+						Configurator instead — it renders a validated form. This
+						tool is for the schema-less remainder.
+					</p>
+					<span class="vorpal-card-link">Open Configurator</span>
+				</a>
+
+				<a href="docs/index.html" class="vorpal-card">
+					<span class="vorpal-card-icon">📖</span>
+					<h3>Documentation</h3>
+					<p>
+						How the editable-file registry works, the path-confinement
+						guard, the per-type validation, and the
+						<code>.versions/</code> backup &amp; restore model.
+					</p>
+					<span class="vorpal-card-link">Browse Documentation</span>
+				</a>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

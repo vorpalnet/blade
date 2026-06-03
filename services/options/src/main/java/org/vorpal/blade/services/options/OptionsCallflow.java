@@ -23,6 +23,20 @@ public class OptionsCallflow extends Callflow implements Serializable {
 				settings = new OptionsSettingsSample();
 			}
 
+			// Drain signal: while OCCAS overload protection is rejecting traffic,
+			// answer the health check 503 so a SIP-aware load balancer stops
+			// routing new calls here. Falls through to the normal 200 OK whenever
+			// the feature is off or the engine is not overloaded.
+			if (settings.isUnavailableWhenOverloaded() && EngineOverload.isOverloaded()) {
+				SipServletResponse busy = request.createResponse(503);
+				int retryAfter = settings.getOverloadRetryAfter();
+				if (retryAfter > 0) {
+					busy.setHeader("Retry-After", Integer.toString(retryAfter));
+				}
+				sendResponse(busy);
+				return;
+			}
+
 			SipServletResponse response = request.createResponse(200);
 			response.setHeader("Accept", settings.getAccept());
 			response.setHeader("Accept-Language", settings.getAcceptLanguage());

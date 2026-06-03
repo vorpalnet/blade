@@ -244,7 +244,7 @@ copy_all_to_dist() {
             "${SCRIPT_DIR}/${mdir}/pom.xml" 2>/dev/null \
             | head -1 | sed 's/<[^>]*>//g')
         if [ -n "$final_name" ]; then
-            for f in "$target/${final_name}.war" "$target/${final_name}.jar"; do
+            for f in "$target/${final_name}.war" "$target/${final_name}.jar" "$target/${final_name}.ear"; do
                 [ -f "$f" ] || continue
                 cp -f "$f" "$destdir/"
                 copied=$((copied + 1))
@@ -293,7 +293,6 @@ write_deployment_manifest() {
             tuning.war)       echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /tuning)" ;;
             files.war)        echo "admin|AdminServer|Config file manager (context: /files)" ;;
             explorer.war)     echo "admin|AdminServer|Experimental UI (context: /explorer)" ;;
-            watcher.war)      echo "admin|AdminServer|Log/event monitor (context: /watcher)" ;;
             logs.war)         echo "admin|AdminServer|Log viewer (context: /logs)" ;;
             javadoc.war)      echo "admin|AdminServer|Javadoc site (context: /blade/javadoc)" ;;
             crud-editor.war)  echo "admin|AdminServer|CRUD editor (context: /crud-editor)" ;;
@@ -633,7 +632,9 @@ done
 if [ "$HAS_BUILD_GOAL" != true ]; then
     JAVADOC_STATUS="n/a (clean-only run)"
 elif [ "$SKIP_JAVADOC" = true ]; then
-    JAVADOC_STATUS="SKIPPED (--no-javadoc or BLADE_SKIP_JAVADOC set)"
+    # The admin EAR bundles the javadoc WAR, so it can't assemble without it.
+    JAVADOC_FLAGS+=("-Dskip.ear")
+    JAVADOC_STATUS="SKIPPED (--no-javadoc or BLADE_SKIP_JAVADOC set) — admin EAR skipped too"
 elif [ "$javadoc_manual" = true ]; then
     INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
     JAVADOC_STATUS="generating (-Pjavadocs passed explicitly)"
@@ -643,7 +644,9 @@ elif [ "$jdk_ok_for_javadoc" = true ]; then
     JAVADOC_STATUS="generating (-Pjavadocs → admin/javadoc → javadoc.war)"
 else
     JAVADOC_OLD_JDK=true
-    JAVADOC_STATUS="SKIPPED — needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown})"
+    # No javadoc WAR on an older JDK → the admin EAR can't bundle it.
+    JAVADOC_FLAGS+=("-Dskip.ear")
+    JAVADOC_STATUS="SKIPPED — needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown}); admin EAR skipped too"
 fi
 
 # Reusable so the same block prints in the header and the post-build summary.

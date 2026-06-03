@@ -738,11 +738,11 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
  * small, centered, brief. Dark glass is perfect here. Once authenticated,
  * the operator lands in a light work surface (the rest of brand.css).
  *
- * Ported from the original `.form-3` look that lived in
- * admin/configurator/assets/style.css — translucent dark card with
- * backdrop-filter blur, inset edge highlight, a blurred image backdrop,
- * and a purple "lit-from-inside" submit button. Inputs and labels keep
- * the dark-on-darker gradient feel.
+ * Ported from the original `.form-3` template login (since removed) —
+ * translucent dark card with backdrop-filter blur, inset edge highlight, a
+ * blurred image backdrop, and a purple "lit-from-inside" submit button.
+ * Inputs and labels keep the dark-on-darker gradient feel. This is now the
+ * single login style for every admin app (each app's login.jsp links it).
  */
 
 .vorpal-login {

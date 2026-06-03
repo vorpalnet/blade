@@ -61,7 +61,6 @@ Deployed to the WebLogic AdminServer as skinny WARs that reference the `vorpal-b
 | Configurator | `/blade/configurator` | Configuration editor with JSON Schema forms, JMX-based schema discovery |
 | Flow | `/blade/flow` | FSMAR diagram editor (mxGraph) |
 | Tuning | `/blade/tuning` | JVM / SIP / OCCAS tuning knobs |
-| Watcher | `/blade/watcher` | Log/event monitor |
 | CRUD Editor | `/blade/crud-editor` | Generic CRUD editor for service resources |
 | Logs | `/blade/logs` | Cluster log tail viewer |
 | Javadoc | `/blade/javadoc` | Browsable Javadoc site with UML class diagrams |
@@ -126,7 +125,6 @@ admin/          Admin tools (deployed to AdminServer)
   javadoc/        Browsable Javadoc site (WAR, context: /blade/javadoc)
   logs/           Cluster log tail viewer (WAR)
   tuning/         JVM / SIP / OCCAS tuning (WAR)
-  watcher/        Log/event monitor (WAR)
 services/       Services (deployed to cluster via EAR)
   acl/            Access Control List
   analytics/      Call detail records and analytics
@@ -228,7 +226,6 @@ dist/<version>-<build>/
     flow.war                                 # /blade/flow
     logs.war                                 # /blade/logs
     tuning.war                               # /blade/tuning
-    watcher.war                              # /blade/watcher
     javadoc.war                              # /blade/javadoc
   services/
     proxy-router.war                         # one WAR per service → cluster
@@ -320,7 +317,7 @@ Module profiles (`build-profiles/*.conf`):
 
 | Profile | Description |
 | --- | --- |
-| `default` | Used when no profile is specified. Builds `framework`, `shared`, `fsmar`, configurator + watcher, most services (no `irouter`/`crud`), test apps. Notably **excludes `fsmar3`**. → `vorpal-blade-services-default.ear` |
+| `default` | Used when no profile is specified. Builds `framework`, `shared`, `fsmar`, the admin tier, most services (no `irouter`/`crud`), test apps. Notably **excludes `fsmar3`**. → `vorpal-blade-services-default.ear` |
 | `full` | Every library, admin, service, and test module → `vorpal-blade-services-full.ear` |
 | `production` | All libraries + admin apps + services (no test apps) → `vorpal-blade-services-production.ear` |
 | `minimal` | `framework` + `shared` + proxy-registrar/proxy-router → `vorpal-blade-services-minimal.ear` |

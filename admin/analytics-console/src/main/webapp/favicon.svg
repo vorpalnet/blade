@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Bar chart with axes — Analytics pipeline metrics. -->
+  <g fill="none" stroke="#1f3a66" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 4v23h23"/>
+    <path d="M11 27v-7 M18 27v-12 M25 27v-18"/>
+  </g>
+</svg>

@@ -588,14 +588,19 @@ public abstract class AsyncSipServlet extends SipServlet
 													// naturally idempotent on retransmissions.
 													if (Analytics.jmsPublisher != null) {
 														try {
-															SessionKey sk = new SessionKey();
-															SessionKeyPK pk = new SessionKeyPK();
-															pk.setSessionId(Analytics.getSessionId(
-																	request.getApplicationSession()));
-															pk.setName(selector.getId());
-															pk.setValue(rr.key);
-															sk.setId(pk);
-															Analytics.jmsPublisher.send(sk);
+															Long vorpalId = Analytics.getVorpalId(
+																	request.getApplicationSession());
+															if (vorpalId != null) {
+																SessionKey sk = new SessionKey();
+																SessionKeyPK pk = new SessionKeyPK();
+																// vorpal-id on the wire; the consumer
+																// resolves it to the DB session PK.
+																pk.setSessionId(vorpalId);
+																pk.setName(selector.getId());
+																pk.setValue(rr.key);
+																sk.setId(pk);
+																Analytics.jmsPublisher.send(sk);
+															}
 														} catch (Exception ex) {
 															sipLogger.warning(request,
 																	"AsyncSipServlet - failed to publish SessionKey: "

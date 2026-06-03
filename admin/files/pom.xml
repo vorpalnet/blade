@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-admin-files</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Admin Files</name>
+	<description>Schema-less domain-file editor. Edits XML / properties / plain-text
+		files that have no JSON Schema (so the Configurator can't touch them) —
+		sipserver.xml, datasource descriptors, logging configs — through the
+		browser instead of over SSH. Files are an admin-defined, deny-by-default
+		registry; every save is well-formedness-checked and version-backed-up.</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-jaxrs2</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>files</finalName>
+		<!-- Inherits the parent pom's maven-war-plugin packagingExcludes regex,
+		     which bundles ONLY vorpal-blade-library-framework.jar (FilesAPI and
+		     the SettingsManager call into framework classes that aren't in the
+		     shared library). Don't override packagingExcludes with `*.jar`. -->
+	</build>
+
+</project>
