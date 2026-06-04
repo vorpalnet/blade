@@ -76,6 +76,11 @@ public abstract class Connector implements Serializable {
 		return this;
 	}
 
+	/// Short identifying tag for log/trap messages, e.g. `RestConnector[screening]`.
+	protected String tag() {
+		return getClass().getSimpleName() + "[" + id + "]";
+	}
+
 	/// Fetch the payload for this connector and run each selector
 	/// against it. Errors should be logged and swallowed so the
 	/// pipeline can continue.

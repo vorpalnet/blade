@@ -154,6 +154,8 @@ public class LogManager implements ServletContextListener {
 					LogParameters.parseLoggingLevel(effectiveLogParameters.getConfigurationLoggingLevel()));
 			logger.setSequenceDiagramLoggingLevel(
 					LogParameters.parseLoggingLevel(effectiveLogParameters.getSequenceDiagramLoggingLevel()));
+			logger.setSnmpTrapLevel(
+					LogParameters.parseLoggingLevel(effectiveLogParameters.getSnmpTrapLevel()));
 
 			if (effectiveBasename != null) {
 				logMap.put(effectiveBasename, logger);

@@ -91,8 +91,9 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// future completes. The iRouter's connector chain then proceeds to
 /// the next connector (or the routing decision).
 @JsonPropertyOrder({ "type", "id", "description", "url", "method", "authentication",
-		"timeoutSeconds", "bodyTemplate", "selectors" })
+		"timeoutSeconds", "circuitBreakerCooldownSeconds", "circuitBreakerTrap", "bodyTemplate", "selectors" })
 @FormLayoutGroup({ "id", "method", "timeoutSeconds" })
+@FormLayoutGroup({ "circuitBreakerCooldownSeconds", "circuitBreakerTrap" })
 public class RestConnector extends Connector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -102,12 +103,17 @@ public class RestConnector extends Connector implements Serializable {
 	protected String method = "GET";
 	protected Authentication authentication;
 	protected Integer timeoutSeconds = 5;
+	protected Integer circuitBreakerCooldownSeconds;
+	protected Boolean circuitBreakerTrap;
 	protected String bodyTemplate;
 
 	@JsonIgnore
 	private transient HttpClient httpClient;
 	@JsonIgnore
 	private transient String cachedTemplate;
+
+	@JsonIgnore
+	private transient CircuitBreaker breaker = new CircuitBreaker();
 
 	public RestConnector() {
 	}
@@ -129,6 +135,21 @@ public class RestConnector extends Connector implements Serializable {
 	public Integer getTimeoutSeconds() { return timeoutSeconds; }
 	public void setTimeoutSeconds(Integer timeoutSeconds) { this.timeoutSeconds = timeoutSeconds; }
 
+	@JsonPropertyDescription("Circuit breaker: after a failed call (transport error, timeout, or non-2xx), "
+			+ "suppress further calls to this endpoint for N seconds and let routing fall to its default route. "
+			+ "Prevents hammering a down endpoint and stops every call from eating the request timeout during an "
+			+ "outage. 0 or empty disables it (default).")
+	public Integer getCircuitBreakerCooldownSeconds() { return circuitBreakerCooldownSeconds; }
+	public void setCircuitBreakerCooldownSeconds(Integer circuitBreakerCooldownSeconds) {
+		this.circuitBreakerCooldownSeconds = circuitBreakerCooldownSeconds;
+	}
+
+	@JsonPropertyDescription("When the circuit breaker opens or recovers, emit one SNMP trap on each edge "
+			+ "(down, then up). Requires the WebLogic SNMP agent enabled with a trap destination (see the Tuning "
+			+ "app). Default false.")
+	public Boolean getCircuitBreakerTrap() { return circuitBreakerTrap; }
+	public void setCircuitBreakerTrap(Boolean circuitBreakerTrap) { this.circuitBreakerTrap = circuitBreakerTrap; }
+
 	@JsonPropertyDescription("Filename in _templates/ — HTTP-message format (headers + blank line + body). If the file is missing on disk, the WAR's bundled copy at classpath:_templates/<filename> is auto-materialized on first use; never overwrites an existing file.")
 	@FormLayout(wide = true)
 	public String getBodyTemplate() { return bodyTemplate; }
@@ -140,6 +161,19 @@ public class RestConnector extends Connector implements Serializable {
 
 		Logger sipLogger = SettingsManager.getSipLogger();
 		final String connectorId = id;
+
+		final boolean breakerEnabled = circuitBreakerCooldownSeconds != null && circuitBreakerCooldownSeconds > 0;
+		if (breakerEnabled && breaker.isOpen()) {
+			// OPEN — skip the call. Selectors don't run, so this connector
+			// contributes nothing to the Context and the iRouter's routing falls
+			// to its default route (fail-open or fail-closed is the routing
+			// config's call, not ours). Cheap and immediate: no per-call timeout
+			// wait while the endpoint is known-down.
+			if (sipLogger.isLoggable(Level.FINE)) {
+				sipLogger.fine(ctx.getRequest(), tag() + " circuit open — skipping call, routing to default");
+			}
+			return CompletableFuture.completedFuture(null);
+		}
 
 		try {
 			String resolvedUrl = ctx.resolve(url);
@@ -203,8 +237,12 @@ public class RestConnector extends Connector implements Serializable {
 							if (httpResp.statusCode() < 200 || httpResp.statusCode() >= 300) {
 								sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] HTTP "
 										+ httpResp.statusCode());
+								if (breakerEnabled) breaker.recordFailure(circuitBreakerCooldownSeconds,
+										Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(),
+										"HTTP " + httpResp.statusCode());
 								return;
 							}
+							if (breakerEnabled) breaker.recordSuccess(Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag());
 							runSelectors(ctx, httpResp.body());
 						} catch (Exception e) {
 							sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] response handling failed: "
@@ -214,6 +252,8 @@ public class RestConnector extends Connector implements Serializable {
 					.exceptionally(t -> {
 						sipLogger.warning(sipReq, "RestConnector[" + connectorId + "] request failed: "
 								+ t.getMessage());
+						if (breakerEnabled) breaker.recordFailure(circuitBreakerCooldownSeconds,
+								Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), t.getMessage());
 						return null;
 					});
 

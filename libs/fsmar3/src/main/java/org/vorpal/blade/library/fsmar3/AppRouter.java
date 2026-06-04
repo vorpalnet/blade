@@ -70,7 +70,8 @@ public class AppRouter implements SipApplicationRouter {
 		try {
 			// stateInfo carries the pinned config snapshot + the accumulating
 			// extraction context across every hop of this initial request.
-			RoutingState routingState = (saved instanceof RoutingState) ? (RoutingState) saved : null;
+			// First call: saved is null, so load fresh config below.
+			RoutingState routingState = (RoutingState) saved;
 			if (routingState == null) {
 				AppRouterConfiguration current = settingsManager.getCurrent();
 				if (current == null) {

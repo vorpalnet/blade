@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.io;
+package org.vorpal.blade.framework.v2.io;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -12,7 +12,7 @@ import java.util.List;
 ///
 /// ```
 /// java -cp target/classes:target/test-classes \
-///   org.vorpal.blade.framework.io.VersionedFileStoreSmokeTest
+///   org.vorpal.blade.framework.v2.io.VersionedFileStoreSmokeTest
 /// ```
 public class VersionedFileStoreSmokeTest {
 
@@ -61,6 +61,9 @@ public class VersionedFileStoreSmokeTest {
 
 		// Restore the oldest backup (content "one"); current "three" is backed up too.
 		long oldest = versions.get(versions.size() - 1).getTimestamp();
+		// Preview must not mutate the live file (still "three" at this point).
+		check("readVersion returns backup content", "one".equals(store.readVersion(f, oldest)));
+		check("readVersion leaves live file untouched", "three".equals(store.read(f)));
 		String restored = store.restore(f, oldest);
 		check("restore returns backup content", "one".equals(restored));
 		check("restore writes backup content live", "one".equals(store.read(f)));

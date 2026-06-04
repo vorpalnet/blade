@@ -44,7 +44,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// framework's bounded [Executors#DB] pool so the SIP container
 /// thread is released for the duration of the LDAP round trip.
 @JsonPropertyOrder({ "type", "id", "description", "ldapUrl", "bindDn", "bindPassword",
-		"searchTemplate", "selectors" })
+		"searchTemplate", "circuitBreakerCooldownSeconds", "circuitBreakerTrap", "selectors" })
 public class LdapConnector extends Connector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -54,11 +54,15 @@ public class LdapConnector extends Connector implements Serializable {
 	protected String bindDn;
 	protected String bindPassword;
 	protected String searchTemplate;
+	protected Integer circuitBreakerCooldownSeconds;
+	protected Boolean circuitBreakerTrap;
 
 	@JsonIgnore
 	private transient DirContext cachedContext;
 	@JsonIgnore
 	private transient String cachedTemplate;
+	@JsonIgnore
+	private transient CircuitBreaker breaker = new CircuitBreaker();
 
 	public LdapConnector() {
 	}
@@ -79,6 +83,21 @@ public class LdapConnector extends Connector implements Serializable {
 	public String getSearchTemplate() { return searchTemplate; }
 	public void setSearchTemplate(String searchTemplate) { this.searchTemplate = searchTemplate; }
 
+	@JsonPropertyDescription("Circuit breaker: after a failed search (directory down, bind or connection error), "
+			+ "suppress further searches for N seconds and let routing fall to its default route. Prevents hammering "
+			+ "a down directory and stops every call from eating the LDAP timeout during an outage. 0 or empty "
+			+ "disables it (default).")
+	public Integer getCircuitBreakerCooldownSeconds() { return circuitBreakerCooldownSeconds; }
+	public void setCircuitBreakerCooldownSeconds(Integer circuitBreakerCooldownSeconds) {
+		this.circuitBreakerCooldownSeconds = circuitBreakerCooldownSeconds;
+	}
+
+	@JsonPropertyDescription("When the circuit breaker opens or recovers, emit one SNMP trap on each edge (down, "
+			+ "then up). Requires the WebLogic SNMP agent enabled with a trap destination (see the Tuning app). "
+			+ "Default false.")
+	public Boolean getCircuitBreakerTrap() { return circuitBreakerTrap; }
+	public void setCircuitBreakerTrap(Boolean circuitBreakerTrap) { this.circuitBreakerTrap = circuitBreakerTrap; }
+
 	@Override
 	public CompletableFuture<Void> invoke(Context ctx) {
 		if (ldapUrl == null || searchTemplate == null) {
@@ -89,6 +108,18 @@ public class LdapConnector extends Connector implements Serializable {
 		final Logger sipLogger = SettingsManager.getSipLogger();
 
 		final javax.servlet.sip.SipServletRequest sipReq = ctx.getRequest();
+
+		final boolean breakerEnabled = circuitBreakerCooldownSeconds != null && circuitBreakerCooldownSeconds > 0;
+		if (breakerEnabled && breaker.isOpen()) {
+			// OPEN — skip the search. Selectors don't run, so the iRouter falls
+			// to its default route. No per-call LDAP-timeout wait while the
+			// directory is known-down.
+			if (sipLogger.isLoggable(Level.FINE)) {
+				sipLogger.fine(sipReq, tag() + " circuit open — skipping search, routing to default");
+			}
+			return CompletableFuture.completedFuture(null);
+		}
+
 		// Template resolution is cheap — do it on the calling thread.
 		final SearchParams params;
 		try {
@@ -125,6 +156,9 @@ public class LdapConnector extends Connector implements Serializable {
 				controls.setCountLimit(1);
 
 				NamingEnumeration<SearchResult> results = dirCtx.search(params.baseDn, params.filter, controls);
+				// The directory was reachable and the search ran — success
+				// regardless of whether an entry matched.
+				if (breakerEnabled) breaker.recordSuccess(Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag());
 				try {
 					if (results.hasMore()) {
 						SearchResult sr = results.next();
@@ -143,6 +177,8 @@ public class LdapConnector extends Connector implements Serializable {
 				}
 			} catch (Exception e) {
 				sipLogger.warning(sipReq, "LdapConnector[" + connectorId + "] search failed: " + e.getMessage());
+				if (breakerEnabled) breaker.recordFailure(circuitBreakerCooldownSeconds,
+						Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), e.getMessage());
 			}
 			return null;
 		}, Executors.DB).thenAccept(entry -> {

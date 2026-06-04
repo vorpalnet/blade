@@ -39,7 +39,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// [Executors#DB] thread pool. The SIP thread returns immediately;
 /// the query runs on a DB worker; selectors run on that same
 /// worker when the row arrives.
-@JsonPropertyOrder({ "type", "id", "description", "dataSource", "queryTemplate", "selectors" })
+@JsonPropertyOrder({ "type", "id", "description", "dataSource", "queryTemplate",
+		"circuitBreakerCooldownSeconds", "circuitBreakerTrap", "selectors" })
 public class JdbcConnector extends Connector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -47,11 +48,15 @@ public class JdbcConnector extends Connector implements Serializable {
 
 	protected String dataSource;
 	protected String queryTemplate;
+	protected Integer circuitBreakerCooldownSeconds;
+	protected Boolean circuitBreakerTrap;
 
 	@JsonIgnore
 	private transient DataSource cachedDataSource;
 	@JsonIgnore
 	private transient String cachedQuery;
+	@JsonIgnore
+	private transient CircuitBreaker breaker = new CircuitBreaker();
 
 	public JdbcConnector() {
 	}
@@ -64,6 +69,21 @@ public class JdbcConnector extends Connector implements Serializable {
 	public String getQueryTemplate() { return queryTemplate; }
 	public void setQueryTemplate(String queryTemplate) { this.queryTemplate = queryTemplate; }
 
+	@JsonPropertyDescription("Circuit breaker: after a failed query (datasource down, connection or SQL error), "
+			+ "suppress further queries for N seconds and let routing fall to its default route. Prevents hammering "
+			+ "a down database and stops every call from eating the connection timeout during an outage. 0 or empty "
+			+ "disables it (default).")
+	public Integer getCircuitBreakerCooldownSeconds() { return circuitBreakerCooldownSeconds; }
+	public void setCircuitBreakerCooldownSeconds(Integer circuitBreakerCooldownSeconds) {
+		this.circuitBreakerCooldownSeconds = circuitBreakerCooldownSeconds;
+	}
+
+	@JsonPropertyDescription("When the circuit breaker opens or recovers, emit one SNMP trap on each edge (down, "
+			+ "then up). Requires the WebLogic SNMP agent enabled with a trap destination (see the Tuning app). "
+			+ "Default false.")
+	public Boolean getCircuitBreakerTrap() { return circuitBreakerTrap; }
+	public void setCircuitBreakerTrap(Boolean circuitBreakerTrap) { this.circuitBreakerTrap = circuitBreakerTrap; }
+
 	@Override
 	public CompletableFuture<Void> invoke(Context ctx) {
 		if (dataSource == null || queryTemplate == null) {
@@ -74,6 +94,18 @@ public class JdbcConnector extends Connector implements Serializable {
 		final Logger sipLogger = SettingsManager.getSipLogger();
 
 		final javax.servlet.sip.SipServletRequest sipReq = ctx.getRequest();
+
+		final boolean breakerEnabled = circuitBreakerCooldownSeconds != null && circuitBreakerCooldownSeconds > 0;
+		if (breakerEnabled && breaker.isOpen()) {
+			// OPEN — skip the query. Selectors don't run, so the iRouter falls to
+			// its default route. No per-call connection-timeout wait while the
+			// datasource is known-down.
+			if (sipLogger.isLoggable(Level.FINE)) {
+				sipLogger.fine(sipReq, tag() + " circuit open — skipping query, routing to default");
+			}
+			return CompletableFuture.completedFuture(null);
+		}
+
 		// Resolve the SQL on the calling thread (cheap) but execute the query
 		// on the DB executor so the SIP container thread is released.
 		final String sql;
@@ -97,6 +129,9 @@ public class JdbcConnector extends Connector implements Serializable {
 				try (Connection conn = cachedDataSource.getConnection();
 						Statement stmt = conn.createStatement();
 						ResultSet rs = stmt.executeQuery(sql)) {
+					// The datasource was reachable and the query ran — that's a
+					// success regardless of whether any row came back.
+					if (breakerEnabled) breaker.recordSuccess(Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag());
 					if (rs.next()) {
 						Map<String, String> row = new LinkedHashMap<>();
 						ResultSetMetaData md = rs.getMetaData();
@@ -110,6 +145,8 @@ public class JdbcConnector extends Connector implements Serializable {
 				}
 			} catch (Exception e) {
 				sipLogger.warning(sipReq, "JdbcConnector[" + connectorId + "] query failed: " + e.getMessage());
+				if (breakerEnabled) breaker.recordFailure(circuitBreakerCooldownSeconds,
+						Boolean.TRUE.equals(circuitBreakerTrap), sipReq, tag(), e.getMessage());
 			}
 			return null;
 		}, Executors.DB).thenAccept(row -> {

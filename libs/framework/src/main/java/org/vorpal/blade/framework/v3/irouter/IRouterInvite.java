@@ -245,7 +245,7 @@ public class IRouterInvite extends Callflow {
 		// Log before send — a final non-2xx response invalidates the session,
 		// after which the logger's hexHash → getGlareState → session.getAttribute
 		// path throws "Invalid attribute store!". Same reasoning as
-		// SecureLogixInvite.executeRoute and Callflow.sendResponse.
+		// Callflow.sendResponse.
 		sipLogger.fine(request, "iRouter responded " + code + (reason != null ? " " + reason : ""));
 		// Route through the framework's sendResponse rather than response.send()
 		// so we pick up X-Vorpal-* header injection and the Logger.superArrow
@@ -253,19 +253,19 @@ public class IRouterInvite extends Callflow {
 		sendResponse(response);
 	}
 
-	/// Subclass hook: act on the chosen [Route] + resolved destination
-	/// URI. The default implementation **proxies** the INVITE
-	/// downstream with `Record-Route: false` so iRouter drops out of
-	/// the dialog (re-INVITE / ACK / BYE go end-to-end). Route headers
-	/// and conditional headers are stamped on the outbound request
-	/// before `proxyTo` fires.
+	/// Hook for the *forwarding* role: act on the chosen [Route] + resolved
+	/// destination URI. The default implementation **proxies** the INVITE
+	/// downstream with `Record-Route: false` so iRouter drops out of the dialog
+	/// (re-INVITE / ACK / BYE go end-to-end). Route headers and conditional
+	/// headers are stamped on the outbound request before `proxyTo` fires.
 	///
-	/// Subclasses override this to take a different SIP role for the
-	/// same routing-table machinery — for example
-	/// [org.vorpal.blade.connect.securelogix.SecureLogixInvite]
-	/// returns a `302 Moved Temporarily` with the destination in
-	/// `Contact`, so SecureLogix never participates in the call leg
-	/// at all (an even stronger drop-out than `recordRoute=false`).
+	/// Reached only for routes WITHOUT a `statusCode` — a route that sets a
+	/// status code is a direct response and short-circuits to [#sendStatus] in
+	/// [#applyRouting] before this runs. That's how SecureLogix is a redirect
+	/// server with no Java override: every clause in its routing config is a
+	/// `new Route(302, "Moved Temporarily")` with a `Contact`, so it never
+	/// reaches `executeRoute` at all. Override this only to take a different
+	/// *forwarding* role than proxy-and-drop-out.
 	///
 	/// Throws are caught by [#applyRouting] which sends 500 upstream.
 	protected void executeRoute(SipServletRequest request, URI destination, Route route, Context ctx)

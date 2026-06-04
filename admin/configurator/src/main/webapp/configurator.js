@@ -180,6 +180,18 @@ function handleWebSocketMessage(message) {
             handleVersionContent(message.content);
             break;
 
+        case 'text_version_list':
+            displayVersionList(message.content, 'text');
+            break;
+
+        case 'text_version_restored':
+            handleTextVersionRestored(message.content);
+            break;
+
+        case 'text_version_content':
+            handleTextVersionContent(message.content);
+            break;
+
         case 'file_content':
             // Ignore initial file_content message from generic file manager
             break;
@@ -3754,6 +3766,8 @@ function handleTextFileLoaded(raw) {
     textEditor.session.setMode('ace/mode/' + aceModeForFile(payload.fileName));
     textEditor.setValue(payload.content, -1);
     updateTextEditorDirtyState();
+    const histBtn = document.getElementById('text-history-btn');
+    if (histBtn) histBtn.disabled = false;
     showTextFileStatus('Loaded ' + currentTextFile, 'success');
 }
 
@@ -3793,6 +3807,61 @@ function showTextFileStatus(text, kind) {
     el.className = 'sync-status ' + (kind || '');
     el.style.display = 'inline-flex';
     setTimeout(() => { el.style.display = 'none'; }, 2500);
+}
+
+// Template-file version history. Reuses the shared version modal, but its
+// Preview/Restore buttons dispatch to the text handlers below (the content is
+// arbitrary text, not JSON, so it can't go through the form-based JSON flow).
+function showTextVersionHistory() {
+    if (!currentTextFile) {
+        showTextFileStatus('Load a template file first', 'warning');
+        return;
+    }
+    sendWebSocketMessage('list_text_versions', { fileName: currentTextFile });
+    const modal = document.getElementById('versionModal');
+    if (modal) modal.classList.add('active');
+    const container = document.getElementById('versionListContainer');
+    if (container) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px;">Loading versions...</div>';
+    }
+}
+
+function previewTextVersion(timestamp) {
+    if (!currentTextFile) return;
+    pendingRequests.set('textVersionTimestamp', timestamp);
+    sendWebSocketMessage('get_text_version_content', { fileName: currentTextFile, timestamp: timestamp });
+}
+
+function restoreTextVersion(timestamp) {
+    if (!currentTextFile) return;
+    if (!confirm('Restore this version? The current content will be saved as a backup first.')) {
+        return;
+    }
+    sendWebSocketMessage('restore_text_version', { fileName: currentTextFile, timestamp: timestamp });
+}
+
+function handleTextVersionContent(raw) {
+    let payload;
+    try { payload = JSON.parse(raw); } catch (e) { return; }
+    if (!textEditor || typeof payload.content !== 'string') return;
+    // Preview = drop the old content into the editor without touching the
+    // baseline, so it reads as unsaved and the user can Save or Revert.
+    textEditor.setValue(payload.content, -1);
+    updateTextEditorDirtyState();
+    closeVersionHistory();
+    showTextFileStatus('Preview loaded (not saved)', 'warning');
+}
+
+function handleTextVersionRestored(raw) {
+    let payload;
+    try { payload = JSON.parse(raw); } catch (e) { return; }
+    if (!textEditor || typeof payload.content !== 'string') return;
+    // Restore already wrote the file server-side; sync the editor to match.
+    textEditor.setValue(payload.content, -1);
+    currentTextFileBaseline = payload.content;
+    updateTextEditorDirtyState();
+    closeVersionHistory();
+    showTextFileStatus('Restored ' + (payload.fileName || currentTextFile), 'success');
 }
 
 // ---------------------------------------------------------------------------
@@ -5022,7 +5091,15 @@ function closeVersionHistory() {
     modal.classList.remove('active');
 }
 
-function displayVersionList(versionListJson) {
+// 'json' (schema-backed config) or 'text' (a _templates/ file). Controls which
+// Preview/Restore handlers the rendered buttons call.
+let versionHistoryContext = 'json';
+
+function displayVersionList(versionListJson, context) {
+    versionHistoryContext = context || 'json';
+    const isText = versionHistoryContext === 'text';
+    const previewFn = isText ? 'previewTextVersion' : 'previewVersion';
+    const restoreFn = isText ? 'restoreTextVersion' : 'restoreVersionFromHistory';
     const container = document.getElementById('versionListContainer');
     const versions = JSON.parse(versionListJson);
 
@@ -5052,9 +5129,9 @@ function displayVersionList(versionListJson) {
                 </div>
                 <div class="version-actions">
                     <button type="button" class="btn btn-secondary btn-small"
-                            onclick="previewVersion('${version.timestamp}')">Preview</button>
+                            onclick="${previewFn}('${version.timestamp}')">Preview</button>
                     <button type="button" class="btn btn-primary btn-small"
-                            onclick="restoreVersionFromHistory('${version.timestamp}')">Restore</button>
+                            onclick="${restoreFn}('${version.timestamp}')">Restore</button>
                 </div>
             </li>
         `;

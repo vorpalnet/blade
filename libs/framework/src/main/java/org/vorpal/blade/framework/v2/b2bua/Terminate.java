@@ -103,28 +103,35 @@ public class Terminate extends Callflow {
 
 					switch (linkedSession.getState()) {
 
-					case INITIAL: // created, but not sent
-						linkedSession.invalidate();
-						break;
-
+					case INITIAL: // INVITE sent, but no provisional response received yet
 					case EARLY: // 180 Ringing, sipSession will be in INITIAL state
 						SipServletRequest activeInvite = linkedSession.getActiveInvite(UAMode.UAC);
-						if (activeInvite != null) {
-							terminationRequest = activeInvite.createCancel();
 
-							if (request.getMethod().equals(CANCEL)) {
-								copyContentAndHeaders(request, terminationRequest);
+						if (activeInvite == null || !activeInvite.isCommitted()) {
+							// INITIAL with an unsent INVITE: created, but never sent
+							if (linkedSession.getState() == SipSession.State.INITIAL) {
+								linkedSession.invalidate();
 							}
-
-							SettingsManager.createEvent("callAbandoned", terminationRequest);
-							if (b2buaListener != null) {
-								b2buaListener.callAbandoned(terminationRequest);
-							}
-							// sipLogger.finer("Terminate.process - SettingsManager.sendEvent(terminationRequest); #1");
-							SettingsManager.sendEvent(terminationRequest);
-							Analytics.sessionStop(terminationRequest);
-
+							break;
 						}
+
+						// The INVITE is on the wire; cancel it. In the INITIAL case the
+						// transaction layer has already seen the downstream 100 Trying,
+						// which satisfies RFC 3261 9.1 even though the SipSession has
+						// not yet transitioned to EARLY.
+						terminationRequest = activeInvite.createCancel();
+
+						if (request.getMethod().equals(CANCEL)) {
+							copyContentAndHeaders(request, terminationRequest);
+						}
+
+						SettingsManager.createEvent("callAbandoned", terminationRequest);
+						if (b2buaListener != null) {
+							b2buaListener.callAbandoned(terminationRequest);
+						}
+						// sipLogger.finer("Terminate.process - SettingsManager.sendEvent(terminationRequest); #1");
+						SettingsManager.sendEvent(terminationRequest);
+						Analytics.sessionStop(terminationRequest);
 
 						break;
 

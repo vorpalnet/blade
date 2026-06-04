@@ -30,15 +30,16 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 //	  )
 
 
-@JsonPropertyOrder({  // 
+@JsonPropertyOrder({  //
 	"directory", "fileName", //
 	 "loggingLevel", "sequenceDiagramLoggingLevel", "configurationLoggingLevel", "analyticsLoggingLevel", //
+	 "snmpTrapLevel", //
 	 "fileSize", "fileCount", "useParentLogging", "appendFile", "colorsEnabled" //
 })
 
 @FormLayoutGroup({ "directory", "fileName" })
 @FormLayoutGroup({ "loggingLevel", "sequenceDiagramLoggingLevel", "configurationLoggingLevel",
-		"analyticsLoggingLevel" })
+		"analyticsLoggingLevel", "snmpTrapLevel" })
 @FormLayoutGroup(columns = {
 		@FormLayoutColumn({ "fileSize", "fileCount" }),
 		@FormLayoutColumn({ "useParentLogging", "appendFile", "colorsEnabled" })
@@ -82,6 +83,9 @@ public class LogParameters implements Serializable {
 	@JsonProperty(defaultValue = "INFO")
 	protected LoggingLevel analyticsLoggingLevel = null;
 
+	@JsonProperty(defaultValue = "OFF")
+	protected LoggingLevel snmpTrapLevel = null;
+
 	@JsonProperty(defaultValue = "false")
 	protected Boolean useParentLogging = null;
 
@@ -112,6 +116,8 @@ public class LogParameters implements Serializable {
 		this.loggingLevel = that.loggingLevel;
 		this.sequenceDiagramLoggingLevel = that.sequenceDiagramLoggingLevel;
 		this.configurationLoggingLevel = that.configurationLoggingLevel;
+		this.analyticsLoggingLevel = that.analyticsLoggingLevel;
+		this.snmpTrapLevel = that.snmpTrapLevel;
 	}
 
 	@JsonPropertyDescription("Logging level. Levels include: OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST, ALL. Default: INFO")
@@ -386,6 +392,21 @@ public class LogParameters implements Serializable {
 
 	public void setAnalyticsLoggingLevel(LoggingLevel analyticsLoggingLevel) {
 		this.analyticsLoggingLevel = analyticsLoggingLevel;
+	}
+
+	@JsonPropertyDescription("Emit an SNMP trap for any log statement at or above this level (OFF disables). "
+			+ "Requires the WebLogic SNMP agent to be enabled with a trap destination (see the Tuning app). Default: OFF")
+	public LoggingLevel getSnmpTrapLevel() {
+		return snmpTrapLevel;
+	}
+
+	public LogParameters setSnmpTrapLevel(LoggingLevel snmpTrapLevel) {
+		this.snmpTrapLevel = snmpTrapLevel;
+		return this;
+	}
+
+	public Level resolveSnmpTrapLevel() {
+		return parseLoggingLevel(this.getSnmpTrapLevel());
 	}
 
 	public Boolean getColorsEnabled() {

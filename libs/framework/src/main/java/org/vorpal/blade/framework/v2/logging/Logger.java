@@ -45,6 +45,7 @@ import org.vorpal.blade.framework.v2.analytics.Attribute;
 import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v2.snmp.Snmp;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -85,11 +86,20 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	private Level sequenceDiagramLoggingLevel = Level.FINE;
 	private Level configurationLoggingLevel = Level.FINE;
 	private Level analyticsLoggingLevel = Level.OFF;
+	private Level snmpTrapLevel = Level.OFF;
 	private static volatile ObjectMapper mapper = null;
 	private static final Object MAPPER_LOCK = new Object();
 
 	@Override
 	public void log(Level level, String msg) {
+		// SNMP trap bridge: when snmpTrapLevel is set (not OFF), any statement
+		// at or above it also fires a SIP-application trap. snmpTrapLevel
+		// defaults to Level.OFF (intValue Integer.MAX_VALUE), so the common
+		// case is a single comparison that short-circuits to false. The trap
+		// itself is best-effort and never throws (see Snmp.trap).
+		if (level != null && level.intValue() >= snmpTrapLevel.intValue()) {
+			Snmp.trap(Snmp.Severity.fromLevel(level), stripAnsi(msg));
+		}
 		try {
 			super.log(level, msg);
 		} catch (Exception ex) {
@@ -163,6 +173,38 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 
 	public void setAnalyticsLoggingLevel(Level analyticsLoggingLevel) {
 		this.analyticsLoggingLevel = analyticsLoggingLevel;
+	}
+
+	/**
+	 * Returns the level at or above which log statements also emit an SNMP trap.
+	 *
+	 * @return the SNMP trap level (Level.OFF disables)
+	 */
+	public Level getSnmpTrapLevel() {
+		return snmpTrapLevel;
+	}
+
+	/**
+	 * Sets the level at or above which log statements also emit an SNMP trap.
+	 *
+	 * @param snmpTrapLevel the SNMP trap level, or Level.OFF to disable
+	 */
+	public void setSnmpTrapLevel(Level snmpTrapLevel) {
+		this.snmpTrapLevel = (snmpTrapLevel != null) ? snmpTrapLevel : Level.OFF;
+	}
+
+	/** ANSI SGR escape sequences (colorized log output). */
+	private static final java.util.regex.Pattern ANSI = java.util.regex.Pattern.compile("\\u001B\\[[;\\d]*m");
+
+	/**
+	 * Strips ANSI color escape codes so trap text carries a clean message rather
+	 * than terminal control sequences.
+	 *
+	 * @param msg the (possibly colorized) log message
+	 * @return the message with ANSI SGR codes removed
+	 */
+	private static String stripAnsi(String msg) {
+		return (msg == null) ? null : ANSI.matcher(msg).replaceAll("");
 	}
 
 	/**

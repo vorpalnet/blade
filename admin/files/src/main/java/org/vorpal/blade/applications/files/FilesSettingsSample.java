@@ -6,22 +6,54 @@ import java.util.Arrays;
 /// `./config/custom/vorpal/files.json` on first deployment when no
 /// operator-supplied file is present.
 ///
-/// The registry ships EMPTY of real targets on purpose — deny-by-default. The
-/// two sample entries below show the shape (and point at files that exist in a
-/// stock domain); an administrator edits this list to expose the files their
-/// site actually maintains by hand.
+/// The registry still acts as a whitelist — a path not listed here cannot be
+/// read or written — but the sample ships pre-populated with the standard
+/// hand-maintained config files of a stock OCCAS domain. An administrator
+/// edits this list to add or remove files for their site.
 public class FilesSettingsSample extends FilesSettings {
 	private static final long serialVersionUID = 1L;
 
 	public FilesSettingsSample() {
 		this.about.setName("Files")
 				.setTagline("Domain File Editor")
-				.setDescription("Edit schema-less domain files — XML, properties, plain text — from the browser instead of over SSH. Files are an admin-defined whitelist; every save is well-formedness-checked and backed up so a bad edit can be rolled back.");
+				.setDescription("Edit schema-less domain files — XML, JSON, properties, plain text — from the browser instead of over SSH. Files are an admin-defined whitelist; every save is well-formedness-checked and backed up so a bad edit can be rolled back.");
 
 		this.files = Arrays.asList(
 				new EditableFile()
+						.setLabel("Domain Config (config.xml)")
+						.setPath("config/config.xml")
+						.setType(FileType.XML),
+				new EditableFile()
+						.setLabel("Coherence Cluster (defaultCoherenceCluster-coherence.xml)")
+						.setPath("config/coherence/defaultCoherenceCluster-coherence.xml")
+						.setType(FileType.XML),
+				new EditableFile()
+						.setLabel("Coherence Default Cache Config (Coherence-Default.xml)")
+						.setPath("config/coherence/Coherence-Default/Coherence-Default.xml")
+						.setType(FileType.XML),
+				new EditableFile()
+						.setLabel("Coherence Custom Cache Config (Custom-Default.xml)")
+						.setPath("config/coherence/Coherence-Default/Custom-Default.xml")
+						.setType(FileType.XML),
+				new EditableFile()
+						.setLabel("Server Debug Config (serverdebug.xml)")
+						.setPath("config/custom/serverdebug.xml")
+						.setType(FileType.XML),
+				new EditableFile()
+						.setLabel("Coherence Config (coherence.xml)")
+						.setPath("config/custom/coherence.xml")
+						.setType(FileType.XML),
+				new EditableFile()
+						.setLabel("Application Router Config (approuter.xml)")
+						.setPath("config/custom/approuter.xml")
+						.setType(FileType.XML),
+				new EditableFile()
 						.setLabel("SIP Server Config (sipserver.xml)")
 						.setPath("config/custom/sipserver.xml")
+						.setType(FileType.XML),
+				new EditableFile()
+						.setLabel("Lifecycle Config (lifecycle-config.xml)")
+						.setPath("config/lifecycle-config.xml")
 						.setType(FileType.XML),
 				new EditableFile()
 						.setLabel("Logging Properties")

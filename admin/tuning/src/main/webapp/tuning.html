@@ -110,6 +110,7 @@
 			<a href="#section-jvm">JVM</a>
 			<a href="#section-server">Server Tuning</a>
 			<a href="#section-jdbc">JDBC Pools</a>
+			<a href="#section-snmp">SNMP</a>
 			<a href="#section-sip">SIP Timers</a>
 			<a href="#section-wm">OCCAS Threads</a>
 			<a href="#section-cluster">Cluster</a>
@@ -223,6 +224,28 @@
 					Min/Max resize on activate; Initial Capacity is restart-required.
 				</div>
 				<div id="jdbc-container"><span class="text-muted">Loading...</span></div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- SNMP -->
+		<!-- ============================================================ -->
+		<div id="section-snmp"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>SNMP Traps</strong>
+				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveSnmp()">Save</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadSnmp()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div class="info-box">
+					<strong>Domain SNMP agent.</strong> BLADE services emit SIP-application traps from their
+					logging config (set <b>SNMP Trap Level</b> per service in the Configurator). A trap only
+					leaves the box when the agent below is <b>Enabled</b>, <b>Send Automatic Traps</b> is on, and
+					at least one trap destination (your NMS host:port) is configured. Agent enable/port changes
+					take effect when the agent restarts; destination edits apply on activate.
+				</div>
+				<div id="snmp-container"><span class="text-muted">Loading...</span></div>
 			</div>
 		</div>
 
@@ -442,6 +465,7 @@
 			loadJvmSettings();
 			loadServerTuning();
 			loadJdbc();
+			loadSnmp();
 			loadSipTimers();
 			loadWorkManagers();
 			loadCluster();
@@ -1062,6 +1086,7 @@
 		}
 		function v(id) { return $('#' + id).val(); }
 		function esc(s) { return s.replace(/[^a-zA-Z0-9]/g, '_'); }
+		function he(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 		function showStatus(type, msg) {
 			$('#status-message').removeClass('alert-info alert-success alert-danger alert-warning')
 				.addClass('alert-' + type).text(msg).show();
@@ -1070,6 +1095,77 @@
 		function parseError(xhr) {
 			try { var e = JSON.parse(xhr.responseText); return e.error || ''; } catch (x) { return ''; }
 		}
+		// ================================================================
+		// SNMP agent + trap destinations
+		// ================================================================
+		var snmpData = {};
+		function loadSnmp() {
+			$.getJSON('api/v1/snmp', function (data) {
+				snmpData = data || {};
+				if (data && data.present === false) {
+					$('#snmp-container').html('<span class="text-muted">This domain has no SNMP agent bean to configure.</span>');
+					return;
+				}
+				var h = '';
+				h += '<h6 class="text-muted mb-2" style="font-size:12px;text-transform:uppercase;letter-spacing:1px;">Agent</h6>';
+				h += '<div class="row mb-3">';
+				h += '<div class="col-md-3 field-group"><label>Enabled</label><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="snmp-enabled"' + (data.enabled ? ' checked' : '') + '><label class="custom-control-label" for="snmp-enabled">Agent on</label></div></div>';
+				h += '<div class="col-md-3 field-group"><label data-toggle="tooltip" title="OCCAS sendSipAppTrap() only fires when automatic traps are enabled on the agent.">Send Automatic Traps</label><div class="custom-control custom-switch"><input type="checkbox" class="custom-control-input" id="snmp-auto"' + (data.sendAutomaticTrapsEnabled ? ' checked' : '') + '><label class="custom-control-label" for="snmp-auto">Traps on</label></div></div>';
+				h += '<div class="col-md-2 field-group"><label>Agent Port</label><input type="number" class="form-control form-control-sm mono" id="snmp-port" value="' + (data.port || 161) + '"></div>';
+				h += '<div class="col-md-2 field-group"><label>Trap Version</label><select class="form-control form-control-sm" id="snmp-version"><option value="1"' + (data.trapVersion == 1 ? ' selected' : '') + '>v1</option><option value="2"' + (data.trapVersion == 2 ? ' selected' : '') + '>v2c</option></select></div>';
+				h += '<div class="col-md-2 field-group"><label>Community Prefix</label><input type="text" class="form-control form-control-sm mono" id="snmp-community" value="' + he(data.communityPrefix || 'public') + '"></div>';
+				h += '</div>';
+				h += '<h6 class="text-muted mb-2" style="font-size:12px;text-transform:uppercase;letter-spacing:1px;">Trap Destinations <button class="btn btn-sm btn-outline-secondary ml-2" onclick="addSnmpDest()">+ Add</button></h6>';
+				h += '<table class="table table-compact table-bordered"><thead class="thead-light"><tr><th>Name</th><th>Host</th><th>Port</th><th>Community</th><th></th></tr></thead><tbody id="snmp-dest-body"></tbody></table>';
+				$('#snmp-container').html(h);
+				var dests = data.destinations || [];
+				dests.forEach(function (d) { addSnmpDest(d); });
+				if (!dests.length) { addSnmpDest(); }
+			}).fail(function (xhr) {
+				$('#snmp-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		function addSnmpDest(d) {
+			d = d || {};
+			var row = '<tr>'
+				+ '<td><input type="text" class="form-control form-control-sm mono snmp-dest-name" value="' + he(d.name || '') + '" placeholder="nms1"></td>'
+				+ '<td><input type="text" class="form-control form-control-sm mono snmp-dest-host" value="' + he(d.host || '') + '" placeholder="10.0.0.5"></td>'
+				+ '<td><input type="number" class="form-control form-control-sm mono snmp-dest-port" value="' + (d.port || 162) + '" style="width:90px"></td>'
+				+ '<td><input type="text" class="form-control form-control-sm mono snmp-dest-community" value="' + he(d.community || 'public') + '"></td>'
+				+ '<td><button class="btn btn-sm btn-outline-danger" onclick="$(this).closest(\'tr\').remove()">Remove</button></td>'
+				+ '</tr>';
+			$('#snmp-dest-body').append(row);
+		}
+
+		function saveSnmp() {
+			var dests = [];
+			$('#snmp-dest-body tr').each(function () {
+				var name = $(this).find('.snmp-dest-name').val();
+				if (!name) { return; }
+				dests.push({
+					name: name,
+					host: $(this).find('.snmp-dest-host').val(),
+					port: parseInt($(this).find('.snmp-dest-port').val()) || 162,
+					community: $(this).find('.snmp-dest-community').val()
+				});
+			});
+			var data = {
+				enabled: $('#snmp-enabled').is(':checked'),
+				sendAutomaticTrapsEnabled: $('#snmp-auto').is(':checked'),
+				port: parseInt(v('snmp-port')) || 161,
+				trapVersion: parseInt(v('snmp-version')) || 2,
+				communityPrefix: v('snmp-community'),
+				destinations: dests
+			};
+			showStatus('info', 'Saving SNMP configuration...');
+			$.ajax({ url: 'api/v1/snmp', method: 'PUT', contentType: 'application/json',
+				data: JSON.stringify(data), dataType: 'json',
+				success: function () { showStatus('success', 'SNMP saved. Agent enable/port changes take effect when the agent restarts.'); },
+				error: function (xhr) { showStatus('danger', 'Save failed: ' + parseError(xhr)); }
+			});
+		}
+
 	</script>
 
 </body>

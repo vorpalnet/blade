@@ -11,7 +11,7 @@
 	'use strict';
 
 	var API = 'api';
-	var ACE_MODE = { XML: 'ace/mode/xml', PROPERTIES: 'ace/mode/properties', TEXT: 'ace/mode/text' };
+	var ACE_MODE = { XML: 'ace/mode/xml', JSON: 'ace/mode/json', PROPERTIES: 'ace/mode/properties', TEXT: 'ace/mode/text' };
 
 	var editor, registry = [], current = null, dirty = false;
 

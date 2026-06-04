@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.io;
+package org.vorpal.blade.framework.v2.io;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -124,17 +124,27 @@ public final class VersionedFileStore {
 		return versions;
 	}
 
-	/// Restore a specific backup as the live file, backing up the (about to be
-	/// overwritten) current content first. Returns the restored text.
-	public String restore(Path file, long timestamp) throws IOException {
-		Path versionsDir = file.getParent().resolve(VERSIONS_DIR);
-		Path versionPath = versionsDir.resolve(file.getFileName().toString() + "." + timestamp + VERSION_SUFFIX);
+	/// Read the content of a specific backup without touching the live file —
+	/// for previewing a version before deciding whether to [#restore] it.
+	public String readVersion(Path file, long timestamp) throws IOException {
+		Path versionPath = versionPath(file, timestamp);
 		if (!Files.exists(versionPath)) {
 			throw new IOException("No such version: " + timestamp);
 		}
-		String content = new String(Files.readAllBytes(versionPath), StandardCharsets.UTF_8);
+		return new String(Files.readAllBytes(versionPath), StandardCharsets.UTF_8);
+	}
+
+	/// Restore a specific backup as the live file, backing up the (about to be
+	/// overwritten) current content first. Returns the restored text.
+	public String restore(Path file, long timestamp) throws IOException {
+		String content = readVersion(file, timestamp);
 		write(file, content);
 		return content;
+	}
+
+	private Path versionPath(Path file, long timestamp) {
+		Path versionsDir = file.getParent().resolve(VERSIONS_DIR);
+		return versionsDir.resolve(file.getFileName().toString() + "." + timestamp + VERSION_SUFFIX);
 	}
 
 	private void cleanupOldVersions(Path versionsDir, String baseFileName) throws IOException {

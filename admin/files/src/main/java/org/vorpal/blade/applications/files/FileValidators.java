@@ -12,9 +12,20 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.xml.sax.ErrorHandler;
 import org.xml.sax.SAXParseException;
 
-/// Per-type well-formedness checks run before a file is written. JDK-only (no
-/// JAX-RS / Jackson) so it can be exercised in isolation — see
-/// `FileValidatorsSmokeTest`.
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/// Per-type well-formedness checks run before a file is written. No JAX-RS
+/// dependencies, so it can be exercised outside the container — see
+/// `FileValidatorsSmokeTest`. JSON validation uses Jackson (already in the WAR
+/// via the framework library); the smoke test puts it on the classpath with:
+///
+/// ```
+/// mvn -q dependency:build-classpath -Dmdep.outputFile=target/cp.txt
+/// java -cp "target/classes:target/test-classes:$(cat target/cp.txt)" \
+///   org.vorpal.blade.applications.files.FileValidatorsSmokeTest
+/// ```
 ///
 /// These are *well-formedness* checks, not semantic ones: a well-formed
 /// `sipserver.xml` can still be wrong for the SIP container. The guarantee is
@@ -35,6 +46,11 @@ public final class FileValidators {
 		}
 	};
 
+	/// Tolerates nothing beyond plain RFC 8259 JSON — no comments, and
+	/// FAIL_ON_TRAILING_TOKENS rejects content after the root value.
+	private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
+			.enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
 	private FileValidators() {
 	}
 
@@ -45,6 +61,8 @@ public final class FileValidators {
 		switch (type) {
 		case XML:
 			return validateXml(body);
+		case JSON:
+			return validateJson(body);
 		case PROPERTIES:
 			return validateProperties(body);
 		case TEXT:
@@ -70,6 +88,19 @@ public final class FileValidators {
 			return null;
 		} catch (Exception e) {
 			return "Not well-formed XML: " + e.getMessage();
+		}
+	}
+
+	static String validateJson(String content) {
+		try {
+			JsonNode root = JSON_MAPPER.readTree(content);
+			// readTree("") yields MissingNode rather than throwing.
+			if (root == null || root.isMissingNode()) {
+				return "Not valid JSON: empty content";
+			}
+			return null;
+		} catch (Exception e) {
+			return "Not valid JSON: " + e.getMessage();
 		}
 	}
 

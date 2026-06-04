@@ -14,7 +14,7 @@
 	<artifactId>vorpal-blade-admin-files</artifactId>
 	<packaging>war</packaging>
 	<name>BLADE Admin Files</name>
-	<description>Schema-less domain-file editor. Edits XML / properties / plain-text
+	<description>Schema-less domain-file editor. Edits XML / JSON / properties / plain-text
 		files that have no JSON Schema (so the Configurator can't touch them) —
 		sipserver.xml, datasource descriptors, logging configs — through the
 		browser instead of over SSH. Files are an admin-defined, deny-by-default

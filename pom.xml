@@ -14,12 +14,10 @@
 	<url>https://vorpal.net</url>
 
 	<modules>
-		<!-- Always built: services aggregator (the EAR module). -->
-		<module>services</module>
-
-		<!-- Libraries, admin, service, and test modules are controlled by
-		     profiles below. Exclude any module with -Dskip.<name>,
-		     e.g. -Dskip.fsmar3, -Dskip.analytics, -Dskip.configurator. -->
+		<!-- Libraries, admin, service, and test modules — including the admin
+		     EAR (admin/ear) and the cluster/services EAR (services/cluster) —
+		     are all controlled by profiles below. Exclude any module with
+		     -Dskip.<name>, e.g. -Dskip.fsmar3, -Dskip.analytics, -Dskip.cluster. -->
 	</modules>
 
 	<properties>
@@ -730,6 +728,18 @@ fi
 			<id>ear</id>
 			<activation><property><name>!skip.ear</name></property></activation>
 			<modules><module>admin/ear</module></modules>
+		</profile>
+
+		<!-- The cluster EAR (services/cluster, module name "cluster"): assembles
+		     every engine-tier service WAR into one deployable (blade-cluster.ear),
+		     the mirror of admin/ear. Active by default; exclude with -Dskip.cluster.
+		     Each service is contributed by an ear-<name> profile inside
+		     services/cluster/pom.xml, so the EAR shrinks to match a trimmed
+		     build profile (e.g. minimal). -->
+		<profile>
+			<id>cluster</id>
+			<activation><property><name>!skip.cluster</name></property></activation>
+			<modules><module>services/cluster</module></modules>
 		</profile>
 
 		<profile>

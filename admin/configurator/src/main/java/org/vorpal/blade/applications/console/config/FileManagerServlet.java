@@ -5,7 +5,6 @@ import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Set;
 import java.util.TreeSet;
@@ -33,6 +32,7 @@ import javax.websocket.server.ServerEndpoint;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import org.vorpal.blade.framework.v2.io.VersionedFileStore;
 import org.vorpal.blade.framework.v2.config.SettingsMXBean;
 
 @WebServlet("/filemanager")
@@ -44,7 +44,11 @@ public class FileManagerServlet extends HttpServlet {
 	private static final String DATA_FILE_PATH = "server_data.txt";
 	private static final Set<Session> websocketSessions = new CopyOnWriteArraySet<>();
 	private static final ObjectMapper objectMapper = new ObjectMapper();
-	private static final int MAX_VERSIONS = 20;
+
+	/// File I/O with versioned backups — the same `.versions/` discipline the
+	/// schema-less `admin/files` editor uses. Default retention (20) matches the
+	/// count this servlet kept before the logic was factored into the framework.
+	private static final VersionedFileStore store = new VersionedFileStore();
 
 	private static final String DOMAIN_HOME = System.getProperty("DOMAIN_HOME",
 			System.getenv().getOrDefault("DOMAIN_HOME", "."));
@@ -198,6 +202,45 @@ public class FileManagerServlet extends HttpServlet {
 				String previewContent = getVersionContent(previewFile, previewTimestamp);
 				sendMessageToSession(session, createMessage("version_content", previewContent));
 				break;
+
+			case "list_text_versions": {
+				// Same backups as JSON configs, but the path is relative to
+				// _templates/, so resolve (and confine) it before listing.
+				Path tvPath = resolveTextFilePath(jsonNode.get("fileName").asText());
+				if (tvPath == null) {
+					sendMessageToSession(session, createMessage("error", "Invalid path"));
+				} else {
+					sendMessageToSession(session,
+							createMessage("text_version_list", listVersions(tvPath.toString())));
+				}
+				break;
+			}
+
+			case "restore_text_version": {
+				String restoreName = jsonNode.get("fileName").asText();
+				Path rvPath = resolveTextFilePath(restoreName);
+				if (rvPath == null) {
+					sendMessageToSession(session, createMessage("error", "Invalid path"));
+				} else {
+					String rvContent = restoreVersion(rvPath.toString(), jsonNode.get("timestamp").asText());
+					sendMessageToSession(session,
+							createMessage("text_version_restored", textVersionPayload(restoreName, rvContent)));
+				}
+				break;
+			}
+
+			case "get_text_version_content": {
+				String tvcName = jsonNode.get("fileName").asText();
+				Path tvcPath = resolveTextFilePath(tvcName);
+				if (tvcPath == null) {
+					sendMessageToSession(session, createMessage("error", "Invalid path"));
+				} else {
+					String tvcContent = getVersionContent(tvcPath.toString(), jsonNode.get("timestamp").asText());
+					sendMessageToSession(session,
+							createMessage("text_version_content", textVersionPayload(tvcName, tvcContent)));
+				}
+				break;
+			}
 
 			case "ping":
 				sendMessageToSession(session, createMessage("pong", String.valueOf(System.currentTimeMillis())));
@@ -529,16 +572,22 @@ public class FileManagerServlet extends HttpServlet {
 		return new String(Files.readAllBytes(p));
 	}
 
-	/// Write text content to a file under _templates/. Creates parent dirs if
-	/// needed; overwrites existing files (no version backup for templates — they
-	/// are ancillary to the JSON configs that do get versioned).
+	/// Write text content to a file under _templates/, taking a versioned
+	/// backup first — same `.versions/` discipline as the JSON configs, so a
+	/// bad template edit (REST body template, SQL, LDAP query) is recoverable.
 	private void saveTextFile(String relPath, String content) throws IOException {
 		Path p = resolveTextFilePath(relPath);
 		if (p == null) throw new IOException("Invalid path: " + relPath);
-		if (p.getParent() != null && !Files.exists(p.getParent())) {
-			Files.createDirectories(p.getParent());
-		}
-		Files.write(p, content == null ? new byte[0] : content.getBytes());
+		store.write(p, content == null ? "" : content);
+	}
+
+	/// Bundle a template file's name with restored/previewed version content so
+	/// the client can drop it back into the right editor.
+	private String textVersionPayload(String fileName, String content) throws IOException {
+		com.fasterxml.jackson.databind.node.ObjectNode payload = objectMapper.createObjectNode();
+		payload.put("fileName", fileName);
+		payload.put("content", content);
+		return objectMapper.writeValueAsString(payload);
 	}
 
 	/// Resolve a caller-supplied relative path inside _templates/, rejecting
@@ -584,16 +633,6 @@ public class FileManagerServlet extends HttpServlet {
 
 		Path filePath = Paths.get(realPath);
 
-		// Create version backup before saving (if file exists)
-		if (Files.exists(filePath)) {
-			createVersionBackup(filePath);
-		}
-
-		// Create parent directories if they don't exist
-		if (filePath.getParent() != null && !Files.exists(filePath.getParent())) {
-			Files.createDirectories(filePath.getParent());
-		}
-
 		// Encrypt any {CLEARTEXT} credentials before writing to disk
 		try {
 			com.fasterxml.jackson.databind.ObjectMapper encMapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -606,123 +645,33 @@ public class FileManagerServlet extends HttpServlet {
 			System.out.println("Warning: credential encryption skipped: " + e.getMessage());
 		}
 
-		Files.write(filePath, content.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-	}
-
-	private void createVersionBackup(Path filePath) throws IOException {
-		Path versionsDir = filePath.getParent().resolve(".versions");
-		if (!Files.exists(versionsDir)) {
-			Files.createDirectories(versionsDir);
-		}
-
-		String fileName = filePath.getFileName().toString();
-		long timestamp = System.currentTimeMillis();
-		String versionFileName = fileName + "." + timestamp + ".version";
-		Path versionPath = versionsDir.resolve(versionFileName);
-
-		Files.copy(filePath, versionPath, StandardCopyOption.REPLACE_EXISTING);
-
-		cleanupOldVersions(versionsDir, fileName);
-	}
-
-	private void cleanupOldVersions(Path versionsDir, String baseFileName) throws IOException {
-		String versionPrefix = baseFileName + ".";
-		java.util.List<Path> versions = new java.util.ArrayList<>();
-
-		try (java.util.stream.Stream<Path> stream = Files.list(versionsDir)) {
-			stream.filter(p -> p.getFileName().toString().startsWith(versionPrefix)).forEach(versions::add);
-		}
-
-		versions.sort((p1, p2) -> {
-			String name1 = p1.getFileName().toString();
-			String name2 = p2.getFileName().toString();
-			return name2.compareTo(name1);
-		});
-
-		if (versions.size() > MAX_VERSIONS) {
-			for (int i = MAX_VERSIONS; i < versions.size(); i++) {
-				Files.delete(versions.get(i));
-			}
-		}
+		// Backs up existing content into .versions/, creates parent dirs, writes.
+		store.write(filePath, content);
 	}
 
 	private String listVersions(String relativePath) throws IOException {
-		String realPath = relativePath;
-		Path filePath = Paths.get(realPath);
-		String fileName = filePath.getFileName().toString();
-		Path versionsDir = filePath.getParent().resolve(".versions");
-
-		if (!Files.exists(versionsDir)) {
-			return "[]";
-		}
-
-		String versionPrefix = fileName + ".";
+		Path filePath = Paths.get(relativePath);
 		java.util.List<java.util.Map<String, Object>> versionList = new java.util.ArrayList<>();
 
-		try (java.util.stream.Stream<Path> stream = Files.list(versionsDir)) {
-			stream.filter(p -> p.getFileName().toString().startsWith(versionPrefix)).forEach(versionPath -> {
-				try {
-					String versionFileName = versionPath.getFileName().toString();
-					String timestampStr = versionFileName.substring(versionPrefix.length(),
-							versionFileName.lastIndexOf(".version"));
-					long timestamp = Long.parseLong(timestampStr);
-					long size = Files.size(versionPath);
-
-					java.util.Map<String, Object> versionInfo = new java.util.HashMap<>();
-					versionInfo.put("timestamp", timestamp);
-					versionInfo.put("size", size);
-					versionInfo.put("date", new java.util.Date(timestamp).toString());
-
-					versionList.add(versionInfo);
-				} catch (Exception e) {
-					logger.log(Level.WARNING, "Error reading version file: " + versionPath, e);
-				}
-			});
+		// listVersions returns newest-first; preserve the JSON shape the
+		// configurator UI reads (timestamp + size; it formats the date itself).
+		for (VersionedFileStore.VersionInfo v : store.listVersions(filePath)) {
+			java.util.Map<String, Object> versionInfo = new java.util.HashMap<>();
+			versionInfo.put("timestamp", v.getTimestamp());
+			versionInfo.put("size", v.getSizeBytes());
+			versionInfo.put("date", new java.util.Date(v.getTimestamp()).toString());
+			versionList.add(versionInfo);
 		}
-
-		versionList.sort((v1, v2) -> Long.compare((Long) v2.get("timestamp"), (Long) v1.get("timestamp")));
 
 		return objectMapper.writeValueAsString(versionList);
 	}
 
 	private String restoreVersion(String relativePath, String timestampStr) throws IOException {
-		String realPath = relativePath;
-		Path filePath = Paths.get(realPath);
-		String fileName = filePath.getFileName().toString();
-		Path versionsDir = filePath.getParent().resolve(".versions");
-
-		String versionFileName = fileName + "." + timestampStr + ".version";
-		Path versionPath = versionsDir.resolve(versionFileName);
-
-		if (!Files.exists(versionPath)) {
-			throw new IOException("Version not found: " + versionFileName);
-		}
-
-		String content = new String(Files.readAllBytes(versionPath));
-
-		if (Files.exists(filePath)) {
-			createVersionBackup(filePath);
-		}
-
-		Files.write(filePath, content.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-
-		return content;
+		return store.restore(Paths.get(relativePath), Long.parseLong(timestampStr));
 	}
 
 	private String getVersionContent(String relativePath, String timestampStr) throws IOException {
-		String realPath = relativePath;
-		Path filePath = Paths.get(realPath);
-		String fileName = filePath.getFileName().toString();
-		Path versionsDir = filePath.getParent().resolve(".versions");
-
-		String versionFileName = fileName + "." + timestampStr + ".version";
-		Path versionPath = versionsDir.resolve(versionFileName);
-
-		if (!Files.exists(versionPath)) {
-			throw new IOException("Version not found: " + versionFileName);
-		}
-
-		return new String(Files.readAllBytes(versionPath));
+		return store.readVersion(Paths.get(relativePath), Long.parseLong(timestampStr));
 	}
 
 	private String listTargetDirectories() throws IOException {

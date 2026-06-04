@@ -322,6 +322,7 @@ public class Settings<T> implements SettingsMXBean {
 					}
 					logger.setConfigurationLoggingLevel(cfg.getLogging().resolveConfigurationLoggingLevel());
 					logger.setSequenceDiagramLoggingLevel(cfg.getLogging().resolveSequenceDiagramLoggingLevel());
+					logger.setSnmpTrapLevel(cfg.getLogging().resolveSnmpTrapLevel());
 				}
 
 				SessionParameters sessionParams = cfg.getSession();

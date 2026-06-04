@@ -39,7 +39,7 @@ public class EditableFile implements Serializable {
 		return this;
 	}
 
-	@JsonPropertyDescription("File kind — XML and PROPERTIES are well-formedness-checked before save; TEXT is saved as-is.")
+	@JsonPropertyDescription("File kind — XML, JSON and PROPERTIES are well-formedness-checked before save; TEXT is saved as-is.")
 	public FileType getType() {
 		return type;
 	}

@@ -2,11 +2,12 @@ package org.vorpal.blade.applications.files;
 
 /// Smoke-test driver for [FileValidators] — the per-type well-formedness checks
 /// run before a save. Same `main()` convention as the framework smoke tests;
-/// exits non-zero on the first failed expectation. JDK-only, so it runs against
-/// just the module's compiled classes:
+/// exits non-zero on the first failed expectation. JSON validation pulls in
+/// Jackson, so build the dependency classpath first:
 ///
 /// ```
-/// java -cp target/classes:target/test-classes \
+/// mvn -q dependency:build-classpath -Dmdep.outputFile=target/cp.txt
+/// java -cp "target/classes:target/test-classes:$(cat target/cp.txt)" \
 ///   org.vorpal.blade.applications.files.FileValidatorsSmokeTest
 /// ```
 public class FileValidatorsSmokeTest {
@@ -22,6 +23,17 @@ public class FileValidatorsSmokeTest {
 		reject(FileType.XML, "", "empty is not a document");
 		// DOCTYPE is disallowed (XXE hardening) — treated as not acceptable.
 		reject(FileType.XML, "<!DOCTYPE a><a/>", "doctype rejected");
+
+		// JSON — plain RFC 8259; a scalar root is valid JSON.
+		accept(FileType.JSON, "{\"a\": 1, \"b\": [true, null, \"x\"]}", "json object");
+		accept(FileType.JSON, "[1, 2, 3]", "json array root");
+		accept(FileType.JSON, "{\"outer\": {\"inner\": {\"deep\": []}}}", "nested json");
+		accept(FileType.JSON, "42", "scalar root is valid json");
+		reject(FileType.JSON, "{\"a\": 1} junk", "trailing content");
+		reject(FileType.JSON, "{\"a\": 1", "unclosed brace");
+		reject(FileType.JSON, "{'a': 1}", "single quotes");
+		reject(FileType.JSON, "not json", "bare word");
+		reject(FileType.JSON, "", "empty is not json");
 
 		// Properties — Properties.load is lenient; a lone bad unicode escape fails.
 		accept(FileType.PROPERTIES, "a=1\nb=2\n# comment\n", "normal properties");

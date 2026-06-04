@@ -1,6 +1,96 @@
 # BLADE Release Notes
 
-## 2.9.6 (unreleased)
+## 2.9.9 (unreleased)
+
+### iRouter: shared `IRouterServlet` base class in the framework
+
+`IRouterServlet` moved from the `services/irouter` WAR into the framework
+(`org.vorpal.blade.framework.v3.irouter`), joining its siblings `IRouterInvite`,
+`IRouterConfig`, `IRouterConfigSample`. It's now the shared, unannotated base
+(like `B2buaServlet`) that any iRouter app or commercial extension subclasses
+with **only the framework dependency** — no cross-WAR `-classes.jar` needed.
+
+- Centralizes everything common: the `settings` lifecycle (`servletCreated` /
+  `servletDestroyed`), the static `settings` snapshot, and the initial-INVITE
+  dispatch in `chooseCallflow`. Also traps an SNMP `ERROR` on init failure — a
+  universal default for every iRouter app now.
+- Two overridable seams, both with plain-iRouter defaults: `newSampleConfig()`
+  (the pipeline + routing config) and `newInvite(config)` (the initial-INVITE
+  callflow). A subclass overrides only what differs.
+- `IRouterApp` (the standalone iRouter WAR's annotated leaf) is unchanged — an
+  empty annotated body over the base defaults. `SecureLogixServlet` collapses to
+  ~12 lines of code: the `@Sip` annotations plus the two factory overrides
+  (`SecureLogixConfigSample`, `SecureLogixInvite`). Its `servletCreated` /
+  `servletDestroyed` / `chooseCallflow` / static field / SNMP wiring are all
+  inherited. (`SecureLogixSettingsManager` was already deleted — the framework
+  `RestConnector` self-materializes the body template.)
+- Verified: framework + iRouter WAR + securelogix WAR all build; securelogix WAR
+  carries exactly one `@SipServlet`-annotated leaf (the base is unannotated and
+  rides in the framework jar), so no redundant-annotation deployment error.
+
+### iRouter connectors: circuit breaker with SNMP edge traps (REST, LDAP, JDBC)
+
+The three IO-bound iRouter connectors gain an optional circuit breaker so a
+flaky/down backend doesn't drag every call through the request timeout and doesn't
+storm the NMS with a trap per failure.
+
+- Two additive, off-by-default fields on `RestConnector`, `LdapConnector`, and
+  `JdbcConnector`: `circuitBreakerCooldownSeconds` (0/empty = disabled, unchanged
+  behavior) and `circuitBreakerTrap` (emit SNMP on the edges). The in-memory
+  connectors (sip/map/table) make no external call and don't get the fields.
+- When a call fails (REST transport/timeout/non-2xx; LDAP bind/search error; JDBC
+  datasource/connection/SQL error), the breaker **opens**: for the cooldown window
+  the connector skips the call entirely and returns immediately, so its selectors
+  don't run and the iRouter falls to its **default route**. The breaker is
+  policy-neutral — whether "no data" means allow or block is the routing config's
+  call, not the connector's. After the window, a live call retries; success
+  **closes** the breaker. (For LDAP/JDBC, "success" = the server was reachable and
+  the query ran, even if zero rows/entries came back — an empty result is not a
+  failure.)
+- **Edge-triggered, storm-proof.** Shared `CircuitBreaker` helper; state is a
+  single node-local `AtomicLong` (0 = healthy; else epoch-ms suppress-until).
+  `getAndSet` gives lock-free edge detection: under a flood of concurrent failures
+  during an outage, exactly one thread sees the open transition and emits one
+  "down" trap/log; one sees recovery and emits one "up." Verified with a
+  2000-thread concurrency test (1 down, 1 up) plus a behavior test of the real
+  class. No singleton, no background timer/thread — just a timestamp compared on
+  the call path.
+- SecureLogix (att-tao) enables it on its HUCS FRS screening (REST) connector:
+  `cooldown=60s`, `trap=true`. During a HUCS outage, calls fall to the existing
+  `X-Screening: fallback` allow route instead of each eating the 3s timeout, and
+  AT&T's NOC gets one trap down + one trap up per outage.
+
+### SNMP: user-defined traps from BLADE apps + a Tuning agent editor
+
+BLADE can now emit SNMP traps for AT&T-style NMS monitoring, reusing the
+trap-sending machinery OCCAS already ships (`com.bea.wcp.sip.management.snmp.SNMPAgent.sendSipAppTrap`)
+— no new dependency, no custom MIB. The seven severity-keyed SIP-application
+traps (`sipAppInfoTrap` … `sipAppEmergencyTrap`, OIDs `1.3.6.1.4.1.140.626.200.14`–`.20`)
+are defined in the shipped `WLSS-MIB.asn1`; give that MIB to the NMS to decode them.
+
+- **`framework.v2.snmp.Snmp`** — reflective, fail-closed wrapper (same pattern as
+  `EngineOverload`). `Snmp.trap(Severity, message)` for explicit business events;
+  a `Severity` enum mirrors OCCAS's `TRAP_SIP_APP_SEVERITY`. If `SNMPAgent` is
+  absent (off-OCCAS, unit tests, a renamed engine) every call is a silent no-op —
+  a trap must never break its caller (verified: no throw off-engine).
+- **Log→trap bridge.** New per-service `LogParameters.snmpTrapLevel` (default
+  **OFF**): any log statement at or above that level also fires a trap, mapping
+  JUL → trap severity (SEVERE→error, WARNING→warning, else→info). Wired through
+  the central `Logger.log(...)`, applied at logger creation (`LogManager`) and on
+  live config reload (`Settings`). ANSI color codes are stripped from trap text.
+  Purely additive — existing `configuration.json` without the field stays OFF, so
+  behavior is unchanged until opted in.
+- **Tuning → "SNMP" tab.** Edits the **domain** SNMP agent
+  (`DomainMBean.getSNMPAgent()` — the same agent OCCAS's `isTrapEnabled()`
+  consults) through the JMX edit tree like the other tabs: enable/automatic-traps,
+  port, community, v1/v2c, plus an add/remove trap-destination table. This is
+  where the destination host:port belongs (domain config), not in any service's
+  `configuration.json`. Agent enable/port changes take effect on agent restart;
+  destination edits apply on activate.
+
+Division of labor: **where** traps go = Tuning (domain agent); **whether/at what
+severity** a service emits = its logging config (`snmpTrapLevel`); **sending** =
+`framework.v2.snmp.Snmp`. All on the current v2 surface (additive).
 
 ### Options: drain the node via OPTIONS when OCCAS is overloaded
 
