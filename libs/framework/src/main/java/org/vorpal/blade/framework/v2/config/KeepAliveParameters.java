@@ -20,7 +20,7 @@ public class KeepAliveParameters implements Serializable {
 
 	protected Integer minSE = null;
 
-	@JsonPropertyDescription("Sets keep alive style: DISABLED, UPDATE, REINVITE")
+	@JsonPropertyDescription("Sets keep alive style: DISABLED, UPDATE, REINVITE. UPDATE is used only when both endpoints have advertised 'Allow: UPDATE'; otherwise each refresh falls back to re-INVITE.")
 	public KeepAlive getStyle() {
 		return style;
 	}

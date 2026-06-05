@@ -526,6 +526,15 @@ public class SettingsManager<T> {
 				.with(Option.DEFINITIONS_FOR_ALL_OBJECTS,
 						Option.MAP_VALUES_AS_ADDITIONAL_PROPERTIES);
 
+		// @SchemaTitle — emitted as the schema `title` keyword; the Configurator
+		// shows it as the form heading (falls back to the schema filename).
+		configBuilder.forTypesInGeneral().withTitleResolver(scope -> {
+			Class<?> raw = scope.getType().getErasedType();
+			if (raw == null) return null;
+			SchemaTitle title = raw.getAnnotation(SchemaTitle.class);
+			return title != null ? title.value() : null;
+		});
+
 		// @JsonAnyGetter-annotated Map methods (e.g. Translation.getExtras())
 		// serialize as top-level properties, but the default schema generator
 		// doesn't describe them. Emit `additionalProperties` with the Map's

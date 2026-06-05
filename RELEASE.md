@@ -2,6 +2,166 @@
 
 ## 2.9.9 (unreleased)
 
+### Framework: keep-alive `style: UPDATE` actually implemented
+
+`session.keepAlive.style: UPDATE` previously behaved identically to `REINVITE`
+— the enum value was accepted by the schema but never checked (the only style
+comparison was `!DISABLED.equals(style)`), and every refresh sent re-INVITEs
+with full SDP shuttling. Now UPDATE sends lightweight, bodiless RFC 3311
+UPDATEs — **but only when both endpoints are known to support UPDATE**;
+otherwise each refresh falls back to the re-INVITE behavior, unchanged.
+
+- **Capability detection**: `AsyncSipServlet` passively sniffs `Allow:`
+  headers on every inbound request/response and records
+  `Callflow.ALLOW_UPDATE` (Boolean) on that leg's SipSession. No Allow header
+  → flag untouched; unknown counts as unsupported (conservative).
+- **Refresh dispatch** (`keepalive.KeepAlive.handle`): style is read from
+  config at refresh time (a republish flips live calls on their next cycle).
+  UPDATE style + both legs flagged TRUE → sequential bodiless UPDATE on each
+  leg (leg B only after leg A's 2xx, so at most one fallback can fire). Any
+  non-2xx final → that cycle completes via re-INVITE (refreshes both legs, so
+  a half-refreshed pair self-corrects); 405/501 additionally latches the
+  failing leg to non-supporting so future cycles skip UPDATE entirely.
+- B2BUA chains relay the refresh end-to-end — UPDATE already routes through
+  `Passthru`. Glare logic is untouched (UPDATE never set PROTECT, same as
+  INFO).
+- One new public constant (`Callflow.ALLOW_UPDATE`) and one public static
+  helper (`KeepAlive.allowsUpdate(List<String>)`); everything else private or
+  package-private.
+
+Verified: framework builds clean; new `KeepAliveUpdateSmokeTest` 20/20 (Allow
+parsing, config gate, per-leg flag); existing Callflow/SDP smoke tests 84/84.
+Wire-level behavior (UPDATE vs re-INVITE on a real refresh cycle, 405
+fallback) is SIPp/deploy-only.
+
+### Framework: Callflow.java internal refactor (behavior-preserving)
+
+`v2.callflow.Callflow` decomposed for readability; no public/protected API
+signature, session-attribute name, or wire behavior changed. v3's `Callflow`
+subclasses v2 and inherits everything.
+
+- `sendRequest` shrank from ~265 lines to ~55: the Vorpal-ID header stamping
+  (previously duplicated verbatim in `sendResponse`) is now
+  `stampVorpalIdHeaders` (`protected static`, usable by subclasses); appSession
+  expiration and keep-alive setup moved to private helpers.
+- **Fix:** the keep-alive *expiry* callback used a captured `SipSession`
+  reference instead of the live session the container hands the callback —
+  stale after cluster failover. Now matches the refresh callback (which was
+  already correct).
+- `sendRequestsInSerial`: the triple-duplicated "next request or dummy 408"
+  block is one helper; removed a provably unreachable dummy-408 branch.
+- Dead-code sweep: unused private constants, commented-out constants,
+  always-true null checks, a redundant `Math.abs` on `nextLong(0, bound)`.
+
+Verified: framework builds clean; Callflow/SDP smoke tests pass 84/84.
+
+### Framework: AsyncSipServlet.java internal refactor (same treatment as Callflow)
+
+`v2.AsyncSipServlet` decomposed; no public/protected API signature or
+session-attribute name changed. All new helpers are `private` (static where
+possible), per the no-protected-instance-helpers rule.
+
+- `doRequest` shrank from ~380 lines to ~130; `doResponse` from ~330 to ~110.
+  Extracted: FINER diagnostics (both directions), initial-INVITE caller/
+  keep-alive bookkeeping, origin/destination AttributeSelector processing,
+  early-dialog session merge, and both error-recovery blocks.
+- **Fix:** `servletCreated` was invoked **twice** for any app whose config has
+  no analytics section — once unconditionally, then again in the
+  `getAnalytics() == null` else-branch. Now exactly once.
+- **Fix:** `Callflow.setLogger(sipLogger)` ran *before*
+  `sipLogger = LogManager.getLogger(event)`, pushing the previous (null on
+  first deploy) logger into Callflow; the fresh logger only arrived later via
+  `SettingsManager.build`. Reordered so Callflow gets the new logger
+  immediately.
+- Dead code removed: an always-null `callflow` pre-check before
+  `chooseCallflow`, a provably unreachable `isProxy(response)` re-check in
+  `doResponse` (false on entry to that branch, attribute can't change in
+  between), an unused `rqst` assignment in downstream-kill recovery, the
+  commented-out glare-queue block, and dead `sipLogger != null` checks that
+  followed unguarded `sipLogger.warning` calls (warnings now inside the
+  guard).
+- Log-text corrections: `doReponse`/`sendReponse` typos, a "doResponse" tag on
+  a doRequest warning and on the timer-expiry message, and the `#5`/`Error #3`
+  tags normalized to `#ex7`.
+- **Known no-op left in place (flagged, not fixed):** the analytics "start"
+  event (`createEvent("start", ...)` → `start(event)` →
+  `SettingsManager.sendEvent(contextEvent)`) has never been published —
+  `createEvent(name, SipServletContextEvent)` deliberately does not attach the
+  event to the context (the "jwm - this is a bad idea" comment in
+  SettingsManager), and `sendEvent(ssce)` only sends what it finds there.
+  Wiring it up would newly publish JMS events; that's a product decision.
+
+Verified: framework builds clean; Callflow/SDP smoke tests pass 84/84.
+
+### Dependencies: kjetland mbknor-jackson-jsonschema removed (kills the Scala/Kotlin CVE surface)
+
+The legacy kjetland schema-generator library is gone from the framework, the
+shared library, both FSMAR jars, and the Configurator. The generator code path
+has been victools since the Draft 2020-12 migration; the only remaining use was
+the `@JsonSchemaTitle` annotation on config classes.
+
+- **`@SchemaTitle`** (`org.vorpal.blade.framework.v2.config`) replaces kjetland's
+  `@JsonSchemaTitle` on the 14 config classes that used it. Unlike before, the
+  title is now actually emitted: `SettingsManager.generateSchemaNode` gained a
+  victools title resolver, so the Configurator shows the declared title as the
+  form heading instead of falling back to the schema filename. (kjetland's
+  annotation had been a silent no-op under victools.)
+- **Security payoff:** drops `scala-library` 2.13.1 (CVE-2022-36944, Critical),
+  `kotlin-stdlib` 1.3.50 (CVE-2020-29582, CVE-2022-24329), `kotlinx-coroutines`
+  1.1.1, and the kotlin-scripting jars from every shipped artifact. (The
+  kotlin-stdlib 1.8.21 still in the shared library is okhttp's — current, no
+  known CVEs.)
+
+### Dependencies: CVE cleanup — all shipped artifacts scan clean
+
+Beyond the kjetland removal, the remaining scanner findings were fixed; grype
+reports **zero vulnerabilities** across every artifact in `dist/` (shared
+library, both FSMAR jars, both EARs, every admin/service/test WAR).
+
+- **Apache Oltu removed** (`org.apache.oltu.oauth2.client` 1.0.2, shared
+  library). Retired Apache project, no BLADE code imported it, and its
+  `org.json:20140107` transitive carried two High CVEs (GHSA-3vqj-43w4-2q58,
+  GHSA-4jq9-2xhw-jpx7). The live OAuth stack is Nimbus `oauth2-oidc-sdk`.
+- **Patch bumps:** jackson family 2.18.2 → 2.18.6 (jackson-core
+  GHSA-72hv-8253-57qq); nimbus-jose-jwt → 9.37.4 (GHSA-xwmg-2g98-w7v9);
+  commons-lang3 → 3.18.0 (GHSA-j288-q9x7-2f5v); jakarta.mail → 1.6.8
+  (GHSA-9342-92gg-6v29). joschi's `jackson-datatype-threetenbp` is pinned
+  separately at 2.18.2 (it lags Jackson patch releases).
+- Scan note: grype/syft mangle Maven groupIds for jars nested inside
+  WAR-inside-EAR (e.g. `kotlin-stdlib/kotlin-stdlib`), silently missing
+  advisories — verify archive scans with corrected purl queries
+  (`grype purl:<file>`).
+
+### Configurator: converted to a skinny WAR (shared-library architecture restored)
+
+The Configurator was the one WAR violating the packaging rule that `WEB-INF/lib`
+carries only the framework jar with all 3rd-party JARs coming from the
+`vorpal-blade` shared library. It bundled 47 3rd-party JARs (27 MB); it now
+ships the framework jar only (< 1 MB), like every other admin and service WAR.
+
+- `weblogic.xml` gained the standard `<library-ref>`; `prefer-web-inf-classes`
+  is gone (the shared library's auto-generated `prefer-application-packages`
+  owns classloader policy).
+- The shared library gained the Configurator's extras: networknt
+  `json-schema-validator` (+ `itu`, `jackson-dataformat-yaml` transitives) and
+  `taglibs-standard-impl` (which the portal's JSTL `login.jsp` needed anyway).
+  **Not** `xalan` — bundling it in the shared library breaks the WebLogic Admin
+  Console (see the provided-scope note in `libs/shared/pom.xml`); the
+  Configurator now uses the server's Xalan.
+- The Configurator no longer deploys without the shared library present on
+  AdminServer — same requirement as every other admin app.
+- The per-WAR multi-release-stripping exec hack in the Configurator pom is gone
+  (it existed only because 3rd-party jars were bundled).
+
+### Configurator: welcome panel on initial load
+
+Before a schema is selected, the editor area no longer sits as a blank void
+under a dead toolbar. A centered welcome card now explains the three steps
+(pick a Target scope, pick a Schema, then edit/save/publish) with links to the
+Overview and Documentation. The toolbar stays hidden until the first schema
+loads — every toolbar action required a loaded schema anyway. Styled from the
+theme variables, so it renders correctly in all four themes.
+
 ### iRouter: shared `IRouterServlet` base class in the framework
 
 `IRouterServlet` moved from the `services/irouter` WAR into the framework
@@ -393,26 +553,31 @@ instead of per-WAR — needs the shared library repackaged as an EAR-referenceab
 library, since a WAR-packaged shared library is only visible at the WAR
 classloader level. Deferred.)
 
-### Configurator: auto-publish absorbed; standalone `watcher` WAR retired
+### Configurator: auto-publish absorbed; `watcher` WAR kept as the standalone alternative
 
-The Configurator now owns the file-system auto-publish behavior that the
-separate `watcher` WAR used to provide, and `watcher` has been removed from
-the build and the admin tier.
+The Configurator now owns the file-system auto-publish behavior in-process, so
+sites running the Configurator no longer need the separate `watcher` WAR.
 
-- **Auto-publish on by default.** `ConfiguratorSettings.autoPublish` defaults to
-  `true` (via the shipped sample), so on-disk edits to
-  `./config/custom/vorpal/*.json` are republished to live services via JMX —
-  the same behavior ops scripts relied on under `watcher`.
+- **Auto-publish off by default.** `ConfiguratorSettings.autoPublish` defaults
+  to `false` (via the shipped sample): changes go live only through the UI's
+  explicit Save + Publish flow. Turning it on makes on-disk edits to
+  `./config/custom/vorpal/*.json` republish to live services via JMX — the
+  same behavior ops scripts relied on under `watcher`.
 - **Live on/off toggle in the UI.** A sliding Auto-publish switch sits at the
   right of the form toolbar. Flipping it writes `autoPublish` to
   `configurator.json` and reloads the Configurator's own MBean; the watcher
   thread starts/stops immediately — no redeploy. The lifecycle is owned by
   `ConfiguratorSettingsManager.initialize()`, the framework's per-reload hook.
-- **`watcher` removed.** Deleted `admin/watcher`, its Maven profile, its entries
-  in every build profile, `build.sh`, the javadoc collector, and the README /
-  DEPLOYMENT tables. Its portal launcher card disappears automatically (the deck
-  is built from JMX). Customers migrating off `watcher` lose nothing: undeploy
-  it and leave Auto-publish on.
+- **`watcher` retained — standalone only, not in `blade-admin.ear`.** (It was
+  briefly deleted during the 2.9.9 cycle, then restored: some sites can't
+  deploy the Configurator UI — it doesn't pass their security scans — and
+  `watcher`, with no UI / no servlets / no login, is what they deploy
+  instead.) It builds as `watcher.war` in `dist/<ver>/admin/` and is
+  deliberately excluded from the admin EAR, since running it alongside the
+  Configurator's Auto-publish double-publishes every file edit. Its "this
+  module will be removed" deprecation banners (startup log, README, webapp
+  pages) are gone; it's a supported peer of the Configurator's auto-publish
+  now. Deploy one or the other.
 
 ### Build: Javadocs are generated automatically (needs a JDK 23+ tool)
 

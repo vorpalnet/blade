@@ -88,7 +88,7 @@ public abstract class Callflow implements Serializable {
 		ALLOW, // no glare, process all messages
 		QUEUE, // okay to queue requests that come in out of order
 		PROTECT, // protect against glare by issuing 491
-	};
+	}
 
 	private static final long serialVersionUID = 1L;
 	protected static SipFactory sipFactory;
@@ -138,6 +138,13 @@ public abstract class Callflow implements Serializable {
 	private static final String VORPAL_SESSION = "VORPAL_SESSION";
 	private static final String VORPAL_DIALOG = "VORPAL_DIALOG";
 
+	/// SipSession attribute (Boolean): whether this session's endpoint has
+	/// advertised UPDATE in an Allow header. Maintained passively by
+	/// AsyncSipServlet as messages arrive; read by the keep-alive refresh to
+	/// choose between UPDATE and re-INVITE style. Absent = unknown, which the
+	/// keep-alive treats as unsupported.
+	public static final String ALLOW_UPDATE = "ALLOW_UPDATE";
+
 	public static final String DIALOG_PARAM = "dialog";
 	/// Parameterable key on X-Vorpal-ID carrying the transport-level
 	/// address of whoever sent the original INVITE into OCCAS. Populated
@@ -147,15 +154,10 @@ public abstract class Callflow implements Serializable {
 	public static final String ORIGIN_PARAM = "origin";
 	private static final String VORPAL_ORIGIN = "VORPAL_ORIGIN";
 
-//	private static final String EXPECT_ACK = "EXPECT_ACK";
-	private static final String USER_AGENT_ATTR = "userAgent";
 	private static final String SIP_ADDRESS_ATTR = "sipAddress";
 	private static final String IS_PROXY_ATTR = "isProxy";
-	private static final String CALLER = "caller";
-	private static final String CALLEE = "callee";
 	private static final String MESSAGE_SIPFRAG = "message/sipfrag";
 	private static final String SEND_REQUESTS_PREFIX = "SEND_REQUESTS_";
-//	private static final String REQUEST_PENDING = "REQUEST_PENDING";
 
 	private static final String GLARE_STATE = "GLARE_STATE";
 
@@ -163,10 +165,6 @@ public abstract class Callflow implements Serializable {
 	private static final int RESPONSE_CODE_408 = 408;
 	private static final int RESPONSE_CODE_486 = 486;
 	private static final int RESPONSE_CODE_500 = 500;
-
-	// Session expiration defaults
-//	private static final int DEFAULT_SESSION_EXPIRES_MINUTES = 60;
-//	private static final int MIN_SESSION_EXPIRES_MINUTES = 30;
 
 	/**
 	 * Checks if the response is a provisional response (1xx status code).
@@ -578,8 +576,9 @@ public abstract class Callflow implements Serializable {
 		String indexKey = null;
 
 		do {
+			// nextLong(0, bound) is already non-negative
 			indexKey = String.format("%08X", //
-					Math.abs(ThreadLocalRandom.current().nextLong(0, 0xFFFFFFFFL)) //
+					ThreadLocalRandom.current().nextLong(0, 0xFFFFFFFFL) //
 			).toUpperCase();
 
 		} while (!getSipUtil().getSipApplicationSessionIds(indexKey).isEmpty());
@@ -716,9 +715,7 @@ public abstract class Callflow implements Serializable {
 		if (sipSession != null) {
 			try {
 				dialog = String.format("%04X", Math.abs(sipSession.getId().hashCode()) % 0xFFFF);
-				if (dialog != null) {
-					sipSession.setAttribute(VORPAL_DIALOG, dialog);
-				}
+				sipSession.setAttribute(VORPAL_DIALOG, dialog);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -782,261 +779,119 @@ public abstract class Callflow implements Serializable {
 		return dialog;
 	}
 
-	/**
-	 * Sends a SipServletRequest object. Supplies a SipServletResponse object to the
-	 * user as part of the lambda function.
-	 * 
-	 * @param request
-	 * @param lambdaFunction
-	 * @throws ServletException
-	 * @throws IOException
-	 */
+	/// Stamp the Vorpal tracking headers on an outbound message, if this
+	/// appSession has a Vorpal session ID. Writes both formats:
+	///
+	/// - `X-Vorpal-Session` — legacy colon-pair, retained for
+	///   cluster-to-cluster compat with peers that haven't upgraded to
+	///   X-Vorpal-ID. (X-Vorpal-Timestamp is no longer emitted.)
+	/// - `X-Vorpal-ID` — new parameterable format, carrying the `dialog`
+	///   param and, when known, the `origin` param. Origin is cached by
+	///   [#getVorpalSessionId(SipServletRequest)] either from an inbound
+	///   X-Vorpal-ID header or from `request.getRemoteAddr()` at
+	///   first-touch; absent for purely-internal UAC originations, in which
+	///   case the param is simply skipped.
+	///
+	/// Does nothing when the appSession has no `VORPAL_SESSION` attribute.
+	///
+	/// @param message    the outbound request or response to stamp
+	/// @param appSession the application session holding the Vorpal session ID
+	/// @param sipSession the dialog's SipSession (for the dialog ID)
+	protected static void stampVorpalIdHeaders(SipServletMessage message, SipApplicationSession appSession,
+			SipSession sipSession) throws ServletParseException {
+
+		String vorpalSessionId = getVorpalSessionId(appSession);
+		if (vorpalSessionId != null) {
+			String dialogId = getVorpalDialogId(sipSession);
+
+			// Legacy format: X-Vorpal-Session colon-pair
+			message.setHeader(X_VORPAL_SESSION, vorpalSessionId + ":" + dialogId);
+
+			// New format: X-Vorpal-ID (parameterable)
+			Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
+			xVorpalId.setParameter(DIALOG_PARAM, dialogId);
+
+			String origin = (String) appSession.getAttribute(VORPAL_ORIGIN);
+			if (origin != null && !origin.isEmpty()) {
+				xVorpalId.setParameter(ORIGIN_PARAM, origin);
+			}
+			message.setParameterableHeader(X_VORPAL_ID, xVorpalId);
+		}
+	}
+
+	/// Sends a SipServletRequest object. Supplies a SipServletResponse object
+	/// to the user as part of the lambda function.
+	///
+	/// On initial INVITEs this also stamps the Vorpal tracking headers
+	/// ([#stampVorpalIdHeaders]), sets the appSession expiration and arms the
+	/// session keep-alive when configured.
+	///
+	/// @param request        the request to send
+	/// @param lambdaFunction supplies the SipServletResponse
+	/// @throws ServletException
+	/// @throws IOException
 	@SuppressWarnings("serial")
 	public void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambdaFunction)
 			throws ServletException, IOException {
 
-		SipApplicationSession appSession;
-		SipSession sipSession;
-		String method = request.getMethod();
+		if (request == null) {
+			return;
+		}
 
 		try {
+			SipApplicationSession appSession = request.getApplicationSession();
+			SipSession sipSession = request.getSession();
 
-			if (request != null) {
-				appSession = request.getApplicationSession();
-				sipSession = request.getSession();
+			if (sipSession != null && sipSession.isValid()) {
 
-				if (sipSession != null && sipSession.isValid()) {
-
-					// For GLARE
-					switch (method) {
-					case INVITE:
-						if (request.getMethod().equals(INVITE) && request.isInitial()) {
-							String vorpalSessionId = getVorpalSessionId(appSession);
-							if (vorpalSessionId != null) { // if it's null, let's not worry about it.
-								String dialogId = getVorpalDialogId(sipSession);
-
-								// Legacy format: X-Vorpal-Session colon-pair.
-								// Kept for backward compat with Optum clusters
-								// that haven't yet upgraded to X-Vorpal-ID.
-								// X-Vorpal-Timestamp is no longer emitted.
-								request.setHeader(X_VORPAL_SESSION, vorpalSessionId + ":" + dialogId);
-
-								// New format: X-Vorpal-ID (parameterable)
-								Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
-								xVorpalId.setParameter(DIALOG_PARAM, dialogId);
-
-								// Propagate the origin when we've got one. Cached
-								// by getVorpalSessionId either from an inbound
-								// X-Vorpal-ID header or from request.getRemoteAddr()
-								// at first-touch. Absent for purely-internal
-								// UAC originations — that's fine, stamp is skipped.
-								String origin = (String) appSession.getAttribute(VORPAL_ORIGIN);
-								if (origin != null && !origin.isEmpty()) {
-									xVorpalId.setParameter(ORIGIN_PARAM, origin);
-								}
-								request.setParameterableHeader(X_VORPAL_ID, xVorpalId);
-							}
-						}
-						setGlareState(sipSession, GlareState.PROTECT);
-						break;
-
-					case REFER:
-						setGlareState(sipSession, GlareState.PROTECT);
-						break;
-
-					case ACK:
-					case CANCEL:
-						setGlareState(sipSession, GlareState.ALLOW);
-						break;
-
-					default:
-						// setGlareState(sipSession, GlareState.PROTECT);
+				// For GLARE
+				switch (request.getMethod()) {
+				case INVITE:
+					if (request.isInitial()) {
+						stampVorpalIdHeaders(request, appSession, sipSession);
 					}
+					setGlareState(sipSession, GlareState.PROTECT);
+					break;
 
-					try {
+				case REFER:
+					setGlareState(sipSession, GlareState.PROTECT);
+					break;
 
-						// Set SipApplicationSession expiration.
-						// Priority (highest value wins, except 0 means never-expire):
-						//   1. Developer may have set appSession expires manually (0 = never expire)
-						//   2. SessionParameters.expiration from config file (in minutes)
-						//   3. Session-Expires SIP header value (in seconds, converted to minutes)
+				case ACK:
+				case CANCEL:
+					setGlareState(sipSession, GlareState.ALLOW);
+					break;
 
-						if (request.isInitial()) {
-							switch (method) {
-							case OPTIONS:
-							case INFO:
-							case MESSAGE:
-								break;
-							default:
-								long expirationTime = appSession.getExpirationTime();
-
-								if (expirationTime != 0) { // 0 means never expires, don't override
-									int expiresInMinutes = (int) (((expirationTime
-											- System.currentTimeMillis()) / 60000) + 1);
-
-									// Check config file expiration
-									SessionParameters params = Callflow.getSessionParameters();
-									if (params != null && params.getExpiration() != null) {
-										expiresInMinutes = Math.max(expiresInMinutes,
-												params.getExpiration());
-									}
-
-									// Check Session-Expires header (value is in seconds)
-									Parameterable sessionExpires = request
-											.getParameterableHeader(SESSION_EXPIRES);
-									if (sessionExpires == null) {
-										sessionExpires = (Parameterable) appSession
-												.getAttribute(SESSION_EXPIRES);
-									}
-									if (sessionExpires != null) {
-										int headerExpiresInMinutes = Integer
-												.parseInt(sessionExpires.getValue()) / 60;
-										expiresInMinutes = Math.max(expiresInMinutes,
-												headerExpiresInMinutes);
-									}
-
-									appSession.setExpires(expiresInMinutes);
-
-									if (sipLogger.isLoggable(Level.FINER)) {
-										sipLogger.finer(request,
-												"Callflow.sendRequest - setting appSession expires="
-														+ expiresInMinutes + " minutes");
-									}
-								}
-							}
-						}
-
-						// begin KeepAlive logic...
-
-						SessionParameters keepAliveParams = Callflow.getSessionParameters();
-						KeepAliveParameters kap = (keepAliveParams != null)
-								? keepAliveParams.getKeepAlive()
-								: null;
-						boolean keepAliveEnabled = (kap != null
-								&& kap.getStyle() != null
-								&& !KeepAlive.DISABLED.equals(kap.getStyle()));
-
-						if (keepAliveEnabled && //
-								request.isInitial() //
-								&& request.getMethod().equals(INVITE) //
-								&& request.getAttribute("noKeepAlive") == null //
-						) { //
-
-							if (appSession.getExpirationTime() == 0) {
-								// Session set to never-expire, skip keep-alive setup
-							} else {
-
-							// In the case of a complicated B2BUA like 'transfer' where a new INVITE is
-							// sent out, supply the original 'Session-Expires' if it exists.
-							Parameterable sessionExpires = request.getParameterableHeader(SESSION_EXPIRES);
-							if (sessionExpires == null) {
-								sessionExpires = (Parameterable) appSession.getAttribute(SESSION_EXPIRES);
-								if (sessionExpires != null) {
-									request.addHeader(SESSION_EXPIRES, sessionExpires.toString());
-									String minSE = (String) appSession.getAttribute(MIN_SE);
-									if (minSE != null) {
-										request.addHeader(MIN_SE, minSE);
-									}
-								}
-							}
-
-							int sessionExpiresInSeconds = (kap.getSessionExpires() != null)
-									? kap.getSessionExpires() : 1800; // default 30 minutes
-							int minSEinSeconds = (kap.getMinSE() != null)
-									? kap.getMinSE() : 900; // default 15 minutes
-
-							String refresher = null;
-							boolean uas = false;
-							if (sessionExpires != null) {
-								refresher = sessionExpires.getParameter("refresher");
-								if (refresher != null) {
-									uas = refresher.equals("uas");
-								}
-								// important, so no other app operates on it.
-								sessionExpires.setParameter("refresher", "uac");
-							}
-
-							if (sessionExpires == null || uas == true) {
-
-								if (uas == true) {
-									sessionExpiresInSeconds = Integer.parseInt(sessionExpires.getValue());
-									String strMinSE = request.getHeader("Min-SE");
-									if (strMinSE != null) {
-										minSEinSeconds = Integer.parseInt(strMinSE);
-									} else {
-										minSEinSeconds = sessionExpiresInSeconds / 2;
-									}
-								}
-
-								request.getSessionKeepAlivePreference().setEnabled(true);
-								request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
-								request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
-								request.getSessionKeepAlivePreference().setRefresher(Refresher.UAC);
-								SessionKeepAlive skl = request.getSession().getKeepAlive();
-
-								skl.setRefreshCallback(new SessionKeepAlive.Callback() {
-									public void handle(SipSession session) {
-										try {
-											org.vorpal.blade.framework.v2.keepalive.KeepAlive ka = new org.vorpal.blade.framework.v2.keepalive.KeepAlive();
-											ka.handle(session);
-										} catch (Exception e100) {
-											sipLogger.warning(sipSession,
-													"#1.3 Callflow.sendRequest - catch Exception e100");
-										}
-									}
-								});
-
-								skl.setExpiryCallback(new SessionKeepAlive.Callback() {
-									public void handle(SipSession session) {
-										try {
-											KeepAliveExpiry expiry = new KeepAliveExpiry();
-											expiry.handle(sipSession);
-										} catch (Exception e200) {
-											sipLogger.warning(sipSession,
-													"#1.4 Callflow.sendRequest - catch Exception e200");
-										}
-									}
-								});
-
-								if (sipLogger.isLoggable(Level.FINER)) {
-									sipLogger.finer(request, "Callflow.sendRequest - setting keep alive timer; "//
-											+ "Session-Expires=" + request.getHeader("Session-Expires") // "
-											+ ", Min-SE=" + request.getHeader("Min-SE"));
-								}
-
-							}
-
-							} // else (session has expiration)
-
-						} // keepAliveEnabled
-
-					} catch (Exception exk) {
-						sipLogger.severe(request,
-								"Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
-					}
-					// end KeepAlive logic.
-
-					if (lambdaFunction != null) {
-						request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
-					}
-
-					// useful for identifying sessions
-					if (request.getTo() != null) {
-						sipSession.setAttribute(SIP_ADDRESS_ATTR, request.getTo());
-					}
-
-					// Useful for associating SIP with HTTP
-					Analytics.sipServletRequest.set(request);
-
-					request.send();
-					sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
-
+				default:
+					// leave glare state as-is
 				}
+
+				try {
+					applySessionExpiration(request, appSession);
+					applyKeepAlive(request, appSession);
+				} catch (Exception exk) {
+					sipLogger.severe(request,
+							"Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
+				}
+
+				if (lambdaFunction != null) {
+					request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
+				}
+
+				// useful for identifying sessions
+				if (request.getTo() != null) {
+					sipSession.setAttribute(SIP_ADDRESS_ATTR, request.getTo());
+				}
+
+				// Useful for associating SIP with HTTP
+				Analytics.sipServletRequest.set(request);
+
+				request.send();
+				sipLogger.superArrow(Direction.SEND, request, null, this.getClass().getSimpleName());
+
 			}
 
-		} catch (
-
-		Exception ex300) {
+		} catch (Exception ex300) {
 			sipLogger.warning(request, "#1.5 Callflow.sendRequest - catch Exception ex300");
 			sipLogger.severe(request, ex300);
 
@@ -1058,6 +913,166 @@ public abstract class Callflow implements Serializable {
 
 	}
 
+	/// Set the SipApplicationSession expiration for an initial request.
+	/// Priority (highest value wins, except 0 which means never-expire):
+	///
+	/// 1. Developer may have set appSession expires manually (0 = never expire)
+	/// 2. `SessionParameters.expiration` from the config file (in minutes)
+	/// 3. `Session-Expires` SIP header value (in seconds, converted to minutes)
+	///
+	/// Skipped for non-initial requests and for OPTIONS, INFO and MESSAGE.
+	private static void applySessionExpiration(SipServletRequest request, SipApplicationSession appSession)
+			throws ServletParseException {
+
+		if (!request.isInitial()) {
+			return;
+		}
+
+		switch (request.getMethod()) {
+		case OPTIONS:
+		case INFO:
+		case MESSAGE:
+			return;
+		default:
+			break;
+		}
+
+		long expirationTime = appSession.getExpirationTime();
+
+		if (expirationTime != 0) { // 0 means never expires, don't override
+			int expiresInMinutes = (int) (((expirationTime - System.currentTimeMillis()) / 60000) + 1);
+
+			// Check config file expiration
+			SessionParameters params = Callflow.getSessionParameters();
+			if (params != null && params.getExpiration() != null) {
+				expiresInMinutes = Math.max(expiresInMinutes, params.getExpiration());
+			}
+
+			// Check Session-Expires header (value is in seconds)
+			Parameterable sessionExpires = request.getParameterableHeader(SESSION_EXPIRES);
+			if (sessionExpires == null) {
+				sessionExpires = (Parameterable) appSession.getAttribute(SESSION_EXPIRES);
+			}
+			if (sessionExpires != null) {
+				int headerExpiresInMinutes = Integer.parseInt(sessionExpires.getValue()) / 60;
+				expiresInMinutes = Math.max(expiresInMinutes, headerExpiresInMinutes);
+			}
+
+			appSession.setExpires(expiresInMinutes);
+
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(request,
+						"Callflow.sendRequest - setting appSession expires=" + expiresInMinutes + " minutes");
+			}
+		}
+	}
+
+	/// Arm the session keep-alive on an initial outbound INVITE, per the
+	/// configured [KeepAliveParameters]. Does nothing when keep-alive is
+	/// disabled in config, the request is not an initial INVITE, the request
+	/// carries the `noKeepAlive` attribute, or the appSession is set to
+	/// never expire.
+	///
+	/// In the case of a complicated B2BUA like 'transfer' where a new INVITE
+	/// is sent out, the original `Session-Expires` (cached on the appSession)
+	/// is re-applied if the request doesn't already carry one.
+	@SuppressWarnings("serial")
+	private static void applyKeepAlive(SipServletRequest request, SipApplicationSession appSession)
+			throws ServletParseException {
+
+		SessionParameters sessionParams = Callflow.getSessionParameters();
+		KeepAliveParameters kap = (sessionParams != null) ? sessionParams.getKeepAlive() : null;
+		boolean keepAliveEnabled = (kap != null && kap.getStyle() != null
+				&& !KeepAlive.DISABLED.equals(kap.getStyle()));
+
+		if (!keepAliveEnabled || !request.isInitial() || !request.getMethod().equals(INVITE)
+				|| request.getAttribute("noKeepAlive") != null) {
+			return;
+		}
+
+		if (appSession.getExpirationTime() == 0) {
+			// Session set to never-expire, skip keep-alive setup
+			return;
+		}
+
+		// In the case of a complicated B2BUA like 'transfer' where a new INVITE is
+		// sent out, supply the original 'Session-Expires' if it exists.
+		Parameterable sessionExpires = request.getParameterableHeader(SESSION_EXPIRES);
+		if (sessionExpires == null) {
+			sessionExpires = (Parameterable) appSession.getAttribute(SESSION_EXPIRES);
+			if (sessionExpires != null) {
+				request.addHeader(SESSION_EXPIRES, sessionExpires.toString());
+				String minSE = (String) appSession.getAttribute(MIN_SE);
+				if (minSE != null) {
+					request.addHeader(MIN_SE, minSE);
+				}
+			}
+		}
+
+		int sessionExpiresInSeconds = (kap.getSessionExpires() != null) ? kap.getSessionExpires() : 1800; // 30 min
+		int minSEinSeconds = (kap.getMinSE() != null) ? kap.getMinSE() : 900; // 15 minutes
+
+		String refresher = null;
+		boolean uas = false;
+		if (sessionExpires != null) {
+			refresher = sessionExpires.getParameter("refresher");
+			if (refresher != null) {
+				uas = refresher.equals("uas");
+			}
+			// important, so no other app operates on it.
+			sessionExpires.setParameter("refresher", "uac");
+		}
+
+		if (sessionExpires == null || uas == true) {
+
+			if (uas == true) {
+				sessionExpiresInSeconds = Integer.parseInt(sessionExpires.getValue());
+				String strMinSE = request.getHeader(MIN_SE);
+				if (strMinSE != null) {
+					minSEinSeconds = Integer.parseInt(strMinSE);
+				} else {
+					minSEinSeconds = sessionExpiresInSeconds / 2;
+				}
+			}
+
+			request.getSessionKeepAlivePreference().setEnabled(true);
+			request.getSessionKeepAlivePreference().setExpiration(sessionExpiresInSeconds);
+			request.getSessionKeepAlivePreference().setMinimumExpiration(minSEinSeconds);
+			request.getSessionKeepAlivePreference().setRefresher(Refresher.UAC);
+			SessionKeepAlive skl = request.getSession().getKeepAlive();
+
+			skl.setRefreshCallback(new SessionKeepAlive.Callback() {
+				public void handle(SipSession session) {
+					try {
+						org.vorpal.blade.framework.v2.keepalive.KeepAlive ka = new org.vorpal.blade.framework.v2.keepalive.KeepAlive();
+						ka.handle(session);
+					} catch (Exception e100) {
+						sipLogger.warning(session, "#1.3 Callflow.applyKeepAlive - catch Exception e100");
+					}
+				}
+			});
+
+			skl.setExpiryCallback(new SessionKeepAlive.Callback() {
+				public void handle(SipSession session) {
+					try {
+						KeepAliveExpiry expiry = new KeepAliveExpiry();
+						// Use the live session handed in by the container, not a
+						// captured reference that may be stale after failover.
+						expiry.handle(session);
+					} catch (Exception e200) {
+						sipLogger.warning(session, "#1.4 Callflow.applyKeepAlive - catch Exception e200");
+					}
+				}
+			});
+
+			if (sipLogger.isLoggable(Level.FINER)) {
+				sipLogger.finer(request, "Callflow.sendRequest - setting keep alive timer; "//
+						+ "Session-Expires=" + request.getHeader(SESSION_EXPIRES) //
+						+ ", Min-SE=" + request.getHeader(MIN_SE));
+			}
+		}
+	}
+
 	/**
 	 * Sends a SipServletRequest object. This method does not supply a
 	 * SipServletResponse object to the user. (Useful for messages like ACK or
@@ -1071,64 +1086,61 @@ public abstract class Callflow implements Serializable {
 		sendRequest(request, null);
 	}
 
-	/**
-	 * Sends multiple requests (INVITE) in serial.
-	 * 
-	 * @param milliseconds   timer duration in milliseconds for each request
-	 * @param requests       a list of SipServletRequest objects
-	 * @param lambdaFunction supplies a SipServletResponse object
-	 * @throws ServletException
-	 * @throws IOException
-	 */
+	/// Sends multiple requests (INVITE) in serial. Each request gets
+	/// `milliseconds` to produce a final response before it is canceled and
+	/// the next request is tried. If every request fails, a dummy 408 is
+	/// delivered to the callback.
+	///
+	/// @param milliseconds   timer duration in milliseconds for each request
+	/// @param requests       a list of SipServletRequest objects
+	/// @param lambdaFunction supplies a SipServletResponse object
+	/// @throws ServletException
+	/// @throws IOException
 	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
 			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
 
-		if (!requests.isEmpty()) {
-			SipServletRequest request = requests.remove(0);
-			String timerId = startTimer(request.getApplicationSession(), milliseconds, false, (timeout) -> {
-				sendRequest(request.createCancel());
-				if (!requests.isEmpty()) {
-					sendRequestsInSerial(milliseconds, requests, lambdaFunction);
-				} else {
-					// No valid responses, create a dummy one
-					lambdaFunction.accept(request.createResponse(RESPONSE_CODE_408));
-				}
-			});
-
-			try {
-				sendRequest(request, (response) -> {
-					stopTimer(response.getApplicationSession(), timerId);
-					if (!failure(response) || requests.isEmpty()) {
-						lambdaFunction.accept(response);
-					} else {
-						if (!requests.isEmpty()) {
-							sendRequestsInSerial(milliseconds, requests, lambdaFunction);
-						} else {
-							// No valid responses, create a dummy one
-							lambdaFunction.accept(request.createResponse(RESPONSE_CODE_408));
-						}
-					}
-
-				});
-			} catch (Exception ex500) {
-				sipLogger.warning(request,
-						"#1.6 Callflow.sendRequestsInSerial - catch Exception ex500: " + ex500.getMessage());
-				sipLogger.severe(request, ex500.getMessage());
-				stopTimer(request.getApplicationSession(), timerId);
-
-				if (!requests.isEmpty()) {
-					sendRequestsInSerial(milliseconds, requests, lambdaFunction);
-				} else {
-					// No valid responses, create a dummy one
-					lambdaFunction.accept(request.createResponse(RESPONSE_CODE_408));
-				}
-
-			}
-
-		} else {
+		if (requests.isEmpty()) {
 			sipLogger.warning("#1.7 Callflow.sendRequestsInSerial... Empty request list.");
+			return;
 		}
 
+		SipServletRequest request = requests.remove(0);
+		String timerId = startTimer(request.getApplicationSession(), milliseconds, false, (timeout) -> {
+			sendRequest(request.createCancel());
+			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, request);
+		});
+
+		try {
+			sendRequest(request, (response) -> {
+				stopTimer(response.getApplicationSession(), timerId);
+				if (!failure(response) || requests.isEmpty()) {
+					lambdaFunction.accept(response);
+				} else {
+					// failure and more requests remain; try the next one
+					sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+				}
+			});
+		} catch (Exception ex500) {
+			sipLogger.warning(request,
+					"#1.6 Callflow.sendRequestsInSerial - catch Exception ex500: " + ex500.getMessage());
+			sipLogger.severe(request, ex500.getMessage());
+			stopTimer(request.getApplicationSession(), timerId);
+			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, request);
+		}
+
+	}
+
+	/// Continue with the next request in the serial list, or deliver a dummy
+	/// 408 response built from the request that just failed if none remain.
+	private void sendNextInSerialOrFail(long milliseconds, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction, SipServletRequest request)
+			throws ServletException, IOException {
+		if (!requests.isEmpty()) {
+			sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+		} else {
+			// No valid responses, create a dummy one
+			lambdaFunction.accept(request.createResponse(RESPONSE_CODE_408));
+		}
 	}
 
 	/**
@@ -1171,9 +1183,7 @@ public abstract class Callflow implements Serializable {
 			requestMap.put(request.getSession().getId(), request);
 		}
 
-		if (requestMap != null) {
-			appSession.setAttribute(id, requestMap);
-		}
+		appSession.setAttribute(id, requestMap);
 
 		// create a timer for canceling requests, if needed
 		// using a little syntactical magic for lambda expressions
@@ -1242,9 +1252,7 @@ public abstract class Callflow implements Serializable {
 								lambdaFunction.accept(response);
 							} else {
 								// save the outstanding requests and await for future responses
-								if (savedRequests != null) {
-									appSession.setAttribute(id, savedRequests);
-								}
+								appSession.setAttribute(id, savedRequests);
 							}
 
 						}
@@ -1282,15 +1290,14 @@ public abstract class Callflow implements Serializable {
 		response.setAttribute(WITHHOLD_RESPONSE, true);
 	}
 
-	// Send a response, expect an 'ACK'
-	/**
-	 * Send a response back upstream and expect an ACK/PRACK.
-	 * 
-	 * @param response
-	 * @param lambdaFunction
-	 * @throws ServletException
-	 * @throws IOException
-	 */
+	/// Send a response back upstream and expect an ACK/PRACK. On responses to
+	/// initial INVITEs this also stamps the Vorpal tracking headers
+	/// ([#stampVorpalIdHeaders]).
+	///
+	/// @param response       the response to send
+	/// @param lambdaFunction called with the ACK or PRACK
+	/// @throws ServletException
+	/// @throws IOException
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
 
@@ -1307,30 +1314,10 @@ public abstract class Callflow implements Serializable {
 				// leave in PROTECT
 				break;
 			case INVITE:
-				// For inserting Vorpal Session header
+				// Keep the Vorpal tracking headers on responses too — useful for
+				// downstream services tracing a call back to its entry point.
 				if (response.getRequest().isInitial()) {
-					String indexKey = getVorpalSessionId(response.getApplicationSession());
-					if (indexKey != null) {
-						String vorpalSessionId = getVorpalSessionId(appSession);
-						String dialogId = getVorpalDialogId(sipSession);
-
-						// Legacy format: X-Vorpal-Session colon-pair, retained
-						// for cluster-to-cluster compat with peers that haven't
-						// upgraded to X-Vorpal-ID. X-Vorpal-Timestamp dropped.
-						response.setHeader(X_VORPAL_SESSION, vorpalSessionId + ":" + dialogId);
-
-						// New format: X-Vorpal-ID (parameterable)
-						Parameterable xVorpalId = sipFactory.createParameterable(vorpalSessionId);
-						xVorpalId.setParameter(DIALOG_PARAM, dialogId);
-
-						// Keep origin on responses too — useful for downstream
-						// services tracing a call back to its entry point.
-						String origin = (String) appSession.getAttribute(VORPAL_ORIGIN);
-						if (origin != null && !origin.isEmpty()) {
-							xVorpalId.setParameter(ORIGIN_PARAM, origin);
-						}
-						response.setParameterableHeader(X_VORPAL_ID, xVorpalId);
-					}
+					stampVorpalIdHeaders(response, appSession, sipSession);
 				}
 
 				// Glare handling

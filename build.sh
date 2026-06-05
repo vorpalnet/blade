@@ -293,6 +293,7 @@ write_deployment_manifest() {
             tuning.war)       echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /tuning)" ;;
             files.war)        echo "admin|AdminServer|Config file manager (context: /files)" ;;
             explorer.war)     echo "admin|AdminServer|Experimental UI (context: /explorer)" ;;
+            watcher.war)      echo "admin|AdminServer|Headless config auto-publish, standalone — not in blade-admin.ear (context: /watcher)" ;;
             logs.war)         echo "admin|AdminServer|Log viewer (context: /logs)" ;;
             javadoc.war)      echo "admin|AdminServer|Javadoc site (context: /blade/javadoc)" ;;
             crud-editor.war)  echo "admin|AdminServer|CRUD editor (context: /crud-editor)" ;;

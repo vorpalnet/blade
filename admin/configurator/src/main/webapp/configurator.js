@@ -554,6 +554,11 @@ function loadSample() {
 }
 
 function finalizeSchemaLoad(newData) {
+    // First schema load: retire the welcome panel and reveal the toolbar.
+    const welcomePanel = document.getElementById('welcome-panel');
+    if (welcomePanel) welcomePanel.style.display = 'none';
+    document.getElementById('form-tab').classList.remove('no-schema');
+
     // Update the data
     initialData = newData;
     currentData = newData;
@@ -3516,7 +3521,7 @@ function publishConfig() {
 // --- Auto-publish toggle ---------------------------------------------------
 // Global Configurator behavior: when ON, *.json files saved under
 // ./config/custom/vorpal/ are republished to live services automatically
-// (the behavior the retired watcher WAR provided). Writing the flag triggers
+// (the same behavior the standalone watcher WAR provides). Writing the flag triggers
 // a server-side reload that starts/stops the watcher thread immediately.
 
 function setAutoPublish(enabled) {

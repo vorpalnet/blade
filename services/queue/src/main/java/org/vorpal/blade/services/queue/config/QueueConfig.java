@@ -6,12 +6,12 @@ import java.util.Map;
 import org.vorpal.blade.framework.v2.config.RouterConfig;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
+import org.vorpal.blade.framework.v2.config.SchemaTitle;
 
 /**
  * Defines how the Queue application is configured.
  */
-@JsonSchemaTitle("Queue")
+@SchemaTitle("Queue")
 public class QueueConfig extends RouterConfig {
 	private static final long serialVersionUID = 1L;
 	

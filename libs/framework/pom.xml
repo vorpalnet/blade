@@ -44,15 +44,6 @@
 			<groupId>com.github.victools</groupId>
 			<artifactId>jsonschema-module-jackson</artifactId>
 		</dependency>
-		<!-- Kjetland's annotations (e.g. @JsonSchemaTitle) are still used
-		     by many service config classes. The generator code path is
-		     gone, but the annotations need to be on the compile classpath
-		     until services migrate to Jackson-native or victools-native
-		     metadata. They're no-ops at runtime under victools. -->
-		<dependency>
-			<groupId>com.kjetland</groupId>
-			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
-		</dependency>
 		<dependency>
 			<groupId>io.swagger.core.v3</groupId>
 			<artifactId>swagger-jaxrs2</artifactId>

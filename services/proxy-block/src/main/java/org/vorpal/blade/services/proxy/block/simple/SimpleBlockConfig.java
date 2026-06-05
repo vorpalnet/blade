@@ -8,9 +8,9 @@ import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
+import org.vorpal.blade.framework.v2.config.SchemaTitle;
 
-@JsonSchemaTitle("Proxy Block")
+@SchemaTitle("Proxy Block")
 public class SimpleBlockConfig extends Configuration {
 	private static final long serialVersionUID = 1L;
 

@@ -28,7 +28,7 @@ import java.util.LinkedList;
 import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.services.acl.AclRule.Permission;
 
-import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
+import org.vorpal.blade.framework.v2.config.SchemaTitle;
 
 import inet.ipaddr.Address;
 import inet.ipaddr.IPAddressString;
@@ -40,7 +40,7 @@ import inet.ipaddr.ipv4.IPv4AddressAssociativeTrie;
  * @author Jeff McDonald
  *
  */
-@JsonSchemaTitle(value = "Access Control List")
+@SchemaTitle(value = "Access Control List")
 public class AclConfig extends Configuration {
 	private static final long serialVersionUID = 1L;
 

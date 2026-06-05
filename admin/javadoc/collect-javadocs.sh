@@ -193,7 +193,7 @@ echo '            </section>' >> "$DOCROOT/index.html"
 # --- Admin ---
 echo '            <h2 class="jd-section">Administration</h2>' >> "$DOCROOT/index.html"
 echo '            <section class="vorpal-card-grid">' >> "$DOCROOT/index.html"
-for mod in configurator flow tuning logs crud-editor portal; do
+for mod in configurator flow tuning logs watcher crud-editor portal; do
     [ -d "$DOCROOT/$mod" ] && emit_module "$mod" >> "$DOCROOT/index.html"
 done
 echo '            </section>' >> "$DOCROOT/index.html"
@@ -204,7 +204,7 @@ echo '            <section class="vorpal-card-grid">' >> "$DOCROOT/index.html"
 for dir in "$DOCROOT"/*/; do
     mod=$(basename "$dir")
     case "$mod" in
-        framework|fsmar|fsmar3|configurator|flow|tuning|logs|crud-editor|portal|javadoc|test-*|images) continue ;;
+        framework|fsmar|fsmar3|configurator|flow|tuning|logs|watcher|crud-editor|portal|javadoc|test-*|images) continue ;;
     esac
     emit_module "$mod" >> "$DOCROOT/index.html"
 done

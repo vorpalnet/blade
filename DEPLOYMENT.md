@@ -60,6 +60,7 @@ Management tools that run **only on AdminServer**, packaged as a single EAR (`bl
 
 - **Why AdminServer only:** admin apps expose management endpoints; deploying them to the cluster would expose those endpoints on every engine node and duplicate state.
 - **EAR vs. individual WAR:** `deploy.sh ... admin` deploys `blade-admin.ear` (the whole tier). For a quick single-app test, redeploy that one WAR (from `dist/<ver>/admin/` or its exploded `target/` dir) — each is independently deployable.
+- **`watcher.war` — standalone only, NOT in the EAR.** `admin/watcher` builds `watcher.war` (context `/blade/watcher`), a headless config auto-publish shim: no UI, no servlets, no login — one background `WatchService` thread that republishes `./config/custom/vorpal/*.json` edits via JMX. It exists for sites that don't deploy the Configurator UI (e.g., it can't pass their security scans) but still need auto-publish. Deploy it manually to AdminServer from `dist/<ver>/admin/watcher.war`. Don't run it alongside the Configurator with Auto-publish on — both watch the same files, so every edit publishes twice (harmless but redundant); turn the Configurator's Auto-publish off, or undeploy one of them.
 
 ### 4. Services + test apps — `dist/<ver>/services/*.war`
 
@@ -190,6 +191,7 @@ This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The s
 | `flow.war` | `/blade/flow` |
 | `tuning.war` | `/blade/tuning` |
 | `logs.war` | `/blade/logs` |
+| `watcher.war` | `/blade/watcher` (standalone only — not in blade-admin.ear) |
 | `crud-editor.war` | `/blade/crud-editor` |
 | `javadoc.war` | `/blade/javadoc` |
 

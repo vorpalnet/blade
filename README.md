@@ -1,9 +1,49 @@
 # BLADE
 
-**B**lended **L**ayer **A**pplication **D**evelopment **E**nvironment
+**B**lended **L**ayer **A**ppliance **D**evelopment **E**nvironment
+
+What once read like a choose-your-own-adventure book now reads like a poem — open-source callflows for carrier-grade call centers.🗡️ 
 
 BLADE is an open-source collection of libraries and applications that
 aide in the development real-time, audio-visual streaming applications.
+
+Coming soon! BLADE 3.0 — The Open-Source SIP Application Framework for Carrier-Scale Call Centers
+  
+  BLADE turns SIP application development on Oracle OCCAS from scattered event-handler spaghetti into readable, top-to-bottom callflows — entire SIP conversations expressed as straight-line lambda code, with automatic state serialization so
+  calls survive cluster failover. Built for production: 1000+ calls-per-second clustered deployments, no singletons, no single point of failure.
+
+  - 34 shipped artifacts, 130 unique packages — zero known vulnerabilities. Every WAR, EAR, and JAR in the distribution scans clean against current CVE databases.
+  - 12 browser-based admin tools, deployable as one EAR in one step.
+  - 15+ production SIP services out of the box: registrar, proxy/router, load balancer, transfer, hold, queueing, presence, analytics, access control, and more.
+  - A custom enterprise routing application in ~12 lines of code.
+
+  Security
+
+  - Scan-clean by design. The entire dependency tree was audited package-by-package; legacy libraries were removed outright rather than patched around. Application WARs carry only BLADE code — every third-party library lives in one centrally-managed,
+  centrally-patchable shared library. This allows one library update to patch the entire suite of servies.
+  - Minimal attack surface options. Sites with strict scanning policies can run headless: config auto-publish with no UI, no servlets, no login page — nothing to probe.
+  - Locked-down by default. Changes go live only by explicit operator action. File editing is deny-by-default whitelist with path-traversal guards and automatic versioned backups. CORS is exact-origin allowlist only — wildcards intentionally unsupported.
+  Credentials can't be committed by accident (four independent safeguards). Air-gap friendly: zero CDN dependencies.
+
+  Operate it from a browser, not an SSH session
+
+  - Configurator — every service's config edited through forms generated live from JSON Schema, with version history, validation, guided dropdowns for known keys, and one-click publish to the running cluster. No restarts.
+  - Tuning — OCCAS/WebLogic/JVM tuning with one-click "Recommended" presets encoding high-CPS heuristics, a read-only Health Check that flags latency-killing misconfigurations, and JDK 21 low-pause GC setup done correctly.
+  - API Explorer — live-discovered, deep-linkable OpenAPI docs for every running service.
+  - Plus log viewing, visual FSMAR diagram editing, analytics administration with one-click JMS provisioning, and a fully browsable API reference with UML diagrams.
+
+  Carrier-grade resilience
+
+  - Graceful overload drain: when the engine is overloaded, BLADE tells the load balancer to stop sending new calls — in-flight calls finish undisturbed.
+  - Circuit breakers on REST/LDAP/database lookups: a flaky backend stops dragging calls through timeouts, and the NOC gets exactly one SNMP trap down and one up per outage — not a trap storm.
+  - NMS-ready monitoring using the standard MIB your operations team already has.
+
+  Smarter routing
+
+  - FSMAR 3: call-path routing driven by any data in the message — headers, JSON, XML, SDP, regex captures — with templated routes like sip:${To.user}@proxy. Routing state survives cluster failover.
+  - Multi-tenant analytics: one analytics database serving many customers, each seeing only their own calls.
+
+  ---
 
 The latest documentation can be found here: https://vorpal.net/javadocs/blade/
 The company website can be found here: https://vorpal.net
@@ -63,6 +103,7 @@ Deployed to the WebLogic AdminServer as skinny WARs that reference the `vorpal-b
 | Tuning | `/blade/tuning` | JVM / SIP / OCCAS tuning knobs |
 | CRUD Editor | `/blade/crud-editor` | Generic CRUD editor for service resources |
 | Logs | `/blade/logs` | Cluster log tail viewer |
+| Watcher | `/blade/watcher` | Headless config auto-publish shim (no UI, no servlets) — standalone alternative to the Configurator's auto-publish; not bundled in `blade-admin.ear` |
 | Javadoc | `/blade/javadoc` | Browsable Javadoc site with UML class diagrams |
 
 ### Services
@@ -125,6 +166,7 @@ admin/          Admin tools (deployed to AdminServer)
   javadoc/        Browsable Javadoc site (WAR, context: /blade/javadoc)
   logs/           Cluster log tail viewer (WAR)
   tuning/         JVM / SIP / OCCAS tuning (WAR)
+  watcher/        Headless config auto-publish shim (WAR, standalone — not in the admin EAR)
 services/       Services (deployed to cluster via EAR)
   acl/            Access Control List
   analytics/      Call detail records and analytics
@@ -226,6 +268,7 @@ dist/<version>-<build>/
     flow.war                                 # /blade/flow
     logs.war                                 # /blade/logs
     tuning.war                               # /blade/tuning
+    watcher.war                              # /blade/watcher (standalone only — not in blade-admin.ear)
     javadoc.war                              # /blade/javadoc
   services/
     proxy-router.war                         # one WAR per service → cluster
@@ -242,7 +285,7 @@ Each WAR's filename matches the last segment of its `<wls:context-root>` from `w
 - The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
 - **EAR (currently disabled)**: the `services/` aggregator no longer produces a `vorpal-blade-services-<profile>.ear`. Services are deployed individually as WARs while the EAR logic is offline. See `services/pom.xml` for the TODO marker.
 - **FSMAR JAR** must be installed manually into the OCCAS approuter `lib/` folder.
-- **Admin WARs** are standalone (include all dependency JARs) and are deployed separately to AdminServer.
+- **Admin WARs** are skinny like service WARs — `WEB-INF/lib` carries only the framework jar; 3rd-party JARs come from the `vorpal-blade` shared library. They deploy to AdminServer (as `blade-admin.ear`, or individually).
 - On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
 
 ### Skipping the dist copy (dev mode)

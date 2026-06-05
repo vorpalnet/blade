@@ -3,6 +3,12 @@
     <wls:weblogic-version>14.1.1.0</wls:weblogic-version>
     <wls:context-root>blade/configurator</wls:context-root>
 
+	<wls:library-ref>
+		<wls:library-name>vorpal-blade</wls:library-name>
+		<wls:specification-version>2.0</wls:specification-version>
+		<wls:exact-match>false</wls:exact-match>
+	</wls:library-ref>
+
 	<!-- Shared session cookie across BLADE admin webapps. Same cookie-name
 	     + path=/ in every admin WAR (configurator, securelogix-admin, …)
 	     gives WebLogic's realm-level SSO a single session to recognize,
@@ -43,14 +49,12 @@
 		<wls:debug>true</wls:debug>
 	</wls:jsp-descriptor>
 
-	<!-- prefer-web-inf-classes and prefer-application-packages are mutually
-	     exclusive on WLS 14.1.1+. The Configurator is a standalone WAR
-	     (no library-ref), so prefer-web-inf-classes=true is the right
-	     classloader policy — it makes every bundled JAR in WEB-INF/lib
-	     take precedence, which subsumes what the prior
-	     prefer-application-packages org.xmlsoap.schemas.* entry was doing. -->
+	<!-- No <prefer-web-inf-classes>: this WAR ships only the framework jar
+	     in WEB-INF/lib (war plugin strips the rest via packagingExcludes);
+	     3rd-party classes come from the vorpal-blade shared library, whose
+	     auto-generated <prefer-application-packages> owns the classloader
+	     policy — the two settings are mutually exclusive on WLS 14.1.1+. -->
 	<wls:container-descriptor>
-		<wls:prefer-web-inf-classes>true</wls:prefer-web-inf-classes>
 		<wls:referer-validation>STRICT</wls:referer-validation>
 		<wls:filter-dispatched-requests-enabled>false</wls:filter-dispatched-requests-enabled>
 		<wls:servlet-reload-check-secs>-1</wls:servlet-reload-check-secs>

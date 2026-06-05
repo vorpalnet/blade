@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Documentation · BLADE Watcher</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/watcher/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Watcher</span>
+				<span class="vorpal-brand-tagline">Headless Configuration Monitor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Running</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation</div>
+				<h1 class="vorpal-page-title">Watcher Handbook</h1>
+				<p class="vorpal-page-subtitle">
+					Short reference for a small, backend-only app. What it
+					does, why it exists, and when to use it instead of (or
+					alongside) the Configurator's built-in monitor.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html" class="vorpal-active-doc">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Welcome</h1>
+					<p>
+						The BLADE Watcher is a tiny backend service. It does
+						one thing: watches
+						<code>$DOMAIN_HOME/config/custom/vorpal/</code> for
+						file-system changes and pushes any modified JSON into
+						the matching <code>SettingsMXBean</code>. Same
+						mechanism the Configurator uses internally, packaged
+						as a standalone WAR.
+					</p>
+
+					<h2>At a glance</h2>
+					<table>
+						<tr><th>UI</th><td>None — landing + docs only</td></tr>
+						<tr><th>Java</th><td><code>WatcherStartup</code> (@WebListener) starts a <code>ConfigurationMonitor</code> thread on context init</td></tr>
+						<tr><th>Watches</th><td><code>$DOMAIN_HOME/config/custom/vorpal/**</code> (recursive)</td></tr>
+						<tr><th>Action on change</th><td>Match file → MBean by name + scope, push JSON via SettingsMXBean.openForWrite / write / close / reload</td></tr>
+					</table>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Why this exists</div>
+						<p>
+							Historically the Watcher was the sole file → MBean
+							pump for the BLADE admin tier. The Configurator
+							inherited this logic in its own
+							<code>ConfigurationMonitor</code>, so most
+							deployments don't need a separately-deployed
+							Watcher. It's kept around for the rare deploy
+							that wants the pump <em>without</em> the
+							Configurator UI.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

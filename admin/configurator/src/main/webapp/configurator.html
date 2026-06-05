@@ -84,7 +84,7 @@
             <button class="tab" data-tab="files">Files</button>
         </div>
         
-        <div id="form-tab" class="tab-content active">
+        <div id="form-tab" class="tab-content active no-schema">
             <div class="form-toolbar">
                 <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
                 <button type="button" class="btn btn-secondary" onclick="loadConfig()">Load</button>
@@ -141,6 +141,22 @@
                     <span class="autopublish-track"><span class="autopublish-thumb"></span></span>
                     <span id="autopublish-state" class="autopublish-state">on</span>
                 </label>
+            </div>
+
+            <!-- Welcome / empty state — shown until the first schema is loaded.
+                 finalizeSchemaLoad() hides it and removes .no-schema from #form-tab. -->
+            <div id="welcome-panel" class="welcome-panel">
+                <div class="welcome-card">
+                    <div class="welcome-icon" aria-hidden="true">⚙</div>
+                    <h2>No configuration loaded</h2>
+                    <p>Pick a target and a schema above to begin editing.</p>
+                    <ol class="welcome-steps">
+                        <li><strong>Target</strong> — the scope to edit: Domain, Cluster, or Server.</li>
+                        <li><strong>Schema</strong> — which BLADE application's settings to open.</li>
+                        <li><strong>Edit, Save, Publish</strong> — published changes go live to running services immediately.</li>
+                    </ol>
+                    <p class="welcome-links">New here? See the <a href="docs/overview.html">Overview</a> or the <a href="docs/index.html">Documentation</a>.</p>
+                </div>
             </div>
 
             <!-- Auto-save draft banner — appears when a localStorage draft is newer than the server copy. -->

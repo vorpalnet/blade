@@ -15,136 +15,33 @@
 	<packaging>war</packaging>
 	<name>BLADE Admin Configurator</name>
 
+	<!-- Skinny WAR like every other admin/service app: WEB-INF/lib carries
+	     only the framework jar (parent war-plugin packagingExcludes); all
+	     3rd-party JARs come from the vorpal-blade shared library via the
+	     <library-ref> in weblogic.xml. Common 3rd-party deps (jackson,
+	     swagger, slf4j, ipaddress, json-path, commons-*) are inherited
+	     provided-scope from the parent; only the Configurator-specific
+	     extras are declared here — they're bundled in libs/shared for it. -->
 	<dependencies>
-		<dependency>
-			<groupId>com.fasterxml.jackson.core</groupId>
-			<artifactId>jackson-databind</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.taglibs</groupId>
-			<artifactId>taglibs-standard-impl</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>xalan</groupId>
-			<artifactId>xalan</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.networknt</groupId>
-			<artifactId>json-schema-validator</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>io.swagger.core.v3</groupId>
-			<artifactId>swagger-jaxrs2</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>io.swagger.core.v3</groupId>
-			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
-		</dependency>
-		<!-- Override parent's provided scope — standalone WAR, no shared library -->
-		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-api</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<!-- CredentialEncryption for {CLEARTEXT} → {AES} on save.
-		     Bundled into the WAR since the Configurator is standalone
-		     (no shared library reference). -->
+		<!-- CredentialEncryption for {CLEARTEXT} → {AES} on save. -->
 		<dependency>
 			<groupId>org.vorpal.blade</groupId>
 			<artifactId>vorpal-blade-library-framework</artifactId>
 		</dependency>
-		<!-- Framework transitives that the parent declares as <scope>provided</scope>
-		     (shared library provides them for normal service WARs). The Configurator
-		     is standalone, so re-scope to compile or they get stripped from WEB-INF/lib.
-		     ipaddress in particular is touched at deploy time by framework v2.config
-		     JSON (de)serializers during schema scan. -->
 		<dependency>
-			<groupId>com.github.seancfoley</groupId>
-			<artifactId>ipaddress</artifactId>
-			<scope>compile</scope>
+			<groupId>com.networknt</groupId>
+			<artifactId>json-schema-validator</artifactId>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
-			<groupId>com.fasterxml.jackson.dataformat</groupId>
-			<artifactId>jackson-dataformat-xml</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.kjetland</groupId>
-			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.jayway.jsonpath</groupId>
-			<artifactId>json-path</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-collections4</artifactId>
-			<scope>compile</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.apache.commons</groupId>
-			<artifactId>commons-email</artifactId>
-			<scope>compile</scope>
+			<groupId>io.swagger.core.v3</groupId>
+			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>
+			<scope>provided</scope>
 		</dependency>
 	</dependencies>
 
 	<build>
 		<finalName>configurator</finalName>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-war-plugin</artifactId>
-				<configuration>
-					<!-- Standalone WAR (not in EAR) - include all JARs -->
-					<packagingExcludes>none</packagingExcludes>
-				</configuration>
-			</plugin>
-			<!-- Strip multi-release classes above the target Java version from
-			     JARs inside the WAR. Prevents UnsupportedClassVersionError on older JDKs. -->
-			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>exec-maven-plugin</artifactId>
-				<version>3.5.0</version>
-				<executions>
-					<execution>
-						<id>strip-multirelease</id>
-						<phase>package</phase>
-						<goals><goal>exec</goal></goals>
-						<configuration>
-							<executable>bash</executable>
-							<arguments>
-								<argument>-c</argument>
-								<argument>
-TARGET_VER="${blade.java.version}";
-WARFILE="${project.build.directory}/${project.build.finalName}.war";
-TMPDIR="${project.build.directory}/war-strip-tmp";
-STRIPPED=0;
-mkdir -p "$TMPDIR" &amp;&amp; cd "$TMPDIR" &amp;&amp;
-jar xf "$WARFILE" WEB-INF/lib/;
-for jar in WEB-INF/lib/*.jar; do
-  for ver in $(jar tf "$jar" 2>/dev/null | grep 'META-INF/versions/' | sed 's|META-INF/versions/||' | cut -d/ -f1 | sort -un); do
-    if [ "$ver" -gt "$TARGET_VER" ]; then
-      zip -qd "$jar" "META-INF/versions/$ver/*" 2>/dev/null || true
-      STRIPPED=1
-    fi
-  done
-done;
-if [ "$STRIPPED" -eq 1 ]; then
-  jar uf "$WARFILE" WEB-INF/lib/;
-  echo "Stripped multi-release classes above Java $TARGET_VER from configurator WAR JARs"
-else
-  echo "No multi-release classes above Java $TARGET_VER found in configurator WAR JARs"
-fi;
-rm -rf "$TMPDIR"
-								</argument>
-							</arguments>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
 	</build>
 
 </project>

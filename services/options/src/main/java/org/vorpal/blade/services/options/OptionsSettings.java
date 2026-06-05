@@ -29,9 +29,9 @@ import java.io.Serializable;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
+import org.vorpal.blade.framework.v2.config.SchemaTitle;
 
-@JsonSchemaTitle("Options")
+@SchemaTitle("Options")
 public class OptionsSettings extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 

@@ -39,7 +39,10 @@
 		<blade.license>MIT License</blade.license>
 
 		<!-- Dependency versions -->
-		<jackson.version>2.18.2</jackson.version>
+		<jackson.version>2.18.6</jackson.version>
+		<!-- joschi's threetenbp datatype lags Jackson patch releases — pinned
+		     separately from jackson.version. -->
+		<jackson-threetenbp.version>2.18.2</jackson-threetenbp.version>
 		<slf4j.version>2.0.17</slf4j.version>
 		<swagger.version>2.2.28</swagger.version>
 		<swagger-parser.version>2.1.25</swagger-parser.version>
@@ -48,13 +51,14 @@
 		<ipaddress.version>5.5.1</ipaddress.version>
 		<xalan.version>2.7.3</xalan.version>
 		<jsonpath.version>2.10.0</jsonpath.version>
-		<jsonschema.version>1.0.39</jsonschema.version>
 		<victools.version>4.38.0</victools.version>
 		<json-schema-validator.version>1.5.6</json-schema-validator.version>
 		<findbugs.version>3.0.2</findbugs.version>
 		<gson-fire.version>1.9.0</gson-fire.version>
 		<okhttp.version>4.12.0</okhttp.version>
-		<oauth2.version>1.0.2</oauth2.version>
+		<nimbus-jose-jwt.version>9.37.4</nimbus-jose-jwt.version>
+		<commons-lang3.version>3.18.0</commons-lang3.version>
+		<jakarta-mail.version>1.6.8</jakarta-mail.version>
 		<nimbus-oauth2-oidc-sdk.version>11.10.1</nimbus-oauth2-oidc-sdk.version>
 
 		<!-- Plugin versions -->
@@ -111,6 +115,13 @@
 			<dependency>
 				<groupId>com.github.joschi.jackson</groupId>
 				<artifactId>jackson-datatype-threetenbp</artifactId>
+				<version>${jackson-threetenbp.version}</version>
+			</dependency>
+			<!-- Transitive of json-schema-validator; managed so it tracks the
+			     jackson family instead of trailing a patch behind. -->
+			<dependency>
+				<groupId>com.fasterxml.jackson.dataformat</groupId>
+				<artifactId>jackson-dataformat-yaml</artifactId>
 				<version>${jackson.version}</version>
 			</dependency>
 
@@ -133,14 +144,10 @@
 				<version>${jsonpath.version}</version>
 			</dependency>
 
-			<!-- JSON Schema -->
-			<dependency>
-				<groupId>com.kjetland</groupId>
-				<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
-				<version>${jsonschema.version}</version>
-			</dependency>
-			<!-- victools jsonschema-generator: replaces kjetland in v3.
-			     See blade/libs/framework/pom.xml comment. -->
+			<!-- JSON Schema — victools jsonschema-generator. (The legacy kjetland
+			     mbknor-jackson-jsonschema is gone: generator and annotations are
+			     both BLADE/victools now, which also dropped its Scala/Kotlin
+			     transitive JARs from the shared library and admin WARs.) -->
 			<dependency>
 				<groupId>com.github.victools</groupId>
 				<artifactId>jsonschema-generator</artifactId>
@@ -221,20 +228,34 @@
 				<version>${okhttp.version}</version>
 			</dependency>
 
-			<!-- OAuth2 -->
-			<dependency>
-				<groupId>org.apache.oltu.oauth2</groupId>
-				<artifactId>org.apache.oltu.oauth2.client</artifactId>
-				<version>${oauth2.version}</version>
-			</dependency>
-			<!-- Nimbus OAuth 2.0 + OIDC SDK: the comprehensive OAuth/OIDC
-			     client library. Drives every RestConnector Authentication
-			     subtype (password, client credentials, refresh token,
-			     JWT bearer, SAML bearer, token exchange). -->
+			<!-- OAuth2 — Nimbus OAuth 2.0 + OIDC SDK: the comprehensive
+			     OAuth/OIDC client library. Drives every RestConnector
+			     Authentication subtype (password, client credentials,
+			     refresh token, JWT bearer, SAML bearer, token exchange).
+			     (Apache Oltu is gone: retired project, nothing imported it,
+			     and its org.json:20140107 transitive carried two High CVEs.) -->
 			<dependency>
 				<groupId>com.nimbusds</groupId>
 				<artifactId>oauth2-oidc-sdk</artifactId>
 				<version>${nimbus-oauth2-oidc-sdk.version}</version>
+			</dependency>
+			<!-- Transitive of oauth2-oidc-sdk; managed up for GHSA-xwmg-2g98-w7v9. -->
+			<dependency>
+				<groupId>com.nimbusds</groupId>
+				<artifactId>nimbus-jose-jwt</artifactId>
+				<version>${nimbus-jose-jwt.version}</version>
+			</dependency>
+			<!-- Transitives (swagger-core → commons-lang3, commons-email →
+			     jakarta.mail); managed up past known CVEs. -->
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-lang3</artifactId>
+				<version>${commons-lang3.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.sun.mail</groupId>
+				<artifactId>jakarta.mail</artifactId>
+				<version>${jakarta-mail.version}</version>
 			</dependency>
 
 			<!-- Admin Console specific -->
@@ -341,11 +362,6 @@
 		<dependency>
 			<groupId>com.github.seancfoley</groupId>
 			<artifactId>ipaddress</artifactId>
-			<scope>provided</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.kjetland</groupId>
-			<artifactId>mbknor-jackson-jsonschema_2.13</artifactId>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -706,6 +722,15 @@ fi
 			<id>tuning</id>
 			<activation><property><name>!skip.tuning</name></property></activation>
 			<modules><module>admin/tuning</module></modules>
+		</profile>
+		<!-- watcher: headless config auto-publish shim, deployed standalone —
+		     deliberately NOT bundled into blade-admin.ear. For sites that don't
+		     deploy the Configurator UI; running both double-publishes on file
+		     edits (harmless but redundant). -->
+		<profile>
+			<id>watcher</id>
+			<activation><property><name>!skip.watcher</name></property></activation>
+			<modules><module>admin/watcher</module></modules>
 		</profile>
 		<profile>
 			<id>logs</id>

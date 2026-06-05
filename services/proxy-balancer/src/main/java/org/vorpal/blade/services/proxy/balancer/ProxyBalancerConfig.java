@@ -9,9 +9,9 @@ import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import com.kjetland.jackson.jsonSchema.annotations.JsonSchemaTitle;
+import org.vorpal.blade.framework.v2.config.SchemaTitle;
 
-@JsonSchemaTitle("Proxy Balancer")
+@SchemaTitle("Proxy Balancer")
 public class ProxyBalancerConfig extends Configuration implements Serializable {
 	
 	private static final long serialVersionUID = 1L;

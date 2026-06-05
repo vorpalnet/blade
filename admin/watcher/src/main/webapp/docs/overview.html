@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Overview · BLADE Watcher</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/watcher/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Watcher</span>
+				<span class="vorpal-brand-tagline">Headless Configuration Monitor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Running</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Architecture</div>
+				<h1 class="vorpal-page-title">Overview</h1>
+				<p class="vorpal-page-subtitle">
+					Watcher in one page: what it watches, what it does on
+					change, and how it interacts with the Configurator's
+					internal monitor.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html" class="vorpal-active-doc">Overview</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Overview</h1>
+
+					<h2>The pump pattern</h2>
+					<p>
+						Every BLADE service that exposes configuration
+						registers a <code>SettingsMXBean</code> at
+						<code>vorpal.blade:Name=&lt;app&gt;,Type=Configuration</code>.
+						To change a service's config at runtime you need to:
+					</p>
+					<ol>
+						<li>Write the new JSON to disk under <code>config/custom/vorpal/</code>.</li>
+						<li>Find the matching MBean.</li>
+						<li>Stream the JSON into it.</li>
+						<li>Tell it to reload.</li>
+					</ol>
+					<p>
+						Steps 2–4 are mechanical. That's what the "pump" is.
+						Watcher is one implementation of the pump. The
+						Configurator includes its own implementation of the
+						same logic.
+					</p>
+
+					<h2>Which pump should I deploy?</h2>
+					<dl class="vorpal-kv">
+						<dt>Configurator is deployed</dt>
+						<dd>You don't need Watcher. The Configurator's <code>ConfigurationMonitor</code> covers the pump role.</dd>
+						<dt>Configurator is not deployed, but you still want file → MBean updates</dt>
+						<dd>Deploy Watcher. Useful for headless setups where operators edit JSON files via a different mechanism (SSH, Ansible, deploy pipeline) and want the runtime to pick them up automatically.</dd>
+						<dt>Configurator AND Watcher are both deployed</dt>
+						<dd>Both will pump. Not harmful — the second pump's update is a no-op since the file hasn't changed by the time it picks it up. Slightly wasteful but operationally fine.</dd>
+					</dl>
+
+					<h2>What it doesn't do</h2>
+					<ul>
+						<li>No UI — there's no page to interact with.</li>
+						<li>No validation — it pumps whatever JSON is on disk, valid or not. Bad JSON shows up as a SettingsMXBean reload exception.</li>
+						<li>No editing — that's the Configurator's job.</li>
+					</ul>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">When to use which</div>
+						<p>
+							The Configurator's <code>autoPublish</code> setting
+							provides the same pump, so sites running the
+							Configurator don't need Watcher. Watcher exists as
+							a standalone zero-UI WAR for sites that cannot
+							deploy the Configurator at all — nothing to log
+							into, no servlets, nothing for a security scan to
+							flag. Deploy one or the other, not both.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>
