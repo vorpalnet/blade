@@ -10,7 +10,6 @@
 #   ./build.sh production                   # production services, auto-detected
 #   ./build.sh production occas-8.2         # production services, OCCAS 8.2
 #   ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
-#   ./build.sh production minimal           # two EARs: production + minimal
 #   ./build.sh production clean package     # with explicit Maven goals
 #   ./build.sh --no-dist                    # full build, skip dist/ copy
 #   ./build.sh --no-javadoc                 # full build, skip javadoc generation
@@ -28,10 +27,16 @@
 # The chosen source is shown in parentheses next to "Platform:" in the build
 # header (e.g. "Platform: occas-8.3 ($MW_HOME)").
 #
-# EAR naming:
-#   Each profile produces its own EAR named vorpal-blade-services-<profile>.ear
-#   e.g. vorpal-blade-services-production.ear, vorpal-blade-services-minimal.ear
-#   (EAR is currently disabled — see services/pom.xml.)
+# EARs (profile-driven contents):
+#   When the active build-profiles/*.conf lists them, two tier EARs are built:
+#     ear     → admin/ear        → blade-admin.ear   (admin tier, AdminServer)
+#     cluster → services/cluster → blade-cluster.ear (services tier, cluster)
+#   Inside each EAR pom, every WAR is contributed by an ear-<name> Maven
+#   profile activated by !skip.<name> — the same flags this script derives
+#   from the conf — so each EAR contains exactly the apps the active build
+#   profile selected. The javadoc WAR rides the `javadocs` profile id: the
+#   admin EAR carries javadoc.war exactly when docs are generated, and
+#   assembles without it otherwise.
 #
 # Dist management:
 #   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/ into
@@ -59,11 +64,6 @@
 #     ./build.sh --no-javadoc               # one-off
 #     export BLADE_SKIP_JAVADOC=1           # sticky for the current shell
 #
-# EAR (currently disabled):
-#   The services EAR is intentionally offline — see services/pom.xml. While
-#   disabled, services are deployed individually as WARs (the dist/ folder
-#   contains every WAR built). Re-enable via the TODO(EAR) markers in
-#   services/pom.xml and this script.
 # ============================================================================
 
 set -euo pipefail
@@ -287,17 +287,20 @@ write_deployment_manifest() {
     classify_admin_war() {
         local name="$1" base="${1%.war}"
         case "$name" in
-            blade.war)        echo "admin|AdminServer|Admin dashboard (context: /blade)" ;;
-            configurator.war) echo "admin|AdminServer|Config editor (context: /configurator)" ;;
-            flow.war)         echo "admin|AdminServer|FSMAR diagram editor (context: /flow)" ;;
-            tuning.war)       echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /tuning)" ;;
-            files.war)        echo "admin|AdminServer|Config file manager (context: /files)" ;;
-            explorer.war)     echo "admin|AdminServer|Experimental UI (context: /explorer)" ;;
-            watcher.war)      echo "admin|AdminServer|Headless config auto-publish, standalone — not in blade-admin.ear (context: /watcher)" ;;
-            logs.war)         echo "admin|AdminServer|Log viewer (context: /logs)" ;;
-            javadoc.war)      echo "admin|AdminServer|Javadoc site (context: /blade/javadoc)" ;;
-            crud-editor.war)  echo "admin|AdminServer|CRUD editor (context: /crud-editor)" ;;
-            *)                echo "admin|AdminServer|Admin app (context: /${base})" ;;
+            blade-admin.ear)        echo "admin|AdminServer|Admin tier EAR — all admin apps in one deployable" ;;
+            portal.war)             echo "admin|AdminServer|Portal / launcher deck (context: /blade/portal)" ;;
+            blade-redirect.war)     echo "admin|AdminServer|Bare /blade 302 → /blade/portal/ (context: /)" ;;
+            api.war)                echo "admin|AdminServer|API explorer (context: /blade/api)" ;;
+            configurator.war)       echo "admin|AdminServer|Config editor (context: /blade/configurator)" ;;
+            flow.war)               echo "admin|AdminServer|FSMAR diagram editor (context: /blade/flow)" ;;
+            tuning.war)             echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /blade/tuning)" ;;
+            files.war)              echo "admin|AdminServer|Config file manager (context: /blade/files)" ;;
+            watcher.war)            echo "admin|AdminServer|Headless config auto-publish, standalone — not in blade-admin.ear (context: /blade/watcher)" ;;
+            logs.war)               echo "admin|AdminServer|Log viewer (context: /blade/logs)" ;;
+            javadoc.war)            echo "admin|AdminServer|Javadoc site (context: /blade/javadoc)" ;;
+            crud-editor.war)        echo "admin|AdminServer|CRUD editor (context: /blade/crud-editor)" ;;
+            analytics-console.war)  echo "admin|AdminServer|Analytics console (context: /blade/analytics)" ;;
+            *)                      echo "admin|AdminServer|Admin app (context: /${base})" ;;
         esac
     }
 
@@ -305,6 +308,7 @@ write_deployment_manifest() {
     classify_services_war() {
         local name="$1" base="${1%.war}"
         case "$name" in
+            blade-cluster.ear) echo "service|cluster|Services tier EAR — all service WARs in one deployable" ;;
             test-*.war) echo "test|cluster|SIP test app (context: /${base})" ;;
             *)          echo "service|cluster|SIP service (context: /${base})" ;;
         esac
@@ -576,12 +580,16 @@ fi
 ALL_MODULES=$(discover_modules)
 TOTAL_COUNT=$(echo "$ALL_MODULES" | wc -l | tr -d ' ')
 
-# --- Multi-profile builds were only meaningful for per-profile EARs.
-#     With the EAR disabled, refuse them up front. ---
+# --- One profile per invocation: a build is one Maven reactor, and the EAR
+#     contents are derived from that reactor's skip flags. Different profiles
+#     produce different EAR contents under the same blade-admin.ear /
+#     blade-cluster.ear names, so run them as separate builds (each gets its
+#     own dist/<ver>-<build>/ directory). ---
 if [ ${#PROFILES[@]} -gt 1 ]; then
-    echo "Error: multiple profiles (${PROFILES[*]}) only made sense when each one"
-    echo "       produced its own EAR. The EAR logic is currently disabled — see"
-    echo "       services/pom.xml. Pick a single profile and run again."
+    echo "Error: multiple profiles (${PROFILES[*]}) in one invocation are not supported."
+    echo "       Each build is one Maven reactor and produces one blade-admin.ear /"
+    echo "       blade-cluster.ear whose contents match that profile. Run one"
+    echo "       profile at a time — each lands in its own dist/<ver>-<build>/."
     exit 1
 fi
 
@@ -633,9 +641,9 @@ done
 if [ "$HAS_BUILD_GOAL" != true ]; then
     JAVADOC_STATUS="n/a (clean-only run)"
 elif [ "$SKIP_JAVADOC" = true ]; then
-    # The admin EAR bundles the javadoc WAR, so it can't assemble without it.
-    JAVADOC_FLAGS+=("-Dskip.ear")
-    JAVADOC_STATUS="SKIPPED (--no-javadoc or BLADE_SKIP_JAVADOC set) — admin EAR skipped too"
+    # The admin EAR's javadoc webModule rides the `javadocs` profile id, so
+    # without it the EAR simply assembles without javadoc.war.
+    JAVADOC_STATUS="SKIPPED (--no-javadoc or BLADE_SKIP_JAVADOC set) — admin EAR built without javadoc.war"
 elif [ "$javadoc_manual" = true ]; then
     INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
     JAVADOC_STATUS="generating (-Pjavadocs passed explicitly)"
@@ -645,9 +653,8 @@ elif [ "$jdk_ok_for_javadoc" = true ]; then
     JAVADOC_STATUS="generating (-Pjavadocs → admin/javadoc → javadoc.war)"
 else
     JAVADOC_OLD_JDK=true
-    # No javadoc WAR on an older JDK → the admin EAR can't bundle it.
-    JAVADOC_FLAGS+=("-Dskip.ear")
-    JAVADOC_STATUS="SKIPPED — needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown}); admin EAR skipped too"
+    # No javadoc WAR on an older JDK → the admin EAR assembles without it.
+    JAVADOC_STATUS="SKIPPED — needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown}); admin EAR built without javadoc.war"
 fi
 
 # Reusable so the same block prints in the header and the post-build summary.
@@ -697,6 +704,11 @@ if [ "${#SKIP_FLAGS[@]}" -gt 0 ]; then
 fi
 echo ""
 
+# Hand the profile's module list to admin/javadoc's collect-javadocs.sh
+# (4th argument, via -Dblade.included.modules) so javadoc.war contains the
+# docs of exactly this build's modules — collected fresh, stale ones pruned.
+INCLUDED_CSV=$(printf '%s' "$INCLUDED_MODULES" | tr '\n' ',' | sed 's/^,*//;s/,*$//')
+
 set +e
 "${SCRIPT_DIR}/mvnw" \
     "${MAVEN_GOALS[@]}" \
@@ -705,6 +717,7 @@ set +e
     "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
     "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
     "-Dbuild.number=${BUILD_NUM}" \
+    "-Dblade.included.modules=${INCLUDED_CSV}" \
     "-Dblade.skip.install=false"
 MVN_EXIT=$?
 set -e
@@ -727,12 +740,3 @@ echo "================================ BUILD SUMMARY ===========================
 print_build_info
 echo "Dist:          ${DIST_MSG}"
 echo "==============================================================================="
-
-# =============================================================================
-# TODO(EAR): multi-profile / per-profile-EAR branch removed. The original logic
-# ran two Maven phases (build modules, then build one EAR per profile) and was
-# the only consumer of -Dear.profile and -Dbuild.platform. Recover from git
-# history when re-enabling the EAR. Look for the block under
-# `if [ ${#PROFILES[@]} -eq 1 ]; then ... else ... fi` in the previous version
-# of this file.
-# =============================================================================

@@ -10,9 +10,17 @@ FSMAR uses state memory and pattern matching to route SIP traffic between applic
 
 ## What's new in 3?
 
-- Built on the v3 configuration framework — `RequestSelector` / `SelectorGroup` replace the ad-hoc per-header comparison lists used by FSMAR 2
+- **Data-driven routing** on the v3 configuration framework: per-state *selectors* extract named values from any part of the message (headers, URIs, parameters, even the body), and transitions fire on `when` expressions over those values — replacing FSMAR 2's per-header comparison lists
+- **Route construction from extracted values**: routes are `${}`-templated (`"sip:${To.user}@registrar"`), so one transition handles what used to take one rule per subscriber
+- **Capture-and-carry**: extracted values accumulate across the whole call-path (carried in the JSR-289 `stateInfo`, replicated cluster-wide) — a later state can route on something captured at ingress, before intermediate apps rewrote the message
+- **Tiering as data**: a `table` selector classifies calls through a translation table (exact / longest-prefix / range keys) — gold/silver/bronze customers are table rows an operator edits, not routing logic. Conditions just test `${tier} == 'gold'`
+- **Condition operators**: `==`, `!=`, ordering, `&&`/`||`, plus `matches` (full-string regex) and `contains`
+- **Pseudo-variables** published every hop: `${method}`, `${requestUri}`, `${directive}`, `${previousApp}`, `${hour}`, `${dayOfWeek}`, and `${hash100}` — a stable per-call 0–99 bucket, so `${hash100} < 5` canaries ~5% of calls to a new application version
+- **Routing observability**: a FINER trace of every transition evaluated (and why it did or didn't fire), plus JMX metrics at `org.vorpal.blade:type=Fsmar3,name=metrics` — per-transition hit counts, default-application fallbacks, undeployed bypasses, cycle detections
+- **Config validation on load**: malformed `when` expressions are flagged SEVERE (they'd otherwise never match, silently); transitions targeting undeployed applications get a WARNING
+- Optional JSR-289 `region` per transition (`ORIGINATING` / `TERMINATING`; default `NEUTRAL`) for third-party apps that branch on `request.getRegion()`
 - Flatter, more expressive JSON schema: `defaultApplication` + `states` map keyed by previous application name (with `"null"` for initial requests)
-- First-class integration with the BLADE Flow editor (visual diagram of the state machine, round-tripped through `FsmarExport` / `FsmarImport` servlets in `admin/flow`)
+- Integration with the BLADE Flow editor (visual diagram of the state machine via `admin/flow` — being updated to the data-driven shape)
 - Dedicated log files (same as FSMAR 2)
 - Dynamic config reloads (same as FSMAR 2)
 
@@ -28,31 +36,43 @@ On first startup, FSMAR 3 writes a sample config into the OCCAS `_samples` direc
 
 ## Tutorial
 
-FSMAR 3 is a finite state machine. Each *state* represents a SIP Servlet application. As messages flow through the system, they *transition* between states when a *trigger* (SIP method) matches a *selector group* (condition). The transition may fire an *action* that modifies routing region, subscriber URI, or pushed routes.
+FSMAR 3 is a finite state machine. Each *state* represents a SIP Servlet application. As a message flows through the system, two things happen on entry to each state:
+
+1. The state's **selectors** run, extracting named values from the request into the routing context (e.g. the user-part of the To header becomes `${To.user}`). The context accumulates across the whole call-path — values captured at ingress remain available in every later state, even after intermediate apps rewrite the message.
+2. The **trigger** matching the SIP method is consulted, and its **transitions** are evaluated in order. The first transition whose `when` expression matches (or that has no `when`) wins.
 
 Here's the breakdown:
 
 * **Previous State** — the origin of the message (`"null"` if it originated from an external system)
+* **Selectors** — extraction rules run on entry to the state: regex named-groups against headers, attribute reads, JSON/XML/SDP body extraction. A selector with id `To` capturing `(?<user>…)` publishes both `${user}` and the namespaced `${To.user}`
 * **Trigger** — a SIP method, like `INVITE`, `REGISTER`, `SUBSCRIBE`
-* **Condition** — a `SelectorGroup` of `RequestSelector`s evaluated against the incoming request
-* **Action** — additional steps to take during the transition (region, subscriber URI, pushed routes)
-* **Next State** — the destination application
+* **Transition** — `when` (a condition expression over `${}` context values; omit it for an unconditional match), `next` (the destination application), `subscriber` (which header names the subscriber — the JSR-289 contract), `routes` (`${}`-templated SIP URIs to push), and an optional `routeModifier`
 
 ## JSON Shape
 
 ```json
 {
-  "defaultApplication": "mediarouter",
+  "defaultApplication": "b2bua",
   "states": {
     "null": {
+      "selectors": [
+        { "type": "regex", "id": "To", "attribute": "To",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*" }
+      ],
       "triggers": {
         "INVITE": {
           "transitions": [
             {
-              "id": "INV-1",
+              "id": "INV-bob",
+              "when": "${To.user} == 'bob'",
               "next": "b2bua",
-              "condition": { "...": "SelectorGroup" },
-              "action":    { "originating": "From", "route": ["sip:proxy1"] }
+              "subscriber": "From",
+              "routes": [ "sip:${To.user}@special-proxy" ]
+            },
+            {
+              "id": "INV-default",
+              "next": "screening",
+              "subscriber": "From"
             }
           ]
         }
@@ -62,7 +82,7 @@ Here's the breakdown:
 }
 ```
 
-See `AppRouterConfigurationSample.java` in this module for the full auto-generated sample, and `org.vorpal.blade.framework.v3.configuration.RequestSelector` for the condition DSL.
+See `AppRouterConfigurationSample.java` in this module for the full sample (it demonstrates capture-and-carry across a three-state path: ingress → screening → b2bua → registrar); the selector types live in `org.vorpal.blade.framework.v3.configuration.selectors` and the `when` expression syntax is the same one iRouter uses (`org.vorpal.blade.framework.v3.configuration.expressions`).
 
 ## Don't Overthink It
 

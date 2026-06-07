@@ -20,90 +20,26 @@
 		framework jar and references the `vorpal-blade` shared library via its
 		own weblogic.xml (the proven per-WAR model). This EAR is purely a
 		packaging convenience over those WARs; it bundles no libraries itself.
-		An individual admin app can still be redeployed on its own for testing.</description>
+		An individual admin app can still be redeployed on its own for testing.
+
+		Each admin app is contributed by its own ear-&lt;name&gt; profile, activated by
+		!skip.&lt;name&gt; — the same flags build.sh derives from the active
+		build-profiles/*.conf. So a trimmed profile that builds only a subset of
+		admin apps produces an EAR containing exactly that subset, with no
+		dangling references to WARs that aren't in the reactor. The javadoc WAR
+		is contributed by the `javadocs` profile id — the one build.sh activates
+		when generating docs — so the EAR carries javadoc.war exactly when the
+		docs are built, and assembles without it otherwise (--no-javadoc or an
+		old build JDK no longer skips the whole EAR).
+
+		admin/watcher is intentionally NOT bundled here (headless config
+		auto-publish shim for sites without the Configurator UI); it builds and
+		deploys standalone.</description>
 
 	<dependencies>
-		<!-- The admin WARs, bundled as web modules. The wildcard exclusion keeps
-		     each WAR's transitive dependencies out of the EAR — every WAR is
-		     already self-contained (framework jar inside + shared-library
-		     reference in its weblogic.xml), so the EAR itself bundles nothing. -->
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-portal</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-redirect</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-api</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-configurator</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-files</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-crud-editor</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-flow</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-tuning</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-logs</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>vorpal-blade-admin-analytics-console</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.vorpal.blade</groupId>
-			<artifactId>javadoc</artifactId>
-			<version>${project.version}</version>
-			<type>war</type>
-			<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-		</dependency>
+		<!-- Admin WAR modules are contributed via the ear-* profiles below.
+		     No JARs in this EAR — framework is in each WAR, 3rd-party libs come
+		     from the vorpal-blade shared library at runtime. -->
 	</dependencies>
 
 	<build>
@@ -117,71 +53,308 @@
 					<version>8</version>
 					<generateApplicationXml>true</generateApplicationXml>
 					<displayName>BLADE Admin</displayName>
-					<!-- Context roots are stated explicitly so they exactly match
-					     each WAR's weblogic.xml (application.xml wins over
-					     weblogic.xml in an EAR). Never change these — they are
-					     fixed deployment identifiers. -->
-					<modules>
+					<!-- Context roots are stated explicitly (per webModule in the
+					     profiles below) so they exactly match each WAR's weblogic.xml;
+					     application.xml wins over weblogic.xml in an EAR. Never change
+					     them — they are fixed deployment identifiers. -->
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+	<profiles>
+		<!-- One profile per admin WAR. Active by default; build.sh excludes an
+		     app with -Dskip.<name> when it's absent from the active
+		     build-profiles/*.conf. Each profile contributes BOTH the war
+		     dependency AND its webModule (combine.children="append"), so the two
+		     never drift and a skipped app drops cleanly out of the EAR. The
+		     javadoc WAR rides the `javadocs` profile id instead (see above). -->
+		<profile>
+			<id>ear-portal</id>
+			<activation><property><name>!skip.portal</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-portal</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-portal</artifactId>
 							<contextRoot>blade/portal</contextRoot>
 							<bundleFileName>portal.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-redirect</id>
+			<activation><property><name>!skip.redirect</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-redirect</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-redirect</artifactId>
 							<contextRoot>/</contextRoot>
 							<bundleFileName>blade-redirect.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-api</id>
+			<activation><property><name>!skip.api</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-api</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-api</artifactId>
 							<contextRoot>blade/api</contextRoot>
 							<bundleFileName>api.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-configurator</id>
+			<activation><property><name>!skip.configurator</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-configurator</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-configurator</artifactId>
 							<contextRoot>blade/configurator</contextRoot>
 							<bundleFileName>configurator.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-files</id>
+			<activation><property><name>!skip.files</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-files</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-files</artifactId>
 							<contextRoot>blade/files</contextRoot>
 							<bundleFileName>files.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-crud-editor</id>
+			<activation><property><name>!skip.crud-editor</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-crud-editor</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-crud-editor</artifactId>
 							<contextRoot>blade/crud-editor</contextRoot>
 							<bundleFileName>crud-editor.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-flow</id>
+			<activation><property><name>!skip.flow</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-flow</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-flow</artifactId>
 							<contextRoot>blade/flow</contextRoot>
 							<bundleFileName>flow.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-tuning</id>
+			<activation><property><name>!skip.tuning</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-tuning</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-tuning</artifactId>
 							<contextRoot>blade/tuning</contextRoot>
 							<bundleFileName>tuning.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-logs</id>
+			<activation><property><name>!skip.logs</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-logs</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-logs</artifactId>
 							<contextRoot>blade/logs</contextRoot>
 							<bundleFileName>logs.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-analytics-console</id>
+			<activation><property><name>!skip.analytics-console</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-analytics-console</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-analytics-console</artifactId>
 							<contextRoot>blade/analytics</contextRoot>
 							<bundleFileName>analytics-console.war</bundleFileName>
 						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>javadocs</id>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>javadoc</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>javadoc</artifactId>
@@ -190,8 +363,8 @@
 						</webModule>
 					</modules>
 				</configuration>
-			</plugin>
-		</plugins>
-	</build>
+			</plugin></plugins></build>
+		</profile>
+	</profiles>
 
 </project>

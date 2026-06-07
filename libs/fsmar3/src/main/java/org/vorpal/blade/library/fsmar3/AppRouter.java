@@ -42,6 +42,17 @@ public class AppRouter implements SipApplicationRouter {
 	private static SettingsManager<AppRouterConfiguration> settingsManager;
 	protected static ConcurrentHashMap<String, String> deployed = new ConcurrentHashMap<>();
 
+	/// Routing metrics, exposed over JMX. Static like `deployed` — one App
+	/// Router instance per engine JVM.
+	static final Fsmar3Metrics metrics = new Fsmar3Metrics();
+	private static final String METRICS_OBJECT_NAME = "org.vorpal.blade:type=Fsmar3,name=metrics";
+
+	/// Last config instance run through [#validateConfiguration] — validate
+	/// each loaded config exactly once, on its first routing use (by which
+	/// time the `deployed` map is populated). A benign race may validate a
+	/// config twice; the log lines just repeat.
+	private static volatile AppRouterConfiguration lastValidated;
+
 	@Override
 	public void init() {
 		try {
@@ -52,6 +63,21 @@ public class AppRouter implements SipApplicationRouter {
 			e.printStackTrace();
 			if (sipLogger != null) {
 				sipLogger.severe(e);
+			}
+		}
+
+		// Register the metrics MBean — explicitly via StandardMBean (JMX
+		// auto-introspection produces broken MBeanInfo for some shapes; see
+		// the SettingsManager MBean precedent).
+		try {
+			javax.management.MBeanServer mbs = java.lang.management.ManagementFactory.getPlatformMBeanServer();
+			javax.management.ObjectName name = new javax.management.ObjectName(METRICS_OBJECT_NAME);
+			if (!mbs.isRegistered(name)) {
+				mbs.registerMBean(new javax.management.StandardMBean(metrics, Fsmar3MetricsMBean.class), name);
+			}
+		} catch (Exception e) {
+			if (sipLogger != null) {
+				sipLogger.warning("FSMAR metrics MBean registration failed: " + e.getMessage());
 			}
 		}
 	}
@@ -66,6 +92,7 @@ public class AppRouter implements SipApplicationRouter {
 			SipApplicationRoutingDirective directive, SipTargetedRequestInfo requestInfo, Serializable saved) {
 
 		SipApplicationRouterInfo nextApp = null;
+		metrics.countRequest();
 
 		try {
 			// stateInfo carries the pinned config snapshot + the accumulating
@@ -76,6 +103,11 @@ public class AppRouter implements SipApplicationRouter {
 				AppRouterConfiguration current = settingsManager.getCurrent();
 				if (current == null) {
 					throw new Exception("Invalid FSMAR configuration file.");
+				}
+				// Validate each loaded config once, on first routing use.
+				if (current != lastValidated) {
+					validateConfiguration(current);
+					lastValidated = current;
 				}
 				routingState = new RoutingState(current);
 			}
@@ -89,6 +121,18 @@ public class AppRouter implements SipApplicationRouter {
 			SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request)
 					.getImpl().getSipApplicationSessionImpl();
 			String previous = (sasi != null) ? SettingsManager.basename(sasi.getApplicationName()) : "null";
+
+			// Pseudo-variables: routing metadata published into the context
+			// before the state's selectors run (a selector with the same id
+			// deliberately overrides). ${previousApp} is refreshed inside the
+			// bypass loop as `previous` advances.
+			publishPseudoVariables(ctx,
+					request.getMethod(),
+					(request.getRequestURI() != null) ? request.getRequestURI().toString() : "",
+					(directive != null) ? directive.toString() : "",
+					(region != null) ? String.valueOf(region.getType()) : "",
+					previous,
+					request.getCallId());
 
 			if (sipLogger.isLoggable(Level.FINE)) {
 				String str = "getNextApplication... " + request.getMethod() + " " + request.getRequestURI();
@@ -134,6 +178,9 @@ public class AppRouter implements SipApplicationRouter {
 				while (true) {
 					State state = config.getStates().get(previous);
 
+					// Keep ${previousApp} current as the bypass loop advances.
+					ctx.put("previousApp", previous);
+
 					// On entry to a state, run its selectors to populate the
 					// context from the request (best-effort; never aborts routing).
 					if (state != null) {
@@ -144,9 +191,22 @@ public class AppRouter implements SipApplicationRouter {
 
 					Transition matched = null;
 					if (trigger != null) {
+						boolean trace = sipLogger.isLoggable(Level.FINER);
 						for (Transition t : trigger.getTransitions()) {
-							if (t.matches(ctx)) {
+							boolean fired = t.matches(ctx);
+							if (trace) {
+								// Route-decision trace: every transition evaluated,
+								// in order, with its outcome. The Route Simulator's
+								// raw material.
+								sipLogger.finer("FSMAR trace: state=" + previous
+										+ " trigger=" + request.getMethod()
+										+ " transition=" + t.getId()
+										+ " when=" + (t.getWhen() != null ? "'" + t.getWhen() + "'" : "(unconditional)")
+										+ " -> " + (fired ? "FIRED" : "no match"));
+							}
+							if (fired) {
 								matched = t;
+								metrics.countTransition(previous, request.getMethod(), t.getId());
 								sipLogger.fine("Transition matched: " + t.getId());
 								break;
 							}
@@ -184,10 +244,12 @@ public class AppRouter implements SipApplicationRouter {
 					// 'next' names an undeployed application: bypass it and continue
 					// from that state. Stop if we'd revisit a state (config loop).
 					if (!visited.add(next)) {
+						metrics.countCycle();
 						sipLogger.warning("FSMAR routing cycle detected at undeployed application '"
 								+ next + "'; routing downstream.");
 						break;
 					}
+					metrics.countBypass();
 					sipLogger.fine("Bypassing undeployed application '" + next
 							+ "'; continuing as though it had already run.");
 					previous = next;
@@ -197,6 +259,7 @@ public class AppRouter implements SipApplicationRouter {
 			// Default application fallback
 			if (previous.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
 					|| nextApp.getNextApplicationName().equals("null"))) {
+				metrics.countDefaultFallback();
 				sipLogger.warning("Using defaultApplication: " + config.getDefaultApplication()
 						+ " for " + request.getMethod() + " " + request.getRequestURI());
 				nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null, null,
@@ -244,11 +307,109 @@ public class AppRouter implements SipApplicationRouter {
 
 	@Override
 	public void destroy() {
+		try {
+			javax.management.MBeanServer mbs = java.lang.management.ManagementFactory.getPlatformMBeanServer();
+			javax.management.ObjectName name = new javax.management.ObjectName(METRICS_OBJECT_NAME);
+			if (mbs.isRegistered(name)) {
+				mbs.unregisterMBean(name);
+			}
+		} catch (Exception ignore) {
+			// shutting down anyway
+		}
 		LogManager.closeLogger(FSMAR);
 	}
 
 	public static String getDeployedApp(String appName) {
 		return deployed.get(SettingsManager.basename(appName));
+	}
+
+	/// Publish routing metadata as pseudo-variables for `when` conditions and
+	/// `${}` route templates. Runs before the state's selectors, so a selector
+	/// with the same id deliberately overrides.
+	///
+	/// - `${method}` — SIP method
+	/// - `${requestUri}` — request URI
+	/// - `${directive}` — routing directive (NEW / CONTINUE / REVERSE)
+	/// - `${region}` — routing region type, when the container supplied one
+	/// - `${previousApp}` — current FSM state (refreshed as the bypass loop advances)
+	/// - `${hour}` — local hour of day, 0–23 (time-of-day routing)
+	/// - `${dayOfWeek}` — MONDAY … SUNDAY
+	/// - `${hash100}` — stable per-call bucket 0–99 hashed from the Call-ID:
+	///   `${hash100} < 5` sends ~5% of calls down a canary path, and every
+	///   retransmission/hop of the same call lands in the same bucket
+	static void publishPseudoVariables(Context ctx, String method, String requestUri, String directive,
+			String regionType, String previous, String callId) {
+		if (ctx == null) {
+			return;
+		}
+		ctx.put("method", nullSafe(method));
+		ctx.put("requestUri", nullSafe(requestUri));
+		ctx.put("directive", nullSafe(directive));
+		ctx.put("region", nullSafe(regionType));
+		ctx.put("previousApp", nullSafe(previous));
+
+		java.time.LocalDateTime now = java.time.LocalDateTime.now();
+		ctx.put("hour", String.valueOf(now.getHour()));
+		ctx.put("dayOfWeek", now.getDayOfWeek().name());
+
+		if (callId != null) {
+			ctx.put("hash100", String.valueOf(Math.floorMod(callId.hashCode(), 100)));
+		}
+	}
+
+	private static String nullSafe(String s) {
+		return (s != null) ? s : "";
+	}
+
+	/// Config sanity pass, run once per loaded configuration on its first
+	/// routing use (the `deployed` map is populated by then). Surfaces the
+	/// two mistakes that otherwise eat traffic silently:
+	///
+	/// - a malformed `when` expression (which evaluates to false forever) → SEVERE
+	/// - a transition whose `next` names an application that isn't deployed
+	///   (legitimate mid-rollout, but worth a WARNING — the bypass logic will
+	///   skip it)
+	static void validateConfiguration(AppRouterConfiguration config) {
+		if (config == null || config.getStates() == null) {
+			return;
+		}
+
+		for (java.util.Map.Entry<String, State> se : config.getStates().entrySet()) {
+			State state = se.getValue();
+			if (state == null || state.getTriggers() == null) {
+				continue;
+			}
+			for (java.util.Map.Entry<String, Trigger> te : state.getTriggers().entrySet()) {
+				Trigger trigger = te.getValue();
+				if (trigger == null || trigger.getTransitions() == null) {
+					continue;
+				}
+				for (Transition t : trigger.getTransitions()) {
+					String where = "state '" + se.getKey() + "' trigger " + te.getKey()
+							+ " transition '" + t.getId() + "'";
+
+					if (t.getWhen() != null && !t.getWhen().isEmpty()) {
+						try {
+							new org.vorpal.blade.framework.v3.configuration.expressions.Expression(t.getWhen());
+						} catch (Exception e) {
+							sipLogger.severe("FSMAR config: malformed 'when' in " + where
+									+ " — it will never match: " + e.getMessage());
+						}
+					}
+
+					String next = t.getNext();
+					if (next != null && !deployed.containsKey(next)) {
+						sipLogger.warning("FSMAR config: " + where + " routes to '" + next
+								+ "', which is not currently deployed (bypass logic will skip it).");
+					}
+				}
+			}
+		}
+
+		String def = config.getDefaultApplication();
+		if (def != null && !deployed.containsKey(def)) {
+			sipLogger.warning("FSMAR config: defaultApplication '" + def + "' is not currently deployed.");
+		}
 	}
 
 }

@@ -6,6 +6,8 @@ import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v3.configuration.selectors.AttributeSelector;
 import org.vorpal.blade.framework.v3.configuration.selectors.RegexSelector;
+import org.vorpal.blade.framework.v3.configuration.selectors.TableSelector;
+import org.vorpal.blade.framework.v3.configuration.translations.TranslationTable;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -44,19 +46,45 @@ public class AppRouterConfigurationSample extends AppRouterConfiguration impleme
 		init.addSelector(new RegexSelector("To", "To", SIP_USER, null));
 		init.addSelector(new AttributeSelector("callerIp", "Origin-IP"));
 
+		// Classify the caller — tiering as data. The table rows are what an
+		// operator edits; the routing logic below just tests ${tier}. Selectors
+		// run in order, so this one reads the ${From.user} the RegexSelector
+		// above extracted.
+		TranslationTable tierTable = new TranslationTable();
+		tierTable.setDescription("Customer tier by caller user-part");
+		tierTable.setKeyExpression("${From.user}");
+		tierTable.createTranslation("alice").put("tier", "gold");
+		tierTable.createTranslation("bob").put("tier", "silver");
+		init.addSelector(new TableSelector("customerTier", tierTable));
+
 		init.getTrigger("REGISTER").createTransition("proxy-registrar");
 		init.getTrigger("SUBSCRIBE").createTransition("presence");
 		init.getTrigger("PUBLISH").createTransition("presence");
 		init.getTrigger("OPTIONS").createTransition("options");
 
-		// INVITE: a Bob-specific path built from the extracted callee, plus an
-		// unconditional fallback. ${To.user} / ${From.user} are namespaced by
-		// the selector id so two selectors capturing (?<user>…) don't collide.
+		// INVITE: a Bob-specific path built from the extracted callee, a
+		// gold-tier fast path, a toll-free regex match, plus an unconditional
+		// fallback. ${To.user} / ${From.user} are namespaced by the selector
+		// id so two selectors capturing (?<user>…) don't collide. Pseudo-
+		// variables are also available in `when` and routes: ${method},
+		// ${previousApp}, ${hour}, ${dayOfWeek}, and ${hash100} — a stable
+		// per-call 0-99 bucket, so "${hash100} < 5" canaries ~5% of calls.
 		init.getTrigger("INVITE").createTransition("b2bua")
 				.setId("INV-bob")
 				.setWhen("${To.user} == 'bob' && ${From.user} == 'alice'")
 				.setSubscriber("From")
 				.setRoutes(new String[] { "sip:${To.user}@special-proxy" });
+		// Gold callers (classified by the customerTier table) skip screening.
+		init.getTrigger("INVITE").createTransition("b2bua")
+				.setId("INV-gold")
+				.setWhen("${tier} == 'gold'")
+				.setSubscriber("From")
+				.setRoutes(new String[] { "sip:${From.user}@gold-trunk" });
+		// Toll-free callees route by full-string regex.
+		init.getTrigger("INVITE").createTransition("b2bua")
+				.setId("INV-tollfree")
+				.setWhen("${To.user} matches '18(00|88|77|66)\\d{7}'")
+				.setSubscriber("To");
 		init.getTrigger("INVITE").createTransition("screening")
 				.setId("INV-default")
 				.setSubscriber("From");

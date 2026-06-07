@@ -26,6 +26,11 @@ public final class FsmarRoutingSmokeTest {
 		testUnconditionalTransition();
 		testFirstMatchWins();
 		testSampleConfigShape();
+		testPseudoVariables();
+		testTierTableClassification();
+		testMatchesOperatorInWhen();
+		testRegionSerialization();
+		testMetricsCounters();
 		summary();
 	}
 
@@ -138,6 +143,124 @@ public final class FsmarRoutingSmokeTest {
 		Transition first = init.getTrigger("INVITE").getTransitions().get(0);
 		check("sample INV-bob fires for alice->bob", "INV-bob".equals(first.getId()) && first.matches(ctx));
 		check("sample INV-bob route resolves", "sip:bob@special-proxy".equals(ctx.resolve(first.getRoutes()[0])));
+	}
+
+	private static void testPseudoVariables() {
+		Context ctx = new MemoryContext();
+		AppRouter.publishPseudoVariables(ctx, "INVITE", "sip:bob@example.com", "NEW",
+				"NEUTRAL", "null", "a84b4c76e66710@pc33.example.com");
+
+		check("pseudo: method", "INVITE".equals(ctx.resolve("${method}")));
+		check("pseudo: requestUri", "sip:bob@example.com".equals(ctx.resolve("${requestUri}")));
+		check("pseudo: directive", "NEW".equals(ctx.resolve("${directive}")));
+		check("pseudo: previousApp", "null".equals(ctx.resolve("${previousApp}")));
+
+		int hour = Integer.parseInt(ctx.resolve("${hour}"));
+		check("pseudo: hour in range", hour >= 0 && hour <= 23);
+		check("pseudo: dayOfWeek named", ctx.resolve("${dayOfWeek}").matches("[A-Z]+"));
+
+		int bucket = Integer.parseInt(ctx.resolve("${hash100}"));
+		check("pseudo: hash100 in range", bucket >= 0 && bucket <= 99);
+
+		// Stability: the same Call-ID always lands in the same bucket.
+		Context ctx2 = new MemoryContext();
+		AppRouter.publishPseudoVariables(ctx2, "INVITE", "", "", "", "null",
+				"a84b4c76e66710@pc33.example.com");
+		check("pseudo: hash100 stable per Call-ID", ctx.resolve("${hash100}").equals(ctx2.resolve("${hash100}")));
+
+		// Canary condition is expressible.
+		Transition canary = new Transition().setWhen("${hash100} < 100").setNext("b2bua");
+		check("pseudo: canary condition evaluates", canary.matches(ctx));
+
+		// null-tolerance (no Call-ID → no hash100, nothing throws)
+		Context ctx3 = new MemoryContext();
+		AppRouter.publishPseudoVariables(ctx3, null, null, null, null, null, null);
+		check("pseudo: null-tolerant", ctx3.resolve("${hash100}").equals("${hash100}"));
+	}
+
+	private static void testTierTableClassification() {
+		// The sample's tier table classifies alice as gold and the INV-gold
+		// transition fires on it — tiering as data, end to end.
+		AppRouterConfigurationSample cfg = new AppRouterConfigurationSample();
+		State init = cfg.getStates().get("null");
+
+		Context ctx = new MemoryContext();
+		init.extract(ctx, invite("alice", "carol"));
+		check("tier: alice classified gold", "gold".equals(ctx.resolve("${tier}")));
+		check("tier: namespaced too", "gold".equals(ctx.resolve("${customerTier.tier}")));
+
+		Transition gold = findTransition(init, "INV-gold");
+		check("tier: INV-gold fires for gold caller", gold != null && gold.matches(ctx));
+		check("tier: gold route resolves", "sip:alice@gold-trunk".equals(ctx.resolve(gold.getRoutes()[0])));
+
+		// carol is in no tier row: INV-gold must not fire.
+		Context ctx2 = new MemoryContext();
+		init.extract(ctx2, invite("carol", "bob"));
+		check("tier: unclassified caller not gold", gold != null && !gold.matches(ctx2));
+	}
+
+	private static void testMatchesOperatorInWhen() {
+		AppRouterConfigurationSample cfg = new AppRouterConfigurationSample();
+		State init = cfg.getStates().get("null");
+		Transition tollfree = findTransition(init, "INV-tollfree");
+
+		Context ctx = new MemoryContext();
+		init.extract(ctx, invite("carol", "18005551212"));
+		check("matches: toll-free callee fires", tollfree != null && tollfree.matches(ctx));
+
+		Context ctx2 = new MemoryContext();
+		init.extract(ctx2, invite("carol", "14085551212"));
+		check("matches: ordinary callee does not fire", tollfree != null && !tollfree.matches(ctx2));
+	}
+
+	private static void testRegionSerialization() throws RuntimeException {
+		try {
+			com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			Transition t = new Transition().setId("r").setNext("b2bua")
+					.setRegion(Transition.Region.TERMINATING);
+			String json = mapper.writeValueAsString(t);
+			check("region: serialized by name", json.contains("\"region\":\"TERMINATING\""));
+			Transition back = mapper.readValue(json, Transition.class);
+			check("region: round-trips", back.getRegion() == Transition.Region.TERMINATING);
+			Transition plain = mapper.readValue("{\"id\":\"x\",\"next\":\"b2bua\"}", Transition.class);
+			check("region: absent stays null (NEUTRAL at runtime)", plain.getRegion() == null);
+		} catch (Exception e) {
+			check("region: serialization threw " + e.getMessage(), false);
+		}
+	}
+
+	private static void testMetricsCounters() {
+		Fsmar3Metrics m = new Fsmar3Metrics();
+		m.countRequest();
+		m.countRequest();
+		m.countDefaultFallback();
+		m.countBypass();
+		m.countCycle();
+		m.countTransition("null", "INVITE", "INV-gold");
+		m.countTransition("null", "INVITE", "INV-gold");
+		m.countTransition("screening", "INVITE", null);
+
+		check("metrics: requests", m.getRequestsRouted() == 2);
+		check("metrics: fallbacks", m.getDefaultApplicationFallbacks() == 1);
+		check("metrics: bypasses", m.getUndeployedBypasses() == 1);
+		check("metrics: cycles", m.getRoutingCyclesDetected() == 1);
+
+		String[] hits = m.getTransitionHits();
+		check("metrics: two distinct transitions", hits.length == 2);
+		check("metrics: gold counted twice",
+				java.util.Arrays.asList(hits).contains("null/INVITE/INV-gold = 2"));
+		check("metrics: null id renders as dash",
+				java.util.Arrays.asList(hits).contains("screening/INVITE/- = 1"));
+
+		m.resetCounters();
+		check("metrics: reset", m.getRequestsRouted() == 0 && m.getTransitionHits().length == 0);
+	}
+
+	private static Transition findTransition(State state, String id) {
+		for (Transition t : state.getTrigger("INVITE").getTransitions()) {
+			if (id.equals(t.getId())) return t;
+		}
+		return null;
 	}
 
 	private static void check(String name, boolean ok) {

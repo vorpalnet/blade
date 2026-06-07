@@ -60,7 +60,7 @@ public class LogManager implements ServletContextListener {
 	@Override
 	public final void contextInitialized(ServletContextEvent sce) {
 		if (sce != null && sce.getServletContext() != null) {
-			basename = SettingsManager.basename(sce.getServletContext().getServletContextName());
+			basename = SettingsManager.deriveName(sce.getServletContext());
 		}
 	}
 
@@ -87,10 +87,12 @@ public class LogManager implements ServletContextListener {
 			return logger;
 		}
 
-		// Without basename (typical), use servlet context name
+		// Without basename (typical), derive it from the context — the same
+		// flattened-context-path name SettingsManager uses for MBean and config
+		// file names, so log files share the canonical per-app name.
 		String effectiveBasename = basename;
 		if (effectiveBasename == null && context != null) {
-			effectiveBasename = SettingsManager.basename(context.getServletContextName());
+			effectiveBasename = SettingsManager.deriveName(context);
 		}
 
 		// If the logger already exists, use it
@@ -198,13 +200,13 @@ public class LogManager implements ServletContextListener {
 
 	public static void closeLogger(ServletContextEvent event) {
 		if (event != null && event.getServletContext() != null) {
-			closeLogger(SettingsManager.basename(event.getServletContext().getServletContextName()));
+			closeLogger(SettingsManager.deriveName(event.getServletContext()));
 		}
 	}
 
 	public static void closeLogger(SipServletContextEvent event) {
 		if (event != null && event.getServletContext() != null) {
-			closeLogger(SettingsManager.basename(event.getServletContext().getServletContextName()));
+			closeLogger(SettingsManager.deriveName(event.getServletContext()));
 		}
 	}
 

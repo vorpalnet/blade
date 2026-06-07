@@ -1,6 +1,6 @@
-/// This package provides the root of the Vorpal Blade analytics service, a SIP analytics
-/// pipeline that captures call lifecycle events and persists them to a relational database
-/// through an asynchronous JMS-based architecture.
+/// The root of the BLADE analytics service — a SIP analytics pipeline that
+/// captures call lifecycle events and persists them to a relational
+/// database. The architecture is asynchronous and JMS-based.
 ///
 /// ## Key Components
 ///

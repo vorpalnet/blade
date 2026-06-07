@@ -21,13 +21,19 @@ import org.vorpal.blade.framework.v3.configuration.Context;
 /// and_expr   := not_expr ( '&&' not_expr )*
 /// not_expr   := '!' not_expr | primary
 /// primary    := '(' expr ')' | comparison | atom
-/// comparison := atom ( '==' | '!=' | '<' | '>' | '<=' | '>=' ) atom
+/// comparison := atom ( '==' | '!=' | '<' | '>' | '<=' | '>='
+///                    | 'matches' | 'contains' ) atom
 /// atom       := variable | number | string | bareword | boolean
 /// variable   := '${' name '}'
 /// string     := "'" any-chars-except-quote "'"
 /// bareword   := non-operator non-whitespace characters
 /// boolean    := 'true' | 'false'
 /// ```
+///
+/// `matches` is a full-string regex match (Java [java.util.regex.Pattern]
+/// syntax); `contains` is a literal substring test. Both treat an
+/// unresolved left side as the empty string. A malformed regex pattern
+/// evaluates to false rather than throwing.
 ///
 /// ## Value semantics
 ///
@@ -53,6 +59,8 @@ import org.vorpal.blade.framework.v3.configuration.Context;
 /// !${blocked}
 /// ${description} == 'not allowed'
 /// (${customerTier} == premium && ${shift} == business) || ${override}
+/// ${To.host} contains 'example'
+/// ${From.user} matches '1\d{10}'
 /// ```
 public class Expression implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -150,10 +158,36 @@ public class Expression implements Serializable {
 			return eval(ctx);
 		}
 
+		/// Lazily compiled regex for the `matches` operator, keyed by its
+		/// source so a dynamic (variable) right side recompiles only when it
+		/// changes. Transient — recompiled after deserialization.
+		private transient java.util.regex.Pattern cachedPattern;
+		private transient String cachedPatternSource;
+
 		@Override
 		public boolean eval(Context ctx) {
 			Object l = left.value(ctx);
 			Object r = right.value(ctx);
+
+			// String operators: no numeric coercion.
+			if ("matches".equals(op) || "contains".equals(op)) {
+				String ls = (l == null) ? "" : l.toString();
+				String rs = (r == null) ? "" : r.toString();
+				if ("contains".equals(op)) {
+					return ls.contains(rs);
+				}
+				try {
+					if (cachedPattern == null || !rs.equals(cachedPatternSource)) {
+						cachedPattern = java.util.regex.Pattern.compile(rs, java.util.regex.Pattern.DOTALL);
+						cachedPatternSource = rs;
+					}
+					return cachedPattern.matcher(ls).matches();
+				} catch (java.util.regex.PatternSyntaxException e) {
+					// Malformed pattern: evaluate to false, never throw mid-routing.
+					return false;
+				}
+			}
+
 			Double ln = asNumber(l);
 			Double rn = asNumber(r);
 			if (ln != null && rn != null) {
@@ -397,7 +431,30 @@ public class Expression implements Serializable {
 			if (match(">=")) return ">=";
 			if (match("<"))  return "<";
 			if (match(">"))  return ">";
+			if (matchWord("matches"))  return "matches";
+			if (matchWord("contains")) return "contains";
 			return null;
+		}
+
+		/// Like [#match] but only for word operators: the operator must be
+		/// followed by a non-bareword character (whitespace, quote, `${`,
+		/// `(`, or end of input) so a bareword like `containsX` is not
+		/// half-consumed as an operator.
+		private boolean matchWord(String s) {
+			skipWhitespace();
+			if (pos + s.length() > src.length()
+					|| !src.regionMatches(pos, s, 0, s.length())) {
+				return false;
+			}
+			int after = pos + s.length();
+			if (after < src.length()) {
+				char c = src.charAt(after);
+				if (!Character.isWhitespace(c) && c != '\'' && c != '$' && c != '(') {
+					return false;
+				}
+			}
+			pos += s.length();
+			return true;
 		}
 
 		private static boolean isBareTerminator(char c) {

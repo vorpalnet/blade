@@ -2,6 +2,209 @@
 
 ## 2.9.9 (unreleased)
 
+### Build: fixed shade-plugin double-shading on incremental builds
+
+Incremental (no-`clean`) builds of the fsmar fat-jar modules re-shaded the
+previous build's already-shaded jar: shade overwrites
+`target/<finalName>.jar` with the uber-jar, and maven-jar-plugin's default
+`forceCreation=false` then skipped recreating the thin jar on the next run.
+Symptoms were thousands of bogus "overlapping classes" warnings — and a real
+risk of stale classes from removed/upgraded dependencies surviving in the
+shipped jar. Parent pom now sets `forceCreation=true` on maven-jar-plugin.
+Both fsmar shade configs also set `createDependencyReducedPom=false`
+(nothing consumes these artifacts via Maven; the reduced POM was source-tree
+clutter).
+
+Verified: fsmar and fsmar3 rebuilt twice without `clean` — zero overlap
+warnings, no `dependency-reduced-pom.xml` generated.
+
+### Context-path-derived config names (BREAKING for admin-app config files)
+
+The canonical per-app name — JMX MBean (`vorpal.blade:Name=…`), config file
+(`<name>.json` + cluster/server overlays), `_schemas`/`_samples` files, and
+log files — is now derived from the webapp's **context path**, flattened
+(strip leading `/`, then `/` → `-`), via new `SettingsManager.flatten()` /
+`deriveName()`. Previously it came from the web.xml display-name, which
+forced every admin app to pick a flat name differing from its context-root.
+
+- **Services unchanged**: `/crud` → `crud` — same names as before.
+- **Admin apps change**: `/blade/crud` → `blade-crud`. MBeans, config files,
+  and log files for the whole admin tier are now `blade-*`.
+- Portal launcher join simplified to the same flatten; the
+  `analytics`→`analytics-console` special-case map is gone.
+- Configurator auto-publish self-reference updated to `blade-configurator`.
+- LogManager shares the same single name derivation (log files match MBean
+  and config names byte-for-byte).
+
+**Migration**: existing domain config files for admin apps must be renamed
+(`configurator.json` → `blade-configurator.json`, `portal.json` →
+`blade-portal.json`, `files.json` → `blade-files.json`, `logs.json` →
+`blade-logs.json`, `flow.json` → `blade-flow.json`, `tuning.json` →
+`blade-tuning.json`, `watcher.json` → `blade-watcher.json`, `api.json` →
+`blade-api.json`, `javadoc.json` → `blade-javadoc.json`, `crud-editor.json`
+→ `blade-crud-editor.json`, `analytics-console.json` → `blade-analytics.json`),
+including any `_clusters/`/`_servers/` overlays. Un-renamed files are ignored
+(app falls back to its sample config). `_schemas`/`_samples` regenerate on
+deploy. Service config files need no changes. External JMX scripts using old
+admin MBean names must update.
+
+Verified: new FlattenSmokeTest 7/7; full build green (framework, portal,
+configurator, watcher, all services).
+
+### Config schema version field (groundwork for automatic config upgrades)
+
+`Configuration` (v2 base class, so every service/admin config) now carries an
+`Integer version` — the config file's schema version, serialized first in
+every config file and SAMPLE. Absent/null reads as 0, meaning "pre-versioning
+file". Rendered read-only in the Configurator form (`@FormLayout(readOnly)`),
+deliberately NOT Jackson read-only so the value still binds from files. First
+step toward framework-managed config-file upgrade chains (BLADE 3.0).
+
+Verified: new ConfigurationVersionSmokeTest 6/6 (absent⇒0, explicit binds,
+serialized first, schema `x-readonly`).
+
+Follow-up: `SettingsManager`/`Settings` refactored for extensibility ahead of
+the v3 SettingsManager — six duplicated event-constructor bodies collapsed
+into `initContext()`; `build()` decomposed into `initConfigPaths()` /
+`createSettings()` (Settings factory) / `configureMapper()`, all protected
+overridable seams; `Settings.reload()` now reads each overlay file through a
+protected `readConfigTree(file, configType)` hook (the future per-file
+upgrade point); Settings fields widened to protected. No behavior change —
+all constructors and public methods unchanged, full build + existing
+subclasses (queue, acl, proxy-block, proxy-balancer, configurator) compile
+as-is, smoke tests green.
+
+### FSMAR 3: razzle-dazzle round — tiering as data, pseudo-variables, observability
+
+Five features landed together (framework + fsmar3), closing every remaining
+FSMAR 2 gap worth closing and adding capabilities v2 never had:
+
+- **`matches` / `contains` operators** in the v3 `Expression` grammar
+  (framework — iRouter gets them too). `matches` is full-string regex with a
+  cached compiled pattern; `contains` is literal substring; malformed
+  patterns evaluate false rather than throwing.
+- **`TableSelector`** (framework, selector type `table`): looks up
+  already-extracted context values in an embedded `TranslationTable`
+  (hash/prefix/range keys) and spreads the matched extras into the context —
+  classification/tiering as data. Gold/silver/bronze is one config plus a
+  table operators edit; conditions just test `${tier} == 'gold'`.
+- **Pseudo-variables** published each hop before the state's selectors:
+  `${method}`, `${requestUri}`, `${directive}`, `${region}`,
+  `${previousApp}`, `${hour}`, `${dayOfWeek}`, `${hash100}` (stable per-call
+  0–99 bucket from the Call-ID — `${hash100} < 5` canaries ~5% of calls).
+- **Trace + metrics**: FINER trace of every transition evaluated with its
+  outcome (the Route Simulator's raw material); JMX MBean
+  `org.vorpal.blade:type=Fsmar3,name=metrics` (explicit StandardMBean) with
+  per-transition hit counts, requests routed, default-app fallbacks,
+  undeployed bypasses, cycle detections, and a reset operation.
+- **Config validation** on each loaded config's first routing use: malformed
+  `when` → SEVERE (it would silently never match); `next`/defaultApplication
+  naming an undeployed app → WARNING. Plus an optional per-transition
+  **`region`** field (ORIGINATING/TERMINATING/NEUTRAL, default NEUTRAL) —
+  the last JSR-289 feature v2 had that v3 lacked.
+
+The sample config now demonstrates the tier table, a `matches` toll-free
+rule, and documents the pseudo-variables. README updated.
+
+Verified: ExpressionSmokeTest 71/71, new TableSelectorSmokeTest 13/13,
+FsmarRoutingSmokeTest 46/46 (pseudo-vars incl. hash stability, tier
+classification end-to-end, matches in `when`, region round-trip, metrics);
+full production build + javadocs green; connect/securelogix regression
+build green against the modified framework. Wire-level behavior (trace in
+live logs, JMX metrics in a real engine) is deploy-only.
+
+### Javadoc site: every module card now has a tagline
+
+Seven modules on the javadoc landing page (`/blade/javadoc`) showed a bare
+title with no description. Three fixes:
+
+- **Six missing `package-info.java` files written** — services/crud,
+  services/irouter, admin/files, admin/logs, admin/analytics-console, and
+  admin/flow (its real root package is `applications.console.mxgraph`). Each
+  has a card-sized first sentence plus a real package overview.
+- **Stale-docroot fix in `collect-javadocs.sh`**: the collected docroot
+  persists across builds by design (modules absent from a trimmed build keep
+  their docs), but a module's own directory is now `rm -rf`'d before copy.
+  The analytics service's card was blank because its docroot still carried
+  the console's old `applications.analytics` classes (May 29 layout), which
+  won the root-package tie-break over the real `services.analytics` package
+  and its description.
+- **Display names**: the index generator now special-cases names that naive
+  Title-Casing mangles — ACL, API, CRUD, CRUD Editor, iRouter, TPCC, FSMAR,
+  FSMAR 3, Test UAC/UAS/B2BUA. Also shortened the analytics package-info
+  first sentence, which was being truncated mid-word at the card's 200-char
+  limit.
+
+Verified: `./build.sh production` regenerates the index with all 31 cards
+carrying descriptions; browser check of `/blade/javadoc` after deploy.
+
+### Javadoc site matches the build profile; test apps promoted to production
+
+- **javadoc.war now contains exactly the active profile's modules.** build.sh
+  passes the profile's module list to `collect-javadocs.sh`
+  (`-Dblade.included.modules` → 4th script argument): only listed modules are
+  collected (a leftover `target/` from another profile's build no longer
+  leaks in) and previously collected modules not in the list are pruned.
+  A plain `mvn -Pjavadocs` without build.sh keeps the legacy
+  accumulate-everything behavior (empty list).
+- **Test apps promoted to production** (2026-06-05): `test-b2bua`,
+  `test-uac`, `test-uas` added to production.conf and to the cluster EAR via
+  their own `ear-test-*` profiles — they now deploy with the services tier as
+  live-diagnostics tools, with more features planned. `context.war` remains
+  the only standalone services-tier WAR.
+
+Verified: production build → blade-cluster.ear contains the 3 test WARs;
+javadoc docroot contains exactly the profile's modules (`context` pruned with
+a log line, test-app docs present, 30 index cards).
+
+### Context service promoted to full/production
+
+The `context` service (REST lookup of raw inbound SIP headers, captured
+before a cloud-provider trunk scrubs them) is now a featured BLADE service:
+added to production.conf and bundled into blade-cluster.ear via its own
+`ear-context` profile. Every services-tier WAR now rides the EAR; the only
+standalone deployable left anywhere is the admin tier's `watcher.war`.
+
+With this, the `default`, `full`, and `production` profiles select identical
+module sets (verified by diff). They remain separate files on purpose —
+production is the customer-facing anchor; default/full can grow dev-only
+modules again later.
+
+Verified: production build → blade-cluster.ear contains context.war (18
+WARs); javadoc index back to 31 cards with the Context tagline.
+
+### Build: profile-driven tier EARs — blade-admin.ear + blade-cluster.ear
+
+Both tiers now package as one EAR each, with contents that track the active
+`build-profiles/*.conf`:
+
+- **`blade-cluster.ear`** (`services/cluster`, conf name `cluster`) — all
+  service WARs in one cluster deployable, mirror of the admin EAR. Test apps
+  and `context.war` are deliberately standalone (deploy manually, like
+  `watcher.war` on the admin side).
+- **`blade-admin.ear`** (`admin/ear`) converted from a fixed WAR list to the
+  same profile-driven pattern: every app rides an `ear-<name>` profile
+  activated by `!skip.<name>` — the flags build.sh derives from the conf — so
+  dropping an app from the conf drops it from the EAR with no dangling
+  references.
+- **javadoc.war rides the `javadocs` profile id**: the admin EAR carries it
+  exactly when docs are generated. `--no-javadoc` (or an old build JDK) no
+  longer skips the whole admin EAR — it just assembles without javadoc.war.
+- `deploy.sh` already prefers an EAR in a tier dir as the deploy unit, so
+  `deploy.sh <env> services <target>` now deploys `blade-cluster.ear`.
+- Cleanup: stale "EAR is disabled" text and the TODO(EAR) marker removed from
+  build.sh; DEPLOYMENT.txt manifest now classifies both EARs and shows the
+  real `/blade/<app>` context-roots (several were stale, e.g. `/configurator`);
+  dead `blade.war`/`explorer.war` classifier cases dropped; DEPLOYMENT.md
+  services-tier section rewritten.
+
+Verified: `./build.sh production` → both EARs with the full production set
+(11 admin WARs incl. javadoc.war; 14 service WARs, correct context-roots in
+application.xml); `./build.sh production --no-javadoc -Dskip.queue -Dskip.flow`
+→ admin EAR builds *without* javadoc.war/flow.war, cluster EAR without
+queue.war; dist run → EARs land in `dist/<ver>/{admin,services}/` beside the
+individual WARs, manifest correct.
+
 ### Framework: keep-alive `style: UPDATE` actually implemented
 
 `session.keepAlive.style: UPDATE` previously behaved identically to `REINVITE`

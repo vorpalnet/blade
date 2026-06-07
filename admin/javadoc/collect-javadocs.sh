@@ -1,12 +1,30 @@
 #!/usr/bin/env bash
-# Collects javadocs from all sibling modules and generates an index.html
-# Usage: collect-javadocs.sh <project-root> <output-dir> <version>
+# Collects javadocs from sibling modules and generates an index.html
+# Usage: collect-javadocs.sh <project-root> <output-dir> <version> [included-modules]
+#
+#   included-modules: comma-separated module directory names — the active
+#   build profile's list, passed by build.sh via -Dblade.included.modules.
+#   When given, ONLY those modules are collected and any previously collected
+#   module not in the list is pruned, so javadoc.war matches the build
+#   profile exactly. When omitted/empty (plain `mvn -Pjavadocs` without
+#   build.sh), every module with apidocs on disk is collected and the docroot
+#   accumulates across builds (legacy union behavior).
 
 set -euo pipefail
 
 PARENT="$1"
 DOCROOT="$2"
 VERSION="$3"
+INCLUDED="${4:-}"
+
+# Is module $1 in the included list? Always true when no list was given.
+module_included() {
+    [ -z "$INCLUDED" ] && return 0
+    case ",$INCLUDED," in
+        *",$1,"*) return 0 ;;
+        *)        return 1 ;;
+    esac
+}
 
 mkdir -p "$DOCROOT"
 
@@ -16,6 +34,9 @@ for moddir in "$PARENT"/*/*/; do
     [ -d "$moddir" ] || continue
     modname=$(basename "$moddir")
     [ ! -f "$moddir/pom.xml" ] && continue
+    # Profile filter: a leftover target/ from an earlier build of a different
+    # profile must not leak its docs into this build's javadoc.war.
+    module_included "$modname" || continue
 
     apidocs=""
     if [ -d "$moddir/target/reports/apidocs" ]; then
@@ -26,10 +47,31 @@ for moddir in "$PARENT"/*/*/; do
 
     if [ -n "$apidocs" ]; then
         echo "  Collecting javadoc: $modname"
+        # Clean before copy: the docroot persists across builds (deliberately,
+        # so modules absent from this build's reactor keep their docs), but a
+        # module's OWN dir must be replaced wholesale — stale packages from an
+        # earlier source layout otherwise poison the root-package pick used
+        # for the index card description (e.g. analytics once carried the
+        # console's org.vorpal.blade.applications.analytics classes).
+        rm -rf "$DOCROOT/$modname"
         mkdir -p "$DOCROOT/$modname"
         cp -r "$apidocs/"* "$DOCROOT/$modname/"
     fi
 done
+
+# Prune modules dropped from the build profile (only when a list was given —
+# without one, the docroot keeps its legacy accumulate-across-builds behavior).
+if [ -n "$INCLUDED" ]; then
+    for dir in "$DOCROOT"/*/; do
+        [ -d "$dir" ] || continue
+        mod=$(basename "$dir")
+        case "$mod" in images) continue ;; esac   # webapp asset dir, not a module
+        if ! module_included "$mod"; then
+            echo "  Pruning javadoc: $mod (not in build profile)"
+            rm -rf "$dir"
+        fi
+    done
+fi
 
 # Redirect each module's index.html to its root package-summary.html
 # Javadoc already does this for single-package modules; do the same for multi-package ones.
@@ -118,7 +160,21 @@ emit_module() {
     local modname="$1"
     local dir="$DOCROOT/$modname"
     local display desc
-    display=$(echo "$modname" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1')
+    # Proper names that naive Title-Casing mangles (Crud, Irouter, Fsmar...).
+    case "$modname" in
+        acl)         display="ACL" ;;
+        api)         display="API" ;;
+        crud)        display="CRUD" ;;
+        crud-editor) display="CRUD Editor" ;;
+        irouter)     display="iRouter" ;;
+        tpcc)        display="TPCC" ;;
+        fsmar)       display="FSMAR" ;;
+        fsmar3)      display="FSMAR 3" ;;
+        test-uac)    display="Test UAC" ;;
+        test-uas)    display="Test UAS" ;;
+        test-b2bua)  display="Test B2BUA" ;;
+        *) display=$(echo "$modname" | sed 's/-/ /g' | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) substr($i,2)}1') ;;
+    esac
     desc=$(get_module_description "$dir")
     if [ -n "$desc" ]; then
         echo "                <a class=\"vorpal-card\" href=\"$modname/index.html\"><h3>$display</h3><p>$desc</p><span class=\"vorpal-card-link\">Open</span></a>"

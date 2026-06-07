@@ -19,11 +19,12 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  * Base configuration class with logging, session parameters, and utility
  * methods.
  */
-@JsonPropertyOrder({ "about", "logging", "session", "analytics" })
+@JsonPropertyOrder({ "version", "about", "logging", "session", "analytics" })
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 
+	protected Integer version;
 	protected About about = new About();
 	protected LogParameters logging = new LogParametersDefault();
 	protected SessionParameters session = new SessionParameters();
@@ -148,6 +149,19 @@ public class Configuration implements Serializable {
 					0);
 		}
 
+	}
+
+	/// Config file schema version. 0 means a pre-versioning file. Managed by
+	/// the framework — not operator-editable.
+	@JsonPropertyDescription("Config schema version (framework-managed)")
+	@FormLayout(readOnly = true)
+	public Integer getVersion() {
+		return (version == null) ? 0 : version;
+	}
+
+	public Configuration setVersion(Integer version) {
+		this.version = version;
+		return this;
 	}
 
 	@JsonPropertyDescription("Display metadata for this app — name, tagline, description, and administrator notes. Shown on the BLADE Admin Portal launcher deck and the in-app topbar.")

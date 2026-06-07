@@ -62,15 +62,15 @@ Management tools that run **only on AdminServer**, packaged as a single EAR (`bl
 - **EAR vs. individual WAR:** `deploy.sh ... admin` deploys `blade-admin.ear` (the whole tier). For a quick single-app test, redeploy that one WAR (from `dist/<ver>/admin/` or its exploded `target/` dir) — each is independently deployable.
 - **`watcher.war` — standalone only, NOT in the EAR.** `admin/watcher` builds `watcher.war` (context `/blade/watcher`), a headless config auto-publish shim: no UI, no servlets, no login — one background `WatchService` thread that republishes `./config/custom/vorpal/*.json` edits via JMX. It exists for sites that don't deploy the Configurator UI (e.g., it can't pass their security scans) but still need auto-publish. Deploy it manually to AdminServer from `dist/<ver>/admin/watcher.war`. Don't run it alongside the Configurator with Auto-publish on — both watch the same files, so every edit publishes twice (harmless but redundant); turn the Configurator's Auto-publish off, or undeploy one of them.
 
-### 4. Services + test apps — `dist/<ver>/services/*.war`
+### 4. Services + test apps — `dist/<ver>/services/blade-cluster.ear`
 
-The production SIP applications themselves (ACL, Analytics, Hold, Proxy-Registrar, Proxy-Router, etc.) plus the test apps (`test-uac`, `test-uas`, `test-b2bua`). Each WAR bundles the framework JAR and references the shared library for 3rd-party code. WAR filenames match the context-root (`hold.war`, `proxy-router.war`, `test-uac.war`).
+The production SIP applications themselves (ACL, Analytics, Hold, Proxy-Registrar, Proxy-Router, etc.), packaged as a single EAR (`blade-cluster.ear`) — the mirror of the admin tier's `blade-admin.ear` — so the whole services tier deploys to the cluster in one step. Each bundled WAR is self-contained exactly as it deploys standalone (framework JAR inside + shared-library reference in its own `weblogic.xml`); the EAR bundles no libraries itself. The EAR's contents track the active build profile: each service rides an `ear-<name>` profile in `services/cluster/pom.xml`, so a trimmed profile produces a trimmed EAR. `./build.sh` also drops the individual WARs in `dist/<ver>/services/` (filenames match the context-root: `hold.war`, `proxy-router.war`) so a single service can be redeployed on its own during testing.
 
-- **Artifacts:** every WAR under `dist/<ver>-<build>/services/`
-- **Goes to:** the **cluster only** (engine tier).
+- **Artifacts:** `blade-cluster.ear` plus every WAR under `dist/<ver>-<build>/services/`
+- **Goes to:** the **cluster only** (engine tier). `deploy.sh ... services` deploys the EAR when present, individual WARs otherwise.
 - **Why cluster only:** services handle live SIP traffic; AdminServer doesn't.
-- **Test apps live here too:** they target the cluster just like real services — no need for a separate tier.
-- **EAR (currently disabled):** the historical packaging was a single `vorpal-blade-services-<profile>.ear`. While that's offline (see `services/pom.xml`), services are deployed as individual WARs.
+- **Test apps are bundled too** (promoted to production 2026-06-05 as live-diagnostics tools): `test-uac`, `test-uas`, `test-b2bua` ride the EAR via their own `ear-test-*` profiles whenever the active build profile includes them.
+- **`context.war` is bundled as well** (promoted 2026-06-05): every services-tier WAR now rides the EAR. The only standalone deployable left in the whole system is `watcher.war` on the admin tier.
 
 ## Quick start
 
@@ -85,7 +85,7 @@ $EDITOR build-profiles/deploy/production.conf          # adminurl, user, approut
 ./deploy.sh production shared --dry-run                       # sanity check
 ./deploy.sh production shared                                 # WebLogic shared library
 ./deploy.sh production admin    AdminServer                   # blade-admin.ear → AdminServer
-./deploy.sh production services BEA_ENGINE_TIER_CLUST         # all services/*.war → your cluster
+./deploy.sh production services BEA_ENGINE_TIER_CLUST         # blade-cluster.ear → your cluster
 ./deploy.sh production fsmar                                  # FSMAR jars → approuter/
 ```
 
@@ -103,7 +103,7 @@ After the FSMAR step, **restart the engine tier** so the new `fsmar.jar` is pick
 |---|---|
 | `./deploy.sh production shared` | WebLogic shared library → both AdminServer and the cluster (target read from `wls.targets.both` in the conf) |
 | `./deploy.sh production admin AdminServer` | `dist/<ver>/admin/blade-admin.ear` to AdminServer |
-| `./deploy.sh production services BEA_ENGINE_TIER_CLUST` | Every `dist/<ver>/services/*.war` (services + test apps) to your cluster |
+| `./deploy.sh production services BEA_ENGINE_TIER_CLUST` | `dist/<ver>/services/blade-cluster.ear` (all services + test apps) to your cluster |
 | `./deploy.sh production fsmar` | `cp`/`scp` FSMAR jars to `approuter/` (path from `approuter.dir` / `ssh.host` in the conf) |
 | `./deploy.sh production admin AdminServer undeploy` | Tear down every admin app from AdminServer |
 | `./deploy.sh production services BEA_ENGINE_TIER_CLUST status` | `list-apps` against WebLogic |

@@ -15,6 +15,16 @@
 	<packaging>war</packaging>
 	<name>BLADE Javadoc</name>
 
+	<properties>
+		<!-- Comma-separated module list from the active build profile; set by
+		     build.sh (-Dblade.included.modules). collect-javadocs.sh then
+		     collects exactly those modules and prunes the rest, so
+		     javadoc.war matches the build profile. Empty (a plain
+		     `mvn -Pjavadocs` without build.sh) = collect every module with
+		     apidocs on disk, accumulating across builds. -->
+		<blade.included.modules></blade.included.modules>
+	</properties>
+
 	<!-- Framework JAR for the SettingsManager that registers this app's
 	     name/tagline/description metadata MBean (the portal launcher card).
 	     The framework JAR is bundled per-WAR (the parent's packagingExcludes
@@ -46,6 +56,7 @@
 								<argument>${project.basedir}/../..</argument>
 								<argument>${project.build.directory}/javadoc-content</argument>
 								<argument>${project.version}</argument>
+								<argument>${blade.included.modules}</argument>
 							</arguments>
 						</configuration>
 					</execution>

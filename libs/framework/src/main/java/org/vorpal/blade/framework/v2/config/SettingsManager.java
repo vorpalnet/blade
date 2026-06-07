@@ -55,7 +55,6 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.analytics.AnalyticsAsyncSipServletSample;
 import org.vorpal.blade.framework.v2.analytics.Event;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogManager;
@@ -133,10 +132,6 @@ public class SettingsManager<T> {
 	protected static String applicationName = "";
 	protected static String applicationVersion;
 
-//	protected static Analytics analytics = new AnalyticsAsyncSipServletSample();
-//	protected static SessionParameters sessionParameters = new SessionParametersDefault();
-//	protected static LogParameters logParameters = new LogParametersDefault();
-
 	private static Analytics analytics = null;
 	private static SessionParameters sessionParameters = null;
 	private static LogParameters logParameters = null;
@@ -193,89 +188,56 @@ public class SettingsManager<T> {
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
-		this.servletContext = event.getServletContext();
-		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
-		Callflow.setSipFactory(sipFactory);
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
-		Callflow.setSipUtil(sipUtil);
-
 		this.mapper = mapper;
-
-		applicationName = basename(event.getServletContext().getServletContextName());
-		applicationVersion = version(event.getServletContext().getServletContextName());
-
+		initContext(event.getServletContext());
 		this.build(applicationName, clazz, mapper);
 	}
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, ObjectMapper mapper)
 			throws ServletException, IOException {
-		this.servletContext = event.getServletContext();
-		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
-		Callflow.setSipFactory(sipFactory);
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
-		Callflow.setSipUtil(sipUtil);
-
 		this.mapper = mapper;
-
-		applicationName = basename(event.getServletContext().getServletContextName());
-		applicationVersion = version(event.getServletContext().getServletContextName());
-
+		initContext(event.getServletContext());
 		this.build(applicationName, clazz, mapper);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
-		this.servletContext = event.getServletContext();
-		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
-		Callflow.setSipFactory(sipFactory);
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
-		Callflow.setSipUtil(sipUtil);
-
-		applicationName = basename(event.getServletContext().getServletContextName());
-		applicationVersion = version(event.getServletContext().getServletContextName());
-
+		initContext(event.getServletContext());
 		this.build(applicationName, clazz, null);
 	}
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz) throws ServletException, IOException {
-		this.servletContext = event.getServletContext();
-		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
-		Callflow.setSipFactory(sipFactory);
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
-		Callflow.setSipUtil(sipUtil);
-
-		applicationName = basename(event.getServletContext().getServletContextName());
-		applicationVersion = version(event.getServletContext().getServletContextName());
-
+		initContext(event.getServletContext());
 		this.build(applicationName, clazz, null);
 	}
 
 	public SettingsManager(SipServletContextEvent event, Class<T> clazz, T sample)
 			throws ServletException, IOException {
 		this.sample = sample;
-		this.servletContext = event.getServletContext();
-		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
-		Callflow.setSipFactory(sipFactory);
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
-		Callflow.setSipUtil(sipUtil);
-
-		applicationName = basename(event.getServletContext().getServletContextName());
-		applicationVersion = version(event.getServletContext().getServletContextName());
-
+		initContext(event.getServletContext());
 		this.build(applicationName, clazz, null);
 	}
 
 	public SettingsManager(ServletContextEvent event, Class<T> clazz, T sample) throws ServletException, IOException {
 		this.sample = sample;
-		this.servletContext = event.getServletContext();
-		sipFactory = (SipFactory) event.getServletContext().getAttribute(ATTR_SIP_FACTORY);
+		initContext(event.getServletContext());
+		this.build(applicationName, clazz, null);
+	}
+
+	/// Captures the servlet context and propagates the container's SipFactory /
+	/// SipSessionsUtil to the framework, then derives the application name and
+	/// version from the deployed context name. Shared by every event-based
+	/// constructor; also callable by subclasses that use the no-arg constructor
+	/// and drive [#build] themselves (the pattern a subclass needs when it must
+	/// set its own fields before `build()` runs).
+	protected final void initContext(javax.servlet.ServletContext servletContext) {
+		this.servletContext = servletContext;
+		sipFactory = (SipFactory) servletContext.getAttribute(ATTR_SIP_FACTORY);
 		Callflow.setSipFactory(sipFactory);
-		sipUtil = (SipSessionsUtil) event.getServletContext().getAttribute(ATTR_SIP_SESSIONS_UTIL);
+		sipUtil = (SipSessionsUtil) servletContext.getAttribute(ATTR_SIP_SESSIONS_UTIL);
 		Callflow.setSipUtil(sipUtil);
 
-		applicationName = basename(event.getServletContext().getServletContextName());
-		applicationVersion = version(event.getServletContext().getServletContextName());
-
-		this.build(applicationName, clazz, null);
+		applicationName = deriveName(servletContext);
+		applicationVersion = version(servletContext.getServletContextName());
 	}
 
 	public static SipFactory getSipFactory() {
@@ -319,7 +281,7 @@ public class SettingsManager<T> {
 	}
 
 	public void build(String name, Class<T> clazz, ObjectMapper _mapper) throws ServletException, IOException {
-		this.servletContextName = basename(name);
+		this.servletContextName = flatten(basename(name));
 		sipLogger = LogManager.getLogger(servletContextName);
 
 		this.clazz = clazz;
@@ -335,85 +297,11 @@ public class SettingsManager<T> {
 			AsyncSipServlet.setSipLogger(sipLogger);
 			Callflow.setLogger(sipLogger);
 
-//			settings = new Settings<T>(clazz, this, name, mapper, sample);
+			initConfigPaths();
 
-			// Get the managed server & cluster names
-			domainPath = Paths.get(CONFIG_BASE_PATH);
-			Files.createDirectories(domainPath);
-			schemaPath = Paths.get(CONFIG_BASE_PATH + "_schemas/");
-			Files.createDirectories(schemaPath);
+			settings = createSettings(name);
 
-			samplePath = Paths.get(CONFIG_BASE_PATH + "_samples/");
-			Files.createDirectories(samplePath);
-
-			server = ManagementFactory.getPlatformMBeanServer();
-			serverName = System.getProperty("weblogic.Name");
-			serverPath = Paths.get(CONFIG_BASE_PATH + "_servers/" + serverName);
-			Files.createDirectories(serverPath);
-			ObjectName managedServerName = new ObjectName("com.bea:Name=" + serverName + ",Type=Server");
-			ObjectName clusterObjectName = (ObjectName) server.getAttribute(managedServerName, "Cluster");
-			if (clusterObjectName != null) {
-				clusterName = (String) server.getAttribute(clusterObjectName, "Name");
-				clusterPath = Paths.get(CONFIG_BASE_PATH + "_clusters/" + clusterName);
-				Files.createDirectories(clusterPath);
-				domainName = server.getDefaultDomain();
-			}
-
-			settings = new Settings<T>(clazz, this, name, mapper, sample);
-
-			// Support for SipFactory classes
-
-			// URI
-			this.mapper.registerModule(new SimpleModule()//
-					.addSerializer(URI.class, new JsonUriSerializer()));
-			this.mapper.registerModule(new SimpleModule()//
-					.addDeserializer(URI.class, new JsonUriDeserializer()));
-
-			// SipURI
-			this.mapper.registerModule(new SimpleModule()//
-					.addSerializer(SipURI.class, new JsonSipUriSerializer()));
-			this.mapper.registerModule(new SimpleModule()//
-					.addDeserializer(SipURI.class, new JsonSipUriDeserializer()));
-
-			// Address
-			this.mapper.registerModule(new SimpleModule()//
-					.addSerializer(Address.class, new JsonAddressSerializer()));
-			this.mapper.registerModule(new SimpleModule()//
-					.addDeserializer(Address.class, new JsonAddressDeserializer()));
-
-			// IPAddress
-			this.mapper.registerModule(new SimpleModule()//
-					.addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
-			this.mapper.registerModule(new SimpleModule()//
-					.addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
-
-			// IPv4Address
-			this.mapper.registerModule(new SimpleModule()//
-					.addSerializer(IPv4Address.class, new JsonIPv4AddressSerializer()));
-			this.mapper.registerModule(new SimpleModule()//
-					.addDeserializer(IPv4Address.class, new JsonIPv4AddressDeserializer()));
-
-			// IPv6Address
-			this.mapper.registerModule(new SimpleModule()//
-					.addSerializer(IPv6Address.class, new JsonIPv6AddressSerializer()));
-			this.mapper.registerModule(new SimpleModule()//
-					.addDeserializer(IPv6Address.class, new JsonIPv6AddressDeserializer()));
-
-			this.mapper.registerModule(new SimpleModule()//
-					.addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
-
-			// Trying to get rid of
-			// WARNING: Not able to generate jsonSchema-info for type: [simple type, class
-			// java.lang.Object] - probably using custom serializer which does not override
-			// acceptJsonFormatVisitor
-
-			// this.mapper.registerModule(new SimpleModule()//
-			// .addSerializer(Object.class, new JsonObjectSerializer()));
-
-			// Don't bother to save attributes set to null.
-			this.mapper.setSerializationInclusion(Include.NON_NULL);
-
-			this.mapper.configure(SerializationFeature.FAIL_ON_SELF_REFERENCES, false);
+			configureMapper(this.mapper);
 
 			if (clusterName != null) {
 				objectName = new ObjectName(
@@ -454,10 +342,102 @@ public class SettingsManager<T> {
 
 	}
 
+	/// Resolves and creates the `config/custom/vorpal/` directory tree (domain,
+	/// `_schemas`, `_samples`, `_servers/<server>`, and — when this node belongs
+	/// to a cluster — `_clusters/<cluster>`), discovering the server, cluster,
+	/// and domain names from the platform MBean server along the way.
+	protected void initConfigPaths() throws Exception {
+		domainPath = Paths.get(CONFIG_BASE_PATH);
+		Files.createDirectories(domainPath);
+		schemaPath = Paths.get(CONFIG_BASE_PATH + "_schemas/");
+		Files.createDirectories(schemaPath);
+
+		samplePath = Paths.get(CONFIG_BASE_PATH + "_samples/");
+		Files.createDirectories(samplePath);
+
+		server = ManagementFactory.getPlatformMBeanServer();
+		serverName = System.getProperty("weblogic.Name");
+		serverPath = Paths.get(CONFIG_BASE_PATH + "_servers/" + serverName);
+		Files.createDirectories(serverPath);
+		ObjectName managedServerName = new ObjectName("com.bea:Name=" + serverName + ",Type=Server");
+		ObjectName clusterObjectName = (ObjectName) server.getAttribute(managedServerName, "Cluster");
+		if (clusterObjectName != null) {
+			clusterName = (String) server.getAttribute(clusterObjectName, "Name");
+			clusterPath = Paths.get(CONFIG_BASE_PATH + "_clusters/" + clusterName);
+			Files.createDirectories(clusterPath);
+			domainName = server.getDefaultDomain();
+		}
+	}
+
+	/// Factory for the [Settings] MBean implementation this manager registers.
+	/// Override to substitute a Settings subclass (the seam the planned v3
+	/// SettingsManager uses to hook config upgrades into the load path). Called
+	/// from [#build], so an override must not depend on subclass constructor
+	/// state unless the subclass uses the no-arg constructor and drives
+	/// `build()` itself after its fields are set.
+	protected Settings<T> createSettings(String name) {
+		return new Settings<T>(clazz, this, name, mapper, sample);
+	}
+
+	/// Registers BLADE's (de)serializers for the SipFactory types (URI, SipURI,
+	/// Address) and the ipaddr types, plus the serialization features every
+	/// config mapper needs. Override to extend mapper behavior — call
+	/// `super.configureMapper(mapper)` first to keep the standard support.
+	protected void configureMapper(ObjectMapper mapper) {
+		// URI
+		mapper.registerModule(new SimpleModule()//
+				.addSerializer(URI.class, new JsonUriSerializer()));
+		mapper.registerModule(new SimpleModule()//
+				.addDeserializer(URI.class, new JsonUriDeserializer()));
+
+		// SipURI
+		mapper.registerModule(new SimpleModule()//
+				.addSerializer(SipURI.class, new JsonSipUriSerializer()));
+		mapper.registerModule(new SimpleModule()//
+				.addDeserializer(SipURI.class, new JsonSipUriDeserializer()));
+
+		// Address
+		mapper.registerModule(new SimpleModule()//
+				.addSerializer(Address.class, new JsonAddressSerializer()));
+		mapper.registerModule(new SimpleModule()//
+				.addDeserializer(Address.class, new JsonAddressDeserializer()));
+
+		// IPAddress
+		mapper.registerModule(new SimpleModule()//
+				.addSerializer(IPAddress.class, new JsonIPAddressSerializer()));
+		mapper.registerModule(new SimpleModule()//
+				.addDeserializer(IPAddress.class, new JsonIPAddressDeserializer()));
+
+		// IPv4Address
+		mapper.registerModule(new SimpleModule()//
+				.addSerializer(IPv4Address.class, new JsonIPv4AddressSerializer()));
+		mapper.registerModule(new SimpleModule()//
+				.addDeserializer(IPv4Address.class, new JsonIPv4AddressDeserializer()));
+
+		// IPv6Address
+		mapper.registerModule(new SimpleModule()//
+				.addSerializer(IPv6Address.class, new JsonIPv6AddressSerializer()));
+		mapper.registerModule(new SimpleModule()//
+				.addDeserializer(IPv6Address.class, new JsonIPv6AddressDeserializer()));
+
+		mapper.registerModule(new SimpleModule()//
+				.addKeyDeserializer(inet.ipaddr.Address.class, new InetAddressKeyDeserializer()));
+
+		// Note: registering a custom Object.class serializer to silence the
+		// schema-generator WARNING "Not able to generate jsonSchema-info for
+		// type java.lang.Object" was tried and abandoned — it breaks more than
+		// it fixes. The warning is harmless.
+
+		// Don't bother to save attributes set to null.
+		mapper.setSerializationInclusion(Include.NON_NULL);
+
+		mapper.configure(SerializationFeature.FAIL_ON_SELF_REFERENCES, false);
+	}
+
 	/**
 	 * This method is intended to be overridden to allow configurations that require
 	 * additional work before they are ready to use.
-	 * 
+	 *
 	 * @param config
 	 * @throws ServletParseException
 	 */
@@ -768,13 +748,46 @@ public class SettingsManager<T> {
 	 * an application with the name 'b2bua#2.1.0' would simply be 'b2bua'. Use
 	 * SipServletContextEvent.getServletContext().getServletContextName() for the
 	 * name.
-	 * 
+	 *
 	 * @param name
 	 * @return The base name of the application
 	 */
 	public static String basename(String name) {
 		int i = name.indexOf('#');
 		return (i >= 0) ? name.substring(0, i) : name;
+	}
+
+	/// Flattens a context path into the canonical per-app config name: strips
+	/// one leading '/', replaces each remaining '/' with '-'. So a service at
+	/// `/crud` is named `crud` and an admin app at `/blade/crud` is named
+	/// `blade-crud`. The name keys everything the framework derives per app —
+	/// the JMX ObjectName (`vorpal.blade:Name=...`), the config file
+	/// (`<name>.json` and its cluster/server overlays), `_schemas/<name>.jschema`,
+	/// `_samples/<name>.json.SAMPLE`, and the log file names — keeping the
+	/// `config/custom/vorpal/` layout flat and every filename↔MBean join exact.
+	/// Idempotent on already-flat names; null/empty returned as-is.
+	public static String flatten(String path) {
+		if (path == null || path.isEmpty()) {
+			return path;
+		}
+		if (path.charAt(0) == '/') {
+			path = path.substring(1);
+		}
+		return path.replace('/', '-');
+	}
+
+	/// Derives the canonical per-app config name for a deployed webapp: the
+	/// [#flatten]-ed context path, falling back to the version-stripped
+	/// display-name when the container reports no context path. The single
+	/// definition shared by [#initContext] and
+	/// [org.vorpal.blade.framework.v2.logging.LogManager] — both must agree
+	/// byte-for-byte or the log-file and MBean names diverge.
+	public static String deriveName(javax.servlet.ServletContext servletContext) {
+		String contextPath = servletContext.getContextPath();
+		if (contextPath != null && !contextPath.isEmpty() && !contextPath.equals("/")) {
+			return flatten(contextPath);
+		}
+		return basename(servletContext.getServletContextName());
 	}
 
 	/**

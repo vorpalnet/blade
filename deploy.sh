@@ -265,8 +265,10 @@ run_mvn() {
 
 # Deploy / undeploy every deployable in dist/<ver>/<subdir>/ to <target>.
 # App name = artifact basename without extension (e.g. configurator.war →
-# "configurator", blade-admin.ear → "blade-admin"). The admin tier ships as a
-# single blade-admin.ear; services ship as individual WARs.
+# "configurator", blade-admin.ear → "blade-admin"). Both tiers ship as one
+# EAR (admin → blade-admin.ear, services → blade-cluster.ear — every
+# services-tier WAR incl. context and the test apps); the one standalone
+# extra (admin watcher.war) deploys manually — see DEPLOYMENT.md.
 deploy_subdir() {
     local sub="$1" target="$2" action="$3"
     local src_dir="${DIST_DIR}/${sub}"

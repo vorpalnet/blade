@@ -25,18 +25,25 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// fires it routes to [#next], optionally identifying a [#subscriber] (by SIP
 /// header name, per the JSR-289 App Router contract) and pushing [#routes],
 /// which may contain `${}` placeholders resolved against the context.
-@JsonPropertyOrder({ "id", "when", "next", "subscriber", "routes", "routeModifier" })
+@JsonPropertyOrder({ "id", "when", "next", "subscriber", "region", "routes", "routeModifier" })
 @FormSection(title = "Condition", fields = { "when" })
-@FormSection(title = "Route to", fields = { "next", "subscriber", "routes", "routeModifier" })
-@FormLayoutGroup({ "next", "subscriber" })
+@FormSection(title = "Route to", fields = { "next", "subscriber", "region", "routes", "routeModifier" })
+@FormLayoutGroup({ "next", "subscriber", "region" })
 @FormLayoutGroup({ "routes", "routeModifier" })
 public class Transition implements Serializable {
 	private static final long serialVersionUID = 1L;
+
+	/// JSR-289 routing region for the routed application. Serialized by name;
+	/// maps to the [SipApplicationRoutingRegion] constants in createRouterInfo.
+	public enum Region {
+		ORIGINATING, TERMINATING, NEUTRAL
+	}
 
 	private String id;
 	private String when;
 	private String next;
 	private String subscriber;
+	private Region region;
 	private String[] routes;
 	private SipRouteModifier routeModifier;
 
@@ -91,6 +98,21 @@ public class Transition implements Serializable {
 
 	public Transition setSubscriber(String subscriber) {
 		this.subscriber = subscriber;
+		return this;
+	}
+
+	/// JSR-289 routing region the application is invoked in: ORIGINATING
+	/// (serving the caller), TERMINATING (serving the callee), or NEUTRAL
+	/// (the default when absent). Only matters to applications that call
+	/// `request.getRegion()` — BLADE's own services don't, but third-party
+	/// JSR-289 apps written IMS-style may.
+	@JsonPropertyDescription("JSR-289 routing region: ORIGINATING, TERMINATING, or NEUTRAL (default)")
+	public Region getRegion() {
+		return region;
+	}
+
+	public Transition setRegion(Region region) {
+		this.region = region;
 		return this;
 	}
 
@@ -153,16 +175,24 @@ public class Transition implements Serializable {
 
 	/// Builds the SipApplicationRouterInfo for this transition.
 	///
-	/// Uses NEUTRAL_REGION. If [#subscriber] is set, extracts the URI from that
-	/// named header (the container hands it to the app's subscriber-URI API).
-	/// Each route is `${}`-resolved against [ctx] before being pushed.
-	/// [stateInfo] is the wrapper carried across App Router invocations.
+	/// The routing region comes from [#getRegion] (NEUTRAL when absent). If
+	/// [#subscriber] is set, extracts the URI from that named header (the
+	/// container hands it to the app's subscriber-URI API). Each route is
+	/// `${}`-resolved against [ctx] before being pushed. [stateInfo] is the
+	/// wrapper carried across App Router invocations.
 	public SipApplicationRouterInfo createRouterInfo(String deployedAppName, Serializable stateInfo,
 			Context ctx, SipServletRequest request) {
 
 		String subscriberURI = null;
 		SipRouteModifier modifier = SipRouteModifier.NO_ROUTE;
 		String[] routeArray = null;
+
+		SipApplicationRoutingRegion routingRegion = SipApplicationRoutingRegion.NEUTRAL_REGION;
+		if (region == Region.ORIGINATING) {
+			routingRegion = SipApplicationRoutingRegion.ORIGINATING_REGION;
+		} else if (region == Region.TERMINATING) {
+			routingRegion = SipApplicationRoutingRegion.TERMINATING_REGION;
+		}
 
 		// Extract subscriber URI from the named header.
 		if (subscriber != null) {
@@ -182,7 +212,7 @@ public class Transition implements Serializable {
 			modifier = (routeModifier != null) ? routeModifier : SipRouteModifier.ROUTE;
 		}
 
-		return new SipApplicationRouterInfo(deployedAppName, SipApplicationRoutingRegion.NEUTRAL_REGION,
+		return new SipApplicationRouterInfo(deployedAppName, routingRegion,
 				subscriberURI, routeArray, modifier, stateInfo);
 	}
 

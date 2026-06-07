@@ -27,8 +27,10 @@
 		a subset of services produces an EAR containing exactly that subset, with no
 		dangling references to WARs that aren't in the reactor.
 
-		services/context is intentionally NOT bundled here (it is not a cluster
-		routing service); it builds and deploys on its own.</description>
+		The test apps (test-uac, test-uas, test-b2bua) are bundled the same way
+		when the active profile includes them — promoted to production 2026-06-05
+		as live-diagnostics tools. services/context likewise (promoted
+		2026-06-05): every services-tier WAR now rides this EAR.</description>
 
 	<dependencies>
 		<!-- Service WAR modules are contributed via the ear-* profiles below.
@@ -435,6 +437,114 @@
 							<artifactId>vorpal-blade-services-crud</artifactId>
 							<contextRoot>crud</contextRoot>
 							<bundleFileName>crud.war</bundleFileName>
+						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-context</id>
+			<activation><property><name>!skip.context</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-services-context</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-services-context</artifactId>
+							<contextRoot>context</contextRoot>
+							<bundleFileName>context.war</bundleFileName>
+						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-test-b2bua</id>
+			<activation><property><name>!skip.test-b2bua</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>test-b2bua</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>test-b2bua</artifactId>
+							<contextRoot>test-b2bua</contextRoot>
+							<bundleFileName>test-b2bua.war</bundleFileName>
+						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-test-uac</id>
+			<activation><property><name>!skip.test-uac</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>test-uac</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>test-uac</artifactId>
+							<contextRoot>test-uac</contextRoot>
+							<bundleFileName>test-uac.war</bundleFileName>
+						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
+			<id>ear-test-uas</id>
+			<activation><property><name>!skip.test-uas</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>test-uas</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>test-uas</artifactId>
+							<contextRoot>test-uas</contextRoot>
+							<bundleFileName>test-uas.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>

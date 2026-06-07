@@ -17,6 +17,8 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.vorpal.blade.framework.v2.config.SettingsManager;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -54,17 +56,6 @@ public class PortalCardsResource {
 	private static final int STATE_ACTIVE = 2; // ApplicationRuntimeMBean.ActiveVersionState ACTIVE
 	private static final String CTX_ROOT_PREFIX = "blade/";
 	private static final String SELF_CONTEXT_ROOT = "blade/portal";
-
-	/// Apps whose SettingsMXBean Name (their web.xml display-name) deliberately
-	/// differs from their context-root slug — so the join below looks up the
-	/// right MBean. The Analytics Console serves at /blade/analytics but
-	/// registers Name=analytics-console, so its MBean does not collide with the
-	/// analytics CLUSTER SERVICE (which also registers Name=analytics).
-	/// Maps context-root last-segment → SettingsMXBean Name.
-	private static final Map<String, String> SETTINGS_NAME_BY_SLUG = new HashMap<>();
-	static {
-		SETTINGS_NAME_BY_SLUG.put("analytics", "analytics-console");
-	}
 
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
@@ -104,8 +95,10 @@ public class PortalCardsResource {
 				if (SELF_CONTEXT_ROOT.equals(ctxRoot)) {
 					continue;
 				}
-				String slug = lastSegment(ctxRoot);
-				String settingsKey = SETTINGS_NAME_BY_SLUG.getOrDefault(slug, slug);
+				// SettingsManager names every app's MBean after its flattened
+				// context path ("blade/crud" → "blade-crud"), so the join is the
+				// same flatten — no display-name conventions, no special cases.
+				String settingsKey = SettingsManager.flatten(ctxRoot);
 				cards.add(buildCard(mbs, settingsKey, ctxRoot, settingsMBeans.get(settingsKey)));
 			}
 		}

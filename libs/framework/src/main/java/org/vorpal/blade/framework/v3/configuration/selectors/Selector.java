@@ -35,6 +35,8 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 /// - [XmlSelector] — XPath
 /// - [SdpSelector] — SDP field code
 /// - [RegexSelector] — regex with named groups + expression template
+/// - [TableSelector] — TranslationTable lookup over already-extracted
+///   values (classification/tiering as data)
 ///
 /// They are peers — none extends another. If you need regex parsing
 /// on top of a JSON-extracted value, chain a [JsonSelector] (writes
@@ -48,7 +50,8 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 		@JsonSubTypes.Type(value = JsonSelector.class, name = "json"),
 		@JsonSubTypes.Type(value = XmlSelector.class, name = "xml"),
 		@JsonSubTypes.Type(value = SdpSelector.class, name = "sdp"),
-		@JsonSubTypes.Type(value = RegexSelector.class, name = "regex")
+		@JsonSubTypes.Type(value = RegexSelector.class, name = "regex"),
+		@JsonSubTypes.Type(value = TableSelector.class, name = "table")
 })
 @JsonPropertyOrder({ "type", "id", "description", "attribute" })
 // Tolerate the legacy `index` and `applicationSession` fields in older

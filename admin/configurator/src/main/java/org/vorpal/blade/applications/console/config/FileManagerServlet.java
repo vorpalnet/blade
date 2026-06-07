@@ -57,6 +57,12 @@ public class FileManagerServlet extends HttpServlet {
 	private static final String SAMPLES_DIR = CONFIG_BASE + "/_samples";
 	private static final String TEMPLATES_DIR = CONFIG_BASE + "/_templates";
 
+	/// The Configurator's own canonical app name — its flattened context path
+	/// ("blade/configurator"), which is what SettingsManager uses for the MBean
+	/// Name and the domain config file. Used for the auto-publish toggle's
+	/// self-read/self-write/self-reload.
+	private static final String SELF_APP = "blade-configurator";
+
 	private static MBeanServer server;
 	private static String domainName;
 
@@ -402,7 +408,7 @@ public class FileManagerServlet extends HttpServlet {
 	/// running server is actually doing. Defaults to true if it can't be read.
 	private boolean getAutoPublish() {
 		try {
-			SettingsMXBean cfg = getMBeanProxy(getMBeanServer(), "configurator");
+			SettingsMXBean cfg = getMBeanProxy(getMBeanServer(), SELF_APP);
 			if (cfg != null) {
 				String json = cfg.getCurrentJson();
 				if (json != null) {
@@ -419,12 +425,12 @@ public class FileManagerServlet extends HttpServlet {
 	}
 
 	/// Persist the auto-publish flag and republish so it takes effect live.
-	/// Writes only `autoPublish` to the domain `configurator.json` (the rest
-	/// of the config comes from the shipped sample via merge), then reloads
+	/// Writes only `autoPublish` to the domain `blade-configurator.json` (the
+	/// rest of the config comes from the shipped sample via merge), then reloads
 	/// the Configurator's MBean — which fires ConfiguratorSettingsManager's
 	/// initialize() hook and starts or stops the watcher thread.
 	private void setAutoPublish(boolean enabled) throws Exception {
-		Path file = Paths.get(CONFIG_BASE + "/configurator.json");
+		Path file = Paths.get(CONFIG_BASE + "/" + SELF_APP + ".json");
 		com.fasterxml.jackson.databind.node.ObjectNode node;
 		if (Files.exists(file)) {
 			JsonNode existing = objectMapper.readTree(Files.readAllBytes(file));
@@ -436,7 +442,7 @@ public class FileManagerServlet extends HttpServlet {
 		node.put("autoPublish", enabled);
 		String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
 		saveConfigFile(file.toString(), json);
-		reloadViaMBean("configurator");
+		reloadViaMBean(SELF_APP);
 	}
 
 	private String listSchemasFromFilesystem() {

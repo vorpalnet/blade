@@ -60,19 +60,19 @@ public class Settings<T> implements SettingsMXBean {
 	private static final String CONFIG_SCHEMA = "schema";
 	private static final String CONFIG_SAMPLE = "sample";
 
-	private final Logger sipLogger;
-	private final Class<T> clazz;
+	protected final Logger sipLogger;
+	protected final Class<T> clazz;
 	private T config;
 	private final T sampleConfig;
 
-	private final ObjectMapper objectMapper;
-	private final SettingsManager<T> settingsManager;
+	protected final ObjectMapper objectMapper;
+	protected final SettingsManager<T> settingsManager;
 
-	private final Path domain;
-	private final Path cluster;
-	private final Path server;
-	private final Path sample;
-	private final Path schema;
+	protected final Path domain;
+	protected final Path cluster;
+	protected final Path server;
+	protected final Path sample;
+	protected final Path schema;
 
 	private BufferedWriter bufferedWriter;
 	private BufferedReader bufferedReader;
@@ -236,19 +236,19 @@ public class Settings<T> implements SettingsMXBean {
 			File domainFile = domain.toFile();
 			if (domainFile.exists()) {
 				useSampleConfig = false;
-				jsonNode = objectMapper.readTree(domainFile);
+				jsonNode = readConfigTree(domainFile, CONFIG_DOMAIN);
 			}
 
 			File clusterFile = cluster.toFile();
 			if (clusterFile.exists()) {
 				useSampleConfig = false;
-				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(clusterFile));
+				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(readConfigTree(clusterFile, CONFIG_CLUSTER));
 			}
 
 			File serverFile = server.toFile();
 			if (serverFile.exists()) {
 				useSampleConfig = false;
-				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(objectMapper.readTree(serverFile));
+				jsonNode = objectMapper.readerForUpdating(jsonNode).readValue(readConfigTree(serverFile, CONFIG_SERVER));
 			}
 
 			if (useSampleConfig) {
@@ -367,6 +367,18 @@ public class Settings<T> implements SettingsMXBean {
 			sipLogger.severe(e);
 		}
 
+	}
+
+	/// Reads one overlay config file (domain, cluster, or server) into a JSON
+	/// tree. Each of the three files passes through here individually, before
+	/// the hierarchical merge in [#reload]. This is the seam the planned v3
+	/// settings will override to upgrade an old-version file in place — which
+	/// is why it operates per-file: each overlay carries its own `version`.
+	///
+	/// @param file       the overlay file; guaranteed to exist by the caller
+	/// @param configType one of "domain", "cluster", "server" (for logging)
+	protected JsonNode readConfigTree(File file, String configType) throws IOException {
+		return objectMapper.readTree(file);
 	}
 
 	public Path getPath(String configType) {

@@ -82,6 +82,10 @@
 						<phase>package</phase>
 						<goals><goal>shade</goal></goals>
 						<configuration>
+							<!-- Nothing consumes this artifact via Maven (install is
+							     skipped above), so the dependency-reduced POM is dead
+							     weight in the source tree. -->
+							<createDependencyReducedPom>false</createDependencyReducedPom>
 							<!-- Exclude provided-scope deps (OCCAS/WebLogic JARs) -->
 							<artifactSet>
 								<excludes>

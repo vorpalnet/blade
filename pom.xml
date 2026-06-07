@@ -439,6 +439,15 @@
 					<artifactId>maven-jar-plugin</artifactId>
 					<version>${maven-jar-plugin.version}</version>
 					<configuration>
+						<!-- Always rebuild the jar, even when contents look unchanged.
+						     The fsmar fat-jar modules run shade:shade, which OVERWRITES
+						     target/<finalName>.jar with the uber-jar. On an incremental
+						     build (no clean), the default forceCreation=false skips
+						     jar:jar, so shade re-shades last build's fat jar against the
+						     same deps - producing thousands of bogus "overlapping
+						     classes" warnings and risking stale classes from removed
+						     deps surviving. See the maven-shade-plugin FAQ. -->
+						<forceCreation>true</forceCreation>
 						<archive>
 							<manifestEntries>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
@@ -743,12 +752,14 @@ fi
 			<modules><module>admin/analytics-console</module></modules>
 		</profile>
 
-		<!-- The admin EAR (admin/ear, module name "ear"): assembles every admin
-		     WAR + the framework jar into one deployable. Active by default;
-		     exclude with -Dskip.ear. It depends on the javadoc WAR, so it can
-		     only build when the `javadocs` profile is also active — build.sh
-		     skips it automatically when javadocs are skipped (the no-javadoc
-		     flag or BLADE_SKIP_JAVADOC). -->
+		<!-- The admin EAR (admin/ear, module name "ear"): assembles the admin
+		     WARs into one deployable (blade-admin.ear). Active by default;
+		     exclude with -Dskip.ear. Each admin app is contributed by an
+		     ear-<name> profile inside admin/ear/pom.xml (activated by
+		     !skip.<name>), so the EAR shrinks to match a trimmed build profile.
+		     The javadoc WAR rides the `javadocs` profile id — the EAR carries
+		     javadoc.war exactly when docs are generated and assembles without
+		     it otherwise. -->
 		<profile>
 			<id>ear</id>
 			<activation><property><name>!skip.ear</name></property></activation>

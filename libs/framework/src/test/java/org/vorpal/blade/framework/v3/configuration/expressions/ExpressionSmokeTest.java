@@ -41,6 +41,8 @@ public final class ExpressionSmokeTest {
 		checkBooleanAtoms();
 		// null / missing variable behavior
 		checkMissingVariables();
+		// matches + contains word operators
+		checkStringOperators();
 		// parse errors
 		checkParseErrors();
 		// realistic expressions
@@ -160,6 +162,34 @@ public final class ExpressionSmokeTest {
 		// Missing var in comparison → empty-string comparison
 		check("missing.eq.empty", new Expression("${nonexistent} == ''").evaluate(ctx));
 		check("missing.ne.value", new Expression("${nonexistent} != foo").evaluate(ctx));
+	}
+
+	private static void checkStringOperators() {
+		FakeContext ctx = new FakeContext()
+				.set("host", "sip.example.com")
+				.set("user", "14085551212")
+				.set("containsWord", "x-contains-y")
+				.set("pat", "14.*");
+
+		// contains: literal substring
+		check("contains.hit", new Expression("${host} contains 'example'").evaluate(ctx));
+		check("contains.miss", !new Expression("${host} contains 'nowhere'").evaluate(ctx));
+		check("contains.bareword", new Expression("${host} contains example").evaluate(ctx));
+		check("contains.missing.var", !new Expression("${nonexistent} contains 'x'").evaluate(ctx));
+		check("contains.empty.rhs", new Expression("${host} contains ''").evaluate(ctx));
+
+		// matches: full-string regex
+		check("matches.hit", new Expression("${user} matches '1\\d{10}'").evaluate(ctx));
+		check("matches.full.string", !new Expression("${user} matches '\\d{5}'").evaluate(ctx));
+		check("matches.dotstar", new Expression("${host} matches '.*example.*'").evaluate(ctx));
+		check("matches.dynamic.rhs", new Expression("${user} matches ${pat}").evaluate(ctx));
+		check("matches.bad.pattern", !new Expression("${user} matches '[unclosed'").evaluate(ctx));
+		check("matches.missing.var", !new Expression("${nonexistent} matches '.+'").evaluate(ctx));
+
+		// word-boundary: 'contains' embedded in a bareword is a value, not an operator
+		check("word.boundary.value", new Expression("${containsWord} == 'x-contains-y'").evaluate(ctx));
+		check("ops.combined", new Expression(
+				"${host} contains 'example' && ${user} matches '1\\d+'").evaluate(ctx));
 	}
 
 	private static void checkParseErrors() {
