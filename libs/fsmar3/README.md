@@ -17,10 +17,13 @@ FSMAR uses state memory and pattern matching to route SIP traffic between applic
 - **Condition operators**: `==`, `!=`, ordering, `&&`/`||`, plus `matches` (full-string regex) and `contains`
 - **Pseudo-variables** published every hop: `${method}`, `${requestUri}`, `${directive}`, `${previousApp}`, `${hour}`, `${dayOfWeek}`, and `${hash100}` — a stable per-call 0–99 bucket, so `${hash100} < 5` canaries ~5% of calls to a new application version
 - **Routing observability**: a FINER trace of every transition evaluated (and why it did or didn't fire), plus JMX metrics at `org.vorpal.blade:type=Fsmar3,name=metrics` — per-transition hit counts, default-application fallbacks, undeployed bypasses, cycle detections
+- **Route Simulator** (in the Flow editor, `blade/flow`): run a synthetic request — or paste a real INVITE — through the diagram *being edited* and watch the routing path animate hop by hop: selectors extracting values, every transition's `when` shown FIRED / no-match, `${}` routes resolved. Pseudo-variables are overridable ("simulate Sunday 3 AM", "show the 4% canary bucket") and any application can be marked *undeployed* to explore bypass / cycle / fallback behavior before deploying anything
+- **Call capture & replay**: arm `captureNextCalls(n)` on the metrics MBean and the engine records full routing traces (the same format the simulator emits) for the next n real calls — then replay them on the Flow editor diagram. Capture is opt-in; disarmed cost is one atomic read per request
+- **Live heat overlay**: the Flow editor polls per-transition hit counts across every engine and renders them on the diagram edges — count labels, stroke width scaled by traffic share
 - **Config validation on load**: malformed `when` expressions are flagged SEVERE (they'd otherwise never match, silently); transitions targeting undeployed applications get a WARNING
 - Optional JSR-289 `region` per transition (`ORIGINATING` / `TERMINATING`; default `NEUTRAL`) for third-party apps that branch on `request.getRegion()`
 - Flatter, more expressive JSON schema: `defaultApplication` + `states` map keyed by previous application name (with `"null"` for initial requests)
-- Integration with the BLADE Flow editor (visual diagram of the state machine via `admin/flow` — being updated to the data-driven shape)
+- Full BLADE Flow editor integration (`admin/flow`): visual authoring of the state machine, semantic validation, plan-dispatch generation, simulation and replay
 - Dedicated log files (same as FSMAR 2)
 - Dynamic config reloads (same as FSMAR 2)
 

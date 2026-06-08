@@ -134,28 +134,74 @@
 						(state / transition / condition) and by name regex.
 					</p>
 
-					<h2>Sub-pages</h2>
+					<h2>Service plans (tier dispatch)</h2>
 					<p>
-						The editor uses three additional HTML pages as
-						iframed inspectors when editing complex attributes:
+						The gold/silver/bronze pattern has two halves, and they
+						deliberately live in different places:
+					</p>
+					<ul>
+						<li><strong>Classification is data.</strong> A
+							<em>table selector</em> on the Ingress (or any state) maps
+							a caller attribute to a plan value — e.g. key
+							<code>${From.user}</code>, rows
+							<code>alice &rarr; tier=gold</code>. Operators edit rows in
+							the Configurator; no diagram change, no redeploy.</li>
+						<li><strong>Dispatch is edges.</strong> One transition per
+							plan with a mutually exclusive condition
+							(<code>${tier} == 'gold'</code>, <code>'silver'</code>, …)
+							plus one unconditional default. Because no two conditions
+							can both match, first-match-wins evaluation order cannot
+							change the outcome.</li>
+					</ul>
+					<p>
+						The editor makes this pattern first-class, with no change to
+						the FSMAR JSON:
+					</p>
+					<ul>
+						<li><strong>Badged edges</strong> — a dispatch condition
+							renders as <code>INVITE&nbsp;&middot;&nbsp;tier=gold</code>;
+							the unconditional member of a family as
+							<code>INVITE&nbsp;&middot;&nbsp;default</code>. Display
+							only; hand-written configs that follow the pattern render
+							identically.</li>
+						<li><strong>Add plan dispatch&hellip;</strong> — a button on
+							the State/Ingress properties panel generates the whole
+							family (conditions, evaluation order, target states
+							created if missing) in one undo step.</li>
+						<li><strong>Plans view filter</strong> — when dispatch
+							conditions exist, the View panel grows a Plans section;
+							uncheck everything but <code>tier=gold</code> to show a
+							customer exactly what the gold path does.</li>
+						<li><strong>Shadowing validation</strong> — export-time
+							findings flag unreachable transitions (an unconditional
+							one anywhere but last) and duplicate conditions, the two
+							ordering mistakes a canvas cannot show.</li>
+					</ul>
+
+					<h2>Property panel templates</h2>
+					<p>
+						The properties panel (in the Tasks window) is driven by
+						three HTML templates, loaded once and switched by what's
+						selected on the canvas:
 					</p>
 					<dl class="vorpal-kv">
 						<dt><code>state.html</code></dt>
-						<dd>Detailed state attribute editor — opened from a state's inspector when you need more form real estate.</dd>
+						<dd>State / Ingress / Egress panel — name, selector editing, and the "Add plan dispatch&hellip;" button.</dd>
 						<dt><code>transition.html</code></dt>
-						<dd>Detailed transition / condition editor.</dd>
+						<dd>Transition panel — SIP method, <code>when</code> condition, evaluation order, subscriber, region, routes, route modifier.</dd>
 						<dt><code>config.html</code></dt>
-						<dd>Editor-wide settings (grid snap, autosave toggle, default styles).</dd>
+						<dd>FlowModel panel (shown when nothing is selected) — <code>defaultApplication</code>.</dd>
 					</dl>
 
 					<div class="vorpal-callout vorpal-callout-warn">
 						<div class="vorpal-callout-title">Save vs. Export</div>
 						<p>
-							The editor's <em>Save</em> action mirrors the
-							canvas to localStorage so a reload restores your
-							work-in-progress. <em>Export</em> is what writes
-							the FSMAR XML back to the server-side servlet —
-							that's the action that ships a new descriptor.
+							<em>Save</em> downloads the diagram as mxGraph XML —
+							your drawing, including layout; reload it later with
+							<em>Open</em>. <em>Export</em> produces the FSMAR&nbsp;3
+							JSON (validated, with findings shown) — the deployable
+							artifact. Neither writes anything server-side; applying
+							the JSON to a cluster goes through the Configurator.
 						</p>
 					</div>
 				</article>

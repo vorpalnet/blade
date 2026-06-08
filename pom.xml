@@ -751,6 +751,11 @@ fi
 			<activation><property><name>!skip.analytics-console</name></property></activation>
 			<modules><module>admin/analytics-console</module></modules>
 		</profile>
+		<profile>
+			<id>test-console</id>
+			<activation><property><name>!skip.test-console</name></property></activation>
+			<modules><module>admin/test-console</module></modules>
+		</profile>
 
 		<!-- The admin EAR (admin/ear, module name "ear"): assembles the admin
 		     WARs into one deployable (blade-admin.ear). Active by default;

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Documentation · BLADE Test Console</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/test-console/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Test Console</span>
+				<span class="vorpal-brand-tagline">Cluster-Wide SIP Test Runs</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../console.html">Console</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>Test Console Documentation</h1>
+					<p>One toolkit, two call sources: the BLADE test apps replace SIPp with
+					scenario-driven testing that lives in the cluster itself.</p>
+				</div>
+			</section>
+
+			<section class="vorpal-prose">
+
+				<h2>The pieces</h2>
+				<ul>
+					<li><strong>test-uac</strong> — the originator. Its load engine synthesizes INVITEs at a
+						target CPS or concurrency, per node. As a B2BUA it can also transform <em>real</em>
+						softphone calls (e.g. dress them up as SIPREC recorder legs).</li>
+					<li><strong>test-uas</strong> — the terminator. It answers calls with scripted response
+						sequences (ringing, rejections, transfers, auto-teardown) or forwards them while
+						transforming the message (e.g. stripping SIPREC multipart down to bare SDP).</li>
+					<li><strong>This console</strong> — discovers every tester node's
+						<code>TesterControl</code> MBean over federated JMX, fans out start/stop/reset, and
+						aggregates each node's live metrics.</li>
+				</ul>
+
+				<h2>Scenarios</h2>
+				<p>A <em>scenario</em> describes what happens to a call: a role
+				(<code>originate</code> / <code>answer</code> / <code>b2bua</code>), an optional template
+				(a raw SIP message fragment merged into the INVITE), transformation rules (the CRUD
+				engine's rule sets — headers, MIME parts, SDP/XML/JSON edits), a response script, and
+				assertions. Scenarios live in <code>test-uac.json</code> and <code>test-uas.json</code> —
+				edit them schema-validated in the
+				<a href="/blade/configurator/">Configurator</a>.</p>
+
+				<p>On the terminator, a call selects its scenario with a
+				<code>;scenario=name</code> Request-URI parameter, a translation-plan match, or the
+				classic shorthands (<code>;status=486</code>, <code>;delay=5s</code>,
+				<code>;refer=sip:…</code>), which keep working with no configuration at all.</p>
+
+				<h2>Running a load test</h2>
+				<ol>
+					<li>Pick the app (usually <code>test-uac</code>) and, optionally, a scenario name and
+						pacing overrides. Empty fields use the configuration's <code>originate</code>
+						defaults.</li>
+					<li><strong>Start on all nodes</strong> sends the run to every matching node — targets
+						are per node, so 3 nodes × 100 CPS = 300 CPS aggregate.</li>
+					<li>Watch the node cards (engine state, active calls, counters) and the scenario
+						table (status distribution, latency percentiles, expectation mismatches, assertion
+						tallies). Counters are summed across nodes; latency columns show the worst node.</li>
+					<li><strong>Stop</strong> drains active calls naturally. <strong>Reset metrics</strong>
+						clears the per-scenario counters for a fresh measurement window.</li>
+				</ol>
+
+				<h2>Per-call variables &amp; assertions</h2>
+				<p>Each originated call exposes <code>${lastStatus}</code>,
+				<code>${statusSequence}</code>, <code>${setupMs}</code>, <code>${index}</code>,
+				<code>${scenario}</code>, plus anything a rule's <code>read</code> operation captured.
+				Assertions are boolean expressions over those variables —
+				<code>${lastStatus} == 200 &amp;&amp; ${setupMs} &lt; 500</code> — tallied per scenario as
+				pass / fail / warn.</p>
+
+				<h2>Equivalent REST (per node)</h2>
+				<p>Everything the console does is also available per node on the service tier:</p>
+				<pre>POST /test-uac/api/v1/loadtest/start   {"scenario":"load-basic","mode":"cps","targetCps":100}
+POST /test-uac/api/v1/loadtest/stop
+GET  /test-uac/api/v1/loadtest/status
+GET  /test-uac/api/v1/loadtest/report
+POST /test-uac/api/v1/loadtest/reset</pre>
+				<p>The console itself uses federated JMX (never REST) to reach the nodes, per BLADE
+				admin-tier convention.</p>
+
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

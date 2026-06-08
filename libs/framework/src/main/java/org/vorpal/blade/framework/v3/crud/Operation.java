@@ -31,6 +31,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 		@JsonSubTypes.Type(value = JsonPathCreateOperation.class, name = "jsonCreate"),
 		@JsonSubTypes.Type(value = JsonPathUpdateOperation.class, name = "jsonUpdate"),
 		@JsonSubTypes.Type(value = JsonPathDeleteOperation.class, name = "jsonDelete"),
+		@JsonSubTypes.Type(value = KeepOnlyPartOperation.class, name = "keepPart"),
 		@JsonSubTypes.Type(value = SdpReadOperation.class, name = "sdpRead"),
 		@JsonSubTypes.Type(value = SdpCreateOperation.class, name = "sdpCreate"),
 		@JsonSubTypes.Type(value = SdpUpdateOperation.class, name = "sdpUpdate"),

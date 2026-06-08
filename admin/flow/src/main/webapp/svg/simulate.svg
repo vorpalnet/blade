@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512">
+  <!-- Route Simulator: a state-machine path with a play head -->
+  <!-- three states along a path -->
+  <circle cx="96" cy="256" r="56" fill="none" stroke="currentColor" stroke-width="24"/>
+  <circle cx="320" cy="120" r="56" fill="none" stroke="currentColor" stroke-width="24"/>
+  <circle cx="320" cy="392" r="56" fill="none" stroke="currentColor" stroke-width="24"/>
+  <!-- transitions -->
+  <path d="M140 220 L266 148" fill="none" stroke="currentColor" stroke-width="24"/>
+  <path d="M140 292 L266 364" fill="none" stroke="currentColor" stroke-width="24"/>
+  <!-- play head: the simulated call -->
+  <path d="M448 176 L448 336 L592 256 Z" fill="currentColor"/>
+</svg>

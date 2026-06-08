@@ -94,11 +94,19 @@
 
 					<h2>Built on</h2>
 					<ul>
-						<li><strong>mxGraph</strong> (jgraphx 4.2.2) — canvas engine.</li>
-						<li><strong>jQuery + jQuery UI</strong> — windows, dialogs, drag-and-drop.</li>
-						<li><strong>FontAwesome 5</strong> — palette and toolbar icons.</li>
-						<li><strong>FsmarImportServlet / FsmarExportServlet</strong> — round-trip to the FSMAR descriptor.</li>
+						<li><strong>mxGraph 3.9.8</strong> (JavaScript) — canvas engine, vendored
+							in the WAR. Upstream is archived; this copy is owned and documented
+							in <code>js/THIRD-PARTY.md</code> (Apache-2.0 license included).</li>
+						<li><strong>jQuery 3.7.1</strong> — panel wiring, self-hosted
+							(<code>js/vendor/</code>).</li>
+						<li><strong>FsmarImportServlet / FsmarExportServlet / FsmarValidateServlet</strong>
+							— FSMAR&nbsp;3 JSON round-trip and semantic validation.</li>
 					</ul>
+					<p>
+						Everything the editor needs ships inside the WAR — no CDN
+						dependencies, so it works on air-gapped admin networks. Vendored
+						library provenance: <code>js/THIRD-PARTY.md</code>.
+					</p>
 
 					<h2>Reporting issues</h2>
 					<p>

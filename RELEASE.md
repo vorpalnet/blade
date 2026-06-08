@@ -2,6 +2,117 @@
 
 ## 2.9.9 (unreleased)
 
+### Enterprise SIP test suite: scenario-driven test-uac / test-uas + Test Console
+
+The test pair grows from "load script + parameter tricks" into one
+scenario-driven testing toolkit — BLADE's SIPp replacement. Core insight:
+simulated tests and real-call manipulation are the same thing with two call
+sources, and the message-transformation engine already existed (v3 CRUD).
+
+**New framework subsystem `framework.v3.tester`** (shared by both WARs):
+
+- `TesterConfiguration extends CrudConfiguration` — adds a `scenarios` map
+  (+ `defaultScenario`, `originate` load defaults) on top of the CRUD
+  `ruleSets`/selectors/maps/plan machinery, so scenario selection and message
+  transformation reuse the proven engine and the Configurator edits all of it
+  schema-validated.
+- `Scenario` — role (`originate` / `answer` / `b2bua`), optional template,
+  referenced ruleSet and/or inline rules, `ResponseScript`, assertions.
+- `ScriptedAnswer` — generalizes TestInvite/TestRefer: ordered status steps
+  with per-step delay/reason/SDP control, REFER transfer (NOTIFY handshake),
+  auto-BYE. The `status=`/`delay=`/`refer=` URI shorthands still work
+  unchanged (they synthesize an ephemeral scenario) — existing SIPp scripts
+  keep passing.
+- `LoadEngine` / `OriginateCallflow` — the test-uac load generator, moved to
+  the framework and made scenario-aware (CPS + concurrent pacing preserved
+  verbatim). Originated calls apply rules to requests AND responses, validate
+  the final status against `expectFinal` (`2xx`, `!5xx`, … — the Rule
+  statusRange syntax), and evaluate **assertions**: v3 `Expression`
+  predicates over per-call variables (`${lastStatus}`, `${statusSequence}`,
+  `${setupMs}`, `${index}`, plus anything a rule `read` captured).
+- `SipMessageTemplate` / `TemplateLoader` — the template engine, extracted
+  and hardened: mtime-based hot reload (no more cache invalidation hack),
+  MimeHelper-backed multipart merge (template SDP wins, softphone SDP
+  preserved otherwise), Contact param-merge via the framework.
+- `TesterMetrics` / `ScenarioStats` / `ScenarioReport` — per-node,
+  per-scenario lock-free counters: status distribution, latency buckets with
+  p50/p90/p99/avg/max, expectation mismatches, assertion pass/fail/warn.
+- `TesterControl` / `TesterMXBean` — per-node JMX control surface
+  (`vorpal.blade:Name=<app>,Type=TesterControl`): startLoad/stopLoad/
+  status/report as JSON, registered via the explicit-StandardMBean pattern.
+- `TesterServlet` — abstract base both WARs extend: scenario resolution
+  (URI param → translation plan → shorthands → configured default → built-in
+  default), endpoint vs B2BUA routing, lifecycle rule application.
+
+**CRUD engine additions**: `KeepOnlyPartOperation` (`keepPart`) collapses a
+multipart body to the part(s) matching a content type — the SIPREC-strip as
+one operation; `MimeHelper` gains string-based `parseParts`, `compose`,
+`keepOnlyPart`, public `extractBoundary`; `MessageHelper` now guards the
+`Contact` system header (merges parameters like `+sip.src` instead of
+throwing); `Rule.matchesStatus` is public (reused by `expectFinal`).
+
+**test-uac / test-uas** shrink to thin leaves. Both hand-rolled multipart
+parsers are gone (replaced by MimeHelper); the four test-uas callflows fold
+into `ScriptedAnswer`. REST API gains `GET /api/v1/loadtest/report` and
+`POST /reset`; `start` accepts `scenario`. The single-call
+`POST /api/v1/connect` now honors its request fields (the hardcoded
+`siprecInvite.txt` body-stuffing debug leftover is gone) and accepts
+`template`/`scenario`. Legacy config fields still load: test-uac's top-level
+`template` remains functional, and `fromAddressPattern`/`toAddressPattern`/
+`requestUriTemplate`/`duration` feed into the new `originate` block.
+test-uas keeps strip-multipart-to-SDP as its built-in default scenario.
+
+**New admin app `admin/test-console`** (`blade/test-console`, in
+blade-admin.ear, portal card via SettingsManager metadata): discovers every
+tester node's `TesterControl` MBean over federated JMX, starts/stops runs on
+all nodes at once, and renders per-node status cards plus an aggregated
+per-scenario metrics table (counters summed across nodes; latency shows the
+worst node — percentiles don't merge). State conveyed by text/shape, not
+color alone.
+
+### FSMAR 3 Route Simulator, call replay, and live heat overlay (Flow editor)
+
+The Flow editor (`blade/flow`) gains a **Route Simulator** window (toolbar
+button, three tabs) built on one shared routing-trace JSON format:
+
+- **Simulate** — runs a synthetic request (form fields or a pasted raw SIP
+  message) through the diagram *being edited* and animates the routing path
+  hop by hop on the canvas: per-hop extracted values, every transition
+  evaluated with FIRED/no-match and its `when`, resolved `${}` routes,
+  subscriber URI, region. Pseudo-variables (`${hour}`, `${dayOfWeek}`,
+  `${hash100}`) are overridable, and any application can be marked
+  *undeployed* to explore bypass / cycle-detection / default-fallback
+  behavior before deploying anything. New `FsmarSimulateServlet` +
+  `RouteSimulator` (flow-side mirror of `AppRouter.getNextApplication`,
+  chained across invocations so one run traces the whole call path; the hard
+  semantics — selectors, `Expression`, tables, `${}` resolution — run through
+  the same framework v3 classes the engine bundles). A **Validate diagram**
+  button runs the semantic validator and outlines named states on the canvas.
+- **Replay** — `Fsmar3Metrics` gains opt-in trace capture: MBean ops
+  `captureNextCalls(n)` / `getCaptureRemaining` / `getCapturedTraces` /
+  `clearCapturedTraces` (new `RouteTrace` record, max 100 calls, disarmed
+  cost = one atomic read per request; multi-hop calls correlate by Call-ID).
+  The Replay tab arms capture across every engine over federated JMX and
+  replays captured production calls through the same diagram animation.
+- **Live** — polls per-transition hit counters across all engines every 5 s
+  and overlays them on the edges: count appended to the edge label, stroke
+  width scaled by traffic share (width + text carry the meaning, not color).
+  Plus domain-wide totals and a reset button.
+
+New `FsmarMetricsServlet` bridges the browser to
+`org.vorpal.blade:type=Fsmar3,name=metrics` on every engine via the
+DomainRuntime MBeanServer (the admin tier's JMX convention). All canvas
+effects are mxCellHighlight overlays — cell styles, the model, and undo
+history are untouched.
+
+Verified: `Fsmar3CaptureSmokeTest` 52/52 (arm/claim/extend, trace shape,
+bypass/cycle/fallback flags, per-hop diffs, clamp/bounds/order),
+`SimulateSmokeTest` 50/50 (full call-path chaining, tier table + `matches`,
+bypass, cycle, fallback, pseudo overrides, engine-parity selector handling),
+existing fsmar3 suites still green. JMX reachability of the engine MBeans
+follows the proven SettingsMXBean pattern (same platform-MBeanServer
+registration, same federated walk the portal uses).
+
 ### Build: fixed shade-plugin double-shading on incremental builds
 
 Incremental (no-`clean`) builds of the fsmar fat-jar modules re-shaded the

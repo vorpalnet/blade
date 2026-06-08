@@ -122,6 +122,15 @@ public class AppRouter implements SipApplicationRouter {
 					.getImpl().getSipApplicationSessionImpl();
 			String previous = (sasi != null) ? SettingsManager.basename(sasi.getApplicationName()) : "null";
 
+			// Trace capture (opt-in, armed via the metrics MBean): null in the
+			// common disarmed case. Begin the hop before the pseudo-variables
+			// publish so they show up in the hop's extracted-values diff.
+			RouteTrace trace = metrics.recorder(request.getCallId(), request.getMethod(),
+					(request.getRequestURI() != null) ? request.getRequestURI().toString() : "");
+			if (trace != null) {
+				trace.beginHop(previous, routingState.getContext());
+			}
+
 			// Pseudo-variables: routing metadata published into the context
 			// before the state's selectors run (a selector with the same id
 			// deliberately overrides). ${previousApp} is refreshed inside the
@@ -150,6 +159,9 @@ public class AppRouter implements SipApplicationRouter {
 				String deployedApp = getDeployedApp(requestInfo.getApplicationName());
 				nextApp = new SipApplicationRouterInfo(deployedApp, region, null, null,
 						SipRouteModifier.NO_ROUTE, routingState);
+				if (trace != null) {
+					trace.routed(nextApp);
+				}
 			}
 
 			// URI-based direct routing (e.g. "sip:hold")
@@ -160,6 +172,9 @@ public class AppRouter implements SipApplicationRouter {
 					if (app != null) {
 						nextApp = new SipApplicationRouterInfo(app, region, null, null,
 								SipRouteModifier.NO_ROUTE, routingState);
+						if (trace != null) {
+							trace.routed(nextApp);
+						}
 					}
 				}
 			}
@@ -175,7 +190,15 @@ public class AppRouter implements SipApplicationRouter {
 				Set<String> visited = new HashSet<>();
 				visited.add(previous);
 
+				boolean firstIteration = true;
 				while (true) {
+					// A bypass iteration is a new hop in the captured trace
+					// (the first iteration's hop is already open).
+					if (trace != null && !firstIteration) {
+						trace.beginHop(previous, routingState.getContext());
+					}
+					firstIteration = false;
+
 					State state = config.getStates().get(previous);
 
 					// Keep ${previousApp} current as the bypass loop advances.
@@ -191,10 +214,13 @@ public class AppRouter implements SipApplicationRouter {
 
 					Transition matched = null;
 					if (trigger != null) {
-						boolean trace = sipLogger.isLoggable(Level.FINER);
+						boolean traceLog = sipLogger.isLoggable(Level.FINER);
 						for (Transition t : trigger.getTransitions()) {
 							boolean fired = t.matches(ctx);
-							if (trace) {
+							if (trace != null) {
+								trace.evaluated(t.getId(), t.getWhen(), fired);
+							}
+							if (traceLog) {
 								// Route-decision trace: every transition evaluated,
 								// in order, with its outcome. The Route Simulator's
 								// raw material.
@@ -221,6 +247,9 @@ public class AppRouter implements SipApplicationRouter {
 					if (matched == null) {
 						break;
 					}
+					if (trace != null) {
+						trace.matched(matched.getId(), matched.getNext());
+					}
 
 					if (sipLogger.isLoggable(Level.FINE)) {
 						sipLogger.fine("Transition: id=" + matched.getId()
@@ -233,6 +262,9 @@ public class AppRouter implements SipApplicationRouter {
 					String deployedApp = (next != null) ? deployed.get(next) : null;
 					if (deployedApp != null) {
 						nextApp = matched.createRouterInfo(deployedApp, routingState, ctx, request);
+						if (trace != null) {
+							trace.routed(nextApp);
+						}
 						break;
 					}
 
@@ -245,11 +277,17 @@ public class AppRouter implements SipApplicationRouter {
 					// from that state. Stop if we'd revisit a state (config loop).
 					if (!visited.add(next)) {
 						metrics.countCycle();
+						if (trace != null) {
+							trace.cycle();
+						}
 						sipLogger.warning("FSMAR routing cycle detected at undeployed application '"
 								+ next + "'; routing downstream.");
 						break;
 					}
 					metrics.countBypass();
+					if (trace != null) {
+						trace.bypassed();
+					}
 					sipLogger.fine("Bypassing undeployed application '" + next
 							+ "'; continuing as though it had already run.");
 					previous = next;
@@ -260,10 +298,18 @@ public class AppRouter implements SipApplicationRouter {
 			if (previous.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
 					|| nextApp.getNextApplicationName().equals("null"))) {
 				metrics.countDefaultFallback();
+				if (trace != null) {
+					trace.defaultFallback(config.getDefaultApplication());
+				}
 				sipLogger.warning("Using defaultApplication: " + config.getDefaultApplication()
 						+ " for " + request.getMethod() + " " + request.getRequestURI());
 				nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null, null,
 						SipRouteModifier.NO_ROUTE, routingState);
+			}
+
+			// Close out this invocation's captured hop and snapshot the context.
+			if (trace != null) {
+				trace.endInvocation(routingState.getContext());
 			}
 
 			if (sipLogger.isLoggable(Level.FINE)) {

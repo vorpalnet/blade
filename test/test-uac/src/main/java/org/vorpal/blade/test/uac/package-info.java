@@ -1,74 +1,61 @@
-/// A SIP load generation tool and test UAC built on the BLADE framework.
-///
-/// This module generates outbound SIP calls at scale, supporting two modes:
-/// **CPS mode** (fire calls at a target calls-per-second rate) and
-/// **concurrent mode** (maintain N active calls with callback-driven replenishment).
-/// Designed for 1000+ CPS per node in an OCCAS cluster, with each node operating
-/// independently via REST commands.
+/// A scenario-driven SIP load generator and test UAC built on the BLADE
+/// framework. The Test UAC is the counterpart to the Test UAS — together
+/// they form a complete SIP testing suite: synthesized load on one side,
+/// scriptable endpoints and transformations on the other. No SIPp required.
 ///
 /// ## Key Components
 ///
-/// - [UserAgentClientServlet] - main SIP servlet extending `B2buaServlet`, injects
-///   configured headers into outbound requests and notifies the load generator
-///   on call lifecycle events (`callCompleted`, `callDeclined`)
-/// - [UserAgentClientConfig] - configuration with header map, address patterns
-///   (`fromAddressPattern`, `toAddressPattern`, `requestUriTemplate`), call
-///   `duration`, and `sdpContent`
-/// - [LoadGenerator] - per-node load generation engine using `java.util.Timer`
-///   for CPS pacing; concurrent mode is purely callback-driven with no timer
-/// - [LoadCallflow] - per-call lifecycle handler extending `ClientCallflow`
-///   (INVITE -> ACK -> auto-BYE timer -> completion notification)
-/// - [LoadTestAPI] - JAX-RS REST endpoints for start, stop, and status
-/// - [LoadTestRequest] - request model specifying mode, CPS/concurrent targets,
-///   address patterns, duration, max calls, and header overrides
-/// - [LoadTestStatus] - response model with state, counters, and elapsed time
+/// - [UserAgentClientServlet] - thin leaf over the framework's
+///   [TesterServlet][org.vorpal.blade.framework.v3.tester.TesterServlet];
+///   wires the load engine, metrics, and the `TesterControl` JMX MBean, and
+///   preserves the legacy top-level `template` behavior on the softphone
+///   B2BUA path
+/// - [UserAgentClientConfig] - concrete
+///   [TesterConfiguration][org.vorpal.blade.framework.v3.tester.TesterConfiguration];
+///   accepts the pre-scenario top-level fields for backward compatibility
+/// - [LoadTestAPI] - JAX-RS endpoints: start, stop, status, report, reset
 ///
 /// ## Load Generation Architecture
 ///
-/// Each cluster node creates its own [LoadGenerator] instance, stored on the
-/// `ServletContext`. There is no singleton or centralized coordinator. The REST
-/// API sends a start command which resolves effective parameters (merging
-/// [LoadTestRequest] overrides with [UserAgentClientConfig] defaults), resets
-/// counters, and begins generating calls.
+/// Each cluster node runs its own
+/// [LoadEngine][org.vorpal.blade.framework.v3.tester.LoadEngine] instance,
+/// stored on the `ServletContext` — no singleton, no centralized
+/// coordinator. **CPS mode** paces calls with a `java.util.Timer` (batched
+/// ticks above 1000 CPS); **concurrent mode** fires an initial batch and
+/// replenishes via completion callbacks.
 ///
-/// In **CPS mode**, a `java.util.Timer` fires at the target rate. At high CPS
-/// (above 1000), multiple calls are batched per timer tick. In **concurrent mode**,
-/// the initial batch of calls is fired immediately, and [LoadGenerator#onCallCompleted]
-/// triggers replacement calls as each one finishes.
-///
-/// Each generated call runs through [LoadCallflow], which sends the INVITE, ACKs
-/// on 2xx, and schedules an auto-BYE via `Callflow.scheduleTimer()` tied to the
-/// `SipApplicationSession`. When the BYE completes, [UserAgentClientServlet#callCompleted]
-/// notifies the generator to update counters and replenish if in concurrent mode.
+/// Each generated call runs a
+/// [Scenario][org.vorpal.blade.framework.v3.tester.Scenario]: an optional
+/// template seeds the INVITE's headers and body (e.g. a SIPREC
+/// `application/rs-metadata+xml` part), CRUD rule sets transform requests
+/// and responses, and
+/// [OriginateCallflow][org.vorpal.blade.framework.v3.tester.OriginateCallflow]
+/// validates the final response against `expectFinal`, evaluates
+/// assertions, and feeds the per-scenario metrics (latency percentiles,
+/// status distribution, pass/fail tallies).
 ///
 /// ## Configuration Precedence
 ///
-/// [LoadTestRequest] fields override [UserAgentClientConfig] defaults. Null or
-/// empty fields in the request fall back to config values. Headers are merged —
-/// request headers override config headers with the same name.
+/// [LoadRequest][org.vorpal.blade.framework.v3.tester.LoadRequest] fields
+/// override the configuration's `originate` defaults; null or empty request
+/// fields fall back to config values.
 ///
 /// ## Related Packages
 ///
 /// ### org.vorpal.blade.test.client
-/// A SIP test client with a REST API for initiating individual outbound SIP calls.
+/// Single-call REST test client:
 /// [TestClientAPI][org.vorpal.blade.test.client.TestClientAPI] provides
-/// `POST /api/v1/connect` bridging HTTP REST requests to SIP INVITE sessions
-/// with asynchronous response handling. Data models include
-/// [MessageRequest][org.vorpal.blade.test.client.MessageRequest],
-/// [MessageResponse][org.vorpal.blade.test.client.MessageResponse], and
-/// [MessageSession][org.vorpal.blade.test.client.MessageSession].
+/// `POST /api/v1/connect`, bridging one HTTP request to one SIP INVITE and
+/// returning every response. Honors scenarios, templates, and inline
+/// content.
 ///
 /// ### org.vorpal.blade.framework.tpcc
-/// Third-Party Call Control callflows and REST APIs enabling an external application
-/// to set up, modify, and tear down SIP calls between two endpoints.
-/// [ThirdPartyCallControl][org.vorpal.blade.framework.tpcc.ThirdPartyCallControl]
-/// exposes `POST /api/v1/tpcc` with OpenAPI annotations and asynchronous HTTP
-/// response handling.
+/// Third-Party Call Control callflows and REST APIs enabling an external
+/// application to set up, modify, and tear down SIP calls between two
+/// endpoints.
 ///
 /// @see org.vorpal.blade.test.client
-/// @see org.vorpal.blade.framework.tpcc
-/// @see org.vorpal.blade.framework.v2.b2bua.B2buaServlet
-/// @see org.vorpal.blade.framework.v2.callflow.ClientCallflow
+/// @see org.vorpal.blade.framework.v3.tester.TesterServlet
+/// @see org.vorpal.blade.framework.v3.tester.LoadEngine
 /// @see org.vorpal.blade.framework.v2.config.SettingsManager
-/// @see org.vorpal.blade.framework.v2.config.Configuration
 package org.vorpal.blade.test.uac;

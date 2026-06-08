@@ -16,51 +16,56 @@ body {
 #transition-tabs {
 	font-size: 12px;
 }
+/* Vanilla tab strip (replaces jQuery-UI tabs — the only widget it was
+   loaded for). Active tab is marked by the underline + bold, not color
+   alone. */
+.tab-strip {
+	display: flex;
+	gap: 2px;
+	border-bottom: 2px solid #bbb;
+	margin-bottom: 6px;
+	padding: 0;
+	list-style: none;
+}
+.tab-strip button {
+	border: 1px solid #bbb;
+	border-bottom: none;
+	border-radius: 4px 4px 0 0;
+	background: #e4e4ee;
+	padding: 4px 12px;
+	font-size: 12px;
+	cursor: pointer;
+}
+.tab-strip button.tab-active {
+	background: #f8f8ff;
+	font-weight: bold;
+	border-bottom: 2px solid #f8f8ff;
+	margin-bottom: -2px;
+}
+.tab-page { display: none; }
+.tab-page.tab-active { display: block; }
 #transition-view > #transition-tabs > div > label {
 	display: block;
 	margin-top: 6px;
 	font-weight: bold;
 }
 #transition-view input[type=text],
-#transition-view select {
+#transition-view input[type=number],
+#transition-view select,
+#transition-view textarea {
 	padding: 3px;
 	box-sizing: border-box;
 }
 #transition-view > #transition-tabs > div > input[type=text],
-#transition-view > #transition-tabs > div > select {
+#transition-view > #transition-tabs > div > input[type=number],
+#transition-view > #transition-tabs > div > select,
+#transition-view > #transition-tabs > div > textarea {
 	width: 100%;
 }
-#transition-view fieldset {
-	margin: 10px 0;
-	border: 1px solid #bbb;
-	padding: 6px 10px 12px 10px;
-	background: #f8f8ff;
-	border-radius: 4px;
-}
-#transition-view legend {
-	font-weight: bold;
+#transition-when {
+	font-family: monospace;
 	font-size: 11px;
-	padding: 0 6px;
-}
-.selector-row legend .remove-btn {
-	cursor: pointer;
-	color: #c00;
-	margin-left: 6px;
-}
-/* Each selector field stacks vertically with breathing room */
-.sel-field {
-	margin-top: 10px;
-}
-.sel-field label {
-	display: block;
-	font-weight: bold;
-	font-size: 11px;
-	margin-bottom: 3px;
-	color: #444;
-}
-.sel-field input[type=text],
-.sel-field select {
-	width: 100%;
+	min-height: 56px;
 }
 .route-row {
 	border: 1px dashed #aaa;
@@ -73,40 +78,6 @@ body {
 }
 .route-row input {
 	flex: 1;
-}
-.extract-row {
-	display: flex;
-	gap: 4px;
-	align-items: center;
-	margin-top: 4px;
-}
-.extract-row .ex-name {
-	flex: 1;
-	min-width: 0;
-}
-.extract-row .ex-path {
-	flex: 2;
-	min-width: 0;
-}
-.group-row {
-	margin: 8px 0;
-	border: 2px solid #88a;
-	padding: 6px 8px 10px 8px;
-	background: #f4f4ff;
-	border-radius: 6px;
-}
-.group-row > legend {
-	font-weight: bold;
-	font-size: 12px;
-	padding: 0 6px;
-	color: #446;
-}
-.or-divider {
-	text-align: center;
-	font-weight: bold;
-	font-size: 11px;
-	color: #888;
-	margin: 2px 0;
 }
 .add-btn {
 	color: green;
@@ -129,13 +100,12 @@ body {
 <div id="transition-view">
 
 	<div id="transition-tabs">
-		<ul>
-			<li><a href="#transition-tabs-basic">Basic</a></li>
-			<li><a href="#transition-tabs-selectors">Selectors</a></li>
-			<li><a href="#transition-tabs-routing">Routing</a></li>
-		</ul>
+		<div class="tab-strip">
+			<button type="button" class="tab-btn tab-active" data-tab="transition-tabs-basic">Basic</button>
+			<button type="button" class="tab-btn" data-tab="transition-tabs-routing">Routing</button>
+		</div>
 
-		<div id="transition-tabs-basic">
+		<div id="transition-tabs-basic" class="tab-page tab-active">
 			<label>SIP Method</label>
 			<select id="transition-method">
 				<option>INVITE</option>
@@ -148,6 +118,12 @@ body {
 				<option>NOTIFY</option>
 			</select>
 
+			<label>When <span class="hint">(condition over extracted values; empty = always matches)</span></label>
+			<textarea id="transition-when" placeholder="${To.user} == 'bob' &amp;&amp; ${tier} == 'gold'"></textarea>
+
+			<label>Evaluation Order <span class="hint">(within same state+method; lower runs first — first match wins)</span></label>
+			<input id="transition-seq" type="number" min="0" step="1" />
+
 			<label>Transition ID <span class="hint">(for logging)</span></label>
 			<input id="transition-txid" type="text" placeholder="e.g. INV-1" />
 
@@ -155,24 +131,33 @@ body {
 			<input id="transition-next" type="text" readonly />
 		</div>
 
-		<div id="transition-tabs-selectors">
-			<div style="margin-bottom: 4px;">
-				<i class="fas fa-plus-circle add-btn" id="add-group" title="Add selector group"></i>
-				<span class="hint">First matching group wins (OR)</span>
-			</div>
-			<div id="transition-groups"></div>
-		</div>
-
-		<div id="transition-tabs-routing">
+		<div id="transition-tabs-routing" class="tab-page">
 			<label>Subscriber Header <span class="hint">(e.g. From, To)</span></label>
 			<input id="transition-subscriber" type="text" placeholder="From" />
 
+			<label>Region <span class="hint">(JSR-289 routing region; blank = NEUTRAL)</span></label>
+			<select id="transition-region">
+				<option value=""></option>
+				<option>ORIGINATING</option>
+				<option>TERMINATING</option>
+				<option>NEUTRAL</option>
+			</select>
+
 			<label>Route URIs</label>
 			<div style="margin-bottom: 4px;">
-				<i class="fas fa-plus-circle add-btn" id="add-route" title="Add route"></i>
-				<span class="hint">Pushed as Route headers</span>
+				<svg class="add-btn" id="add-route" title="Add route" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>
+				<span class="hint">Pushed as Route headers; ${} placeholders resolve against the context</span>
 			</div>
 			<div id="transition-routes"></div>
+
+			<label>Route Modifier <span class="hint">(how routes are applied; blank = ROUTE)</span></label>
+			<select id="transition-route-modifier">
+				<option value=""></option>
+				<option>ROUTE</option>
+				<option>ROUTE_BACK</option>
+				<option>ROUTE_FINAL</option>
+				<option>NO_ROUTE</option>
+			</select>
 		</div>
 
 	</div>

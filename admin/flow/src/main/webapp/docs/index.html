@@ -69,10 +69,10 @@
 					<h1>Welcome</h1>
 					<p>
 						This handbook covers the Flow Editor, which is a visual
-						front-end for FSMAR descriptors. If you have ever
-						hand-edited an <code>fsmar.xml</code> file, this is
-						the GUI equivalent — same source of truth, much
-						friendlier authoring.
+						front-end for FSMAR&nbsp;3 configurations. If you have
+						ever hand-edited an FSMAR JSON config file, this is the
+						GUI equivalent — same source of truth, much friendlier
+						authoring.
 					</p>
 
 					<h2>Reading order</h2>
@@ -81,17 +81,43 @@
 						<li><a href="overview.html">Overview</a> — what the editor produces and where it sits in OCCAS request handling.</li>
 						<li><a href="fsmar-concepts.html">FSMAR Concepts</a> — states, transitions, triggers, conditions, initial vs. non-initial requests.</li>
 						<li><a href="editor-guide.html">Editor Guide</a> — the canvas, palette, inspectors, and the Tasks window.</li>
-						<li><a href="round-trip.html">Import / Export Round-Trip</a> — how the visual graph becomes the deployed XML and back again.</li>
+						<li><a href="round-trip.html">Import / Export Round-Trip</a> — how the visual graph becomes the deployed JSON and back again.</li>
 					</ol>
 
 					<h2>At a glance</h2>
 					<table>
-						<tr><th>Produces</th><td>FSMAR XML descriptor, shipped in <code>fsmar.jar</code> at <code>$DOMAIN_HOME/approuter/</code></td></tr>
+						<tr><th>Produces</th><td>FSMAR&nbsp;3 JSON configuration, consumed by <code>vorpal-blade-library-fsmar3.jar</code> at <code>$DOMAIN_HOME/approuter/</code></td></tr>
 						<tr><th>Canvas engine</th><td>mxGraph (jgraphx 4.2.2)</td></tr>
-						<tr><th>Backend</th><td><code>FsmarExportServlet</code> (graph → XML) and <code>FsmarImportServlet</code> (XML → graph) in this WAR</td></tr>
-						<tr><th>Activation</th><td>FSMAR is loaded by OCCAS via the SPI <code>javax.servlet.sip.ar.spi.SipApplicationRouterProvider</code>; the engine tier reboots to pick up a new descriptor.</td></tr>
+						<tr><th>Backend</th><td>Five servlets in this WAR: export, import, validate, simulate (Route Simulator), and the JMX metrics bridge — see <a href="round-trip.html">Round-Trip</a></td></tr>
+						<tr><th>Activation</th><td>FSMAR is loaded by OCCAS via the SPI <code>javax.servlet.sip.ar.spi.SipApplicationRouterProvider</code>; configuration reloads dynamically — no reboot, no dropped calls.</td></tr>
 						<tr><th>Triggers fire on</th><td>Initial SIP requests only — see <a href="fsmar-concepts.html">FSMAR Concepts</a> for the full method list.</td></tr>
 					</table>
+
+					<h2>Route Simulator</h2>
+					<p>
+						The play-head toolbar button opens the Route Simulator —
+						three tabs over one trace format:
+					</p>
+					<ul>
+						<li><b>Simulate</b> — fill in a synthetic request (or paste
+							a real INVITE from a trace) and run it through the
+							diagram <i>being edited</i>. The routing path animates
+							hop by hop on the canvas: values extracted, every
+							transition shown FIRED / no&nbsp;match with its
+							<code>when</code>, resolved routes. Override
+							<code>${hour}</code> / <code>${dayOfWeek}</code> /
+							<code>${hash100}</code> to simulate Sunday 3&nbsp;AM or
+							a canary bucket, and mark applications <i>undeployed</i>
+							to watch bypass, cycle-detection, and default-fallback
+							behavior — all before deploying anything.</li>
+						<li><b>Replay</b> — arm the engines' trace capture (per-call
+							routing traces recorded by FSMAR&nbsp;3 itself) and
+							replay real production calls through the same
+							animation.</li>
+						<li><b>Live</b> — overlay per-transition hit counts from
+							every engine on the diagram edges; the count is the
+							label and edge thickness scales with traffic share.</li>
+					</ul>
 
 					<div class="vorpal-callout vorpal-callout-tip">
 						<div class="vorpal-callout-title">Quick action</div>
@@ -101,7 +127,8 @@
 							stencil from the palette, double-click a state to
 							edit, drag from state-edge to state-edge to add a
 							transition. Press Export to round-trip changes
-							back to the FSMAR XML.
+							back to the FSMAR JSON — or the play-head button
+							to simulate a call through it first.
 						</p>
 					</div>
 				</article>

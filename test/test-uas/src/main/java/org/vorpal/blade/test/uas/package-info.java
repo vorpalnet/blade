@@ -1,43 +1,38 @@
 /// A SIP test server built on the BLADE framework. The Test UAS is the
-/// counterpart to the Test UAC — together they form a complete SIP load
-/// testing tool for production call center performance tuning.
+/// counterpart to the Test UAC — together they form a complete SIP testing
+/// suite: synthesized load on one side, scriptable endpoints and
+/// transformations on the other. No SIPp required.
 ///
-/// ## Two modes, chosen from the Request-URI
+/// ## Scenario-driven
 ///
-/// [UasServlet] picks a mode per-call from the initial INVITE's Request-URI —
-/// there is no configuration toggle:
+/// [UasServlet] extends the framework's
+/// [TesterServlet][org.vorpal.blade.framework.v3.tester.TesterServlet], which
+/// resolves a [Scenario][org.vorpal.blade.framework.v3.tester.Scenario] for
+/// every initial INVITE:
 ///
-/// - **Strip-and-forward (B2BUA)** — when the INVITE carries none of `status`,
-///   `delay`, or `refer`, it is forwarded to its Request-URI. A multipart
-///   (e.g. SIPREC) body is stripped down to just its `application/sdp` part so
-///   a plain softphone can parse it.
-/// - **Endpoint (UAS)** — when the INVITE carries `status`, `delay`, or
-///   `refer`, the call is answered locally:
-///   - `status` / `delay` →
-///     [TestInvite][org.vorpal.blade.test.uas.callflows.TestInvite]
-///   - `refer` → [TestRefer][org.vorpal.blade.test.uas.callflows.TestRefer]
+/// - `;scenario=<name>` Request-URI parameter, or a translation-plan match
+/// - the classic shorthands — `;status=486`, `;delay=5s`, `;refer=sip:…` —
+///   which synthesize an ephemeral answer scenario (fully backward
+///   compatible with existing test scripts)
+/// - otherwise the built-in default: **strip-and-forward** — the call is
+///   forwarded B2BUA-style with any multipart (e.g. SIPREC) body stripped
+///   down to its `application/sdp` part so a plain softphone can parse it
 ///
 /// Example endpoint call: `sip:target@uas.test;status=200;delay=5s` answers
 /// with a muted (blackhole) SDP and sends `BYE` after 5 seconds.
 ///
-/// The chosen mode is stamped on the application session so in-dialog requests
-/// (re-INVITE, BYE, …) route the same way as the initial INVITE.
-///
-/// ## Sub-packages
-///
-/// ### [org.vorpal.blade.test.uas.callflows]
-/// The endpoint-mode callflows: [TestInvite][org.vorpal.blade.test.uas.callflows.TestInvite]
-/// (status/delay + auto-BYE), [TestRefer][org.vorpal.blade.test.uas.callflows.TestRefer]
-/// (transfer test), and simple 200/501 responders. Re-INVITEs reuse the
-/// framework's [CallflowHold][org.vorpal.blade.framework.v2.callflow.CallflowHold].
+/// Configured scenarios (in `test-uas.json`, edited in the Configurator) can
+/// script multi-step response sequences with per-step delays and reason
+/// phrases, REFER transfers, auto-teardown, and CRUD rule-set message
+/// transformations — see
+/// [TestUasConfigSample][org.vorpal.blade.test.uas.config.TestUasConfigSample]
+/// for worked examples.
 ///
 /// ### [org.vorpal.blade.test.uas.config]
-/// [TestUasConfig][org.vorpal.blade.test.uas.config.TestUasConfig] carries no
-/// app-specific settings — behavior comes from the Request-URI — only the
-/// inherited logging and session parameters.
+/// [TestUasConfig][org.vorpal.blade.test.uas.config.TestUasConfig] — a
+/// concrete [TesterConfiguration][org.vorpal.blade.framework.v3.tester.TesterConfiguration].
 ///
-/// @see org.vorpal.blade.test.uas.callflows
 /// @see org.vorpal.blade.test.uas.config
-/// @see org.vorpal.blade.framework.v2.b2bua.B2buaServlet
-/// @see org.vorpal.blade.framework.v2.b2bua.B2buaListener
+/// @see org.vorpal.blade.framework.v3.tester.TesterServlet
+/// @see org.vorpal.blade.framework.v3.tester.ScriptedAnswer
 package org.vorpal.blade.test.uas;

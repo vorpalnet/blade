@@ -1,9 +1,20 @@
 // FSMAR Flow Editor — property panel bindings
 //
 // Binds the currently-selected mxGraph cell's XML user object to the visible
-// property panel. The cell's wrapper element (State, Transition, FlowModel)
-// is the source of truth; panels read on selection change and write back on
-// every input change via mxCellAttributeChange for proper undo support.
+// property panel. The cell's wrapper element (State, Ingress, Egress,
+// Transition, FlowModel) is the source of truth; panels read on selection
+// change and write back on every input change via mxCellAttributeChange for
+// proper undo support.
+//
+// Model notes (must match FsmarImportServlet/FsmarExportServlet):
+//  - Selectors live on State/Ingress vertices as <selector> children with
+//    id/type/description/attribute/pattern/expression attributes plus an
+//    `extra` attribute (JSON blob) preserving fields the form doesn't show
+//    (table, namespaces, anything future).
+//  - Transitions carry when/subscriber/region/routeModifier/seq attributes;
+//    seq is the evaluation order within (state, method) — first match wins.
+//  - `extra` attributes anywhere are round-trip passthrough; the UI never
+//    deletes them.
 
 window.flowTasks = (function() {
 
@@ -58,30 +69,31 @@ window.flowTasks = (function() {
 		return out;
 	}
 
-	function getChildElementsOf(el, tagName) {
-		var out = [];
-		if (!el || !el.childNodes) return out;
-		for (var i = 0; i < el.childNodes.length; i++) {
-			var c = el.childNodes[i];
-			if (c.nodeType === 1 && c.nodeName === tagName) {
-				out.push(c);
-			}
-		}
-		return out;
+	function escapeAttr(s) {
+		return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+	}
+
+	// Scope a jQuery selector to the panel of the currently-selected cell's
+	// tag. state.html is loaded into #State, #Ingress AND #Egress, so every
+	// lookup must be scoped or we'd read inputs from a hidden sibling panel.
+	function panel(cell) {
+		if (!cell || !cell.value) return $();
+		return $('#' + cell.value.tagName);
 	}
 
 	// ----- node panel (shared by State / Ingress / Egress) ------------------
 
-	// Find the .node-name input inside the panel that matches the cell's tag
-	// (e.g. '#State', '#Ingress', '#Egress'). Each panel loads state.html so all
-	// three contain a .node-name input — we need to scope to the right one.
-	function nodeNameInput(cell) {
-		if (!cell || !cell.value) return $();
-		return $('#' + cell.value.tagName + ' .node-name');
-	}
-
 	function loadNode(cell) {
-		nodeNameInput(cell).val(cell.getAttribute('label') || '');
+		panel(cell).find('.node-name').val(cell.getAttribute('label') || '');
+		// Selectors and plan dispatch apply to State and Ingress (the "null"
+		// state's selectors run against initial requests). Egress is a pure
+		// sink — hide both.
+		var isEgress = cell.value.tagName === 'Egress';
+		panel(cell).find('.state-selectors-section, .state-dispatch-section')
+				.css('display', isEgress ? 'none' : '');
+		if (!isEgress) {
+			renderStateSelectors(cell);
+		}
 	}
 
 	function bindNode() {
@@ -93,171 +105,195 @@ window.flowTasks = (function() {
 		});
 	}
 
-	// ----- transition panel --------------------------------------------------
+	// ----- state selectors ----------------------------------------------------
 
-	function loadTransition(cell) {
-		$('#transition-method').val(cell.getAttribute('label') || 'INVITE');
-		$('#transition-txid').val(cell.getAttribute('txId') || '');
-		$('#transition-subscriber').val(cell.getAttribute('subscriber') || '');
-		var target = cell.target;
-		$('#transition-next').val(target ? (target.getAttribute('label') || '') : '');
-		renderSelectors(cell);
-		renderRoutes(cell);
-	}
+	var SELECTOR_TYPES = ['attribute', 'regex', 'json', 'xml', 'sdp', 'table'];
 
-	function renderGroups(cell) {
-		var $c = $('#transition-groups').empty();
-		var groups = getChildElements(cell, 'selectorGroup');
-		for (var g = 0; g < groups.length; g++) {
-			if (g > 0) $c.append('<div class="or-divider">OR</div>');
-			$c.append(groupRowHtml(groups[g], g));
-		}
-	}
+	// What the `attribute` field means per selector type (matches the
+	// framework v3 selector classes). Empty label = field hidden.
+	var ATTRIBUTE_LABELS = {
+		'attribute': 'Attribute (header name / map key / pseudo-header)',
+		'regex':     'Attribute (source: header name / map key / context value)',
+		'json':      'Attribute (JsonPath, e.g. $.callDirection)',
+		'xml':       'Attribute (XPath)',
+		'sdp':       'Attribute (SDP field code)',
+		'table':     ''  // TableSelector hides attribute — key lives on the table
+	};
 
-	function groupRowHtml(groupEl, gIdx) {
-		var selectors = getChildElementsOf(groupEl, 'selector');
-		var selectorHtml = '';
+	function renderStateSelectors(cell) {
+		var $c = panel(cell).find('.state-selectors').empty();
+		var selectors = getChildElements(cell, 'selector');
 		for (var i = 0; i < selectors.length; i++) {
-			selectorHtml += selectorRowHtml(selectors[i], i);
-		}
-		return '' +
-			'<fieldset class="group-row" data-gidx="' + gIdx + '">' +
-				'<legend>Group ' + (gIdx + 1) +
-					' <i class="fas fa-minus-circle remove-btn remove-group" title="Remove group"></i>' +
-				'</legend>' +
-				'<div style="margin-bottom: 4px;">' +
-					'<i class="fas fa-plus-circle add-btn add-selector" title="Add selector"></i>' +
-					' <span class="hint">All selectors must match (AND)</span>' +
-				'</div>' +
-				'<div class="group-selectors">' + selectorHtml + '</div>' +
-			'</fieldset>';
-	}
-
-	function renderSelectors(cell) {
-		renderGroups(cell);
-	}
-
-	// Map a stored 'attribute' string to a UI type + header name.
-	// Anything that isn't a recognized special keyword is treated as a header name.
-	function attributeToType(attr) {
-		if (!attr) return { type: 'Header', name: '' };
-		switch (attr) {
-			case 'Request-URI': case 'RequestURI': case 'requestURI':
-			case 'ruri': case 'Ruri': case 'RURI':
-				return { type: 'Request-URI', name: '' };
-			case 'body': case 'Body': case 'content': case 'Content':
-				return { type: 'Body', name: '' };
-			case 'Origin-IP': case 'OriginIP': case 'originIP':
-				return { type: 'Origin-IP', name: '' };
-			default:
-				return { type: 'Header', name: attr };
-		}
-	}
-
-	// Map UI type + header name back to the canonical 'attribute' string.
-	function typeToAttribute(type, name) {
-		switch (type) {
-			case 'Request-URI': return 'Request-URI';
-			case 'Body':        return 'body';
-			case 'Origin-IP':   return 'Origin-IP';
-			case 'Header':
-			default:
-				return name || '';
+			$c.append(selectorRowHtml(selectors[i], i));
 		}
 	}
 
 	function selectorRowHtml(el, idx) {
+		var type = (el.getAttribute('type') || 'attribute').toLowerCase();
+		if (SELECTOR_TYPES.indexOf(type) < 0) type = 'attribute';
 		var id = el.getAttribute('id') || '';
-		var mode = (el.getAttribute('type') || 'REGEX').toUpperCase();
-		if (mode !== 'REGEX' && mode !== 'JSONPATH' && mode !== 'XPATH') mode = 'REGEX';
+		var description = el.getAttribute('description') || '';
 		var attribute = el.getAttribute('attribute') || '';
 		var pattern = el.getAttribute('pattern') || '';
 		var expression = el.getAttribute('expression') || '';
-		var t = attributeToType(attribute);
+		var extra = el.getAttribute('extra') || '';
 
-		// Gather <extract name="" path=""/> children
-		var extracts = [];
-		if (el.childNodes) {
-			for (var i = 0; i < el.childNodes.length; i++) {
-				var c = el.childNodes[i];
-				if (c.nodeType === 1 && c.nodeName === 'extract') {
-					extracts.push({
-						name: c.getAttribute('name') || '',
-						path: c.getAttribute('path') || ''
-					});
-				}
-			}
-		}
-
-		var hideHeader = (t.type !== 'Header') ? ' style="display:none;"' : '';
-		var hidePattern = (mode !== 'REGEX') ? ' style="display:none;"' : '';
-		var hideExtractions = (mode === 'REGEX') ? ' style="display:none;"' : '';
-
-		var sourceOptions = ['Header', 'Request-URI', 'Body', 'Origin-IP'].map(function(opt) {
-			return '<option' + (opt === t.type ? ' selected' : '') + '>' + opt + '</option>';
+		var typeOptions = SELECTOR_TYPES.map(function(opt) {
+			return '<option' + (opt === type ? ' selected' : '') + '>' + opt + '</option>';
 		}).join('');
 
-		var modeOptions = ['REGEX', 'JSONPATH', 'XPATH'].map(function(opt) {
-			return '<option' + (opt === mode ? ' selected' : '') + '>' + opt + '</option>';
-		}).join('');
+		var isRegex = (type === 'regex');
+		var attrLabel = ATTRIBUTE_LABELS[type];
+		var hideAttr = attrLabel ? '' : ' style="display:none;"';
+		var hideRegex = isRegex ? '' : ' style="display:none;"';
+		// The extra blob carries what the form doesn't model (table rows,
+		// XML namespaces, future fields). Show it only when present so the
+		// common case stays uncluttered — it appears automatically for
+		// table/xml selectors imported with data.
+		var hideExtra = extra ? '' : ' style="display:none;"';
 
-		var extractsHtml = extracts.map(extractRowHtml).join('');
-
-		var patternPlaceholder = '(?&lt;user&gt;[^@]+)@(?&lt;host&gt;.*)';
-
-		// Existing selector id is preserved silently via data-id (UI doesn't expose it).
 		return '' +
-			'<fieldset class="selector-row" data-idx="' + idx + '" data-id="' + escapeAttr(id) + '">' +
+			'<fieldset class="selector-row" data-idx="' + idx + '">' +
 				'<legend>Selector ' + (idx + 1) +
-					' <i class="fas fa-minus-circle remove-btn remove-selector" title="Remove"></i>' +
+					' <svg class="remove-btn remove-state-selector" title="Remove" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>' +
 				'</legend>' +
 
 				'<div class="sel-field">' +
-					'<label>Source</label>' +
-					'<select class="sel-type">' + sourceOptions + '</select>' +
-				'</div>' +
-
-				'<div class="sel-field sel-header-field"' + hideHeader + '>' +
-					'<label>Header name</label>' +
-					'<input class="sel-header" type="text" value="' + escapeAttr(t.name) +
-						'" placeholder="e.g. From, To, X-Cisco-Gucid" />' +
+					'<label>Type</label>' +
+					'<select class="sel-type">' + typeOptions + '</select>' +
 				'</div>' +
 
 				'<div class="sel-field">' +
-					'<label>Mode</label>' +
-					'<select class="sel-mode">' + modeOptions + '</select>' +
+					'<label>Id <span class="hint">(also the context variable name, e.g. ${id})</span></label>' +
+					'<input class="sel-id" type="text" value="' + escapeAttr(id) + '" placeholder="e.g. To" />' +
 				'</div>' +
 
-				'<div class="sel-field sel-pattern-field"' + hidePattern + '>' +
-					'<label>Pattern <span class="hint">(regex with named groups)</span></label>' +
+				'<div class="sel-field">' +
+					'<label>Description</label>' +
+					'<input class="sel-description" type="text" value="' + escapeAttr(description) + '" />' +
+				'</div>' +
+
+				'<div class="sel-field sel-attribute-field"' + hideAttr + '>' +
+					'<label class="sel-attribute-label">' + (attrLabel || '') + '</label>' +
+					'<input class="sel-attribute" type="text" value="' + escapeAttr(attribute) + '" />' +
+				'</div>' +
+
+				'<div class="sel-field sel-pattern-field"' + hideRegex + '>' +
+					'<label>Pattern <span class="hint">(regex; named groups become ${id.group} variables)</span></label>' +
 					'<input class="sel-pattern" type="text" value="' + escapeAttr(pattern) +
-						'" placeholder="' + patternPlaceholder + '" />' +
+						'" placeholder="sips?:(?&lt;user&gt;[^@]+)@(?&lt;host&gt;[^;&gt;]+)" />' +
 				'</div>' +
 
-				'<div class="sel-field sel-extractions-field"' + hideExtractions + '>' +
-					'<label>Extractions ' +
-						'<i class="fas fa-plus-circle add-btn add-extract" title="Add extraction"></i>' +
-					'</label>' +
-					'<div class="extract-list">' + extractsHtml + '</div>' +
-				'</div>' +
-
-				'<div class="sel-field">' +
-					'<label>Expression <span class="hint">(${name} template)</span></label>' +
+				'<div class="sel-field sel-expression-field"' + hideRegex + '>' +
+					'<label>Expression <span class="hint">(optional ${} template; result stored under Id)</span></label>' +
 					'<input class="sel-expression" type="text" value="' + escapeAttr(expression) +
 						'" placeholder="${user}@${host}" />' +
+				'</div>' +
+
+				'<div class="sel-field sel-extra-field"' + hideExtra + '>' +
+					'<label>Advanced <span class="hint">(raw JSON for fields the form does not show: table, namespaces, …)</span></label>' +
+					'<textarea class="sel-extra">' + escapeAttr(extra) + '</textarea>' +
 				'</div>' +
 
 			'</fieldset>';
 	}
 
-	function extractRowHtml(ex) {
-		return '<div class="extract-row">' +
-			'<input class="ex-name" type="text" value="' + escapeAttr(ex.name || '') +
-				'" placeholder="name" />' +
-			'<input class="ex-path" type="text" value="' + escapeAttr(ex.path || '') +
-				'" placeholder="$.path  or  //xpath" />' +
-			' <i class="fas fa-minus-circle remove-btn remove-extract" title="Remove extraction"></i>' +
-			'</div>';
+	function saveStateSelectors() {
+		var cell = window.flowSelectedCell;
+		if (!cell) return;
+		var items = [];
+		panel(cell).find('.state-selectors .selector-row').each(function() {
+			var $row = $(this);
+			items.push({
+				type: $row.find('.sel-type').val(),
+				id: $row.find('.sel-id').val(),
+				description: $row.find('.sel-description').val(),
+				attribute: $row.find('.sel-attribute').val(),
+				pattern: $row.find('.sel-pattern').val(),
+				expression: $row.find('.sel-expression').val(),
+				extra: $row.find('.sel-extra').val()
+			});
+		});
+		setChildElements(cell, 'selector', items, function(el, item) {
+			// 'attribute' is the schema default type — omit it for brevity,
+			// matching how hand-written configs usually look.
+			if (item.type && item.type !== 'attribute') el.setAttribute('type', item.type);
+			if (item.id) el.setAttribute('id', item.id);
+			if (item.description) el.setAttribute('description', item.description);
+			if (item.attribute && item.type !== 'table') el.setAttribute('attribute', item.attribute);
+			if (item.type === 'regex') {
+				if (item.pattern) el.setAttribute('pattern', item.pattern);
+				if (item.expression) el.setAttribute('expression', item.expression);
+			}
+			if (item.extra) el.setAttribute('extra', item.extra);
+		});
+	}
+
+	function bindStateSelectors() {
+		// Add selector
+		$(document).off('click.flowSel', '.add-state-selector').on('click.flowSel', '.add-state-selector', function() {
+			var cell = window.flowSelectedCell;
+			if (!cell || !cell.value) return;
+			var doc = cell.value.ownerDocument;
+			cell.value.appendChild(doc.createElement('selector'));
+			renderStateSelectors(cell);
+			return false;
+		});
+
+		// Remove selector
+		$(document).off('click.flowSel', '.remove-state-selector').on('click.flowSel', '.remove-state-selector', function() {
+			$(this).closest('.selector-row').remove();
+			saveStateSelectors();
+			var cell = window.flowSelectedCell;
+			if (cell) renderStateSelectors(cell);
+			return false;
+		});
+
+		// Type change: re-toggle dependent fields, then save
+		$(document).off('change.flowSel', '.state-selectors .sel-type').on('change.flowSel', '.state-selectors .sel-type', function() {
+			var $row = $(this).closest('.selector-row');
+			var type = $(this).val();
+			var attrLabel = ATTRIBUTE_LABELS[type];
+			$row.find('.sel-attribute-field').css('display', attrLabel ? '' : 'none');
+			$row.find('.sel-attribute-label').text(attrLabel || '');
+			var isRegex = (type === 'regex');
+			$row.find('.sel-pattern-field, .sel-expression-field').css('display', isRegex ? '' : 'none');
+			// table/xml usually need the Advanced blob — reveal it
+			if (type === 'table' || type === 'xml') {
+				$row.find('.sel-extra-field').css('display', '');
+			}
+			saveStateSelectors();
+		});
+
+		// Any other selector field change
+		$(document).off('change.flowSel', '.state-selectors input, .state-selectors textarea')
+				.on('change.flowSel', '.state-selectors input, .state-selectors textarea', function() {
+			saveStateSelectors();
+		});
+
+		// Plan dispatch dialog
+		$(document).off('click.flowSel', '.add-plan-dispatch').on('click.flowSel', '.add-plan-dispatch', function() {
+			var cell = window.flowSelectedCell;
+			if (cell && cell.value && window.flowPlans) {
+				window.flowPlans.showDispatchDialog(cell);
+			}
+			return false;
+		});
+	}
+
+	// ----- transition panel --------------------------------------------------
+
+	function loadTransition(cell) {
+		$('#transition-method').val(cell.getAttribute('label') || 'INVITE');
+		$('#transition-when').val(cell.getAttribute('when') || '');
+		$('#transition-seq').val(cell.getAttribute('seq') || '');
+		$('#transition-txid').val(cell.getAttribute('txId') || '');
+		$('#transition-subscriber').val(cell.getAttribute('subscriber') || '');
+		$('#transition-region').val(cell.getAttribute('region') || '');
+		$('#transition-route-modifier').val(cell.getAttribute('routeModifier') || '');
+		var target = cell.target;
+		$('#transition-next').val(target ? (target.getAttribute('label') || '') : '');
+		renderRoutes(cell);
 	}
 
 	function renderRoutes(cell) {
@@ -271,77 +307,9 @@ window.flowTasks = (function() {
 	function routeRowHtml(el, idx) {
 		var uri = el.getAttribute('uri') || '';
 		return '<div class="route-row" data-idx="' + idx + '">' +
-			'<input class="route-uri" type="text" value="' + escapeAttr(uri) + '" placeholder="sip:proxy.example.com" />' +
-			' <i class="fas fa-minus-circle remove-btn remove-route" title="Remove route"></i>' +
+			'<input class="route-uri" type="text" value="' + escapeAttr(uri) + '" placeholder="sip:${To.user}@proxy.example.com" />' +
+			' <svg class="remove-btn remove-route" title="Remove route" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>' +
 			'</div>';
-	}
-
-	function escapeAttr(s) {
-		return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-	}
-
-	function collectSelectorFromRow($row) {
-		var type = $row.find('.sel-type').val();
-		var name = $row.find('.sel-header').val();
-		var mode = ($row.find('.sel-mode').val() || 'REGEX').toUpperCase();
-		var extractions = [];
-		$row.find('.extract-row').each(function() {
-			var n = $(this).find('.ex-name').val();
-			var p = $(this).find('.ex-path').val();
-			if (n || p) extractions.push({ name: n || '', path: p || '' });
-		});
-		return {
-			id: $row.attr('data-id') || '',
-			type: (mode === 'REGEX') ? '' : mode,
-			attribute: typeToAttribute(type, name),
-			pattern: (mode === 'REGEX') ? $row.find('.sel-pattern').val() : '',
-			extractions: (mode !== 'REGEX') ? extractions : [],
-			expression: $row.find('.sel-expression').val()
-		};
-	}
-
-	function writeSelectorEl(el, item) {
-		if (item.id) el.setAttribute('id', item.id);
-		if (item.type) el.setAttribute('type', item.type);
-		if (item.attribute) el.setAttribute('attribute', item.attribute);
-		if (item.pattern) el.setAttribute('pattern', item.pattern);
-		if (item.expression) el.setAttribute('expression', item.expression);
-		if (item.extractions && item.extractions.length > 0) {
-			var doc = el.ownerDocument;
-			for (var k = 0; k < item.extractions.length; k++) {
-				var ex = doc.createElement('extract');
-				ex.setAttribute('name', item.extractions[k].name);
-				ex.setAttribute('path', item.extractions[k].path);
-				el.appendChild(ex);
-			}
-		}
-	}
-
-	function saveGroups() {
-		var cell = window.flowSelectedCell;
-		if (!cell) return;
-
-		var groupItems = [];
-		$('#transition-groups .group-row').each(function() {
-			var selectors = [];
-			$(this).find('.selector-row').each(function() {
-				selectors.push(collectSelectorFromRow($(this)));
-			});
-			groupItems.push({ selectors: selectors });
-		});
-
-		setChildElements(cell, 'selectorGroup', groupItems, function(groupEl, groupItem) {
-			var doc = groupEl.ownerDocument;
-			for (var s = 0; s < groupItem.selectors.length; s++) {
-				var selEl = doc.createElement('selector');
-				writeSelectorEl(selEl, groupItem.selectors[s]);
-				groupEl.appendChild(selEl);
-			}
-		});
-	}
-
-	function saveSelectors() {
-		saveGroups();
 	}
 
 	function saveRoutes() {
@@ -358,6 +326,17 @@ window.flowTasks = (function() {
 	}
 
 	function bindTransition() {
+		// Vanilla tab strip (replaces jQuery-UI tabs). Active state lives in
+		// the tab-active class on both the button and its page.
+		$(document).off('click.flowTx', '#transition-tabs .tab-btn').on('click.flowTx', '#transition-tabs .tab-btn', function() {
+			var target = $(this).attr('data-tab');
+			$('#transition-tabs .tab-btn').removeClass('tab-active');
+			$(this).addClass('tab-active');
+			$('#transition-tabs .tab-page').removeClass('tab-active');
+			$('#' + target).addClass('tab-active');
+			return false;
+		});
+
 		// Method change updates label
 		$(document).off('change.flowTx', '#transition-method').on('change.flowTx', '#transition-method', function() {
 			var cell = window.flowSelectedCell;
@@ -366,96 +345,19 @@ window.flowTasks = (function() {
 			}
 		});
 
-		// Transition ID
-		$(document).off('change.flowTx', '#transition-txid').on('change.flowTx', '#transition-txid', function() {
-			setAttr(window.flowSelectedCell, 'txId', $(this).val());
-		});
-
-		// Subscriber
-		$(document).off('change.flowTx', '#transition-subscriber').on('change.flowTx', '#transition-subscriber', function() {
-			setAttr(window.flowSelectedCell, 'subscriber', $(this).val());
-		});
-
-		// Add selector group
-		$(document).off('click.flowTx', '#add-group').on('click.flowTx', '#add-group', function() {
-			var cell = window.flowSelectedCell;
-			if (!cell || !cell.value) return;
-			var doc = cell.value.ownerDocument;
-			var groupEl = doc.createElement('selectorGroup');
-			cell.value.appendChild(groupEl);
-			renderGroups(cell);
-			return false;
-		});
-
-		// Remove selector group
-		$(document).off('click.flowTx', '.remove-group').on('click.flowTx', '.remove-group', function() {
-			$(this).closest('.group-row').remove();
-			// Remove OR dividers that are now orphaned
-			$('#transition-groups .or-divider').first().remove();
-			saveGroups();
-			return false;
-		});
-
-		// Add selector (within a group)
-		$(document).off('click.flowTx', '.add-selector').on('click.flowTx', '.add-selector', function() {
-			var cell = window.flowSelectedCell;
-			if (!cell || !cell.value) return;
-			// Find the group-row this button belongs to, then save+re-render
-			var $group = $(this).closest('.group-row');
-			var doc = cell.value.ownerDocument;
-			var dummyEl = doc.createElement('selector');
-			$group.find('.group-selectors').append(selectorRowHtml(dummyEl, $group.find('.selector-row').length));
-			saveGroups();
-			return false;
-		});
-
-		// Remove selector
-		$(document).off('click.flowTx', '.remove-selector').on('click.flowTx', '.remove-selector', function() {
-			$(this).closest('.selector-row').remove();
-			saveGroups();
-			return false;
-		});
-
-		// Save selector field changes on blur
-		$(document).off('change.flowTx', '#transition-groups input').on('change.flowTx', '#transition-groups input', function() {
-			saveSelectors();
-		});
-
-		// Source dropdown change: toggle header field visibility AND save
-		$(document).off('change.flowTx', '#transition-groups .sel-type').on('change.flowTx', '#transition-groups .sel-type', function() {
-			var $row = $(this).closest('.selector-row');
-			var showHeader = ($(this).val() === 'Header');
-			$row.find('.sel-header-field').css('display', showHeader ? '' : 'none');
-			saveSelectors();
-		});
-
-		// Mode dropdown change: toggle pattern vs extractions field AND save
-		$(document).off('change.flowTx', '#transition-groups .sel-mode').on('change.flowTx', '#transition-groups .sel-mode', function() {
-			var $row = $(this).closest('.selector-row');
-			var isRegex = ($(this).val() === 'REGEX');
-			$row.find('.sel-pattern-field').css('display', isRegex ? '' : 'none');
-			$row.find('.sel-extractions-field').css('display', isRegex ? 'none' : '');
-			saveSelectors();
-		});
-
-		// Add extraction row
-		$(document).off('click.flowTx', '.add-extract').on('click.flowTx', '.add-extract', function() {
-			var $row = $(this).closest('.selector-row');
-			$row.find('.extract-list').append(extractRowHtml({ name: '', path: '' }));
-			saveSelectors();
-			return false;
-		});
-
-		// Remove extraction row
-		$(document).off('click.flowTx', '.remove-extract').on('click.flowTx', '.remove-extract', function() {
-			$(this).closest('.extract-row').remove();
-			saveSelectors();
-			return false;
-		});
-
-		// Save extraction field changes
-		$(document).off('change.flowTx', '#transition-groups .extract-row input').on('change.flowTx', '#transition-groups .extract-row input', function() {
-			saveSelectors();
+		// Simple attribute fields
+		var attrFields = {
+			'#transition-when': 'when',
+			'#transition-seq': 'seq',
+			'#transition-txid': 'txId',
+			'#transition-subscriber': 'subscriber',
+			'#transition-region': 'region',
+			'#transition-route-modifier': 'routeModifier'
+		};
+		Object.keys(attrFields).forEach(function(sel) {
+			$(document).off('change.flowTx', sel).on('change.flowTx', sel, function() {
+				setAttr(window.flowSelectedCell, attrFields[sel], $(this).val());
+			});
 		});
 
 		// Add route
@@ -491,6 +393,7 @@ window.flowTasks = (function() {
 	// the undo stack.
 
 	var hiddenMethods = {};
+	var hiddenPlans = {};
 
 	function collectMethods(graph) {
 		var set = {};
@@ -505,6 +408,30 @@ window.flowTasks = (function() {
 		return Object.keys(set).sort();
 	}
 
+	// Plan key for an edge: "tier=gold" for dispatch conditions, "default"
+	// for the unconditional member of a family, null for everything else
+	// (non-dispatch edges are never plan-filtered).
+	function planKeyOf(cell) {
+		if (!window.flowPlans) return null;
+		var when = cell.getAttribute('when') || '';
+		var d = window.flowPlans.parseDispatch(when);
+		if (d) return d.variable + '=' + d.value;
+		return null;
+	}
+
+	function collectPlans(graph) {
+		var set = {};
+		var cells = graph.getModel().cells;
+		for (var id in cells) {
+			var cell = cells[id];
+			if (cell && cell.edge && cell.value && cell.value.tagName === 'Transition') {
+				var key = planKeyOf(cell);
+				if (key) set[key] = true;
+			}
+		}
+		return Object.keys(set).sort();
+	}
+
 	function rebuildView(graph) {
 		var methods = collectMethods(graph);
 		// Drop hidden entries for methods that no longer exist
@@ -514,7 +441,6 @@ window.flowTasks = (function() {
 		var $list = $('#view-methods').empty();
 		if (methods.length === 0) {
 			$list.append('<div class="view-empty">No transitions yet</div>');
-			return;
 		}
 		for (var i = 0; i < methods.length; i++) {
 			var m = methods[i];
@@ -522,6 +448,25 @@ window.flowTasks = (function() {
 			$list.append(
 				'<label class="view-item"><input type="checkbox" class="view-method" value="' +
 				escapeAttr(m) + '"' + checked + '> ' + escapeAttr(m) + '</label>'
+			);
+		}
+
+		// Plans section: one checkbox per dispatch variable=value. Only shown
+		// when the model actually contains dispatch-shaped conditions, so
+		// non-plan flows don't grow UI. "Show only the gold path" = uncheck
+		// the others.
+		var plans = collectPlans(graph);
+		for (var pkey in hiddenPlans) {
+			if (plans.indexOf(pkey) < 0) delete hiddenPlans[pkey];
+		}
+		$('#view-plans-header').css('display', plans.length > 0 ? '' : 'none');
+		var $plans = $('#view-plans').empty();
+		for (var p = 0; p < plans.length; p++) {
+			var pk = plans[p];
+			var pchecked = hiddenPlans[pk] ? '' : ' checked';
+			$plans.append(
+				'<label class="view-item"><input type="checkbox" class="view-plan" value="' +
+				escapeAttr(pk) + '"' + pchecked + '> ' + escapeAttr(pk) + '</label>'
 			);
 		}
 	}
@@ -532,7 +477,8 @@ window.flowTasks = (function() {
 			var cell = cells[id];
 			if (cell && cell.edge && cell.value && cell.value.tagName === 'Transition') {
 				var label = cell.getAttribute('label') || '(none)';
-				cell.visible = !hiddenMethods[label];
+				var planKey = planKeyOf(cell);
+				cell.visible = !hiddenMethods[label] && !(planKey && hiddenPlans[planKey]);
 			}
 		}
 		graph.refresh();
@@ -548,8 +494,18 @@ window.flowTasks = (function() {
 			}
 			applyFilter(graph);
 		});
+		$(document).off('change.flowView', '.view-plan').on('change.flowView', '.view-plan', function() {
+			var p = $(this).val();
+			if ($(this).is(':checked')) {
+				delete hiddenPlans[p];
+			} else {
+				hiddenPlans[p] = true;
+			}
+			applyFilter(graph);
+		});
 		$(document).off('click.flowView', '#view-show-all').on('click.flowView', '#view-show-all', function() {
 			hiddenMethods = {};
+			hiddenPlans = {};
 			rebuildView(graph);
 			applyFilter(graph);
 			return false;
@@ -604,6 +560,7 @@ window.flowTasks = (function() {
 	// only exist after that, so we use delegated handlers on document).
 	$(function() {
 		bindNode();
+		bindStateSelectors();
 		bindTransition();
 		bindFlowModel();
 	});

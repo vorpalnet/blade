@@ -43,14 +43,19 @@ public class MimeHelper implements Serializable {
 	}
 
 	public static List<MimePart> parseParts(SipServletMessage msg) throws IOException {
+		if (msg.getContent() == null || msg.getContentType() == null) return new ArrayList<>();
+		return parseParts(bodyAsString(msg.getContent()), msg.getContentType());
+	}
+
+	/// Parses a raw multipart body string against the boundary declared in
+	/// `contentType`. Used directly when the multipart text doesn't live in a
+	/// [SipServletMessage] yet — e.g. a template file body.
+	public static List<MimePart> parseParts(String body, String contentType) {
 		List<MimePart> parts = new ArrayList<>();
-		if (msg.getContent() == null || msg.getContentType() == null) return parts;
+		if (body == null || contentType == null) return parts;
 
-		String boundary = extractBoundary(msg.getContentType());
+		String boundary = extractBoundary(contentType);
 		if (boundary == null) return parts;
-
-		String body = bodyAsString(msg.getContent());
-		if (body == null) return parts;
 
 		String delimiter = "--" + boundary;
 		String[] sections = body.split(java.util.regex.Pattern.quote(delimiter));
@@ -127,7 +132,35 @@ public class MimeHelper implements Serializable {
 		List<MimePart> parts = new ArrayList<>();
 		parts.add(new MimePart(existingType, bodyAsString(msg.getContent())));
 		parts.add(new MimePart(contentType, body));
-		String wrappedType = "multipart/mixed;boundary=" + boundary;
+		msg.setContent(compose(parts, boundary), "multipart/mixed;boundary=" + boundary);
+	}
+
+	/// Collapses a multipart body down to only the part(s) whose Content-Type
+	/// matches `contentType`. A single surviving part becomes the entire
+	/// (single-part) body; multiple survivors stay multipart. Returns false —
+	/// leaving the message untouched — when the message isn't multipart or no
+	/// part matches, so callers can warn rather than silently destroy a body.
+	public static boolean keepOnlyPart(SipServletMessage msg, String contentType) throws Exception {
+		String mt = msg.getContentType();
+		if (mt == null || !mt.toLowerCase().startsWith("multipart/")) return false;
+
+		List<MimePart> kept = new ArrayList<>();
+		for (MimePart part : parseParts(msg)) {
+			if (matches(part.getContentType(), contentType)) kept.add(part);
+		}
+		if (kept.isEmpty()) return false;
+
+		if (kept.size() == 1) {
+			MimePart sole = kept.get(0);
+			msg.setContent(sole.body, sole.getContentType());
+		} else {
+			rewrite(msg, kept);
+		}
+		return true;
+	}
+
+	/// Serializes parts into a multipart body string with the given boundary.
+	public static String compose(List<MimePart> parts, String boundary) {
 		StringBuilder sb = new StringBuilder();
 		for (MimePart part : parts) {
 			sb.append("--").append(boundary).append("\r\n");
@@ -138,7 +171,7 @@ public class MimeHelper implements Serializable {
 			sb.append(part.body != null ? part.body : "").append("\r\n");
 		}
 		sb.append("--").append(boundary).append("--\r\n");
-		msg.setContent(sb.toString(), wrappedType);
+		return sb.toString();
 	}
 
 	public static void removePart(SipServletMessage msg, String contentType) throws Exception {
@@ -227,7 +260,9 @@ public class MimeHelper implements Serializable {
 		return "blade-" + Long.toHexString(System.nanoTime()) + Long.toHexString(Double.doubleToLongBits(Math.random()));
 	}
 
-	private static String extractBoundary(String contentType) {
+	/// Extracts `boundary=...` from a Content-Type header value, handling
+	/// quoted and unquoted forms. Returns null when absent.
+	public static String extractBoundary(String contentType) {
 		if (contentType == null) return null;
 		String lower = contentType.toLowerCase();
 		int idx = lower.indexOf("boundary=");

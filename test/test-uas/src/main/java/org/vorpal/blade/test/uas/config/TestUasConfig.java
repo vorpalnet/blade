@@ -1,16 +1,14 @@
 package org.vorpal.blade.test.uas.config;
 
-import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v3.tester.TesterConfiguration;
 
-/// Configuration for the BLADE Test UAS.
-///
-/// Response behavior is driven entirely by the Request-URI (`status`, `delay`,
-/// `refer`), so this carries no app-specific settings — only the inherited
-/// logging and session parameters. It exists as a concrete type for the
-/// [org.vorpal.blade.framework.v2.config.SettingsManager].
-public class TestUasConfig extends Configuration {
+/// Configuration for the BLADE Test UAS. All app-specific settings —
+/// scenarios, rule sets, originate defaults, scenario selection — come from
+/// the inherited [TesterConfiguration]. URI-parameter shorthands (`status`,
+/// `delay`, `refer`) keep working with an empty configuration.
+public class TestUasConfig extends TesterConfiguration {
+	private static final long serialVersionUID = 1L;
 
 	public TestUasConfig() {
 	}
-
 }

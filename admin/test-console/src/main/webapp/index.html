@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Test Console</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/test-console/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Test Console</span>
+				<span class="vorpal-brand-tagline">Cluster-Wide SIP Test Runs</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html" class="vorpal-active">Overview</a>
+			<a href="console.html">Console</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>BLADE Test Console</h1>
+					<p>Drive the BLADE test apps — test-uac and test-uas — across the whole cluster.
+					Start and stop load runs on every node at once and watch live per-scenario metrics:
+					call counts, status distributions, latency percentiles, and assertion pass/fail
+					tallies, aggregated over federated JMX. No SIPp required.</p>
+				</div>
+			</section>
+
+			<section class="vorpal-card-grid">
+				<a href="console.html" class="vorpal-card">
+					<span class="vorpal-card-icon">▶</span>
+					<h3>Open Console</h3>
+					<p>Discover every tester node, launch scenario-driven load runs, and watch the
+					numbers move.</p>
+					<span class="vorpal-card-link">Open Test Console</span>
+				</a>
+				<a href="/blade/configurator/" class="vorpal-card">
+					<span class="vorpal-card-icon">✎</span>
+					<h3>Edit Scenarios</h3>
+					<p>Scenarios, response scripts, rule sets, and assertions live in test-uac.json and
+					test-uas.json — edited schema-validated in the Configurator.</p>
+					<span class="vorpal-card-link">Open Configurator</span>
+				</a>
+				<a href="docs/index.html" class="vorpal-card">
+					<span class="vorpal-card-icon">📖</span>
+					<h3>Documentation</h3>
+					<p>How scenarios, templates, transformation rules, assertions, and the load engine
+					fit together.</p>
+					<span class="vorpal-card-link">Read the Docs</span>
+				</a>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

@@ -6,6 +6,7 @@
 	<br/><hr/>
 	<add as="exportFsmar" action="exportFsmar" icon="svg/cloud-upload.svg"/>
 	<add as="importFsmar" action="importFsmar" icon="svg/cloud-download.svg"/>
+	<add as="simulateFsmar" action="simulateFsmar" icon="svg/simulate.svg"/>
 
 	<br/><hr/>
 	<add as="select" mode="select" icon="svg/mouse-pointer.svg"/>

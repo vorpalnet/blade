@@ -87,6 +87,12 @@
 				flowFsmar.importFromJson(editor);
 			}
 		]]></add>
+		<add as="simulateFsmar"><![CDATA[
+			function (editor)
+			{
+				flowSimulate.open(editor);
+			}
+		]]></add>
 		<add as="openHref"><![CDATA[
 			function (editor, cell)
 			{

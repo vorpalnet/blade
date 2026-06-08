@@ -10,25 +10,30 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import org.vorpal.blade.framework.v3.tester.LoadEngine;
+import org.vorpal.blade.framework.v3.tester.LoadRequest;
+import org.vorpal.blade.framework.v3.tester.TesterMetrics;
+
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.info.Info;
 
-/// REST API for controlling the BLADE Test UAC load generator on this node.
+/// REST API for controlling this node's [LoadEngine].
 ///
-/// Each node in the cluster receives commands independently.
-/// The load generator instance is stored on the ServletContext so it
-/// lives for the lifetime of this WAR deployment on this node.
+/// Each node in the cluster receives commands independently; the engine and
+/// metrics live on the ServletContext for the lifetime of this WAR
+/// deployment on this node. The same controls are available cluster-wide
+/// through the `TesterControl` JMX MBean (the BLADE Test Console uses that).
 @OpenAPIDefinition(info = @Info(title = "BLADE Test UAC - Load Generator", version = "1"))
 @Path("api/v1/loadtest")
 public class LoadTestAPI {
 
-	private static final String GENERATOR_ATTR = "loadGenerator";
-
 	@Context
 	private ServletContext servletContext;
 
-	/// Starts a load test with the given parameters on this node.
+	/// Starts a load test with the given parameters on this node. The
+	/// optional `scenario` field selects a configured scenario; null fields
+	/// fall back to the configuration's `originate` defaults.
 	///
 	/// Returns 409 Conflict if a test is already running.
 	@POST
@@ -36,14 +41,16 @@ public class LoadTestAPI {
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Start load generation on this node")
-	public Response start(LoadTestRequest request) {
+	public Response start(LoadRequest request) {
+		LoadEngine engine = engine();
+		if (engine == null) {
+			return notReady();
+		}
 		try {
-			LoadGenerator generator = getOrCreateGenerator();
-			generator.start(request);
-			return Response.ok(generator.getStatus()).build();
+			engine.start(request);
+			return Response.ok(engine.getStatus()).build();
 		} catch (IllegalStateException e) {
-			return Response.status(Response.Status.CONFLICT)
-					.entity(getOrCreateGenerator().getStatus()).build();
+			return Response.status(Response.Status.CONFLICT).entity(engine.getStatus()).build();
 		} catch (IllegalArgumentException e) {
 			return Response.status(Response.Status.BAD_REQUEST)
 					.entity("{\"error\":\"" + e.getMessage() + "\"}").build();
@@ -56,9 +63,12 @@ public class LoadTestAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Stop load generation on this node")
 	public Response stop() {
-		LoadGenerator generator = getOrCreateGenerator();
-		generator.stop();
-		return Response.ok(generator.getStatus()).build();
+		LoadEngine engine = engine();
+		if (engine == null) {
+			return notReady();
+		}
+		engine.stop();
+		return Response.ok(engine.getStatus()).build();
 	}
 
 	/// Returns the current load test status for this node.
@@ -67,16 +77,39 @@ public class LoadTestAPI {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(summary = "Get load test status on this node")
 	public Response getStatus() {
-		return Response.ok(getOrCreateGenerator().getStatus()).build();
-	}
-
-	private LoadGenerator getOrCreateGenerator() {
-		LoadGenerator generator = (LoadGenerator) servletContext.getAttribute(GENERATOR_ATTR);
-		if (generator == null) {
-			generator = new LoadGenerator();
-			servletContext.setAttribute(GENERATOR_ATTR, generator);
+		LoadEngine engine = engine();
+		if (engine == null) {
+			return notReady();
 		}
-		return generator;
+		return Response.ok(engine.getStatus()).build();
 	}
 
+	/// Returns the per-scenario metrics report for this node: counters,
+	/// final-status distribution, latency percentiles, assertion tallies.
+	@GET
+	@Path("/report")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Get the per-scenario metrics report for this node")
+	public Response getReport() {
+		return Response.ok(TesterMetrics.from(servletContext).report()).build();
+	}
+
+	/// Clears all per-scenario metrics on this node.
+	@POST
+	@Path("/reset")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(summary = "Clear the per-scenario metrics on this node")
+	public Response reset() {
+		TesterMetrics.from(servletContext).reset();
+		return Response.noContent().build();
+	}
+
+	private LoadEngine engine() {
+		return (LoadEngine) servletContext.getAttribute(LoadEngine.ATTR);
+	}
+
+	private Response notReady() {
+		return Response.status(Response.Status.SERVICE_UNAVAILABLE)
+				.entity("{\"error\":\"Load engine not initialized; servlet still starting\"}").build();
+	}
 }

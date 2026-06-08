@@ -29,6 +29,56 @@ body {
 	margin-top: 4px;
 	font-style: italic;
 }
+#state-view fieldset {
+	margin: 10px 0;
+	border: 1px solid #bbb;
+	padding: 6px 10px 12px 10px;
+	background: #f8f8ff;
+	border-radius: 4px;
+}
+#state-view legend {
+	font-weight: bold;
+	font-size: 11px;
+	padding: 0 6px;
+}
+.sel-field {
+	margin-top: 10px;
+}
+.sel-field label {
+	display: block;
+	font-weight: bold;
+	font-size: 11px;
+	margin-bottom: 3px;
+	color: #444;
+	margin-top: 0;
+}
+.sel-field input[type=text],
+.sel-field select,
+.sel-field textarea {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 3px;
+}
+.sel-field textarea {
+	font-family: monospace;
+	font-size: 11px;
+	min-height: 48px;
+}
+.add-btn {
+	color: green;
+	cursor: pointer;
+	font-size: 14px;
+}
+.remove-btn {
+	color: #c00;
+	cursor: pointer;
+}
+.hint {
+	color: #666;
+	font-size: 10px;
+	font-style: italic;
+	font-weight: normal;
+}
 </style>
 </head>
 <body>
@@ -40,6 +90,32 @@ body {
 		For a State, this is the BLADE application name (used as the JSON key).
 		For Ingress/Egress clouds, this is just a display label &mdash; both clouds always
 		map to the literal string <code>null</code> in FSMAR JSON.
+	</div>
+
+	<!-- Selectors run on entry to this state; each extracts a value from the
+	     request into the routing context for transition conditions and ${}
+	     route templates. Hidden for Egress (nothing routes FROM egress). -->
+	<div class="state-selectors-section">
+		<label style="margin-top: 14px;">Selectors
+			<svg class="add-btn add-state-selector" title="Add selector" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>
+		</label>
+		<div class="state-hint" style="margin-top: 0;">
+			Run when a request enters this state. Each extracts a value into the
+			routing context; transition conditions (<code>when</code>) and
+			<code>${...}</code> route templates read from it.
+		</div>
+		<div class="state-selectors"></div>
+	</div>
+
+	<!-- Service plans: generate a family of mutually exclusive dispatch
+	     transitions (gold/silver/bronze) from this state. Hidden for Egress. -->
+	<div class="state-dispatch-section">
+		<label style="margin-top: 14px;">Service Plans</label>
+		<div class="state-hint" style="margin-top: 0;">
+			Route by plan (e.g. gold / silver / bronze): one transition per plan
+			with mutually exclusive conditions, so evaluation order cannot matter.
+		</div>
+		<button class="add-plan-dispatch" type="button" style="margin-top: 6px;">Add plan dispatch&hellip;</button>
 	</div>
 </div>
 

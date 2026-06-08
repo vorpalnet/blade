@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Console · BLADE Test Console</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="console.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/test-console/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Test Console</span>
+				<span class="vorpal-brand-tagline">Cluster-Wide SIP Test Runs</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="console.html" class="vorpal-active">Console</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill" id="refresh-pill" title="Auto-refresh">refresh: 2s</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<!-- Run controls -->
+			<section class="tc-controls">
+				<h2>Load Run</h2>
+				<div class="tc-controls-grid">
+					<div class="vorpal-form-row">
+						<label for="ctl-app">App</label>
+						<select id="ctl-app"></select>
+					</div>
+					<div class="vorpal-form-row">
+						<label for="ctl-scenario">Scenario</label>
+						<input id="ctl-scenario" type="text" placeholder="(configured default)">
+					</div>
+					<div class="vorpal-form-row">
+						<label for="ctl-mode">Mode</label>
+						<select id="ctl-mode">
+							<option value="">(configured default)</option>
+							<option value="cps">cps — calls per second</option>
+							<option value="concurrent">concurrent — maintain N calls</option>
+						</select>
+					</div>
+					<div class="vorpal-form-row">
+						<label for="ctl-cps">Target CPS</label>
+						<input id="ctl-cps" type="number" min="0" step="0.1" placeholder="per node">
+					</div>
+					<div class="vorpal-form-row">
+						<label for="ctl-concurrent">Target concurrent</label>
+						<input id="ctl-concurrent" type="number" min="0" step="1" placeholder="per node">
+					</div>
+					<div class="vorpal-form-row">
+						<label for="ctl-maxcalls">Max calls</label>
+						<input id="ctl-maxcalls" type="number" min="0" step="1" placeholder="0 = unlimited">
+					</div>
+					<div class="vorpal-form-row">
+						<label for="ctl-duration">Call duration</label>
+						<input id="ctl-duration" type="text" placeholder="e.g. 30s">
+					</div>
+				</div>
+				<div class="tc-actions">
+					<button class="vorpal-btn" id="btn-start">Start on all nodes</button>
+					<button class="vorpal-btn" id="btn-stop">Stop</button>
+					<button class="vorpal-btn" id="btn-reset">Reset metrics</button>
+					<span class="tc-feedback" id="ctl-feedback"></span>
+				</div>
+			</section>
+
+			<!-- Per-node status -->
+			<section>
+				<h2>Nodes</h2>
+				<div id="nodes" class="tc-node-grid">
+					<p class="tc-empty">Discovering tester nodes…</p>
+				</div>
+			</section>
+
+			<!-- Aggregated scenario metrics -->
+			<section>
+				<h2>Scenario Metrics <span class="tc-note">(summed across nodes; latency shows the worst node)</span></h2>
+				<div id="scenarios">
+					<p class="tc-empty">No metrics yet.</p>
+				</div>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+<script src="console.js"></script>
+</body>
+</html>

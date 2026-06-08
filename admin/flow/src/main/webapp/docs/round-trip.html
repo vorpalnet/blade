@@ -66,31 +66,64 @@
 				<article class="vorpal-docs-content">
 					<h1>Import / Export Round-Trip</h1>
 
-					<h2>Two servlets, one descriptor</h2>
+					<h2>Three servlets, one JSON configuration</h2>
 					<dl class="vorpal-kv">
-						<dt><code>FsmarImportServlet</code></dt>
-						<dd>GET endpoint. Reads the current FSMAR XML from the deployed JAR and translates it into mxGraph cells the editor consumes.</dd>
-						<dt><code>FsmarExportServlet</code></dt>
-						<dd>POST endpoint. Accepts the editor's serialized graph, translates it back to FSMAR XML, and writes the result.</dd>
+						<dt><code>FsmarImportServlet</code> <code>/fsmarImport</code></dt>
+						<dd>POST. Accepts FSMAR&nbsp;3 JSON (pasted into the Import dialog) and returns the mxGraph XML model the editor renders.</dd>
+						<dt><code>FsmarExportServlet</code> <code>/fsmarExport</code></dt>
+						<dd>POST. Accepts the editor's serialized graph and returns FSMAR&nbsp;3 JSON for download or copy. Nothing is written server-side.</dd>
+						<dt><code>FsmarValidateServlet</code> <code>/fsmarValidate</code></dt>
+						<dd>POST. Semantic checks on the JSON — run automatically on every export; findings appear above the JSON, labeled <b>ERROR</b> (won't route as written: unparseable <code>when</code>, bad region/routeModifier, regex that doesn't compile, transition with no <code>next</code>), <b>WARNING</b> (probably a mistake: unknown field names, unreachable states), or <b>INFO</b>. The <code>when</code> check uses the same expression parser the router itself compiles with.</dd>
 					</dl>
 
 					<h2>What happens on Import</h2>
 					<ol>
-						<li>Browser hits the Import endpoint.</li>
-						<li>Servlet locates the active FSMAR JAR under <code>$DOMAIN_HOME/approuter/</code> and extracts the descriptor XML.</li>
-						<li>Each state element in the XML becomes an mxCell with the state's name as the cell's user-object value.</li>
-						<li>Each transition element becomes a directed edge with source and target resolved by name.</li>
-						<li>The Ingress and Egress clouds are synthesized — there is no XML element for them; they are visual stand-ins for the start and end of every chain.</li>
-						<li>The Tasks window is populated from the same data.</li>
+						<li>Paste FSMAR&nbsp;3 JSON into the Import dialog.</li>
+						<li>Each entry in <code>states</code> becomes a State vertex; its <code>selectors</code> ride along on the vertex (edit them in the State properties panel).</li>
+						<li>The <code>"null"</code> state becomes the Ingress cloud — its selectors (run against initial requests) live on the cloud. Transitions targeting <code>"null"</code> get an Egress cloud.</li>
+						<li>Each transition becomes a directed edge labeled with its SIP method, carrying <code>when</code>, <code>subscriber</code>, <code>region</code>, <code>routes</code>, and <code>routeModifier</code> — plus a sequence number, because transitions in a trigger are evaluated <em>first match wins</em> and edge order on a canvas is meaningless without it.</li>
+						<li>A config the diagram cannot represent faithfully (e.g. a transition with no <code>next</code>) is <em>rejected with a named reason</em> — never imported lossily.</li>
 					</ol>
 
 					<h2>What happens on Export</h2>
 					<ol>
-						<li>Editor serializes the current graph to mxGraph XML and POSTs it.</li>
-						<li>Servlet walks the graph, identifies states and transitions, and emits the FSMAR XML element tree.</li>
-						<li>The synthesized Ingress and Egress clouds are dropped (they round-trip as the literal string <code>null</code> in the descriptor).</li>
-						<li>The result is written back to the FSMAR JAR (or to a staging file, depending on configuration).</li>
+						<li>Editor serializes the current graph and POSTs it; the servlet rebuilds the FSMAR&nbsp;3 JSON tree.</li>
+						<li>Ingress and Egress clouds round-trip as the literal string <code>null</code>.</li>
+						<li>Transitions are emitted in evaluation order (their sequence numbers), grouped by state and SIP method.</li>
+						<li>Validation runs automatically; findings appear above the JSON.</li>
+						<li>Download or copy the JSON and apply it like any FSMAR&nbsp;3 config change. A dangling edge (not connected at both ends) fails the export with a named reason.</li>
 					</ol>
+
+					<h2>The no-silent-loss guarantee</h2>
+					<p>
+						Every field of the imported JSON survives export — including
+						fields this editor has no UI for. Anything not explicitly
+						modeled (TableSelector tables, XML namespaces, fields added
+						by future FSMAR versions) is carried through verbatim in
+						passthrough attributes and merged back on export. A
+						full-featured config round-trips to JSON-equality; the
+						regression gate is
+						<code>FsmarRoundTripSmokeTest</code> in the flow module's
+						test sources.
+					</p>
+					<p>
+						Two harmless normalizations: every state in the export
+						carries an explicit <code>"triggers"</code> object (matching
+						how FSMAR&nbsp;3 itself serializes), and a state vertex that
+						exists only on the canvas exports as an empty state entry.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Pre-rework diagram files</div>
+						<p>
+							Diagram XML files saved before the 2026-06 rework stored
+							conditions in transition-level "selector groups" — a shape
+							that never matched FSMAR&nbsp;3. Exporting such a diagram
+							is refused with a named reason: re-import your FSMAR
+							configuration JSON to rebuild the diagram, then re-apply
+							edits.
+						</p>
+					</div>
 
 					<div class="vorpal-callout vorpal-callout-note">
 						<div class="vorpal-callout-title">Reboot to activate</div>
@@ -103,50 +136,21 @@
 						</p>
 					</div>
 
-					<h2>XML shape (FSMAR 2)</h2>
+					<h2>FSMAR 2</h2>
 					<p>
-						An FSMAR 2 descriptor is essentially a list of
-						state-transition tuples wrapped in a header. Simplified
-						example:
-					</p>
-					<pre><code>&lt;fsmar&gt;
-  &lt;state name="start"/&gt;
-  &lt;state name="acl"/&gt;
-  &lt;state name="proxy-router"/&gt;
-
-  &lt;transition from="null" to="acl"&gt;
-    &lt;trigger method="INVITE"/&gt;
-  &lt;/transition&gt;
-
-  &lt;transition from="acl" to="proxy-router"/&gt;
-  &lt;transition from="proxy-router" to="null"/&gt;
-&lt;/fsmar&gt;</code></pre>
-
-					<p>
-						Note that <code>from="null"</code> is the Ingress
-						cloud and <code>to="null"</code> is Egress — the same
-						literal string in both places.
+						The editor targets <strong>FSMAR&nbsp;3 JSON only</strong>.
+						FSMAR&nbsp;2 (the legacy router, retained for backward
+						compatibility) uses a different configuration shape that this
+						editor does not read or write.
 					</p>
 
-					<h2>XML shape (FSMAR 3)</h2>
+					<h2>What does NOT round-trip: layout</h2>
 					<p>
-						FSMAR 3 adds richer condition semantics and clean-up
-						of the legacy idioms. It is not source-compatible with
-						FSMAR 2; the editor detects which generation a
-						descriptor uses from the root element and adjusts its
-						export accordingly.
-					</p>
-
-					<h2>Edits that don't round-trip cleanly</h2>
-					<p>
-						The visual editor's coordinate / size information for
-						each cell is preserved on round-trip in a separate
-						side-car region of the descriptor. Pure-text edits to
-						the descriptor (hand-editing the XML outside the
-						editor) will lose the layout — re-importing in the
-						editor produces an auto-layout. Avoid manual XML edits
-						unless you're prepared to re-arrange the canvas after
-						re-importing.
+						Canvas positions are <em>not</em> stored in the FSMAR JSON —
+						importing always produces an auto-layout. If you care about
+						a hand-arranged canvas, save the diagram itself (the toolbar's
+						mxGraph XML save) alongside the exported JSON; the JSON is the
+						deployable artifact, the XML is your drawing.
 					</p>
 				</article>
 			</section>

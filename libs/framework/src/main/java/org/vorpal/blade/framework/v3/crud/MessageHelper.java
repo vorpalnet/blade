@@ -166,9 +166,44 @@ public class MessageHelper implements Serializable {
 			}
 			break;
 
+		case "contact":
+		case "Contact":
+			// `Contact` is a SIP system header — `setHeader` throws. The
+			// container manages the Contact URI; what a rule can usefully
+			// contribute is header parameters (notably `+sip.src` for SIPREC
+			// role advertisement). Parse the supplied value, copy its
+			// parameters onto the container-managed Contact.
+			mergeContactParameters(msg, value);
+			break;
+
 		default:
 			msg.setHeader(attribute, value);
 			break;
+		}
+	}
+
+	/// Copies the header parameters of a textual Contact value onto the
+	/// message's container-managed Contact address. The supplied URI is
+	/// discarded — only the parameters survive, since the container owns the
+	/// host:port and contact-URI shape.
+	private static void mergeContactParameters(SipServletMessage msg, String value) {
+		try {
+			javax.servlet.sip.Parameterable supplied = SettingsManager.sipFactory.createParameterable(value);
+			javax.servlet.sip.Address contact = msg.getAddressHeader("Contact");
+			if (contact == null) {
+				SettingsManager.getSipLogger().warning(msg,
+						"MessageHelper - no Contact header on message; cannot apply parameters");
+				return;
+			}
+			java.util.Iterator<String> names = supplied.getParameterNames();
+			while (names.hasNext()) {
+				String pname = names.next();
+				String pvalue = supplied.getParameter(pname);
+				contact.setParameter(pname, pvalue == null ? "" : pvalue);
+			}
+		} catch (Exception e) {
+			SettingsManager.getSipLogger().warning(msg,
+					"MessageHelper - failed to apply Contact parameters: " + e.getMessage());
 		}
 	}
 

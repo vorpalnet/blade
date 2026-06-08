@@ -27,4 +27,20 @@ public interface Fsmar3MetricsMBean {
 
 	/// Zero every counter.
 	void resetCounters();
+
+	/// Arms routing-trace capture: the next [count] calls (by Call-ID) record
+	/// a full [RouteTrace] — every hop, every transition evaluated, the values
+	/// extracted, and the final decision. Clamped to 0–100; 0 disarms. The
+	/// Flow editor replays captured traces on the state-machine diagram.
+	void captureNextCalls(int count);
+
+	/// Calls left to capture; 0 means disarmed.
+	int getCaptureRemaining();
+
+	/// The captured traces, one JSON document per call in arrival order —
+	/// the shared trace format documented on [RouteTrace].
+	String[] getCapturedTraces();
+
+	/// Discards all captured traces.
+	void clearCapturedTraces();
 }

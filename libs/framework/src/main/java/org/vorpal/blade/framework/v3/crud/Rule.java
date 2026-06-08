@@ -154,7 +154,8 @@ public class Rule implements Serializable {
 	/// Status-code matcher. Same comma + negation rules as
 	/// [#matchesSpec]; each token is `200`, `200-299`, or `4xx` (the last
 	/// expands to that hundred). Malformed tokens are skipped silently.
-	static boolean matchesStatus(String spec, int status) {
+	/// Public because the tester's `expectFinal` reuses this syntax.
+	public static boolean matchesStatus(String spec, int status) {
 		if (spec == null) return true;
 
 		boolean hasPositive = false;

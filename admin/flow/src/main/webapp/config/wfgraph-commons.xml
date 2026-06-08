@@ -2,18 +2,65 @@
 	<add as="getTooltipForCell"><![CDATA[
 		function(cell)
 		{
+			var esc = function(s) {
+				return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+			};
 			var tag = cell.value ? cell.value.tagName : '';
 			var label = cell.getAttribute('label') || '';
 			var info = '';
 
 			if (tag === 'Transition') {
+				// Surface the routing decision on hover — the when condition
+				// IS the logic; nobody should have to click every edge to
+				// read the flow.
+				var when = cell.getAttribute('when') || '';
+				var seq = cell.getAttribute('seq') || '';
 				var txId = cell.getAttribute('txId') || '';
 				var subscriber = cell.getAttribute('subscriber') || '';
-				if (txId) info += '<br>id: ' + txId;
-				if (subscriber) info += '<br>subscriber: ' + subscriber;
+				var region = cell.getAttribute('region') || '';
+				var modifier = cell.getAttribute('routeModifier') || '';
+				info += '<br>when: ' + (when ? esc(when) : '(always)');
+				if (seq) info += '<br>order: ' + esc(seq) + ' (first match wins)';
+				if (txId) info += '<br>id: ' + esc(txId);
+				if (subscriber) info += '<br>subscriber: ' + esc(subscriber);
+				if (region) info += '<br>region: ' + esc(region);
+				if (cell.value && cell.value.childNodes) {
+					for (var i = 0; i < cell.value.childNodes.length; i++) {
+						var c = cell.value.childNodes[i];
+						if (c.nodeType === 1 && c.nodeName === 'route') {
+							info += '<br>route: ' + esc(c.getAttribute('uri') || '');
+						}
+					}
+				}
+				if (modifier) info += '<br>modifier: ' + esc(modifier);
+				return '<b>' + esc(tag) + ': ' + esc(label) + '</b>' + info;
 			}
 
-			return '<b>' + tag + ': ' + label + '</b>' + info +
+			if (tag === 'State' || tag === 'Ingress') {
+				// Selector summary: which variables this state publishes.
+				var sels = [];
+				if (cell.value && cell.value.childNodes) {
+					for (var j = 0; j < cell.value.childNodes.length; j++) {
+						var s = cell.value.childNodes[j];
+						if (s.nodeType === 1 && s.nodeName === 'selector') {
+							sels.push(esc(s.getAttribute('id') || '(no id)')
+									+ ' (' + esc(s.getAttribute('type') || 'attribute') + ')');
+						}
+					}
+				}
+				if (sels.length > 0) {
+					info += '<br>selectors: ' + sels.join(', ');
+				} else if (tag === 'State') {
+					info += '<br>selectors: none';
+				}
+				if (tag === 'Ingress') {
+					info += '<br>maps to the "null" state (initial requests)';
+				}
+				return '<b>' + esc(tag) + ': ' + esc(label) + '</b>' + info +
+						'<br>Edges: ' + cell.getEdgeCount();
+			}
+
+			return '<b>' + esc(tag) + ': ' + esc(label) + '</b>' + info +
 					'<br>Edges: ' + cell.getEdgeCount() +
 					'<br>Children: ' + cell.getChildCount();
 		}
@@ -21,7 +68,31 @@
 	<add as="convertValueToString">
 		function(cell)
 		{
+			// Transitions get a derived display label: plan-dispatch
+			// conditions render as "INVITE · tier=gold" and the
+			// unconditional member of a family as "INVITE · default".
+			// Stored label attribute stays the bare SIP method. When the
+			// Route Simulator's live overlay is on, the hit count is
+			// appended ("INVITE · tier=gold · 1284").
+			if (cell.value &amp;&amp; cell.value.tagName === 'Transition'
+					&amp;&amp; window.flowPlans) {
+				var label = window.flowPlans.displayLabel(cell);
+				if (window.flowSimulate) {
+					label = window.flowSimulate.decorate(cell, label);
+				}
+				return label;
+			}
 			return cell.getAttribute('label');
+		}
+	</add>
+	<add as="getEditingValue">
+		function(cell, evt)
+		{
+			// In-place edit must present the bare stored label, not the
+			// decorated display string from convertValueToString — otherwise
+			// committing an edit would write "INVITE · tier=gold" into the
+			// method attribute.
+			return cell.getAttribute('label') || '';
 		}
 	</add>
 	<mxGraphModel as="model">

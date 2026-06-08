@@ -1,0 +1,121 @@
+/* Test Console — app-specific styles layered on brand.css.
+   Status is always conveyed by TEXT (state names, counts, labels);
+   color only supplements. */
+
+.tc-controls {
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 10px;
+	padding: 1rem 1.25rem 1.25rem;
+	margin-bottom: 1.5rem;
+}
+
+.tc-controls-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+	gap: 0.75rem 1rem;
+}
+
+.tc-actions {
+	margin-top: 1rem;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+
+.tc-feedback {
+	font-size: 0.85rem;
+	opacity: 0.85;
+}
+
+.tc-node-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 1rem;
+	margin-bottom: 1.5rem;
+}
+
+.tc-node {
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 10px;
+	padding: 0.85rem 1rem;
+}
+
+.tc-node-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.tc-node-title {
+	font-weight: 600;
+}
+
+.tc-node-server {
+	font-size: 0.8rem;
+	opacity: 0.7;
+}
+
+.tc-state {
+	font-size: 0.75rem;
+	letter-spacing: 0.06em;
+	padding: 0.1rem 0.5rem;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+/* Shape + weight distinguish states; hue is secondary. */
+.tc-state-RUNNING { font-weight: 700; }
+.tc-state-STOPPING { font-style: italic; }
+.tc-state-STOPPED { opacity: 0.65; }
+
+.tc-counters {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 0.25rem 1rem;
+	font-size: 0.85rem;
+}
+
+.tc-counters dt { opacity: 0.7; }
+.tc-counters dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+table.tc-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.85rem;
+	margin-bottom: 1.5rem;
+}
+
+table.tc-table th,
+table.tc-table td {
+	padding: 0.4rem 0.6rem;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+table.tc-table th:first-child,
+table.tc-table td:first-child {
+	text-align: left;
+}
+
+table.tc-table th {
+	opacity: 0.7;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+}
+
+.tc-note {
+	font-size: 0.8rem;
+	font-weight: 400;
+	opacity: 0.65;
+}
+
+.tc-empty {
+	opacity: 0.65;
+	font-style: italic;
+}

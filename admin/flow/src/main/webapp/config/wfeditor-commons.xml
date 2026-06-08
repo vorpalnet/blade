@@ -22,7 +22,10 @@
 			</Group>
 		</add>
 		<add as="edge">
-			<Transition label="INVITE" txId="" subscriber="">
+			<!-- New hand-drawn edges: bare method only. No empty attribute
+			     stubs — export's addIfPresent skips empties anyway, and the
+			     panel supplies when/seq/region/etc. on first edit. -->
+			<Transition label="INVITE">
 				<mxCell edge="1">
 					<mxGeometry as="geometry" relative="1" />
 				</mxCell>
@@ -68,7 +71,11 @@
 					'<a href="#" id="view-show-all">all</a> | ' +
 					'<a href="#" id="view-hide-all">none</a>' +
 				'</div>' +
-				'<div id="view-methods"></div>';
+				'<div id="view-methods"></div>' +
+				'<div class="view-header" id="view-plans-header" style="display:none; margin-top:6px;">' +
+					'<b>Plans</b>' +
+				'</div>' +
+				'<div id="view-plans"></div>';
 			div.appendChild(view);
 
 			if (window.flowTasks && window.flowTasks.initView) {
@@ -109,9 +116,7 @@
 			transition.className = 'task';
 			transition.style.display = 'none';
 			div.appendChild(transition);
-			$('#Transition').load('./transition.html #transition-view', function() {
-				$('#transition-tabs').tabs();
-			});
+			$('#Transition').load('./transition.html #transition-view');
 
 			// Global config panel (FlowModel root)
 			var config = document.createElement('div');

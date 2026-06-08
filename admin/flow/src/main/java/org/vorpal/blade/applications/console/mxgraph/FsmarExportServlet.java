@@ -4,7 +4,11 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import javax.servlet.ServletException;
@@ -21,6 +25,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -29,9 +34,21 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// Exports the current mxGraph editor model as FSMAR 3 JSON.
 ///
 /// Reads an `xml` request parameter containing the mxGraph XML, walks the
-/// graph cells (vertices = States, edges = Transitions), and builds the
-/// FSMAR 3 JSON structure: defaultApplication + states (map of state name
-/// to triggers (map of SIP method to transitions list)).
+/// graph cells (State/Ingress/Egress vertices, Transition edges), and builds
+/// the real FSMAR 3 structure: root{defaultApplication, states} →
+/// State{selectors, triggers} → Trigger{transitions} → Transition{id, when,
+/// next, subscriber, region, routes, routeModifier}.
+///
+/// **Round-trip contract — never silently strip.** `extra` attributes
+/// written by [FsmarImportServlet] (JSON blobs of fields the editor doesn't
+/// explicitly model) are merged back at every level, and `triggerExtras`
+/// re-attaches trigger-level unknowns. Transitions are emitted in `seq`
+/// order — `Trigger.transitions` is first-match-wins, so order is meaning,
+/// not cosmetics.
+///
+/// Diagrams containing the obsolete `selectorGroup` transition model (from
+/// pre-rework saved XML files) are rejected with a named reason — the data
+/// can't be mapped to FSMAR 3; re-import the original JSON instead.
 @WebServlet("/fsmarExport")
 public class FsmarExportServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
@@ -57,6 +74,8 @@ public class FsmarExportServlet extends HttpServlet {
 			PrintWriter out = response.getWriter();
 			out.write(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(root));
 			out.flush();
+		} catch (IllegalArgumentException e) {
+			response.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
 		} catch (Exception e) {
 			throw new ServletException("FSMAR export failed: " + e.getMessage(), e);
 		}
@@ -69,17 +88,29 @@ public class FsmarExportServlet extends HttpServlet {
 		DocumentBuilder builder = dbf.newDocumentBuilder();
 		Document doc = builder.parse(new ByteArrayInputStream(mxGraphXml.getBytes(StandardCharsets.UTF_8)));
 
+		// Obsolete model guard: pre-rework diagrams stored conditions as
+		// <selectorGroup> children on transitions. That shape never matched
+		// FSMAR 3 and cannot be exported faithfully.
+		if (doc.getElementsByTagName("selectorGroup").getLength() > 0) {
+			throw new IllegalArgumentException("This diagram uses the obsolete transition-level "
+					+ "selector-group model. It cannot be exported as FSMAR 3 JSON — re-import "
+					+ "your FSMAR configuration JSON to rebuild the diagram, then re-apply edits.");
+		}
+
 		// Map cell ID -> wrapper element (State or Transition or FlowModel)
 		Map<String, Element> wrappersById = new HashMap<>();
 		// Map cell ID -> state name (for resolving edge source/target).
 		// Ingress/Egress clouds map to "null" here.
 		Map<String, String> stateNamesById = new HashMap<>();
-		// Set of "real" state names (from <State> elements only) — used to seed
-		// empty state entries in the JSON. Cloud cells do NOT contribute to this
-		// set, so a lonely egress cloud doesn't create an empty "null" entry.
-		java.util.Set<String> realStateNames = new java.util.HashSet<>();
+		// "Real" state names (from <State> elements only) mapped to their
+		// wrapper elements — used to seed state entries (selectors + extras)
+		// even when no transitions touch them. The Ingress cloud carries the
+		// "null" state's selectors/extras; Egress carries nothing.
+		Map<String, Element> realStates = new java.util.LinkedHashMap<>();
+		Element ingressEl = null;
 
 		String defaultApplication = null;
+		String rootExtra = null;
 
 		// First pass: walk all elements with mxCell children to find wrappers
 		NodeList allCells = doc.getElementsByTagName("mxCell");
@@ -108,19 +139,26 @@ public class FsmarExportServlet extends HttpServlet {
 					String stateName = wrapper.getAttribute("label");
 					stateNamesById.put(cellId, stateName);
 					if (stateName != null && !stateName.isEmpty()) {
-						realStateNames.add(stateName);
+						realStates.put(stateName, wrapper);
 					}
 					break;
 				case "Ingress":
+					stateNamesById.put(cellId, "null");
+					ingressEl = wrapper;
+					break;
 				case "Egress":
-					// Both cloud types map to the literal "null" state — the
-					// display label on the cloud is for humans only.
+					// Maps to the literal "null" state — display label is for
+					// humans only, and it contributes no state data.
 					stateNamesById.put(cellId, "null");
 					break;
 				case "FlowModel":
 					String def = wrapper.getAttribute("defaultApplication");
 					if (def != null && !def.isEmpty()) {
 						defaultApplication = def;
+					}
+					String ex = wrapper.getAttribute("extra");
+					if (ex != null && !ex.isEmpty()) {
+						rootExtra = ex;
 					}
 					break;
 				default:
@@ -137,26 +175,41 @@ public class FsmarExportServlet extends HttpServlet {
 			if (def != null && !def.isEmpty()) {
 				defaultApplication = def;
 			}
+			String ex = fm.getAttribute("extra");
+			if (ex != null && !ex.isEmpty()) {
+				rootExtra = ex;
+			}
 		}
 
-		// Build the FSMAR JSON structure
+		// Build the FSMAR JSON structure. Root extras (about, logging,
+		// session, …) lead so the output diffs cleanly against the original.
 		ObjectNode rootNode = mapper.createObjectNode();
+		mergeExtra(rootNode, rootExtra);
 		if (defaultApplication != null) {
 			rootNode.put("defaultApplication", defaultApplication);
 		}
 
 		ObjectNode statesNode = rootNode.putObject("states");
 
-		// Ensure every real state has an entry (even with no triggers).
-		// Cloud-derived "null" entries are NOT pre-seeded — they only appear if
-		// transitions actually originate from an ingress cloud.
-		for (String stateName : realStateNames) {
-			if (!statesNode.has(stateName)) {
-				statesNode.putObject(stateName).putObject("triggers");
-			}
+		// Seed every real state entry: selectors first (schema order), then
+		// triggers, then state-level extras.
+		for (Map.Entry<String, Element> entry : realStates.entrySet()) {
+			seedState(statesNode, entry.getKey(), entry.getValue());
+		}
+		// The "null" state exists when an ingress cloud does. Its selectors
+		// (run against initial requests) and extras live on the cloud.
+		if (ingressEl != null) {
+			seedState(statesNode, "null", ingressEl);
 		}
 
-		// Second pass: walk all Transition elements as edges
+		// Second pass: collect Transition edges grouped by (source state,
+		// method), keeping each one's seq for ordering.
+		class TxEntry {
+			int seq;
+			ObjectNode node;
+		}
+		Map<String, Map<String, List<TxEntry>>> collected = new java.util.LinkedHashMap<>();
+
 		NodeList transitions = doc.getElementsByTagName("Transition");
 		for (int i = 0; i < transitions.getLength(); i++) {
 			Element tx = (Element) transitions.item(i);
@@ -167,13 +220,19 @@ public class FsmarExportServlet extends HttpServlet {
 			String sourceId = mxCell.getAttribute("source");
 			String targetId = mxCell.getAttribute("target");
 			if (sourceId == null || sourceId.isEmpty() || targetId == null || targetId.isEmpty()) {
-				continue;
+				// A dangling edge (no source or target) is unroutable — refuse
+				// rather than silently drop the admin's work.
+				throw new IllegalArgumentException("A transition edge labeled '"
+						+ tx.getAttribute("label") + "' is not connected at both ends. "
+						+ "Connect it to a source and target state (or delete it) and export again.");
 			}
 
 			String sourceState = stateNamesById.get(sourceId);
 			String targetState = stateNamesById.get(targetId);
 			if (sourceState == null || targetState == null) {
-				continue;
+				throw new IllegalArgumentException("A transition edge labeled '"
+						+ tx.getAttribute("label") + "' connects to a cell that is not a "
+						+ "State/Ingress/Egress. Reconnect it and export again.");
 			}
 
 			String method = tx.getAttribute("label");
@@ -181,76 +240,15 @@ public class FsmarExportServlet extends HttpServlet {
 				method = "INVITE";
 			}
 
-			// Ensure the state node exists
-			ObjectNode stateNode = (ObjectNode) statesNode.get(sourceState);
-			if (stateNode == null) {
-				stateNode = statesNode.putObject(sourceState);
-			}
-			ObjectNode triggersNode = (ObjectNode) stateNode.get("triggers");
-			if (triggersNode == null) {
-				triggersNode = stateNode.putObject("triggers");
-			}
-			ObjectNode triggerNode = (ObjectNode) triggersNode.get(method);
-			if (triggerNode == null) {
-				triggerNode = triggersNode.putObject(method);
-			}
-			ArrayNode txList = (ArrayNode) triggerNode.get("transitions");
-			if (txList == null) {
-				txList = triggerNode.putArray("transitions");
-			}
-
-			// Build the transition object
+			// Build the transition object in fsmar3 @JsonPropertyOrder:
+			// id, when, next, subscriber, region, routes, routeModifier.
 			ObjectNode txNode = mapper.createObjectNode();
-			String txId = tx.getAttribute("txId");
-			if (txId != null && !txId.isEmpty()) {
-				txNode.put("id", txId);
-			}
+			addIfPresent(txNode, "id", tx.getAttribute("txId"));
+			addIfPresent(txNode, "when", tx.getAttribute("when"));
+			txNode.put("next", targetState);
+			addIfPresent(txNode, "subscriber", tx.getAttribute("subscriber"));
+			addIfPresent(txNode, "region", tx.getAttribute("region"));
 
-			// Selector groups (OR logic); each group contains selectors (AND logic)
-			NodeList groups = tx.getElementsByTagName("selectorGroup");
-			if (groups.getLength() > 0) {
-				ArrayNode groupsArr = txNode.putArray("selectorGroups");
-				for (int g = 0; g < groups.getLength(); g++) {
-					Element group = (Element) groups.item(g);
-					ObjectNode groupNode = mapper.createObjectNode();
-					ArrayNode selArr = groupNode.putArray("selectors");
-
-					NodeList selectors = group.getElementsByTagName("selector");
-					for (int s = 0; s < selectors.getLength(); s++) {
-						Element sel = (Element) selectors.item(s);
-						ObjectNode selNode = mapper.createObjectNode();
-						addIfPresent(selNode, "id", sel.getAttribute("id"));
-						addIfPresent(selNode, "type", sel.getAttribute("type"));
-						addIfPresent(selNode, "attribute", sel.getAttribute("attribute"));
-						addIfPresent(selNode, "pattern", sel.getAttribute("pattern"));
-						// Extractions: nested <extract name="..." path="..."/> children
-						NodeList extracts = sel.getElementsByTagName("extract");
-						if (extracts.getLength() > 0) {
-							ObjectNode extractions = selNode.putObject("extractions");
-							for (int e = 0; e < extracts.getLength(); e++) {
-								Element ex = (Element) extracts.item(e);
-								String name = ex.getAttribute("name");
-								String path = ex.getAttribute("path");
-								if (name != null && !name.isEmpty()) {
-									extractions.put(name, path == null ? "" : path);
-								}
-							}
-						}
-						addIfPresent(selNode, "expression", sel.getAttribute("expression"));
-						selArr.add(selNode);
-					}
-
-					groupsArr.add(groupNode);
-				}
-			}
-
-			// Subscriber
-			String subscriber = tx.getAttribute("subscriber");
-			if (subscriber != null && !subscriber.isEmpty()) {
-				txNode.put("subscriber", subscriber);
-			}
-
-			// Routes
 			NodeList routes = tx.getElementsByTagName("route");
 			if (routes.getLength() > 0) {
 				ArrayNode rArr = txNode.putArray("routes");
@@ -262,14 +260,139 @@ public class FsmarExportServlet extends HttpServlet {
 					}
 				}
 			}
+			addIfPresent(txNode, "routeModifier", tx.getAttribute("routeModifier"));
+			mergeExtra(txNode, tx.getAttribute("extra"));
 
-			// Next
-			txNode.put("next", targetState);
+			TxEntry e = new TxEntry();
+			e.seq = parseSeq(tx.getAttribute("seq"));
+			e.node = txNode;
+			collected.computeIfAbsent(sourceState, k -> new java.util.LinkedHashMap<>())
+					.computeIfAbsent(method, k -> new ArrayList<>())
+					.add(e);
+		}
 
-			txList.add(txNode);
+		// Emit collected transitions sorted by seq within each trigger —
+		// first-match-wins order is semantic. New edges (no seq) sort last
+		// in document order.
+		for (Map.Entry<String, Map<String, List<TxEntry>>> stateEntry : collected.entrySet()) {
+			String stateName = stateEntry.getKey();
+			ObjectNode stateNode = (ObjectNode) statesNode.get(stateName);
+			if (stateNode == null) {
+				stateNode = statesNode.putObject(stateName);
+			}
+			ObjectNode triggersNode = (ObjectNode) stateNode.get("triggers");
+			if (triggersNode == null) {
+				triggersNode = stateNode.putObject("triggers");
+			}
+			// Trigger-level extras stashed on the source state's element
+			ObjectNode triggerExtras = parseTriggerExtras(
+					"null".equals(stateName) ? ingressEl : realStates.get(stateName));
+
+			for (Map.Entry<String, List<TxEntry>> trigEntry : stateEntry.getValue().entrySet()) {
+				String method = trigEntry.getKey();
+				List<TxEntry> list = trigEntry.getValue();
+				list.sort(Comparator.comparingInt(t -> t.seq));
+
+				ObjectNode triggerNode = triggersNode.putObject(method);
+				ArrayNode txList = triggerNode.putArray("transitions");
+				for (TxEntry e : list) {
+					txList.add(e.node);
+				}
+				if (triggerExtras != null && triggerExtras.has(method)) {
+					mergeInto(triggerNode, (ObjectNode) triggerExtras.get(method));
+				}
+			}
 		}
 
 		return rootNode;
+	}
+
+	/// Creates the JSON entry for one state from its wrapper element:
+	/// selectors (children), empty triggers (filled by the edge pass), and
+	/// state-level extras.
+	private void seedState(ObjectNode statesNode, String name, Element wrapper) {
+		if (statesNode.has(name)) return;
+		ObjectNode stateNode = statesNode.putObject(name);
+		ArrayNode selectors = buildSelectors(wrapper);
+		if (selectors != null) {
+			stateNode.set("selectors", selectors);
+		}
+		stateNode.putObject("triggers");
+		mergeExtra(stateNode, wrapper.getAttribute("extra"));
+	}
+
+	/// Rebuilds the selectors array from `<selector>` children. Known fields
+	/// come from attributes; each selector's `extra` blob (table, namespaces,
+	/// anything future) is merged back. Returns null when there are none.
+	private ArrayNode buildSelectors(Element wrapper) {
+		List<Element> sels = childElements(wrapper, "selector");
+		if (sels.isEmpty()) return null;
+		ArrayNode arr = mapper.createArrayNode();
+		for (Element sel : sels) {
+			ObjectNode selNode = mapper.createObjectNode();
+			addIfPresent(selNode, "type", sel.getAttribute("type"));
+			addIfPresent(selNode, "id", sel.getAttribute("id"));
+			addIfPresent(selNode, "description", sel.getAttribute("description"));
+			addIfPresent(selNode, "attribute", sel.getAttribute("attribute"));
+			addIfPresent(selNode, "pattern", sel.getAttribute("pattern"));
+			addIfPresent(selNode, "expression", sel.getAttribute("expression"));
+			mergeExtra(selNode, sel.getAttribute("extra"));
+			arr.add(selNode);
+		}
+		return arr;
+	}
+
+	private ObjectNode parseTriggerExtras(Element stateEl) {
+		if (stateEl == null) return null;
+		String raw = stateEl.getAttribute("triggerExtras");
+		if (raw == null || raw.isEmpty()) return null;
+		try {
+			JsonNode parsed = mapper.readTree(raw);
+			return parsed.isObject() ? (ObjectNode) parsed : null;
+		} catch (IOException e) {
+			throw new IllegalArgumentException("Malformed triggerExtras JSON on state '"
+					+ stateEl.getAttribute("label") + "': " + e.getMessage());
+		}
+	}
+
+	/// Merges an `extra` attribute (JSON object string) into `target`,
+	/// skipping keys the editor already set — explicit edits win.
+	private void mergeExtra(ObjectNode target, String extraJson) {
+		if (extraJson == null || extraJson.isEmpty()) return;
+		JsonNode parsed;
+		try {
+			parsed = mapper.readTree(extraJson);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("Malformed extra JSON ('" + abbreviate(extraJson)
+					+ "'): " + e.getMessage());
+		}
+		if (!parsed.isObject()) {
+			throw new IllegalArgumentException("extra attribute must be a JSON object, got: "
+					+ abbreviate(extraJson));
+		}
+		mergeInto(target, (ObjectNode) parsed);
+	}
+
+	private static void mergeInto(ObjectNode target, ObjectNode source) {
+		Iterator<Map.Entry<String, JsonNode>> it = source.fields();
+		while (it.hasNext()) {
+			Map.Entry<String, JsonNode> e = it.next();
+			if (!target.has(e.getKey())) {
+				target.set(e.getKey(), e.getValue());
+			}
+		}
+	}
+
+	private static String abbreviate(String s) {
+		return s.length() > 60 ? s.substring(0, 60) + "…" : s;
+	}
+
+	private static int parseSeq(String seq) {
+		try {
+			return (seq == null || seq.isEmpty()) ? Integer.MAX_VALUE : Integer.parseInt(seq);
+		} catch (NumberFormatException e) {
+			return Integer.MAX_VALUE;
+		}
 	}
 
 	private static void addIfPresent(ObjectNode node, String key, String value) {
@@ -278,15 +401,21 @@ public class FsmarExportServlet extends HttpServlet {
 		}
 	}
 
-	private static Element firstChildElement(Element parent, String tagName) {
+	private static List<Element> childElements(Element parent, String tagName) {
+		List<Element> out = new ArrayList<>();
 		NodeList kids = parent.getChildNodes();
 		for (int i = 0; i < kids.getLength(); i++) {
 			Node n = kids.item(i);
 			if (n.getNodeType() == Node.ELEMENT_NODE && n.getNodeName().equals(tagName)) {
-				return (Element) n;
+				out.add((Element) n);
 			}
 		}
-		return null;
+		return out;
+	}
+
+	private static Element firstChildElement(Element parent, String tagName) {
+		List<Element> found = childElements(parent, tagName);
+		return found.isEmpty() ? null : found.get(0);
 	}
 
 }
