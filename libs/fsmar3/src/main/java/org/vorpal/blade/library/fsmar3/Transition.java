@@ -178,7 +178,7 @@ public class Transition implements Serializable {
 	/// The routing region comes from [#getRegion] (NEUTRAL when absent). If
 	/// [#subscriber] is set, extracts the URI from that named header (the
 	/// container hands it to the app's subscriber-URI API). Each route is
-	/// `${}`-resolved against [ctx] before being pushed. [stateInfo] is the
+	/// `${}`-resolved against `ctx` before being pushed. `stateInfo` is the
 	/// wrapper carried across App Router invocations.
 	public SipApplicationRouterInfo createRouterInfo(String deployedAppName, Serializable stateInfo,
 			Context ctx, SipServletRequest request) {

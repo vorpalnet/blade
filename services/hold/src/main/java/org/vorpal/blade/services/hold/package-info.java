@@ -10,9 +10,9 @@
 ///
 /// ## Call Flow Handlers
 ///
-/// - [HoldInvite] - Processes SIP INVITE requests for hold operations
-/// - [HoldBye] - Handles SIP BYE requests to terminate held calls
-/// - [NotImplemented] - Placeholder callflow handler for unimplemented SIP methods
+/// - `CallflowHold` - Processes SIP INVITE requests to place/resume calls on hold
+/// - `Terminate` - Handles SIP CANCEL and BYE requests to tear down the call
+/// - [HoldMethodNotAllowed] - Fallback callflow for unsupported SIP methods
 ///
 /// ## Architecture
 ///
@@ -38,9 +38,9 @@
 /// and `@SipServlet(loadOnStartup=1)`. It extends `B2buaServlet` and routes incoming
 /// requests via `chooseCallflow`:
 ///
-/// - Initial INVITE requests are routed to [HoldInvite]
-/// - CANCEL and BYE requests are routed to [HoldBye]
-/// - Unrecognized methods fall back to [NotImplemented]
+/// - Initial INVITE requests are routed to `CallflowHold`
+/// - CANCEL and BYE requests are routed to `Terminate`
+/// - Unrecognized methods fall back to [HoldMethodNotAllowed]
 ///
 /// Lifecycle methods `servletCreated` and `servletDestroyed` manage the
 /// [HoldSettings] configuration through a static `SettingsManager`.

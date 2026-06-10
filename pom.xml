@@ -418,8 +418,10 @@
 						     Each child WAR pom sets finalName to its <wls:context-root>
 						     value (e.g. configurator → configurator.war, hold → hold.war).
 						     Customers prefer short context-matching names over the long
-						     artifactId-based names (e.g. vorpal-blade-admin-configurator.war). -->
-						<warName>${project.build.finalName}</warName>
+						     artifactId-based names (e.g. vorpal-blade-admin-configurator.war).
+						     warName defaults to ${project.build.finalName}, so we don't set
+						     it explicitly — it's read-only in war-plugin 3.4.0 and setting it
+						     just emits a "must not be used in configuration" warning per WAR. -->
 						<failOnMissingWebXml>false</failOnMissingWebXml>
 						<!-- Include only the framework JAR; 3rd-party JARs come from the shared library -->
 						<packagingExcludes>%regex[WEB-INF/lib/(?!vorpal-blade-library-framework).*\.jar]</packagingExcludes>
@@ -533,7 +535,7 @@
 			     the exploded directory works the same as deploying the WAR.
 
 			     Both the WAR filename and the exploded directory derive from
-			     finalName (warName=${project.build.finalName} above), so they
+			     finalName (war-plugin's warName defaults to it), so they
 			     share a basename. -->
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>

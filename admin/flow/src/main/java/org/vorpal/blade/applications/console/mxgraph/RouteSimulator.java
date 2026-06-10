@@ -64,7 +64,7 @@ public final class RouteSimulator {
 	private RouteSimulator() {
 	}
 
-	/// Simulates one request. [simRequest] is the editor's POST body:
+	/// Simulates one request. `simRequest` is the editor's POST body:
 	/// `{ config, request: {method, requestUri, headers}, pseudo, undeployed }`.
 	public static ObjectNode simulate(JsonNode simRequest, ObjectMapper mapper) {
 		JsonNode config = simRequest.path("config");

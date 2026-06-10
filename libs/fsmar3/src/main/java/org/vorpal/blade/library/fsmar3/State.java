@@ -48,7 +48,7 @@ public class State implements Serializable {
 	}
 
 	/// Runs every selector against the request, accumulating extracted values
-	/// into [ctx]. A selector that throws is logged-and-skipped by the caller's
+	/// into `ctx`. A selector that throws is logged-and-skipped by the caller's
 	/// expectations — extraction failure must never abort routing.
 	public void extract(Context ctx, Object payload) {
 		if (selectors == null) return;

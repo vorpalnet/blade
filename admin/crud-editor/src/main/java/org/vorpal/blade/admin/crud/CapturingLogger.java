@@ -15,7 +15,7 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 /// A SIP-style [Logger] that doesn't NPE when called from a context that
 /// never initialised the framework's full logging stack (i.e. the
 /// AdminServer-side preview WAR), and — critically — captures every
-/// per-request error into a thread-local buffer so [PreviewEngine] callers
+/// per-request error into a thread-local buffer so `PreviewEngine` callers
 /// can surface them to the operator instead of silently logging to a file.
 ///
 /// Wire it up once in [PreviewServlet#init], then bracket each preview
