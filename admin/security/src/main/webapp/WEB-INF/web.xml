@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee"
 	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
-	id="WebApp_AnalyticsConsole" version="4.0">
-
-	<!-- display-name → JMX MBean key (vorpal.blade:Name=analytics-console) and
-	     the on-disk config file name. Deliberately NOT "analytics": that would
-	     collide with the analytics CLUSTER SERVICE, which also registers
-	     Name=analytics. Context-root stays blade/analytics (see weblogic.xml). -->
-	<display-name>analytics-console</display-name>
+	id="WebApp_ID" version="4.0"
+>
+	<display-name>security</display-name>
 
 	<welcome-file-list>
 		<welcome-file>index.html</welcome-file>
@@ -22,15 +17,12 @@
 		</web-resource-collection>
 	</security-constraint>
 
-	<!-- Everything else requires an admin role. Matches the constraint every
-	     other admin app declares; closes the gap where /blade/analytics exposed
-	     the audit API and POST /api/provision/jms (which creates WebLogic JMS
-	     resources) with no auth. The "/" pattern is WebLogic's catch-all, so
-	     the provision endpoint is FORM-protected like the rest of the app —
-	     no Basic carve-out, since it is a browser-driven configuration check. -->
+	<!-- Everything else requires an admin role, like every other admin app.
+	     The "/" pattern is WebLogic's catch-all. The bearer-JWT path
+	     (JwtAuthFilter) is additive on top of this FORM/BASIC constraint. -->
 	<security-constraint>
 		<web-resource-collection>
-			<web-resource-name>analytics-console</web-resource-name>
+			<web-resource-name>security</web-resource-name>
 			<url-pattern>/</url-pattern>
 		</web-resource-collection>
 		<auth-constraint>

@@ -23,8 +23,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-import org.vorpal.blade.framework.logs.LogFileInfo;
-import org.vorpal.blade.framework.logs.LogSlice;
+import org.vorpal.blade.framework.v2.logging.LogFileInfo;
+import org.vorpal.blade.framework.v2.logging.LogSlice;
 
 @Path("/")
 @Tag(name = "Logs", description = "Cluster-wide log viewer")

@@ -154,6 +154,16 @@ public abstract class Callflow implements Serializable {
 	public static final String ORIGIN_PARAM = "origin";
 	private static final String VORPAL_ORIGIN = "VORPAL_ORIGIN";
 
+	/// Parameterable key on X-Vorpal-ID carrying the call's birth instant as
+	/// upper-case hex of epoch millis (`Long.toHexString(currentTimeMillis)`).
+	/// Stamped once at first-touch by [#createVorpalSessionId] and propagated
+	/// unchanged across forwards and cluster-to-cluster hops. This is the same
+	/// instant the Analytics layer records as the Session's `created` time —
+	/// see Analytics.createSession — so the wire tag and the DB row agree to the
+	/// millisecond.
+	public static final String TIMESTAMP_PARAM = "ts";
+	private static final String VORPAL_TIMESTAMP = "VORPAL_TIMESTAMP";
+
 	private static final String SIP_ADDRESS_ATTR = "sipAddress";
 	private static final String IS_PROXY_ATTR = "isProxy";
 	private static final String MESSAGE_SIPFRAG = "message/sipfrag";
@@ -585,6 +595,12 @@ public abstract class Callflow implements Serializable {
 
 		appSession.setAttribute(VORPAL_SESSION, indexKey);
 
+		// Birth instant of the call. This single currentTimeMillis() read is the
+		// canonical source for both the X-Vorpal-ID `ts` param (stamped on the
+		// wire) and the Analytics Session `created` column, so they agree to the
+		// millisecond. Hex of epoch millis is lossless back to a Date.
+		appSession.setAttribute(VORPAL_TIMESTAMP, Long.toHexString(System.currentTimeMillis()).toUpperCase());
+
 		return indexKey;
 	}
 
@@ -606,6 +622,28 @@ public abstract class Callflow implements Serializable {
 		// `Logger.hexHash` — a log line must never crash the calling thread.
 		try {
 			return (String) appSession.getAttribute(VORPAL_SESSION);
+		} catch (IllegalStateException e) {
+			return null;
+		}
+	}
+
+	/// Returns this call's birth instant as upper-case hex of epoch millis (the
+	/// X-Vorpal-ID `ts` param), or null if none was stamped (legacy-only peers,
+	/// or an appSession that never went through first-touch). Set once by
+	/// [#createVorpalSessionId] and adopted from an inbound X-Vorpal-ID `ts`.
+	/// This is the canonical creation timestamp the Analytics layer parses into
+	/// the Session's `created` column — never fabricated here, so the two stay
+	/// identical.
+	///
+	/// @param appSession the SIP application session
+	/// @return the hex birth timestamp, or null if unset or the session is invalid
+	public static String getVorpalTimestamp(SipApplicationSession appSession) {
+		if (appSession == null) {
+			return null;
+		}
+		// Same hot-path / cleanup-window guard as getVorpalSessionId.
+		try {
+			return (String) appSession.getAttribute(VORPAL_TIMESTAMP);
 		} catch (IllegalStateException e) {
 			return null;
 		}
@@ -643,6 +681,13 @@ public abstract class Callflow implements Serializable {
 						if (origin != null && !origin.isEmpty()) {
 							appSession.setAttribute(VORPAL_ORIGIN, origin);
 						}
+						// Propagate the `ts` (birth instant) param the same way,
+						// so the whole call chain — and the Analytics row on every
+						// cluster — shares one creation timestamp.
+						String ts = xVorpalId.getParameter(TIMESTAMP_PARAM);
+						if (ts != null && !ts.isEmpty()) {
+							appSession.setAttribute(VORPAL_TIMESTAMP, ts);
+						}
 					}
 				} catch (Exception ex) {
 					sipLogger.warning(request, "Callflow.getVorpalSessionId - Unable to parse header '" + X_VORPAL_ID
@@ -651,8 +696,10 @@ public abstract class Callflow implements Serializable {
 
 				// Fall back to X-Vorpal-Session (legacy colon format). Optum
 				// still has clusters emitting this in cluster-to-cluster
-				// traffic; X-Vorpal-Timestamp is no longer read or written.
-				// The Vorpal-ID + dialog chain is preserved.
+				// traffic; the standalone X-Vorpal-Timestamp header is no longer
+				// read (legacy peers carry no birth instant — Analytics falls
+				// back to receipt time for those). The Vorpal-ID + dialog chain
+				// is preserved.
 				if (indexKey == null) {
 					try {
 						String session = request.getHeader(X_VORPAL_SESSION);
@@ -784,13 +831,16 @@ public abstract class Callflow implements Serializable {
 	///
 	/// - `X-Vorpal-Session` — legacy colon-pair, retained for
 	///   cluster-to-cluster compat with peers that haven't upgraded to
-	///   X-Vorpal-ID. (X-Vorpal-Timestamp is no longer emitted.)
+	///   X-Vorpal-ID. (The standalone `X-Vorpal-Timestamp` header stays
+	///   retired; the birth instant now rides on X-Vorpal-ID as `ts`.)
 	/// - `X-Vorpal-ID` — new parameterable format, carrying the `dialog`
-	///   param and, when known, the `origin` param. Origin is cached by
+	///   param, the `ts` (call birth instant) param, and, when known, the
+	///   `origin` param. Origin is cached by
 	///   [#getVorpalSessionId(SipServletRequest)] either from an inbound
 	///   X-Vorpal-ID header or from `request.getRemoteAddr()` at
 	///   first-touch; absent for purely-internal UAC originations, in which
-	///   case the param is simply skipped.
+	///   case the param is simply skipped. The `ts` param is the same instant
+	///   the Analytics Session records as `created`.
 	///
 	/// Does nothing when the appSession has no `VORPAL_SESSION` attribute.
 	///
@@ -814,6 +864,11 @@ public abstract class Callflow implements Serializable {
 			String origin = (String) appSession.getAttribute(VORPAL_ORIGIN);
 			if (origin != null && !origin.isEmpty()) {
 				xVorpalId.setParameter(ORIGIN_PARAM, origin);
+			}
+
+			String timestamp = getVorpalTimestamp(appSession);
+			if (timestamp != null && !timestamp.isEmpty()) {
+				xVorpalId.setParameter(TIMESTAMP_PARAM, timestamp);
 			}
 			message.setParameterableHeader(X_VORPAL_ID, xVorpalId);
 		}

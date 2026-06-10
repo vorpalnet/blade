@@ -6,9 +6,9 @@ import javax.management.JMX;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 
-import org.vorpal.blade.framework.logs.LogFileInfo;
-import org.vorpal.blade.framework.logs.LogSlice;
-import org.vorpal.blade.framework.logs.VorpalLogReaderMXBean;
+import org.vorpal.blade.framework.v2.logging.LogFileInfo;
+import org.vorpal.blade.framework.v2.logging.LogSlice;
+import org.vorpal.blade.framework.v2.logging.VorpalLogReaderMXBean;
 
 /// Builds typed JMX proxies for the per-server LogReader MBeans registered by
 /// the framework library on every JVM in the domain.

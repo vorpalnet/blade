@@ -732,6 +732,11 @@ fi
 			<activation><property><name>!skip.tuning</name></property></activation>
 			<modules><module>admin/tuning</module></modules>
 		</profile>
+		<profile>
+			<id>security</id>
+			<activation><property><name>!skip.security</name></property></activation>
+			<modules><module>admin/security</module></modules>
+		</profile>
 		<!-- watcher: headless config auto-publish shim, deployed standalone —
 		     deliberately NOT bundled into blade-admin.ear. For sites that don't
 		     deploy the Configurator UI; running both double-publishes on file

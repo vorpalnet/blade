@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.cors;
+package org.vorpal.blade.framework.v2.cors;
 
 import java.util.Set;
 
@@ -8,7 +8,7 @@ import java.util.Set;
 ///
 /// ```
 /// java -cp target/classes:target/test-classes \
-///   org.vorpal.blade.framework.cors.CorsFilterSmokeTest
+///   org.vorpal.blade.framework.v2.cors.CorsFilterSmokeTest
 /// ```
 public class CorsFilterSmokeTest {
 

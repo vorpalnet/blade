@@ -1,15 +1,18 @@
 /// This package provides a Third Party Call Control (TPCC) service implementation
 /// for SIP-based telecommunications applications. It enables external applications
-/// to control and manipulate SIP calls through REST APIs with proper CORS support.
+/// to control and manipulate SIP calls through REST APIs.
+///
+/// Cross-Origin Resource Sharing (CORS) is handled fleet-wide by the framework's
+/// `org.vorpal.blade.framework.v2.cors.CorsFilter`, registered in every WAR via
+/// the framework JAR's `META-INF/web-fragment.xml`. It is a no-op until an
+/// operator sets `-Dblade.cors.allowedOrigins` (and optionally
+/// `-Dblade.cors.exposeHeaders`) on the domain.
 ///
 /// ## Key Components
 ///
 /// - [TpccServlet] - Main SIP servlet that extends B2BUA functionality to handle
 ///   call control operations and manages asynchronous REST API responses through
 ///   a concurrent map of pending responses
-/// - [CorsFilter] - JAX-RS filter that handles Cross-Origin Resource Sharing (CORS)
-///   headers for REST API endpoints, enabling web-based clients to interact with
-///   the service by implementing both request and response filtering
 /// - [TpccSettings] - Configuration class that extends the framework's base
 ///   `Configuration` to store TPCC-specific settings
 /// - [TpccSettingsSample] - Sample configuration implementation demonstrating
@@ -24,11 +27,6 @@
 /// - Maintains a static concurrent map (`responseMap`) of pending async responses
 /// - Supports distributed deployment through SIP application annotations
 /// - Uses a `SettingsManager` for configuration management
-///
-/// The [CorsFilter] is annotated with `@Provider` and `@PreMatching` to ensure web
-/// browsers can make cross-origin requests to the REST endpoints, which is essential
-/// for web-based call control applications. It processes both preflight OPTIONS
-/// requests and actual response headers.
 ///
 /// ## Configuration
 ///
@@ -46,16 +44,6 @@
 /// lifecycle tracking. Maintains a static `ConcurrentHashMap<String, AsyncResponse>`
 /// (`responseMap`) for correlating asynchronous REST API calls with SIP responses.
 /// Logs session creation, destruction, expiration, and invalidation events at INFO level.
-///
-/// ### CorsFilter
-///
-/// JAX-RS filter annotated with `@Provider` and `@PreMatching` that enables Cross-Origin
-/// Resource Sharing for the REST API. Implements both `ContainerRequestFilter` and
-/// `ContainerResponseFilter`. Preflight OPTIONS requests with an `Origin` header are
-/// aborted with 200 OK. Response headers are enriched with `Access-Control-Allow-Methods`,
-/// `Access-Control-Allow-Credentials`, `Access-Control-Allow-Headers`,
-/// `Access-Control-Expose-Headers`, and `Access-Control-Allow-Origin` (reflecting the
-/// request's origin).
 ///
 /// ### TpccSettings
 ///
@@ -83,7 +71,6 @@
 /// `ConcurrentHashMap`-based response tracking for non-blocking SIP integration.
 ///
 /// @see TpccServlet
-/// @see CorsFilter
 /// @see TpccSettings
 /// @see TpccSettingsSample
 package org.vorpal.blade.services.tpcc;

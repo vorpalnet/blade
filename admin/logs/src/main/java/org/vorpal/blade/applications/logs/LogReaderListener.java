@@ -3,7 +3,7 @@ package org.vorpal.blade.applications.logs;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 
-import org.vorpal.blade.framework.logs.LogReaderRegistrar;
+import org.vorpal.blade.framework.v2.logging.LogReaderRegistrar;
 
 /// Thin shim that lives in this WAR's own `WEB-INF/classes` so the WLS
 /// deployment-activation pass can resolve the listener class without needing

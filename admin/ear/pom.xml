@@ -286,6 +286,33 @@
 			</plugin></plugins></build>
 		</profile>
 		<profile>
+			<id>ear-security</id>
+			<activation><property><name>!skip.security</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-security</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-security</artifactId>
+							<contextRoot>blade/security</contextRoot>
+							<bundleFileName>security.war</bundleFileName>
+						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
 			<id>ear-logs</id>
 			<activation><property><name>!skip.logs</name></property></activation>
 			<dependencies>

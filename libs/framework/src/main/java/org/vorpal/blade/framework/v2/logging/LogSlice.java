@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.logs;
+package org.vorpal.blade.framework.v2.logging;
 
 import java.beans.ConstructorProperties;
 

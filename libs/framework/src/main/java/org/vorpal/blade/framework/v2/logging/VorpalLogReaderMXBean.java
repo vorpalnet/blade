@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.logs;
+package org.vorpal.blade.framework.v2.logging;
 
 /// JMX interface every BLADE JVM exposes so the admin/logs WAR running on
 /// AdminServer can read this server's log files (engine.log, access.log,

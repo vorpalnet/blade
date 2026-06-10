@@ -287,8 +287,25 @@ public class Analytics implements Serializable {
 			session.setVorpalId(vorpalId);
 		}
 		session.setApplicationId(getAppInstanceId());
-		session.setCreated(new Date());
+		session.setCreated(getCreatedFromVorpalTimestamp(msg.getApplicationSession()));
 		return session;
+	}
+
+	/// Resolves the Session `created` instant from the X-Vorpal-ID `ts` param
+	/// cached on the appSession (upper-case hex of epoch millis), so the DB row
+	/// and the wire tag are the same millisecond. Falls back to receipt time
+	/// only when no `ts` was stamped — legacy-only peers, or an appSession that
+	/// never went through Callflow first-touch.
+	private static Date getCreatedFromVorpalTimestamp(SipApplicationSession appSession) {
+		String ts = Callflow.getVorpalTimestamp(appSession);
+		if (ts != null) {
+			try {
+				return new Date(Long.parseLong(ts, 16));
+			} catch (NumberFormatException ex) {
+				Callflow.getSipLogger().warning("Analytics.createSession - unparseable vorpal-timestamp '" + ts + "'");
+			}
+		}
+		return new Date();
 	}
 
 	public static void applicationStart() {

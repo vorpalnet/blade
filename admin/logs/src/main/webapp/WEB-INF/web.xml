@@ -19,4 +19,51 @@
 		<listener-class>org.vorpal.blade.applications.logs.LogReaderListener</listener-class>
 	</listener>
 
+	<!-- no security required: the login form and its assets -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>login</web-resource-name>
+			<url-pattern>/login/*</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
+	<!-- Everything else requires an admin role. Matches the constraint every
+	     other admin app declares (tuning, configurator, …); closes the gap
+	     where /blade/logs exposed cluster topology and log file contents with
+	     no auth. WebLogic treats the "/" pattern as the catch-all. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>logs</web-resource-name>
+			<url-pattern>/</url-pattern>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+			<role-name>Deployer</role-name>
+			<role-name>Monitor</role-name>
+		</auth-constraint>
+	</security-constraint>
+
+	<login-config>
+		<auth-method>CLIENT-CERT,FORM</auth-method>
+		<realm-name>default</realm-name>
+		<form-login-config>
+			<form-login-page>/login/login.jsp</form-login-page>
+			<form-error-page>/login/login.jsp</form-error-page>
+		</form-login-config>
+	</login-config>
+
+	<security-role>
+		<role-name>Admin</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Operator</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Deployer</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Monitor</role-name>
+	</security-role>
+
 </web-app>

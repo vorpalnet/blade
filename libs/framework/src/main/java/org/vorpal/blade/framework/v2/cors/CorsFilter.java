@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.cors;
+package org.vorpal.blade.framework.v2.cors;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -41,17 +41,36 @@ import javax.servlet.http.HttpServletResponse;
 /// then is `Access-Control-Allow-Credentials: true` emitted. A wildcard `*` is
 /// deliberately not supported, because the wildcard is invalid with credentials
 /// and reflecting arbitrary origins with credentials would be unsafe.
+///
+/// **Exposed response headers:** by default the browser only sees the
+/// CORS-safelisted response headers. A service whose browser clients need to
+/// read non-safelisted headers (e.g. `Location` after a create, or a
+/// service-specific header) can list them via [#EXPOSE_HEADERS_PROPERTY]:
+///
+/// ```
+/// -Dblade.cors.exposeHeaders=Location,X-SEMAFONE-TARGET,Date
+/// ```
+///
+/// Unset ⇒ no `Access-Control-Expose-Headers` is emitted.
 public class CorsFilter implements Filter {
 
 	/// System property holding the comma-separated list of exact origins
 	/// allowed to make credentialed cross-origin requests. Empty/unset ⇒ no-op.
 	public static final String ALLOWED_ORIGINS_PROPERTY = "blade.cors.allowedOrigins";
 
+	/// System property holding the comma-separated list of response headers to
+	/// surface to the browser via `Access-Control-Expose-Headers`. Empty/unset ⇒
+	/// header is not emitted.
+	public static final String EXPOSE_HEADERS_PROPERTY = "blade.cors.exposeHeaders";
+
 	private Set<String> allowedOrigins = Collections.emptySet();
+	private String exposeHeaders = null;
 
 	@Override
 	public void init(FilterConfig filterConfig) {
 		allowedOrigins = parseOrigins(System.getProperty(ALLOWED_ORIGINS_PROPERTY));
+		Set<String> expose = parseOrigins(System.getProperty(EXPOSE_HEADERS_PROPERTY));
+		exposeHeaders = expose.isEmpty() ? null : String.join(", ", expose);
 	}
 
 	/// Parse a comma-separated origin list into a set, trimming blanks. Package
@@ -92,6 +111,9 @@ public class CorsFilter implements Filter {
 		response.setHeader("Access-Control-Allow-Origin", origin);
 		response.setHeader("Access-Control-Allow-Credentials", "true");
 		response.addHeader("Vary", "Origin");
+		if (exposeHeaders != null) {
+			response.setHeader("Access-Control-Expose-Headers", exposeHeaders);
+		}
 
 		if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
 			// Preflight: echo the requested method/headers and cache the grant.

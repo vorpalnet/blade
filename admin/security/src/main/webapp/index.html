@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>BLADE Security</title>
+	<link rel="icon" href="favicon.svg" type="image/svg+xml">
+	<style>
+		body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 2.5rem; line-height: 1.55; color: #1b1b1b; }
+		main { max-width: 46rem; margin: 0 auto; }
+		h1 { margin: 0 0 .25rem; font-size: 1.6rem; }
+		.tagline { color: #555; margin: 0 0 1.75rem; }
+		h2 { font-size: 1.05rem; margin: 1.75rem 0 .4rem; }
+		p { margin: .4rem 0; }
+		code { background: #f2f2f2; padding: .1rem .35rem; border-radius: .25rem; font-size: .9em; }
+		a { color: #0b66c3; }
+		ul { margin: .4rem 0; padding-left: 1.25rem; }
+	</style>
+</head>
+<body>
+<main>
+	<h1>BLADE Security</h1>
+	<p class="tagline">Authentication &amp; Identity</p>
+
+	<p>This app configures how callers authenticate to BLADE. Settings are edited
+	through the <a href="/blade/configurator/">Configurator</a> — this page is
+	just an entry point and reference.</p>
+
+	<h2>Inbound JWT single sign-on</h2>
+	<p>Validates bearer tokens from your enterprise identity provider against its
+	JWKS and maps the token's group/role claim onto the BLADE admin roles
+	(Admin, Operator, Deployer, Monitor). It is <em>additive</em> to the existing
+	FORM/BASIC login and ships <strong>disabled</strong> — turn it on per
+	deployment once the issuer, JWKS URI, audience, and role mappings are set
+	under <code>jwt</code> in this app's config.</p>
+
+	<h2>Check it's wired up</h2>
+	<p><code>GET /blade/security/api/v1/status</code> reports the authenticated
+	caller, the auth scheme used, and whether JWT is enabled.</p>
+
+	<h2>The bigger picture</h2>
+	<p>BLADE has three authentication surfaces — inbound HTTP (this realm-backed
+	admin login), inbound SIP (a configurable trusted-core / digest model), and
+	outbound REST (the framework's connector auth). All three, plus credential
+	storage and TLS/mTLS, are documented in <code>SECURITY.md</code>.</p>
+</main>
+</body>
+</html>

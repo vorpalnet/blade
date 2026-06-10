@@ -26,6 +26,26 @@
 		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
 	</wls:session-descriptor>
 
+	<!-- Map the web.xml roles to realm groups of the same name. Required for
+	     the auth-constraint to resolve; without these the role names match
+	     nothing and the constraint rejects everyone. -->
+	<wls:security-role-assignment>
+		<wls:role-name>Admin</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+	<wls:security-role-assignment>
+		<wls:role-name>Operator</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+	<wls:security-role-assignment>
+		<wls:role-name>Monitor</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+	<wls:security-role-assignment>
+		<wls:role-name>Deployer</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+
 	<wls:security-permission>
 		<wls:security-permission-spec>grant { permission java.security.AllPermission ; } ;</wls:security-permission-spec>
 	</wls:security-permission>
