@@ -2,6 +2,16 @@
 
 ## 2.9.9 (unreleased)
 
+### iRouter: routing decision re-dispatched onto a container thread
+
+`IRouterInvite` now wraps `applyRouting` in a 0-ms ServletTimer. When the
+pipeline contains an async connector (REST), the connector chain completes on
+the HttpClient executor thread, where the container has no call context —
+`request.getProxy()` in `executeRoute` threw an NPE (hit in the field on
+forward routes behind a REST screening call). The timer fires the routing
+decision on a container thread with appSession context regardless of which
+thread completed the chain; sync-only pipelines just take one extra 0-ms hop.
+
 ### Enterprise SIP test suite: scenario-driven test-uac / test-uas + Test Console
 
 The test pair grows from "load script + parameter tricks" into one

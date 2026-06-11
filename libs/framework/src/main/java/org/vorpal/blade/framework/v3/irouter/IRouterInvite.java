@@ -30,7 +30,8 @@ import org.vorpal.blade.framework.v3.configuration.routing.Routing;
 ///    complete instantly; REST fires its HTTP call and returns a
 ///    real future; JDBC/LDAP run on a bounded thread pool. The SIP
 ///    container thread is released as soon as the chain starts.
-/// 3. When the chain completes, consults `config.routing` for the
+/// 3. When the chain completes, re-dispatches onto a SIP container
+///    thread (0-ms ServletTimer), consults `config.routing` for the
 ///    routing decision — a concrete [Route] — and proxies via
 ///    [Callflow#proxyRequest] (which marks the appSession as a
 ///    proxy so re-INVITE / BYE / ACK pass through automatically).
@@ -120,7 +121,13 @@ public class IRouterInvite extends Callflow {
 			chain = chain.thenCompose(v -> safeInvoke(a, ctx));
 		}
 
-		chain.thenRun(() -> applyRouting(request, ctx, config))
+		// An async connector (REST) completes the chain on its HttpClient
+		// executor thread, where the container has no call context —
+		// request.getProxy() in executeRoute throws NPE. The 0-ms
+		// ServletTimer fires applyRouting on a container thread with
+		// appSession context, whichever thread completed the chain.
+		chain.thenRun(() -> startTimer(request.getApplicationSession(), 0, false,
+				timer -> applyRouting(request, ctx, config)))
 				.exceptionally(t -> {
 					sipLogger.severe(request, "iRouter pipeline failed: " + t.getMessage());
 					safeSend(request, 500);
@@ -261,11 +268,11 @@ public class IRouterInvite extends Callflow {
 	///
 	/// Reached only for routes WITHOUT a `statusCode` — a route that sets a
 	/// status code is a direct response and short-circuits to [#sendStatus] in
-	/// [#applyRouting] before this runs. That's how SecureLogix is a redirect
-	/// server with no Java override: every clause in its routing config is a
-	/// `new Route(302, "Moved Temporarily")` with a `Contact`, so it never
-	/// reaches `executeRoute` at all. Override this only to take a different
-	/// *forwarding* role than proxy-and-drop-out.
+	/// [#applyRouting] before this runs. SecureLogix mixes both with no Java
+	/// override: allow is a 302 with a `Contact` (sendStatus), block is a 603
+	/// Decline (sendStatus), and redirect is a forward route (`requestUri`,
+	/// no status code) that lands here and proxies to the SBC. Override this
+	/// only to take a different *forwarding* role than proxy-and-drop-out.
 	///
 	/// Throws are caught by [#applyRouting] which sends 500 upstream.
 	protected void executeRoute(SipServletRequest request, URI destination, Route route, Context ctx)
