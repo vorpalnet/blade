@@ -46,7 +46,7 @@ public class AttributeSelector extends Selector implements Serializable {
 		store(ctx, id, raw);
 
 		Logger sipLogger = SettingsManager.getSipLogger();
-		if (sipLogger.isLoggable(Level.FINER)) {
+		if (sipLogger != null && sipLogger.isLoggable(Level.FINER)) {
 			sipLogger.finer(ctx != null ? ctx.getRequest() : null,
 					"AttributeSelector[" + id + "] attribute=" + attribute + " value=" + raw);
 		}

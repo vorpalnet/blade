@@ -54,6 +54,14 @@ public interface SettingsMXBean {
 	/// touch the file system, doesn't change MBean state, safe to call
 	/// concurrently with reads/writes. Use this when you only need to
 	/// inspect the current settings (e.g. the BLADE Admin Portal reading
-	/// each app's name/tagline/description metadata for the launcher deck).
+	/// each app's administrator notes or other live values).
 	public String getCurrentJson();
+
+	/// Returns this app's generated JSON Schema as a string, or null if it
+	/// can't be produced. The schema is static (derived from the config class,
+	/// not the data), so this is side-effect-free and safe to call anytime.
+	/// The BLADE Admin Portal reads the schema-root `title` / `x-tagline` /
+	/// `description` (emitted from [SchemaAbout]) to build each launcher card —
+	/// developer-owned identity that an operator config save can't blank.
+	public String getSchemaJson();
 }

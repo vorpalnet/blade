@@ -21,14 +21,6 @@ public class UserAgentClientConfigSample extends UserAgentClientConfig {
 	private static final long serialVersionUID = 1L;
 
 	public UserAgentClientConfigSample() {
-		this.about.setName("Test UAC")
-				.setTagline("Scenario-driven SIP load generator")
-				.setDescription("Originates SIP calls at scale — CPS or concurrent-call pacing, per node. "
-						+ "Scenarios script the INVITE (templates, header/body transformation rules), what "
-						+ "responses to expect, and per-call assertions; metrics report latency percentiles, "
-						+ "status distributions, and pass/fail counts. As a B2BUA it can also transform real "
-						+ "softphone calls, e.g. simulating a SIPREC recorder leg. No SIPp required.");
-
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LoggingLevel.FINEST);
 		this.session = new SessionParametersDefault();

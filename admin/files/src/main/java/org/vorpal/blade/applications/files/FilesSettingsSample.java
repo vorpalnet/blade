@@ -14,10 +14,6 @@ public class FilesSettingsSample extends FilesSettings {
 	private static final long serialVersionUID = 1L;
 
 	public FilesSettingsSample() {
-		this.about.setName("Files")
-				.setTagline("Domain File Editor")
-				.setDescription("Edit schema-less domain files — XML, JSON, properties, plain text — from the browser instead of over SSH. Files are an admin-defined whitelist; every save is well-formedness-checked and backed up so a bad edit can be rolled back.");
-
 		this.files = Arrays.asList(
 				new EditableFile()
 						.setLabel("Domain Config (config.xml)")

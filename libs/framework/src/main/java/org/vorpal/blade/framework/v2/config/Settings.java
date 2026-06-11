@@ -223,6 +223,24 @@ public class Settings<T> implements SettingsMXBean {
 		}
 	}
 
+	/// Lazily generated once — the schema depends only on [#clazz], never on the
+	/// loaded data, so it's immutable for this MBean's lifetime.
+	private String schemaJson;
+
+	@Override
+	public String getSchemaJson() {
+		if (schemaJson == null) {
+			try {
+				schemaJson = objectMapper.writeValueAsString(
+						SettingsManager.generateSchemaNode(clazz, objectMapper));
+			} catch (JsonProcessingException e) {
+				sipLogger.severe(e);
+				return null;
+			}
+		}
+		return schemaJson;
+	}
+
 	@Override
 	public void reload() {
 		sipLogger.info("Reloading configuration file.");

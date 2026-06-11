@@ -1,5 +1,7 @@
 package org.vorpal.blade.applications.api;
 
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
+
 import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
@@ -12,6 +14,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /// AdminServer this app runs on, and the value must be reachable from the
 /// operator's browser (so it must be the externally-visible address — behind a
 /// load balancer or NAT that can differ from the JMX `ListenAddress`).
+@SchemaAbout(
+		name = "API Explorer",
+		tagline = "Live OpenAPI Reference",
+		description = "Discovers every deployed BLADE service that publishes an OpenAPI document and renders it with an interactive, try-it-out reference. Pick a service from the pulldown, or deep-link straight to one with ?app=<service>.")
 public class ApiSettings extends Configuration {
 	private static final long serialVersionUID = 1L;
 

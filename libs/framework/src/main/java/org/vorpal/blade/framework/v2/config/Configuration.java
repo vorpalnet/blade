@@ -164,7 +164,7 @@ public class Configuration implements Serializable {
 		return this;
 	}
 
-	@JsonPropertyDescription("Display metadata for this app — name, tagline, description, and administrator notes. Shown on the BLADE Admin Portal launcher deck and the in-app topbar.")
+	@JsonPropertyDescription("Administrator notes for this configuration. (App identity — name, tagline, description — is now developer-owned and lives in the JSON Schema via @SchemaAbout, not here.)")
 	public About getAbout() {
 		return about;
 	}

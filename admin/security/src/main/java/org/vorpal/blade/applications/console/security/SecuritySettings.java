@@ -1,5 +1,7 @@
 package org.vorpal.blade.applications.console.security;
 
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
+
 import java.io.Serializable;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
@@ -15,6 +17,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /// enterprise-IdP SSO on the admin tier. The container FORM/BASIC login and the
 /// configurable SIP trust model are documented in `SECURITY.md`; the SIP side
 /// is deployment-descriptor driven and has no knob here by design.
+@SchemaAbout(
+		name = "Security",
+		tagline = "Authentication & Identity",
+		description = "Configure how callers authenticate to BLADE. Inbound bearer-JWT single sign-on against your enterprise identity provider for the admin consoles (additive to the FORM/BASIC login). See SECURITY.md for the full picture: container realm roles, the configurable SIP trust model, credential storage, and TLS/mTLS.")
 public class SecuritySettings extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 

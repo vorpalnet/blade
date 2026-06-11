@@ -18,6 +18,7 @@ import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 import javax.servlet.sip.ar.SipRouteModifier;
 import javax.servlet.sip.ar.SipTargetedRequestInfo;
 
+import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
@@ -94,11 +95,33 @@ public class AppRouter implements SipApplicationRouter {
 		SipApplicationRouterInfo nextApp = null;
 		metrics.countRequest();
 
+		// Correlation id for the single per-invocation log line, pulled from the
+		// X-Vorpal-ID header. Session-free by necessity: the App Router must not
+		// touch the Coherence-backed SipApplicationSession/SipSession (the
+		// session-aware Logger overloads resolve a session that isn't safely there).
+		// Isolated in its own try so a header-read hiccup can never reach
+		// getNextApplication's catch below — which returns null and hands OCCAS 8.3
+		// the very 500 we just eliminated. null on a brand-new external INVITE (not
+		// stamped until the first BLADE hop); the line then falls back to Call-ID.
+		String vsession = null;
+		String vdialog = null;
+		try {
+			vsession = AsyncSipServlet.getVorpalSessionIdFromMessage(request);
+			vdialog = AsyncSipServlet.getVorpalDialogIdFromMessage(request);
+		} catch (Exception ignore) {
+			// best-effort correlation id; never affects routing
+		}
+
 		try {
 			// stateInfo carries the pinned config snapshot + the accumulating
 			// extraction context across every hop of this initial request.
 			// First call: saved is null, so load fresh config below.
 			RoutingState routingState = (RoutingState) saved;
+			// First App Router consultation for this initial request: the container
+			// hands back no stateInfo. FSMAR always returns a non-null RoutingState as
+			// its stateInfo (see the SipApplicationRouterInfo constructions below), so
+			// saved == null marks the start of a fresh composition — and only then.
+			boolean freshComposition = (routingState == null);
 			if (routingState == null) {
 				AppRouterConfiguration current = settingsManager.getCurrent();
 				if (current == null) {
@@ -117,10 +140,27 @@ public class AppRouter implements SipApplicationRouter {
 			// conditions and ${} route templates read here.
 			Context ctx = new MemoryContext(routingState.getContext());
 
-			// Determine previous application
-			SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request)
-					.getImpl().getSipApplicationSessionImpl();
-			String previous = (sasi != null) ? SettingsManager.basename(sasi.getApplicationName()) : "null";
+			// Determine the previous application — the FSM state to evaluate from.
+			//
+			// On a fresh composition the chain starts at the "null" state. We must
+			// NOT read the previous app off the session here: for a second initial
+			// INVITE that the container has joined to an existing SipApplicationSession
+			// via an @SipApplicationKey (e.g. a second SIPREC recording dialog keyed on
+			// the same UCID), getSipApplicationSessionImpl() returns the session owned
+			// by the LAST application in the chain. Starting the FSM from that terminal
+			// state finds no forward INVITE transition, getNextApplication returns null,
+			// and OCCAS 8.3 renders that as a 500 "No handler found" (8.0 tolerated the
+			// null AR result; the default-application fallback below is likewise gated
+			// on previous == "null"). Only trust the session's application name on
+			// continuation hops, where the container hands our stateInfo back.
+			String previous;
+			if (freshComposition) {
+				previous = "null";
+			} else {
+				SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request)
+						.getImpl().getSipApplicationSessionImpl();
+				previous = (sasi != null) ? SettingsManager.basename(sasi.getApplicationName()) : "null";
+			}
 
 			// Trace capture (opt-in, armed via the metrics MBean): null in the
 			// common disarmed case. Begin the hop before the pseudo-variables
@@ -143,35 +183,35 @@ public class AppRouter implements SipApplicationRouter {
 					previous,
 					request.getCallId());
 
-			if (sipLogger.isLoggable(Level.FINE)) {
-				String str = "getNextApplication... " + request.getMethod() + " " + request.getRequestURI();
-				str += ", previous: " + previous;
-				str += (region != null) ? ", region: " + region.getLabel() + " " + region.getType() : "";
-				str += (directive != null) ? ", directive: " + directive : "";
-				str += (requestInfo != null)
-						? ", requestInfo: " + requestInfo.getType() + " " + requestInfo.getApplicationName()
-						: "";
-				sipLogger.fine(str);
-			}
+			// Single-line summary, assembled as routing proceeds and emitted exactly
+			// once at the end of this invocation. `startState` preserves the FSM
+			// entry state for the line (the bypass loop may advance `previous`).
+			final String startState = previous;
+			String decision = "none (routed downstream)";
+			java.util.List<String> bypassed = new java.util.ArrayList<>();
 
 			// For targeted sessions, route directly
 			if (requestInfo != null) {
 				String deployedApp = getDeployedApp(requestInfo.getApplicationName());
 				nextApp = new SipApplicationRouterInfo(deployedApp, region, null, null,
 						SipRouteModifier.NO_ROUTE, routingState);
+				decision = "targeted=" + requestInfo.getApplicationName() + " -> " + deployedApp;
 				if (trace != null) {
 					trace.routed(nextApp);
 				}
 			}
 
-			// URI-based direct routing (e.g. "sip:hold")
-			if (nextApp == null) {
+			// URI-based direct routing (e.g. "sip:hold"). Guard the cast: a
+			// tel: Request-URI is not a SipURI, and a ClassCastException here
+			// would escape to the outer catch — null return, silent 500.
+			if (nextApp == null && request.getRequestURI() instanceof SipURI) {
 				SipURI sipUri = (SipURI) request.getRequestURI();
 				if (null == sipUri.getUser()) {
 					String app = getDeployedApp(sipUri.getHost());
 					if (app != null) {
 						nextApp = new SipApplicationRouterInfo(app, region, null, null,
 								SipRouteModifier.NO_ROUTE, routingState);
+						decision = "uri=" + sipUri.getHost() + " -> " + app;
 						if (trace != null) {
 							trace.routed(nextApp);
 						}
@@ -214,32 +254,21 @@ public class AppRouter implements SipApplicationRouter {
 
 					Transition matched = null;
 					if (trigger != null) {
-						boolean traceLog = sipLogger.isLoggable(Level.FINER);
 						for (Transition t : trigger.getTransitions()) {
 							boolean fired = t.matches(ctx);
 							if (trace != null) {
+								// Every transition evaluated, in order, with its
+								// outcome — the Route Simulator's raw material.
 								trace.evaluated(t.getId(), t.getWhen(), fired);
-							}
-							if (traceLog) {
-								// Route-decision trace: every transition evaluated,
-								// in order, with its outcome. The Route Simulator's
-								// raw material.
-								sipLogger.finer("FSMAR trace: state=" + previous
-										+ " trigger=" + request.getMethod()
-										+ " transition=" + t.getId()
-										+ " when=" + (t.getWhen() != null ? "'" + t.getWhen() + "'" : "(unconditional)")
-										+ " -> " + (fired ? "FIRED" : "no match"));
 							}
 							if (fired) {
 								matched = t;
 								metrics.countTransition(previous, request.getMethod(), t.getId());
-								sipLogger.fine("Transition matched: " + t.getId());
 								break;
 							}
 						}
 						if (matched == null && trigger.getTransitions().isEmpty()) {
 							// Trigger defined with no transitions — implicit match, no action.
-							sipLogger.fine("No transitions defined, implicit match.");
 							matched = new Transition();
 						}
 					}
@@ -251,17 +280,11 @@ public class AppRouter implements SipApplicationRouter {
 						trace.matched(matched.getId(), matched.getNext());
 					}
 
-					if (sipLogger.isLoggable(Level.FINE)) {
-						sipLogger.fine("Transition: id=" + matched.getId()
-								+ ", next=" + matched.getNext()
-								+ ", subscriber=" + matched.getSubscriber()
-								+ ", routes=" + Arrays.toString(matched.getRoutes()));
-					}
-
 					String next = matched.getNext();
 					String deployedApp = (next != null) ? deployed.get(next) : null;
 					if (deployedApp != null) {
 						nextApp = matched.createRouterInfo(deployedApp, routingState, ctx, request);
+						decision = "matched=" + matched.getId() + " -> " + deployedApp;
 						if (trace != null) {
 							trace.routed(nextApp);
 						}
@@ -270,6 +293,7 @@ public class AppRouter implements SipApplicationRouter {
 
 					if (next == null) {
 						// Matched with no target application — nothing to route to.
+						decision = "matched=" + matched.getId() + " -> (no target, routed downstream)";
 						break;
 					}
 
@@ -280,29 +304,30 @@ public class AppRouter implements SipApplicationRouter {
 						if (trace != null) {
 							trace.cycle();
 						}
-						sipLogger.warning("FSMAR routing cycle detected at undeployed application '"
-								+ next + "'; routing downstream.");
+						bypassed.add(next + " (cycle)");
 						break;
 					}
 					metrics.countBypass();
 					if (trace != null) {
 						trace.bypassed();
 					}
-					sipLogger.fine("Bypassing undeployed application '" + next
-							+ "'; continuing as though it had already run.");
+					bypassed.add(next);
 					previous = next;
 				}
 			}
 
-			// Default application fallback
-			if (previous.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
+			// Default application fallback. defaultApplication is optional —
+			// guard it: ConcurrentHashMap.get(null) throws NPE, which would
+			// escape to the outer catch as a silent 500. With no default
+			// configured, nextApp stays null and OCCAS routes downstream.
+			if (config.getDefaultApplication() != null
+					&& previous.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
 					|| nextApp.getNextApplicationName().equals("null"))) {
 				metrics.countDefaultFallback();
 				if (trace != null) {
 					trace.defaultFallback(config.getDefaultApplication());
 				}
-				sipLogger.warning("Using defaultApplication: " + config.getDefaultApplication()
-						+ " for " + request.getMethod() + " " + request.getRequestURI());
+				decision = "defaultApplication -> " + config.getDefaultApplication();
 				nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null, null,
 						SipRouteModifier.NO_ROUTE, routingState);
 			}
@@ -312,24 +337,42 @@ public class AppRouter implements SipApplicationRouter {
 				trace.endInvocation(routingState.getContext());
 			}
 
-			if (sipLogger.isLoggable(Level.FINE)) {
-				if (nextApp != null) {
-					String str = "RouterInfo... " + nextApp.getNextApplicationName();
-					str += ", subscriberURI: " + nextApp.getSubscriberURI();
-					if (nextApp.getRoutingRegion() != null) {
-						str += ", region: " + nextApp.getRoutingRegion().getType();
-					}
-					str += ", routeModifier: " + nextApp.getRouteModifier();
-					str += ", routes: " + Arrays.toString(nextApp.getRoutes());
-					sipLogger.fine(str);
-				} else {
-					sipLogger.fine("No match. Setting router info to null.");
+			// Exactly one line per invocation describing the routing decision,
+			// correlated by X-Vorpal-ID ([session:dialog]) so a call can be grepped
+			// end-to-end across BLADE services. Built only when the level is live —
+			// the core log() does not pre-gate and this runs at 1000+ CPS.
+			if (sipLogger != null && sipLogger.isLoggable(Level.INFO)) {
+				StringBuilder sb = new StringBuilder("FSMAR ");
+				sb.append(request.getMethod()).append(' ').append(request.getRequestURI());
+				sb.append(" previous=").append(startState);
+				sb.append(" directive=").append(directive != null ? directive : "-");
+				sb.append(" region=").append(region != null ? region.getType() : "-");
+				if (requestInfo != null) {
+					sb.append(" requestInfo=").append(requestInfo.getType());
 				}
+				sb.append(" -> ").append(decision);
+				if (!bypassed.isEmpty()) {
+					sb.append(" bypassed=").append(bypassed);
+				}
+				if (nextApp != null && nextApp.getRoutes() != null && nextApp.getRoutes().length > 0) {
+					sb.append(" routes=").append(Arrays.toString(nextApp.getRoutes()));
+				}
+				sb.append(" callid=").append(request.getCallId());
+				sipLogger.log(Level.INFO, vsession, vdialog, sb.toString());
 			}
 
 		} catch (Exception e) {
-			sipLogger.severe("Error processing request:\n" + request.toString());
-			sipLogger.logStackTrace(e);
+			// Still one line — correlated and self-describing — then the trace.
+			// Logger can be null only if init() failed; fall back to stderr so
+			// the REAL exception isn't masked by a logging NPE.
+			if (sipLogger != null) {
+				sipLogger.log(Level.SEVERE, vsession, vdialog, "FSMAR " + request.getMethod()
+						+ " " + request.getRequestURI() + " callid=" + request.getCallId()
+						+ " -> ERROR: " + e);
+				sipLogger.logStackTrace(e);
+			} else {
+				e.printStackTrace();
+			}
 		}
 
 		return nextApp;
@@ -366,7 +409,8 @@ public class AppRouter implements SipApplicationRouter {
 	}
 
 	public static String getDeployedApp(String appName) {
-		return deployed.get(SettingsManager.basename(appName));
+		// basename(null) and ConcurrentHashMap.get(null) both throw NPE.
+		return (appName != null) ? deployed.get(SettingsManager.basename(appName)) : null;
 	}
 
 	/// Publish routing metadata as pseudo-variables for `when` conditions and

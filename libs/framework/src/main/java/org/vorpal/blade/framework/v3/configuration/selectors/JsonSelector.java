@@ -59,7 +59,7 @@ public class JsonSelector extends Selector implements Serializable {
 
 			store(ctx, id, raw);
 
-			if (sipLogger.isLoggable(Level.FINER)) {
+			if (sipLogger != null && sipLogger.isLoggable(Level.FINER)) {
 				sipLogger.finer(ctx != null ? ctx.getRequest() : null,
 						"JsonSelector[" + id + "] path=" + attribute + " value=" + raw);
 			}
@@ -69,13 +69,15 @@ public class JsonSelector extends Selector implements Serializable {
 			// `detail.actionBasis` only appears on `block` verdicts). Not a
 			// failure; downgrade to FINER so it doesn't pollute the WARNING
 			// channel on every otherwise-clean request.
-			if (sipLogger.isLoggable(Level.FINER)) {
+			if (sipLogger != null && sipLogger.isLoggable(Level.FINER)) {
 				sipLogger.finer(ctx != null ? ctx.getRequest() : null,
 						"JsonSelector[" + id + "] path absent: " + attribute);
 			}
 		} catch (Exception e) {
-			sipLogger.warning(ctx != null ? ctx.getRequest() : null,
-					"JsonSelector[" + id + "] failed: " + e.getMessage());
+			if (sipLogger != null) {
+				sipLogger.warning(ctx != null ? ctx.getRequest() : null,
+						"JsonSelector[" + id + "] failed: " + e.getMessage());
+			}
 		}
 	}
 

@@ -14,9 +14,5 @@ public class ConfiguratorSettingsSample extends ConfiguratorSettings {
 
 	public ConfiguratorSettingsSample() {
 		this.autoPublish = false;
-
-		this.about.setName("Configurator")
-				.setTagline("Schema-Driven Configuration Editor")
-				.setDescription("Edit every deployed BLADE service's configuration through a form generated live from its JSON Schema. Targets domain, cluster, and per-server scopes; tracks version history; round-trips changes to live JMX MBeans without an application restart.");
 	}
 }

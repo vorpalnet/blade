@@ -61,6 +61,7 @@ import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -646,7 +647,24 @@ public class SettingsManager<T> {
 
 		SchemaGeneratorConfig config = configBuilder.build();
 		SchemaGenerator schemaGenerator = new SchemaGenerator(config);
-		return schemaGenerator.generateSchema(clazz);
+		JsonNode schema = schemaGenerator.generateSchema(clazz);
+
+		// @SchemaAbout — developer-owned app identity, stamped directly onto the
+		// schema root (which victools keeps inlined as the main type, so `title`
+		// lands where the Configurator's form heading and the Portal both read
+		// it). Done here rather than via a resolver so name/tagline/description
+		// land at the ABSOLUTE root regardless of the $ref/$defs idiom, and so a
+		// single read of the annotation covers all three. `@SchemaAbout` is
+		// @Inherited, so getAnnotation resolves a subclass override or an
+		// inherited base declaration. Takes precedence over @SchemaTitle.
+		SchemaAbout about = clazz.getAnnotation(SchemaAbout.class);
+		if (about != null && schema instanceof ObjectNode) {
+			ObjectNode root = (ObjectNode) schema;
+			root.put("title", about.name());
+			if (!about.tagline().isEmpty()) root.put("x-tagline", about.tagline());
+			if (!about.description().isEmpty()) root.put("description", about.description());
+		}
+		return schema;
 	}
 
 	/// Convert the String from @JsonProperty(defaultValue = "...") to a typed

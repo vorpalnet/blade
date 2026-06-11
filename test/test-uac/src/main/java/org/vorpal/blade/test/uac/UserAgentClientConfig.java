@@ -1,5 +1,7 @@
 package org.vorpal.blade.test.uac;
 
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
+
 import org.vorpal.blade.framework.v3.tester.TesterConfiguration;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -15,6 +17,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /// no template of its own), and `fromAddressPattern` / `toAddressPattern` /
 /// `requestUriTemplate` / `duration` feed straight into `originate` and
 /// never serialize back out.
+@SchemaAbout(
+		name = "Test UAC",
+		tagline = "Scenario-driven SIP load generator",
+		description = "Originates SIP calls at scale — CPS or concurrent-call pacing, per node. " + "Scenarios script the INVITE (templates, header/body transformation rules), what " + "responses to expect, and per-call assertions; metrics report latency percentiles, " + "status distributions, and pass/fail counts. As a B2BUA it can also transform real " + "softphone calls, e.g. simulating a SIPREC recorder leg. No SIPp required.")
 public class UserAgentClientConfig extends TesterConfiguration {
 	private static final long serialVersionUID = 1L;
 

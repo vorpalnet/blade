@@ -168,34 +168,74 @@ public class PortalCardsResource {
 		boolean hasMetadata = false;
 
 		if (settingsMBean != null) {
-			try {
-				// MXBean exposes no-arg getter `getCurrentJson()` as ATTRIBUTE
-				// `CurrentJson`, NOT as an operation — standard MXBean rule. Use
-				// getAttribute, not invoke. SettingsManager registers Settings
-				// via an explicit StandardMBean wrapper so this attribute is
-				// guaranteed to be exposed. See memory
-				// `[[settingsmxbean-introspection-bug]]`.
-				String json = (String) mbs.getAttribute(settingsMBean, "CurrentJson");
+			// Preferred: developer-owned identity from the generated schema root
+			// (`title` / `x-tagline` / `description`, emitted from @SchemaAbout) —
+			// NOT the operator's config data, which a config save would blank.
+			// MXBean no-arg getters surface as ATTRIBUTEs (`SchemaJson`), not
+			// operations — standard MXBean rule, so getAttribute, not invoke.
+			//
+			// `SchemaJson` is a newer attribute: an app still bound to an older
+			// framework shared library (mid-rolling-deploy, or simply not yet
+			// re-pushed) won't expose it. readAttr returns null instead of
+			// throwing so that case falls through to the legacy `about` read
+			// rather than blanking the card down to its humanized slug — which
+			// is exactly the regression a single shared try/catch caused.
+			String schemaJson = readAttr(mbs, settingsMBean, "SchemaJson", appName);
+			if (schemaJson != null) {
+				try {
+					JsonNode root = mapper.readTree(schemaJson);
+					String n = textOrNull(root, "title");
+					String t = textOrNull(root, "x-tagline");
+					String d = textOrNull(root, "description");
+					if (n != null) { name = n; hasMetadata = true; }
+					if (t != null) { tagline = t; hasMetadata = true; }
+					if (d != null) { description = d; hasMetadata = true; }
+				} catch (Exception e) {
+					log.log(Level.WARNING, "schema parse failed for " + appName
+							+ ": " + e.getClass().getSimpleName() + ": " + e.getMessage());
+				}
+			}
+
+			// Transitional fallback: legacy `about` block in CurrentJson, for
+			// apps not on @SchemaAbout / the new framework yet. On those, About
+			// still carries name/tagline/description, so this restores the card.
+			// Delete once every app exposes schema identity.
+			if (!hasMetadata) {
+				String json = readAttr(mbs, settingsMBean, "CurrentJson", appName);
 				if (json != null) {
-					JsonNode root = mapper.readTree(json);
-					// Metadata lives under the `about` object on the Configuration.
-					JsonNode about = root.get("about");
-					if (about != null && !about.isNull()) {
-						String n = textOrNull(about, "name");
-						String t = textOrNull(about, "tagline");
-						String d = textOrNull(about, "description");
-						if (n != null) { name = n; hasMetadata = true; }
-						if (t != null) { tagline = t; hasMetadata = true; }
-						if (d != null) { description = d; hasMetadata = true; }
+					try {
+						JsonNode about = mapper.readTree(json).get("about");
+						if (about != null && !about.isNull()) {
+							String n = textOrNull(about, "name");
+							String t = textOrNull(about, "tagline");
+							String d = textOrNull(about, "description");
+							if (n != null) { name = n; hasMetadata = true; }
+							if (t != null) { tagline = t; hasMetadata = true; }
+							if (d != null) { description = d; hasMetadata = true; }
+						}
+					} catch (Exception e) {
+						log.log(Level.WARNING, "about parse failed for " + appName
+								+ ": " + e.getClass().getSimpleName() + ": " + e.getMessage());
 					}
 				}
-			} catch (Exception e) {
-				log.log(Level.WARNING, "metadata read failed for " + appName
-						+ " (using fallback): " + e.getClass().getSimpleName()
-						+ ": " + e.getMessage(), e);
 			}
 		}
 		return new Card(ctxRoot, name, tagline, description, hasMetadata);
+	}
+
+	/// Reads a String MBean attribute, returning null instead of throwing when
+	/// it can't be read — most importantly when the attribute is absent because
+	/// the target app is bound to an older framework shared library that predates
+	/// it (e.g. `SchemaJson`). A missing attribute on one app must never abort
+	/// that app's card or the surrounding read; the caller falls back.
+	private String readAttr(MBeanServer mbs, ObjectName on, String attr, String appName) {
+		try {
+			return (String) mbs.getAttribute(on, attr);
+		} catch (Exception e) {
+			log.log(Level.FINE, "attribute " + attr + " unavailable for " + appName
+					+ ": " + e.getClass().getSimpleName() + ": " + e.getMessage());
+			return null;
+		}
 	}
 
 	private static String lastSegment(String contextRoot) {

@@ -9,8 +9,5 @@ public class PortalSettingsSample extends PortalSettings {
 	private static final long serialVersionUID = 1L;
 
 	public PortalSettingsSample() {
-		this.about.setName("BLADE Admin Portal")
-				.setTagline("Unified Administration")
-				.setDescription("Launcher for every admin app deployed on this AdminServer. The deck is built live from JMX — any app that registers a SettingsMXBean shows up automatically.");
 	}
 }

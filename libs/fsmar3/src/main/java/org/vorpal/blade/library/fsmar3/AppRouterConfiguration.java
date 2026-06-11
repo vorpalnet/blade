@@ -1,5 +1,7 @@
 package org.vorpal.blade.library.fsmar3;
 
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
+
 import java.io.Serializable;
 import java.util.HashMap;
 
@@ -18,6 +20,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// into the routing context, and its triggers (keyed by SIP method) hold
 /// ordered transitions evaluated until the first whose `when` condition fires.
 @JsonPropertyOrder({ "about", "logging", "defaultApplication", "states" })
+@SchemaAbout(
+		name = "FSMAR 3",
+		tagline = "Finite State Machine Application Router",
+		description = "Routes initial SIP requests between applications using a finite state machine: " + "states keyed by the previous application, selectors that extract values from the " + "message, and transitions matched by conditions over those values. The future of FSMAR.")
 public class AppRouterConfiguration extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -51,7 +57,9 @@ public class AppRouterConfiguration extends Configuration implements Serializabl
 	}
 
 	public void setStates(HashMap<String, State> states) {
-		this.states = states;
+		// Coerce null so an explicit "states": null in hand-edited JSON can't
+		// NPE the routing loop (same idiom as State.setSelectors).
+		this.states = (states != null) ? states : new HashMap<>();
 	}
 
 	/// Gets or creates a state for the given previous application name.

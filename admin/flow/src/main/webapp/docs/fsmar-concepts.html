@@ -72,7 +72,7 @@
 						<dt>State</dt>
 						<dd>A node in the graph. Represents either an application invocation (e.g. "run analytics") or a control point (start, end, decision). Rendered as a labeled shape.</dd>
 						<dt>Transition</dt>
-						<dd>A directed edge between two states. Carries an optional condition and an optional trigger. Traversed when the runtime matches.</dd>
+						<dd>A directed edge between two states, evaluated under its trigger's SIP method. Carries an optional <code>when</code> condition; transitions are tried in order and the first match wins.</dd>
 						<dt>Trigger</dt>
 						<dd>An event that activates the start of a flow — typically a SIP method on an initial request. Triggers live on the edge from the Ingress cloud.</dd>
 						<dt>Condition</dt>

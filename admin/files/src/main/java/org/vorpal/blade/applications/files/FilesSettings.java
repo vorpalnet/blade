@@ -1,5 +1,7 @@
 package org.vorpal.blade.applications.files;
 
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,6 +14,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /// holds the editable-file registry: the deny-by-default whitelist of domain
 /// files this tool is permitted to read and write. The tool never browses the
 /// filesystem freely — only the files an administrator lists here are reachable.
+@SchemaAbout(
+		name = "Files",
+		tagline = "Domain File Editor",
+		description = "Edit schema-less domain files — XML, JSON, properties, plain text — from the browser instead of over SSH. Files are an admin-defined whitelist; every save is well-formedness-checked and backed up so a bad edit can be rolled back.")
 public class FilesSettings extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 

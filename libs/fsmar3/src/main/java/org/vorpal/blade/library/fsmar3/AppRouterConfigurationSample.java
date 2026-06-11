@@ -27,12 +27,6 @@ public class AppRouterConfigurationSample extends AppRouterConfiguration impleme
 	private static final String SIP_USER = ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*";
 
 	public AppRouterConfigurationSample() {
-		this.about.setName("FSMAR 3")
-				.setTagline("Finite State Machine Application Router")
-				.setDescription("Routes initial SIP requests between applications using a finite state machine: "
-						+ "states keyed by the previous application, selectors that extract values from the "
-						+ "message, and transitions matched by conditions over those values. The future of FSMAR.");
-
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LoggingLevel.WARNING);
 

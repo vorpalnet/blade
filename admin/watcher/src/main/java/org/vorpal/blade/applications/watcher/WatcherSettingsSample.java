@@ -8,9 +8,5 @@ public class WatcherSettingsSample extends WatcherSettings {
 
 	public WatcherSettingsSample() {
 		this.enabled = true;
-
-		this.about.setName("Watcher")
-				.setTagline("Headless Configuration Monitor")
-				.setDescription("Backend-only service that watches the BLADE configuration directory and pushes JSON file changes into the matching SettingsMXBean. Kept for backward compatibility with deployments that don't run the Configurator.");
 	}
 }

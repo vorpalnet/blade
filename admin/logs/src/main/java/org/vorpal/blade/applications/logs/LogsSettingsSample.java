@@ -7,8 +7,5 @@ public class LogsSettingsSample extends LogsSettings {
 	private static final long serialVersionUID = 1L;
 
 	public LogsSettingsSample() {
-		this.about.setName("Logs")
-				.setTagline("Cluster Log Tail")
-				.setDescription("Stream and filter logs from every node in the cluster. Merges per-server output by timestamp; supports phase filters, severity filters, and live follow mode.");
 	}
 }
