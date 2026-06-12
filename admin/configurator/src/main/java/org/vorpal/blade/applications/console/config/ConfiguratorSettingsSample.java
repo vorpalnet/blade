@@ -13,6 +13,6 @@ public class ConfiguratorSettingsSample extends ConfiguratorSettings {
 	private static final long serialVersionUID = 1L;
 
 	public ConfiguratorSettingsSample() {
-		this.autoPublish = false;
+		this.autoPublish = true;
 	}
 }

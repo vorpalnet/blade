@@ -11,6 +11,7 @@
 #   ./build.sh production occas-8.2         # production services, OCCAS 8.2
 #   ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
 #   ./build.sh production clean package     # with explicit Maven goals
+#   ./build.sh clean                        # also purges org.vorpal.blade from ~/.m2
 #   ./build.sh --no-dist                    # full build, skip dist/ copy
 #   ./build.sh --no-javadoc                 # full build, skip javadoc generation
 #   ./build.sh -- -Pfoo                     # full build with extra Maven flags
@@ -537,12 +538,13 @@ DISTDIR="${SCRIPT_DIR}/dist/${REVISION}-${BUILD_NUM}"
 # ranges (e.g. [1.0.0,)) against the local .m2 repository. If we don't install
 # here, those builds silently resolve to whatever older BLADE was installed
 # previously. So even when the user passes explicit goals like `clean package`,
-# we append `install` so the framework JAR (and other BLADE artifacts) land in
-# .m2. All non-framework modules have maven-install-plugin skipped, so this is
-# cheap.
+# we append `install` so the framework JAR and parent POM land in .m2. All
+# other modules have maven-install-plugin skipped (blade.skip.install=true in
+# the parent pom), so this is cheap.
 HAS_GOALS=false
 HAS_INSTALL=false
 HAS_BUILD_GOAL=false
+HAS_CLEAN=false
 MAVEN_GOALS=()
 MAVEN_FLAGS=()
 for arg in "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}"; do
@@ -555,7 +557,7 @@ for arg in "${MAVEN_ARGS[@]+"${MAVEN_ARGS[@]}"}"; do
         # shouldn't trigger the install-append below. Anything else is
         # treated as a build goal.
         case "$arg" in
-            clean|pre-clean|post-clean) ;;
+            clean|pre-clean|post-clean) HAS_CLEAN=true ;;
             install|deploy) HAS_INSTALL=true; HAS_BUILD_GOAL=true ;;
             *) HAS_BUILD_GOAL=true ;;
         esac
@@ -569,6 +571,19 @@ elif [ "$HAS_INSTALL" = false ] && [ "$HAS_BUILD_GOAL" = true ]; then
     # version ranges, so we install on every build that produces artifacts.
     # Clean-only runs (./build.sh clean) skip this — nothing to install.
     MAVEN_GOALS+=("install")
+fi
+
+# --- Purge installed BLADE artifacts on clean ---
+# `mvn clean` only reaches target/; installed artifacts in ~/.m2 are the
+# other place build output lands, and version-range consumers (optum's
+# [2.0.0,)) resolve to the highest version found there — so a stale install
+# silently shadows fresh builds. Scoped to org/vorpal/blade: the
+# bootstrapped OCCAS/WebLogic JARs (javax, com.oracle.*) are untouched.
+# After a clean-only run, downstream repos can't resolve BLADE until the
+# next ./build.sh re-installs it — a loud failure, by design.
+if [ "$HAS_CLEAN" = true ]; then
+    echo "Purging BLADE artifacts from ${M2_REPO}/org/vorpal/blade"
+    rm -rf "${M2_REPO}/org/vorpal/blade"
 fi
 
 # Clean-only runs have no dist to copy. Force SKIP_DIST so we don't write
@@ -717,8 +732,7 @@ set +e
     "${SKIP_FLAGS[@]+"${SKIP_FLAGS[@]}"}" \
     "${PLATFORM_FLAGS[@]+"${PLATFORM_FLAGS[@]}"}" \
     "-Dbuild.number=${BUILD_NUM}" \
-    "-Dblade.included.modules=${INCLUDED_CSV}" \
-    "-Dblade.skip.install=false"
+    "-Dblade.included.modules=${INCLUDED_CSV}"
 MVN_EXIT=$?
 set -e
 
