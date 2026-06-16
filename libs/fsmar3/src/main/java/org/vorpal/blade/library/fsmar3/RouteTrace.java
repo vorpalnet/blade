@@ -27,7 +27,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// Mutators are synchronized: a single call's hops arrive sequentially, but
 /// the serializing JMX thread may read while a routing thread writes.
-@JsonPropertyOrder({ "callId", "method", "requestUri", "hops", "finalApp", "defaultFallback", "cycleDetected",
+@JsonPropertyOrder({ "callId", "method", "requestURI", "hops", "finalApp", "defaultFallback", "cycleDetected",
 		"context" })
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RouteTrace {
@@ -248,7 +248,7 @@ public class RouteTrace {
 		return method;
 	}
 
-	public String getRequestUri() {
+	public String getRequestURI() {
 		return requestUri;
 	}
 

@@ -89,6 +89,16 @@ stay consistent.
 <!-- + the four <security-role> declarations -->
 ```
 
+**The login page itself is single-sourced.** The only real `login.jsp` in the
+repo is the portal master, `admin/portal/src/main/webapp/login.jsp`; every
+other admin WAR's pom injects a byte-identical copy at build time via a
+`maven-war-plugin` `webResources` entry (at `/login/login.jsp` or `/login.jsp`,
+matching that app's `form-login-page`). To change the login page, edit the
+portal master and rebuild — **never create a per-app login page**; per-app
+copies are exactly the drift this arrangement exists to prevent. The page's
+assets (brand CSS, backdrop, logo) are served unauthenticated from
+`/blade/portal/` for all apps.
+
 `weblogic.xml` must also carry the four
 `<wls:security-role-assignment><wls:externally-defined/>` blocks. **Both halves
 are required** — without the role assignments the role names match no realm

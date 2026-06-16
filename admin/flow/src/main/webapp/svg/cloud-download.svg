@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Cloud with down arrow -->
+  <path d="M368 400 L144 400 Q64 400 64 320 Q64 244 136 236 Q152 152 240 152 Q320 152 344 216 Q448 216 448 308 Q448 400 368 400 Z" fill="none" stroke="currentColor" stroke-width="32" stroke-linejoin="round"/>
+  <path d="M256 376 L184 288 L224 288 L224 224 L288 224 L288 288 L328 288 Z" fill="currentColor"/>
+</svg>

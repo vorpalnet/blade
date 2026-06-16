@@ -18,7 +18,13 @@ import java.lang.annotation.Target;
 ///   single-line &lt;input&gt;. Implies wide layout.
 /// - `password = true` — render as a masked &lt;input type="password"&gt;.
 /// - `readOnly = true` — render the input in disabled state. Useful for
-///   computed/derived fields that should be visible but not editable.
+///   computed/derived fields that should be visible but not editable. On a
+///   complex property (object/map/array) the whole subtree renders with its
+///   controls disabled — visible but not editable.
+/// - `collapsed = true` — render the property's collapsible section
+///   minimized even when it has data. For machine-managed payloads (e.g. the
+///   Flow editor's `diagram` layout) that operators should see exists but
+///   not be drawn to.
 /// - `regexTest = true` — surface a "test" button beside the field that
 ///   opens the configurator's regex-tester modal (sample input →
 ///   named/numbered capture groups).
@@ -37,4 +43,5 @@ public @interface FormLayout {
     boolean password() default false;
     boolean readOnly() default false;
     boolean regexTest() default false;
+    boolean collapsed() default false;
 }

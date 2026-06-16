@@ -2434,3 +2434,9 @@ button.btn {
     text-shadow: 0 1px 0 #000;
     font-size: 11px;
 }
+
+/* @FormLayout(readOnly=true) on a complex property: the whole subtree is
+   visible but not editable (controls disabled by applyReadOnly). */
+.form-readonly {
+    opacity: 0.75;
+}

@@ -6,9 +6,11 @@ import java.io.Serializable;
 import java.util.HashMap;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -19,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// initial requests). Each state's selectors extract values from the request
 /// into the routing context, and its triggers (keyed by SIP method) hold
 /// ordered transitions evaluated until the first whose `when` condition fires.
-@JsonPropertyOrder({ "about", "logging", "defaultApplication", "states" })
+@JsonPropertyOrder({ "version", "logging", "defaultApplication", "states", "diagram" })
 @SchemaAbout(
 		name = "FSMAR 3",
 		tagline = "Finite State Machine Application Router",
@@ -29,6 +31,20 @@ public class AppRouterConfiguration extends Configuration implements Serializabl
 
 	private String defaultApplication;
 	private HashMap<String, State> states = new HashMap<>();
+	private Diagram diagram;
+
+	/// FSMAR 3 config baseline version. The framework's `version` field
+	/// encodes the FSMAR generation for this config lineage: an fsmar config
+	/// with no version (or a legacy fsmar2-shaped file) reads as gen 3, so a
+	/// future upgrader can recognize a pre-3 file and run the Fsmar2Converter
+	/// transform. An explicitly-versioned file keeps its value. Stays
+	/// read-only in the Configurator (re-applies the base getter's hints).
+	@Override
+	@JsonPropertyDescription("Config schema version (framework-managed)")
+	@FormLayout(readOnly = true)
+	public Integer getVersion() {
+		return (version == null) ? 3 : version;
+	}
 
 	/// Fallback application when no transition matches an initial request.
 	@JsonPropertyDescription("Fallback application when no transition matches an initial request")
@@ -60,6 +76,24 @@ public class AppRouterConfiguration extends Configuration implements Serializabl
 		// Coerce null so an explicit "states": null in hand-edited JSON can't
 		// NPE the routing loop (same idiom as State.setSelectors).
 		this.states = (states != null) ? states : new HashMap<>();
+	}
+
+	/// Flow editor layout: state positions, gateway clouds, and which gateway
+	/// each null-side transition attaches to. Pure presentation metadata —
+	/// routing never reads it, and the config remains valid without it (the
+	/// Flow editor auto-lays-out whatever has no stored placement). Absent
+	/// entirely until a diagram is saved from the Flow editor. Collapsed and
+	/// read-only in the Configurator: operators should see it exists but
+	/// edit it only through the Flow editor. See [Diagram].
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	@FormLayout(collapsed = true, readOnly = true)
+	@JsonPropertyDescription("Flow editor layout (state positions, gateway clouds, transition attachments). Managed by the Flow editor; safe to delete.")
+	public Diagram getDiagram() {
+		return diagram;
+	}
+
+	public void setDiagram(Diagram diagram) {
+		this.diagram = diagram;
 	}
 
 	/// Gets or creates a state for the given previous application name.

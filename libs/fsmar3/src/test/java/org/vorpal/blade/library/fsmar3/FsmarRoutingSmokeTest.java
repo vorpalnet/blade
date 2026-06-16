@@ -3,6 +3,9 @@ package org.vorpal.blade.library.fsmar3;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.servlet.sip.ar.SipApplicationRouterInfo;
+import javax.servlet.sip.ar.SipRouteModifier;
+
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.MemoryContext;
 import org.vorpal.blade.framework.v3.configuration.selectors.RegexSelector;
@@ -30,6 +33,9 @@ public final class FsmarRoutingSmokeTest {
 		testTierTableClassification();
 		testMatchesOperatorInWhen();
 		testRegionSerialization();
+		testEgressRouterInfo();
+		testSampleEgress();
+		testTwiceInvokedApp();
 		testMetricsCounters();
 		summary();
 	}
@@ -136,13 +142,38 @@ public final class FsmarRoutingSmokeTest {
 		check("sample has null state", cfg.getStates().get("null") != null);
 		check("sample null state has selectors", !cfg.getStates().get("null").getSelectors().isEmpty());
 		check("sample defaultApplication set", "b2bua".equals(cfg.getDefaultApplication()));
-		// Drive the sample's INVITE transitions for alice->bob.
 		State init = cfg.getStates().get("null");
+
+		// INV-bob (found by id — it no longer leads the trigger; the two
+		// ingress dispatch transitions do) still fires for alice->bob.
 		Context ctx = new MemoryContext();
 		init.extract(ctx, invite("alice", "bob"));
-		Transition first = init.getTrigger("INVITE").getTransitions().get(0);
-		check("sample INV-bob fires for alice->bob", "INV-bob".equals(first.getId()) && first.matches(ctx));
-		check("sample INV-bob route resolves", "sip:bob@special-proxy".equals(ctx.resolve(first.getRoutes()[0])));
+		Transition bob = findTransition(init, "INV-bob");
+		check("sample INV-bob fires for alice->bob", bob != null && bob.matches(ctx));
+		check("sample INV-bob route resolves", "sip:bob@special-proxy".equals(ctx.resolve(bob.getRoutes()[0])));
+
+		// The two ingress SBCs lead the INVITE trigger and classify by source
+		// subnet via the insubnet operator (real CIDR, ipaddress-backed).
+		java.util.List<Transition> inv = init.getTrigger("INVITE").getTransitions();
+		check("sample dispatch-Atlanta leads", "dispatch-Atlanta".equals(inv.get(0).getId())
+				&& "Atlanta".equals(inv.get(0).getNext()));
+		check("sample dispatch-Dallas second", "dispatch-Dallas".equals(inv.get(1).getId())
+				&& "Dallas".equals(inv.get(1).getNext()));
+
+		Context atl = new MemoryContext(); atl.put("originIP", "10.20.5.9");
+		Context dal = new MemoryContext(); dal.put("originIP", "10.30.5.9");
+		check("sample Atlanta subnet matches its dispatch", findTransition(init, "dispatch-Atlanta").matches(atl));
+		check("sample Atlanta IP misses Dallas dispatch", !findTransition(init, "dispatch-Dallas").matches(atl));
+		check("sample Dallas subnet matches its dispatch", findTransition(init, "dispatch-Dallas").matches(dal));
+
+		// The ingress entry states exist with their own routing.
+		check("sample Atlanta entry state exists", cfg.getStates().get("Atlanta") != null);
+		check("sample Dallas entry state exists", cfg.getStates().get("Dallas") != null);
+		// And they're marked as ingresses in the diagram.
+		check("sample diagram marks Atlanta + Dallas ingresses",
+				cfg.getDiagram() != null && cfg.getDiagram().getIngresses() != null
+						&& cfg.getDiagram().getIngresses().containsKey("Atlanta")
+						&& cfg.getDiagram().getIngresses().containsKey("Dallas"));
 	}
 
 	private static void testPseudoVariables() {
@@ -151,7 +182,7 @@ public final class FsmarRoutingSmokeTest {
 				"NEUTRAL", "null", "a84b4c76e66710@pc33.example.com");
 
 		check("pseudo: method", "INVITE".equals(ctx.resolve("${method}")));
-		check("pseudo: requestUri", "sip:bob@example.com".equals(ctx.resolve("${requestUri}")));
+		check("pseudo: requestURI", "sip:bob@example.com".equals(ctx.resolve("${requestURI}")));
 		check("pseudo: directive", "NEW".equals(ctx.resolve("${directive}")));
 		check("pseudo: previousApp", "null".equals(ctx.resolve("${previousApp}")));
 
@@ -227,6 +258,85 @@ public final class FsmarRoutingSmokeTest {
 		} catch (Exception e) {
 			check("region: serialization threw " + e.getMessage(), false);
 		}
+	}
+
+	private static void testEgressRouterInfo() {
+		// A terminal transition (no `next`) that carries routes is an egress:
+		// createRouterInfo with a null app name is the JSR-289 "selection
+		// complete, route per these routes" signal the engine now emits.
+		State s = new State();
+		s.addSelector(new RegexSelector("To", "To", SIP_USER, null));
+		Context ctx = new MemoryContext();
+		s.extract(ctx, invite("alice", "bob"));
+
+		Transition egress = new Transition().setId("offnet")
+				.setRouteFinal(new String[] { "sip:${To.user}@carrier-trunk" });
+		// No subscriber set, so passing a null request is safe.
+		SipApplicationRouterInfo info = egress.createRouterInfo(null, new HashMap<String, String>(), ctx, null);
+		check("egress: no next application (null name)", info.getNextApplicationName() == null);
+		check("egress: route resolved from context", "sip:bob@carrier-trunk".equals(info.getRoutes()[0]));
+		check("egress: ROUTE_FINAL applied", info.getRouteModifier() == SipRouteModifier.ROUTE_FINAL);
+
+		Transition back = new Transition().setId("back")
+				.setRouteBack(new String[] { "sip:reject@${originIP}" });
+		Context ctx2 = new MemoryContext();
+		ctx2.put("originIP", "10.20.5.9");
+		SipApplicationRouterInfo binfo = back.createRouterInfo(null, new HashMap<String, String>(), ctx2, null);
+		check("egress: ROUTE_BACK applied", binfo.getRouteModifier() == SipRouteModifier.ROUTE_BACK);
+		check("egress: ROUTE_BACK route resolved", "sip:reject@10.20.5.9".equals(binfo.getRoutes()[0]));
+	}
+
+	private static void testSampleEgress() {
+		AppRouterConfigurationSample cfg = new AppRouterConfigurationSample();
+
+		// b2bua-callee off-net path is a terminal ROUTE_FINAL egress.
+		Transition offnet = findTransition(cfg.getStates().get("b2bua-callee"), "B2B-offnet");
+		check("sample B2B-offnet exists", offnet != null);
+		check("sample B2B-offnet is terminal (no next)", offnet != null && offnet.getNext() == null);
+		check("sample B2B-offnet is ROUTE_FINAL",
+				offnet != null && offnet.getRouteModifier() == SipRouteModifier.ROUTE_FINAL);
+
+		// screening anon path is a ROUTE_BACK egress: routes out, resumes at
+		// b2bua (next), so `next` is the return state, not null.
+		Transition anon = findTransition(cfg.getStates().get("screening"), "SCR-anon");
+		check("sample SCR-anon exists", anon != null);
+		check("sample SCR-anon is ROUTE_BACK",
+				anon != null && anon.getRouteModifier() == SipRouteModifier.ROUTE_BACK);
+		check("sample SCR-anon resumes at b2bua (next = return state)",
+				anon != null && "b2bua".equals(anon.getNext()));
+
+		// Diagram marks both exits; media-greeting carries its returnState.
+		check("sample diagram marks to-carrier + media-greeting egresses",
+				cfg.getDiagram() != null && cfg.getDiagram().getEgresses() != null
+						&& cfg.getDiagram().getEgresses().containsKey("to-carrier")
+						&& cfg.getDiagram().getEgresses().containsKey("media-greeting"));
+		check("sample media-greeting egress returns to b2bua",
+				cfg.getDiagram().getEgresses().get("media-greeting") != null
+						&& "b2bua".equals(cfg.getDiagram().getEgresses().get("media-greeting").getReturnState()));
+		check("sample to-carrier egress is ROUTE_FINAL (no returnState)",
+				cfg.getDiagram().getEgresses().get("to-carrier") != null
+						&& cfg.getDiagram().getEgresses().get("to-carrier").getReturnState() == null);
+	}
+
+	private static void testTwiceInvokedApp() {
+		// A state's id (map key) is distinct from the app it invokes: two states
+		// can share an app. State.appOrId resolves the app (its `app`, else the
+		// id passed in).
+		State plain = new State();
+		check("appOrId: defaults to the id when app unset", "b2bua".equals(plain.appOrId("b2bua")));
+		State callee = new State().setApp("b2bua");
+		check("appOrId: uses app when set", "b2bua".equals(callee.appOrId("b2bua-callee")));
+
+		// The sample demonstrates it end to end: two states, both running b2bua.
+		AppRouterConfigurationSample cfg = new AppRouterConfigurationSample();
+		State caller = cfg.getStates().get("b2bua");
+		State callee2 = cfg.getStates().get("b2bua-callee");
+		check("sample has both b2bua-leg states", caller != null && callee2 != null);
+		check("sample b2bua (caller leg) runs app b2bua", caller != null && "b2bua".equals(caller.appOrId("b2bua")));
+		check("sample b2bua-callee runs app b2bua", callee2 != null && "b2bua".equals(callee2.getApp()));
+		Transition callerLeg = findTransition(caller, "B2B-caller-leg");
+		check("sample caller leg routes to the callee-leg state id",
+				callerLeg != null && "b2bua-callee".equals(callerLeg.getNext()));
 	}
 
 	private static void testMetricsCounters() {

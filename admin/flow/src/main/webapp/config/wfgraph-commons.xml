@@ -36,7 +36,37 @@
 				return '<b>' + esc(tag) + ': ' + esc(label) + '</b>' + info;
 			}
 
-			if (tag === 'State' || tag === 'Ingress') {
+			// Egress exit node (Gateway with role="egress"): where the call
+			// leaves OCCAS. The kind is inferred from topology — an out-edge back
+			// to a state makes it ROUTE_BACK (resume there on return), else
+			// ROUTE_FINAL.
+			if (cell.getAttribute('role') === 'egress') {
+				var egReturn = null;
+				var egEdges = cell.edges || [];
+				for (var ei = 0; ei < egEdges.length; ei++) {
+					var ee = egEdges[ei];
+					if (ee.source === cell &amp;&amp; ee.target &amp;&amp; ee.target.value
+							&amp;&amp; ee.target.getAttribute('role') !== 'egress') {
+						egReturn = ee.target.getAttribute('stateId') || ee.target.getAttribute('label');
+						break;
+					}
+				}
+				info += '<br>egress exit (the call leaves OCCAS here)';
+				if (cell.value &amp;&amp; cell.value.childNodes) {
+					for (var k = 0; k < cell.value.childNodes.length; k++) {
+						var rc = cell.value.childNodes[k];
+						if (rc.nodeType === 1 &amp;&amp; rc.nodeName === 'route') {
+							info += '<br>route: ' + esc(rc.getAttribute('uri') || '');
+						}
+					}
+				}
+				info += egReturn
+						? '<br>ROUTE_BACK &#8594; resumes at ' + esc(egReturn)
+						: '<br>ROUTE_FINAL (leaves for good)';
+				return '<b>Egress: ' + esc(label) + '</b>' + info;
+			}
+
+			if (tag === 'State' || tag === 'Gateway' || tag === 'Ingress') {
 				// Selector summary: which variables this state publishes.
 				var sels = [];
 				if (cell.value && cell.value.childNodes) {
@@ -53,8 +83,13 @@
 				} else if (tag === 'State') {
 					info += '<br>selectors: none';
 				}
-				if (tag === 'Ingress') {
-					info += '<br>maps to the "null" state (initial requests)';
+				if (tag === 'Gateway' || tag === 'Ingress') {
+					var match = cell.getAttribute('match');
+					if (match) {
+						info += '<br>ingress entry state; source match: ' + esc(match);
+					} else {
+						info += '<br>default ingress (the "null" state — any source)';
+					}
 				}
 				return '<b>' + esc(tag) + ': ' + esc(label) + '</b>' + info +
 						'<br>Edges: ' + cell.getEdgeCount();
@@ -82,7 +117,18 @@
 				}
 				return label;
 			}
-			return cell.getAttribute('label');
+			// A State/ingress whose state id differs from its application name
+			// (a second instance of the same app) shows the id as a qualifier so
+			// the two boxes read distinctly: "b2bua\n(b2bua-caller)".
+			var lbl = cell.getAttribute('label');
+			if (cell.value &amp;&amp; (cell.value.tagName === 'State' || cell.value.tagName === 'Gateway')
+					&amp;&amp; cell.getAttribute('role') !== 'egress') {
+				var sid = cell.getAttribute('stateId');
+				if (sid &amp;&amp; sid.length &gt; 0 &amp;&amp; sid !== lbl) {
+					return lbl + '\n(' + sid + ')';
+				}
+			}
+			return lbl;
 		}
 	</add>
 	<add as="getEditingValue">
@@ -153,6 +199,38 @@
 			<add as="fontSize" value="12"/>
 			<add as="fontStyle" value="1"/>
 		</add>
+		<!-- Ingress entry node: a filled cloud (cloud-ingress stencil) with a
+		     fat down block-arrow low on the cloud. The state name/id sits dead
+		     center; the arrow lives below it near the cloud's bottom line. -->
+		<add as="gateway">
+			<add as="shape" value="cloud-ingress"/>
+			<add as="fillColor" value="#F8F8FA"/>
+			<add as="strokeColor" value="#545454"/>
+			<add as="strokeWidth" value="2"/>
+			<add as="fontSize" value="11"/>
+			<add as="fontStyle" value="1"/>
+			<add as="verticalLabelPosition" value="middle"/>
+			<add as="verticalAlign" value="middle"/>
+			<add as="spacingBottom" value="30"/>
+			<add as="whiteSpace" value="wrap"/>
+		</add>
+		<!-- Egress exit node: the mirror of an ingress. Distinguished from
+		     ingress by SHAPE (the up-arrow vs the ingress down-arrow), not color
+		     alone, plus its right-column placement and "Egress:" tooltip. -->
+		<add as="egress">
+			<add as="shape" value="cloud-egress"/>
+			<add as="fillColor" value="#F8F8FA"/>
+			<add as="strokeColor" value="#545454"/>
+			<add as="strokeWidth" value="2"/>
+			<add as="fontSize" value="11"/>
+			<add as="fontStyle" value="1"/>
+			<add as="verticalLabelPosition" value="middle"/>
+			<add as="verticalAlign" value="middle"/>
+			<add as="spacingBottom" value="30"/>
+			<add as="whiteSpace" value="wrap"/>
+		</add>
+		<!-- Legacy cloud styles: pre-unification saved XML diagrams still
+		     reference them. New diagrams use the gateway style only. -->
 		<add as="ingressCloud">
 			<add as="shape" value="networkServer"/>
 			<add as="fillColor" value="#E1D5E7"/>
@@ -179,6 +257,17 @@
 		<add as="straightEdge">
 			<add as="shape" value="connector"/>
 			<add as="endArrow" value="classic"/>
+		</add>
+		<!-- Route-back line: an egress's out-edge back to a state. Dashed +
+		     open arrow so it reads as "the call returns here", distinct from a
+		     routing transition. Topology only — its presence makes the egress
+		     ROUTE_BACK. -->
+		<add as="routeBack">
+			<add as="shape" value="connector"/>
+			<add as="dashed" value="1"/>
+			<add as="endArrow" value="open"/>
+			<add as="strokeColor" value="#888888"/>
+			<add as="dashPattern" value="6 4"/>
 		</add>
 		<add as="group">
 			<add as="shape" value="rectangle"/>

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Backspace key with X -->
+  <path d="M192 96 L464 96 Q480 96 480 112 L480 400 Q480 416 464 416 L192 416 L48 256 Z" fill="none" stroke="currentColor" stroke-width="32" stroke-linejoin="round"/>
+  <path d="M240 192 L368 320 M368 192 L240 320" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round"/>
+</svg>

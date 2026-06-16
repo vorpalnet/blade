@@ -99,7 +99,7 @@ public final class Fsmar3CaptureSmokeTest {
 		JsonNode root = new ObjectMapper().readTree(traces[0]);
 		check("shape: callId", "call-shape".equals(root.path("callId").asText()));
 		check("shape: method", "INVITE".equals(root.path("method").asText()));
-		check("shape: requestUri", "sip:bob@example.com".equals(root.path("requestUri").asText()));
+		check("shape: requestURI", "sip:bob@example.com".equals(root.path("requestURI").asText()));
 		check("shape: two hops", root.path("hops").size() == 2);
 
 		JsonNode hop1 = root.path("hops").get(0);

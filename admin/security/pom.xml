@@ -40,6 +40,28 @@
 		     which keeps only vorpal-blade-library-framework.jar in WEB-INF/lib.
 		     That jar carries the v3 security package (JwtAuthFilter, etc.), so
 		     JAX-RS scanning picks the filter up here without bundling Nimbus. -->
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<!-- The login page is the portal master, injected at build time:
+					     one source file, no per-app copies to drift. Edit
+					     admin/portal/src/main/webapp/login.jsp, never add a per-app
+					     login page. See SECURITY.md. -->
+					<webResources>
+						<resource>
+							<directory>${project.basedir}/../portal/src/main/webapp</directory>
+							<includes>
+								<include>login.jsp</include>
+							</includes>
+							<targetPath>login</targetPath>
+						</resource>
+					</webResources>
+				</configuration>
+			</plugin>
+		</plugins>
 	</build>
+
 
 </project>

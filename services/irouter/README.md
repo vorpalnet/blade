@@ -47,17 +47,19 @@ Each connector (except `table`) carries a list of `Selector`s that extract value
 
 In a `SipConnector`, selectors typically read a named SIP header (`To`, `From`, `Contact`, `P-Asserted-Identity`, etc.), but a handful of pseudo-attribute names reach past the header map for request-level or transport-level info. Use them as the `attribute` field on any selector:
 
-| Name (either casing) | Value |
+Each has ONE spelling — lowerCamelCase, acronyms uppercase. (SIP header names, by contrast, keep their canonical form: `To`, `Call-ID`, etc.)
+
+| Name | Value |
 |---|---|
-| `Request-URI` / `requestURI` / `RequestURI` / `ruri` | Request URI of the inbound INVITE |
-| `Origin-IP` / `OriginIP` / `originIP` | Original caller IP with the five-step fallback chain (X-Vorpal-ID origin → `getInitialRemoteAddr` → Via `received` → Via `sent-by` → `getRemoteAddr`) |
-| `Peer-IP` / `peerIP` | Immediate transport peer — typically the upstream OCCAS service when iRouter isn't first in the chain |
-| `content` / `Content` / `body` / `Body` | INVITE message body (SDP, MIME, whatever) |
-| `Transport` / `transport` | Inbound transport: `UDP`, `TCP`, `TLS`, `WS`, `WSS` |
-| `IsSecure` / `isSecure` | `"true"` when transport is `TLS` or `WSS`, else `"false"` |
-| `ClientCertSubject` / `clientCertSubject` | Subject DN of the peer-presented X.509 cert (TLS/WSS with mutual auth) |
-| `ClientCertIssuer` / `clientCertIssuer` | Issuer DN of the same cert |
-| `TlsCipher` / `tlsCipher` | Negotiated TLS cipher suite |
+| `requestURI` | Request URI of the inbound INVITE |
+| `originIP` | Original caller IP with the five-step fallback chain (X-Vorpal-ID origin → `getInitialRemoteAddr` → Via `received` → Via `sent-by` → `getRemoteAddr`) |
+| `peerIP` | Immediate transport peer — typically the upstream OCCAS service when iRouter isn't first in the chain |
+| `body` | INVITE message body (SDP, MIME, whatever) |
+| `transport` | Inbound transport: `UDP`, `TCP`, `TLS`, `WS`, `WSS` |
+| `isSecure` | `"true"` when transport is `TLS` or `WSS`, else `"false"` |
+| `clientCertSubject` | Subject DN of the peer-presented X.509 cert (TLS/WSS with mutual auth) |
+| `clientCertIssuer` | Issuer DN of the same cert |
+| `tlsCipher` | Negotiated TLS cipher suite |
 
 Any other value in `attribute` is treated as an actual SIP header name and looked up via `getHeader()`.
 

@@ -2,94 +2,47 @@
 <head>
 <title>Node Properties</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="css/panels.css">
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 
-<style>
-body {
-	font-family: Arial;
-	font-size: 12px;
-	background-color: #eef;
-}
-#state-view {
-	padding: 8px;
-}
-#state-view label {
-	display: block;
-	margin-top: 8px;
-	font-weight: bold;
-}
-#state-view input[type=text] {
-	width: 95%;
-	padding: 4px;
-	box-sizing: border-box;
-}
-.state-hint {
-	color: #666;
-	font-size: 11px;
-	margin-top: 4px;
-	font-style: italic;
-}
-#state-view fieldset {
-	margin: 10px 0;
-	border: 1px solid #bbb;
-	padding: 6px 10px 12px 10px;
-	background: #f8f8ff;
-	border-radius: 4px;
-}
-#state-view legend {
-	font-weight: bold;
-	font-size: 11px;
-	padding: 0 6px;
-}
-.sel-field {
-	margin-top: 10px;
-}
-.sel-field label {
-	display: block;
-	font-weight: bold;
-	font-size: 11px;
-	margin-bottom: 3px;
-	color: #444;
-	margin-top: 0;
-}
-.sel-field input[type=text],
-.sel-field select,
-.sel-field textarea {
-	width: 100%;
-	box-sizing: border-box;
-	padding: 3px;
-}
-.sel-field textarea {
-	font-family: monospace;
-	font-size: 11px;
-	min-height: 48px;
-}
-.add-btn {
-	color: green;
-	cursor: pointer;
-	font-size: 14px;
-}
-.remove-btn {
-	color: #c00;
-	cursor: pointer;
-}
-.hint {
-	color: #666;
-	font-size: 10px;
-	font-style: italic;
-	font-weight: normal;
-}
-</style>
 </head>
 <body>
 
 <div id="state-view">
 	<label>Name</label>
-	<input class="node-name" type="text" placeholder="e.g. b2bua, proxy-registrar, PSTN, SBC1" />
+	<input class="node-name" type="text" placeholder="e.g. b2bua, proxy-registrar, SBC-Dallas" />
 	<div class="state-hint">
-		For a State, this is the BLADE application name (used as the JSON key).
-		For Ingress/Egress clouds, this is just a display label &mdash; both clouds always
-		map to the literal string <code>null</code> in FSMAR JSON.
+		For a State, this is the BLADE <b>application</b> it invokes. For an ingress
+		(SBC, trunk, carrier), this is the entry state's name &mdash; a real FSMAR
+		state with its own selectors and arrows. The <b>default</b> ingress is the
+		<code>null</code> state (any source).
+	</div>
+
+	<!-- State ID: the unique key in the states map, separate from the
+	     application name above. Leave blank to use the name as the id (the
+	     usual case). Set a distinct id to invoke the SAME application from two
+	     states — e.g. a B2BUA once per subscriber leg. -->
+	<div class="state-id-section">
+		<label style="margin-top: 14px;">State ID <span class="hint">(unique key; blank = same as the name)</span></label>
+		<div class="state-hint" style="margin-top: 0;">
+			Set a distinct id to invoke the same application from more than one
+			state (e.g. <code>b2bua-caller</code> and <code>b2bua-callee</code>,
+			both running <code>b2bua</code>).
+		</div>
+		<input class="node-stateid" type="text" placeholder="(same as the name)" />
+	</div>
+
+	<!-- Source match: only meaningful for a NAMED ingress (not the default).
+	     Compiles to a dispatch transition on the null state, classifying inbound
+	     traffic into this ingress. The editor shows this only for ingress boxes. -->
+	<div class="ingress-match-section">
+		<label style="margin-top: 14px;">Source match</label>
+		<div class="state-hint" style="margin-top: 0;">
+			A <code>when</code> expression over the inbound request that routes its
+			traffic to this ingress, e.g. <code>${originIP} insubnet '10.20.0.0/16'</code>.
+			Leave blank on the <b>default</b> ingress (it catches any source).
+		</div>
+		<input class="node-match" type="text" placeholder="${originIP} insubnet '10.20.0.0/16'" />
 	</div>
 
 	<!-- Selectors run on entry to this state; each extracts a value from the
@@ -116,6 +69,33 @@ body {
 			with mutually exclusive conditions, so evaluation order cannot matter.
 		</div>
 		<button class="add-plan-dispatch" type="button" style="margin-top: 6px;">Add plan dispatch&hellip;</button>
+	</div>
+
+	<!-- Egress exit node: where the call LEAVES OCCAS. The mirror of an
+	     ingress. Shown only for an egress node. Its routes are baked onto each
+	     transition that targets it; the EXIT KIND is inferred from topology —
+	     draw a line from the egress back to a state to make it route-back. -->
+	<div class="egress-section">
+		<label style="margin-top: 14px;">Exit kind</label>
+		<div class="state-hint" style="margin-top: 0;">
+			Inferred from the diagram: with no line out, the call leaves OCCAS for
+			good (<b>ROUTE_FINAL</b>). Draw a line from this egress back to a state
+			and it becomes <b>ROUTE_BACK</b> — the call goes out to the routes
+			below, then resumes the flow at that state when it returns.
+		</div>
+		<div class="egress-kind" style="font-weight:bold; margin-top:2px;"></div>
+
+		<label style="margin-top: 14px;">Route URIs
+			<svg class="add-btn add-egress-route" title="Add route" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>
+		</label>
+		<div class="state-hint" style="margin-top: 0;">
+			Where the call exits; <code>${...}</code> placeholders resolve against
+			the routing context, e.g. <code>sip:${To.user}@carrier-trunk.example.com</code>.
+		</div>
+		<div class="egress-routes"></div>
+
+		<label style="margin-top: 14px;">Description <span class="hint">(optional label for this exit)</span></label>
+		<input class="egress-description" type="text" placeholder="e.g. PSTN carrier trunk" />
 	</div>
 </div>
 

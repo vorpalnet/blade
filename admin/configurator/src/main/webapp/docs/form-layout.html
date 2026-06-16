@@ -102,8 +102,9 @@
 						<tr><th>Flag</th><th>Effect</th></tr>
 						<tr><td><code>multiline = true</code></td><td>Render a <code>&lt;textarea&gt;</code> (implies wide).</td></tr>
 						<tr><td><code>password = true</code></td><td>Masked <code>&lt;input type="password"&gt;</code>.</td></tr>
-						<tr><td><code>readOnly = true</code></td><td>Disabled input — visible but not editable. Good for computed/derived values.</td></tr>
+						<tr><td><code>readOnly = true</code></td><td>Disabled input — visible but not editable. Good for computed/derived values. On a complex property (object/map/array) the entire subtree renders disabled.</td></tr>
 						<tr><td><code>regexTest = true</code></td><td>Adds a "test" button beside the field that opens the regex-tester modal.</td></tr>
+						<tr><td><code>collapsed = true</code></td><td>Render the property's section minimized even when it has data. For machine-managed payloads (e.g. the Flow editor's <code>diagram</code> layout) that operators should see but not be drawn to.</td></tr>
 						<tr><td><code>wide = true</code></td><td>Force the field onto a full row.</td></tr>
 					</table>
 
@@ -209,7 +210,7 @@ public class LogParameters implements Serializable { ... }</code></pre>
 						<tr><td><code>@FormLayoutGroup(value=…)</code></td><td><code>x-form-groups</code></td><td><code>[ ["a","b"], … ]</code></td></tr>
 						<tr><td><code>@FormLayoutGroup(columns=…)</code></td><td><code>x-form-columns</code></td><td><code>[ { "columns": [ ["a","b"], … ] } ]</code></td></tr>
 						<tr><td><code>@FormSection</code></td><td><code>x-form-sections</code></td><td><code>[ { "title": "…", "fields": ["a"] } ]</code></td></tr>
-						<tr><td><code>@FormLayout</code></td><td><code>x-wide</code> / <code>format</code> / <code>x-readonly</code> / <code>x-regex-test</code></td><td>on the field's own schema node</td></tr>
+						<tr><td><code>@FormLayout</code></td><td><code>x-wide</code> / <code>format</code> / <code>x-readonly</code> / <code>x-regex-test</code> / <code>x-collapsed</code></td><td>on the field's own schema node</td></tr>
 					</table>
 
 					<div class="vorpal-callout vorpal-callout-tip">

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Scissors: crossed blades, ring handles -->
+  <circle cx="128" cy="400" r="56" fill="none" stroke="currentColor" stroke-width="32"/>
+  <circle cx="384" cy="400" r="56" fill="none" stroke="currentColor" stroke-width="32"/>
+  <path d="M164 356 L368 64" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round"/>
+  <path d="M348 356 L144 64" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round"/>
+</svg>

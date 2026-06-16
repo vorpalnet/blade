@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- One dashed selection around two objects -->
+  <rect x="48" y="48" width="416" height="416" fill="none" stroke="currentColor" stroke-width="24" stroke-dasharray="48 32"/>
+  <rect x="112" y="112" width="160" height="160" fill="currentColor"/>
+  <rect x="240" y="240" width="160" height="160" fill="currentColor"/>
+</svg>

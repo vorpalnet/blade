@@ -63,16 +63,13 @@
 	</mxDefaultPopupMenu>
 	<include name="config/keyhandler-commons.xml" />
 	<Array as="actions">
-		<add as="save"><![CDATA[
+		<!-- Fit the whole diagram into the viewport AND center it (the stock
+		     'fit' scrolls to the top-left corner; operators expect centered). -->
+		<add as="fit"><![CDATA[
 			function (editor)
 			{
-				flowUtils.saveFile(editor);
-			}
-		]]></add>
-		<add as="open"><![CDATA[
-			function (editor)
-			{
-				flowUtils.selectFile(editor);
+				editor.graph.fit();
+				editor.graph.center(true, true);
 			}
 		]]></add>
 		<add as="exportFsmar"><![CDATA[
@@ -85,6 +82,18 @@
 			function (editor)
 			{
 				flowFsmar.importFromJson(editor);
+			}
+		]]></add>
+		<add as="autoLayout"><![CDATA[
+			function (editor)
+			{
+				flowFsmar.autoLayout(editor);
+			}
+		]]></add>
+		<add as="jsonView"><![CDATA[
+			function (editor)
+			{
+				flowFsmar.toggleJsonView(editor);
 			}
 		]]></add>
 		<add as="simulateFsmar"><![CDATA[

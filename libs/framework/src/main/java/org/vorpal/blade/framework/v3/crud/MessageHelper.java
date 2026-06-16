@@ -34,19 +34,14 @@ public class MessageHelper implements Serializable {
 			return null;
 		}
 
+		// One canonical spelling per pseudo-attribute (lowerCamelCase,
+		// acronyms uppercase) — matches v3 Selector.readSource. Any other
+		// name is a real SIP header.
 		switch (attribute) {
 		case "body":
-		case "Body":
-		case "content":
-		case "Content":
 			return getBodyContent(msg, contentType);
 
-		case "ruri":
-		case "Ruri":
-		case "RURI":
 		case "requestURI":
-		case "RequestURI":
-		case "Request-URI":
 			if (msg instanceof SipServletRequest) {
 				return ((SipServletRequest) msg).getRequestURI().toString();
 			}
@@ -58,7 +53,6 @@ public class MessageHelper implements Serializable {
 			}
 			return null;
 
-		case "reason":
 		case "reasonPhrase":
 			if (msg instanceof SipServletResponse) {
 				return ((SipServletResponse) msg).getReasonPhrase();
@@ -66,30 +60,24 @@ public class MessageHelper implements Serializable {
 			return null;
 
 		case "originIP":
-		case "OriginIP":
-		case "Origin-IP":
 			// Original caller across proxy / B2BUA hops. Delegates to v3
 			// Selector, which walks X-Vorpal-ID;origin → InitialRemoteAddr →
 			// bottom Via received/sent-by → transport peer.
-			return Selector.readSource(asRequest(msg), "Origin-IP");
+			return Selector.readSource(asRequest(msg), "originIP");
 
 		case "peerIP":
-		case "PeerIP":
-		case "Peer-IP":
 			// Immediate transport peer — whoever sent THIS hop. Use this
 			// when you specifically want the upstream neighbor; for
 			// "who dialed?" use originIP.
 			return msg.getRemoteAddr();
 
 		case "transport":
-		case "Transport":
 			// UDP / TCP / TLS / WS / WSS, taken from the initial request
 			// regardless of whether `msg` is the request or its response.
 			SipServletRequest tReq = asRequest(msg);
 			return tReq != null ? tReq.getInitialTransport() : null;
 
 		case "isSecure":
-		case "IsSecure":
 			SipServletRequest sReq = asRequest(msg);
 			String t = (sReq != null) ? sReq.getInitialTransport() : null;
 			return Boolean.toString("TLS".equalsIgnoreCase(t) || "WSS".equalsIgnoreCase(t));
@@ -149,18 +137,10 @@ public class MessageHelper implements Serializable {
 
 		switch (attribute) {
 		case "body":
-		case "Body":
-		case "content":
-		case "Content":
 			setBodyContent(msg, value, contentType);
 			break;
 
-		case "ruri":
-		case "Ruri":
-		case "RURI":
 		case "requestURI":
-		case "RequestURI":
-		case "Request-URI":
 			if (msg instanceof SipServletRequest) {
 				((SipServletRequest) msg).setRequestURI(SettingsManager.sipFactory.createURI(value));
 			}
@@ -219,9 +199,6 @@ public class MessageHelper implements Serializable {
 
 		switch (attribute) {
 		case "body":
-		case "Body":
-		case "content":
-		case "Content":
 			String wantedCt = (contentType != null && !contentType.trim().isEmpty()) ? contentType : null;
 			boolean multipart = msg.getContentType() != null
 					&& msg.getContentType().toLowerCase().startsWith("multipart/");

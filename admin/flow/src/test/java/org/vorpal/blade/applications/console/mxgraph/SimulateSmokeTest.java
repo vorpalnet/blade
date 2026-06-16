@@ -28,7 +28,7 @@ public final class SimulateSmokeTest {
 			+ "   `selectors`: ["
 			+ "    {`type`:`regex`,`id`:`From`,`attribute`:`From`,`pattern`:`.*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*`},"
 			+ "    {`type`:`regex`,`id`:`To`,`attribute`:`To`,`pattern`:`.*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*`},"
-			+ "    {`type`:`attribute`,`id`:`callerIp`,`attribute`:`Origin-IP`},"
+			+ "    {`type`:`attribute`,`id`:`callerIp`,`attribute`:`originIP`},"
 			+ "    {`type`:`table`,`id`:`customerTier`,`table`:{"
 			+ "      `keyExpression`:`${From.user}`,"
 			+ "      `translations`:{`alice`:{`tier`:`gold`},`bob`:{`tier`:`silver`}}}}"
@@ -79,7 +79,214 @@ public final class SimulateSmokeTest {
 		testPseudoOverrides();
 		testBadSelectorReported();
 		testExtractUri();
+		testIngressDispatch();
+		testSubnetIngressDispatch();
+		testEgressExit();
+		testRouteBackEgress();
+		testTwiceInvokedApp();
 		summary();
+	}
+
+	/// The sample's shape: ingresses classified by source IP SUBNET via the
+	/// `insubnet` CIDR operator. 10.20.x → Atlanta, 10.30.x → Dallas, anything
+	/// else → the default ingress. Proves insubnet + null-dispatch + bypass
+	/// end to end through the engine mirror.
+	/// A terminal transition (no `next`) carrying routes is an egress: the call
+	/// leaves OCCAS. The simulator must flag the hop and the outcome, resolve
+	/// the routes, and — for an egress at the entry state — NOT clobber it with
+	/// the default-application fallback (mirrors AppRouter's routedExternally).
+	/// The same application invoked TWICE on one path — two states with distinct
+	/// ids ("b2bua-caller", "b2bua-callee") but the same `app` ("b2bua"). The
+	/// simulator must visit each as its own hop (resuming by state id, not app
+	/// name) and resolve the application via each state.
+	private static void testTwiceInvokedApp() throws Exception {
+		String cfg = q("{`states`:{"
+				+ "`null`:{`triggers`:{`INVITE`:{`transitions`:[{`id`:`T0`,`next`:`b2bua-caller`}]}}},"
+				+ "`b2bua-caller`:{`app`:`b2bua`,`triggers`:{`INVITE`:{`transitions`:["
+				+ "  {`id`:`T1`,`next`:`b2bua-callee`,`subscriber`:`From`}]}}},"
+				+ "`b2bua-callee`:{`app`:`b2bua`,`triggers`:{`INVITE`:{`transitions`:["
+				+ "  {`id`:`T2`,`next`:`registrar`,`subscriber`:`To`}]}}}"
+				+ "}}");
+		ObjectNode simReq = mapper.createObjectNode();
+		simReq.set("config", mapper.readTree(cfg));
+		ObjectNode req = simReq.putObject("request");
+		req.put("method", "INVITE");
+		ObjectNode h = req.putObject("headers");
+		h.put("To", "<sip:bob@example.com>");
+		h.put("From", "<sip:alice@example.com>;tag=1");
+		JsonNode t = RouteSimulator.simulate(simReq, mapper);
+
+		JsonNode hops = t.path("hops");
+		check("twice: four hops (null, caller, callee, registrar)", hops.size() == 4);
+		check("twice: hop2 is the caller-leg state", "b2bua-caller".equals(hops.path(1).path("state").asText()));
+		check("twice: hop2 runs app b2bua", "b2bua".equals(hops.path(1).path("app").asText()));
+		check("twice: hop3 is the callee-leg state", "b2bua-callee".equals(hops.path(2).path("state").asText()));
+		check("twice: hop3 runs app b2bua", "b2bua".equals(hops.path(2).path("app").asText()));
+		check("twice: the two legs are distinct states",
+				!hops.path(1).path("state").asText().equals(hops.path(2).path("state").asText()));
+		check("twice: final application is registrar", "registrar".equals(t.path("finalApp").asText()));
+	}
+
+	/// A ROUTE_BACK egress: the call routes OUT to an external server, then the
+	/// flow RESUMES at the egress's return state. The simulator must flag the
+	/// egress hop (not terminal) and continue the walk at the return state.
+	private static void testRouteBackEgress() throws Exception {
+		String cfg = q("{`defaultApplication`:`b2bua`,`states`:{"
+				+ "`null`:{`triggers`:{`INVITE`:{`transitions`:[{`id`:`T0`,`next`:`screening`}]}}},"
+				+ "`screening`:{`triggers`:{`INVITE`:{`transitions`:["
+				+ "  {`id`:`SCR-anon`,`next`:`b2bua`,`routeModifier`:`ROUTE_BACK`,"
+				+ "   `routes`:[`sip:greeting@media.example.com`]}]}}},"
+				+ "`b2bua`:{`triggers`:{`INVITE`:{`transitions`:[{`id`:`B2B`,`next`:`registrar`}]}}}"
+				+ "}}");
+		ObjectNode simReq = mapper.createObjectNode();
+		simReq.set("config", mapper.readTree(cfg));
+		ObjectNode req = simReq.putObject("request");
+		req.put("method", "INVITE");
+		ObjectNode h = req.putObject("headers");
+		h.put("To", "<sip:bob@example.com>");
+		JsonNode t = RouteSimulator.simulate(simReq, mapper);
+
+		JsonNode hops = t.path("hops");
+		// null -> screening -> (route-back) b2bua -> registrar(terminal)
+		check("route-back: four hops", hops.size() == 4);
+		JsonNode scr = hops.path(1);
+		check("route-back: screening hop is an egress", scr.path("egress").asBoolean());
+		check("route-back: screening hop is ROUTE_BACK", "ROUTE_BACK".equals(scr.path("routeModifier").asText()));
+		check("route-back: returnsTo b2bua", "b2bua".equals(scr.path("returnsTo").asText()));
+		check("route-back: route resolved", "sip:greeting@media.example.com".equals(scr.path("routes").path(0).asText()));
+		check("route-back: flow resumes at b2bua", "b2bua".equals(hops.path(2).path("state").asText()));
+		// The call did NOT leave for good — it continued and ended at registrar.
+		check("route-back: not a final egress", !t.path("egress").asBoolean());
+		check("route-back: final application is registrar", "registrar".equals(t.path("finalApp").asText()));
+	}
+
+	private static void testEgressExit() throws Exception {
+		String cfg = q("{`defaultApplication`:`b2bua`,`states`:{"
+				+ "`null`:{`selectors`:[{`type`:`regex`,`id`:`To`,`attribute`:`To`,"
+				+ "  `pattern`:`.*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*`}],"
+				+ " `triggers`:{`INVITE`:{`transitions`:["
+				+ "  {`id`:`OFFNET`,`subscriber`:`To`,`routes`:[`sip:${To.user}@carrier-trunk`],"
+				+ "   `routeModifier`:`ROUTE_FINAL`}"
+				+ " ]}}}}}");
+		ObjectNode simReq = mapper.createObjectNode();
+		simReq.set("config", mapper.readTree(cfg));
+		ObjectNode req = simReq.putObject("request");
+		req.put("method", "INVITE");
+		req.put("requestURI", "sip:12125551212@example.com");
+		ObjectNode h = req.putObject("headers");
+		h.put("To", "<sip:12125551212@example.com>");
+		h.put("From", "<sip:alice@example.com>;tag=1");
+		JsonNode t = RouteSimulator.simulate(simReq, mapper);
+
+		check("egress: outcome flagged egress", t.path("egress").asBoolean());
+		check("egress: no finalApp (call left OCCAS)", !t.has("finalApp"));
+		check("egress: default fallback NOT triggered", !t.path("defaultFallback").asBoolean());
+		JsonNode hop = t.path("hops").get(0);
+		check("egress: hop flagged egress", hop.path("egress").asBoolean());
+		check("egress: hop route resolved from context",
+				"sip:12125551212@carrier-trunk".equals(hop.path("routes").get(0).asText()));
+		check("egress: hop ROUTE_FINAL", "ROUTE_FINAL".equals(hop.path("routeModifier").asText()));
+	}
+
+	private static void testSubnetIngressDispatch() throws Exception {
+		String cfg = q("{`states`:{"
+				+ "`null`:{"
+				+ "  `selectors`:[{`type`:`attribute`,`id`:`originIP`,`attribute`:`originIP`}],"
+				+ "  `triggers`:{`INVITE`:{`transitions`:["
+				+ "    {`id`:`dispatch-Atlanta`,`when`:`${originIP} insubnet '10.20.0.0/16'`,`next`:`Atlanta`},"
+				+ "    {`id`:`dispatch-Dallas`,`when`:`${originIP} insubnet '10.30.0.0/16'`,`next`:`Dallas`},"
+				+ "    {`id`:`def`,`next`:`b2bua`}"
+				+ "  ]}}},"
+				+ "`Atlanta`:{`triggers`:{`INVITE`:{`transitions`:[{`id`:`ATL-in`,`next`:`b2bua`}]}}},"
+				+ "`Dallas`:{`triggers`:{`INVITE`:{`transitions`:[{`id`:`DAL-in`,`next`:`b2bua`}]}}},"
+				+ "`b2bua`:{`triggers`:{}}"
+				+ "}}");
+
+		check("subnet: Atlanta IP enters Atlanta",
+				"Atlanta".equals(subnetSim(cfg, "10.20.5.9").path("hops").get(1).path("state").asText()));
+		check("subnet: Atlanta dispatch matched",
+				"dispatch-Atlanta".equals(subnetSim(cfg, "10.20.5.9").path("hops").get(0).path("matched").asText()));
+		check("subnet: Dallas IP enters Dallas",
+				"Dallas".equals(subnetSim(cfg, "10.30.5.9").path("hops").get(1).path("state").asText()));
+		JsonNode other = subnetSim(cfg, "192.0.2.1");
+		check("subnet: unmatched IP falls to default ingress",
+				"def".equals(other.path("hops").get(0).path("matched").asText())
+						&& other.path("hops").size() == 2);
+	}
+
+	private static JsonNode subnetSim(String cfg, String originIP) throws Exception {
+		ObjectNode simReq = mapper.createObjectNode();
+		simReq.set("config", mapper.readTree(cfg));
+		ObjectNode req = simReq.putObject("request");
+		req.put("method", "INVITE");
+		req.put("requestURI", "sip:x@example.com");
+		ObjectNode h = req.putObject("headers");
+		h.put("From", "<sip:a@example.com>;tag=1");
+		h.put("To", "<sip:x@example.com>");
+		h.put("Call-ID", "subnet-" + originIP + "@test");
+		h.put("originIP", originIP);
+		return RouteSimulator.simulate(simReq, mapper);
+	}
+
+	/// Multi-ingress entry: a named ingress (SBC-Dallas) is reached from the
+	/// "null" dispatch layer by a source match, then runs its OWN selectors
+	/// and routes onward — the bypass loop walking null → SBC-Dallas → app.
+	/// Unmatched source falls through to the default ingress's routing.
+	private static void testIngressDispatch() throws Exception {
+		String cfg = q("{`states`:{"
+				+ "`null`:{"
+				+ "  `selectors`:[{`type`:`attribute`,`id`:`src`,`attribute`:`X-Src`}],"
+				+ "  `triggers`:{`INVITE`:{`transitions`:["
+				+ "    {`id`:`dispatch-SBC-Dallas`,`when`:`${src} == 'dallas'`,`next`:`SBC-Dallas`},"
+				+ "    {`id`:`def`,`next`:`b2bua`}"
+				+ "  ]}}},"
+				+ "`SBC-Dallas`:{"
+				+ "  `selectors`:[{`type`:`attribute`,`id`:`cust`,`attribute`:`X-Dallas-Cust`}],"
+				+ "  `triggers`:{`INVITE`:{`transitions`:[{`id`:`d1`,`next`:`b2bua`}]}}},"
+				+ "`b2bua`:{`triggers`:{}}"
+				+ "}}");
+
+		// Dallas source → classified into SBC-Dallas, which runs its selector.
+		ObjectNode simReq = mapper.createObjectNode();
+		simReq.set("config", mapper.readTree(cfg));
+		ObjectNode req = simReq.putObject("request");
+		req.put("method", "INVITE");
+		req.put("requestURI", "sip:x@example.com");
+		ObjectNode h = req.putObject("headers");
+		h.put("From", "<sip:a@example.com>;tag=1");
+		h.put("To", "<sip:x@example.com>");
+		h.put("Call-ID", "ingress-dallas@test");
+		h.put("X-Src", "dallas");
+		h.put("X-Dallas-Cust", "ACME");
+		JsonNode t = RouteSimulator.simulate(simReq, mapper);
+
+		check("ingress: hop1 is null", "null".equals(t.path("hops").get(0).path("state").asText()));
+		check("ingress: hop1 dispatch-SBC-Dallas matched",
+				"dispatch-SBC-Dallas".equals(t.path("hops").get(0).path("matched").asText()));
+		JsonNode h2 = t.path("hops").get(1);
+		check("ingress: hop2 continues from SBC-Dallas state",
+				"SBC-Dallas".equals(h2.path("state").asText()));
+		check("ingress: SBC-Dallas runs its OWN selector",
+				"ACME".equals(h2.path("extracted").path("cust").asText()));
+		check("ingress: call routes onward to b2bua", "b2bua".equals(t.path("finalApp").asText()));
+
+		// Unmatched source → default ingress routing (no Dallas hop).
+		simReq = mapper.createObjectNode();
+		simReq.set("config", mapper.readTree(cfg));
+		req = simReq.putObject("request");
+		req.put("method", "INVITE");
+		req.put("requestURI", "sip:x@example.com");
+		h = req.putObject("headers");
+		h.put("From", "<sip:a@example.com>;tag=1");
+		h.put("To", "<sip:x@example.com>");
+		h.put("Call-ID", "ingress-other@test");
+		h.put("X-Src", "elsewhere");
+		JsonNode t2 = RouteSimulator.simulate(simReq, mapper);
+		check("ingress: unmatched source falls to default",
+				"def".equals(t2.path("hops").get(0).path("matched").asText()));
+		check("ingress: default routes straight to b2bua (no Dallas hop)",
+				"b2bua".equals(t2.path("finalApp").asText())
+						&& t2.path("hops").size() == 2);
 	}
 
 	private static JsonNode simulate(String from, String to, String method,
@@ -88,7 +295,7 @@ public final class SimulateSmokeTest {
 		simReq.set("config", mapper.readTree(CONFIG));
 		ObjectNode req = simReq.putObject("request");
 		req.put("method", method);
-		req.put("requestUri", "sip:" + to + "@example.com");
+		req.put("requestURI", "sip:" + to + "@example.com");
 		ObjectNode headers = req.putObject("headers");
 		headers.put("From", "<sip:" + from + "@example.com>;tag=1");
 		headers.put("To", "<sip:" + to + "@example.com>");

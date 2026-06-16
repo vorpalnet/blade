@@ -58,9 +58,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// - any other operator name `P` — FSMAR 2 treated it as a parameter name;
 ///   [RegexSelector] extracting `;P=value`; clause on `${H.P}`.
 /// - special "headers" `Request-URI`, `Directive`, `Region` map to the
-///   `${requestUri}` / `${directive}` / `${region}` pseudo-variables
+///   `${requestURI}` / `${directive}` / `${region}` pseudo-variables
 ///   (`Request-URI` `user`/`host`/param still get a selector, which reads the
-///   Request-URI natively).
+///   `requestURI` pseudo-header natively).
 ///
 /// FSMAR 2 compared with `equalsIgnoreCase`; where `E` contains letters the
 /// converter emits `matches '(?i)…'` to preserve case-insensitivity, and a
@@ -275,9 +275,9 @@ public final class Fsmar2Converter {
 			switch (op) {
 			case "matches":
 			case "address":
-				return "${requestUri} matches '" + expr + "'";
+				return "${requestURI} matches '" + expr + "'";
 			case "equals":
-				return eq("${requestUri}", expr);
+				return eq("${requestURI}", expr);
 			// user/host/params fall through to the selector paths below;
 			// readSource resolves the "Request-URI" attribute natively.
 			}
@@ -352,23 +352,25 @@ public final class Fsmar2Converter {
 
 	private static void addressSelector(String header, Map<String, Selector> selectors) {
 		selectors.computeIfAbsent("regex|" + header + "|" + ADDRESS_PATTERN,
-				k -> new RegexSelector(key(header), header, ADDRESS_PATTERN, null));
+				k -> new RegexSelector(key(header), key(header), ADDRESS_PATTERN, null));
 	}
 
 	private static void regexSelector(String header, String pattern, Map<String, Selector> selectors) {
 		selectors.computeIfAbsent("regex|" + header + "|" + pattern,
-				k -> new RegexSelector(key(header), header, pattern, null));
+				k -> new RegexSelector(key(header), key(header), pattern, null));
 	}
 
 	private static void attributeSelector(String header, Map<String, Selector> selectors) {
 		selectors.computeIfAbsent("attribute|" + header,
-				k -> new AttributeSelector(key(header), header));
+				k -> new AttributeSelector(key(header), key(header)));
 	}
 
-	/// Context key for a header: "Request-URI" reads natively but its dash
-	/// would split oddly in `${}` names, so publish it as `RequestURI`.
+	/// Maps an fsmar2 "header" name to its v3 canonical name (used as both the
+	/// selector id and the attribute it reads). Only `Request-URI` differs: it
+	/// is the `requestURI` pseudo-header in v3 (the dash would also split oddly
+	/// in `${}` names). Real SIP headers pass through unchanged.
 	private static String key(String header) {
-		return header.equals("Request-URI") ? "RequestURI" : header;
+		return header.equals("Request-URI") ? "requestURI" : header;
 	}
 
 	private static String escapeRegex(String s) {

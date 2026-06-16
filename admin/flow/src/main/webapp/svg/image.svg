@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Picture: frame, sun, mountains -->
+  <rect x="48" y="80" width="416" height="352" rx="24" fill="none" stroke="currentColor" stroke-width="32"/>
+  <circle cx="168" cy="192" r="40" fill="currentColor"/>
+  <path d="M96 384 L208 272 L272 336 L344 240 L424 384" fill="none" stroke="currentColor" stroke-width="32" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

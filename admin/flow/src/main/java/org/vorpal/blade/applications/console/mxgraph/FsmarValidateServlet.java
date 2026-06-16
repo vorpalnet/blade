@@ -100,10 +100,33 @@ public class FsmarValidateServlet extends HttpServlet {
 			infos.add("No defaultApplication — initial requests matching no transition will not route");
 		}
 
-		// Root-level: about/logging/session are real base-Configuration
-		// fields; anything else is probably a typo.
+		// Root-level: logging/session are real base-Configuration fields;
+		// version is framework-managed. "about" is tolerated as legacy — the
+		// field was removed framework-wide, but old on-disk configs may still
+		// carry an "about" block, and that shouldn't trip a typo warning.
+		// Anything else is probably a typo.
 		warnUnknown(root, FsmarImportServlet.ROOT_KNOWN, "root", warnings,
-				"about", "logging", "session");
+				"version", "logging", "session", "about");
+
+		// Ingress entry states (diagram.ingresses): each names a state and a
+		// source-match. Warn on a missing match (a named ingress with no match
+		// catches nothing — its dispatch transition can't be generated) and on
+		// an ingress whose state doesn't exist.
+		JsonNode ingresses = root.path("diagram").path("ingresses");
+		if (ingresses.isObject()) {
+			Iterator<Map.Entry<String, JsonNode>> it = ingresses.fields();
+			while (it.hasNext()) {
+				Map.Entry<String, JsonNode> e = it.next();
+				String name = e.getKey();
+				if (e.getValue().path("match").asText("").isEmpty()) {
+					warnings.add("ingress '" + name + "' has no source match — it can't be"
+							+ " reached (only the default ingress catches unmatched traffic)");
+				}
+				if (!root.path("states").path(name).isObject()) {
+					warnings.add("ingress '" + name + "' has no matching state entry");
+				}
+			}
+		}
 
 		JsonNode states = root.path("states");
 		if (!states.isObject() || states.size() == 0) {
@@ -264,8 +287,13 @@ public class FsmarValidateServlet extends HttpServlet {
 		}
 
 		String next = tx.path("next").asText("");
+		boolean hasRoutes = tx.path("routes").isArray() && tx.path("routes").size() > 0;
 		if (next.isEmpty()) {
-			errors.add(at + " has no 'next' — it cannot route");
+			// A terminal transition with routes is an egress (the call leaves
+			// OCCAS); only a transition with neither next nor routes is an error.
+			if (!hasRoutes) {
+				errors.add(at + " has neither 'next' nor 'routes' — it cannot route");
+			}
 		} else if (!"null".equals(next) && !states.has(next)) {
 			infos.add(at + " routes to '" + next + "' which has no state entry — "
 					+ "fine for a terminal application, a typo otherwise");

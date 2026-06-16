@@ -1,6 +1,7 @@
 <mxEditor>
 	<mxDefaultKeyHandler as="keyHandler">
-		<add as="8" action="collapse"/>
+		<add as="8" action="delete"/>		<!-- Backspace (the Mac "delete" key) removes the selection -->
+		<add as="46" action="delete"/>		<!-- Forward-delete (fn+Delete) also removes the selection -->
 		<add as="13" action="expand"/>
 		<add as="33" action="exitGroup"/>
 		<add as="34" action="enterGroup"/>
@@ -10,7 +11,6 @@
 		<add as="38" action="selectParent"/>
 		<add as="40" action="selectChild"/>
 		<add as="39" action="selectNext"/>
-		<add as="46" action="delete"/>
 		<add as="65" control="1" action="selectAll"/>
 		<add as="90" control="1" action="undo"/>
 		<add as="89" control="1" action="redo"/>

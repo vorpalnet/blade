@@ -19,7 +19,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///   is the map key.
 /// - [javax.servlet.sip.SipServletRequest] (SipConnector) —
 ///   `attribute` is a SIP header name, with pseudo-headers
-///   `Request-URI`, `Origin-IP`, `content`/`body` handled directly.
+///   `requestURI`, `originIP`, `body` handled directly (see
+///   [Selector#readSource] for the full set).
 ///
 /// If you need regex parsing on top of the raw value, chain a
 /// [RegexSelector] after this one in the same connector's selectors.

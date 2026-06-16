@@ -99,18 +99,44 @@ public class FsmarExportServlet extends HttpServlet {
 
 		// Map cell ID -> wrapper element (State or Transition or FlowModel)
 		Map<String, Element> wrappersById = new HashMap<>();
-		// Map cell ID -> state name (for resolving edge source/target).
-		// Ingress/Egress clouds map to "null" here.
+		// Map cell ID -> state name (for resolving edge source/target). An
+		// ingress box with a source-match is its OWN state (named by its
+		// label); the default ingress (a matchless box, or legacy
+		// Ingress/Egress) maps to "null".
 		Map<String, String> stateNamesById = new HashMap<>();
-		// "Real" state names (from <State> elements only) mapped to their
-		// wrapper elements — used to seed state entries (selectors + extras)
-		// even when no transitions touch them. The Ingress cloud carries the
-		// "null" state's selectors/extras; Egress carries nothing.
+		// State name -> wrapper, for seeding state entries (selectors + extras)
+		// even when no transitions touch them. Includes plain States AND
+		// matched ingress boxes — each ingress is a real state with its own
+		// selectors.
 		Map<String, Element> realStates = new java.util.LinkedHashMap<>();
-		Element ingressEl = null;
+		// Matchless ingress box(es) — the default ingress, i.e. the "null"
+		// state. Normally one; selectors concatenate if several.
+		List<Element> defaultIngressEls = new ArrayList<>();
+		// Named ingress state -> its source-match expression (a `when`).
+		// Drives the generated dispatch transitions on "null".
+		Map<String, String> ingressMatch = new java.util.LinkedHashMap<>();
+
+		// Egress exit nodes — the mirror of ingresses. An egress is NOT a state;
+		// it's the target of a terminal transition. The edge pass bakes the
+		// egress's routes onto that transition, with the modifier DERIVED from
+		// the egress's out-edge topology: an edge back to a state Y emits
+		// next=Y + ROUTE_BACK, no out-edge emits next=null + ROUTE_FINAL (the
+		// engine reads them). Recorded by cell id (to resolve edges) and by name
+		// (its {description, routes, returnState}, for diagram.egresses).
+		Map<String, String> egressNameByCellId = new HashMap<>();
+		Map<String, ObjectNode> egressDefByName = new java.util.LinkedHashMap<>();
+		// Egress name -> return-state id, for an egress with an out-edge back to a
+		// state (the route-back line). Drives ROUTE_BACK: the terminal transition's
+		// `next` becomes this state, and the call resumes there after the external
+		// round-trip. Empty = ROUTE_FINAL (the call leaves OCCAS for good).
+		Map<String, String> egressReturnByName = new HashMap<>();
 
 		String defaultApplication = null;
 		String rootExtra = null;
+
+		// Vertex positions for the diagram `states` section: state name -> {x, y}.
+		// Includes "null" (the default ingress box) and every ingress state.
+		Map<String, int[]> placements = new java.util.LinkedHashMap<>();
 
 		// First pass: walk all elements with mxCell children to find wrappers
 		NodeList allCells = doc.getElementsByTagName("mxCell");
@@ -136,20 +162,68 @@ public class FsmarExportServlet extends HttpServlet {
 
 			switch (tag) {
 				case "State":
-					String stateName = wrapper.getAttribute("label");
-					stateNamesById.put(cellId, stateName);
-					if (stateName != null && !stateName.isEmpty()) {
-						realStates.put(stateName, wrapper);
+					// The states-map KEY is the state id (unique); the `label` is
+					// the application it invokes (may repeat across states). When a
+					// node carries no explicit stateId, the two coincide.
+					String stateId = stateIdOf(wrapper);
+					stateNamesById.put(cellId, stateId);
+					if (stateId != null && !stateId.isEmpty()) {
+						if (realStates.containsKey(stateId)) {
+							throw new IllegalArgumentException("Two states share the id '" + stateId
+									+ "'. Give one a distinct State ID (the application name may repeat, "
+									+ "but each state's id must be unique).");
+						}
+						realStates.put(stateId, wrapper);
+						addPlacement(placements, stateId, mxCell);
 					}
 					break;
-				case "Ingress":
-					stateNamesById.put(cellId, "null");
-					ingressEl = wrapper;
-					break;
-				case "Egress":
-					// Maps to the literal "null" state — display label is for
-					// humans only, and it contributes no state data.
-					stateNamesById.put(cellId, "null");
+				case "Gateway":
+				case "Ingress":   // legacy saved XML, pre-unification
+				case "Egress":    // legacy saved XML, pre-unification
+					String gwRole = wrapper.getAttribute("role");
+					String gwLabel = wrapper.getAttribute("label");
+					if ("egress".equals(gwRole)) {
+						// An EGRESS exit node: not a state. It is the target of a
+						// terminal transition; the edge pass bakes this node's routes
+						// onto that transition. The route-modifier is INFERRED from
+						// topology, not stored: no out-edge → ROUTE_FINAL; an out-edge
+						// back to a state → ROUTE_BACK (resume there on return).
+						if (gwLabel == null || gwLabel.isEmpty()) {
+							throw new IllegalArgumentException("An egress node has no name. "
+									+ "Give it a label and export again.");
+						}
+						egressNameByCellId.put(cellId, gwLabel);
+						ObjectNode egDef = mapper.createObjectNode();
+						addIfPresent(egDef, "description", wrapper.getAttribute("description"));
+						ArrayNode egRoutes = buildRoutes(wrapper);
+						if (egRoutes != null) {
+							egDef.set("routes", egRoutes);
+						}
+						egressDefByName.put(gwLabel, egDef);
+						addPlacement(placements, gwLabel, mxCell);
+						break;
+					}
+					// An ingress box WITH a source-match is its own entry state
+					// (keyed by its state id, default = label); a matchless box is
+					// the default ingress = the "null" state. Legacy Ingress/Egress
+					// have no match attribute, so they fall through as default.
+					String gwMatch = wrapper.getAttribute("match");
+					if (gwMatch != null && !gwMatch.isEmpty()
+							&& gwLabel != null && !gwLabel.isEmpty()) {
+						String ingressId = stateIdOf(wrapper);
+						stateNamesById.put(cellId, ingressId);
+						if (realStates.containsKey(ingressId)) {
+							throw new IllegalArgumentException("Two states share the id '" + ingressId
+									+ "'. Give one a distinct State ID.");
+						}
+						realStates.put(ingressId, wrapper);
+						ingressMatch.put(ingressId, gwMatch);
+						addPlacement(placements, ingressId, mxCell);
+					} else {
+						stateNamesById.put(cellId, "null");
+						defaultIngressEls.add(wrapper);
+						addPlacement(placements, "null", mxCell);
+					}
 					break;
 				case "FlowModel":
 					String def = wrapper.getAttribute("defaultApplication");
@@ -191,19 +265,47 @@ public class FsmarExportServlet extends HttpServlet {
 
 		ObjectNode statesNode = rootNode.putObject("states");
 
-		// Seed every real state entry: selectors first (schema order), then
-		// triggers, then state-level extras.
+		// Seed every real state entry — plain States AND matched ingress
+		// states (each ingress carries its own selectors): selectors first
+		// (schema order), then triggers, then state-level extras.
 		for (Map.Entry<String, Element> entry : realStates.entrySet()) {
 			seedState(statesNode, entry.getKey(), entry.getValue());
 		}
-		// The "null" state exists when an ingress cloud does. Its selectors
-		// (run against initial requests) and extras live on the cloud.
-		if (ingressEl != null) {
-			seedState(statesNode, "null", ingressEl);
+		// The default ingress box(es) seed the "null" state — its shared
+		// selectors (run for all traffic) and extras.
+		if (!defaultIngressEls.isEmpty()) {
+			seedDefaultIngress(statesNode, defaultIngressEls);
+		}
+
+		// Pre-scan for route-back lines: a Transition whose SOURCE is an egress
+		// node is not a routing transition — it's the line back to a state that
+		// makes the egress a ROUTE_BACK exit. Record each egress's return state so
+		// the terminal-into-egress baking below knows to emit next=<return> +
+		// ROUTE_BACK. These edges are skipped in the main pass.
+		NodeList preScan = doc.getElementsByTagName("Transition");
+		for (int i = 0; i < preScan.getLength(); i++) {
+			Element tx = (Element) preScan.item(i);
+			Element mxCell = firstChildElement(tx, "mxCell");
+			if (mxCell == null) {
+				continue;
+			}
+			String sourceId = mxCell.getAttribute("source");
+			if (sourceId == null || !egressNameByCellId.containsKey(sourceId)) {
+				continue;
+			}
+			String retState = stateNamesById.get(mxCell.getAttribute("target"));
+			if (retState == null) {
+				throw new IllegalArgumentException("The route-back line from egress '"
+						+ egressNameByCellId.get(sourceId) + "' must end on a State or ingress. "
+						+ "Reconnect it (or delete it) and export again.");
+			}
+			egressReturnByName.put(egressNameByCellId.get(sourceId), retState);
 		}
 
 		// Second pass: collect Transition edges grouped by (source state,
-		// method), keeping each one's seq for ordering.
+		// method), keeping each one's seq for first-match ordering. Edges
+		// connect to states directly now — an ingress box IS a state — so
+		// there are no gateway attachment maps.
 		class TxEntry {
 			int seq;
 			ObjectNode node;
@@ -227,12 +329,19 @@ public class FsmarExportServlet extends HttpServlet {
 						+ "Connect it to a source and target state (or delete it) and export again.");
 			}
 
+			// Route-back lines (source = an egress) were absorbed in the pre-scan
+			// — they're topology, not transitions. Skip them here.
+			if (egressNameByCellId.containsKey(sourceId)) {
+				continue;
+			}
+
 			String sourceState = stateNamesById.get(sourceId);
-			String targetState = stateNamesById.get(targetId);
-			if (sourceState == null || targetState == null) {
+			String egressName = egressNameByCellId.get(targetId);
+			String targetState = (egressName != null) ? null : stateNamesById.get(targetId);
+			if (sourceState == null || (egressName == null && targetState == null)) {
 				throw new IllegalArgumentException("A transition edge labeled '"
 						+ tx.getAttribute("label") + "' connects to a cell that is not a "
-						+ "State/Ingress/Egress. Reconnect it and export again.");
+						+ "State/ingress/egress. Reconnect it and export again.");
 			}
 
 			String method = tx.getAttribute("label");
@@ -245,23 +354,51 @@ public class FsmarExportServlet extends HttpServlet {
 			ObjectNode txNode = mapper.createObjectNode();
 			addIfPresent(txNode, "id", tx.getAttribute("txId"));
 			addIfPresent(txNode, "when", tx.getAttribute("when"));
-			txNode.put("next", targetState);
-			addIfPresent(txNode, "subscriber", tx.getAttribute("subscriber"));
-			addIfPresent(txNode, "region", tx.getAttribute("region"));
 
-			NodeList routes = tx.getElementsByTagName("route");
-			if (routes.getLength() > 0) {
-				ArrayNode rArr = txNode.putArray("routes");
-				for (int r = 0; r < routes.getLength(); r++) {
-					Element route = (Element) routes.item(r);
-					String uri = route.getAttribute("uri");
-					if (uri != null && !uri.isEmpty()) {
-						rArr.add(uri);
+			if (egressName != null) {
+				// Transition into an egress. The route-modifier is inferred from
+				// the egress's topology: an out-edge back to a state Y → ROUTE_BACK
+				// with next=Y (resume there after the external round-trip); no
+				// out-edge → ROUTE_FINAL with no next (the call leaves OCCAS). The
+				// egress node's routes are baked on either way — the engine reads
+				// them to build the routing decision.
+				ObjectNode egDef = egressDefByName.get(egressName);
+				// An egress must carry at least one route — it's the only thing
+				// that makes the transition route anywhere. Without it the call
+				// would just fall downstream and the config wouldn't re-import.
+				if (egDef == null || !egDef.has("routes") || egDef.get("routes").size() == 0) {
+					throw new IllegalArgumentException("Egress '" + egressName
+							+ "' has no route URIs. Add at least one route on the egress node "
+							+ "(or delete it) and export again.");
+				}
+				String returnState = egressReturnByName.get(egressName);
+				if (returnState != null) {
+					txNode.put("next", returnState);
+				}
+				addIfPresent(txNode, "subscriber", tx.getAttribute("subscriber"));
+				addIfPresent(txNode, "region", tx.getAttribute("region"));
+				txNode.set("routes", egDef.get("routes").deepCopy());
+				txNode.put("routeModifier", (returnState != null) ? "ROUTE_BACK" : "ROUTE_FINAL");
+				mergeExtra(txNode, tx.getAttribute("extra"));
+			} else {
+				txNode.put("next", targetState);
+				addIfPresent(txNode, "subscriber", tx.getAttribute("subscriber"));
+				addIfPresent(txNode, "region", tx.getAttribute("region"));
+
+				NodeList routes = tx.getElementsByTagName("route");
+				if (routes.getLength() > 0) {
+					ArrayNode rArr = txNode.putArray("routes");
+					for (int r = 0; r < routes.getLength(); r++) {
+						Element route = (Element) routes.item(r);
+						String uri = route.getAttribute("uri");
+						if (uri != null && !uri.isEmpty()) {
+							rArr.add(uri);
+						}
 					}
 				}
+				addIfPresent(txNode, "routeModifier", tx.getAttribute("routeModifier"));
+				mergeExtra(txNode, tx.getAttribute("extra"));
 			}
-			addIfPresent(txNode, "routeModifier", tx.getAttribute("routeModifier"));
-			mergeExtra(txNode, tx.getAttribute("extra"));
 
 			TxEntry e = new TxEntry();
 			e.seq = parseSeq(tx.getAttribute("seq"));
@@ -271,9 +408,31 @@ public class FsmarExportServlet extends HttpServlet {
 					.add(e);
 		}
 
+		// Generated dispatch transitions for the "null" state: one per
+		// (ingress, method) classifying source traffic into the ingress entry
+		// state. They run BEFORE null's own routing (source-classified traffic
+		// is always handled by its ingress), so first-match-wins picks them
+		// first. Method set per ingress = the methods its state handles
+		// (fallback INVITE if it has none yet).
+		Map<String, List<ObjectNode>> dispatchByMethod = new java.util.LinkedHashMap<>();
+		for (Map.Entry<String, String> ing : ingressMatch.entrySet()) {
+			String name = ing.getKey();
+			String match = ing.getValue();
+			Map<String, List<TxEntry>> ingTriggers = collected.get(name);
+			java.util.Set<String> methods = (ingTriggers != null && !ingTriggers.isEmpty())
+					? ingTriggers.keySet()
+					: java.util.Collections.singleton("INVITE");
+			for (String method : methods) {
+				ObjectNode d = mapper.createObjectNode();
+				d.put("id", "dispatch-" + name);
+				d.put("when", match);
+				d.put("next", name);
+				dispatchByMethod.computeIfAbsent(method, k -> new ArrayList<>()).add(d);
+			}
+		}
+
 		// Emit collected transitions sorted by seq within each trigger —
-		// first-match-wins order is semantic. New edges (no seq) sort last
-		// in document order.
+		// first-match-wins order is semantic. New edges (no seq) sort last.
 		for (Map.Entry<String, Map<String, List<TxEntry>>> stateEntry : collected.entrySet()) {
 			String stateName = stateEntry.getKey();
 			ObjectNode stateNode = (ObjectNode) statesNode.get(stateName);
@@ -284,9 +443,9 @@ public class FsmarExportServlet extends HttpServlet {
 			if (triggersNode == null) {
 				triggersNode = stateNode.putObject("triggers");
 			}
-			// Trigger-level extras stashed on the source state's element
-			ObjectNode triggerExtras = parseTriggerExtras(
-					"null".equals(stateName) ? ingressEl : realStates.get(stateName));
+			ObjectNode triggerExtras = "null".equals(stateName)
+					? mergedDefaultIngressTriggerExtras(defaultIngressEls)
+					: parseTriggerExtras(realStates.get(stateName));
 
 			for (Map.Entry<String, List<TxEntry>> trigEntry : stateEntry.getValue().entrySet()) {
 				String method = trigEntry.getKey();
@@ -295,6 +454,12 @@ public class FsmarExportServlet extends HttpServlet {
 
 				ObjectNode triggerNode = triggersNode.putObject(method);
 				ArrayNode txList = triggerNode.putArray("transitions");
+				// Dispatch transitions lead the null state's triggers.
+				if ("null".equals(stateName) && dispatchByMethod.containsKey(method)) {
+					for (ObjectNode d : dispatchByMethod.get(method)) {
+						txList.add(d);
+					}
+				}
 				for (TxEntry e : list) {
 					txList.add(e.node);
 				}
@@ -304,15 +469,175 @@ public class FsmarExportServlet extends HttpServlet {
 			}
 		}
 
+		// Dispatch transitions for methods the null state has no routing of its
+		// own for (e.g. an ingress handles REGISTER but the default doesn't):
+		// ensure those triggers exist on null too.
+		if (!dispatchByMethod.isEmpty()) {
+			ObjectNode nullNode = (ObjectNode) statesNode.get("null");
+			if (nullNode == null) {
+				nullNode = statesNode.putObject("null");
+				nullNode.putObject("triggers");
+			}
+			ObjectNode triggersNode = (ObjectNode) nullNode.get("triggers");
+			if (triggersNode == null) {
+				triggersNode = nullNode.putObject("triggers");
+			}
+			for (Map.Entry<String, List<ObjectNode>> d : dispatchByMethod.entrySet()) {
+				if (!triggersNode.has(d.getKey())) {
+					ArrayNode txList = triggersNode.putObject(d.getKey()).putArray("transitions");
+					for (ObjectNode dn : d.getValue()) {
+						txList.add(dn);
+					}
+				}
+			}
+		}
+
+		// Diagram metadata: written explicitly (never via extras — "diagram"
+		// is in FsmarImportServlet.ROOT_KNOWN), from current cell geometry and
+		// ingress topology. Shape matches the fsmar3 Diagram class:
+		// states (positions, incl "null") + ingresses (name -> {match}).
+		if (!placements.isEmpty() || !ingressMatch.isEmpty() || !egressDefByName.isEmpty()) {
+			ObjectNode diagramNode = rootNode.putObject("diagram");
+			if (!placements.isEmpty()) {
+				ObjectNode statesPos = diagramNode.putObject("states");
+				for (Map.Entry<String, int[]> p : placements.entrySet()) {
+					ObjectNode pos = statesPos.putObject(p.getKey());
+					pos.put("x", p.getValue()[0]);
+					pos.put("y", p.getValue()[1]);
+				}
+			}
+			if (!ingressMatch.isEmpty()) {
+				ObjectNode ing = diagramNode.putObject("ingresses");
+				for (Map.Entry<String, String> e : ingressMatch.entrySet()) {
+					ing.putObject(e.getKey()).put("match", e.getValue());
+				}
+			}
+			// Egress exit nodes: name -> {description, routes, returnState?}.
+			// Positions ride the shared `states` map above (keyed by egress
+			// name). `returnState` present = a ROUTE_BACK exit (out-edge to that
+			// state); absent = ROUTE_FINAL. Import recovers the node — including
+			// its route-back line — from this and matches transitions by routes.
+			if (!egressDefByName.isEmpty()) {
+				ObjectNode eg = diagramNode.putObject("egresses");
+				for (Map.Entry<String, ObjectNode> e : egressDefByName.entrySet()) {
+					ObjectNode egNode = e.getValue();
+					String returnState = egressReturnByName.get(e.getKey());
+					if (returnState != null) {
+						egNode.put("returnState", returnState);
+					}
+					eg.set(e.getKey(), egNode);
+				}
+			}
+		}
+
 		return rootNode;
 	}
 
-	/// Creates the JSON entry for one state from its wrapper element:
-	/// selectors (children), empty triggers (filled by the edge pass), and
-	/// state-level extras.
+	/// Builds a `routes` array from `<route uri="…">` direct children of an
+	/// egress node. Returns null when there are none.
+	private ArrayNode buildRoutes(Element wrapper) {
+		List<Element> routeEls = childElements(wrapper, "route");
+		if (routeEls.isEmpty()) {
+			return null;
+		}
+		ArrayNode arr = mapper.createArrayNode();
+		for (Element r : routeEls) {
+			String uri = r.getAttribute("uri");
+			if (uri != null && !uri.isEmpty()) {
+				arr.add(uri);
+			}
+		}
+		return arr.size() > 0 ? arr : null;
+	}
+
+	/// Seeds the "null" state (the default ingress) from the matchless ingress
+	/// box(es): shared selectors that run for all traffic, plus extras.
+	/// Normally a single default box; if several, selectors concatenate.
+	private void seedDefaultIngress(ObjectNode statesNode, List<Element> defaults) {
+		if (statesNode.has("null")) {
+			return;
+		}
+		ObjectNode stateNode = statesNode.putObject("null");
+		ArrayNode allSels = mapper.createArrayNode();
+		for (Element g : defaults) {
+			ArrayNode sels = buildSelectors(g);
+			if (sels != null) {
+				allSels.addAll(sels);
+			}
+		}
+		if (allSels.size() > 0) {
+			stateNode.set("selectors", allSels);
+		}
+		stateNode.putObject("triggers");
+		for (Element g : defaults) {
+			mergeExtra(stateNode, g.getAttribute("extra"));
+		}
+	}
+
+	/// Merges triggerExtras from the default ingress box(es), first-wins.
+	private ObjectNode mergedDefaultIngressTriggerExtras(List<Element> gateways) {
+		ObjectNode merged = null;
+		for (Element g : gateways) {
+			ObjectNode te = parseTriggerExtras(g);
+			if (te == null) {
+				continue;
+			}
+			if (merged == null) {
+				merged = mapper.createObjectNode();
+			}
+			Iterator<Map.Entry<String, JsonNode>> it = te.fields();
+			while (it.hasNext()) {
+				Map.Entry<String, JsonNode> e = it.next();
+				if (!merged.has(e.getKey())) {
+					merged.set(e.getKey(), e.getValue());
+				}
+			}
+		}
+		return merged;
+	}
+
+	/// Records a vertex's mxGeometry position. Coordinates may be fractional
+	/// in mxGraph (drag snapping off) — rounded; the Placement model and the
+	/// editor's grid are integer-pixel.
+	private static void addPlacement(Map<String, int[]> placements, String key, Element mxCell) {
+		Element geom = firstChildElement(mxCell, "mxGeometry");
+		if (geom == null) {
+			return;
+		}
+		try {
+			// mxGeometry omits x/y attributes when 0 — empty means origin,
+			// not "no position".
+			placements.put(key, new int[] { parseCoord(geom.getAttribute("x")),
+					parseCoord(geom.getAttribute("y")) });
+		} catch (NumberFormatException e) {
+			// Unparseable position — leave unplaced; auto-layout on import.
+		}
+	}
+
+	private static int parseCoord(String value) {
+		return (value == null || value.isEmpty()) ? 0 : (int) Math.round(Double.parseDouble(value));
+	}
+
+	/// The states-map key for a node: its explicit `stateId` attribute, else its
+	/// label. Lets two State nodes share a label (the application name) while
+	/// staying distinct states.
+	private static String stateIdOf(Element wrapper) {
+		String id = wrapper.getAttribute("stateId");
+		return (id != null && !id.isEmpty()) ? id : wrapper.getAttribute("label");
+	}
+
+	/// Creates the JSON entry for one state from its wrapper element: `app`
+	/// (only when it differs from the id), selectors (children), empty triggers
+	/// (filled by the edge pass), and state-level extras.
 	private void seedState(ObjectNode statesNode, String name, Element wrapper) {
 		if (statesNode.has(name)) return;
 		ObjectNode stateNode = statesNode.putObject(name);
+		// `name` is the state id; the node's label is the application it invokes.
+		// Emit `app` only when they differ — the common case has them equal.
+		String app = wrapper.getAttribute("label");
+		if (app != null && !app.isEmpty() && !app.equals(name)) {
+			stateNode.put("app", app);
+		}
 		ArrayNode selectors = buildSelectors(wrapper);
 		if (selectors != null) {
 			stateNode.set("selectors", selectors);

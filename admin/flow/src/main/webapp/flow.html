@@ -2,6 +2,10 @@
 <head>
 	<title>Editor · BLADE Flow</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<!-- Property-panel styles. The panels are fragment-loaded into THIS
+	     document, so their styles must be linked here — head styles in the
+	     fragment pages are discarded by jQuery .load(url, '#fragment'). -->
+	<link rel="stylesheet" href="css/panels.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/flow/favicon.svg">
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 	<!-- Embed mode (?embed=1): no-op for now; brand topbar stays visible
@@ -87,7 +91,31 @@
 
 
 	<script type="text/javascript" src="js/mxClient.js"></script>
+	<script type="text/javascript">
+		// Cache-busting for the editor config + stencils. Every *.xml the editor
+		// pulls — the toolbar/graph/editor config includes AND the stencil set —
+		// is fetched through mxUtils.load (config includes via
+		// mxObjectCodec.processInclude). Appending the build id makes a redeploy
+		// fetch fresh copies instead of serving a stale cached XML (the "cache
+		// dance"). The id is constant within a build, so caching still works
+		// between reloads and only busts when a new build is deployed.
+		// ${buildTimestamp} is filtered in at build time; running straight
+		// from unfiltered source falls back to a constant (fine for dev).
+		(function() {
+			var build = '${buildTimestamp}'.replace(/[^0-9A-Za-z]/g, '') || 'dev';
+			var origLoad = mxUtils.load;
+			mxUtils.load = function(url) {
+				if (typeof url === 'string' && /\.xml(\?|$)/i.test(url)
+						&& url.indexOf('v=' + build) === -1) {
+					url += (url.indexOf('?') === -1 ? '?' : '&') + 'v=' + build;
+				}
+				arguments[0] = url;
+				return origLoad.apply(this, arguments);
+			};
+		})();
+	</script>
 	<script type="text/javascript" src="js/app.js"></script>
+	<script type="text/javascript" src="js/flowSession.js"></script>
 	<script type="text/javascript" src="js/flowUtils.js"></script>
 	<script type="text/javascript" src="js/flowPlans.js"></script>
 	<script type="text/javascript" src="js/flowFsmar.js"></script>

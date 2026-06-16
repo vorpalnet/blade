@@ -132,10 +132,10 @@
 ///
 /// | Name              | Returns                                                                   |
 /// |-------------------|---------------------------------------------------------------------------|
-/// | `body` / `content`| Message body (multipart-aware via `contentType`)                          |
-/// | `Request-URI` / `ruri` | Request URI (request only)                                           |
+/// | `body`            | Message body (multipart-aware via `contentType`)                          |
+/// | `requestURI`      | Request URI (request only)                                                |
 /// | `status`          | Response status code as string (response only)                            |
-/// | `reason`          | Response reason phrase (response only)                                    |
+/// | `reasonPhrase`    | Response reason phrase (response only)                                    |
 /// | `originIP`        | Original caller across proxy hops — walks `X-Vorpal-ID;origin`, `InitialRemoteAddr`, bottom Via, transport peer |
 /// | `peerIP`          | Immediate transport peer (`getRemoteAddr`)                                |
 /// | `transport`       | UDP / TCP / TLS / WS / WSS                                                |

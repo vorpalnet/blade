@@ -15,6 +15,14 @@
 	<packaging>war</packaging>
 	<name>BLADE Admin Flow</name>
 
+	<properties>
+		<!-- Indirection so resource filtering can see the build timestamp:
+		     Maven's special ${maven.build.timestamp} is NOT exposed to the
+		     filter directly (it's left literal), but a plain property that
+		     references it IS. Filtered into flow.html as the cache-buster id. -->
+		<buildTimestamp>${maven.build.timestamp}</buildTimestamp>
+	</properties>
+
 	<dependencies>
 		<!-- The diagramming engine is the JavaScript mxGraph bundled under
 		     src/main/webapp/js/ — there is no Java-side graph dependency.
@@ -37,6 +45,44 @@
 		     Don't override with `*.jar` — that strips framework too and causes
 		     NoClassDefFoundError at startup if any class wired into web.xml or
 		     annotation-scanned references a framework class. -->
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<!-- flow.html is provided by the filtered webResource below (to
+					     inject the cache-buster build id); exclude it from the
+					     default unfiltered copy so that copy doesn't overwrite the
+					     filtered one (the webResource dir == warSourceDirectory). -->
+					<warSourceExcludes>flow.html</warSourceExcludes>
+					<!-- The login page is the portal master, injected at build time:
+					     one source file, no per-app copies to drift. Edit
+					     admin/portal/src/main/webapp/login.jsp, never add a per-app
+					     login page. See SECURITY.md. -->
+					<webResources>
+						<resource>
+							<directory>${project.basedir}/../portal/src/main/webapp</directory>
+							<includes>
+								<include>login.jsp</include>
+							</includes>
+							<targetPath>login</targetPath>
+						</resource>
+						<!-- Filter flow.html ONLY, to inject ${maven.build.timestamp}
+						     as the cache-buster build id (see the mxUtils.load wrapper
+						     in flow.html). Scoped to this one file so JS template
+						     literals (${...}) elsewhere in the webapp are untouched. -->
+						<resource>
+							<directory>${project.basedir}/src/main/webapp</directory>
+							<includes>
+								<include>flow.html</include>
+							</includes>
+							<filtering>true</filtering>
+						</resource>
+					</webResources>
+				</configuration>
+			</plugin>
+		</plugins>
 	</build>
+
 
 </project>

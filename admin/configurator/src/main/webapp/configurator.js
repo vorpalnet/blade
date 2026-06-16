@@ -1565,6 +1565,16 @@ function setJavaClassOnSection(labelEl, fqn) {
     labelEl.classList.remove('hidden');
 }
 
+/// @FormLayout(readOnly=true) on a complex property (object/map/array)
+/// disables every control already rendered in its subtree — the data stays
+/// visible (and copyable) but nothing is editable, including add/remove
+/// buttons. Called after the section content is fully built.
+function applyReadOnly(fieldSchema, content) {
+    if (fieldSchema['x-readonly'] !== true) return;
+    content.classList.add('form-readonly');
+    content.querySelectorAll('input, select, textarea, button').forEach(el => el.disabled = true);
+}
+
 function createCollapsibleSection(title, description, content, hasData = false, autoCollapse = false, deleteInfo = null, javaClass = null) {
     const section = document.createElement('div');
     section.className = 'collapsible-section';
@@ -2032,7 +2042,7 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
     renderVariant(initialIdx, value);
 
     const hasData = hasValue(value);
-    const autoCollapse = !hasData;
+    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
     const deleteInfo = {
         schema: schemaForDelete || fieldSchema,
         title: title,
@@ -2040,6 +2050,7 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
         path: path,
         isNested: isNested
     };
+    applyReadOnly(fieldSchema, content);
     const section = createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo, variantJavaClass(initialIdx));
     javaClassLabelRef = section.querySelector('.collapsible-java-class');
     return section;
@@ -2051,7 +2062,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
     content.className = 'object-content';
 
     const hasData = hasValue(value);
-    const autoCollapse = !hasData;
+    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
 
     if (fieldSchema.properties) {
         const requiredSet = new Set(Array.isArray(fieldSchema.required) ? fieldSchema.required : []);
@@ -2201,6 +2212,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
         isNested: isNested
     };
 
+    applyReadOnly(fieldSchema, content);
     const section = createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo, fieldSchema['x-java-class'] || null);
 
     // Tag objects that have an "id" field so identity references can link to them
@@ -2220,7 +2232,7 @@ function createOpaqueObjectGroup(fieldSchema, title, description, path, value = 
     const content = document.createElement('div');
 
     const hasData = hasValue(value);
-    const autoCollapse = !hasData;
+    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
 
     const textarea = document.createElement('textarea');
     textarea.className = 'opaque-object-input';
@@ -2282,6 +2294,7 @@ function createOpaqueObjectGroup(fieldSchema, title, description, path, value = 
         isNested: isNested
     };
 
+    applyReadOnly(fieldSchema, content);
     return createCollapsibleSection(title || 'Object', description, content, hasData, autoCollapse, deleteInfo);
 }
 
@@ -2294,7 +2307,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     const content = document.createElement('div');
 
     const hasData = hasValue(value);
-    const autoCollapse = !hasData;
+    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
 
     const header = document.createElement('div');
     header.className = 'array-header';
@@ -2344,6 +2357,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
         isNested: isNested
     };
 
+    applyReadOnly(fieldSchema, content);
     const section = createCollapsibleSection(title || 'Map', description, content, hasData, autoCollapse, deleteInfo);
 
     // Function to update section status when items are added/removed
@@ -2363,7 +2377,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     content.className = 'form-group array';
 
     const hasData = Array.isArray(value) && value.length > 0;
-    const autoCollapse = !hasData;
+    const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
 
     const header = document.createElement('div');
     header.className = 'array-header';
@@ -2476,6 +2490,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
         isNested: isNested
     };
 
+    applyReadOnly(fieldSchema, content);
     const section = createCollapsibleSection(title || 'Array', description, content, hasData, autoCollapse, deleteInfo);
 
     // Function to update section status when items are added/removed

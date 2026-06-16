@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Clipboard with check mark -->
+  <rect x="96" y="80" width="320" height="384" rx="24" fill="none" stroke="currentColor" stroke-width="32"/>
+  <rect x="192" y="40" width="128" height="80" rx="16" fill="currentColor"/>
+  <path d="M176 296 L240 360 L352 216" fill="none" stroke="currentColor" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

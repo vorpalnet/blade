@@ -503,17 +503,38 @@ if [ -n "$OCCAS_VERSION" ]; then
 fi
 
 # --- Verify OCCAS/WebLogic libraries are installed in the local Maven repo ---
+# If they're missing and $MW_HOME points at a valid OCCAS install, bootstrap
+# automatically — bootstrap.sh reads $MW_HOME exactly the same way. Without
+# $MW_HOME we have no path to the OCCAS install, so we can't self-bootstrap and
+# fall back to the manual instruction below.
 M2_REPO="${HOME}/.m2/repository"
 WLS_JAR="${M2_REPO}/com/oracle/weblogic/weblogic-server/${WL_VERSION}/weblogic-server-${WL_VERSION}.jar"
 WLSS_JAR="${M2_REPO}/com/oracle/occas/wlss/${OCCAS_VERSION}/wlss-${OCCAS_VERSION}.jar"
-missing_libs=()
-[ -f "$WLS_JAR" ]  || missing_libs+=("$WLS_JAR")
-[ -f "$WLSS_JAR" ] || missing_libs+=("$WLSS_JAR")
-if [ ${#missing_libs[@]} -gt 0 ]; then
+occas_installed() { [ -f "$WLS_JAR" ] && [ -f "$WLSS_JAR" ]; }
+
+if ! occas_installed && [ -n "${MW_HOME:-}" ] && [ -d "${MW_HOME}/wlserver" ]; then
+    echo "OCCAS/WebLogic libraries not found in local Maven repo for platform ${PLATFORM}."
+    echo "Bootstrapping from \$MW_HOME=${MW_HOME} ..."
+    echo ""
+    "${SCRIPT_DIR}/bootstrap.sh" "$MW_HOME"
+    echo ""
+fi
+
+if ! occas_installed; then
+    missing_libs=()
+    [ -f "$WLS_JAR" ]  || missing_libs+=("$WLS_JAR")
+    [ -f "$WLSS_JAR" ] || missing_libs+=("$WLSS_JAR")
     echo "Error: OCCAS/WebLogic libraries not found in local Maven repo for platform ${PLATFORM}:"
     printf '  %s\n' "${missing_libs[@]}"
     echo ""
-    echo "Run ./bootstrap.sh /path/to/occas first to install them."
+    if [ -n "${MW_HOME:-}" ]; then
+        echo "Auto-bootstrap from \$MW_HOME=${MW_HOME} did not install OCCAS ${OCCAS_VERSION}."
+        echo "Check that \$MW_HOME points at an OCCAS ${OCCAS_VERSION} install, or run"
+        echo "./bootstrap.sh /path/to/occas-${OCCAS_VERSION} manually."
+    else
+        echo "Run ./bootstrap.sh /path/to/occas first to install them,"
+        echo "or set \$MW_HOME and re-run ./build.sh to bootstrap automatically."
+    fi
     exit 1
 fi
 
@@ -654,7 +675,18 @@ for f in "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}"; do
 done
 
 if [ "$HAS_BUILD_GOAL" != true ]; then
-    JAVADOC_STATUS="n/a (clean-only run)"
+    # Clean-only run. admin/javadoc is gated behind the `javadocs` profile, so
+    # without it a plain `./build.sh clean` would leave admin/javadoc/target/
+    # stale. Activate -Pjavadocs so the clean lifecycle reaches that module —
+    # safe on any JDK because clean never runs the javadoc tool (it only
+    # deletes target/, no JDK 23+ requirement).
+    if [ "$HAS_CLEAN" = true ]; then
+        JAVADOC_FLAGS+=("-Pjavadocs")
+        INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
+        JAVADOC_STATUS="n/a (clean-only run; admin/javadoc pulled in so clean reaches it)"
+    else
+        JAVADOC_STATUS="n/a (clean-only run)"
+    fi
 elif [ "$SKIP_JAVADOC" = true ]; then
     # The admin EAR's javadoc webModule rides the `javadocs` profile id, so
     # without it the EAR simply assembles without javadoc.war.

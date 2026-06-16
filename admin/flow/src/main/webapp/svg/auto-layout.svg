@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Auto-position: root node fanning out to ranked nodes, left to right -->
+  <rect x="32" y="208" width="112" height="96" fill="currentColor"/>
+  <rect x="368" y="48" width="112" height="96" fill="currentColor"/>
+  <rect x="368" y="208" width="112" height="96" fill="currentColor"/>
+  <rect x="368" y="368" width="112" height="96" fill="currentColor"/>
+  <path d="M144 256 L368 96 M144 256 L368 256 M144 256 L368 416" fill="none" stroke="currentColor" stroke-width="28"/>
+</svg>

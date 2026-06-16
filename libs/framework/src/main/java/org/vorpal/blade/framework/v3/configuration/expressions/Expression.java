@@ -22,7 +22,7 @@ import org.vorpal.blade.framework.v3.configuration.Context;
 /// not_expr   := '!' not_expr | primary
 /// primary    := '(' expr ')' | comparison | atom
 /// comparison := atom ( '==' | '!=' | '<' | '>' | '<=' | '>='
-///                    | 'matches' | 'contains' ) atom
+///                    | 'matches' | 'contains' | 'insubnet' ) atom
 /// atom       := variable | number | string | bareword | boolean
 /// variable   := '${' name '}'
 /// string     := "'" any-chars-except-quote "'"
@@ -34,6 +34,12 @@ import org.vorpal.blade.framework.v3.configuration.Context;
 /// syntax); `contains` is a literal substring test. Both treat an
 /// unresolved left side as the empty string. A malformed regex pattern
 /// evaluates to false rather than throwing.
+///
+/// `insubnet` is true when the left side (an IP address) falls inside the
+/// right side, a CIDR block or bare IP — e.g.
+/// `${originIP} insubnet '10.20.0.0/16'`. Real subnet math via the
+/// `ipaddress` library: any CIDR boundary (/18, /26, …), IPv4 and IPv6; a
+/// bare IP on the right means exact match. Unparseable input → false.
 ///
 /// ## Value semantics
 ///
@@ -61,6 +67,7 @@ import org.vorpal.blade.framework.v3.configuration.Context;
 /// (${customerTier} == premium && ${shift} == business) || ${override}
 /// ${To.host} contains 'example'
 /// ${From.user} matches '1\d{10}'
+/// ${originIP} insubnet '10.20.0.0/16'
 /// ```
 public class Expression implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -164,6 +171,11 @@ public class Expression implements Serializable {
 		private transient java.util.regex.Pattern cachedPattern;
 		private transient String cachedPatternSource;
 
+		/// Lazily parsed subnet/IP for the `insubnet` operator, keyed by its
+		/// source (same caching rationale as the regex). Transient.
+		private transient inet.ipaddr.IPAddress cachedSubnet;
+		private transient String cachedSubnetSource;
+
 		@Override
 		public boolean eval(Context ctx) {
 			Object l = left.value(ctx);
@@ -184,6 +196,26 @@ public class Expression implements Serializable {
 					return cachedPattern.matcher(ls).matches();
 				} catch (java.util.regex.PatternSyntaxException e) {
 					// Malformed pattern: evaluate to false, never throw mid-routing.
+					return false;
+				}
+			}
+
+			// CIDR containment: left IP inside the right CIDR block (or equal
+			// to the right bare IP). Backed by the ipaddress library — real
+			// subnet math, any boundary, IPv4 and IPv6. toPrefixBlock() ignores
+			// host bits in the CIDR. Any parse failure → false (never throw).
+			if ("insubnet".equals(op)) {
+				String ls = (l == null) ? "" : l.toString();
+				String rs = (r == null) ? "" : r.toString();
+				try {
+					if (cachedSubnet == null || !rs.equals(cachedSubnetSource)) {
+						inet.ipaddr.IPAddress net = new inet.ipaddr.IPAddressString(rs).getAddress();
+						cachedSubnet = (net != null) ? net.toPrefixBlock() : null;
+						cachedSubnetSource = rs;
+					}
+					inet.ipaddr.IPAddress ip = new inet.ipaddr.IPAddressString(ls).getAddress();
+					return cachedSubnet != null && ip != null && cachedSubnet.contains(ip);
+				} catch (Exception e) {
 					return false;
 				}
 			}
@@ -433,6 +465,7 @@ public class Expression implements Serializable {
 			if (match(">"))  return ">";
 			if (matchWord("matches"))  return "matches";
 			if (matchWord("contains")) return "contains";
+			if (matchWord("insubnet")) return "insubnet";
 			return null;
 		}
 

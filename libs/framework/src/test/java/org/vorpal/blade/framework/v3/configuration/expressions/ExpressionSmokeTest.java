@@ -43,6 +43,8 @@ public final class ExpressionSmokeTest {
 		checkMissingVariables();
 		// matches + contains word operators
 		checkStringOperators();
+		// insubnet CIDR operator
+		checkSubnetOperator();
 		// parse errors
 		checkParseErrors();
 		// realistic expressions
@@ -190,6 +192,35 @@ public final class ExpressionSmokeTest {
 		check("word.boundary.value", new Expression("${containsWord} == 'x-contains-y'").evaluate(ctx));
 		check("ops.combined", new Expression(
 				"${host} contains 'example' && ${user} matches '1\\d+'").evaluate(ctx));
+	}
+
+	/// insubnet: real CIDR containment via the ipaddress library.
+	private static void checkSubnetOperator() {
+		FakeContext ctx = new FakeContext()
+				.set("atl", "10.20.5.9")
+				.set("dal", "10.30.5.9")
+				.set("v6", "2001:db8::1")
+				.set("exact", "203.0.113.7");
+
+		check("subnet.in16", new Expression("${atl} insubnet '10.20.0.0/16'").evaluate(ctx));
+		check("subnet.out16", !new Expression("${dal} insubnet '10.20.0.0/16'").evaluate(ctx));
+		// Non-octet boundary — only real CIDR math gets this right (string
+		// prefix can't): 10.20.64.0/18 covers 10.20.64–127.x, not 10.20.5.x.
+		check("subnet.in18", new Expression("${atl} insubnet '10.20.0.0/18'").evaluate(ctx));
+		check("subnet.out18", !new Expression("${atl} insubnet '10.20.64.0/18'").evaluate(ctx));
+		// CIDR host bits are ignored (treated as the prefix block).
+		check("subnet.hostbits", new Expression("${atl} insubnet '10.20.5.255/16'").evaluate(ctx));
+		// Bare IP on the right = exact match.
+		check("subnet.exact.hit", new Expression("${exact} insubnet '203.0.113.7'").evaluate(ctx));
+		check("subnet.exact.miss", !new Expression("${exact} insubnet '203.0.113.8'").evaluate(ctx));
+		// IPv6.
+		check("subnet.ipv6", new Expression("${v6} insubnet '2001:db8::/32'").evaluate(ctx));
+		// Unparseable inputs → false, never throw.
+		check("subnet.bad.ip", !new Expression("${host} insubnet '10.0.0.0/8'").evaluate(ctx));
+		check("subnet.bad.cidr", !new Expression("${atl} insubnet 'not-a-subnet'").evaluate(ctx));
+		check("subnet.missing.var", !new Expression("${nope} insubnet '10.20.0.0/16'").evaluate(ctx));
+		// 'insubnet' as a bareword value, not an operator (word boundary).
+		check("subnet.word.boundary", new Expression("${exact} == '203.0.113.7'").evaluate(ctx));
 	}
 
 	private static void checkParseErrors() {

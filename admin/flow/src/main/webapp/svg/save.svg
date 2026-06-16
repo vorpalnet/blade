@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Floppy disk: body with clipped corner, shutter, label -->
+  <path d="M96 64 L368 64 L448 144 L448 416 Q448 448 416 448 L96 448 Q64 448 64 416 L64 96 Q64 64 96 64 Z" fill="none" stroke="currentColor" stroke-width="32" stroke-linejoin="round"/>
+  <rect x="160" y="88" width="160" height="96" rx="12" fill="currentColor"/>
+  <rect x="136" y="280" width="240" height="144" rx="12" fill="none" stroke="currentColor" stroke-width="24"/>
+</svg>

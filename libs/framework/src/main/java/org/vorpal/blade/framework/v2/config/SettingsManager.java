@@ -552,7 +552,7 @@ public class SettingsManager<T> {
 
 		// @FormLayout — per-property layout/rendering hints. Emitted as an
 		// x-form attribute on the property's schema; the Configurator keys off
-		// x-wide, format="password"/"textarea", x-readonly.
+		// x-wide, format="password"/"textarea", x-readonly, x-collapsed.
 		ConfigFunction<MemberScope<?, ?>, ObjectNode> formLayoutAttrs = member -> {
 			ObjectNode extras = mapper.createObjectNode();
 
@@ -563,6 +563,7 @@ public class SettingsManager<T> {
 				if (fl.wide() || fl.multiline()) extras.put("x-wide", true);
 				if (fl.readOnly()) extras.put("x-readonly", true);
 				if (fl.regexTest()) extras.put("x-regex-test", true);
+				if (fl.collapsed()) extras.put("x-collapsed", true);
 			}
 
 			// @FormKeyEnum — constrain a map property's keys to a fixed set.

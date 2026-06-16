@@ -65,12 +65,12 @@ public final class RouteSimulator {
 	}
 
 	/// Simulates one request. `simRequest` is the editor's POST body:
-	/// `{ config, request: {method, requestUri, headers}, pseudo, undeployed }`.
+	/// `{ config, request: {method, requestURI, headers}, pseudo, undeployed }`.
 	public static ObjectNode simulate(JsonNode simRequest, ObjectMapper mapper) {
 		JsonNode config = simRequest.path("config");
 		JsonNode req = simRequest.path("request");
 		String method = req.path("method").asText("INVITE");
-		String requestUri = req.path("requestUri").asText("");
+		String requestURI = req.path("requestURI").asText("");
 
 		List<String> problems = new ArrayList<>();
 
@@ -82,8 +82,8 @@ public final class RouteSimulator {
 			Map.Entry<String, JsonNode> h = headers.next();
 			payload.put(h.getKey(), h.getValue().asText());
 		}
-		if (!requestUri.isEmpty()) {
-			payload.putIfAbsent("Request-URI", requestUri);
+		if (!requestURI.isEmpty()) {
+			payload.putIfAbsent("requestURI", requestURI);
 		}
 
 		Set<String> undeployed = new HashSet<>();
@@ -98,17 +98,18 @@ public final class RouteSimulator {
 		Map<String, String> contextMap = new LinkedHashMap<>();
 		Context ctx = new MemoryContext(contextMap);
 		Map<String, String> beforeFirstHop = new HashMap<>(contextMap);
-		publishPseudoVariables(contextMap, method, requestUri,
+		publishPseudoVariables(contextMap, method, requestURI,
 				(String) payload.get("Call-ID"), simRequest.path("pseudo"));
 
 		ObjectNode out = mapper.createObjectNode();
 		out.put("method", method);
-		out.put("requestUri", requestUri);
+		out.put("requestURI", requestURI);
 		ArrayNode hops = out.putArray("hops");
 
 		String finalApp = null;
 		boolean defaultFallback = false;
 		boolean cycleDetected = false;
+		boolean finalEgress = false;
 
 		// ===== Mirror of AppRouter.getNextApplication's state-machine walk,
 		// chained across invocations =====
@@ -139,12 +140,17 @@ public final class RouteSimulator {
 
 			ObjectNode hop = hops.addObject();
 			hop.put("state", previous);
+			// The application this hop's state runs (its `app`, default = the id).
+			// Distinct from `state` so two hops with the same app read clearly.
+			hop.put("app", appOf(states, previous));
 			Map<String, String> before = (beforeFirstHop != null) ? beforeFirstHop : new HashMap<>(contextMap);
 			beforeFirstHop = null;
 
-			// Keep ${previousApp} current as the walk advances (engine does
-			// the same inside its loop).
-			contextMap.put("previousApp", previous);
+			// Keep ${previousState}/${previousApp} current as the walk advances
+			// (engine does the same inside its loop). `previous` is a state id;
+			// ${previousApp} is that state's application.
+			contextMap.put("previousState", previous);
+			contextMap.put("previousApp", appOf(states, previous));
 
 			// On entry to a state, run its selectors (best-effort, like
 			// State.extract — a failing selector must not abort routing).
@@ -189,6 +195,7 @@ public final class RouteSimulator {
 
 			hop.put("bypassed", false);
 			String routedTo = null;
+			boolean egressedHop = false;
 
 			if (matched == null) {
 				// No transition: this invocation routes nothing.
@@ -202,48 +209,86 @@ public final class RouteSimulator {
 					hop.put("next", next);
 				}
 
-				if (next == null) {
-					// Matched with no target application — nothing to route to.
-					done = true;
-				} else if (undeployed.contains(next)) {
-					// Bypass the undeployed application and continue from its
-					// state (same invocation). Stop on a revisit (config loop).
-					hop.put("bypassed", true);
-					if (!visited.add(next)) {
-						cycleDetected = true;
-						done = true;
-					} else {
-						previous = next;
+				JsonNode mRoutes = matched.path("routes");
+				boolean mHasRoutes = mRoutes.isArray() && mRoutes.size() > 0;
+				boolean mRouteBack = "ROUTE_BACK".equals(matched.path("routeModifier").asText(""));
+
+				if (next != null && mRouteBack && mHasRoutes) {
+					// Route-back egress: out to the routes, then the flow RESUMES at
+					// `next` when the request returns. Mirror AppRouter — a null-app
+					// decision now (no app runs), continue the walk at the return
+					// state. Not terminal: the call continues.
+					ArrayNode rb = hop.putArray("routes");
+					for (JsonNode r : mRoutes) {
+						rb.add(ctx.resolve(r.asText()));
 					}
-				} else {
-					// "Deployed": route here. Resolve ${} routes against the
-					// context, exactly as Transition.createRouterInfo does.
-					JsonNode routes = matched.path("routes");
-					if (routes.isArray() && routes.size() > 0) {
+					hop.put("routeModifier", "ROUTE_BACK");
+					hop.put("egress", true);
+					hop.put("returnsTo", next);
+					egressedHop = true;
+					routedTo = next;   // continue the walk at the return state
+				} else if (next == null) {
+					// Terminal ROUTE_FINAL egress: the call leaves OCCAS via its
+					// routes (resolve ${}, flag the hop); no routes = nothing to route.
+					if (mHasRoutes) {
 						ArrayNode resolved = hop.putArray("routes");
-						for (JsonNode r : routes) {
+						for (JsonNode r : mRoutes) {
 							resolved.add(ctx.resolve(r.asText()));
 						}
 						hop.put("routeModifier", matched.path("routeModifier").asText("ROUTE"));
-					} else {
-						hop.put("routeModifier", "NO_ROUTE");
+						hop.put("egress", true);
+						egressedHop = true;
+						finalEgress = true;
 					}
-					String subscriber = matched.path("subscriber").asText("");
-					if (!subscriber.isEmpty()) {
-						String uri = extractUri((String) payload.get(subscriber));
-						if (uri != null) {
-							hop.put("subscriberURI", uri);
+					done = true;
+				} else {
+					// `next` is the target STATE id; the application to invoke is
+					// that state's `app` (default = the id). Deployment is checked
+					// on the app, but the walk continues from the STATE id — so two
+					// states sharing an app stay distinct.
+					String targetApp = appOf(states, next);
+					if (undeployed.contains(targetApp)) {
+						// Bypass the undeployed application; continue from the target
+						// state (same invocation). Stop on a revisit (config loop).
+						hop.put("bypassed", true);
+						if (!visited.add(next)) {
+							cycleDetected = true;
+							done = true;
+						} else {
+							previous = next;
 						}
+					} else {
+						// "Deployed": route here. Resolve ${} routes against the
+						// context, exactly as Transition.createRouterInfo does.
+						JsonNode routes = matched.path("routes");
+						if (routes.isArray() && routes.size() > 0) {
+							ArrayNode resolved = hop.putArray("routes");
+							for (JsonNode r : routes) {
+								resolved.add(ctx.resolve(r.asText()));
+							}
+							hop.put("routeModifier", matched.path("routeModifier").asText("ROUTE"));
+						} else {
+							hop.put("routeModifier", "NO_ROUTE");
+						}
+						String subscriber = matched.path("subscriber").asText("");
+						if (!subscriber.isEmpty()) {
+							String uri = extractUri((String) payload.get(subscriber));
+							if (uri != null) {
+								hop.put("subscriberURI", uri);
+							}
+						}
+						hop.put("region", matched.path("region").asText("NEUTRAL"));
+						finalApp = targetApp;   // the application routed to
+						routedTo = next;        // the STATE id — chain `previous` from here
 					}
-					hop.put("region", matched.path("region").asText("NEUTRAL"));
-					finalApp = next;
-					routedTo = next;
 				}
 			}
 
-			// Default application fallback — engine condition verbatim: fires
-			// only while the walk never advanced past the initial state.
-			if (done && previous.equals("null") && finalApp == null) {
+			// Default application fallback — engine condition: fires only while
+			// the walk never advanced past the initial state AND the call didn't
+			// already egress (an egress at "null" has no app but is a decision,
+			// so it must not be clobbered — mirrors AppRouter's routedExternally).
+			if (done && previous.equals("null") && finalApp == null && !egressedHop) {
 				defaultFallback = true;
 				if (defaultApplication.isEmpty()) {
 					problems.add("No defaultApplication configured — the engine would route to null");
@@ -273,6 +318,9 @@ public final class RouteSimulator {
 		}
 		out.put("defaultFallback", defaultFallback);
 		out.put("cycleDetected", cycleDetected);
+		// The call left OCCAS via an egress (terminal transition with routes)
+		// rather than landing on an application — the editor labels the outcome.
+		out.put("egress", finalEgress);
 		ObjectNode finalContext = out.putObject("context");
 		for (Map.Entry<String, String> e : contextMap.entrySet()) {
 			finalContext.put(e.getKey(), e.getValue());
@@ -310,6 +358,17 @@ public final class RouteSimulator {
 		return list;
 	}
 
+	/// The application a state id resolves to: the state's `app` (default = its
+	/// id), or the id itself when no state entry exists. Mirrors
+	/// AppRouter.appOf / State.appOrId.
+	private static String appOf(JsonNode states, String stateId) {
+		if (stateId == null) {
+			return null;
+		}
+		String app = states.path(stateId).path("app").asText("");
+		return (!app.isEmpty()) ? app : stateId;
+	}
+
 	/// Mirrors Transition.matches: empty/absent matches unconditionally,
 	/// parse/eval errors resolve to false (a malformed condition can't abort
 	/// the routing decision).
@@ -328,9 +387,9 @@ public final class RouteSimulator {
 	/// explicit overrides (so "simulate Sunday 3 AM" or a fixed `${hash100}`
 	/// bucket is one form field, not a wait until Sunday).
 	private static void publishPseudoVariables(Map<String, String> ctx, String method,
-			String requestUri, String callId, JsonNode overrides) {
+			String requestURI, String callId, JsonNode overrides) {
 		ctx.put("method", method != null ? method : "");
-		ctx.put("requestUri", requestUri != null ? requestUri : "");
+		ctx.put("requestURI", requestURI != null ? requestURI : "");
 		ctx.put("directive", "NEW");
 		ctx.put("region", "");
 		ctx.put("previousApp", "null");

@@ -81,18 +81,56 @@ window.flowTasks = (function() {
 		return $('#' + cell.value.tagName);
 	}
 
-	// ----- node panel (shared by State / Ingress / Egress) ------------------
+	// ----- node panel (shared by State / Gateway, legacy Ingress / Egress) ---
 
 	function loadNode(cell) {
-		panel(cell).find('.node-name').val(cell.getAttribute('label') || '');
-		// Selectors and plan dispatch apply to State and Ingress (the "null"
-		// state's selectors run against initial requests). Egress is a pure
-		// sink — hide both.
+		var $p = panel(cell);
+		$p.find('.node-name').val(cell.getAttribute('label') || '');
+
+		// Egress exit node (Gateway with role="egress"): the mirror of an
+		// ingress. It owns the routes baked onto each transition targeting it.
+		// Nothing routes FROM it as a state, so hide selectors/dispatch/match/id.
+		// The exit KIND is inferred from topology — a line back to a state makes
+		// it ROUTE_BACK; otherwise ROUTE_FINAL.
+		var isExitEgress = cell.getAttribute('role') === 'egress';
+		$p.find('.egress-section').css('display', isExitEgress ? '' : 'none');
+		if (isExitEgress) {
+			$p.find('.state-selectors-section, .state-dispatch-section, .ingress-match-section, .state-id-section')
+					.css('display', 'none');
+			var ret = egressReturnState(cell);
+			$p.find('.egress-kind').text(ret
+					? 'Back to origin (ROUTE_BACK) → resumes at ' + ret
+					: 'To destination (ROUTE_FINAL)');
+			$p.find('.egress-description').val(cell.getAttribute('description') || '');
+			renderEgressRoutes(cell);
+			return;
+		}
+
+		// Selectors and plan dispatch apply to State and Gateway (a state's
+		// selectors run on entry). Legacy Egress is a pure sink — hide both.
 		var isEgress = cell.value.tagName === 'Egress';
-		panel(cell).find('.state-selectors-section, .state-dispatch-section')
+		$p.find('.state-selectors-section, .state-dispatch-section')
 				.css('display', isEgress ? 'none' : '');
 		if (!isEgress) {
 			renderStateSelectors(cell);
+		}
+		// Source match: only an ingress (Gateway) has one, and only a NAMED
+		// ingress (not the "default" box) should set it.
+		var isIngress = cell.value.tagName === 'Gateway' || cell.value.tagName === 'Ingress';
+		$p.find('.ingress-match-section').css('display', isIngress ? '' : 'none');
+		if (isIngress) {
+			$p.find('.node-match').val(cell.getAttribute('match') || '');
+		}
+
+		// State ID: the unique JSON key, separate from the application name
+		// (the label). Shown for a State or a NAMED ingress; blank means "use
+		// the name as the id" (the common one-instance-per-app case). Set a
+		// distinct id to invoke the same application from two states.
+		var hasMatch = (cell.getAttribute('match') || '').length > 0;
+		var showId = cell.value.tagName === 'State' || (isIngress && hasMatch);
+		$p.find('.state-id-section').css('display', showId ? '' : 'none');
+		if (showId) {
+			$p.find('.node-stateid').val(cell.getAttribute('stateId') || '');
 		}
 	}
 
@@ -102,6 +140,88 @@ window.flowTasks = (function() {
 			if (cell) {
 				window.flowGraph.cellLabelChanged(cell, $(this).val(), false);
 			}
+		});
+		$(document).off('change.flowMatch', '.node-match').on('change.flowMatch', '.node-match', function() {
+			var cell = window.flowSelectedCell;
+			if (cell) {
+				setAttr(cell, 'match', $(this).val());
+			}
+		});
+		$(document).off('change.flowSid', '.node-stateid').on('change.flowSid', '.node-stateid', function() {
+			var cell = window.flowSelectedCell;
+			if (cell) {
+				// Blank stateId → the export falls back to the name (label) as
+				// the id. Refresh so the on-canvas qualifier reflects the change.
+				setAttr(cell, 'stateId', ($(this).val() || '').trim());
+				if (window.flowGraph) { window.flowGraph.refresh(); }
+			}
+		});
+	}
+
+	// ----- egress exit node ---------------------------------------------------
+
+	// The egress's return state, if it has a route-back line: the state id (or
+	// label) its out-edge points at. null when the egress has no out-edge —
+	// then it's a ROUTE_FINAL exit. This topology is what determines the kind.
+	function egressReturnState(cell) {
+		if (!cell || !cell.edges) return null;
+		for (var i = 0; i < cell.edges.length; i++) {
+			var e = cell.edges[i];
+			if (e.source === cell && e.target && e.target.value
+					&& e.target.getAttribute('role') !== 'egress') {
+				return e.target.getAttribute('stateId') || e.target.getAttribute('label') || '?';
+			}
+		}
+		return null;
+	}
+
+	function renderEgressRoutes(cell) {
+		var $c = panel(cell).find('.egress-routes').empty();
+		var routes = getChildElements(cell, 'route');
+		for (var i = 0; i < routes.length; i++) {
+			var uri = routes[i].getAttribute('uri') || '';
+			$c.append('<div class="egress-route-row" data-idx="' + i + '">' +
+				'<input class="egress-route-uri" type="text" value="' + escapeAttr(uri) +
+					'" placeholder="sip:${To.user}@carrier-trunk.example.com" />' +
+				' <svg class="remove-btn remove-egress-route" title="Remove route" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>' +
+				'</div>');
+		}
+	}
+
+	function saveEgressRoutes() {
+		var cell = window.flowSelectedCell;
+		if (!cell) return;
+		var items = [];
+		panel(cell).find('.egress-routes .egress-route-row').each(function() {
+			var v = $(this).find('.egress-route-uri').val();
+			if (v) items.push({ uri: v });
+		});
+		setChildElements(cell, 'route', items, function(el, item) {
+			el.setAttribute('uri', item.uri);
+		});
+	}
+
+	function bindEgress() {
+		// No modifier control: the exit kind is inferred from the egress's
+		// out-edge (a route-back line), recomputed in loadNode on every model
+		// change. See egressReturnState.
+		$(document).off('change.flowEg', '.egress-description').on('change.flowEg', '.egress-description', function() {
+			setAttr(window.flowSelectedCell, 'description', $(this).val());
+		});
+		$(document).off('click.flowEg', '.add-egress-route').on('click.flowEg', '.add-egress-route', function() {
+			var cell = window.flowSelectedCell;
+			if (!cell || !cell.value) return false;
+			cell.value.appendChild(cell.value.ownerDocument.createElement('route'));
+			renderEgressRoutes(cell);
+			return false;
+		});
+		$(document).off('click.flowEg', '.remove-egress-route').on('click.flowEg', '.remove-egress-route', function() {
+			$(this).closest('.egress-route-row').remove();
+			saveEgressRoutes();
+			return false;
+		});
+		$(document).off('change.flowEg', '.egress-routes input').on('change.flowEg', '.egress-routes input', function() {
+			saveEgressRoutes();
 		});
 	}
 
@@ -294,6 +414,15 @@ window.flowTasks = (function() {
 		var target = cell.target;
 		$('#transition-next').val(target ? (target.getAttribute('label') || '') : '');
 		renderRoutes(cell);
+
+		// Routes belong at the egress (or are pointless app-to-app). Show this
+		// transition's own route editor only for a legacy app-to-app transition
+		// that already carries routes; for an egress target, point to the node.
+		var targetIsEgress = !!(target && target.getAttribute('role') === 'egress');
+		var hasRoutes = getChildElements(cell, 'route').length > 0;
+		$('#transition-egress-note').css('display', targetIsEgress ? '' : 'none');
+		$('#transition-routes-section').css('display',
+				(!targetIsEgress && hasRoutes) ? '' : 'none');
 	}
 
 	function renderRoutes(cell) {
@@ -547,7 +676,7 @@ window.flowTasks = (function() {
 	function loadFromCell(cell) {
 		if (!cell || !cell.value) return;
 		var tag = cell.value.tagName;
-		if (tag === 'State' || tag === 'Ingress' || tag === 'Egress') {
+		if (tag === 'State' || tag === 'Gateway' || tag === 'Ingress' || tag === 'Egress') {
 			loadNode(cell);
 		} else if (tag === 'Transition') {
 			loadTransition(cell);
@@ -560,6 +689,7 @@ window.flowTasks = (function() {
 	// only exist after that, so we use delegated handlers on document).
 	$(function() {
 		bindNode();
+		bindEgress();
 		bindStateSelectors();
 		bindTransition();
 		bindFlowModel();

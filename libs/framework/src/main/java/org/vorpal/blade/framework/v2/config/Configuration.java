@@ -19,13 +19,12 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  * Base configuration class with logging, session parameters, and utility
  * methods.
  */
-@JsonPropertyOrder({ "version", "about", "logging", "session", "analytics" })
+@JsonPropertyOrder({ "version", "logging", "session", "analytics" })
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 
 	protected Integer version;
-	protected About about = new About();
 	protected LogParameters logging = new LogParametersDefault();
 	protected SessionParameters session = new SessionParameters();
 
@@ -161,16 +160,6 @@ public class Configuration implements Serializable {
 
 	public Configuration setVersion(Integer version) {
 		this.version = version;
-		return this;
-	}
-
-	@JsonPropertyDescription("Administrator notes for this configuration. (App identity — name, tagline, description — is now developer-owned and lives in the JSON Schema via @SchemaAbout, not here.)")
-	public About getAbout() {
-		return about;
-	}
-
-	public Configuration setAbout(About about) {
-		this.about = about;
 		return this;
 	}
 

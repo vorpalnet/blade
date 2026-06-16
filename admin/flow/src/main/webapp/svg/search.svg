@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Magnifier -->
+  <circle cx="208" cy="208" r="136" fill="none" stroke="currentColor" stroke-width="40"/>
+  <path d="M312 312 L456 456" fill="none" stroke="currentColor" stroke-width="48" stroke-linecap="round"/>
+</svg>

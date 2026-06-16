@@ -51,28 +51,45 @@ window.flowSimulate = (function() {
 		return editorRef.graph;
 	}
 
-	// State name a vertex represents: Ingress/Egress clouds are "null".
+	// State name a vertex represents. An ingress box is its own state: a
+	// NAMED ingress (has a `match`) is the state named by its label; a
+	// matchless ingress (the default) is "null". Legacy Ingress/Egress are
+	// "null".
+	// A node's state id (the JSON key): its `stateId` attribute, else its label.
+	function stateIdOf(v) {
+		return v.getAttribute('stateId') || v.getAttribute('label') || '';
+	}
+
 	function vertexStateName(v) {
 		if (!v || !v.value || !v.value.tagName) return null;
 		var tag = v.value.tagName;
+		if (tag === 'Gateway') {
+			// An egress Gateway is an exit, not a state — it's a transition
+			// target, never a source. Excluded so it can't be mistaken for null.
+			if (v.getAttribute('role') === 'egress') return null;
+			var match = v.getAttribute('match');
+			return (match && match.length > 0) ? stateIdOf(v) : 'null';
+		}
 		if (tag === 'Ingress' || tag === 'Egress') return 'null';
-		if (tag === 'State') return v.getAttribute('label') || '';
+		if (tag === 'State') return stateIdOf(v);
 		return null;
 	}
 
-	// All vertices representing a state. For "null", Ingress clouds (entry
-	// side) are preferred; Egress only if no Ingress exists.
+	// All vertices representing a state. For "null", the default ingress
+	// (matchless Gateway / legacy Ingress) is preferred; legacy Egress only
+	// if nothing else exists. Named ingress states match by their label.
 	function findStateCells(stateName) {
 		var model = graph().getModel();
 		var ingress = [], states = [], egress = [];
 		for (var id in model.cells) {
 			var c = model.cells[id];
 			if (!c || !c.vertex || !c.value || !c.value.tagName) continue;
+			if (vertexStateName(c) !== stateName) continue;
 			var tag = c.value.tagName;
 			if (stateName === 'null') {
-				if (tag === 'Ingress') ingress.push(c);
-				else if (tag === 'Egress') egress.push(c);
-			} else if (tag === 'State' && (c.getAttribute('label') || '') === stateName) {
+				if (tag === 'Egress') egress.push(c);
+				else ingress.push(c);
+			} else {
 				states.push(c);
 			}
 		}
@@ -112,8 +129,7 @@ window.flowSimulate = (function() {
 	}
 
 	function post(url, params, onJson, onError) {
-		var req = new mxXmlRequest(url, params);
-		req.send(function(resp) {
+		flowRequest(url, params, 'POST', function(resp) {
 			if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
 				try {
 					onJson(JSON.parse(resp.getText()));
@@ -382,7 +398,7 @@ window.flowSimulate = (function() {
 		return {
 			request: {
 				method: div.querySelector('#sim-method').value,
-				requestUri: div.querySelector('#sim-uri').value.trim(),
+				requestURI: div.querySelector('#sim-uri').value.trim(),
 				headers: headers
 			},
 			pseudo: pseudo,
@@ -500,8 +516,8 @@ window.flowSimulate = (function() {
 			traces.forEach(function(t) {
 				var row = document.createElement('div');
 				row.style.cssText = 'padding:3px 5px; border-bottom:1px solid #eee; cursor:pointer;';
-				row.innerHTML = '<b>' + esc(t.method || '?') + '</b> ' + esc(t.requestUri || '') +
-						' &rarr; ' + esc(t.finalApp || '(downstream)') +
+				row.innerHTML = '<b>' + esc(t.method || '?') + '</b> ' + esc(t.requestURI || '') +
+						' &rarr; ' + esc(t.egress ? '(egress)' : (t.finalApp || '(downstream)')) +
 						'<br/><span style="color:#777;">' + esc(t.callId || '') +
 						(t.server ? ' · ' + esc(t.server) : '') + '</span>';
 				row.onclick = function() { loadTrace(t); };
@@ -633,9 +649,13 @@ window.flowSimulate = (function() {
 			findStateCells(hop.state).forEach(function(cell) {
 				addHighlight(highlights, cell, width, stateDashed, PATH_COLOR);
 			});
-			if (hop.matched != null || hop.next != null) {
+			if (hop.matched != null || hop.next != null || hop.egress) {
 				var edge = findEdge(hop.state, trace.method, hop.matched);
 				addHighlight(highlights, edge, width, hop.bypassed, PATH_COLOR);
+				// An egress hop's edge points at the exit node — light it up too.
+				if (hop.egress && edge && edge.target) {
+					addHighlight(highlights, edge.target, width, false, PATH_COLOR);
+				}
 			}
 		}
 
@@ -686,6 +706,10 @@ window.flowSimulate = (function() {
 				if (hop.region && hop.region !== 'NEUTRAL') html += ' · region ' + esc(hop.region);
 				html += '</div>';
 			}
+			if (hop.egress) {
+				html += '<div style="margin-top:4px;"><b>&rarr; egress</b> — the call leaves OCCAS ' +
+						'via the routes below</div>';
+			}
 			if (hop.routes && hop.routes.length > 0) {
 				html += '<div style="margin-top:2px;"><b>Routes (' + esc(hop.routeModifier || 'ROUTE') + '):</b>' +
 						'<div style="margin-left:8px; font-family:monospace; font-size:11px;">' +
@@ -699,7 +723,11 @@ window.flowSimulate = (function() {
 
 		// --- whole-call summary ---
 		html += '<div style="margin-top:6px; border-top:1px dotted #aaa; padding-top:4px;">';
-		html += '<b>Final application:</b> ' + esc(trace.finalApp || '(none — routes downstream)');
+		if (trace.egress) {
+			html += '<b>Outcome:</b> egress — the call left OCCAS via its routes';
+		} else {
+			html += '<b>Final application:</b> ' + esc(trace.finalApp || '(none — routes downstream)');
+		}
 		if (trace.defaultFallback) html += ' · <b>DEFAULT FALLBACK</b>';
 		if (trace.cycleDetected) html += ' · <b>CYCLE DETECTED</b>';
 		if (trace.server) html += ' · engine ' + esc(trace.server);

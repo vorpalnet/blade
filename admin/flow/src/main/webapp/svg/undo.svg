@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Counter-clockwise circular arrow, head at lower left -->
+  <path d="M395 336 A160 160 0 1 0 117 336" fill="none" stroke="currentColor" stroke-width="40"/>
+  <path d="M117 432 L53 324 L181 324 Z" fill="currentColor"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Open hand (pan): four fingers, palm, thumb -->
+  <rect x="128" y="104" width="48" height="200" rx="24" fill="currentColor"/>
+  <rect x="192" y="56" width="48" height="240" rx="24" fill="currentColor"/>
+  <rect x="256" y="64" width="48" height="232" rx="24" fill="currentColor"/>
+  <rect x="320" y="104" width="48" height="192" rx="24" fill="currentColor"/>
+  <path d="M120 240 L392 240 L392 336 Q392 448 280 448 L240 448 Q120 448 120 336 Z" fill="currentColor"/>
+  <path d="M140 392 L64 296" fill="none" stroke="currentColor" stroke-width="52" stroke-linecap="round"/>
+</svg>

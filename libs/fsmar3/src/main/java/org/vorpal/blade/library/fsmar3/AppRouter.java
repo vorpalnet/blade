@@ -123,6 +123,13 @@ public class AppRouter implements SipApplicationRouter {
 			// saved == null marks the start of a fresh composition — and only then.
 			boolean freshComposition = (routingState == null);
 			if (routingState == null) {
+				routingState = new RoutingState(null);
+			}
+			// The config is transient in RoutingState (kept off the wire so a
+			// ROUTE_BACK round-trip doesn't BASE64 the whole config into a Route
+			// URI). Bind the live snapshot on the fresh hop AND re-bind it on
+			// every continuation hop (where the field deserialized to null).
+			if (routingState.getConfig() == null) {
 				AppRouterConfiguration current = settingsManager.getCurrent();
 				if (current == null) {
 					throw new Exception("Invalid FSMAR configuration file.");
@@ -132,7 +139,7 @@ public class AppRouter implements SipApplicationRouter {
 					validateConfiguration(current);
 					lastValidated = current;
 				}
-				routingState = new RoutingState(current);
+				routingState.bindConfig(current);
 			}
 			AppRouterConfiguration config = routingState.getConfig();
 
@@ -156,7 +163,16 @@ public class AppRouter implements SipApplicationRouter {
 			String previous;
 			if (freshComposition) {
 				previous = "null";
+			} else if (routingState.getCurrentStateId() != null) {
+				// Resume at the exact state we last routed INTO, carried in our
+				// stateInfo. This — not the session's application name — is what
+				// lets two states share one application (same `app`, different
+				// ids) and still be told apart on continuation.
+				previous = routingState.getCurrentStateId();
 			} else {
+				// Defensive fallback (no state id carried yet): the previous
+				// application name off the session, as before. With state ids set
+				// on every routing decision below, continuations don't reach here.
 				SipApplicationSessionImpl sasi = ((SipServletRequestAdapter) request)
 						.getImpl().getSipApplicationSessionImpl();
 				previous = (sasi != null) ? SettingsManager.basename(sasi.getApplicationName()) : "null";
@@ -180,8 +196,12 @@ public class AppRouter implements SipApplicationRouter {
 					(request.getRequestURI() != null) ? request.getRequestURI().toString() : "",
 					(directive != null) ? directive.toString() : "",
 					(region != null) ? String.valueOf(region.getType()) : "",
-					previous,
+					appOf(config, previous),
 					request.getCallId());
+			// ${previousState} is the FSM state id; ${previousApp} (above) is that
+			// state's application — usually the same, but distinct for a state
+			// that invokes an app under a different id.
+			ctx.put("previousState", previous);
 
 			// Single-line summary, assembled as routing proceeds and emitted exactly
 			// once at the end of this invocation. `startState` preserves the FSM
@@ -190,9 +210,17 @@ public class AppRouter implements SipApplicationRouter {
 			String decision = "none (routed downstream)";
 			java.util.List<String> bypassed = new java.util.ArrayList<>();
 
+			// True once a terminal transition routes the call out of OCCAS via its
+			// own routes (an egress). Such a decision has a null application name,
+			// which would otherwise look identical to "no decision" to the
+			// default-application fallback below — this flag keeps the fallback from
+			// clobbering an egress hung off the entry ("null") state.
+			boolean routedExternally = false;
+
 			// For targeted sessions, route directly
 			if (requestInfo != null) {
 				String deployedApp = getDeployedApp(requestInfo.getApplicationName());
+				routingState.setCurrentStateId(SettingsManager.basename(requestInfo.getApplicationName()));
 				nextApp = new SipApplicationRouterInfo(deployedApp, region, null, null,
 						SipRouteModifier.NO_ROUTE, routingState);
 				decision = "targeted=" + requestInfo.getApplicationName() + " -> " + deployedApp;
@@ -209,6 +237,7 @@ public class AppRouter implements SipApplicationRouter {
 				if (null == sipUri.getUser()) {
 					String app = getDeployedApp(sipUri.getHost());
 					if (app != null) {
+						routingState.setCurrentStateId(SettingsManager.basename(sipUri.getHost()));
 						nextApp = new SipApplicationRouterInfo(app, region, null, null,
 								SipRouteModifier.NO_ROUTE, routingState);
 						decision = "uri=" + sipUri.getHost() + " -> " + app;
@@ -241,8 +270,10 @@ public class AppRouter implements SipApplicationRouter {
 
 					State state = config.getStates().get(previous);
 
-					// Keep ${previousApp} current as the bypass loop advances.
-					ctx.put("previousApp", previous);
+					// Keep ${previousState}/${previousApp} current as the bypass
+					// loop advances through state ids.
+					ctx.put("previousState", previous);
+					ctx.put("previousApp", (state != null) ? state.appOrId(previous) : previous);
 
 					// On entry to a state, run its selectors to populate the
 					// context from the request (best-effort; never aborts routing).
@@ -281,10 +312,42 @@ public class AppRouter implements SipApplicationRouter {
 					}
 
 					String next = matched.getNext();
-					String deployedApp = (next != null) ? deployed.get(next) : null;
+
+					// Route-back egress: a fired transition carrying ROUTE_BACK +
+					// routes sends the request OUT to those routes and asks the
+					// container to route it back. OCCAS BASE64-encodes our stateInfo
+					// into the route it pushes to itself and re-invokes us (CONTINUE)
+					// with it — so setting currentStateId to `next` is all it takes
+					// to resume at the return state when the request comes back. No
+					// application runs now (null-app decision); the external hop does.
+					if (next != null
+							&& matched.getRouteModifier() == SipRouteModifier.ROUTE_BACK
+							&& matched.getRoutes() != null && matched.getRoutes().length > 0) {
+						routingState.setCurrentStateId(next);
+						nextApp = matched.createRouterInfo(null, routingState, ctx, request);
+						routedExternally = true;
+						decision = "matched=" + matched.getId() + " -> (route-back, resume " + next + ")";
+						if (trace != null) {
+							trace.routed(nextApp);
+						}
+						break;
+					}
+
+					// `next` is the TARGET STATE id. The application to invoke is
+					// that state's `app` (defaulting to the id) — or, when no state
+					// entry exists, `next` itself ("invoke this app, no follow-up
+					// state", e.g. a terminal registrar).
+					State targetState = (next != null) ? config.getStates().get(next) : null;
+					String targetApp = (next == null) ? null
+							: (targetState != null ? targetState.appOrId(next) : next);
+					String deployedApp = (targetApp != null) ? deployed.get(targetApp) : null;
 					if (deployedApp != null) {
+						// Resume into the target STATE id next hop (so two states
+						// sharing an app stay distinct).
+						routingState.setCurrentStateId(next);
 						nextApp = matched.createRouterInfo(deployedApp, routingState, ctx, request);
-						decision = "matched=" + matched.getId() + " -> " + deployedApp;
+						decision = "matched=" + matched.getId() + " -> " + next
+								+ " (app " + targetApp + ")";
 						if (trace != null) {
 							trace.routed(nextApp);
 						}
@@ -292,13 +355,29 @@ public class AppRouter implements SipApplicationRouter {
 					}
 
 					if (next == null) {
-						// Matched with no target application — nothing to route to.
-						decision = "matched=" + matched.getId() + " -> (no target, routed downstream)";
+						// Terminal transition: no further application. If it carries
+						// routes, this is an EGRESS — the call leaves OCCAS via those
+						// routes (ROUTE_FINAL to an external destination, or ROUTE_BACK
+						// toward the origin). createRouterInfo with a null app name is
+						// the JSR-289 "application selection complete, route per these
+						// routes" signal. With no routes it's the old behavior: nothing
+						// to push, OCCAS routes downstream on the Request-URI.
+						if (matched.getRoutes() != null && matched.getRoutes().length > 0) {
+							nextApp = matched.createRouterInfo(null, routingState, ctx, request);
+							routedExternally = true;
+							decision = "matched=" + matched.getId() + " -> (egress)";
+							if (trace != null) {
+								trace.routed(nextApp);
+							}
+						} else {
+							decision = "matched=" + matched.getId() + " -> (no target, routed downstream)";
+						}
 						break;
 					}
 
-					// 'next' names an undeployed application: bypass it and continue
-					// from that state. Stop if we'd revisit a state (config loop).
+					// The target state's application isn't deployed: bypass it and
+					// continue from that state id (its selectors/transitions run as
+					// though it had executed). Stop if we'd revisit a state (loop).
 					if (!visited.add(next)) {
 						metrics.countCycle();
 						if (trace != null) {
@@ -320,7 +399,7 @@ public class AppRouter implements SipApplicationRouter {
 			// guard it: ConcurrentHashMap.get(null) throws NPE, which would
 			// escape to the outer catch as a silent 500. With no default
 			// configured, nextApp stays null and OCCAS routes downstream.
-			if (config.getDefaultApplication() != null
+			if (config.getDefaultApplication() != null && !routedExternally
 					&& previous.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
 					|| nextApp.getNextApplicationName().equals("null"))) {
 				metrics.countDefaultFallback();
@@ -328,6 +407,7 @@ public class AppRouter implements SipApplicationRouter {
 					trace.defaultFallback(config.getDefaultApplication());
 				}
 				decision = "defaultApplication -> " + config.getDefaultApplication();
+				routingState.setCurrentStateId(config.getDefaultApplication());
 				nextApp = new SipApplicationRouterInfo(deployed.get(config.getDefaultApplication()), region, null, null,
 						SipRouteModifier.NO_ROUTE, routingState);
 			}
@@ -418,7 +498,7 @@ public class AppRouter implements SipApplicationRouter {
 	/// with the same id deliberately overrides.
 	///
 	/// - `${method}` — SIP method
-	/// - `${requestUri}` — request URI
+	/// - `${requestURI}` — request URI
 	/// - `${directive}` — routing directive (NEW / CONTINUE / REVERSE)
 	/// - `${region}` — routing region type, when the container supplied one
 	/// - `${previousApp}` — current FSM state (refreshed as the bypass loop advances)
@@ -433,7 +513,7 @@ public class AppRouter implements SipApplicationRouter {
 			return;
 		}
 		ctx.put("method", nullSafe(method));
-		ctx.put("requestUri", nullSafe(requestUri));
+		ctx.put("requestURI", nullSafe(requestUri));
 		ctx.put("directive", nullSafe(directive));
 		ctx.put("region", nullSafe(regionType));
 		ctx.put("previousApp", nullSafe(previous));
@@ -449,6 +529,17 @@ public class AppRouter implements SipApplicationRouter {
 
 	private static String nullSafe(String s) {
 		return (s != null) ? s : "";
+	}
+
+	/// The application a state id resolves to: the state's `app` (default = its
+	/// id), or the id itself when no state entry exists ("invoke this app, no
+	/// follow-up state").
+	private static String appOf(AppRouterConfiguration config, String stateId) {
+		if (stateId == null) {
+			return null;
+		}
+		State s = config.getStates().get(stateId);
+		return (s != null) ? s.appOrId(stateId) : stateId;
 	}
 
 	/// Config sanity pass, run once per loaded configuration on its first
@@ -487,10 +578,20 @@ public class AppRouter implements SipApplicationRouter {
 						}
 					}
 
+					// `next` is a target STATE id; the deployment check is on that
+					// state's application (default = the id). Skip it for a
+					// route-back egress, whose `next` is the resume state after an
+					// external round-trip, not an application invoked here.
 					String next = t.getNext();
-					if (next != null && !deployed.containsKey(next)) {
-						sipLogger.warning("FSMAR config: " + where + " routes to '" + next
-								+ "', which is not currently deployed (bypass logic will skip it).");
+					boolean routeBackEgress = t.getRouteModifier() == SipRouteModifier.ROUTE_BACK
+							&& t.getRoutes() != null && t.getRoutes().length > 0;
+					if (next != null && !routeBackEgress) {
+						String targetApp = appOf(config, next);
+						if (!deployed.containsKey(targetApp)) {
+							sipLogger.warning("FSMAR config: " + where + " routes to state '" + next
+									+ "' (app '" + targetApp + "'), which is not currently deployed "
+									+ "(bypass logic will skip it).");
+						}
 					}
 				}
 			}

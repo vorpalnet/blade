@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Connect: draw a transition (an arrow) between two states -->
+  <path d="M104 408 L372 140" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round"/>
+  <path d="M372 140 L268 152 M372 140 L360 244" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

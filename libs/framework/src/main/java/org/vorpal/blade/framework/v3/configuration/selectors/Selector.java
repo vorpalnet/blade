@@ -105,20 +105,22 @@ public abstract class Selector implements Serializable {
 	/// - `Map<String,String>` payload (REST/JDBC/LDAP/Map connectors):
 	///   name is a map key.
 	/// - [SipServletRequest] payload (SipConnector): name is a SIP
-	///   header name, with special pseudo-headers handled directly:
-	///   - `Request-URI`, `requestURI`, `RequestURI`, `ruri` — request URI
-	///   - `Origin-IP`, `OriginIP`, `originIP` — original caller (fallback chain)
-	///   - `Peer-IP`, `peerIP` — immediate transport peer
-	///   - `content`, `body` — message body
-	///   - `Transport`, `transport` — `UDP` / `TCP` / `TLS` / `WS` / `WSS`
-	///   - `IsSecure`, `isSecure` — `true` if transport is `TLS` or `WSS`
-	///   - `ClientCertSubject`, `clientCertSubject` — subject DN of the
-	///     client's X.509 cert (TLS/WSS with mutual auth)
-	///   - `ClientCertIssuer`, `clientCertIssuer` — issuer DN of that cert
-	///   - `TlsCipher`, `tlsCipher` — negotiated TLS cipher suite
+	///   header name, with special pseudo-headers handled directly. Each has
+	///   ONE canonical spelling (lowerCamelCase, acronyms uppercase) — older
+	///   hyphenated / PascalCase / short aliases are no longer accepted:
+	///   - `requestURI` — request URI
+	///   - `originIP` — original caller (fallback chain)
+	///   - `peerIP` — immediate transport peer
+	///   - `body` — message body
+	///   - `transport` — `UDP` / `TCP` / `TLS` / `WS` / `WSS`
+	///   - `isSecure` — `true` if transport is `TLS` or `WSS`
+	///   - `clientCertSubject` — subject DN of the client's X.509 cert
+	///     (TLS/WSS with mutual auth)
+	///   - `clientCertIssuer` — issuer DN of that cert
+	///   - `tlsCipher` — negotiated TLS cipher suite
 	///
-	/// Returns null if `payload` isn't recognized or the name isn't
-	/// present.
+	/// Any other `name` is treated as a real SIP header (`request.getHeader`).
+	/// Returns null if `payload` isn't recognized or the name isn't present.
 	@SuppressWarnings("unchecked")
 	public static String readSource(Object payload, String name) {
 		if (name == null) return null;
@@ -132,17 +134,11 @@ public abstract class Selector implements Serializable {
 			SipServletRequest request = (SipServletRequest) payload;
 			try {
 				switch (name) {
-				case "Request-URI":
 				case "requestURI":
-				case "RequestURI":
-				case "ruri":
 					return request.getRequestURI() != null ? request.getRequestURI().toString() : null;
 
-				case "Origin-IP":
-				case "OriginIP":
 				case "originIP":
 					return resolveOriginalSourceIp(request);
-				case "Peer-IP":
 				case "peerIP": {
 					// Raw transport-level peer of the immediate socket —
 					// whatever sent THIS hop. Only useful when you
@@ -152,34 +148,26 @@ public abstract class Selector implements Serializable {
 					return (peer != null) ? peer : "127.0.0.1";
 				}
 
-				case "content":
-				case "Content":
 				case "body":
-				case "Body":
 					if (request.getContent() == null) return null;
 					if (request.getContent() instanceof String) return (String) request.getContent();
 					return new String((byte[]) request.getContent());
 
-				case "Transport":
 				case "transport":
 					return request.getInitialTransport();
 
-				case "IsSecure":
 				case "isSecure": {
 					String t = request.getInitialTransport();
 					boolean secure = "TLS".equalsIgnoreCase(t) || "WSS".equalsIgnoreCase(t);
 					return Boolean.toString(secure);
 				}
 
-				case "ClientCertSubject":
 				case "clientCertSubject":
 					return firstClientCert(request, /*subject=*/true);
 
-				case "ClientCertIssuer":
 				case "clientCertIssuer":
 					return firstClientCert(request, /*subject=*/false);
 
-				case "TlsCipher":
 				case "tlsCipher": {
 					Object cipher = request.getAttribute("javax.servlet.request.cipher_suite");
 					return (cipher != null) ? cipher.toString() : null;

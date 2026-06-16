@@ -27,8 +27,6 @@
 		<wls:referer-validation>STRICT</wls:referer-validation>
 	</wls:container-descriptor>
 
-	<!-- Security role assignments temporarily disabled for development -->
-	<!--
 	<wls:security-role-assignment>
 		<wls:role-name>Admin</wls:role-name>
 		<wls:externally-defined/>
@@ -45,7 +43,6 @@
 		<wls:role-name>Deployer</wls:role-name>
 		<wls:externally-defined/>
 	</wls:security-role-assignment>
-	-->
 
 	<wls:security-permission>
 		<wls:security-permission-spec>grant { permission java.security.AllPermission ; } ;</wls:security-permission-spec>

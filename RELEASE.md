@@ -2,6 +2,320 @@
 
 ## 2.9.9 (unreleased)
 
+### FSMAR 3: route-back egress (detour out, resume the flow)
+
+An egress can now **return**. Draw a line from an egress node back to a state
+and it becomes a `ROUTE_BACK` exit: the call goes out to the egress's routes
+(an external media server, transcoder, SBC), and when it comes back the flow
+**resumes at that state**. No line out = `ROUTE_FINAL` as before (the call
+leaves OCCAS for good). The exit kind is inferred from the diagram topology —
+there's no modifier dropdown anymore.
+
+This works because OCCAS already round-trips our routing state: on `ROUTE_BACK`
+the container BASE64-encodes the App Router's `stateInfo` into the route it
+pushes back to itself, and re-invokes the AR (directive CONTINUE) with that
+exact `stateInfo` when the call returns (verified in the decompiled
+`ContainerProcessRequest`). So FSMAR needs no special detection — it sets the
+return state as its `currentStateId` when issuing the `ROUTE_BACK`, and resumes
+there on the continuation hop. In the config a route-back egress is a transition
+with `routeModifier: ROUTE_BACK` whose `next` is the resume state; `diagram`
+records the egress's `returnState`.
+
+**`RoutingState` slimmed for the wire.** Because `ROUTE_BACK` serializes
+`stateInfo` into a SIP Route URI, `RoutingState.config` is now **transient** —
+the whole configuration is no longer carried on the wire (it was). The engine
+re-binds the current config snapshot on each invocation. Trade-off: a config
+reload mid-call now applies to that call's later hops instead of being pinned —
+acceptable, and it keeps the route-back Route header small at 1000+ CPS.
+
+The sample shows it: anonymous callers detour through a media server
+(`media-greeting`) and resume at `b2bua`.
+
+### FSMAR 3: a state's id is now separate from its application
+
+A state used to be keyed by the application that runs there — the states-map key
+*was* the app name. That made it impossible to invoke one application **twice**
+on a call-path (e.g. a B2BUA once per subscriber leg): on each continuation hop
+the engine recomputed "where am I" from the SIP session's last application name,
+so two states sharing an app name were indistinguishable.
+
+Now a state has an **id** (its unique map key) distinct from its **`app`** (the
+application it invokes). Two states can share an `app` under different ids:
+
+```json
+"b2bua-caller": { "app": "b2bua", … },
+"b2bua-callee": { "app": "b2bua", … }
+```
+
+- `app` is optional and defaults to the id, so the common one-instance-per-app
+  case is unchanged (no `app` field). A transition's `next` is a **state id**.
+- The engine (`AppRouter`) carries the current **state id** in its `stateInfo`
+  (`RoutingState.currentStateId`) and resumes from it rather than re-deriving it
+  from the session — which is what lets the two states be told apart. The
+  application to invoke is resolved through the target state's `app`.
+- New pseudo-variable `${previousState}` (the state id); `${previousApp}` remains
+  the application name.
+- Flow editor: a **State ID** field (defaults to the name); a node whose id
+  differs from its app shows the id as a qualifier so duplicate-app boxes read
+  distinctly. The Route Simulator visits each instance as its own hop.
+- The sample demonstrates a two-leg B2BUA (`b2bua` → `b2bua-callee`, both running
+  `b2bua`).
+
+FSMAR 3 has no users yet, so this is a clean config-shape change with no
+migration.
+
+### FSMAR 3: egress exits (the mirror of ingresses)
+
+Ingresses made each SBC a real entry state classified by source IP. Egress is
+the symmetric idea at the *other* end of the callpath: where a call **leaves
+OCCAS**. Routes are pointless on a transition between two apps inside OCCAS (the
+next app routes itself) — they only matter on the final hop, which is an egress:
+either an explicit external destination (carrier, PBX) or a return toward the
+origin SBC.
+
+- **Engine fix (`libs/fsmar3` `AppRouter`)** — a matched *terminal* transition
+  (no `next`) that carries `routes` now produces a real JSR-289 routing decision
+  (`createRouterInfo` with a null application name), applying the routes and
+  `routeModifier`. Previously such routes were silently dropped — the one place
+  they make sense was the one place the engine ignored them. The
+  default-application fallback is guarded so an egress hung off the entry state
+  isn't clobbered.
+- **Editor** — a new **Egress** node (the mirror of the ingress gateway). Draw a
+  transition into it; set the exit's route URIs and kind (**to destination** =
+  `ROUTE_FINAL`, **back to origin** = `ROUTE_BACK`) on the node. The transition's
+  own route editor is hidden for app-to-app hops (routes belong at the egress).
+  Egress nodes round-trip through `diagram.egresses`, matched to their terminal
+  transitions by (routes, routeModifier).
+- **Route Simulator** — shows the egress as the final outcome ("the call left
+  OCCAS via its routes") rather than a downstream fall-through.
+- **Sample config** — adds a `to-carrier` (`ROUTE_FINAL`) off-net exit and a
+  `back-to-origin` (`ROUTE_BACK`) blocklist exit.
+
+### Flow editor: graceful recovery from an expired admin session
+
+When the admin session (`BLADEADMINSESSION`, 1h idle) expired mid-edit, the
+Flow editor's next call to a FORM-auth-protected `/fsmar*` endpoint surfaced
+raw HTML in the UI — usually `Export failed: 500 …
+MaxPostSizeExceededException: MaxSavePostSize [4096] exceeded`. That 500 comes
+from WebLogic's FORM-auth save-post buffer: it tries to stash the POST body to
+replay after re-login, but the multi-KB mxGraph XML overruns the fixed 4096
+cap. (That cap is *not* a `weblogic.xml` web-app knob — `max-save-post-size`
+belongs to the `weblogic-application-client` descriptor — so there's nothing to
+raise per-WAR.)
+
+Now all editor calls route through a single wrapper (`js/flowSession.js`,
+`window.flowRequest`). On a response that is actually the auth layer talking
+(401/403, a login page, or the save-post 500), it shows a "Your admin session
+expired — Log in" banner instead of dumping HTML into the editor, and parks the
+request. Clicking **Log in** opens the portal (`/blade/portal/`) in a popup;
+after you authenticate and close it, the shared session cookie is refreshed and
+the parked request retries automatically — now with a valid session, so it
+completes normally (no save-post, no 500). The diagram lives in the mxGraph
+model the whole time, so nothing is lost. No background keep-alive; idle
+sessions still time out per policy. The portal popup also closes itself the
+moment login completes (it's same-origin, so the editor watches it land back on
+the portal), so the parked action retries without the user closing it by hand.
+
+The editor also now warns before you leave the page (close tab / refresh /
+navigate away) when the diagram has edits that were never published — the work
+lives only in the in-memory model, so this guards against losing it. The flag
+is cleared on publish and on load/import.
+
+### One spelling for pseudo-headers/variables (lowerCamelCase)
+
+The v3 selector layer used to accept every spelling of each synthetic name
+(`Origin-IP`/`OriginIP`/`originIP`, `Request-URI`/`requestURI`/`RequestURI`/`ruri`,
+`Peer-IP`/`peerIP`, `Transport`, `IsSecure`, …). Standardized to ONE spelling
+each — lowerCamelCase with acronyms uppercase: `originIP`, `peerIP`,
+`requestURI`, `transport`, `isSecure`, `clientCertSubject`, `clientCertIssuer`,
+`tlsCipher`, `reasonPhrase`, `body`. The alias spellings are gone from
+`Selector.readSource` and `MessageHelper`; a config still using an old spelling
+falls through to a real-header lookup (→ null). Real SIP header names
+(`From`, `To`, `Call-ID`, …) are untouched. Also fixed an inconsistency: the
+router published the context var as `requestUri` but read it as `requestURI` —
+now `requestURI` everywhere (engine, RouteSimulator, RouteTrace JSON, the
+FSMAR2→3 converter, sample, docs). FSMAR2 config files keep their own
+`Request-URI` spelling — the converter maps it to the v3 canonical.
+
+### `insubnet` operator + sample with two SBC ingresses
+
+The v3 expression engine gains an `insubnet` operator for **real CIDR
+matching**, backed by the already-bundled `ipaddress` library:
+`${originIP} insubnet '10.20.0.0/16'`. True subnet math at any boundary
+(/18, /26, …), IPv4 and IPv6; a bare IP on the right means exact match;
+unparseable input evaluates to false (never throws mid-routing). This is the
+honest answer to source-IP matching — the old string `matches` regex only
+worked at octet boundaries and couldn't do arbitrary CIDR.
+
+The FSMAR3 sample now demonstrates it: two ingress SBC entry states,
+**Atlanta** (`10.20.0.0/16`) and **Dallas** (`10.30.0.0/16`), classified by
+`${originIP}` via `insubnet`. Each is a real entry state routing its calls
+out its own site gateway; the default ingress (`null`) catches everything
+else. The sample sets `diagram.ingresses` so it renders as ingress clouds
+in Flow.
+
+### Flow editor: ingresses are real FSMAR entry states
+
+Multiple ingress clouds (SBCs) are now honest, not decoration. An ingress box
+is a genuine FSMAR state with its OWN selectors and arrows; the `"null"` state
+became a thin **dispatch layer** that classifies inbound traffic by a
+per-ingress **Source match** (`when` expression, e.g.
+`${originIP} insubnet '10.20.0.0/16'`) and bypasses it into the matching
+ingress state — using the existing bypass loop, no engine change. The
+**default ingress = the `"null"` state** ("any source"); with no named
+ingresses it's exactly the old single-entry model. Per-ingress selectors are
+real now (different SBCs, different header conventions), fixing the old
+all-gateways-collapse-to-null selector asymmetry.
+
+- `Diagram` reshaped: `states` (positions, incl `"null"`) + `ingresses`
+  (state name → `{match}`). `Gateway`/`from`/`to` retired — an ingress is a
+  state, so edges connect to it directly.
+- Export emits each ingress as a real state and generates its source-dispatch
+  transition on `"null"` (`dispatch-<name>`, leading the trigger so
+  classified traffic wins first-match). Import absorbs those dispatch
+  transitions (re-derived from each ingress's match, not drawn as arrows).
+- Editor: ingress node panel gains a **Source match** field; selectors are
+  per-ingress. Validator warns on a matchless named ingress / a missing state.
+- Egress unchanged this round (a transition `next:"null"` + routes, drawn into
+  the default box); richer per-SBC egress is the symmetric follow-on.
+- **Breaking (uncommitted-era):** the `diagram` shape changed again
+  (gateways/from/to → ingresses). Old-shape diagrams don't round-trip; re-save
+  from Flow. The live dev config has no diagram (stripped earlier).
+
+### Config cleanup: drop `about`/notes; FSMAR3 declares version 3
+
+- **`about` removed framework-wide.** The `About` class (operator `notes`) is
+  deleted and the `about` field is gone from the base `Configuration` — app
+  identity already lives developer-side in `@SchemaAbout`, `notes` had no
+  readers, and the empty `"about": {}` cluttered every config. Backward
+  compatible: the SettingsManager mapper ignores unknown keys, so existing
+  customer files with an `about` block still load (the key is dropped on next
+  save). The Flow validator still tolerates a stray legacy `about` without a
+  typo warning.
+- **FSMAR3 config baseline version is 3.** `AppRouterConfiguration.getVersion()`
+  defaults a missing version to 3, and the generated sample emits
+  `"version": 3`. The framework `version` field now encodes the FSMAR
+  *generation* for this config lineage — a future upgrader can spot a pre-3
+  fsmar file and run the `Fsmar2Converter` transform. Other services' version
+  counters are independent and unchanged.
+
+### One login page: portal master injected into every admin WAR at build time
+
+The ten per-app login pages (rewritten lookalikes of the portal's hand-built
+`login.jsp` — three drifted variants, missing the backdrop, remember-me, and
+footer) are deleted from source. Each admin WAR's pom now injects the portal
+master byte-identically at packaging time via maven-war-plugin
+`webResources`, at whichever path that app's `form-login-page` expects. One
+source file; drift is structurally impossible. Runtime assets were already
+centralized (unauthenticated `/blade/portal/brand/*` + `/blade/portal/assets/*`);
+JSTL comes from the `vorpal-blade` shared library, so the master runs in
+every WAR. See SECURITY.md.
+
+### Flow editor: Gateways replace Ingress/Egress clouds
+
+One cloud type — **Gateway** (SBC, trunk, carrier) — where direction lives
+on the arrows: an edge OUT of a gateway is ingress traffic (a transition in
+the `"null"` state), an edge INTO one is egress (`next: "null"`). The same
+SBC no longer has to be drawn twice, and an administrator's multi-SBC
+topology now survives reload: the `diagram` section is restructured
+(`states` placements, `gateways` list, `from`/`to` attachment maps keyed by
+transition id — or `state/METHOD/index` for id-less transitions, which
+degrade to first-gateway attachment if reordered). The neutral gateway
+shape carries direction as drawn arrows, not color-coding (the old
+purple-in/orange-out scheme). Legacy Ingress/Egress elements in saved XML
+diagrams still open and export as gateways. Null-state selectors
+concatenate from all gateways on export and land on the first on reload
+(known v1 asymmetry). The validator warns on duplicate gateway labels
+(duplicates merge on reload).
+
+**Breaking (uncommitted-era only):** the `diagram` schema changed from this
+morning's flat placement map to the structured `Diagram` class. The live
+dev config's old-shape `diagram` section was stripped (backup at
+`fsmar3.json.pre-gateway.bak`) — valid for both jar versions; re-save from
+Flow to regain a stored layout.
+
+### Flow editor: hand-tool panning + auto-position; Configurator form hints
+
+- **Hand tool pans the canvas**: dragging the background with the pan tool
+  slides the view (explicit view-translate drag — tracks client coordinates
+  and consumes the gesture, so the rubberband can't fight it; clicking a
+  cell still selects). Grab cursor while active. Ctrl+Shift-drag panning
+  still works in any mode.
+- **Auto-position toolbar button** re-runs the hierarchical left-to-right
+  layout on the whole diagram and centers it. Imports also center the view.
+- **Live JSON view** (curly-braces toolbar button): a read-only window
+  showing the FSMAR 3 JSON for the diagram being edited, refreshed
+  (debounced 400 ms) on every model change — drag a box or draw an edge and
+  watch the config update. Mid-edit unexportable states (e.g. a dangling
+  edge) display the named reason instead of going blank.
+- **`@FormLayout(collapsed = true)`** — new framework form hint (emitted as
+  `x-collapsed`): the Configurator renders the property's section minimized
+  even when it has data. `readOnly = true` now also works on complex
+  properties (object/map/array): the whole subtree renders disabled.
+- The fsmar3 `diagram` property is annotated collapsed + read-only, so the
+  Configurator shows it as a minimized, non-editable section — visible,
+  but clearly owned by the Flow editor.
+
+### Flow editor: single-artifact workflow — FSMAR JSON carries its own layout
+
+The two-file workspace (mxGraph XML for layout + FSMAR JSON for routing) is
+gone. `AppRouterConfiguration` gains an optional `diagram` section — a map of
+state name → `Placement{x,y}` (reserved keys `(ingress)`/`(egress)` for the
+clouds) — so one JSON file holds both the routing semantics and the editor
+layout. Only geometry is stored, never duplicated semantics, so a Configurator
+edit can't make the diagram lie; states without a stored position are
+auto-laid-out. The field had to be typed into the config class: the
+SettingsManager mapper fails on unknown properties, so a bare `diagram` key
+would have broken the engine's config load.
+
+- Export emits `diagram` from live cell geometry; import honors stored
+  positions (grid fallback per state). Round-trip covered by new smoke tests.
+- Importing a config with no diagram runs the bundled mxHierarchicalLayout
+  left-to-right — a bare hand-written config renders as a readable callflow.
+- The editor's Save/Open buttons now use FSMAR JSON as the native file
+  format (legacy mxGraph XML files still open, sniffed by leading `<`).
+- The import dialog gains **Load live fsmar3** (GET on the publish servlet),
+  completing the no-files loop: Load live → edit → Save to fsmar3.
+- **Load sample** (was "Load example") now serves the canonical generated
+  sample `_samples/fsmar3.json.SAMPLE` instead of a hardcoded JS copy that
+  had drifted from `AppRouterConfigurationSample` — one source of truth.
+
+**Deploy order matters**: engines must get the new
+`vorpal-blade-library-fsmar3.jar` before any diagram-bearing config is
+published, or the old class rejects the unknown `diagram` field on load.
+
+### Flow editor: publish straight to the live fsmar3 config
+
+The FSMAR Export dialog gains a **Save to fsmar3** button. A new
+`FsmarPublishServlet` writes `config/custom/vorpal/fsmar3.json` on
+AdminServer — the same file and mechanism as a Configurator save — and the
+engine-tier SettingsManager reloads it live. The JSON is re-parsed through
+Jackson before writing, so malformed edits are rejected instead of
+clobbering a working config. Download / Copy remain for source control and
+lab transfers. Also: the export/import dialogs now size to the viewport and
+are resizable (the fixed 600×500 window clipped the validation findings),
+and the property panels' CSS actually loads now — panel styles moved to a
+shared `css/panels.css` linked from flow.html, because jQuery's
+fragment-load discards the fragment pages' `<head>` styles.
+
+### Fix: Flow editor toolbar icons
+
+`config/wftoolbar-commons.xml` references 24 toolbar icons under `svg/`, but
+only three (simulate, server-in, server-out) ever existed — every other
+toolbar button rendered as a broken image and 404'd in the console. Authored
+the 21 missing SVGs in the same hand-drawn `currentColor` style.
+
+### Fix: 403 Forbidden on Flow and Test Console admin apps
+
+`admin/flow` had its `<security-role-assignment>` blocks commented out
+("temporarily disabled for development") and `admin/test-console` never had
+them. With no assignment, WebLogic maps each declared role to a same-named
+principal — no group is literally named `Admin`, so every user landed in zero
+roles and got 403 after a successful FORM login. Both weblogic.xml files now
+carry the standard four `<externally-defined/>` assignments
+(Admin/Operator/Monitor/Deployer), matching the rest of the admin tier. All
+other admin apps, services, and test WARs audited — no other mismatches.
+
 ### iRouter: routing decision re-dispatched onto a container thread
 
 `IRouterInvite` now wraps `applyRouting` in a 0-ms ServletTimer. When the
@@ -210,7 +524,7 @@ FSMAR 2 gap worth closing and adding capabilities v2 never had:
   classification/tiering as data. Gold/silver/bronze is one config plus a
   table operators edit; conditions just test `${tier} == 'gold'`.
 - **Pseudo-variables** published each hop before the state's selectors:
-  `${method}`, `${requestUri}`, `${directive}`, `${region}`,
+  `${method}`, `${requestURI}`, `${directive}`, `${region}`,
   `${previousApp}`, `${hour}`, `${dayOfWeek}`, `${hash100}` (stable per-call
   0–99 bucket from the Call-ID — `${hash100} < 5` canaries ~5% of calls).
 - **Trace + metrics**: FINER trace of every transition evaluated with its

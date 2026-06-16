@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Open folder: back panel with tab, tilted front flap -->
+  <path d="M48 416 L48 112 Q48 96 64 96 L176 96 L224 144 L432 144 Q448 144 448 160 L448 200" fill="none" stroke="currentColor" stroke-width="32" stroke-linejoin="round"/>
+  <path d="M48 416 L128 224 L496 224 L416 416 Z" fill="none" stroke="currentColor" stroke-width="32" stroke-linejoin="round"/>
+</svg>

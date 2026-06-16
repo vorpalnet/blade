@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Two sheets: front outline, back partial -->
+  <rect x="176" y="48" width="288" height="352" rx="24" fill="none" stroke="currentColor" stroke-width="32"/>
+  <path d="M400 464 L112 464 Q88 464 88 440 L88 128" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round"/>
+</svg>

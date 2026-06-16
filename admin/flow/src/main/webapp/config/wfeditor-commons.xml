@@ -38,19 +38,27 @@
 				</mxCell>
 			</State>
 		</add>
-		<add as="ingress">
-			<Ingress label="ingress">
-				<mxCell vertex="1" style="ingressCloud">
-					<mxGeometry as="geometry" width="120" height="80" />
+		<!-- One gateway type; direction lives on the arrows (an edge OUT of a
+		     gateway is ingress traffic, an edge INTO one is egress). All
+		     gateways map to the "null" state in FSMAR JSON. -->
+		<add as="gateway">
+			<Gateway label="gateway">
+				<mxCell vertex="1" style="gateway">
+					<mxGeometry as="geometry" width="120" height="114" />
 				</mxCell>
-			</Ingress>
+			</Gateway>
 		</add>
+		<!-- Egress exit node: a Gateway with role="egress". Where the call
+		     leaves OCCAS; a terminal transition drawn INTO it routes externally.
+		     Its kind is DERIVED from topology, not stored: no out-edge =
+		     ROUTE_FINAL (destination exit); an edge back to a state =
+		     ROUTE_BACK (the call returns and resumes at that state). -->
 		<add as="egress">
-			<Egress label="egress">
-				<mxCell vertex="1" style="egressCloud">
-					<mxGeometry as="geometry" width="120" height="80" />
+			<Gateway label="egress" role="egress">
+				<mxCell vertex="1" style="egress">
+					<mxGeometry as="geometry" width="120" height="114" />
 				</mxCell>
-			</Egress>
+			</Gateway>
 		</add>
 	</Array>
 
@@ -94,7 +102,15 @@
 			div.appendChild(state);
 			$('#State').load('./state.html #state-view');
 
-			// Ingress cloud properties panel (same template as State)
+			// Gateway properties panel (same template as State). #Ingress and
+			// #Egress remain for legacy saved-XML diagrams.
+			var gateway = document.createElement('div');
+			gateway.id = 'Gateway';
+			gateway.className = 'task';
+			gateway.style.display = 'none';
+			div.appendChild(gateway);
+			$('#Gateway').load('./state.html #state-view');
+
 			var ingress = document.createElement('div');
 			ingress.id = 'Ingress';
 			ingress.className = 'task';
@@ -102,7 +118,6 @@
 			div.appendChild(ingress);
 			$('#Ingress').load('./state.html #state-view');
 
-			// Egress cloud properties panel (same template as State)
 			var egress = document.createElement('div');
 			egress.id = 'Egress';
 			egress.className = 'task';

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Question mark in a circle -->
+  <circle cx="256" cy="256" r="208" fill="none" stroke="currentColor" stroke-width="32"/>
+  <path d="M180 200 Q180 116 256 116 Q332 116 332 192 Q332 244 288 264 Q256 280 256 320" fill="none" stroke="currentColor" stroke-width="40" stroke-linecap="round"/>
+  <circle cx="256" cy="392" r="28" fill="currentColor"/>
+</svg>

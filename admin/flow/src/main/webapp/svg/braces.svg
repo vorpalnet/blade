@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- JSON view: curly braces -->
+  <path d="M200 64 Q144 64 144 128 L144 208 Q144 256 96 256 Q144 256 144 304 L144 384 Q144 448 200 448" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round"/>
+  <path d="M312 64 Q368 64 368 128 L368 208 Q368 256 416 256 Q368 256 368 304 L368 384 Q368 448 312 448" fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round"/>
+</svg>

@@ -1,41 +1,28 @@
 <mxDefaultToolbar>
-	<add as="open" action="open" icon="svg/folder-open.svg"/>
-	<add as="save" action="save" icon="svg/save.svg"/>
+	<!-- Open / Load: one button for every way a config comes IN — local file,
+	     paste, the live fsmar3, or the sample. -->
+	<add as="importFsmar" action="importFsmar" icon="svg/folder-open.svg"/>
+	<!-- Save / Export: one button for every way a config goes OUT — download,
+	     copy, or publish to the live fsmar3 (with validation). -->
+	<add as="exportFsmar" action="exportFsmar" icon="svg/save.svg"/>
 	<add as="exportImage" action="exportImage" icon="svg/image.svg"/>
 
 	<br/><hr/>
-	<add as="exportFsmar" action="exportFsmar" icon="svg/cloud-upload.svg"/>
-	<add as="importFsmar" action="importFsmar" icon="svg/cloud-download.svg"/>
 	<add as="simulateFsmar" action="simulateFsmar" icon="svg/simulate.svg"/>
+	<add as="jsonView" action="jsonView" icon="svg/braces.svg"/>
 
 	<br/><hr/>
 	<add as="select" mode="select" icon="svg/mouse-pointer.svg"/>
 	<add as="pan" mode="pan" icon="svg/hand-paper.svg"/>
-	<add as="connect" mode="connect" icon="svg/connector-straight.svg"><![CDATA[
-		function (editor)
-		{
-			if (editor.defaultEdge != null)
-			{
-				editor.defaultEdge.style = null;
-			}
-		}
-	]]></add>
-	<add as="connect" mode="connect" icon="svg/connector-elbow.svg"><![CDATA[
-		function (editor)
-		{
-			if (editor.defaultEdge != null)
-			{
-				editor.defaultEdge.style = 'straightEdge';
-			}
-		}
-	]]></add>
+	<add as="connect" mode="connect" icon="svg/connect.svg"/>
 	<add as="group" action="group" icon="svg/object-group.svg"/>
 	<add as="ungroup" action="ungroup" icon="svg/object-ungroup.svg"/>
+	<add as="autoLayout" action="autoLayout" icon="svg/auto-layout.svg"/>
 
 	<br/><hr/>
-	<add as="Ingress" template="ingress" style="ingressCloud" icon="svg/server-in.svg"/>
+	<add as="Gateway" template="gateway" style="gateway" icon="svg/cloud-download.svg"/>
+	<add as="Egress" template="egress" style="egress" icon="svg/cloud-upload.svg"/>
 	<add as="State" template="state" style="state" icon="svg/rectangle-landscape.svg"/>
-	<add as="Egress" template="egress" style="egressCloud" icon="svg/server-out.svg"/>
 
 	<br/><hr/>
 	<add as="cut" action="cut" icon="svg/cut.svg"/>
