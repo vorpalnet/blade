@@ -37,7 +37,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// structure that the source format's own query language can't
 /// handle natively. For pure JsonPath/XPath/SDP-field lookups
 /// without regex, prefer the dedicated selector.
-@JsonPropertyOrder({ "type", "id", "description", "attribute", "pattern", "expression",
+@JsonPropertyOrder({ "type", "id", "attribute", "pattern", "expression",
 		"index", "applicationSession" })
 @FormLayoutGroup({ "id", "attribute", "pattern", "expression" })
 public class RegexSelector extends Selector implements Serializable {

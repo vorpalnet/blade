@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// `c=IN IP4 192.168.1.1`), chain a [RegexSelector] after this one
 /// — it can read `attribute=<thisId>` from the session and apply a
 /// regex like `IN IP4 (?<ip>[\d.]+)` with `expression=${ip}`.
-@JsonPropertyOrder({ "type", "id", "description", "attribute", "index", "applicationSession" })
+@JsonPropertyOrder({ "type", "id", "attribute", "index", "applicationSession" })
 @FormLayoutGroup({ "id", "attribute" })
 public class SdpSelector extends Selector implements Serializable {
 	private static final long serialVersionUID = 1L;

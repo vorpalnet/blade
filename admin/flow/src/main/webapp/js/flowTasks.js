@@ -101,7 +101,6 @@ window.flowTasks = (function() {
 			$p.find('.egress-kind').text(ret
 					? 'Back to origin (ROUTE_BACK) → resumes at ' + ret
 					: 'To destination (ROUTE_FINAL)');
-			$p.find('.egress-description').val(cell.getAttribute('description') || '');
 			renderEgressRoutes(cell);
 			return;
 		}
@@ -205,9 +204,6 @@ window.flowTasks = (function() {
 		// No modifier control: the exit kind is inferred from the egress's
 		// out-edge (a route-back line), recomputed in loadNode on every model
 		// change. See egressReturnState.
-		$(document).off('change.flowEg', '.egress-description').on('change.flowEg', '.egress-description', function() {
-			setAttr(window.flowSelectedCell, 'description', $(this).val());
-		});
 		$(document).off('click.flowEg', '.add-egress-route').on('click.flowEg', '.add-egress-route', function() {
 			var cell = window.flowSelectedCell;
 			if (!cell || !cell.value) return false;
@@ -240,6 +236,127 @@ window.flowTasks = (function() {
 		'table':     ''  // TableSelector hides attribute — key lives on the table
 	};
 
+	// ----- table selector editor ----------------------------------------------
+	// A table selector's data lives in the framework v3 TranslationTable model:
+	//   { description?, match?(hash|prefix|range), keyExpression, translations }
+	// where translations maps a lookup key to a flat string map of context vars
+	// (plus an optional per-row description). The whole object rides in the
+	// selector's `extra` JSON blob. Rather than make the operator hand-edit that
+	// blob, we render it as a grid and keep the hidden .sel-extra textarea — the
+	// single source saveStateSelectors() reads back — in sync underneath.
+
+	var MATCH_STRATEGIES = ['hash', 'prefix', 'range'];
+
+	function parseExtraObj(s) {
+		if (!s) return {};
+		try { var o = JSON.parse(s); return (o && typeof o === 'object') ? o : {}; }
+		catch (e) { return {}; }
+	}
+
+	// Var-column names across all translations, first-seen order. 'description'
+	// is the reserved per-row field, never a column.
+	function tableColumns(translations) {
+		var cols = [], seen = {};
+		for (var k in translations) {
+			if (!translations.hasOwnProperty(k)) continue;
+			var v = translations[k] || {};
+			for (var f in v) {
+				if (!v.hasOwnProperty(f) || f === 'description') continue;
+				if (!seen[f]) { seen[f] = 1; cols.push(f); }
+			}
+		}
+		return cols;
+	}
+
+	var TBL_REMOVE_SVG = '<svg class="remove-btn CLS" title="Remove" viewBox="0 0 16 16" width="WH" height="WH"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>';
+	function removeSvg(cls, wh) { return TBL_REMOVE_SVG.replace('CLS', cls).replace(/WH/g, wh); }
+
+	function tableEditorHtml(table) {
+		table = table || {};
+		var keyExpr = table.keyExpression || '';
+		var match = (table.match || 'hash').toLowerCase();
+		if (MATCH_STRATEGIES.indexOf(match) < 0) match = 'hash';
+		var translations = (table.translations && typeof table.translations === 'object') ? table.translations : {};
+		var cols = tableColumns(translations);
+
+		var matchOptions = MATCH_STRATEGIES.map(function(m) {
+			return '<option' + (m === match ? ' selected' : '') + '>' + m + '</option>';
+		}).join('');
+
+		var head = '<tr><th class="tbl-key-col">Key</th>';
+		for (var c = 0; c < cols.length; c++) {
+			head += '<th><input class="tbl-col" type="text" value="' + escapeAttr(cols[c]) +
+				'" placeholder="var" />' + removeSvg('tbl-remove-col', '12') + '</th>';
+		}
+		head += '<th class="tbl-col-add"><span class="add-btn tbl-add-col" title="Add column">+</span></th></tr>';
+
+		var keys = [];
+		for (var kk in translations) { if (translations.hasOwnProperty(kk)) keys.push(kk); }
+		var body = '';
+		for (var r = 0; r < keys.length; r++) {
+			var key = keys[r];
+			var val = translations[key] || {};
+			body += '<tr class="tbl-row">' +
+				'<td><input class="tbl-key" type="text" value="' + escapeAttr(key) + '" /></td>';
+			for (var c2 = 0; c2 < cols.length; c2++) {
+				var cellVal = (val[cols[c2]] != null) ? String(val[cols[c2]]) : '';
+				body += '<td><input class="tbl-val" type="text" value="' + escapeAttr(cellVal) + '" /></td>';
+			}
+			body += '<td class="tbl-row-rm">' + removeSvg('tbl-remove-row', '14') + '</td></tr>';
+		}
+
+		return '' +
+			'<div class="sel-field">' +
+				'<label>Key expression <span class="hint">(${} template producing the lookup key)</span></label>' +
+				'<input class="tbl-keyexpr" type="text" value="' + escapeAttr(keyExpr) + '" placeholder="${From.user}" />' +
+			'</div>' +
+			'<div class="sel-field">' +
+				'<label>Match strategy <span class="hint">(hash = exact, prefix = longest-prefix, range = lo-hi)</span></label>' +
+				'<select class="tbl-match">' + matchOptions + '</select>' +
+			'</div>' +
+			'<div class="sel-field">' +
+				'<label>Translations <span class="hint">(lookup key → context variables)</span></label>' +
+				'<table class="tbl-grid"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>' +
+				'<span class="add-btn tbl-add-row" title="Add row">+ add row</span>' +
+			'</div>';
+	}
+
+	// Read the grid back into a TranslationTable object (omitting defaults the
+	// way hand-written configs do: no match=hash, no empty fields).
+	function readTableEditor($row) {
+		var table = {};
+		var keyExpr = $.trim($row.find('.tbl-keyexpr').val() || '');
+		var match = $row.find('.tbl-match').val() || 'hash';
+		var cols = [];
+		$row.find('.tbl-grid thead .tbl-col').each(function() { cols.push($.trim($(this).val() || '')); });
+		var translations = {};
+		$row.find('.tbl-grid tbody .tbl-row').each(function() {
+			var $r = $(this);
+			var key = $.trim($r.find('.tbl-key').val() || '');
+			if (!key) return;
+			var entry = {};
+			$r.find('.tbl-val').each(function(i) {
+				var name = cols[i];
+				if (!name) return;
+				var v = $(this).val();
+				if (v != null && v !== '') entry[name] = v;
+			});
+			translations[key] = entry;
+		});
+		if (match && match !== 'hash') table.match = match;
+		if (keyExpr) table.keyExpression = keyExpr;
+		table.translations = translations;
+		return table;
+	}
+
+	// Push the grid into the hidden .sel-extra JSON sink, preserving any
+	// non-table keys the form doesn't model.
+	function syncTableToExtra($row) {
+		var extra = parseExtraObj($row.find('.sel-extra').val());
+		extra.table = readTableEditor($row);
+		$row.find('.sel-extra').val(JSON.stringify(extra));
+	}
+
 	function renderStateSelectors(cell) {
 		var $c = panel(cell).find('.state-selectors').empty();
 		var selectors = getChildElements(cell, 'selector');
@@ -252,7 +369,6 @@ window.flowTasks = (function() {
 		var type = (el.getAttribute('type') || 'attribute').toLowerCase();
 		if (SELECTOR_TYPES.indexOf(type) < 0) type = 'attribute';
 		var id = el.getAttribute('id') || '';
-		var description = el.getAttribute('description') || '';
 		var attribute = el.getAttribute('attribute') || '';
 		var pattern = el.getAttribute('pattern') || '';
 		var expression = el.getAttribute('expression') || '';
@@ -266,11 +382,18 @@ window.flowTasks = (function() {
 		var attrLabel = ATTRIBUTE_LABELS[type];
 		var hideAttr = attrLabel ? '' : ' style="display:none;"';
 		var hideRegex = isRegex ? '' : ' style="display:none;"';
-		// The extra blob carries what the form doesn't model (table rows,
-		// XML namespaces, future fields). Show it only when present so the
-		// common case stays uncluttered — it appears automatically for
-		// table/xml selectors imported with data.
-		var hideExtra = extra ? '' : ' style="display:none;"';
+		// Table selectors get a dedicated grid editor; their data still rides in
+		// the `extra` blob, but the raw textarea is hidden and used only as the
+		// sync sink. Other types: the blob carries what the form doesn't model
+		// (XML namespaces, future fields), shown only when present.
+		var isTable = (type === 'table');
+		var tableObj = isTable ? (parseExtraObj(extra).table || {}) : null;
+		var tableBlock = isTable
+			? '<div class="sel-field sel-table">' + tableEditorHtml(tableObj) + '</div>'
+			: '';
+		// Show the raw blob when it carries data, or always for xml (namespaces
+		// are entered there). Never for table — the grid owns that data.
+		var hideExtra = (!isTable && (extra || type === 'xml')) ? '' : ' style="display:none;"';
 
 		return '' +
 			'<fieldset class="selector-row" data-idx="' + idx + '">' +
@@ -286,11 +409,6 @@ window.flowTasks = (function() {
 				'<div class="sel-field">' +
 					'<label>Id <span class="hint">(also the context variable name, e.g. ${id})</span></label>' +
 					'<input class="sel-id" type="text" value="' + escapeAttr(id) + '" placeholder="e.g. To" />' +
-				'</div>' +
-
-				'<div class="sel-field">' +
-					'<label>Description</label>' +
-					'<input class="sel-description" type="text" value="' + escapeAttr(description) + '" />' +
 				'</div>' +
 
 				'<div class="sel-field sel-attribute-field"' + hideAttr + '>' +
@@ -310,8 +428,10 @@ window.flowTasks = (function() {
 						'" placeholder="${user}@${host}" />' +
 				'</div>' +
 
+				tableBlock +
+
 				'<div class="sel-field sel-extra-field"' + hideExtra + '>' +
-					'<label>Advanced <span class="hint">(raw JSON for fields the form does not show: table, namespaces, …)</span></label>' +
+					'<label>Advanced <span class="hint">(raw JSON for fields the form does not show: namespaces, …)</span></label>' +
 					'<textarea class="sel-extra">' + escapeAttr(extra) + '</textarea>' +
 				'</div>' +
 
@@ -327,7 +447,6 @@ window.flowTasks = (function() {
 			items.push({
 				type: $row.find('.sel-type').val(),
 				id: $row.find('.sel-id').val(),
-				description: $row.find('.sel-description').val(),
 				attribute: $row.find('.sel-attribute').val(),
 				pattern: $row.find('.sel-pattern').val(),
 				expression: $row.find('.sel-expression').val(),
@@ -339,7 +458,6 @@ window.flowTasks = (function() {
 			// matching how hand-written configs usually look.
 			if (item.type && item.type !== 'attribute') el.setAttribute('type', item.type);
 			if (item.id) el.setAttribute('id', item.id);
-			if (item.description) el.setAttribute('description', item.description);
 			if (item.attribute && item.type !== 'table') el.setAttribute('attribute', item.attribute);
 			if (item.type === 'regex') {
 				if (item.pattern) el.setAttribute('pattern', item.pattern);
@@ -369,26 +487,67 @@ window.flowTasks = (function() {
 			return false;
 		});
 
-		// Type change: re-toggle dependent fields, then save
+		// Type change: which fields a selector shows is type-dependent (the table
+		// editor appears/disappears), so re-render the whole panel from the model.
 		$(document).off('change.flowSel', '.state-selectors .sel-type').on('change.flowSel', '.state-selectors .sel-type', function() {
+			saveStateSelectors();
+			var cell = window.flowSelectedCell;
+			if (cell) renderStateSelectors(cell);
+		});
+
+		// Any other selector field change. For table rows, fold the grid back
+		// into the hidden .sel-extra sink first so saveStateSelectors() sees it.
+		$(document).off('change.flowSel', '.state-selectors input, .state-selectors textarea, .state-selectors select:not(.sel-type)')
+				.on('change.flowSel', '.state-selectors input, .state-selectors textarea, .state-selectors select:not(.sel-type)', function() {
 			var $row = $(this).closest('.selector-row');
-			var type = $(this).val();
-			var attrLabel = ATTRIBUTE_LABELS[type];
-			$row.find('.sel-attribute-field').css('display', attrLabel ? '' : 'none');
-			$row.find('.sel-attribute-label').text(attrLabel || '');
-			var isRegex = (type === 'regex');
-			$row.find('.sel-pattern-field, .sel-expression-field').css('display', isRegex ? '' : 'none');
-			// table/xml usually need the Advanced blob — reveal it
-			if (type === 'table' || type === 'xml') {
-				$row.find('.sel-extra-field').css('display', '');
-			}
+			if ($row.find('.sel-type').val() === 'table') syncTableToExtra($row);
 			saveStateSelectors();
 		});
 
-		// Any other selector field change
-		$(document).off('change.flowSel', '.state-selectors input, .state-selectors textarea')
-				.on('change.flowSel', '.state-selectors input, .state-selectors textarea', function() {
+		// Table editor: add a translation row (blank — it persists once keyed).
+		$(document).off('click.flowSel', '.tbl-add-row').on('click.flowSel', '.tbl-add-row', function() {
+			var $row = $(this).closest('.selector-row');
+			var nCols = $row.find('.tbl-grid thead .tbl-col').length;
+			var cells = '<td><input class="tbl-key" type="text" /></td>';
+			for (var i = 0; i < nCols; i++) cells += '<td><input class="tbl-val" type="text" /></td>';
+			cells += '<td class="tbl-row-rm">' + removeSvg('tbl-remove-row', '14') + '</td>';
+			$row.find('.tbl-grid tbody').append('<tr class="tbl-row" data-desc="">' + cells + '</tr>');
+			return false;
+		});
+
+		// Table editor: remove a translation row.
+		$(document).off('click.flowSel', '.tbl-remove-row').on('click.flowSel', '.tbl-remove-row', function() {
+			var $row = $(this).closest('.selector-row');
+			$(this).closest('.tbl-row').remove();
+			syncTableToExtra($row);
 			saveStateSelectors();
+			return false;
+		});
+
+		// Table editor: add a value column (named once the operator types a var).
+		$(document).off('click.flowSel', '.tbl-add-col').on('click.flowSel', '.tbl-add-col', function() {
+			var $row = $(this).closest('.selector-row');
+			$row.find('.tbl-grid thead .tbl-col-add').before(
+				'<th><input class="tbl-col" type="text" placeholder="var" />' + removeSvg('tbl-remove-col', '12') + '</th>');
+			$row.find('.tbl-grid tbody .tbl-row').each(function() {
+				$(this).find('.tbl-row-rm').before('<td><input class="tbl-val" type="text" /></td>');
+			});
+			return false;
+		});
+
+		// Table editor: remove a value column (header + the cell at its position
+		// in every row).
+		$(document).off('click.flowSel', '.tbl-remove-col').on('click.flowSel', '.tbl-remove-col', function() {
+			var $row = $(this).closest('.selector-row');
+			var $th = $(this).closest('th');
+			var idx = $row.find('.tbl-grid thead .tbl-col').index($th.find('.tbl-col'));
+			$th.remove();
+			$row.find('.tbl-grid tbody .tbl-row').each(function() {
+				$(this).find('.tbl-val').eq(idx).closest('td').remove();
+			});
+			syncTableToExtra($row);
+			saveStateSelectors();
+			return false;
 		});
 
 		// Plan dispatch dialog

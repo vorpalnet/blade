@@ -28,7 +28,7 @@ import com.jayway.jsonpath.spi.mapper.JacksonMappingProvider;
 /// - byte[] payload
 /// - SIP request body (`getContent()`) when the payload is a
 ///   [SipServletRequest]
-@JsonPropertyOrder({ "type", "id", "description", "attribute", "index", "applicationSession" })
+@JsonPropertyOrder({ "type", "id", "attribute", "index", "applicationSession" })
 @FormLayoutGroup({ "id", "attribute" })
 public class JsonSelector extends Selector implements Serializable {
 	private static final long serialVersionUID = 1L;

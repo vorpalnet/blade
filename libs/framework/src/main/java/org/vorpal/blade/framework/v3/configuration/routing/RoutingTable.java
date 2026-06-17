@@ -4,7 +4,6 @@ import java.io.Serializable;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.MatchStrategy;
@@ -12,6 +11,7 @@ import org.vorpal.blade.framework.v3.configuration.RangeKey;
 import org.vorpal.blade.framework.v3.configuration.trie.Trie;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -25,12 +25,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// The prefix trie is built lazily on first [MatchStrategy#prefix] call
 /// and invalidated when `routes` or `match` changes.
-@JsonPropertyOrder({ "description", "match", "keyExpression", "routes" })
+@JsonPropertyOrder({ "match", "keyExpression", "routes" })
+// `description` retired (folded into Configuration.notes); tolerate in old configs.
+@JsonIgnoreProperties("description")
 @FormLayoutGroup({ "match", "keyExpression" })
 public class RoutingTable implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	private String description;
 	private MatchStrategy match;
 	private String keyExpression;
 	private Map<String, Route> routes = new LinkedHashMap<>();
@@ -39,16 +40,6 @@ public class RoutingTable implements Serializable {
 	private transient Trie<Route> prefixIndex;
 
 	public RoutingTable() {
-	}
-
-	@JsonPropertyDescription("Human-readable description of this routing table")
-	@FormLayout(wide = true)
-	public String getDescription() {
-		return description;
-	}
-
-	public void setDescription(String description) {
-		this.description = description;
 	}
 
 	@JsonPropertyDescription("Lookup strategy: hash (exact match, default), prefix (longest-prefix match), or range (integer-interval match)")

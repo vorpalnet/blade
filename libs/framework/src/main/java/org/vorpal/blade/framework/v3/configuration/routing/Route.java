@@ -8,6 +8,7 @@ import java.util.Map;
 
 import org.vorpal.blade.framework.v2.config.FormLayout;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -39,12 +40,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// stamped on whichever message the route produces — outbound
 /// INVITE for a forward, the response itself for a direct response
 /// or for a SecureLogix-style 302.
-@JsonPropertyOrder({ "description", "requestUri", "statusCode", "reasonPhrase",
+@JsonPropertyOrder({ "requestUri", "statusCode", "reasonPhrase",
 		"headers", "conditionalHeaders" })
+// `description` retired (folded into Configuration.notes); tolerate in old configs.
+@JsonIgnoreProperties("description")
 public class Route implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	private String description;
 	private String requestUri;
 	private Integer statusCode;
 	private String reasonPhrase;
@@ -70,16 +72,6 @@ public class Route implements Serializable {
 	public Route(int statusCode, String reasonPhrase) {
 		this.statusCode = statusCode;
 		this.reasonPhrase = reasonPhrase;
-	}
-
-	@JsonPropertyDescription("Human-readable description of this route")
-	@FormLayout(wide = true)
-	public String getDescription() {
-		return description;
-	}
-
-	public void setDescription(String description) {
-		this.description = description;
 	}
 
 	@JsonPropertyDescription("Destination SIP URI to forward to (proxy or 302 Contact). Supports ${var}. Ignored when statusCode is set.")

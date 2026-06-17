@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "defaultApplication": "audio-bridge",
+  "states": {
+    "null": {
+      "selectors": [
+        {
+          "type": "sdp",
+          "id": "media",
+          "attribute": "m"
+        },
+        {
+          "type": "json",
+          "id": "intent",
+          "attribute": "$.intent"
+        },
+        {
+          "type": "xml",
+          "id": "cmd",
+          "attribute": "/request/command"
+        }
+      ],
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "video-call",
+              "when": "${media} contains 'video'",
+              "next": "video-bridge",
+              "subscriber": "To"
+            },
+            {
+              "id": "audio-call",
+              "next": "audio-bridge",
+              "subscriber": "To"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

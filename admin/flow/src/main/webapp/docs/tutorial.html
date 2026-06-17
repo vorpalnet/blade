@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>FSMAR 3 Tutorial · BLADE Flow Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/flow/favicon.svg">
+</head>
+<body>
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Flow Editor</span>
+				<span class="vorpal-brand-tagline">Visual FSMAR Editor</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../flow.html">Editor</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation · Tutorial</div>
+				<h1 class="vorpal-page-title">FSMAR 3 Tutorial</h1>
+				<p class="vorpal-page-subtitle">
+					A guided, hands-on tour of every FSMAR&nbsp;3 feature. Each
+					chapter is one believable routing problem, the FSMAR&nbsp;3
+					feature that solves it, and a ready-made config you load into
+					this editor and run live in the Route Simulator.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Getting Started</h4>
+					<ul>
+						<li><a href="index.html">Documentation Home</a></li>
+						<li><a href="overview.html">Overview</a></li>
+						<li><a href="tutorial.html" class="vorpal-active-doc">FSMAR 3 Tutorial</a></li>
+					</ul>
+					<h4>Reference</h4>
+					<ul>
+						<li><a href="fsmar-concepts.html">FSMAR Concepts</a></li>
+						<li><a href="editor-guide.html">Editor Guide</a></li>
+						<li><a href="round-trip.html">Import / Export Round-Trip</a></li>
+					</ul>
+					<h4>Operations</h4>
+					<ul>
+						<li><a href="troubleshooting.html">Troubleshooting</a></li>
+					</ul>
+					<h4>About</h4>
+					<ul>
+						<li><a href="about.html">About this build</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>FSMAR 3, feature by feature</h1>
+					<p>
+						FSMAR is the brain that sits in front of every call and
+						decides which of your SIP applications handle it, and in
+						what order. FSMAR&nbsp;3 makes that brain a
+						<em>data-driven state machine</em>: it <b>extracts</b>
+						facts from the call, <b>remembers</b> them across every
+						hop, <b>decides</b> with readable expressions, and
+						<b>builds</b> the routes from what it learned — and it
+						lets you watch the whole thing happen before a single real
+						call is placed.
+					</p>
+					<p>
+						This tutorial walks that capability set one chapter at a
+						time. Every chapter ships a small, self-contained config.
+						Load it, read the one or two states it adds, then run the
+						suggested calls in the Route Simulator and watch the path
+						light up.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Before you begin</div>
+						<p>
+							Open the <a href="../flow.html">Editor</a>. For each
+							chapter, download its config (the links below), then in
+							the editor use <b>Open / Load → Choose file…</b> to
+							import it. After loading, click <b>Auto-position</b>
+							then <b>Fit</b> for a clean layout, and open the
+							<b>Route Simulator</b> (the play-head toolbar button) to
+							run calls. All example callers and domains are
+							fictional (<code>example_co.com</code>).
+						</p>
+					</div>
+
+					<h2>Chapters</h2>
+					<ol>
+						<li><a href="#ch1">The data-driven core</a> — selectors, capture-and-carry, templated routes.</li>
+						<li><a href="#ch2">Smart conditions</a> — the operator set and the pseudo-variables on every call.</li>
+						<li><a href="#ch3">Tiering as data</a> — translation tables an operator edits, not code.</li>
+						<li><a href="#ch4">Ingress, egress, and capture-and-carry</a> — entry by subnet, two kinds of exit.</li>
+						<li><a href="#ch5">One application, invoked twice</a> — state id is separate from application.</li>
+						<li><a href="#ch6">The whole switchboard</a> — every initial method, plus the default-application safety net.</li>
+						<li><a href="#ch7">Reaching into the message</a> — SDP / JSON / XML selectors and magic-URI routing.</li>
+						<li><a href="#ch8">See it run</a> — the observability suite on a full production flow.</li>
+					</ol>
+					<p>
+						Reference at the end: a <a href="#coverage">feature
+						coverage map</a>, a <a href="#reference">verified syntax
+						reference</a>, and the <a href="#configs">full list of
+						example configs</a>.
+					</p>
+
+					<hr>
+
+					<h2 id="ch1">Chapter 1 — The data-driven core</h2>
+					<p>
+						<b>Why it mattered.</b> In the old per-subscriber model,
+						"treat Bob differently" meant a dedicated rule with Bob's
+						proxy URI written in by hand. A hundred VIPs meant a
+						hundred rules, and the route was a literal string baked
+						into each one.
+					</p>
+					<p>
+						<b>What FSMAR 3 does.</b> Two regex <b>selectors</b>
+						capture the caller and callee user-parts into the routing
+						context (<code>${From.user}</code>,
+						<code>${To.user}</code>). One transition routes the VIP
+						<code>bob</code> to a priority proxy; a second handles
+						<em>everyone else</em> with a single templated route,
+						<code>sip:${To.user}@proxy.example_co.com</code>. The
+						callee's user-part, captured at the front door, is still
+						available one hop later at <code>b2bua</code> to build the
+						registrar route — that is <b>capture-and-carry</b>: FSMAR
+						keeps the facts it extracted for the whole call.
+					</p>
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Try it — <a href="examples/01-basic-routing.json" download>01-basic-routing.json</a></div>
+						<p>
+							Load it, then click the <code>null</code> entry state →
+							<b>Selectors</b> panel to see the two regex selectors.
+							Click the <code>INV-vip</code> edge to read
+							<code>when: ${To.user} == 'bob'</code> and its route.
+							In the <b>Route Simulator</b>: Method <code>INVITE</code>,
+							To <code>sip:bob@example_co.com</code> → <b>Run</b> —
+							watch the selectors fill and <code>INV-vip</code> fire.
+							Change To to <code>sip:carol@example_co.com</code> →
+							<b>Run</b> → <code>INV-everyone</code> fires with the
+							same templated route, a different callee.
+						</p>
+					</div>
+
+					<h2 id="ch2">Chapter 2 — Smart conditions</h2>
+					<p>
+						<b>Why it mattered.</b> Time-of-day routing, percentage
+						rollouts, emergency detection — none of that fit the old
+						equality/regex header tests.
+					</p>
+					<p>
+						<b>What FSMAR 3 does.</b> A full, safe operator set —
+						<code>== != &lt; &gt; &lt;= &gt;=</code>,
+						<code>&amp;&amp; || !</code>, <code>matches</code>
+						(full-string regex), <code>contains</code> (substring),
+						and <code>insubnet</code> (CIDR) — plus
+						<b>pseudo-variables</b> the engine publishes on every hop.
+						This config fans out from <code>null</code>: 911 →
+						emergency; toll-free regex → IVR; weekend or after-hours →
+						voicemail; <code>${hash100} &lt; 5</code> → a <b>canary</b>
+						build (a stable 5% of calls); business hours → live agents.
+					</p>
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Try it — <a href="examples/02-conditions.json" download>02-conditions.json</a></div>
+						<p>
+							Click a few edges to read conditions like
+							<code>${hour} &lt; 9 || ${hour} &gt;= 17</code> and
+							<code>${hash100} &lt; 5</code>. In the
+							<b>Route Simulator</b>, use the pseudo-variable
+							overrides: set <code>hour = 3</code>,
+							<code>dayOfWeek = TUESDAY</code> → <b>Run</b> →
+							after-hours → voicemail. Set <code>hour = 12</code>,
+							<code>hash100 = 2</code> → the canary path. Set
+							<code>hash100 = 73</code> → live agents. Set To
+							<code>sip:18005551234@example_co.com</code> → toll-free
+							wins (it is matched higher up).
+						</p>
+					</div>
+
+					<h2 id="ch3">Chapter 3 — Tiering as data</h2>
+					<p>
+						<b>Why it mattered.</b> Gold / silver / bronze used to mean
+						editing routing rules every time a customer changed plan.
+					</p>
+					<p>
+						<b>What FSMAR 3 does.</b> A <b>table selector</b> classifies
+						the caller through a <b>translation table</b> — the tiers
+						are <em>table rows an operator edits</em>, not code. The
+						routing just tests <code>${tier}</code>. In the editor this
+						renders as a <b>plan dispatch family</b>: the edges are
+						badged <code>INVITE · tier=gold</code>,
+						<code>tier=silver</code>, <code>tier=bronze</code>, and an
+						unconditional default. Tables also support
+						<b>longest-prefix</b> matching (dial plans, via a trie) and
+						<b>range</b> matching (<code>"8-17"</code>), not just exact.
+					</p>
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Try it — <a href="examples/03-tiering.json" download>03-tiering.json</a></div>
+						<p>
+							Click the <code>null</code> state → <b>Selectors</b> →
+							open the <code>customerTier</code> table to see the rows
+							(alice → gold, carol → gold, bob → silver, dave →
+							bronze). In the <b>Tasks</b> window, use
+							<b>View filter → Plans</b> and uncheck all but
+							<code>gold</code> to isolate that one path. In the
+							<b>Route Simulator</b>: From <code>sip:alice@…</code> →
+							gold team; From <code>sip:dave@…</code> → bronze; From
+							<code>sip:zoe@…</code> (no row) → the general queue via
+							the default.
+						</p>
+					</div>
+
+					<h2 id="ch4">Chapter 4 — Ingress, egress, and capture-and-carry</h2>
+					<p>
+						<b>Why it mattered.</b> The old model had no first-class
+						notion of <em>where</em> a call entered or <em>how</em> it
+						leaves, and once an app rewrote a header the original value
+						was gone.
+					</p>
+					<p>
+						<b>What FSMAR 3 does.</b> Three things at once:
+					</p>
+					<ul>
+						<li><b>Ingress</b> — entry states classified by source
+							subnet (<code>${originIP} insubnet '10.20.0.0/16'</code>),
+							drawn as <b>clouds with a down-arrow</b>.</li>
+						<li><b>Egress</b> — two kinds, distinguished by
+							<em>topology</em>, not a stored flag. <b>ROUTE_FINAL</b>
+							has no line out: the call leaves OCCAS for the carrier
+							and never returns. <b>ROUTE_BACK</b> has a dashed line
+							back to a state: the call detours (say, to a media
+							server for a greeting) and then <em>resumes</em> at that
+							state. Both draw as <b>clouds with an up-arrow</b>.</li>
+						<li><b>Capture-and-carry</b> — <code>screening</code> may
+							rewrite From; we re-capture it as
+							<code>${callerNow.user}</code>, but the <em>original</em>
+							<code>${From.user}</code> from the front door is still
+							there, carried across every hop.</li>
+					</ul>
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Try it — <a href="examples/04-ingress-egress.json" download>04-ingress-egress.json</a></div>
+						<p>
+							Name the shapes: ingress clouds (Atlanta / Dallas,
+							down-arrow), the carrier egress (solid, ROUTE_FINAL), and
+							the media-greeting egress (dashed line back to
+							<code>b2bua</code>, ROUTE_BACK). In the
+							<b>Route Simulator</b>, set the origin IP to
+							<code>10.20.5.9</code> → the call enters through the
+							Atlanta cloud. From <code>sip:anonymous@…</code> → it
+							detours out the media-greeting egress and returns to
+							<code>b2bua</code>. To <code>sip:12125551234@…</code>
+							(an E.164 number) → it exits to-carrier and is gone.
+						</p>
+					</div>
+
+					<h2 id="ch5">Chapter 5 — One application, invoked twice</h2>
+					<p>
+						<b>Why it mattered.</b> When a state <em>was</em> its
+						application, you could never run the same app twice in one
+						call, and a reused app was one tangled box.
+					</p>
+					<p>
+						<b>What FSMAR 3 does.</b> A state's <b>id</b> is separate
+						from its <b>application</b>. Two states,
+						<code>b2bua-caller</code> and <code>b2bua-callee</code>,
+						both run the <code>b2bua</code> app — so the B2BUA runs once
+						for the originating leg and again for the terminating leg,
+						with different routing (and a different JSR-289
+						<code>region</code>) each time. In the editor they are two
+						clean boxes, each labelled <code>b2bua</code> with its id
+						underneath.
+					</p>
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Try it — <a href="examples/05-b2bua-twice.json" download>05-b2bua-twice.json</a></div>
+						<p>
+							Click each box: the <b>State ID</b> reads
+							<code>b2bua-caller</code> / <code>b2bua-callee</code>,
+							while the application <b>Name</b> is <code>b2bua</code>
+							for both. In the <b>Route Simulator</b>, run an
+							<code>INVITE</code> and watch the call visit
+							<code>b2bua-caller</code> then <code>b2bua-callee</code>
+							— two distinct hops, one application.
+						</p>
+					</div>
+
+					<h2 id="ch6">Chapter 6 — The whole switchboard</h2>
+					<p>
+						<b>What FSMAR 3 does.</b> FSMAR routes <em>every</em>
+						initial SIP method, not just INVITE: REGISTER → registrar,
+						SUBSCRIBE / PUBLISH → presence, OPTIONS → responder, MESSAGE
+						→ IM relay, INVITE → its own logic. The
+						<b>default application</b> is the safety net: here INVITE
+						has only a toll-free rule, so any <em>other</em> INVITE
+						matches nothing and falls to <code>defaultApplication</code>
+						(<code>b2bua</code>). The simulator can also mark an app
+						<b>undeployed</b> to show <b>bypass</b> — the router skips
+						an undeployed app and keeps evaluating, so you can roll out
+						a chain before every piece is live.
+					</p>
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Try it — <a href="examples/06-multimethod.json" download>06-multimethod.json</a></div>
+						<p>
+							In the <b>Route Simulator</b>: Method
+							<code>REGISTER</code> → registrar;
+							<code>SUBSCRIBE</code> → presence;
+							<code>MESSAGE</code> → IM relay. Method
+							<code>INVITE</code>, To <code>sip:bob@…</code> (not
+							toll-free) → "no transition matched → default
+							application <code>b2bua</code>"; point at the decision
+							line. Re-run an INVITE with a downstream app marked
+							<b>undeployed</b> to watch the bypass.
+						</p>
+					</div>
+
+					<h2 id="ch7">Chapter 7 — Reaching into the message</h2>
+					<p>
+						<b>Why it mattered.</b> The old model read headers. That was
+						all.
+					</p>
+					<p>
+						<b>What FSMAR 3 does.</b> Selectors can reach the
+						<b>body</b>: <code>sdp</code> (route video calls to a video
+						bridge by reading the <code>m=</code> line),
+						<code>json</code> (JsonPath into a JSON body), and
+						<code>xml</code> (XPath). Plus <b>magic-URI routing</b>: a
+						Request-URI of <code>sip:hold</code> (no user-part, host =
+						an application name) routes <em>straight</em> to the
+						<code>hold</code> application, bypassing the state machine —
+						handy for feature codes and park / retrieve.
+					</p>
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Try it — <a href="examples/07-snippets.json" download>07-snippets.json</a></div>
+						<p>
+							Click <code>null</code> → <b>Selectors</b> to see the
+							<code>sdp</code>, <code>json</code>, and <code>xml</code>
+							selectors side by side. In the <b>Route Simulator</b>,
+							toggle <b>paste a real INVITE</b> and paste one whose SDP
+							has an <code>m=video</code> line → <b>Run</b> →
+							<code>video-call</code> fires to the video bridge. Swap
+							to an audio-only SDP → audio bridge. Set the Request-URI
+							to <code>sip:hold</code> → it routes directly to the
+							<code>hold</code> app (which must be deployed).
+						</p>
+					</div>
+
+					<h2 id="ch8">Chapter 8 — See it run</h2>
+					<p>
+						<b>What FSMAR 3 does.</b> The previous chapters, combined
+						into one production-shaped flow — and the thing the old
+						model never had: you can <em>watch</em> it. On the full
+						config, the observability suite is:
+					</p>
+					<ul>
+						<li><b>Route Simulator</b> — synthetic calls, paste a real
+							INVITE, pseudo-variable overrides, and mark-undeployed to
+							explore bypass / fallback, all before deploying.</li>
+						<li><b>Capture &amp; replay</b> — arm
+							<code>captureNextCalls(n)</code> on the metrics MBean;
+							the engine records real routing traces in the simulator's
+							own format; replay them on the diagram.</li>
+						<li><b>Live heat overlay</b> — the editor polls
+							per-transition hit counts across every engine and paints
+							them on the edges: count labels, with stroke width scaled
+							by traffic share.</li>
+						<li><b>Metrics MBean</b>
+							(<code>org.vorpal.blade:type=Fsmar3,name=metrics</code>)
+							— requests routed, default-app fallbacks, undeployed
+							bypasses, cycle detections.</li>
+						<li><b>Load-time validation</b> — a malformed
+							<code>when</code> is flagged SEVERE at load (it would
+							otherwise silently never match); the editor surfaces the
+							same findings above the exported JSON.</li>
+					</ul>
+					<div class="vorpal-callout vorpal-callout-tip">
+						<div class="vorpal-callout-title">Try it — <a href="examples/08-everything.json" download>08-everything.json</a></div>
+						<p>
+							Load → Auto-position → Fit to see the full enterprise
+							flow (ingress clouds, tiering, the B2BUA legs, both
+							egress kinds). In the <b>Route Simulator</b>, run a few
+							representative calls (a gold caller, an anonymous caller
+							through the media greeting, an off-net E.164 to the
+							carrier). Flip to <b>Replay</b> / <b>Live</b> to show
+							real traffic on the same diagram. Then <b>Export</b> and
+							look at the validation findings; break one
+							<code>when</code> (e.g. <code>${tier} ==</code>),
+							re-export, and watch the SEVERE finding appear.
+						</p>
+					</div>
+
+					<hr>
+
+					<h2 id="coverage">Appendix A — feature coverage map</h2>
+					<table>
+						<tr><th>Feature</th><th>Chapter(s)</th></tr>
+						<tr><td><code>regex</code> / <code>attribute</code> selectors</td><td>1, 4</td></tr>
+						<tr><td><code>table</code> selector + translation table</td><td>3, 8</td></tr>
+						<tr><td><code>json</code> / <code>xml</code> / <code>sdp</code> selectors</td><td>7</td></tr>
+						<tr><td>Capture-and-carry across hops</td><td>1, 4</td></tr>
+						<tr><td>Boolean / comparison operators</td><td>1, 2, 3</td></tr>
+						<tr><td><code>matches</code>, <code>contains</code>, <code>insubnet</code></td><td>2, 4</td></tr>
+						<tr><td>Pseudo-vars <code>${hour}</code> <code>${dayOfWeek}</code> <code>${hash100}</code></td><td>2</td></tr>
+						<tr><td><code>${}</code> route templating</td><td>1, 3, 4</td></tr>
+						<tr><td><code>subscriber</code> + <code>region</code></td><td>1, 5</td></tr>
+						<tr><td>Service-plan dispatch + Plans filter</td><td>3</td></tr>
+						<tr><td>Table strategies hash / prefix / range</td><td>3</td></tr>
+						<tr><td>State id ≠ application (invoke twice)</td><td>5</td></tr>
+						<tr><td><code>defaultApplication</code> fallback</td><td>6</td></tr>
+						<tr><td>Multi-method triggers</td><td>6</td></tr>
+						<tr><td>Egress ROUTE_FINAL / ROUTE_BACK</td><td>4, 8</td></tr>
+						<tr><td>Ingress source-match (clouds)</td><td>4, 8</td></tr>
+						<tr><td>Magic-URI routing (<code>sip:hold</code>)</td><td>7</td></tr>
+						<tr><td>Undeployed bypass + cycle detection</td><td>6, 8</td></tr>
+						<tr><td>Simulator / replay / heat / metrics / validation</td><td>8</td></tr>
+					</table>
+
+					<h2 id="reference">Appendix B — verified syntax reference</h2>
+					<dl class="vorpal-kv">
+						<dt>Operators</dt>
+						<dd>
+							<code>==</code> <code>!=</code> <code>&lt;</code>
+							<code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>
+							<code>&amp;&amp;</code> <code>||</code> <code>!</code>
+							<code>matches</code> <code>contains</code>
+							<code>insubnet</code>. <code>matches</code> is a
+							full-string Java regex; <code>contains</code> is a
+							literal substring; <code>insubnet</code> is real CIDR
+							math (IPv4 / IPv6). There is <b>no</b>
+							<code>startsWith</code> / <code>endsWith</code>.
+						</dd>
+						<dt>Pseudo-variables</dt>
+						<dd>
+							Published every hop: <code>${method}</code>
+							<code>${requestURI}</code> <code>${directive}</code>
+							<code>${region}</code> <code>${previousApp}</code>
+							<code>${previousState}</code> <code>${hour}</code>
+							<code>${dayOfWeek}</code> <code>${hash100}</code>.
+							<code>${hash100}</code> is a stable 0–99 bucket derived
+							from the Call-ID.
+						</dd>
+						<dt>Selector types</dt>
+						<dd>
+							<code>attribute</code> <code>regex</code>
+							<code>json</code> <code>xml</code> <code>sdp</code>
+							<code>table</code>.
+						</dd>
+						<dt>Table strategies</dt>
+						<dd>
+							<code>hash</code> (exact, default), <code>prefix</code>
+							(longest-prefix, trie — dial-plan semantics),
+							<code>range</code> (<code>"lo-hi"</code> integer
+							interval).
+						</dd>
+						<dt>Egress kind</dt>
+						<dd>
+							Topology, not a stored flag: a line back to a state =
+							ROUTE_BACK (resume there); no out-edge = ROUTE_FINAL
+							(leaves for good).
+						</dd>
+						<dt>Magic URI</dt>
+						<dd>
+							<code>sip:&lt;appname&gt;</code> (null user-part, host =
+							application name) routes straight to that app with
+							NO_ROUTE.
+						</dd>
+					</dl>
+
+					<h2 id="configs">Appendix C — the example configs</h2>
+					<p>
+						All eight configs are validated (structure, every
+						<code>when</code> / regex compiles, JSON round-trip, and
+						first-match routing assertions). Download and load any of
+						them via <b>Open / Load → Choose file…</b>:
+					</p>
+					<ul>
+						<li><a href="examples/01-basic-routing.json" download>01-basic-routing.json</a> — the data-driven core</li>
+						<li><a href="examples/02-conditions.json" download>02-conditions.json</a> — smart conditions</li>
+						<li><a href="examples/03-tiering.json" download>03-tiering.json</a> — tiering as data</li>
+						<li><a href="examples/04-ingress-egress.json" download>04-ingress-egress.json</a> — ingress / egress / carry</li>
+						<li><a href="examples/05-b2bua-twice.json" download>05-b2bua-twice.json</a> — app invoked twice</li>
+						<li><a href="examples/06-multimethod.json" download>06-multimethod.json</a> — the whole switchboard</li>
+						<li><a href="examples/07-snippets.json" download>07-snippets.json</a> — reaching into the message</li>
+						<li><a href="examples/08-everything.json" download>08-everything.json</a> — the full production flow</li>
+					</ul>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Where to go next</div>
+						<p>
+							For the model underneath these examples, read
+							<a href="fsmar-concepts.html">FSMAR Concepts</a>. For the
+							canvas, palette, and inspector mechanics, read the
+							<a href="editor-guide.html">Editor Guide</a>. To deploy
+							what you have authored, read
+							<a href="round-trip.html">Import / Export Round-Trip</a>.
+						</p>
+					</div>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

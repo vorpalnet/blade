@@ -12,7 +12,6 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.configuration.Context;
 
@@ -53,17 +52,17 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 		@JsonSubTypes.Type(value = RegexSelector.class, name = "regex"),
 		@JsonSubTypes.Type(value = TableSelector.class, name = "table")
 })
-@JsonPropertyOrder({ "type", "id", "description", "attribute" })
-// Tolerate the legacy `index` and `applicationSession` fields in older
-// configs: they moved out of the per-selector schema (they're now a
-// session-level concern; see SessionParameters). This annotation lets
-// existing irouter.json files keep loading without an edit pass.
-@JsonIgnoreProperties(value = { "index", "applicationSession" }, ignoreUnknown = false)
+@JsonPropertyOrder({ "type", "id", "attribute" })
+// Tolerate the legacy `index` and `applicationSession` fields, plus the
+// retired per-selector `description` (folded into Configuration.notes): they
+// all moved out of the per-selector schema. This annotation lets existing
+// irouter.json / FSMAR configs keep loading without an edit pass; any OTHER
+// unknown field still errors (ignoreUnknown stays false).
+@JsonIgnoreProperties(value = { "index", "applicationSession", "description" }, ignoreUnknown = false)
 public abstract class Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	protected String id;
-	protected String description;
 	protected String attribute;
 
 	public Selector() {
@@ -72,11 +71,6 @@ public abstract class Selector implements Serializable {
 	@JsonPropertyDescription("Unique identifier; also the default session attribute name for the extracted value")
 	public String getId() { return id; }
 	public void setId(String id) { this.id = id; }
-
-	@JsonPropertyDescription("Human-readable description")
-	@FormLayout(wide = true)
-	public String getDescription() { return description; }
-	public void setDescription(String description) { this.description = description; }
 
 	@JsonPropertyDescription("What to extract: header name / JsonPath / XPath / SDP field / column / source attribute")
 	public String getAttribute() { return attribute; }

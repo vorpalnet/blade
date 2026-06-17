@@ -36,7 +36,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// The inherited `attribute` field is meaningless here (the key expression
 /// lives on the table) and is hidden from JSON.
-@JsonPropertyOrder({ "type", "id", "description", "table" })
+@JsonPropertyOrder({ "type", "id", "table" })
 public class TableSelector extends Selector {
 	private static final long serialVersionUID = 1L;
 

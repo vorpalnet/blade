@@ -1,0 +1,66 @@
+{
+  "version": 3,
+  "defaultApplication": "general-queue",
+  "states": {
+    "null": {
+      "selectors": [
+        {
+          "type": "regex",
+          "id": "From",
+          "attribute": "From",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*"
+        },
+        {
+          "type": "table",
+          "id": "customerTier",
+          "table": {
+            "keyExpression": "${From.user}",
+            "translations": {
+              "alice": {
+                "tier": "gold"
+              },
+              "carol": {
+                "tier": "gold"
+              },
+              "bob": {
+                "tier": "silver"
+              },
+              "dave": {
+                "tier": "bronze"
+              }
+            }
+          }
+        }
+      ],
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "tier-gold",
+              "when": "${tier} == 'gold'",
+              "next": "gold-team",
+              "subscriber": "From"
+            },
+            {
+              "id": "tier-silver",
+              "when": "${tier} == 'silver'",
+              "next": "silver-team",
+              "subscriber": "From"
+            },
+            {
+              "id": "tier-bronze",
+              "when": "${tier} == 'bronze'",
+              "next": "bronze-team",
+              "subscriber": "From"
+            },
+            {
+              "id": "tier-default",
+              "next": "general-queue",
+              "subscriber": "From"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

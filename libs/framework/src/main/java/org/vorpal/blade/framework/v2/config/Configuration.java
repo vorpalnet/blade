@@ -19,12 +19,13 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  * Base configuration class with logging, session parameters, and utility
  * methods.
  */
-@JsonPropertyOrder({ "version", "logging", "session", "analytics" })
+@JsonPropertyOrder({ "version", "notes", "logging", "session", "analytics" })
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
 
 	protected Integer version;
+	protected String notes;
 	protected LogParameters logging = new LogParametersDefault();
 	protected SessionParameters session = new SessionParameters();
 
@@ -160,6 +161,20 @@ public class Configuration implements Serializable {
 
 	public Configuration setVersion(Integer version) {
 		this.version = version;
+		return this;
+	}
+
+	/// Free-form operator notes about this configuration. The one place to
+	/// describe anything that needs describing — the per-element `description`
+	/// fields were removed from the v3 model in favor of this single field.
+	@JsonPropertyDescription("Free-form notes about this configuration")
+	@FormLayout(wide = true, multiline = true)
+	public String getNotes() {
+		return notes;
+	}
+
+	public Configuration setNotes(String notes) {
+		this.notes = notes;
 		return this;
 	}
 

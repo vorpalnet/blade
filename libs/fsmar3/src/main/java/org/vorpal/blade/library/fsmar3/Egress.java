@@ -2,6 +2,7 @@ package org.vorpal.blade.library.fsmar3;
 
 import java.io.Serializable;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -18,11 +19,12 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// resumes at that state — see `AppRouter` and the route-back line in the Flow
 /// editor).
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({ "description", "routes", "returnState" })
+@JsonPropertyOrder({ "routes", "returnState" })
+// `description` retired (folded into Configuration.notes); tolerate in old configs.
+@JsonIgnoreProperties("description")
 public class Egress implements Serializable {
 	private static final long serialVersionUID = 2L;
 
-	private String description;
 	private String[] routes;
 	private String returnState;
 
@@ -32,17 +34,6 @@ public class Egress implements Serializable {
 	public Egress(String[] routes, String returnState) {
 		this.routes = routes;
 		this.returnState = returnState;
-	}
-
-	/// Optional human-readable label for the exit (e.g. "Carrier trunk").
-	@JsonPropertyDescription("Optional human-readable label for the exit, e.g. 'Carrier trunk'")
-	public String getDescription() {
-		return description;
-	}
-
-	public Egress setDescription(String description) {
-		this.description = description;
-		return this;
 	}
 
 	/// SIP route URIs the editor bakes onto each transition that targets this

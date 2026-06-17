@@ -197,7 +197,6 @@ public final class RoutingSmokeTest {
 	private static void testDirectRouting() {
 		DirectRouting dr = new DirectRouting();
 		dr.setRequestUri("sip:${destNum}@pbx");
-		dr.setDescription("always");
 
 		FakeContext ctx = new FakeContext().set("destNum", "18005551234");
 		Route r = dr.decide(ctx);

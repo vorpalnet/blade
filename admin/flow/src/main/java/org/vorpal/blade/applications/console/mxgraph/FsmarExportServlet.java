@@ -61,6 +61,10 @@ public class FsmarExportServlet extends HttpServlet {
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 
+		// Decode the POSTed mxGraph XML as UTF-8; without this getParameter() falls
+		// back to ISO-8859-1 and corrupts non-ASCII config text on the way back out.
+		request.setCharacterEncoding("UTF-8");
+
 		String xml = request.getParameter("xml");
 		if (xml == null || xml.isEmpty()) {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing xml parameter");
@@ -194,7 +198,6 @@ public class FsmarExportServlet extends HttpServlet {
 						}
 						egressNameByCellId.put(cellId, gwLabel);
 						ObjectNode egDef = mapper.createObjectNode();
-						addIfPresent(egDef, "description", wrapper.getAttribute("description"));
 						ArrayNode egRoutes = buildRoutes(wrapper);
 						if (egRoutes != null) {
 							egDef.set("routes", egRoutes);
@@ -657,7 +660,6 @@ public class FsmarExportServlet extends HttpServlet {
 			ObjectNode selNode = mapper.createObjectNode();
 			addIfPresent(selNode, "type", sel.getAttribute("type"));
 			addIfPresent(selNode, "id", sel.getAttribute("id"));
-			addIfPresent(selNode, "description", sel.getAttribute("description"));
 			addIfPresent(selNode, "attribute", sel.getAttribute("attribute"));
 			addIfPresent(selNode, "pattern", sel.getAttribute("pattern"));
 			addIfPresent(selNode, "expression", sel.getAttribute("expression"));

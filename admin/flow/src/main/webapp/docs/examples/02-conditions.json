@@ -1,0 +1,58 @@
+{
+  "version": 3,
+  "defaultApplication": "agents",
+  "states": {
+    "null": {
+      "selectors": [
+        {
+          "type": "regex",
+          "id": "To",
+          "attribute": "To",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*"
+        }
+      ],
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "emergency",
+              "when": "${To.user} contains '911'",
+              "next": "emergency-bridge",
+              "subscriber": "To"
+            },
+            {
+              "id": "toll-free",
+              "when": "${To.user} matches '1(800|888|877|866)\\d{7}'",
+              "next": "toll-free-ivr",
+              "subscriber": "To"
+            },
+            {
+              "id": "weekend",
+              "when": "${dayOfWeek} == 'SATURDAY' || ${dayOfWeek} == 'SUNDAY'",
+              "next": "voicemail",
+              "subscriber": "To"
+            },
+            {
+              "id": "after-hours",
+              "when": "${hour} < 9 || ${hour} >= 17",
+              "next": "voicemail",
+              "subscriber": "To"
+            },
+            {
+              "id": "canary",
+              "when": "${hash100} < 5",
+              "next": "agents-v2",
+              "subscriber": "To"
+            },
+            {
+              "id": "business-hours",
+              "when": "${hour} >= 9 && ${hour} < 17",
+              "next": "agents",
+              "subscriber": "To"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

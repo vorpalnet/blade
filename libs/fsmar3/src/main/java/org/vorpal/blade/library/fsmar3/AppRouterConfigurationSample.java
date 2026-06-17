@@ -59,7 +59,6 @@ public class AppRouterConfigurationSample extends AppRouterConfiguration impleme
 		// run in order, so this one reads the ${From.user} the RegexSelector
 		// above extracted.
 		TranslationTable tierTable = new TranslationTable();
-		tierTable.setDescription("Customer tier by caller user-part");
 		tierTable.setKeyExpression("${From.user}");
 		tierTable.createTranslation("alice").put("tier", "gold");
 		tierTable.createTranslation("bob").put("tier", "silver");
@@ -190,11 +189,9 @@ public class AppRouterConfigurationSample extends AppRouterConfiguration impleme
 		// editor metadata; the AppRouter reads the baked transitions, not this.
 		HashMap<String, Egress> egresses = new HashMap<>();
 		egresses.put("to-carrier", new Egress(
-				new String[] { "sip:${To.user}@carrier-trunk.example_co.com" }, null)
-				.setDescription("PSTN carrier trunk"));
+				new String[] { "sip:${To.user}@carrier-trunk.example_co.com" }, null));
 		egresses.put("media-greeting", new Egress(
-				new String[] { "sip:greeting@media.example_co.com" }, "b2bua")
-				.setDescription("Plays a greeting, then the flow resumes at b2bua"));
+				new String[] { "sip:greeting@media.example_co.com" }, "b2bua"));
 		diagram.setEgresses(egresses);
 		this.setDiagram(diagram);
 	}

@@ -30,7 +30,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// Reads from String payload (e.g. SOAP response body) or the SIP
 /// request body when the payload is a [SipServletRequest].
-@JsonPropertyOrder({ "type", "id", "description", "attribute", "namespaces",
+@JsonPropertyOrder({ "type", "id", "attribute", "namespaces",
 		"index", "applicationSession" })
 @FormLayoutGroup({ "id", "attribute" })
 public class XmlSelector extends Selector implements Serializable {

@@ -1,0 +1,61 @@
+{
+  "version": 3,
+  "defaultApplication": "b2bua",
+  "states": {
+    "null": {
+      "selectors": [
+        {
+          "type": "regex",
+          "id": "From",
+          "attribute": "From",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*"
+        },
+        {
+          "type": "regex",
+          "id": "To",
+          "attribute": "To",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*"
+        }
+      ],
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "INV-vip",
+              "when": "${To.user} == 'bob'",
+              "next": "b2bua",
+              "subscriber": "From",
+              "routes": [
+                "sip:${To.user}@priority-proxy.example_co.com"
+              ]
+            },
+            {
+              "id": "INV-everyone",
+              "next": "b2bua",
+              "subscriber": "From",
+              "routes": [
+                "sip:${To.user}@proxy.example_co.com"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "b2bua": {
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "deliver",
+              "next": "proxy-registrar",
+              "subscriber": "To",
+              "routes": [
+                "sip:${To.user}@registrar.example_co.com"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

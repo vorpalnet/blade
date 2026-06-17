@@ -146,6 +146,48 @@
 	min-height: 48px;
 }
 
+/* --- Table-selector grid (translation table editor) ------------------ */
+
+.tbl-grid {
+	width: 100%;
+	border-collapse: collapse;
+	margin-top: 4px;
+	table-layout: fixed;
+}
+.tbl-grid th,
+.tbl-grid td {
+	border: 1px solid #ccd;
+	padding: 2px;
+	vertical-align: middle;
+}
+.tbl-grid th {
+	background: #ececf6;
+	font-size: 10px;
+	font-weight: bold;
+}
+/* The grid's own inputs are denser than the panel default. */
+#state-view .tbl-grid input[type=text] {
+	padding: 2px 4px;
+	font-size: 11px;
+}
+.tbl-grid .tbl-key-col { width: 34%; }
+.tbl-grid th .tbl-col {
+	width: calc(100% - 16px);
+	display: inline-block;
+}
+.tbl-grid .tbl-col-add,
+.tbl-grid .tbl-row-rm {
+	width: 18px;
+	text-align: center;
+}
+.tbl-add-row {
+	display: inline-block;
+	margin-top: 4px;
+	font-size: 11px;
+	font-weight: bold;
+}
+.tbl-grid .remove-btn { vertical-align: middle; }
+
 /* --- Route URI rows --------------------------------------------------- */
 
 .route-row {

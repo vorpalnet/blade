@@ -4,7 +4,6 @@ import java.io.Serializable;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.vorpal.blade.framework.v2.config.FormLayout;
 import org.vorpal.blade.framework.v2.config.FormLayoutGroup;
 import org.vorpal.blade.framework.v3.configuration.Context;
 import org.vorpal.blade.framework.v3.configuration.MatchStrategy;
@@ -12,6 +11,7 @@ import org.vorpal.blade.framework.v3.configuration.RangeKey;
 import org.vorpal.blade.framework.v3.configuration.trie.Trie;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -26,12 +26,14 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// The prefix trie is built lazily on first [MatchStrategy#prefix] call
 /// and invalidated when `translations` or `match` changes.
-@JsonPropertyOrder({ "description", "match", "keyExpression", "translations" })
+@JsonPropertyOrder({ "match", "keyExpression", "translations" })
+// `description` retired (folded into Configuration.notes); tolerated so older
+// configs still load. Other unknowns still error.
+@JsonIgnoreProperties("description")
 @FormLayoutGroup({ "match", "keyExpression" })
 public class TranslationTable implements Serializable {
 	private static final long serialVersionUID = 1L;
 
-	private String description;
 	private MatchStrategy match;
 	private String keyExpression;
 	private Map<String, Translation> translations = new LinkedHashMap<>();
@@ -40,16 +42,6 @@ public class TranslationTable implements Serializable {
 	private transient Trie<Translation> prefixIndex;
 
 	public TranslationTable() {
-	}
-
-	@JsonPropertyDescription("Human-readable description of this lookup attempt")
-	@FormLayout(wide = true)
-	public String getDescription() {
-		return description;
-	}
-
-	public void setDescription(String description) {
-		this.description = description;
 	}
 
 	@JsonPropertyDescription("Lookup strategy: hash (exact match, default), prefix (longest-prefix match), or range (integer-interval match on keys like \"8-17\")")

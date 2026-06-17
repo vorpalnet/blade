@@ -88,6 +88,12 @@ public class FsmarImportServlet extends HttpServlet {
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 
+		// The browser POSTs the config UTF-8-encoded (encodeURIComponent). Without
+		// this, getParameter() decodes the body as ISO-8859-1 (the servlet default)
+		// and every non-ASCII character — em-dashes in descriptions, etc. — arrives
+		// mojibaked.
+		request.setCharacterEncoding("UTF-8");
+
 		String json = request.getParameter("json");
 		if (json == null || json.isEmpty()) {
 			response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing json parameter");
@@ -252,7 +258,6 @@ public class FsmarImportServlet extends HttpServlet {
 				String key = egressKey(egJson.path("routes"), returnState);
 				String cellId = String.valueOf(nextId++);
 				createEgressBox(doc, root, cellId, name, egJson.path("routes"),
-						egJson.path("description").asText(""),
 						statePlacements, egressCol, MARGIN_Y + egressRow++ * ROW_SPACING);
 				egressCellIdByKey.putIfAbsent(key, cellId);
 				// Draw the route-back line from the egress back to its return state.
@@ -316,7 +321,7 @@ public class FsmarImportServlet extends HttpServlet {
 							if (targetId == null) {
 								targetId = String.valueOf(nextId++);
 								String synthName = synthEgressName(routeBackEgress, egressCellIdByKey.size());
-								createEgressBox(doc, root, targetId, synthName, tx.path("routes"), "",
+								createEgressBox(doc, root, targetId, synthName, tx.path("routes"),
 										statePlacements, egressCol, MARGIN_Y + egressRow++ * ROW_SPACING);
 								egressCellIdByKey.put(key, targetId);
 								if (routeBackEgress && stateCellIds.get(returnState) != null) {
@@ -474,13 +479,12 @@ public class FsmarImportServlet extends HttpServlet {
 	/// `name` keys its stored position; the routes (+ return state) identify it
 	/// for round-trip matching.
 	private String createEgressBox(Document doc, Element root, String cellId,
-			String name, JsonNode routes, String description,
+			String name, JsonNode routes,
 			JsonNode placements, int defX, int defY) {
 		Element gateway = doc.createElement("Gateway");
 		gateway.setAttribute("label", name);
 		gateway.setAttribute("id", cellId);
 		gateway.setAttribute("role", "egress");
-		setIfPresent(gateway, "description", description);
 		if (routes != null && routes.isArray()) {
 			for (JsonNode route : routes) {
 				Element rEl = doc.createElement("route");
@@ -599,7 +603,6 @@ public class FsmarImportServlet extends HttpServlet {
 			Element selEl = doc.createElement("selector");
 			setIfPresent(selEl, "id", sel.path("id").asText(""));
 			setIfPresent(selEl, "type", sel.path("type").asText(""));
-			setIfPresent(selEl, "description", sel.path("description").asText(""));
 			setIfPresent(selEl, "attribute", sel.path("attribute").asText(""));
 			setIfPresent(selEl, "pattern", sel.path("pattern").asText(""));
 			setIfPresent(selEl, "expression", sel.path("expression").asText(""));

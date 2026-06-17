@@ -4,6 +4,7 @@ import java.util.Map;
 
 import org.vorpal.blade.framework.v3.configuration.Context;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
@@ -17,16 +18,16 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// ```json
 /// "routing": {
 ///   "type": "direct",
-///   "description": "Always proxy to the customer's contact center",
 ///   "requestUri": "sip:${destNum}@${customerPbx}",
 ///   "headers": { "X-Customer-Id": "${customerId}" }
 /// }
 /// ```
-@JsonPropertyOrder({ "type", "description", "requestUri", "headers" })
+@JsonPropertyOrder({ "type", "requestUri", "headers" })
+// `description` retired (folded into Configuration.notes); tolerate in old configs.
+@JsonIgnoreProperties("description")
 public class DirectRouting extends Routing {
 	private static final long serialVersionUID = 1L;
 
-	private String description;
 	private String requestUri;
 	private Map<String, String> headers;
 
@@ -35,15 +36,6 @@ public class DirectRouting extends Routing {
 
 	public DirectRouting(String requestUri) {
 		this.requestUri = requestUri;
-	}
-
-	@JsonPropertyDescription("Human-readable description of this route")
-	public String getDescription() {
-		return description;
-	}
-
-	public void setDescription(String description) {
-		this.description = description;
 	}
 
 	@JsonPropertyDescription("Destination SIP URI for the outbound INVITE; supports ${var}")
@@ -67,7 +59,6 @@ public class DirectRouting extends Routing {
 	@Override
 	public Route decide(Context ctx) {
 		Route r = new Route();
-		r.setDescription(description);
 		r.setRequestUri(requestUri);
 		r.setHeaders(headers);
 		return r;

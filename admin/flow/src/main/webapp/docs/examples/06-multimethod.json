@@ -1,0 +1,63 @@
+{
+  "version": 3,
+  "defaultApplication": "b2bua",
+  "states": {
+    "null": {
+      "selectors": [
+        {
+          "type": "regex",
+          "id": "To",
+          "attribute": "To",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*"
+        }
+      ],
+      "triggers": {
+        "REGISTER": {
+          "transitions": [
+            {
+              "next": "proxy-registrar"
+            }
+          ]
+        },
+        "SUBSCRIBE": {
+          "transitions": [
+            {
+              "next": "presence"
+            }
+          ]
+        },
+        "PUBLISH": {
+          "transitions": [
+            {
+              "next": "presence"
+            }
+          ]
+        },
+        "OPTIONS": {
+          "transitions": [
+            {
+              "next": "options-responder"
+            }
+          ]
+        },
+        "MESSAGE": {
+          "transitions": [
+            {
+              "next": "im-relay"
+            }
+          ]
+        },
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "toll-free",
+              "when": "${To.user} matches '1(800|888|877|866)\\d{7}'",
+              "next": "toll-free-ivr",
+              "subscriber": "To"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

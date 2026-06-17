@@ -1,0 +1,240 @@
+{
+  "version": 3,
+  "defaultApplication": "b2bua",
+  "states": {
+    "screening": {
+      "selectors": [
+        {
+          "type": "regex",
+          "id": "callerNow",
+          "attribute": "From",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*"
+        }
+      ],
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "SCR-anon",
+              "when": "${callerNow.user} == 'anonymous'",
+              "next": "b2bua",
+              "subscriber": "To",
+              "routes": [
+                "sip:greeting@media.example_co.com"
+              ],
+              "routeModifier": "ROUTE_BACK"
+            },
+            {
+              "id": "SCR-normal",
+              "next": "b2bua",
+              "subscriber": "To"
+            }
+          ]
+        }
+      }
+    },
+    "b2bua": {
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "B2B-caller-leg",
+              "next": "b2bua-callee",
+              "subscriber": "From"
+            }
+          ]
+        }
+      }
+    },
+    "null": {
+      "selectors": [
+        {
+          "type": "regex",
+          "id": "From",
+          "attribute": "From",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*"
+        },
+        {
+          "type": "regex",
+          "id": "To",
+          "attribute": "To",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*"
+        },
+        {
+          "type": "attribute",
+          "id": "originIP",
+          "attribute": "originIP"
+        },
+        {
+          "type": "table",
+          "id": "customerTier",
+          "table": {
+            "keyExpression": "${From.user}",
+            "translations": {
+              "alice": {
+                "tier": "gold"
+              },
+              "bob": {
+                "tier": "silver"
+              }
+            }
+          }
+        }
+      ],
+      "triggers": {
+        "REGISTER": {
+          "transitions": [
+            {
+              "next": "proxy-registrar"
+            }
+          ]
+        },
+        "PUBLISH": {
+          "transitions": [
+            {
+              "next": "presence"
+            }
+          ]
+        },
+        "OPTIONS": {
+          "transitions": [
+            {
+              "next": "options"
+            }
+          ]
+        },
+        "SUBSCRIBE": {
+          "transitions": [
+            {
+              "next": "presence"
+            }
+          ]
+        },
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "dispatch-Atlanta",
+              "when": "${originIP} insubnet '10.20.0.0/16'",
+              "next": "Atlanta"
+            },
+            {
+              "id": "dispatch-Dallas",
+              "when": "${originIP} insubnet '10.30.0.0/16'",
+              "next": "Dallas"
+            },
+            {
+              "id": "INV-bob",
+              "when": "${To.user} == 'bob' && ${From.user} == 'alice'",
+              "next": "b2bua",
+              "subscriber": "From",
+              "routes": [
+                "sip:${To.user}@special-proxy"
+              ]
+            },
+            {
+              "id": "INV-gold",
+              "when": "${tier} == 'gold'",
+              "next": "b2bua",
+              "subscriber": "From",
+              "routes": [
+                "sip:${From.user}@gold-trunk"
+              ]
+            },
+            {
+              "id": "INV-tollfree",
+              "when": "${To.user} matches '18(00|88|77|66)\\d{7}'",
+              "next": "b2bua",
+              "subscriber": "To"
+            },
+            {
+              "id": "INV-default",
+              "next": "screening",
+              "subscriber": "From"
+            }
+          ]
+        }
+      }
+    },
+    "Atlanta": {
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "ATL-in",
+              "next": "b2bua",
+              "subscriber": "From",
+              "routes": [
+                "sip:${To.user}@atlanta-gw.example_co.com"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "b2bua-callee": {
+      "app": "b2bua",
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "B2B-offnet",
+              "when": "${To.user} matches '\\+?1[2-9]\\d{9}'",
+              "subscriber": "To",
+              "routes": [
+                "sip:${To.user}@carrier-trunk.example_co.com"
+              ],
+              "routeModifier": "ROUTE_FINAL"
+            },
+            {
+              "id": "B2B-deliver",
+              "next": "proxy-registrar",
+              "subscriber": "To",
+              "routes": [
+                "sip:${To.user}@registrar"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "Dallas": {
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "DAL-in",
+              "next": "b2bua",
+              "subscriber": "From",
+              "routes": [
+                "sip:${To.user}@dallas-gw.example_co.com"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "diagram": {
+    "ingresses": {
+      "Atlanta": {
+        "match": "${originIP} insubnet '10.20.0.0/16'"
+      },
+      "Dallas": {
+        "match": "${originIP} insubnet '10.30.0.0/16'"
+      }
+    },
+    "egresses": {
+      "to-carrier": {
+        "routes": [
+          "sip:${To.user}@carrier-trunk.example_co.com"
+        ]
+      },
+      "media-greeting": {
+        "routes": [
+          "sip:greeting@media.example_co.com"
+        ],
+        "returnState": "b2bua"
+      }
+    }
+  }
+}

@@ -77,7 +77,6 @@ public class IRouterConfigSample extends IRouterConfig {
 		customers.setDescription("Find this customer via IP, else source number, else From-domain");
 
 		TranslationTable byOriginIp = new TranslationTable();
-		byOriginIp.setDescription("Known customer IPs (most specific)");
 		byOriginIp.setMatch(MatchStrategy.hash);
 		byOriginIp.setKeyExpression("${originIP}");
 		byOriginIp.createTranslation("172.16.32.173")
@@ -93,7 +92,6 @@ public class IRouterConfigSample extends IRouterConfig {
 		customers.addTable(byOriginIp);
 
 		TranslationTable bySrcAreaCode = new TranslationTable();
-		bySrcAreaCode.setDescription("Customers identified by source area code (longest-prefix match)");
 		bySrcAreaCode.setMatch(MatchStrategy.prefix);
 		bySrcAreaCode.setKeyExpression("${srcNum}");
 		bySrcAreaCode.createTranslation("1816")
@@ -104,7 +102,6 @@ public class IRouterConfigSample extends IRouterConfig {
 		customers.addTable(bySrcAreaCode);
 
 		TranslationTable byFromHost = new TranslationTable();
-		byFromHost.setDescription("Customers identified by SIP From-domain (catch-all)");
 		byFromHost.setMatch(MatchStrategy.hash);
 		byFromHost.setKeyExpression("${fromHost}");
 		byFromHost.createTranslation("example.com")
@@ -123,7 +120,6 @@ public class IRouterConfigSample extends IRouterConfig {
 		schedule.setDescription("Classify the current hour as business / evening / overnight");
 
 		TranslationTable shifts = new TranslationTable();
-		shifts.setDescription("Business hours by UTC hour (range match)");
 		shifts.setMatch(MatchStrategy.range);
 		shifts.setKeyExpression("${now:H}");
 		shifts.createTranslation("0-7").put("shift", "overnight");
@@ -143,13 +139,11 @@ public class IRouterConfigSample extends IRouterConfig {
 
 		JsonSelector action = new JsonSelector();
 		action.setId("action");
-		action.setDescription("Screening verdict: allow | block");
 		action.setAttribute("$.action");
 		screening.addSelector(action);
 
 		JsonSelector routeTo = new JsonSelector();
 		routeTo.setId("routeTo");
-		routeTo.setDescription("Destination SIP URI supplied by the screening API");
 		routeTo.setAttribute("$.routeTo");
 		screening.addSelector(routeTo);
 
@@ -171,7 +165,6 @@ public class IRouterConfigSample extends IRouterConfig {
 				new Route("sip:rejected@pbx.example.com")
 						.addHeader("X-Customer-Id", "${customerId}")
 						.addHeader("X-Screening", "blocked"));
-		routing.getClauses().get(0).getRoute().setDescription("Blocked by screening");
 
 		routing.addClause(
 				"${action} == allow && ${shift} == business",
@@ -180,20 +173,15 @@ public class IRouterConfigSample extends IRouterConfig {
 						.addHeader("X-Screening", "passed")
 						.addConditionalHeader("X-Priority", "high",
 								"${customerTier} == premium"));
-		routing.getClauses().get(1).getRoute()
-				.setDescription("Allowed, business hours — route to the screening-suggested destination");
 
 		routing.addClause(
 				"${action} == allow",
 				new Route("sip:voicemail@pbx.example.com")
 						.addHeader("X-Customer-Id", "${customerId}")
 						.addHeader("X-Original-Dest", "${routeTo}"));
-		routing.getClauses().get(2).getRoute()
-				.setDescription("Allowed, outside business hours — send to voicemail");
 
 		Route fallback = new Route("sip:operator@pbx.example.com")
 				.addHeader("X-Customer-Id", "${customerId}");
-		fallback.setDescription("Fallback when no clause matches");
 		routing.setDefaultRoute(fallback);
 
 		this.setRouting(routing);

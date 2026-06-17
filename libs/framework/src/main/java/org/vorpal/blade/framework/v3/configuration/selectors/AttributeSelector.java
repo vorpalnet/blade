@@ -24,7 +24,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// If you need regex parsing on top of the raw value, chain a
 /// [RegexSelector] after this one in the same connector's selectors.
-@JsonPropertyOrder({ "type", "id", "description", "attribute", "index", "applicationSession" })
+@JsonPropertyOrder({ "type", "id", "attribute", "index", "applicationSession" })
 @FormLayoutGroup({ "id", "attribute" })
 public class AttributeSelector extends Selector implements Serializable {
 	private static final long serialVersionUID = 1L;
