@@ -7,5 +7,8 @@ public class TuningSettingsSample extends TuningSettings {
 	private static final long serialVersionUID = 1L;
 
 	public TuningSettingsSample() {
+		this.jvmProfiles = new java.util.ArrayList<>(java.util.Arrays.asList(
+				new JvmProfile("engine", "-server -Xms2g -Xmx2g -XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError"),
+				new JvmProfile("admin", "-server -Xms512m -Xmx1g -XX:+UseG1GC")));
 	}
 }

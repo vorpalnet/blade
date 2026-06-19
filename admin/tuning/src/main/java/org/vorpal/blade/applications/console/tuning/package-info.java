@@ -2,7 +2,7 @@
 ///
 /// Provides endpoints for managing JVM heap and garbage collection, SIP protocol timers,
 /// work manager thread constraints, server thread pools and socket readers, cluster topology
-/// and Coherence cache configuration, Node Manager settings, and Single Sign-On (SSO) status.
+/// and Coherence cache configuration.
 ///
 /// ## REST Endpoints
 ///
@@ -34,14 +34,6 @@
 /// [ClusterSettings] exposes `/api/v1/cluster` for reading cluster topology, member
 /// servers, migratable targets, and Coherence cache configuration.
 ///
-/// ### Node Manager
-/// [NodeManagerSettings] exposes `/api/v1/nodemanager` for reading Node Manager
-/// configuration and assigned servers for all machines in the domain.
-///
-/// ### SSO
-/// [SsoSettings] exposes `/api/v1/sso` for enabling or disabling WebLogic Single
-/// Sign-On across all servers via `WebAppContainerMBean`.
-///
 /// ### Application Root
 /// [RestApplication] is the JAX-RS `@ApplicationPath("/api/v1")` entry point that
 /// registers all resource classes. Each resource declares a short `@Path` (e.g.
@@ -53,7 +45,5 @@
 /// @see WorkManagerSettings
 /// @see ServerTuningSettings
 /// @see ClusterSettings
-/// @see NodeManagerSettings
-/// @see SsoSettings
 /// @see RestApplication
 package org.vorpal.blade.applications.console.tuning;

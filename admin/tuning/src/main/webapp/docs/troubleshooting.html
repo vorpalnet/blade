@@ -98,11 +98,6 @@
 							<td>The value violates a WLS internal constraint (negative number, value out of range, malformed expression)</td>
 							<td>Error message names the offending attribute and constraint. Adjust and re-save.</td>
 						</tr>
-						<tr>
-							<td>NodeManager section shows "unreachable"</td>
-							<td>Node Manager isn't running on that host, or the listen address / port doesn't match the AdminServer's view</td>
-							<td>SSH to the host, check <code>nodemanager.log</code>. The WLS Machines configuration may need to align with the actual NM binding.</td>
-						</tr>
 					</table>
 
 					<div class="vorpal-callout vorpal-callout-warn">

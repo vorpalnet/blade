@@ -1,0 +1,18 @@
+[Unit]
+Description=WebLogic Node Manager Service
+
+[Service]
+Type=simple
+# Note that the following three parameters should be changed to the correct paths
+# on your own system
+WorkingDirectory=/opt/oracle/occas/8.3/user_projects/domains/NodeManager
+ExecStart=/opt/oracle/occas/8.3/user_projects/domains/NodeManager/bin/startNodeManager.sh
+ExecStop=/opt/oracle/occas/8.3/user_projects/domains/NodeManager/bin/stopNodeManager.sh
+User=oracle
+Group=oinstall
+KillMode=process
+LimitNOFILE=65535
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

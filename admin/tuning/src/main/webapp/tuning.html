@@ -27,7 +27,6 @@
 
 		/* Per-server cards */
 		.server-card { border-left: 3px solid #007bff; }
-		.nm-card { border-left: 3px solid #28a745; }
 		.wm-card { border-left: 3px solid #6f42c1; }
 		.cluster-card { border-left: 3px solid #fd7e14; }
 
@@ -68,6 +67,37 @@
 		   whether the user reaches the app via the portal or directly. */
 		body.embedded { padding: 12px; }
 		body.embedded > .container-fluid > h4 { display: none; }
+		/* JVM Arguments box: a textarea with transparent text over a backdrop div
+		   that renders the same text and squiggles invalid tokens. The two must
+		   share identical box metrics or the highlight drifts out of alignment. */
+		.jvm-argwrap { position: relative; }
+		.jvm-argwrap .jvm-arghl,
+		.jvm-argwrap textarea.jvm-argta {
+			margin: 0;
+			border: 1px solid #ced4da;
+			border-radius: .2rem;
+			padding: .3rem .5rem;
+			font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+			font-size: 12px;
+			line-height: 1.45;
+			white-space: pre-wrap;
+			word-break: break-all;
+			box-sizing: border-box;
+			width: 100%;
+		}
+		.jvm-argwrap .jvm-arghl {
+			position: absolute; top: 0; left: 0; height: 100%;
+			color: #212529; background: #fff;
+			overflow: auto; pointer-events: none; z-index: 1;
+		}
+		.jvm-argwrap textarea.jvm-argta {
+			position: relative;
+			background: transparent; color: transparent; caret-color: #212529;
+			resize: vertical; z-index: 2;
+		}
+		/* Invalid token: the wavy underline is the real cue (color-independent);
+		   the red supplements it. */
+		.jvm-bad { color: #d6336c; text-decoration: underline wavy #d6336c; text-decoration-skip-ink: none; }
 	</style>
 
 	<!-- EXPERIMENT REMOVED 2026-05-24: tried black-glass aesthetic on this dense
@@ -105,8 +135,6 @@
 		<!-- Quick nav -->
 		<div class="section-nav">
 			<a href="#section-health">Health Check</a>
-				<a href="#section-auth">Authentication</a>
-			<a href="#section-nm">Node Manager</a>
 			<a href="#section-jvm">JVM</a>
 			<a href="#section-server">Server Tuning</a>
 			<a href="#section-jdbc">JDBC Pools</a>
@@ -114,6 +142,8 @@
 			<a href="#section-sip">SIP Timers</a>
 			<a href="#section-wm">OCCAS Threads</a>
 			<a href="#section-cluster">Cluster</a>
+			<a href="#section-coherence">Coherence</a>
+			<a href="#section-kernel">Kernel</a>
 		</div>
 
 		<!-- ============================================================ -->
@@ -123,7 +153,7 @@
 		<div class="card">
 			<div class="card-header">
 				<strong>Health Check</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="runHealthCheck()">Re-run</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadHealthData()">Re-run</button>
 			</div>
 			<div class="card-body">
 				<div class="info-box">
@@ -131,45 +161,8 @@
 					and JDK-21 readiness. Nothing here changes config; fixes are applied in the sections below.
 				</div>
 				<div id="health-container"><span class="text-muted">Loading...</span></div>
-			</div>
-		</div>
-
-		<!-- ============================================================ -->
-		<!-- AUTHENTICATION -->
-		<!-- ============================================================ -->
-		<div id="section-auth"></div>
-		<div class="card">
-			<div class="card-header"><strong>Authentication</strong></div>
-			<div class="card-body">
-				<div class="setting-row">
-					<div class="setting-label">
-						<h6>Enable Single Sign-On</h6>
-						<small>Share authentication across all BLADE admin apps. Users log in once.</small>
-						<div id="sso-status" class="server-status"></div>
-					</div>
-					<div class="custom-control custom-switch">
-						<input type="checkbox" class="custom-control-input" id="sso-toggle">
-						<label class="custom-control-label" for="sso-toggle"></label>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- ============================================================ -->
-		<!-- NODE MANAGER -->
-		<!-- ============================================================ -->
-		<div id="section-nm"></div>
-		<div class="card">
-			<div class="card-header">
-				<strong>Node Manager</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadNodeManagerSettings()">Refresh</button>
-			</div>
-			<div class="card-body">
-				<div class="warning-box">
-					<strong>Important:</strong> JVM settings only take effect when servers are started through Node Manager.
-					Verify NM is running and configured before changing JVM arguments.
-				</div>
-				<div id="nm-container"><span class="text-muted">Loading...</span></div>
+				<div class="mt-3 mb-1" style="font-size:12px;font-weight:600;color:#555;border-bottom:1px solid #eee;padding-bottom:2px">OS &amp; Limits <span class="text-muted" style="font-weight:400">(from the platform OperatingSystem MBean)</span></div>
+				<div id="os-container"><span class="text-muted">Loading...</span></div>
 			</div>
 		</div>
 
@@ -179,14 +172,14 @@
 		<div id="section-jvm"></div>
 		<div class="card">
 			<div class="card-header">
-				<strong>JVM Settings</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendJvmZgc()" title="Low-latency preset for JDK 21: select ZGC, enable Generational + AlwaysPreTouch, and set -Xms = -Xmx on every server. Pre-fill only — review, then Save each server. (JDK 21/22; do not use the Generational flag on JDK 24+.)">Low-Latency (ZGC)</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="recommendJvm()" title="Pre-fill -Xms = -Xmx on every server so the heap is fully committed at startup (no runtime resize pauses). Review, then Save each server.">Recommended</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadJvmSettings()">Refresh</button>
+				<strong>JVM Profiles</strong>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendJvmZgc()" title="Low-latency preset for JDK 21 applied to the selected profile: ZGC + Generational + AlwaysPreTouch + -Xms=-Xmx. (JDK 21/22; do not carry the Generational flag past JDK 23.)">Low-Latency (ZGC)</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="recommendJvm()" title="Set -Xms = -Xmx on the selected profile so the heap is fully committed at startup (no runtime resize pauses).">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadJvmProfiles()">Refresh</button>
 			</div>
 			<div class="card-body">
 				<div class="info-box">
-					<strong>Note:</strong> Changes are saved to domain configuration. Restart servers via Node Manager for changes to take effect.
+					<strong>Note:</strong> A profile is a complete set of JVM arguments. Assign one to each node, then <strong>Apply</strong> to write it into that node's Server-Start arguments. Restart the engine tier to activate.
 				</div>
 				<div id="jvm-container"><span class="text-muted">Loading...</span></div>
 			</div>
@@ -434,6 +427,40 @@
 			</div>
 		</div>
 
+		<!-- ============================================================ -->
+		<!-- COHERENCE -->
+		<!-- ============================================================ -->
+		<div id="section-coherence"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>Coherence</strong>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadCoherence()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div class="info-box">
+					Coherence cluster networking — clustering mode (unicast / multicast), listen addresses and ports, TTL — from each Coherence system resource descriptor (config.xml). <strong>Restart-required:</strong> saved to the domain config; the engine tier must restart to pick it up.
+				</div>
+				<div id="coherence-container"><span class="text-muted">Loading...</span></div>
+			</div>
+		</div>
+
+		<!-- ============================================================ -->
+		<!-- KERNEL PARAMETERS -->
+		<!-- ============================================================ -->
+		<div id="section-kernel"></div>
+		<div class="card">
+			<div class="card-header">
+				<strong>Kernel Parameters</strong>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadKernel()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div class="info-box">
+					Read-only kernel tunables per node — sysctl values, transparent hugepages, CPU governor, process limits — read from <span class="mono">/proc/sys</span>, <span class="mono">/sys</span>, and <span class="mono">/proc/self/limits</span> on each node (no sudo). Guidance flags are SIP-oriented hints, not hard rules. Changing these is an OS task (Tier 2), not done here.
+				</div>
+				<div id="kernel-container"><span class="text-muted">Loading...</span></div>
+			</div>
+		</div>
+
 	</div>
 
 	<!-- Floating status message -->
@@ -451,7 +478,140 @@
 			{ value: '-XX:+UseParallelGC',     label: 'Parallel GC (throughput)' }
 		];
 
-		var jvmData = []; // cached for the ZGC preset + health check
+		// Short names for the GC collectors, for validation messages.
+		var GC_LABEL = { '-XX:+UseG1GC': 'G1', '-XX:+UseZGC': 'ZGC', '-XX:+UseShenandoahGC': 'Shenandoah', '-XX:+UseParallelGC': 'Parallel' };
+		var GC_G1 = '-XX:+UseG1GC', GC_Z = '-XX:+UseZGC', GC_SHEN = '-XX:+UseShenandoahGC', GC_PAR = '-XX:+UseParallelGC';
+
+		// Modeled valued ("scalar") args. `group` decides which panel renders it:
+		// 'heap' | 'gc' | 'occas'. `gc` (optional) restricts a 'gc' item to the
+		// listed collectors — used both to show it dynamically and to flag it as
+		// invalid in the Arguments box when a different collector is selected.
+		var JVM_SCALARS = [
+			{ name: 'heapInitial', group: 'heap', prefix: '-Xms', label: '-Xms', ph: '512m', cols: 3,
+				tip: 'Initial heap size. Set equal to -Xmx to avoid runtime heap resizing. Example: 512m, 1g, 2g' },
+			{ name: 'heapMax', group: 'heap', prefix: '-Xmx', label: '-Xmx', ph: '2g', cols: 3,
+				tip: 'Maximum heap size. For SIP engines, 1-4G is typical. Too large increases GC pause times; too small causes OutOfMemoryError under load.' },
+			{ name: 'metaspaceSize', group: 'heap', prefix: '-XX:MetaspaceSize=', label: 'Metaspace', ph: '256m', cols: 3,
+				tip: 'Initial Metaspace size for class metadata. Setting this avoids early GC cycles as classes load at startup.' },
+			{ name: 'maxMetaspaceSize', group: 'heap', prefix: '-XX:MaxMetaspaceSize=', label: 'Max Meta', ph: '512m', cols: 3,
+				tip: 'Maximum Metaspace size. Caps memory used for class metadata; if unset, Metaspace grows without bound.' },
+
+			{ name: 'maxGcPauseMillis', group: 'gc', gc: [GC_G1, GC_PAR], prefix: '-XX:MaxGCPauseMillis=', label: 'GC Pause ms', ph: '200', cols: 3,
+				tip: 'Target maximum GC pause time in ms. G1 and Parallel treat it as a goal. ZGC ignores it (already sub-millisecond).' },
+			{ name: 'parallelGcThreads', group: 'gc', gc: [GC_G1, GC_PAR, GC_SHEN], prefix: '-XX:ParallelGCThreads=', label: 'Parallel GC Thr', ph: '', cols: 3,
+				tip: 'Threads for stop-the-world parallel GC work (-XX:ParallelGCThreads). Defaults scale with CPU count.' },
+			{ name: 'concGcThreads', group: 'gc', gc: [GC_G1, GC_Z, GC_SHEN], prefix: '-XX:ConcGCThreads=', label: 'Conc GC Thr', ph: '', cols: 3,
+				tip: 'Threads for concurrent GC work (-XX:ConcGCThreads). Usually a fraction of ParallelGCThreads.' },
+			{ name: 'g1HeapRegionSize', group: 'gc', gc: [GC_G1], prefix: '-XX:G1HeapRegionSize=', label: 'G1 Region Size', ph: '8m', cols: 3,
+				tip: 'G1 heap region size (power of 2, 1m-32m). Larger regions reduce bookkeeping for big heaps; smaller can lower pauses.' },
+			{ name: 'g1IHOP', group: 'gc', gc: [GC_G1], prefix: '-XX:InitiatingHeapOccupancyPercent=', label: 'G1 IHOP %', ph: '45', cols: 3,
+				tip: 'Heap-occupancy threshold that starts a G1 concurrent marking cycle (-XX:InitiatingHeapOccupancyPercent). Lower starts marking earlier. Aikar uses 15.' },
+			{ name: 'g1NewSizePercent', group: 'gc', gc: [GC_G1], prefix: '-XX:G1NewSizePercent=', label: 'G1 New Size %', ph: '30', cols: 3,
+				tip: 'Minimum young-gen size as a percent of heap (-XX:G1NewSizePercent). Experimental — needs Unlock Experimental Options. Aikar uses 30.' },
+			{ name: 'g1MaxNewSizePercent', group: 'gc', gc: [GC_G1], prefix: '-XX:G1MaxNewSizePercent=', label: 'G1 Max New Size %', ph: '40', cols: 3,
+				tip: 'Maximum young-gen size as a percent of heap (-XX:G1MaxNewSizePercent). Experimental. Aikar uses 40.' },
+			{ name: 'g1ReservePercent', group: 'gc', gc: [GC_G1], prefix: '-XX:G1ReservePercent=', label: 'G1 Reserve %', ph: '20', cols: 3,
+				tip: 'Heap percent G1 holds in reserve to reduce promotion-failure risk (-XX:G1ReservePercent). Aikar uses 20.' },
+			{ name: 'g1HeapWastePercent', group: 'gc', gc: [GC_G1], prefix: '-XX:G1HeapWastePercent=', label: 'G1 Heap Waste %', ph: '5', cols: 3,
+				tip: 'Tolerable wasted heap in collectable regions before G1 starts mixed collections (-XX:G1HeapWastePercent). Aikar uses 5.' },
+			{ name: 'g1MixedGCCountTarget', group: 'gc', gc: [GC_G1], prefix: '-XX:G1MixedGCCountTarget=', label: 'G1 Mixed GC Count', ph: '4', cols: 3,
+				tip: 'Target number of mixed collections to reclaim the old-gen marking candidates (-XX:G1MixedGCCountTarget). Aikar uses 4.' },
+			{ name: 'g1MixedGCLiveThreshold', group: 'gc', gc: [GC_G1], prefix: '-XX:G1MixedGCLiveThresholdPercent=', label: 'G1 Mixed Live %', ph: '90', cols: 3,
+				tip: 'Old region live-occupancy above which it is NOT collected in a mixed GC (-XX:G1MixedGCLiveThresholdPercent). Experimental. Aikar uses 90.' },
+			{ name: 'g1RSetUpdatingPause', group: 'gc', gc: [GC_G1], prefix: '-XX:G1RSetUpdatingPauseTimePercent=', label: 'G1 RSet Update %', ph: '5', cols: 3,
+				tip: 'Percent of the pause-time budget spent updating remembered sets during the pause vs concurrently (-XX:G1RSetUpdatingPauseTimePercent). Aikar uses 5.' },
+			{ name: 'survivorRatio', group: 'gc', gc: [GC_G1, GC_PAR], prefix: '-XX:SurvivorRatio=', label: 'Survivor Ratio', ph: '32', cols: 3,
+				tip: 'Ratio of eden to each survivor space (-XX:SurvivorRatio). Generational collectors only. Aikar uses 32.' },
+			{ name: 'maxTenuringThreshold', group: 'gc', gc: [GC_G1, GC_PAR], prefix: '-XX:MaxTenuringThreshold=', label: 'Max Tenuring', ph: '1', cols: 3,
+				tip: 'How many young-gen survivals before an object is promoted to old gen (-XX:MaxTenuringThreshold). Generational only. Aikar uses 1.' },
+			{ name: 'softMaxHeap', group: 'gc', gc: [GC_Z], prefix: '-XX:SoftMaxHeapSize=', label: 'ZGC Soft Max Heap', ph: '', cols: 3,
+				tip: 'ZGC soft cap on heap size (-XX:SoftMaxHeapSize). ZGC tries to stay under it, exceeding only to avoid OOM.' },
+			{ name: 'zCollectionInterval', group: 'gc', gc: [GC_Z], prefix: '-XX:ZCollectionInterval=', label: 'ZGC Collect Interval (s)', ph: '', cols: 3,
+				tip: 'Force a ZGC cycle at least every N seconds (-XX:ZCollectionInterval). 0 / unset = collect on demand only.' },
+			{ name: 'zUncommitDelay', group: 'gc', gc: [GC_Z], prefix: '-XX:ZUncommitDelay=', label: 'ZGC Uncommit Delay (s)', ph: '300', cols: 3,
+				tip: 'How long unused heap stays committed before ZGC returns it to the OS (-XX:ZUncommitDelay). Default 300. Only applies when Uncommit is on.' },
+
+			{ name: 'gcTimeRatio', group: 'gc', gc: [GC_G1, GC_PAR], prefix: '-XX:GCTimeRatio=', label: 'GC Time Ratio', ph: '99', cols: 3,
+				tip: 'Throughput goal (-XX:GCTimeRatio): target app-to-GC time ratio of N:1. 99 aims for <1% GC time. G1 and Parallel.' },
+			{ name: 'newRatio', group: 'gc', gc: [GC_PAR], prefix: '-XX:NewRatio=', label: 'New Ratio', ph: '2', cols: 3,
+				tip: 'Ratio of old-gen to young-gen size (-XX:NewRatio). NewRatio=2 makes the young gen 1/3 of the heap. Parallel / Serial — G1 sizes the young gen itself.' },
+			{ name: 'minHeapFreeRatio', group: 'gc', gc: [GC_G1, GC_PAR], prefix: '-XX:MinHeapFreeRatio=', label: 'Min Heap Free %', ph: '40', cols: 3,
+				tip: 'Minimum free-heap percent after a GC before the JVM grows the heap (-XX:MinHeapFreeRatio). Default 40.' },
+			{ name: 'maxHeapFreeRatio', group: 'gc', gc: [GC_G1, GC_PAR], prefix: '-XX:MaxHeapFreeRatio=', label: 'Max Heap Free %', ph: '70', cols: 3,
+				tip: 'Maximum free-heap percent after a GC before the JVM shrinks the heap (-XX:MaxHeapFreeRatio). Default 70.' },
+			{ name: 'adaptiveSizePolicyWeight', group: 'gc', gc: [GC_PAR], prefix: '-XX:AdaptiveSizePolicyWeight=', label: 'Adaptive Size Weight', ph: '10', cols: 3,
+				tip: 'Weight (%) given to recent GCs when Parallel adaptive sizing decides generation sizes (-XX:AdaptiveSizePolicyWeight). Higher reacts faster.' },
+			{ name: 'youngGenSizeIncrement', group: 'gc', gc: [GC_PAR], prefix: '-XX:YoungGenerationSizeIncrement=', label: 'Young Gen Increment %', ph: '20', cols: 3,
+				tip: 'Step (%) Parallel adaptive sizing grows the young gen by (-XX:YoungGenerationSizeIncrement). Default 20.' },
+			{ name: 'tenuredGenSizeIncrement', group: 'gc', gc: [GC_PAR], prefix: '-XX:TenuredGenerationSizeIncrement=', label: 'Tenured Gen Increment %', ph: '20', cols: 3,
+				tip: 'Step (%) Parallel adaptive sizing grows the old gen by (-XX:TenuredGenerationSizeIncrement). Default 20.' },
+
+			{ name: 'shenHeuristics', group: 'gc', gc: [GC_SHEN], prefix: '-XX:ShenandoahGCHeuristics=', label: 'Shenandoah Heuristics', ph: 'adaptive', cols: 3,
+				tip: 'Shenandoah pacing heuristic (-XX:ShenandoahGCHeuristics): adaptive, static, compact, or aggressive.' },
+			{ name: 'shenGCMode', group: 'gc', gc: [GC_SHEN], prefix: '-XX:ShenandoahGCMode=', label: 'Shenandoah Mode', ph: 'satb', cols: 3,
+				tip: 'Shenandoah collection mode (-XX:ShenandoahGCMode): satb (default), iu, or passive.' },
+			{ name: 'shenGuaranteedInterval', group: 'gc', gc: [GC_SHEN], prefix: '-XX:ShenandoahGuaranteedGCInterval=', label: 'Shenandoah Guaranteed (ms)', ph: '300000', cols: 3,
+				tip: 'Shenandoah triggers a GC at least every N ms even when idle (-XX:ShenandoahGuaranteedGCInterval). Default 300000.' },
+			{ name: 'shenUncommitDelay', group: 'gc', gc: [GC_SHEN], prefix: '-XX:ShenandoahUncommitDelay=', label: 'Shenandoah Uncommit (ms)', ph: '', cols: 3,
+				tip: 'How long unused heap stays committed before Shenandoah returns it to the OS (-XX:ShenandoahUncommitDelay), in ms. Only applies when Uncommit is on.' },
+
+			{ name: 'compileThreshold', group: 'occas', prefix: '-XX:CompileThreshold=', label: 'JIT CompileThreshold', ph: '8000', cols: 3,
+				tip: 'Number of method invocations (and loop back-edges) before HotSpot JIT-compiles a method. Lower compiles sooner; higher stays interpreted longer.' },
+			{ name: 'enableAssertions', group: 'occas', prefix: '-ea:', label: 'Enable Assertions (-ea:pkg)', ph: 'com.bea.wcp...', cols: 3,
+				tip: 'Enable Java assertions for a package tree (-ea:<pkg>...). The trailing ... also covers subpackages. OCCAS ships internal assert checks under com.bea.wcp.' },
+			{ name: 'sslMinProtocol', group: 'occas', prefix: '-Dweblogic.security.SSL.minimumProtocolVersion=', label: 'SSL min TLS version', ph: 'TLSv1.2', cols: 3,
+				tip: 'Minimum TLS protocol version WebLogic will negotiate for SSL. TLSv1.2 disables the older SSLv3 / TLSv1.0 / TLSv1.1.' },
+			{ name: 'wlssMaddrEnable', group: 'occas', type: 'bool', def: false, on: 'true', off: 'false', prefix: '-Dwlss.maddr.enable=', label: 'wlss.maddr.enable', cols: 3,
+				tip: 'OCCAS engine property wlss.maddr.enable (ServerConfig.MARRD_ENABLED). Default false. When on, the engine honors the SIP maddr URI parameter when routing. Emitted only when set to true (i.e. different from the default).' },
+			{ name: 'wlssReplication', group: 'occas', type: 'enum', def: '', cols: 3,
+				options: [ { value: '', label: '(unset / none)' }, { value: 'on', label: 'on' }, { value: 'local', label: 'local' }, { value: 'colocated', label: 'colocated' }, { value: 'disabled', label: 'disabled' } ],
+				prefix: '-Dwlss.replication=', label: 'wlss.replication',
+				tip: 'OCCAS call-state replication mode (ServerConfig). Not a simple on/off — values are on, local, colocated, or disabled (off/non); unset by default. Emitted only when a mode is chosen.' },
+			{ name: 'launchUseEnvClasspath', group: 'occas', type: 'bool', def: false, on: 'true', off: 'false', prefix: '-Dlaunch.use.env.classpath=', label: 'launch.use.env.classpath', cols: 3,
+				tip: 'WebLogic launcher property (weblogic-launcher.jar): use the environment CLASSPATH when launching. The generated start script sets it =true. Default here assumed false (not found in the decompiled SIP source) — emitted only when checked.' },
+			{ name: 'callStateManager', group: 'occas', prefix: '-Dwlss.callstate.manager.classname=', label: 'wlss.callstate.manager.classname', ph: '', cols: 6,
+				tip: 'Implementation class for the OCCAS call-state manager. CoherenceCallStateManager stores SIP call/dialog state in Coherence so another node can take over on failover.' },
+			{ name: 'systemClassLoader', group: 'occas', prefix: '-Djava.system.class.loader=', label: 'java.system.class.loader', ph: '', cols: 6,
+				tip: 'JVM system class loader. WebLogic LaunchClassLoader bootstraps the WLS class-loading hierarchy. Do not change this — the server will not start without it.' },
+			{ name: 'allowedPackagesSecure', group: 'occas', prefix: '-Dweblogic.servlet.ClasspathServlet.allowedPackagesInSecureMode=', label: 'ClasspathServlet allowedPackagesInSecureMode', ph: '', cols: 12,
+				tip: 'Whitelist of class resources the WebLogic ClasspathServlet may serve in secure mode. Semicolon-separated.' }
+		];
+
+		// Valueless boolean flags (present = on). `group`: 'gc' | 'universal'.
+		var JVM_FLAGS = [
+			{ flag: '-server', group: 'universal', label: 'Server Mode', tip: 'Run the JVM in server mode (-server). Aggressive optimizations: slower startup, faster steady state. Always recommended for production OCCAS servers.' },
+			{ flag: '-da', group: 'universal', label: 'Disable Assertions (-da)', tip: 'Disable Java assertions globally. Assertions are off by default, so this is explicit. Combined with Enable Assertions (-ea:pkg), keeps them off everywhere except the named package.' },
+			{ flag: '-XX:+UseCompressedOops', group: 'universal', label: 'CompressedOops', tip: 'Compressed object pointers in 64-bit JVMs. ~30% smaller footprint for heaps under 32GB. Default on most JVMs.' },
+			{ flag: '-XX:+HeapDumpOnOutOfMemoryError', group: 'universal', label: 'HeapDump OOM', tip: 'Dump the heap to a file on OutOfMemoryError. Essential for post-mortem analysis; the dump can be large (heap size).' },
+			{ flag: '-XX:+DisableExplicitGC', group: 'universal', label: 'DisableExplicitGC', tip: 'Ignore System.gc() calls. Prevents app/library code from triggering full GC pauses. Recommended unless RMI distributed GC is required.' },
+			{ flag: '-XX:+AlwaysPreTouch', group: 'universal', label: 'AlwaysPreTouch', tip: 'Touch every heap page at startup so the cost is paid once at boot, not as latency spikes. Pairs with -Xms=-Xmx. Recommended for low-latency SIP nodes.' },
+			{ flag: '-XX:+UnlockExperimentalVMOptions', group: 'universal', label: 'Unlock Experimental Options', tip: 'Permit experimental -XX flags (e.g. G1NewSizePercent, G1MixedGCLiveThresholdPercent). Required before those flags or the JVM refuses to start. Part of Aikar\'s flags.' },
+			{ flag: '-XX:+PerfDisableSharedMem', group: 'universal', label: 'PerfDisableSharedMem', tip: 'Disable the hsperfdata shared-memory file (-XX:+PerfDisableSharedMem). Avoids GC pauses caused by disk I/O stalls writing that file. Part of Aikar\'s flags.' },
+			{ flag: '-Djava.security.egd=file:/dev/./urandom', group: 'universal', label: 'Fast SecureRandom (urandom)', tip: 'Seed SecureRandom from non-blocking /dev/urandom. Eliminates startup/TLS-handshake stalls from entropy starvation. The /./ is the JDK workaround so the path is not silently ignored.' },
+			{ flag: '-XX:+UseStringDeduplication', group: 'gc', gc: [GC_G1, GC_SHEN], label: 'StringDedup', tip: 'Deduplicate identical Strings during GC. Helps SIP apps with many identical header values (Via, Contact). G1 and Shenandoah only.' },
+			{ flag: '-XX:+ParallelRefProcEnabled', group: 'gc', gc: [GC_G1, GC_PAR], label: 'Parallel Ref Proc', tip: 'Process soft/weak/phantom references with multiple threads during GC (-XX:+ParallelRefProcEnabled). Cuts reference-heavy pause times. Part of Aikar\'s flags.' },
+			{ flag: '-XX:+UseAdaptiveSizePolicy', group: 'gc', gc: [GC_PAR], def: true, label: 'Adaptive Size Policy (default on)', tip: 'Let Parallel GC auto-tune generation sizes toward the pause / throughput goals (-XX:+UseAdaptiveSizePolicy, default on). Uncheck (emits -XX:-...) to pin sizes via NewRatio / SurvivorRatio.' },
+			{ flag: '-XX:+ZUncommit', group: 'gc', gc: [GC_Z], def: true, label: 'ZGC Uncommit (default on)', tip: 'Return unused heap to the OS after the uncommit delay (-XX:+ZUncommit, default on). Uncheck to emit -XX:-ZUncommit and keep memory committed.' },
+			{ flag: '-XX:+ZProactive', group: 'gc', gc: [GC_Z], def: true, label: 'ZGC Proactive (default on)', tip: 'Let ZGC run proactive cycles while idle to reduce later work (-XX:+ZProactive, default on). Uncheck to disable.' },
+			{ flag: '-XX:+ShenandoahUncommit', group: 'gc', gc: [GC_SHEN], def: true, label: 'Shenandoah Uncommit (default on)', tip: 'Return unused heap to the OS (-XX:+ShenandoahUncommit, default on). Uncheck to emit -XX:-ShenandoahUncommit.' },
+			{ flag: '-XX:+ShenandoahPacing', group: 'gc', gc: [GC_SHEN], def: true, label: 'Shenandoah Pacing (default on)', tip: 'Pace application allocations so they keep up with the concurrent collector (-XX:+ShenandoahPacing, default on). Uncheck to disable.' },
+			{ flag: '-XX:+ZGenerational', group: 'gc', gc: [GC_Z], label: 'ZGC Generational (JDK 21)', tip: 'JDK 21/22 ONLY. Opts ZGC into generational mode (required on JDK 21 to get it; default in JDK 23, removed in JDK 24). ZGC only.' }
+		];
+
+		// True if a 'gc'-group item applies to the selected collector.
+		function gcApplies(item, collector) { return !item.gc || (collector && item.gc.indexOf(collector) >= 0); }
+		function gcLabel(v) { return GC_LABEL[v] || (v ? v : 'default'); }
+		// The "-XX:-Name" off-form for a "-XX:+Name" flag, or null for presence flags (-server, -D...).
+		function flagOff(flag) { return flag.indexOf('-XX:+') === 0 ? '-XX:-' + flag.substring('-XX:+'.length) : null; }
+
+		// If a token is a known GC-restricted flag/scalar, return the collectors it needs; else null.
+		function gcRequirement(token) {
+			for (var i = 0; i < JVM_SCALARS.length; i++) { if (JVM_SCALARS[i].gc && token.indexOf(JVM_SCALARS[i].prefix) === 0) return JVM_SCALARS[i].gc; }
+			for (var j = 0; j < JVM_FLAGS.length; j++) { if (JVM_FLAGS[j].gc && (token === JVM_FLAGS[j].flag || token === flagOff(JVM_FLAGS[j].flag))) return JVM_FLAGS[j].gc; }
+			return null;
+		}
+
+		var jvmData = []; // per-server args cached for the Health Check (read-only)
 
 		// ================================================================
 		// Init
@@ -460,162 +620,488 @@
 			// Enable Bootstrap tooltips on all elements with title attr
 			$('body').tooltip({ selector: '[data-toggle="tooltip"]', html: true });
 
-			loadSsoStatus();
-			loadNodeManagerSettings();
-			loadJvmSettings();
+			loadJvmProfiles();
+			loadHealthData();
 			loadServerTuning();
 			loadJdbc();
 			loadSnmp();
 			loadSipTimers();
 			loadWorkManagers();
 			loadCluster();
-
-			$('#sso-toggle').on('change', function () {
-				setSsoStatus($(this).is(':checked'));
-			});
+			loadCoherence();
+			loadKernel();
 		});
 
 		// ================================================================
-		// SSO
+		// JVM Profiles
 		// ================================================================
-		function loadSsoStatus() {
-			$.getJSON('api/v1/sso', function (data) {
-				var allOn = true, anyOn = false, html = '';
-				$.each(data, function (i, s) {
-					var cls = s.ssoEnabled ? 'badge-success' : 'badge-secondary';
-					html += '<span class="badge ' + cls + '">' + s.server + ': ' + (s.ssoEnabled ? 'ON' : 'OFF') + '</span> ';
-					if (!s.ssoEnabled) allOn = false;
-					if (s.ssoEnabled) anyOn = true;
+		// In-memory model: the selected profile's `arguments` string is the single
+		// source of truth — the left-hand controls and the right-hand textarea are
+		// both views of it.
+		var jvm = { profiles: [], assignments: {}, servers: [], sel: -1 };
+
+		function loadJvmProfiles() {
+			$.getJSON('api/v1/jvm/profiles', function (d) {
+				jvm.profiles = (d && d.profiles) || [];
+				jvm.assignments = (d && d.assignments) || {};
+				$.getJSON('api/v1/jvm/servers', function (servers) {
+					jvm.servers = servers || [];
+					jvm.sel = jvm.profiles.length ? 0 : -1;
+					renderJvmPanel();
+				}).fail(function () {
+					jvm.servers = [];
+					jvm.sel = jvm.profiles.length ? 0 : -1;
+					renderJvmPanel();
 				});
-				$('#sso-status').html(html);
-				$('#sso-toggle').prop('checked', allOn || anyOn);
-			}).fail(function () {
-				$('#sso-status').html('<span class="text-danger">Unable to retrieve SSO status</span>');
+			}).fail(function (xhr) {
+				$('#jvm-container').html('<span class="text-danger">Unable to load profiles. ' + parseError(xhr) + '</span>');
 			});
 		}
 
-		function setSsoStatus(enabled) {
-			$('#sso-toggle').prop('disabled', true);
-			showStatus('info', (enabled ? 'Enabling' : 'Disabling') + ' SSO...');
-			$.ajax({ url: 'api/v1/sso', method: 'PUT', contentType: 'application/json',
-				data: JSON.stringify({ enabled: enabled }), dataType: 'json',
-				success: function () {
-					showStatus('success', 'SSO ' + (enabled ? 'enabled' : 'disabled') + '. Restart servers for effect.');
-					$('#sso-toggle').prop('disabled', false);
-					loadSsoStatus();
-				},
-				error: function (xhr) {
-					showStatus('danger', 'SSO update failed. ' + parseError(xhr));
-					$('#sso-toggle').prop('disabled', false).prop('checked', !enabled);
+		// Health Check reads each server's live args independently (read-only).
+		function loadHealthData() {
+			$.getJSON('api/v1/jvm', function (data) { jvmData = data || []; runHealthCheck(); })
+				.fail(function () { jvmData = []; renderHealth([]); });
+			loadOsInfo();
+		}
+
+		// OS / limits readout from the platform OperatingSystem MBean. Sysctl kernel
+		// tunables are NOT here (JMX has no /proc/sys window) — just kernel version,
+		// memory, load, and the process file-descriptor limit (ulimit -n).
+		function loadOsInfo() {
+			$.getJSON('api/v1/os', function (rows) {
+				if (!rows || !rows.length) { $('#os-container').html('<span class="text-muted">No OS info available.</span>'); return; }
+				var html = '<table class="table table-compact table-sm mb-0" style="font-size:12px"><thead class="thead-light"><tr>';
+				html += '<th>Server</th><th>Kernel</th><th>CPUs</th><th>Load</th><th>RAM free/total</th><th>Swap free/total</th><th data-toggle="tooltip" title="Process open-file limit (ulimit -n) and current open count. Each socket is a file descriptor — high-CPS SIP engines need a high limit (65536+).">Open / Max FDs</th>';
+				html += '</tr></thead><tbody>';
+				$.each(rows, function (i, r) {
+					var lowFd = r.maxFds > 0 && r.maxFds < 16384;
+					html += '<tr><td><strong>' + he(r.server) + '</strong> <span class="text-muted">' + he(r.arch || '') + '</span></td>';
+					html += '<td class="mono">' + he((r.name ? r.name + ' ' : '') + (r.kernel || '')) + '</td>';
+					html += '<td class="mono">' + fmtNum(r.processors) + '</td>';
+					html += '<td class="mono">' + fmtLoad(r.loadAverage) + '</td>';
+					html += '<td class="mono">' + fmtMB(r.ramFreeMB) + ' / ' + fmtMB(r.ramTotalMB) + '</td>';
+					html += '<td class="mono">' + fmtMB(r.swapFreeMB) + ' / ' + fmtMB(r.swapTotalMB) + '</td>';
+					html += '<td class="mono">' + fmtNum(r.openFds) + ' / ' + fmtNum(r.maxFds);
+					if (lowFd) html += ' <span class="badge badge-warning" data-toggle="tooltip" title="Open-file limit looks low for a high-CPS SIP engine — raise nofile (ulimit -n) toward 65536.">&#9650; low for SIP</span>';
+					html += '</td></tr>';
+				});
+				html += '</tbody></table>';
+				$('#os-container').html(html);
+				$('body').tooltip({ selector: '[data-toggle="tooltip"]', html: true });
+			}).fail(function (xhr) {
+				$('#os-container').html('<span class="text-danger">Unable to load OS info. ' + parseError(xhr) + '</span>');
+			});
+		}
+		function fmtNum(n) { return (n == null || n < 0) ? '—' : String(n); }
+		function fmtMB(mb) { return (mb == null || mb < 0) ? '—' : (mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb + ' MB'); }
+		function fmtLoad(l) { return (l == null || l < 0) ? '—' : l.toFixed(2); }
+
+		// ---- arg string <-> control state (ported from JvmSettings.java) -------
+		function jvmTokenize(s) { return (s || '').trim().length ? s.trim().split(/\s+/) : []; }
+
+		// ---- Flight Recording (JFR): one compound arg each. --------------------
+		var JFR_PREFIX = '-XX:StartFlightRecording=';
+		var JFR_OPTS_PREFIX = '-XX:FlightRecorderOptions=';
+		var JFR_FIELDS = [
+			{ name: 'jfrName', key: 'name', type: 'text', label: 'Recording Name', ph: 'occas', cols: 3, tip: 'A label for the recording (name=).' },
+			{ name: 'jfrSettings', key: 'settings', type: 'text', label: 'Settings', ph: 'default', cols: 3, tip: 'Event profile: default (~1% overhead, production-safe) or profile (more detail), or a path to a .jfc file.' },
+			{ name: 'jfrDuration', key: 'duration', type: 'text', label: 'Duration', ph: '0 = until exit', cols: 3, tip: 'How long to record, e.g. 120s. Blank / 0 = until the JVM exits (continuous).' },
+			{ name: 'jfrFilename', key: 'filename', type: 'text', label: 'Filename', ph: './servers/${server}/logs/occas.jfr', cols: 6, tip: 'Where to write the .jfr. ${server} / ${cluster} / ${machine} / ${domain} are resolved per node when you Apply (so each node writes to its own dir). JFR also expands %p (pid) and %t (timestamp) at record-time.' },
+			{ name: 'jfrMaxAge', key: 'maxage', type: 'text', label: 'Max Age', ph: '10m', cols: 3, tip: 'Continuous recordings: keep at most this much history, e.g. 10m, 1h.' },
+			{ name: 'jfrMaxSize', key: 'maxsize', type: 'text', label: 'Max Size', ph: '200m', cols: 3, tip: 'Continuous recordings: cap the on-disk buffer, e.g. 200m.' },
+			{ name: 'jfrDelay', key: 'delay', type: 'text', label: 'Delay', ph: '30s', cols: 3, tip: 'Wait this long after JVM start before recording, e.g. 30s.' },
+			{ name: 'jfrDumpOnExit', key: 'dumponexit', type: 'bool', def: false, label: 'Dump on Exit', cols: 3, tip: 'Write the recording to Filename when the JVM exits.' },
+			{ name: 'jfrDisk', key: 'disk', type: 'bool', def: true, label: 'Buffer to Disk (default on)', cols: 3, tip: 'Stream recording data to disk (default on). Uncheck (disk=false) to keep it in memory only.' },
+			{ name: 'jfrGcRoots', key: 'path-to-gc-roots', type: 'bool', def: false, label: 'Path to GC Roots', cols: 3, tip: 'Capture reference chains to GC roots for leak analysis. Expensive — use only for leak hunts.' }
+		];
+		var JFR_OPT_FIELDS = [
+			{ name: 'jfrStackDepth', key: 'stackdepth', type: 'text', label: 'Stack Depth', ph: '64', cols: 3, tip: 'Max stack frames captured per event (FlightRecorderOptions). Default 64; raise for deeper call trees (more overhead).' },
+			{ name: 'jfrMaxChunk', key: 'maxchunksize', type: 'text', label: 'Max Chunk Size', ph: '12m', cols: 3, tip: 'Maximum size of a single JFR chunk file.' },
+			{ name: 'jfrRepository', key: 'repository', type: 'text', label: 'Repository Path', ph: '/path', cols: 6, tip: 'Directory for temporary JFR chunk files.' }
+		];
+
+		// Parse a compound "-XX:Prefix=k=v,k=v" token into { enabled, vals }.
+		function parseCompound(tokens, prefix, fields) {
+			var cst = { enabled: false, vals: {} };
+			fields.forEach(function (f) { cst.vals[f.key] = (f.type === 'bool') ? !!f.def : ''; });
+			var tok = null;
+			for (var i = 0; i < tokens.length; i++) { if (tokens[i].indexOf(prefix) === 0) { tok = tokens[i].substring(prefix.length); cst.enabled = true; break; } }
+			if (tok) {
+				tok.split(',').forEach(function (pair) {
+					var eq = pair.indexOf('='), k = eq >= 0 ? pair.substring(0, eq) : pair, val = eq >= 0 ? pair.substring(eq + 1) : 'true';
+					var f = fields.filter(function (x) { return x.key === k; })[0];
+					if (f) cst.vals[k] = (f.type === 'bool') ? (val.toLowerCase() === 'true') : val;
+				});
+			}
+			return cst;
+		}
+
+		// Rebuild the compound token from { enabled, vals } — emit only sub-options
+		// that differ from their default. `gated`: presence is controlled by the
+		// enable flag (StartFlightRecording); else emit only when at least one is set.
+		function buildCompound(tokens, prefix, fields, cst, gated) {
+			if (!cst) return;
+			var idx = -1;
+			for (var i = 0; i < tokens.length; i++) { if (tokens[i].indexOf(prefix) === 0) { idx = i; break; } }
+			var parts = [];
+			fields.forEach(function (f) {
+				var val = cst.vals[f.key];
+				if (f.type === 'bool') { if (!!val !== !!f.def) parts.push(f.key + '=' + (val ? 'true' : 'false')); }
+				else { val = (val || '').toString().trim(); if (val) parts.push(f.key + '=' + val); }
+			});
+			var emit = gated ? !!cst.enabled : parts.length > 0;
+			if (!emit) { if (idx >= 0) tokens.splice(idx, 1); return; }
+			var joined = parts.join(',');
+			if (gated && !joined) joined = 'settings=default'; // StartFlightRecording needs >= 1 option
+			var tok = prefix + joined;
+			if (idx >= 0) tokens[idx] = tok; else tokens.push(tok);
+		}
+
+		function parseArgs(str) {
+			var tokens = jvmTokenize(str);
+			var st = { scalars: {}, gc: '', flags: {} };
+			JVM_SCALARS.forEach(function (s) {
+				var found = false, val = '';
+				for (var i = 0; i < tokens.length; i++) { if (tokens[i].indexOf(s.prefix) === 0) { val = tokens[i].substring(s.prefix.length); found = true; break; } }
+				// 'bool' -> boolean (default-aware); 'text'/'enum' -> the string value.
+				if (s.type === 'bool') st.scalars[s.name] = found ? (val.toLowerCase() === s.on) : s.def;
+				else st.scalars[s.name] = val;
+			});
+			gcCollectors.forEach(function (g) { if (g.value && tokens.indexOf(g.value) >= 0) st.gc = g.value; });
+			JVM_FLAGS.forEach(function (f) {
+				var off = flagOff(f.flag);
+				// "-XX:+Name" present -> on; "-XX:-Name" present -> off; neither -> the JVM default.
+				if (tokens.indexOf(f.flag) >= 0) st.flags[f.flag] = true;
+				else if (off && tokens.indexOf(off) >= 0) st.flags[f.flag] = false;
+				else st.flags[f.flag] = !!f.def;
+			});
+			st.jfr = parseCompound(tokens, JFR_PREFIX, JFR_FIELDS);
+			st.jfropts = parseCompound(tokens, JFR_OPTS_PREFIX, JFR_OPT_FIELDS);
+			return st;
+		}
+
+		// Apply control state onto the base string in place — known tokens are
+		// edited/added/removed; every unrecognized token (typed in the textarea)
+		// keeps its position. Mirrors the lossless Java applyArguments.
+		function buildArgs(baseStr, st) {
+			var tokens = jvmTokenize(baseStr);
+			JVM_SCALARS.forEach(function (s) {
+				if (!(s.name in st.scalars)) return; // not currently rendered -> leave its token alone
+				var idx = -1;
+				for (var i = 0; i < tokens.length; i++) { if (tokens[i].indexOf(s.prefix) === 0) { idx = i; break; } }
+				if (s.type === 'bool') {
+					// Emit only when the value differs from the verified default.
+					var checked = !!st.scalars[s.name];
+					if (checked !== s.def) { var bt = s.prefix + (checked ? s.on : s.off); if (idx >= 0) tokens[idx] = bt; else tokens.push(bt); }
+					else if (idx >= 0) tokens.splice(idx, 1);
+				} else {
+					var val = (st.scalars[s.name] || '').toString().trim(); // 'text'/'enum': emit if non-empty
+					if (val) { var tok = s.prefix + val; if (idx >= 0) tokens[idx] = tok; else tokens.push(tok); }
+					else if (idx >= 0) tokens.splice(idx, 1);
 				}
 			});
+			if ('gc' in st) {
+				var want = st.gc || '', gidx = -1;
+				for (var i = 0; i < tokens.length && gidx < 0; i++) {
+					for (var j = 0; j < gcCollectors.length; j++) { if (gcCollectors[j].value && tokens[i] === gcCollectors[j].value) { gidx = i; break; } }
+				}
+				if (want) { if (gidx >= 0) tokens[gidx] = want; else tokens.push(want); }
+				else if (gidx >= 0) tokens.splice(gidx, 1);
+			}
+			JVM_FLAGS.forEach(function (f) {
+				if (!(f.flag in st.flags)) return; // not currently rendered -> leave it alone
+				var off = flagOff(f.flag), on = !!st.flags[f.flag], def = !!f.def;
+				// Emit only when the desired state differs from the JVM default: "-XX:+Name"
+				// to force on, "-XX:-Name" to force off. Edit in place to keep position.
+				var want = (on !== def) ? (on ? f.flag : off) : null;
+				var idx = tokens.indexOf(f.flag);
+				if (idx < 0 && off) idx = tokens.indexOf(off);
+				if (want) { if (idx >= 0) tokens[idx] = want; else tokens.push(want); }
+				else if (idx >= 0) tokens.splice(idx, 1);
+			});
+			buildCompound(tokens, JFR_PREFIX, JFR_FIELDS, st.jfr, true);
+			buildCompound(tokens, JFR_OPTS_PREFIX, JFR_OPT_FIELDS, st.jfropts, false);
+			return tokens.join(' ').trim();
 		}
 
-		// ================================================================
-		// Node Manager
-		// ================================================================
-		function loadNodeManagerSettings() {
-			$.getJSON('api/v1/nodemanager', function (data) {
-				if (!data || data.length === 0) { $('#nm-container').html('<span class="text-muted">No machines configured.</span>'); return; }
-				var html = '';
-				$.each(data, function (i, m) {
-					var badge = m.configured ? '<span class="badge badge-success">Configured</span>' : '<span class="badge badge-warning">Not Configured</span>';
-					html += '<div class="card nm-card mb-2"><div class="card-header d-flex justify-content-between align-items-center py-2">';
-					html += '<span><strong>' + m.machine + '</strong> ' + badge + '</span>';
-					if (m.servers && m.servers.length) html += '<span class="text-muted" style="font-size:12px">Servers: ' + m.servers.join(', ') + '</span>';
-					html += '</div>';
-					if (m.configured) {
-						html += '<div class="card-body py-2"><div class="row">';
-						html += '<div class="col-md-3"><small class="text-muted" data-toggle="tooltip" title="Network address and port where Node Manager listens for commands from the AdminServer. Must be reachable from the AdminServer for server lifecycle operations.">Address</small><div class="mono">' + (m.listenAddress || 'localhost') + ':' + m.listenPort + '</div></div>';
-						html += '<div class="col-md-2"><small class="text-muted" data-toggle="tooltip" title="Connection type between AdminServer and Node Manager. SSL (default) encrypts traffic. Plain is unencrypted — only use in secure networks. ssh uses SSH tunneling.">Type</small><div class="mono">' + m.type + '</div></div>';
-						html += '<div class="col-md-5"><small class="text-muted" data-toggle="tooltip" title="Filesystem path to the Node Manager installation directory. Contains nodemanager.properties, logs, and security files.">Home</small><div class="mono">' + (m.nodeManagerHome || '(default)') + '</div></div>';
-						html += '<div class="col-md-2"><small class="text-muted" data-toggle="tooltip" title="Enable verbose debug logging for Node Manager operations. Useful for troubleshooting server start failures.">Debug</small><div class="mono">' + (m.debugEnabled ? 'Yes' : 'No') + '</div></div>';
-						html += '</div></div>';
-					}
-					html += '</div>';
+		// ---- rendering ---------------------------------------------------------
+		function renderJvmPanel() {
+			var h = '';
+			h += '<div class="d-flex align-items-center mb-3" style="gap:6px">';
+			h += '<label class="mb-0" style="font-weight:600">Profile:</label>';
+			h += '<select id="jvm-prof-sel" class="form-control form-control-sm" style="width:auto;min-width:160px">';
+			if (!jvm.profiles.length) h += '<option value="-1">(no profiles)</option>';
+			jvm.profiles.forEach(function (p, i) { h += '<option value="' + i + '"' + (i === jvm.sel ? ' selected' : '') + '>' + he(p.name) + '</option>'; });
+			h += '</select>';
+			h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmNewProfile()">New</button>';
+			h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmRenameProfile()">Rename</button>';
+			h += '<button class="btn btn-sm btn-outline-secondary" onclick="jvmDeleteProfile()">Delete</button>';
+			h += '<button class="btn btn-sm btn-outline-primary ml-auto" onclick="jvmSaveProfiles()">Save</button>';
+			h += '</div>';
+
+			if (jvm.sel >= 0 && jvm.profiles[jvm.sel]) {
+				h += '<div class="row"><div class="col-md-7" id="jvm-controls"></div>';
+				h += '<div class="col-md-5"><label style="font-size:12px;font-weight:600">Arguments (live)</label>';
+				h += '<div class="jvm-argwrap"><div id="jvm-arghl" class="jvm-arghl"></div>';
+				h += '<textarea id="jvm-argbox" class="jvm-argta" rows="20" spellcheck="false"></textarea></div>';
+				h += '<div class="text-muted mt-1" style="font-size:11px">Edit fields or type here — they stay in sync. A <span class="jvm-bad">wavy-underlined</span> token is flagged invalid (hover for why); unmodeled args are preserved.</div></div></div>';
+			} else {
+				h += '<div class="info-box">No profile selected. Click <strong>New</strong> to create one.</div>';
+			}
+
+			h += '<hr><div style="font-weight:600" class="mb-1">Node assignments</div>';
+			h += '<table class="table table-compact table-bordered" style="max-width:520px"><thead class="thead-light"><tr><th>Server</th><th>Profile</th></tr></thead><tbody>';
+			jvm.servers.forEach(function (srv) {
+				h += '<tr><td class="mono">' + he(srv) + '</td><td><select class="form-control form-control-sm jvm-assign" data-server="' + he(srv) + '">';
+				h += '<option value="">(none)</option>';
+				jvm.profiles.forEach(function (p) { h += '<option value="' + he(p.name) + '"' + (jvm.assignments[srv] === p.name ? ' selected' : '') + '>' + he(p.name) + '</option>'; });
+				h += '</select></td></tr>';
+			});
+			if (!jvm.servers.length) h += '<tr><td colspan="2" class="text-muted">No servers found.</td></tr>';
+			h += '</tbody></table>';
+			h += '<button class="btn btn-sm btn-primary" onclick="jvmApply()">Apply to cluster</button>';
+			h += ' <span class="text-muted" style="font-size:12px">Saves, then writes each assigned profile to its node ServerStart.Arguments. Restart the engine tier to activate.</span>';
+
+			$('#jvm-container').html(h);
+
+			$('#jvm-prof-sel').on('change', function () { jvm.sel = parseInt($(this).val(), 10); renderJvmPanel(); });
+			$('.jvm-assign').on('change', function () {
+				var s = $(this).data('server'), val = $(this).val();
+				if (val) jvm.assignments[s] = val; else delete jvm.assignments[s];
+			});
+
+			if (jvm.sel >= 0 && jvm.profiles[jvm.sel]) jvmRefreshEditor();
+		}
+
+		function jvmPanelHeader(t) {
+			return '<div class="mt-3 mb-1" style="font-size:12px;font-weight:600;color:#555;border-bottom:1px solid #eee;padding-bottom:2px">' + he(t) + '</div>';
+		}
+
+		function renderJvmControls() {
+			var p = jvm.profiles[jvm.sel];
+			var st = parseArgs(p.arguments);
+			var collector = st.gc;
+			var id = 'p';
+			var h = '';
+
+			h += jvmPanelHeader('Heap & Metaspace');
+			h += '<div class="row">';
+			JVM_SCALARS.filter(function (s) { return s.group === 'heap'; }).forEach(function (s) { h += renderScalar(id, s, st); });
+			h += '</div>';
+
+			// Garbage Collection — collector selector + only the chosen collector's options.
+			h += jvmPanelHeader('Garbage Collection');
+			h += '<div class="row">' + selectField(id, 'gcCollector', 'Collector', collector, gcCollectors, 4) + '</div>';
+			var gcScalars = JVM_SCALARS.filter(function (s) { return s.group === 'gc' && gcApplies(s, collector); });
+			var gcFlags = JVM_FLAGS.filter(function (f) { return f.group === 'gc' && gcApplies(f, collector); });
+			if (gcScalars.length || gcFlags.length) {
+				h += '<div class="row mt-1">';
+				gcScalars.forEach(function (s) { h += renderScalar(id, s, st); });
+				h += '</div><div class="row mt-1">';
+				gcFlags.forEach(function (f) { h += tipCb(id, f.flag, f.label, st.flags, f.tip); });
+				h += '</div>';
+			} else {
+				h += '<div class="text-muted" style="font-size:11px">' + (collector ? 'No extra tuning options modeled for this collector.' : 'Pick a collector to see its tuning options.') + '</div>';
+			}
+
+			h += jvmPanelHeader('Performance');
+			h += '<div class="row">';
+			JVM_FLAGS.filter(function (f) { return f.group === 'universal'; }).forEach(function (f) { h += tipCb(id, f.flag, f.label, st.flags, f.tip); });
+			h += '</div>';
+
+			h += jvmPanelHeader('WebLogic / OCCAS & JVM');
+			h += '<div class="row">';
+			JVM_SCALARS.filter(function (s) { return s.group === 'occas'; }).forEach(function (s) { h += renderScalar(id, s, st); });
+			h += '</div>';
+
+			// Flight Recording (JFR) — a compound -XX:StartFlightRecording arg.
+			h += jvmPanelHeader('Flight Recording (JFR)');
+			h += '<div class="custom-control custom-checkbox mb-2"><input type="checkbox" class="custom-control-input" id="p-jfrEnable"' + (st.jfr.enabled ? ' checked' : '') + '>';
+			h += '<label class="custom-control-label" for="p-jfrEnable" style="font-size:12px">Start a recording at JVM startup (-XX:StartFlightRecording). On JDK 11+ JFR is free — do not add -XX:+UnlockCommercialFeatures.</label></div>';
+			h += '<div class="row">';
+			JFR_FIELDS.forEach(function (f) { h += renderJfrField(id, f, st.jfr.vals[f.key]); });
+			h += '</div>';
+			h += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Global JFR options (-XX:FlightRecorderOptions)</div><div class="row">';
+			JFR_OPT_FIELDS.forEach(function (f) { h += renderJfrField(id, f, st.jfropts.vals[f.key]); });
+			h += '</div>';
+
+			$('#jvm-controls').html(h);
+
+			// The collector swaps the GC panel; everything else just rebuilds the string.
+			$('#jvm-controls').find('input, select').not('#p-gcCollector').on('change', jvmControlsToArgs);
+			$('#p-gcCollector').on('change', jvmGcChanged);
+			$('#jvm-argbox').off('input scroll').on('input', jvmArgsToControls).on('scroll', jvmSyncScroll);
+
+			jvmHighlight();
+		}
+
+		// Read only the controls CURRENTLY rendered, so buildArgs leaves tokens for
+		// hidden (other-collector) controls untouched.
+		function readControlState() {
+			var st = { scalars: {}, flags: {} };
+			if ($('#p-gcCollector').length) st.gc = v('p-gcCollector') || '';
+			JVM_SCALARS.forEach(function (s) {
+				var el = $('#p-' + s.name);
+				if (!el.length) return;
+				st.scalars[s.name] = (s.type === 'bool') ? el.is(':checked') : (el.val() || '');
+			});
+			$('#jvm-controls .jvm-flag').each(function () { st.flags[$(this).data('flag')] = $(this).is(':checked'); });
+			st.jfr = readCompoundState($('#p-jfrEnable').is(':checked'), JFR_FIELDS);
+			st.jfropts = readCompoundState(true, JFR_OPT_FIELDS);
+			return st;
+		}
+
+		function readCompoundState(enabled, fields) {
+			var cst = { enabled: enabled, vals: {} };
+			fields.forEach(function (f) {
+				var el = $('#p-' + f.name);
+				if (!el.length) { cst.vals[f.key] = (f.type === 'bool') ? !!f.def : ''; return; }
+				cst.vals[f.key] = (f.type === 'bool') ? el.is(':checked') : (el.val() || '');
+			});
+			return cst;
+		}
+
+		// Sync textarea to the model and re-render controls — after a programmatic
+		// change (initial load, GC switch, preset).
+		function jvmRefreshEditor() {
+			$('#jvm-argbox').val(jvm.profiles[jvm.sel].arguments);
+			renderJvmControls();
+		}
+
+		// A non-GC control changed: rebuild the string + refresh textarea/highlight.
+		// No re-render (each control maps 1:1 to a token; re-rendering eats clicks).
+		function jvmControlsToArgs() {
+			var p = jvm.profiles[jvm.sel];
+			p.arguments = buildArgs(p.arguments, readControlState());
+			$('#jvm-argbox').val(p.arguments);
+			jvmHighlight();
+		}
+
+		// The collector changed: rebuild, then re-render so the GC panel shows the
+		// new collector's options.
+		function jvmGcChanged() {
+			var p = jvm.profiles[jvm.sel];
+			p.arguments = buildArgs(p.arguments, readControlState());
+			jvmRefreshEditor();
+		}
+
+		// The textarea was edited: it's authoritative — re-derive control states in
+		// place (leave the textarea, so the caret is preserved) + re-highlight.
+		function jvmArgsToControls() {
+			var p = jvm.profiles[jvm.sel];
+			p.arguments = $('#jvm-argbox').val();
+			var st = parseArgs(p.arguments);
+			JVM_SCALARS.forEach(function (s) {
+				var el = $('#p-' + s.name);
+				if (!el.length) return;
+				if (s.type === 'bool') el.prop('checked', !!st.scalars[s.name]); else el.val(st.scalars[s.name]);
+			});
+			if ($('#p-gcCollector').length) $('#p-gcCollector').val(st.gc);
+			$('#jvm-controls .jvm-flag').each(function () { $(this).prop('checked', !!st.flags[$(this).data('flag')]); });
+			if ($('#p-jfrEnable').length) {
+				$('#p-jfrEnable').prop('checked', !!st.jfr.enabled);
+				JFR_FIELDS.concat(JFR_OPT_FIELDS).forEach(function (f) {
+					var el = $('#p-' + f.name);
+					if (!el.length) return;
+					var src = (JFR_FIELDS.indexOf(f) >= 0 ? st.jfr : st.jfropts).vals[f.key];
+					if (f.type === 'bool') el.prop('checked', !!src); else el.val(src);
 				});
-				$('#nm-container').html(html);
-			}).fail(function (xhr) {
-				$('#nm-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			}
+			jvmHighlight();
+		}
+
+		// ---- Arguments-box highlighting ---------------------------------------
+		function jvmSyncScroll() {
+			var ta = document.getElementById('jvm-argbox'), hl = document.getElementById('jvm-arghl');
+			if (ta && hl) { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; }
+		}
+
+		// Backdrop = the same text as the textarea, with invalid tokens wavy-
+		// underlined. Conservative: only flags non-option tokens, duplicate
+		// collectors, and GC-restricted flags under the wrong collector.
+		function jvmHighlight() {
+			var ta = document.getElementById('jvm-argbox'), hl = document.getElementById('jvm-arghl');
+			if (!ta || !hl) return;
+			var text = ta.value;
+			var collector = parseArgs(text).gc;
+			var gcCount = 0;
+			var html = text.split(/(\s+)/).map(function (part) {
+				if (part === '' || /^\s+$/.test(part)) return he(part);
+				var reason = null;
+				var isGc = gcCollectors.some(function (g) { return g.value && part === g.value; });
+				if (isGc) { gcCount++; if (gcCount > 1) reason = 'Multiple GC collectors selected — keep only one.'; }
+				else if (part.charAt(0) !== '-') { reason = 'Not a JVM option (should start with "-").'; }
+				else {
+					var req = gcRequirement(part);
+					if (req && !collector) reason = 'Requires ' + req.map(gcLabel).join(' or ') + '; no collector is selected.';
+					else if (req && req.indexOf(collector) < 0) reason = 'Requires ' + req.map(gcLabel).join(' or ') + '; selected collector is ' + gcLabel(collector) + '.';
+				}
+				return reason ? '<span class="jvm-bad" title="' + he(reason) + '">' + he(part) + '</span>' : he(part);
+			}).join('');
+			hl.innerHTML = html + '\n';
+			jvmSyncScroll();
+		}
+
+		// ---- profile management -----------------------------------------------
+		function jvmNewProfile() {
+			var name = prompt('New profile name:');
+			if (!name) return; name = name.trim(); if (!name) return;
+			if (jvm.profiles.some(function (p) { return p.name === name; })) { showStatus('danger', 'A profile named "' + name + '" already exists.'); return; }
+			jvm.profiles.push({ name: name, arguments: '-server -Xms2g -Xmx2g -XX:+UseG1GC' });
+			jvm.sel = jvm.profiles.length - 1;
+			renderJvmPanel();
+		}
+
+		function jvmRenameProfile() {
+			if (jvm.sel < 0) return;
+			var p = jvm.profiles[jvm.sel];
+			var name = prompt('Rename profile:', p.name);
+			if (!name) return; name = name.trim(); if (!name || name === p.name) return;
+			if (jvm.profiles.some(function (q) { return q.name === name; })) { showStatus('danger', 'A profile named "' + name + '" already exists.'); return; }
+			Object.keys(jvm.assignments).forEach(function (s) { if (jvm.assignments[s] === p.name) jvm.assignments[s] = name; });
+			p.name = name;
+			renderJvmPanel();
+		}
+
+		function jvmDeleteProfile() {
+			if (jvm.sel < 0) return;
+			var p = jvm.profiles[jvm.sel];
+			if (!confirm('Delete profile "' + p.name + '"?')) return;
+			Object.keys(jvm.assignments).forEach(function (s) { if (jvm.assignments[s] === p.name) delete jvm.assignments[s]; });
+			jvm.profiles.splice(jvm.sel, 1);
+			jvm.sel = jvm.profiles.length ? 0 : -1;
+			renderJvmPanel();
+		}
+
+		function jvmSaveProfiles() {
+			showStatus('info', 'Saving profiles...');
+			return $.ajax({
+				url: 'api/v1/jvm/profiles', method: 'PUT', contentType: 'application/json',
+				data: JSON.stringify({ profiles: jvm.profiles, assignments: jvm.assignments }), dataType: 'json',
+				success: function () { showStatus('success', 'Profiles saved.'); },
+				error: function (xhr) { showStatus('danger', 'Save failed: ' + parseError(xhr)); }
 			});
 		}
 
-		// ================================================================
-		// JVM Settings
-		// ================================================================
-		function loadJvmSettings() {
-			$.getJSON('api/v1/jvm', function (data) {
-				jvmData = data || [];
-				runHealthCheck();
-				if (!data || data.length === 0) { $('#jvm-container').html('<span class="text-muted">No servers found.</span>'); return; }
-				var html = '';
-				$.each(data, function (i, s) { html += renderJvmCard(s); });
-				$('#jvm-container').html(html);
-			}).fail(function (xhr) {
-				$('#jvm-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
-			});
-		}
-
-		function renderJvmCard(s) {
-			var id = esc(s.server);
-			var html = '<div class="card server-card mb-2" id="jvm-' + id + '"><div class="card-header d-flex justify-content-between align-items-center py-2">';
-			html += '<strong>' + s.server + '</strong>';
-			html += '<div><button class="btn btn-sm btn-outline-primary" onclick="saveJvm(\'' + s.server + '\',\'' + id + '\')">Save</button>';
-			html += ' <a class="btn btn-sm btn-outline-secondary" data-toggle="collapse" href="#jvm-raw-' + id + '">Raw</a></div>';
-			html += '</div><div class="card-body">';
-
-			// Memory row
-			html += '<div class="row">';
-			html += tipField(id, 'heapInitial', '-Xms', s.heapInitial, '512m', 2, 'Initial heap size. JVM starts with this much memory allocated. Set equal to -Xmx to avoid runtime heap resizing. Example: 512m, 1g, 2g');
-			html += tipField(id, 'heapMax', '-Xmx', s.heapMax, '2g', 2, 'Maximum heap size. JVM will not exceed this. For SIP engines, 1-4G is typical. Too large increases GC pause times; too small causes OutOfMemoryError under load.');
-			html += tipField(id, 'metaspaceSize', 'Metaspace', s.metaspaceSize, '256m', 2, 'Initial Metaspace size for class metadata. Metaspace replaced PermGen in Java 8+. Setting this avoids early GC cycles as classes load at startup.');
-			html += tipField(id, 'maxMetaspaceSize', 'Max Meta', s.maxMetaspaceSize, '512m', 2, 'Maximum Metaspace size. Caps memory used for class metadata. If unset, Metaspace grows without bound. Set this to prevent runaway class loading from consuming all native memory.');
-			html += selectField(id, 'gcCollector', 'GC', s.gcCollector, gcCollectors, 2);
-			html += tipField(id, 'maxGcPauseMillis', 'GC Pause ms', s.maxGcPauseMillis, '200', 2, 'Target maximum GC pause time in milliseconds (-XX:MaxGCPauseMillis). The GC collector will try to keep pauses below this target. Lower values reduce latency spikes but may reduce throughput. Only applies to G1 and ZGC.');
-			html += '</div>';
-
-			// Flags row
-			html += '<div class="row mt-2">';
-			html += tipCb(id, '-server', 'Server Mode', s.flags, 'Run the JVM in server mode (-server). Enables aggressive optimizations: longer startup time, faster steady-state performance. Always recommended for production OCCAS servers.');
-			html += tipCb(id, '-XX:+UseCompressedOops', 'CompressedOops', s.flags, 'Use compressed object pointers in 64-bit JVMs. Reduces memory footprint by ~30% for heaps under 32GB. Enabled by default in most JVMs — only disable if heap exceeds 32GB.');
-			html += tipCb(id, '-XX:+HeapDumpOnOutOfMemoryError', 'HeapDump OOM', s.flags, 'Automatically dump the heap to a file when an OutOfMemoryError occurs. Essential for post-mortem analysis. The dump file can be large (equal to heap size).');
-			html += tipCb(id, '-XX:+UseStringDeduplication', 'StringDedup', s.flags, 'Deduplicate identical String objects in memory during GC. Can significantly reduce heap usage in SIP apps where many identical header values exist (e.g., Via, Contact). Only works with G1 GC.');
-			html += tipCb(id, '-XX:+DisableExplicitGC', 'DisableExplicitGC', s.flags, 'Ignore calls to System.gc(). Prevents application or library code from triggering full GC pauses. Recommended unless you have specific RMI distributed GC requirements.');
-			html += tipCb(id, '-Djava.security.egd=file:/dev/./urandom', 'Fast SecureRandom (urandom)', s.flags, 'Seed SecureRandom from the non-blocking /dev/urandom instead of /dev/random. Eliminates startup and TLS-handshake stalls caused by entropy starvation under load — a meaningful throughput win for SIP over TLS. The /./ is the standard JDK workaround: file:/dev/urandom is silently ignored (falls back to blocking /dev/random), while file:/dev/./urandom reads non-blocking. Restart-required.');
-			html += tipCb(id, '-XX:+ZGenerational', 'ZGC Generational (JDK 21)', s.flags, 'JDK 21/22 ONLY. Opts ZGC into its generational mode. On JDK 21 plain -XX:+UseZGC selects the legacy non-generational collector — this flag is required to get Generational ZGC. It became the default in JDK 23 and is REMOVED in JDK 24, so do not carry it forward past JDK 22. Use only with the ZGC collector selected above.');
-			html += tipCb(id, '-XX:+AlwaysPreTouch', 'AlwaysPreTouch', s.flags, 'Page in (touch) every heap page at startup instead of on first use, so the cost is paid once at boot rather than as latency spikes during calls. Pairs with -Xms = -Xmx; together they also disable ZGC runtime memory uncommit. Slightly slower startup, steadier pause times. Recommended for low-latency SIP nodes.');
-			html += '</div>';
-
-			// Java home + additional
-			html += '<div class="row mt-2">';
-			html += tipField(id, 'javaHome', 'Java Home', s.javaHome, '/path/to/jdk', 5, 'Path to the JDK installation used to start this server. Must be a valid JDK (not JRE) directory. Leave empty to use the domain default from setDomainEnv.sh.');
-			html += '<div class="col-md-7 field-group"><label data-toggle="tooltip" title="Any additional JVM flags not covered by the fields above. These are appended verbatim to the server start arguments. Example: -Djava.net.preferIPv4Stack=true -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2">Additional Args</label>';
-			html += '<input type="text" class="form-control form-control-sm mono" id="' + id + '-additionalArgs" value="' + (s.additionalArgs || '') + '"></div>';
-			html += '</div>';
-
-			// Raw collapse
-			html += '<div class="collapse mt-2" id="jvm-raw-' + id + '"><div class="mono" style="background:#f8f9fa;padding:6px;border-radius:3px;word-break:break-all;color:#666;font-size:12px">' + (s.rawArguments || '(empty)') + '</div></div>';
-			html += '</div></div>';
-			return html;
-		}
-
-		function saveJvm(serverName, id) {
-			var data = {
-				heapInitial: v(id + '-heapInitial'), heapMax: v(id + '-heapMax'),
-				metaspaceSize: v(id + '-metaspaceSize'), maxMetaspaceSize: v(id + '-maxMetaspaceSize'),
-				maxGcPauseMillis: v(id + '-maxGcPauseMillis'),
-				parallelGcThreads: v(id + '-parallelGcThreads') || '',
-				concGcThreads: v(id + '-concGcThreads') || '',
-				gcCollector: v(id + '-gcCollector'), javaHome: v(id + '-javaHome'),
-				additionalArgs: v(id + '-additionalArgs'), flags: {}
-			};
-			$('#jvm-' + id + ' .jvm-flag').each(function () { data.flags[$(this).data('flag')] = $(this).is(':checked'); });
-			showStatus('info', 'Saving JVM settings for ' + serverName + '...');
-			$.ajax({ url: 'api/v1/jvm/' + encodeURIComponent(serverName), method: 'PUT',
-				contentType: 'application/json', data: JSON.stringify(data), dataType: 'json',
-				success: function () { showStatus('success', serverName + ' JVM saved. Restart via NM for effect.'); loadJvmSettings(); },
-				error: function (xhr) { showStatus('danger', 'JVM save failed: ' + parseError(xhr)); }
-			});
+		// Apply implies save, so what you see is what lands on the nodes.
+		function jvmApply() {
+			showStatus('info', 'Saving and applying to assigned nodes...');
+			$.ajax({
+				url: 'api/v1/jvm/profiles', method: 'PUT', contentType: 'application/json',
+				data: JSON.stringify({ profiles: jvm.profiles, assignments: jvm.assignments }), dataType: 'json'
+			}).done(function () {
+				$.ajax({ url: 'api/v1/jvm/apply', method: 'POST', dataType: 'json' })
+					.done(function (res) {
+						var applied = res.applied || [];
+						var ok = applied.filter(function (r) { return r.ok; }).length;
+						var bad = applied.filter(function (r) { return !r.ok; });
+						var msg = 'Applied to ' + ok + ' node(s). Restart the engine tier to activate.';
+						if (bad.length) msg += ' Failed: ' + bad.map(function (r) { return r.server + ' (' + r.error + ')'; }).join(', ');
+						showStatus(bad.length ? 'warning' : 'success', msg);
+					})
+					.fail(function (xhr) { showStatus('danger', 'Apply failed: ' + parseError(xhr)); });
+			}).fail(function (xhr) { showStatus('danger', 'Apply failed (save step): ' + parseError(xhr)); });
 		}
 
 		// ================================================================
@@ -887,28 +1373,28 @@
 		}
 
 		// ================================================================
-		// "Recommended" presets — pre-fill only; operator reviews and Saves
+		// "Recommended" presets — mutate the SELECTED profile; operator Saves/Applies
 		// ================================================================
 		function recommendJvm() {
-			$('#jvm-container input[id$="-heapMax"]').each(function () {
-				var max = $(this).val();
-				if (!max) return;
-				var base = this.id.substring(0, this.id.length - '-heapMax'.length);
-				$('#' + base + '-heapInitial').val(max); // -Xms = -Xmx
-			});
-			showStatus('warning', 'Filled -Xms = -Xmx on each server. Review, then Save each server. (Set Max Heap first on any server still blank.)');
+			if (jvm.sel < 0 || !jvm.profiles[jvm.sel]) { showStatus('danger', 'Select or create a profile first.'); return; }
+			var p = jvm.profiles[jvm.sel], st = parseArgs(p.arguments);
+			if (!st.scalars.heapMax) { showStatus('danger', 'Set Max Heap (-Xmx) on this profile first.'); return; }
+			st.scalars.heapInitial = st.scalars.heapMax; // -Xms = -Xmx
+			p.arguments = buildArgs(p.arguments, st);
+			jvmRefreshEditor();
+			showStatus('warning', 'Set -Xms = -Xmx on profile "' + p.name + '". Save or Apply when ready.');
 		}
 
 		function recommendJvmZgc() {
-			$('#jvm-container .server-card').each(function () {
-				var id = this.id.substring('jvm-'.length);
-				$('#' + id + '-gcCollector').val('-XX:+UseZGC');
-				$(this).find('.jvm-flag[data-flag="-XX:+ZGenerational"]').prop('checked', true);
-				$(this).find('.jvm-flag[data-flag="-XX:+AlwaysPreTouch"]').prop('checked', true);
-				var hm = $('#' + id + '-heapMax').val();
-				if (hm) $('#' + id + '-heapInitial').val(hm); // -Xms = -Xmx
-			});
-			showStatus('warning', 'Filled low-latency ZGC preset (ZGC + Generational + AlwaysPreTouch + -Xms=-Xmx) on each server — JDK 21/22 only. Review, then Save each server.');
+			if (jvm.sel < 0 || !jvm.profiles[jvm.sel]) { showStatus('danger', 'Select or create a profile first.'); return; }
+			var p = jvm.profiles[jvm.sel], st = parseArgs(p.arguments);
+			st.gc = '-XX:+UseZGC';
+			st.flags['-XX:+ZGenerational'] = true;
+			st.flags['-XX:+AlwaysPreTouch'] = true;
+			if (st.scalars.heapMax) st.scalars.heapInitial = st.scalars.heapMax; // -Xms = -Xmx
+			p.arguments = buildArgs(p.arguments, st);
+			jvmRefreshEditor();
+			showStatus('warning', 'Applied low-latency ZGC preset to profile "' + p.name + '" (JDK 21/22 only). Save or Apply when ready.');
 		}
 
 		// ================================================================
@@ -1055,20 +1541,239 @@
 		}
 
 		// ================================================================
+		// Coherence cluster networking (unicast/multicast, address, port).
+		// ================================================================
+		function loadCoherence() {
+			$('#coherence-container').html('<span class="text-muted">Loading...</span>');
+			$.getJSON('api/v1/coherence', function (data) {
+				if (!data || !data.length) {
+					$('#coherence-container').html('<div class="info-box">No Coherence cluster system resources are configured in this domain.</div>');
+					return;
+				}
+				var html = '';
+				$.each(data, function (i, r) { html += renderCoherenceResource(r, i); });
+				$('#coherence-container').html(html);
+			}).fail(function (xhr) {
+				$('#coherence-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		function renderCoherenceResource(r, i) {
+			var id = 'coh-' + esc(r.name);
+			var html = '<div class="card mb-2"><div class="card-header py-2 d-flex justify-content-between align-items-center">';
+			html += '<strong>' + he(r.name) + '</strong>';
+			html += '<button class="btn btn-sm btn-outline-primary" onclick="saveCoherence(\'' + esc(r.name) + '\',\'' + id + '\')">Save</button></div>';
+			if (r.error || r.found === false) {
+				html += '<div class="card-body py-2 text-muted" style="font-size:12px">' + he(r.error || 'No cluster params available for this resource.') + '</div></div>';
+				return html;
+			}
+			html += '<div class="card-body py-2">';
+			// Clustering mode + TTL
+			html += '<div class="row">';
+			html += cohSelect(id, 'ClusteringMode', 'Clustering Mode', r.ClusteringMode, [{ value: 'unicast', label: 'unicast' }, { value: 'multicast', label: 'multicast' }], 3, 'How members discover each other: unicast (well-known addresses, routable) or multicast (single LAN segment).');
+			html += cohField(id, 'TimeToLive', 'Multicast TTL', r.TimeToLive, '1', 3, 'Multicast packet hop limit (-). 0 = same host, 1 = same subnet. Only used in multicast mode.');
+			html += cohField(id, 'ClusterListenPort', 'Cluster Listen Port', r.ClusterListenPort, '', 3, 'The base cluster port members communicate on.');
+			html += '</div>';
+			// Unicast
+			html += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Unicast</div><div class="row">';
+			html += cohField(id, 'UnicastListenAddress', 'Listen Address', r.UnicastListenAddress, '', 4, 'Address this member binds for unicast cluster traffic. Blank = all/auto.');
+			html += cohField(id, 'UnicastListenPort', 'Listen Port', r.UnicastListenPort, '', 3, 'Port for unicast cluster traffic.');
+			html += cohField(id, 'UnicastPortAutoAdjust', 'Port Auto-Adjust', r.UnicastPortAutoAdjust, '', 3, 'If the listen port is taken, try the next ones automatically.');
+			html += '</div>';
+			// Multicast
+			html += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Multicast</div><div class="row">';
+			html += cohField(id, 'MulticastListenAddress', 'Listen Address', r.MulticastListenAddress, '', 4, 'Multicast group address (e.g. 231.x.x.x). Only used in multicast mode.');
+			html += cohField(id, 'MulticastListenPort', 'Listen Port', r.MulticastListenPort, '', 3, 'Multicast group port. Only used in multicast mode.');
+			html += cohField(id, 'SecurityFrameworkEnabled', 'Security Framework', r.SecurityFrameworkEnabled, '', 3, 'Whether the WebLogic security framework guards cluster membership.');
+			html += '</div>';
+			// WKA (read-only)
+			if (r.wellKnownAddresses && r.wellKnownAddresses.length) {
+				html += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Well-Known Addresses (read-only)</div>';
+				html += '<table class="table table-sm mb-0" style="font-size:12px;max-width:360px"><tbody>';
+				$.each(r.wellKnownAddresses, function (j, w) { html += '<tr><td class="mono">' + he(w.address) + '</td><td class="mono">' + he(w.port) + '</td></tr>'; });
+				html += '</tbody></table>';
+			}
+			html += '</div></div>';
+			return html;
+		}
+
+		function cohField(id, name, label, value, ph, cols, tip) {
+			return '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label>'
+				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + name + '" value="' + he(value) + '" placeholder="' + he(ph) + '"></div>';
+		}
+		function cohSelect(id, name, label, value, opts, cols, tip) {
+			var h = '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label><select class="form-control form-control-sm" id="' + id + '-' + name + '">';
+			$.each(opts, function (i, o) { h += '<option value="' + he(o.value) + '"' + (String(o.value) === String(value) ? ' selected' : '') + '>' + he(o.label) + '</option>'; });
+			return h + '</select></div>';
+		}
+
+		function saveCoherence(name, id) {
+			var fields = ['ClusteringMode', 'TimeToLive', 'ClusterListenPort', 'UnicastListenAddress', 'UnicastListenPort', 'UnicastPortAutoAdjust', 'MulticastListenAddress', 'MulticastListenPort', 'SecurityFrameworkEnabled'];
+			var data = {};
+			fields.forEach(function (f) { var el = $('#' + id + '-' + f); if (el.length) data[f] = el.val(); });
+			showStatus('info', 'Saving Coherence config for ' + name + '...');
+			$.ajax({
+				url: 'api/v1/coherence/' + encodeURIComponent(name), method: 'PUT', contentType: 'application/json',
+				data: JSON.stringify(data), dataType: 'json',
+				success: function () { showStatus('success', name + ' Coherence config saved. Restart the engine tier to apply.'); loadCoherence(); },
+				error: function (xhr) { showStatus('danger', 'Save failed: ' + parseError(xhr)); }
+			});
+		}
+
+		// ================================================================
+		// Kernel Parameters (read-only). Metadata (label/category/tip/SIP flag)
+		// is keyed by the reading name; the node MBean only returns name->value.
+		// src: 'readings' (default) or 'limits'. flag(val) -> short warning or null.
+		// ================================================================
+		var KERNEL_META = [
+			{ cat: 'Network', key: 'net.core.somaxconn', label: 'somaxconn', tip: 'Max queued connections per listen socket. Low values drop bursts of new SIP-over-TCP/TLS connections.', flag: function (v) { return num(v) >= 0 && num(v) < 1024 ? 'low for high accept rates' : null; } },
+			{ cat: 'Network', key: 'net.core.netdev_max_backlog', label: 'netdev_max_backlog', tip: 'Packets queued on the NIC ingress before the kernel processes them. Raise for high packet rates.' },
+			{ cat: 'Network', key: 'net.core.rmem_max', label: 'rmem_max', tip: 'Max socket receive buffer the app can request. UDP SIP under load needs headroom.' },
+			{ cat: 'Network', key: 'net.core.wmem_max', label: 'wmem_max', tip: 'Max socket send buffer the app can request.' },
+			{ cat: 'Network', key: 'net.core.rmem_default', label: 'rmem_default', tip: 'Default socket receive buffer.' },
+			{ cat: 'Network', key: 'net.core.wmem_default', label: 'wmem_default', tip: 'Default socket send buffer.' },
+			{ cat: 'Network', key: 'net.ipv4.tcp_max_syn_backlog', label: 'tcp_max_syn_backlog', tip: 'Half-open (SYN) connection queue. Raise for connection bursts.' },
+			{ cat: 'Network', key: 'net.ipv4.tcp_fin_timeout', label: 'tcp_fin_timeout', tip: 'Seconds a socket stays in FIN-WAIT-2. Lower frees ephemeral ports faster.' },
+			{ cat: 'Network', key: 'net.ipv4.tcp_tw_reuse', label: 'tcp_tw_reuse', tip: 'Reuse TIME-WAIT sockets for new outbound connections. Helps high outbound churn.' },
+			{ cat: 'Network', key: 'net.ipv4.ip_local_port_range', label: 'ip_local_port_range', tip: 'Ephemeral port range for outbound connections. Widen if you make many.' },
+			{ cat: 'Network', key: 'net.ipv4.tcp_rmem', label: 'tcp_rmem (min/def/max)', tip: 'TCP receive buffer autotuning triplet.' },
+			{ cat: 'Network', key: 'net.ipv4.tcp_wmem', label: 'tcp_wmem (min/def/max)', tip: 'TCP send buffer autotuning triplet.' },
+			{ cat: 'Network', key: 'net.ipv4.udp_mem', label: 'udp_mem (low/pressure/max)', tip: 'System-wide UDP memory pages. Critical for UDP SIP at high CPS.' },
+			{ cat: 'Network', key: 'net.ipv4.udp_rmem_min', label: 'udp_rmem_min', tip: 'Guaranteed UDP receive buffer floor per socket.' },
+			{ cat: 'Network', key: 'net.ipv4.udp_wmem_min', label: 'udp_wmem_min', tip: 'Guaranteed UDP send buffer floor per socket.' },
+			{ cat: 'Network', key: 'net.ipv4.tcp_keepalive_time', label: 'tcp_keepalive_time', tip: 'Idle seconds before TCP keepalive probes start.' },
+			{ cat: 'Network', key: 'net.netfilter.nf_conntrack_max', label: 'nf_conntrack_max', tip: 'Connection-tracking table size. If conntrack is loaded it can throttle SIP — many SIP deployments disable it.', flag: function (v) { return (v && v !== 'n/a') ? 'conntrack active — often disabled for SIP' : null; } },
+			{ cat: 'Network', key: 'net.netfilter.nf_conntrack_count', label: 'nf_conntrack_count', tip: 'Current tracked connections (vs max above).' },
+			{ cat: 'Files & Limits', key: 'fs.file-max', label: 'fs.file-max', tip: 'System-wide max open file handles.' },
+			{ cat: 'Files & Limits', key: 'fs.file-nr', label: 'fs.file-nr (used/—/max)', tip: 'Currently allocated file handles vs the system max.' },
+			{ cat: 'Files & Limits', key: 'fs.nr_open', label: 'fs.nr_open', tip: 'Per-process ceiling on file descriptors (upper bound for nofile).' },
+			{ cat: 'Files & Limits', key: 'Max open files', src: 'limits', label: 'ulimit nofile (soft/hard)', tip: 'This server process FD limit. Each socket is an FD — high-CPS SIP needs 65536+.', flag: function (v) { return softUnder(v, 16384) ? 'low — raise nofile toward 65536 for SIP' : null; } },
+			{ cat: 'Files & Limits', key: 'Max processes', src: 'limits', label: 'ulimit nproc (soft/hard)', tip: 'Process/thread limit for this user.' },
+			{ cat: 'Files & Limits', key: 'Max locked memory', src: 'limits', label: 'ulimit memlock (soft/hard)', tip: 'Locked-memory limit (matters if you use large/huge pages).' },
+			{ cat: 'VM', key: 'vm.swappiness', label: 'vm.swappiness', tip: 'How aggressively the kernel swaps. Low values favor latency for a SIP engine.', flag: function (v) { return num(v) > 10 ? 'high — low values favor latency' : null; } },
+			{ cat: 'VM', key: 'vm.max_map_count', label: 'vm.max_map_count', tip: 'Max memory-map areas per process.' },
+			{ cat: 'VM', key: 'vm.overcommit_memory', label: 'vm.overcommit_memory', tip: 'Memory overcommit policy (0 heuristic, 1 always, 2 strict).' },
+			{ cat: 'CPU & Memory', key: 'transparent_hugepage', label: 'transparent_hugepage', tip: 'THP can cause latency spikes from background compaction; many low-latency stacks set madvise or never.', flag: function (v) { return (v && v.indexOf('[always]') >= 0) ? 'THP=always — consider madvise/never for latency' : null; } },
+			{ cat: 'CPU & Memory', key: 'cpu_scaling_governor', label: 'cpu governor', tip: 'CPU frequency governor. "performance" avoids latency from frequency ramp-up.', flag: function (v) { return (v && v !== 'n/a' && v !== 'performance') ? 'not "performance" — can add latency' : null; } },
+
+			// Cumulative since-boot counters — the "are we dropping SIP packets" signals (no sudo).
+			{ cat: 'Network Counters (since boot)', key: 'Udp.RcvbufErrors', src: 'netCounters', label: 'UDP RcvbufErrors', tip: 'UDP datagrams dropped because the socket receive buffer was full — direct SIP-over-UDP packet loss. Non-zero → raise rmem / socket buffers.', flag: nonzero('UDP receive-buffer drops') },
+			{ cat: 'Network Counters (since boot)', key: 'Udp.InErrors', src: 'netCounters', label: 'UDP InErrors', tip: 'UDP receive errors (buffer overflows + checksum errors).', flag: nonzero('UDP errors') },
+			{ cat: 'Network Counters (since boot)', key: 'Udp.NoPorts', src: 'netCounters', label: 'UDP NoPorts', tip: 'UDP datagrams to a port with no listener (often benign).' },
+			{ cat: 'Network Counters (since boot)', key: 'Udp.InDatagrams', src: 'netCounters', label: 'UDP InDatagrams', tip: 'Total UDP datagrams received.' },
+			{ cat: 'Network Counters (since boot)', key: 'TcpExt.ListenOverflows', src: 'netCounters', label: 'TCP ListenOverflows', tip: 'Connections dropped because the accept queue was full — raise somaxconn / the app backlog.', flag: nonzero('accept-queue overflow') },
+			{ cat: 'Network Counters (since boot)', key: 'TcpExt.ListenDrops', src: 'netCounters', label: 'TCP ListenDrops', tip: 'SYNs dropped at the listen socket.', flag: nonzero('listen drops') },
+			{ cat: 'Network Counters (since boot)', key: 'TcpExt.SyncookiesSent', src: 'netCounters', label: 'TCP SyncookiesSent', tip: 'SYN cookies emitted — the SYN backlog overflowed. Raise tcp_max_syn_backlog.', flag: nonzero('SYN backlog overflow') },
+			{ cat: 'Network Counters (since boot)', key: 'Tcp.RetransSegs', src: 'netCounters', label: 'TCP RetransSegs', tip: 'Retransmitted TCP segments (network loss / latency indicator).' },
+			{ cat: 'Network Counters (since boot)', key: 'Tcp.CurrEstab', src: 'netCounters', label: 'TCP CurrEstab', tip: 'Currently established TCP connections.' },
+			{ cat: 'Network Counters (since boot)', key: 'TCP.inuse', src: 'sockstat', label: 'TCP sockets in use', tip: 'Open TCP sockets (/proc/net/sockstat).' },
+			{ cat: 'Network Counters (since boot)', key: 'TCP.tw', src: 'sockstat', label: 'TCP TIME-WAIT', tip: 'Sockets in TIME-WAIT — high churn pressures ephemeral ports.' },
+			{ cat: 'Network Counters (since boot)', key: 'UDP.inuse', src: 'sockstat', label: 'UDP sockets in use', tip: 'Open UDP sockets.' }
+		];
+
+		function num(v) { var n = parseInt(v, 10); return isNaN(n) ? -1 : n; }
+		function softUnder(v, threshold) { if (!v || v === 'n/a') return false; var s = parseInt(String(v).split('/')[0].trim(), 10); return !isNaN(s) && s < threshold; }
+		function nonzero(msg) { return function (v) { return num(v) > 0 ? msg : null; }; }
+
+		function loadKernel() {
+			$('#kernel-container').html('<span class="text-muted">Loading...</span>');
+			$.getJSON('api/v1/kernel', function (rows) {
+				if (!rows || !rows.length) {
+					$('#kernel-container').html('<div class="info-box">No KernelProbe MBeans reachable. The AdminServer should always appear; engine nodes show up once the BLADE shared library is deployed there and federates to the domain.</div>');
+					return;
+				}
+				var servers = rows.map(function (r) { return r.server || '?'; });
+				var html = '<table class="table table-compact table-sm mb-0" style="font-size:12px"><thead class="thead-light"><tr><th style="min-width:200px">Parameter</th>';
+				servers.forEach(function (s) { html += '<th class="mono">' + he(s) + '</th>'; });
+				html += '</tr></thead><tbody>';
+				var lastCat = null;
+				KERNEL_META.forEach(function (m) {
+					if (m.cat !== lastCat) {
+						html += '<tr><td colspan="' + (servers.length + 1) + '" style="font-weight:600;color:#555;background:#f8f9fa">' + he(m.cat) + '</td></tr>';
+						lastCat = m.cat;
+					}
+					html += '<tr><td data-toggle="tooltip" title="' + he(m.tip) + '">' + he(m.label) + ' <span class="text-muted mono" style="font-size:10px">' + he(m.key) + '</span></td>';
+					rows.forEach(function (r) {
+						var bag = r[m.src || 'readings'] || {};
+						var val = bag[m.key];
+						if (val == null) val = '—';
+						var warn = (m.flag && val !== 'n/a' && val !== '—') ? m.flag(val) : null;
+						html += '<td class="mono">' + he(val);
+						if (warn) html += ' <span class="badge badge-warning" data-toggle="tooltip" title="' + he(warn) + '">&#9650;</span>';
+						html += '</td>';
+					});
+					html += '</tr>';
+				});
+				html += '</tbody></table>';
+
+				// Per-NIC drop/error counters (variable interfaces per node) — separate block.
+				var ifBlock = '';
+				rows.forEach(function (r) {
+					if (!r.interfaces || !r.interfaces.length) return;
+					ifBlock += '<div style="font-size:12px;margin-bottom:2px"><span class="mono" style="font-weight:600">' + he(r.server) + '</span>: ';
+					r.interfaces.forEach(function (ifc) {
+						var bad = num(ifc.rx_dropped) > 0 || num(ifc.rx_errors) > 0 || num(ifc.rx_missed_errors) > 0 || num(ifc.rx_fifo_errors) > 0 || num(ifc.tx_dropped) > 0;
+						ifBlock += '<span class="mono" style="margin-right:12px">' + he(ifc.name)
+							+ ' rx_drop=' + he(ifc.rx_dropped) + ' rx_err=' + he(ifc.rx_errors) + ' rx_miss=' + he(ifc.rx_missed_errors) + ' tx_drop=' + he(ifc.tx_dropped);
+						if (bad) ifBlock += ' <span class="badge badge-warning" data-toggle="tooltip" title="non-zero NIC drops/errors — check ring buffers / IRQ affinity (Tier 2)">&#9650;</span>';
+						ifBlock += '</span>';
+					});
+					ifBlock += '</div>';
+				});
+				if (ifBlock) html += '<div class="mt-2 mb-1" style="font-size:12px;font-weight:600;color:#555">Interface drop counters</div>' + ifBlock;
+
+				$('#kernel-container').html(html);
+				$('body').tooltip({ selector: '[data-toggle="tooltip"]', html: true });
+			}).fail(function (xhr) {
+				$('#kernel-container').html('<span class="text-danger">Unable to load. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		// ================================================================
 		// Helpers
 		// ================================================================
 		function field(id, name, label, value, ph, cols) {
 			return '<div class="col-md-' + cols + ' field-group"><label>' + label + '</label>'
-				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + name + '" value="' + (value || '') + '" placeholder="' + ph + '"></div>';
+				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + name + '" value="' + he(value) + '" placeholder="' + he(ph) + '"></div>';
 		}
 		function tipField(id, name, label, value, ph, cols, tip) {
-			return '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + tip + '">' + label + '</label>'
-				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + name + '" value="' + (value || '') + '" placeholder="' + ph + '"></div>';
+			return '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label>'
+				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + name + '" value="' + he(value) + '" placeholder="' + he(ph) + '"></div>';
 		}
 		function selectField(id, name, label, value, opts, cols) {
 			var h = '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="Garbage collection algorithm. G1 is the recommended default for OCCAS. ZGC offers lower pause times but higher CPU overhead. Parallel GC maximizes throughput at the cost of longer pauses.">' + label + '</label><select class="form-control form-control-sm" id="' + id + '-' + name + '">';
 			$.each(opts, function (i, o) { h += '<option value="' + o.value + '"' + (o.value === value ? ' selected' : '') + '>' + o.label + '</option>'; });
 			return h + '</select></div>';
+		}
+		// A key=value enum property (dropdown). Value is the option string; "" = unset.
+		function enumField(id, name, label, value, opts, cols, tip) {
+			var h = '<div class="col-md-' + cols + ' field-group"><label data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label><select class="form-control form-control-sm" id="' + id + '-' + name + '">';
+			$.each(opts, function (i, o) { h += '<option value="' + he(o.value) + '"' + (o.value === value ? ' selected' : '') + '>' + he(o.label) + '</option>'; });
+			return h + '</select></div>';
+		}
+		// A key=true|false property rendered as a checkbox (default-aware).
+		function boolField(id, name, label, checked, cols, tip) {
+			var cid = id + '-' + name;
+			return '<div class="col-md-' + cols + ' field-group"><label style="visibility:hidden">.</label>'
+				+ '<div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input jvm-bool" id="' + cid + '" data-name="' + name + '"' + (checked ? ' checked' : '') + '>'
+				+ '<label class="custom-control-label" for="' + cid + '" style="font-size:12px" data-toggle="tooltip" title="' + he(tip) + '">' + label + '</label></div></div>';
+		}
+		// Render a scalar param by its type: bool -> checkbox, enum -> select, else text field.
+		function renderScalar(id, s, st) {
+			if (s.type === 'bool') return boolField(id, s.name, s.label, !!st.scalars[s.name], s.cols, s.tip);
+			if (s.type === 'enum') return enumField(id, s.name, s.label, st.scalars[s.name] || '', s.options, s.cols, s.tip);
+			return tipField(id, s.name, s.label, st.scalars[s.name], s.ph, s.cols, s.tip);
+		}
+		// A JFR sub-option field (text or checkbox), id-keyed by its `name`.
+		function renderJfrField(id, f, val) {
+			if (f.type === 'bool') {
+				var cid = id + '-' + f.name;
+				return '<div class="col-md-' + f.cols + ' field-group"><label style="visibility:hidden">.</label><div class="custom-control custom-checkbox">'
+					+ '<input type="checkbox" class="custom-control-input jfr-bool" id="' + cid + '" data-name="' + f.name + '"' + (val ? ' checked' : '') + '>'
+					+ '<label class="custom-control-label" for="' + cid + '" style="font-size:12px" data-toggle="tooltip" title="' + he(f.tip) + '">' + he(f.label) + '</label></div></div>';
+			}
+			return '<div class="col-md-' + f.cols + ' field-group"><label data-toggle="tooltip" title="' + he(f.tip) + '">' + he(f.label) + '</label>'
+				+ '<input type="text" class="form-control form-control-sm mono" id="' + id + '-' + f.name + '" value="' + he(val) + '" placeholder="' + he(f.ph) + '"></div>';
 		}
 		function cb(id, flag, label, flags) {
 			var cbId = id + '-flag-' + flag.replace(/[^a-zA-Z0-9]/g, '_');

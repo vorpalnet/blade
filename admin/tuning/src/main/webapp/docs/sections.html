@@ -75,6 +75,7 @@
 						<tr><td>GC algorithm</td><td><code>-XX:+UseG1GC</code> for most</td><td>Picks the GC strategy. G1 for low-pause requirements; ZGC for very large heaps.</td></tr>
 						<tr><td>GC log</td><td><code>-Xlog:gc*:file=...</code></td><td>Where GC events get written; essential for any sizing investigation.</td></tr>
 					</table>
+					<p>Each server card has two tabs. <strong>Settings</strong> is the structured form — heap, GC, assertions, JIT, and the modeled WebLogic/OCCAS <code>-D</code> properties, each with a hover description; saving edits only the changed fields and leaves every other argument untouched. <strong>Arguments</strong> shows the raw <code>ServerStart.Arguments</code> string for hand editing, saved verbatim. Both write the same <code>ServerStart.Arguments</code> field that Node Manager uses to launch the server — including the AdminServer.</p>
 
 					<h2>SIP Timer</h2>
 					<p>The SIP timer table per RFC 3261 §A. Tuning these affects retransmission cadence and dialog teardown. <strong>Restart-required</strong> — the engine reads the timers once at startup (a static initializer in the transaction layer), so a change is persisted to <code>sipserver.xml</code> on activate but does not affect a running engine until that node restarts.</p>
@@ -97,18 +98,6 @@
 						<tr><td>Fair-share class</td><td>50</td><td>Relative scheduling weight when multiple work-managers compete.</td></tr>
 					</table>
 
-					<h2>Node Manager</h2>
-					<p>How the AdminServer talks to the per-host Node Manager for start/stop. <strong>Restart-required for listen port; debug toggle is runtime.</strong></p>
-					<dl class="vorpal-kv">
-						<dt>Listen address</dt>
-						<dd>The IP / hostname Node Manager listens on. Must match the AdminServer's NodeManager machine binding.</dd>
-						<dt>Listen port</dt>
-						<dd>Typically 5556 (SSL).</dd>
-						<dt>Debug</dt>
-						<dd>Verbose NodeManager logging; useful when start/stop sequences are misbehaving.</dd>
-						<dt>Log retention</dt>
-						<dd>How many historical NM logs to keep on disk.</dd>
-					</dl>
 
 					<h2>Cluster</h2>
 					<p>Cluster membership view (mostly read-only) plus the heartbeat knobs. <strong>Read-only members; heartbeat is runtime-tunable.</strong></p>
@@ -119,17 +108,6 @@
 						<dd>Unicast (preferred) or multicast. Unicast scales better and traverses routers; multicast needs a switched LAN.</dd>
 						<dt>Heartbeat interval</dt>
 						<dd>How often each member announces itself. Lower = faster failure detection but more network chatter.</dd>
-					</dl>
-
-					<h2>SSO</h2>
-					<p>Single-sign-on cookie configuration for the BLADE admin tier. <strong>Runtime-tunable.</strong></p>
-					<dl class="vorpal-kv">
-						<dt>Cookie name</dt>
-						<dd>Standard is <code>BLADEADMINSESSION</code>; every admin WAR shares this so a single login covers the whole admin tier.</dd>
-						<dt>Cookie path</dt>
-						<dd>Must be <code>/</code> for cross-WAR session sharing.</dd>
-						<dt>Cookie domain</dt>
-						<dd>Set only if the admin tier spans multiple subdomains.</dd>
 					</dl>
 
 					<h2>Server Tuning</h2>

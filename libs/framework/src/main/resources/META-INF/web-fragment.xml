@@ -7,6 +7,9 @@
     <listener>
         <listener-class>org.vorpal.blade.framework.v2.logging.LogReaderRegistrar</listener-class>
     </listener>
+    <listener>
+        <listener-class>org.vorpal.blade.framework.v3.probe.KernelProbeRegistrar</listener-class>
+    </listener>
 
     <!-- Cross-origin filter for REST endpoints. No-op until an operator sets
          -Dblade.cors.allowedOrigins=<origin>[,<origin>...]; then it grants
