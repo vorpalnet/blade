@@ -35,7 +35,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 ///   hit counts parsed into `{state, method, id, count}` records keyed for
 ///   the diagram overlay
 /// - `traces` — every captured routing trace (the shared trace format; see
-///   `RouteTrace` in libs/fsmar3), tagged with the engine it came from
+///   `RouteTrace` in libs/fsmar), tagged with the engine it came from
 /// - `capture&count=N` — arm trace capture for the next N calls **per
 ///   engine** (a cluster of 4 armed with 10 yields up to 40 traces)
 /// - `clear` — discard captured traces on every engine

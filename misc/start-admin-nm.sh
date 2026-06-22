@@ -29,7 +29,7 @@
   try:
       nmConnect('${NM_USER}', '${NM_PASSWORD}', '${NM_HOST}', '${NM_PORT}',
                 '${DOMAIN_NAME}', '${DOMAIN_HOME}', '${NM_TYPE}')
-      print('Connected to Node Manager at ${NM_HOST}:${NM_PORT}. Starting ${ADMIN_SERVER}...')
+  print('Connected to Node Manager at ${NM_HOST}:${NM_PORT}. Starting ${ADMIN_SERVER}...')
       nmStart('${ADMIN_SERVER}')
       print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
       nmDisconnect()

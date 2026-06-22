@@ -25,7 +25,7 @@ import org.vorpal.blade.framework.v3.configuration.Context;
 ///                    | 'matches' | 'contains' | 'insubnet' ) atom
 /// atom       := variable | number | string | bareword | boolean
 /// variable   := '${' name '}'
-/// string     := "'" any-chars-except-quote "'"
+/// string     := "'" ( "\\'" | any-char-except-quote )* "'"
 /// bareword   := non-operator non-whitespace characters
 /// boolean    := 'true' | 'false'
 /// ```
@@ -193,7 +193,22 @@ public class Expression implements Serializable {
 						cachedPattern = java.util.regex.Pattern.compile(rs, java.util.regex.Pattern.DOTALL);
 						cachedPatternSource = rs;
 					}
-					return cachedPattern.matcher(ls).matches();
+					// "Any instance" semantics: a value carrying the multi-value
+					// delimiter (a repeating header read by an allInstances
+					// selector) matches if ANY of its instances matches. An
+					// ordinary single value has no delimiter — one element,
+					// identical to a plain full-string match — so iRouter and
+					// every existing condition are unaffected.
+					if (!ls.contains(Context.MULTI_VALUE_DELIMITER)) {
+						return cachedPattern.matcher(ls).matches();
+					}
+					for (String element : ls.split(
+							java.util.regex.Pattern.quote(Context.MULTI_VALUE_DELIMITER), -1)) {
+						if (cachedPattern.matcher(element).matches()) {
+							return true;
+						}
+					}
+					return false;
 				} catch (java.util.regex.PatternSyntaxException e) {
 					// Malformed pattern: evaluate to false, never throw mid-routing.
 					return false;
@@ -421,16 +436,29 @@ public class Expression implements Serializable {
 				return new Variable(name);
 			}
 
-			// string literal: 'foo bar'
+			// string literal: 'foo bar'. \' is an escaped single quote so a
+			// literal can contain one (e.g. a display name like O'Brien). Only
+			// \' is special — \\, \d, \. and every other backslash pass through
+			// verbatim, so regex patterns on the right of `matches` are untouched.
 			if (match("'")) {
-				int start = pos;
-				while (pos < src.length() && src.charAt(pos) != '\'') pos++;
+				StringBuilder sb = new StringBuilder();
+				while (pos < src.length()) {
+					char c = src.charAt(pos);
+					if (c == '\\' && pos + 1 < src.length() && src.charAt(pos + 1) == '\'') {
+						sb.append('\'');
+						pos += 2;
+					} else if (c == '\'') {
+						break;
+					} else {
+						sb.append(c);
+						pos++;
+					}
+				}
 				if (pos >= src.length()) {
 					throw new IllegalArgumentException("unterminated string in: " + src);
 				}
-				String s = src.substring(start, pos);
-				pos++;
-				return new Literal(s);
+				pos++; // closing quote
+				return new Literal(sb.toString());
 			}
 
 			// number or bare word

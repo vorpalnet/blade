@@ -25,7 +25,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>crud-editor</finalName>
+		<finalName>blade-crud</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

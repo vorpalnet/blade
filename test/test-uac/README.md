@@ -186,7 +186,7 @@ template of its own.
 
 - [**test/test-uas**](../test-uas) — Test User Agent Server — the other half of the pair
 - [**libs/framework**](../../libs/framework) — BLADE framework (tester + CRUD engines)
-- [**admin/test-console**](../../admin/test-console) — cluster-wide run control and live dashboards
+- [**proto/test-console**](../../proto/test-console) — cluster-wide run control and live dashboards
 
 ## Deployment
 

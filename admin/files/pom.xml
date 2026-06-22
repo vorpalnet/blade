@@ -36,7 +36,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>files</finalName>
+		<finalName>blade-files</finalName>
 		<!-- Inherits the parent pom's maven-war-plugin packagingExcludes regex,
 		     which bundles ONLY vorpal-blade-library-framework.jar (FilesAPI and
 		     the SettingsManager call into framework classes that aren't in the

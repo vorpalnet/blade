@@ -31,7 +31,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>analytics-console</finalName>
+		<finalName>blade-analytics</finalName>
 		<!-- Inherits the parent pom's maven-war-plugin packagingExcludes regex,
 		     which excludes every JAR EXCEPT vorpal-blade-library-framework.
 		     The framework JAR carries the Analytics classes used by this admin

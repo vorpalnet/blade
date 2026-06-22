@@ -251,7 +251,7 @@ public class Settings<T> implements SettingsMXBean {
 
 			JsonNode jsonNode = NullNode.getInstance();
 
-			File domainFile = domain.toFile();
+			File domainFile = domainFile();
 			if (domainFile.exists()) {
 				useSampleConfig = false;
 				jsonNode = readConfigTree(domainFile, CONFIG_DOMAIN);
@@ -397,6 +397,14 @@ public class Settings<T> implements SettingsMXBean {
 	/// @param configType one of "domain", "cluster", "server" (for logging)
 	protected JsonNode readConfigTree(File file, String configType) throws IOException {
 		return objectMapper.readTree(file);
+	}
+
+	/// The domain-level config file [#reload] reads. Default is the standard
+	/// `<name>.json` ([#domain]); override to support a legacy-filename fallback
+	/// (e.g. FSMAR reading `fsmar.json`, else the legacy `fsmar2.json`). Cluster
+	/// and server overlays are not affected.
+	protected File domainFile() {
+		return domain.toFile();
 	}
 
 	public Path getPath(String configType) {

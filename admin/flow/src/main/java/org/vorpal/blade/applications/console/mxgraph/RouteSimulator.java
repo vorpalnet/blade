@@ -25,7 +25,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// (with its `when` and whether it fired), the values each hop extracted, and
 /// the final decision.
 ///
-/// **This mirrors `AppRouter.getNextApplication` in `libs/fsmar3` — that loop
+/// **This mirrors `AppRouter.getNextApplication` in `libs/fsmar` — that loop
 /// is the source of truth.** The hard semantics (selector extraction,
 /// `Expression` evaluation, `${}` route resolution, translation tables) run
 /// through the very same framework v3 classes the engine bundles; only the
@@ -34,7 +34,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// change this too.
 ///
 /// The output is the **shared trace format** also produced by the engine's
-/// opt-in capture (`RouteTrace` in `libs/fsmar3`) — the Flow editor animates
+/// opt-in capture (`RouteTrace` in `libs/fsmar`) — the Flow editor animates
 /// simulated and captured (replayed) calls through one code path. The only
 /// additions here are `problems[]` (simulator-side notes: a selector that
 /// wouldn't deserialize, the hop cap) and the absence of `callId`.

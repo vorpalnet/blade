@@ -192,7 +192,7 @@ Framework-level configuration management for Vorpal Blade v2. Handles core frame
 ### Core Framework
 - [libs/framework](../libs/framework) - Base framework components and interfaces
 - [libs/shared/bin](../libs/shared/bin) - Shared binary utilities and helper classes
-- [libs/fsmar](../libs/fsmar) - File system management and resource handling
+- [libs/fsmar](../../libs/fsmar) - FSMAR, the Finite State Machine Application Router
 
 ### Administrative Components
 - [admin/console](../admin/console) - Administrative console interface and management tools

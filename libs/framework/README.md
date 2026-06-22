@@ -154,7 +154,7 @@ Configure SLF4J-compatible loggers to take advantage of the framework's enhanced
 
 ### Shared Libraries
 - [libs/shared/bin](../shared/bin) - Shared binary utilities
-- [libs/fsmar](../fsmar) - Finite State Machine and Rules engine
+- [libs/fsmar](../fsmar) - FSMAR, the Finite State Machine Application Router
 
 ### Administrative Tools
 - [admin/console](../../admin/console) - Web-based administration console

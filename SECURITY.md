@@ -108,7 +108,6 @@ group and the constraint rejects everyone.
 
 | WAR | Why it's open |
 |---|---|
-| `admin/watcher` | Headless config auto-publish shim, no UI, deployed standalone |
 | `admin/redirect` | Default-app that 302s `/` → `/blade/portal` |
 | `admin/javadoc` | Public API documentation |
 
@@ -147,7 +146,7 @@ IdP's signed token and maps its group/role claim onto the four `AdminRole`s.
   - `JwtAuthFilter` — JAX-RS `ContainerRequestFilter`, the inbound counterpart
     to `BasicAuthFilter`. Installs a `JwtSecurityContext` on success.
   - `AdminRole`, `JwtIdentity`, `JwtSecurityContext`, `JwtAuthException`.
-- **Config app** — `admin/security` (context-root `blade/security`). Holds the
+- **Config app** — `proto/security` (context-root `blade/security`). Holds the
   `jwt` config section (`SecuritySettings`), edited in the Configurator like any
   other app, and publishes a live config supplier the filter reads.
 
@@ -267,7 +266,7 @@ Locally verifiable (CI / build box):
   signature, issuer, audience, expiry, claim→role mapping, string-vs-list roles,
   username-claim override, and rejection of wrong-issuer/wrong-audience/expired/
   foreign-signature/garbage tokens.
-- **Descriptors / build** — `admin/security` packages as a skinny WAR (only
+- **Descriptors / build** — `proto/security` packages as a skinny WAR (only
   `vorpal-blade-library-framework.jar` in `WEB-INF/lib`); the three hardened
   WARs and the admin EAR build.
 - **Anti-regression grep** — every admin WAR except `watcher`/`redirect`/

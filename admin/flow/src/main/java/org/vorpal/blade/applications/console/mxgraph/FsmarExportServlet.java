@@ -202,6 +202,10 @@ public class FsmarExportServlet extends HttpServlet {
 						if (egRoutes != null) {
 							egDef.set("routes", egRoutes);
 						}
+						// Retired/unknown egress fields (e.g. `description`, folded
+						// into Configuration.notes) ride the cell's extra — the
+						// no-silent-strip round-trip, mirrored on import.
+						mergeExtra(egDef, wrapper.getAttribute("extra"));
 						egressDefByName.put(gwLabel, egDef);
 						addPlacement(placements, gwLabel, mxCell);
 						break;

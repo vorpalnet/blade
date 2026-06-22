@@ -28,16 +28,15 @@
 # The chosen source is shown in parentheses next to "Platform:" in the build
 # header (e.g. "Platform: occas-8.3 ($MW_HOME)").
 #
-# EARs (profile-driven contents):
-#   When the active build-profiles/*.conf lists them, two tier EARs are built:
-#     ear     → admin/ear        → blade-admin.ear   (admin tier, AdminServer)
-#     cluster → services/cluster → blade-cluster.ear (services tier, cluster)
-#   Inside each EAR pom, every WAR is contributed by an ear-<name> Maven
-#   profile activated by !skip.<name> — the same flags this script derives
-#   from the conf — so each EAR contains exactly the apps the active build
-#   profile selected. The javadoc WAR rides the `javadocs` profile id: the
-#   admin EAR carries javadoc.war exactly when docs are generated, and
-#   assembles without it otherwise.
+# Admin EAR (profile-driven contents):
+#   When the active build-profiles/*.conf lists it, the admin tier EAR is built:
+#     ear → admin/ear → blade-admin.ear   (admin tier, AdminServer)
+#   Each admin WAR is contributed by an ear-<name> Maven profile activated by
+#   !skip.<name> — the same flags this script derives from the conf. The javadoc
+#   WAR rides the `javadocs` profile id: the admin EAR carries blade-javadoc.war
+#   when docs are generated, and assembles without it otherwise.
+#   The SERVICES tier has NO EAR — its WARs deploy individually (OCCAS 8.3 can't
+#   show an EAR's contents; deploy.sh loops the per-service WARs).
 #
 # Dist management:
 #   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/ into
@@ -59,7 +58,7 @@
 #   BLADE's source uses Java 23+ Markdown '///' doc comments (JEP 467), so docs
 #   are generated automatically (via the -Pjavadocs profile) whenever the build
 #   JDK is >= 23 — even though bytecode still targets Java 11 (--release). The
-#   resulting javadoc.war is copied to dist/<ver>-<build>/admin/. On an older
+#   resulting blade-javadoc.war is copied to dist/<ver>-<build>/admin/. On an older
 #   build JDK the docs are skipped with a warning; the build itself is fine.
 #   To skip generation deliberately (e.g. fast dev loops):
 #     ./build.sh --no-javadoc               # one-off
@@ -132,7 +131,7 @@ REVISION=$(grep '<revision>' "${SCRIPT_DIR}/pom.xml" | head -1 | sed 's/.*<revis
 # so a module that's discovered here but not listed in the active build-profiles/*.conf
 # will be excluded with -Dskip.<name>.
 discover_modules() {
-    for subdir in libs admin services test; do
+    for subdir in libs admin services test proto; do
         for dir in "${SCRIPT_DIR}/${subdir}"/*/; do
             local name=$(basename "$dir")
             # Skip always-built modules
@@ -200,6 +199,7 @@ dist_subdir_for() {
     case "$1" in
         admin/*)             echo "admin" ;;
         services/*|test/*)   echo "services" ;;  # test apps live with services
+        proto/*)             echo "proto" ;;     # incubator apps — built, never shipped
         libs/*)              echo "" ;;          # libraries at root
         *)                   echo "" ;;
     esac
@@ -289,18 +289,17 @@ write_deployment_manifest() {
         local name="$1" base="${1%.war}"
         case "$name" in
             blade-admin.ear)        echo "admin|AdminServer|Admin tier EAR — all admin apps in one deployable" ;;
-            portal.war)             echo "admin|AdminServer|Portal / launcher deck (context: /blade/portal)" ;;
+            blade-portal.war)       echo "admin|AdminServer|Portal / launcher deck (context: /blade/portal)" ;;
             blade-redirect.war)     echo "admin|AdminServer|Bare /blade 302 → /blade/portal/ (context: /)" ;;
-            api.war)                echo "admin|AdminServer|API explorer (context: /blade/api)" ;;
-            configurator.war)       echo "admin|AdminServer|Config editor (context: /blade/configurator)" ;;
-            flow.war)               echo "admin|AdminServer|FSMAR diagram editor (context: /blade/flow)" ;;
-            tuning.war)             echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /blade/tuning)" ;;
-            files.war)              echo "admin|AdminServer|Config file manager (context: /blade/files)" ;;
-            watcher.war)            echo "admin|AdminServer|Headless config auto-publish, standalone — not in blade-admin.ear (context: /blade/watcher)" ;;
-            logs.war)               echo "admin|AdminServer|Log viewer (context: /blade/logs)" ;;
-            javadoc.war)            echo "admin|AdminServer|Javadoc site (context: /blade/javadoc)" ;;
-            crud-editor.war)        echo "admin|AdminServer|CRUD editor (context: /blade/crud-editor)" ;;
-            analytics-console.war)  echo "admin|AdminServer|Analytics console (context: /blade/analytics)" ;;
+            blade-api.war)          echo "admin|AdminServer|API explorer (context: /blade/api)" ;;
+            blade-configurator.war) echo "admin|AdminServer|Config editor (context: /blade/configurator)" ;;
+            blade-flow.war)         echo "admin|AdminServer|FSMAR diagram editor (context: /blade/flow)" ;;
+            blade-tuning.war)       echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /blade/tuning)" ;;
+            blade-files.war)        echo "admin|AdminServer|Config file manager (context: /blade/files)" ;;
+            blade-logs.war)         echo "admin|AdminServer|Log viewer (context: /blade/logs)" ;;
+            blade-javadoc.war)      echo "admin|AdminServer|Javadoc site (context: /blade/javadoc)" ;;
+            blade-crud.war)         echo "admin|AdminServer|CRUD editor (context: /blade/crud-editor)" ;;
+            blade-analytics.war)    echo "admin|AdminServer|Analytics console (context: /blade/analytics)" ;;
             *)                      echo "admin|AdminServer|Admin app (context: /${base})" ;;
         esac
     }
@@ -309,7 +308,6 @@ write_deployment_manifest() {
     classify_services_war() {
         local name="$1" base="${1%.war}"
         case "$name" in
-            blade-cluster.ear) echo "service|cluster|Services tier EAR — all service WARs in one deployable" ;;
             test-*.war) echo "test|cluster|SIP test app (context: /${base})" ;;
             *)          echo "service|cluster|SIP service (context: /${base})" ;;
         esac
@@ -319,9 +317,7 @@ write_deployment_manifest() {
     classify_root_artifact() {
         case "$1" in
             vorpal-blade-library-fsmar.jar)
-                echo "fsmar|approuter/|SIP application router — v2 legacy (reboot engine tier)" ;;
-            vorpal-blade-library-fsmar3.jar)
-                echo "fsmar|approuter/|SIP application router — v3 (reboot engine tier)" ;;
+                echo "fsmar|approuter/|SIP application router (reboot engine tier)" ;;
             vorpal-blade-library-shared.war)
                 echo "shared-lib|admin+cluster|WebLogic shared library (3rd-party JARs)" ;;
             vorpal-blade-library-framework.jar)
@@ -616,16 +612,15 @@ fi
 ALL_MODULES=$(discover_modules)
 TOTAL_COUNT=$(echo "$ALL_MODULES" | wc -l | tr -d ' ')
 
-# --- One profile per invocation: a build is one Maven reactor, and the EAR
-#     contents are derived from that reactor's skip flags. Different profiles
-#     produce different EAR contents under the same blade-admin.ear /
-#     blade-cluster.ear names, so run them as separate builds (each gets its
-#     own dist/<ver>-<build>/ directory). ---
+# --- One profile per invocation: a build is one Maven reactor, and the admin
+#     EAR contents are derived from that reactor's skip flags. Different profiles
+#     produce different contents under the same blade-admin.ear name, so run them
+#     as separate builds (each gets its own dist/<ver>-<build>/ directory). ---
 if [ ${#PROFILES[@]} -gt 1 ]; then
     echo "Error: multiple profiles (${PROFILES[*]}) in one invocation are not supported."
-    echo "       Each build is one Maven reactor and produces one blade-admin.ear /"
-    echo "       blade-cluster.ear whose contents match that profile. Run one"
-    echo "       profile at a time — each lands in its own dist/<ver>-<build>/."
+    echo "       Each build is one Maven reactor and produces one blade-admin.ear"
+    echo "       whose contents match that profile. Run one profile at a time —"
+    echo "       each lands in its own dist/<ver>-<build>/."
     exit 1
 fi
 
@@ -660,7 +655,7 @@ fi
 # can't render the docs, so we skip them (the build itself is unaffected) and
 # warn below. Generating activates the -Pjavadocs profile, which adds the
 # admin/javadoc module; we append "javadoc" to the dist copy list so the
-# resulting javadoc.war lands in dist/<ver>-<build>/admin/.
+# resulting blade-javadoc.war lands in dist/<ver>-<build>/admin/.
 JAVADOC_MIN_JDK=23
 JAVADOC_FLAGS=()
 JAVADOC_OLD_JDK=false
@@ -689,19 +684,19 @@ if [ "$HAS_BUILD_GOAL" != true ]; then
     fi
 elif [ "$SKIP_JAVADOC" = true ]; then
     # The admin EAR's javadoc webModule rides the `javadocs` profile id, so
-    # without it the EAR simply assembles without javadoc.war.
-    JAVADOC_STATUS="SKIPPED (--no-javadoc or BLADE_SKIP_JAVADOC set) — admin EAR built without javadoc.war"
+    # without it the EAR simply assembles without blade-javadoc.war.
+    JAVADOC_STATUS="SKIPPED (--no-javadoc or BLADE_SKIP_JAVADOC set) — admin EAR built without blade-javadoc.war"
 elif [ "$javadoc_manual" = true ]; then
     INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
     JAVADOC_STATUS="generating (-Pjavadocs passed explicitly)"
 elif [ "$jdk_ok_for_javadoc" = true ]; then
     JAVADOC_FLAGS+=("-Pjavadocs")
     INCLUDED_MODULES="${INCLUDED_MODULES}"$'\n'"javadoc"
-    JAVADOC_STATUS="generating (-Pjavadocs → admin/javadoc → javadoc.war)"
+    JAVADOC_STATUS="generating (-Pjavadocs → admin/javadoc → blade-javadoc.war)"
 else
     JAVADOC_OLD_JDK=true
     # No javadoc WAR on an older JDK → the admin EAR assembles without it.
-    JAVADOC_STATUS="SKIPPED — needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown}); admin EAR built without javadoc.war"
+    JAVADOC_STATUS="SKIPPED — needs JDK ${JAVADOC_MIN_JDK}+ (build JDK is ${BUILD_JDK_MAJOR:-unknown}); admin EAR built without blade-javadoc.war"
 fi
 
 # Reusable so the same block prints in the header and the post-build summary.
@@ -752,7 +747,7 @@ fi
 echo ""
 
 # Hand the profile's module list to admin/javadoc's collect-javadocs.sh
-# (4th argument, via -Dblade.included.modules) so javadoc.war contains the
+# (4th argument, via -Dblade.included.modules) so blade-javadoc.war contains the
 # docs of exactly this build's modules — collected fresh, stale ones pruned.
 INCLUDED_CSV=$(printf '%s' "$INCLUDED_MODULES" | tr '\n' ',' | sed 's/^,*//;s/,*$//')
 

@@ -40,7 +40,7 @@ Coming soon! BLADE 3.0 — The Open-Source SIP Application Framework for Carrier
 
   Smarter routing
 
-  - FSMAR 3: call-path routing driven by any data in the message — headers, JSON, XML, SDP, regex captures — with templated routes like sip:${To.user}@proxy. Routing state survives cluster failover.
+  - FSMAR: call-path routing driven by any data in the message — headers, JSON, XML, SDP, regex captures — with templated routes like sip:${To.user}@proxy. Routing state survives cluster failover.
   - Multi-tenant analytics: one analytics database serving many customers, each seeing only their own calls.
 
   ---
@@ -103,7 +103,6 @@ Deployed to the WebLogic AdminServer as skinny WARs that reference the `vorpal-b
 | Tuning | `/blade/tuning` | JVM / SIP / OCCAS tuning knobs |
 | CRUD Editor | `/blade/crud-editor` | Generic CRUD editor for service resources |
 | Logs | `/blade/logs` | Cluster log tail viewer |
-| Watcher | `/blade/watcher` | Headless config auto-publish shim (no UI, no servlets) — standalone alternative to the Configurator's auto-publish; not bundled in `blade-admin.ear` |
 | Javadoc | `/blade/javadoc` | Browsable Javadoc site with UML class diagrams |
 
 ### Services
@@ -166,7 +165,6 @@ admin/          Admin tools (deployed to AdminServer)
   javadoc/        Browsable Javadoc site (WAR, context: /blade/javadoc)
   logs/           Cluster log tail viewer (WAR)
   tuning/         JVM / SIP / OCCAS tuning (WAR)
-  watcher/        Headless config auto-publish shim (WAR, standalone — not in the admin EAR)
 services/       Services (deployed to cluster via EAR)
   acl/            Access Control List
   analytics/      Call detail records and analytics
@@ -261,15 +259,14 @@ dist/<version>-<build>/
   vorpal-blade-library-shared.war            # WebLogic shared library (admin + cluster)
   vorpal-blade-library-fsmar.jar             # FSMAR (copy to OCCAS approuter/)
   admin/
-    portal.war                               # /blade/portal    → AdminServer
+    blade-portal.war                         # /blade/portal    → AdminServer
     blade-redirect.war                       # /blade           (302s to /blade/portal/)
-    configurator.war                         # /blade/configurator
-    crud-editor.war                          # /blade/crud-editor
-    flow.war                                 # /blade/flow
-    logs.war                                 # /blade/logs
-    tuning.war                               # /blade/tuning
-    watcher.war                              # /blade/watcher (standalone only — not in blade-admin.ear)
-    javadoc.war                              # /blade/javadoc
+    blade-configurator.war                   # /blade/configurator
+    blade-crud.war                           # /blade/crud-editor
+    blade-flow.war                           # /blade/flow
+    blade-logs.war                           # /blade/logs
+    blade-tuning.war                         # /blade/tuning
+    blade-javadoc.war                        # /blade/javadoc
   services/
     proxy-router.war                         # one WAR per service → cluster
     hold.war
@@ -280,7 +277,7 @@ dist/<version>-<build>/
   DEPLOYMENT.txt                             # generated manifest classifying every artifact
 ```
 
-Each WAR's filename matches the last segment of its `<wls:context-root>` from `weblogic.xml`, so `configurator.war` deploys at `/blade/configurator` and `portal.war` at `/blade/portal`. Exception: `admin/redirect` builds as `blade-redirect.war` (its context-root is bare `/blade`).
+Admin-tier WARs are named `blade-<app>.war` so their WebLogic app names never collide with the like-named services-tier WARs (e.g. admin `blade-crud.war` vs. a service `crud.war`); `blade-configurator.war` still deploys at `/blade/configurator` because the WAR filename and the `<wls:context-root>` are independent. Services-tier WAR filenames still match the last segment of their context-root (`hold.war` → `/hold`). The `blade-` prefix doesn't always equal the context — `blade-crud.war` → `/blade/crud-editor`, `blade-analytics.war` → `/blade/analytics`, `blade-test.war` → `/blade/test-console` — those three are deliberately shortened.
 
 - The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
 - **EAR (currently disabled)**: the `services/` aggregator no longer produces a `vorpal-blade-services-<profile>.ear`. Services are deployed individually as WARs while the EAR logic is offline. See `services/pom.xml` for the TODO marker.
@@ -360,7 +357,7 @@ Module profiles (`build-profiles/*.conf`):
 
 | Profile | Description |
 | --- | --- |
-| `default` | Used when no profile is specified. Builds `framework`, `shared`, `fsmar`, the admin tier, most services (no `irouter`/`crud`), test apps. Notably **excludes `fsmar3`**. → `vorpal-blade-services-default.ear` |
+| `default` | Used when no profile is specified. Builds `framework`, `shared`, `fsmar`, the admin tier, most services (no `irouter`/`crud`), test apps. → `vorpal-blade-services-default.ear` |
 | `full` | Every library, admin, service, and test module → `vorpal-blade-services-full.ear` |
 | `production` | All libraries + admin apps + services (no test apps) → `vorpal-blade-services-production.ear` |
 | `minimal` | `framework` + `shared` + proxy-registrar/proxy-router → `vorpal-blade-services-minimal.ear` |
@@ -393,7 +390,7 @@ The javadoc module is always built and its WAR is copied to the `dist/` folder a
 This uses the [UML Doclet](https://github.com/talsma-ict/umldoclet) to generate class diagrams (SVG) alongside the standard Javadoc HTML, with Vorpal purple branding. All module javadocs are bundled into a deployable WAR:
 
 ```
-dist/<version>-<build>/admin/javadoc.war
+dist/<version>-<build>/admin/blade-javadoc.war
 ```
 
 Deploy this WAR to the AdminServer to browse javadocs at `/blade/javadoc` (it appears as a card on the portal). The index page links to each module's javadoc automatically — no build changes needed when adding new modules.

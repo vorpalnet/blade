@@ -17,7 +17,7 @@
 		<!-- Libraries, admin, service, and test modules — including the admin
 		     EAR (admin/ear) and the cluster/services EAR (services/cluster) —
 		     are all controlled by profiles below. Exclude any module with
-		     -Dskip.<name>, e.g. -Dskip.fsmar3, -Dskip.analytics, -Dskip.cluster. -->
+		     -Dskip.<name>, e.g. -Dskip.analytics, -Dskip.cluster. -->
 	</modules>
 
 	<properties>
@@ -83,11 +83,6 @@
 			<dependency>
 				<groupId>org.vorpal.blade</groupId>
 				<artifactId>vorpal-blade-library-fsmar</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>org.vorpal.blade</groupId>
-				<artifactId>vorpal-blade-library-fsmar3</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 
@@ -338,7 +333,7 @@
 		</dependency>
 		<!-- 3rd-party libs used by the framework and needed on the compile classpath
 		     for all modules. At runtime these come from the shared library WAR.
-		     Modules that bundle JARs (fsmar, fsmar3, shared, configurator) override scope. -->
+		     Modules that bundle JARs (fsmar, shared, configurator) override scope. -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
@@ -508,7 +503,7 @@
 			</plugin>
 			<!-- Install the parent POM and framework JAR to .m2; skip all others.
 		     The parent POM must be installed because the framework JAR references it,
-		     and downstream modules (fsmar, fsmar3, shared) need to resolve it. -->
+		     and downstream modules (fsmar, shared) need to resolve it. -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-install-plugin</artifactId>
@@ -586,11 +581,6 @@ fi
 			<id>fsmar</id>
 			<activation><property><name>!skip.fsmar</name></property></activation>
 			<modules><module>libs/fsmar</module></modules>
-		</profile>
-		<profile>
-			<id>fsmar3</id>
-			<activation><property><name>!skip.fsmar3</name></property></activation>
-			<modules><module>libs/fsmar3</module></modules>
 		</profile>
 
 		<!-- Service/test module profiles. Active by default; exclude with -Dskip.<name> -->
@@ -737,16 +727,7 @@ fi
 		<profile>
 			<id>security</id>
 			<activation><property><name>!skip.security</name></property></activation>
-			<modules><module>admin/security</module></modules>
-		</profile>
-		<!-- watcher: headless config auto-publish shim, deployed standalone —
-		     deliberately NOT bundled into blade-admin.ear. For sites that don't
-		     deploy the Configurator UI; running both double-publishes on file
-		     edits (harmless but redundant). -->
-		<profile>
-			<id>watcher</id>
-			<activation><property><name>!skip.watcher</name></property></activation>
-			<modules><module>admin/watcher</module></modules>
+			<modules><module>proto/security</module></modules>
 		</profile>
 		<profile>
 			<id>logs</id>
@@ -761,7 +742,7 @@ fi
 		<profile>
 			<id>test-console</id>
 			<activation><property><name>!skip.test-console</name></property></activation>
-			<modules><module>admin/test-console</module></modules>
+			<modules><module>proto/test-console</module></modules>
 		</profile>
 
 		<!-- The admin EAR (admin/ear, module name "ear"): assembles the admin
@@ -778,17 +759,6 @@ fi
 			<modules><module>admin/ear</module></modules>
 		</profile>
 
-		<!-- The cluster EAR (services/cluster, module name "cluster"): assembles
-		     every engine-tier service WAR into one deployable (blade-cluster.ear),
-		     the mirror of admin/ear. Active by default; exclude with -Dskip.cluster.
-		     Each service is contributed by an ear-<name> profile inside
-		     services/cluster/pom.xml, so the EAR shrinks to match a trimmed
-		     build profile (e.g. minimal). -->
-		<profile>
-			<id>cluster</id>
-			<activation><property><name>!skip.cluster</name></property></activation>
-			<modules><module>services/cluster</module></modules>
-		</profile>
 
 		<profile>
 			<id>javadocs</id>

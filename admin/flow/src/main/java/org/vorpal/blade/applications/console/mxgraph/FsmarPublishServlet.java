@@ -16,13 +16,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-/// Publishes FSMAR 3 JSON straight to the live `fsmar3` configuration.
+/// Publishes FSMAR JSON straight to the live `fsmar` configuration.
 ///
-/// Writes `config/custom/vorpal/fsmar3.json` relative to the domain root —
+/// Writes `config/custom/vorpal/fsmar.json` relative to the domain root —
 /// the exact path and mechanism the Configurator's SaveDataServlet uses for
 /// every BLADE app config (this WAR runs on AdminServer, whose working
 /// directory is the domain root). The engine-tier SettingsManager registered
-/// by the FSMAR 3 AppRouter picks the change up from there; no AR restart.
+/// by the FSMAR AppRouter picks the change up from there; no AR restart. (The
+/// config is un-versioned by filename — `fsmar.json` — with the version inside;
+/// the engine auto-upgrades a legacy `fsmar2.json` on load.)
 ///
 /// The body is re-serialized through Jackson before writing: malformed JSON
 /// is rejected with the parse error instead of clobbering a working config,
@@ -32,12 +34,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class FsmarPublishServlet extends HttpServlet {
 	private static final long serialVersionUID = 1L;
 
-	static final Path CONFIG_PATH = Paths.get("config/custom/vorpal/fsmar3.json");
+	static final Path CONFIG_PATH = Paths.get("config/custom/vorpal/fsmar.json");
 
 	/// The canonical sample, generated from AppRouterConfigurationSample by
-	/// the fsmar3 SettingsManager at engine startup — the single source of
+	/// the FSMAR SettingsManager at engine startup — the single source of
 	/// truth for "what does an example config look like".
-	static final Path SAMPLE_PATH = Paths.get("config/custom/vorpal/_samples/fsmar3.json.SAMPLE");
+	static final Path SAMPLE_PATH = Paths.get("config/custom/vorpal/_samples/fsmar.json.SAMPLE");
 
 	private final ObjectMapper mapper = new ObjectMapper();
 

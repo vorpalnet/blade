@@ -47,13 +47,14 @@ public class JvmProfileSmokeTest {
 
 		// --- TuningSettings serializes the new profile fields ---
 		TuningSettings ts = new TuningSettings();
-		ts.setJvmProfiles(Arrays.asList(new JvmProfile("engine", "-server -Xmx2g")));
+		ts.setJvmProfiles(Arrays.asList(new JvmProfile("engine", "engine tier nodes", "-server -Xmx2g")));
 		Map<String, String> a = new LinkedHashMap<>();
 		a.put("engine1", "engine");
 		ts.setJvmProfileAssignments(a);
 		String json = mapper.writeValueAsString(ts);
 		expect(json.contains("jvmProfiles"), "serialized config carries jvmProfiles");
 		expect(json.contains("\"engine\""), "serialized config carries the profile name");
+		expect(json.contains("engine tier nodes"), "serialized config carries the about text");
 		expect(json.contains("-server -Xmx2g"), "serialized config carries the arguments");
 		expect(json.contains("jvmProfileAssignments"), "serialized config carries assignments");
 

@@ -4,7 +4,7 @@ BLADE deploys in **four tiers**, each with its own scope. Once you see the pictu
 
 ```
 OCCAS Domain
-├── approuter/               ← (1) fsmar.jar / fsmar3.jar  [engine-tier reboot]
+├── approuter/               ← (1) fsmar.jar  [engine-tier reboot]
 ├── AdminServer              ← (2) shared library  + (3) blade-admin.ear
 └── Cluster (engine tier)    ← (2) shared library  + (4) services/*.war
 ```
@@ -13,20 +13,19 @@ The shared library appears in two rows on purpose: it is **deployed to both Admi
 
 ## The four tiers
 
-### 1. FSMAR — `fsmar.jar` / `fsmar3.jar`
+### 1. FSMAR — `fsmar.jar`
 
 **Not a WebLogic deployment.** FSMAR is the *Finite State Machine Application Router*, loaded by OCCAS before any servlet application sees a SIP message. It lives in a special OCCAS-specific directory (`$DOMAIN_HOME/approuter/`) and is activated in the OCCAS admin console, not in the WebLogic deployments view.
 
-BLADE ships **two independent FSMAR libraries** as separate fat JARs:
+BLADE ships **one FSMAR library** as a fat JAR:
 
 | Artifact | Library | Status |
 |---|---|---|
-| `vorpal-blade-library-fsmar.jar`  | FSMAR 2 | Legacy — retained for backward compatibility |
-| `vorpal-blade-library-fsmar3.jar` | FSMAR 3 | Current — the future of FSMAR |
+| `vorpal-blade-library-fsmar.jar` | FSMAR | Current (formerly "FSMAR 3") |
 
-They share no code and install side-by-side in `approuter/`. Only one is activated at a time via the OCCAS admin console (the SPI entry in the activated JAR's `META-INF/services/javax.servlet.sip.ar.spi.SipApplicationRouterProvider` is what OCCAS loads).
+OCCAS loads its SPI entry (`META-INF/services/javax.servlet.sip.ar.spi.SipApplicationRouterProvider`) at boot. The original **FSMAR 2** is retired (`retired/fsmar2/`, excluded from the standard build) and is no longer shipped.
 
-- **Artifact:** `dist/<ver>-<build>/vorpal-blade-library-fsmar.jar` and/or `vorpal-blade-library-fsmar3.jar` — fat JARs with every dependency bundled in.
+- **Artifact:** `dist/<ver>-<build>/vorpal-blade-library-fsmar.jar` — a fat JAR with every dependency bundled in.
 - **Goes to:** `$DOMAIN_HOME/approuter/` on every engine-tier host. (Newer OCCAS versions support an `approuter/lib/` subdirectory for dependency JARs, but because BLADE ships FSMAR as fat JARs you drop the single files directly into `approuter/`.)
 - **Activation:** configure OCCAS to use the chosen FSMAR via the admin console — the exact navigation changes between OCCAS versions, so check the OCCAS docs for your version.
 - **Takes effect after:** engine-tier server restart (not AdminServer).
@@ -47,30 +46,29 @@ Management tools that run **only on AdminServer**, packaged as a single EAR (`bl
 
 | Source module | WAR (in EAR) | Context root | Purpose |
 |---|---|---|---|
-| `admin/portal` | `portal.war` | `/blade/portal` | Unified admin shell — left rail hosts every other admin app via iframe |
+| `admin/portal` | `blade-portal.war` | `/blade/portal` | Unified admin shell — left rail hosts every other admin app via iframe |
 | `admin/redirect` | `blade-redirect.war` | `/` | Default web app; 302s bare `/blade` to `/blade/portal/` |
-| `admin/api` | `api.war` | `/blade/api` | Scalar-based OpenAPI explorer |
-| `admin/configurator` | `configurator.war` | `/blade/configurator` | JSON Schema-based config editor, JMX-backed |
-| `admin/crud-editor` | `crud-editor.war` | `/blade/crud-editor` | CRUD service config editor |
-| `admin/flow` | `flow.war` | `/blade/flow` | Visual FSMAR diagram editor (mxGraph) |
-| `admin/tuning` | `tuning.war` | `/blade/tuning` | JVM / SIP / OCCAS tuning knobs |
-| `admin/logs` | `logs.war` | `/blade/logs` | Cluster log tail viewer |
-| `admin/analytics-console` | `analytics-console.war` | `/blade/analytics` | Analytics admin endpoints (distinct from the analytics cluster service) |
-| `admin/javadoc` | `javadoc.war` | `/blade/javadoc` | Browsable Javadoc with UML diagrams |
+| `admin/api` | `blade-api.war` | `/blade/api` | Scalar-based OpenAPI explorer |
+| `admin/configurator` | `blade-configurator.war` | `/blade/configurator` | JSON Schema-based config editor, JMX-backed |
+| `admin/crud-editor` | `blade-crud.war` | `/blade/crud-editor` | CRUD service config editor |
+| `admin/flow` | `blade-flow.war` | `/blade/flow` | Visual FSMAR diagram editor (mxGraph) |
+| `admin/tuning` | `blade-tuning.war` | `/blade/tuning` | JVM / SIP / OCCAS tuning knobs |
+| `admin/logs` | `blade-logs.war` | `/blade/logs` | Cluster log tail viewer |
+| `admin/analytics-console` | `blade-analytics.war` | `/blade/analytics` | Analytics admin endpoints (distinct from the analytics cluster service) |
+| `admin/javadoc` | `blade-javadoc.war` | `/blade/javadoc` | Browsable Javadoc with UML diagrams |
 
 - **Why AdminServer only:** admin apps expose management endpoints; deploying them to the cluster would expose those endpoints on every engine node and duplicate state.
 - **EAR vs. individual WAR:** `deploy.sh ... admin` deploys `blade-admin.ear` (the whole tier). For a quick single-app test, redeploy that one WAR (from `dist/<ver>/admin/` or its exploded `target/` dir) — each is independently deployable.
-- **`watcher.war` — standalone only, NOT in the EAR.** `admin/watcher` builds `watcher.war` (context `/blade/watcher`), a headless config auto-publish shim: no UI, no servlets, no login — one background `WatchService` thread that republishes `./config/custom/vorpal/*.json` edits via JMX. It exists for sites that don't deploy the Configurator UI (e.g., it can't pass their security scans) but still need auto-publish. Deploy it manually to AdminServer from `dist/<ver>/admin/watcher.war`. Don't run it alongside the Configurator with Auto-publish on — both watch the same files, so every edit publishes twice (harmless but redundant); turn the Configurator's Auto-publish off, or undeploy one of them.
+- **Watcher is retired.** The headless config auto-publish shim (`blade-watcher.war`) moved to `retired/watcher/` and is no longer built or shipped — the Configurator's auto-publish covers the same need. (It was always standalone-only, never in the EAR.)
 
-### 4. Services + test apps — `dist/<ver>/services/blade-cluster.ear`
+### 4. Services + test apps — individual WARs in `dist/<ver>/services/`
 
-The production SIP applications themselves (ACL, Analytics, Hold, Proxy-Registrar, Proxy-Router, etc.), packaged as a single EAR (`blade-cluster.ear`) — the mirror of the admin tier's `blade-admin.ear` — so the whole services tier deploys to the cluster in one step. Each bundled WAR is self-contained exactly as it deploys standalone (framework JAR inside + shared-library reference in its own `weblogic.xml`); the EAR bundles no libraries itself. The EAR's contents track the active build profile: each service rides an `ear-<name>` profile in `services/cluster/pom.xml`, so a trimmed profile produces a trimmed EAR. `./build.sh` also drops the individual WARs in `dist/<ver>/services/` (filenames match the context-root: `hold.war`, `proxy-router.war`) so a single service can be redeployed on its own during testing.
+The production SIP applications themselves (ACL, Analytics, Hold, Proxy-Registrar, Proxy-Router, etc.) deploy as **individual WARs**, one per service — there is **no services EAR**. (The old `blade-cluster.ear` was dropped: OCCAS 8.3 gives no visibility into what's deployed inside an EAR, and the services tier has no equivalent of the admin portal to enumerate its apps. Per-WAR deployment makes each a distinctly-named, visible WebLogic deployment. The EAR aggregator is parked in `retired/cluster/`.) Each WAR is self-contained exactly as it deploys standalone: framework JAR inside + the `vorpal-blade` shared-library reference in its own `weblogic.xml`. `./build.sh` drops every service WAR in `dist/<ver>/services/` (filenames match the context-root: `hold.war`, `proxy-router.war`).
 
-- **Artifacts:** `blade-cluster.ear` plus every WAR under `dist/<ver>-<build>/services/`
-- **Goes to:** the **cluster only** (engine tier). `deploy.sh ... services` deploys the EAR when present, individual WARs otherwise.
+- **Artifacts:** every WAR under `dist/<ver>-<build>/services/` (no EAR).
+- **Goes to:** the **cluster only** (engine tier). `deploy.sh ... services` loops the WARs, deploying each under its own name (`hold`, `proxy-router`, …) — visible individually in WebLogic.
 - **Why cluster only:** services handle live SIP traffic; AdminServer doesn't.
-- **Test apps are bundled too** (promoted to production 2026-06-05 as live-diagnostics tools): `test-uac`, `test-uas`, `test-b2bua` ride the EAR via their own `ear-test-*` profiles whenever the active build profile includes them.
-- **`context.war` is bundled as well** (promoted 2026-06-05): every services-tier WAR now rides the EAR. The only standalone deployable left in the whole system is `watcher.war` on the admin tier.
+- **Test apps deploy here too** (promoted to production 2026-06-05 as live-diagnostics tools): `test-uac`, `test-uas`, `test-b2bua`, plus `context`, are ordinary service WARs in `dist/<ver>/services/`.
 
 ## Quick start
 
@@ -85,7 +83,7 @@ $EDITOR build-profiles/deploy/production.conf          # adminurl, user, approut
 ./deploy.sh production shared --dry-run                       # sanity check
 ./deploy.sh production shared                                 # WebLogic shared library
 ./deploy.sh production admin    AdminServer                   # blade-admin.ear → AdminServer
-./deploy.sh production services BEA_ENGINE_TIER_CLUST         # blade-cluster.ear → your cluster
+./deploy.sh production services BEA_ENGINE_TIER_CLUST         # service WARs → your cluster
 ./deploy.sh production fsmar                                  # FSMAR jars → approuter/
 ```
 
@@ -103,7 +101,7 @@ After the FSMAR step, **restart the engine tier** so the new `fsmar.jar` is pick
 |---|---|
 | `./deploy.sh production shared` | WebLogic shared library → both AdminServer and the cluster (target read from `wls.targets.both` in the conf) |
 | `./deploy.sh production admin AdminServer` | `dist/<ver>/admin/blade-admin.ear` to AdminServer |
-| `./deploy.sh production services BEA_ENGINE_TIER_CLUST` | `dist/<ver>/services/blade-cluster.ear` (all services + test apps) to your cluster |
+| `./deploy.sh production services BEA_ENGINE_TIER_CLUST` | every WAR in `dist/<ver>/services/` (all services + test apps) to your cluster |
 | `./deploy.sh production fsmar` | `cp`/`scp` FSMAR jars to `approuter/` (path from `approuter.dir` / `ssh.host` in the conf) |
 | `./deploy.sh production admin AdminServer undeploy` | Tear down every admin app from AdminServer |
 | `./deploy.sh production services BEA_ENGINE_TIER_CLUST status` | `list-apps` against WebLogic |
@@ -112,7 +110,7 @@ After the FSMAR step, **restart the engine tier** so the new `fsmar.jar` is pick
 
 The target argument is **required** for `admin` and `services` — no defaults, so there's no surprise about which WebLogic target gets hit. `shared` and `fsmar` derive their target from the conf file or from disk paths, so they don't take one.
 
-Each WAR is registered in WebLogic with `name = basename(war)` — so `configurator.war` becomes the app `configurator`. The deploy app name matches the context-root, which matches the WAR filename, which matches what you see in the browser.
+Each WAR is registered in WebLogic with `name = basename(war)` — so `blade-configurator.war` becomes the app `blade-configurator`. Admin-tier WARs are prefixed `blade-` (e.g. `blade-tuning`, `blade-crud`, `blade-analytics`) so their app names never collide with the like-named services-tier WARs (`hold`, `proxy-router`, …), whose filenames still match their context-root's last segment. The context-root itself is unchanged by the WAR name — `blade-configurator.war` still deploys at `/blade/configurator` — so bookmarks, portal cards, and config-file names are unaffected.
 
 ### Deploy profiles
 
@@ -141,18 +139,16 @@ Password sourcing priority (highest wins):
 
 This is the one tier that isn't a WebLogic deployment, so it's worth spelling out.
 
-1. Build: `./build.sh production` produces two fat JARs in `dist/<ver>-<build>/`:
-   - `vorpal-blade-library-fsmar.jar` — FSMAR 2 (legacy)
-   - `vorpal-blade-library-fsmar3.jar` — FSMAR 3 (current)
-2. Put the JAR(s) in the OCCAS domain's `approuter/` directory on every engine-tier host:
+1. Build: `./build.sh production` produces the fat JAR in `dist/<ver>-<build>/`:
+   - `vorpal-blade-library-fsmar.jar` — FSMAR (the App Router)
+2. Put the JAR in the OCCAS domain's `approuter/` directory on every engine-tier host:
    ```
    $DOMAIN_HOME/approuter/vorpal-blade-library-fsmar.jar
-   $DOMAIN_HOME/approuter/vorpal-blade-library-fsmar3.jar
    ```
-   `./deploy.sh <env> fsmar` copies whichever JARs are present in `dist/` via `scp` (if `ssh.host` is set in the profile) or `cp` (local domain). Having both on disk is fine — OCCAS only loads the one activated in its admin console.
-3. Configure OCCAS to use the chosen FSMAR via the admin console. The exact navigation and field names change between OCCAS versions — check the OCCAS docs for your version.
+   `./deploy.sh <env> fsmar` copies it from `dist/` via `scp` (if `ssh.host` is set in the profile) or `cp` (local domain).
+3. Configure OCCAS to use FSMAR via the admin console. The exact navigation and field names change between OCCAS versions — check the OCCAS docs for your version.
 4. Restart the engine tier (not AdminServer). Node Manager or a rolling restart works.
-5. On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory (same place every other BLADE app drops its samples). FSMAR 2 and FSMAR 3 use distinct sample-file names so they don't collide. Copy the appropriate sample alongside your other BLADE app configs, rename appropriately, and edit — see `libs/fsmar/README.md` (v2) or `libs/fsmar3/README.md` (v3) for the JSON schema.
+5. On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory (same place every other BLADE app drops its samples). Copy it alongside your other BLADE app configs, rename, and edit — see `libs/fsmar/README.md` for the JSON schema.
 
 The JARs can be updated in place and re-activated by a rolling engine-tier restart; hot updates are not supported because the JAR is loaded into the OCCAS Application Router at server startup.
 
@@ -176,8 +172,7 @@ This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The s
 
 | Artifact | Tier | Target | Purpose |
 |---|---|---|---|
-| `vorpal-blade-library-fsmar.jar` | fsmar | `approuter/` | SIP application router — v2 legacy (reboot engine tier) |
-| `vorpal-blade-library-fsmar3.jar` | fsmar | `approuter/` | SIP application router — v3 (reboot engine tier) |
+| `vorpal-blade-library-fsmar.jar` | fsmar | `approuter/` | SIP application router (reboot engine tier) |
 | `vorpal-blade-library-shared.war` | shared-lib | AdminServer + cluster | WebLogic shared library (3rd-party JARs) |
 | `vorpal-blade-library-framework.jar` | framework | bundled in WARs | BLADE framework library (not deployed directly) |
 
@@ -185,15 +180,14 @@ This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The s
 
 | Artifact | Context |
 |---|---|
-| `portal.war` | `/blade/portal` (unified admin shell) |
+| `blade-portal.war` | `/blade/portal` (unified admin shell) |
 | `blade-redirect.war` | `/blade` (302s to /blade/portal/) |
-| `configurator.war` | `/blade/configurator` |
-| `flow.war` | `/blade/flow` |
-| `tuning.war` | `/blade/tuning` |
-| `logs.war` | `/blade/logs` |
-| `watcher.war` | `/blade/watcher` (standalone only — not in blade-admin.ear) |
-| `crud-editor.war` | `/blade/crud-editor` |
-| `javadoc.war` | `/blade/javadoc` |
+| `blade-configurator.war` | `/blade/configurator` |
+| `blade-flow.war` | `/blade/flow` |
+| `blade-tuning.war` | `/blade/tuning` |
+| `blade-logs.war` | `/blade/logs` |
+| `blade-crud.war` | `/blade/crud-editor` |
+| `blade-javadoc.war` | `/blade/javadoc` |
 
 **`dist/<ver>/services/`** (deploy to the cluster):
 

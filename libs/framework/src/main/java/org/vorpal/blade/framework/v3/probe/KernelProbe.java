@@ -80,6 +80,23 @@ public class KernelProbe implements KernelProbeMXBean {
 		readings.put("cpu_scaling_governor",
 				readFirstLine(base.resolve("sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")));
 
+		// Kernel boot cmdline params (numa, transparent_hugepage) — these are set at
+		// boot, not via /proc/sys, so they need their own read.
+		ObjectNode boot = root.putObject("boot");
+		String cmdline = readFirstLine(base.resolve("proc/cmdline"));
+		boot.put("cmdline", cmdline);
+		boot.put("numa", bootParam(cmdline, "numa"));
+		boot.put("transparent_hugepage", bootParam(cmdline, "transparent_hugepage"));
+
+		// Virtualization signals (no sudo): hypervisor identity, clocksource, CPU
+		// steal %, balloon driver. All read-only; the frontend interprets/flags them.
+		ObjectNode virt = root.putObject("virt");
+		virt.put("vendor", readFirstLine(base.resolve("sys/class/dmi/id/sys_vendor")));
+		virt.put("product", readFirstLine(base.resolve("sys/class/dmi/id/product_name")));
+		virt.put("clocksource", readFirstLine(base.resolve("sys/devices/system/clocksource/clocksource0/current_clocksource")));
+		virt.put("stealPct", readStealPct(base.resolve("proc/stat")));
+		virt.put("balloon", readBalloon(base.resolve("proc/modules")));
+
 		root.set("limits", readLimits(base.resolve("proc/self/limits")));
 
 		ObjectNode net = root.putObject("netCounters");
@@ -92,6 +109,71 @@ public class KernelProbe implements KernelProbeMXBean {
 			return mapper.writeValueAsString(root);
 		} catch (Exception e) {
 			return "{\"server\":\"" + serverName + "\",\"error\":\"json\"}";
+		}
+	}
+
+	/// Value of a {@code name=value} token in the kernel boot cmdline. Returns
+	/// the value, {@code "(set)"} for a bare flag, {@code "(default)"} when the
+	/// param isn't on the cmdline, or {@code "n/a"} if the cmdline was unreadable.
+	private String bootParam(String cmdline, String name) {
+		if (cmdline == null || cmdline.isEmpty() || "n/a".equals(cmdline)) return "n/a";
+		for (String tok : cmdline.split("\\s+")) {
+			if (tok.equals(name)) return "(set)";
+			if (tok.startsWith(name + "=")) return tok.substring(name.length() + 1);
+		}
+		return "(default)";
+	}
+
+	/// Steal time as a percent of total CPU time since boot, from the aggregate
+	/// {@code cpu} line of /proc/stat (8th value = steal jiffies). A sustained
+	/// non-zero value means the hypervisor is descheduling our vCPUs (host
+	/// oversubscription). "n/a" if unreadable; never throws.
+	private String readStealPct(Path p) {
+		try {
+			if (!Files.isReadable(p)) return "n/a";
+			for (String line : Files.readAllLines(p, StandardCharsets.UTF_8)) {
+				if (!line.startsWith("cpu ")) continue;
+				String[] t = line.trim().split("\\s+");
+				long total = 0, steal = 0;
+				for (int i = 1; i < t.length; i++) {
+					long v = Long.parseLong(t[i]);
+					total += v;
+					if (i == 8) steal = v; // user nice system idle iowait irq softirq STEAL ...
+				}
+				if (total <= 0) return "0.00";
+				return String.format(java.util.Locale.ROOT, "%.2f", 100.0 * steal / total);
+			}
+			return "n/a";
+		} catch (IOException | RuntimeException e) {
+			return "n/a";
+		}
+	}
+
+	/// Name of a loaded memory-balloon driver (vmw_balloon / virtio_balloon /
+	/// hv_balloon) from /proc/modules, "none" if absent, "n/a" if unreadable.
+	private String readBalloon(Path p) {
+		try {
+			if (!Files.isReadable(p)) return "n/a";
+			for (String line : Files.readAllLines(p, StandardCharsets.UTF_8)) {
+				String mod = line.split("\\s+", 2)[0];
+				if (mod.equals("vmw_balloon") || mod.equals("virtio_balloon") || mod.equals("hv_balloon")) return mod;
+			}
+			return "none";
+		} catch (IOException | RuntimeException e) {
+			return "n/a";
+		}
+	}
+
+	/// NIC driver name from the /sys/class/net/<dev>/device/driver symlink's
+	/// target (e.g. vmxnet3, virtio_net, e1000). "n/a" if absent; never throws.
+	private String readDriver(Path ifDir) {
+		try {
+			Path link = ifDir.resolve("device/driver");
+			if (!Files.exists(link, java.nio.file.LinkOption.NOFOLLOW_LINKS)) return "n/a";
+			Path target = Files.isSymbolicLink(link) ? Files.readSymbolicLink(link) : link;
+			return target.getFileName().toString();
+		} catch (IOException | RuntimeException e) {
+			return "n/a";
 		}
 	}
 
@@ -199,6 +281,7 @@ public class KernelProbe implements KernelProbeMXBean {
 			for (Map.Entry<String, Path> e : ifaces.entrySet()) {
 				ObjectNode n = arr.addObject();
 				n.put("name", e.getKey());
+				n.put("driver", readDriver(e.getValue())); // vmxnet3 / virtio_net (good) vs e1000 (emulated)
 				Path st = e.getValue().resolve("statistics");
 				for (String s : IFACE_STATS) n.put(s, readFirstLine(st.resolve(s)));
 			}

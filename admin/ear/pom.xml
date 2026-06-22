@@ -32,9 +32,8 @@
 		docs are built, and assembles without it otherwise (--no-javadoc or an
 		old build JDK no longer skips the whole EAR).
 
-		admin/watcher is intentionally NOT bundled here (headless config
-		auto-publish shim for sites without the Configurator UI); it builds and
-		deploys standalone.</description>
+		admin/watcher was retired (moved to retired/watcher) and is no longer
+		built or bundled; the Configurator's auto-publish covers that need.</description>
 
 	<dependencies>
 		<!-- Admin WAR modules are contributed via the ear-* profiles below.
@@ -90,7 +89,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-portal</artifactId>
 							<contextRoot>blade/portal</contextRoot>
-							<bundleFileName>portal.war</bundleFileName>
+							<bundleFileName>blade-portal.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
@@ -144,7 +143,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-api</artifactId>
 							<contextRoot>blade/api</contextRoot>
-							<bundleFileName>api.war</bundleFileName>
+							<bundleFileName>blade-api.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
@@ -171,7 +170,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-configurator</artifactId>
 							<contextRoot>blade/configurator</contextRoot>
-							<bundleFileName>configurator.war</bundleFileName>
+							<bundleFileName>blade-configurator.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
@@ -198,7 +197,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-files</artifactId>
 							<contextRoot>blade/files</contextRoot>
-							<bundleFileName>files.war</bundleFileName>
+							<bundleFileName>blade-files.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
@@ -225,7 +224,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-crud-editor</artifactId>
 							<contextRoot>blade/crud-editor</contextRoot>
-							<bundleFileName>crud-editor.war</bundleFileName>
+							<bundleFileName>blade-crud.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
@@ -252,7 +251,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-flow</artifactId>
 							<contextRoot>blade/flow</contextRoot>
-							<bundleFileName>flow.war</bundleFileName>
+							<bundleFileName>blade-flow.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
@@ -279,34 +278,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-tuning</artifactId>
 							<contextRoot>blade/tuning</contextRoot>
-							<bundleFileName>tuning.war</bundleFileName>
-						</webModule>
-					</modules>
-				</configuration>
-			</plugin></plugins></build>
-		</profile>
-		<profile>
-			<id>ear-security</id>
-			<activation><property><name>!skip.security</name></property></activation>
-			<dependencies>
-				<dependency>
-					<groupId>org.vorpal.blade</groupId>
-					<artifactId>vorpal-blade-admin-security</artifactId>
-					<version>${project.version}</version>
-					<type>war</type>
-					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-				</dependency>
-			</dependencies>
-			<build><plugins><plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-ear-plugin</artifactId>
-				<configuration>
-					<modules combine.children="append">
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-admin-security</artifactId>
-							<contextRoot>blade/security</contextRoot>
-							<bundleFileName>security.war</bundleFileName>
+							<bundleFileName>blade-tuning.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
@@ -333,7 +305,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-logs</artifactId>
 							<contextRoot>blade/logs</contextRoot>
-							<bundleFileName>logs.war</bundleFileName>
+							<bundleFileName>blade-logs.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
@@ -360,34 +332,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-analytics-console</artifactId>
 							<contextRoot>blade/analytics</contextRoot>
-							<bundleFileName>analytics-console.war</bundleFileName>
-						</webModule>
-					</modules>
-				</configuration>
-			</plugin></plugins></build>
-		</profile>
-		<profile>
-			<id>ear-test-console</id>
-			<activation><property><name>!skip.test-console</name></property></activation>
-			<dependencies>
-				<dependency>
-					<groupId>org.vorpal.blade</groupId>
-					<artifactId>vorpal-blade-admin-test-console</artifactId>
-					<version>${project.version}</version>
-					<type>war</type>
-					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-				</dependency>
-			</dependencies>
-			<build><plugins><plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-ear-plugin</artifactId>
-				<configuration>
-					<modules combine.children="append">
-						<webModule>
-							<groupId>org.vorpal.blade</groupId>
-							<artifactId>vorpal-blade-admin-test-console</artifactId>
-							<contextRoot>blade/test-console</contextRoot>
-							<bundleFileName>test-console.war</bundleFileName>
+							<bundleFileName>blade-analytics.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
@@ -413,7 +358,7 @@
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>javadoc</artifactId>
 							<contextRoot>blade/javadoc</contextRoot>
-							<bundleFileName>javadoc.war</bundleFileName>
+							<bundleFileName>blade-javadoc.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>

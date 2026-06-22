@@ -234,7 +234,6 @@ DIST_NAME=$(basename "$DIST_DIR")
 
 SHARED_LIB_WAR="${DIST_DIR}/vorpal-blade-library-shared.war"
 FSMAR_JAR="${DIST_DIR}/vorpal-blade-library-fsmar.jar"
-FSMAR3_JAR="${DIST_DIR}/vorpal-blade-library-fsmar3.jar"
 SHARED_LIB_NAME="vorpal-blade"  # Extension-Name from libs/shared/pom.xml
 
 # --- Header ---
@@ -264,11 +263,11 @@ run_mvn() {
 }
 
 # Deploy / undeploy every deployable in dist/<ver>/<subdir>/ to <target>.
-# App name = artifact basename without extension (e.g. configurator.war →
-# "configurator", blade-admin.ear → "blade-admin"). Both tiers ship as one
-# EAR (admin → blade-admin.ear, services → blade-cluster.ear — every
-# services-tier WAR incl. context and the test apps); the one standalone
-# extra (admin watcher.war) deploys manually — see DEPLOYMENT.md.
+# App name = artifact basename without extension (e.g. blade-configurator.war →
+# "configurator", blade-admin.ear → "blade-admin"). The admin tier ships as one
+# EAR (blade-admin.ear); the services tier ships as INDIVIDUAL WARs (no cluster
+# EAR — OCCAS 8.3 gives no visibility into an EAR's contents), so each service
+# deploys under its own name and the loop below registers them one by one.
 deploy_subdir() {
     local sub="$1" target="$2" action="$3"
     local src_dir="${DIST_DIR}/${sub}"
@@ -351,14 +350,13 @@ deploy_fsmar() {
     local action="$1"
     info "Subdir: fsmar → ${SSH_HOST:+${SSH_USER}@${SSH_HOST}:}${APPROUTER_DIR}"
 
-    # FSMAR 2 (legacy) and FSMAR 3 are two distinct fat JARs that both live in
-    # OCCAS's approuter/. Only one is activated at a time in the admin console.
-    # Deploy whichever are present so operators can switch without a rebuild.
+    # The FSMAR fat JAR lives in OCCAS's approuter/ and is loaded by the WLSS
+    # Application Router at boot. (The retired FSMAR 2 jar is no longer built;
+    # see retired/fsmar2.)
     local jars=()
-    [ -f "$FSMAR_JAR" ]  && jars+=("$FSMAR_JAR")
-    [ -f "$FSMAR3_JAR" ] && jars+=("$FSMAR3_JAR")
+    [ -f "$FSMAR_JAR" ] && jars+=("$FSMAR_JAR")
     if [ ${#jars[@]} -eq 0 ]; then
-        err "Missing: no FSMAR jars found in ${DIST_DIR}"
+        err "Missing: no FSMAR jar found in ${DIST_DIR}"
         return 1
     fi
 

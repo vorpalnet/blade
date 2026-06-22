@@ -41,7 +41,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>configurator</finalName>
+		<finalName>blade-configurator</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

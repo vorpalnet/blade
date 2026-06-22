@@ -31,7 +31,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>logs</finalName>
+		<finalName>blade-logs</finalName>
 		<!-- Inherits the parent pom's maven-war-plugin packagingExcludes regex,
 		     which excludes every JAR EXCEPT vorpal-blade-library-framework.
 		     LogReaderListener (and indirectly LogQueryAPI) calls into

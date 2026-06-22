@@ -2,6 +2,166 @@
 
 ## 2.9.9 (unreleased)
 
+### Services tier: dropped `blade-cluster.ear` — deploy service WARs individually
+
+The services/cluster EAR (`blade-cluster.ear`) is gone. OCCAS 8.3 gives no visibility into
+what's deployed inside an EAR, and the services tier has no equivalent of the admin portal to
+enumerate its apps — so a bundled services EAR was an opaque blob. Each service now deploys as
+its own WAR (`hold.war`, `proxy-router.war`, …), visible individually in WebLogic. The build
+already emits these WARs to `dist/<ver>/services/`, and `deploy.sh <env> services` already
+loops them when no EAR is present — so no deploy.sh code change was needed. The EAR aggregator
+moved to `retired/cluster/`; its `cluster` Maven profile and build-profile entries were
+removed. **The admin EAR (`blade-admin.ear`) stays** — the portal makes it self-describing.
+
+### `admin/watcher` retired
+
+The headless config auto-publish shim moved to `retired/watcher/` (excluded from the build,
+not shipped). It was already standalone-only (never in `blade-admin.ear`); the Configurator's
+auto-publish covers the same need. Its `pom.xml` profile, build-profile entries, `build.sh`
+classifier line, and javadoc-collection entry were removed.
+
+### New `proto/` incubator; `admin/security` + `admin/test-console` moved there
+
+Apps that aren't ready to ship now live under **`proto/`** instead of `admin/`. They still
+build — `build.sh` discovers `libs/admin/services/test/proto`, and they compile under the
+`full` profile — but are **excluded from the everyday `default`/`production` builds and are
+never bundled in `blade-admin.ear`**. `proto/security` and `proto/test-console` moved there
+(removed from `default.conf`/`production.conf` and from the `ear-security`/`ear-test-console`
+EAR profiles). **All new apps start in `proto/`**; promote one by moving it to `admin/` (or
+`services/`) and re-adding its `ear-<name>` profile. Mirror of `retired/` at the other end of
+the lifecycle. (The proto poms' `login.jsp` web-resource path was repointed from `../portal`
+to `../../admin/portal` for the deeper directory.)
+
+### FSMAR config is un-versioned by filename, with auto-upgrade on load
+
+The FSMAR App Router now reads `config/custom/vorpal/fsmar.json` (was `fsmar3.json`) — the
+**version lives inside the config** (the framework `version` field), not in the filename.
+On load it version-dispatches:
+
+- a current (v3) `fsmar.json` loads as-is;
+- a pre-3 / FSMAR 2-shaped config (a `version` < 3, or a `previous` map with no `states`) is
+  **auto-upgraded to FSMAR 3 in memory** via `Fsmar2Converter` before deserialization;
+- if `fsmar.json` is absent, it falls back to the legacy `fsmar2.json` filename and upgrades
+  that — so an existing FSMAR 2 domain keeps routing after the jar swap, no file rename needed.
+
+Every auto-upgrade logs loudly (SEVERE + the converter's REVIEW/NOTE items). Because the
+converter **fails closed** (unconvertible conditions become `when:"false"`), a forgotten
+migration under-routes and logs rather than mis-routing — but the intended path is still to
+open the config in the Flow editor, review the conversion, and re-save it. The Flow editor's
+publish/load targets moved to `fsmar.json` to match.
+
+Mechanism: new `Settings.domainFile()` seam (framework) for the legacy-filename fallback, and
+`FsmarSettings`/`FsmarSettingsManager` (in `libs/fsmar`) overriding the `readConfigTree` /
+`createSettings` seams. Upgraders stay typed Java; no executable upgrade rules in the schema.
+This is the first concrete client of the planned config-versioning upgrade-on-load design.
+
+### FSMAR 2 retired; FSMAR 3 is now the un-versioned canonical FSMAR
+
+FSMAR 3 is now *the* FSMAR. The module `libs/fsmar3/` was renamed to `libs/fsmar/` and its
+artifact de-versioned from `vorpal-blade-library-fsmar3.jar` to
+`vorpal-blade-library-fsmar.jar` (version belongs in MANIFEST.MF, not the filename). The
+legacy **FSMAR 2** module moved to `retired/fsmar2/` and is **excluded from the standard
+build** — no Maven profile references it, and `build.sh` only discovers modules under
+`libs/`, `admin/`, `services/`, `test/`. It can still be built by hand
+(`./mvnw -f retired/fsmar2/pom.xml package`).
+
+Internals are unchanged this pass (least churn): the runtime package stays
+`org.vorpal.blade.library.fsmar3`, the SPI provider stays
+`…library.fsmar3.AppRouterProvider`, and the config file stays `fsmar3.json`. Only the
+build *output* (jar) and module *directory* lost the version number.
+
+**Deploy note:** `vorpal-blade-library-fsmar.jar` previously meant FSMAR 2. It now means
+FSMAR 3. A domain that drops in the new jar must migrate its `fsmar2.json` to `fsmar3.json`
+(use the Flow editor's FSMAR 2 → 3 converter) before the new router will route — the file
+swap and the config migration must happen together.
+
+### FSMAR config model moved into the framework JAR
+
+The FSMAR 2 and FSMAR 3 **configuration/data model** classes now live in the
+framework, leaving only the App Router runtime in the two FSMAR fat JARs:
+
+| Was (`libs/fsmar`, `libs/fsmar3`) | Now |
+|---|---|
+| `org.vorpal.blade.library.fsmar2.{AppRouterConfiguration, State, Trigger, Transition, Action, AppRouterConfigurationSample}` | `org.vorpal.blade.framework.v2.fsmar.*` |
+| `org.vorpal.blade.library.fsmar3.{AppRouterConfiguration, State, Trigger, Transition, Ingress, Egress, Placement, Diagram, AppRouterConfigurationSample, Fsmar2Converter}` | `org.vorpal.blade.framework.v3.fsmar.*` |
+
+The runtime stays in `org.vorpal.blade.library.fsmar2`/`fsmar3` (`AppRouter`,
+`AppRouterProvider`, FSMAR 3's `Fsmar3Metrics`/`RouteTrace`/`RoutingState`), so
+the `META-INF/services` SPI registration is unchanged and the fat JARs still
+drop into `approuter/` as before. Because the framework JAR is bundled in every
+WAR (and shaded into the fat JARs), admin-tier tools — the Flow editor in
+particular — can now use the FSMAR model and `Fsmar2Converter` directly without
+linking the engine fat JAR. Existing `fsmar2.json`/`fsmar3.json` files load
+unchanged (configs key on logical Jackson type names, not class FQNs).
+
+### Flow editor opens FSMAR 2 configs and saves them as FSMAR 3
+
+Opening a legacy FSMAR 2 configuration in the Flow editor (file, paste, or
+"Load live") now converts it to FSMAR 3 on import via the framework
+`Fsmar2Converter` (new `/fsmarConvert` servlet). The editor shows a conversion
+summary — state/transition/selector counts plus any REVIEW/NOTE items — and a
+read-only preview before loading; the editor only ever saves FSMAR 3. Anything
+that cannot be converted faithfully becomes `when:"false"` (fail closed) with a
+REVIEW warning, so a conversion gap narrows routing rather than widening it.
+
+### FSMAR 2 → 3 conversion is now lossless
+
+Three FSMAR 3 capabilities were added so the conversion no longer loses
+behavior:
+
+- **Repeating headers.** `AttributeSelector` gained an opt-in `allInstances`
+  mode that reads *every* instance of a repeating header (joined), and the
+  Expression `matches` operator is existential over those instances ("any
+  instance matches"). This restores FSMAR 2's scan-every-instance behavior for
+  `contains`, `value`, and parameter operators (e.g. matching any `Via`,
+  `Route`, or `Diversion`). Single-valued conditions are unchanged.
+- **`${regionLabel}`.** A new pseudo-variable exposes the JSR-289 routing region
+  label; FSMAR 2's `Region-Label` condition maps to it.
+- **Quoted values.** Expression string literals accept a `\'` escape, so a match
+  value containing an apostrophe (e.g. a display name) is representable.
+
+### Flow round-trip preserves retired fields
+
+The Flow import/export round-trip no longer silently drops a retired
+`description` field (on selectors and egress nodes); like any unknown field it
+is preserved verbatim, while the engine continues to ignore it.
+
+### Admin-tier WARs renamed `blade-<app>.war`
+
+Every admin webapp's output WAR is now prefixed `blade-` so its WebLogic app
+name can't collide with the like-named services-tier WAR (e.g. admin
+`blade-crud.war` vs. a service `crud.war`). The `<finalName>` in each
+`admin/*/pom.xml` and the matching `<bundleFileName>` in `admin/ear/pom.xml`
+were updated together; the generated `application.xml` web-uris follow.
+
+| Source module | Old WAR | New WAR | Context root (unchanged) |
+|---|---|---|---|
+| `admin/portal` | `portal.war` | `blade-portal.war` | `/blade/portal` |
+| `admin/redirect` | `blade-redirect.war` | `blade-redirect.war` | `/` |
+| `admin/api` | `api.war` | `blade-api.war` | `/blade/api` |
+| `admin/configurator` | `configurator.war` | `blade-configurator.war` | `/blade/configurator` |
+| `admin/files` | `files.war` | `blade-files.war` | `/blade/files` |
+| `admin/crud-editor` | `crud-editor.war` | `blade-crud.war` | `/blade/crud-editor` |
+| `admin/flow` | `flow.war` | `blade-flow.war` | `/blade/flow` |
+| `admin/tuning` | `tuning.war` | `blade-tuning.war` | `/blade/tuning` |
+| `admin/security` | `security.war` | `blade-security.war` | `/blade/security` |
+| `admin/logs` | `logs.war` | `blade-logs.war` | `/blade/logs` |
+| `admin/analytics-console` | `analytics-console.war` | `blade-analytics.war` | `/blade/analytics` |
+| `admin/test-console` | `test-console.war` | `blade-test.war` | `/blade/test-console` |
+| `admin/javadoc` | `javadoc.war` | `blade-javadoc.war` | `/blade/javadoc` |
+| `admin/watcher` | `watcher.war` | `blade-watcher.war` | `/blade/watcher` (standalone) |
+
+The three "console/editor" apps got short names — `blade-analytics`,
+`blade-crud`, `blade-test` — instead of mechanical `blade-analytics-console`
+etc. **Context-roots did not change**, so bookmarks, portal cards, SSO cookies,
+and config-file names (`blade-tuning.json`, derived from the context path) are
+all unaffected. Only the standalone deploy path changes the registered app name
+(`deploy.sh` uses `basename(war)`): a domain that previously deployed, say,
+`configurator` standalone must **undeploy the old `configurator` app** before
+deploying `blade-configurator` — the EAR path (`blade-admin.ear`, one app) is
+clean. `build.sh`'s manifest classifier, `DEPLOYMENT.md`, and `README.md` were
+updated to match.
+
 ### FSMAR 3: route-back egress (detour out, resume the flow)
 
 An egress can now **return**. Draw a line from an egress node back to a state

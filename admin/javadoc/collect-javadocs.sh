@@ -5,7 +5,7 @@
 #   included-modules: comma-separated module directory names — the active
 #   build profile's list, passed by build.sh via -Dblade.included.modules.
 #   When given, ONLY those modules are collected and any previously collected
-#   module not in the list is pruned, so javadoc.war matches the build
+#   module not in the list is pruned, so blade-javadoc.war matches the build
 #   profile exactly. When omitted/empty (plain `mvn -Pjavadocs` without
 #   build.sh), every module with apidocs on disk is collected and the docroot
 #   accumulates across builds (legacy union behavior).
@@ -35,7 +35,7 @@ for moddir in "$PARENT"/*/*/; do
     modname=$(basename "$moddir")
     [ ! -f "$moddir/pom.xml" ] && continue
     # Profile filter: a leftover target/ from an earlier build of a different
-    # profile must not leak its docs into this build's javadoc.war.
+    # profile must not leak its docs into this build's blade-javadoc.war.
     module_included "$modname" || continue
 
     apidocs=""
@@ -169,7 +169,6 @@ emit_module() {
         irouter)     display="iRouter" ;;
         tpcc)        display="TPCC" ;;
         fsmar)       display="FSMAR" ;;
-        fsmar3)      display="FSMAR 3" ;;
         test-uac)    display="Test UAC" ;;
         test-uas)    display="Test UAS" ;;
         test-b2bua)  display="Test B2BUA" ;;
@@ -241,7 +240,7 @@ HEADER
 # --- Libraries ---
 echo '            <h2 class="jd-section">Libraries</h2>' >> "$DOCROOT/index.html"
 echo '            <section class="vorpal-card-grid">' >> "$DOCROOT/index.html"
-for mod in framework fsmar fsmar3; do
+for mod in framework fsmar; do
     [ -d "$DOCROOT/$mod" ] && emit_module "$mod" >> "$DOCROOT/index.html"
 done
 echo '            </section>' >> "$DOCROOT/index.html"
@@ -249,7 +248,7 @@ echo '            </section>' >> "$DOCROOT/index.html"
 # --- Admin ---
 echo '            <h2 class="jd-section">Administration</h2>' >> "$DOCROOT/index.html"
 echo '            <section class="vorpal-card-grid">' >> "$DOCROOT/index.html"
-for mod in configurator flow tuning logs watcher crud-editor portal; do
+for mod in configurator flow tuning logs crud-editor portal; do
     [ -d "$DOCROOT/$mod" ] && emit_module "$mod" >> "$DOCROOT/index.html"
 done
 echo '            </section>' >> "$DOCROOT/index.html"
@@ -260,7 +259,7 @@ echo '            <section class="vorpal-card-grid">' >> "$DOCROOT/index.html"
 for dir in "$DOCROOT"/*/; do
     mod=$(basename "$dir")
     case "$mod" in
-        framework|fsmar|fsmar3|configurator|flow|tuning|logs|watcher|crud-editor|portal|javadoc|test-*|images) continue ;;
+        framework|fsmar|configurator|flow|tuning|logs|watcher|crud-editor|portal|javadoc|test-*|images) continue ;;
     esac
     emit_module "$mod" >> "$DOCROOT/index.html"
 done

@@ -107,7 +107,7 @@ test-uas registers a `SettingsManager` MBean
 - **Portal launcher deck** — test-uas is **not** a deck card, by design: the
   deck lists admin GUI apps under `blade/*` context-roots. test-uas is a SIP
   service with a flat context-root and no browser UI. Cluster test activity
-  shows up in the [Test Console](../../admin/test-console) instead.
+  shows up in the [Test Console](../../proto/test-console) instead.
 
 ## Dependencies
 
@@ -119,7 +119,7 @@ test-uas registers a `SettingsManager` MBean
 
 - [**test/test-uac**](../test-uac) — Test User Agent Client (load generator)
 - [**libs/framework**](../../libs/framework) — Base framework
-- [**admin/test-console**](../../admin/test-console) — cluster-wide test dashboards
+- [**proto/test-console**](../../proto/test-console) — cluster-wide test dashboards
 
 ## Deployment
 

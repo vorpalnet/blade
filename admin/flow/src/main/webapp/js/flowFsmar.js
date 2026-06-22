@@ -75,12 +75,30 @@ window.flowFsmar = (function() {
 		});
 	}
 
-	// Imports FSMAR 3 JSON text into the editor: servlet converts to mxGraph
-	// XML (honoring stored diagram placements), then — when the config carried
-	// no diagram section at all — the bundled hierarchical layout ranks the
-	// graph left to right, ingress through states to egress, so a bare config
-	// still renders as a readable callflow.
+	// Public entry point for loading a config into the editor. Detects a legacy
+	// FSMAR 2 configuration (the old `previous` map, no v3 `states`) and converts
+	// it to FSMAR 3 first — the editor only ever models, and saves, FSMAR 3.
 	function importJsonText(editor, json, onDone) {
+		var parsed = null;
+		try {
+			parsed = JSON.parse(json);
+		} catch (e) {
+			// Malformed JSON — let importFsmar3Text's servlet report it.
+		}
+		if (parsed && parsed.previous && typeof parsed.previous === 'object'
+				&& !Array.isArray(parsed.previous) && !parsed.states) {
+			convertFsmar2ThenImport(editor, json, onDone);
+			return;
+		}
+		importFsmar3Text(editor, json, onDone);
+	}
+
+	// Imports an FSMAR 3 config: the servlet converts it to mxGraph XML (honoring
+	// stored diagram placements), then — when the config carried no diagram
+	// section at all — the bundled hierarchical layout ranks the graph left to
+	// right, ingress through states to egress, so a bare config still renders as
+	// a readable callflow.
+	function importFsmar3Text(editor, json, onDone) {
 		var hadDiagram = false;
 		try {
 			var parsed = JSON.parse(json);
@@ -118,6 +136,118 @@ window.flowFsmar = (function() {
 				if (onDone) onDone(false);
 			}
 		});
+	}
+
+	// Converts a legacy FSMAR 2 config to FSMAR 3 (server-side, via the framework
+	// Fsmar2Converter), shows what changed plus any review items, then loads the
+	// converted FSMAR 3 into the editor on confirmation.
+	function convertFsmar2ThenImport(editor, fsmar2Json, onDone) {
+		flowRequest('fsmarConvert', 'fsmar2=' + encodeURIComponent(fsmar2Json), 'POST', function(resp) {
+			if (resp.getStatus() < 200 || resp.getStatus() >= 300) {
+				mxUtils.alert('FSMAR 2 conversion failed: ' + resp.getStatus() + ' ' + resp.getText());
+				if (onDone) onDone(false);
+				return;
+			}
+			var result;
+			try {
+				result = JSON.parse(resp.getText());
+			} catch (e) {
+				mxUtils.alert('Conversion response was not valid JSON.');
+				if (onDone) onDone(false);
+				return;
+			}
+			showConversionDialog(result, function() {
+				importFsmar3Text(editor, result.json, onDone);
+			}, function() {
+				if (onDone) onDone(false);
+			});
+		});
+	}
+
+	// Conversion summary: counts, the converted FSMAR 3 JSON (read-only preview),
+	// and the converter's warnings — REVIEW items (fail-closed conditions that
+	// can never fire) shown as errors, NOTE items as info, by text label first so
+	// they read correctly without relying on color. Load applies it; Cancel bails
+	// before anything touches the diagram.
+	function showConversionDialog(result, onProceed, onCancel) {
+		var div = dialogBody();
+
+		var summary = document.createElement('div');
+		summary.style.flexShrink = '0';
+		summary.style.marginBottom = '6px';
+		summary.innerHTML = '<b>Converted FSMAR 2 &rarr; FSMAR 3.</b> '
+			+ (result.states || 0) + ' state(s), ' + (result.transitions || 0)
+			+ ' transition(s), ' + (result.selectors || 0) + ' selector(s). '
+			+ 'The editor saves FSMAR 3.';
+		div.appendChild(summary);
+
+		// Reuse the validation findings renderer: REVIEW -> error, NOTE -> info.
+		var findings = { errors: [], warnings: [], infos: [] };
+		(result.warnings || []).forEach(function(w) {
+			if (w.indexOf('REVIEW') === 0) {
+				findings.errors.push(w);
+			} else if (w.indexOf('NOTE') === 0) {
+				findings.infos.push(w);
+			} else {
+				findings.warnings.push(w);
+			}
+		});
+		var fdiv = document.createElement('div');
+		fdiv.style.flexShrink = '0';
+		fdiv.innerHTML = findingsHtml(findings);
+		div.appendChild(fdiv);
+
+		if (result.needsReview) {
+			var warn = document.createElement('div');
+			warn.style.flexShrink = '0';
+			warn.style.margin = '4px 0';
+			warn.style.color = '#a00';
+			warn.innerHTML = '<b>Some conditions could not be converted faithfully</b> and were set '
+				+ 'to never fire (fail closed). Review the items above and fix them before this '
+				+ 'goes live.';
+			div.appendChild(warn);
+		}
+
+		var label = document.createElement('div');
+		label.innerHTML = '<b>Converted FSMAR 3 JSON (preview):</b>';
+		label.style.flexShrink = '0';
+		label.style.margin = '6px 0 4px';
+		div.appendChild(label);
+
+		var textarea = dialogTextarea();
+		textarea.value = result.json || '';
+		textarea.readOnly = true;
+		div.appendChild(textarea);
+
+		var btnDiv = document.createElement('div');
+		btnDiv.style.marginTop = '8px';
+		btnDiv.style.textAlign = 'right';
+		btnDiv.style.flexShrink = '0';
+
+		var loadBtn = document.createElement('button');
+		loadBtn.textContent = 'Load into editor';
+		loadBtn.onclick = function() {
+			wnd.setVisible(false);
+			wnd.destroy();
+			onProceed();
+		};
+		btnDiv.appendChild(loadBtn);
+
+		var cancelBtn = document.createElement('button');
+		cancelBtn.textContent = 'Cancel';
+		cancelBtn.style.marginLeft = '6px';
+		cancelBtn.onclick = function() {
+			wnd.setVisible(false);
+			wnd.destroy();
+			if (onCancel) onCancel();
+		};
+		btnDiv.appendChild(cancelBtn);
+
+		div.appendChild(btnDiv);
+
+		var wnd = dialogWindow('Convert FSMAR 2 → FSMAR 3', div);
+		wnd.setClosable(true);
+		wnd.setVisible(true);
 	}
 
 	// Left-to-right hierarchical layout (roots on the west side): matches how
@@ -224,15 +354,15 @@ window.flowFsmar = (function() {
 		btnDiv.style.textAlign = 'right';
 		btnDiv.style.flexShrink = '0';
 
-		// Writes config/custom/vorpal/fsmar3.json on AdminServer — the same
+		// Writes config/custom/vorpal/fsmar.json on AdminServer — the same
 		// file a Configurator save writes; the engine SettingsManager reloads
 		// it live. Overwrites the running config, hence the confirm().
 		var pubBtn = document.createElement('button');
-		pubBtn.textContent = 'Save to fsmar3';
+		pubBtn.textContent = 'Save to fsmar';
 		pubBtn.style.cssFloat = 'left';
-		pubBtn.title = 'Publish to the live fsmar3 configuration (config/custom/vorpal/fsmar3.json)';
+		pubBtn.title = 'Publish to the live fsmar configuration (config/custom/vorpal/fsmar.json)';
 		pubBtn.onclick = function() {
-			if (!confirm('Overwrite the live fsmar3 configuration?')) {
+			if (!confirm('Overwrite the live fsmar configuration?')) {
 				return;
 			}
 			pubBtn.disabled = true;
@@ -243,7 +373,7 @@ window.flowFsmar = (function() {
 					var r = {};
 					try { r = JSON.parse(resp.getText()); } catch (e) { /* show without detail */ }
 					status.style.color = '#060';
-					status.textContent = 'PUBLISHED: ' + (r.path || 'fsmar3.json')
+					status.textContent = 'PUBLISHED: ' + (r.path || 'fsmar.json')
 						+ (r.bytes ? ' (' + r.bytes + ' bytes)' : '');
 					// Work is now saved to the live config — no unsaved edits.
 					if (window.flowDirty) window.flowDirty.clear();
@@ -491,7 +621,8 @@ window.flowFsmar = (function() {
 
 		var label = document.createElement('div');
 		label.innerHTML = '<b>Open a config:</b> choose a file, paste JSON below, '
-			+ 'or load the live config / sample.';
+			+ 'or load the live config / sample. A legacy FSMAR 2 config is '
+			+ 'converted to FSMAR 3 on import.';
 		label.style.marginBottom = '6px';
 		label.style.flexShrink = '0';
 		div.appendChild(label);
@@ -504,13 +635,13 @@ window.flowFsmar = (function() {
 		btnDiv.style.textAlign = 'right';
 		btnDiv.style.flexShrink = '0';
 
-		// Open a local file (FSMAR 3 JSON, or a legacy mxGraph XML diagram).
-		// Loads straight into the editor and closes the dialog — the textarea
-		// path is for paste / live / sample.
+		// Open a local file (FSMAR 3 JSON, a legacy FSMAR 2 config — converted on
+		// import — or a legacy mxGraph XML diagram). Loads straight into the editor
+		// and closes the dialog — the textarea path is for paste / live / sample.
 		var fileBtn = document.createElement('button');
 		fileBtn.textContent = 'Choose file…';
 		fileBtn.style.cssFloat = 'left';
-		fileBtn.title = 'Open an FSMAR 3 JSON file (legacy XML diagrams also open)';
+		fileBtn.title = 'Open an FSMAR 3 JSON file (FSMAR 2 configs and legacy XML diagrams also open)';
 		fileBtn.onclick = function() {
 			wnd.setVisible(false);
 			wnd.destroy();
@@ -518,13 +649,13 @@ window.flowFsmar = (function() {
 		};
 		btnDiv.appendChild(fileBtn);
 
-		// Pulls the running config (config/custom/vorpal/fsmar3.json) into the
-		// textarea — the everyday loop is Load live fsmar3 → edit → Save to
-		// fsmar3, no files involved.
+		// Pulls the running config (config/custom/vorpal/fsmar.json) into the
+		// textarea — the everyday loop is Load live fsmar → edit → Save to
+		// fsmar, no files involved.
 		var liveBtn = document.createElement('button');
-		liveBtn.textContent = 'Load live fsmar3';
+		liveBtn.textContent = 'Load live fsmar';
 		liveBtn.style.cssFloat = 'left';
-		liveBtn.title = 'Fill the textarea with the live fsmar3 configuration';
+		liveBtn.title = 'Fill the textarea with the live fsmar configuration';
 		liveBtn.onclick = function() {
 			flowRequest('fsmarPublish', null, 'GET', function(resp) {
 				if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
@@ -536,14 +667,14 @@ window.flowFsmar = (function() {
 		};
 		btnDiv.appendChild(liveBtn);
 
-		// The canonical sample (_samples/fsmar3.json.SAMPLE, generated from
+		// The canonical sample (_samples/fsmar.json.SAMPLE, generated from
 		// AppRouterConfigurationSample) — single source of truth; no JS copy
 		// to drift from it.
 		var exampleBtn = document.createElement('button');
 		exampleBtn.textContent = 'Load sample';
 		exampleBtn.style.cssFloat = 'left';
 		exampleBtn.style.marginLeft = '6px';
-		exampleBtn.title = 'Fill the textarea with the canonical fsmar3 sample (_samples/fsmar3.json.SAMPLE)';
+		exampleBtn.title = 'Fill the textarea with the canonical fsmar sample (_samples/fsmar.json.SAMPLE)';
 		exampleBtn.onclick = function() {
 			flowRequest('fsmarPublish?sample=1', null, 'GET', function(resp) {
 				if (resp.getStatus() >= 200 && resp.getStatus() < 300) {

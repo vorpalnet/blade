@@ -38,7 +38,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>javadoc</finalName>
+		<finalName>blade-javadoc</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>

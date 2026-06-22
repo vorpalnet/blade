@@ -75,8 +75,13 @@ public class FsmarImportServlet extends HttpServlet {
 	static final Set<String> TRIGGER_KNOWN = setOf("transitions");
 	static final Set<String> TRANSITION_KNOWN = setOf("id", "when", "next", "subscriber",
 			"region", "routes", "routeModifier");
-	static final Set<String> SELECTOR_KNOWN = setOf("id", "type", "description",
+	static final Set<String> SELECTOR_KNOWN = setOf("id", "type",
 			"attribute", "pattern", "expression");
+	// Egress diagram fields handled explicitly: `routes` bake as <route> children,
+	// `returnState` is topology (the route-back out-edge). Everything else — e.g.
+	// the retired `description` (folded into Configuration.notes) — rides the
+	// egress cell's `extra` so the round-trip never silently drops it.
+	static final Set<String> EGRESS_KNOWN = setOf("routes", "returnState");
 
 	static Set<String> setOf(String... names) {
 		Set<String> s = new HashSet<>();
@@ -257,7 +262,7 @@ public class FsmarImportServlet extends HttpServlet {
 				String returnState = egJson.path("returnState").asText("");
 				String key = egressKey(egJson.path("routes"), returnState);
 				String cellId = String.valueOf(nextId++);
-				createEgressBox(doc, root, cellId, name, egJson.path("routes"),
+				createEgressBox(doc, root, cellId, name, egJson.path("routes"), egJson,
 						statePlacements, egressCol, MARGIN_Y + egressRow++ * ROW_SPACING);
 				egressCellIdByKey.putIfAbsent(key, cellId);
 				// Draw the route-back line from the egress back to its return state.
@@ -321,7 +326,7 @@ public class FsmarImportServlet extends HttpServlet {
 							if (targetId == null) {
 								targetId = String.valueOf(nextId++);
 								String synthName = synthEgressName(routeBackEgress, egressCellIdByKey.size());
-								createEgressBox(doc, root, targetId, synthName, tx.path("routes"),
+								createEgressBox(doc, root, targetId, synthName, tx.path("routes"), null,
 										statePlacements, egressCol, MARGIN_Y + egressRow++ * ROW_SPACING);
 								egressCellIdByKey.put(key, targetId);
 								if (routeBackEgress && stateCellIds.get(returnState) != null) {
@@ -479,7 +484,7 @@ public class FsmarImportServlet extends HttpServlet {
 	/// `name` keys its stored position; the routes (+ return state) identify it
 	/// for round-trip matching.
 	private String createEgressBox(Document doc, Element root, String cellId,
-			String name, JsonNode routes,
+			String name, JsonNode routes, JsonNode egJson,
 			JsonNode placements, int defX, int defY) {
 		Element gateway = doc.createElement("Gateway");
 		gateway.setAttribute("label", name);
@@ -491,6 +496,13 @@ public class FsmarImportServlet extends HttpServlet {
 				rEl.setAttribute("uri", route.asText(""));
 				gateway.appendChild(rEl);
 			}
+		}
+		// Preserve unknown egress fields (e.g. the retired `description`) on the
+		// cell so the round-trip never silently drops them; FsmarExportServlet
+		// merges them back. egJson is null for a synthesized egress (no diagram
+		// entry to carry).
+		if (egJson != null && egJson.isObject()) {
+			setExtra(gateway, egJson, EGRESS_KNOWN);
 		}
 		Element cell = doc.createElement("mxCell");
 		cell.setAttribute("vertex", "1");

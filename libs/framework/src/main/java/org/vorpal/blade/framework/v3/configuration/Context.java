@@ -44,6 +44,16 @@ import javax.servlet.sip.SipSession;
 public class Context {
 	private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{([^}]+)\\}");
 
+	/// Delimiter joining the multiple values of a repeating SIP header into a
+	/// single context value (see the `allInstances` mode on
+	/// [org.vorpal.blade.framework.v3.configuration.selectors.AttributeSelector]).
+	/// `NUL` never occurs in a real SIP header or body, so a value carrying it
+	/// is unambiguously a multi-instance set — which lets the `matches` operator
+	/// in [org.vorpal.blade.framework.v3.configuration.expressions.Expression]
+	/// apply "any instance" semantics while leaving every ordinary single value
+	/// (no delimiter) untouched.
+	public static final String MULTI_VALUE_DELIMITER = "\u0000";
+
 	/// Iteration cap for `${var}` re-resolution. A resolved value that
 	/// itself contains `${...}` is fed back through substitution; this
 	/// cap stops cycles. Matches v2's historical iteration limit.

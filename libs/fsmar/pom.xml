@@ -115,7 +115,7 @@
 										     ManifestResourceTransformer below builds the
 										     uber-jar's manifest from scratch using the project's
 										     own properties. Excluding here silences the noisy
-										     "N jars define 1 overlapping resource: MANIFEST.MF"
+										     "38 jars define 1 overlapping resource: MANIFEST.MF"
 										     warning. -->
 										<exclude>META-INF/MANIFEST.MF</exclude>
 									</excludes>

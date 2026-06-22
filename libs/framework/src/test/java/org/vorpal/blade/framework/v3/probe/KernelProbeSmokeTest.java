@@ -54,6 +54,17 @@ public class KernelProbeSmokeTest {
 		write(base, "sys/class/net/eth0/statistics/rx_dropped", "12\n");
 		write(base, "sys/class/net/eth0/statistics/tx_dropped", "0\n");
 		write(base, "sys/class/net/lo/statistics/rx_dropped", "999\n"); // must be skipped
+		// kernel boot cmdline: numa=off present, transparent_hugepage NOT present
+		write(base, "proc/cmdline", "BOOT_IMAGE=/vmlinuz root=/dev/sda1 ro numa=off crashkernel=auto\n");
+		// virtualization signals
+		write(base, "proc/stat", "cpu  100 0 50 800 0 0 0 50 0 0\ncpu0 100 0 50 800 0 0 0 50 0 0\n"); // steal=50/1000=5%
+		write(base, "proc/modules", "vmw_balloon 36864 0 - Live 0x0000000000000000\nip_tables 32768 0 - Live 0x0\n");
+		write(base, "sys/class/dmi/id/sys_vendor", "VMware, Inc.\n");
+		write(base, "sys/class/dmi/id/product_name", "VMware Virtual Platform\n");
+		write(base, "sys/devices/system/clocksource/clocksource0/current_clocksource", "tsc\n");
+		// eth0 NIC driver via the device/driver symlink
+		Files.createDirectories(base.resolve("sys/class/net/eth0/device"));
+		Files.createSymbolicLink(base.resolve("sys/class/net/eth0/device/driver"), Paths.get("../../../bus/pci/drivers/vmxnet3"));
 
 		String json = new KernelProbe("engine1", base).readJson();
 		JsonNode root = mapper.readTree(json);
@@ -89,11 +100,28 @@ public class KernelProbeSmokeTest {
 		JsonNode ifs = root.get("interfaces");
 		expect(ifs.size() == 1 && "eth0".equals(ifs.get(0).path("name").asText()), "interfaces lists eth0, skips lo");
 		expect("12".equals(ifs.get(0).path("rx_dropped").asText()), "eth0 rx_dropped read");
+		expect("vmxnet3".equals(ifs.get(0).path("driver").asText()), "eth0 driver from device/driver symlink");
+
+		// virtualization signals
+		JsonNode virt = root.get("virt");
+		expect("VMware, Inc.".equals(virt.path("vendor").asText()), "dmi sys_vendor read");
+		expect("VMware Virtual Platform".equals(virt.path("product").asText()), "dmi product_name read");
+		expect("tsc".equals(virt.path("clocksource").asText()), "clocksource read");
+		expect("5.00".equals(virt.path("stealPct").asText()), "steal% computed from /proc/stat (50/1000)");
+		expect("vmw_balloon".equals(virt.path("balloon").asText()), "balloon driver detected in /proc/modules");
+
+		// boot cmdline: numa=off parsed to its value; absent param -> "(default)"
+		JsonNode boot = root.get("boot");
+		expect("off".equals(boot.path("numa").asText()), "boot numa=off parsed from cmdline");
+		expect("(default)".equals(boot.path("transparent_hugepage").asText()), "boot THP absent -> (default)");
 
 		// empty base dir -> everything n/a, never throws
 		String empty = new KernelProbe("x", Files.createTempDirectory("kempty")).readJson();
 		expect(mapper.readTree(empty).path("readings").path("fs.file-max").asText().equals("n/a"), "empty tree -> n/a, no throw");
 		expect(mapper.readTree(empty).path("netCounters").path("Udp.RcvbufErrors").asText().equals("n/a"), "empty tree -> counters n/a");
+		expect(mapper.readTree(empty).path("boot").path("numa").asText().equals("n/a"), "empty tree -> boot cmdline n/a");
+		expect(mapper.readTree(empty).path("virt").path("balloon").asText().equals("n/a"), "empty tree -> virt balloon n/a");
+		expect(mapper.readTree(empty).path("virt").path("stealPct").asText().equals("n/a"), "empty tree -> virt steal n/a");
 
 		System.out.println(failures == 0 ? "KernelProbeSmokeTest: ALL PASSED" : "KernelProbeSmokeTest: " + failures + " FAILED");
 		System.exit(failures == 0 ? 0 : 1);

@@ -1,296 +1,100 @@
-# BLADE FSMAR 2 (legacy)
+# BLADE FSMAR
 
-**F**inite **S**tate **M**achine **A**pplication **R**outer.
+The next-generation FSMAR — **F**inite **S**tate **M**achine **A**pplication **R**outer.
 
-This module is the **legacy** FSMAR 2 library, retained for backward compatibility with existing deployments. For new work, use **FSMAR 3** (`libs/fsmar3/`) — it shares no code with this module and is the future of FSMAR. FSMAR 2 will eventually be phased out.
+This is BLADE's FSMAR, built on the v3 configuration system (`org.vorpal.blade.framework.v3.configuration`). Its config **model** lives in the framework (`org.vorpal.blade.framework.v3.fsmar`); this module holds the App Router runtime + the `approuter/` SPI registration. The original **FSMAR 2** is a separate, retired library (`retired/fsmar2/`, excluded from the standard build) — it shares no code with this one and will eventually be removed.
 
-FSMAR 2 and FSMAR 3 are shipped as separate fat JARs (`vorpal-blade-library-fsmar.jar` and `vorpal-blade-library-fsmar3.jar`). Both install side-by-side in OCCAS's `approuter/` directory; only one is activated at a time via the OCCAS admin console.
+## What is FSMAR?
 
-## The What Now?
+FSMAR uses state memory and pattern matching to route SIP traffic between applications in a *SIP Servlet Application Server*. Think of it as a router for audio/video streaming microservices. This allows developers to write tiny snippets of code (SIP Servlets) and string them together in an intelligent manner. The FSMAR knows who you are, where you've been, and where you're going.
 
-The FSMAR uses state memory and pattern matching to route traffic between applications in a _SIP Servlet Application Server_. Think of it as a router for audio/video streaming microservices. This allows developers to write tiny snippets of code (SIP Servlets) and string them together in an intelligent manner. The FSMAR knows who you are, where you've been and where you're going.
+## Capabilities
 
-#What's new in 2.0?
+- **Data-driven routing** on the v3 configuration framework: per-state *selectors* extract named values from any part of the message (headers, URIs, parameters, even the body), and transitions fire on `when` expressions over those values — replacing FSMAR 2's per-header comparison lists
+- **Route construction from extracted values**: routes are `${}`-templated (`"sip:${To.user}@registrar"`), so one transition handles what used to take one rule per subscriber
+- **Capture-and-carry**: extracted values accumulate across the whole call-path (carried in the JSR-289 `stateInfo`, replicated cluster-wide) — a later state can route on something captured at ingress, before intermediate apps rewrote the message
+- **Tiering as data**: a `table` selector classifies calls through a translation table (exact / longest-prefix / range keys) — gold/silver/bronze customers are table rows an operator edits, not routing logic. Conditions just test `${tier} == 'gold'`
+- **Condition operators**: `==`, `!=`, ordering, `&&`/`||`, plus `matches` (full-string regex) and `contains`
+- **Pseudo-variables** published every hop: `${method}`, `${requestUri}`, `${directive}`, `${previousApp}`, `${hour}`, `${dayOfWeek}`, and `${hash100}` — a stable per-call 0–99 bucket, so `${hash100} < 5` canaries ~5% of calls to a new application version
+- **Routing observability**: a FINER trace of every transition evaluated (and why it did or didn't fire), plus JMX metrics at `org.vorpal.blade:type=Fsmar3,name=metrics` — per-transition hit counts, default-application fallbacks, undeployed bypasses, cycle detections
+- **Route Simulator** (in the Flow editor, `blade/flow`): run a synthetic request — or paste a real INVITE — through the diagram *being edited* and watch the routing path animate hop by hop: selectors extracting values, every transition's `when` shown FIRED / no-match, `${}` routes resolved. Pseudo-variables are overridable ("simulate Sunday 3 AM", "show the 4% canary bucket") and any application can be marked *undeployed* to explore bypass / cycle / fallback behavior before deploying anything
+- **Call capture & replay**: arm `captureNextCalls(n)` on the metrics MBean and the engine records full routing traces (the same format the simulator emits) for the next n real calls — then replay them on the Flow editor diagram. Capture is opt-in; disarmed cost is one atomic read per request
+- **Live heat overlay**: the Flow editor polls per-transition hit counts across every engine and renders them on the diagram edges — count labels, stroke width scaled by traffic share
+- **Config validation on load**: malformed `when` expressions are flagged SEVERE (they'd otherwise never match, silently); transitions targeting undeployed applications get a WARNING
+- Optional JSR-289 `region` per transition (`ORIGINATING` / `TERMINATING`; default `NEUTRAL`) for third-party apps that branch on `request.getRegion()`
+- Flatter, more expressive JSON schema: `defaultApplication` + `states` map keyed by previous application name (with `"null"` for initial requests)
+- Full BLADE Flow editor integration (`admin/flow`): visual authoring of the state machine, semantic validation, plan-dispatch generation, simulation and replay
+- Dedicated log files (same as FSMAR 2)
+- Dynamic config reloads (same as FSMAR 2)
 
-Key features include:
-* JSON formatted config file with schema
-* Ability to update config files dynamically
-* Improved pattern matching
-* Supports seamless upgrades through versioned applications
-* Dedicated log file(s)
-
-
-#How does it work?
+## How does it work?
 
 FSMAR is not a WebLogic deployment — it's a fat JAR that lives in the OCCAS domain's `approuter/` directory and is activated via the OCCAS admin console. See the **FSMAR install walkthrough** in [DEPLOYMENT.md](../../DEPLOYMENT.md#fsmar-install-walkthrough) for the full procedure.
 
-For automated installs, use `./deploy.sh <env> fsmar` from the repository root, which copies `fsmar.jar` to the configured `approuter.dir` (locally or over SSH).
+For automated installs, use `./deploy.sh <env> fsmar` from the repository root, which copies `vorpal-blade-library-fsmar.jar` to the configured `approuter.dir` (locally or over SSH).
 
-On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory alongside samples from every other BLADE app. Copy it into place, rename, and edit — the JSON syntax is documented in the tutorial below.
+On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory alongside samples from every other BLADE app. Copy it into place, rename, and edit.
 
-Please note: OCCAS 7.1 and older versions require `fsmar.jar` to also appear on the leading CLASSPATH in addition to `approuter/`, due to Jackson version mismatches. Newer OCCAS versions expose an `approuter/lib/` subdirectory for dependency JARs; BLADE avoids it by shipping FSMAR as a fat JAR.
+**Note:** FSMAR installs to `approuter/` as `vorpal-blade-library-fsmar.jar`; OCCAS loads its `SipApplicationRouterProvider` SPI entry at boot. (The retired FSMAR 2 jar is no longer built — see `retired/fsmar2/`.)
 
-#Tutorial
+## Tutorial
 
-The FSMAR is a finite state machine. A finite state machine consists of a number of 'states' which represent individual SIP Servlet applications. As messages flow through the system, they take the _action_ of _transitioning_ between _states_ when _triggered_ by a matching _condition_.
+FSMAR is a finite state machine. Each *state* represents a SIP Servlet application. As a message flows through the system, two things happen on entry to each state:
 
-Here's a helpful breakdown:
-* __Previous State__ -- the origin of the message ('null' if it originated from an external system)
-* __Trigger__ -- a SIP message like INVITE, REGISTER, etc
-* __Condition__ -- a set of matching patterns, like a Java RegEx expression applied to a particular header
-* __Action__ -- additional steps to make during the transition, like defining the region and subscriber URI
-* __Next State__ -- the destination application of the message
+1. The state's **selectors** run, extracting named values from the request into the routing context (e.g. the user-part of the To header becomes `${To.user}`). The context accumulates across the whole call-path — values captured at ingress remain available in every later state, even after intermediate apps rewrite the message.
+2. The **trigger** matching the SIP method is consulted, and its **transitions** are evaluated in order. The first transition whose `when` expression matches (or that has no `when`) wins.
 
-Below are some examples on how to configure this.
+Here's the breakdown:
 
-# Conditional Pattern Matching
+* **Previous State** — the origin of the message (`"null"` if it originated from an external system)
+* **Selectors** — extraction rules run on entry to the state: regex named-groups against headers, attribute reads, JSON/XML/SDP body extraction. A selector with id `To` capturing `(?<user>…)` publishes both `${user}` and the namespaced `${To.user}`
+* **Trigger** — a SIP method, like `INVITE`, `REGISTER`, `SUBSCRIBE`
+* **Transition** — `when` (a condition expression over `${}` context values; omit it for an unconditional match), `next` (the destination application), `subscriber` (which header names the subscriber — the JSR-289 contract), `routes` (`${}`-templated SIP URIs to push), and an optional `routeModifier`
 
-* address  -- regular expression match on a SIP address i.e.: "Bob" <sip:bob@vorpal.org>
-* uri      -- regular expression 'match' on a SIP URI, i.e.: sip@bob.vorpal.org
-* user     -- user part of a SIP URI, case sensitive, i.e.: bob
-* host     -- host (domain) part of a SIP URI, case insensitive, i.e.: vorpal.org
-* port     -- the port number of a SIP URI (matches 5060 if no port exists)
-* equals   -- case sensitive comparison of the _full line_ of the first header found
-* matches  -- regular expression match of the _full line_ of the first header found
-* contains -- partial string match of the value of all headers by the specified name
-* includes -- an exact string match for values found in a comma delimited header
-* value    -- case sensitive match of any 'value' of a header (without parameters / tags)
-* ???      -- anything else is treated as a parameter. i.e.: __Expires: 3600;refresher=uac__ ('refresher' in this case)
-
-By default, if no condition is defined, it is considered a match. Multiple conditions are ANDed together. If you're looking for OR capabilities, consider creating creating two different transitions with the same next state.
-
-# Defining Actions
-
-The FSMAR can only take a few actions once a condition is matched. They include setting the region and subscriber URI as well as defining any routes to be pushed.
-
-
-# Examples
-
-Condider the following SIP packet:
-
-```
-INVITE sip:bob@vorpal.org SIP/2.0
-Content-Type: application/sdp
-To: "Bob" <sip:bob@vorpal.org>;loc=wonderland
-Via: SIP/2.0/TCP 192.168.1.206:5060;wlsscid=1a25;branch=z9b;wlsssid=12dnl1j
-Min-SE: 90
-Allow: INFO, CANCEL, ACK, BYE, UPDATE
-Allow: PRACK, INVITE
-Call-ID: wlss-19b2247c-c038baf4182b6d4aaa762b897434deb7@192.168.1.206
-From: "Alice" <sip:alice@vorpal.org>loc=wonderland;tag=f234ee12
-Max-Forwards: 70
-Contact: <sip:buyer@192.168.1.206:5060;transport=tcp;wlsscid=1a25;ob;sipappsessionid=6ccj>
-X-Version-Number: 2.1.3
-Session-Expires: 3600;refresher=uac
-CSeq: 1 INVITE
-Content-Length: 4060
-Route: <sip:192.168.1.202:5060;lr;transport=tcp>
-Supported: 100rel, timer
-
-...
-```
-
-
-Here's a snippet of the sample config file "fsmar2.SAMPLE" that gets created when you start the application server:
+## JSON Shape
 
 ```json
 {
-  "previous" : {
-    "keep-alive" : {
-      "triggers" : {
-        "INVITE" : {
-          "transitions" : [ {
-            "id" : "INV-2",
-            "next" : "b2bua",
-            "condition" : {
-              "Session-Expires" : [ { "value" : "3600"}, { "refresher" : "uac"} ],
-              "Region" : [ { "equals" : "ORIGINATING" } ],
-              "Request-URI" : [ { "uri" : "^(sips?):([^@]+)(?:@(.+))?$" } ],
-              "From" : [ { "address" : "^.*<(sips?):([^@]+)(?:@(.+))?>.*$" } ],
-              "To" : [ { "user" : "bob" }, { "host" : "vorpal.net" }, { "equals" : "<sip:bob@vorpal.net>" } ],
-              "Directive" : [ { "equals" : "CONTINUE" } ],
-              "Region-Label" : [ { "equals" : "ORIGINATING" } ],
-              "Allow" : [ { "contains" : "INV" }, { "includes" : "INVITE" } ] },
-            "action" : {
-              "originating" : "From",
-              "route" : [ "sip:proxy1", "sip:proxy2" ] }
-          }, {
-            "id" : "INV-3",
-            "next" : "b2bua"
-          } ]
+  "defaultApplication": "b2bua",
+  "states": {
+    "null": {
+      "selectors": [
+        { "type": "regex", "id": "To", "attribute": "To",
+          "pattern": ".*<sips?:(?<user>[^@]+)@(?<host>[^>;]+).*" }
+      ],
+      "triggers": {
+        "INVITE": {
+          "transitions": [
+            {
+              "id": "INV-bob",
+              "when": "${To.user} == 'bob'",
+              "next": "b2bua",
+              "subscriber": "From",
+              "routes": [ "sip:${To.user}@special-proxy" ]
+            },
+            {
+              "id": "INV-default",
+              "next": "screening",
+              "subscriber": "From"
+            }
+          ]
         }
       }
-    },
+    }
   }
 }
 ```
 
-What does it mean? Let's take it line-by-line...
+See `AppRouterConfigurationSample.java` in this module for the full sample (it demonstrates capture-and-carry across a three-state path: ingress → screening → b2bua → registrar); the selector types live in `org.vorpal.blade.framework.v3.configuration.selectors` and the `when` expression syntax is the same one iRouter uses (`org.vorpal.blade.framework.v3.configuration.expressions`).
 
-```
-{
-  "previous" : {
-    "keep-alive" : {
-      "triggers" : {
-        "INVITE" : {
-          "transitions" : [ {
-```
+## Don't Overthink It
 
-The config file consists of a map of 'previous' states with 'triggers' (SIP methods) that may have a list of 'transitions'. In this case we are looking at INVITE messages being sent from an application called "keep-alive". So far, so good?
+FSMAR can only route the first message in a dialog. For instance, it can route an `INVITE` through multiple applications, but it cannot tamper with the flow of subsequent in-dialog messages like `200 OK`, `ACK`, `INFO`, or `BYE`. Those follow their natural course through the system.
 
-```
-          "transitions" : [ {
-            "id" : "INV-2",
-            "next" : "b2bua",
-            "condition" : {
-```
+FSMAR also cannot modify a SIP message. If that's your goal, write a SIP Servlet application — check out the BLADE framework's B2BUA or PROXY APIs.
 
-Now, we have a 'transition' called "INV-2" that will move the state from "keep-alive" to an application called "b2bua". The 'id' of the transition is optional and only serves to help with logging. Now we're getting to the juicy part. Consider this complicated 'condition':
+## Seamless Upgrades and Versioned Applications
 
-```
-            "condition" : {
-              "Session-Expires" : [ { "value" : "3600"}, { "refresher" : "uac"} ],
-              "Region" : [ { "equals" : "ORIGINATING" } ],
-              "Request-URI" : [ { "uri" : "^(sips?):([^@]+)(?:@(.+))?$" } ],
-              "From" : [ { "address" : "^.*<(sips?):([^@]+)(?:@(.+))?>.*$" } ],
-              "To" : [ { "user" : "bob" }, { "host" : "vorpal.net" }, { "equals" : "<sip:bob@vorpal.net>" } ],
-              "Directive" : [ { "equals" : "CONTINUE" } ],
-              "Region-Label" : [ { "equals" : "ORIGINATING" } ],
-              "Allow" : [ { "contains" : "INV" }, { "includes" : "INVITE" } ] },
-```
+FSMAR tracks applications as they are deployed and undeployed. New calls are routed to updated applications while existing calls continue through the previous versions until they complete naturally. FSMAR also supports dynamic configuration changes, so you never need to reboot a server or drop a call to update routing rules. FSMAR maintains a per-call copy of the configuration, so in-flight calls aren't affected by config edits.
 
-A 'condition' is made up of a list of comparisons. If they're all true, the condition matches and the transition will take place, meaning the FSMAR will send the INVITE from the "keep-alive" application to the "b2bua" application.
-
-Let's take more careful look at each one.
-
-## Parameterable Headers
-
-```
-              "Session-Expires" : [ { "value" : "3600"}, { "refresher" : "uac"} ],
-```
-
-In this case, we have a "comparison list" with two comparisons to be made on the "Session-Expires" header. From the sample INVITE packet, the header looks like: __Session-Expires: 3600;refresher=uac__
-
-This is considered a 'parameterable' header. The 'value' of the header is '3600' and the parameter 'refresher' is 'uac'. Why would anyone bother to match on this? There's no good reason except to demonstrate how pattern matching on parameterable headers works.
-
-## Region
-
-```
-              "Region" : [ { "equals" : "ORIGINATING" } ],
-```
-
-In this example, Region is not a real header name, but it refers to the value in defined by: SipServletRequest.getRegion().getType().toString();
-
-In this example, if the value 'equals' the string 'ORIGINATING', the pattern matches.
-
-### Request-URI
-
-```
-              "Request-URI" : [ { "uri" : "^(sips?):([^@]+)(?:@(.+))?$" } ],
-```
-
-
-Once again, "Request-URI" is not a real header name, but it refers to the value defined by: SipServletRequest.getRequestURI();
-
-The 'uri' operator employs a Java Regular Expression 'match'. For the "Request-URI", you are not limited to the 'uri' operator. You can use any operator you like.
-
-## From
-
-```
-              "From" : [ { "address" : "^.*<(sips?):([^@]+)(?:@(.+))?>.*$" } ],
-```
-
-Here is a slight variation on the 'uri' operator, called 'address'. It is defined by: SipServletRequest.getAddressHeader("From");
-
-There's a subtle difference between 'uri' and 'address'.
-
-Consider the example SIP address: __From: "Alice" <sip:alice@vorpal.org>loc=wonderland;tag=f234ee12__
-
-If you were to use the 'uri' operator, the value would be: __alice@vorpal.org__
-
-So, address gives you the ability to apply a Java Regular Expression to the whole string.
-
-## To
-
-```
-              "To" : [ { "user" : "bob" }, { "host" : "vorpal.net" }, { "equals" : "<sip:bob@vorpal.net>" } ],
-```
-
-Here's another example of matching against and address header. In this case, the 'user' is bob, the 'host' is "vorpal.net" and just for giggles, the entire string must be an exact (ignore case) match to "<sip:bob@vorpal.net>". Why do an exact match? No good reason, except to show how the 'equals' operator works.
-
-## Directive
-
-```
-              "Directive" : [ { "equals" : "CONTINUE" } ],
-```
-
-The name "Directive" is not a normal header, but instead refers to the value defined by: SipServletRequest.getRoutingDirective().toString();
-
-## Region-Label
-
-```
-              "Region-Label" : [ { "equals" : "ORIGINATING" } ],
-```
-
-The name "Region-Label" is not a normal header, but instead refers to the value defined by: SipServletRequest.getRegion().getLabel().toString();
-
-Isn't that the same as "Region"? Almost... According to the SIP Servlet specs, application developers can define their own unique 'labels' to help clarify specifics around the region type.
-
-## Allow
-
-```
-              "Allow" : [ { "contains" : "INV" }, { "includes" : "INVITE" } ] },
-```
-
-Let's consider the sample SIP packet again:
-
-```
-Allow: INFO, CANCEL, ACK, BYE, UPDATE
-Allow: PRACK, INVITE
-```
-
-Here we have two similar operators 'contains' and 'includes'. The 'contains' operator will look through every header value and apply the Java String's 'contains' method. The 'includes' operator will do the same, except using the 'equalsIgnoreCase' method.
-
-# Action
-
-Actions are the functions the FSMAR can apply to the SIP message.
-
-```
-            "action" : {
-              "originating" : "From",
-              "route" : [ "sip:proxy1", "sip:proxy2" ] }
-```
-
-In this case, the FSMAR is setting the region to "ORIGINATING" and the subscriber URI to the value of the 'From' header.
-
-An alternate example would be to set the region to "TERMINATING" and the subscriber URI to the value of the 'To' header like so:
-
-```
-              "terminating" : "To",
-```
-
-Failure to specify 'originating' or 'terminating' sets the region to "NEUTRAL" and the subscriber URI to 'null'.
-
-
-```
-              "route" : [ "sip:proxy1", "sip:proxy2" ] }
-```
-
-Finally, the 'route' keyword pushes two SIP endpoints onto the route stack. Keywords 'route_back' and 'route_final' may be used as well. See the SIP Servlet specs for a full definition for each purpose. They're similar, but slightly different.
-
-Failure to specify 'route', 'route_back' or 'route_final' results in a SipRouteModifier of "NO_ROUTE".
-
-#Don't Overthink It
-
-The FSMAR can only route the first message in a dialog. For instance, it can route INVITE message through multiple applications, but it cannot tamper with the flow of the subsequent in-dialog messages like "200 OK", ACK, INFO, or BYE. Those message follow the course through the system naturally, without any interference by the FSMAR.
-
-Also, the FSMAR cannot make modification to a SIP message. If that's your goal, you'll want to write a SIP Servlet application. Check out the BLADE framework's B2BUA or PROXY APIs for instructions on how to write your own application.
-
-# Seamless Upgrades and Versioned Applications
-
-The FSMAR keeps track of applications as they are deployed and undeployed in the application server. New calls are routed to the updated applications while old calls continue to travel through the existing applications until they complete naturally. The FSMAR also supports dynamic configuration changes so you never need to reboot a server or drop a call to make updates. The FSMAR maintains a copy of the configuration for each call so changes to the config won't break any calls in progress.
-
-Notes: Please remember to update the 'Weblogic-Application-Version' entry in the application's META-INF/MANIFEST.MF file for seamless upgrades to work.
-
-
-
+Remember to update the `Weblogic-Application-Version` entry in your application's `META-INF/MANIFEST.MF` for seamless upgrades to work.
