@@ -53,7 +53,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="${SCRIPT_DIR}/build-profiles"
 DEPLOY_DIR="${PROFILES_DIR}/deploy"
-WLS_PLUGIN="com.oracle.weblogic:weblogic-maven-plugin:14.1.1"
+
+# The WebLogic Maven plugin coordinate. The VERSION must match the running
+# server's WebLogic version (OCCAS 8.1 → 14.1.1, OCCAS 8.2/8.3 → 14.1.2); a
+# mismatched plugin won't resolve from ~/.m2, since bootstrap.sh installs only
+# the server's own version. Resolved once DIST_DIR is known, in this order:
+#   1. wls.plugin.version in the deploy conf      (explicit override)
+#   2. weblogic.version from the platform conf build.sh copied into dist/
+#   3. WLS_PLUGIN_VERSION_DEFAULT below           (last-resort fallback + warn)
+WLS_PLUGIN_ARTIFACT="com.oracle.weblogic:weblogic-maven-plugin"
+WLS_PLUGIN_VERSION_DEFAULT="14.1.1"
+WLS_PLUGIN=""   # set once DIST_DIR is known (see resolution block below)
 
 # Whole-environment tier order. Undeploy walks it in reverse (library last).
 ALL_TIERS=(shared fsmar admin services)
@@ -155,6 +165,7 @@ SSH_USER=$(read_prop       "$CONF_FILE" "ssh.user")
 APPROUTER_DIR=$(read_prop  "$CONF_FILE" "approuter.dir")
 ENGINE_NODES_RAW=$(read_prop "$CONF_FILE" "engine.nodes")
 DEPLOY_SERVICES=$(read_prop "$CONF_FILE" "deploy.services")
+WLS_PLUGIN_VERSION=$(read_prop "$CONF_FILE" "wls.plugin.version")
 
 [ -n "$BUILD_PROFILE" ] || die "${CONF_FILE}: missing build.profile"
 
@@ -280,6 +291,29 @@ else
 fi
 DIST_NAME=$(basename "$DIST_DIR")
 
+# --- Resolve the WebLogic Maven plugin version (see WLS_PLUGIN_ARTIFACT above) ---
+# Priority: conf override > platform conf stamped into dist/ > default fallback.
+WLS_PLUGIN_VERSION_SOURCE=""
+if [ -n "$WLS_PLUGIN_VERSION" ]; then
+    WLS_PLUGIN_VERSION_SOURCE="wls.plugin.version in ${ENV_NAME}.conf"
+else
+    # build.sh copies the active platform conf (occas-X.Y.conf) into the dist
+    # dir for traceability; its weblogic.version is what this build targets.
+    plat_conf=$(ls -1 "$DIST_DIR"/occas-*.conf 2>/dev/null | head -1)
+    if [ -n "$plat_conf" ]; then
+        WLS_PLUGIN_VERSION=$(read_prop "$plat_conf" "weblogic.version")
+        [ -n "$WLS_PLUGIN_VERSION" ] && WLS_PLUGIN_VERSION_SOURCE="$(basename "$plat_conf")"
+    fi
+fi
+if [ -z "$WLS_PLUGIN_VERSION" ]; then
+    WLS_PLUGIN_VERSION="$WLS_PLUGIN_VERSION_DEFAULT"
+    WLS_PLUGIN_VERSION_SOURCE="fallback default"
+    warn "Could not determine WebLogic version from dist/ or conf; defaulting"
+    warn "weblogic-maven-plugin to ${WLS_PLUGIN_VERSION}. If deploys fail to resolve"
+    warn "the plugin, set wls.plugin.version in ${CONF_FILE}."
+fi
+WLS_PLUGIN="${WLS_PLUGIN_ARTIFACT}:${WLS_PLUGIN_VERSION}"
+
 SHARED_LIB_WAR="${DIST_DIR}/blade-shared.war"
 FSMAR_JAR="${DIST_DIR}/blade-fsmar.jar"
 SHARED_LIB_NAME="blade-shared"  # Extension-Name from libs/shared/pom.xml
@@ -294,6 +328,7 @@ else
     log "  tiers:        ${TIERS[*]}  (whole environment)"
 fi
 [ "$NEEDS_WLS" = true ]   && log "  WebLogic:     ${WLS_USER}@${WLS_ADMINURL}"
+[ "$NEEDS_WLS" = true ]   && log "  WLS plugin:   ${WLS_PLUGIN_VERSION} (${WLS_PLUGIN_VERSION_SOURCE})"
 if [ "$NEEDS_FSMAR" = true ]; then
     if [ ${#ENGINE_NODES[@]} -gt 0 ]; then
         log "  engine nodes: ${ENGINE_NODES[*]} → ${APPROUTER_DIR}"
@@ -438,7 +473,8 @@ deploy_fsmar() {
                 if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] rm -f ${dest_file}${C_RESET}"
                 else rm -f "$dest_file"; fi ;;
             status)
-                ls -l "$dest_file" 2>&1 || warn "${jar_name} not present at ${dest_file}" ;;
+                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ls -l ${dest_file}${C_RESET}"
+                else ls -l "$dest_file" 2>&1 || warn "${jar_name} not present at ${dest_file}"; fi ;;
         esac
     else
         [ -n "$SSH_USER" ] || die "${CONF_FILE}: engine.nodes set but ssh.user missing"
@@ -454,7 +490,8 @@ deploy_fsmar() {
                     if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ssh ${sshdest} rm -f ${dest_file}${C_RESET}"
                     else ssh "$sshdest" rm -f "$dest_file" || rc=$?; fi ;;
                 status)
-                    ssh "$sshdest" ls -l "$dest_file" 2>&1 || warn "${jar_name} not present on ${node}" ;;
+                    if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ssh ${sshdest} ls -l ${dest_file}${C_RESET}"
+                    else ssh "$sshdest" ls -l "$dest_file" 2>&1 || warn "${jar_name} not present on ${node}"; fi ;;
             esac
         done
     fi

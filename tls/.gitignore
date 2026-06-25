@@ -1,0 +1,9 @@
+# Generated TLS material — NEVER commit. Private keys + keystores live here.
+out/
+
+# Belt-and-suspenders: no keystores/keys/CSRs anywhere under tls/.
+*.p12
+*.jks
+*.pem
+*.key
+*.csr
