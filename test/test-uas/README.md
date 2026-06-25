@@ -123,10 +123,10 @@ test-uas registers a `SettingsManager` MBean
 
 ## Deployment
 
-Deploys as a WAR to Oracle OCCAS with the `vorpal-blade` shared library:
+Deploys as a WAR to Oracle OCCAS with the `blade-shared` shared library:
 
 - **Context root**: `test-uas`
-- **WebLogic shared library**: `vorpal-blade` (specification version 2.0)
+- **WebLogic shared library**: `blade-shared` (specification version 3.0)
 
 SIPp scenarios for exercising both modes live in [`testing/`](testing) —
 they keep working unchanged against the URI shorthands.

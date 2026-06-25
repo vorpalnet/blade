@@ -92,7 +92,7 @@ What once required a complicated collection of Java classes is now a single clas
 
 ### Admin
 
-Deployed to the WebLogic AdminServer as skinny WARs that reference the `vorpal-blade` shared library.
+Deployed to the WebLogic AdminServer as skinny WARs that reference the `blade-shared` shared library.
 
 | Module | Context Root | Description |
 | --- | --- | --- |
@@ -255,9 +255,9 @@ Every WAR/JAR built by the active profile is copied to `dist/<version>-<build>/`
 
 ```
 dist/<version>-<build>/
-  vorpal-blade-library-framework.jar         # Framework library (bundled in WARs; not deployed)
-  vorpal-blade-library-shared.war            # WebLogic shared library (admin + cluster)
-  vorpal-blade-library-fsmar.jar             # FSMAR (copy to OCCAS approuter/)
+  blade-framework.jar         # Framework library (bundled in WARs; not deployed)
+  blade-shared.war            # WebLogic shared library (admin + cluster)
+  blade-fsmar.jar             # FSMAR (copy to OCCAS approuter/)
   admin/
     blade-portal.war                         # /blade/portal    → AdminServer
     blade-redirect.war                       # /blade           (302s to /blade/portal/)
@@ -282,7 +282,7 @@ Admin-tier WARs are named `blade-<app>.war` so their WebLogic app names never co
 - The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
 - **EAR (currently disabled)**: the `services/` aggregator no longer produces a `vorpal-blade-services-<profile>.ear`. Services are deployed individually as WARs while the EAR logic is offline. See `services/pom.xml` for the TODO marker.
 - **FSMAR JAR** must be installed manually into the OCCAS approuter `lib/` folder.
-- **Admin WARs** are skinny like service WARs — `WEB-INF/lib` carries only the framework jar; 3rd-party JARs come from the `vorpal-blade` shared library. They deploy to AdminServer (as `blade-admin.ear`, or individually).
+- **Admin WARs** are skinny like service WARs — `WEB-INF/lib` carries only the framework jar; 3rd-party JARs come from the `blade-shared` shared library. They deploy to AdminServer (as `blade-admin.ear`, or individually).
 - On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
 
 ### Skipping the dist copy (dev mode)
@@ -298,18 +298,17 @@ export BLADE_SKIP_DIST=1         # sticky for the current shell
 
 ### Deployment
 
-BLADE deploys in four tiers — shared library, admin apps, services (+ test apps), and FSMAR. `deploy.sh` is now a single-tier-per-invocation tool: you specify which dist subdir to push and the WebLogic target it goes to. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full guide. The short version:
+BLADE deploys in four tiers — shared library, admin apps, services (+ test apps), and FSMAR. The `<env>.conf` profile is the single source of truth (admin URL, per-tier WebLogic targets, engine node list, approuter path, app allowlist); `./deploy.sh <env>` with no tier deploys the **whole environment** in dependency-safe order. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full guide. The short version:
 
 ```bash
 ./build.sh production                 # produce dist/<ver>-<build>/
-$EDITOR build-profiles/deploy/production.conf          # set adminurl, user, etc.
+$EDITOR build-profiles/deploy/production.conf          # adminurl, user, targets, engine.nodes
 cp build-profiles/deploy/production.secret.example \
    build-profiles/deploy/production.secret             # fill in wls.password
 
-./deploy.sh production shared                              # WebLogic shared library
-./deploy.sh production admin AdminServer                   # all admin/*.war → AdminServer
-./deploy.sh production services BEA_ENGINE_TIER_CLUST      # all services/*.war → cluster
-./deploy.sh production fsmar                               # FSMAR jars → approuter/
+./deploy.sh production --dry-run      # sanity check the whole environment
+./deploy.sh production                # deploy everything, in order: shared → fsmar → admin → services
+./deploy.sh production services       # or just one tier (target read from the conf)
 ```
 
 ## Build Number

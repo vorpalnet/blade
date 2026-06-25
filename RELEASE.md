@@ -2,6 +2,58 @@
 
 ## 2.9.9 (unreleased)
 
+### `deploy.sh`: one env file drives the whole deploy
+
+`deploy.sh` was reworked so a single command deploys an entire environment from its
+`build-profiles/deploy/<env>.conf` profile. **`./deploy.sh <env>`** (no tier) now deploys
+all four tiers in dependency-safe order — **shared → fsmar → admin → services** — so the
+shared library is always in place (≥ spec-version 3.0) before any WAR that references it;
+`undeploy` walks the reverse order (library last). `./deploy.sh <env> <tier>` still does a
+single tier for dev loops.
+
+- **The `<target>` positional argument is gone.** Each tier's WebLogic target is read from
+  the conf (`wls.targets.admin` / `wls.targets.cluster` / `wls.targets.both`) instead of
+  being retyped on the command line. **Migration:** drop the target from any scripted
+  `./deploy.sh <env> <tier> <target>` calls → `./deploy.sh <env> <tier>`.
+- **`engine.nodes`** (new conf key): the FSMAR fat JAR is `scp`'d to every listed engine
+  host's `approuter/`, not just one. Back-compat: falls back to a single `ssh.host`, then to
+  a local `cp` into `approuter.dir`. This is an operator-time push, separate from the paused
+  cluster-file-sync restart-time pull.
+- **`deploy.services`** (new conf key): optional CSV allowlist narrowing which service WARs
+  deploy (`*`/empty = all built). Admin ships as one EAR, so it stays all-or-nothing.
+- `<env>` may now be a profile **name** or a **path** to a conf file.
+- Fixed a latent fragility: `read_prop` no longer aborts the script (via `set -o pipefail`)
+  when an optional conf key is absent.
+
+### Library deploy artifacts renamed `vorpal-blade-library-*` → `blade-*`
+
+The three deployable library filenames lost the `vorpal-` company prefix and the redundant
+`-library` segment: `blade-framework.jar`, `blade-fsmar.jar`, `blade-shared.war` (was
+`vorpal-blade-library-framework.jar` / `-fsmar.jar` / `-shared.war`). *Vorpal* is the
+company, *BLADE* is the project — the deploy units now read as the project's. **Only the
+Maven `<finalName>` (build output) changed.** The Maven coordinates / `artifactId`s are
+unchanged (`org.vorpal.blade:vorpal-blade-library-framework`, …), so the framework jar still
+lands in each skinny WAR's `WEB-INF/lib` as `vorpal-blade-library-framework-<ver>.jar` (named
+by artifactId) and the `packagingExcludes` skinny-WAR filter is untouched. `build.sh`/`deploy.sh`
+reference the new `blade-*` filenames; the admin EAR is `blade-admin.ear`.
+
+### WebLogic shared library renamed `vorpal-blade` → `blade-shared` (spec-version 3.0)
+
+The shared library's `Extension-Name` (the identity WebLogic matches `<library-ref>` against)
+changed from `vorpal-blade` to `blade-shared`, and its `Specification-Version` from `2.0` to
+`3.0` (aligning the shared library with the framework's 3.0 line). This is a **coordinated**
+change — the `Extension-Name` in `libs/shared`'s manifest, the `<library-name>` +
+`<specification-version>` in **all 30 referring WARs'** `weblogic.xml`, and
+`deploy.sh`'s `SHARED_LIB_NAME` (the `-Dname` of the library deployment) all moved together.
+A WAR whose `<library-name>` doesn't match the deployed library's `Extension-Name` fails to
+deploy (unresolved library reference), so they must stay in lockstep.
+
+**Deploy order:** `<exact-match>` is `false`, so a WAR requires the library version to be
+**≥** its referenced version. Deploy the new `blade-shared` 3.0 library **before** redeploying
+any WAR that now references 3.0 — an old `vorpal-blade` 2.0 library still on the server would
+fail the `≥3.0` check. (The shared library's `<context-root>` — a fixed deploy id — is
+unchanged.)
+
 ### Services tier: dropped `blade-cluster.ear` — deploy service WARs individually
 
 The services/cluster EAR (`blade-cluster.ear`) is gone. OCCAS 8.3 gives no visibility into
@@ -9,8 +61,7 @@ what's deployed inside an EAR, and the services tier has no equivalent of the ad
 enumerate its apps — so a bundled services EAR was an opaque blob. Each service now deploys as
 its own WAR (`hold.war`, `proxy-router.war`, …), visible individually in WebLogic. The build
 already emits these WARs to `dist/<ver>/services/`, and `deploy.sh <env> services` already
-loops them when no EAR is present — so no deploy.sh code change was needed. The EAR aggregator
-moved to `retired/cluster/`; its `cluster` Maven profile and build-profile entries were
+loops them when no EAR is present — so no deploy.sh code change was needed. The EAR aggregator (`services/cluster`) was deleted; its `cluster` Maven profile and build-profile entries were
 removed. **The admin EAR (`blade-admin.ear`) stays** — the portal makes it self-describing.
 
 ### `admin/watcher` retired
@@ -58,8 +109,8 @@ This is the first concrete client of the planned config-versioning upgrade-on-lo
 ### FSMAR 2 retired; FSMAR 3 is now the un-versioned canonical FSMAR
 
 FSMAR 3 is now *the* FSMAR. The module `libs/fsmar3/` was renamed to `libs/fsmar/` and its
-artifact de-versioned from `vorpal-blade-library-fsmar3.jar` to
-`vorpal-blade-library-fsmar.jar` (version belongs in MANIFEST.MF, not the filename). The
+artifact de-versioned from `vorpal-blade-library-fsmar3.jar` to `blade-fsmar.jar` (version
+belongs in MANIFEST.MF, not the filename; the `vorpal-`/`-library` strip is noted above). The
 legacy **FSMAR 2** module moved to `retired/fsmar2/` and is **excluded from the standard
 build** — no Maven profile references it, and `build.sh` only discovers modules under
 `libs/`, `admin/`, `services/`, `test/`. It can still be built by hand
@@ -70,10 +121,12 @@ Internals are unchanged this pass (least churn): the runtime package stays
 `…library.fsmar3.AppRouterProvider`, and the config file stays `fsmar3.json`. Only the
 build *output* (jar) and module *directory* lost the version number.
 
-**Deploy note:** `vorpal-blade-library-fsmar.jar` previously meant FSMAR 2. It now means
-FSMAR 3. A domain that drops in the new jar must migrate its `fsmar2.json` to `fsmar3.json`
-(use the Flow editor's FSMAR 2 → 3 converter) before the new router will route — the file
-swap and the config migration must happen together.
+**Deploy note:** the FSMAR fat jar (now `blade-fsmar.jar`) previously meant FSMAR 2; it now
+means FSMAR 3. A domain that drops in the new jar over an existing `fsmar2.json` keeps routing
+— the engine auto-upgrades the legacy config on load (see the un-versioned-by-filename note
+above), logging loudly. No simultaneous file swap is required; the recommended path is still to
+open the config in the Flow editor, review the FSMAR 2 → 3 conversion, and re-save as
+`fsmar.json`.
 
 ### FSMAR config model moved into the framework JAR
 
@@ -440,9 +493,9 @@ would have broken the engine's config load.
   sample `_samples/fsmar3.json.SAMPLE` instead of a hardcoded JS copy that
   had drifted from `AppRouterConfigurationSample` — one source of truth.
 
-**Deploy order matters**: engines must get the new
-`vorpal-blade-library-fsmar3.jar` before any diagram-bearing config is
-published, or the old class rejects the unknown `diagram` field on load.
+**Deploy order matters**: engines must get the new FSMAR jar (now `blade-fsmar.jar`)
+before any diagram-bearing config is published, or the old class rejects the
+unknown `diagram` field on load.
 
 ### Flow editor: publish straight to the live fsmar3 config
 

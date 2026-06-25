@@ -228,7 +228,7 @@ cat > "$DOCROOT/index.html" <<HEADER
             <section class="vorpal-hero">
                 <div>
                     <h1>BLADE API Reference</h1>
-                    <p>Generated API documentation for every BLADE module &mdash; framework, libraries, admin tools, and services &mdash; with UML class diagrams. The Blended Layer Application Development Environment.</p>
+                    <p>Generated API documentation for every BLADE module &mdash; framework, libraries, admin tools, and services &mdash; with UML class diagrams. The Blended Layer Appliance Development Environment.</p>
                 </div>
                 <div class="vorpal-hero-meta">
                     <span>API Reference</span>

@@ -8,8 +8,8 @@
 	<wls:context-root>blade/logs</wls:context-root>
 
 	<wls:library-ref>
-		<wls:library-name>vorpal-blade</wls:library-name>
-		<wls:specification-version>2.0</wls:specification-version>
+		<wls:library-name>blade-shared</wls:library-name>
+		<wls:specification-version>3.0</wls:specification-version>
 		<wls:exact-match>false</wls:exact-match>
 	</wls:library-ref>
 

@@ -71,7 +71,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-library-framework</finalName>
+		<finalName>blade-framework</finalName>
 		<!-- Opt out of the parent POM's .java-bundling resource. The framework
 		     ships sources as a separate -sources.jar (see maven-source-plugin
 		     below) so downstream WARs that bundle the framework don't carry a

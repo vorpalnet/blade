@@ -17,7 +17,7 @@
 
 	<!-- Skinny WAR like every other admin/service app: WEB-INF/lib carries
 	     only the framework jar (parent war-plugin packagingExcludes); all
-	     3rd-party JARs come from the vorpal-blade shared library via the
+	     3rd-party JARs come from the blade-shared shared library via the
 	     <library-ref> in weblogic.xml. Common 3rd-party deps (jackson,
 	     swagger, slf4j, ipaddress, json-path, commons-*) are inherited
 	     provided-scope from the parent; only the Configurator-specific

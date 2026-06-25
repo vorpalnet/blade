@@ -471,7 +471,7 @@ Reserved meta-variables (always win over same-named session/env values):
 
 ## Deployment
 
-Context root: `/irouter`. The WAR depends on the `vorpal-blade` shared library for Jackson, Nimbus OAuth SDK, and the other third-party JARs — do not remove the `<library-ref>` from `weblogic.xml`.
+Context root: `/irouter`. The WAR depends on the `blade-shared` shared library for Jackson, Nimbus OAuth SDK, and the other third-party JARs — do not remove the `<library-ref>` from `weblogic.xml`.
 
 ## Javadocs
 

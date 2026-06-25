@@ -17,7 +17,7 @@
 	<description>Single deployable that bundles every BLADE admin webapp, so the
 		whole admin tier deploys to AdminServer in one step. Each WAR is
 		self-contained exactly as it deploys on its own — it carries the
-		framework jar and references the `vorpal-blade` shared library via its
+		framework jar and references the `blade-shared` shared library via its
 		own weblogic.xml (the proven per-WAR model). This EAR is purely a
 		packaging convenience over those WARs; it bundles no libraries itself.
 		An individual admin app can still be redeployed on its own for testing.
@@ -38,7 +38,7 @@
 	<dependencies>
 		<!-- Admin WAR modules are contributed via the ear-* profiles below.
 		     No JARs in this EAR — framework is in each WAR, 3rd-party libs come
-		     from the vorpal-blade shared library at runtime. -->
+		     from the blade-shared shared library at runtime. -->
 	</dependencies>
 
 	<build>

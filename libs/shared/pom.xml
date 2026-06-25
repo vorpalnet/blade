@@ -121,7 +121,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-library-shared</finalName>
+		<finalName>blade-shared</finalName>
 		<plugins>
 			<!-- Step 1: Copy dependency JARs for package scanning -->
 			<plugin>
@@ -250,10 +250,10 @@ fi
 					<archive>
 						<manifestEntries>
 							<Specification-Title>vorpal-blade-library-shared</Specification-Title>
-							<Specification-Version>2.0</Specification-Version>
-							<Implementation-Title>vorpal-blade-library-shared.war</Implementation-Title>
+							<Specification-Version>3.0</Specification-Version>
+							<Implementation-Title>blade-shared.war</Implementation-Title>
 							<Implementation-Version>${revision}</Implementation-Version>
-							<Extension-Name>vorpal-blade</Extension-Name>
+							<Extension-Name>blade-shared</Extension-Name>
 							<Copyright>${blade.copyright}</Copyright>
 							<License>${blade.license}</License>
 							<Built-By>${user.name}</Built-By>

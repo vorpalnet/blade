@@ -4,8 +4,8 @@
     <wls:context-root>blade/configurator</wls:context-root>
 
 	<wls:library-ref>
-		<wls:library-name>vorpal-blade</wls:library-name>
-		<wls:specification-version>2.0</wls:specification-version>
+		<wls:library-name>blade-shared</wls:library-name>
+		<wls:specification-version>3.0</wls:specification-version>
 		<wls:exact-match>false</wls:exact-match>
 	</wls:library-ref>
 
@@ -51,7 +51,7 @@
 
 	<!-- No <prefer-web-inf-classes>: this WAR ships only the framework jar
 	     in WEB-INF/lib (war plugin strips the rest via packagingExcludes);
-	     3rd-party classes come from the vorpal-blade shared library, whose
+	     3rd-party classes come from the blade-shared shared library, whose
 	     auto-generated <prefer-application-packages> owns the classloader
 	     policy — the two settings are mutually exclusive on WLS 14.1.1+. -->
 	<wls:container-descriptor>

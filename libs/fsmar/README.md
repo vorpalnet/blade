@@ -31,11 +31,11 @@ FSMAR uses state memory and pattern matching to route SIP traffic between applic
 
 FSMAR is not a WebLogic deployment — it's a fat JAR that lives in the OCCAS domain's `approuter/` directory and is activated via the OCCAS admin console. See the **FSMAR install walkthrough** in [DEPLOYMENT.md](../../DEPLOYMENT.md#fsmar-install-walkthrough) for the full procedure.
 
-For automated installs, use `./deploy.sh <env> fsmar` from the repository root, which copies `vorpal-blade-library-fsmar.jar` to the configured `approuter.dir` (locally or over SSH).
+For automated installs, use `./deploy.sh <env> fsmar` from the repository root, which copies `blade-fsmar.jar` to the configured `approuter.dir` (locally or over SSH).
 
 On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory alongside samples from every other BLADE app. Copy it into place, rename, and edit.
 
-**Note:** FSMAR installs to `approuter/` as `vorpal-blade-library-fsmar.jar`; OCCAS loads its `SipApplicationRouterProvider` SPI entry at boot. (The retired FSMAR 2 jar is no longer built — see `retired/fsmar2/`.)
+**Note:** FSMAR installs to `approuter/` as `blade-fsmar.jar`; OCCAS loads its `SipApplicationRouterProvider` SPI entry at boot. (The retired FSMAR 2 jar is no longer built — see `retired/fsmar2/`.)
 
 ## Tutorial
 

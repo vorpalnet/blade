@@ -57,7 +57,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>vorpal-blade-library-fsmar</finalName>
+		<finalName>blade-fsmar</finalName>
 		<plugins>
 			<!-- FSMAR is NOT a typical Java library. It's a fat JAR that
 			     gets dropped into OCCAS's $DOMAIN_HOME/approuter/ directory

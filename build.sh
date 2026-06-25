@@ -39,11 +39,12 @@
 #   show an EAR's contents; deploy.sh loops the per-service WARs).
 #
 # Dist management:
-#   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/ into
-#   a tier subdirectory matching its deployment target:
-#     dist/<ver>-<build>/admin/      Admin apps + javadoc (→ AdminServer)
-#     dist/<ver>-<build>/services/   Services + test apps (→ cluster)
-#     dist/<ver>-<build>/            Libraries + build conf files (special)
+#   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/:
+#     dist/<ver>-<build>/            blade-admin.ear + libraries + conf files
+#                                    (the deploy units: admin EAR, fsmar.jar,
+#                                    shared.war). No admin/ subdir — the EAR is
+#                                    the admin tier's only deployable.
+#     dist/<ver>-<build>/services/   Service WARs (the services deploy units)
 #   Plus the active build profile + platform conf files at the root for
 #   traceability. On failure: the current build's dist directory is deleted.
 #
@@ -58,7 +59,7 @@
 #   BLADE's source uses Java 23+ Markdown '///' doc comments (JEP 467), so docs
 #   are generated automatically (via the -Pjavadocs profile) whenever the build
 #   JDK is >= 23 — even though bytecode still targets Java 11 (--release). The
-#   resulting blade-javadoc.war is copied to dist/<ver>-<build>/admin/. On an older
+#   resulting blade-javadoc.war is bundled into the admin EAR (blade-admin.ear). On an older
 #   build JDK the docs are skipped with a warning; the build itself is fine.
 #   To skip generation deliberately (e.g. fast dev loops):
 #     ./build.sh --no-javadoc               # one-off
@@ -197,7 +198,8 @@ module_dir() {
 # fit the generic admin/services tier model.
 dist_subdir_for() {
     case "$1" in
-        admin/*)             echo "admin" ;;
+        admin/ear)           echo "" ;;          # the admin EAR (blade-admin.ear) → dist root
+        admin/*)             echo "skip" ;;      # individual admin WARs: the EAR is the deploy unit — don't copy to dist
         services/*|test/*)   echo "services" ;;  # test apps live with services
         proto/*)             echo "proto" ;;     # incubator apps — built, never shipped
         libs/*)              echo "" ;;          # libraries at root
@@ -231,7 +233,9 @@ copy_all_to_dist() {
         target="${SCRIPT_DIR}/${mdir}/target"
         [ -d "$target" ] || { missing=$((missing + 1)); continue; }
         subdir=$(dist_subdir_for "$mdir")
-        if [ -n "$subdir" ]; then
+        if [ "$subdir" = "skip" ]; then
+            continue   # built but not copied to dist (e.g. individual admin WARs — the EAR is the deploy unit)
+        elif [ -n "$subdir" ]; then
             destdir="$DISTDIR/$subdir"
             mkdir -p "$destdir"
         else
@@ -316,11 +320,11 @@ write_deployment_manifest() {
     # Classify a root-level artifact (libraries + build conf files).
     classify_root_artifact() {
         case "$1" in
-            vorpal-blade-library-fsmar.jar)
+            blade-fsmar.jar)
                 echo "fsmar|approuter/|SIP application router (reboot engine tier)" ;;
-            vorpal-blade-library-shared.war)
+            blade-shared.war)
                 echo "shared-lib|admin+cluster|WebLogic shared library (3rd-party JARs)" ;;
-            vorpal-blade-library-framework.jar)
+            blade-framework.jar)
                 echo "framework|bundled in WARs|BLADE framework library (not deployed directly)" ;;
             *.conf)
                 echo "metadata|n/a|Build profile / platform used for this build" ;;
@@ -655,7 +659,7 @@ fi
 # can't render the docs, so we skip them (the build itself is unaffected) and
 # warn below. Generating activates the -Pjavadocs profile, which adds the
 # admin/javadoc module; we append "javadoc" to the dist copy list so the
-# resulting blade-javadoc.war lands in dist/<ver>-<build>/admin/.
+# blade-javadoc.war is bundled into blade-admin.ear (admin WARs are not copied to dist individually).
 JAVADOC_MIN_JDK=23
 JAVADOC_FLAGS=()
 JAVADOC_OLD_JDK=false

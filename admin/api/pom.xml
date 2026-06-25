@@ -30,7 +30,7 @@
 	<dependencies>
 		<!-- Same as portal/flow: the framework JAR (SettingsManager, Configuration)
 		     is the only compile dep; JAX-RS, Servlet, and Jackson come from the
-		     vorpal-blade shared library at runtime. Inherits the parent pom's
+		     blade-shared shared library at runtime. Inherits the parent pom's
 		     packagingExcludes regex, which bundles ONLY the framework JAR. -->
 		<dependency>
 			<groupId>org.vorpal.blade</groupId>

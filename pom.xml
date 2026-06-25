@@ -10,7 +10,7 @@
 	<packaging>pom</packaging>
 
 	<name>BLADE</name>
-	<description>Blended Layer Application Development Environment</description>
+	<description>Blended Layer Appliance Development Environment</description>
 	<url>https://vorpal.net</url>
 
 	<modules>
@@ -743,6 +743,11 @@ fi
 			<id>test-console</id>
 			<activation><property><name>!skip.test-console</name></property></activation>
 			<modules><module>proto/test-console</module></modules>
+		</profile>
+		<profile>
+			<id>gumball-agent</id>
+			<activation><property><name>!skip.gumball-agent</name></property></activation>
+			<modules><module>proto/gumball-agent</module></modules>
 		</profile>
 
 		<!-- The admin EAR (admin/ear, module name "ear"): assembles the admin

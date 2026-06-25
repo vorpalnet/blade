@@ -190,10 +190,10 @@ template of its own.
 
 ## Deployment
 
-Deploys as a WAR to Oracle OCCAS with the `vorpal-blade` shared library:
+Deploys as a WAR to Oracle OCCAS with the `blade-shared` shared library:
 
 - **Context root**: `test-uac`
-- **WebLogic shared library**: `vorpal-blade` (specification version 2.0)
+- **WebLogic shared library**: `blade-shared` (specification version 3.0)
 
 Deploy to every engine-tier node; drive runs per node via REST or
 cluster-wide from the Test Console.

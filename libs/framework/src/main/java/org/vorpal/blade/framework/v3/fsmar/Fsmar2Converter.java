@@ -84,7 +84,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// ## CLI
 ///
 /// ```
-/// java -cp vorpal-blade-library-fsmar3.jar \
+/// java -cp blade-fsmar.jar \
 ///      org.vorpal.blade.framework.v3.fsmar.Fsmar2Converter fsmar2.json fsmar3.json
 /// ```
 ///
