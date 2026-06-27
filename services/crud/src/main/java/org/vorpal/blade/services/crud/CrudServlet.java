@@ -17,6 +17,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v3.crud.CrudConfiguration;
 import org.vorpal.blade.framework.v3.crud.CrudConfigurationSample;
+import org.vorpal.blade.framework.v3.crud.CrudSettings;
 import org.vorpal.blade.framework.v3.crud.RuleSet;
 
 /**
@@ -31,11 +32,11 @@ import org.vorpal.blade.framework.v3.crud.RuleSet;
 public class CrudServlet extends B2buaServlet {
 
 	private static final String RULESET_ATTR = "crud.ruleSet";
-	public static SettingsManager<CrudConfiguration> settingsManager;
+	public static SettingsManager<CrudSettings> settingsManager;
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, CrudConfiguration.class, new CrudConfigurationSample());
+		settingsManager = new SettingsManager<>(event, CrudSettings.class, new CrudConfigurationSample());
 	}
 
 	@Override

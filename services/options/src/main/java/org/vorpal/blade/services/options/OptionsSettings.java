@@ -29,9 +29,14 @@ import java.io.Serializable;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import org.vorpal.blade.framework.v2.config.SchemaTitle;
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
-@SchemaTitle("Options")
+@SchemaAbout(
+		name = "Options",
+		tagline = "SIP OPTIONS Keep-Alive Responder",
+		description = "Answers inbound SIP OPTIONS pings — the keep-alive and health probes "
+				+ "upstream elements send to confirm the server is alive — with configurable "
+				+ "responses, so monitors and SBCs see the node as in-service.")
 public class OptionsSettings extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 

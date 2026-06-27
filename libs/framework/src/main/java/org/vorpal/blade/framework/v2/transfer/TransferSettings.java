@@ -9,12 +9,20 @@ import org.vorpal.blade.framework.v2.config.RouterConfig;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
+
 /**
  * Configuration settings for transfer operations.
  *
  * <p>Defines transfer style defaults, allowed SIP methods, and header
  * preservation rules for INVITE and REFER requests.
  */
+@SchemaAbout(
+		name = "Transfer",
+		tagline = "Attended & Blind Call Transfer",
+		description = "Implements SIP call transfer (RFC 3515 REFER) for both attended "
+				+ "(consultative) and blind transfers, managing the REFER/NOTIFY signaling and "
+				+ "transfer state through completion or failure.")
 public class TransferSettings extends RouterConfig implements Serializable {
 	private static final long serialVersionUID = 2L;
 

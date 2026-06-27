@@ -166,6 +166,7 @@ APPROUTER_DIR=$(read_prop  "$CONF_FILE" "approuter.dir")
 ENGINE_NODES_RAW=$(read_prop "$CONF_FILE" "engine.nodes")
 DEPLOY_SERVICES=$(read_prop "$CONF_FILE" "deploy.services")
 WLS_PLUGIN_VERSION=$(read_prop "$CONF_FILE" "wls.plugin.version")
+SHARED_FS=$(read_prop      "$CONF_FILE" "shared.filesystem")
 
 [ -n "$BUILD_PROFILE" ] || die "${CONF_FILE}: missing build.profile"
 
@@ -452,8 +453,9 @@ deploy_shared() {
 
 # Copy / remove the FSMAR fat JAR to each engine node's approuter/ directory.
 # The jar is loaded by the WLSS Application Router at boot (not a WebLogic
-# deployment). engine.nodes lists every engine host; with no nodes we fall back
-# to a local cp into approuter.dir.
+# deployment). engine.nodes lists every engine host; with no nodes — or when
+# shared.filesystem=true (approuter.dir is on a filesystem every node mounts) —
+# we do a single local cp into approuter.dir instead of an scp per node.
 deploy_fsmar() {
     local action="$1"
     [ -f "$FSMAR_JAR" ] || die "Missing: ${FSMAR_JAR}"
@@ -462,9 +464,10 @@ deploy_fsmar() {
     local dest_file="${APPROUTER_DIR}/${jar_name}"
     local rc=0
 
-    if [ ${#ENGINE_NODES[@]} -eq 0 ]; then
-        # Local filesystem (no ssh targets configured).
-        info "Tier: fsmar → (local) ${dest_file}"
+    if [ "$SHARED_FS" = "true" ] || [ ${#ENGINE_NODES[@]} -eq 0 ]; then
+        # Shared filesystem (or no ssh targets): one local cp reaches every node.
+        [ "$SHARED_FS" = "true" ] && info "Tier: fsmar → (shared filesystem, single copy) ${dest_file}" \
+                                  || info "Tier: fsmar → (local) ${dest_file}"
         case "$action" in
             deploy)
                 if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] cp ${FSMAR_JAR} ${dest_file}${C_RESET}"

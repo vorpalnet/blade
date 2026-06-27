@@ -6,9 +6,14 @@ import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import org.vorpal.blade.framework.v2.config.SchemaTitle;
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
-@SchemaTitle(value = "Analytics")
+@SchemaAbout(
+		name = "Analytics",
+		tagline = "Per-Call Records & Metrics",
+		description = "Captures per-call records and metrics from SIP traffic as it flows through "
+				+ "the cluster — call counts, status distributions, and timing — for reporting "
+				+ "and troubleshooting.")
 public class AnalyticsConfig extends Configuration implements Serializable {
 
 	private static final long serialVersionUID = 1L;

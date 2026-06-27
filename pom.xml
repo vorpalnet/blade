@@ -636,11 +636,6 @@ fi
 			<modules><module>services/proxy-registrar</module></modules>
 		</profile>
 		<profile>
-			<id>proxy-router</id>
-			<activation><property><name>!skip.proxy-router</name></property></activation>
-			<modules><module>services/proxy-router</module></modules>
-		</profile>
-		<profile>
 			<id>irouter</id>
 			<activation><property><name>!skip.irouter</name></property></activation>
 			<modules><module>services/irouter</module></modules>

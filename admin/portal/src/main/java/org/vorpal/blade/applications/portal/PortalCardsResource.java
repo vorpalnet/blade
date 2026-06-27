@@ -24,9 +24,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-/// Aggregates the portal launcher deck.
+/// Aggregates the portal launcher deck — two tiers of cards.
 ///
-/// Two JMX walks compose the deck:
+/// **Apps tier** (`kind:"app"`) — launchable admin tools. Composed by:
 ///
 /// 1. **`WebApplicationRuntimeMBean` walk** — every deployed admin app
 ///    (context-root starts with `blade/`, `ApplicationRuntime.ActiveVersionState == 2`).
@@ -34,6 +34,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// 2. **`SettingsMXBean` walk** — query `vorpal.blade:Name=*,Type=Configuration,*`
 ///    and invoke `getCurrentJson()` on each match to read the top-level `name`,
 ///    metadata. Same federated DomainRuntime path Configurator uses.
+///
+/// **Services tier** (`kind:"service"`) — SIP services. These have no `blade/*`
+/// webapp to walk, so the apps tier never sees them; instead `walkServiceSettings`
+/// keeps the Cluster-keyed Configuration MXBeans the apps tier discards and renders
+/// each as a documentation card whose action opens the Configurator (`configuratorDomain`).
+/// Same `@SchemaAbout` identity drives the text.
 ///
 /// **Join key**: lastSegment(contextRoot) — admin convention is that
 /// `<wls:context-root>blade/<app></wls:context-root>` ends in the same slug
@@ -71,6 +77,8 @@ public class PortalCardsResource {
 				if (c.tagline != null) n.put("tagline", c.tagline);
 				if (c.description != null) n.put("description", c.description);
 				n.put("hasMetadata", c.hasMetadata);
+				n.put("kind", c.kind);
+				if (c.configuratorDomain != null) n.put("configuratorDomain", c.configuratorDomain);
 			}
 			return Response.ok(out.toString()).type(MediaType.APPLICATION_JSON).build();
 		} catch (Exception e) {
@@ -84,13 +92,16 @@ public class PortalCardsResource {
 	}
 
 	private List<Card> discover() throws Exception {
-		List<Card> cards = new ArrayList<>();
+		List<Card> appCards = new ArrayList<>();
+		List<Card> serviceCards = new ArrayList<>();
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
 
 			List<String> contextRoots = walkAdminContextRoots(mbs);
 			Map<String, ObjectName> settingsMBeans = walkSettingsMBeans(mbs);
 
+			// Pass 1 — admin apps. One card per deployed `blade/*` webapp,
+			// joined to its (AdminServer-local) SettingsMXBean by flatten().
 			for (String ctxRoot : contextRoots) {
 				if (SELF_CONTEXT_ROOT.equals(ctxRoot)) {
 					continue;
@@ -99,10 +110,39 @@ public class PortalCardsResource {
 				// context path ("blade/crud" → "blade-crud"), so the join is the
 				// same flatten — no display-name conventions, no special cases.
 				String settingsKey = SettingsManager.flatten(ctxRoot);
-				cards.add(buildCard(mbs, settingsKey, ctxRoot, settingsMBeans.get(settingsKey)));
+				appCards.add(buildCard(mbs, settingsKey, ctxRoot,
+						settingsMBeans.get(settingsKey), "app", null));
+			}
+
+			// Pass 2 — SIP services. These have NO `blade/*` webapp to walk
+			// (flat context-roots, no browser GUI), so pass 1 never sees them.
+			// But each registers a Configuration MXBean on the engine CLUSTER
+			// (with a `Cluster` key — the discriminator pass 1 uses to keep
+			// services OFF the admin deck). We collect exactly those here and
+			// turn each into a documentation card whose action opens the
+			// Configurator for that service. The card text comes from the same
+			// @SchemaAbout schema identity admin cards read.
+			for (Map.Entry<String, ObjectName> e : walkServiceSettings(mbs).entrySet()) {
+				String name = e.getKey();
+				Card card = buildCard(mbs, name, name, e.getValue(), "service", name);
+				// A service joins the deck only once a developer has authored
+				// its identity (@SchemaAbout). Unlike admin apps — which are a
+				// curated, deployed-on-purpose set — the cluster carries config
+				// MBeans we don't want on a customer-facing deck: the test tier
+				// (test-uac/uas/b2bua) and assorted internals. Requiring authored
+				// identity is the curation gate. A new service shows up the moment
+				// it's given @SchemaAbout.
+				if (card.hasMetadata) {
+					serviceCards.add(card);
+				}
 			}
 		}
-		cards.sort((a, b) -> a.name.compareToIgnoreCase(b.name));
+		appCards.sort((a, b) -> a.name.compareToIgnoreCase(b.name));
+		serviceCards.sort((a, b) -> a.name.compareToIgnoreCase(b.name));
+
+		List<Card> cards = new ArrayList<>(appCards.size() + serviceCards.size());
+		cards.addAll(appCards);
+		cards.addAll(serviceCards);
 		return cards;
 	}
 
@@ -161,7 +201,28 @@ public class PortalCardsResource {
 		return on.getKeyProperty("Cluster") != null;
 	}
 
-	private Card buildCard(MBeanServer mbs, String appName, String ctxRoot, ObjectName settingsMBean) {
+	/// Collects the SIP-service Configuration MXBeans — the Cluster-keyed ones
+	/// `walkSettingsMBeans` deliberately discards so the service tier doesn't
+	/// leak onto the admin deck. This is the inverse selection: keep ONLY the
+	/// Cluster-keyed registrations.
+	///
+	/// A service registers once per engine node, so the same `Name` comes back
+	/// several times (one ObjectName per server). `putIfAbsent` collapses them
+	/// to a single card — they share one schema, so any node's MBean answers.
+	private Map<String, ObjectName> walkServiceSettings(MBeanServer mbs) throws Exception {
+		Map<String, ObjectName> out = new HashMap<>();
+		ObjectName pattern = new ObjectName("vorpal.blade:Name=*,Type=Configuration,*");
+		for (ObjectInstance inst : mbs.queryMBeans(pattern, null)) {
+			ObjectName on = inst.getObjectName();
+			String name = on.getKeyProperty("Name");
+			if (name == null || !hasCluster(on)) continue;
+			out.putIfAbsent(name, on);
+		}
+		return out;
+	}
+
+	private Card buildCard(MBeanServer mbs, String appName, String ctxRoot, ObjectName settingsMBean,
+			String kind, String configuratorDomain) {
 		String name = humanize(lastSegment(ctxRoot));
 		String tagline = null;
 		String description = null;
@@ -220,7 +281,7 @@ public class PortalCardsResource {
 				}
 			}
 		}
-		return new Card(ctxRoot, name, tagline, description, hasMetadata);
+		return new Card(ctxRoot, name, tagline, description, hasMetadata, kind, configuratorDomain);
 	}
 
 	/// Reads a String MBean attribute, returning null instead of throwing when
@@ -302,13 +363,22 @@ public class PortalCardsResource {
 		final String tagline;
 		final String description;
 		final boolean hasMetadata;
+		/// "app" — a launchable admin tool (navigate to its context-root).
+		/// "service" — a SIP service (no GUI; the card opens the Configurator).
+		final String kind;
+		/// For service cards: the Configurator `domain` (the service's flattened
+		/// MBean Name). Null for admin apps.
+		final String configuratorDomain;
 
-		Card(String contextRoot, String name, String tagline, String description, boolean hasMetadata) {
+		Card(String contextRoot, String name, String tagline, String description, boolean hasMetadata,
+				String kind, String configuratorDomain) {
 			this.contextRoot = contextRoot;
 			this.name = name;
 			this.tagline = tagline;
 			this.description = description;
 			this.hasMetadata = hasMetadata;
+			this.kind = kind;
+			this.configuratorDomain = configuratorDomain;
 		}
 	}
 }

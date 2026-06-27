@@ -8,9 +8,14 @@ import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import org.vorpal.blade.framework.v2.config.SchemaTitle;
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
-@SchemaTitle("Proxy Block")
+@SchemaAbout(
+		name = "Proxy Block",
+		tagline = "Rule-Based SIP Request Blocking",
+		description = "Blocks inbound SIP requests by caller, destination, header, or pattern "
+				+ "using configurable rules, with the first matching rule deciding. A focused "
+				+ "complement to the ACL service's IP-level filtering.")
 public class SimpleBlockConfig extends Configuration {
 	private static final long serialVersionUID = 1L;
 

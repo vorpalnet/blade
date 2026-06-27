@@ -12,9 +12,14 @@ import org.vorpal.blade.framework.v2.config.Configuration;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import org.vorpal.blade.framework.v2.config.SchemaTitle;
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
-@SchemaTitle("Proxy Registrar")
+@SchemaAbout(
+		name = "Proxy Registrar",
+		tagline = "SIP Registration & Location",
+		description = "Processes SIP REGISTER requests and maintains the location database of "
+				+ "contact bindings — registration, expiry, and lookups — so calls can reach "
+				+ "registered endpoints.")
 public class Settings extends Configuration implements Serializable {
 	private static final long serialVersionUID = -3362129920431974760L;
 

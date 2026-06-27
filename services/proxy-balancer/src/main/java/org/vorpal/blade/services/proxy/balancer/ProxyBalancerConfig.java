@@ -9,9 +9,13 @@ import org.vorpal.blade.framework.v2.proxy.ProxyPlan;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import org.vorpal.blade.framework.v2.config.SchemaTitle;
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
-@SchemaTitle("Proxy Balancer")
+@SchemaAbout(
+		name = "Proxy Balancer",
+		tagline = "Load-Balancing SIP Proxy",
+		description = "A stateless SIP proxy that distributes inbound calls across a pool of "
+				+ "downstream destinations, balancing load by a configurable strategy.")
 public class ProxyBalancerConfig extends Configuration implements Serializable {
 	
 	private static final long serialVersionUID = 1L;

@@ -6,12 +6,17 @@ import java.util.Map;
 import org.vorpal.blade.framework.v2.config.RouterConfig;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
-import org.vorpal.blade.framework.v2.config.SchemaTitle;
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
 /**
  * Defines how the Queue application is configured.
  */
-@SchemaTitle("Queue")
+@SchemaAbout(
+		name = "Queue",
+		tagline = "Call Queueing",
+		description = "Holds inbound calls in a managed queue when no downstream resource is "
+				+ "available, releasing them to a destination as capacity frees up. B2BUA-based, "
+				+ "so it stays in the dialog for the life of the queued call.")
 public class QueueConfig extends RouterConfig {
 	private static final long serialVersionUID = 1L;
 	

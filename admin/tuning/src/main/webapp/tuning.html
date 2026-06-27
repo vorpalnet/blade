@@ -54,6 +54,20 @@
 		.field-group select.is-set { font-weight: 700; box-shadow: inset 3px 0 0 #2f6fed; background-color: #eef3ff; }
 		.field-group input.mono::placeholder { font-style: italic; color: #aab2bd; }
 
+		/* About panel — three readout columns over a deployed-apps strip. The
+		   tier of each deployed app is shown by a text label + position (services
+		   group first), never by color alone. */
+		.about-card .card-header strong { font-size: 14px; }
+		.about-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+		@media (max-width: 900px) { .about-grid { grid-template-columns: 1fr; } }
+		.about-col h6 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #888; margin-bottom: 8px; }
+		.about-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; }
+		.about-kv dt { color: #666; font-weight: 600; white-space: nowrap; }
+		.about-kv dd { margin: 0; }
+		.about-version { font-size: 20px; font-weight: 700; line-height: 1.1; }
+		.about-patch { font-size: 12px; line-height: 1.35; margin-bottom: 4px; }
+		.about-patch .pid { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-weight: 700; }
+
 		/* Compact table */
 		.table-compact { font-size: 13px; margin-bottom: 0; }
 		.table-compact td, .table-compact th { padding: 6px 10px; vertical-align: middle; }
@@ -150,8 +164,24 @@
 	<div class="container-fluid">
 		<h4>OCCAS Performance Settings</h4>
 
+		<!-- ============================================================ -->
+		<!-- ABOUT THIS DEPLOYMENT -->
+		<!-- ============================================================ -->
+		<div id="section-about"></div>
+		<div class="card about-card">
+			<div class="card-header">
+				<strong>About this deployment</strong>
+				<span class="text-muted" id="about-sub"></span>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadAbout()">Refresh</button>
+			</div>
+			<div class="card-body">
+				<div id="about-container"><span class="text-muted">Loading…</span></div>
+			</div>
+		</div>
+
 		<!-- Quick nav -->
 		<div class="section-nav">
+			<a href="#section-about">About</a>
 			<a href="#section-health">Health Check</a>
 			<a href="#section-jvm">JVM</a>
 			<a href="#section-server">Server Tuning</a>
@@ -635,6 +665,7 @@
 			// Enable Bootstrap tooltips on all elements with title attr
 			$('body').tooltip({ selector: '[data-toggle="tooltip"]', html: true });
 
+			loadAbout();
 			loadJvmProfiles();
 			loadHealthData();
 			loadServerTuning();
@@ -654,6 +685,83 @@
 		// source of truth — the left-hand controls and the right-hand textarea are
 		// both views of it.
 		var jvm = { profiles: [], assignments: {}, servers: [], sel: -1 };
+
+		// ================================================================
+		// About this deployment — BLADE / OCCAS / WebLogic versions,
+		// applied patches, and the deployed BLADE apps (federated JMX walk).
+		// ================================================================
+		function loadAbout() {
+			$('#about-container').html('<span class="text-muted">Loading…</span>');
+			$.getJSON('api/v1/about', renderAbout).fail(function (xhr) {
+				$('#about-container').html('<span class="text-danger">Unable to load deployment info. ' + parseError(xhr) + '</span>');
+			});
+		}
+
+		function renderAbout(d) {
+			d = d || {};
+			var b = d.blade || {}, p = d.platform || {};
+			var patches = d.patches || [];
+
+			// Header subtitle: BLADE version + domain, the two identifiers you
+			// most often need to read back to someone on a call.
+			var sub = [];
+			if (b.version) sub.push('BLADE ' + he(b.version));
+			if (p.domain) sub.push('domain ' + he(p.domain));
+			$('#about-sub').text(sub.length ? '— ' + sub.join(' · ') : '');
+
+			var h = '<div class="about-grid">';
+
+			// --- BLADE -------------------------------------------------
+			h += '<div class="about-col"><h6>BLADE Framework</h6>';
+			h += '<div class="about-version">' + he(b.version || '—') + '</div>';
+			h += '<dl class="about-kv mt-2">';
+			if (b.built) h += '<dt>Built</dt><dd class="mono">' + he(fmtBuilt(b.built)) + '</dd>';
+			if (b.license) h += '<dt>License</dt><dd>' + he(b.license) + '</dd>';
+			h += '</dl>';
+			if (b.copyright) h += '<div class="text-muted" style="font-size:11px;margin-top:6px">' + he(b.copyright) + '</div>';
+			h += '</div>';
+
+			// --- Platform ---------------------------------------------
+			h += '<div class="about-col"><h6>Platform</h6><dl class="about-kv">';
+			h += kv('OCCAS', p.occas);
+			h += kv('WebLogic', p.weblogic);
+			h += kv('Coherence', p.coherence);
+			h += kv('Domain', p.domain);
+			h += kv('Config ver.', p.configVersion);
+			h += kv('Java', p.java);
+			h += kv('OS', p.os);
+			h += '</dl>';
+			if (p.oracleHome) h += '<div class="text-muted mono" style="font-size:11px;margin-top:6px">' + he(p.oracleHome) + '</div>';
+			h += '</div>';
+
+			// --- Patches ----------------------------------------------
+			h += '<div class="about-col"><h6>Applied Patches (' + patches.length + ')</h6>';
+			if (!patches.length) {
+				h += '<div class="text-muted" style="font-size:12px">None reported by the OPatch inventory.</div>';
+			} else {
+				$.each(patches, function (i, pt) {
+					h += '<div class="about-patch"><span class="pid">' + he(pt.id) + '</span> '
+						+ he(pt.description || '') + '</div>';
+				});
+			}
+			h += '</div>';
+
+			h += '</div>'; // .about-grid
+
+			$('#about-container').html(h);
+			$('body').tooltip({ selector: '[data-toggle="tooltip"]', html: true });
+		}
+
+		function kv(label, val) {
+			if (val == null || val === '') return '';
+			return '<dt>' + he(label) + '</dt><dd class="mono">' + he(val) + '</dd>';
+		}
+
+		// "2026-06-22T21:50:36Z" -> "2026-06-22 21:50 UTC"; pass anything else through.
+		function fmtBuilt(s) {
+			var m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(s || '');
+			return m ? (m[1] + ' ' + m[2] + ' UTC') : s;
+		}
 
 		function loadJvmProfiles() {
 			$.getJSON('api/v1/jvm/profiles', function (d) {

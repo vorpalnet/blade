@@ -21,7 +21,7 @@ import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 ///
 /// Selectors / maps / plan map dialed numbers `8001..8004` onto these rule
 /// sets so each can be exercised independently from a SIPp dialer.
-public class CrudConfigurationSample extends CrudConfiguration {
+public class CrudConfigurationSample extends CrudSettings {
 	private static final long serialVersionUID = 1L;
 
 	public CrudConfigurationSample() {

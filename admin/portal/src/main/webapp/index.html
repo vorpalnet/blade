@@ -36,8 +36,9 @@
 				<div>
 					<h1>Welcome to the BLADE Admin Portal</h1>
 					<p>
-						Every administration tool deployed in this domain is
-						listed below. Click a card to open its overview. The
+						Every administration tool and SIP service deployed in
+						this domain is listed below. Admin tools open their own
+						console; service cards open in the Configurator. The
 						deck is generated live from the AdminServer's
 						deployment registry — what you see is what's actually
 						running.
@@ -49,11 +50,27 @@
 				</div>
 			</section>
 
-			<section class="vorpal-card-grid" id="p-card-grid">
+			<div class="vorpal-eyebrow">Administration Tools</div>
+				<section class="vorpal-card-grid" id="p-card-grid">
 				<!-- Cards rendered by shell.js from /api/v1/cards. -->
 			</section>
 
-			<div id="p-empty-state" class="vorpal-callout vorpal-callout-note" style="display:none; margin-top:24px;">
+			<!-- SIP services tier. Hidden by shell.js when none are deployed.
+				     Distinguished from the apps tier by this labelled heading and
+				     its position below them — not by color. -->
+				<section id="p-services-section" style="display:none; margin-top:40px;">
+					<div class="vorpal-eyebrow">SIP Services</div>
+					<p style="margin:4px 0 18px; max-width:60ch;">
+						SIP services deployed to the engine cluster. These have no
+						console of their own — each card opens that service's
+						configuration in the Configurator.
+					</p>
+					<section class="vorpal-card-grid" id="p-service-grid">
+						<!-- Service cards (kind:"service") rendered by shell.js. -->
+					</section>
+				</section>
+
+				<div id="p-empty-state" class="vorpal-callout vorpal-callout-note" style="display:none; margin-top:24px;">
 				<div class="vorpal-callout-title">No admin apps deployed</div>
 				<p>
 					This domain has no admin apps deployed to the AdminServer

@@ -2,6 +2,49 @@
 
 ## 2.9.9 (unreleased)
 
+### Portal: SIP service cards
+
+The admin portal launcher now shows a second **SIP Services** tier below the administration
+tools. SIP services have no console of their own, so each card is a documentation/configure
+entry: it carries the service's name, tagline, and description, and opens that service's
+configuration in the Configurator. The cards are discovered the same way the admin deck is —
+`PortalCardsResource` keeps the Cluster-keyed `vorpal.blade …Type=Configuration` MBeans the
+admin pass discards, and reads each card's text from the service's `@SchemaAbout` schema
+identity. Service config classes were given `@SchemaAbout` (replacing the older
+`@SchemaTitle`) to supply that text.
+
+A service appears on the deck **only once it carries authored `@SchemaAbout` identity** — the
+curation gate that keeps the test tier (`test-uac`/`uas`/`b2bua`) and assorted internal config
+MBeans off the customer-facing deck. The crud service gets its identity from a new
+`CrudSettings` subclass (between `CrudConfiguration` and `CrudConfigurationSample`) rather than
+from `CrudConfiguration` directly, so the `@Inherited` `@SchemaAbout` does not leak onto the
+test-suite's `TesterConfiguration` hierarchy, which extends `CrudConfiguration`.
+
+### Retired: `proxy-router`
+
+The `proxy-router` service (the "Reductive Reasoning Router") was moved to `retired/` — the
+**iRouter** universal config-driven proxy supersedes it. It is no longer discovered or built
+by the standard build; build by hand with `./mvnw -f retired/proxy-router/pom.xml package` if
+ever needed for reference.
+
+### Tuning app: "About this deployment" panel
+
+The Tuning dashboard now opens with an **About this deployment** card that reads back, at a
+glance, what BLADE is running on:
+
+- **BLADE** — version (`WebLogic-Application-Version`, i.e. `<revision>-<build>`), build
+  date, license, and copyright, read from the bundled framework JAR's `MANIFEST.MF`.
+- **Platform** — OCCAS / WebLogic / Coherence product versions parsed from the Oracle-home
+  install inventory (`inventory/ContentsXML/comps.xml`), plus the live domain name, config
+  version, JVM, and OS. The Oracle home is resolved from `oracle.home`/`bea.home`/env, falling
+  back to `platform.home`'s parent.
+- **Applied patches** — the one-off patches from the OPatch inventory
+  (`inventory/patches/*.xml`: each file's `patch-id` + `description`).
+
+(Deployed-app inventory stays in the portal launcher, not here.) New REST endpoint
+`GET /blade/tuning/api/v1/about`. Every source degrades to an empty value rather than failing
+the panel.
+
 ### `deploy.sh`: one env file drives the whole deploy
 
 `deploy.sh` was reworked so a single command deploys an entire environment from its

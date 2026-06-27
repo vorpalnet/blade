@@ -28,7 +28,7 @@ import java.util.LinkedList;
 import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.services.acl.AclRule.Permission;
 
-import org.vorpal.blade.framework.v2.config.SchemaTitle;
+import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
 import inet.ipaddr.Address;
 import inet.ipaddr.IPAddressString;
@@ -40,7 +40,12 @@ import inet.ipaddr.ipv4.IPv4AddressAssociativeTrie;
  * @author Jeff McDonald
  *
  */
-@SchemaTitle(value = "Access Control List")
+@SchemaAbout(
+		name = "Access Control List",
+		tagline = "IP Allow / Deny Filtering",
+		description = "Allow or deny inbound SIP messages by remote IP address or CIDR range, "
+				+ "with a configurable default permission. The first matching rule wins; "
+				+ "everything else falls through to the default.")
 public class AclConfig extends Configuration {
 	private static final long serialVersionUID = 1L;
 

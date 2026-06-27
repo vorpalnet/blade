@@ -17,10 +17,17 @@
 # Usage:
 #   ./install-occas.sh <env> <step> [--dry-run]
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
-#     <step>  install | configure | all
+#     <step>  init | install | configure | all
+#
+#   init       interactively interview you and WRITE the env conf (+ optional secret)
+#   install    silent product install — idempotent: skips if ORACLE_HOME already
+#              populated, so on a SHARED filesystem it installs once, not per node
+#   configure  create the dynamic-cluster domain
+#   all        install then configure
 #
 # Examples:
-#   ./install-occas.sh oci all --dry-run     # preview both steps
+#   ./install-occas.sh oci init              # build the env conf interactively
+#   ./install-occas.sh oci all --dry-run     # preview install + configure
 #   ./install-occas.sh oci install           # just the silent product install
 #   ./install-occas.sh oci configure         # just the domain (dynamic cluster)
 #
@@ -68,10 +75,10 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-[ ${#POSITIONAL[@]} -ge 1 ] || die "Usage: ./install-occas.sh <env> <install|configure|all> [--dry-run]"
+[ ${#POSITIONAL[@]} -ge 1 ] || die "Usage: ./install-occas.sh <env> <init|install|configure|all> [--dry-run]"
 ENV_ARG="${POSITIONAL[0]}"
 STEP="${POSITIONAL[1]:-}"
-case "$STEP" in install|configure|all) ;; "") die "Missing step (install|configure|all)." ;; *) die "Unknown step: ${STEP}" ;; esac
+case "$STEP" in init|install|configure|all) ;; "") die "Missing step (init|install|configure|all)." ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # --- Resolve conf + secret ---
 if [ -f "$ENV_ARG" ]; then
@@ -79,12 +86,136 @@ if [ -f "$ENV_ARG" ]; then
 else
     ENV_NAME="$ENV_ARG"; CONF_FILE="${OCCAS_DIR}/${ENV_NAME}.conf"; SECRET_FILE="${OCCAS_DIR}/${ENV_NAME}.secret"
 fi
-[ -f "$CONF_FILE" ] || die "Conf not found: ${CONF_FILE}"
-
 read_prop() {
     local file="$1" key="$2"
     { grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
+
+# ask VAR "label" "default"  — prompt with a default (Enter accepts it).
+ask() {
+    local __v="$1" __label="$2" __def="${3:-}" __in
+    if [ -n "$__def" ]; then read -r -p "  ${__label} [${__def}]: " __in
+    else read -r -p "  ${__label}: " __in; fi
+    [ -z "$__in" ] && __in="$__def"
+    printf -v "$__v" '%s' "$__in"
+}
+
+# defask VAR "label" "hardcoded-default" "conf-key"  — default = existing conf value, else hardcoded.
+defask() {
+    local __def; __def="$(read_prop "$CONF_FILE" "$4")"; [ -z "$__def" ] && __def="$3"
+    ask "$1" "$2" "$__def"
+}
+
+# Interactive builder for build-profiles/occas/<env>.conf (+ optional secret).
+do_init() {
+    log "${C_BOLD}OCCAS env builder${C_RESET} → ${CONF_FILE}"
+    [ -f "$CONF_FILE" ] && warn "${CONF_FILE} exists — its values are offered as defaults; you'll confirm overwrite at the end."
+    log "  Shared-filesystem note: 'install' runs ONCE (every node mounts the same"
+    log "  ORACLE_HOME); the domain is created once; only NodeManager runs per host."
+    log ""
+
+    local oracle_home installer inv_loc inv_grp inst_type
+    log "Step 1 — silent product install:"
+    defask oracle_home "ORACLE_HOME (shared install dir)"        "/opt/oracle/occas/8.3"                       "oracle.home"
+    defask installer   "Installer jar (occas_generic.jar path)"  "/home/oracle/install/occas-8.3/occas_generic.jar" "installer.jar"
+    defask inv_loc     "Oracle inventory location"               "/home/oracle/oraInventory"                   "inventory.loc"
+    defask inv_grp     "Inventory group"                         "oinstall"                                    "inventory.group"
+    defask inst_type   "Install type"                            "Complete with Examples"                      "install.type"
+
+    local domain_name start_mode admin_user srv_prefix match_expr dyn_count max_size
+    log ""
+    log "Step 2 — dynamic-cluster domain:"
+    defask domain_name "Domain name (OverwriteDomain=true CLOBBERS an existing one)" "replicated" "domain.name"
+    defask start_mode  "Server start mode (prod|dev)"            "prod"     "server.start.mode"
+    defask admin_user  "Admin username"                          "weblogic" "admin.username"
+    defask srv_prefix  "Dynamic server name prefix"              "engine"   "server.name.prefix"
+    defask match_expr  "Machine name match expression"           "engine*"  "machine.match.expression"
+    defask dyn_count   "Dynamic server count (now)"              "2"        "dynamic.server.count"
+    defask max_size    "Max dynamic cluster size (ceiling)"      "8"        "max.dynamic.cluster.size"
+
+    log ""
+    log "Machines (NodeManager hosts) — enter a blank name to finish:"
+    local machines=() n=1 mname maddr mport mtype
+    while true; do
+        ask mname "machine ${n} name (blank = done)" ""
+        [ -z "$mname" ] && break
+        ask maddr "${mname} NM listen address" ""
+        ask mport "${mname} NM listen port" "5556"
+        ask mtype "${mname} NM type (ssl|plain)" "ssl"
+        machines+=("${mname}:${maddr}:${mport}:${mtype}")
+        n=$((n + 1))
+    done
+    [ ${#machines[@]} -ge 1 ] || die "At least one machine is required."
+
+    local yn static_line="" s_def
+    log ""
+    ask yn "Add a static test engine on the admin box? (y/N)" "N"
+    if [[ "$yn" =~ ^[Yy] ]]; then
+        s_def="$(read_prop "$CONF_FILE" "static.server")"; [ -z "$s_def" ] && s_def="engine0:admin:8001:5060:5061"
+        ask static_line "static.server (name:machine:listen:sip:sips)" "$s_def"
+    fi
+
+    log ""
+    if [ -f "$CONF_FILE" ]; then
+        ask yn "Overwrite ${CONF_FILE}? (y/N)" "N"
+        [[ "$yn" =~ ^[Yy] ]] || die "Aborted — conf not written."
+    fi
+    mkdir -p "$(dirname "$CONF_FILE")"
+    {
+        echo "# OCCAS silent install + dynamic-cluster domain — built by 'install-occas.sh ${ENV_NAME} init'."
+        echo "# Admin password lives in $(basename "$SECRET_FILE") (gitignored), not here."
+        echo "# NOTE: keep comments on their OWN lines — trailing '# ...' becomes part of the value."
+        echo ""
+        echo "# --- Step 1: silent product install (runs once; ORACLE_HOME is shared) ---"
+        echo "oracle.home=${oracle_home}"
+        echo "installer.jar=${installer}"
+        echo "inventory.loc=${inv_loc}"
+        echo "inventory.group=${inv_grp}"
+        echo "install.type=${inst_type}"
+        echo ""
+        echo "# --- Step 2: dynamic-cluster domain ---"
+        echo "domain.name=${domain_name}"
+        echo "server.start.mode=${start_mode}"
+        echo "admin.username=${admin_user}"
+        echo "server.name.prefix=${srv_prefix}"
+        echo "machine.match.expression=${match_expr}"
+        echo "dynamic.server.count=${dyn_count}"
+        echo "max.dynamic.cluster.size=${max_size}"
+        echo ""
+        echo "# --- Machines + NodeManagers (name:nmAddr:nmPort:nmType) ---"
+        local idx=1 m
+        for m in "${machines[@]}"; do echo "machine.${idx}=${m}"; idx=$((idx + 1)); done
+        if [ -n "$static_line" ]; then
+            echo ""
+            echo "# --- Optional static test engine on the admin box (never SBC-targeted) ---"
+            echo "static.server=${static_line}"
+        fi
+    } > "$CONF_FILE"
+    ok "Wrote ${CONF_FILE}"
+
+    log ""
+    ask yn "Save the admin password to $(basename "$SECRET_FILE") now? (y/N)" "N"
+    if [[ "$yn" =~ ^[Yy] ]]; then
+        if ! git -C "$SCRIPT_DIR" check-ignore -q "$SECRET_FILE" 2>/dev/null; then
+            die "REFUSING: ${SECRET_FILE} is not gitignored — fix build-profiles/occas/.gitignore first."
+        fi
+        local pw pw2
+        read -rs -p "  ${admin_user} password: " pw; echo
+        read -rs -p "  confirm: " pw2; echo
+        [ "$pw" = "$pw2" ] || die "Passwords didn't match — secret not written."
+        [ -n "$pw" ]       || die "Empty password — secret not written."
+        printf 'admin.password=%s\n' "$pw" > "$SECRET_FILE"
+        chmod 600 "$SECRET_FILE"
+        ok "Wrote ${SECRET_FILE} (mode 600)"
+    fi
+
+    log ""
+    ok "Done. Preview the run:  ./install-occas.sh ${ENV_NAME} all --dry-run"
+}
+
+if [ "$STEP" = "init" ]; then do_init; exit 0; fi
+
+[ -f "$CONF_FILE" ] || die "Conf not found: ${CONF_FILE} — run './install-occas.sh ${ENV_NAME} init' to build it."
 
 ORACLE_HOME=$(read_prop  "$CONF_FILE" "oracle.home")
 INSTALLER_JAR=$(read_prop "$CONF_FILE" "installer.jar")
@@ -131,6 +262,13 @@ get_admin_pw() {
 # Step 1 — silent product install
 # ----------------------------------------------------------------------------
 do_install() {
+    # Shared filesystem: the binaries are installed ONCE and every node mounts
+    # the same ORACLE_HOME. If it's already populated, this is a no-op — so the
+    # step is safe to invoke from any node without reinstalling.
+    if [ -d "${ORACLE_HOME}/wlserver" ]; then
+        ok "OCCAS already present at ${ORACLE_HOME} (shared filesystem) — skipping install."
+        return 0
+    fi
     [ -n "$INSTALLER_JAR" ] || die "${CONF_FILE}: missing installer.jar"
     [ -n "$INV_LOC" ]       || die "${CONF_FILE}: missing inventory.loc"
     info "Silent install → ${ORACLE_HOME}  (installer: ${INSTALLER_JAR})"

@@ -5,14 +5,21 @@
  *
  * The cards endpoint (PortalCardsResource) walks the AdminServer's
  * deployment registry via JMX, reads each app's name/tagline/description metadata
- * via the same JMX path, and returns one entry per deployed admin app.
+ * via the same JMX path, and returns one entry per deployed admin app
+ * (kind:"app") plus one per deployed SIP service (kind:"service").
  * See memory note `portal-card-discovery` for the discovery flow.
+ *
+ * Two tiers render into two grids:
+ *   - kind:"app"     → Administration Tools (navigate to the app's context-root)
+ *   - kind:"service" → SIP Services (open the Configurator for that service)
  */
 
 (function() {
 	'use strict';
 
 	const grid = document.getElementById('p-card-grid');
+	const serviceGrid = document.getElementById('p-service-grid');
+	const servicesSection = document.getElementById('p-services-section');
 	const empty = document.getElementById('p-empty-state');
 	const countEl = document.getElementById('p-card-count');
 
@@ -35,63 +42,87 @@
 		}
 	}
 
+	// Builds one card anchor. A service card opens the Configurator for that
+	// service; an app card navigates to its own context-root.
+	function buildCardEl(card) {
+		const isService = card.kind === 'service';
+
+		const a = document.createElement('a');
+		a.className = 'vorpal-card' + (card.hasMetadata ? '' : ' p-card-barebones');
+		a.href = isService
+			? '/blade/configurator/?domain=' + encodeURIComponent(card.configuratorDomain)
+			: '/' + card.contextRoot + '/';
+		a.setAttribute('aria-label', card.name);
+
+		// Icon = the app's favicon. Services have no webapp of their own, so
+		// they always fall back to the shared Vorpal Boy. Single-shot
+		// (onerror=null) so we don't loop if the fallback also fails.
+		const icon = document.createElement('img');
+		icon.className = 'vorpal-card-icon';
+		icon.alt = '';
+		icon.src = isService
+			? '/blade/portal/brand/favicon.svg'
+			: '/' + card.contextRoot + '/favicon.svg';
+		icon.setAttribute('onerror',
+			"this.onerror=null; this.src='/blade/portal/brand/favicon.svg';");
+		a.appendChild(icon);
+
+		// Body column flows to the right of the icon (see portal.css).
+		const body = document.createElement('div');
+		body.className = 'p-card-body';
+
+		const h3 = document.createElement('h3');
+		h3.textContent = card.name;
+		body.appendChild(h3);
+
+		if (card.tagline) {
+			const tag = document.createElement('div');
+			tag.className = 'p-card-tagline';
+			tag.textContent = card.tagline;
+			body.appendChild(tag);
+		}
+
+		if (card.description) {
+			const p = document.createElement('p');
+			p.textContent = card.description;
+			body.appendChild(p);
+		}
+
+		const link = document.createElement('span');
+		link.className = 'vorpal-card-link';
+		link.textContent = isService ? 'Configure' : 'Open';
+		body.appendChild(link);
+
+		a.appendChild(body);
+		return a;
+	}
+
 	function render(cards) {
 		grid.innerHTML = '';
-		if (cards.length === 0) {
+		serviceGrid.innerHTML = '';
+
+		const apps = cards.filter(c => c.kind !== 'service');
+		const services = cards.filter(c => c.kind === 'service');
+
+		// Apps tier.
+		if (apps.length === 0) {
 			empty.style.display = '';
-			countEl.textContent = '0 apps';
-			return;
+		} else {
+			empty.style.display = 'none';
+			apps.forEach(card => grid.appendChild(buildCardEl(card)));
 		}
-		empty.style.display = 'none';
-		countEl.textContent = cards.length + (cards.length === 1 ? ' app' : ' apps');
 
-		cards.forEach(card => {
-			const a = document.createElement('a');
-			a.className = 'vorpal-card' + (card.hasMetadata ? '' : ' p-card-barebones');
-			a.href = '/' + card.contextRoot + '/';
-			a.setAttribute('aria-label', card.name);
+		// Services tier — hide the whole section when none are deployed.
+		if (services.length === 0) {
+			servicesSection.style.display = 'none';
+		} else {
+			servicesSection.style.display = '';
+			services.forEach(card => serviceGrid.appendChild(buildCardEl(card)));
+		}
 
-			// Icon = the app's favicon. If the app doesn't ship one,
-			// onerror falls back to the shared Vorpal Boy. Single-shot
-			// (onerror=null) so we don't loop if the fallback also fails.
-			const icon = document.createElement('img');
-			icon.className = 'vorpal-card-icon';
-			icon.alt = '';
-			icon.src = '/' + card.contextRoot + '/favicon.svg';
-			icon.setAttribute('onerror',
-				"this.onerror=null; this.src='/blade/portal/brand/favicon.svg';");
-			a.appendChild(icon);
-
-			// Body column flows to the right of the icon (see portal.css).
-			const body = document.createElement('div');
-			body.className = 'p-card-body';
-
-			const h3 = document.createElement('h3');
-			h3.textContent = card.name;
-			body.appendChild(h3);
-
-			if (card.tagline) {
-				const tag = document.createElement('div');
-				tag.className = 'p-card-tagline';
-				tag.textContent = card.tagline;
-				body.appendChild(tag);
-			}
-
-			if (card.description) {
-				const p = document.createElement('p');
-				p.textContent = card.description;
-				body.appendChild(p);
-			}
-
-			const link = document.createElement('span');
-			link.className = 'vorpal-card-link';
-			link.textContent = 'Open';
-			body.appendChild(link);
-
-			a.appendChild(body);
-
-			grid.appendChild(a);
-		});
+		const appLabel = apps.length + (apps.length === 1 ? ' app' : ' apps');
+		const svcLabel = services.length + (services.length === 1 ? ' service' : ' services');
+		countEl.textContent = appLabel + ' · ' + svcLabel;
 	}
 
 	(async function start() {

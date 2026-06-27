@@ -108,6 +108,7 @@ WLS_USER=$(read_prop     "$CONF_FILE" "wls.user")
 WLS_CLUSTER=$(read_prop  "$CONF_FILE" "wls.targets.cluster")
 SSH_USER=$(read_prop     "$CONF_FILE" "ssh.user")
 ENGINE_NODES_RAW=$(read_prop "$CONF_FILE" "engine.nodes")
+SHARED_FS=$(read_prop    "$CONF_FILE" "shared.filesystem")
 KS_DIR=$(read_prop       "$CONF_FILE" "tls.keystore.dir")
 ID_ALIAS=$(read_prop     "$CONF_FILE" "tls.identity.alias"); ID_ALIAS="${ID_ALIAS:-blade-identity}"
 SSL_PORT=$(read_prop     "$CONF_FILE" "tls.ssl.port");       SSL_PORT="${SSL_PORT:-7002}"
@@ -180,11 +181,13 @@ log ""
 tier_keystores() {
     if [ "$ACTION" = "status" ]; then
         info "keystores: present on each node?"
-        if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ls -l ${KS_DIR}/{${ID_BASENAME},${TRUST_BASENAME}} (local + each node)${C_RESET}"; return 0; fi
+        if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ls -l ${KS_DIR}/{${ID_BASENAME},${TRUST_BASENAME}} (local$([ "$SHARED_FS" = true ] && echo '; shared FS' || echo ' + each node'))${C_RESET}"; return 0; fi
         ls -l "${KS_DIR}/${ID_BASENAME}" "${KS_DIR}/${TRUST_BASENAME}" 2>&1 || warn "missing locally (AdminServer)"
-        local n; for n in "${ENGINE_NODES[@]}"; do
-            ssh "${SSH_USER}@${n}" ls -l "${KS_DIR}/${ID_BASENAME}" "${KS_DIR}/${TRUST_BASENAME}" 2>&1 || warn "missing on ${n}"
-        done
+        if [ "$SHARED_FS" != "true" ]; then
+            local n; for n in "${ENGINE_NODES[@]}"; do
+                ssh "${SSH_USER}@${n}" ls -l "${KS_DIR}/${ID_BASENAME}" "${KS_DIR}/${TRUST_BASENAME}" 2>&1 || warn "missing on ${n}"
+            done
+        fi
         return 0
     fi
     # Under --dry-run we only preview, so don't require the keystores to exist yet.
@@ -202,18 +205,23 @@ tier_keystores() {
     else
         mkdir -p "$KS_DIR"; cp "$ID_P12" "$TRUST_P12" "$KS_DIR/"; chmod 600 "${KS_DIR}/${ID_BASENAME}" "${KS_DIR}/${TRUST_BASENAME}" 2>/dev/null || true
     fi
-    # Engine nodes
-    local n; for n in "${ENGINE_NODES[@]}"; do
-        [ -n "$SSH_USER" ] || die "${CONF_FILE}: engine.nodes set but ssh.user missing"
-        info "keystores → ${SSH_USER}@${n}:${KS_DIR}/"
-        if [ "$DRY_RUN" = true ]; then
-            log "${C_DIM}  [dry-run] ssh ${SSH_USER}@${n} mkdir -p ${KS_DIR}; scp ${ID_BASENAME},${TRUST_BASENAME} → ${n}:${KS_DIR}/${C_RESET}"
-        else
-            ssh "${SSH_USER}@${n}" "mkdir -p '${KS_DIR}' && chmod 700 '${KS_DIR}'"
-            scp "$ID_P12" "$TRUST_P12" "${SSH_USER}@${n}:${KS_DIR}/"
-            ssh "${SSH_USER}@${n}" "chmod 600 '${KS_DIR}/${ID_BASENAME}' '${KS_DIR}/${TRUST_BASENAME}'"
-        fi
-    done
+    # Engine nodes — skipped on a shared filesystem (the local copy is visible
+    # to every node at the same path).
+    if [ "$SHARED_FS" = "true" ]; then
+        info "shared filesystem — keystores at ${KS_DIR}/ are visible to all nodes; skipping per-node copy."
+    else
+        local n; for n in "${ENGINE_NODES[@]}"; do
+            [ -n "$SSH_USER" ] || die "${CONF_FILE}: engine.nodes set but ssh.user missing"
+            info "keystores → ${SSH_USER}@${n}:${KS_DIR}/"
+            if [ "$DRY_RUN" = true ]; then
+                log "${C_DIM}  [dry-run] ssh ${SSH_USER}@${n} mkdir -p ${KS_DIR}; scp ${ID_BASENAME},${TRUST_BASENAME} → ${n}:${KS_DIR}/${C_RESET}"
+            else
+                ssh "${SSH_USER}@${n}" "mkdir -p '${KS_DIR}' && chmod 700 '${KS_DIR}'"
+                scp "$ID_P12" "$TRUST_P12" "${SSH_USER}@${n}:${KS_DIR}/"
+                ssh "${SSH_USER}@${n}" "chmod 600 '${KS_DIR}/${ID_BASENAME}' '${KS_DIR}/${TRUST_BASENAME}'"
+            fi
+        done
+    fi
     ok "keystores in place"
 }
 

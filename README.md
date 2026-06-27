@@ -119,7 +119,7 @@ Deployed to the OCCAS cluster via the EAR. Each WAR includes the framework JAR; 
 | Proxy-Balancer | A simple load balancer |
 | Proxy-Block | Block/reject calls based on rules |
 | Proxy-Registrar | A small, elegant SIP proxy-registrar |
-| Proxy-Router | The Reductive Reasoning Router (R3); supports various search algorithms for optimal routing |
+| iRouter | Universal, config-driven SIP proxy; two-phase enrichment + routing pipeline edited in the Configurator |
 | Queue | Call queuing and distribution |
 | TPCC | Third-party call control |
 | Transfer | Implements REFER for transfer applications |

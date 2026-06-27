@@ -48,6 +48,27 @@ public class ConfigurationMonitor extends Thread {
 		return (WatchEvent<T>) event;
 	}
 
+	/// Tolerance (ms) for the fallback "is this the same physical file?" timestamp
+	/// match. Two mounts of one shared file can report mtime at different
+	/// granularity (e.g. NFS second-resolution vs local sub-second), so an exact
+	/// equality test is too brittle; within this window we treat it as shared.
+	private static final long SHARED_FS_TOLERANCE_MS = 2000L;
+
+	/// Explicit operator declaration of whether the config directory is shared
+	/// with the engine tier — system property `blade.shared.filesystem` or env
+	/// `BLADE_SHARED_FILESYSTEM` (true|false). When set, the timestamp heuristic
+	/// is bypassed entirely. Declaring it removes the NFS attribute-cache race
+	/// where a shared file briefly looks local and the engine then writes back
+	/// over the file the admin just wrote (re-triggering this watch). Returns
+	/// null when undeclared.
+	private static Boolean explicitSharedFileSystem() {
+		String v = System.getProperty("blade.shared.filesystem");
+		if (v == null || v.isEmpty()) {
+			v = System.getenv("BLADE_SHARED_FILESYSTEM");
+		}
+		return (v == null || v.isEmpty()) ? null : Boolean.valueOf(v.trim());
+	}
+
 	/**
 	 * Register the given directory with the WatchService
 	 */
@@ -390,11 +411,20 @@ public class ConfigurationMonitor extends Thread {
 							remoteTimestamp = settings.getLastModified("SERVER");
 						}
 
-						isSharedFileSystem = (localTimestamp == remoteTimestamp) ? true : false;
+						Boolean declared = explicitSharedFileSystem();
+						if (declared != null) {
+							isSharedFileSystem = declared.booleanValue();
+						} else {
+							// Undeclared: fall back to a TOLERANT timestamp match. Exact
+							// equality is brittle across mounts with different mtime
+							// granularity and races NFS attribute caching; the window
+							// absorbs that without falsely reading shared-as-local.
+							isSharedFileSystem = Math.abs(localTimestamp - remoteTimestamp) <= SHARED_FS_TOLERANCE_MS;
+						}
 
 						System.out.println("ConfigurationMonitor.updateManagedMBeans localTimestamp=" + localTimestamp
-								+ ", remoteTimestamp=" + remoteTimestamp + ", isSharedFileSystem="
-								+ isSharedFileSystem);
+								+ ", remoteTimestamp=" + remoteTimestamp + ", isSharedFileSystem=" + isSharedFileSystem
+								+ (declared != null ? " (declared)" : " (heuristic, +/-" + SHARED_FS_TOLERANCE_MS + "ms)"));
 
 						if (false == isSharedFileSystem) {
 							System.out.println("ConfigurationMonitor.updateManagedMBeans openForWrite...");
