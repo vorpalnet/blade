@@ -61,3 +61,6 @@ Thumbs.db
 # Templates named *.secret.example ARE committed (negation below).
 build-profiles/deploy/*.secret
 !build-profiles/deploy/*.secret.example
+
+# BLADE install profiles (host facts, IPs, secrets) — never commit.
+/.conf/
