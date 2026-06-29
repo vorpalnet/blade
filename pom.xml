@@ -587,7 +587,7 @@ fi
 		<profile>
 			<id>acl</id>
 			<activation><property><name>!skip.acl</name></property></activation>
-			<modules><module>services/acl</module></modules>
+			<modules><module>proto/acl</module></modules>
 		</profile>
 		<profile>
 			<id>analytics</id>
@@ -745,18 +745,29 @@ fi
 			<modules><module>proto/gumball-agent</module></modules>
 		</profile>
 
-		<!-- The admin EAR (admin/ear, module name "ear"): assembles the admin
-		     WARs into one deployable (blade-admin.ear). Active by default;
-		     exclude with -Dskip.ear. Each admin app is contributed by an
-		     ear-<name> profile inside admin/ear/pom.xml (activated by
-		     !skip.<name>), so the EAR shrinks to match a trimmed build profile.
-		     The javadoc WAR rides the `javadocs` profile id — the EAR carries
-		     javadoc.war exactly when docs are generated and assembles without
-		     it otherwise. -->
+		<!-- The three deployable EARs under apps/ — one per deploy target. Active
+		     by default; exclude with -Dskip.<name>. Each is assembled from its
+		     component WARs via ear-<name> profiles inside the EAR pom (activated by
+		     !skip.<name>), so an EAR shrinks to match a trimmed build profile:
+		       apps/admin    -> blade-admin.ear     -> AdminServer    (skip.admin)
+		       apps/services -> blade-services.ear  -> engine cluster (skip.services)
+		       apps/test     -> blade-test.ear      -> engine0        (skip.test)
+		     The javadoc WAR rides the `javadocs` profile id — blade-admin.ear
+		     carries javadoc.war exactly when docs are generated. -->
 		<profile>
-			<id>ear</id>
-			<activation><property><name>!skip.ear</name></property></activation>
-			<modules><module>admin/ear</module></modules>
+			<id>admin</id>
+			<activation><property><name>!skip.admin</name></property></activation>
+			<modules><module>apps/admin</module></modules>
+		</profile>
+		<profile>
+			<id>services</id>
+			<activation><property><name>!skip.services</name></property></activation>
+			<modules><module>apps/services</module></modules>
+		</profile>
+		<profile>
+			<id>test</id>
+			<activation><property><name>!skip.test</name></property></activation>
+			<modules><module>apps/test</module></modules>
 		</profile>
 
 

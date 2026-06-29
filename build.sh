@@ -132,7 +132,7 @@ REVISION=$(grep '<revision>' "${SCRIPT_DIR}/pom.xml" | head -1 | sed 's/.*<revis
 # so a module that's discovered here but not listed in the active build-profiles/*.conf
 # will be excluded with -Dskip.<name>.
 discover_modules() {
-    for subdir in libs admin services test proto; do
+    for subdir in libs admin services test proto apps; do
         for dir in "${SCRIPT_DIR}/${subdir}"/*/; do
             local name=$(basename "$dir")
             # Skip always-built modules
@@ -183,7 +183,7 @@ cleanup_failed_dist() {
 # Echoes the path relative to SCRIPT_DIR; empty string if not found.
 module_dir() {
     local name="$1"
-    for d in libs admin services test; do
+    for d in libs admin services test apps proto; do
         if [ -d "${SCRIPT_DIR}/${d}/${name}" ]; then
             echo "${d}/${name}"
             return
@@ -198,12 +198,11 @@ module_dir() {
 # fit the generic admin/services tier model.
 dist_subdir_for() {
     case "$1" in
-        admin/ear)           echo "" ;;          # the admin EAR (blade-admin.ear) → dist root
-        admin/*)             echo "skip" ;;      # individual admin WARs: the EAR is the deploy unit — don't copy to dist
-        services/*|test/*)   echo "services" ;;  # test apps live with services
-        proto/*)             echo "proto" ;;     # incubator apps — built, never shipped
-        libs/*)              echo "" ;;          # libraries at root
-        *)                   echo "" ;;
+        apps/*)                    echo "" ;;     # the 3 EARs (blade-admin/services/test.ear) → dist root
+        admin/*|services/*|test/*) echo "skip" ;; # component WARs: the EAR is the deploy unit, not copied to dist
+        proto/*)                   echo "proto" ;; # incubator apps — built, deployed by hand
+        libs/*)                    echo "" ;;     # libraries at root (shared lib + approuter jar)
+        *)                         echo "" ;;
     esac
 }
 
