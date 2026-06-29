@@ -248,11 +248,21 @@ fi
 						</resource>
 					</webResources>
 					<archive>
-						<manifestEntries>
+						<!-- combine.self=override: take ONLY the entries below, ignoring the
+						     parent pom's injected manifest entries. This is a shared library,
+						     not an application, so it must NOT carry the parent's
+						     WebLogic-Application-Version attribute. -->
+						<manifestEntries combine.self="override">
 							<Specification-Title>vorpal-blade-library-shared</Specification-Title>
 							<Specification-Version>3.0</Specification-Version>
+							<Specification-Vendor>VORPAL.ORG</Specification-Vendor>
 							<Implementation-Title>blade-shared.war</Implementation-Title>
-							<Implementation-Version>${revision}</Implementation-Version>
+							<!-- Versioned independently of the framework <revision>: bump
+							     this by hand only when the bundled 3rd-party JARs change, so
+							     a framework-only build doesn't look like a shared-library
+							     change users must redeploy. -->
+							<Implementation-Version>3.0.0</Implementation-Version>
+							<Implementation-Vendor>Vorpal Networks, LLC</Implementation-Vendor>
 							<Extension-Name>blade-shared</Extension-Name>
 							<Copyright>${blade.copyright}</Copyright>
 							<License>${blade.license}</License>
