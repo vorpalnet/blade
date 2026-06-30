@@ -26,8 +26,13 @@
 #     domains can be rebuilt/upgraded without ever taking Node Manager down.
 #   - create the dynamic-cluster app domain and enroll it into that NM (RUN: c)
 #   - start the AdminServer via Node Manager (RUN: s; misc/start-admin-nm.sh)
+#   - install systemd boot services so Node Manager (RUN: e) and the AdminServer
+#     (RUN: w) come back up on reboot
 #   - stop Node Manager to re-read enrollments (RUN: k)
 #   - set up TLS  (RUN: g/t; tls/make-certs.sh, tls/install-ssl.sh)
+#   - tear down for a clean reinstall: remove the app domain + its profile and
+#     weblogic.service unit (RUN: r), or the Node Manager domain + its
+#     nodemanager.service unit (RUN: b)
 # Build with ./build.sh and deploy with ./deploy.sh <profile> afterwards.
 #
 # Usage:
@@ -112,6 +117,9 @@ JUMP="${2:-}"   # 'wizard' to skip the menu
 
 # Existing-profile scalar defaults (edit mode). Set once NAME/paths are known.
 OCCAS_CONF=""; DEPLOY_CONF=""; OCCAS_SECRET=""; DEPLOY_SECRET=""
+# Set by do_remove_domain after it deletes the active profile, so the dashboard
+# loops know to drop out instead of redrawing a profile that no longer exists.
+PROFILE_GONE=0
 set_paths() {
     PROFILE_DIR="${CONF_BASE}/${NAME}"
     OCCAS_CONF="${PROFILE_DIR}/occas.conf"
@@ -724,6 +732,10 @@ build_menu_rows() {
     local a_i=0; [ -d "${MWHOME}/wlserver" ] && a_i=1
     local a_n=0; [ -d "${MWHOME}/user_projects/domains/${NM_DOMAIN}" ] && a_n=1
     local a_c=0; [ -d "${MWHOME}/user_projects/domains/${DOMAIN}" ] && a_c=1
+    # Boot-service rows are "done" only when the unit is installed AND points at
+    # our own domain (the same key the guarded teardown uses).
+    local a_e=0; grep -qsF "${MWHOME}/user_projects/domains/${NM_DOMAIN}" /etc/systemd/system/nodemanager.service && a_e=1
+    local a_w=0; grep -qsF "${MWHOME}/user_projects/domains/${DOMAIN}"    /etc/systemd/system/weblogic.service    && a_w=1
     local nm_state="stopped"; nm_listening "$NM_PORT" && nm_state="running"
     local pwlbl="—"; _pw_set && pwlbl="set"
 
@@ -749,6 +761,8 @@ build_menu_rows() {
     _row action s "Start the AdminServer"       "" "-"
     _row action x "Stop the AdminServer"        "" "-"
     _row action k "Stop Node Manager"           "" "-"
+    _row action e "Install Node Manager boot service (systemd)"  "nodemanager.service" "$a_e"
+    _row action w "Install AdminServer boot service (via NM)"    "weblogic.service"    "$a_w"
     _row head ""      "STEP 5 · TLS (optional)"                  "" "-"
     _row phase  tls "TLS settings"          "$(_sum_tls)" "$p_tls"
     _row action g "Make certificates"       "" "-"
@@ -760,8 +774,9 @@ build_menu_rows() {
     _row action y "Deploy everything (shared library -> the 3 EARs)" "$distlbl" "-"
     _row action l "List current deployments" "" "-"
     _row action z "Undeploy everything" "" "-"
-    _row head ""      "RESET · start a clean install (keeps Node Manager)" "" "-"
-    _row action r "Remove this app domain (stop servers, delete, un-enroll)" "${DOMAIN:-?}" "$a_c"
+    _row head ""      "RESET · tear down for a clean reinstall"  "" "-"
+    _row action r "Remove this app domain + profile (stop, delete, un-enroll)" "${DOMAIN:-?}" "$a_c"
+    _row action b "Remove Node Manager domain + systemd unit"    "${NM_DOMAIN:-?}" "$a_n"
     unset -f _row
 }
 
@@ -783,12 +798,15 @@ dispatch_row() {
         n) do_nmdomain  || warn "nm-domain returned an error" ;;
         c) do_configure || warn "configure returned an error" ;;
         s) start_admin "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
+        e) do_install_nm_service  || true ;;
+        w) do_install_wls_service || true ;;
         x) stop_admin  "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
         k) stop_nm || true ;;
         y) do_deploy_all || true ;;
         l) do_deploy_status || true ;;
         z) do_undeploy_all || true ;;
         r) do_remove_domain "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
+        b) do_remove_nmdomain || true ;;
         g) "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error" ;;
         t) [ "$DRY" = "on" ] && dr="--dry-run"; "${SCRIPT_DIR}/tls/install-ssl.sh" "$DEPLOY_CONF" $dr || warn "install-ssl returned an error" ;;
         *) warn "unknown row: $1" ;;
@@ -870,6 +888,7 @@ dashboard_tui() {
                    printf '\e[2J\e[H'
                    local rid; for rid in "${runids[@]}"; do dispatch_row "$rid"; done
                    CHK=()
+                   [ "$PROFILE_GONE" = 1 ] && break
                    printf '\n  %s[done] press Enter to return…%s' "$C_DIM" "$C_RESET"; IFS= read -r _ || true
                    load_profile
                    printf '\e[?25l'; trap 'printf "\e[?25h\n"' EXIT INT ;;
@@ -879,7 +898,11 @@ dashboard_tui() {
     done
     printf '\e[?25h'; trap - EXIT INT
     log ""
-    log "  ${C_DIM}Next: ./build.sh   then   ./deploy.sh ${NAME}${C_RESET}"
+    if [ "$PROFILE_GONE" = 1 ]; then
+        log "  ${C_DIM}Profile '${NAME}' removed. Re-run ./blade.sh to pick or create another.${C_RESET}"
+    else
+        log "  ${C_DIM}Next: ./build.sh   then   ./deploy.sh ${NAME}${C_RESET}"
+    fi
     return 0
 }
 
@@ -911,11 +934,17 @@ dashboard_menu() {
                 *[!0-9]*) warn "unknown choice: $tok" ;;
                 *)   [ -n "${idmap[$tok]:-}" ] && dispatch_row "${idmap[$tok]}" || warn "no row ${tok}" ;;
             esac
+            [ "$PROFILE_GONE" = 1 ] && break
         done
         [ "$quit" = 1 ] && break
+        [ "$PROFILE_GONE" = 1 ] && break
     done
     log ""
-    log "  ${C_DIM}Next: ./build.sh   then   ./deploy.sh ${NAME}${C_RESET}"
+    if [ "$PROFILE_GONE" = 1 ]; then
+        log "  ${C_DIM}Profile '${NAME}' removed. Re-run ./blade.sh to pick or create another.${C_RESET}"
+    else
+        log "  ${C_DIM}Next: ./build.sh   then   ./deploy.sh ${NAME}${C_RESET}"
+    fi
     return 0
 }
 
@@ -970,6 +999,191 @@ stop_nm() {
     if nm_listening "$port"; then warn "could not free :${port}."; return 1; fi
     ok "stopped Node Manager (${killpids# }); :${port} free."
     return 0
+}
+
+# Remove a systemd unit that drives the domain we're deleting — and ONLY then.
+# blade.sh's install actions ('e'/'w') write these units pointed at our own
+# domains, but the same conventional name (nodemanager.service) may already point
+# at a completely unrelated WebLogic install on a given host. We therefore touch
+# the unit only if its file actually references ${domhome}; otherwise we leave it
+# strictly alone. Stop, disable, delete, reload. Uses sudo when not root; never
+# fails the caller. Matching by the domain path also works after the directory
+# itself is gone (we're matching the unit's text, not the live dir).
+remove_domain_systemd_unit() {
+    local domhome="$1" unit="$2"
+    [ -n "$domhome" ] || return 0
+    command -v systemctl >/dev/null 2>&1 || return 0
+    local unitfile="/etc/systemd/system/${unit}"
+    [ -f "$unitfile" ] || return 0
+    if ! grep -qF -- "$domhome" "$unitfile" 2>/dev/null; then
+        log "${C_DIM}  left ${unit} alone — it doesn't point at ${domhome}.${C_RESET}"
+        return 0
+    fi
+    local sudo=""
+    if [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1; then sudo="sudo"; fi
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] ${sudo:+${sudo} }systemctl stop/disable ${unit}; rm -f ${unitfile}; daemon-reload${C_RESET}"
+        return 0
+    fi
+    $sudo systemctl stop "$unit"    >/dev/null 2>&1 || true
+    $sudo systemctl disable "$unit" >/dev/null 2>&1 || true
+    $sudo rm -f "$unitfile" && ok "removed systemd unit ${unitfile}."
+    $sudo systemctl daemon-reload   >/dev/null 2>&1 || true
+}
+
+# --- systemd boot services -------------------------------------------------
+# blade.sh starts NM and the AdminServer interactively (RUN n/s). These install
+# the equivalent systemd units so both come back up on reboot. Both unit files
+# are GENERATED here from the live domain paths (the misc/*.service files are
+# only hand-edit references) — so the conventional names always point at exactly
+# the domain blade.sh manages, which is what the guarded teardown above keys on.
+#
+# startNodeManager.sh / startWebLogic.sh each run their JVM in the foreground, so
+# Type=simple + Restart=always is the right shape (matches misc/*.service). Both
+# scripts source setDomainEnv.sh -> setUserOverrides.sh, so the server.mem.args
+# tuning applies under systemd exactly as under RUN n/s.
+
+# Emit a systemd unit to stdout. after = extra ordering deps (may be empty).
+render_systemd_unit() {
+    local desc="$1" workdir="$2" start="$3" stop="$4" user="$5" group="$6" after="$7"
+    printf '%s\n' "[Unit]"
+    printf 'Description=%s\n' "$desc"
+    printf 'After=network-online.target%s\n' "${after:+ ${after}}"
+    printf 'Wants=network-online.target\n'
+    printf '\n[Service]\n'
+    printf 'Type=simple\n'
+    [ -n "${JAVA_HOME_VAL:-}" ] && printf 'Environment=JAVA_HOME=%s\n' "$JAVA_HOME_VAL"
+    printf 'WorkingDirectory=%s\n' "$workdir"
+    printf 'ExecStart=%s\n' "$start"
+    printf 'ExecStop=%s\n'  "$stop"
+    printf 'User=%s\n'  "$user"
+    printf 'Group=%s\n' "$group"
+    printf 'KillMode=process\n'
+    printf 'LimitNOFILE=65535\n'
+    printf 'Restart=always\n'
+    printf '\n[Install]\n'
+    printf 'WantedBy=multi-user.target\n'
+}
+
+# Write <unit> to /etc/systemd/system from stdin, then daemon-reload + enable so
+# it survives reboot (NEVER forget the reload — see the systemd-daemon-reload
+# rule). DRY prints the rendered unit instead of writing. sudo when not root.
+install_systemd_unit() {
+    local unit="$1" text="$2"
+    command -v systemctl >/dev/null 2>&1 || { warn "no systemctl here — cannot install ${unit}."; return 1; }
+    local unitfile="/etc/systemd/system/${unit}"
+    local sudo=""
+    if [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1; then sudo="sudo"; fi
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] write ${unitfile}:${C_RESET}"
+        printf '%s\n' "$text" | sed 's/^/    /'
+        log "${C_DIM}  [dry-run] ${sudo:+${sudo} }systemctl daemon-reload; systemctl enable ${unit}${C_RESET}"
+        return 0
+    fi
+    printf '%s\n' "$text" | $sudo tee "$unitfile" >/dev/null \
+        || { warn "could not write ${unitfile} (need sudo?)."; return 1; }
+    $sudo chmod 644 "$unitfile" 2>/dev/null || true
+    $sudo systemctl daemon-reload || { warn "daemon-reload failed for ${unit}."; return 1; }
+    $sudo systemctl enable "$unit" >/dev/null 2>&1 \
+        && ok "installed + enabled ${unitfile}." \
+        || ok "installed ${unitfile} (enable it with: sudo systemctl enable ${unit})."
+}
+
+# Emit the AdminServer-via-Node-Manager unit to stdout. Unlike the NM unit this
+# is Type=oneshot + RemainAfterExit: misc/start-admin-nm.sh does nmStart and
+# exits, and the AdminServer JVM is a child of Node Manager (not of this unit),
+# so there's no foreground process to babysit and no Restart=. ExecStop is an
+# OS-level kill (misc/stop-admin-os.sh) because pure-Java NM can't reliably
+# nmKill. NM_PASSWORD comes from a 0600 EnvironmentFile, never the unit text.
+render_admin_nm_unit() {
+    local dom="$1" domhome="$2" scriptdir="$3" user="$4" group="$5" envfile="$6"
+    local nmport="${NM_PORT:-5556}" nmtype="${NM_TYPE:-ssl}" nmuser="${ADMIN_USER:-weblogic}"
+    printf '%s\n' "[Unit]"
+    printf 'Description=WebLogic AdminServer via Node Manager (BLADE %s)\n' "$dom"
+    printf 'After=network-online.target nodemanager.service\n'
+    printf 'Wants=network-online.target\n'
+    printf 'Requires=nodemanager.service\n'
+    printf '\n[Service]\n'
+    printf 'Type=oneshot\n'
+    printf 'RemainAfterExit=yes\n'
+    [ -n "${JAVA_HOME_VAL:-}" ] && printf 'Environment=JAVA_HOME=%s\n' "$JAVA_HOME_VAL"
+    printf 'Environment=MW_HOME=%s\n' "$MWHOME"
+    printf 'Environment=DOMAIN_NAME=%s\n' "$dom"
+    printf 'Environment=DOMAIN_HOME=%s\n' "$domhome"
+    printf 'Environment=ADMIN_SERVER=AdminServer\n'
+    printf 'Environment=NM_HOST=localhost\n'
+    printf 'Environment=NM_PORT=%s\n' "$nmport"
+    printf 'Environment=NM_TYPE=%s\n' "$nmtype"
+    printf 'Environment=NM_USER=%s\n' "$nmuser"
+    printf 'EnvironmentFile=%s\n' "$envfile"
+    printf 'ExecStart=%s/start-admin-nm.sh\n' "$scriptdir"
+    printf 'ExecStop=%s/stop-admin-os.sh\n'  "$scriptdir"
+    printf 'User=%s\n'  "$user"
+    printf 'Group=%s\n' "$group"
+    printf 'TimeoutStartSec=600\n'
+    printf '\n[Install]\n'
+    printf 'WantedBy=multi-user.target\n'
+}
+
+# Write the NM password to a 0600 EnvironmentFile that misc/start-admin-nm.sh
+# reads via systemd at boot (nmConnect creds = the admin creds). Kept out of the
+# world-readable unit. Lives inside the domain so a domain teardown removes it.
+write_nm_envfile() {
+    local envfile="$1" user="$2" pw="$3"
+    [ -n "$pw" ] || { warn "no admin password in the profile — weblogic.service will fail to nmConnect until NM_PASSWORD is set in ${envfile}."; }
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] write ${envfile} (NM_PASSWORD=****, 0600, owner ${user})${C_RESET}"
+        return 0
+    fi
+    local sudo=""
+    if [ "$(id -u)" != 0 ] && [ "$(id -un)" != "$user" ] && command -v sudo >/dev/null 2>&1; then sudo="sudo"; fi
+    printf 'NM_PASSWORD=%s\n' "$pw" | ( umask 077; $sudo tee "$envfile" >/dev/null ) \
+        || { warn "could not write ${envfile}."; return 1; }
+    $sudo chown "$user" "$envfile" 2>/dev/null || true
+    $sudo chmod 600 "$envfile" 2>/dev/null || true
+    ok "wrote ${envfile} (NM password for boot, 0600)."
+}
+
+# Install nodemanager.service for our nmdomain (RUN: e).
+do_install_nm_service() {
+    local mw="$MWHOME" nmdom="$NM_DOMAIN" user="${INSTALL_USER:-oracle}" grp="${INV_GRP:-oinstall}"
+    [ -n "$nmdom" ] || { warn "no nm.domain.name."; return 1; }
+    local nmhome="${mw}/user_projects/domains/${nmdom}"
+    [ "$DRY" = "on" ] || [ -d "$nmhome" ] || { warn "nmdomain not found: ${nmhome} — create it first ('n')."; return 1; }
+    local text
+    text="$(render_systemd_unit "WebLogic Node Manager (BLADE ${nmdom})" \
+        "$nmhome" "${nmhome}/bin/startNodeManager.sh" "${nmhome}/bin/stopNodeManager.sh" \
+        "$user" "$grp" "")"
+    install_systemd_unit nodemanager.service "$text"
+}
+
+# Install weblogic.service for our app domain's AdminServer (RUN: w). Starts the
+# AdminServer THROUGH Node Manager (misc/start-admin-nm.sh), exactly like RUN s,
+# so the domain must already be enrolled in NM (configure 'c' / a prior 's' does
+# that — enrollment persists in nodemanager.domains across reboots). Ordered
+# after nodemanager.service and waits for its listener (start-admin-nm.sh).
+do_install_wls_service() {
+    local mw="$MWHOME" dom="$DOMAIN" user="${INSTALL_USER:-oracle}" grp="${INV_GRP:-oinstall}"
+    [ -n "$dom" ] || { warn "no domain name."; return 1; }
+    local domhome="${mw}/user_projects/domains/${dom}"
+    [ "$DRY" = "on" ] || [ -d "$domhome" ] || { warn "app domain not found: ${domhome} — create it first ('c')."; return 1; }
+    # Boot start is nmConnect/nmStart, so the domain must be enrolled in NM. Warn
+    # (don't fail) if it isn't yet — 'c' or a first 's' enrolls it persistently.
+    local nmfile="${mw}/user_projects/domains/${NM_DOMAIN}/nodemanager/nodemanager.domains"
+    if [ "$DRY" != "on" ] && { [ ! -f "$nmfile" ] || ! grep -q "^${dom}=" "$nmfile" 2>/dev/null; }; then
+        warn "'${dom}' isn't enrolled in ${NM_DOMAIN} yet — run 'c' (or 's') once so boot start works."
+    fi
+    # The boot service runs the same scripts blade.sh uses; make sure both exist.
+    [ -f "${SCRIPT_DIR}/misc/start-admin-nm.sh" ] || { warn "missing ${SCRIPT_DIR}/misc/start-admin-nm.sh."; return 1; }
+    [ -f "${SCRIPT_DIR}/misc/stop-admin-os.sh" ]  || { warn "missing ${SCRIPT_DIR}/misc/stop-admin-os.sh.";  return 1; }
+    chmod +x "${SCRIPT_DIR}/misc/start-admin-nm.sh" "${SCRIPT_DIR}/misc/stop-admin-os.sh" 2>/dev/null || true
+    local pw="${BLADE_WLS_PASSWORD:-}"
+    [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
+    local envfile="${domhome}/.blade-nm.env"
+    write_nm_envfile "$envfile" "$user" "$pw" || true
+    local text
+    text="$(render_admin_nm_unit "$dom" "$domhome" "${SCRIPT_DIR}/misc" "$user" "$grp" "$envfile")"
+    install_systemd_unit weblogic.service "$text"
 }
 
 # ----------------------------------------------------------------------------
@@ -1729,28 +1943,70 @@ kill_domain_procs() {
     return 0
 }
 
-# Reset: stop the app domain's servers, un-enroll it from NM, and delete it — so
-# the next configure starts clean. The stable nmdomain is left running.
+# Reset: stop the app domain's servers, un-enroll it from NM, delete it, AND
+# delete this profile's configuration (.conf/<name>/) — so the next install
+# starts from a clean slate with nothing left behind. The stable nmdomain is
+# left running. Sets PROFILE_GONE so the dashboard drops back to the picker.
 do_remove_domain() {
     local oh="$1" dom="$2" auser="${3:-weblogic}"
     local domhome="${oh}/user_projects/domains/${dom}"
     [ -n "$dom" ] || { warn "no domain name."; return 1; }
-    [ -d "$domhome" ] || { ok "domain '${dom}' not present — nothing to remove."; return 0; }
+    local have_dom=0;  [ -d "$domhome" ] && have_dom=1
+    local have_prof=0; [ -n "${PROFILE_DIR:-}" ] && [ -d "$PROFILE_DIR" ] && have_prof=1
+    if [ "$have_dom" = 0 ] && [ "$have_prof" = 0 ]; then
+        ok "domain '${dom}' and its profile already gone — nothing to remove."; return 0
+    fi
     if [ "$DRY" = "on" ]; then
-        log "${C_DIM}  [dry-run] stop AdminServer; kill stray JVMs; un-enroll ${dom}; rm -rf ${domhome}${C_RESET}"
+        log "${C_DIM}  [dry-run] stop AdminServer; kill stray JVMs; un-enroll ${dom}; rm -rf ${domhome}; remove weblogic.service (if it points here); rm -rf ${PROFILE_DIR}${C_RESET}"
+        [ "$have_dom" = 1 ] && remove_domain_systemd_unit "$domhome" weblogic.service
         return 0
     fi
-    yesno "Remove domain '${dom}' at ${domhome}? Stops its servers and DELETES it." "N" \
-        || { warn "kept '${dom}' — nothing removed."; return 1; }
-    stop_admin "$oh" "$dom" "$auser" || true
-    kill_domain_procs "$domhome"
-    local nmdom="${NM_DOMAIN:-$(read_prop "$OCCAS_CONF" nm.domain.name)}"
-    local nmfile="${oh}/user_projects/domains/${nmdom}/nodemanager/nodemanager.domains"
-    if [ -f "$nmfile" ] && grep -q "^${dom}=" "$nmfile"; then
-        local tmp; tmp="$(mktemp)" && grep -v "^${dom}=" "$nmfile" > "$tmp" && mv "$tmp" "$nmfile" \
-            && ok "un-enrolled '${dom}' from ${nmdom} (restart NM with 'k' then 'n' to apply)."
+    yesno "Remove domain '${dom}' AND profile '${NAME}'? Stops its servers, DELETES ${domhome}, removes its weblogic.service unit, and erases the profile config + secrets at ${PROFILE_DIR}." "N" \
+        || { warn "kept '${dom}' and profile '${NAME}' — nothing removed."; return 1; }
+    if [ "$have_dom" = 1 ]; then
+        stop_admin "$oh" "$dom" "$auser" || true
+        kill_domain_procs "$domhome"
+        local nmdom="${NM_DOMAIN:-$(read_prop "$OCCAS_CONF" nm.domain.name)}"
+        local nmfile="${oh}/user_projects/domains/${nmdom}/nodemanager/nodemanager.domains"
+        if [ -f "$nmfile" ] && grep -q "^${dom}=" "$nmfile"; then
+            local tmp; tmp="$(mktemp)" && grep -v "^${dom}=" "$nmfile" > "$tmp" && mv "$tmp" "$nmfile" \
+                && ok "un-enrolled '${dom}' from ${nmdom} (restart NM with 'k' then 'n' to apply)."
+        fi
+        remove_domain_systemd_unit "$domhome" weblogic.service
+        rm -rf "$domhome" && ok "removed ${domhome}."
     fi
-    rm -rf "$domhome" && ok "removed ${domhome}."
+    # Delete the profile last: the domain teardown above reads OCCAS_CONF, which
+    # lives inside the profile directory we're about to remove.
+    if [ "$have_prof" = 1 ]; then
+        rm -rf "$PROFILE_DIR" && { ok "removed profile '${NAME}' (${PROFILE_DIR})."; PROFILE_GONE=1; }
+    fi
+}
+
+# Reset: stop Node Manager, remove its systemd unit (if installed), and delete
+# the standalone nmdomain — so a reinstall recreates it from Oracle's template.
+# Independent of the app domain/profile: app domains enrolled in this NM are
+# untouched on disk, but must be re-enrolled (run 'c', or 'n' then start) after
+# the NM is rebuilt. Handy when iterating on install quirks.
+do_remove_nmdomain() {
+    local mw="$MWHOME" nmdom="$NM_DOMAIN"
+    [ -n "$nmdom" ] || { warn "no nm.domain.name."; return 1; }
+    local nmhome="${mw}/user_projects/domains/${nmdom}"
+    if [ "$DRY" = "on" ]; then
+        stop_nm || true
+        remove_domain_systemd_unit "$nmhome" nodemanager.service
+        log "${C_DIM}  [dry-run] rm -rf ${nmhome}${C_RESET}"
+        return 0
+    fi
+    if [ ! -d "$nmhome" ]; then
+        ok "Node Manager domain '${nmdom}' not present — checking for a matching systemd unit only."
+        remove_domain_systemd_unit "$nmhome" nodemanager.service
+        return 0
+    fi
+    yesno "Remove Node Manager domain '${nmdom}' at ${nmhome}? Stops NM, DELETES the domain, and removes its nodemanager.service unit if that unit points here." "N" \
+        || { warn "kept '${nmdom}' — nothing removed."; return 1; }
+    stop_nm || true
+    remove_domain_systemd_unit "$nmhome" nodemanager.service
+    rm -rf "$nmhome" && ok "removed ${nmhome}."
 }
 
 # ============================================================================

@@ -64,3 +64,8 @@ build-profiles/deploy/*.secret
 
 # BLADE install profiles (host facts, IPs, secrets) — never commit.
 /.conf/
+
+# Node Manager password drop for misc/start-admin-nm.sh — never commit.
+# (The systemd boot service uses <domain>/.blade-nm.env, which lives outside the
+# repo under MW_HOME; this covers the in-repo .nmsecret convenience file.)
+misc/.nmsecret

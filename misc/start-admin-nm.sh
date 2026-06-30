@@ -28,6 +28,22 @@ WLST="$MW_HOME/oracle_common/common/bin/wlst.sh"
 [ -x "$WLST" ]        || { echo "wlst.sh not found/executable: $WLST" >&2; exit 1; }
 [ -d "$DOMAIN_HOME" ] || { echo "app domain home not found: $DOMAIN_HOME" >&2; exit 1; }
 
+# Wait for Node Manager to be listening before nmConnect. At boot the systemd
+# nodemanager.service is "active" as soon as its process spawns, but the NM
+# listener takes a few seconds more — without this, an ordered weblogic.service
+# would race it and fail. Interactively (blade 's') NM is already up, so this
+# returns immediately. NM_WAIT_SECS=0 disables.
+NM_WAIT_SECS="${NM_WAIT_SECS:-90}"
+if [ "$NM_WAIT_SECS" -gt 0 ]; then
+    i=0
+    until (exec 3<>"/dev/tcp/${NM_HOST}/${NM_PORT}") 2>/dev/null; do
+        i=$((i + 1))
+        [ "$i" -ge "$NM_WAIT_SECS" ] && { echo "Node Manager not listening on ${NM_HOST}:${NM_PORT} after ${NM_WAIT_SECS}s" >&2; exit 1; }
+        sleep 1
+    done
+    exec 3>&- 2>/dev/null || true
+fi
+
 PY="$(mktemp /tmp/nmstart.XXXXXX.py)"
 trap 'rm -f "$PY"' EXIT
 
