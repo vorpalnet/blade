@@ -29,10 +29,12 @@
 #   - install systemd boot services so Node Manager (RUN: e) and the AdminServer
 #     (RUN: w) come back up on reboot
 #   - stop Node Manager to re-read enrollments (RUN: k)
+#   - open the firewalld ports OCCAS needs (RUN: f)
 #   - set up TLS  (RUN: g/t; tls/make-certs.sh, tls/install-ssl.sh)
-#   - tear down for a clean reinstall: remove the app domain + its profile and
-#     weblogic.service unit (RUN: r), or the Node Manager domain + its
-#     nodemanager.service unit (RUN: b)
+#   - UNINSTALL, in reverse-of-install order (each row confirms first):
+#       remove app domain + profile (RUN: r) · remove Node Manager domain (RUN: b)
+#       deinstall the OCCAS product (RUN: di) · remove install dirs (RUN: md)
+#       remove install user & group (RUN: ug) · delete the LOCAL repo clone (RUN: repo)
 # Build with ./build.sh and deploy with ./deploy.sh <profile> afterwards.
 #
 # Usage:
@@ -40,6 +42,13 @@
 #   ./blade.sh <name>          open profile <name> in the dashboard
 #   ./blade.sh <name> wizard      run the full linear interview first
 #   ./blade.sh <name> preflight   run host-prerequisite checks first
+#   ./blade.sh <name> install     unattended install (STEP 1-4), no menu
+#   ./blade.sh <name> uninstall   unattended teardown (app+NM domains)
+#                                   add --purge to also remove product/dirs/user
+#   ./blade.sh <name> status      one-shot health snapshot of the profile
+#   ./blade.sh <name> backup      snapshot profile + domain config to a tgz
+#   flags: -y/--yes (assume yes)  -n/--dry-run  --no-backup  --purge
+#   ./blade.sh -v | --version     print the BLADE version
 #   ./blade.sh -h
 # ============================================================================
 
@@ -74,6 +83,7 @@ ask() {
 # yesno "label" "Y|N"  — returns 0 for yes. Default shown in caps.
 yesno() {
     local __l="$1" __d="${2:-Y}" __in __hint
+    if [ "${ASSUME_YES:-0}" = 1 ]; then log "  ${__l} ${C_DIM}[--yes]${C_RESET}"; return 0; fi
     [ "$__d" = "Y" ] && __hint="Y/n" || __hint="y/N"
     read -r -p "  ${__l} [${__hint}]: " __in || __in=""
     [ -z "$__in" ] && __in="$__d"
@@ -111,15 +121,40 @@ set_conf_prop() {
 }
 
 # --- args ---------------------------------------------------------------------
-case "${1:-}" in -h|--help) sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+# Version tracks pom.xml's <revision>, so a dev's bug report pins to a build.
+BLADE_VERSION="$(sed -n 's/.*<revision>\(.*\)<\/revision>.*/\1/p' "${SCRIPT_DIR}/pom.xml" 2>/dev/null | head -1)"
+BLADE_VERSION="${BLADE_VERSION:-3.0.1}"
+case "${1:-}" in
+    -h|--help)            sed -n '2,50p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -v|--version|version) printf 'BLADE %s\n' "$BLADE_VERSION"; exit 0 ;;
+esac
 NAME="${1:-}"
-JUMP="${2:-}"   # 'wizard' to skip the menu
+JUMP=""          # subcommand: wizard|preflight|install|uninstall|status|backup
+ASSUME_YES=0     # -y/--yes: auto-answer every yesno prompt
+BACKUP=1         # snapshot before a domain teardown; --no-backup disables
+PURGE=0          # uninstall --purge: also product, dirs, user/group
+KEEP_PROFILE=0   # set by the uninstall ladder so a reinstall can reuse the profile
+# First non-flag arg after <name> is the subcommand; flags may appear anywhere.
+for __a in "${@:2}"; do
+    case "$__a" in
+        -y|--yes)      ASSUME_YES=1 ;;
+        -n|--dry-run)  DRY=on ;;
+        --no-backup)   BACKUP=0 ;;
+        --backup)      BACKUP=1 ;;
+        --purge|--all) PURGE=1 ;;
+        -*)            warn "ignoring unknown flag: ${__a}" ;;
+        *)             [ -z "$JUMP" ] && JUMP="$__a" || warn "ignoring extra arg: ${__a}" ;;
+    esac
+done
 
 # Existing-profile scalar defaults (edit mode). Set once NAME/paths are known.
 OCCAS_CONF=""; DEPLOY_CONF=""; OCCAS_SECRET=""; DEPLOY_SECRET=""
 # Set by do_remove_domain after it deletes the active profile, so the dashboard
 # loops know to drop out instead of redrawing a profile that no longer exists.
 PROFILE_GONE=0
+# Set by do_remove_repo after it schedules deletion of the local clone (blade.sh
+# included): the dashboard loops drop out so we exit before the tree disappears.
+REPO_GONE=0
 set_paths() {
     PROFILE_DIR="${CONF_BASE}/${NAME}"
     OCCAS_CONF="${PROFILE_DIR}/occas.conf"
@@ -702,7 +737,7 @@ run_wizard() {
 # falls back to a typed numbered menu. Both render from build_menu_rows() and
 # execute through dispatch_row(), so the two never drift apart.
 # ============================================================================
-DRY="off"
+DRY="${DRY:-off}"   # may be pre-set to "on" by the --dry-run flag during arg parse
 
 # One-line summaries for the busier rows.
 _sum_occas() {
@@ -763,6 +798,7 @@ build_menu_rows() {
     _row action k "Stop Node Manager"           "" "-"
     _row action e "Install Node Manager boot service (systemd)"  "nodemanager.service" "$a_e"
     _row action w "Install AdminServer boot service (via NM)"    "weblogic.service"    "$a_w"
+    _row action f "Open firewall ports (firewalld)"              "NM/admin/ssl$([ "${SIP_TLS:-false}" = true ] && printf /sip)" "-"
     _row head ""      "STEP 5 · TLS (optional)"                  "" "-"
     _row phase  tls "TLS settings"          "$(_sum_tls)" "$p_tls"
     _row action g "Make certificates"       "" "-"
@@ -774,9 +810,17 @@ build_menu_rows() {
     _row action y "Deploy everything (shared library -> the 3 EARs)" "$distlbl" "-"
     _row action l "List current deployments" "" "-"
     _row action z "Undeploy everything" "" "-"
-    _row head ""      "RESET · tear down for a clean reinstall"  "" "-"
-    _row action r "Remove this app domain + profile (stop, delete, un-enroll)" "${DOMAIN:-?}" "$a_c"
-    _row action b "Remove Node Manager domain + systemd unit"    "${NM_DOMAIN:-?}" "$a_n"
+    # UNINSTALL · listed top-to-bottom in safe teardown order (reverse of STEP 1).
+    # The checked set runs in menu order, so ticking any subset tears down safely.
+    # Each ✓ means "still present / removable"; each row confirms before deleting.
+    local a_repo=0; [ -d "${SCRIPT_DIR}/.git" ] && a_repo=1
+    _row head ""      "UNINSTALL · tick what to remove; runs top-to-bottom"  "" "-"
+    _row action r  "Remove this app domain + profile (stop, delete, un-enroll)" "${DOMAIN:-?}" "$a_c"
+    _row action b  "Remove Node Manager domain + systemd unit"    "${NM_DOMAIN:-?}" "$a_n"
+    _row action di "Deinstall OCCAS product (Oracle deinstaller)"  "${MWHOME:-?}" "$a_i"
+    _row action md "Remove install dirs (MW_HOME + inventory)"     "${MWHOME:-?}" "$a_m"
+    _row action ug "Remove install user & group"                   "${INSTALL_USER:-oracle}:${INV_GRP:-oinstall}" "$a_u"
+    _row action repo "Delete local BLADE repo clone (NOT GitHub)"  "${SCRIPT_DIR}" "$a_repo"
     unset -f _row
 }
 
@@ -800,6 +844,7 @@ dispatch_row() {
         s) start_admin "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
         e) do_install_nm_service  || true ;;
         w) do_install_wls_service || true ;;
+        f) do_open_firewall || true ;;
         x) stop_admin  "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
         k) stop_nm || true ;;
         y) do_deploy_all || true ;;
@@ -807,6 +852,10 @@ dispatch_row() {
         z) do_undeploy_all || true ;;
         r) do_remove_domain "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
         b) do_remove_nmdomain || true ;;
+        di)   do_deinstall     || true ;;
+        md)   do_remove_dirs   || true ;;
+        ug)   do_remove_usergrp || true ;;
+        repo) do_remove_repo   || true ;;
         g) "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error" ;;
         t) [ "$DRY" = "on" ] && dr="--dry-run"; "${SCRIPT_DIR}/tls/install-ssl.sh" "$DEPLOY_CONF" $dr || warn "install-ssl returned an error" ;;
         *) warn "unknown row: $1" ;;
@@ -888,7 +937,7 @@ dashboard_tui() {
                    printf '\e[2J\e[H'
                    local rid; for rid in "${runids[@]}"; do dispatch_row "$rid"; done
                    CHK=()
-                   [ "$PROFILE_GONE" = 1 ] && break
+                   { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && break
                    printf '\n  %s[done] press Enter to return…%s' "$C_DIM" "$C_RESET"; IFS= read -r _ || true
                    load_profile
                    printf '\e[?25l'; trap 'printf "\e[?25h\n"' EXIT INT ;;
@@ -898,7 +947,9 @@ dashboard_tui() {
     done
     printf '\e[?25h'; trap - EXIT INT
     log ""
-    if [ "$PROFILE_GONE" = 1 ]; then
+    if [ "$REPO_GONE" = 1 ]; then
+        log "  ${C_DIM}Local BLADE clone at ${SCRIPT_DIR} is being removed. GitHub remote is untouched.${C_RESET}"
+    elif [ "$PROFILE_GONE" = 1 ]; then
         log "  ${C_DIM}Profile '${NAME}' removed. Re-run ./blade.sh to pick or create another.${C_RESET}"
     else
         log "  ${C_DIM}Next: ./build.sh   then   ./deploy.sh ${NAME}${C_RESET}"
@@ -934,13 +985,15 @@ dashboard_menu() {
                 *[!0-9]*) warn "unknown choice: $tok" ;;
                 *)   [ -n "${idmap[$tok]:-}" ] && dispatch_row "${idmap[$tok]}" || warn "no row ${tok}" ;;
             esac
-            [ "$PROFILE_GONE" = 1 ] && break
+            { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && break
         done
         [ "$quit" = 1 ] && break
-        [ "$PROFILE_GONE" = 1 ] && break
+        { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && break
     done
     log ""
-    if [ "$PROFILE_GONE" = 1 ]; then
+    if [ "$REPO_GONE" = 1 ]; then
+        log "  ${C_DIM}Local BLADE clone at ${SCRIPT_DIR} is being removed. GitHub remote is untouched.${C_RESET}"
+    elif [ "$PROFILE_GONE" = 1 ]; then
         log "  ${C_DIM}Profile '${NAME}' removed. Re-run ./blade.sh to pick or create another.${C_RESET}"
     else
         log "  ${C_DIM}Next: ./build.sh   then   ./deploy.sh ${NAME}${C_RESET}"
@@ -1807,6 +1860,26 @@ do_preflight() {
         if [ -d "$inv_loc" ] && [ -w "$inv_loc" ]; then ok "inventory dir writable: ${inv_loc}"
         elif [ -d "$(dirname "$inv_loc")" ] && [ -w "$(dirname "$inv_loc")" ]; then ok "inventory parent writable (dir will be created)"
         else warn "inventory location not writable: ${inv_loc}"; PF_NEED="yes"; fi
+
+        # Capacity + OS advisories. The silent install runs with -ignoreSysPrereqs,
+        # so Oracle WON'T flag these — we surface them here rather than let an
+        # install fail cryptically halfway. Advisory (warn), not hard blockers.
+        local memkb memgb swapkb nofile freekb freegb
+        memkb="$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null)"; memgb=$(( ${memkb:-0} / 1024 / 1024 ))
+        if [ "${memkb:-0}" -ge 4194304 ]; then ok "RAM: ${memgb} GiB"
+        else warn "RAM: ${memgb} GiB — OCCAS wants ~4 GiB+; installs and servers may thrash."; fi
+        swapkb="$(awk '/SwapTotal/{print $2}' /proc/meminfo 2>/dev/null)"
+        [ "${swapkb:-0}" -gt 0 ] && ok "swap configured" || log "  ${C_DIM}no swap (ok on a big-RAM box).${C_RESET}"
+        nofile="$(ulimit -n 2>/dev/null || echo 0)"
+        if [ "$nofile" = unlimited ] || { [ "$nofile" -ge 4096 ] 2>/dev/null; }; then ok "open-files ulimit: ${nofile}"
+        else warn "open-files ulimit ${nofile} is low — WebLogic wants ≥4096 (set in /etc/security/limits.conf)."; fi
+        freekb="$(df -Pk "$(dirname "$mwhome")" 2>/dev/null | awk 'NR==2{print $4}')"; freegb=$(( ${freekb:-0} / 1024 / 1024 ))
+        if [ "${freekb:-0}" -ge 10485760 ]; then ok "disk free where MW_HOME goes: ${freegb} GiB"
+        else warn "only ${freegb} GiB free where MW_HOME goes — a full OCCAS install needs ~10 GiB."; fi
+        if command -v rpm >/dev/null 2>&1; then
+            rpm -q libaio >/dev/null 2>&1 && ok "libaio present" \
+                || warn "libaio not installed — Oracle installs often need it (sudo dnf install -y libaio)."
+        fi
     fi
 
     # Installer jar — only a fresh 'install' needs it. Moot once OCCAS is there.
@@ -1956,13 +2029,19 @@ do_remove_domain() {
     if [ "$have_dom" = 0 ] && [ "$have_prof" = 0 ]; then
         ok "domain '${dom}' and its profile already gone — nothing to remove."; return 0
     fi
+    # The uninstall ladder sets KEEP_PROFILE so an iterate-fast reinstall can reuse
+    # the profile's config + secrets; interactive 'r' clears it (removes both).
+    local profnote="; rm -rf ${PROFILE_DIR}"; local proflabel=" AND profile '${NAME}'"
+    if [ "${KEEP_PROFILE:-0}" = 1 ]; then profnote=" (keeping the profile config)"; proflabel=""; fi
     if [ "$DRY" = "on" ]; then
-        log "${C_DIM}  [dry-run] stop AdminServer; kill stray JVMs; un-enroll ${dom}; rm -rf ${domhome}; remove weblogic.service (if it points here); rm -rf ${PROFILE_DIR}${C_RESET}"
+        log "${C_DIM}  [dry-run] stop AdminServer; kill stray JVMs; un-enroll ${dom}; rm -rf ${domhome}; remove weblogic.service (if it points here)${profnote}${C_RESET}"
         [ "$have_dom" = 1 ] && remove_domain_systemd_unit "$domhome" weblogic.service
         return 0
     fi
-    yesno "Remove domain '${dom}' AND profile '${NAME}'? Stops its servers, DELETES ${domhome}, removes its weblogic.service unit, and erases the profile config + secrets at ${PROFILE_DIR}." "N" \
-        || { warn "kept '${dom}' and profile '${NAME}' — nothing removed."; return 1; }
+    yesno "Remove domain '${dom}'${proflabel}? Stops its servers, DELETES ${domhome}, removes its weblogic.service unit${proflabel:+, and erases the profile config + secrets at ${PROFILE_DIR}}." "N" \
+        || { warn "kept '${dom}'${proflabel} — nothing removed."; return 1; }
+    # Safety net before anything irreversible (skippable with --no-backup).
+    [ "${BACKUP:-1}" = 1 ] && [ "$have_dom" = 1 ] && do_backup || true
     if [ "$have_dom" = 1 ]; then
         stop_admin "$oh" "$dom" "$auser" || true
         kill_domain_procs "$domhome"
@@ -1976,9 +2055,12 @@ do_remove_domain() {
         rm -rf "$domhome" && ok "removed ${domhome}."
     fi
     # Delete the profile last: the domain teardown above reads OCCAS_CONF, which
-    # lives inside the profile directory we're about to remove.
-    if [ "$have_prof" = 1 ]; then
+    # lives inside the profile directory we're about to remove. Skipped when the
+    # uninstall ladder asked to keep it (KEEP_PROFILE) for a fast reinstall.
+    if [ "$have_prof" = 1 ] && [ "${KEEP_PROFILE:-0}" != 1 ]; then
         rm -rf "$PROFILE_DIR" && { ok "removed profile '${NAME}' (${PROFILE_DIR})."; PROFILE_GONE=1; }
+    elif [ "$have_prof" = 1 ]; then
+        ok "kept profile '${NAME}' (${PROFILE_DIR}) — reinstall with: ./blade.sh ${NAME} install"
     fi
 }
 
@@ -2007,6 +2089,99 @@ do_remove_nmdomain() {
     stop_nm || true
     remove_domain_systemd_unit "$nmhome" nodemanager.service
     rm -rf "$nmhome" && ok "removed ${nmhome}."
+}
+
+# --- uninstall the rest of STEP 1 (deinstall product, dirs, user, repo) -----
+# These are the inverses of do_install / do_makedirs / do_makeuser plus the repo
+# clone itself, so a machine can be returned all the way to pre-BLADE state. Each
+# confirms (yesno "N") and honours dry-run, mirroring do_remove_domain/nmdomain.
+
+# Deinstall the OCCAS product with Oracle's own deinstaller (inverse of 'i'). The
+# deinstaller detaches ORACLE_HOME from the central inventory and removes the
+# software; run it as the install user since the Oracle home is owned by them. If
+# it's missing, the 'md' row (remove dirs) is the blunt fallback — but that leaves
+# a stale inventory entry, so prefer this.
+do_deinstall() {
+    local mw="$MWHOME" user="${INSTALL_USER:-oracle}"
+    [ -n "$mw" ] || { warn "no oracle.home (MW_HOME)."; return 1; }
+    local deinst="${mw}/oui/bin/deinstall.sh"
+    if [ ! -d "${mw}/wlserver" ]; then ok "no OCCAS product at ${mw} — nothing to deinstall."; return 0; fi
+    local SUDO=""; [ "$(id -u)" -ne 0 ] && [ "$(id -un)" != "$user" ] && command -v sudo >/dev/null 2>&1 && SUDO="sudo -u ${user}"
+    if [ "$DRY" = "on" ]; then
+        if [ -f "$deinst" ]; then log "${C_DIM}  [dry-run] ${SUDO:+${SUDO} }${deinst} -silent${C_RESET}"
+        else log "${C_DIM}  [dry-run] deinstaller absent — would fall back to the 'Remove install dirs' row for ${mw}${C_RESET}"; fi
+        return 0
+    fi
+    if [ ! -f "$deinst" ]; then
+        warn "Oracle deinstaller not found at ${deinst} — use the 'Remove install dirs' row to delete ${mw} (that leaves a stale central-inventory entry)."
+        return 1
+    fi
+    yesno "Deinstall the OCCAS product at ${mw}? Runs Oracle's deinstaller (detaches the central inventory and removes the software)." "N" \
+        || { warn "kept the OCCAS product at ${mw}."; return 1; }
+    if $SUDO "$deinst" -silent; then ok "deinstalled the OCCAS product at ${mw}."
+    else warn "Oracle deinstaller returned an error — you may need the 'Remove install dirs' row."; return 1; fi
+}
+
+# Remove the install dirs (inverse of 'm'): MW_HOME + the central inventory dir.
+do_remove_dirs() {
+    local mw="$MWHOME"
+    local inv; inv="$(read_prop "$OCCAS_CONF" inventory.loc)"; inv="${inv:-${INV_LOC:-}}"
+    [ -n "$mw" ] || { warn "no oracle.home (MW_HOME)."; return 1; }
+    local SUDO=""; [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && SUDO="sudo"
+    if [ ! -d "$mw" ] && { [ -z "$inv" ] || [ ! -d "$inv" ]; }; then
+        ok "install dirs already gone — nothing to remove."; return 0
+    fi
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] ${SUDO:+sudo }rm -rf ${mw}${inv:+ ${inv}}${C_RESET}"; return 0
+    fi
+    yesno "Delete install dirs? rm -rf ${mw}${inv:+ and ${inv}}. Removes the OCCAS software tree and central inventory." "N" \
+        || { warn "kept ${mw}."; return 1; }
+    if [ -d "$mw" ]; then $SUDO rm -rf "$mw" && ok "removed ${mw}."; fi
+    if [ -n "$inv" ] && [ -d "$inv" ]; then $SUDO rm -rf "$inv" && ok "removed ${inv}."; fi
+}
+
+# Remove the install user & group (inverse of 'u'). userdel -r takes the home dir
+# with it, so run this AFTER the dirs row if MW_HOME lives under that home. Guarded
+# hard — this is a real OS account that may not be OCCAS-only.
+do_remove_usergrp() {
+    local user="${INSTALL_USER:-oracle}" grp="${INV_GRP:-oinstall}"
+    [ "$(uname -s)" = "Linux" ] || { warn "user/group removal is Linux-only."; return 0; }
+    local SUDO=""; [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && SUDO="sudo"
+    local has_u=0; id "$user" >/dev/null 2>&1 && has_u=1
+    local has_g=0; getent group "$grp" >/dev/null 2>&1 && has_g=1
+    if [ "$has_u" = 0 ] && [ "$has_g" = 0 ]; then ok "user '${user}' and group '${grp}' already gone."; return 0; fi
+    if [ "$DRY" = "on" ]; then
+        [ "$has_u" = 1 ] && log "${C_DIM}  [dry-run] ${SUDO:+sudo }userdel -r ${user}${C_RESET}"
+        [ "$has_g" = 1 ] && log "${C_DIM}  [dry-run] ${SUDO:+sudo }groupdel ${grp}${C_RESET}"
+        return 0
+    fi
+    [ "$(id -un)" = "$user" ] && { warn "refusing to delete '${user}' — that's the account you're running as."; return 1; }
+    yesno "Delete OS user '${user}' (userdel -r, removes its home) and group '${grp}'? This affects the whole machine, not just OCCAS." "N" \
+        || { warn "kept user '${user}' / group '${grp}'."; return 1; }
+    if [ "$has_u" = 1 ]; then
+        $SUDO userdel -r "$user" 2>/dev/null && ok "removed user '${user}'." || warn "could not fully remove '${user}' (still logged in or running processes?)."
+    fi
+    if [ "$has_g" = 1 ]; then
+        $SUDO groupdel "$grp" 2>/dev/null && ok "removed group '${grp}'." || warn "could not remove group '${grp}' (still a primary group for another user?)."
+    fi
+}
+
+# Delete the LOCAL BLADE repo clone (inverse of 'git clone'). NEVER touches the
+# GitHub remote. blade.sh is running from inside this tree, so we detach the rm to
+# a background shell that fires after we exit, then set REPO_GONE so the dashboard
+# drops out cleanly instead of redrawing from a directory that's about to vanish.
+do_remove_repo() {
+    local dir="$SCRIPT_DIR"
+    { [ -n "$dir" ] && [ -d "$dir" ]; } || { warn "can't locate the repo dir."; return 1; }
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] rm -rf ${dir}  (local clone only — GitHub remote untouched)${C_RESET}"; return 0
+    fi
+    yesno "Delete the LOCAL BLADE repo clone at ${dir}? Removes blade.sh and everything here. Your GitHub remote is NOT affected." "N" \
+        || { warn "kept the repo at ${dir}."; return 1; }
+    # Detach so this process finishes before its own script tree is unlinked.
+    nohup sh -c "sleep 1; rm -rf '$dir'" >/dev/null 2>&1 &
+    ok "removing ${dir} (local clone) — BLADE will exit now. GitHub is untouched."
+    REPO_GONE=1
 }
 
 # ============================================================================
@@ -2095,6 +2270,151 @@ do_undeploy_all() {
 do_deploy_status() { _deploy_one status "" "" "" ; }
 
 # ============================================================================
+# Unattended subcommands, status, backup, firewall — headless siblings of the
+# dashboard. They reuse the same dispatch_row workers, so behaviour never drifts
+# from the interactive menu.
+# ============================================================================
+
+# Tee this (non-interactive) run to .conf/<name>/blade.log so a developer's
+# "it didn't work on my laptop" is diagnosable afterwards. The interactive TUI is
+# deliberately NOT teed — it would fill the log with terminal escape codes.
+start_logging() {
+    local what="$1"
+    { [ -n "${PROFILE_DIR:-}" ] && [ -d "$PROFILE_DIR" ]; } || return 0
+    local lf="${PROFILE_DIR}/blade.log"
+    exec > >(tee -a "$lf") 2>&1
+    LOGGING=1
+    log ""
+    log "===== blade ${BLADE_VERSION} · ${what} · $(date '+%Y-%m-%d %H:%M:%S') · profile '${NAME}' ====="
+}
+
+# Unattended runs can leave partial state if Ctrl-C'd mid-install; say so and
+# point at the recovery path instead of dying silently.
+trap_interrupt() {
+    trap 'echo; warn "interrupted — state may be partial. Clean up with: ./blade.sh '"'"''"${NAME}"''"'"' uninstall"; exit 130' INT
+}
+
+# True if a JVM for THIS domain's AdminServer is running (matched by domain home
+# in the cmdline, like misc/stop-admin-os.sh — never a blind pgrep).
+admin_running() {
+    local domhome="${MWHOME}/user_projects/domains/${DOMAIN}" p cmd
+    command -v pgrep >/dev/null 2>&1 || return 1
+    for p in $(pgrep -f 'weblogic.Name=AdminServer' 2>/dev/null || true); do
+        cmd="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)"
+        case "$cmd" in *"$domhome"*) return 0 ;; esac
+    done
+    return 1
+}
+
+# Unattended install: STEP 1→4 in order, no menu. Each worker is idempotent and
+# skips when its target already exists, so this is safe to re-run. Boot services
+# (e/w) are intentionally left out — they need systemd/sudo and aren't needed to
+# get a laptop running; add them from the menu when you want reboot survival.
+run_install_ladder() {
+    load_profile
+    info "Unattended install of profile '${NAME}' → ${MWHOME:-?}"
+    yesno "Install OCCAS + Node Manager + cluster domain for '${NAME}' now?" "Y" \
+        || { warn "aborted."; return 1; }
+    local id
+    for id in u m i n c f s; do
+        rule; info "install step '${id}'"
+        dispatch_row "$id"
+    done
+    rule
+    ok "install complete for '${NAME}'."
+    log "  verify with:  ./blade.sh ${NAME} status"
+    log "  boot services (optional): ./blade.sh ${NAME}   → rows e, w"
+}
+
+# Unattended uninstall. Default tears down just the app + NM domains and KEEPS
+# the profile, so 'install' can immediately rebuild — the iterate-fast loop.
+# --purge also deinstalls the product, removes the dirs, and the user/group (and
+# drops the profile). Never touches the local repo clone (that stays a manual,
+# interactive-only 'repo' row).
+run_uninstall_ladder() {
+    load_profile
+    local ids
+    if [ "$PURGE" = 1 ]; then ids="r b di md ug"; else KEEP_PROFILE=1; ids="r b"; fi
+    info "Unattended uninstall of profile '${NAME}' — will run: ${ids}"
+    [ "$PURGE" = 1 ] && log "  ${C_DIM}--purge: also deinstall product, remove dirs, remove user/group, drop profile.${C_RESET}" \
+                     || log "  ${C_DIM}keeping the profile so './blade.sh ${NAME} install' can rebuild.${C_RESET}"
+    yesno "Proceed with uninstall (${ids})?" "N" || { warn "aborted."; return 1; }
+    local id
+    for id in $ids; do
+        rule; info "teardown step '${id}'"
+        dispatch_row "$id"
+    done
+    rule
+    ok "uninstall complete for '${NAME}'."
+}
+
+# One-shot health snapshot — the first thing to run when a dev says "it's broken".
+do_status() {
+    load_profile
+    local mw="$MWHOME" dom="$DOMAIN" nmdom="$NM_DOMAIN"
+    local nmport="${NM_PORT:-5556}"
+    local nmfile="${mw}/user_projects/domains/${nmdom}/nodemanager/nodemanager.domains"
+    info "BLADE ${BLADE_VERSION} · status of profile '${NAME}'"
+    log  "  MW_HOME: ${mw:-—}    OCCAS: ${OCCAS_VERSION:-—}    domain: ${dom:-—}"
+    rule
+    # _st "label" <predicate cmd...> — runs the predicate safely under set -e.
+    _st() { local lbl="$1"; shift; if "$@" >/dev/null 2>&1; then printf '   %s✓%s %s\n' "$C_GREEN" "$C_RESET" "$lbl"; else printf '   %s✗%s %s\n' "$C_RED" "$C_RESET" "$lbl"; fi; }
+    _st "install user '${INSTALL_USER:-oracle}' exists"        id "${INSTALL_USER:-oracle}"
+    _st "OCCAS product installed at ${mw}"                     occas_installed "$mw"
+    _st "Node Manager domain '${nmdom}' present"               test -d "${mw}/user_projects/domains/${nmdom}"
+    _st "Node Manager listening on :${nmport}"                 nm_listening "$nmport"
+    _st "app domain '${dom}' present"                          test -d "${mw}/user_projects/domains/${dom}"
+    _st "app domain '${dom}' enrolled in Node Manager"         grep -q "^${dom}=" "$nmfile"
+    _st "AdminServer process running"                          admin_running
+    _st "nodemanager.service installed"                        grep -qsF "${mw}/user_projects/domains/${nmdom}" /etc/systemd/system/nodemanager.service
+    _st "weblogic.service installed"                           grep -qsF "${mw}/user_projects/domains/${dom}" /etc/systemd/system/weblogic.service
+    unset -f _st
+    rule
+    log "  admin URL: $(_wls_adminurl 2>/dev/null || true)"
+    log "  session log: ${PROFILE_DIR}/blade.log"
+}
+
+# Snapshot the profile (configs + secrets) and the domain's config tree to a tgz
+# BEFORE a teardown, so a fat-fingered uninstall is recoverable. Kept OUTSIDE the
+# profile dir (under .conf/.backups/) so removing the profile doesn't take the
+# backups with it. Best-effort: never blocks the operation it precedes.
+do_backup() {
+    { [ -n "${PROFILE_DIR:-}" ] && [ -d "$PROFILE_DIR" ]; } || { warn "no profile dir — nothing to back up."; return 1; }
+    local bdir="${CONF_BASE}/.backups"
+    local dest="${bdir}/${NAME}-$(date '+%Y%m%d-%H%M%S').tgz"
+    local domhome="${MWHOME:-}/user_projects/domains/${DOMAIN:-}"
+    local -a items=()
+    local f; for f in "$PROFILE_DIR"/*.conf "$PROFILE_DIR"/*.secret; do [ -f "$f" ] && items+=("$f"); done
+    [ -d "${domhome}/config" ] && items+=("${domhome}/config")
+    if [ "${#items[@]}" -eq 0 ]; then warn "nothing to back up yet."; return 0; fi
+    if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] tar czf ${dest}  (profile conf/secrets + ${domhome}/config)${C_RESET}"; return 0; fi
+    mkdir -p "$bdir" || { warn "could not create ${bdir}."; return 1; }
+    if tar czf "$dest" "${items[@]}" 2>/dev/null; then ok "backup → ${dest#${SCRIPT_DIR}/}"; else warn "backup failed (continuing)."; return 1; fi
+}
+
+# Open the ports OCCAS needs on firewalld. Server installs need this; laptops
+# usually have no firewalld and it no-ops. Idempotent.
+do_open_firewall() {
+    command -v firewall-cmd >/dev/null 2>&1 || { ok "no firewalld here — nothing to open."; return 0; }
+    firewall-cmd --state >/dev/null 2>&1 || { ok "firewalld not running — nothing to open."; return 0; }
+    local nmport adminport sslport sip siptls
+    nmport="$(read_prop "$OCCAS_CONF" nm.listen.port)"; nmport="${nmport:-5556}"
+    adminport="$(read_prop "$DEPLOY_CONF" wls.adminurl | sed -E 's#.*:([0-9]+).*#\1#')"; adminport="${adminport:-7001}"
+    sslport="$(read_prop "$DEPLOY_CONF" tls.ssl.port)"; sslport="${sslport:-7002}"
+    siptls="$(read_prop "$DEPLOY_CONF" sip.tls.enabled)"
+    sip="$(read_prop "$DEPLOY_CONF" sip.tls.port)"
+    local ports="${nmport} ${adminport} ${sslport}"
+    { [ "$siptls" = "true" ] && [ -n "$sip" ]; } && ports="${ports} ${sip}"
+    local sudo=""; [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1 && sudo="sudo"
+    if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] ${sudo:+sudo }firewall-cmd --permanent --add-port=${ports// /,}/tcp; --reload${C_RESET}"; return 0; fi
+    local p ok_any=0
+    for p in $ports; do
+        $sudo firewall-cmd --permanent --add-port="${p}/tcp" >/dev/null 2>&1 && { ok "opened ${p}/tcp"; ok_any=1; } || warn "could not open ${p}/tcp"
+    done
+    [ "$ok_any" = 1 ] && { $sudo firewall-cmd --reload >/dev/null 2>&1 && ok "firewalld reloaded." || warn "firewall reload failed."; }
+}
+
+# ============================================================================
 # Entry — only when executed directly, so the script can be sourced (e.g. for
 # tests) to load its functions without running the interactive flow.
 # ============================================================================
@@ -2125,11 +2445,18 @@ if [ -z "$NAME" ]; then
     fi
 else
     set_paths
-    # 'wizard' runs the full linear interview first; 'preflight' runs host checks
-    # first; either way you land in the dashboard to iterate on individual phases.
+    # Subcommands: 'wizard'/'preflight' prep then drop into the dashboard; the
+    # rest (install/uninstall/status/backup) are headless and DON'T open the menu.
+    _need_profile() { [ -f "$OCCAS_CONF" ] || die "no profile '${NAME}' yet — create it first: ./blade.sh ${NAME}"; }
     case "$JUMP" in
         wizard)    run_wizard ;;
-        preflight) [ -f "$OCCAS_CONF" ] || die "no profile '${NAME}' yet — create it first: ./blade.sh ${NAME}"; do_preflight ;;
+        preflight) _need_profile; do_preflight ;;
+        install)   _need_profile; start_logging install;   trap_interrupt; run_install_ladder;   exit 0 ;;
+        uninstall) _need_profile; start_logging uninstall; trap_interrupt; run_uninstall_ladder; exit 0 ;;
+        status)    _need_profile; do_status; exit 0 ;;
+        backup)    _need_profile; load_profile; do_backup; exit $? ;;
+        ""|menu|dashboard) : ;;
+        *) die "unknown command '${JUMP}' — try: wizard, preflight, install, uninstall, status, backup" ;;
     esac
     dashboard
 fi
