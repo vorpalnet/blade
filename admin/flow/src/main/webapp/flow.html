@@ -34,27 +34,49 @@
 		div.base {
 			position: absolute;
 			overflow: hidden;
-			font-family: Arial;
-			font-size: 8pt;
+			font-family: var(--vorpal-font-sans, Arial);
+			font-size: 12px;
 		}
+		/* Canvas — a crisp CSS dot grid on a near-white surface, replacing
+		   the old images/grid.gif bitmap. Brand divider for the frame. */
+		/* The canvas is the white "drawing sheet" floating on the page's
+		   purple backdrop — inset on all sides (see workfloweditor.xml <ui>)
+		   so the purple shows just around its edges. */
 		div.base#graph {
-			border-style: solid;
-			border-color: #F2F2F2;
-			border-width: 1px;
-			background: url('images/grid.gif');
+			border: 1px solid var(--vorpal-slate-300);
+			border-radius: var(--vorpal-radius-lg);
+			box-shadow: var(--vorpal-shadow-lg);
+			background-color: var(--vorpal-surface-alt);
+			background-image: radial-gradient(circle, rgba(26, 36, 52, 0.10) 1px, transparent 1.3px);
+			background-size: 18px 18px;
+			background-position: -1px -1px;
+		}
+		/* Dark-glass brand header, pinned to the top (styled by the
+		   .vorpal-glass layer in brand.css via body.vorpal-glass). */
+		.vorpal-topbar {
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			z-index: 6;
+		}
+		/* Status line sits in the purple margin below the sheet → light text. */
+		#status {
+			color: rgba(255, 255, 255, 0.82);
+			text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 		}
 		/* View filter panel inside the Tasks window */
 		.view-panel {
-			padding: 6px 8px 8px 8px;
-			font-family: Arial;
+			padding: 8px 10px 10px;
+			font-family: var(--vorpal-font-sans, Arial);
 			font-size: 12px;
 		}
 		.view-panel .view-header {
-			margin-bottom: 4px;
+			margin-bottom: 6px;
 		}
 		.view-panel .view-header a {
 			font-size: 11px;
-			color: #4679B6;
+			color: var(--vorpal-purple);
 			text-decoration: none;
 		}
 		.view-panel .view-header a:hover {
@@ -63,7 +85,7 @@
 		.view-panel .view-item {
 			display: block;
 			font-weight: normal;
-			padding: 2px 0;
+			padding: 3px 0;
 			cursor: pointer;
 		}
 		.view-panel .view-item input {
@@ -71,14 +93,14 @@
 			vertical-align: middle;
 		}
 		.view-panel .view-empty {
-			color: #888;
+			color: var(--vorpal-slate-600);
 			font-style: italic;
 			font-size: 11px;
 		}
 		hr.view-sep {
 			border: none;
-			border-top: 1px solid #ccc;
-			margin: 4px 0 6px 0;
+			border-top: 1px solid var(--vorpal-divider);
+			margin: 6px 0 8px;
 		}
 	</style>
 	<script type="text/javascript">
@@ -151,7 +173,25 @@
 	
 	
 </head>
-<body onload="createEditor('config/workfloweditor.xml');">
+<body class="vorpal-glass" onload="createEditor('config/workfloweditor.xml');">
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/flow/">Flow</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="flow.html" class="vorpal-active">Editor</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
 	<table id="splash" width="100%" height="100%"
 		style="background:white;position:absolute;top:0px;left:0px;z-index:4;">
 		<tr>

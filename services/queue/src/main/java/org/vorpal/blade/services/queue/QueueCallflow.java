@@ -12,7 +12,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSession.State;
 
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.services.queue.config.QueueAttributes;
 
@@ -54,7 +54,7 @@ public class QueueCallflow extends Callflow {
 				// Try to CANCEL or BYE any outbound requests;
 				sipLogger.finer(inboundRequest,
 						"QueueCallflow.process.cancelWhileRinging - invoking Cancel.process in case there are outbound requests.");
-				Callflow cancelCallflow = new Terminate(null);
+				Terminate cancelCallflow = new Terminate(null);
 				cancelCallflow.process(inboundRequest);
 
 			});

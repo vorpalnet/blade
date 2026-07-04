@@ -6,7 +6,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-public class NotImplemented extends Callflow {
+public class NotImplemented extends org.vorpal.blade.framework.v3.Callflow {
 
 	private static final long serialVersionUID = 1L;
 

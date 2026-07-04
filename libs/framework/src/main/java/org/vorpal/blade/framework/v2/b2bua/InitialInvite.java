@@ -44,7 +44,7 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
  * Callflow for handling initial INVITE requests in a B2BUA scenario. Creates
  * the outbound leg, links sessions, and orchestrates the call setup process.
  */
-public class InitialInvite extends Callflow {
+public class InitialInvite extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;
 
 	// Attribute keys for session and request attributes

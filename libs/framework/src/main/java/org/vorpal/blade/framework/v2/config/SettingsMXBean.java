@@ -61,7 +61,7 @@ public interface SettingsMXBean {
 	/// can't be produced. The schema is static (derived from the config class,
 	/// not the data), so this is side-effect-free and safe to call anytime.
 	/// The BLADE Admin Portal reads the schema-root `title` / `x-tagline` /
-	/// `description` (emitted from [SchemaAbout]) to build each launcher card —
+	/// `description` (emitted from `@SchemaAbout`) to build each launcher card —
 	/// developer-owned identity that an operator config save can't blank.
 	public String getSchemaJson();
 }

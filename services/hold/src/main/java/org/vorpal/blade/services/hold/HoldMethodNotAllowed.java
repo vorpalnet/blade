@@ -6,7 +6,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v3.Callflow;
 
 /// Reply `405 Method Not Allowed` with an `Allow` header listing the methods
 /// the hold service supports. RFC 3261 §21.4.5 requires `Allow` on a 405.

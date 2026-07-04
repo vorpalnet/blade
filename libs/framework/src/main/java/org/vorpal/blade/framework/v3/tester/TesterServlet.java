@@ -10,9 +10,9 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.callflow.CallflowHold;
+import org.vorpal.blade.framework.v3.media.CallflowHold;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v3.crud.RuleSet;
 
@@ -113,7 +113,7 @@ public abstract class TesterServlet extends B2buaServlet {
 
 		switch (request.getMethod()) {
 		case "INVITE":
-			return new CallflowHold(); // re-INVITE → blackhole hold
+			return new CallflowHold(); // re-INVITE → inactive hold (RFC 3264)
 		case "BYE":
 		case "CANCEL":
 		case "INFO":

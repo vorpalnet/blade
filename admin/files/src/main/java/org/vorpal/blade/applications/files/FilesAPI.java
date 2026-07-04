@@ -66,6 +66,7 @@ public class FilesAPI {
 				n.put("label", entry.getLabel());
 				n.put("path", entry.getPath());
 				n.put("type", entry.getType().name());
+				n.put("consumer", entry.getConsumer().name());
 				try {
 					Path resolved = resolve(entry.getPath());
 					boolean exists = Files.exists(resolved);
@@ -135,7 +136,24 @@ public class FilesAPI {
 
 			ObjectNode result = mapper.createObjectNode();
 			result.put("ok", true);
-			result.put("message", "Saved " + entry.getPath());
+			String message = "Saved " + entry.getPath();
+
+			// Editing this app's OWN config: reload the SettingsManager from disk
+			// so the new registry / serverControl / consumer take effect now —
+			// direct file writes otherwise sit on disk until a redeploy (the
+			// auto-publish file watcher was retired).
+			if (selfConfigPath().equals(entry.getPath())) {
+				try {
+					settingsManager().reload();
+					message += " — registry reloaded.";
+				} catch (Exception reloadError) {
+					log.log(Level.WARNING, "files self-config saved but reload failed", reloadError);
+					message += " — but reload failed (" + reloadError.getMessage()
+							+ "); redeploy to apply.";
+				}
+			}
+
+			result.put("message", message);
 			return Response.ok(result.toString()).build();
 		} catch (BadInput b) {
 			return badRequest(b.getMessage());
@@ -191,13 +209,47 @@ public class FilesAPI {
 	// ---- registry / scope ------------------------------------------------
 
 	@SuppressWarnings("unchecked")
-	private List<EditableFile> registry() {
+	private SettingsManager<FilesSettings> settingsManager() {
 		Object mgr = servletContext == null ? null : servletContext.getAttribute(FilesSettingsStartup.SETTINGS_ATTR);
 		if (!(mgr instanceof SettingsManager)) {
 			throw new IllegalStateException("Files SettingsManager not registered");
 		}
-		FilesSettings settings = ((SettingsManager<FilesSettings>) mgr).getCurrent();
-		return settings == null ? java.util.Collections.emptyList() : settings.getFiles();
+		return (SettingsManager<FilesSettings>) mgr;
+	}
+
+	/// The on-disk path of this app's OWN config — derived exactly from the
+	/// SettingsManager name (the flattened context path, e.g. `blade-files`), so
+	/// it tracks the context-root rather than hard-coding a filename.
+	private String selfConfigPath() {
+		return "config/custom/vorpal/" + settingsManager().getName() + ".json";
+	}
+
+	/// The registry, always including a synthetic entry for this app's own
+	/// config so the whitelist can be edited from within Files — without that
+	/// injection it's chicken-and-egg (the registry can't list itself until it
+	/// already lists itself). The entry is computed, never persisted; if the
+	/// operator's file already lists it, the real entry wins (no duplicate).
+	private List<EditableFile> registry() {
+		FilesSettings settings = settingsManager().getCurrent();
+		List<EditableFile> files = new java.util.ArrayList<>(
+				settings == null ? java.util.Collections.emptyList() : settings.getFiles());
+
+		String selfPath = selfConfigPath();
+		boolean present = false;
+		for (EditableFile e : files) {
+			if (selfPath.equals(e.getPath())) {
+				present = true;
+				break;
+			}
+		}
+		if (!present) {
+			files.add(0, new EditableFile()
+					.setLabel("Files Registry (this tool's own config)")
+					.setPath(selfPath)
+					.setType(FileType.JSON)
+					.setConsumer(ConsumerTier.NONE));
+		}
+		return files;
 	}
 
 	/// Look up a registry entry by its registered path. This is the whitelist

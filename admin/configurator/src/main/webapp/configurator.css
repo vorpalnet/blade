@@ -2440,3 +2440,31 @@ button.btn {
 .form-readonly {
     opacity: 0.75;
 }
+
+/* ============================================================
+   DARK-GLASS SHELL  (opt-in via <body class="vorpal-glass">)
+   ------------------------------------------------------------
+   Pairs the Configurator with the shared brand "dark glass" look:
+   brand.css turns the topbar + page backdrop dark/purple. Policy
+   is "dark shell, light document" — the editor content must stay
+   an opaque, readable sheet sitting ON the purple backdrop, never
+   dark text bare on purple.
+
+   .container already carries an opaque themed surface
+   (var(--bg-surface)) in every app theme, so the purple never
+   shows through it. Here we only (a) keep that opacity explicit
+   and (b) inset + frame it so the purple reads as a border.
+
+   NOTE: we deliberately do NOT pin the surface to white. The
+   Configurator ships its own Theme selector (Light/Dark/Midnight/
+   Warm, via [data-theme] on <html>); pinning white would break a
+   user's chosen dark theme by leaving a white container wrapped
+   around dark fields. In the default Light theme this is a white
+   sheet framed by purple, exactly as intended.
+   ============================================================ */
+body.vorpal-glass .container {
+    background: var(--bg-surface);   /* stay opaque over the purple backdrop */
+    margin: 16px;
+    border-radius: var(--vorpal-radius-lg);
+    box-shadow: var(--vorpal-shadow-lg);
+}

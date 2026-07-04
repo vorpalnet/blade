@@ -5,8 +5,8 @@
 ///
 /// ## Key Components
 ///
-/// - [AppRouter] - Core SIP application router implementing `SipApplicationRouter`
-/// - [AppRouterProvider] - SPI provider that exposes [AppRouter] to the SIP servlet container
+/// - `AppRouter` - Core SIP application router implementing `SipApplicationRouter`
+/// - `AppRouterProvider` - SPI provider that exposes `AppRouter` to the SIP servlet container
 /// - [AppRouterConfiguration] - JSON-serializable configuration defining the routing state machine
 /// - [AppRouterConfigurationSample] - Generates a sample configuration file with example routing rules
 /// - [State] - Represents a state in the routing FSM, keyed by the previously invoked application
@@ -79,13 +79,13 @@
 ///
 /// ### SPI Integration
 ///
-/// [AppRouterProvider] extends `SipApplicationRouterProvider` (JSR-289 SPI) and holds a single
-/// static [AppRouter] instance. The container discovers this provider via the standard
+/// `AppRouterProvider` extends `SipApplicationRouterProvider` (JSR-289 SPI) and holds a single
+/// static `AppRouter` instance. The container discovers this provider via the standard
 /// `META-INF/services` mechanism and calls `getSipApplicationRouter()` to obtain the router.
 ///
 /// ### Application Lifecycle
 ///
-/// [AppRouter] tracks deployed applications in a static `HashMap` mapping application basenames
+/// `AppRouter` tracks deployed applications in a static `HashMap` mapping application basenames
 /// to their full deployment names. Applications are registered via `applicationDeployed()` and
 /// the mapping is used to resolve short names in the configuration to full deployment names
 /// when creating `SipApplicationRouterInfo` instances.

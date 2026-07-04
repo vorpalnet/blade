@@ -14,17 +14,18 @@
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/mode-text.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.8/theme-eclipse.js"></script>
 </head>
-<body>
+<body class="vorpal-glass">
 <div class="vorpal-app">
 
 	<header class="vorpal-topbar">
 		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
 			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
 			<span class="vorpal-brand-text">
-				<span class="vorpal-brand-product">BLADE Files</span>
-				<span class="vorpal-brand-tagline">Domain File Editor</span>
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
 			</span>
 		</a>
+		<a class="vorpal-appmark" href="/blade/files/">Files</a>
 		<nav class="vorpal-nav" aria-label="Primary">
 			<a href="index.html">Overview</a>
 			<a href="files.html" class="vorpal-active">Editor</a>
@@ -45,6 +46,7 @@
 			<button id="restore-btn" type="button" disabled>Restore</button>
 			<button id="reload-btn" type="button">Reload</button>
 			<button id="save-btn" type="button" class="files-primary" disabled>Save</button>
+			<button id="restart-btn" type="button" class="files-danger" title="Bounce the AdminServer so a hand-edited config takes effect" hidden>Restart AdminServer</button>
 		</div>
 
 		<div id="message" class="files-message" role="status" hidden></div>

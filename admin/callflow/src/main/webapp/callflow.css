@@ -1,0 +1,325 @@
+/* BLADE Trace — Traces layout on the shared brand layer (brand.css).
+ * Policy "dark shell, light document": the topbar + backdrop are dark/purple;
+ * the calls index and the detail pane are light sheets floating on it.
+ * Controls are square (flat) — only the sheet surfaces carry radius. */
+
+.cf-group-label {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--vorpal-slate-600);
+	padding: 12px 10px 4px;
+}
+
+.cf-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	border: 0;
+	border-left: 3px solid transparent;
+	background: none;
+	padding: 8px 10px;
+	cursor: pointer;
+	font: inherit;
+	color: var(--vorpal-ink-900);
+}
+.cf-item:hover { background: var(--vorpal-slate-100); }
+.cf-item.cf-active {
+	background: var(--vorpal-purple-100);
+	border-left-color: var(--vorpal-purple);
+}
+.cf-item .cf-item-title { font-weight: 600; font-size: 14px; }
+.cf-item .cf-item-cat { display: block; font-size: 11.5px; color: var(--vorpal-slate-600); margin-top: 1px; }
+
+/* ---- Right detail (light sheet) ---- */
+.cf-detail {
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-lg);
+	overflow: hidden;
+	color: var(--vorpal-ink-900);
+}
+
+.cf-detail-head { padding: 20px 22px 14px; border-bottom: 1px solid var(--vorpal-divider); }
+.cf-detail-head h1 { margin: 0 0 8px; font-size: 22px; color: var(--vorpal-ink-900); }
+
+.cf-blurb { margin: 0; font-size: 14px; line-height: 1.5; color: var(--vorpal-ink-700); max-width: 78ch; }
+
+.cf-source-path {
+	margin-top: 12px;
+	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
+	font-size: 12px;
+	color: var(--vorpal-slate-600);
+}
+.cf-source-path::before { content: "source: "; color: var(--vorpal-slate-400); }
+
+/* ---- Source code ---- */
+.cf-code {
+	margin: 0;
+	max-height: calc(100vh - 260px);
+	overflow: auto;
+	background: #fbfbfd;
+}
+.cf-code code.hljs {
+	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
+	font-size: 12.5px;
+	line-height: 1.55;
+	padding: 18px 22px;
+	background: transparent;
+}
+
+.cf-muted { color: var(--vorpal-slate-600); font-size: 13px; padding: 10px; }
+
+/* ==== Traces page ==== */
+
+.tr-page {
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: 24px;
+}
+
+/* ---- Arming strip (light sheet) — one compact control row ---- */
+.tr-armbar {
+	display: flex;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: 8px 14px;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-lg);
+	padding: 10px 14px;
+	margin-bottom: 12px;
+	color: var(--vorpal-ink-900);
+}
+
+.tr-arm-form {
+	display: flex;
+	align-items: flex-end;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.tr-arm-form label {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--vorpal-slate-600);
+}
+.tr-arm-form input, .tr-arm-form select {
+	font: inherit;
+	font-size: 13px;
+	color: var(--vorpal-ink-900);
+	background: #fff;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 0;
+	padding: 5px 8px;
+}
+.tr-arm-form #tr-pattern { min-width: 220px; font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace); }
+.tr-arm-form #tr-max { width: 70px; }
+
+.tr-btn {
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
+	background: var(--vorpal-slate-100);
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 0;
+	padding: 6px 14px;
+	cursor: pointer;
+}
+.tr-btn:hover { background: var(--vorpal-purple-100); border-color: var(--vorpal-purple); }
+
+.tr-arm-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-left: auto; /* push actions to the right, same row as the form */
+}
+.tr-rules {
+	flex-basis: 100%; /* thin status line under the controls */
+	margin: 0;
+	font-size: 12px;
+	color: var(--vorpal-slate-600);
+}
+.tr-auto { font-size: 12.5px; color: var(--vorpal-slate-600); display: flex; align-items: center; gap: 5px; }
+
+/* ---- Two-pane layout: calls+timeline left, source right ---- */
+.tr-layout {
+	display: grid;
+	grid-template-columns: 380px minmax(0, 1fr);
+	gap: 20px;
+	align-items: start;
+}
+@media (max-width: 920px) {
+	.tr-layout { grid-template-columns: 1fr; }
+}
+
+.tr-left {
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-lg);
+	padding: 8px;
+	position: sticky;
+	top: 24px;
+	max-height: calc(100vh - 48px);
+	overflow: auto;
+}
+
+/* ==== Traces page fills the viewport; the panes scroll, not the page ====
+ * The brand shell is already `grid-template-rows: auto 1fr; min-height:100vh`,
+ * so we pin the app to the viewport and let the calls pane + the tabbed detail
+ * grow to the bottom of the window (no lower) and scroll internally — up, down,
+ * left, right — instead of pushing the whole page taller. All dynamic: sizes
+ * come from the viewport, so it rescales with the browser window. */
+.tr-app.vorpal-glass { height: 100vh; min-height: 0; overflow: hidden; }
+.tr-app .vorpal-app { height: 100vh; min-height: 0; }
+.tr-app .vorpal-main { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.tr-app .tr-page {
+	flex: 1 1 auto;
+	min-height: 0;
+	max-width: none;
+	margin: 0;
+	padding: 14px 16px;
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+}
+.tr-app .tr-layout { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.tr-app .tr-left { position: static; top: auto; height: 100%; max-height: none; min-height: 0; }
+.tr-app .cf-detail { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.tr-app .tr-panels { flex: 1 1 auto; min-height: 0; display: flex; }
+.tr-app .tr-panel { flex: 1 1 auto; min-height: 0; max-height: none; overflow: auto; }
+
+/* Narrow screens: drop the fill, let the page scroll normally. */
+@media (max-width: 920px) {
+	.tr-app.vorpal-glass, .tr-app .vorpal-app { height: auto; min-height: 100vh; overflow: visible; }
+	.tr-app .vorpal-main { overflow: auto; display: block; }
+	.tr-app .tr-page { display: block; }
+	.tr-app .tr-layout { display: block; }
+	.tr-app .tr-left, .tr-app .cf-detail { height: auto; }
+	.tr-app .tr-left { margin-bottom: 16px; }
+	.tr-app .tr-panel { max-height: 70vh; }
+}
+
+.tr-step .cf-item-title { font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace); font-size: 12.5px; }
+.tr-step .cf-item-cat { font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace); }
+
+.tr-end {
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--vorpal-slate-400);
+	text-align: center;
+	padding: 8px 0 10px;
+}
+
+/* ---- Source lines with gutter + marked line ---- */
+.tr-lines {
+	list-style: none;
+	margin: 0;
+	padding: 14px 0;
+	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
+	font-size: 12.5px;
+	line-height: 1.55;
+}
+.tr-line {
+	display: flex;
+	white-space: pre;
+}
+.tr-gutter {
+	flex: 0 0 62px;
+	text-align: right;
+	padding-right: 14px;
+	color: var(--vorpal-slate-400);
+	user-select: none;
+}
+.tr-line-text { color: var(--vorpal-ink-900); }
+/* The emitting line: marked by the ▶ gutter glyph, a heavy left border, and
+ * bold text — never by color alone. */
+.tr-mark {
+	background: var(--vorpal-purple-100);
+	border-left: 4px solid var(--vorpal-purple);
+}
+.tr-mark .tr-gutter { color: var(--vorpal-ink-900); font-weight: 700; }
+.tr-mark .tr-line-text { font-weight: 700; }
+
+/* ---- Detail tabs: Sequence | Message | Source ---- */
+.tr-tabs {
+	display: flex;
+	gap: 2px;
+	padding: 0 12px;
+	border-bottom: 1px solid var(--vorpal-divider);
+	background: var(--vorpal-surface);
+}
+.tr-tab {
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--vorpal-slate-600);
+	background: none;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	padding: 9px 14px;
+	cursor: pointer;
+}
+.tr-tab:hover { color: var(--vorpal-ink-900); background: var(--vorpal-slate-100); }
+.tr-tab.cf-active { color: var(--vorpal-ink-900); border-bottom-color: var(--vorpal-purple); }
+.tr-panel[hidden] { display: none; }
+
+/* ---- Sequence (ladder) diagram ---- */
+/* A UML-style ladder built from the same steps as the timeline: one lifeline
+ * per party (BLADE apps boxed + solid, network peers plain + dashed), one arrow
+ * per step. Click an arrow to select its step; selecting a step (here or in the
+ * timeline) highlights its arrow. Selection is shown by a heavy line, a band,
+ * and bold text — never by color alone. */
+.tr-ladder {
+	max-height: calc(100vh - 300px);
+	min-height: 160px;
+	overflow: auto;
+	padding: 14px 16px;
+	background: #fbfbfd;
+}
+.tr-ladder-svg { display: block; }
+.tr-ladder-svg text {
+	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
+	-webkit-user-select: none; user-select: none;
+}
+
+/* Lifelines: app lanes solid + boxed header, network peers dashed. */
+.tr-life { stroke: var(--vorpal-slate-400); stroke-width: 1; stroke-dasharray: 3 4; }
+.tr-life-app { stroke: var(--vorpal-slate-400); stroke-dasharray: none; }
+.tr-lane-box { fill: var(--vorpal-slate-100); stroke: var(--vorpal-slate-400); }
+.tr-lane-label { font-size: 12px; font-weight: 600; fill: var(--vorpal-ink-700); }
+.tr-lane-label.tr-lane-app { fill: var(--vorpal-ink-900); font-weight: 700; }
+
+/* Arrows: full-width hit target per row, line + head + label. */
+.tr-larrow-hit { fill: transparent; cursor: pointer; }
+.tr-larrow-line, .tr-larrow-head { stroke: var(--vorpal-ink-700); stroke-width: 1.4; fill: none; }
+.tr-larrow-label { font-size: 11px; fill: var(--vorpal-slate-600); }
+.tr-larrow:hover .tr-larrow-hit { fill: var(--vorpal-slate-100); }
+.tr-larrow-on .tr-larrow-hit { fill: var(--vorpal-purple-100); }
+.tr-larrow-on .tr-larrow-line, .tr-larrow-on .tr-larrow-head { stroke: var(--vorpal-purple); stroke-width: 3; }
+.tr-larrow-on .tr-larrow-label { fill: var(--vorpal-ink-900); font-weight: 700; }
+
+/* ---- Raw SIP message (Traces step detail) ---- */
+.tr-sipmsg {
+	margin: 0;
+	padding: 16px 20px;
+	max-height: calc(100vh - 300px);
+	min-height: 160px;
+	overflow: auto;
+	background: #fbfbfd;
+	font-family: var(--vorpal-font-mono, ui-monospace, Menlo, Consolas, monospace);
+	font-size: 12px;
+	line-height: 1.5;
+	white-space: pre;
+}

@@ -1,11 +1,30 @@
+/*
+ * BLADE Flow — editor chrome.
+ *
+ * A modern skin over mxGraph's default UI classes, built on the shared
+ * brand layer (brand.css, linked from flow.html so the --vorpal-* tokens
+ * are available here). This file is injected at runtime by mxClient.js
+ * (mxClient.basePath = '.', so it resolves to css/common.css).
+ *
+ * Theme: LIGHT. The editor is a dense work surface, so it follows the
+ * admin-tier policy — dark glass is for landing pages, work surfaces stay
+ * light for readability. Replaces the stock mxGraph look (gray-gradient
+ * GIFs, Arial 8pt, navy menu hover, yellow tooltips).
+ *
+ * Functional affordances are preserved — most importantly the selected-
+ * tool indicator (a purple ring + fill, distinct by border + background,
+ * not by color alone).
+ */
+
+/* --- Selection rubberband ------------------------------------------- */
 div.mxRubberband {
 	position: absolute;
 	overflow: hidden;
-	border-style: solid;
-	border-width: 1px;
-	border-color: #0000FF;
-	background: #0077FF;
+	border: 1px solid var(--vorpal-purple);
+	background: rgba(96, 38, 113, 0.16);
 }
+
+/* --- In-place cell label editor (kept functional/transparent) ------- */
 .mxCellEditor {
 	background: url(data:image/gif;base64,R0lGODlhMAAwAIAAAP///wAAACH5BAEAAAAALAAAAAAwADAAAAIxhI+py+0Po5y02ouz3rz7D4biSJbmiabqyrbuC8fyTNf2jef6zvf+DwwKh8Si8egpAAA7);
 	_background: url('../images/transparent.gif');
@@ -25,12 +44,13 @@ div.mxRubberband {
 	padding: 0px;
 	margin: 0px;
 }
+
+/* --- Floating windows (Tasks, State / Transition inspectors) -------- */
 div.mxWindow {
-	-webkit-box-shadow: 3px 3px 12px #C0C0C0;
-	-moz-box-shadow: 3px 3px 12px #C0C0C0;
-	box-shadow: 3px 3px 12px #C0C0C0;
-	background: url('../images/window.gif');
-	border:1px solid #c3c3c3;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-slate-400);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-lg);
 	position: absolute;
 	overflow: hidden;
 	z-index: 1;
@@ -38,21 +58,22 @@ div.mxWindow {
 table.mxWindow {
 	border-collapse: collapse;
 	table-layout: fixed;
-  	font-family: Arial;
-	font-size: 12;
+	font-family: var(--vorpal-font-sans);
+	font-size: 13px;
 }
 td.mxWindowTitle {
-	background: url('../images/window-title.gif') repeat-x;
+	background: var(--vorpal-slate-100);
+	border-bottom: 1px solid var(--vorpal-divider);
+	color: var(--vorpal-ink-900);
 	text-overflow: ellipsis;
 	white-space: nowrap;
- 	text-align: center;
- 	font-weight: bold;
- 	overflow: hidden;
-	height: 13px;
-	padding: 2px;
- 	padding-top: 4px;
- 	padding-bottom: 6px;
- 	color: black;
+	text-align: left;
+	font-weight: 600;
+	font-size: 12.5px;
+	letter-spacing: 0.01em;
+	overflow: hidden;
+	height: 18px;
+	padding: 9px 12px;
 }
 td.mxWindowPane {
 	vertical-align: top;
@@ -63,101 +84,149 @@ div.mxWindowPane {
 	position: relative;
 }
 td.mxWindowPane td {
-  	font-family: Arial;
-	font-size: 8pt;
+	font-family: var(--vorpal-font-sans);
+	font-size: 12px;
 }
 td.mxWindowPane input, td.mxWindowPane select, td.mxWindowPane textarea, td.mxWindowPane radio {
-  	border-color: #8C8C8C;
-  	border-style: solid;
-  	border-width: 1px;
-  	font-family: Arial;
-	font-size: 8pt;
- 	padding: 1px;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 0;
+	font-family: var(--vorpal-font-sans);
+	font-size: 12px;
+	padding: 4px 6px;
+}
+td.mxWindowPane input:focus, td.mxWindowPane select:focus, td.mxWindowPane textarea:focus {
+	border-color: var(--vorpal-purple);
+	outline: none;
 }
 td.mxWindowPane button {
-	background: url('../images/button.gif') repeat-x;
-  	font-family: Arial;
-  	font-size: 8pt;
-  	padding: 2px;
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-700);
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 0;
+	font-family: var(--vorpal-font-sans);
+	font-size: 12px;
+	font-weight: 600;
+	padding: 5px 12px;
+	cursor: pointer;
 	float: left;
 }
+td.mxWindowPane button:hover {
+	background: var(--vorpal-purple-soft);
+	color: var(--vorpal-purple-700);
+	border-color: var(--vorpal-purple-100);
+}
+
+/* Route Simulator tabs (Simulate/Replay/Live) — render EXACTLY as Jeff's
+   flowSimulate.js styles them inline: flat, SEPARATE gray buttons, active =
+   white + bold. This rule's only job is to undo what the generic
+   window-button rule above would otherwise impose on his design — the rounded
+   corners and the 600 weight on inactive tabs. Nothing else: no segmenting
+   (margin-left), no hover recolor. Those were my additions and they're what
+   made the tabs look worse than his original. */
+td.mxWindowPane button.sim-tab {
+	border-radius: 0;
+	font-weight: normal;
+}
+
+/* --- Toolbar / palette ---------------------------------------------- */
+/* content-box keeps the 32px icon GIFs crisp; brand.css forces global
+   border-box, which would otherwise shrink them under padding+border. */
+img.mxToolbarItem, img.mxToolbarMode, img.mxToolbarModeSelected {
+	box-sizing: content-box;
+	width: 32px;
+	height: 32px;
+	cursor: pointer;
+}
 img.mxToolbarItem {
-	margin-right: 6px;
-	margin-bottom: 6px;
-	border-width: 1px;
-	width: 32px;height: 32px;
+	margin: 0 4px 4px 0;
+	padding: 2px;
+	border: 1px solid transparent;
+	border-radius: 0;
+}
+img.mxToolbarItem:hover {
+	background: var(--vorpal-purple-soft);
+	border-color: var(--vorpal-purple-100);
 }
 select.mxToolbarCombo {
 	vertical-align: top;
-	border-style: inset;
-	border-width: 2px;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 0;
+	font-family: var(--vorpal-font-sans);
+	font-size: 12px;
+	padding: 2px 4px;
 }
 div.mxToolbarComboContainer {
 	padding: 2px;
 }
 img.mxToolbarMode {
-	margin: 2px;
-	margin-right: 4px;
-	margin-bottom: 4px;
-	border-width: 0px;width: 32px;height: 32px;
+	margin: 2px 4px 4px 2px;
+	padding: 2px;
+	border: 1px solid transparent;
+	border-radius: 0;
 }
+img.mxToolbarMode:hover {
+	background: var(--vorpal-purple-soft);
+	border-color: var(--vorpal-purple-100);
+}
+/* Active tool — purple ring + fill (border + background, not color alone). */
 img.mxToolbarModeSelected {
-	margin: 0px;
-	margin-right: 2px;
-	margin-bottom: 2px;
-	border-width: 2px;
-	border-style: inset;width: 32px;height: 32px;
+	margin: 2px 4px 4px 2px;
+	padding: 2px;
+	border: 1px solid var(--vorpal-purple);
+	border-radius: 0;
+	background: var(--vorpal-purple-100);
 }
+
+/* --- Tooltips — dark, high-contrast, readable multi-line ------------ */
 div.mxTooltip {
-	-webkit-box-shadow: 3px 3px 12px #C0C0C0;
-	-moz-box-shadow: 3px 3px 12px #C0C0C0;
-	box-shadow: 3px 3px 12px #C0C0C0;
-	background: #FFFFCC;
-	border-style: solid;
-	border-width: 1px;
-	border-color: black;
-	font-family: Arial;
-	font-size: 8pt;
+	background: var(--vorpal-ink-900);
+	color: #fff;
+	border: 0;
+	border-radius: var(--vorpal-radius-md);
+	box-shadow: var(--vorpal-shadow-md);
+	font-family: var(--vorpal-font-sans);
+	font-size: 12px;
+	line-height: 1.5;
 	position: absolute;
 	cursor: default;
-	padding: 4px;
-	color: black;
+	padding: 8px 11px;
+	max-width: 340px;
 }
+
+/* --- Right-click popup menu ----------------------------------------- */
 div.mxPopupMenu {
-	-webkit-box-shadow: 3px 3px 12px #C0C0C0;
-	-moz-box-shadow: 3px 3px 12px #C0C0C0;
-	box-shadow: 3px 3px 12px #C0C0C0;
-	background: url('../images/window.gif');
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-md);
+	box-shadow: var(--vorpal-shadow-lg);
 	position: absolute;
-	border-style: solid;
-	border-width: 1px;
-	border-color: black;
+	padding: 4px;
 }
 table.mxPopupMenu {
 	border-collapse: collapse;
-	margin-top: 1px;
-	margin-bottom: 1px;
+	margin: 0;
 }
 tr.mxPopupMenuItem {
-	color: black;
+	color: var(--vorpal-ink-900);
 	cursor: pointer;
 }
 tr.mxPopupMenuItemHover {
-	background-color: #000066;
-	color: #FFFFFF;
+	background: var(--vorpal-purple-soft);
+	color: var(--vorpal-purple-700);
 	cursor: pointer;
 }
 td.mxPopupMenuItem {
-	padding: 2px 30px 2px 10px;
+	padding: 6px 26px 6px 12px;
 	white-space: nowrap;
-	font-family: Arial;
-	font-size: 8pt;
+	font-family: var(--vorpal-font-sans);
+	font-size: 12.5px;
 }
 td.mxPopupMenuIcon {
-	background-color: #D0D0D0;
-	padding: 2px 4px 2px 4px;
+	background: transparent;
+	padding: 4px 6px;
 }
+
 .mxDisabled {
 	opacity: 0.2 !important;
-	cursor:default !important;
+	cursor: default !important;
 }

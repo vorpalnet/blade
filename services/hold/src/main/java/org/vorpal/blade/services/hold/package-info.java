@@ -45,19 +45,19 @@
 /// Lifecycle methods `servletCreated` and `servletDestroyed` manage the
 /// [HoldSettings] configuration through a static `SettingsManager`.
 ///
-/// ### HoldInvite
+/// ### CallflowHold (framework, `v3.media`)
 ///
-/// Processes re-INVITE requests to place a call on hold. Reads the SDP body from
-/// the incoming request, replaces `a=sendrecv` with `a=inactive` to mute media,
-/// copies the `Allow` header, and sends back a 200 OK response. This implements
-/// the standard RFC 3264 hold mechanism by setting the media direction to inactive.
+/// Answers the (re-)INVITE with a proper RFC 3264 hold: a 200 OK whose body is
+/// OUR OWN inactive answer built from the offer — our `o=` line (stable
+/// per-dialog session id, version bumped per answer), our real address with
+/// the discard port, `a=inactive` per offered m-line. Offerless refreshes
+/// replay the cached answer. Never the legacy `c=0.0.0.0` blackhole.
 ///
-/// ### HoldBye
+/// ### Terminate (framework)
 ///
-/// Handles BYE requests to terminate held calls. Creates and sends a simple 200 OK
-/// response to acknowledge the session teardown.
+/// Handles CANCEL and BYE to tear down the call with a 200 OK.
 ///
-/// ### NotImplemented
+/// ### HoldMethodNotAllowed
 ///
 /// A fallback callflow handler for SIP methods that the hold service does not support.
 /// Responds with 405 (Method Not Allowed) to indicate the method is not implemented.

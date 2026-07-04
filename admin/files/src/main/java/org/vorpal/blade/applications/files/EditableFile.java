@@ -18,6 +18,7 @@ public class EditableFile implements Serializable {
 	protected String label;
 	protected String path;
 	protected FileType type = FileType.TEXT;
+	protected ConsumerTier consumer = ConsumerTier.NONE;
 
 	@JsonPropertyDescription("Human-readable name shown in the file picker, e.g. \"SIP Server Config\".")
 	public String getLabel() {
@@ -46,6 +47,18 @@ public class EditableFile implements Serializable {
 
 	public EditableFile setType(FileType type) {
 		this.type = type;
+		return this;
+	}
+
+	@JsonPropertyDescription("Which server tier reads this file — drives the \"restart to apply\" offer after a save. "
+			+ "ADMIN = AdminServer (e.g. config.xml); ENGINE = SIP engine tier (e.g. approuter.xml); BOTH; "
+			+ "NONE = no restart needed. Defaults to NONE.")
+	public ConsumerTier getConsumer() {
+		return consumer;
+	}
+
+	public EditableFile setConsumer(ConsumerTier consumer) {
+		this.consumer = consumer;
 		return this;
 	}
 }

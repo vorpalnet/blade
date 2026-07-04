@@ -23,8 +23,15 @@
 		restoreBtn: document.getElementById('restore-btn'),
 		reloadBtn: document.getElementById('reload-btn'),
 		saveBtn: document.getElementById('save-btn'),
+		restartBtn: document.getElementById('restart-btn'),
 		message: document.getElementById('message')
 	};
+
+	// Server-control capability, learned from GET api/server/health.
+	var serverCtl = { configured: false, adminServerName: 'AdminServer' };
+
+	function needsAdminRestart(consumer) { return consumer === 'ADMIN' || consumer === 'BOTH'; }
+	function readByEngine(consumer) { return consumer === 'ENGINE' || consumer === 'BOTH'; }
 
 	function setStatus(text) { els.status.textContent = text; }
 
@@ -103,6 +110,15 @@
 			+ (entry.exists ? ' · ' + fmtBytes(entry.sizeBytes) : ' · new file');
 		loadContent(entry);
 		loadVersions(entry);
+		updateRestart();
+	}
+
+	// Offer the AdminServer restart only when the selected file is read by the
+	// AdminServer AND a restart helper is configured server-side. Engine-only
+	// files never show it — restarting the AdminServer wouldn't apply them.
+	function updateRestart() {
+		var show = !!current && serverCtl.configured && needsAdminRestart(current.consumer);
+		els.restartBtn.hidden = !show;
 	}
 
 	function loadContent(entry) {
@@ -152,7 +168,7 @@
 			.then(function (res) {
 				if (res.ok && res.body.ok) {
 					setDirty(false);
-					showMessage(res.body.message || 'Saved.', false);
+					showMessage((res.body.message || 'Saved.') + applyHint(current.consumer), false);
 					loadVersions(current);
 				} else {
 					setStatus('Rejected');
@@ -194,6 +210,95 @@
 		action();
 	}
 
+	// Tier-aware nudge appended to the save confirmation: tell the operator what
+	// (if anything) has to happen for the edit to take effect.
+	function applyHint(consumer) {
+		var admin = needsAdminRestart(consumer);
+		var engine = readByEngine(consumer);
+		if (admin && engine) {
+			return ' Restart the AdminServer to apply the admin-tier part; the engine-tier part needs an engine apply (not yet wired).';
+		}
+		if (admin) {
+			return serverCtl.configured
+				? ' Read at boot — use “Restart AdminServer” to apply.'
+				: ' Read at boot — restart the AdminServer to apply (restart helper not configured).';
+		}
+		if (engine) {
+			return ' Read by the SIP engine tier — restarting the AdminServer won’t apply it; engine apply is not yet wired.';
+		}
+		return '';
+	}
+
+	function loadHealth() {
+		return fetch(API + '/server/health', { headers: { 'Accept': 'application/json' } })
+			.then(function (r) { return r.json(); })
+			.then(function (h) {
+				serverCtl.configured = !!h.restartConfigured;
+				serverCtl.adminServerName = h.adminServerName || 'AdminServer';
+				updateRestart();
+			})
+			.catch(function () { /* leave restart disabled if health is unreachable */ });
+	}
+
+	function restart() {
+		var name = serverCtl.adminServerName;
+		if (!window.confirm('Restart ' + name + ' now?\n\n'
+				+ 'This takes the ENTIRE admin tier offline for a minute or two — the console, the '
+				+ 'portal, and every admin app including this page. You will likely have to log in again.\n\n'
+				+ 'Save any unsaved work elsewhere first.')) {
+			return;
+		}
+		setStatus('Restarting…');
+		els.restartBtn.disabled = true;
+		fetch(API + '/server/restart?tier=admin', { method: 'POST' })
+			.then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+			.then(function (res) {
+				if (res.status === 202) {
+					showMessage(res.body.message || (name + ' restarting…'), false);
+					pollUntilBack();
+				} else {
+					els.restartBtn.disabled = false;
+					setStatus('Ready');
+					showMessage(res.body.message || ('Restart rejected (HTTP ' + res.status + ').'), true);
+				}
+			})
+			.catch(function (err) {
+				// The connection may drop as the server goes down — that's expected;
+				// treat it as "restart in progress" and start polling.
+				showMessage(name + ' is going down… waiting for it to come back.', false);
+				pollUntilBack();
+			});
+	}
+
+	// The AdminServer (this page's own server) goes down then comes back. Poll
+	// health: once it answers AGAIN after having failed at least once, reload.
+	function pollUntilBack() {
+		var sawDown = false, tries = 0;
+		setStatus('Restarting ' + serverCtl.adminServerName + '…');
+		var timer = setInterval(function () {
+			tries++;
+			fetch(API + '/server/health', { cache: 'no-store' })
+				.then(function (r) {
+					if (!r.ok) { throw new Error('HTTP ' + r.status); }
+					if (sawDown) {
+						clearInterval(timer);
+						showMessage(serverCtl.adminServerName + ' is back — reloading.', false);
+						window.location.reload();
+					}
+				})
+				.catch(function () {
+					sawDown = true;
+					setStatus('Restarting ' + serverCtl.adminServerName + '… (' + tries + ')');
+				});
+			if (tries > 120) { // ~6 min ceiling at 3s
+				clearInterval(timer);
+				setStatus('Error');
+				showMessage('Gave up waiting for ' + serverCtl.adminServerName
+					+ ' to come back. Reload the page manually once it is up.', true);
+			}
+		}, 3000);
+	}
+
 	// Wire up
 	els.fileSelect.addEventListener('change', function () {
 		guardUnsaved(function () { selectIndex(Number(els.fileSelect.value)); });
@@ -202,6 +307,7 @@
 		guardUnsaved(function () { if (current) { loadContent(current); } });
 	});
 	els.saveBtn.addEventListener('click', save);
+	els.restartBtn.addEventListener('click', restart);
 	els.restoreBtn.addEventListener('click', restore);
 	els.versionSelect.addEventListener('change', function () {
 		els.restoreBtn.disabled = !els.versionSelect.value;
@@ -211,5 +317,6 @@
 	});
 
 	initEditor();
+	loadHealth();
 	loadRegistry();
 })();

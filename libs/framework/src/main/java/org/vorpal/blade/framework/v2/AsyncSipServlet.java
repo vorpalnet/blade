@@ -97,7 +97,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	private static final long serialVersionUID = 1L;
 
 	/// Initial SIP servlet context event, preserved for cleanup operations
-	private static SipServletContextEvent initialSipServletContextEvent;
+	protected static SipServletContextEvent initialSipServletContextEvent;
 
 	/// Global SIP logger instance for message and event logging
 	protected static Logger sipLogger;
@@ -115,7 +115,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	private static final String RESPONSE_CALLBACK_INVITE = "RESPONSE_CALLBACK_INVITE";
 
 	/// Session attribute key for glare request queue
-	private static final String GLARE_QUEUE = "GLARE_QUEUE";
+	protected static final String GLARE_QUEUE = "GLARE_QUEUE";
 
 	/// Session attribute key for linked session references
 	private static final String LINKED_SESSION = "LINKED_SESSION";
@@ -127,7 +127,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	private static final String HASHKEY_COLLISION = "HASHKEY_COLLISION";
 
 	/// Application session attribute key for the per-call 3xx auto-follow counter
-	private static final String AUTO_REDIRECT_COUNT = "AUTO_REDIRECT_COUNT";
+	protected static final String AUTO_REDIRECT_COUNT = "AUTO_REDIRECT_COUNT";
 
 	/// Maximum number of 3xx redirects the framework will auto-follow on a single
 	/// AppSession before giving up and delivering the redirect response to the
@@ -576,7 +576,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// `Callflow.ALLOW_UPDATE` attribute; if there is no Allow header, leave
 	/// the attribute untouched — unknown stays unknown, and a previous
 	/// definitive answer is not erased.
-	private static void captureAllowHeader(SipServletMessage message, SipSession sipSession) {
+	protected static void captureAllowHeader(SipServletMessage message, SipSession sipSession) {
 		if (sipSession == null || !sipSession.isValid()) {
 			return;
 		}
@@ -595,7 +595,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	/// FINER diagnostics for every inbound request: request, session and
 	/// linked-session state. No-op unless FINER is loggable.
-	private static void logRequestDiagnostics(SipServletRequest request, SipSession sipSession,
+	protected static void logRequestDiagnostics(SipServletRequest request, SipSession sipSession,
 			SipSession linkedSession) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			try {
@@ -637,7 +637,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// caller's, and cache the Session-Expires / Min-SE values so a B2BUA like
 	/// 'transfer' can re-apply them on a new outbound INVITE (see
 	/// Callflow.applyKeepAlive).
-	private static void saveCallerInfo(SipServletRequest request, SipSession sipSession)
+	protected static void saveCallerInfo(SipServletRequest request, SipSession sipSession)
 			throws ServletParseException {
 
 		// attempt to keep track of who called whom
@@ -660,7 +660,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// Process the configured non-destination AttributeSelectors on an initial
 	/// request: create appSession index keys, publish SessionKey analytics rows,
 	/// and copy named regex groups onto the sessions.
-	private static void applyOriginSelectors(SipServletRequest request, SipApplicationSession appSession,
+	protected static void applyOriginSelectors(SipServletRequest request, SipApplicationSession appSession,
 			SipSession sipSession) {
 
 		List<AttributeSelector> selectors = Callflow.getSessionParameters().getSessionSelectors();
@@ -732,7 +732,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// Process the configured destination-dialog AttributeSelectors on an
 	/// initial request, copying named regex groups onto the linked (origin)
 	/// session, then FINER-dump the linked session's attributes.
-	private static void applyDestinationSelectors(SipServletRequest request, SipSession sipSession,
+	protected static void applyDestinationSelectors(SipServletRequest request, SipSession sipSession,
 			SipSession linkedSession) {
 
 		List<AttributeSelector> selectors = Callflow.getSessionParameters().getSessionSelectors();
@@ -772,7 +772,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	/// FINER dump of the appSession and SipSession state just before a request
 	/// is dispatched to its callflow. No-op unless FINER is loggable.
-	private static void logCallflowDispatch(SipServletRequest request, Callflow callflow, SipSession sipSession,
+	protected static void logCallflowDispatch(SipServletRequest request, Callflow callflow, SipSession sipSession,
 			SipApplicationSession appSession) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			sipLogger.finer(request, "AsyncSipServlet.doRequest - appSession id=" + appSession.getId() + //
@@ -804,7 +804,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// request: for INVITE, send a 500 (with stack trace) back upstream; for
 	/// ACK the call is already connected, so terminate both legs via
 	/// [CallflowCallConnectedError].
-	private void recoverFromRequestError(SipServletRequest request, Exception ex3) {
+	protected final void recoverFromRequestError(SipServletRequest request, Exception ex3) {
 		sipLogger.warning("AsyncSipServlet.doRequest - Exception #ex3");
 
 		Throwable cause = ex3.getCause() != null ? ex3.getCause() : ex3;
@@ -1004,7 +1004,7 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	/// FINER diagnostics for every inbound response: response, session and
 	/// linked-session state. No-op unless FINER is loggable.
-	private static void logResponseDiagnostics(SipServletResponse response, boolean isProxy, SipSession sipSession,
+	protected static void logResponseDiagnostics(SipServletResponse response, boolean isProxy, SipSession sipSession,
 			SipSession linkedSession) {
 		if (sipLogger.isLoggable(Level.FINER)) {
 			try {
@@ -1055,7 +1055,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// @return the merged-in response callback, or null if no early-dialog
 	/// session matched
 	@SuppressWarnings("unchecked")
-	private static Callback<SipServletResponse> mergeEarlyDialogSession(SipServletResponse response,
+	protected static Callback<SipServletResponse> mergeEarlyDialogSession(SipServletResponse response,
 			SipSession sipSession, SipApplicationSession appSession, SipSession linkedSession) {
 
 		Callback<SipServletResponse> callback = null;
@@ -1133,7 +1133,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// trace) upstream on the linked session, then attempt to kill the call
 	/// going downstream — ACK+BYE ([CallflowAckBye]) for a successful INVITE
 	/// response, CANCEL ([Terminate]) for a provisional one.
-	private void recoverFromResponseError(SipServletResponse response, Exception ex3) {
+	protected final void recoverFromResponseError(SipServletResponse response, Exception ex3) {
 		sipLogger.severe(response, "AsyncSipServlet.doResponse - Exception #ex3");
 		sipLogger.severe(response, "AsyncSipServlet.doResponse - Exception on SIP response: \n" + response.toString());
 		sipLogger.severe(response, ex3);
@@ -1391,7 +1391,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// callback.
 	///
 	/// The container auto-ACKs the original 3xx, so this method does not.
-	private void followRedirect(SipServletResponse response, Callback<SipServletResponse> callback)
+	protected final void followRedirect(SipServletResponse response, Callback<SipServletResponse> callback)
 			throws ServletException, IOException {
 		Address contact = response.getAddressHeader("Contact");
 		if (contact == null) {

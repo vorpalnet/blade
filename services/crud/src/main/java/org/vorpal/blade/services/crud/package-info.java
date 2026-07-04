@@ -8,7 +8,7 @@
 /// [RuleSet][org.vorpal.blade.framework.v3.crud.RuleSet] in the B2BUA
 /// lifecycle callbacks — the rule engine, configuration model and preview
 /// machinery all live in the framework's
-/// [crud][org.vorpal.blade.framework.v3.crud] package. Rules are written in
+/// `crud` package. Rules are written in
 /// the service's JSON configuration (no Java required) and can be authored
 /// and previewed interactively with the CRUD Editor admin app at
 /// `/blade/crud-editor`.

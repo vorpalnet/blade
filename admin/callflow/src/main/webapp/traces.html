@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Trace</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="callflow.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/callflow/favicon.svg">
+</head>
+<body class="vorpal-glass tr-app">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/callflow/">Trace</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="traces.html" class="vorpal-active">Traces</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span id="status" class="vorpal-pill">Loading…</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="tr-page">
+
+			<!-- Arming strip: which calls get recorded -->
+			<section class="tr-armbar" aria-label="Trace arming">
+				<form id="tr-arm-form" class="tr-arm-form">
+					<label>Match
+						<select id="tr-attribute">
+							<option value="From" selected>From</option>
+							<option value="To">To</option>
+							<option value="Request-URI">Request-URI</option>
+							<option value="Call-ID">Call-ID</option>
+							<option value="Origin-IP">Origin-IP</option>
+							<option value="__other__">other header…</option>
+						</select>
+					</label>
+					<input id="tr-attribute-other" type="text" placeholder="header name" hidden>
+					<label>Pattern
+						<input id="tr-pattern" type="text" placeholder=".*5551234.*" required>
+					</label>
+					<label>Max calls
+						<input id="tr-max" type="number" value="5" min="0" step="1">
+					</label>
+					<label>Label
+						<input id="tr-label" type="text" placeholder="optional note">
+					</label>
+					<button type="submit" class="tr-btn">Arm</button>
+				</form>
+				<div class="tr-arm-actions">
+					<button id="tr-disarm" type="button" class="tr-btn">Disarm All</button>
+					<button id="tr-clear" type="button" class="tr-btn">Clear Buffer</button>
+					<button id="tr-save" type="button" class="tr-btn" title="Download the captured calls as one self-contained HTML file anyone can open — no OCCAS or login needed.">Save Snapshot</button>
+					<button id="tr-load" type="button" class="tr-btn" title="View a previously saved snapshot file. Refresh returns to live data.">Load Snapshot</button>
+					<input id="tr-file" type="file" accept=".html,.json" hidden>
+					<button id="tr-refresh" type="button" class="tr-btn">Refresh</button>
+					<label class="tr-auto"><input id="tr-auto" type="checkbox"> auto-refresh</label>
+				</div>
+				<span id="tr-rules" class="tr-rules">No rules armed.</span>
+			</section>
+
+			<div class="tr-layout">
+
+				<!-- Left: captured calls + the selected call's timeline -->
+				<aside class="tr-left" aria-label="Captured calls">
+					<div class="cf-group-label">Captured calls</div>
+					<div id="tr-calls"><p class="cf-muted">Nothing captured yet. Arm a rule, then place a matching call.</p></div>
+					<div class="cf-group-label">Timeline</div>
+					<div id="tr-timeline"><p class="cf-muted">Pick a call above.</p></div>
+				</aside>
+
+				<!-- Right: tabbed detail — sequence diagram, raw message, source -->
+				<article class="cf-detail">
+					<div class="cf-detail-head">
+						<h1 id="tr-title">Call Traces</h1>
+						<p id="tr-step-info" class="cf-blurb">
+							Each row on the left is one message an app sent or received.
+							Pick a call to see its sequence diagram; pick a step to see the
+							raw SIP message and, for sent steps, the source line that emitted it.
+						</p>
+						<div id="tr-source-path" class="cf-source-path" hidden></div>
+					</div>
+					<div class="tr-tabs" role="tablist" aria-label="Detail views">
+						<button type="button" class="tr-tab cf-active" id="tr-tab-seq" data-tab="seq" role="tab">Sequence</button>
+						<button type="button" class="tr-tab" id="tr-tab-msg" data-tab="msg" role="tab">Message</button>
+						<button type="button" class="tr-tab" id="tr-tab-src" data-tab="src" role="tab">Source</button>
+					</div>
+					<div class="tr-panels">
+						<section id="tr-ladder" class="tr-ladder tr-panel" data-tab="seq" aria-label="Sequence diagram"></section>
+						<pre id="tr-message" class="tr-sipmsg tr-panel" data-tab="msg" hidden></pre>
+						<pre id="tr-code-panel" class="cf-code tr-panel" data-tab="src" hidden><ol id="tr-code" class="tr-lines"></ol></pre>
+					</div>
+				</article>
+
+			</div>
+		</div>
+	</main>
+
+</div>
+<script src="traces.js"></script>
+</body>
+</html>

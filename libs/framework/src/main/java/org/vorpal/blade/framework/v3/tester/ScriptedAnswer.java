@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
-import javax.mail.MessagingException;
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
 import javax.servlet.sip.SipServletRequest;
@@ -15,15 +14,15 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 /// Endpoint-mode responder driven by a [Scenario]'s [ResponseScript]: plays
 /// the `send` steps in order (each with its own delay and optional custom
-/// reason phrase), answers 2xx steps with a blackhole/mute SDP derived from
-/// the offer (unless the step says `sdp: none`), then optionally runs a
-/// REFER transfer and/or an auto-BYE teardown.
+/// reason phrase), answers 2xx steps with an RFC 3264 inactive hold SDP
+/// derived from the offer (unless the step says `sdp: none`), then optionally
+/// runs a REFER transfer and/or an auto-BYE teardown.
 ///
 /// Generalizes the old test-uas `TestInvite` (status/delay) and `TestRefer`
 /// (transfer + NOTIFY handshake) callflows — those behaviors are now just
 /// particular response scripts, which the URI-parameter shorthands
 /// (`status=`, `delay=`, `refer=`) synthesize at runtime.
-public class ScriptedAnswer extends Callflow {
+public class ScriptedAnswer extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;
 
 	private final Scenario scenario;
@@ -71,10 +70,12 @@ public class ScriptedAnswer extends Callflow {
 
 		boolean answered = status >= 200 && status < 300;
 		if (answered && !ResponseStep.SDP_NONE.equals(step.getSdp())) {
-			try {
-				hold(request, response); // blackhole/mute answer derived from the offer
-			} catch (MessagingException e) {
-				throw new IOException("ScriptedAnswer: failed to build hold answer from offer", e);
+			// RFC 3264-style inactive answer (own o= line, real address) —
+			// replaced the v2 blackhole helper so the test tier never answers
+			// with the deprecated c=0.0.0.0 pattern it's supposed to catch
+			String answer = org.vorpal.blade.framework.v3.media.CallflowHold.inactiveAnswerFor(request);
+			if (answer != null) {
+				response.setContent(answer.getBytes(java.nio.charset.StandardCharsets.UTF_8), "application/sdp");
 			}
 		}
 

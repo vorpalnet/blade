@@ -13,7 +13,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /// The routing decision payload — what to do with the inbound
-/// INVITE once the pipeline has finished enriching the [Context].
+/// INVITE once the pipeline has finished enriching the [org.vorpal.blade.framework.v3.configuration.Context].
 ///
 /// A Route is either a **forward** or a **direct response**:
 ///

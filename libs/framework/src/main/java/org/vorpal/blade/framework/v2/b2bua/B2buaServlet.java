@@ -97,7 +97,7 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 	 * Tells the B2buaServlet not to send the message (request or response). You are
 	 * now responsible for completing the callflow.
 	 * 
-	 * @param outboundRequest
+	 * @param msg the request or response the B2buaServlet should not send
 	 */
 	public void doNotProcess(SipServletMessage msg) {
 		if (msg == null) {

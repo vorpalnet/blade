@@ -10,7 +10,7 @@ import javax.servlet.sip.SipServletResponse;
  * A configurable callflow that responds with a specific SIP response code.
  * Useful for quickly rejecting requests with appropriate status codes.
  */
-public class CallflowResponseCode extends Callflow {
+public class CallflowResponseCode extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;
 
 	private final int responseCode;

@@ -473,10 +473,25 @@ public class SettingsManager<T> {
 		}
 	}
 
+	/// Seam mirroring [#configureMapper]: override to customize the JSON Schema
+	/// builder (e.g. register custom definitions for new value types) before the
+	/// schema is generated. Called by [#saveSchema]; the default is a no-op, so
+	/// v2 schema output is byte-for-byte unchanged.
+	protected void configureSchema(SchemaGeneratorConfigBuilder configBuilder) {
+		// no-op
+	}
+
 	public void saveSchema(T t) throws JsonGenerationException, JsonMappingException, IOException {
-		JsonNode jsonSchema = generateSchemaNode(t.getClass(), mapper);
+		JsonNode jsonSchema = generateSchemaNode(t.getClass(), mapper, this::configureSchema);
 		File schemaFile = new File(schemaPath.toString() + "/" + servletContextName + ".jschema");
 		mapper.writerWithDefaultPrettyPrinter().writeValue(schemaFile, jsonSchema);
+	}
+
+	/// Two-arg form, kept for callers/tests needing no customization; delegates
+	/// to the customizable form with a no-op customizer.
+	public static JsonNode generateSchemaNode(Class<?> clazz, ObjectMapper mapper) {
+		return generateSchemaNode(clazz, mapper, builder -> {
+		});
 	}
 
 	/// Builds the JSON Schema node for a configuration class using victools +
@@ -484,8 +499,10 @@ public class SettingsManager<T> {
 	/// ([FormLayout], [FormLayoutGroup], [FormSection], [FormKeyEnum]). Pure —
 	/// no file IO and no SettingsManager state — so it can be exercised
 	/// standalone in tests/verifiers; [#saveSchema] wraps it to write the
-	/// `.jschema` file.
-	public static JsonNode generateSchemaNode(Class<?> clazz, ObjectMapper mapper) {
+	/// `.jschema` file. The `customizer` (supplied by [#configureSchema]) is
+	/// applied to the builder just before generation.
+	public static JsonNode generateSchemaNode(Class<?> clazz, ObjectMapper mapper,
+			java.util.function.Consumer<SchemaGeneratorConfigBuilder> customizer) {
 		// victools jsonschema-generator with the Jackson module:
 		//   - Reads @JsonSubTypes / @JsonTypeInfo for polymorphism (emitted as
 		//     anyOf variants in the schema)
@@ -646,6 +663,8 @@ public class SettingsManager<T> {
 			}
 		});
 
+		customizer.accept(configBuilder);
+
 		SchemaGeneratorConfig config = configBuilder.build();
 		SchemaGenerator schemaGenerator = new SchemaGenerator(config);
 		JsonNode schema = schemaGenerator.generateSchema(clazz);
@@ -698,6 +717,17 @@ public class SettingsManager<T> {
 	 */
 	public T getCurrent() {
 		return current;
+	}
+
+	/**
+	 * Re-reads the domain/cluster/server config files from disk and rebuilds
+	 * {@link #getCurrent()} — the same refresh the MBean's {@code reload()}
+	 * performs. Use this after writing a config file out-of-band (e.g. the Files
+	 * app editing this app's own config) so the change takes effect without a
+	 * redeploy.
+	 */
+	public void reload() {
+		settings.reload();
 	}
 
 	public String getName() {

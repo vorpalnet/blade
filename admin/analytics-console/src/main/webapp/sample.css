@@ -1,12 +1,36 @@
-/* Analytics sample-data page — uses brand.css tokens; only page-specific rules. */
+/*
+ * Analytics sample-data page — uses brand.css tokens; only page-specific rules.
+ *
+ * Theme: "dark shell, light document". The page runs under `body.vorpal-glass`
+ * (dark/purple chrome + backdrop). The form fieldsets and result stats are
+ * LIGHT brand sheets floating on the purple; section labels and transient
+ * status text that sit directly on the backdrop read light.
+ */
 
+/* Each fieldset is a light sheet. */
 .sample-fieldset {
-  border: 1px solid var(--vorpal-border, #3a3f4b);
-  border-radius: 8px;
-  padding: 14px 16px;
+  background: var(--vorpal-surface);
+  border: 1px solid var(--vorpal-divider);
+  border-radius: var(--vorpal-radius-lg);
+  box-shadow: var(--vorpal-shadow-sm);
+  color: var(--vorpal-ink-900);
+  padding: 18px 20px 20px;
   margin: 0 0 18px;
 }
-.sample-fieldset legend { padding: 0 6px; font-weight: 600; }
+/* Float the legend into normal flow (full width) so it reads as a clean
+   heading INSIDE the sheet, and the panel border stays an unbroken
+   rounded rectangle — instead of the native legend tab straddling the
+   top border (which sat half on the purple backdrop). */
+.sample-fieldset legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 0;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--vorpal-ink-900);
+}
+.sample-fieldset .sample-grid { clear: both; }
 
 .sample-grid {
   display: grid;
@@ -18,18 +42,24 @@
   flex-direction: column;
   gap: 4px;
   font-weight: 600;
+  color: var(--vorpal-ink-700);
 }
 .sample-field-wide { grid-column: 1 / -1; }
-.sample-hint { font-weight: 400; opacity: .7; font-size: .85em; }
+.sample-hint { font-weight: 400; color: var(--vorpal-slate-600); font-size: .85em; }
 
 .sample-field input {
   margin-top: 2px;
   padding: 7px 9px;
-  border: 1px solid var(--vorpal-border, #3a3f4b);
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
+  border: 1px solid var(--vorpal-slate-300);
+  border-radius: 0;
+  background: var(--vorpal-surface);
+  color: var(--vorpal-ink-900);
   font: inherit;
+}
+.sample-field input:focus {
+  outline: none;
+  border-color: var(--vorpal-purple);
+  box-shadow: 0 0 0 2px var(--vorpal-purple-100);
 }
 
 .sample-actions {
@@ -38,7 +68,20 @@
   gap: 14px;
   margin-bottom: 1.5rem;
 }
-.sample-status { opacity: .8; font-size: .9em; }
+/* Status sits on the dark backdrop beside the Generate button — read light. */
+.vorpal-glass .sample-status {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: .9em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* "Result" is a section label on the dark backdrop; the stat cells below are
+   the light sheets. */
+.vorpal-glass .sample-results h2 {
+  margin-top: 0;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
 
 .sample-counts {
   display: grid;
@@ -46,18 +89,26 @@
   gap: 10px;
 }
 .sample-stat {
-  border: 1px solid var(--vorpal-border, #3a3f4b);
-  border-radius: 8px;
+  background: var(--vorpal-surface);
+  border: 1px solid var(--vorpal-divider);
+  border-radius: var(--vorpal-radius-lg);
+  box-shadow: var(--vorpal-shadow-sm);
   padding: 10px 12px;
+  color: var(--vorpal-ink-900);
 }
-.sample-stat-n { font-size: 1.5em; font-weight: 700; }
-.sample-stat-k { font-size: .85em; opacity: .75; margin-top: 2px; }
+.sample-stat-n { font-size: 1.5em; font-weight: 700; color: var(--vorpal-ink-900); }
+.sample-stat-k { font-size: .85em; color: var(--vorpal-slate-600); margin-top: 2px; }
 
+/* Error sheet — light red-tinted panel with dark, readable text. */
 .sample-error {
   margin-top: 1rem;
   padding: 12px 14px;
-  border: 1px solid currentColor;
-  border-radius: 8px;
+  background: #fbecea;
+  border: 1px solid #e0b4ae;
+  border-left: 4px solid #c0392b;
+  border-radius: var(--vorpal-radius-lg);
+  box-shadow: var(--vorpal-shadow-sm);
+  color: var(--vorpal-ink-900);
   font-size: .9em;
 }
 

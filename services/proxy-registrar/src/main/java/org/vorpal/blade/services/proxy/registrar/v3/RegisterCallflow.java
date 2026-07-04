@@ -8,7 +8,7 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v3.Callflow;
 
 public class RegisterCallflow extends Callflow implements Serializable {
 	private static final long serialVersionUID = -5068514646904567798L;

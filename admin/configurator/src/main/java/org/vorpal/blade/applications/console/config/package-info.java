@@ -73,7 +73,7 @@
 /// including the [Logout][org.vorpal.blade.applications.console.webapp.Logout] servlet
 /// that handles session invalidation with anti-caching headers and redirect to the login page.
 ///
-/// ### [org.vorpal.blade.framework.v2.config]
+/// ### `org.vorpal.blade.framework.v2.config`
 /// Contains the [SettingsMXBean][org.vorpal.blade.framework.v2.config.SettingsMXBean] JMX
 /// interface used by the configurator to interact with remote service configurations at
 /// runtime, providing streaming file I/O operations, configuration scoping

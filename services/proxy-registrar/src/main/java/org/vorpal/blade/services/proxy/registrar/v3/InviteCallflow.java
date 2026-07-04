@@ -13,7 +13,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v3.Callflow;
 
 public class InviteCallflow extends Callflow implements Serializable {
 	private static final long serialVersionUID = 397213565821542521L;

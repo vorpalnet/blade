@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
-# start-admin-nm.sh — start an OCCAS/WebLogic AdminServer through Node Manager.
+# start-admin-nm.sh — start/stop/restart an OCCAS/WebLogic AdminServer through
+# Node Manager.
 #
 # In the BLADE layout, Node Manager runs in its OWN domain (nmdomain) and serves
 # the app/cluster domains enrolled into it. This connects WLST straight to that
 # Node Manager (nmConnect) — NOT to the AdminServer, which isn't up yet — then
 # nmStart('AdminServer') for the APP domain named below.
+#
+# NM_ACTION=restart is the load-bearing primitive for the Files app's "restart
+# to apply" button: it kills then re-starts the AdminServer. It works ONLY
+# because Node Manager is a separate process that outlives the AdminServer — a
+# webapp hosted ON the AdminServer cannot restart its own JVM, so it launches
+# THIS script DETACHED (new session, see ServerControlAPI) and the script,
+# running outside the dying JVM, drives the kill→start through NM.
 #
 # Required env: MW_HOME, DOMAIN_NAME (the app domain). Others have defaults.
 set -euo pipefail
@@ -17,7 +25,7 @@ NM_HOST="${NM_HOST:-localhost}"
 NM_PORT="${NM_PORT:-5556}"
 NM_USER="${NM_USER:-weblogic}"
 NM_TYPE="${NM_TYPE:-ssl}"          # ssl|plain — must match SecureListener in nodemanager.properties
-NM_ACTION="${NM_ACTION:-start}"    # start | kill (stop) the server via Node Manager
+NM_ACTION="${NM_ACTION:-start}"    # start | kill (stop) | restart, via Node Manager
 
 # NM password: env var, else a gitignored secret file next to this script, else prompt.
 SECRET="$(dirname "$0")/.nmsecret"          # one line:  NM_PASSWORD=...
@@ -55,6 +63,25 @@ try:
     print('Connected to Node Manager at ${NM_HOST}:${NM_PORT}; ${NM_ACTION} ${ADMIN_SERVER}...')
     if '${NM_ACTION}' == 'kill':
         nmKill('${ADMIN_SERVER}')
+        print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
+    elif '${NM_ACTION}' == 'restart':
+        # Kill, wait for the OS process to fully release (so the re-start does
+        # not hit "address already in use"), then start. nmKill is synchronous
+        # but the short poll guards the port-release race without heavy retry
+        # scaffolding. A kill that fails because the server is already down is
+        # not fatal — fall through to start.
+        try:
+            nmKill('${ADMIN_SERVER}')
+            print('killed; status: ' + nmServerStatus('${ADMIN_SERVER}'))
+        except Exception, ke:
+            print('kill (continuing): ' + str(ke))
+        import time
+        for i in range(30):
+            s = nmServerStatus('${ADMIN_SERVER}')
+            if s != 'RUNNING':
+                break
+            time.sleep(2)
+        nmStart('${ADMIN_SERVER}')
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     else:
         nmStart('${ADMIN_SERVER}')

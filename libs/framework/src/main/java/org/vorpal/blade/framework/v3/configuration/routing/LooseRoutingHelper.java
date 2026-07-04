@@ -6,6 +6,8 @@ import com.bea.wcp.sip.engine.server.proxy.ProxyImpl;
 import java.lang.reflect.Field;
 import javax.servlet.sip.Proxy;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipSession;
+import javax.servlet.sip.URI;
 
 /**
  * Per-application utility for disabling Record-Route (loose routing
@@ -173,6 +175,58 @@ public class LooseRoutingHelper {
             return (Boolean) proxyImplRecordRouteField.get(proxyImpl);
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * The remote target of a SIP session -- the peer UA's Contact URI, i.e.
+     * where OCCAS sends this session's in-dialog requests. Read from
+     * SipSessionImpl.getRemoteTarget() (public), unwrapping the SipSessionAdapter
+     * the servlet sees. This is what the v3 passthru proxy stitches onto the
+     * outbound INVITE / 2xx so the two endpoints address each other directly.
+     *
+     * Has its OWN reflection init, separate from the Record-Route path above, so
+     * a missing SipSessionAdapter can never disable disableRecordRoute().
+     *
+     * @return the peer's Contact URI, or null if unavailable
+     */
+    public static URI remoteTarget(SipSession session) {
+        if (session == null) {
+            return null;
+        }
+        initSessionReflection();
+        if (sessionReflectionFailed) {
+            return null;
+        }
+        try {
+            SipSessionImpl impl = null;
+            if (session instanceof SipSessionImpl) {
+                impl = (SipSessionImpl) session;
+            } else if (sessionAdapterImplField != null
+                    && sessionAdapterImplField.getDeclaringClass().isInstance(session)) {
+                impl = (SipSessionImpl) sessionAdapterImplField.get(session);
+            }
+            return impl != null ? impl.getRemoteTarget() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Field sessionAdapterImplField;
+    private static boolean sessionReflectionInitialized;
+    private static boolean sessionReflectionFailed;
+
+    private static synchronized void initSessionReflection() {
+        if (sessionReflectionInitialized) {
+            return;
+        }
+        sessionReflectionInitialized = true;
+        try {
+            Class sipSessionAdapterClass = Class.forName("com.bea.wcp.sip.engine.SipSessionAdapter");
+            sessionAdapterImplField = sipSessionAdapterClass.getDeclaredField("impl");
+            sessionAdapterImplField.setAccessible(true);
+        } catch (Exception e) {
+            sessionReflectionFailed = true;
         }
     }
 

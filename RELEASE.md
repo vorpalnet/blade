@@ -2,6 +2,418 @@
 
 ## 2.9.9 (unreleased)
 
+### New: Trace (admin call-trace tool — display name; earlier notes call it "Callflow Viewer")
+
+A new admin tool — `admin/callflow` (context-root `blade/callflow`, finalName
+`blade-callflow`) — that surfaces BLADE's signature feature in the admin tier: it shows the
+real lambda-based callflow source as a browsable, syntax-highlighted gallery, so "your call
+logic reads top-to-bottom" stops being a claim on a slide and becomes something you can point at.
+(Started in `proto/`, promoted to `admin/` 2026-07-03: module moved, `callflow` added to the
+default/full build profiles, and an `ear-callflow` profile added to `apps/admin` — it now ships
+in `blade-admin.ear` like every other admin app.)
+
+- **Source is read LIVE from the deployed apps — nothing is bundled in the viewer.** (Replaces
+  the first cut's build-time harvest.) Every WAR already packages its `.java` next to its
+  `.class` (parent-pom resource include); the framework JAR now does too (its `-sources.jar`
+  opt-out was reverted), so framework callflows ride inside every app. A new
+  `framework.v3.source.SourceMXBean`/`Source` inventories those files per app —
+  `vorpal.blade:Name=<app>,Type=Source[,Cluster=…]`, callflow classes flagged by a no-init
+  `Class.forName` probe — and `SourceRegistrar`, a `@WebListener` **inside the framework JAR**
+  (Servlet 3.0 scans `WEB-INF/lib`), registers it for every app automatically: zero app code,
+  zero v2 changes, and customer-built apps appear in the gallery the moment they deploy.
+- `CallflowsAPI` walks the Source MBeans over federated DomainRuntime JMX and pins all reads to
+  ONE node — `CallflowSettings.sourceServer` (e.g. `engine0`, the sample-generation node that
+  carries no traffic), or the lexicographically first `Location` when unset — so browsing never
+  touches the busy engines. The per-app manifest is the whitelist (an MBean only answers for a
+  class its own scan inventoried). Curated titles/blurbs for the eight flagship callflows now
+  live as a display-side annotation map in `callflow.js`, keyed by simple class name; unknown
+  (e.g. customer) callflows still appear, titled by class name.
+- **Services-first gallery + self-registering callflows.** The sidebar lists the RUNNING
+  SERVICES; open one (accordion) and see only the callflows that service *implements* — not
+  the ~20 framework flows every WAR happens to carry. "Implements" is the union of the app's
+  own callflow classes (scan provenance: `.java` from `WEB-INF/classes`) and the framework
+  flows the app has actually instantiated. The latter comes from a new v3 mechanism:
+  `v3.Callflow`'s no-arg constructor records the concrete class in a per-app
+  `v3.source.CallflowRegistry` (one set-add per construction), so `B2buaServlet`'s
+  `new InitialInvite(this)` marks `InitialInvite` as b2bua's callflow with zero app code.
+  `chooseCallflow` is untouched — dispatch stays imperative; the registry is observation, not
+  routing. The Source manifest gains a live `used` flag per class. Trade-off: the observed
+  half fills with traffic, so a framework-only app appears in the gallery after its first
+  handled call (own-code callflows always show); v2-only proxy flows never self-register
+  (pending their v3 rework). Verified by `CallflowRegistrySmokeTest` (5/5).
+- **Trace transport + Traces page — the chain-tracing loop is closed (needs live verify).**
+  Node side (all `framework.v3.diagnostics`, zero v2 edits): `TraceLog` holds per-app statics —
+  a bounded ring buffer (2000 steps) of armed calls' `CallStep`s plus the live `Diagnostics`
+  arming rules; `v3.Callflow` consults the rules ONCE per `SipApplicationSession` (first
+  outbound send, one-boolean hot path when disarmed, decision cached in `TRACE_DECIDED_ATTR`)
+  and publishes every recorded step to the buffer. `Trace`/`TraceMXBean`
+  (`vorpal.blade:Name=<app>,Type=Trace[,Cluster=…]`) exposes read (`StepsJson`/`RulesJson`) and
+  control (`arm`/`disarm`/`clearSteps`); registered per app by `TraceRegistrar`, a second
+  framework-JAR `@WebListener`. Rules are in-memory only — a trace session is "arm, reproduce,
+  disarm"; nothing persists across restarts. Viewer side: `TracesAPI` sweeps EVERY node's Trace
+  MBeans (traffic lands anywhere — unlike Source reads, which pin to one idle node) and fans
+  `arm`/`disarm`/`clear` out to all of them, so one operator action arms the whole app chain;
+  `traces.html`/`traces.js` merge all steps into per-call timelines by `X-Vorpal-Session` —
+  call list (time · chain `analytics ▸ proxy ▸ hold` · step count), per-step rows
+  (`#3 proxy ← 200 · ProxyInvite.lambda$process$1:43`), and clicking a step opens the LIVE
+  source (Source MBean) with the emitting line marked (▶ gutter + border, line-numbered, not
+  color-only). Arming strip: attribute/regex/max-captures form, armed-rule counts, disarm/clear/
+  refresh + optional 5s auto-refresh. Verified: `TraceLogSmokeTest` 13/13 (ring eviction,
+  arm/disarm, JSON round-trip incl. escaping), prior smoke tests still 9/9 + 16/16, full build
+  green. Not verifiable here: `@WebListener` scan, Selector matching on real traffic, the
+  JMX fan-out — first live check is arm `From ~ .*` and place one call through the test tier.
+- **Trace eventing rebuilt on the sequence-diagram spine (supersedes the two entries below).**
+  Jeff's design review: the right recording spots are the exact places v2 draws its ASCII
+  sequence-diagram arrows (`Logger.superArrow` call sites) — message, direction, AND handling
+  callflow all in scope, under the SAS lock — killing the dispatch-time capture + handler
+  back-fill scaffolding. Implementation, with v2's logic untouched:
+  - **v2: access widening ONLY** (18 members, binary-compatible, zero logic): the private
+    helpers the dispatch bodies call became `protected static` (`captureAllowHeader`,
+    `saveCallerInfo`, `applyOrigin/DestinationSelectors`, `log*Diagnostics`,
+    `logCallflowDispatch`, `mergeEarlyDialogSession`, `applySessionExpiration`,
+    `applyKeepAlive`) or `protected final` for the instance ones (`recoverFromRequest/
+    ResponseError`, `followRedirect` — final so a same-signature customer method is a loud
+    compile error, never a silent override), plus four constants and
+    `initialSipServletContextEvent`. Jeff's ruling: private helpers in framework base classes
+    were a design flaw.
+  - **v3.AsyncSipServlet / v3.Callflow carry COPIES of the v2 bodies** (`doRequest`,
+    `doResponse`, servlet `sendResponse`; callflow `sendRequest`/`sendResponse`) with
+    `Callflow.traceEvent(...)` beside each superArrow — the only diff vs the originals
+    (verified by normalize-diff). Each copy names its v2 source range for manual sync until
+    the planned v1 hoist. `v3.B2buaServlet` re-parents onto `v3.AsyncSipServlet` and copies
+    v2.B2buaServlet's small layer (chooseCallflow + doNotProcess + getIncomingRequest +
+    listener hooks), so the dispatch copy exists once.
+  - **traceEvent** is the single recording spine (exactly one caller per message per app — no
+    dedup markers): RECEIVE pins the handler FQN (`chooseCallflow` result at dispatch, callback
+    owner via `$$Lambda` trim, or servlet) with method hint `process`; SEND pins the exact
+    emitting line via `captureStep`, and — being at the arrow spots — records the message
+    AFTER v2 stamps Vorpal-ID/session-expiration/keep-alive headers: true as-sent wire content.
+    Arming + header-aware session-id resolution ride along. Send arrows fire before
+    `response.send()` for the same session-invalidation reason v2's arrows do; the
+    reliable-provisional branch gets a traceEvent even though v2 draws no arrow there (a v2
+    diagram gap the trace shouldn't share). Proxy arrows record as `proxy` — partial proxy
+    visibility ahead of the proxy rework.
+  - **Deleted:** `recordArrival`, `assignArrivalHandler`, `TRACE_IN_RECORDED_ATTR`,
+    `wrapReceiving`/`recordIn`, `recordInboundRequest`; `CallStep` is immutable again.
+  - **Viewer:** an in-step (no line pin) now highlights the handling method's DECLARATION —
+    `traces.js` finds `process(` in the loaded source client-side. Received rows read
+    "received by <Class>".
+  - **Callback receives resolve to the enclosing method** (Jeff's step-12 report: a received
+    180 showed InitialInvite source with no highlight). Every `Callback` is a serializable
+    lambda — `writeReplace` → `SerializedLambda` reveals the declaring class and
+    `implMethodName` (`lambda$processContinue$…`), so the in-step pins
+    `InitialInvite.processContinue` and the viewer highlights that declaration. Introspection
+    runs on ARMED calls only; falls back to the `$$Lambda` class-name trim.
+  - **Inheritance-aware pins** (Jeff's step-15 report: TransferInitialInvite sent a 180 with
+    `?:-1`). Thin subclasses send from INHERITED code, so the emitting frame carries the base
+    class's name — `captureStep` now matches any ancestor frame (stopping before the v3/v2
+    Callflow plumbing) and records the FRAME's class, keeping the line aligned with the file
+    shown (`InitialInvite.processContinue:215`, not an unmatchable `TransferInitialInvite`).
+    Receive mirror: a dispatched callflow pins the class that DECLARES `process`
+    (`processDeclarer` reflection walk) — highlighting a 17-line subclass shell marks nothing.
+  - Verified: `TraceEventSmokeTest` 26/26 (handler pin, status labeling, captureStep line
+    pin, inherited-send base-frame pin, process-declarer pin, servlet-level sends, disarmed
+    no-op, header id resolution, lambda owner + enclosing method resolution); prior suites
+    12/15/16; viewer harness incl. declaration-highlight; copies normalize-diff clean; full
+    build green. Live: same transfer-test checklist as below.
+- **Arrival tracing at the servlet dispatch point (v3 servlet bases).** The strongest form of
+  "coming": new `v3.AsyncSipServlet` and `v3.B2buaServlet` shims (~15 lines each, extending the
+  frozen v2 classes — v2 untouched) override `doRequest`/`doResponse` to record every inbound
+  request AND response via the new static `v3.Callflow.recordArrival` BEFORE any app code can
+  touch the message — so an armed trace shows the message as received next to the message as
+  sent, the diff that catches in-app garbling. True arrival order (fixes the B2BUA
+  received-after-forwarded ordering), covers responses with no registered callback (fixes the
+  fire-and-forget gap), and the arming decision now happens at dispatch. Deduped against the
+  callflow-level fallback per message object (`TRACE_IN_RECORDED_ATTR`), so both hooks coexist;
+  a disarmed pass leaves the message unmarked so later capture isn't blocked (glare-queue
+  redispatch also deduped). Opt-in is the Group-1 pattern — a one-line base-class swap:
+  framework v3 servlets re-parented (`BladeServlet`, `TesterServlet`, `IRouterServlet` — the
+  latter records arrivals now even though its proxy sends stay untraceable until the proxy
+  rework), plus ten app servlets (tpcc, options, proxy-registrar, context, transfer, presence,
+  crud, queue, hold, analytics, test-b2bua). Still v2-based: the proxy family (ProxyServlet)
+  and the inert legacy test-client. Disarmed cost: one attribute read per message. Verified:
+  new `ArrivalSmokeTest` (reflect-proxy SIP messages: armed capture with raw text, per-message
+  dedup, disarmed-doesn't-mark, response labeling), all prior suites still green, full build
+  green.
+  **Live-verify fix (2026-07-04, first real run):** arrival steps landed in a "(no session id)"
+  bucket — dispatch runs BEFORE v2 populates the `VORPAL_SESSION` attribute, so the read-only
+  `getVorpalSessionId(appSession)` overload came up empty on each app's first message even
+  though the inbound `X-Vorpal-ID` header named the call. `recordArrival` now resolves like v2
+  does moments later — the header-aware `getVorpalSessionId(request)` overload (mints only at
+  the true chain head; wrapped so a resolver failure still records the step id-less).
+  `ArrivalSmokeTest` grew to 16/16 incl. header resolution + attr store-back.
+  **Handler back-fill (same day, Jeff's live feedback):** arrival steps showed the servlet with
+  no source highlight — the handler genuinely isn't known at dispatch (`chooseCallflow` hasn't
+  run). Since SIP dispatch is synchronous, the v3 servlet bases now back-fill after
+  `super.do*` returns: `recordArrival` returns the arrival `CallStep`, and
+  `Callflow.assignArrivalHandler` finds the first `out` step of the same call recorded after it
+  in the ring — that step's class/method/line IS the handler acting (ground truth, e.g.
+  `BlindTransfer.process:<its first send>`), and the arrival adopts the pin (`CallStep`'s pin
+  fields became back-fillable; ring-based scan so it works after BYE invalidates the session).
+  A handler that sends nothing synchronously honestly keeps the servlet pin. Viewer shows
+  back-filled in-steps as `Class.method:line · received` with the line highlighted.
+  `ArrivalSmokeTest` 19/19 (back-fill, quiet handler, other-call sends never claimed). Same run also
+  taught a non-bug: softphone-driven transfers (Bria acting on the REFER itself) arrive as new
+  external dialogs and correctly get a NEW Vorpal id — route transfers through the `transfer`
+  service (FSMAR) to keep the chain inside BLADE. The transfer stack needed no code for that:
+  `Transfer` + all four flavors, `TransferInitialInvite`, `TransferAPI`/`CallflowAckBye`/
+  `KeepAlive` (via `ClientCallflow`) and `TransferServlet` were already on v3.
+- **Traces carry the raw SIP messages, coming AND going.** Every recorded step now embeds the
+  wire message (`CallStep.message` — OCCAS `SipServletMessageImpl.toString()` renders
+  `getBytes()` UTF-8; capped at 16KiB with a truncation marker) plus a `direction` field.
+  Outbound (`out`) steps are the existing send-override capture, message attached. Inbound
+  (`in`) steps come from the only seams v3 owns without touching frozen v2: the response/ACK
+  callbacks of `sendRequest`/`sendResponse` are WRAPPED on armed calls (recording each arrival
+  at its true moment before the app lambda runs — wrapper captures only `this` + the original
+  callback, both serializable, so continuations still failover), and an inbound request
+  (INVITE/BYE/re-INVITE) is recorded when the callflow first responds to it
+  (`response.getRequest()`, deduped by a request attribute). Two documented gaps:
+  fire-and-forget sends (null lambda) never get a wrapper — substituting a callback where the
+  app registered none would change v2 response dispatch — so their responses aren't recorded;
+  and in a forward-before-answer B2BUA the received INVITE records after the forwarded one
+  (arrival time isn't observable from v3). Viewer: timeline arrows are now direction-based
+  (sent →, received ←; legacy data falls back to the old kind convention), received rows read
+  "received by <Class>", and the step detail shows the raw message in a bordered monospace
+  pane above the source view — in live mode AND inside saved snapshots (the message rides the
+  embedded JSON automatically; expect larger snapshot files). `Trace` MBean JSON gained the
+  two fields; `TracesAPI` passes them through untouched. Ring stays 2000 steps/app — with
+  messages that's a few MB per armed app, ceiling ~32MB if every step hit the cap. Verified:
+  CallStepSmokeTest 12/12, TraceLogSmokeTest 15/15 (CRLF + escaped-quote message round-trip),
+  CallTraceSmokeTest 16/16, viewer harness 31/31 (arrows, message pane live + snapshot,
+  legacy-step fallback). Live check: arm, one call, expect `← INVITE` / `→ 180` rows with
+  message text.
+- **Trace snapshots — share a trace with people who have no OCCAS access.** "Save Snapshot" on
+  the Traces page downloads the captured calls as ONE self-contained `.html`: the raw trace data
+  (embedded as a `<script type="application/json">` block, `</` JSON-escaped so source text can't
+  terminate it), the source file behind every step (fetched once per unique `app|className` via
+  the existing `api/source`), `traces.js` itself, and both stylesheets — `brand.css` with the
+  `blurred.jpg` backdrop swapped to a data URI, so the glass look survives offline. Recipients
+  double-click and get the same call list → timeline → marked-source-line experience with zero
+  server. Assembly is entirely client-side in `traces.js` (`saveSnapshot`/`buildSnapshotHtml`);
+  `TracesAPI` learned nothing new. The same script powers both pages: with
+  `window.BLADE_TRACE_SNAPSHOT` set it renders embedded data and skips all fetches/arming
+  controls (element lookups guarded). "Load Snapshot" reads a saved file (or raw JSON) back into
+  the live viewer for side-by-side use; Refresh returns to live. The embedded JSON doubles as the
+  machine-readable format. Note: a snapshot carries application source — share with the same
+  care as the code. Docs page gained Traces + Snapshots sections. Browser-only verification:
+  save on a real capture, open the file offline, step through source views.
+- **Renamed to "Trace".** The admin app's display identity is now **Trace** — topbar appmark,
+  page titles, portal-deck card (`CallflowSettings` `@SchemaAbout name="Trace"` + repointed
+  tagline/description), and docs. More concise; conveys purpose at a glance. Deliberately NOT
+  changed: the deployment identifiers keep the historical `callflow` name (context-root
+  `blade/callflow`, WAR `blade-callflow`, Java package/classes, config-file name) — so the rename
+  needs no redeploy and no config-file migration. (The URL/WAR/config could be renamed to `trace`
+  too, but that's a separate cross-cutting change — build profiles, EAR profile, deploy conf, a
+  config-file migration — offered but not done.)
+- **Gallery removed — the Source tab supersedes it.** The standalone Gallery page
+  (`callflows.html` + `callflow.js`, the services-first source browser) and its nav link are
+  gone; the **Source** tab in Traces now shows the real code, pinned to the emitting line. The
+  backend is untouched — `CallflowsAPI /source` and the `v3.source` MBeans still serve source for
+  the Source tab (only the unused `/apps` gallery feed is now dead but harmless). Overview + docs
+  reworded; dead Gallery-only CSS (`cf-layout`/`cf-list`/`cf-service*`/`cf-chip`/…) trimmed.
+- **Traces page fills the window; panes scroll, not the page.** The arming bar is one compact
+  control row (form + actions on the same line, armed-rule status as a thin line below); the
+  captured-calls/timeline pane and the tabbed detail pane grow to the bottom of the viewport and
+  scroll internally — up, down, and (for the wide sequence diagram) left/right — rather than
+  making the whole page taller. All viewport-derived, so it rescales with the browser window
+  (`.tr-app` scoping in `callflow.css`; narrow screens fall back to normal page scroll).
+- **Sequence (ladder) diagram — the "who talks to what" view.** The Traces detail panel is now
+  three tabs — **Sequence · Message · Source** (so the diagram, raw SIP, and code no longer stack
+  and shove each other off-screen); picking a call opens Sequence, picking a timeline step reveals
+  Source, and clicking a ladder arrow stays on Sequence. The Sequence tab draws the selected call's
+  steps as a UML sequence diagram: one lifeline per party, one arrow per message HOP, in time order. Built from scratch as inline SVG in `traces.js`
+  (`buildLadder`/`renderLadder`) — deliberately NOT mxGraph: the Flow app's mxGraph is a ~2.4 MB
+  `document.write` loader built for interactive editing with no sequence layout, and inlining it
+  would bloat/break the self-contained snapshots. The from-scratch SVG adds a few KB of vanilla
+  JS and rides into snapshots for free (a `<section id="tr-ladder">` was added to both the page
+  and `buildSnapshotHtml`). No framework/JMX/API change — it consumes the same in-memory
+  `call.steps` the timeline already builds. **Correlate by Call-ID, don't parse addresses** (this
+  is the correctness fix after the first cut mislabeled hops): in a routed chain a message is
+  logged twice — app N sends (`out`), app N+1 receives (`in`) — and its `From`/`To` are END-TO-END
+  (they name the ultimate caller/callee, not the next hop), while co-located BLADE apps share one
+  host so SIP addressing can't tell them apart. So `buildLadder` pairs an `out` with the `in` that
+  received THE SAME wire message, keyed by **Call-ID + CSeq** (a message keeps its Call-ID hop to
+  hop; a B2BUA gives each leg its own, so `test-uas → bob` — a leg no traced app receives — stays
+  an egress to bob and is never mis-paired with an unrelated INVITE some other app happened to
+  receive next; the first cut keyed on method+time and drew `test-uas → proxy-registrar`). One
+  arrow per hop, between the two app lanes. `From`/`To` name only the leftover boundary steps — the
+  first receive (real caller) and an `out` nobody received (real external callee) — via
+  `Logger.from/to` (URI user, else host; Contact/Via fallback; `(network)` when unparseable).
+  **Lane order**: BLADE apps form the spine in first-hop order; external endpoints pin to the edges
+  (a party that first *sends* into the chain = caller, left; one that first *receives* = callee,
+  right) — so an app reached by a side branch lands in the app spine, never wedged between the
+  caller and the first app. Responses flow back leftward. Lifelines: apps boxed + solid, peers
+  dashed. **Timeline and diagram are linked both ways**: selecting a timeline step highlights the
+  hop it belongs to (a hop carries both its `out` and `in` step indices); clicking a hop (delegated
+  handler on the SVG) selects its `out` step, driving the source/message panes. Selection is shown
+  by a heavy line + band + bold label, never color alone (colorblind-safe). Viewer harness (35/35)
+  plus a B2BUA chain fixture (distinct per-leg Call-IDs) confirm `alice | transfer | test-uac |
+  test-uas | proxy-registrar | bob` with `test-uas → bob` correct and the responses paired back.
+  Method+time is the fallback only when a step carries no message. Docs page updated.
+- Registered on the portal deck via `CallflowSettings` `@SchemaAbout`. Ships in
+  `blade-admin.ear` (promoted from `proto/` — see above).
+- **Tier-3 foundation landed (v3.Callflow instrumentation).** The previously-empty
+  `org.vorpal.blade.framework.v3.Callflow` now carries its first real behavior: it overrides the
+  two `send*` lambda overloads to record a `CallStep` (new) pinning the EXACT source line that
+  emitted each outbound message — the correlation the v2 sequence-diagram log can't give (it logs
+  only the callflow class name). Captured into an ordered `List<CallStep>` on the
+  `SipApplicationSession` (`getTrace(...)` reads it back). **v2 is untouched/frozen** — a callflow
+  opts in by extending v3 instead of v2; only the 2-arg overloads are overridden (the no-arg ones
+  delegate to them, so overriding both would double-count). Verified by `CallStepSmokeTest`
+  (9/9, container-free) — including the key case: a `sendRequest` inside a response lambda
+  captures the lambda's own line. Remaining for the live loop (needs a running domain): migrate a
+  flagship callflow onto `v3.Callflow`, and bridge the trace to the viewer to highlight lines.
+- **Chain-aware call tracing core (the "which app in the string misbehaved" engine).** Built on
+  the above: `CallStep` now carries the `X-Vorpal-Session` id (stable across the whole routed app
+  chain) and a timestamp; `framework.v3.diagnostics.CallTrace` + `CallTraceAggregator` merge the
+  per-app steps of one logical call into a single ordered timeline that names the app behind every
+  message. Tracing is **gated per call** — `Callflow.enableTrace(appSession)` arms it; unarmed
+  calls cost one boolean and record nothing, so it's safe to leave in production. Arming policy is
+  `Selector`-gated and count-capped: `diagnostics.Diagnostics` (framework-level, Configurator-
+  editable) holds `TraceRule`s (a `Selector` on From/any header + `maxCaptures` self-disarm) and
+  `armFor(request)` decides once at the initial request. Verified by `CallTraceSmokeTest` (16/16,
+  container-free) — including a 3-app chain merged from scrambled input, culprit located by name,
+  and the capture cap. (The arming hook, trace delivery, and the viewer's chain-timeline UI landed
+  the next day — see "Trace transport + Traces page" below; only live verification remains.)
+- **Service migration to v3.Callflow — Group 1 done.** Nine leaf service callflows that extend
+  `Callflow` directly (options, queue, proxy-registrar Register/Invite, proxy-balancer ping,
+  presence Publish/Subscribe, hold's not-allowed, tpcc DialogAPI) were swapped to `v3.Callflow`
+  (one-line import change; behaviour identical, tracing dormant). QueueCallflow needed a one-token
+  fix (a `Callflow`-typed local held a v2 `Terminate` — retyped to `Terminate`). Then the NON-proxy
+  framework callflow bases were migrated too — 19 roots across b2bua (InitialInvite, Reinvite,
+  Passthru, Terminate, ByeOld and CancelOld — both since deleted), transfer, 3PCC (AbstractCallflow3PCC,
+  ClientCallflow),
+  the callflow package (CallflowHold, …), and the v3 tester flows; their subclasses inherit it. To
+  avoid the entanglement class-wide, the framework roots use a fully-qualified `extends
+  …v3.Callflow` and keep their import, so the simple name `Callflow` still means v2 for any
+  polymorphic local. **Proxy flows (`ProxyInvite`, `ProxyCancel`, `IRouterInvite`) are deliberately
+  left on v2** — the SipServlet Proxy API bypasses `Callflow.sendRequest()`, so it's untraceable and
+  misses the accumulated sendRequest fixes; they get a separate rework onto Callflow-based
+  forwarding. Framework + all 13 services compile clean; the v3 diagnostics smoke tests still pass.
+
+### New: `v3.CallflowResponse` — one configurable response, any shape
+
+Replaces the hard-coded `Callflow481` (deleted; it was unused — see the callflow usage audit)
+and supersedes the v2 `CallflowResponseCode` (code + phrase only; still present, still used by
+the transfer service). Fluent: any status code, optional reason phrase, optional headers
+(`addHeader` semantics), optional body — `setContent(body, contentType)` requires both, since
+a body without a Content-Type is malformed — and an optional `onAck(...)` lambda for the one
+case that needs more than fire-and-forget: a 2xx to an INVITE forms a dialog and the far end
+ACKs. Designed for final responses; system-header edits throw per JSR-289 (coding error, not
+hidden). Being v3, it self-registers in the gallery and traces like any other callflow.
+`ByeOld` and `CancelOld` were also deleted (unused, "not supposed to be there"); dangling
+javadoc references to `Callflow481` in the v2 package-info files now point at
+`CallflowResponse`.
+
+### New: `framework.v3.media` — RFC 3264 hold/mute/resume, blackhole retired
+
+The v2 hold/mute family audit (Jeff: "I want them to be perfect") found the 2543-era patterns
+and several outright bugs; the whole family is rebuilt in a new `v3.media` package and the v2
+classes are DELETED (`CallflowHold`, `CallflowHoldRelease`, `CallflowMute`, `CallflowUnmute`,
+`CallflowResume`, `AbstractCallflow3PCC`, `SdpDirection` + their smoke tests). What was wrong
+and is now right:
+
+- **Perspective bug (v2 CallflowMute muted the wrong leg).** Direction attributes read from
+  the SDP sender's perspective; forcing `recvonly` into the offer makes the *target* the
+  sender. v3 `MediaDirection.reverse()` owns the flip: `CallflowMute` drives the target to
+  `recvonly` by offering `sendonly`, per RFC 3264 §6.1's answer rules.
+- **No failure handling (v2 threw on 486/491).** `createAck()` was called on any response.
+  v3 `CallflowMediaDirection` guards provisionals and non-2xx on both legs; when the target
+  rejects the rewritten offer, the peer's open offer is still answered (`a=inactive`, media
+  parked, logged severe) instead of leaving its 200 retransmitting.
+- **Blanket `sendrecv` wiped per-stream state.** v3 captures pre-change directions on the
+  target `SipSession`; `CallflowResume` restores them per m-line (a video stream that was
+  inactive stays inactive); `CallflowUnmute` remains the deliberate blanket-`sendrecv`.
+- **Session-level direction attrs were left to contradict m-lines** (v2 `SdpDirection`); v3
+  `SdpMedia.forceDirection` strips them.
+- **The blackhole is gone.** v3 `CallflowHold` (answer-side; `services/hold` + the tester
+  migrated) builds a PROPER answer via `SdpMedia.buildInactiveAnswer`: our own `o=` line
+  (stable per-dialog session id, version incremented per answer, RFC 3264 §8), our real
+  address (the interface the INVITE arrived on) — never `c=0.0.0.0` (RFC 2543 hold; RFC 3264
+  §8.4 keeps it only for backward-compat receiving; breaks RTCP/ICE) — discard-port (9)
+  m-lines with the offer's formats/rtpmap, `a=inactive` (legal against any offered
+  direction), offered port-0 streams stay rejected. Offerless-refresh replay cache retained.
+  Multipart SIPREC in, plain `application/sdp` out. `CallflowHoldRelease` (bare 200, no SDP —
+  an offer/answer violation, never a media operation) has no successor; `CallflowResume` is
+  the real "release hold". The v2 `Callflow.hold()`/`buildHoldAnswerSdp` helpers remain
+  (frozen v2 surface) but nothing in the tree calls them.
+
+Verified: `SdpMediaSmokeTest` 26/26 (perspective, capture/restore, idempotence, mixed-case,
+answer-builder incl. IPv6 + port-0, multipart SIPREC round-trip); all prior smoke tests pass;
+full build + javadocs green. The 3PCC wire flow itself needs a live call to verify. Known
+limits, deliberate: no automatic 491 retry timer (caller retries; parked-inactive recovery
+applies) and `CallflowHold` answers echo the full offered format list rather than picking one.
+
+### Blackhole sweep — every remaining 2543-era SDP site fixed or ruled
+
+Audit of blade + optum for the same diseases the v3.media rebuild fixed. Fixed:
+
+- **tpcc create-dialog is now OFFERLESS** (Jeff: "offerless is correct — the Internet is full
+  of bad advice on this"). `DialogAPI.createDialog` no longer sends the static blackhole offer
+  (constant deleted, along with a 50-line commented-out duplicate and the TODO `process()`
+  stub, now fail-loud); `CreateDialog` answers the party's offer in the ACK via
+  `v3.media.CallflowHold.inactiveAnswerFor(...)` — RFC 3725 Flow I create-and-park, media
+  recoverable until `connectDialogs` bridges. Bodiless ACK only if the party's 200 itself
+  carried no offer (logged).
+- **`v3.tester.ScriptedAnswer`** (the engine behind test-uas scenario answers) now answers
+  with the same RFC 3264 inactive SDP instead of the v2 blackhole helper — so the test tier
+  no longer speaks the deprecated pattern at the thing being tested. `inactiveAnswerFor` was
+  extracted from `v3.media.CallflowHold` as a public static (message-typed: works on requests
+  AND on the 200-carrying-offer case) and is now the single shared implementation.
+- **optum `mediahub3.holdLocally`** swapped from v2 `Callflow.buildHoldAnswerSdp` (offer echo,
+  zeroed `c=`, caller's `o=` line) to `inactiveAnswerFor` — full optum build verified against
+  framework 3.0.1.
+- **Deleted** the unfinished `test-uac` `tpcc/Simple.java` stub (empty lambdas, never
+  referenced). Docs de-blackholed: tpcc v1 + test-uas + test-uac tpcc package-infos, and the
+  hold service package-info (which described `HoldInvite`/`HoldBye` classes that don't exist)
+  rewritten to the real HoldServlet → v3.media architecture.
+
+Ruled, not fixed: **mediahub2** is defunct per Jeff (its `RemoveMediaSession` static-blackhole
+re-INVITE — which also violates RFC 3264 §8's m-line count rule against SIPREC's two-stream
+sessions — stays as-is); **optum `legacy/hold`** stays as a museum piece.
+
+### v3 proxy drop-out (`session.passthru`) — foundation
+
+First cut of the config-driven proxy replacement: a forwarding v3 callflow (initial INVITE in,
+initial INVITE out) can leave the dialog after setup so caller and callee exchange ACK/BYE/media
+directly, with OCCAS out of the route set — no SipServlet Proxy API, so it's a traceable Callflow
+that inherits every `sendRequest` fix. New `SessionParameters.passthru` (default false, forwarder-
+apps-only) flips the *same* callflow between B2BUA and proxy per network. Logic lives in the
+`v3.Callflow` `sendRequest`/`sendResponse` overrides, deduced from `request.isInitial()`. On the
+outbound 2xx it disables Record-Route (`LooseRoutingHelper`) and manually invalidates both legs +
+the app session (no ACK/BYE returns, so OCCAS won't auto-invalidate). The symmetric Contact-stitch
+(`peerContact`) is wired via the peer LEG's remote target: once a leg's dialog is up, OCCAS stores
+the peer's Contact as that `SipSessionImpl`'s remote target (it IS the in-dialog request-URI), read
+through new `LooseRoutingHelper.remoteTarget(SipSession)` (isolated reflection unwrap of
+`SipSessionAdapter.impl`). **Needs live verification** (test-uac → test-b2bua`[passthru]` →
+test-uas): that the remote target is populated at each stitch moment, and that the manual
+invalidation stops the 200-OK retransmit. Framework + all services compile; smoke tests pass.
+
+### Files app: restart the AdminServer to apply a hand-edit
+
+The Files editor edits the WebLogic-owned descriptors (`config.xml`, `coherence.xml`,
+`lifecycle-config.xml`, …) that the running AdminServer holds in memory and can flush back over
+a hand-edit. The editor now offers a **Restart AdminServer** action so a saved edit actually
+takes effect (and is not clobbered).
+
+- **Tier-aware.** Each registry entry (`EditableFile`) carries a `consumer` tier
+  (`ADMIN`/`ENGINE`/`BOTH`/`NONE`). The restart button only appears for `ADMIN`/`BOTH` files;
+  for `ENGINE` files (approuter.xml, sipserver.xml, coherence) the editor says plainly that an
+  AdminServer restart won't apply them — they need the file pushed to the engine nodes and
+  those bounced (the paused cluster-file-sync work), which isn't wired yet.
+- **Forced, via Node Manager, from a detached process.** A webapp hosted on the AdminServer
+  can't restart its own JVM, so `ServerControlAPI` launches `misc/start-admin-nm.sh` **detached**
+  (new session via `setsid`/`nohup`) with `NM_ACTION=restart`; the script runs outside the
+  dying JVM and drives `nmConnect → nmKill → nmStart`. It's a *forced* stop on purpose — a
+  graceful shutdown would flush in-memory config over the edit. The browser polls
+  `api/server/health` and reloads when the server returns.
+- **Off by default, fail-loud.** `FilesSettings.serverControl.scriptPath` is empty until the
+  operator sets it (absolute path to `start-admin-nm.sh`, with `.nmsecret` beside it); the
+  endpoint reports "not configured" rather than guess. The webapp never handles the NM password.
+- New: `ConsumerTier`, `ServerControlConfig`, `ServerControlAPI`; `start-admin-nm.sh` gains
+  `NM_ACTION=restart`. **Existing `files.json` keeps working** (new fields default), but to see
+  the button, set `consumer` on the AdminServer-owned entries and configure `serverControl`.
+
 ### Portal: SIP service cards
 
 The admin portal launcher now shows a second **SIP Services** tier below the administration

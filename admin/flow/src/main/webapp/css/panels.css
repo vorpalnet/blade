@@ -8,15 +8,25 @@
  *
  * Every rule is scoped under a panel id or a panel-only class: anything
  * global (body, label, input) would leak into the editor page itself.
+ *
+ * Built on the shared brand layer (brand.css, linked from flow.html), so
+ * the inspector forms match the modernized editor chrome around them.
  */
 
 #transition-view,
 #state-view,
 #config-view {
-	padding: 8px;
-	font-family: Arial, sans-serif;
-	font-size: 12px;
-	color: #222;
+	padding: 10px 12px;
+	font-family: var(--vorpal-font-sans, Arial, sans-serif);
+	font-size: 12.5px;
+	color: var(--vorpal-ink-700);
+}
+
+#config-view h3 {
+	margin: 0 0 10px;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
 }
 
 /* --- Labels & hints ------------------------------------------------- */
@@ -25,10 +35,11 @@
 #state-view label,
 #config-view label {
 	display: block;
-	margin: 10px 0 3px;
-	font-weight: bold;
+	margin: 12px 0 4px;
+	font-weight: 600;
 	font-size: 11px;
-	color: #333;
+	color: var(--vorpal-ink-900);
+	letter-spacing: 0.01em;
 }
 
 /* Hints render on their own line under the label text, never inline —
@@ -38,8 +49,8 @@
 .config-hint {
 	display: block;
 	margin: 1px 0 2px;
-	color: #667;
-	font-size: 10px;
+	color: var(--vorpal-slate-600);
+	font-size: 10.5px;
 	font-style: italic;
 	font-weight: normal;
 }
@@ -56,11 +67,12 @@
 #config-view input[type=text] {
 	width: 100%;
 	box-sizing: border-box;
-	padding: 4px 6px;
-	border: 1px solid #b8b8c8;
-	border-radius: 3px;
-	background: #fff;
-	font-size: 12px;
+	padding: 5px 8px;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 0;
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
+	font-size: 12.5px;
 	font-family: inherit;
 }
 
@@ -71,64 +83,92 @@
 #state-view select:focus,
 #state-view textarea:focus,
 #config-view input:focus {
-	border-color: #4a6cd4;
+	border-color: var(--vorpal-purple);
+	box-shadow: 0 0 0 2px rgba(96, 38, 113, 0.15);
 	outline: none;
 }
 
 #transition-view input[readonly],
 #state-view input[readonly] {
-	background: #f0f0f4;
-	color: #555;
+	background: var(--vorpal-slate-100);
+	color: var(--vorpal-slate-600);
 }
 
 #transition-when {
-	font-family: monospace;
-	font-size: 11px;
+	font-family: var(--vorpal-font-mono);
+	font-size: 11.5px;
 	min-height: 56px;
 	resize: vertical;
 }
 
 /* --- Tab strip (Basic / Routing) ------------------------------------- */
 
+/* Underline tabs — mirrors the brand topbar nav: plain text, the active
+   one carries a purple underline (distinguished by underline + weight +
+   color, not color alone). Cleaner against the panel than boxed tabs. */
 .tab-strip {
 	display: flex;
-	gap: 2px;
-	border-bottom: 2px solid #bbb;
-	margin: 0 0 6px;
+	gap: 6px;
+	border-bottom: 1px solid var(--vorpal-slate-200);
+	margin: 0 0 10px;
 	padding: 0;
 	list-style: none;
 }
 .tab-strip button {
-	border: 1px solid #bbb;
-	border-bottom: none;
-	border-radius: 4px 4px 0 0;
-	background: #e4e4ee;
-	padding: 4px 12px;
-	font-size: 12px;
+	border: none;
+	background: none;
+	color: var(--vorpal-slate-600);
+	padding: 6px 10px;
+	margin-bottom: -1px;
+	border-bottom: 2px solid transparent;
+	font-family: var(--vorpal-font-sans);
+	font-size: 12.5px;
+	font-weight: 500;
 	cursor: pointer;
 }
-/* Active tab marked by underline continuity + bold, not color alone. */
+.tab-strip button:hover {
+	color: var(--vorpal-ink-900);
+}
 .tab-strip button.tab-active {
-	background: #f8f8ff;
-	font-weight: bold;
-	border-bottom: 2px solid #f8f8ff;
-	margin-bottom: -2px;
+	color: var(--vorpal-purple);
+	font-weight: 600;
+	border-bottom-color: var(--vorpal-purple);
 }
 .tab-page { display: none; }
 .tab-page.tab-active { display: block; }
 
+/* --- Plan-dispatch button (state panel) ------------------------------ */
+
+.add-plan-dispatch {
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-700);
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 0;
+	padding: 5px 12px;
+	font-family: var(--vorpal-font-sans);
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.add-plan-dispatch:hover {
+	background: var(--vorpal-purple-soft);
+	color: var(--vorpal-purple-700);
+	border-color: var(--vorpal-purple-100);
+}
+
 /* --- Grouped sections (state.html fieldsets, selector fields) -------- */
 
 #state-view fieldset {
-	margin: 10px 0;
-	border: 1px solid #bbb;
-	padding: 6px 10px 12px;
-	background: #f8f8ff;
-	border-radius: 4px;
+	margin: 12px 0;
+	border: 1px solid var(--vorpal-slate-300);
+	padding: 8px 10px 12px;
+	background: var(--vorpal-surface-alt);
+	border-radius: 0;
 }
 #state-view legend {
-	font-weight: bold;
+	font-weight: 600;
 	font-size: 11px;
+	color: var(--vorpal-ink-900);
 	padding: 0 6px;
 }
 
@@ -138,11 +178,11 @@
 .sel-field label {
 	margin: 0 0 3px;
 	font-size: 11px;
-	color: #444;
+	color: var(--vorpal-ink-700);
 }
 .sel-field textarea {
-	font-family: monospace;
-	font-size: 11px;
+	font-family: var(--vorpal-font-mono);
+	font-size: 11.5px;
 	min-height: 48px;
 }
 
@@ -156,14 +196,15 @@
 }
 .tbl-grid th,
 .tbl-grid td {
-	border: 1px solid #ccd;
+	border: 1px solid var(--vorpal-slate-200);
 	padding: 2px;
 	vertical-align: middle;
 }
 .tbl-grid th {
-	background: #ececf6;
+	background: var(--vorpal-slate-100);
+	color: var(--vorpal-ink-900);
 	font-size: 10px;
-	font-weight: bold;
+	font-weight: 600;
 }
 /* The grid's own inputs are denser than the panel default. */
 #state-view .tbl-grid input[type=text] {
@@ -184,18 +225,18 @@
 	display: inline-block;
 	margin-top: 4px;
 	font-size: 11px;
-	font-weight: bold;
+	font-weight: 600;
 }
 .tbl-grid .remove-btn { vertical-align: middle; }
 
 /* --- Route URI rows --------------------------------------------------- */
 
 .route-row {
-	border: 1px dashed #aaa;
-	padding: 4px;
+	border: 1px dashed var(--vorpal-slate-300);
+	padding: 5px;
 	margin-top: 4px;
-	background: #f8f8ff;
-	border-radius: 3px;
+	background: var(--vorpal-surface-alt);
+	border-radius: 0;
 	display: flex;
 	gap: 4px;
 	align-items: center;
@@ -206,14 +247,18 @@
 }
 
 /* --- Add / remove buttons --------------------------------------------- */
-
+/* Distinguished by their + / × glyph (and the SVG outline), not color
+   alone — color here is brand decoration. */
 .add-btn {
-	color: #060;
+	color: var(--vorpal-purple);
 	cursor: pointer;
 	font-size: 14px;
 	vertical-align: middle;
 }
+.add-btn:hover {
+	color: var(--vorpal-purple-700);
+}
 .remove-btn {
-	color: #c00;
+	color: var(--vorpal-error);
 	cursor: pointer;
 }

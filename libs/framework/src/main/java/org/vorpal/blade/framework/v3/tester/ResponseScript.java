@@ -12,7 +12,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// **answer role** — `send` is played in order: each step waits its `delay`,
 /// then sends its status. Steps after the first final (≥200) status are
-/// ignored with a warning. A 2xx answer carries a blackhole/mute SDP derived
+/// ignored with a warning. A 2xx answer carries an RFC 3264 inactive hold SDP derived
 /// from the offer unless the step says otherwise. After a 2xx, `refer` (if
 /// set) runs a REFER transfer, and `autoByeAfter` (if set) tears the call
 /// down.

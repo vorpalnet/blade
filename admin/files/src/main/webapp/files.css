@@ -7,7 +7,8 @@
 	align-items: center;
 	gap: 0.6rem;
 	padding: 0.6rem 1rem;
-	border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+	background: var(--vorpal-surface-alt);
+	border-bottom: 1px solid var(--vorpal-divider);
 	flex-wrap: wrap;
 }
 
@@ -20,9 +21,10 @@
 .files-toolbar button {
 	font: inherit;
 	padding: 0.35rem 0.6rem;
-	border: 1px solid rgba(0, 0, 0, 0.25);
-	border-radius: 5px;
-	background: #fff;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 0;
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
 }
 
 .files-toolbar button {
@@ -35,9 +37,24 @@
 }
 
 .files-toolbar button.files-primary {
-	background: #1f3a66;
+	background: var(--vorpal-purple);
 	color: #fff;
-	border-color: #1f3a66;
+	border-color: var(--vorpal-purple);
+}
+
+/* Restart is a heavyweight action (takes the admin tier down). It's set apart
+   by a double border + a circular-arrow glyph and an explicit label — not by
+   colour alone. */
+.files-toolbar button.files-danger {
+	border: 2px solid #a12b2b;
+	background: #fbeaea;
+	color: #5a1414;
+	font-weight: 600;
+}
+
+.files-toolbar button.files-danger::before {
+	content: "\21bb ";
+	font-weight: 700;
 }
 
 .files-meta {
@@ -54,7 +71,7 @@
 	margin: 0;
 	padding: 0.5rem 1rem;
 	font-size: 0.85rem;
-	border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+	border-bottom: 1px solid var(--vorpal-divider);
 }
 
 /* Outcome is conveyed by an explicit word ("Saved" / "Rejected") plus a left
@@ -81,6 +98,54 @@
 
 .files-editor {
 	width: 100%;
-	/* Fill the area below topbar (~64px) + toolbar (~52px). */
+	/* Light-mode fallback: fill the area below topbar (~64px) + toolbar
+	   (~52px). The dark-glass shell below overrides this with flex sizing. */
 	height: calc(100vh - 124px);
+}
+
+/* ============================================================
+   DARK-GLASS SHELL — opt-in via <body class="vorpal-glass">.
+   Policy "dark shell, light document": the brand topbar + page
+   backdrop go dark/purple, but the editor stays a LIGHT sheet
+   (white surface, dark text) floating on the purple — the same
+   full-bleed recipe the Flow editor uses.
+   ============================================================ */
+
+/* Pin the dark-glass brand topbar to the top (64px tall). */
+.vorpal-glass .vorpal-topbar {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 10;
+}
+
+/* The main area becomes a white sheet inset on the purple backdrop:
+   the top margin clears the 64px fixed topbar (+16px gap); the side
+   and bottom margins let the purple show around the sheet's edges.
+   (Overrides brand.css's `.vorpal-glass .vorpal-main { background:
+   transparent }` — equal specificity, files.css loads later.) */
+.vorpal-glass .vorpal-main {
+	margin: 80px 24px 24px;
+	/* Definite height (viewport minus the 80px top margin + 24px bottom)
+	   so the flex column has a height to distribute — without it the
+	   flex:1 editor below collapses to zero and the Ace pane disappears. */
+	height: calc(100vh - 104px);
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-lg);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Inside the sheet the editor flexes to fill the height left below the
+   toolbar and the (transient) save/error message, so a banner pushes
+   the editor down rather than clipping it. min-height:0 lets the flex
+   child shrink; Ace re-measures via its ResizeObserver. */
+.vorpal-glass .files-editor {
+	flex: 1 1 auto;
+	min-height: 0;
+	height: auto;
 }

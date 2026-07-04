@@ -79,3 +79,232 @@ img.vorpal-card-icon {
 .vorpal-card.p-card-barebones:hover {
 	opacity: 1;
 }
+
+/* ====================================================================
+   DARK-GLASS PORTAL — match the login's "black glass" front door
+   ====================================================================
+   The brand layer (brand.css) ships every admin app LIGHT; only the
+   login screen is the dark-glass exception. This block is the portal
+   landing's own opt-in into that same look, kept here (portal-only)
+   so no other admin app is affected.
+
+   Glass only reads as glass over a textured backdrop to blur. So we
+   give the whole page the login's blurred + purple-tinted backdrop
+   (same brand.css recipe, same blurred.jpg), make the page chrome
+   transparent so it shows through, then float the boxes — topbar,
+   hero, and cards — as translucent smoked-glass panels with the
+   inset edge highlight and deep drop shadow from .vorpal-login-card.
+   Box text flips to light to stay legible on the dark glass. */
+
+/* Page backdrop — pinned to the viewport so the boxes glide over a
+   static image as the deck scrolls (mirrors brand.css .vorpal-login). */
+body {
+	/* Vivid — no overlay, exactly like login.jsp. The image carries the
+	   color; the mauve base only shows if the image fails to load. Any
+	   wash on top just mutes the bright blobs, which is what we're fixing. */
+	background: #563c55 url('/blade/portal/brand/blurred.jpg') center center / cover no-repeat fixed;
+}
+.vorpal-main { background: transparent; }
+
+/* Shared glass-panel recipe lives inline on each box below (CSS has no
+   mixins); the values track .vorpal-login-card in brand.css. */
+
+/* ---- Topbar → glass ---------------------------------------------- */
+.vorpal-topbar {
+	background: rgba(18, 18, 24, 0.55);
+	backdrop-filter: blur(16px) saturate(140%);
+	-webkit-backdrop-filter: blur(16px) saturate(140%);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px -14px rgba(0, 0, 0, 0.6);
+}
+.vorpal-brand { border-right-color: rgba(255, 255, 255, 0.10); }
+/* Dark-purple splotch → white on the dark glass topbar. */
+.vorpal-topbar .vorpal-brand-mark { filter: brightness(0) invert(1); }
+.vorpal-brand-product { color: #fff; }
+.vorpal-brand-tagline { color: rgba(232, 234, 239, 0.6); }
+.vorpal-topbar-right {
+	border-left-color: rgba(255, 255, 255, 0.10);
+	color: rgba(232, 234, 239, 0.7);
+}
+.vorpal-topbar-link {
+	color: rgba(232, 234, 239, 0.85);
+	background: rgba(255, 255, 255, 0.06);
+	border-color: rgba(255, 255, 255, 0.18);
+}
+.vorpal-topbar-link:hover {
+	color: #fff;
+	background: rgba(124, 58, 144, 0.40);
+	border-color: rgba(124, 58, 144, 0.6);
+	border-bottom-color: rgba(124, 58, 144, 0.6);
+}
+
+/* ---- Hero → glass (the largest box) ------------------------------ */
+.vorpal-hero {
+	background:
+		linear-gradient(125deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.05) 16%, rgba(255, 255, 255, 0.02) 34%, transparent 58%),
+		radial-gradient(80px 26px at 50% -8px, rgba(255, 255, 255, 0.26), transparent 72%),
+		linear-gradient(168deg,
+			rgba(50, 50, 60, 0.82) 0%,
+			rgba(20, 20, 26, 0.90) 38%,
+			rgba(11, 11, 15, 0.94) 100%);
+	backdrop-filter: blur(16px) saturate(130%);
+	-webkit-backdrop-filter: blur(16px) saturate(130%);
+	border: 1px solid rgba(0, 0, 0, 0.5);
+	border-left: 4px solid var(--vorpal-purple);  /* keep the purple accent */
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.12),
+		inset 0 0 2px 1px rgba(255, 255, 255, 0.05),
+		0 24px 60px -14px rgba(0, 0, 0, 0.6);
+	color: #e8eaef;
+}
+.vorpal-hero h1 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
+.vorpal-hero p { color: rgba(240, 242, 247, 0.95); }
+.vorpal-hero-meta { color: rgba(232, 234, 239, 0.72); }
+/* Re-tint the hero's corner glow from a light wash to a purple haze so
+   it reads on the dark surface instead of as a bright smudge. */
+.vorpal-hero::after {
+	background: radial-gradient(closest-side, rgba(124, 58, 144, 0.45), transparent);
+}
+/* Metallic highlight strip across the hero top (uses ::before since the
+   corner glow already owns ::after). */
+.vorpal-hero::before {
+	content: "";
+	position: absolute;
+	left: 32%;
+	top: 0;
+	width: 36%;
+	height: 1px;
+	background: linear-gradient(90deg,
+		transparent, rgba(205, 205, 215, 0.8) 50%, transparent);
+	box-shadow: 0 0 4px rgba(255, 255, 255, 0.4);
+	pointer-events: none;
+	z-index: 2;
+}
+
+/* ---- Cards → black glass (the .form-3 login look) ---------------- */
+/* Deep near-black surface with a faint top-lit vertical gradient — the
+   richness comes from being genuinely dark, not from translucency, so
+   the purple backdrop only barely tints the top edge (high alpha). */
+.vorpal-card {
+	position: relative;
+	overflow: hidden;
+	/* Two layers: a soft "lamp glow" bloom at top-center (the light
+	   source above the glass), over a lit-from-above vertical gradient
+	   that falls off to near-black — the depth the flat fill was missing. */
+	background:
+		radial-gradient(50px 22px at 50% -6px, rgba(255, 255, 255, 0.30), transparent 72%),
+		linear-gradient(168deg,
+			rgba(50, 50, 60, 0.82) 0%,
+			rgba(20, 20, 26, 0.90) 38%,
+			rgba(11, 11, 15, 0.94) 100%);
+	backdrop-filter: blur(16px) saturate(130%);
+	-webkit-backdrop-filter: blur(16px) saturate(130%);
+	border: 1px solid rgba(0, 0, 0, 0.5);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.14),   /* crisp top edge */
+		inset 0 0 2px 1px rgba(255, 255, 255, 0.05),
+		0 18px 44px -16px rgba(0, 0, 0, 0.65);
+	color: #e8eaef;
+}
+.vorpal-card:hover {
+	transform: translateY(-2px);             /* keep the lift */
+	border-color: rgba(124, 58, 144, 0.6);   /* purple edge on hover */
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.16),
+		inset 0 0 2px 1px rgba(255, 255, 255, 0.08),
+		0 0 22px -2px rgba(124, 58, 144, 0.45),   /* soft purple glow */
+		0 26px 60px -16px rgba(0, 0, 0, 0.7);
+}
+
+/* Metallic highlight strip across the top — the signature "light
+   catching the glass edge" from .form-3:after / .vorpal-login-card. */
+.vorpal-card::before {
+	content: "";
+	position: absolute;
+	left: 15%;
+	top: 0;
+	width: 70%;
+	height: 1px;
+	background: linear-gradient(90deg,
+		transparent 0%,
+		rgba(120, 120, 130, 0) 8%,
+		rgba(220, 220, 230, 0.95) 50%,
+		rgba(120, 120, 130, 0) 92%,
+		transparent 100%);
+	box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+	pointer-events: none;
+	z-index: 2;
+}
+
+/* Diagonal glass sheen sweeping from the top-left — the lit reflection
+   from .form-3 p:nth-child(1):before. Clipped by the card's overflow. */
+.vorpal-card::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: linear-gradient(125deg,
+		rgba(255, 255, 255, 0.26) 0%,
+		rgba(255, 255, 255, 0.12) 16%,
+		rgba(255, 255, 255, 0.04) 34%,
+		rgba(255, 255, 255, 0.0) 60%);   /* extra stops → smooth, no hard edge */
+	pointer-events: none;
+	z-index: 1;
+}
+
+/* Keep the icon + text above the strip and sheen. */
+.vorpal-card .p-card-body { position: relative; z-index: 3; }
+
+.vorpal-card h3,
+.vorpal-card .p-card-body h3 {
+	font-size: 22px;
+	color: #fff;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);  /* crisp like the login labels */
+}
+.vorpal-card p { color: rgba(240, 242, 247, 0.96); }
+/* Subtitle — bigger + much brighter; the old thin grey was hard to read. */
+.p-card-tagline {
+	font-size: 17px;
+	font-weight: 500;
+	color: rgba(240, 242, 247, 0.92);
+}
+.vorpal-card-link { color: #d3aee0; }  /* lighter purple for the dark card */
+
+/* Favicons were rendered bare on the old white card; on dark glass a
+   dark-line favicon would vanish, so seat each one on a small frosted
+   tile — reads as an intentional app icon and guarantees legibility. */
+img.vorpal-card-icon {
+	position: relative;
+	z-index: 3;
+	/* Frosted chip — soft off-white gradient + edge highlight so it reads
+	   as a dimensional tile on the glass, not a flat white sticker. */
+	background: linear-gradient(160deg, rgba(255, 255, 255, 0.97), rgba(226, 228, 238, 0.88));
+	border: 1px solid rgba(255, 255, 255, 0.55);
+	border-radius: 10px;
+	padding: 6px;
+	box-shadow:
+		0 1px 3px rgba(0, 0, 0, 0.35),
+		inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ---- Bare-on-page text (outside any box) → light ----------------- */
+/* These sit directly on the vivid backdrop, so add a soft shadow for
+   legibility (same trick login.jsp uses on its over-backdrop text). */
+.vorpal-eyebrow {
+	color: rgba(255, 255, 255, 0.95);
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+#p-services-section > p {
+	color: rgba(255, 255, 255, 0.92);
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+/* ---- Footer → light on the dark backdrop ------------------------- */
+.vorpal-footer {
+	color: rgba(255, 255, 255, 0.62);
+	border-top-color: rgba(255, 255, 255, 0.12);
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.vorpal-footer span { color: rgba(255, 255, 255, 0.62); }
+.vorpal-footer a { color: #c79fd6; }
+.vorpal-footer a:hover { color: #e0c4ec; }

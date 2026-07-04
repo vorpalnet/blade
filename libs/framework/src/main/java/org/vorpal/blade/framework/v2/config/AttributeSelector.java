@@ -242,9 +242,9 @@ public class AttributeSelector implements Serializable {
 	 * the specified attribute (header, body, URI, etc.) and applies the regular
 	 * expression to extract named capturing groups.
 	 *
-	 * @param request the SIP request to extract attributes from
+	 * @param message the SIP message to extract attributes from
 	 * @return an AttributesKey containing the extracted key and attributes, or null
-	 *         if the request is null or pattern does not match
+	 *         if the message is null or pattern does not match
 	 */
 	public AttributesKey findKey(SipServletMessage message) {
 		if (message == null || attribute == null) {

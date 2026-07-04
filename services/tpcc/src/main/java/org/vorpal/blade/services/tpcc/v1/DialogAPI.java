@@ -28,7 +28,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.services.tpcc.TpccServlet;
 import org.vorpal.blade.services.tpcc.callflows.CreateDialog;
 import org.vorpal.blade.services.tpcc.v1.dialog.Dialog;
@@ -107,7 +107,11 @@ public class DialogAPI extends Callflow implements Serializable {
 					invite.setRequestURI(sipFactory.createURI(dialogData.requestUri));
 				}
 
-				invite.setContent(blackhole, "application/sdp");
+				// OFFERLESS initial INVITE (RFC 3725 Flow I): the party answers
+				// with its real offer and CreateDialog answers in the ACK with
+				// an RFC 3264 inactive SDP — media parked until a later
+				// re-INVITE activates it. Replaces the 2543-era static
+				// "blackhole" offer (c=0.0.0.0) this flow used to send.
 
 				// Save this in static memory so it's not serialized
 				responseMap.put(invite.getSession().getId(), new ResponseStuff(uriInfo, asyncResponse));
@@ -126,57 +130,6 @@ public class DialogAPI extends Callflow implements Serializable {
 
 	}
 
-//	public void createDialog(
-//			@Parameter(required = true, example = "ABCD6789", description = "Session ID") @PathParam("sessionId") String sessionId,
-//			@RequestBody(description = "optional session properties", required = true) Dialog dialogData,
-//			@Context UriInfo uriInfo, @Suspended AsyncResponse asyncResponse) {
-//
-//		try {
-//			SipApplicationSession appSession = sipUtil.getApplicationSessionByKey(sessionId, false);
-//
-//			if (appSession != null) {
-//
-//				SipServletRequest invite = sipFactory.createRequest(appSession, INVITE, dialogData.localParty,
-//						dialogData.remoteParty);
-//
-//				if (dialogData.requestUri != null) {
-//					invite.setRequestURI(sipFactory.createURI(dialogData.requestUri));
-//				}
-//
-//				invite.setContent(blackhole, "application/sdp");
-//
-//				// Save this in static memory so it's not serialized
-//				responseMap.put(invite.getSession().getId(), new ResponseStuff(uriInfo, asyncResponse));
-//
-//				sendRequest(invite, (inviteResponse) -> {
-//
-//					if (successful(inviteResponse)) {
-//
-//						sendRequest(inviteResponse.createAck());
-//
-//						ResponseStuff rstuff = DialogAPI.responseMap.remove(inviteResponse.getSession().getId());
-//						Response response = Response.status(inviteResponse.getStatus(), inviteResponse.getReasonPhrase())
-//								.build();
-//						rstuff.asyncResponse.resume(response);
-//
-//					} else if (failure(inviteResponse)) {
-//
-//						ResponseStuff rstuff = DialogAPI.responseMap.get(inviteResponse.getSession().getId());
-//						rstuff.asyncResponse
-//								.resume(Response.status(inviteResponse.getStatus(), inviteResponse.getReasonPhrase()).build());
-//
-//					}
-//				});
-//			} else {
-//				asyncResponse.resume(Response.status(Status.NOT_FOUND).build());
-//			}
-//
-//		} catch (Exception e) {
-//			sipLogger.severe(e);
-//			asyncResponse.resume(Response.status(500, e.getMessage()).build());
-//		}
-//
-//	}
 
 	@GET
 	@Asynchronous
@@ -424,18 +377,7 @@ public class DialogAPI extends Callflow implements Serializable {
 
 	@Override
 	public void process(SipServletRequest request) throws ServletException, IOException {
-		// TODO Auto-generated method stub
-
+		throw new ServletException("DialogAPI is REST-initiated; it never handles an inbound SIP request.");
 	}
-
-	static final String blackhole = "" + //
-			"v=0\r\n" + //
-			"o=- 15474517 1 IN IP4 127.0.0.1\r\n" + //
-			"s=cpc_med\r\n" + //
-			"c=IN IP4 0.0.0.0\r\n" + //
-			"t=0 0\r\n" + //
-			"m=audio 23348 RTP/AVP 0\r\n" + //
-			"a=rtpmap:0 pcmu/8000\r\n" + //
-			"a=inactive\r\n";
 
 }

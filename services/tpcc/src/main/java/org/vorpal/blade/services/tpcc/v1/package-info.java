@@ -58,7 +58,7 @@
 /// ### POST dialog/{sessionId}
 ///
 /// Creates a new SIP dialog within an existing application session. Looks up the session by
-/// key, creates an INVITE request with a "black hole" SDP (inactive media at 0.0.0.0), stores
+/// key, creates an OFFERLESS INVITE (RFC 3725 Flow I; the ACK answers the party's offer with an RFC 3264 inactive SDP), stores
 /// the `AsyncResponse` in the response map keyed by SIP session ID, and delegates to
 /// [CreateDialog][org.vorpal.blade.services.tpcc.callflows.CreateDialog] to send the INVITE asynchronously.
 ///

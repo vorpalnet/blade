@@ -16,7 +16,7 @@ import org.vorpal.blade.framework.v2.logging.Logger;
  * Terminates both legs of a B2BUA call by sending BYE requests with error information
  * in the Reason header and stack trace in the body.
  */
-public class CallflowCallConnectedError extends Callflow {
+public class CallflowCallConnectedError extends org.vorpal.blade.framework.v3.Callflow {
 
 	private static final long serialVersionUID = 1L;
 	private static final String REASON_HEADER = "Reason";

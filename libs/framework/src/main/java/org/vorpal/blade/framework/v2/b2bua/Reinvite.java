@@ -37,7 +37,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
  * Callflow for handling re-INVITE requests in a B2BUA scenario.
  * Forwards re-INVITE requests between the two call legs with SDP exchange.
  */
-public class Reinvite extends Callflow {
+public class Reinvite extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;
 	private B2buaListener b2buaListener;
 

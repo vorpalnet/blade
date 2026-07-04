@@ -51,6 +51,23 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 public abstract class Authentication implements Serializable {
 	private static final long serialVersionUID = 1L;
 
+	/// Runtime TLS context handed down by the owning RestConnector when its
+	/// `tls` section is configured — so a scheme that makes its own network
+	/// call (the OAuth token fetch) uses the same trust/client-identity as
+	/// the API call it authenticates. Null means JVM-default TLS. Not part
+	/// of the JSON config; the connector sets it just before [#applyTo].
+	@com.fasterxml.jackson.annotation.JsonIgnore
+	private transient javax.net.ssl.SSLContext sslContext;
+
+	@com.fasterxml.jackson.annotation.JsonIgnore
+	public javax.net.ssl.SSLContext getSslContext() {
+		return sslContext;
+	}
+
+	public void setSslContext(javax.net.ssl.SSLContext sslContext) {
+		this.sslContext = sslContext;
+	}
+
 	/// Stamp whatever credential headers this scheme needs onto
 	/// `reqBuilder`. Called synchronously just before the RestConnector
 	/// dispatches the request; OAuth subtypes may block briefly on a

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Documentation · BLADE Trace</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/callflow/favicon.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/callflow/">Trace</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../traces.html">Traces</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Read-only</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation</div>
+				<h1 class="vorpal-page-title">BLADE Trace</h1>
+				<p class="vorpal-page-subtitle">
+					What a BLADE callflow is, why it reads top-to-bottom, and how
+					the Traces tool relates to the Flow editor and the running
+					services.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Documentation</h4>
+					<ul>
+						<li><a href="index.html" class="vorpal-active-doc">Overview</a></li>
+					</ul>
+					<h4>See also</h4>
+					<ul>
+						<li><a href="../traces.html">Traces</a></li>
+						<li><a href="/blade/flow/">Flow editor</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>See the code behind the call</h1>
+					<p>
+						A <strong>callflow</strong> is how a BLADE application
+						expresses a whole SIP conversation. Instead of the
+						traditional JSR-289 model — where the logic for one call is
+						scattered across separate <code>doInvite</code>,
+						<code>doResponse</code>, <code>doAck</code>, and
+						<code>doBye</code> handlers that you have to mentally
+						reassemble — a callflow is a single <code>process(...)</code>
+						method you read top to bottom, the same order the messages
+						happen.
+					</p>
+
+					<h2>The lambda-continuation model</h2>
+					<p>
+						The trick is that each response handler is a lambda passed
+						to the request that provokes it. You call
+						<code>sendRequest(request, response -&gt; { ... })</code>,
+						and the lambda runs when that response arrives; inside it
+						you <code>sendResponse(response, ack -&gt; { ... })</code>,
+						and so on. The conversation nests exactly as it flows:
+					</p>
+					<pre><code>sendRequest(bobInvite, bobResponse -&gt; {
+    SipServletResponse aliceResponse = aliceInvite.createResponse(bobResponse.getStatus());
+    copyContentAndHeaders(bobResponse, aliceResponse);
+    sendResponse(aliceResponse, aliceAck -&gt; {
+        sendRequest(copyContentAndHeaders(aliceAck, bobResponse.createAck()));
+    });
+});</code></pre>
+					<p>
+						That is a full back-to-back call bridge. The response
+						lambda even fires more than once — once for
+						<code>180 Ringing</code>, again for <code>200 OK</code> —
+						without you writing a state machine. Behind the scenes the
+						framework serializes the continuation into the SIP session,
+						so a paused callflow survives node failover across the
+						cluster.
+					</p>
+
+					<h2>The Source tab is the real code</h2>
+					<p>
+						When you pick a traced step, the <strong>Source</strong> tab
+						shows the <em>real</em> source of the app that handled it —
+						copied out of the framework and service tree when the app was
+						built, not a hand-written snippet — with the exact line that
+						sent the message marked. So it can't drift from the code that
+						actually runs, and it works the same for framework flows,
+						BLADE services, and customer-built apps.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Callflow vs. Flow</div>
+						<p>
+							The <a href="/blade/flow/">Flow editor</a> shows
+							<em>inter-app routing</em> — which application FSMAR
+							hands a call to. The Traces tool shows
+							<em>intra-app conversation</em> — what each
+							application does once it's handling the call. Flow is
+							the map; a callflow is the trip.
+						</p>
+					</div>
+
+					<h2>Traces — the flight recorder</h2>
+					<p>
+						The <a href="../traces.html">Traces</a> page is the heart of
+						this tool. Arm a rule (match a header pattern,
+						cap the capture count), reproduce the call, and read the
+						recording: the SIP messages coming and going through every
+						BLADE app in the chain — raw message text included — merged
+						into one timeline, with each sent message pinned to the exact
+						source line that emitted it. Arming is in-memory runtime state on the Trace
+						MBeans — it never touches configuration and disappears on
+						restart.
+					</p>
+					<p>
+						The detail panel on the right has three tabs —
+						<strong>Sequence</strong>, <strong>Message</strong> and
+						<strong>Source</strong>. Picking a call opens the Sequence tab;
+						picking a step updates all three but leaves you on whichever tab
+						you are viewing. The Sequence tab draws the same
+						steps as a <strong>ladder diagram</strong> — one lifeline per
+						party (each BLADE app boxed, the external softphones dashed) and
+						one arrow per message hop, in time order. A message crossing an
+						app is logged twice — the app that sends it and the next app that
+						receives it — and the two are matched by <strong>Call-ID</strong>
+						(the reliable per-hop key) into a single arrow between their two
+						lanes; a routed call lays out
+						<em>caller → app₁ → … → appₙ → callee</em> and the responses flow
+						back. The external softphone names come from the From/To headers
+						only at the true ends of the chain (they are end-to-end, so they
+						can't name an internal hop). The timeline and the diagram are
+						linked both ways: click a step on the left and its hop lights up;
+						click a hop and its step is selected, with the raw message and
+						source line following along.
+					</p>
+
+					<h2>Snapshots — sharing what you saw</h2>
+					<p>
+						<strong>Save Snapshot</strong> downloads the captured calls as
+						a single self-contained <code>.html</code> file: the trace
+						data, the source file behind every step, and this viewer's own
+						rendering are all embedded. Anyone can open it in a browser —
+						no OCCAS, no login, no network — and see the same timeline and
+						marked source lines you saw. Attach it to a ticket or email;
+						it stays readable long after the trace buffer is gone.
+					</p>
+					<p>
+						<strong>Load Snapshot</strong> opens a saved file back in the
+						live viewer (Refresh returns to live data) — the saved file
+						also opens directly on its own, so loading is only needed when
+						you want it side-by-side with live captures.
+					</p>
+					<div class="vorpal-callout vorpal-callout-note">
+						<div class="vorpal-callout-title">Snapshots carry source code</div>
+						<p>
+							A snapshot embeds the application source for every traced
+							step. Share it with the same care as the code itself.
+						</p>
+					</div>
+
+					<h2>Read-only</h2>
+					<p>
+						This tool never changes configuration — it only displays
+						source and traces, and trace arming is transient runtime state.
+					</p>
+				</article>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo_white.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

@@ -18,42 +18,52 @@ public class FilesSettingsSample extends FilesSettings {
 				new EditableFile()
 						.setLabel("Domain Config (config.xml)")
 						.setPath("config/config.xml")
-						.setType(FileType.XML),
+						.setType(FileType.XML)
+						.setConsumer(ConsumerTier.ADMIN),
 				new EditableFile()
 						.setLabel("Coherence Cluster (defaultCoherenceCluster-coherence.xml)")
 						.setPath("config/coherence/defaultCoherenceCluster-coherence.xml")
-						.setType(FileType.XML),
+						.setType(FileType.XML)
+						.setConsumer(ConsumerTier.ENGINE),
 				new EditableFile()
 						.setLabel("Coherence Default Cache Config (Coherence-Default.xml)")
 						.setPath("config/coherence/Coherence-Default/Coherence-Default.xml")
-						.setType(FileType.XML),
+						.setType(FileType.XML)
+						.setConsumer(ConsumerTier.ENGINE),
 				new EditableFile()
 						.setLabel("Coherence Custom Cache Config (Custom-Default.xml)")
 						.setPath("config/coherence/Coherence-Default/Custom-Default.xml")
-						.setType(FileType.XML),
+						.setType(FileType.XML)
+						.setConsumer(ConsumerTier.ENGINE),
 				new EditableFile()
 						.setLabel("Server Debug Config (serverdebug.xml)")
 						.setPath("config/custom/serverdebug.xml")
-						.setType(FileType.XML),
+						.setType(FileType.XML)
+						.setConsumer(ConsumerTier.BOTH),
 				new EditableFile()
 						.setLabel("Coherence Config (coherence.xml)")
 						.setPath("config/custom/coherence.xml")
-						.setType(FileType.XML),
+						.setType(FileType.XML)
+						.setConsumer(ConsumerTier.ENGINE),
 				new EditableFile()
 						.setLabel("Application Router Config (approuter.xml)")
 						.setPath("config/custom/approuter.xml")
-						.setType(FileType.XML),
+						.setType(FileType.XML)
+						.setConsumer(ConsumerTier.ENGINE),
 				new EditableFile()
 						.setLabel("SIP Server Config (sipserver.xml)")
 						.setPath("config/custom/sipserver.xml")
-						.setType(FileType.XML),
+						.setType(FileType.XML)
+						.setConsumer(ConsumerTier.ENGINE),
 				new EditableFile()
 						.setLabel("Lifecycle Config (lifecycle-config.xml)")
 						.setPath("config/lifecycle-config.xml")
-						.setType(FileType.XML),
+						.setType(FileType.XML)
+						.setConsumer(ConsumerTier.ADMIN),
 				new EditableFile()
 						.setLabel("Logging Properties")
 						.setPath("config/custom/logging.properties")
-						.setType(FileType.PROPERTIES));
+						.setType(FileType.PROPERTIES)
+						.setConsumer(ConsumerTier.BOTH));
 	}
 }

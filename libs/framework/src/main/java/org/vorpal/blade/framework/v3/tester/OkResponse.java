@@ -10,7 +10,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 /// Answers `200 OK` to an in-dialog request (BYE, CANCEL, INFO) on an
 /// endpoint-mode dialog — requests that need no handling beyond
 /// acknowledgement.
-public class OkResponse extends Callflow {
+public class OkResponse extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;
 
 	@Override

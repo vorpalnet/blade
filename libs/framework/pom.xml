@@ -72,15 +72,12 @@
 
 	<build>
 		<finalName>blade-framework</finalName>
-		<!-- Opt out of the parent POM's .java-bundling resource. The framework
-		     ships sources as a separate -sources.jar (see maven-source-plugin
-		     below) so downstream WARs that bundle the framework don't carry a
-		     duplicate copy of every .java file inside their WEB-INF/classes. -->
-		<resources>
-			<resource>
-				<directory>src/main/resources</directory>
-			</resource>
-		</resources>
+		<!-- The framework inherits the parent POM's .java-bundling resource, so
+		     framework source (InitialInvite, Transfer, CallflowHold, ...) rides
+		     inside the framework JAR itself. The per-app SourceMXBean serves it
+		     from there to the Callflow Viewer — the browsed source is always
+		     byte-identical to the deployed code. The -sources.jar below still
+		     exists for IDE source attachment. -->
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

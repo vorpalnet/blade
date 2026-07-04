@@ -7,17 +7,18 @@
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/configurator/favicon.svg">
 </head>
-<body>
+<body class="vorpal-glass">
 <div class="vorpal-app">
 
 	<header class="vorpal-topbar">
 		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
 			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
 			<span class="vorpal-brand-text">
-				<span class="vorpal-brand-product">BLADE Configurator</span>
-				<span class="vorpal-brand-tagline">Schema-Driven Configuration Editor</span>
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
 			</span>
 		</a>
+		<a class="vorpal-appmark" href="/blade/configurator/">Configurator</a>
 		<nav class="vorpal-nav" aria-label="Primary">
 			<a href="../index.html">Overview</a>
 			<a href="../configurator.html">Editor</a>
@@ -90,8 +91,10 @@
 						<a href="/blade/portal/">BLADE Admin Portal</a>. The
 						portal's left rail iframes this editor for in-context
 						use; the standalone URL
-						<code>/blade/configurator/</code> works equivalently
-						for direct access or bookmarking.
+						<code>/blade/configurator/configurator.html</code> opens
+						the same editor directly, for direct access or bookmarking.
+						(The bare <code>/blade/configurator/</code> lands on this
+						app's overview page, not the editor.)
 					</p>
 
 					<h2>Built on</h2>
@@ -117,7 +120,7 @@
 
 		<footer class="vorpal-footer">
 			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
-				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+				<img src="/blade/portal/brand/vorpal_logo_white.svg" alt="Vorpal Networks">
 			</a>
 			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
 			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>

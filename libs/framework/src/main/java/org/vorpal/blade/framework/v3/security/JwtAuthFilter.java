@@ -15,7 +15,7 @@ import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.ext.Provider;
 
 /// Inbound bearer-JWT authentication for admin JAX-RS resources, modeled on
-/// [org.vorpal.blade.applications.console.config.BasicAuthFilter].
+/// `BasicAuthFilter`.
 ///
 /// **Additive by design.** It only ever acts on a request that carries an
 /// `Authorization: Bearer <jwt>` header *and* only when JWT auth is enabled in

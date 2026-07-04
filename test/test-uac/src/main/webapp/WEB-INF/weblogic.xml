@@ -8,6 +8,10 @@
 		<wls:specification-version>3.0</wls:specification-version>
 		<wls:exact-match>false</wls:exact-match>
 	</wls:library-ref>
+	<wls:session-descriptor>
+		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
+	</wls:session-descriptor>
+
 
 <!--
 	<wls:container-descriptor>

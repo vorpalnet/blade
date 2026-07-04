@@ -3,10 +3,13 @@
 # shared library via WLST. Self-contained: needs only the OCCAS install's
 # wlst.sh (no Maven, no weblogic-maven-plugin). Driven entirely by env vars.
 #
-# Required: MW_HOME, WLS_ADMINURL (t3://host:port), and for deploy/undeploy a
-#   WLS_NAME (and WLS_SOURCE/WLS_TARGETS for deploy).
+# Required: MW_HOME, WLS_ADMINURL (t3://host:port or t3s://host:sslport), and
+#   for deploy/undeploy a WLS_NAME (and WLS_SOURCE/WLS_TARGETS for deploy).
 # Optional: WLS_USER (weblogic), WLS_PASSWORD (else prompt), WLS_ACTION
 #   (deploy|undeploy|status, default deploy), WLS_LIBRARY (true → shared library).
+#   For t3s: WLS_TRUSTSTORE (+ WLS_TRUSTSTORE_TYPE, default PKCS12, and
+#   WLS_TRUSTSTORE_PASSWORD) — CA trust for the AdminServer's cert. Without it
+#   the JVM default truststore is used (CA imported into cacerts).
 set -euo pipefail
 
 : "${MW_HOME:?set MW_HOME}"
@@ -22,6 +25,22 @@ WLS_LIBRARY="${WLS_LIBRARY:-false}"
 
 WLST="$MW_HOME/oracle_common/common/bin/wlst.sh"
 [ -x "$WLST" ] || { echo "wlst.sh not found/executable: $WLST" >&2; exit 1; }
+
+# t3s: hand SSL trust to the WLST JVM (wlst.sh honors WLST_PROPERTIES).
+case "$WLS_ADMINURL" in
+    t3s://*)
+        if [ -n "${WLS_TRUSTSTORE:-}" ]; then
+            [ -f "$WLS_TRUSTSTORE" ] || { echo "WLS_TRUSTSTORE not found: $WLS_TRUSTSTORE" >&2; exit 1; }
+            WLST_PROPERTIES="${WLST_PROPERTIES:-} -Dweblogic.security.TrustKeyStore=CustomTrust"
+            WLST_PROPERTIES="${WLST_PROPERTIES} -Dweblogic.security.CustomTrustKeyStoreFileName=${WLS_TRUSTSTORE}"
+            WLST_PROPERTIES="${WLST_PROPERTIES} -Dweblogic.security.CustomTrustKeyStoreType=${WLS_TRUSTSTORE_TYPE:-PKCS12}"
+            [ -n "${WLS_TRUSTSTORE_PASSWORD:-}" ] && \
+                WLST_PROPERTIES="${WLST_PROPERTIES} -Dweblogic.security.CustomTrustKeyStorePassPhrase=${WLS_TRUSTSTORE_PASSWORD}"
+            export WLST_PROPERTIES
+        fi
+        ;;
+esac
+
 case "$WLS_ACTION" in
     deploy)   [ -n "$WLS_NAME" ] && [ -f "$WLS_SOURCE" ] && [ -n "$WLS_TARGETS" ] || { echo "deploy needs WLS_NAME + WLS_SOURCE(file) + WLS_TARGETS" >&2; exit 1; } ;;
     undeploy) [ -n "$WLS_NAME" ] || { echo "undeploy needs WLS_NAME" >&2; exit 1; } ;;

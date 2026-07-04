@@ -8,10 +8,10 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
-import org.vorpal.blade.framework.v2.callflow.CallflowHold;
+import org.vorpal.blade.framework.v3.media.CallflowHold;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 /**
