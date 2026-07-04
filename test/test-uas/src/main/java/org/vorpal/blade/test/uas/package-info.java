@@ -19,7 +19,7 @@
 ///   down to its `application/sdp` part so a plain softphone can parse it
 ///
 /// Example endpoint call: `sip:target@uas.test;status=200;delay=5s` answers
-/// with a muted (blackhole) SDP and sends `BYE` after 5 seconds.
+/// with an RFC 3264 inactive hold SDP and sends `BYE` after 5 seconds.
 ///
 /// Configured scenarios (in `test-uas.json`, edited in the Configurator) can
 /// script multi-step response sequences with per-step delays and reason

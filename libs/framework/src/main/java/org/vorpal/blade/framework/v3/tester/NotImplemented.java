@@ -9,7 +9,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 
 /// Answers `501 Not Implemented` to in-dialog requests an endpoint-mode
 /// dialog doesn't handle.
-public class NotImplemented extends Callflow {
+public class NotImplemented extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;
 
 	@Override

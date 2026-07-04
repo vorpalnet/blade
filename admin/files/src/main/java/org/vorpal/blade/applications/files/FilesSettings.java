@@ -22,6 +22,7 @@ public class FilesSettings extends Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 
 	protected List<EditableFile> files = new ArrayList<>();
+	protected ServerControlConfig serverControl = new ServerControlConfig();
 
 	@JsonPropertyDescription("The whitelist of editable files. Only files listed here can be opened or saved by the Files tool. Paths are relative to DOMAIN_HOME and confined to the domain.")
 	public List<EditableFile> getFiles() {
@@ -30,6 +31,16 @@ public class FilesSettings extends Configuration implements Serializable {
 
 	public FilesSettings setFiles(List<EditableFile> files) {
 		this.files = files;
+		return this;
+	}
+
+	@JsonPropertyDescription("How to reach Node Manager to restart the AdminServer after editing an AdminServer-owned file (config.xml, etc.). Leave scriptPath empty to keep the restart button disabled.")
+	public ServerControlConfig getServerControl() {
+		return serverControl;
+	}
+
+	public FilesSettings setServerControl(ServerControlConfig serverControl) {
+		this.serverControl = serverControl;
 		return this;
 	}
 }

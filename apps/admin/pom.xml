@@ -339,6 +339,33 @@
 			</plugin></plugins></build>
 		</profile>
 		<profile>
+			<id>ear-callflow</id>
+			<activation><property><name>!skip.callflow</name></property></activation>
+			<dependencies>
+				<dependency>
+					<groupId>org.vorpal.blade</groupId>
+					<artifactId>vorpal-blade-admin-callflow</artifactId>
+					<version>${project.version}</version>
+					<type>war</type>
+					<exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+				</dependency>
+			</dependencies>
+			<build><plugins><plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-ear-plugin</artifactId>
+				<configuration>
+					<modules combine.children="append">
+						<webModule>
+							<groupId>org.vorpal.blade</groupId>
+							<artifactId>vorpal-blade-admin-callflow</artifactId>
+							<contextRoot>blade/callflow</contextRoot>
+							<bundleFileName>blade-callflow.war</bundleFileName>
+						</webModule>
+					</modules>
+				</configuration>
+			</plugin></plugins></build>
+		</profile>
+		<profile>
 			<id>javadocs</id>
 			<dependencies>
 				<dependency>

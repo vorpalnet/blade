@@ -109,7 +109,7 @@
 /// `callStarted`, `callAnswered`, `callConnected`, `callCompleted`,
 /// `callDeclined`, `callAbandoned`, `requestEvent`, `responseEvent`.
 ///
-/// See [CrudServlet] for which lifecycle methods fire each event.
+/// See `CrudServlet` for which lifecycle methods fire each event.
 ///
 ///
 /// ## Operation reference
@@ -249,7 +249,7 @@
 ///
 /// ## Core classes
 ///
-/// - [CrudServlet] — the B2BUA entry point
+/// - `CrudServlet` — the B2BUA entry point
 /// - [CrudConfiguration] / [CrudConfigurationSample] — config surface
 /// - [RuleSet] / [Rule] / [Operation] — the rule engine
 /// - [MessageHelper] / [MimeHelper] / [XmlHelper] / [SdpHelper] — utilities

@@ -8,6 +8,10 @@
 		<wls:specification-version>3.0</wls:specification-version>
 		<wls:exact-match>false</wls:exact-match>
 	</wls:library-ref>
+	<wls:session-descriptor>
+		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
+	</wls:session-descriptor>
+
 
 	<!-- Any defined user (aka 'weblogic') can invoke the REST APIs. -->
 	<wls:security-role-assignment>

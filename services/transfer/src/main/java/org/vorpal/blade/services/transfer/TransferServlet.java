@@ -19,7 +19,7 @@ import javax.servlet.sip.SipSessionListener;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
-import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v2.b2bua.Passthru;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.CallflowResponseCode;

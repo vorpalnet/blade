@@ -1,17 +1,25 @@
 /*
- * Audit page styles. Brand layer (topbar, page background, typography) lives
- * in /blade/portal/brand/brand.css; this file is just the audit-specific bits.
+ * Audit page styles. Brand layer (topbar, page background, dark-glass chrome,
+ * hero, typography) lives in /blade/portal/brand/brand.css; this file is just
+ * the audit-specific bits.
+ *
+ * Theme: "dark shell, light document". The page runs under `body.vorpal-glass`
+ * (dark/purple chrome + backdrop). Dense work content therefore sits on LIGHT
+ * brand sheets — solid var(--vorpal-surface) panels, var(--vorpal-divider)
+ * borders, explicit dark var(--vorpal-ink-*) text — floating on the purple.
  *
  * State distinction by shape + label, not color alone (a meaningful number of
  * operators are colorblind). The OK / MISSING / ERROR badges differ in glyph
- * and word, not just hue.
+ * and word, not just hue; the colored left-accent on a row is a secondary cue.
  */
 
+/* Refresh lives inside the dark-glass hero (.vorpal-hero-meta), so it stays
+   light-on-translucent to read against that dark surface. */
 .audit-refresh {
 	font: inherit;
 	padding: 0.45rem 1.1rem;
 	border: 1px solid rgba(255, 255, 255, 0.3);
-	border-radius: 6px;
+	border-radius: 0;
 	background: rgba(255, 255, 255, 0.06);
 	color: inherit;
 	cursor: pointer;
@@ -23,19 +31,22 @@
 	transform: translateY(1px);
 }
 
+/* Expected bindings — a light sheet panel. */
 .audit-expected {
 	margin-top: 2rem;
 	padding: 1.25rem 1.5rem;
-	background: rgba(255, 255, 255, 0.04);
-	border: 1px solid rgba(255, 255, 255, 0.08);
-	border-radius: 8px;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-sm);
+	color: var(--vorpal-ink-900);
 }
 .audit-expected h2 {
 	margin-top: 0;
 	font-size: 1rem;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
-	opacity: 0.7;
+	color: var(--vorpal-slate-600);
 }
 .audit-expected dl {
 	display: grid;
@@ -44,44 +55,53 @@
 	margin: 0;
 }
 .audit-expected dt {
-	opacity: 0.7;
+	color: var(--vorpal-slate-600);
 }
 .audit-expected dd {
 	margin: 0;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-family: var(--vorpal-font-mono);
+	color: var(--vorpal-ink-900);
 }
 
 .audit-results {
 	margin-top: 2rem;
 }
-.audit-results h2 {
+/* "Findings" is a section label sitting directly on the dark backdrop (the
+   findings themselves are the sheets below it), so it reads light — like the
+   brand page-title under glass. */
+.vorpal-glass .audit-results h2 {
 	margin-top: 0;
 	font-size: 1rem;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
-	opacity: 0.7;
+	color: rgba(255, 255, 255, 0.92);
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
+/* Each finding is a light sheet; the colored left edge is a secondary cue on
+   top of the glyph+word badge. */
 .audit-row {
 	display: grid;
 	grid-template-columns: 9rem 1fr;
 	gap: 1rem;
 	padding: 1rem 1.25rem;
 	margin-bottom: 0.75rem;
-	background: rgba(255, 255, 255, 0.04);
-	border: 1px solid rgba(255, 255, 255, 0.08);
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
 	border-left-width: 4px;
-	border-radius: 8px;
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-sm);
+	color: var(--vorpal-ink-900);
 	align-items: start;
 }
 .audit-row.ok {
-	border-left-color: rgba(120, 220, 150, 0.9);
+	border-left-color: #1f9d57;
 }
 .audit-row.missing {
-	border-left-color: rgba(240, 180, 80, 0.9);
+	border-left-color: #c98a16;
 }
 .audit-row.error {
-	border-left-color: rgba(230, 100, 100, 0.9);
+	border-left-color: #c0392b;
 }
 
 .audit-badge {
@@ -93,9 +113,10 @@
 	font-weight: 600;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
-	border-radius: 4px;
-	background: rgba(255, 255, 255, 0.08);
-	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 0;
+	background: var(--vorpal-slate-100);
+	border: 1px solid var(--vorpal-slate-300);
+	color: var(--vorpal-ink-900);
 }
 .audit-badge.ok::before { content: "✓"; }
 .audit-badge.missing::before { content: "✕"; }
@@ -104,49 +125,60 @@
 .audit-row-body h3 {
 	margin: 0 0 0.3rem 0;
 	font-size: 1.05rem;
+	color: var(--vorpal-ink-900);
 }
 .audit-row-body p {
 	margin: 0;
-	opacity: 0.85;
+	color: var(--vorpal-ink-700);
 	font-size: 0.95rem;
 	line-height: 1.45;
 }
 
+/* Error sheet — light red-tinted panel with dark, readable text. */
 .audit-error {
 	margin-top: 1rem;
 	padding: 1rem 1.25rem;
-	background: rgba(230, 100, 100, 0.1);
-	border: 1px solid rgba(230, 100, 100, 0.3);
-	border-radius: 8px;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	background: #fbecea;
+	border: 1px solid #e0b4ae;
+	border-left: 4px solid #c0392b;
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-sm);
+	font-family: var(--vorpal-font-mono);
 	font-size: 0.85rem;
+	color: var(--vorpal-ink-900);
 	white-space: pre-wrap;
 }
 
-/* "Fix" action — provision the missing JMS resources. */
+/* "Fix" action — provision the missing JMS resources. Light sheet. */
 .audit-fix {
 	margin-top: 1.25rem;
 	padding: 1rem 1.25rem;
-	background: rgba(255, 255, 255, 0.04);
-	border: 1px solid rgba(255, 255, 255, 0.10);
-	border-radius: 8px;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-sm);
+	color: var(--vorpal-ink-900);
 }
 .audit-fix-note {
 	margin: 0.6rem 0 0;
 	font-size: 0.85rem;
-	opacity: 0.8;
+	color: var(--vorpal-slate-600);
 }
 .audit-fix-log {
 	margin-top: 1rem;
 	padding: 1rem 1.25rem;
-	background: rgba(255, 255, 255, 0.04);
-	border: 1px solid rgba(255, 255, 255, 0.10);
-	border-radius: 8px;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	background: var(--vorpal-surface-alt);
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-sm);
+	font-family: var(--vorpal-font-mono);
 	font-size: 0.85rem;
+	color: var(--vorpal-ink-900);
 	white-space: pre-wrap;
 }
 
+/* Overall pill lives in the dark-glass topbar-right, so its tints read on a
+   dark surface — keep the translucent state tints. */
 .vorpal-pill.pill-ok {
 	background: rgba(120, 220, 150, 0.18);
 	border-color: rgba(120, 220, 150, 0.4);
@@ -159,4 +191,3 @@
 	background: rgba(230, 100, 100, 0.18);
 	border-color: rgba(230, 100, 100, 0.4);
 }
-

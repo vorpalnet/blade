@@ -1753,14 +1753,27 @@ _dist_dir() {
     printf '%s' "${d%/}"
 }
 
-# Authoritative AdminServer t3 URL from the live domain config (the server often
-# binds the host IP, not localhost). Falls back to deploy.conf, then localhost.
+# Authoritative AdminServer t3/t3s URL from the live domain config (the server
+# often binds the host IP, not localhost). Falls back to deploy.conf, then
+# localhost. TLS everywhere: when the AdminServer's <ssl> block is enabled,
+# prefer t3s on the SSL port — mandatory once 'install-occas.sh secure' ran
+# with tls.only (the plaintext port is disabled then).
 _wls_adminurl() {
     local cfg="${MWHOME}/user_projects/domains/${DOMAIN}/config/config.xml" addr="" port="" blk
+    local scheme="t3" sslblk sslon="" sslport=""
     if [ -f "$cfg" ]; then
         blk="$(awk '/<server>/{b=""} {b=b"\n"$0} /<\/server>/{ if (b ~ /<name>AdminServer<\/name>/){print b; exit} }' "$cfg")"
         addr="$(printf '%s' "$blk" | grep -om1 '<listen-address>[^<]*' | sed 's/.*>//')"
         port="$(printf '%s' "$blk" | grep -om1 '<listen-port>[0-9]*'  | sed 's/.*>//')"
+        sslblk="$(printf '%s' "$blk" | awk '/<ssl>/,/<\/ssl>/')"
+        sslon="$(printf '%s' "$sslblk" | grep -om1 '<enabled>[^<]*' | sed 's/.*>//')"
+        sslport="$(printf '%s' "$sslblk" | grep -om1 '<listen-port>[0-9]*' | sed 's/.*>//')"
+    fi
+    if [ "$sslon" = "true" ]; then
+        scheme="t3s"; port="${sslport:-7002}"
+    elif [ -z "$addr" ]; then
+        # No live config readable — honor the deploy conf's scheme choice.
+        case "$(read_prop "$DEPLOY_CONF" wls.adminurl)" in t3s://*) scheme="t3s" ;; esac
     fi
     [ -n "$addr" ] || addr="$(read_prop "$DEPLOY_CONF" wls.adminurl | sed -E 's#^[a-z0-9]+://([^:/]+).*#\1#')"
     # NEVER localhost — the AdminServer is reached over the network, not the
@@ -1768,8 +1781,10 @@ _wls_adminurl() {
     # routable name/IP.
     case "$addr" in ""|localhost|127.*|::1) addr="$(hostname -f 2>/dev/null || hostname)" ;; esac
     [ -n "$addr" ] || addr="$(hostname)"
-    [ -n "$port" ] || port="7001"
-    printf 't3://%s:%s' "$addr" "$port"
+    if [ -z "$port" ]; then
+        [ "$scheme" = "t3s" ] && port="7002" || port="7001"
+    fi
+    printf '%s://%s:%s' "$scheme" "$addr" "$port"
 }
 
 # The static engine / test server name (static.server field 1).
@@ -1787,8 +1802,20 @@ _deploy_one() {
     fi
     [ "$action" = "deploy" ] && [ ! -f "$source" ] && { warn "missing artifact: ${source} — run ./build.sh first."; return 1; }
     pw="${BLADE_WLS_PASSWORD:-}"; [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
+    # t3s trust: the occas conf's trust keystore (certs.sh layout) + store password.
+    local trust="" trustpw=""
+    case "$url" in t3s://*)
+        trust="$(read_prop "$OCCAS_CONF" trust.keystore)"; trust="${trust/#\~/$HOME}"
+        if [ -z "$trust" ]; then
+            local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"; cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
+            [ -f "${cdir}/trust.p12" ] && trust="${cdir}/trust.p12"
+        fi
+        trustpw="${BLADE_STORE_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$OCCAS_SECRET" ] && trustpw="$(read_prop "$OCCAS_SECRET" store.password)"
+        ;;
+    esac
     MW_HOME="$MWHOME" JAVA_HOME="${JAVA_HOME_VAL:-${JAVA_HOME:-}}" \
         WLS_ADMINURL="$url" WLS_USER="$auser" WLS_PASSWORD="$pw" \
+        WLS_TRUSTSTORE="$trust" WLS_TRUSTSTORE_PASSWORD="$trustpw" \
         WLS_ACTION="$action" WLS_NAME="$name" WLS_SOURCE="$source" WLS_TARGETS="$targets" WLS_LIBRARY="$library" \
         bash "${SCRIPT_DIR}/misc/deploy-wls.sh" || { warn "deploy ${action} ${name} failed"; return 1; }
 }

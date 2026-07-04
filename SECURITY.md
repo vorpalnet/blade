@@ -256,6 +256,88 @@ Config-file secrets are encrypted with the WebLogic domain key via
 Degrades gracefully (no-op) outside a WebLogic domain (tests/CLI). Never commit
 cleartext secrets; never transcribe a secret into a log or doc.
 
+## 6. Transport security — TLS everywhere (HTTPS / SIPS / t3s)
+
+Driven by the UHG/Optum mandate that all apps be TLS-encrypted by 2027 —
+HTTPS and SIPS only. BLADE-side, this is tooling plus an operator switch;
+OCCAS terminates TLS for both HTTP and SIP. The WARs themselves do **not**
+force TLS: developers keep plain HTTP on :7001/:8001, and a customer goes
+TLS-only by disabling the plaintext ports (`tls.only=true`, below) once
+HTTPS is proven — enforcement by port, not by descriptor.
+
+### What the WARs carry (framework, always on)
+
+- **No URL session rewriting** — every weblogic.xml session-descriptor sets
+  `<url-rewriting-enabled>false</url-rewriting-enabled>`, so session ids
+  never leak into URLs. Deliberately absent: `CONFIDENTIAL`
+  transport-guarantees (would break or redirect developer HTTP — and with
+  no SSL port configured, WebLogic 500s instead of redirecting) and
+  `<cookie-secure>true</cookie-secure>` (the `BLADEADMINSESSION` cookie
+  would never ride plain HTTP, so FORM login on :7001 loops forever). Once
+  a deployment is TLS-only the cookie only ever rides TLS anyway; a
+  customer wanting the belt-and-suspenders secure flag can add it with a
+  deployment plan without a BLADE rebuild.
+
+### Certificates (per environment)
+
+`./certs.sh <env> generate` builds a self-signed test PKI: a local CA
+(`ca.p12`/`ca.pem`), a server identity keystore whose SAN covers every host
+in the env conf, and a trust keystore — all PKCS12, written OUTSIDE the repo
+(default `~/.blade/certs/<env>`). The server cert carries EKU
+serverAuth **and** clientAuth, so the same identity keystore serves as the
+client certificate where mutual TLS is demanded.
+
+Customers with their own certificate process (e.g. Optum) use
+`./certs.sh <env> import` — a ready-made PKCS12, or PEM cert+key+chain,
+packaged into the identical keystore layout. Same downstream steps either way.
+
+### Wiring the domain
+
+`./install-occas.sh <env> secure` (offline WLST, domain stopped) enables the
+SSL listen port with the keystores on the AdminServer (:7002), the engine
+server-template, and the static engine (:8002). With `tls.only=true` in the
+env conf it also **disables the plaintext HTTP listen ports and deletes the
+plaintext `sip` network channels** — leaving HTTPS, SIPS (:5061), and t3s
+only. That flag is the 2027 posture; run without it first to prove the certs
+while both ports are up. NodeManager is already `ssl` per machine conf.
+
+### Management traffic (t3s)
+
+The mandate includes t3. `deploy.sh` and `misc/deploy-wls.sh` honor a
+`t3s://` admin URL and pass CustomTrust JVM flags when `wls.truststore`
+points at the CA trust keystore (password `wls.truststore.password` in the
+secret, or `$BLADE_STORE_PASSWORD`); without a truststore they fall back to
+the JVM default (import `ca.pem` with `keytool -importcert -cacerts`).
+`blade.sh` auto-detects an SSL-enabled AdminServer in the live config.xml
+and switches its derived admin URL to t3s. When using `blade.sh` profile
+dirs, set `certs.dir` in the profile's occas.conf so the trust keystore is
+found.
+
+### Outbound REST — private trust and mutual TLS
+
+`https://` URLs in `RestConnector` (and the OAuth token endpoints, and the
+JWKS fetch) verify against the **JVM default truststore** — the normal
+deployment loads the customer CA into cacerts once and everything outbound
+trusts it. For endpoint-specific needs, `RestConnector` has an optional
+`tls` section (`framework.v3.security.TlsClientConfig`): a private
+`trustStore` for a CA you don't want JVM-wide, and/or a `keyStore` holding a
+client certificate for **mutual TLS**. The connector hands the same
+SSLContext to its auth scheme, so the OAuth token fetch presents the same
+identity as the API call. A misconfigured store throws — the call fails
+closed rather than silently downgrading to default trust. Offline coverage:
+`TlsClientConfigSmokeTest`.
+
+### SIP
+
+SIPS channels (:5061) exist on every engine since domain creation;
+`tls.only` removes the plaintext channel. The framework is
+transport-agnostic (OCCAS owns the transport); `UriTidy` already treats
+`sips:`/`transport=tls` as secure. Route/tenant configs with hard
+`transport=udp|tcp` URI params are operator data — sweep them per
+deployment when going SIPS-only, and re-point the SBC at :5061.
+
+---
+
 ---
 
 ## Verification
@@ -269,13 +351,27 @@ Locally verifiable (CI / build box):
 - **Descriptors / build** — `proto/security` packages as a skinny WAR (only
   `vorpal-blade-library-framework.jar` in `WEB-INF/lib`); the three hardened
   WARs and the admin EAR build.
+- **TLS client config** — `TlsClientConfigSmokeTest` (offline): empty config →
+  JVM default, truststore → working SSLContext, missing/garbage store → throws
+  (fail closed).
 - **Anti-regression grep** — every admin WAR except `watcher`/`redirect`/
-  `javadoc` contains an `<auth-constraint>`:
+  `javadoc` contains an `<auth-constraint>`; **every** active WAR (all trees,
+  `retired/` excluded) carries the `CONFIDENTIAL` transport-guarantee and a
+  `cookie-secure` session-descriptor (`libs/shared` is a library container, not
+  an app, and inherits nothing here):
 
   ```sh
   for d in admin/*/src/main/webapp/WEB-INF/web.xml; do
     case "$d" in */watcher/*|*/redirect/*|*/javadoc/*) continue;; esac
     grep -q '<auth-constraint>' "$d" || echo "MISSING auth-constraint: $d"
+  done
+  for d in admin services proto test; do
+    for f in $d/*/src/main/webapp/WEB-INF/web.xml; do
+      grep -q '<transport-guarantee>CONFIDENTIAL' "$f" || echo "MISSING CONFIDENTIAL: $f"
+    done
+    for f in $d/*/src/main/webapp/WEB-INF/weblogic.xml; do
+      grep -q '<wls:cookie-secure>true' "$f" || echo "MISSING cookie-secure: $f"
+    done
   done
   ```
 
@@ -286,6 +382,15 @@ Deploy-only (Jeff, in an OCCAS domain — "after you deploy, look for…"):
 - JWT SSO against the real IdP (issuer/JWKS/aud and the role-bearing claim).
 - SIP: mTLS/SIPS handshake on the SBC↔engine channel; and, if digest is enabled,
   that a `407` is issued and validated against the JDBC digest store.
+- TLS: after `certs.sh` + `install-occas.sh <env> secure`, the console answers
+  on `https://…:7002`, engines on `:8002`, `openssl s_client -connect host:5061`
+  shows the expected chain; with `tls.only=true`, ports 7001/8001/5060 refuse
+  connections and `./deploy.sh <env> status` works over `t3s`. The `secure`
+  step's WLST ran only in dry-run here — first execution against a real
+  stopped domain is yours.
+- Mutual TLS outbound: point a `RestConnector` `tls.keyStore` at
+  `identity.p12` against an endpoint requiring client certs (the generated
+  cert carries EKU clientAuth).
 
 ## Open items (next refinement)
 

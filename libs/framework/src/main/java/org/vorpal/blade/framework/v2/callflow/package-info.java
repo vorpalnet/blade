@@ -92,7 +92,7 @@
 /// selects this callflow for an incoming request:
 ///
 /// {@snippet :
-/// public class MyCallflow extends Callflow {
+/// public class MyCallflow extends org.vorpal.blade.framework.v3.Callflow {
 ///     @Override
 ///     public void process(SipServletRequest request) throws ServletException, IOException {
 ///         // Your call logic here — use sendRequest(), sendResponse(), etc.
@@ -298,9 +298,10 @@
 ///   <caption>Pre-built Callflows</caption>
 ///   <tr><th>Class</th><th>Purpose</th></tr>
 ///   <tr>
-///     <td>[Callflow481]</td>
-///     <td>Responds with 481 (Call/Transaction Does Not Exist) &mdash; used when
-///         a request arrives for a dialog that has already been terminated</td>
+///     <td>[CallflowResponse][org.vorpal.blade.framework.v3.CallflowResponse]</td>
+///     <td>Responds with any configurable status code, reason phrase, headers,
+///         and body (v3) &mdash; e.g. 481 when a request arrives for a dialog
+///         that has already been terminated</td>
 ///   </tr>
 ///   <tr>
 ///     <td>[CallflowAckBye]</td>
@@ -361,7 +362,7 @@
 ///
 /// ### Pre-built Callflows
 ///
-/// - [Callflow481] - Responds with 481 (Call/Transaction Does Not Exist)
+/// - [CallflowResponse][org.vorpal.blade.framework.v3.CallflowResponse] - Responds with any configurable code/phrase/headers/body (v3)
 /// - [CallflowResponseCode] - Responds with a configurable status code
 /// - [CallflowAckBye] - Handles CANCEL/200 OK race conditions (ACK then BYE)
 /// - [CallflowCallConnectedError] - Error cleanup for connected calls (BYE both legs)

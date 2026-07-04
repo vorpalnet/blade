@@ -216,6 +216,15 @@
 
 				// Shows the application
 				hideSplash();
+
+				// Deep-link from the portal's "Route Simulator" card
+				// (flow.html?sim=1): open the editor and pop the Route Simulator
+				// window straight away, so the card lands on the simulator rather
+				// than a bare editor with no hint the simulator exists.
+				if (window.flowSimulate &&
+						new URLSearchParams(window.location.search).get('sim') === '1') {
+					window.flowSimulate.open(editor);
+				}
 			}
 		}
 		catch (e)

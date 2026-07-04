@@ -17,12 +17,27 @@
 # Usage:
 #   ./install-occas.sh <env> <step> [--dry-run]
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
-#     <step>  init | install | configure | all
+#     <step>  init | install | configure | secure | all
 #
 #   init       interactively interview you and WRITE the env conf (+ optional secret)
 #   install    silent product install — idempotent: skips if ORACLE_HOME already
 #              populated, so on a SHARED filesystem it installs once, not per node
 #   configure  create the dynamic-cluster domain
+#   secure     wire TLS into the EXISTING domain (offline WLST readDomain/
+#              updateDomain — run with the domain STOPPED): enable the SSL
+#              listen ports with the certs.sh keystores on the AdminServer,
+#              the engine server-template, and the static engine; with
+#              tls.only=true also disable the plaintext HTTP listen ports and
+#              delete the plaintext 'sip' channels (HTTPS/SIPS/t3s only).
+#              Conf keys (defaults):  admin.server.name (AdminServer),
+#              admin.ssl.port (7002), ssl.listen.port (8002),
+#              engine.template.name (BEA_ENGINE_TIER_CLUST-template),
+#              tls.only (false), certs.dir (~/.blade/certs/<env>),
+#              identity.keystore / trust.keystore ({certs.dir}/identity.p12,
+#              {certs.dir}/trust.p12), identity.keystore.type /
+#              trust.keystore.type (PKCS12), identity.alias (server).
+#              Secret: store.password (or $BLADE_STORE_PASSWORD) — same one
+#              certs.sh used.
 #   all        install then configure
 #
 # Examples:
@@ -78,7 +93,7 @@ done
 [ ${#POSITIONAL[@]} -ge 1 ] || die "Usage: ./install-occas.sh <env> <init|install|configure|all> [--dry-run]"
 ENV_ARG="${POSITIONAL[0]}"
 STEP="${POSITIONAL[1]:-}"
-case "$STEP" in init|install|configure|all) ;; "") die "Missing step (init|install|configure|all)." ;; *) die "Unknown step: ${STEP}" ;; esac
+case "$STEP" in init|install|configure|secure|all) ;; "") die "Missing step (init|install|configure|secure|all)." ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # --- Resolve conf + secret ---
 if [ -f "$ENV_ARG" ]; then
@@ -258,6 +273,17 @@ get_admin_pw() {
     printf '%s' "$v"
 }
 
+# --- Keystore password (secure only): env > secret > prompt — certs.sh's convention ---
+get_store_pw() {
+    local v="${BLADE_STORE_PASSWORD:-}"
+    [ -z "$v" ] && [ -f "$SECRET_FILE" ] && v=$(read_prop "$SECRET_FILE" "store.password")
+    if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
+        read -rs -p "Keystore password (stores + keys, from certs.sh): " v; echo
+        [ -n "$v" ] || die "No password provided."
+    fi
+    printf '%s' "$v"
+}
+
 # ----------------------------------------------------------------------------
 # Step 1 — silent product install
 # ----------------------------------------------------------------------------
@@ -431,6 +457,123 @@ Machine${idx}NodemanagerNMType=${type}"
     warn "Start the NodeManager on each machine, then start the AdminServer (see misc/start-admin-nm.sh)."
 }
 
+# ----------------------------------------------------------------------------
+# Step 3 — secure: TLS on the EXISTING domain (offline WLST; run domain-stopped)
+# ----------------------------------------------------------------------------
+# Emits the Jython for one server-ish mbean: custom identity/trust keystores on
+# the server, an enabled SSL child at the given port, and (tls.only) plaintext
+# HTTP off. Args: <mbean-path> <name> <ssl-port> <has-sip-channel yes|no>
+emit_tls_block() {
+    local path="$1" name="$2" sslport="$3" has_sip="$4"
+    cat <<PYBLOCK
+
+# --- ${name}: keystores + SSL :${sslport} ---
+cd('${path}')
+set('KeyStores','CustomIdentityAndCustomTrust')
+set('CustomIdentityKeyStoreFileName','${ID_STORE}')
+set('CustomIdentityKeyStoreType','${ID_TYPE}')
+set('CustomIdentityKeyStorePassPhraseEncrypted','${STORE_PW_TOKEN}')
+set('CustomTrustKeyStoreFileName','${TRUST_STORE}')
+set('CustomTrustKeyStoreType','${TRUST_TYPE}')
+set('CustomTrustKeyStorePassPhraseEncrypted','${STORE_PW_TOKEN}')
+try:
+    create('${name}','SSL')
+except:
+    pass
+cd('${path}/SSL/${name}')
+set('Enabled','true')
+set('ListenPort',${sslport})
+set('ServerPrivateKeyAlias','${ID_ALIAS}')
+set('ServerPrivateKeyPassPhraseEncrypted','${STORE_PW_TOKEN}')
+PYBLOCK
+    if [ "$TLS_ONLY" = "true" ]; then
+        cat <<PYBLOCK
+cd('${path}')
+set('ListenPortEnabled','false')
+PYBLOCK
+        if [ "$has_sip" = "yes" ]; then
+            cat <<PYBLOCK
+# tls.only: drop the plaintext sip channel — sips stays
+try:
+    delete('sip','NetworkAccessPoint')
+except:
+    pass
+PYBLOCK
+        fi
+    fi
+}
+
+do_secure() {
+    local domain_dir="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}"
+    local certs_dir admin_name admin_ssl engine_ssl tmpl_name
+
+    certs_dir="$(read_prop "$CONF_FILE" "certs.dir")"; certs_dir="${certs_dir/#\~/$HOME}"
+    [ -z "$certs_dir" ] && certs_dir="${HOME}/.blade/certs/${ENV_NAME}"
+    admin_name="$(read_prop "$CONF_FILE" "admin.server.name")";    admin_name="${admin_name:-AdminServer}"
+    admin_ssl="$(read_prop "$CONF_FILE" "admin.ssl.port")";        admin_ssl="${admin_ssl:-7002}"
+    engine_ssl="$(read_prop "$CONF_FILE" "ssl.listen.port")";      engine_ssl="${engine_ssl:-8002}"
+    tmpl_name="$(read_prop "$CONF_FILE" "engine.template.name")";  tmpl_name="${tmpl_name:-BEA_ENGINE_TIER_CLUST-template}"
+    TLS_ONLY="$(read_prop "$CONF_FILE" "tls.only")";               TLS_ONLY="${TLS_ONLY:-false}"
+    ID_STORE="$(read_prop "$CONF_FILE" "identity.keystore")";      ID_STORE="${ID_STORE:-${certs_dir}/identity.p12}"; ID_STORE="${ID_STORE/#\~/$HOME}"
+    ID_TYPE="$(read_prop "$CONF_FILE" "identity.keystore.type")";  ID_TYPE="${ID_TYPE:-PKCS12}"
+    ID_ALIAS="$(read_prop "$CONF_FILE" "identity.alias")";         ID_ALIAS="${ID_ALIAS:-server}"
+    TRUST_STORE="$(read_prop "$CONF_FILE" "trust.keystore")";      TRUST_STORE="${TRUST_STORE:-${certs_dir}/trust.p12}"; TRUST_STORE="${TRUST_STORE/#\~/$HOME}"
+    TRUST_TYPE="$(read_prop "$CONF_FILE" "trust.keystore.type")";  TRUST_TYPE="${TRUST_TYPE:-PKCS12}"
+    STORE_PW_TOKEN="__STORE_PW__"
+
+    info "Secure domain '${DOMAIN_NAME}' — TLS on admin + engines"
+    log  "  admin:    ${admin_name}  SSL :${admin_ssl}"
+    log  "  engines:  ${tmpl_name} (+ static, if any)  SSL :${engine_ssl}"
+    log  "  identity: ${ID_STORE} (${ID_TYPE}, alias '${ID_ALIAS}')"
+    log  "  trust:    ${TRUST_STORE} (${TRUST_TYPE})"
+    log  "  tls.only: ${TLS_ONLY}$([ "$TLS_ONLY" = "true" ] && echo '  — plaintext HTTP + sip channels OFF (HTTPS/SIPS/t3s only)')"
+
+    # Generate the WLST script (password as a token; substituted at run time).
+    local py
+    py="readDomain('${domain_dir}')"
+    py="${py}$(emit_tls_block "/Servers/${admin_name}" "${admin_name}" "${admin_ssl}" no)"
+    py="${py}$(emit_tls_block "/ServerTemplates/${tmpl_name}" "${tmpl_name}" "${engine_ssl}" yes)"
+    if [ -n "$STATIC_SRV" ]; then
+        local sname
+        IFS=: read -r sname _ <<< "$STATIC_SRV"
+        py="${py}$(emit_tls_block "/Servers/${sname}" "${sname}" "${engine_ssl}" yes)"
+    fi
+    py="${py}
+updateDomain()
+closeDomain()
+print('secure: domain updated')"
+
+    if [ "$DRY_RUN" = true ]; then
+        log "${C_DIM}  [dry-run] generated WLST (password redacted):${C_RESET}"
+        printf '%s\n' "$py" | sed 's/^/    /'
+        log "${C_DIM}  [dry-run] source setWLSEnv.sh; java weblogic.WLST secure-domain.py${C_RESET}"
+        return 0
+    fi
+
+    [ -d "$domain_dir" ]   || die "Domain not found: ${domain_dir} — run the configure step first."
+    [ -f "$ID_STORE" ]     || die "Identity keystore not found: ${ID_STORE} — run './certs.sh ${ENV_NAME} generate' (or import) first."
+    [ -f "$TRUST_STORE" ]  || die "Trust keystore not found: ${TRUST_STORE}"
+    local setwls="${ORACLE_HOME}/wlserver/server/bin/setWLSEnv.sh"
+    [ -f "$setwls" ] || die "setWLSEnv.sh not found: ${setwls}"
+
+    local pw; pw="$(get_store_pw)"
+    local work; work="$(mktemp -d /tmp/occas-secure.XXXXXX)"
+    trap 'rm -rf "$work"' RETURN
+    printf '%s\n' "${py//${STORE_PW_TOKEN}/$pw}" > "${work}/secure-domain.py"
+    chmod 600 "${work}/secure-domain.py"
+
+    (
+        cd "$work"
+        # shellcheck disable=SC1090
+        . "$setwls" >/dev/null
+        java weblogic.WLST secure-domain.py
+    )
+    ok "Domain '${DOMAIN_NAME}' secured — restart NodeManagers + servers."
+    if [ "$TLS_ONLY" = "true" ]; then
+        warn "tls.only: plaintext HTTP and sip are OFF. Use https://…:${admin_ssl} for the console, t3s in deploy confs, and SIPS/TLS toward the SBC."
+    fi
+}
+
 # --- Header + dispatch ---
 log "${C_BOLD}OCCAS install${C_RESET}"
 log "  environment:  ${ENV_NAME}  (${CONF_FILE})"
@@ -442,6 +585,7 @@ log ""
 case "$STEP" in
     install)   do_install ;;
     configure) do_configure ;;
+    secure)    do_secure ;;
     all)       do_install; log ""; do_configure ;;
 esac
 

@@ -169,6 +169,24 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 	margin-top: 2px;
 }
 
+/* The current app's name, sitting to the RIGHT of the constant portal identity
+   (which keeps its border-right divider — the "|"). The far-left brand stays
+   "BLADE Admin Portal / Unified Administration" on every page; this says which
+   app you're in, followed by that app's nav. */
+.vorpal-appmark {
+	display: flex;
+	align-items: center;
+	padding: 0 20px;
+	font-size: 15px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--vorpal-ink-900);
+	white-space: nowrap;
+	flex-shrink: 0;
+	text-decoration: none;
+}
+.vorpal-appmark:hover { color: var(--vorpal-purple); }
+
 .vorpal-nav {
 	display: flex;
 	align-items: stretch;
@@ -1002,3 +1020,253 @@ code, pre, kbd, samp { font-family: var(--vorpal-font-mono); }
 	.vorpal-page { padding: 22px 18px 40px; }
 	.vorpal-docs-content { padding: 24px 22px; }
 }
+
+/* ============================================================
+ * DARK-GLASS LAYER — opt-in via `vorpal-glass` on <body>
+ * ============================================================
+ *
+ * The portal's "black glass" front-door look, generalized so any
+ * LANDING page (a collection of panels: topbar + hero + card grid)
+ * can adopt it with one class — `<body class="vorpal-glass">` — and
+ * nothing else. Inert until that class is present, so every existing
+ * app renders exactly as before.
+ *
+ * Use it ONLY on panel-collection surfaces (portal, app Overviews).
+ * Do NOT put it on dense work pages (audit findings, data tables,
+ * forms, the Flow canvas): bare running text/data over a blurred
+ * backdrop is unreadable. Those stay LIGHT — see the THEME note at
+ * the top of this file. Glass is the front door; light is the bench.
+ *
+ * The richness comes from being genuinely dark (high alpha) with a
+ * lit-from-above gradient, a "lamp glow" at top-center, a metallic
+ * edge strip, and a diagonal sheen — ported from .form-3/.vorpal-login.
+ * Portal-only card details (favicon tiles, taglines, the row layout)
+ * stay in portal.css. */
+
+/* ---- Page backdrop — vivid blurred image, no muting overlay ----- */
+body.vorpal-glass {
+	background: #563c55 url('/blade/portal/brand/blurred.jpg') center center / cover no-repeat fixed;
+	/* Always fill the viewport so the purple backdrop covers the page even
+	   when content is short (else a short page lets the document's own
+	   <html> background show below the body). 100vh, not 100% — a %
+	   min-height is ignored when the parent's height is auto. */
+	min-height: 100vh;
+}
+.vorpal-glass .vorpal-main { background: transparent; }
+
+/* ---- Topbar + nav → glass -------------------------------------- */
+.vorpal-glass .vorpal-topbar {
+	background: rgba(18, 18, 24, 0.55);
+	backdrop-filter: blur(16px) saturate(140%);
+	-webkit-backdrop-filter: blur(16px) saturate(140%);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px -14px rgba(0, 0, 0, 0.6);
+	/* Base light color so ANY stray topbar text (custom labels, selects,
+	   app pickers) reads on the dark glass without each app re-solving it.
+	   The specific pieces below (brand, nav, links) still set their own. */
+	color: rgba(232, 234, 239, 0.85);
+}
+.vorpal-glass .vorpal-brand { border-right-color: rgba(255, 255, 255, 0.10); }
+/* The Vorpal Boy splotch ships dark purple (for light surfaces); on the
+   dark glass topbar, whiten it so it reads. */
+.vorpal-glass .vorpal-brand-mark { filter: brightness(0) invert(1); }
+.vorpal-glass .vorpal-brand-product { color: #fff; }
+.vorpal-glass .vorpal-brand-tagline { color: rgba(232, 234, 239, 0.6); }
+.vorpal-glass .vorpal-topbar-right {
+	border-left-color: rgba(255, 255, 255, 0.10);
+	color: rgba(232, 234, 239, 0.7);
+}
+.vorpal-glass .vorpal-topbar-link {
+	color: rgba(232, 234, 239, 0.85);
+	background: rgba(255, 255, 255, 0.06);
+	border-color: rgba(255, 255, 255, 0.18);
+}
+.vorpal-glass .vorpal-topbar-link:hover {
+	color: #fff;
+	background: rgba(124, 58, 144, 0.40);
+	border-color: rgba(124, 58, 144, 0.6);
+	border-bottom-color: rgba(124, 58, 144, 0.6);
+}
+.vorpal-glass .vorpal-appmark { color: #fff; }
+.vorpal-glass .vorpal-appmark:hover { color: rgba(255, 255, 255, 0.75); }
+/* Nav links — light on the dark topbar (the portal's nav is empty, but
+   app topbars carry real tabs that would otherwise be invisible). */
+.vorpal-glass .vorpal-nav a { color: rgba(232, 234, 239, 0.72); }
+.vorpal-glass .vorpal-nav a:hover {
+	color: #fff;
+	border-bottom-color: rgba(255, 255, 255, 0.35);
+}
+.vorpal-glass .vorpal-nav a.vorpal-active {
+	color: #fff;
+	border-bottom-color: #a05cc0;
+}
+
+/* ---- Hero → black glass ---------------------------------------- */
+.vorpal-glass .vorpal-hero {
+	background:
+		linear-gradient(125deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.05) 16%, rgba(255, 255, 255, 0.02) 34%, transparent 58%),
+		radial-gradient(80px 26px at 50% -8px, rgba(255, 255, 255, 0.26), transparent 72%),
+		linear-gradient(168deg,
+			rgba(50, 50, 60, 0.82) 0%,
+			rgba(20, 20, 26, 0.90) 38%,
+			rgba(11, 11, 15, 0.94) 100%);
+	backdrop-filter: blur(16px) saturate(130%);
+	-webkit-backdrop-filter: blur(16px) saturate(130%);
+	border: 1px solid rgba(0, 0, 0, 0.5);
+	border-left: 4px solid var(--vorpal-purple);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.12),
+		inset 0 0 2px 1px rgba(255, 255, 255, 0.05),
+		0 24px 60px -14px rgba(0, 0, 0, 0.6);
+	color: #e8eaef;
+}
+.vorpal-glass .vorpal-hero h1 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
+.vorpal-glass .vorpal-hero p { color: rgba(240, 242, 247, 0.95); }
+.vorpal-glass .vorpal-hero-meta { color: rgba(232, 234, 239, 0.72); }
+.vorpal-glass .vorpal-hero::after {
+	background: radial-gradient(closest-side, rgba(124, 58, 144, 0.45), transparent);
+}
+.vorpal-glass .vorpal-hero::before {
+	content: "";
+	position: absolute;
+	left: 32%;
+	top: 0;
+	width: 36%;
+	height: 1px;
+	background: linear-gradient(90deg, transparent, rgba(205, 205, 215, 0.8) 50%, transparent);
+	box-shadow: 0 0 4px rgba(255, 255, 255, 0.4);
+	pointer-events: none;
+	z-index: 2;
+}
+
+/* ---- Cards → black glass --------------------------------------- */
+.vorpal-glass .vorpal-card {
+	position: relative;
+	overflow: hidden;
+	background:
+		radial-gradient(50px 22px at 50% -6px, rgba(255, 255, 255, 0.30), transparent 72%),
+		linear-gradient(168deg,
+			rgba(50, 50, 60, 0.82) 0%,
+			rgba(20, 20, 26, 0.90) 38%,
+			rgba(11, 11, 15, 0.94) 100%);
+	backdrop-filter: blur(16px) saturate(130%);
+	-webkit-backdrop-filter: blur(16px) saturate(130%);
+	border: 1px solid rgba(0, 0, 0, 0.5);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.14),
+		inset 0 0 2px 1px rgba(255, 255, 255, 0.05),
+		0 18px 44px -16px rgba(0, 0, 0, 0.65);
+	color: #e8eaef;
+}
+.vorpal-glass .vorpal-card:hover {
+	transform: translateY(-2px);
+	border-color: rgba(124, 58, 144, 0.6);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.16),
+		inset 0 0 2px 1px rgba(255, 255, 255, 0.08),
+		0 0 22px -2px rgba(124, 58, 144, 0.45),
+		0 26px 60px -16px rgba(0, 0, 0, 0.7);
+}
+.vorpal-glass .vorpal-card::before {
+	content: "";
+	position: absolute;
+	left: 15%;
+	top: 0;
+	width: 70%;
+	height: 1px;
+	background: linear-gradient(90deg,
+		transparent 0%,
+		rgba(120, 120, 130, 0) 8%,
+		rgba(220, 220, 230, 0.95) 50%,
+		rgba(120, 120, 130, 0) 92%,
+		transparent 100%);
+	box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+	pointer-events: none;
+	z-index: 2;
+}
+.vorpal-glass .vorpal-card::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: linear-gradient(125deg,
+		rgba(255, 255, 255, 0.26) 0%,
+		rgba(255, 255, 255, 0.12) 16%,
+		rgba(255, 255, 255, 0.04) 34%,
+		rgba(255, 255, 255, 0.0) 60%);
+	pointer-events: none;
+	z-index: 1;
+}
+/* Keep the card content above the strip and sheen. */
+.vorpal-glass .vorpal-card > * { position: relative; z-index: 3; }
+
+/* Layout — icon beside the title; description + link span the full width
+   below. Apps have flat card markup (icon, h3, p, link as siblings),
+   unlike the portal's body-wrapper row layout (portal.css). The middle
+   row grows (1fr) so the link pins to the bottom and aligns across a row. */
+.vorpal-glass .vorpal-card {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	grid-template-rows: auto 1fr auto;
+	column-gap: 16px;
+	row-gap: 10px;
+}
+.vorpal-glass .vorpal-card .vorpal-card-icon { grid-column: 1; grid-row: 1; align-self: center; }
+.vorpal-glass .vorpal-card h3 {
+	grid-column: 2;
+	grid-row: 1;
+	align-self: center;
+	margin: 0;
+	font-size: 22px;
+	color: #fff;
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.vorpal-glass .vorpal-card > p {
+	grid-column: 1 / -1;
+	grid-row: 2;
+	margin: 0;
+	color: rgba(240, 242, 247, 0.96);
+}
+.vorpal-glass .vorpal-card-link {
+	grid-column: 1 / -1;
+	grid-row: 3;
+	color: #d3aee0;
+}
+
+/* Glyph card icons (apps use a <span> glyph; the portal overrides with
+   <img> favicons in portal.css) — frosted chip so they read on glass. */
+.vorpal-glass .vorpal-card-icon {
+	width: 44px;
+	height: 44px;
+	border-radius: 10px;
+	font-size: 24px;
+	background: linear-gradient(160deg, rgba(255, 255, 255, 0.97), rgba(226, 228, 238, 0.88));
+	color: var(--vorpal-purple);
+	border: 1px solid rgba(255, 255, 255, 0.55);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ---- Bare-on-backdrop text (section labels, footer) → light ---- */
+.vorpal-glass .vorpal-eyebrow {
+	color: rgba(255, 255, 255, 0.95);
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+/* Page-header title/subtitle sit bare on the backdrop → light + shadow.
+   (Doc nav/content panels stay light — the "dark shell, light document"
+   pattern keeps dense reference text readable.) */
+.vorpal-glass .vorpal-page-title {
+	color: #fff;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+.vorpal-glass .vorpal-page-subtitle {
+	color: rgba(255, 255, 255, 0.85);
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+.vorpal-glass .vorpal-footer {
+	color: rgba(255, 255, 255, 0.62);
+	border-top-color: rgba(255, 255, 255, 0.12);
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.vorpal-glass .vorpal-footer span { color: rgba(255, 255, 255, 0.62); }
+.vorpal-glass .vorpal-footer a { color: #d3aee0; }
+.vorpal-glass .vorpal-footer a:hover { color: #e0c4ec; }

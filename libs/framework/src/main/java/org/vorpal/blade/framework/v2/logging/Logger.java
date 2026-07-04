@@ -1334,7 +1334,7 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 	 * strings.
 	 * 
 	 * @param level
-	 * @param appSessionId
+	 * @param sessionId
 	 * @param dialogId
 	 * @param comments
 	 */

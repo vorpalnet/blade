@@ -91,7 +91,12 @@ public abstract class AbstractOAuth2Authentication extends Authentication {
 		Logger sipLogger = SettingsManager.getSipLogger();
 		try {
 			TokenRequest req = buildTokenRequest(ctx);
-			TokenResponse response = TokenResponse.parse(req.toHTTPRequest().send());
+			com.nimbusds.oauth2.sdk.http.HTTPRequest httpRequest = req.toHTTPRequest();
+			javax.net.ssl.SSLContext ssl = getSslContext();
+			if (ssl != null) {
+				httpRequest.setSSLSocketFactory(ssl.getSocketFactory());
+			}
+			TokenResponse response = TokenResponse.parse(httpRequest.send());
 			if (!response.indicatesSuccess()) {
 				ErrorObject err = response.toErrorResponse().getErrorObject();
 				if (sipLogger != null) {

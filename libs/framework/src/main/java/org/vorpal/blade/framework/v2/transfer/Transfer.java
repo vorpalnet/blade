@@ -84,7 +84,7 @@ import org.vorpal.blade.framework.v2.config.SchemaTitle;
  * headers, and managing the transferor, transferee, and target SIP sessions.
  */
 @SchemaTitle(value = "Transfer")
-public class Transfer extends Callflow {
+public class Transfer extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;
 
 	// SIP Header name constants

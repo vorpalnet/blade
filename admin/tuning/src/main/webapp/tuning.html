@@ -11,7 +11,8 @@
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/js/bootstrap.bundle.min.js"></script>
 
 	<style>
-		body { padding: 20px; background: #f5f5f5; font-size: 14px; }
+		body { padding: 0; background: #f5f5f5; font-size: 14px; }
+		.container-fluid { max-width: 1440px; margin: 0 auto; padding: 24px 24px 40px; }
 		h4 { margin-bottom: 20px; }
 		.card { margin-bottom: 16px; }
 		.card-header { font-size: 14px; padding: 10px 15px; }
@@ -141,27 +142,47 @@
 		.jvm-argissues .issue::before { content: "\26A0"; color: #d6336c; flex: 0 0 auto; }
 		.jvm-argissues .issue .tok { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-weight: 700; text-decoration: underline wavy #d6336c; text-decoration-skip-ink: none; white-space: nowrap; }
 		.jvm-argissues .issue .why { color: #555; }
+
+		/* ---- Dark-glass shell (opt-in via body.vorpal-glass) ----------
+		   "Dark shell, light document": brand.css turns the topbar + page
+		   backdrop dark/purple; the dense work content stays on LIGHT
+		   sheets. The Bootstrap cards keep their solid white background and
+		   dark text, now floating on the purple with a soft drop shadow so
+		   they read as intentional sheets rather than bleeding into it. The
+		   only bare-on-backdrop chrome text is the page H4 heading, which is
+		   lightened so it stays readable on the dark backdrop. */
+		.vorpal-glass > .container-fluid > h4 { color: #fff; }
+		.vorpal-glass .card {
+			background: var(--vorpal-surface, #fff);
+			border-color: rgba(0, 0, 0, .08);
+			box-shadow: var(--vorpal-shadow-md, 0 6px 20px -8px rgba(0, 0, 0, .45));
+		}
+		.vorpal-glass .card-header,
+		.vorpal-glass .card-body { color: var(--vorpal-ink-900, #212529); }
 	</style>
 
-	<!-- EXPERIMENT REMOVED 2026-05-24: tried black-glass aesthetic on this dense
-	     scrolling work surface and it didn't read as glass. See memory note
-	     [[glass-needs-visible-backdrop]] for the diagnosis. -->
+	<!-- Dark-glass theme applied via "dark shell, light document": only the
+	     chrome (topbar) + page backdrop go dark/purple (brand.css), while the
+	     dense card content stays on solid light sheets with dark text. The
+	     earlier 2026-05-24 attempt that failed put the work content ITSELF on
+	     glass (unreadable); see memory note [[glass-needs-visible-backdrop]]. -->
 	<script>
 		if (new URLSearchParams(location.search).get('embed') === '1') {
 			document.addEventListener('DOMContentLoaded', () => document.body.classList.add('embedded'));
 		}
 	</script>
 </head>
-<body>
+<body class="vorpal-glass">
 
 	<header class="vorpal-topbar">
 		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
 			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
 			<span class="vorpal-brand-text">
-				<span class="vorpal-brand-product">BLADE Tuning</span>
-				<span class="vorpal-brand-tagline">OCCAS Performance Dashboard</span>
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
 			</span>
 		</a>
+		<a class="vorpal-appmark" href="/blade/tuning/">Tuning</a>
 		<nav class="vorpal-nav" aria-label="Primary">
 			<a href="index.html">Overview</a>
 			<a href="tuning.html" class="vorpal-active">Dashboard</a>

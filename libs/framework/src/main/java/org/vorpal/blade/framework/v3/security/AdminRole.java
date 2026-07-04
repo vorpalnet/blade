@@ -5,7 +5,7 @@ package org.vorpal.blade.framework.v3.security;
 /// `weblogic.xml` `<security-role-assignment>`.
 ///
 /// These are the *only* role names BLADE grants administrative access to.
-/// Both the container FORM/BASIC path ([org.vorpal.blade.applications.console.config.BasicAuthFilter])
+/// Both the container FORM/BASIC path (`BasicAuthFilter`)
 /// and the inbound-JWT path ([JwtAuthFilter]) authorize against this set, so
 /// the two front doors stay consistent.
 public enum AdminRole {

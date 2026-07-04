@@ -8,8 +8,8 @@
 /// Everything else — the connector pipeline (REST, LDAP, JDBC, map, table,
 /// sip), translation tables, polymorphic authentication and the routing
 /// engine — lives in the framework's
-/// [irouter][org.vorpal.blade.framework.v3.irouter] and
-/// [configuration][org.vorpal.blade.framework.v3.configuration] packages and
+/// `irouter` and
+/// `configuration` packages and
 /// is driven entirely by the JSON configuration file. Routing decisions
 /// always come from translation tables, never from code.
 ///

@@ -11,7 +11,8 @@
  *
  * Two tiers render into two grids:
  *   - kind:"app"     → Administration Tools (navigate to the app's context-root)
- *   - kind:"service" → SIP Services (open the Configurator for that service)
+ *   - kind:"service" → SIP Services (open the service's documentation page,
+ *                      which links through to the Configurator for that service)
  */
 
 (function() {
@@ -42,15 +43,16 @@
 		}
 	}
 
-	// Builds one card anchor. A service card opens the Configurator for that
-	// service; an app card navigates to its own context-root.
+	// Builds one card anchor. A service card opens that service's documentation
+	// page (which in turn links to the Configurator with the service's config
+	// auto-loaded); an app card navigates to its own context-root.
 	function buildCardEl(card) {
 		const isService = card.kind === 'service';
 
 		const a = document.createElement('a');
 		a.className = 'vorpal-card' + (card.hasMetadata ? '' : ' p-card-barebones');
 		a.href = isService
-			? '/blade/configurator/?domain=' + encodeURIComponent(card.configuratorDomain)
+			? '/blade/portal/service.html?service=' + encodeURIComponent(card.configuratorDomain)
 			: '/' + card.contextRoot + '/';
 		a.setAttribute('aria-label', card.name);
 
@@ -90,7 +92,7 @@
 
 		const link = document.createElement('span');
 		link.className = 'vorpal-card-link';
-		link.textContent = isService ? 'Configure' : 'Open';
+		link.textContent = isService ? 'Details' : 'Open';
 		body.appendChild(link);
 
 		a.appendChild(body);

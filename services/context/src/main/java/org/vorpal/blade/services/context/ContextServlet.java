@@ -11,7 +11,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
-import org.vorpal.blade.framework.v2.b2bua.B2buaServlet;
+import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 /// Captures raw inbound SIP headers on initial requests so external apps can

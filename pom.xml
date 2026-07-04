@@ -740,9 +740,9 @@ fi
 			<modules><module>proto/test-console</module></modules>
 		</profile>
 		<profile>
-			<id>gumball-agent</id>
-			<activation><property><name>!skip.gumball-agent</name></property></activation>
-			<modules><module>proto/gumball-agent</module></modules>
+			<id>callflow</id>
+			<activation><property><name>!skip.callflow</name></property></activation>
+			<modules><module>admin/callflow</module></modules>
 		</profile>
 
 		<!-- The three deployable EARs under apps/ — one per deploy target. Active
@@ -804,11 +804,28 @@ fi
 								<additionalOption>--add-stylesheet ${maven.multiModuleProjectDirectory}/admin/javadoc/src/main/resources/vorpal-theme.css</additionalOption>
 								<additionalOption>--add-script ${maven.multiModuleProjectDirectory}/admin/javadoc/src/main/resources/overview-toc.js</additionalOption>
 								<additionalOption>--allow-script-in-comments</additionalOption>
+								<!-- Force doclint off at the javadoc-tool level: the <doclint> config
+								     below is not passed through when a custom doclet (UML) is in use. -->
+								<additionalOption>-Xdoclint:none</additionalOption>
 							</additionalOptions>
+							<!-- Exclude the vendored JSR-SDP reference source from BLADE's javadoc.
+							     excludePackageNames with a trailing .* only matches SUB-packages and
+							     needs -subpackages to take effect, so it never excluded these; file-level
+							     excludes are applied by the plugin before javadoc runs and are reliable. -->
+							<sourceFileExcludes>
+								<sourceFileExclude>javax/sdp/**</sourceFileExclude>
+								<sourceFileExclude>gov/nist/**</sourceFileExclude>
+							</sourceFileExcludes>
 							<excludePackageNames>gov.nist.*:javax.sdp.*</excludePackageNames>
 							<show>public</show>
 							<doclint>none</doclint>
 							<failOnError>false</failOnError>
+							<!-- Don't auto-link to sibling reactor modules' build-time apidocs.
+							     It hunts for a legacy package-list (JDK 11+ emits element-list) in
+							     dirs that don't exist during per-module runs, warning once per
+							     downstream module. The published cross-linked docs come from the
+							     aggregated admin/javadoc site, so these offline links add nothing. -->
+							<detectOfflineLinks>false</detectOfflineLinks>
 							<links>
 								<link>https://docs.oracle.com/en/java/javase/11/docs/api</link>
 								<link>https://javaee.github.io/javaee-spec/javadocs/</link>

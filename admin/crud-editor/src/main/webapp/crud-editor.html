@@ -6,23 +6,30 @@
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<style>
 		:root {
-			--bg: #0f1419;
-			--panel: #1a1f29;
-			--text: #d4d4d4;
-			--muted: #7d8590;
-			--accent: #58a6ff;
-			--good: #56d364;
-			--bad: #f85149;
-			--border: #30363d;
+			/* Dark shell, light document: the page chrome (topbar) and the
+			   backdrop come from brand.css's .vorpal-glass layer; the tool's
+			   own surfaces stay LIGHT and readable. These local aliases map
+			   onto the shared --vorpal-* tokens. */
+			--bg: var(--vorpal-slate-100);   /* recessed surfaces (inputs, pre, diff body) */
+			--panel: var(--vorpal-surface);  /* panels / cards — white */
+			--text: var(--vorpal-ink-900);
+			--muted: var(--vorpal-slate-600);
+			--accent: var(--vorpal-purple);
+			--good: #1a7f37;                 /* readable on light */
+			--bad: #cf222e;
+			--border: var(--vorpal-divider);
 		}
 		* { box-sizing: border-box; }
 		body {
 			font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-			background: var(--bg);
 			color: var(--text);
 			margin: 0;
-			padding: 24px;
 		}
+		.crud-content { max-width: 1400px; margin: 0 auto; padding: 24px; }
+		/* Page heading sits on the dark glass backdrop — keep it light. */
+		.vorpal-glass .crud-content > h1 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
+		.vorpal-glass .crud-content > .subtitle { color: rgba(240, 242, 247, 0.92); }
+		.vorpal-glass .crud-content > .subtitle code { color: #fff; }
 		h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
 		.subtitle { color: var(--muted); margin-bottom: 24px; }
 		.grid {
@@ -37,6 +44,10 @@
 			gap: 12px;
 			align-items: end;
 			flex-wrap: wrap;
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: var(--vorpal-radius-md);
+			padding: 12px;
 		}
 		label {
 			display: block;
@@ -63,7 +74,7 @@
 		}
 		button {
 			background: var(--accent);
-			color: #0d1117;
+			color: #fff;
 			font-weight: 600;
 			border: none;
 			cursor: pointer;
@@ -179,8 +190,8 @@
 		.vars-toolbar .clear-btn:hover { border-color: var(--bad); color: var(--bad); }
 		.chip {
 			display: inline-block;
-			background: rgba(88, 166, 255, 0.15);
-			color: var(--accent);
+			background: var(--vorpal-purple-100);
+			color: var(--vorpal-purple-700);
 			padding: 2px 8px;
 			border-radius: 12px;
 			margin: 2px 4px 2px 0;
@@ -298,7 +309,27 @@
 		}
 	</style>
 </head>
-<body>
+<body class="vorpal-glass">
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/crud-editor/">CRUD</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="crud-editor.html" class="vorpal-active">Editor</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="crud-content">
 	<h1>CRUD rule preview</h1>
 	<p class="subtitle">
 		Paste a SIP message, pick a rule set, and click Run. The transformation runs
@@ -402,6 +433,7 @@
 			<pre id="diagStack" style="border-color:var(--bad);"></pre>
 		</div>
 	</details>
+	</main>
 
 	<script>
 		// Compute the API base from the document URL so the fetches work

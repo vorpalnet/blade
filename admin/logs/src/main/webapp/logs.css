@@ -1,17 +1,118 @@
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-body { display: flex; flex-direction: column; }
-header { padding: 12px 16px; border-bottom: 1px solid #ccc; background: #f6f6f6; }
-header h1 { margin: 0 0 8px; font-size: 18px; }
-.controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
-.controls label { display: flex; flex-direction: column; font-size: 12px; }
-.controls select, .controls input { font: 13px/1.4 inherit; padding: 4px 6px; min-width: 160px; }
-.controls button { font: 13px/1.4 inherit; padding: 6px 14px; cursor: pointer; }
+html, body { margin: 0; height: 100%; font-family: var(--vorpal-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif); }
+
+/* Dark shell, light document.
+   The brand topbar is pinned to the top as dark glass (via
+   body.vorpal-glass in brand.css); the controls + log pane float
+   together as one light sheet on the purple backdrop. */
+body {
+	display: flex;
+	flex-direction: column;
+	/* Clear the fixed 64px topbar (+ gap) so the sheet starts below it,
+	   and leave a purple margin on the other sides. */
+	padding: calc(var(--vorpal-topbar-height, 64px) + 16px) 16px 16px;
+	min-height: 0;
+}
+
+/* Pin the brand topbar across the top. */
+.vorpal-topbar {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 6;
+}
+
+/* The light work sheet — controls header + main, floating on the
+   purple backdrop with a generous rounded frame and drop shadow. */
+.work-sheet {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	background: var(--vorpal-surface, #fff);
+	border: 1px solid var(--vorpal-divider, #dde2ec);
+	border-radius: var(--vorpal-radius-lg, 10px);
+	box-shadow: var(--vorpal-shadow-lg, 0 16px 40px rgba(26, 36, 52, 0.10));
+	overflow: hidden;
+}
+
+/* Controls header — light surface, dark ink. */
+.work-sheet > header {
+	padding: 14px 18px;
+	border-bottom: 1px solid var(--vorpal-divider, #dde2ec);
+	background: var(--vorpal-surface-alt, #fafbfd);
+}
+.work-sheet > header h1 {
+	margin: 0 0 10px;
+	font-size: 18px;
+	color: var(--vorpal-ink-900, #1a2434);
+}
+.controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; }
+.controls label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 12px;
+	color: var(--vorpal-slate-600, #5a6677);
+}
+.controls select, .controls input {
+	font: 13px/1.4 var(--vorpal-font-sans, inherit);
+	padding: 5px 8px;
+	min-width: 160px;
+	border: 1px solid var(--vorpal-slate-300, #d0d6e2);
+	border-radius: 0;
+	background: var(--vorpal-surface, #fff);
+	color: var(--vorpal-ink-900, #1a2434);
+}
+.controls select:focus, .controls input:focus {
+	outline: none;
+	border-color: var(--vorpal-purple, #602671);
+	box-shadow: 0 0 0 2px var(--vorpal-purple-100, #ece1f0);
+}
+.controls button {
+	font: 13px/1.4 var(--vorpal-font-sans, inherit);
+	padding: 6px 16px;
+	cursor: pointer;
+	border: 1px solid var(--vorpal-purple, #602671);
+	border-radius: 0;
+	background: var(--vorpal-purple, #602671);
+	color: #fff;
+}
+.controls button:hover {
+	background: var(--vorpal-purple-700, #4a1c58);
+	border-color: var(--vorpal-purple-700, #4a1c58);
+}
+
 main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.status { padding: 6px 16px; font-size: 12px; color: #444; min-height: 22px; }
-.status.error { color: #800; }
+
+/* Status line — light, inside the sheet. The error message text itself
+   carries the "...failed" wording (set by logs.js), and the error state
+   adds bold weight, so severity reads without relying on color alone. */
+.status {
+	padding: 7px 18px;
+	font-size: 12px;
+	color: var(--vorpal-slate-600, #444);
+	min-height: 24px;
+	border-bottom: 1px solid var(--vorpal-divider, #dde2ec);
+	background: var(--vorpal-surface, #fff);
+}
+.status.error { color: var(--vorpal-error, #800); font-weight: 600; }
+
+/* Log pane — a DELIBERATE dark console. The original design uses the
+   classic VS Code dark scheme (#1e1e1e / #d4d4d4), the conventional
+   look for tailing logs. Per the "light document" policy's stated
+   exception, it's kept as a SELF-CONTAINED dark panel framed by the
+   white sheet (never bare on the purple backdrop) — light text on a
+   deliberate dark surface, readable for long monospace dumps. */
 .output {
-	flex: 1; margin: 0; padding: 12px 16px; overflow: auto;
-	font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
-	white-space: pre; background: #1e1e1e; color: #d4d4d4;
+	flex: 1;
+	margin: 0;
+	padding: 14px 18px;
+	overflow: auto;
+	font-family: var(--vorpal-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+	font-size: 12px;
+	white-space: pre;
+	background: #1e1e1e;
+	color: #d4d4d4;
 }

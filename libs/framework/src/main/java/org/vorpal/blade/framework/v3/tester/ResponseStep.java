@@ -59,7 +59,7 @@ public class ResponseStep implements Serializable {
 		this.delay = delay;
 	}
 
-	@JsonPropertyDescription("SDP on this step: 'hold' (blackhole/mute answer derived from the offer — default for 2xx) or 'none' (bare response).")
+	@JsonPropertyDescription("SDP on this step: 'hold' (RFC 3264 inactive answer derived from the offer — default for 2xx) or 'none' (bare response).")
 	public String getSdp() {
 		return sdp;
 	}

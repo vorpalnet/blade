@@ -4,18 +4,12 @@
 ///
 /// ## Key Components
 ///
-/// - [Simple] - a TPCC callflow that establishes a bridged call between Alice and Bob using dual INVITE sequences
 /// - [TestReinvite] - a minimal callflow that responds 200 OK to re-INVITE requests for mid-dialog testing
 /// - [ThirdPartyCallControl] - a JAX-RS REST endpoint exposing TPCC operations via {@code POST /api/v1/tpcc}
 ///
-/// ## TPCC Call Setup
-///
-/// ### Simple Callflow
-/// [Simple] extends {@code Callflow} and implements the classic TPCC pattern:
-/// first INVITE Alice with a blackhole SDP (no media), wait for her answer with
-/// real SDP, then use that SDP to INVITE Bob. The call is bridged once both
-/// parties have exchanged session descriptions. The callflow tracks addresses,
-/// headers, content type, and session IDs for both legs.
+/// (An unfinished `Simple` TPCC callflow stub was deleted 2026-07-03; the real
+/// TPCC flows live in the tpcc SERVICE — offerless create-and-park plus
+/// delayed-offer bridging, per RFC 3725 Flow I.)
 ///
 /// ### TestReinvite Callflow
 /// [TestReinvite] provides a simple re-INVITE handler that sends a 200 OK response

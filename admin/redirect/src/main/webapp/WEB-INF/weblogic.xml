@@ -15,4 +15,8 @@
 	     NOTE: only one default web app is allowed per virtual host. -->
 	<wls:context-root>/</wls:context-root>
 
+	<wls:session-descriptor>
+		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
+	</wls:session-descriptor>
+
 </wls:weblogic-web-app>

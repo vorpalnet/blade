@@ -7,17 +7,18 @@
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<link rel="icon" type="image/svg+xml" href="/blade/files/favicon.svg">
 </head>
-<body>
+<body class="vorpal-glass">
 <div class="vorpal-app">
 
 	<header class="vorpal-topbar">
 		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
 			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
 			<span class="vorpal-brand-text">
-				<span class="vorpal-brand-product">BLADE Files</span>
-				<span class="vorpal-brand-tagline">Domain File Editor</span>
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
 			</span>
 		</a>
+		<a class="vorpal-appmark" href="/blade/files/">Files</a>
 		<nav class="vorpal-nav" aria-label="Primary">
 			<a href="../index.html">Overview</a>
 			<a href="../files.html">Editor</a>
@@ -41,7 +42,7 @@
 				</div>
 			</section>
 
-			<section class="vorpal-prose">
+			<section class="vorpal-docs-content">
 				<h2>The editable-file registry</h2>
 				<p>
 					The set of editable files lives in this app's own settings,
@@ -50,7 +51,7 @@
 					(relative to <code>DOMAIN_HOME</code>), and a
 					<code>type</code> (<code>XML</code>, <code>PROPERTIES</code>,
 					or <code>TEXT</code>). Edit that list in the
-					<a href="/blade/configurator/">Configurator</a> (the
+					<a href="/blade/configurator/configurator.html">Configurator</a> (the
 					<code>files</code> app) — it has a JSON Schema, so it gets a
 					validated form there. This is deny-by-default: a file that
 					isn't in the registry cannot be opened or saved, period.
@@ -101,7 +102,7 @@
 
 		<footer class="vorpal-footer">
 			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">
-				<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+				<img src="/blade/portal/brand/vorpal_logo_white.svg" alt="Vorpal Networks">
 			</a>
 			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
 			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>

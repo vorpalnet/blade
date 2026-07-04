@@ -10,7 +10,7 @@ import javax.servlet.sip.SipServletRequest;
  * Provides a no-op implementation of the process method since client callflows
  * typically handle responses rather than incoming requests.
  */
-public class ClientCallflow extends Callflow {
+public class ClientCallflow extends org.vorpal.blade.framework.v3.Callflow {
 	private static final long serialVersionUID = 1L;
 
 	/**

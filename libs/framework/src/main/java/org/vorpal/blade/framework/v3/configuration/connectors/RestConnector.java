@@ -90,7 +90,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// shared HttpClient executor), selectors run and the returned
 /// future completes. The iRouter's connector chain then proceeds to
 /// the next connector (or the routing decision).
-@JsonPropertyOrder({ "type", "id", "description", "url", "method", "authentication",
+@JsonPropertyOrder({ "type", "id", "description", "url", "method", "authentication", "tls",
 		"timeoutSeconds", "circuitBreakerCooldownSeconds", "circuitBreakerTrap", "bodyTemplate", "selectors" })
 @FormLayoutGroup({ "id", "method", "timeoutSeconds" })
 @FormLayoutGroup({ "circuitBreakerCooldownSeconds", "circuitBreakerTrap" })
@@ -102,6 +102,7 @@ public class RestConnector extends Connector implements Serializable {
 	protected String url;
 	protected String method = "GET";
 	protected Authentication authentication;
+	protected org.vorpal.blade.framework.v3.security.TlsClientConfig tls;
 	protected Integer timeoutSeconds = 5;
 	protected Integer circuitBreakerCooldownSeconds;
 	protected Boolean circuitBreakerTrap;
@@ -130,6 +131,10 @@ public class RestConnector extends Connector implements Serializable {
 	@JsonPropertyDescription("Authentication scheme; pick a type (basic / bearer / apikey / oauth2-password / oauth2-client / oauth2-refresh-token / oauth2-jwt-bearer / oauth2-saml-bearer)")
 	public Authentication getAuthentication() { return authentication; }
 	public void setAuthentication(Authentication authentication) { this.authentication = authentication; }
+
+	@JsonPropertyDescription("Optional TLS overrides for this endpoint: a private truststore and/or a client certificate for mutual TLS. Leave unset to use the JVM default truststore (the normal case).")
+	public org.vorpal.blade.framework.v3.security.TlsClientConfig getTls() { return tls; }
+	public void setTls(org.vorpal.blade.framework.v3.security.TlsClientConfig tls) { this.tls = tls; }
 
 	@JsonPropertyDescription("Request timeout in seconds (default 5)")
 	public Integer getTimeoutSeconds() { return timeoutSeconds; }
@@ -201,7 +206,17 @@ public class RestConnector extends Connector implements Serializable {
 				reqBuilder.GET();
 			}
 
+			// Build the TLS context first (throws on a misconfigured store —
+			// fail closed rather than silently downgrading to default trust)
+			// and share it with the auth scheme so its token fetch uses the
+			// same trust/client identity as the API call.
+			javax.net.ssl.SSLContext sslContext = null;
+			if (tls != null && !tls.isEmpty()) {
+				sslContext = tls.buildSslContext();
+			}
+
 			if (authentication != null) {
+				authentication.setSslContext(sslContext);
 				authentication.applyTo(reqBuilder, ctx,
 						new Authentication.RequestSignature(method, resolvedUrl, resolvedBody));
 			}
@@ -213,9 +228,12 @@ public class RestConnector extends Connector implements Serializable {
 			}
 
 			if (httpClient == null) {
-				httpClient = HttpClient.newBuilder()
-						.connectTimeout(Duration.ofSeconds(timeoutSeconds != null ? timeoutSeconds : 5))
-						.build();
+				HttpClient.Builder clientBuilder = HttpClient.newBuilder()
+						.connectTimeout(Duration.ofSeconds(timeoutSeconds != null ? timeoutSeconds : 5));
+				if (sslContext != null) {
+					clientBuilder.sslContext(sslContext);
+				}
+				httpClient = clientBuilder.build();
 			}
 
 			javax.servlet.sip.SipServletRequest sipReq = ctx.getRequest();

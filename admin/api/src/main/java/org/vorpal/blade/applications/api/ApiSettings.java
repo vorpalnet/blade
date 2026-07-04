@@ -23,7 +23,7 @@ public class ApiSettings extends Configuration {
 
 	protected String engineBaseUrl;
 
-	@JsonPropertyDescription("Base URL of the engine tier where services publish OpenAPI documents, e.g. \"http://sip.example.com:8001\". Used to build <engineBaseUrl>/<contextRoot>/resources/openapi.json. Must be reachable from the operator's browser for live \"try it\" requests.")
+	@JsonPropertyDescription("Base URL of the engine tier where services publish OpenAPI documents, e.g. \"https://sip.example.com:8002\" (the engine SSL port; TLS-everywhere deployments have no plaintext port). Used to build <engineBaseUrl>/<contextRoot>/resources/openapi.json. Must be reachable from the operator's browser for live \"try it\" requests.")
 	public String getEngineBaseUrl() {
 		return engineBaseUrl;
 	}

@@ -164,7 +164,7 @@ public abstract class Callflow implements Serializable {
 	public static final String TIMESTAMP_PARAM = "ts";
 	private static final String VORPAL_TIMESTAMP = "VORPAL_TIMESTAMP";
 
-	private static final String SIP_ADDRESS_ATTR = "sipAddress";
+	protected static final String SIP_ADDRESS_ATTR = "sipAddress";
 	private static final String IS_PROXY_ATTR = "isProxy";
 	private static final String MESSAGE_SIPFRAG = "message/sipfrag";
 	private static final String SEND_REQUESTS_PREFIX = "SEND_REQUESTS_";
@@ -174,7 +174,7 @@ public abstract class Callflow implements Serializable {
 	// Response code constants
 	private static final int RESPONSE_CODE_408 = 408;
 	private static final int RESPONSE_CODE_486 = 486;
-	private static final int RESPONSE_CODE_500 = 500;
+	protected static final int RESPONSE_CODE_500 = 500;
 
 	/**
 	 * Checks if the response is a provisional response (1xx status code).
@@ -976,7 +976,7 @@ public abstract class Callflow implements Serializable {
 	/// 3. `Session-Expires` SIP header value (in seconds, converted to minutes)
 	///
 	/// Skipped for non-initial requests and for OPTIONS, INFO and MESSAGE.
-	private static void applySessionExpiration(SipServletRequest request, SipApplicationSession appSession)
+	protected static void applySessionExpiration(SipServletRequest request, SipApplicationSession appSession)
 			throws ServletParseException {
 
 		if (!request.isInitial()) {
@@ -1032,7 +1032,7 @@ public abstract class Callflow implements Serializable {
 	/// is sent out, the original `Session-Expires` (cached on the appSession)
 	/// is re-applied if the request doesn't already carry one.
 	@SuppressWarnings("serial")
-	private static void applyKeepAlive(SipServletRequest request, SipApplicationSession appSession)
+	protected static void applyKeepAlive(SipServletRequest request, SipApplicationSession appSession)
 			throws ServletParseException {
 
 		SessionParameters sessionParams = Callflow.getSessionParameters();
@@ -1514,7 +1514,7 @@ public abstract class Callflow implements Serializable {
 	 * content and sets the routing directive to continue. Finally, it sets the
 	 * request URI from the specified String.
 	 * 
-	 * @param uri           as a Java String
+	 * @param strUri        as a Java String
 	 * @param originRequest to be copied
 	 * @return request
 	 * @throws ServletParseException

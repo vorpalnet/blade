@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SIP Service · BLADE</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">SIP Service</span>
+			</span>
+		</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="/blade/portal/">All Apps &amp; Services</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<a class="vorpal-topbar-link" href="logout" title="Sign out">Logout</a>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">SIP Service</div>
+				<h1 class="vorpal-page-title" id="svc-name">Loading…</h1>
+				<p class="vorpal-page-subtitle" id="svc-tagline"></p>
+			</div>
+
+			<article class="vorpal-docs-content" id="svc-doc" style="max-width:820px;">
+				<p id="svc-description">Loading service details…</p>
+
+				<div class="vorpal-callout vorpal-callout-tip" id="svc-configure-wrap" style="display:none;">
+					<div class="vorpal-callout-title">Configure this service</div>
+					<p>
+						SIP services have no console of their own — their settings
+						live in the Configurator. This opens the Configurator with
+						this service's configuration already loaded.
+					</p>
+					<p style="margin-top:12px;">
+						<a class="vorpal-btn" id="svc-configure" href="#">Open in Configurator</a>
+					</p>
+				</div>
+
+				<div class="vorpal-callout vorpal-callout-warn" id="svc-error" style="display:none;">
+					<div class="vorpal-callout-title">Service not found</div>
+					<p id="svc-error-msg"></p>
+					<p style="margin-top:8px;"><a href="/blade/portal/">Back to the portal</a></p>
+				</div>
+			</article>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo_white.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+
+<script>
+/*
+ * Service documentation page. The portal deck links each SIP-service tile here
+ * (service.html?service=<name>) instead of straight into the Configurator.
+ * It reads the same live card deck the portal uses (/api/v1/cards), shows the
+ * service's authored @SchemaAbout documentation, and offers a button that opens
+ * the Configurator with THIS service's config auto-loaded via ?schema=<name>
+ * (the param that actually selects a config — ?domain= only picks the
+ * target-directory scope).
+ */
+(function () {
+	'use strict';
+
+	var params = new URLSearchParams(window.location.search);
+	var wanted = params.get('service') || params.get('domain');
+
+	var els = {
+		name: document.getElementById('svc-name'),
+		tagline: document.getElementById('svc-tagline'),
+		description: document.getElementById('svc-description'),
+		configureWrap: document.getElementById('svc-configure-wrap'),
+		configure: document.getElementById('svc-configure'),
+		error: document.getElementById('svc-error'),
+		errorMsg: document.getElementById('svc-error-msg')
+	};
+
+	function showError(msg) {
+		els.name.textContent = 'SIP Service';
+		els.tagline.textContent = '';
+		els.description.style.display = 'none';
+		els.configureWrap.style.display = 'none';
+		els.errorMsg.textContent = msg;
+		els.error.style.display = '';
+	}
+
+	if (!wanted) {
+		showError('No service was specified in the URL.');
+		return;
+	}
+
+	fetch('api/v1/cards', { credentials: 'same-origin', cache: 'no-cache' })
+		.then(function (r) {
+			if (!r.ok) { throw new Error('HTTP ' + r.status); }
+			return r.json();
+		})
+		.then(function (data) {
+			var cards = (data && Array.isArray(data.cards)) ? data.cards : [];
+			var card = cards.find(function (c) {
+				return c.kind === 'service' &&
+					(c.configuratorDomain === wanted || c.contextRoot === wanted || c.name === wanted);
+			});
+			if (!card) {
+				showError('“' + wanted + '” was not found among the deployed SIP services.');
+				return;
+			}
+
+			document.title = card.name + ' · BLADE SIP Service';
+			els.name.textContent = card.name;
+			els.tagline.textContent = card.tagline || 'SIP Service';
+			els.description.textContent = card.description ||
+				'This service does not yet publish a description. Open it in the Configurator to see its settings.';
+
+			var domain = card.configuratorDomain || card.name;
+			els.configure.href = '/blade/configurator/configurator.html?schema=' + encodeURIComponent(domain);
+			els.configureWrap.style.display = '';
+		})
+		.catch(function (err) {
+			showError('Could not load service details: ' + err.message);
+		});
+})();
+</script>
+</body>
+</html>

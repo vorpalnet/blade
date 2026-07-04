@@ -156,6 +156,8 @@ read_prop() {
 
 BUILD_PROFILE=$(read_prop  "$CONF_FILE" "build.profile")
 WLS_ADMINURL=$(read_prop   "$CONF_FILE" "wls.adminurl")
+WLS_TRUSTSTORE=$(read_prop "$CONF_FILE" "wls.truststore"); WLS_TRUSTSTORE="${WLS_TRUSTSTORE/#\~/$HOME}"
+WLS_TRUSTSTORE_TYPE=$(read_prop "$CONF_FILE" "wls.truststore.type"); WLS_TRUSTSTORE_TYPE="${WLS_TRUSTSTORE_TYPE:-PKCS12}"
 WLS_USER=$(read_prop       "$CONF_FILE" "wls.user")
 WLS_TGT_ADMIN=$(read_prop  "$CONF_FILE" "wls.targets.admin")
 WLS_TGT_CLUSTER=$(read_prop "$CONF_FILE" "wls.targets.cluster")
@@ -275,6 +277,27 @@ if [ "$NEEDS_WLS" = true ]; then
         fi
     fi
 fi
+
+# --- t3s: SSL trust for the WebLogic Maven plugin's Deployer JVM ---
+# A t3s:// admin URL needs the AdminServer's CA trusted. Two ways:
+#   1. wls.truststore=<trust.p12 from certs.sh>  (+ wls.truststore.password in
+#      the secret, else $BLADE_STORE_PASSWORD) — explicit CustomTrust.
+#   2. No wls.truststore — rely on the JVM default truststore (works when the
+#      CA was imported via `keytool -importcert -cacerts`, certs.sh step 2).
+case "$WLS_ADMINURL" in
+    t3s://*)
+        if [ -n "$WLS_TRUSTSTORE" ]; then
+            [ -f "$WLS_TRUSTSTORE" ] || die "wls.truststore not found: ${WLS_TRUSTSTORE}"
+            TRUST_PW="${BLADE_STORE_PASSWORD:-}"
+            [ -z "$TRUST_PW" ] && [ -f "$SECRET_FILE" ] && TRUST_PW=$(read_prop "$SECRET_FILE" "wls.truststore.password")
+            export MAVEN_OPTS="${MAVEN_OPTS:-} -Dweblogic.security.TrustKeyStore=CustomTrust \
+-Dweblogic.security.CustomTrustKeyStoreFileName=${WLS_TRUSTSTORE} \
+-Dweblogic.security.CustomTrustKeyStoreType=${WLS_TRUSTSTORE_TYPE}${TRUST_PW:+ -Dweblogic.security.CustomTrustKeyStorePassPhrase=${TRUST_PW}}"
+        else
+            warn "t3s admin URL with no wls.truststore — relying on the JVM default truststore (CA must be in cacerts)."
+        fi
+        ;;
+esac
 
 # --- Locate dist directory ---
 DIST_ROOT="${SCRIPT_DIR}/dist"
