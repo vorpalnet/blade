@@ -1,96 +1,54 @@
 # Proxy Registrar Service
 
-A SIP proxy registrar service module that handles user registration and location management within the Vorpal Blade SIP servlet container framework.
+[Javadocs](https://vorpal.net/javadocs/blade/proxy-registrar)
 
-## Overview
+A SIP registrar with call forwarding: REGISTER requests maintain an in-memory
+location database, and initial INVITEs are forwarded to the registered contact.
 
-The `services/proxy-registrar` module provides SIP REGISTER request processing capabilities, managing user registrations and maintaining location databases for SIP endpoints. This service is a core component of the Vorpal Blade SIP proxy infrastructure, enabling user authentication, registration validation, and contact binding management.
+## How it works
 
-## Features
+- **REGISTER** — `RegisterCallflow` maintains one `SipApplicationSession` per
+  account (keyed by the From account name via `@SipApplicationKey`), holding a
+  `Registrar` object that tracks contact bindings and their expirations. The
+  app session's own expiration is tied to the longest contact expiry, so
+  bindings age out with the session.
+- **INVITE** — `InviteCallflow` forks the call to **every** registered
+  contact with `sendRequestsInParallel`: the first 2xx wins and the framework
+  CANCELs the losing legs; if all legs fail, the last error is relayed; the
+  `timeout` setting cancels everything and answers 408. Unregistered accounts
+  get a 404 unless `proxyOnUnregistered` is set, in which case the INVITE is
+  forwarded to its request URI unchanged. In-dialog requests are relayed by
+  the b2bua callflows inherited from the v3 `B2buaServlet`.
 
-- SIP REGISTER request processing
-- User location database management
-- Contact binding and expiration handling
-- Registration authentication and authorization
-- Integration with proxy routing services
-- Scalable registration storage backend
+## B2BUA vs. proxy drop-out
 
-## Package Structure
+The v2 `Proxy` API is gone. Whether the service stays in the signaling path is
+now decided by configuration, not code:
 
-### [`org.vorpal.blade.services.proxy.registrar.v3`](#orgvorpalbladeservicesproxyregistrarv3)
+- `session:passthru = true` (the sample default) — after call setup the
+  framework stitches the endpoints' Contacts together and removes OCCAS from
+  the route set; the ACK and all in-dialog traffic flow directly between the
+  endpoints, like a proxy that drops out.
+- `session:passthru = false` — the service remains in the dialog as a full
+  B2BUA, relaying in-dialog requests (re-INVITE, BYE, etc.).
 
-Core registrar service implementation containing:
-- SIP REGISTER message handlers
-- Location database interfaces and implementations
-- Registration policy enforcement
-- Contact management utilities
-- Authentication integration components
+Provisional responses: the service sends its own 180 Ringing as soon as the
+fork starts (so the caller hears local ringback immediately), and real 18x
+from the legs — including 183 early media — is relayed upstream via the
+fan-out primitive's per-leg observer.
 
-## Dependencies
+## Configuration
 
-### Core Dependencies
-
-- **`org.vorpal.blade:vorpal-blade-library-framework`** - Core framework library providing SIP servlet container functionality, base service classes, and essential utilities
-
-## Related Modules
-
-### Core Framework
-- [**libs/framework**](../libs/framework) - Base framework components and service interfaces
-- [**libs/shared/bin**](../libs/shared/bin) - Shared binary utilities and common libraries
-- [**libs/fsmar**](../libs/fsmar) - Finite State Machine and Application Router components
-
-### Administration
-- [**admin/console**](../admin/console) - Administrative console interface
-- [**admin/configurator**](../admin/configurator) - Service configuration management
-
-### Related Services
-- [**services/acl**](../services/acl) - Access Control List service for registration authorization
-- [**services/analytics**](../services/analytics) - Registration analytics and monitoring
-- [**services/proxy-router**](../services/proxy-router) - SIP proxy routing engine that uses registration data
-- [**services/proxy-balancer**](../services/proxy-balancer) - Load balancing service for registered endpoints
-- [**services/proxy-block**](../services/proxy-block) - Call blocking service integration
-- [**services/presence**](../services/presence) - Presence service integration for registered users
-
-### Supporting Services
-- [**services/hold**](../services/hold) - Call hold functionality
-- [**services/options**](../services/options) - SIP OPTIONS handling
-- [**services/queue**](../services/queue) - Message queuing service
-- [**services/tpcc**](../services/tpcc) - Third Party Call Control service
-- [**services/transfer**](../services/transfer) - Call transfer functionality
-
-## Integration Guide
-
-### Basic Setup
-
-1. **Add Maven dependency** to your project's `pom.xml`
-2. **Configure registrar settings** through the admin configurator module
-3. **Initialize location database** backend storage
-4. **Deploy alongside proxy-router** service for complete proxy functionality
-
-### Service Configuration
-
-The registrar service integrates with:
-- **ACL service** for registration authorization policies
-- **Analytics service** for registration event tracking
-- **Proxy router** for location-based call routing
-- **Presence service** for user availability status
-
-### Database Integration
-
-Configure the location database backend through:
-- Connection pool settings
-- Storage retention policies
-- Contact expiration timers
-- Registration refresh intervals
+| Setting | Description |
+|---|---|
+| `allowHeader` | Value for the `Allow` header on REGISTER responses |
+| `proxyOnUnregistered` | Forward to the request URI instead of answering 404 when no contact is registered |
+| `timeout` | Overall timeout in seconds for the forked INVITEs; on expiry all legs are canceled and the caller gets a 408 |
+| `session:passthru` | Drop out of the dialog after setup (see above) |
 
 ## Maven Coordinates
 
 ```xml
 <groupId>org.vorpal.blade</groupId>
-<artifactId>proxy-registrar</artifactId>
-<version>${vorpal.blade.version}</version>
+<artifactId>vorpal-blade-services-proxy-registrar</artifactId>
 ```
-
-## License
-
-Part of the Vorpal Blade SIP Servlet Container project.

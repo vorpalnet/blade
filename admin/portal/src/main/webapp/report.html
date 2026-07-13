@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Deployment Inventory</title>
+	<style>
+		/* Print-first document styling — deliberately self-contained (no CDN,
+		   no bootstrap, no brand.css): the report must render identically on
+		   screen, on paper, and in print-to-PDF. Same skin as the Tuning,
+		   Trace, and Balancer reports so the printed BLADE documents read as
+		   one family. */
+		* { box-sizing: border-box; }
+		body { margin: 0; background: #e9e9ee; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c1c22; }
+		.page { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px 48px 56px; min-height: 100vh; }
+		.mono { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+		.toolbar { max-width: 900px; margin: 0 auto; padding: 10px 0; display: flex; gap: 12px; align-items: center; }
+		.toolbar a { color: #333; font-size: 13px; }
+		.toolbar button { font-size: 13px; padding: 5px 14px; cursor: pointer; border: 1px solid #888; background: #fff; }
+
+		.rpt-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1c1c22; padding-bottom: 14px; margin-bottom: 8px; }
+		.rpt-head img { height: 44px; }
+		.rpt-title { text-align: right; }
+		.rpt-title h1 { margin: 0; font-size: 22px; }
+		.rpt-title .sub { color: #555; font-size: 13px; margin-top: 2px; }
+
+		h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+		h3 { font-size: 13px; margin: 14px 0 4px; color: #444; text-transform: uppercase; letter-spacing: .5px; }
+
+		table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 6px 0 10px; }
+		th, td { border: 1px solid #d5d5da; padding: 4px 8px; text-align: left; vertical-align: top; }
+		th { background: #f2f2f5; font-weight: 600; }
+
+		.tiles { display: flex; gap: 12px; margin: 10px 0 12px; }
+		.tile { flex: 1; border: 1px solid #d5d5da; padding: 10px 14px 12px; }
+		.tile .val { font-size: 30px; font-weight: 600; line-height: 1.15; }
+		.tile .val small { font-size: 16px; font-weight: 400; color: #555; }
+		.tile .lbl { font-size: 12px; color: #555; margin-top: 2px; }
+		.tile.alert { border: 2.5px solid #1c1c22; }
+		.exec-summary { font-size: 14px; margin: 8px 0 4px; }
+
+		.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 10px 0; }
+		.kv dt { font-weight: 600; color: #555; white-space: nowrap; }
+		.kv dd { margin: 0; }
+		.cols { display: flex; gap: 40px; }
+		.cols > div { flex: 1; }
+		.muted { color: #666; }
+		.unavail { color: #777; font-style: italic; }
+		.status-ok::before { content: "\2713\00a0"; }
+		.status-bad { font-weight: 700; }
+
+		.rpt-foot { margin-top: 36px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 11.5px; color: #666; display: flex; justify-content: space-between; }
+
+		@media print {
+			body { background: #fff; }
+			.page { max-width: none; padding: 0; min-height: 0; }
+			.toolbar { display: none; }
+			h2 { page-break-after: avoid; }
+			table, .tiles { page-break-inside: avoid; }
+			@page { margin: 18mm 15mm; }
+		}
+	</style>
+</head>
+<body>
+
+	<div class="toolbar">
+		<a href="index.html">&larr; Portal</a>
+		<button onclick="window.print()">Print</button>
+		<span class="muted" style="font-size:12px">Use the browser's print dialog to save as PDF.</span>
+	</div>
+
+	<div class="page">
+		<div class="rpt-head">
+			<img src="brand/vorpal_logo.svg" alt="Vorpal Networks" onerror="this.style.display='none'">
+			<div class="rpt-title">
+				<h1>BLADE Deployment Inventory</h1>
+				<div class="sub" id="rpt-sub">Loading&hellip;</div>
+			</div>
+		</div>
+
+		<h2>Executive Summary</h2>
+		<div id="rpt-exec" class="unavail">Loading&hellip;</div>
+
+		<h2>Servers</h2>
+		<div id="rpt-servers" class="unavail">Loading&hellip;</div>
+
+		<h2>Admin Applications</h2>
+		<div id="rpt-apps" class="unavail">Loading&hellip;</div>
+
+		<h2>SIP Services</h2>
+		<div id="rpt-services" class="unavail">Loading&hellip;</div>
+
+		<h2>Platform &amp; Patches</h2>
+		<div id="rpt-platform" class="unavail">Loading&hellip;</div>
+
+		<div class="rpt-foot">
+			<span>Generated <span id="rpt-ts"></span> by the BLADE Admin Portal</span>
+			<span>&copy; Vorpal Networks &middot; BLADE is MIT-licensed open source</span>
+		</div>
+	</div>
+
+	<script>
+		function he(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+		function fmtMB(mb) { return (mb == null || mb < 0) ? '—' : (mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb + ' MB'); }
+
+		document.getElementById('rpt-ts').textContent = new Date().toLocaleString();
+
+		// The app/service inventory is the portal's own cards API. Versions,
+		// patches, and live server states come from the Tuning console's REST
+		// API (same-origin, same FORM SSO cookie) — each degrades to a note if
+		// that app isn't deployed, so the inventory itself always renders.
+		var CALLS = [
+			'api/v1/cards',
+			'/blade/tuning/api/v1/about',
+			'/blade/tuning/api/v1/os'
+		];
+		Promise.allSettled(CALLS.map(function (u) {
+			return fetch(u, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+				.then(function (r) { if (!r.ok) { throw new Error(u + ': HTTP ' + r.status); } return r.json(); });
+		})).then(function (results) {
+			var cards = results[0].status === 'fulfilled' ? (results[0].value.cards || []) : null;
+			var about = results[1].status === 'fulfilled' ? results[1].value : null;
+			var os = results[2].status === 'fulfilled' ? results[2].value : null;
+			render(cards, about, os);
+		});
+
+		function render(cards, about, os) {
+			var apps = (cards || []).filter(function (c) { return c.kind === 'app'; });
+			var services = (cards || []).filter(function (c) { return c.kind === 'service'; });
+			var platform = (about || {}).platform || {};
+
+			document.getElementById('rpt-sub').innerHTML =
+				he(platform.domain ? 'Domain ' + platform.domain : 'BLADE admin tier')
+				+ ' &middot; ' + new Date().toLocaleDateString();
+
+			renderExec(cards, apps, services, os, about);
+			renderServers(os);
+			renderApps(apps);
+			renderServices(services);
+			renderPlatform(about);
+		}
+
+		function renderExec(cards, apps, services, os, about) {
+			var el = document.getElementById('rpt-exec');
+			if (cards == null) { el.textContent = 'Deployment discovery unavailable (cards API failed).'; return; }
+
+			var running = null, total = null, down = [];
+			if (os && os.length) {
+				total = os.length;
+				running = os.filter(function (r) { return r.state === 'RUNNING'; }).length;
+				down = os.filter(function (r) { return r.state !== 'RUNNING'; }).map(function (r) { return r.server; });
+			}
+			var blade = (about || {}).blade || {};
+
+			var h = '<p class="exec-summary">This inventory lists every BLADE component discovered live in the domain'
+				+ (blade.version ? ' (framework ' + he(blade.version) + ')' : '')
+				+ ': ' + apps.length + ' admin application' + (apps.length === 1 ? '' : 's')
+				+ ' and ' + services.length + ' SIP service' + (services.length === 1 ? '' : 's')
+				+ (total != null ? ', across ' + total + ' server' + (total === 1 ? '' : 's') : '')
+				+ '. Discovery is live &mdash; an app absent here is not running, whatever the install notes say.</p>';
+
+			h += '<div class="tiles">';
+			h += '<div class="tile"><div class="val">' + apps.length + '</div><div class="lbl">admin applications deployed</div></div>';
+			h += '<div class="tile"><div class="val">' + services.length + '</div><div class="lbl">SIP services on the engine cluster</div></div>';
+			if (total != null) {
+				h += '<div class="tile' + (running < total ? ' alert' : '') + '"><div class="val">' + running + '<small> of ' + total + '</small></div>'
+					+ '<div class="lbl">servers running' + (down.length ? ' &mdash; down: ' + he(down.join(', ')) : '') + '</div></div>';
+			} else {
+				h += '<div class="tile"><div class="val">&mdash;</div><div class="lbl">server states unavailable (Tuning console not deployed)</div></div>';
+			}
+			h += '</div>';
+
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderServers(os) {
+			var el = document.getElementById('rpt-servers');
+			if (!os || !os.length) { el.textContent = 'Server states unavailable — deploy the Tuning console for live lifecycle detail.'; return; }
+			var h = '<table><thead><tr><th>Server</th><th>State</th><th>CPUs</th><th>RAM</th></tr></thead><tbody>';
+			os.forEach(function (r) {
+				var ok = r.state === 'RUNNING';
+				h += '<tr><td><strong>' + he(r.server) + '</strong>' + (r.adminServer ? ' <span class="muted">(admin)</span>' : '') + '</td>';
+				h += '<td class="mono' + (ok ? '' : ' status-bad') + '">' + he(r.state || '—') + '</td>';
+				h += '<td class="mono">' + (r.processors > 0 ? r.processors : '—') + '</td>';
+				h += '<td class="mono">' + fmtMB(r.ramTotalMB) + '</td></tr>';
+			});
+			h += '</tbody></table>';
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderApps(apps) {
+			var el = document.getElementById('rpt-apps');
+			if (!apps.length) { el.textContent = 'No admin applications discovered.'; return; }
+			var h = '<table><thead><tr><th>Application</th><th>URL</th><th>Active on</th></tr></thead><tbody>';
+			apps.forEach(function (c) {
+				h += '<tr><td><strong>' + he(c.name) + '</strong>'
+					+ (c.tagline ? '<br><span class="muted" style="font-size:11.5px">' + he(c.tagline) + '</span>' : '') + '</td>';
+				h += '<td class="mono">/' + he(c.contextRoot) + '/</td>';
+				h += '<td class="mono">' + he((c.servers || []).join(', ') || '—') + '</td></tr>';
+			});
+			h += '</tbody></table>';
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderServices(services) {
+			var el = document.getElementById('rpt-services');
+			if (!services.length) { el.textContent = 'No SIP services discovered on the engine cluster.'; return; }
+			var h = '<table><thead><tr><th>Service</th><th>Config domain</th><th>Active on</th></tr></thead><tbody>';
+			services.forEach(function (c) {
+				h += '<tr><td><strong>' + he(c.name) + '</strong>'
+					+ (c.tagline ? '<br><span class="muted" style="font-size:11.5px">' + he(c.tagline) + '</span>' : '') + '</td>';
+				h += '<td class="mono">' + he(c.configuratorDomain || '—') + '</td>';
+				h += '<td class="mono">' + he((c.servers || []).join(', ') || '—') + '</td></tr>';
+			});
+			h += '</tbody></table>';
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderPlatform(about) {
+			var el = document.getElementById('rpt-platform');
+			if (!about || !about.platform) { el.textContent = 'Platform detail unavailable — deploy the Tuning console for versions and patches.'; return; }
+			var p = about.platform, b = about.blade || {}, patches = about.patches || [];
+			function kvRow(label, val) { return val ? '<dt>' + he(label) + '</dt><dd class="mono">' + he(val) + '</dd>' : ''; }
+			var h = '<div class="cols"><div><h3>BLADE Framework</h3><dl class="kv">';
+			h += kvRow('Version', b.version) + kvRow('Built', b.built) + kvRow('License', b.license);
+			h += '</dl></div><div><h3>Platform</h3><dl class="kv">';
+			h += kvRow('OCCAS', p.occas) + kvRow('WebLogic', p.weblogic) + kvRow('Coherence', p.coherence);
+			h += kvRow('Domain', p.domain) + kvRow('Java', p.java) + kvRow('OS', p.os) + kvRow('Oracle Home', p.oracleHome);
+			h += '</dl></div></div>';
+			if (patches.length) {
+				h += '<h3>Applied Patches (' + patches.length + ')</h3>';
+				patches.forEach(function (pt) {
+					h += '<div class="mono" style="font-size:11.5px">' + he(pt.id) + ' ' + he(pt.description || '') + '</div>';
+				});
+			}
+			el.className = ''; el.innerHTML = h;
+		}
+	</script>
+</body>
+</html>

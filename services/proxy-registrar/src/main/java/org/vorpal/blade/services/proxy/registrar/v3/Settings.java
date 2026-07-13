@@ -1,152 +1,68 @@
 package org.vorpal.blade.services.proxy.registrar.v3;
 
 import java.io.Serializable;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
 
-import javax.servlet.sip.Proxy;
-import javax.servlet.sip.SipServletRequest;
-
-import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.Configuration;
+import org.vorpal.blade.framework.v2.config.FormLayout;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+
 import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 
 @SchemaAbout(
 		name = "Proxy Registrar",
 		tagline = "SIP Registration & Location",
 		description = "Processes SIP REGISTER requests and maintains the location database of "
-				+ "contact bindings — registration, expiry, and lookups — so calls can reach "
-				+ "registered endpoints.")
+				+ "contact bindings — registration, expiry, and lookups — and forwards calls to "
+				+ "registered endpoints. Set session:passthru to drop out of the dialog after "
+				+ "call setup (proxy behavior); leave it off to stay in the path as a B2BUA.")
 public class Settings extends Configuration implements Serializable {
 	private static final long serialVersionUID = -3362129920431974760L;
 
-	/**
-	 * Specifies the SIP messages this container supports.
-	 */
+	/// Registrar config baseline version. The v3 shape (B2BUA fan-out; the
+	/// proxy-only knobs removed) is generation 3: a config with no version
+	/// reads as 3, and an explicitly-versioned file keeps its value. Stays
+	/// read-only in the Configurator.
+	@Override
+	@JsonPropertyDescription("Config schema version (framework-managed). The v3 shape — B2BUA fan-out, no proxy knobs — is version 3.")
+	@FormLayout(readOnly = true)
+	public Integer getVersion() {
+		return (version == null) ? 3 : version;
+	}
+
+	private String allowHeader;
+
+	private Boolean proxyOnUnregistered;
+
+	private Integer timeout;
+
 	@JsonPropertyDescription("Specifies the SIP methods this container supports, used in the Allow header")
-	protected String allowHeader;
+	public String getAllowHeader() {
+		return allowHeader;
+	}
 
-	/**
-	 * Specifies whether branches initiated in this proxy operation should include a
-	 * Path header for the REGISTER request for this servlet container or not.
-	 */
-	@JsonPropertyDescription("Whether proxy branches should include a Path header for REGISTER requests")
+	public void setAllowHeader(String allowHeader) {
+		this.allowHeader = allowHeader;
+	}
+
+	@JsonPropertyDescription("Forward the request to its request URI instead of issuing a 404 Not Found error when no contact is registered")
 	@JsonProperty(defaultValue = "false")
-	protected Boolean addToPath;
+	public Boolean getProxyOnUnregistered() {
+		return proxyOnUnregistered;
+	}
 
-	/**
-	 * Proxy the request to the 'To' header instead of issuing a 404 Not Found
-	 * error.
-	 */
-	@JsonPropertyDescription("Proxy the request to the To header instead of issuing a 404 Not Found error")
-	@JsonProperty(defaultValue = "false")
-	public Boolean proxyOnUnregistered;
+	public void setProxyOnUnregistered(Boolean proxyOnUnregistered) {
+		this.proxyOnUnregistered = proxyOnUnregistered;
+	}
 
-	/**
-	 * In multi-homed environment this method can be used to select the outbound
-	 * interface to use when sending requests for proxy branches.
-	 */
-	@JsonPropertyDescription("Outbound interface address for proxy branches in a multi-homed environment")
-	public InetAddress outboundInterfaceAddress;
+	@JsonPropertyDescription("Overall timeout in seconds for forked INVITE requests; outstanding requests are canceled and the caller receives a 408. Unset means no timer.")
+	public Integer getTimeout() {
+		return timeout;
+	}
 
-	/**
-	 * In multi-homed environment this method can be used to select the outbound
-	 * interface and port number to use for proxy branches.
-	 */
-	@JsonPropertyDescription("Outbound interface address and port for proxy branches in a multi-homed environment")
-	public InetSocketAddress outboundInterfaceSocketAddress;
-
-	/**
-	 * Specifies whether to proxy in parallel or sequentially.
-	 */
-	@JsonPropertyDescription("Whether to proxy in parallel (true) or sequentially (false)")
-	@JsonProperty(defaultValue = "true")
-	public Boolean parallel;
-
-	/**
-	 * Sets the overall proxy timeout in seconds.
-	 */
-	@JsonPropertyDescription("Overall proxy timeout in seconds")
-	public Integer proxyTimeout;
-
-	/**
-	 * Specifies whether branches initiated in this proxy operation should include a
-	 * Record-Route header for this servlet engine or not. This shall affect all the
-	 * branches created after its invocation. Record-routing is used to specify that
-	 * this servlet engine must stay on the signaling path of subsequent requests. Set to
-	 * 'false' to enable 'loose-routing'.
-	 */
-	@JsonPropertyDescription("Whether to include a Record-Route header to stay on the signaling path; set to false for loose-routing")
-	@JsonProperty(defaultValue = "true")
-	public Boolean recordRoute;
-
-	/**
-	 * Sets the proxy timeout in seconds.
-	 */
-	@JsonPropertyDescription("Proxy timeout in seconds for individual branches")
-	public Integer timeout = null;
-
-	/**
-	 * Specifies whether the application will be invoked on incoming responses
-	 * related to this proxying.
-	 */
-	@JsonPropertyDescription("Whether the application will be invoked on incoming responses related to this proxying")
-	@JsonProperty(defaultValue = "true")
-	public Boolean supervised = null;
-
-	/**
-	 * Apply default configuration values to the 'proxy' object. Values include
-	 * 'addToPath', 'flow', 'noCancel', 'outboundInterfaceAddress',
-	 * outboundInterfaceSocketAddress', 'parallel', 'proxyTimeout', 'recordRoute',
-	 * 'recurse' and 'supervised'.
-	 * 
-	 * @param proxy
-	 * @return the update proxy object
-	 */
-	public Proxy apply(Proxy proxy) {
-		SipServletRequest request = proxy.getOriginalRequest();
-
-		if (this.addToPath != null) {
-			Callflow.getSipLogger().finer(request, "proxy.setAddToPath(" + this.addToPath + ");");
-			proxy.setAddToPath(this.addToPath);
-		}
-
-		if (this.outboundInterfaceAddress != null) {
-			Callflow.getSipLogger().finer(request,
-					"proxy.setOutboundInterface(" + this.outboundInterfaceAddress + ");");
-			proxy.setOutboundInterface(this.outboundInterfaceAddress);
-		}
-
-		if (this.outboundInterfaceSocketAddress != null) {
-			Callflow.getSipLogger().finer(request,
-					"proxy.setOutboundInterface(" + this.outboundInterfaceSocketAddress + ");");
-			proxy.setOutboundInterface(this.outboundInterfaceSocketAddress);
-		}
-
-		if (this.parallel != null) {
-			Callflow.getSipLogger().finer(request, "proxy.setParallel(" + this.parallel + ");");
-			proxy.setParallel(this.parallel);
-		}
-
-		if (this.proxyTimeout != null) {
-			Callflow.getSipLogger().finer(request, "proxy.setProxyTimeout(" + this.proxyTimeout + ");");
-			proxy.setProxyTimeout(this.proxyTimeout);
-		}
-
-		if (this.recordRoute != null) {
-			Callflow.getSipLogger().finer(request, "proxy.setRecordRoute(" + this.recordRoute + ");");
-			proxy.setRecordRoute(this.recordRoute);
-		}
-
-		if (this.supervised != null) {
-			Callflow.getSipLogger().finer(request, "proxy.setSupervised(" + this.supervised + ");");
-			proxy.setSupervised(this.supervised);
-		}
-
-		return proxy;
+	public void setTimeout(Integer timeout) {
+		this.timeout = timeout;
 	}
 
 }

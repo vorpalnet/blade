@@ -731,6 +731,69 @@ function attachFieldValidation(input, schema) {
     validate();
 }
 
+/// Fields an `x-uri-preview`-flagged object (see FormUriPreview.java) must
+/// expose; the configurator assembles them into a SIP URI client-side.
+const URI_PREVIEW_FIELDS = ['scheme', 'transport', 'host', 'port', 'user', 'uriParams'];
+
+/// Assembles the SIP URI from structured field values — mirrors the Java
+/// side's own assembly (e.g. Endpoint.getUri()) exactly; keep both in sync.
+function composeUriPreview(vals) {
+    const scheme = vals.scheme || 'sip';
+    const transport = vals.transport || 'udp';
+    let uri = scheme + ':';
+    if (vals.user && String(vals.user).trim() !== '') uri += vals.user + '@';
+    uri += vals.host || '';
+    if (vals.port) uri += ':' + vals.port;
+    uri += ';transport=' + transport;
+    if (vals.uriParams && String(vals.uriParams).trim() !== '') uri += ';' + vals.uriParams;
+    return uri;
+}
+
+// Portable syntax checks, no SipFactory (the configurator can't reach one —
+// it isn't a SIP servlet). Known limitation: plain-hostname shape only, no
+// IPv6 literal ([::1]) support; not needed for the SBC/trunk endpoints this
+// targets today.
+const URI_HOST_RE = /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$/;
+const URI_USER_RE = /^[A-Za-z0-9._!~*'()%-]+$/;
+const URI_PARAMS_RE = /^[A-Za-z0-9._-]+(=[A-Za-z0-9._%-]*)?(;[A-Za-z0-9._-]+(=[A-Za-z0-9._%-]*)?)*$/;
+
+/// Validates the structured SIP URI fields, returning a specific reason on
+/// failure so the badge tooltip can say exactly what's wrong.
+function validateUriPreview(vals) {
+    if (!vals.host || !String(vals.host).trim()) return { ok: false, reason: 'host is required' };
+    if (!URI_HOST_RE.test(vals.host)) return { ok: false, reason: 'host has characters not valid in a SIP URI' };
+    if (vals.user && !URI_USER_RE.test(vals.user)) return { ok: false, reason: 'user part has characters not valid in a SIP URI' };
+    if (vals.port != null && vals.port !== '' && (vals.port < 1 || vals.port > 65535)) return { ok: false, reason: 'port must be 1-65535' };
+    if (vals.uriParams && !URI_PARAMS_RE.test(vals.uriParams)) return { ok: false, reason: "extra URI params must be ';'-separated key=value pairs" };
+    return { ok: true, uri: composeUriPreview(vals) };
+}
+
+/// Attaches a live ✓/✕ badge (never color-only) to `badge` for an
+/// `x-uri-preview`-flagged object whose fields render as descendants of
+/// `container`, addressed by `basePath.field` via the data-path attribute
+/// every form input already carries. Listens on `container` (event
+/// delegation) rather than per-field, since the optional port/user/uriParams
+/// fields swap DOM nodes in and out via the +/- add-property placeholder.
+function wireUriPreviewBadge(badge, container, basePath) {
+    const recompute = () => {
+        const vals = {};
+        URI_PREVIEW_FIELDS.forEach(f => {
+            const el = container.querySelector(`[data-path="${basePath}.${f}"]`);
+            vals[f] = el ? readInputValue(el) : null;
+        });
+        const result = validateUriPreview(vals);
+        badge.textContent = result.ok ? '✓' : '✗'; // ✓ / ✕ — never color-only
+        badge.classList.toggle('valid', result.ok);
+        badge.classList.toggle('invalid', !result.ok);
+        badge.title = result.ok ? 'Valid SIP URI: ' + result.uri : 'Invalid: ' + result.reason;
+    };
+    badge.style.display = '';
+    container.addEventListener('input', recompute);
+    container.addEventListener('change', recompute);
+    container.addEventListener('click', recompute); // +/- placeholder swaps
+    recompute();
+}
+
 /// Harvest `${var}` names available in the current form — every `id` field
 /// across all selectors/connectors/routes/etc. These become autocomplete
 /// candidates in template-style inputs.
@@ -1466,46 +1529,35 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
         const label = document.createElement('label');
         label.textContent = title || 'Field';
 
-        // Required-field asterisk. The parent schema sets `required: [propName]`;
-        // it's passed via originalSchema['x-required-here'] by createObjectGroup
-        // (see that function for the injection point).
-        if (fieldSchema['x-required-here']) {
-            const star = document.createElement('span');
-            star.className = 'required-marker';
-            star.textContent = '*';
-            label.appendChild(star);
-        }
-
-        // Feature: Add help icon with tooltip if description exists
+        // Hovering the label shows the description tooltip (shared element;
+        // see the delegated mouseenter handler in the DOMContentLoaded block).
         if (description) {
-            const helpIcon = document.createElement('span');
-            helpIcon.className = 'field-help-icon';
-            helpIcon.innerHTML = '?';
-
-            const tooltip = document.createElement('div');
-            tooltip.className = 'field-help-tooltip';
-            tooltip.textContent = description;
-            helpIcon.appendChild(tooltip);
-
-            label.appendChild(helpIcon);
+            label.classList.add('has-help');
+            label.dataset.help = description;
         }
 
         headerRow.appendChild(label);
 
-        // Add delete button
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.className = 'delete-property-btn';
-        deleteBtn.innerHTML = '<span class="delete-property-icon">-</span>';
-        deleteBtn.title = `Remove ${title}`;
-        deleteBtn.onclick = (e) => {
-            e.stopPropagation();
-            // Replace with placeholder
-            const placeholder = createAddPropertyPlaceholder(schemaForDelete, title, description, path, null, isNested);
-            group.replaceWith(placeholder);
-            setDirty();
-        };
-        headerRow.appendChild(deleteBtn);
+        // Add delete button — required properties can't be removed, so they
+        // get no [-] button. `x-required-here` is injected by the parent
+        // renderer (createObjectGroup.renderPropInto and its siblings) from
+        // the parent schema's `required` list.
+        let deleteBtn = null;
+        if (!fieldSchema['x-required-here']) {
+            deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'delete-property-btn';
+            deleteBtn.innerHTML = '<span class="delete-property-icon">-</span>';
+            deleteBtn.title = `Remove ${title}`;
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                // Replace with placeholder
+                const placeholder = createAddPropertyPlaceholder(schemaForDelete, title, description, path, null, isNested);
+                group.replaceWith(placeholder);
+                setDirty();
+            };
+            headerRow.appendChild(deleteBtn);
+        }
 
         // Regex-tester button — surfaced whenever the schema carries
         // x-regex-test=true (emitted by @FormLayout(regexTest=true)). Click
@@ -1535,13 +1587,21 @@ function createFormGroup(fieldSchema, title, description, path, value = null, is
             checkboxGroup.appendChild(element);
             headerRow.removeChild(label);
             checkboxGroup.appendChild(label);
-            headerRow.removeChild(deleteBtn);
-            checkboxGroup.appendChild(deleteBtn);
+            if (deleteBtn) {
+                headerRow.removeChild(deleteBtn);
+                checkboxGroup.appendChild(deleteBtn);
+            }
             // Remove empty header row
             group.removeChild(headerRow);
             group.appendChild(checkboxGroup);
-        } else {
+        } else if (element.tagName === 'TEXTAREA') {
+            // Multi-line editors keep the two-row layout.
             group.appendChild(element);
+        } else {
+            // Single-line control rides in the header row — label, control,
+            // delete on one line, matching the checkbox layout.
+            headerRow.classList.add('inline');
+            headerRow.insertBefore(element, label.nextSibling);
         }
 
         return group;
@@ -1602,14 +1662,8 @@ function createCollapsibleSection(title, description, content, hasData = false, 
     badgeContainer.style.alignItems = 'center';
 
     if (description) {
-        const helpIcon = document.createElement('span');
-        helpIcon.className = 'field-help-icon';
-        helpIcon.innerHTML = '?';
-        const tooltip = document.createElement('div');
-        tooltip.className = 'field-help-tooltip';
-        tooltip.textContent = description;
-        helpIcon.appendChild(tooltip);
-        titleContainer.appendChild(helpIcon);
+        titleText.classList.add('has-help');
+        titleText.dataset.help = description;
     }
 
     // Backing Java class label (small grey text on the right). FQN as tooltip;
@@ -1907,18 +1961,10 @@ function createAddPropertyPlaceholder(fieldSchema, title, description, path, con
     label.className = 'add-property-label';
     label.textContent = title || 'Field';
 
-    // Add help icon with tooltip if description exists
+    // Hovering the label shows the description tooltip.
     if (description) {
-        const helpIcon = document.createElement('span');
-        helpIcon.className = 'field-help-icon';
-        helpIcon.innerHTML = '?';
-
-        const tooltip = document.createElement('div');
-        tooltip.className = 'field-help-tooltip';
-        tooltip.textContent = description;
-        helpIcon.appendChild(tooltip);
-
-        label.appendChild(helpIcon);
+        label.classList.add('has-help');
+        label.dataset.help = description;
     }
 
     placeholder.appendChild(addBtn);
@@ -2016,6 +2062,7 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
         if (vs && vs.$ref) vs = deref(vs);
         if (!vs || vs.type !== 'object' || !vs.properties) return;
 
+        const requiredSet = new Set(Array.isArray(vs.required) ? vs.required : []);
         Object.keys(vs.properties).forEach(prop => {
             if (prop === 'type') return; // handled by hiddenType
             const propSchema = vs.properties[prop];
@@ -2023,11 +2070,15 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
             const propValue = variantValue && variantValue[prop] !== undefined ? variantValue[prop] : null;
             const propTitle = propSchema.title || prop;
             const propDescription = propSchema.description;
+            // Required-flag injection (suppresses the [-] button), same as createObjectGroup.renderPropInto.
+            const childSchema = requiredSet.has(prop)
+                ? Object.assign({}, propSchema, { 'x-required-here': true })
+                : propSchema;
             if (!hasValue(propValue)) {
-                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, content, true);
+                const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, propPath, content, true);
                 content.appendChild(placeholder);
             } else {
-                const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
+                const propGroup = createFormGroup(childSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
                 content.appendChild(propGroup);
             }
         });
@@ -2043,7 +2094,7 @@ function createPolymorphicObjectGroup(fieldSchema, title, description, path, val
 
     const hasData = hasValue(value);
     const autoCollapse = !hasData || fieldSchema['x-collapsed'] === true;
-    const deleteInfo = {
+    const deleteInfo = fieldSchema['x-required-here'] ? null : {
         schema: schemaForDelete || fieldSchema,
         title: title,
         description: description,
@@ -2204,7 +2255,7 @@ function createObjectGroup(fieldSchema, title, description, path, value = null, 
     }
 
     // Create deleteInfo for the collapsible section
-    const deleteInfo = {
+    const deleteInfo = fieldSchema['x-required-here'] ? null : {
         schema: schemaForDelete,
         title: title,
         description: description,
@@ -2286,7 +2337,7 @@ function createOpaqueObjectGroup(fieldSchema, title, description, path, value = 
     content.appendChild(textarea);
     content.appendChild(status);
 
-    const deleteInfo = {
+    const deleteInfo = fieldSchema['x-required-here'] ? null : {
         schema: schemaForDelete,
         title: title,
         description: description,
@@ -2349,7 +2400,7 @@ function createMapGroup(fieldSchema, title, description, path, value = null, isN
     }
 
     // Create deleteInfo for the collapsible section
-    const deleteInfo = {
+    const deleteInfo = fieldSchema['x-required-here'] ? null : {
         schema: schemaForDelete,
         title: title,
         description: description,
@@ -2482,7 +2533,7 @@ function createArrayGroup(fieldSchema, title, description, path, value = null, i
     }
 
     // Create deleteInfo for the collapsible section
-    const deleteInfo = {
+    const deleteInfo = fieldSchema['x-required-here'] ? null : {
         schema: schemaForDelete,
         title: title,
         description: description,
@@ -2594,6 +2645,14 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
     keyInput.placeholder = 'Key';
     header.appendChild(keyInput);
 
+    // Hidden unless valueSchema turns out to carry x-uri-preview (deref'd
+    // below); cheap to create unconditionally, avoids an awkward mid-function
+    // insertion point once the schema is resolved.
+    const uriBadge = document.createElement('span');
+    uriBadge.className = 'uri-preview-badge';
+    uriBadge.style.display = 'none';
+    header.appendChild(uriBadge);
+
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'delete-property-btn';
@@ -2630,21 +2689,29 @@ function addMapEntry(container, valueSchema, basePath, key = '', value = null, p
 
     if (valueSchema.type === 'object' && valueSchema.properties) {
         // Render object properties directly without a collapsible wrapper
+        const requiredSet = new Set(Array.isArray(valueSchema.required) ? valueSchema.required : []);
         Object.keys(valueSchema.properties).forEach(prop => {
             const propSchema = valueSchema.properties[prop];
             const propPath = valuePath ? `${valuePath}.${prop}` : prop;
             const propValue = value && value[prop] !== undefined ? value[prop] : null;
             const propTitle = propSchema.title || prop;
             const propDescription = propSchema.description;
+            // Required-flag injection (suppresses the [-] button), same as createObjectGroup.renderPropInto.
+            const childSchema = requiredSet.has(prop)
+                ? Object.assign({}, propSchema, { 'x-required-here': true })
+                : propSchema;
 
             if (!hasValue(propValue)) {
-                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, entryContent, true);
+                const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, propPath, entryContent, true);
                 entryContent.appendChild(placeholder);
             } else {
-                const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
+                const propGroup = createFormGroup(childSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
                 entryContent.appendChild(propGroup);
             }
         });
+        if (valueSchema['x-uri-preview']) {
+            wireUriPreviewBadge(uriBadge, entryContent, valuePath);
+        }
         // Hybrid object: defined properties + additionalProperties (e.g. a
         // Jackson @JsonAnySetter bag like Translation.extras). Render the
         // unknown keys as inline key/value rows alongside the defined props.
@@ -2926,18 +2993,23 @@ function addArrayItem(container, itemSchema, basePath, value = null, index = nul
             item.id = 'identity-' + value.id;
         }
 
+        const requiredSet = new Set(Array.isArray(itemSchema.required) ? itemSchema.required : []);
         Object.keys(itemSchema.properties).forEach(prop => {
             const propSchema = itemSchema.properties[prop];
             const propPath = itemPath ? `${itemPath}.${prop}` : prop;
             const propValue = value && value[prop] !== undefined ? value[prop] : null;
             const propTitle = propSchema.title || prop;
             const propDescription = propSchema.description;
+            // Required-flag injection (suppresses the [-] button), same as createObjectGroup.renderPropInto.
+            const childSchema = requiredSet.has(prop)
+                ? Object.assign({}, propSchema, { 'x-required-here': true })
+                : propSchema;
 
             if (!hasValue(propValue)) {
-                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, propPath, body, true);
+                const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, propPath, body, true);
                 body.appendChild(placeholder);
             } else {
-                const propGroup = createFormGroup(propSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
+                const propGroup = createFormGroup(childSchema, propTitle, propDescription, propPath, propValue, true, propSchema);
                 body.appendChild(propGroup);
             }
         });
@@ -3178,7 +3250,7 @@ function getFormData() {
                             ':scope > .form-section > .form-section-body > .collapsible-section, ' +
                             ':scope > .form-section > .form-section-body > .form-layout-group > .collapsible-section');
                         sections.forEach(section => {
-                            const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.field-help-icon):not(.collapsible-arrow)');
+                            const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.collapsible-arrow)');
                             if (!header) return;
                             const headerText = (header.textContent || '').trim();
                             // Match either the schema-driven title or the bare
@@ -3386,7 +3458,7 @@ function getFormData() {
                 let targetSection = null;
 
                 sections.forEach(section => {
-                    const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.field-help-icon):not(.collapsible-arrow)');
+                    const header = section.querySelector('.collapsible-header .collapsible-title > span:not(.collapsible-arrow)');
                     if (!header) return;
                     const headerText = (header.textContent || '').trim();
                     // Match either the schema-driven title or the bare propName.
@@ -4807,16 +4879,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // Feature: Initialize enhancements
     setupDirtyTracking(); // Set up unsaved changes tracking
 
-    // Position help tooltips using fixed positioning to avoid overflow clipping
+    // Field help: hovering a label/title with a schema description (marked
+    // .has-help, text in data-help) shows one shared fixed-position tooltip —
+    // fixed positioning avoids overflow clipping, and keeping the tooltip out
+    // of the label's DOM keeps textContent-based title matching intact.
+    const helpTooltip = document.createElement('div');
+    helpTooltip.className = 'field-help-tooltip';
+    document.body.appendChild(helpTooltip);
+
     document.addEventListener('mouseenter', function(e) {
-        const icon = e.target.closest('.field-help-icon');
-        if (!icon) return;
-        const tooltip = icon.querySelector('.field-help-tooltip');
-        if (!tooltip) return;
-        const rect = icon.getBoundingClientRect();
-        tooltip.style.display = 'block';
-        // Position above the icon, centered
-        const tooltipRect = tooltip.getBoundingClientRect();
+        const el = e.target.closest('.has-help');
+        if (!el || !el.dataset.help) return;
+        const rect = el.getBoundingClientRect();
+        helpTooltip.textContent = el.dataset.help;
+        helpTooltip.style.display = 'block';
+        // Position above the label, centered
+        const tooltipRect = helpTooltip.getBoundingClientRect();
         let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
         let top = rect.top - tooltipRect.height - 8;
         // Keep within viewport
@@ -4825,19 +4903,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (top < 4) {
             // Show below if no room above
             top = rect.bottom + 8;
-            tooltip.classList.add('below');
+            helpTooltip.classList.add('below');
         } else {
-            tooltip.classList.remove('below');
+            helpTooltip.classList.remove('below');
         }
-        tooltip.style.left = left + 'px';
-        tooltip.style.top = top + 'px';
+        helpTooltip.style.left = left + 'px';
+        helpTooltip.style.top = top + 'px';
     }, true);
 
     document.addEventListener('mouseleave', function(e) {
-        const icon = e.target.closest('.field-help-icon');
-        if (!icon) return;
-        const tooltip = icon.querySelector('.field-help-tooltip');
-        if (tooltip) tooltip.style.display = 'none';
+        if (e.target.closest && e.target.closest('.has-help')) {
+            helpTooltip.style.display = 'none';
+        }
     }, true);
 
     // Add tab click handlers using data-tab attribute
@@ -5058,18 +5135,24 @@ function generateFormWithData(data) {
     form.innerHTML = '';
 
     if (schema.properties) {
+        const requiredSet = new Set(Array.isArray(schema.required) ? schema.required : []);
         Object.keys(schema.properties).forEach(prop => {
             const propSchema = schema.properties[prop];
             const propValue = data[prop];
             const propTitle = propSchema.title || prop;
             const propDescription = propSchema.description;
+            // Same required-flag injection as createObjectGroup.renderPropInto:
+            // shallow clone so the shared schema object isn't mutated.
+            const childSchema = requiredSet.has(prop)
+                ? Object.assign({}, propSchema, { 'x-required-here': true })
+                : propSchema;
 
             // If property has no value, show a placeholder with '+' icon
             if (!hasValue(propValue)) {
-                const placeholder = createAddPropertyPlaceholder(propSchema, propTitle, propDescription, prop, form, false);
+                const placeholder = createAddPropertyPlaceholder(childSchema, propTitle, propDescription, prop, form, false);
                 form.appendChild(placeholder);
             } else {
-                const group = createFormGroup(propSchema, propTitle, propDescription, prop, propValue, false, propSchema);
+                const group = createFormGroup(childSchema, propTitle, propDescription, prop, propValue, false, propSchema);
                 form.appendChild(group);
             }
         });

@@ -188,9 +188,9 @@ public class Registrar implements Serializable {
 
 		}
 
-		String allowHeader = PRServlet.settingsManager.getCurrent().allowHeader;
+		String allowHeader = PRServlet.settingsManager.getCurrent().getAllowHeader();
 		if (allowHeader != null) {
-			response.setHeader("Allow", PRServlet.settingsManager.getCurrent().allowHeader);
+			response.setHeader("Allow", allowHeader);
 		}
 
 		return response;

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>FSMAR Routing Plan</title>
+	<script>
+		// Same flag flow.html sets: mxResources/app.txt loading is unreliable
+		// in the deployed environment, and this page needs no resources anyway.
+		var mxLoadResources = false;
+	</script>
+	<script src="js/mxClient.js"></script>
+	<script src="js/flowUtils.js"></script>
+	<style>
+		/* Print-first document styling — deliberately self-contained (no CDN,
+		   no bootstrap, no brand.css): the report must render identically on
+		   screen, on paper, and in print-to-PDF. Same skin as the Tuning,
+		   Trace, Balancer, and Portal reports so the printed BLADE documents
+		   read as one family. */
+		* { box-sizing: border-box; }
+		body { margin: 0; background: #e9e9ee; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c1c22; }
+		.page { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px 48px 56px; min-height: 100vh; }
+		.mono { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+		.toolbar { max-width: 900px; margin: 0 auto; padding: 10px 0; display: flex; gap: 12px; align-items: center; }
+		.toolbar a { color: #333; font-size: 13px; }
+		.toolbar button { font-size: 13px; padding: 5px 14px; cursor: pointer; border: 1px solid #888; background: #fff; }
+
+		.rpt-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1c1c22; padding-bottom: 14px; margin-bottom: 8px; }
+		.rpt-head img { height: 44px; }
+		.rpt-title { text-align: right; }
+		.rpt-title h1 { margin: 0; font-size: 22px; }
+		.rpt-title .sub { color: #555; font-size: 13px; margin-top: 2px; }
+
+		h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+		h3 { font-size: 13px; margin: 16px 0 4px; color: #444; }
+		h3 .mono { font-size: 13px; }
+
+		table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0 10px; }
+		th, td { border: 1px solid #d5d5da; padding: 4px 7px; text-align: left; vertical-align: top; }
+		th { background: #f2f2f5; font-weight: 600; }
+
+		.tiles { display: flex; gap: 12px; margin: 10px 0 12px; }
+		.tile { flex: 1; border: 1px solid #d5d5da; padding: 10px 14px 12px; }
+		.tile .val { font-size: 30px; font-weight: 600; line-height: 1.15; }
+		.tile .lbl { font-size: 12px; color: #555; margin-top: 2px; }
+
+		.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 10px 0; }
+		.kv dt { font-weight: 600; color: #555; white-space: nowrap; }
+		.kv dd { margin: 0; }
+		.muted { color: #666; }
+		.unavail { color: #777; font-style: italic; }
+
+		.diagram { border: 1px solid #d5d5da; padding: 10px; overflow-x: auto; }
+		.diagram svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+		.state-meta { font-size: 12px; color: #555; margin: 2px 0 4px; }
+		.sel { font-size: 11px; margin: 1px 0; }
+
+		.rpt-foot { margin-top: 36px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 11.5px; color: #666; display: flex; justify-content: space-between; }
+
+		@media print {
+			body { background: #fff; }
+			.page { max-width: none; padding: 0; min-height: 0; }
+			.toolbar { display: none; }
+			h2, h3 { page-break-after: avoid; }
+			table, .tiles, .diagram { page-break-inside: avoid; }
+			@page { margin: 16mm 14mm; }
+		}
+	</style>
+</head>
+<body>
+
+	<div class="toolbar">
+		<a href="flow.html">&larr; Editor</a>
+		<button onclick="window.print()">Print</button>
+		<span class="muted" style="font-size:12px">Use the browser's print dialog to save as PDF.</span>
+	</div>
+
+	<div class="page">
+		<div class="rpt-head">
+			<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks" onerror="this.style.display='none'">
+			<div class="rpt-title">
+				<h1>FSMAR Routing Plan</h1>
+				<div class="sub" id="rpt-sub">Loading&hellip;</div>
+			</div>
+		</div>
+
+		<h2>Summary</h2>
+		<div id="rpt-summary" class="unavail">Loading&hellip;</div>
+
+		<h2>Callflow Diagram</h2>
+		<div id="rpt-diagram" class="unavail">Rendering&hellip;</div>
+
+		<h2>Routing Detail</h2>
+		<div id="rpt-detail" class="unavail">Loading&hellip;</div>
+
+		<div class="rpt-foot">
+			<span>Generated <span id="rpt-ts"></span> by the BLADE Flow editor</span>
+			<span>&copy; Vorpal Networks &middot; BLADE is MIT-licensed open source</span>
+		</div>
+	</div>
+
+	<!-- Headless canvas the diagram renders into before SVG capture; never shown. -->
+	<div id="offscreen" style="position:absolute; left:-100000px; top:0; width:1200px; height:800px; overflow:hidden;"></div>
+
+	<script>
+		function he(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+		function fail(msg) {
+			document.getElementById('rpt-sub').textContent = 'error';
+			var el = document.getElementById('rpt-summary');
+			el.className = 'unavail'; el.textContent = msg;
+			document.getElementById('rpt-diagram').textContent = '—';
+			document.getElementById('rpt-detail').textContent = '—';
+		}
+
+		document.getElementById('rpt-ts').textContent = new Date().toLocaleString();
+
+		// Same label semantics as the editor canvas (flow.html).
+		mxGraph.prototype.htmlLabels = true;
+		mxGraph.prototype.isWrapping = function (cell) { return true; };
+
+		// Stencils (ingress/egress clouds) — same registry load as flow.html.
+		(function () {
+			var req = mxUtils.load('./stencils/microservices.xml');
+			var shape = req.getDocumentElement().firstChild;
+			while (shape != null) {
+				if (shape.nodeType == mxConstants.NODETYPE_ELEMENT) {
+					mxStencilRegistry.addStencil(shape.getAttribute('name'), new mxStencil(shape));
+				}
+				shape = shape.nextSibling;
+			}
+		})();
+
+		// ------------------------------------------------------------------
+		// 1. Which config? Opened from the editor's Print Report button, the
+		//    just-exported JSON (unsaved edits included) is in sessionStorage;
+		//    opened from the nav, pull the live fsmar config.
+		// ------------------------------------------------------------------
+		var fromEditor = new URLSearchParams(location.search).get('source') === 'editor';
+		var sourceLabel = fromEditor ? 'editor snapshot' : 'live configuration';
+
+		var jsonPromise;
+		var parked = fromEditor ? sessionStorage.getItem('bladeFlowReportJson') : null;
+		if (parked) {
+			jsonPromise = Promise.resolve(parked);
+		} else {
+			sourceLabel = 'live configuration';
+			jsonPromise = fetch('fsmarPublish', { credentials: 'same-origin' }).then(function (r) {
+				if (!r.ok) { throw new Error('could not load the live fsmar config: HTTP ' + r.status); }
+				return r.text();
+			});
+		}
+
+		jsonPromise.then(function (jsonText) {
+			var config;
+			try {
+				config = JSON.parse(jsonText);
+			} catch (e) {
+				throw new Error('the fsmar config did not parse as JSON — session may have expired; reload or open from the editor');
+			}
+			renderSummary(config);
+			renderDetail(config);
+			return renderDiagram(jsonText, config);
+		}).catch(function (err) {
+			fail(err.message);
+		});
+
+		// ------------------------------------------------------------------
+		// 2. Diagram: the import servlet converts the JSON to mxGraph XML
+		//    (honoring stored placements), a headless graph renders it with the
+		//    editor's own stylesheet, and flowUtils.graphToSvgString captures a
+		//    standalone SVG — identical marks to the editor canvas.
+		// ------------------------------------------------------------------
+		function renderDiagram(jsonText, config) {
+			return fetch('fsmarImport', {
+				method: 'POST',
+				credentials: 'same-origin',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: 'json=' + encodeURIComponent(jsonText)
+			}).then(function (r) {
+				if (!r.ok) { throw new Error('diagram conversion failed: HTTP ' + r.status); }
+				return r.text();
+			}).then(function (xml) {
+				var graph = new mxGraph(document.getElementById('offscreen'));
+
+				// The editor's graph config: stylesheet (state/gateway/egress
+				// looks) AND convertValueToString (labels from cell XML). The
+				// function bodies in the XML need eval, exactly as app.js does.
+				mxObjectCodec.allowEval = true;
+				try {
+					var gnode = mxUtils.load('config/wfgraph-commons.xml').getDocumentElement();
+					new mxCodec(gnode.ownerDocument).decode(gnode, graph);
+					var doc = mxUtils.parseXml(xml);
+					new mxCodec(doc).decode(doc.documentElement, graph.getModel());
+				} finally {
+					mxObjectCodec.allowEval = false;
+				}
+
+				// A config with no stored layout ranks left-to-right, ingress
+				// through states to egress — the same pass the editor runs
+				// (flowFsmar.autoLayout + parallel-edge fanning).
+				var hadDiagram = !!(config && config.diagram && Object.keys(config.diagram).length > 0);
+				if (!hadDiagram) {
+					var layout = new mxHierarchicalLayout(graph, mxConstants.DIRECTION_WEST);
+					layout.intraCellSpacing = 60;
+					layout.interRankCellSpacing = 140;
+					layout.parallelEdgeSpacing = 20;
+					layout.execute(graph.getDefaultParent());
+				}
+				var parallel = new mxParallelEdgeLayout(graph);
+				parallel.spacing = 32;
+				parallel.execute(graph.getDefaultParent());
+
+				var el = document.getElementById('rpt-diagram');
+				el.className = 'diagram';
+				el.innerHTML = flowUtils.graphToSvgString(graph);
+				graph.destroy();
+			}).catch(function (err) {
+				var el = document.getElementById('rpt-diagram');
+				el.className = 'unavail';
+				el.textContent = 'Diagram unavailable: ' + err.message + ' (the routing detail below is still complete)';
+			});
+		}
+
+		// ------------------------------------------------------------------
+		// 3. Routing tables straight from the FSMAR JSON.
+		// ------------------------------------------------------------------
+		function stateOrder(config) {
+			var diagram = config.diagram || {};
+			var ingressKeys = Object.keys(diagram.ingresses || {});
+			var keys = Object.keys(config.states || {});
+			keys.sort();
+			var out = [];
+			if (keys.indexOf('null') >= 0) { out.push('null'); }
+			ingressKeys.sort().forEach(function (k) { if (out.indexOf(k) < 0 && keys.indexOf(k) >= 0) { out.push(k); } });
+			keys.forEach(function (k) { if (out.indexOf(k) < 0) { out.push(k); } });
+			return out;
+		}
+
+		function transitionCount(config) {
+			var n = 0;
+			Object.keys(config.states || {}).forEach(function (k) {
+				var trig = config.states[k].triggers || {};
+				Object.keys(trig).forEach(function (m) { n += ((trig[m] || {}).transitions || []).length; });
+			});
+			return n;
+		}
+
+		function exitRouteCount(config) {
+			var n = 0;
+			Object.keys(config.states || {}).forEach(function (k) {
+				var trig = config.states[k].triggers || {};
+				Object.keys(trig).forEach(function (m) {
+					((trig[m] || {}).transitions || []).forEach(function (t) {
+						if (t.routes && t.routes.length) { n++; }
+					});
+				});
+			});
+			return n;
+		}
+
+		function renderSummary(config) {
+			var el = document.getElementById('rpt-summary');
+			var states = Object.keys(config.states || {});
+			var diagram = config.diagram || {};
+
+			document.getElementById('rpt-sub').innerHTML =
+				he(sourceLabel) + ' &middot; ' + new Date().toLocaleDateString();
+
+			var h = '<div class="tiles">';
+			h += '<div class="tile"><div class="val">' + states.length + '</div><div class="lbl">states (including the default ingress)</div></div>';
+			h += '<div class="tile"><div class="val">' + transitionCount(config) + '</div><div class="lbl">transitions</div></div>';
+			h += '<div class="tile"><div class="val">' + exitRouteCount(config) + '</div><div class="lbl">transitions that route out of OCCAS</div></div>';
+			h += '</div>';
+
+			h += '<dl class="kv">';
+			if (config.defaultApplication) {
+				h += '<dt>Default application</dt><dd class="mono">' + he(config.defaultApplication) + '</dd>';
+			}
+			if (config.version != null) {
+				h += '<dt>Config version</dt><dd class="mono">' + he(config.version) + '</dd>';
+			}
+			var ing = Object.keys(diagram.ingresses || {});
+			if (ing.length) {
+				h += '<dt>Ingresses</dt><dd class="mono">' + ing.sort().map(he).join(', ') + ' <span class="muted">(+ default)</span></dd>';
+			}
+			var eg = Object.keys(diagram.egresses || {});
+			if (eg.length) {
+				h += '<dt>Egresses</dt><dd class="mono">' + eg.sort().map(he).join(', ') + '</dd>';
+			}
+			h += '</dl>';
+
+			el.className = ''; el.innerHTML = h;
+		}
+
+		// One compact line per selector; the shape is polymorphic (regex,
+		// attribute, table selectors…) so print every non-null scalar field
+		// rather than guessing a schema.
+		function selectorLine(sel) {
+			var parts = [];
+			Object.keys(sel || {}).forEach(function (k) {
+				var v = sel[k];
+				if (v == null || typeof v === 'object') { return; }
+				parts.push(k + '=' + v);
+			});
+			return parts.join('  ');
+		}
+
+		function renderDetail(config) {
+			var el = document.getElementById('rpt-detail');
+			var states = config.states || {};
+			var diagram = config.diagram || {};
+			var ingresses = diagram.ingresses || {};
+			var order = stateOrder(config);
+			if (!order.length) { el.textContent = 'No states configured.'; return; }
+
+			var h = '';
+			order.forEach(function (id) {
+				var st = states[id] || {};
+				var title = (id === 'null')
+					? 'null <span class="muted" style="font-weight:400">— default ingress (any source)</span>'
+					: he(id);
+				h += '<h3><span class="mono">' + title + '</span>'
+					+ (st.app ? ' <span class="muted" style="font-weight:400">&middot; app: <span class="mono">' + he(st.app) + '</span></span>' : '')
+					+ '</h3>';
+				if (ingresses[id] && ingresses[id].match) {
+					h += '<div class="state-meta">Ingress &mdash; source match: <span class="mono">' + he(ingresses[id].match) + '</span></div>';
+				}
+				(st.selectors || []).forEach(function (sel) {
+					h += '<div class="sel mono muted">selector: ' + he(selectorLine(sel)) + '</div>';
+				});
+
+				var trig = st.triggers || {};
+				var methods = Object.keys(trig).sort();
+				if (!methods.length) {
+					h += '<div class="state-meta muted">No triggers &mdash; requests here fall through to the default application.</div>';
+					return;
+				}
+				h += '<table><thead><tr><th style="width:70px">Trigger</th><th style="width:24px">#</th><th>When</th><th>Next state</th><th>Routes</th><th style="width:90px">Modifier</th></tr></thead><tbody>';
+				methods.forEach(function (m) {
+					var ts = (trig[m] || {}).transitions || [];
+					ts.forEach(function (t, i) {
+						h += '<tr>' + (i === 0 ? '<td rowspan="' + ts.length + '" class="mono">' + he(m) + '</td>' : '');
+						h += '<td class="mono">' + (i + 1) + '</td>';
+						h += '<td class="mono">' + he(t.when || '(always)') + '</td>';
+						h += '<td class="mono">' + he(t.next || '—') + '</td>';
+						h += '<td class="mono" style="font-size:10.5px">' + (t.routes && t.routes.length ? t.routes.map(he).join('<br>') : '—') + '</td>';
+						h += '<td class="mono">' + he(t.routeModifier || '—') + '</td></tr>';
+					});
+				});
+				h += '</tbody></table>';
+			});
+
+			// Egress exits are presentation-level (diagram section) but carry
+			// the routes management asks about — print them when present.
+			var eg = Object.keys(diagram.egresses || {}).sort();
+			if (eg.length) {
+				h += '<h3>Egress exits</h3>';
+				h += '<table><thead><tr><th>Egress</th><th>Routes</th><th>Return state</th></tr></thead><tbody>';
+				eg.forEach(function (k) {
+					var e = diagram.egresses[k] || {};
+					h += '<tr><td class="mono">' + he(k) + '</td>';
+					h += '<td class="mono" style="font-size:10.5px">' + (e.routes && e.routes.length ? e.routes.map(he).join('<br>') : '—') + '</td>';
+					h += '<td class="mono">' + (e.returnState ? he(e.returnState) + ' <span class="muted">(call returns)</span>' : '— <span class="muted">(final)</span>') + '</td></tr>';
+				});
+				h += '</tbody></table>';
+			}
+
+			el.className = ''; el.innerHTML = h;
+		}
+	</script>
+</body>
+</html>

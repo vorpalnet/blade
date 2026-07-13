@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>OCCAS Performance Tuning Report</title>
+	<script src="recommendations.js"></script>
+	<style>
+		/* Print-first document styling — deliberately self-contained (no CDN,
+		   no bootstrap, no brand.css): the report must render identically on
+		   screen, on paper, and in print-to-PDF. */
+		* { box-sizing: border-box; }
+		body { margin: 0; background: #e9e9ee; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c1c22; }
+		.page { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px 48px 56px; min-height: 100vh; }
+		.mono { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+		.toolbar { max-width: 900px; margin: 0 auto; padding: 10px 0; display: flex; gap: 12px; align-items: center; }
+		.toolbar a { color: #333; font-size: 13px; }
+		.toolbar button { font-size: 13px; padding: 5px 14px; cursor: pointer; border: 1px solid #888; background: #fff; }
+
+		.rpt-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1c1c22; padding-bottom: 14px; margin-bottom: 8px; }
+		.rpt-head img { height: 44px; }
+		.rpt-title { text-align: right; }
+		.rpt-title h1 { margin: 0; font-size: 22px; }
+		.rpt-title .sub { color: #555; font-size: 13px; margin-top: 2px; }
+
+		h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+		h3 { font-size: 13px; margin: 14px 0 4px; color: #444; text-transform: uppercase; letter-spacing: .5px; }
+
+		table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 6px 0 10px; }
+		th, td { border: 1px solid #d5d5da; padding: 4px 8px; text-align: left; vertical-align: top; }
+		th { background: #f2f2f5; font-weight: 600; }
+		tr.sect td { background: #f7f7fa; font-weight: 600; }
+
+		.headline { font-size: 15px; background: #f2f2f5; border: 1px solid #d5d5da; padding: 10px 14px; margin: 10px 0 14px; }
+		.headline strong { font-size: 18px; }
+
+		/* Executive summary — monochrome stat tiles; the critical tile is
+		   distinguished by border weight and label, never by color alone. */
+		.tiles { display: flex; gap: 12px; margin: 10px 0 12px; }
+		.tile { flex: 1; border: 1px solid #d5d5da; padding: 10px 14px 12px; }
+		.tile .val { font-size: 30px; font-weight: 600; line-height: 1.15; }
+		.tile .val small { font-size: 16px; font-weight: 400; color: #555; }
+		.tile .lbl { font-size: 12px; color: #555; margin-top: 2px; }
+		.tile.alert { border: 2.5px solid #1c1c22; }
+		.exec-summary { font-size: 14px; margin: 8px 0 4px; }
+		.exec-action { font-size: 14px; font-weight: 600; margin: 10px 0 4px; }
+
+		.finding-crit { border: 2px solid #1c1c22; padding: 8px 12px; margin: 8px 0 12px; }
+		.finding-crit .cap { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+
+		.status-ok::before { content: "\2713\00a0"; }           /* ✓ */
+		.status-diff::before { content: "\25B3\00a0"; }         /* △ */
+		.status-diff { font-weight: 600; }
+
+		.finding { margin: 4px 0; }
+		.finding .srv { font-weight: 600; }
+		.finding .fix { color: #555; }
+
+		.profile-about { color: #333; font-size: 12.5px; margin: 2px 0 10px; }
+		.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; }
+		.kv dt { font-weight: 600; color: #555; white-space: nowrap; }
+		.kv dd { margin: 0; }
+		.cols { display: flex; gap: 40px; }
+		.cols > div { flex: 1; }
+		.muted { color: #666; }
+		.unavail { color: #777; font-style: italic; }
+
+		.rpt-foot { margin-top: 36px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 11.5px; color: #666; display: flex; justify-content: space-between; }
+
+		@media print {
+			body { background: #fff; }
+			.page { max-width: none; padding: 0; min-height: 0; }
+			.toolbar { display: none; }
+			h2 { page-break-after: avoid; }
+			table, .headline, .tiles, .finding-crit { page-break-inside: avoid; }
+			@page { margin: 18mm 15mm; }
+		}
+	</style>
+</head>
+<body>
+
+	<div class="toolbar">
+		<a href="tuning.html">&larr; Dashboard</a>
+		<button onclick="window.print()">Print</button>
+		<span class="muted" style="font-size:12px">Use the browser's print dialog to save as PDF.</span>
+	</div>
+
+	<div class="page">
+		<div class="rpt-head">
+			<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks" onerror="this.style.display='none'">
+			<div class="rpt-title">
+				<h1>OCCAS Performance Tuning Report</h1>
+				<div class="sub" id="rpt-sub">Loading&hellip;</div>
+			</div>
+		</div>
+
+		<h2>Executive Summary</h2>
+		<div id="rpt-exec" class="unavail">Loading&hellip;</div>
+
+		<h2>Deployment</h2>
+		<div id="rpt-deployment" class="unavail">Loading&hellip;</div>
+
+		<h2>Environment</h2>
+		<div id="rpt-environment" class="unavail">Loading&hellip;</div>
+
+		<h2>Tuning Scorecard</h2>
+		<div id="rpt-scorecard" class="unavail">Loading&hellip;</div>
+
+		<h2>Findings</h2>
+		<div id="rpt-findings" class="unavail">Loading&hellip;</div>
+
+		<h2>JVM Profiles</h2>
+		<div id="rpt-profiles" class="unavail">Loading&hellip;</div>
+
+		<div class="rpt-foot">
+			<span>Generated <span id="rpt-ts"></span> by the BLADE Tuning console</span>
+			<span>&copy; Vorpal Networks &middot; BLADE is MIT-licensed open source</span>
+		</div>
+	</div>
+
+	<script>
+		function he(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+		function nf(n) { return (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString('en-US'); }
+		function fmtMB(mb) { return (mb == null || mb < 0) ? '—' : (mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb + ' MB'); }
+		function jdkOf(javaHome) {
+			var m = (javaHome || '').match(/(?:jdk-?|java-?|1\.)(\d{1,2})/i);
+			return m ? 'JDK ' + m[1] : (javaHome || '—');
+		}
+		function statusCell(ok) {
+			return ok ? '<span class="status-ok">at recommended</span>'
+					  : '<span class="status-diff">differs</span>';
+		}
+
+		var API = 'api/v1/';
+		var KEYS = ['about', 'os', 'server-tuning', 'jdbc', 'work-managers', 'sip-timers', 'domain-mode', 'jvm', 'jvm/profiles'];
+
+		Promise.allSettled(KEYS.map(function (k) {
+			return fetch(API + k).then(function (r) {
+				if (!r.ok) throw new Error(k + ': HTTP ' + r.status);
+				return r.json();
+			});
+		})).then(function (results) {
+			var d = {};
+			KEYS.forEach(function (k, i) { d[k] = results[i].status === 'fulfilled' ? results[i].value : null; });
+			render(d);
+		});
+
+		function render(d) {
+			var about = d['about'] || {};
+			var platform = about.platform || {};
+			var blade = about.blade || {};
+
+			document.getElementById('rpt-ts').textContent = new Date().toLocaleString();
+			document.getElementById('rpt-sub').innerHTML =
+				he(platform.domain ? 'Domain ' + platform.domain : '') +
+				(blade.version ? ' &middot; BLADE ' + he(blade.version) : '') +
+				' &middot; ' + new Date().toLocaleDateString();
+
+			renderExec(d);
+			renderDeployment(about);
+			renderEnvironment(d['os'], d['jvm']);
+			renderScorecard(d);
+			renderFindings(d['jvm']);
+			renderProfiles(d['jvm/profiles']);
+		}
+
+		// ============================================================
+		// Executive Summary — the one section written for a reader who
+		// will not scroll to the flag-level detail below it.
+		// ============================================================
+		function renderExec(d) {
+			var el = document.getElementById('rpt-exec');
+			var rows = buildScorecard(d);
+			if (!rows.length) { el.textContent = 'Summary unavailable.'; return; }
+
+			var ok = rows.filter(function (r) { return r.ok; }).length;
+			var findings = computeJvmFindings(d['jvm'] || []);
+			var crit = findings.filter(function (f) { return f.sev === 'critical'; }).length;
+			var adv = findings.length - crit;
+
+			var os = d['os'] || [];
+			var running = os.filter(function (r) { return r.state === 'RUNNING'; }).length;
+			var cpus = 0, ram = 0;
+			os.forEach(function (r) {
+				if (r.processors > 0) cpus += r.processors;
+				if (r.ramTotalMB > 0) ram += r.ramTotalMB;
+			});
+
+			var about = d['about'] || {}, platform = about.platform || {};
+			var h = '<p class="exec-summary">This report assesses the '
+				+ (platform.domain ? '<strong>' + he(platform.domain) + '</strong> ' : '')
+				+ 'OCCAS domain'
+				+ (os.length ? ' &mdash; ' + os.length + ' server' + (os.length === 1 ? '' : 's')
+					+ (running ? ' (' + running + ' running)' : '')
+					+ (cpus ? ', ' + nf(cpus) + ' CPU cores' : '')
+					+ (ram ? ', ' + fmtMB(ram) + ' RAM' : '') : '')
+				+ ' &mdash; against Vorpal’s recommended performance-tuning values for high-volume SIP traffic.</p>';
+
+			h += '<div class="tiles">';
+			h += '<div class="tile"><div class="val">' + ok + '<small> of ' + rows.length + '</small></div><div class="lbl">settings at recommended values ('
+				+ Math.round(100 * ok / rows.length) + '%)</div></div>';
+			h += '<div class="tile' + (crit ? ' alert' : '') + '"><div class="val">' + crit + '</div><div class="lbl">critical risk' + (crit === 1 ? '' : 's') + ' '
+				+ (crit ? '&mdash; a server will fail its next restart' : '&mdash; none detected') + '</div></div>';
+			h += '<div class="tile"><div class="val">' + adv + '</div><div class="lbl">advisory finding' + (adv === 1 ? '' : 's') + '</div></div>';
+			h += '</div>';
+
+			// Per-section rollup; the per-server JVM sections collapse into one
+			// line so the summary stays one page on any size cluster.
+			var sections = {}, order = [];
+			rows.forEach(function (r) {
+				var s = r.section.indexOf('JVM ') === 0 ? 'JVM Arguments' : r.section;
+				if (!sections[s]) { sections[s] = { ok: 0, total: 0 }; order.push(s); }
+				sections[s].total++;
+				if (r.ok) sections[s].ok++;
+			});
+			h += '<table style="max-width:520px"><thead><tr><th>Area</th><th>At recommended</th><th>Status</th></tr></thead><tbody>';
+			order.forEach(function (s) {
+				var v = sections[s];
+				h += '<tr><td>' + he(s) + '</td><td class="mono">' + v.ok + ' of ' + v.total + '</td>'
+					+ '<td>' + statusCell(v.ok === v.total) + '</td></tr>';
+			});
+			h += '</tbody></table>';
+
+			var action;
+			if (crit) {
+				action = crit + ' critical risk' + (crit === 1 ? '' : 's') + ' (detailed under Findings) will prevent the affected server'
+					+ (crit === 1 ? '' : 's') + ' from starting after the next restart &mdash; correct before any restart or maintenance activity.';
+			} else if (ok < rows.length) {
+				action = 'No critical risks. The ' + (rows.length - ok) + ' remaining difference' + (rows.length - ok === 1 ? '' : 's')
+					+ ' can be applied from the Tuning dashboard during a normal maintenance window.';
+			} else {
+				action = 'The environment matches all recommended values. No action required.';
+			}
+			h += '<p class="exec-action">Recommended action: <span style="font-weight:400">' + action + '</span></p>';
+
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function kvRow(label, val) { return val ? '<dt>' + he(label) + '</dt><dd class="mono">' + he(val) + '</dd>' : ''; }
+
+		function renderDeployment(about) {
+			var el = document.getElementById('rpt-deployment');
+			if (!about || !about.platform) { el.textContent = 'Deployment information unavailable.'; return; }
+			var p = about.platform, b = about.blade || {}, patches = about.patches || [];
+			var h = '<div class="cols"><div><h3>BLADE Framework</h3><dl class="kv">';
+			h += kvRow('Version', b.version) + kvRow('Built', b.built) + kvRow('License', b.license);
+			h += '</dl></div><div><h3>Platform</h3><dl class="kv">';
+			h += kvRow('OCCAS', p.occas) + kvRow('WebLogic', p.weblogic) + kvRow('Coherence', p.coherence);
+			h += kvRow('Domain', p.domain) + kvRow('Java', p.java) + kvRow('OS', p.os) + kvRow('Oracle Home', p.oracleHome);
+			h += '</dl></div></div>';
+			if (patches.length) {
+				h += '<h3>Applied Patches (' + patches.length + ')</h3>';
+				patches.forEach(function (pt) {
+					h += '<div class="mono" style="font-size:11.5px">' + he(pt.id) + ' ' + he(pt.description || '') + '</div>';
+				});
+			}
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderEnvironment(os, jvm) {
+			var el = document.getElementById('rpt-environment');
+			if (!os || !os.length) { el.textContent = 'Environment information unavailable.'; return; }
+			var jdkByServer = {};
+			(jvm || []).forEach(function (s) { jdkByServer[s.server] = jdkOf(s.javaHome); });
+			var h = '<table><thead><tr><th>Server</th><th>State</th><th>Kernel</th><th>CPUs</th><th>RAM</th><th>JDK</th><th>Open / Max FDs</th></tr></thead><tbody>';
+			os.forEach(function (r) {
+				h += '<tr><td><strong>' + he(r.server) + '</strong>' + (r.adminServer ? ' <span class="muted">(admin)</span>' : '') + '</td>';
+				h += '<td class="mono">' + he(r.state || '—') + '</td>';
+				h += '<td class="mono">' + he(((r.name || '') + ' ' + (r.kernel || '')).trim() || '—') + '</td>';
+				h += '<td class="mono">' + (r.processors > 0 ? r.processors : '—') + '</td>';
+				h += '<td class="mono">' + fmtMB(r.ramTotalMB) + '</td>';
+				h += '<td class="mono">' + he(jdkByServer[r.server] || '—') + '</td>';
+				h += '<td class="mono">' + (r.openFds >= 0 ? nf(r.openFds) : '—') + ' / ' + (r.maxFds >= 0 ? nf(r.maxFds) : '—') + '</td></tr>';
+			});
+			h += '</tbody></table>';
+			el.className = ''; el.innerHTML = h;
+		}
+
+		// The scorecard compares live values against TUNING_REC — the same
+		// structure the dashboard's Recommended buttons fill from, so this
+		// report can never disagree with what the buttons set.
+		function buildScorecard(d) {
+			var rows = [];
+			function add(section, scope, setting, current, recommended, ok) {
+				rows.push({ section: section, scope: scope, setting: setting, current: current, recommended: recommended, ok: !!ok });
+			}
+
+			(d['server-tuning'] || []).forEach(function (s) {
+				var R = TUNING_REC.serverTuning;
+				add('Server Tuning', s.server, 'Max Message Size (bytes)', nf(s.maxMessageSize), nf(R.maxMessageSize), s.maxMessageSize === R.maxMessageSize);
+				add('Server Tuning', s.server, 'Socket Readers', nf(s.socketReaders), nf(R.socketReaders), s.socketReaders === R.socketReaders);
+				add('Server Tuning', s.server, 'Thread pool pinned (Min = Max)', nf(s.threadPoolMin) + ' / ' + nf(s.threadPoolMax), 'Min = Max', s.threadPoolMax > 0 && s.threadPoolMin === s.threadPoolMax);
+				add('Server Tuning', s.server, 'Min Severity to Log', s.minimumSeverityToLog || '—', R.minimumSeverityToLog, s.minimumSeverityToLog === R.minimumSeverityToLog);
+			});
+
+			(d['jdbc'] || []).forEach(function (p) {
+				var min = TUNING_REC.jdbc.minimumPool;
+				var ok = p.initialCapacity === p.minCapacity && p.minCapacity === p.maxCapacity && p.maxCapacity >= min;
+				add('JDBC Pools', p.name, 'Pool pinned (Initial = Min = Max, ≥ ' + nf(min) + ')',
+					nf(p.initialCapacity) + ' / ' + nf(p.minCapacity) + ' / ' + nf(p.maxCapacity), '≥ ' + nf(min) + ', pinned', ok);
+			});
+
+			(d['work-managers'] || []).forEach(function (wm) {
+				var rec = TUNING_REC.workManagers[wm.name];
+				if (rec && rec.maxThreads != null && wm.maxThreadsName) {
+					add('OCCAS Threads', wm.name, 'Max Threads', nf(wm.maxThreads), '≥ ' + nf(rec.maxThreads), wm.maxThreads >= rec.maxThreads);
+				}
+				if (rec && rec.capacity != null && wm.capacityName) {
+					add('OCCAS Threads', wm.name, 'Capacity', nf(wm.capacity), nf(rec.capacity), wm.capacity === rec.capacity);
+				}
+				if (wm.minThreadsName && wm.maxThreadsName) {
+					add('OCCAS Threads', wm.name, 'Threads pinned (Min = Max)', nf(wm.minThreads) + ' / ' + nf(wm.maxThreads), 'Min = Max', wm.minThreads === wm.maxThreads);
+				}
+			});
+
+			if (d['sip-timers']) {
+				add('SIP Protocol', 'engine cluster', 'Engine Call State Cache',
+					d['sip-timers'].engineCallStateCache ? 'enabled' : 'disabled', 'enabled', !!d['sip-timers'].engineCallStateCache);
+			}
+
+			if (d['domain-mode']) {
+				var dm = d['domain-mode'], R = TUNING_REC.domain;
+				add('Domain', dm.domain, 'Config Archive', dm.configBackupEnabled ? 'enabled' : 'disabled', 'enabled', !!dm.configBackupEnabled);
+				add('Domain', dm.domain, 'Archive Count (0 = unbounded)', nf(dm.archiveConfigurationCount), nf(R.archiveConfigurationCount), dm.archiveConfigurationCount > 0);
+				add('Domain', dm.domain, 'Config Audit', dm.configurationAuditType || 'none', R.configurationAuditType,
+					dm.configurationAuditType === 'log' || dm.configurationAuditType === 'logaudit');
+			}
+
+			(d['jvm'] || []).forEach(function (s) {
+				var raw = s.rawArguments || '';
+				var sect = 'JVM — ' + s.server;
+				add(sect, s.server, 'Heap pinned (-Xms = -Xmx)', (s.heapInitial || '—') + ' / ' + (s.heapMax || '—'), 'equal',
+					!!s.heapMax && s.heapInitial === s.heapMax);
+				add(sect, s.server, 'GC logging (-Xlog:gc*)', raw.indexOf('-Xlog:gc') >= 0 ? 'configured' : 'absent', 'configured', raw.indexOf('-Xlog:gc') >= 0);
+				TUNING_REC.jvmFlags.forEach(function (f) {
+					add(sect, s.server, f, raw.indexOf(f) >= 0 ? 'present' : 'absent', 'present', raw.indexOf(f) >= 0);
+				});
+			});
+
+			return rows;
+		}
+
+		function renderScorecard(d) {
+			var el = document.getElementById('rpt-scorecard');
+			var rows = buildScorecard(d);
+			if (!rows.length) { el.textContent = 'Scorecard unavailable.'; return; }
+			var ok = rows.filter(function (r) { return r.ok; }).length;
+
+			var h = '<div class="headline"><strong>' + ok + ' of ' + rows.length + '</strong> tunable settings are at their recommended values.'
+				+ (ok < rows.length ? ' Each △ row below names the dashboard section where it can be applied.' : '') + '</div>';
+			h += '<table><thead><tr><th>Scope</th><th>Setting</th><th>Current</th><th>Recommended</th><th>Status</th></tr></thead><tbody>';
+			var lastSection = null;
+			rows.forEach(function (r) {
+				if (r.section !== lastSection) {
+					h += '<tr class="sect"><td colspan="5">' + he(r.section) + '</td></tr>';
+					lastSection = r.section;
+				}
+				h += '<tr><td>' + he(r.scope) + '</td><td class="mono">' + he(r.setting) + '</td>';
+				h += '<td class="mono">' + r.current + '</td><td class="mono">' + r.recommended + '</td>';
+				h += '<td>' + statusCell(r.ok) + '</td></tr>';
+			});
+			h += '</tbody></table>';
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderFindings(jvm) {
+			var el = document.getElementById('rpt-findings');
+			if (!jvm) { el.textContent = 'Findings unavailable.'; return; }
+			var issues = computeJvmFindings(jvm);
+			if (!issues.length) {
+				el.className = ''; el.innerHTML = '<div class="finding">✓ No configuration issues detected across ' + jvm.length + ' server(s).</div>';
+				return;
+			}
+			function findingDiv(it) {
+				return '<div class="finding"><span class="srv">' + he(it.server) + ':</span> ' + he(it.msg)
+					+ ' <span class="fix">&mdash; ' + he(it.fix) + '</span></div>';
+			}
+			var crit = issues.filter(function (it) { return it.sev === 'critical'; });
+			var adv = issues.filter(function (it) { return it.sev !== 'critical'; });
+			var h = '';
+			if (crit.length) {
+				h += '<div class="finding-crit"><div class="cap">&#9650; Critical &mdash; will prevent server startup</div>'
+					+ crit.map(findingDiv).join('') + '</div>';
+			}
+			if (adv.length) {
+				if (crit.length) h += '<h3>Advisory</h3>';
+				h += adv.map(findingDiv).join('');
+			}
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderProfiles(pd) {
+			var el = document.getElementById('rpt-profiles');
+			if (!pd || !pd.profiles || !pd.profiles.length) { el.textContent = 'No JVM profiles defined.'; return; }
+			var assignments = pd.assignments || {};
+			var h = '<h3>Node assignments</h3><table style="max-width:420px"><thead><tr><th>Server</th><th>Profile</th></tr></thead><tbody>';
+			var servers = Object.keys(assignments);
+			if (servers.length) {
+				servers.forEach(function (srv) {
+					h += '<tr><td class="mono">' + he(srv) + '</td><td>' + he(assignments[srv]) + '</td></tr>';
+				});
+			} else {
+				h += '<tr><td colspan="2" class="muted">No profiles assigned to nodes.</td></tr>';
+			}
+			h += '</tbody></table>';
+			pd.profiles.forEach(function (p) {
+				h += '<h3>' + he(p.name) + '</h3>';
+				if (p.about) h += '<div class="profile-about">' + he(p.about) + '</div>';
+				if (p.arguments) h += '<div class="mono" style="font-size:11px; white-space:pre-wrap; background:#f7f7fa; border:1px solid #e2e2e8; padding:6px 8px">' + he(p.arguments) + '</div>';
+			});
+			el.className = ''; el.innerHTML = h;
+		}
+	</script>
+</body>
+</html>

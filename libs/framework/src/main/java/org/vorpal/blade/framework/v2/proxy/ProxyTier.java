@@ -20,10 +20,19 @@ public class ProxyTier implements Serializable {
 	 * Routing mode for endpoints within this tier.
 	 */
 	public enum Mode {
-		/** Try all endpoints simultaneously */
+		/** Try all endpoints simultaneously; first success wins */
 		parallel,
-		/** Try endpoints one at a time in order */
-		serial
+		/** Try endpoints one at a time in configured (priority) order */
+		serial,
+		/** Try endpoints one at a time in random order (equal-cost distribution) */
+		random,
+		/** Try endpoints one at a time, starting at a per-node rotating offset */
+		roundrobin,
+		/**
+		 * Try endpoints one at a time, starting at an offset hashed from the
+		 * caller's From URI (sticky: the same caller lands on the same endpoint)
+		 */
+		hash
 	}
 
 	/** Default timeout value in seconds */

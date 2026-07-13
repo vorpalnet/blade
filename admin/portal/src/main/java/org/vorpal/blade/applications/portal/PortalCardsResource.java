@@ -2,9 +2,10 @@ package org.vorpal.blade.applications.portal;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -79,6 +80,10 @@ public class PortalCardsResource {
 				n.put("hasMetadata", c.hasMetadata);
 				n.put("kind", c.kind);
 				if (c.configuratorDomain != null) n.put("configuratorDomain", c.configuratorDomain);
+				if (c.servers != null && !c.servers.isEmpty()) {
+					ArrayNode servers = n.putArray("servers");
+					for (String s : c.servers) servers.add(s);
+				}
 			}
 			return Response.ok(out.toString()).type(MediaType.APPLICATION_JSON).build();
 		} catch (Exception e) {
@@ -97,12 +102,14 @@ public class PortalCardsResource {
 		try (CloseableContext ctx = new CloseableContext()) {
 			MBeanServer mbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
 
-			List<String> contextRoots = walkAdminContextRoots(mbs);
+			Map<String, TreeSet<String>> contextRoots = walkAdminContextRoots(mbs);
 			Map<String, ObjectName> settingsMBeans = walkSettingsMBeans(mbs);
+			Map<String, TreeSet<String>> serviceServers = new HashMap<>();
 
 			// Pass 1 — admin apps. One card per deployed `blade/*` webapp,
 			// joined to its (AdminServer-local) SettingsMXBean by flatten().
-			for (String ctxRoot : contextRoots) {
+			for (Map.Entry<String, TreeSet<String>> entry : contextRoots.entrySet()) {
+				String ctxRoot = entry.getKey();
 				if (SELF_CONTEXT_ROOT.equals(ctxRoot)) {
 					continue;
 				}
@@ -111,7 +118,8 @@ public class PortalCardsResource {
 				// same flatten — no display-name conventions, no special cases.
 				String settingsKey = SettingsManager.flatten(ctxRoot);
 				appCards.add(buildCard(mbs, settingsKey, ctxRoot,
-						settingsMBeans.get(settingsKey), "app", null));
+						settingsMBeans.get(settingsKey), "app", null,
+						new ArrayList<>(entry.getValue())));
 			}
 
 			// Pass 2 — SIP services. These have NO `blade/*` webapp to walk
@@ -122,9 +130,11 @@ public class PortalCardsResource {
 			// turn each into a documentation card whose action opens the
 			// Configurator for that service. The card text comes from the same
 			// @SchemaAbout schema identity admin cards read.
-			for (Map.Entry<String, ObjectName> e : walkServiceSettings(mbs).entrySet()) {
+			for (Map.Entry<String, ObjectName> e : walkServiceSettings(mbs, serviceServers).entrySet()) {
 				String name = e.getKey();
-				Card card = buildCard(mbs, name, name, e.getValue(), "service", name);
+				List<String> servers = serviceServers.containsKey(name)
+						? new ArrayList<>(serviceServers.get(name)) : null;
+				Card card = buildCard(mbs, name, name, e.getValue(), "service", name, servers);
 				// A service joins the deck only once a developer has authored
 				// its identity (@SchemaAbout). Unlike admin apps — which are a
 				// curated, deployed-on-purpose set — the cluster carries config
@@ -146,13 +156,18 @@ public class PortalCardsResource {
 		return cards;
 	}
 
-	private List<String> walkAdminContextRoots(MBeanServer mbs) throws Exception {
-		LinkedHashSet<String> out = new LinkedHashSet<>();
+	/// Context-root → the running servers it was found active on. The walk has
+	/// always visited every ServerRuntime; keeping the server name (instead of
+	/// flattening to a set of roots) is what lets the deck — and the printable
+	/// Deployment Inventory report — say WHERE each app is running.
+	private Map<String, TreeSet<String>> walkAdminContextRoots(MBeanServer mbs) throws Exception {
+		Map<String, TreeSet<String>> out = new LinkedHashMap<>();
 		ObjectName service = new ObjectName(
 				"com.bea:Name=DomainRuntimeService,Type=weblogic.management.mbeanservers.domainruntime.DomainRuntimeServiceMBean");
 		ObjectName[] servers = (ObjectName[]) mbs.getAttribute(service, "ServerRuntimes");
-		if (servers == null) return new ArrayList<>(out);
+		if (servers == null) return out;
 		for (ObjectName server : servers) {
+			String serverName = strAttr(mbs, server, "Name");
 			ObjectName[] apps = arrAttr(mbs, server, "ApplicationRuntimes");
 			if (apps == null) continue;
 			for (ObjectName app : apps) {
@@ -168,12 +183,13 @@ public class PortalCardsResource {
 							? contextRoot.substring(1)
 							: contextRoot;
 					if (normalized.startsWith(CTX_ROOT_PREFIX)) {
-						out.add(normalized);
+						TreeSet<String> where = out.computeIfAbsent(normalized, k -> new TreeSet<>());
+						if (serverName != null) where.add(serverName);
 					}
 				}
 			}
 		}
-		return new ArrayList<>(out);
+		return out;
 	}
 
 	private Map<String, ObjectName> walkSettingsMBeans(MBeanServer mbs) throws Exception {
@@ -209,7 +225,11 @@ public class PortalCardsResource {
 	/// A service registers once per engine node, so the same `Name` comes back
 	/// several times (one ObjectName per server). `putIfAbsent` collapses them
 	/// to a single card — they share one schema, so any node's MBean answers.
-	private Map<String, ObjectName> walkServiceSettings(MBeanServer mbs) throws Exception {
+	/// The per-node registrations aren't wasted, though: each federated
+	/// ObjectName carries a `Location=<server>` key, collected into `servers`
+	/// so the card can say which engine nodes are running the service.
+	private Map<String, ObjectName> walkServiceSettings(MBeanServer mbs,
+			Map<String, TreeSet<String>> servers) throws Exception {
 		Map<String, ObjectName> out = new HashMap<>();
 		ObjectName pattern = new ObjectName("vorpal.blade:Name=*,Type=Configuration,*");
 		for (ObjectInstance inst : mbs.queryMBeans(pattern, null)) {
@@ -217,12 +237,16 @@ public class PortalCardsResource {
 			String name = on.getKeyProperty("Name");
 			if (name == null || !hasCluster(on)) continue;
 			out.putIfAbsent(name, on);
+			String location = on.getKeyProperty("Location");
+			if (location != null) {
+				servers.computeIfAbsent(name, k -> new TreeSet<>()).add(location);
+			}
 		}
 		return out;
 	}
 
 	private Card buildCard(MBeanServer mbs, String appName, String ctxRoot, ObjectName settingsMBean,
-			String kind, String configuratorDomain) {
+			String kind, String configuratorDomain, List<String> servers) {
 		String name = humanize(lastSegment(ctxRoot));
 		String tagline = null;
 		String description = null;
@@ -281,7 +305,7 @@ public class PortalCardsResource {
 				}
 			}
 		}
-		return new Card(ctxRoot, name, tagline, description, hasMetadata, kind, configuratorDomain);
+		return new Card(ctxRoot, name, tagline, description, hasMetadata, kind, configuratorDomain, servers);
 	}
 
 	/// Reads a String MBean attribute, returning null instead of throwing when
@@ -369,9 +393,12 @@ public class PortalCardsResource {
 		/// For service cards: the Configurator `domain` (the service's flattened
 		/// MBean Name). Null for admin apps.
 		final String configuratorDomain;
+		/// Where it's running: server names the app was found ACTIVE on (apps)
+		/// or the engine nodes carrying its Configuration MBean (services).
+		final List<String> servers;
 
 		Card(String contextRoot, String name, String tagline, String description, boolean hasMetadata,
-				String kind, String configuratorDomain) {
+				String kind, String configuratorDomain, List<String> servers) {
 			this.contextRoot = contextRoot;
 			this.name = name;
 			this.tagline = tagline;
@@ -379,6 +406,7 @@ public class PortalCardsResource {
 			this.hasMetadata = hasMetadata;
 			this.kind = kind;
 			this.configuratorDomain = configuratorDomain;
+			this.servers = servers;
 		}
 	}
 }

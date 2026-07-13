@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Balancer &middot; Endpoint Health</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="balancer.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/balancer/favicon.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/balancer/">Balancer</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="health.html" class="vorpal-active">Endpoint Health</a>
+			<a href="report.html">Report</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<label class="bal-refresh">
+				<input type="checkbox" id="autorefresh" checked> auto-refresh
+			</label>
+			<span class="vorpal-pill" id="last-updated">loading&hellip;</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="bal-tabs" role="tablist" aria-label="Health views">
+				<button type="button" class="bal-tab" id="tab-map" data-view="map" role="tab">Map</button>
+				<button type="button" class="bal-tab" id="tab-topology" data-view="topology" role="tab">Topology</button>
+				<button type="button" class="bal-tab" id="tab-grid" data-view="grid" role="tab">Grid</button>
+			</div>
+
+			<div id="health-root">
+				<p class="bal-empty">Loading endpoint health&hellip;</p>
+			</div>
+
+		</div>
+	</main>
+
+</div>
+
+<!-- Vendored locally (admin networks are often air-gapped — no CDN).
+     d3-geo + d3-array do projection math only; topojson-client unpacks the
+     Natural Earth atlases in map/. All rendering is our own SVG. -->
+<script src="map/d3-array.min.js"></script>
+<script src="map/d3-geo.min.js"></script>
+<script src="map/topojson-client.min.js"></script>
+<script src="balancer-model.js"></script>
+<script src="health.js"></script>
+</body>
+</html>

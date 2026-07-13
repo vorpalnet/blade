@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Balancer &middot; Documentation</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/balancer/favicon.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/balancer/">Balancer</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../health.html">Endpoint Health</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<div class="vorpal-page-header">
+				<div class="vorpal-eyebrow">Documentation</div>
+				<h1 class="vorpal-page-title">BLADE Balancer</h1>
+				<p class="vorpal-page-subtitle">
+					How the Proxy Balancer routes calls across tiered endpoint
+					pools, how endpoint health is decided, and how to read the
+					per-node dashboard.
+				</p>
+			</div>
+
+			<section class="vorpal-docs">
+				<aside class="vorpal-docs-nav">
+					<h4>Documentation</h4>
+					<ul>
+						<li><a href="index.html" class="vorpal-active-doc">Overview</a></li>
+					</ul>
+					<h4>See also</h4>
+					<ul>
+						<li><a href="../health.html">Endpoint Health</a></li>
+						<li><a href="/blade/configurator/">Configurator</a></li>
+					</ul>
+				</aside>
+
+				<article class="vorpal-docs-content">
+					<h1>Routing and health, per node</h1>
+					<p>
+						The <code>proxy-balancer</code> service distributes initial
+						INVITEs across <strong>tiered pools of named
+						endpoints</strong>. Endpoints are defined once in the
+						configuration's registry; plans are ordered arrays of
+						tiers, selected by the request URI's host (exact match,
+						then the longest <code>*.suffix</code> wildcard, then the
+						<code>"*"</code> default). A tier that fails hands the
+						call to the next tier — order tiers cheapest-first for
+						least-cost routing.
+					</p>
+
+					<h2>Tier strategies</h2>
+					<ul>
+						<li><strong>parallel</strong> — race every endpoint at
+							once; the first 2xx wins and the losing legs are
+							canceled.</li>
+						<li><strong>serial</strong> — hunt one at a time in listed
+							(priority) order.</li>
+						<li><strong>random</strong> — hunt in random order:
+							equal-cost distribution.</li>
+						<li><strong>roundrobin</strong> — hunt from a rotating
+							offset. Each node rotates independently; the aggregate
+							stays evenly balanced.</li>
+						<li><strong>weighted</strong> — hunt in smooth weighted
+							round-robin order: over any <em>totalWeight</em>
+							consecutive calls on a node, each endpoint gets exactly
+							<em>weight</em> first attempts.</li>
+					</ul>
+					<p>
+						Failover is response-classified: route-level failures
+						(408/timeout, 480, 404, 5xx, 3xx) escalate to the next
+						tier; user-state and auth responses (486 busy, 401/407,
+						487 canceled, all 6xx) are relayed to the caller and never
+						touch a more expensive tier.
+					</p>
+
+					<h2>How endpoint health is decided</h2>
+					<p>
+						Each engine node keeps its <strong>own</strong> health map
+						— there is no shared cluster state. Two inputs write it;
+						routing reads it.
+					</p>
+					<ul>
+						<li><strong>OPTIONS pings</strong> — every
+							<code>health.pingInterval</code> seconds (default 60)
+							the node sends OPTIONS to every registry endpoint
+							(unless it opts out with <code>ping: false</code>). ANY
+							final response except 408/503 proves the box alive —
+							a 405 is an endpoint that dislikes OPTIONS, not a dead
+							one. The 408 generated when nothing answers, or a 503,
+							marks it DOWN. Publishing a config reschedules the
+							cycle immediately.</li>
+						<li><strong>Live call legs</strong> — a 2xx from an INVITE
+							leg marks its endpoint UP; a <strong>503</strong> (the
+							SIP overload signal) marks it DOWN, honoring
+							<code>Retry-After</code> as a timed backoff, else the
+							configured <code>health.defaultBackoff</code>. User
+							responses (486 busy, 603 decline, other 4xx) say
+							nothing about the endpoint and are ignored.</li>
+					</ul>
+					<p>
+						Routing skips DOWN and drained endpoints when building a
+						tier's forks; a tier with nothing routable is skipped; if
+						no tier has a routable endpoint the caller gets 503. A
+						BACKOFF endpoint becomes eligible the moment its window
+						expires — the next call probes it; a repeat 503 renews the
+						backoff. Health <strong>survives</strong> a config publish:
+						the endpoint's registry name is its stable identity, so a
+						name that persists keeps its status, observation history,
+						and traffic counters; only new names start fresh (up).
+					</p>
+					<p>
+						Beyond the instantaneous verdict, every node keeps a
+						bounded ring of recent observations per endpoint — each
+						OPTIONS ping records its <strong>round-trip time</strong>,
+						and passive call marks are logged alongside — plus live
+						traffic counters (attempts / successes / failovers per
+						INVITE leg). These feed the sparklines, heartbeat strips,
+						and traffic-share bars below.
+					</p>
+
+					<h2>Sites and the map</h2>
+					<p>
+						The optional top-level <code>sites</code> registry names
+						physical locations — datacenters, POPs, regions — with a
+						label and decimal <code>lat</code>/<code>lon</code>;
+						endpoints join a site via their <code>site</code> field,
+						and <code>clusterSite</code> says where this OCCAS cluster
+						runs. The Map view places each site geographically: when
+						every placed site falls inside the United States it uses
+						an Albers USA projection (with the customary Alaska and
+						Hawaii insets); otherwise a world projection. A site
+						without coordinates isn't lost — it collects in the
+						<em>Unplaced</em> tray beside the map, as do endpoints
+						with no site at all.
+					</p>
+					<ul>
+						<li><strong>Site glyph</strong> — shape carries the rollup:
+							a solid circle when every endpoint is up, a diamond
+							when degraded (some backoff/drained/unknown), a square
+							when something is down or undefined. The
+							<em>n/m UP</em> count is always printed beside it.</li>
+						<li><strong>Traffic arcs</strong> — drawn from the
+							cluster site to each endpoint site; an arc animates
+							(dashed, moving) when calls flowed to that site since
+							the last poll.</li>
+						<li><strong>Click a site</strong> to jump to the Topology
+							view filtered to it (other endpoints dim).</li>
+					</ul>
+
+					<h2>The three views</h2>
+					<ul>
+						<li><strong>Map</strong> — the geographic rollup above:
+							one glyph per site, arcs showing live traffic.</li>
+						<li><strong>Topology</strong> — the call path as a
+							pipeline: engine nodes, then each tier in failover
+							order. Endpoints render as cards: per-node status
+							glyphs (one per engine — disagreement stays visible),
+							an OPTIONS round-trip sparkline, a heartbeat strip of
+							recent observations (short bar = up, full-height bar
+							= down), a traffic-share bar (that endpoint's slice of
+							the tier's attempts — watch a weighted 3:1 split prove
+							itself), and attempt/success/failover counters. A card
+							flashes when it took calls since the last poll. A tier
+							with more than 12 endpoints starts as a one-card
+							summary — counts by state plus the currently active
+							endpoints — and expands on demand.</li>
+						<li><strong>Grid</strong> — the dense table: rows are
+							tier/endpoint, one column per engine node.</li>
+					</ul>
+					<p>
+						Clicking any endpoint (card or grid row) opens the detail
+						panel: per-node status and round-trip times, the overlaid
+						RTT trend, counters, and a time-stamped log of the most
+						recent observations from every node.
+					</p>
+
+					<h2>Reading the dashboard</h2>
+					<ul>
+						<li><strong>&#9679; UP</strong> — routable; last observation succeeded.</li>
+						<li><strong>&#9632; DOWN</strong> — skipped by routing on that node.</li>
+						<li><strong>&#9670; BACKOFF <em>n</em>s</strong> — 503'd; eligible again
+							in <em>n</em> seconds (Retry-After, or the configured
+							defaultBackoff).</li>
+						<li><strong>&#9634; DRAINED</strong> — administratively disabled
+							(<code>enabled: false</code>): no new calls, still monitored.</li>
+						<li><strong>! UNDEFINED</strong> — a tier references an endpoint
+							name missing from the registry; fix the configuration.</li>
+						<li><strong>? UNKNOWN</strong> — the node has no health entry for
+							that endpoint (usually a just-published config).</li>
+					</ul>
+					<p>
+						Columns are engine nodes; each is that node's independent
+						opinion. One column disagreeing with the rest points at the
+						network path between that engine and that endpoint, not at
+						the endpoint itself.
+					</p>
+				</article>
+			</section>
+
+		</div>
+	</main>
+
+</div>
+</body>
+</html>

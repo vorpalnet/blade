@@ -1,77 +1,57 @@
-/// This package provides a SIP proxy load balancer that distributes requests across
-/// multiple endpoints organized into tiered proxy plans. It supports parallel and serial
-/// routing modes, periodic health checking via OPTIONS pings, and dynamic endpoint
-/// status tracking.
+/// This package provides a SIP load balancer that distributes calls across
+/// tiered pools of named endpoints, with per-tier selection strategies and
+/// per-node endpoint health.
 ///
 /// ## Key Components
 ///
-/// - [ProxyBalancerServlet] - Main proxy servlet that routes requests based on configured proxy plans
-/// - [ProxyBalancerConfig] - Configuration class defining proxy plans, endpoint status, and ping intervals
-/// - [ProxyBalancerConfigSample] - Sample configuration with multi-tier parallel and serial routing
-/// - [ProxyBalancerSettingsManager] - Settings manager that builds the endpoint status map from proxy plans
-/// - [OptionsPingCallflow] - Periodic callflow that sends OPTIONS pings to track endpoint availability
+/// - [ProxyBalancerServlet] - Main servlet; b2bua dispatch, ping startup, health MBean
+/// - [InviteCallflow] - Plan selection, strategy ordering, health filter, fan-out, failover, relay
+/// - [org.vorpal.blade.services.proxy.balancer.config.BalancerConfig] - The v3 config: endpoint registry, plans, health knobs
+/// - [EndpointHealth] - One endpoint's health as THIS node sees it (up / down / backoff)
+/// - [OptionsPingCallflow] - Self-rescheduling OPTIONS ping cycle, started per node at deploy
+/// - [EndpointHealthMBean] - Publishes this node's health view for the Balancer admin app
+/// - [ProxyBalancerSettingsManager] - Seeds health from the registry, validates tier references
+///
+/// ## Configuration model
+///
+/// Endpoints are defined ONCE in the top-level registry
+/// ([org.vorpal.blade.services.proxy.balancer.config.Endpoint]: `uri`,
+/// `weight`, `enabled` to drain, `ping` to opt out of pings), keyed by NAME —
+/// the stable identity health tracking and the dashboard use. Plans are
+/// arrays of [org.vorpal.blade.services.proxy.balancer.config.Tier]s keyed
+/// by request-URI host: exact match, longest `*.suffix` wildcard, then `"*"`.
 ///
 /// ## Architecture
 ///
-/// The service extends `ProxyServlet` from the framework to provide tiered proxy routing.
-/// When a request arrives, [ProxyBalancerServlet] extracts the host from the Request-URI and
-/// looks up a matching `ProxyPlan` from the configuration. Each plan contains ordered tiers
-/// of endpoints that can be tried in parallel or serial mode with configurable timeouts.
+/// The service is a forking B2BUA on the v3 framework
+/// ([org.vorpal.blade.framework.v3.B2buaServlet]). Each tier resolves its
+/// endpoint names, drops drained/unhealthy ones, and offers the call by
+/// strategy: `parallel` races all with `sendRequestsInParallel` (first 2xx
+/// wins, losers CANCELed); `serial` hunts in priority order; `random`
+/// shuffles; `roundrobin` rotates a per-node offset; `weighted` hunts in
+/// smooth weighted round-robin order (deterministic, per-node counter).
+/// Tier order is priority order — cheapest-first gives least-cost routing.
+/// Failover is response-classified: route-level failures (408, 480, 404,
+/// 5xx, 3xx) escalate to the next tier; user-state and auth responses (486,
+/// 401/407, 487, all 6xx per RFC 3261 §16.7) are relayed and never escalate,
+/// and a caller who CANCELs mid-hunt ends the plan.
 ///
-/// Endpoint health is monitored by [OptionsPingCallflow], which sends periodic SIP OPTIONS
-/// requests to all configured endpoints and updates their status (up/down) based on the
-/// response. This status information can be used to skip unavailable endpoints during routing.
+/// Health has two writers and one reader: the OPTIONS ping cycle (any final
+/// response except 408/503 proves the endpoint alive), live call legs (2xx →
+/// up; 503 → down with Retry-After or `health.defaultBackoff`), and the
+/// routing filter. Every engine node keeps its own independent view — no
+/// shared cluster state — and publishes it as
+/// `vorpal.blade:Name=proxy-balancer,Type=EndpointHealth[,Cluster=...]`,
+/// which the `blade/balancer` admin app aggregates over federated JMX.
 ///
-/// ## Detailed Class Reference
-///
-/// ### ProxyBalancerServlet
-///
-/// Main servlet annotated with `@WebListener`, `@SipApplication(distributable=true)`,
-/// and `@SipServlet(loadOnStartup=1)`. Extends `ProxyServlet` and maintains a static
-/// `SettingsManager<ProxyBalancerConfig>`. The `proxyRequest` method extracts the host
-/// portion of the Request-URI, looks up the corresponding `ProxyPlan`, and copies it
-/// into the active proxy plan. The `doResponse` method handles response callbacks by
-/// pulling the stored callback from the callflow and invoking it. The `proxyResponse`
-/// method logs the response status.
-///
-/// ### ProxyBalancerConfig
-///
-/// Configuration class extending `Configuration` and implementing `Serializable`. Defines:
-///
-/// - `plans` (HashMap of String to ProxyPlan) -- maps hostnames to proxy routing plans
-/// - `pingInterval` (Integer) -- seconds between OPTIONS health-check cycles (default 60)
-/// - `endpointStatus` (HashMap, `@JsonIgnore`) -- runtime map of endpoint URIs to `EndpointStatus` (up/down)
-/// - `tierStatus` (HashMap, `@JsonIgnore`) -- runtime map of tier names to `TierStatus` (available/degraded/unavailable)
-/// - `planStatus` (HashMap, `@JsonIgnore`) -- runtime map of plan names to `PlanStatus` (optimized/impaired/faulty)
-///
-/// Provides fluent `addPlan` and `removePlan` methods for programmatic configuration.
-///
-/// ### ProxyBalancerConfigSample
-///
-/// Sample configuration demonstrating a two-tier proxy plan named "test1":
-///
-/// - **Tier 1** (parallel, 15s timeout) -- two endpoints (`blade1`, `blade2`) tried simultaneously
-/// - **Tier 2** (serial, 15s timeout) -- three endpoints (`blade3`, `blade4`, `blade5`) tried in sequence
-///
-/// Uses `ProxyServlet.getSipFactory()` to create endpoint URIs with test parameters.
-///
-/// ### ProxyBalancerSettingsManager
-///
-/// Extends `SettingsManager<ProxyBalancerConfig>` and overrides `initialize` to build
-/// the `endpointStatus` map. Iterates over all plans, tiers, and endpoints, extracting
-/// the host from each SIP URI and setting the initial status to `EndpointStatus.up`.
-///
-/// ### OptionsPingCallflow
-///
-/// Periodic health-check callflow extending `Callflow`. The `process` method schedules
-/// a repeating timer (interval from `pingInterval` config) that iterates over all
-/// entries in `endpointStatus`, sends an OPTIONS request to each endpoint using the
-/// servlet context name as the From address, and updates the status based on the
-/// response (200 = up, anything else = down).
+/// Real 18x ringing from the legs is relayed upstream via the fan-out
+/// primitives' per-leg observer, on top of the immediate 180 sent when the
+/// fork starts. With `session:passthru` set, the winning leg's Contacts are
+/// stitched together and the balancer drops out of the dialog after setup;
+/// without it, it stays in the path as a full B2BUA.
 ///
 /// @see ProxyBalancerServlet
-/// @see ProxyBalancerConfig
-/// @see [org.vorpal.blade.framework.v2.proxy.ProxyServlet]
-/// @see [org.vorpal.blade.framework.v2.proxy.ProxyPlan]
-/// @see [org.vorpal.blade.framework.v2.proxy.ProxyTier]
+/// @see InviteCallflow
+/// @see org.vorpal.blade.services.proxy.balancer.config.BalancerConfig
+/// @see EndpointHealth
 package org.vorpal.blade.services.proxy.balancer;

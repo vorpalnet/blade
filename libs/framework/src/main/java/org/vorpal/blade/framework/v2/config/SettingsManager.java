@@ -661,6 +661,11 @@ public class SettingsManager<T> {
 				}
 				node.set("x-form-sections", outer);
 			}
+			// @FormUriPreview — flags a type for the configurator's client-side
+			// SIP-URI validity badge (scheme/transport/host/port/user/uriParams).
+			if (raw.isAnnotationPresent(FormUriPreview.class)) {
+				node.put("x-uri-preview", true);
+			}
 		});
 
 		customizer.accept(configBuilder);
@@ -684,7 +689,42 @@ public class SettingsManager<T> {
 			if (!about.tagline().isEmpty()) root.put("x-tagline", about.tagline());
 			if (!about.description().isEmpty()) root.put("description", about.description());
 		}
+
+		applyRootPropertyOrder(schema, clazz);
 		return schema;
+	}
+
+	/// Reorder the root `properties` object per the class's effective
+	/// `@JsonPropertyOrder` (nearest annotation walking up the hierarchy —
+	/// Jackson semantics). victools' RESPECT_JSONPROPERTY_ORDER sorter loses a
+	/// property's order index when a subclass overrides the annotated getter
+	/// (e.g. BalancerConfig.getVersion() overriding Configuration's), which let
+	/// app properties jump ahead of `version` in the Configurator. Consumers —
+	/// the Configurator form and JSON editor — display properties in document
+	/// order, so this pins the framework header (version, notes, logging, ...)
+	/// to the top of every config schema regardless of sorter quirks.
+	private static void applyRootPropertyOrder(JsonNode schema, Class<?> clazz) {
+		JsonNode propsNode = schema.get("properties");
+		if (!(propsNode instanceof ObjectNode)) return;
+		String[] order = null;
+		for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+			com.fasterxml.jackson.annotation.JsonPropertyOrder anno =
+					c.getAnnotation(com.fasterxml.jackson.annotation.JsonPropertyOrder.class);
+			if (anno != null && anno.value().length > 0) {
+				order = anno.value();
+				break;
+			}
+		}
+		if (order == null) return;
+		ObjectNode props = (ObjectNode) propsNode;
+		java.util.Map<String, JsonNode> reordered = new java.util.LinkedHashMap<>();
+		for (String name : order) {
+			JsonNode child = props.get(name);
+			if (child != null) reordered.put(name, child);
+		}
+		props.fieldNames().forEachRemaining(name -> reordered.putIfAbsent(name, props.get(name)));
+		props.removeAll();
+		props.setAll(reordered);
 	}
 
 	/// Convert the String from @JsonProperty(defaultValue = "...") to a typed

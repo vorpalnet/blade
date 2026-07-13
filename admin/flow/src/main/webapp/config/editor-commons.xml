@@ -102,6 +102,29 @@
 				flowSimulate.open(editor);
 			}
 		]]></add>
+		<!-- Overrides the stock mxEditor exportImage, which expects a
+		     server-side image servlet (urlImage) and falls back to a bare
+		     mxUtils.show popup. Ours downloads a standalone SVG. -->
+		<add as="exportImage"><![CDATA[
+			function (editor)
+			{
+				flowUtils.downloadSvg(editor.graph, 'fsmar-diagram.svg');
+			}
+		]]></add>
+		<!-- Printable routing plan: exports the CURRENT diagram (via the
+		     export servlet, so unsaved edits and layout are included), parks
+		     the JSON in sessionStorage, and opens report.html on it. Opened
+		     from the nav instead, the report falls back to the live config. -->
+		<add as="printReport"><![CDATA[
+			function (editor)
+			{
+				flowFsmar.getConfigJson(editor, function (json)
+				{
+					try { sessionStorage.setItem('bladeFlowReportJson', json); } catch (e) { /* fall back to live */ }
+					window.open('report.html?source=editor', '_blank');
+				});
+			}
+		]]></add>
 		<add as="openHref"><![CDATA[
 			function (editor, cell)
 			{

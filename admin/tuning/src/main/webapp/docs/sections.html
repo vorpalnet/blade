@@ -120,6 +120,8 @@
 						<dd>TCP buffer tuning. Defaults are usually fine; bump only after measuring.</dd>
 						<dt>Native I/O</dt>
 						<dd>Toggle WLS native socket muxer vs. pure-Java. Native wins for high concurrency; the toggle requires restart.</dd>
+						<dt>Min Severity to Log</dt>
+						<dd>Floor for the server's own log stream (WebLogic <code>Log</code> MBean's <code>MinimumSeverityToLog</code>). Runtime-effective, no restart. Quiets chatty subsystem Notice-level noise without touching application logging config.</dd>
 					</dl>
 
 					<div class="vorpal-callout vorpal-callout-warn">

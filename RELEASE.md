@@ -2,6 +2,331 @@
 
 ## 2.9.9 (unreleased)
 
+### iRouter: printable Dial Plan report
+
+The iRouter's routing policy on paper (`blade/portal/report-irouter.html`,
+reached from the iRouter service card's new **Printable Report** button):
+Phase 1 prints every pipeline connector in order — its selectors (`${var}` ←
+extracted from), source settings, and each translation table with its lookup
+key, match strategy spelled out in words (exact / longest-prefix-wins /
+integer-range), and key → sets-in-context rows; Phase 2 prints the routing
+decision — routing tables (key → destination, including answer-with-status
+rejects, stamped headers, and conditional headers with their `when`), or the
+conditional clauses, or the direct route — plus the default route (or a
+called-out warning that none exists). Backed by a new portal endpoint,
+`GET /blade/portal/api/v1/config/{name}` (`PortalConfigResource`), which
+returns any app or service's RUNNING configuration read from its
+Configuration MXBean's `CurrentJson` over federated JMX — the running truth,
+not the file on disk — preferring the Cluster-keyed (service) registration
+and listing the engine nodes carrying it. The service detail page grew a
+domain-keyed report registry, so future service reports plug in with one line.
+
+### Flow: printable FSMAR Routing Plan + real SVG export
+
+The Flow editor joins the report family (`blade/flow/report.html`): the callflow
+diagram rendered exactly as the canvas draws it — the config is converted by the
+same import servlet, re-rendered through the editor's own stylesheet and stencil
+registry on a headless graph, and captured as standalone SVG via
+`mxImageExport`/`mxSvgCanvas2D` (`flowUtils.graphToSvgString`) — followed by the
+routing detail as tables: every state's triggers and ordered transitions
+(when → next / routes / modifier), ingress source-matches, selectors, and the
+egress exits. A **Print Report** toolbar button exports the *current* diagram
+(unsaved edits included) and opens the report on it; the Report nav link renders
+the live config instead. The **Export image** button now downloads a scalable
+standalone SVG — the stock mxEditor action expected a server-side image servlet
+and fell back to a bare `mxUtils.show` popup.
+
+### Printable reports: Balancer, Trace, and Portal join Tuning
+
+Three more admin apps grew a management-facing, print-to-PDF report page in the
+same self-contained skin as the Tuning report (no CDN, no brand.css; status by
+symbols and words, never color alone), each fed by the app's existing REST API:
+
+- **Balancer — Site Health & Capacity** (`blade/balancer/report.html`):
+  executive summary (endpoints up / impaired / call legs answered), per-site
+  rollup, plans & failover tiers with per-endpoint state, RTT, and counters,
+  a Node Agreement section calling out endpoints the engine nodes disagree on,
+  and the health-checking config. The derived-state logic (`stateOf`,
+  `buildIndex`, `worstState`, `siteRollup`) moved into a shared
+  `balancer-model.js` consumed by both the live console and the report.
+  **Bug fix found in the move:** `worstState` seeded its scan from `unknown`,
+  so an endpoint every node saw as `up` could never rank better than unknown —
+  the map's site markers read "0/N UP" and topology headlines "? unknown" even
+  when everything was healthy. It now seeds from `up` (empty = still unknown).
+- **Trace — SIP Call Trace Report** (`blade/callflow/report.html?session=…`):
+  one captured call as a printable incident document — call summary
+  (session, duration, From/To, apps, servers), the sequence-diagram ladder in
+  print ink, and every SIP message in step order with its source reference.
+  Reached from a "Print Report" button beside Save Snapshot or the new Report
+  nav link (which lists captured calls when no session is given). The
+  aggregation and ladder geometry moved into a shared `trace-model.js` used by
+  the live viewer, the snapshot export (which now bundles it), and the report.
+- **Portal — BLADE Deployment Inventory** (`blade/portal/report.html`):
+  what is actually running, discovered live — admin applications and SIP
+  services with name/URL/where-active, server lifecycle states, platform
+  versions and applied patches (the latter two fetched same-origin from the
+  Tuning console's API, degrading to a note when it isn't deployed). The
+  cards API now emits a `servers` array per card: the JMX walk already visited
+  every ServerRuntime for apps, and service MBeans carry their engine node in
+  the federated `Location` key — both previously discarded.
+
+### Tuning: printable OCCAS Performance Tuning Report
+
+New Report page (`blade/tuning/report.html`, linked from the app nav): a
+management-facing, print-to-PDF document — deployment identity and patches,
+environment table, a tuning scorecard comparing every managed setting against the
+recommended values with a headline "N of M at recommended", the Health Check
+findings, and each node's JVM profile with its rationale. The recommended values
+and findings logic moved into a shared `recommendations.js` consumed by both the
+dashboard's Recommended buttons and the report, so the two can never disagree.
+The report page is fully self-contained (no CDN assets) and status is conveyed
+with symbols and words, not color alone.
+
+The report opens with an **Executive Summary** written for a reader who won't
+scroll into flag-level detail: environment scale (servers/CPUs/RAM), three stat
+tiles (settings at recommended, critical risks, advisory findings), a per-area
+rollup table, and a one-line recommended action. Findings now carry a severity:
+**critical** is reserved for boot-blockers — flag/JDK combinations where the JVM
+will refuse to start on its next restart (`-XX:+ZGenerational` below JDK 21,
+CMS/ParNew on JDK 14+) — and both the report and the dashboard's Health Check
+panel list critical findings first, labeled, ahead of advisory ones.
+
+### Tuning: Recommended buttons on every editable panel
+
+SIP Protocol (enables the engine call state cache — the panel's one universal
+recommendation) and Domain (config archive on, 20 kept, config-change logging;
+never touches production/development mode) join Server Tuning, JDBC Pools, OCCAS
+Threads, and the two JVM templates. No global tuning profile by design: the domain
+config itself is the global state and Config Archive already snapshots it.
+
+### Tuning: Health Check panel — server state and restart
+
+The OS & Limits table now leads the panel (findings below it), seeds a row per
+configured server from the lifecycle runtimes — so a down engine shows as SHUTDOWN
+instead of vanishing — and adds a State column plus a per-server Restart button.
+Engines restart via force-shutdown + Node Manager start with the State column
+polling the progress; restarting the AdminServer works wifi-router style: the page
+counts down 90 seconds and reloads while Node Manager auto-restart brings the
+server back (the server must be NM-started, as blade.sh's boot service does). Also
+fixed a JS name collision that rendered every RAM/swap value as "0m", and added a
+boot-blocker finding for -XX:+ZGenerational on a pre-21 JDK.
+
+### Tuning: Domain section (was "Domain Mode")
+
+The domain card now covers more than production/development mode — all saved by one
+Save button, with `*` marking restart-required settings (mode only). New, verified
+against the DomainMBean: **Config Archive** (`ConfigBackupEnabled` +
+`ArchiveConfigurationCount` — WebLogic jars the whole `config/` tree, BLADE JSON
+configs included, to `configArchive/config-<n>.jar` on every activation; count 0
+means keep-all, so enabling the archive pre-fills a bounded 20) and **Config Audit**
+(`ConfigurationAuditType`: none/log/audit/logaudit, with a warning when an audit
+option is selected but the security realm has no Auditing provider to receive the
+records). Production mode is a single checkbox, per the WLS console convention.
+
+### Tuning: JVM profile templates hardened
+
+The two shipped JVM templates were re-audited. The G1 profile is now honestly named
+"G1GC - Java 11+" (its `-Xlog:gc*` argument is fatal on Java 8); both templates add
+`-XX:+ExitOnOutOfMemoryError` (heap dump, then fast exit so Node Manager restarts
+the server and calls fail over) with a matching "Exit on OOM" checkbox in the
+Performance flags; About texts now document each choice, including that IHOP 35 only
+seeds G1's adaptive marking trigger and that ZGC's sub-millisecond pauses are a
+design goal, not a guarantee. The template buttons are fixed points of their own
+templates (clicking Deterministic (G1GC) on the shipped G1 profile changes nothing),
+and the health check now flags contradictory explicit-GC flags and missing GC
+logging on live servers.
+
+### Tuning: per-server "Min Severity to Log"
+
+Server Tuning now exposes WebLogic's server-level minimum log severity
+(Emergency–Trace, recommended: Warning) as a runtime-effective dropdown per
+server — no restart, no WLST/console access needed to quiet chatty subsystem
+log noise.
+
+### proxy-registrar and proxy-balancer upgraded to v3 (Proxy API → B2BUA fan-out)
+
+Both services drop the v2 `Proxy` API and forward calls as forking B2BUAs on the v3
+framework — the first users of `sendRequestsInParallel`/`sendRequestsInSerial`. Whether
+they stay in the signaling path is now configuration, not code: with `session:passthru`
+set (both samples default to true), the framework stitches the endpoints' Contacts and
+drops out of the dialog after setup; without it they stay in the path as full B2BUAs,
+relaying in-dialog traffic via the b2bua callflows inherited from the v3 `B2buaServlet`.
+Because the fan-out primitives don't surface the legs' provisional responses, both
+services send an immediate 180 Ringing when the fork starts (local ringback; a callee's
+183 early media is not relayed).
+
+- **proxy-registrar**: initial INVITEs fork to *every* registered contact — first 2xx
+  wins, losers are CANCELed. Config: the proxy-only knobs (`addToPath`, `parallel`,
+  `recordRoute`, `proxyTimeout`, `supervised`, outbound interfaces) are gone; a single
+  `timeout` (seconds; sample 180) cancels all legs and answers 408. `proxyOnUnregistered`
+  and `allowHeader` survive.
+- **proxy-balancer**: the `plans` config model (`ProxyPlan`/`ProxyTier`) is unchanged —
+  a `parallel` tier races its endpoints with `sendRequestsInParallel`, a `serial` tier
+  hunts with `sendRequestsInSerial`, and a failed tier fails over to the next. Tier
+  timeout 0/unset now defaults to 180s (a serial tier's timer drives the hunt and must
+  never be 0). No plan for the request-URI host → 404. The `doResponse` branch-response
+  hack is deleted.
+
+### Proxy Balancer: selection strategies, endpoint health, admin dashboard
+
+The balancer is now an actual load balancer, not just a failover router:
+
+- **Tier strategies** — `ProxyTier.Mode` (v2 config model; freeze relaxed) gains
+  `random` (equal-cost shuffled hunt — the LCR-style randomization) and `roundrobin`
+  (per-node rotating offset) alongside `parallel` and `serial`. All hunt strategies
+  order the list and reuse the serial machinery. The sample's tier 1 is now `random`.
+  Round-robin state is per node by design. (A `hash` sticky-affinity strategy was
+  built and then removed on review: stateless hashing cannot give correctness-grade
+  affinity once health filtering re-homes keys, and real resource affinity belongs
+  in the owning app via @SipApplicationKey — not in a stateless balancer.)
+- **Endpoint health, wired both ways** — per-node `EndpointHealth` map (no shared
+  cluster state), keyed by full endpoint URI (was host-only, which collided). Writers:
+  the OPTIONS ping cycle (finally scheduled — self-rescheduling per node from
+  `servletCreated`, re-reads `pingInterval` each cycle; 200 → up, else → down) and
+  live legs (2xx → up, 503 → down honoring Retry-After as timed backoff; user
+  responses like 486/603 deliberately ignored). Routing skips down endpoints, skips
+  empty tiers, answers 503 when nothing is routable. Health resets on config publish.
+- **Fan-out primitives (v2, freeze relaxed)** — both `sendRequestsInSerial` and
+  `sendRequestsInParallel` gain an optional per-leg observer overload (every leg
+  response, provisional + final: powers passive health marking and real 18x/183
+  relay upstream in both proxy-registrar and proxy-balancer). Two serial-hunt bug
+  fixes: provisionals no longer stop the leg timer or get delivered to the final
+  callback as if they were finals (a 100 Trying used to end the hunt), and a late
+  487 after a timer CANCEL no longer double-advances the hunt.
+- **Balancer admin app** (`proto/balancer`, context root `blade/balancer`, new
+  `balancer` build profile in full.conf) — endpoint-health dashboard: plan/tier/
+  endpoint rows × engine-node columns, each node's independent view side by side
+  (disagreement between nodes is itself a network diagnostic). Status is shape+text
+  (● UP / ■ DOWN / ◆ BACKOFF n s), color only reinforces. Reads the per-node
+  `vorpal.blade:Name=proxy-balancer,Type=EndpointHealth` MBeans (explicit
+  StandardMBean) over federated DomainRuntime JMX. Standard admin chrome: FORM auth,
+  BLADEADMINSESSION, injected portal login.jsp, brand.css.
+- Plan selection hardening: `"*"` default plan for unmatched hosts; non-SIP request
+  URIs (tel:) no longer ClassCastException — they fall to the default plan.
+
+### Configurator: single-line simple fields; required fields lose the [-] button
+
+Simple fields (text, number, enum, password) now render on one line — label,
+control, delete button — matching the checkbox layout, instead of stacking the
+control on a second row. Multi-line editors (`format=textarea`) keep the stacked
+layout. Validation errors wrap onto their own line below the control.
+
+The `?` help badges are gone: a label or section title with a schema description is
+now itself the hover target (dotted underline + help cursor as the cue), showing one
+shared fixed-position tooltip. Fixed the
+`@FormLayoutColumn` cell sizing (`flex-basis: 100%` in a column container is a
+*height*, which Safari ballooned to hundreds of pixels per one-line tile).
+
+Properties listed in their parent schema's `required` array no longer render a [-]
+remove button — anywhere: top-level fields, nested objects, map entry values,
+array items, and polymorphic variants (the last four render paths previously
+ignored `required` entirely). The `*` required marker is gone — with removal
+structurally impossible and defaults filling the value, it prompted no action.
+
+Schema generation (v2 `SettingsManager.generateSchemaNode`, so v3 inherits it) now
+reorders the root `properties` per the config class's effective `@JsonPropertyOrder`
+(nearest annotation up the hierarchy), pinning the framework header — `version`,
+`notes`, `logging`, `session`, `analytics` — to the top of every schema. victools'
+sorter loses a property's order index when a subclass overrides the annotated getter
+(e.g. `BalancerConfig.getVersion()`), which had let app properties render above
+`version`. Schemas regenerate on next deploy.
+
+### FSMAR3: app-originated requests egress again (regression vs FSMAR2)
+
+OCCAS consults the AR at SEND time for application-originated initial requests
+(ClientTransaction.dispatch → ContainerProcessInternalRequest.getNextApplication); if
+the AR names an app, the request is INTERNALLY DISPATCHED to it (pushLocalRoute) and
+never reaches DNS or the wire. FSMAR3 treated every fresh composition as chain-top
+(`previous="null"` → defaultApplication), so e.g. proxy-balancer's OPTIONS health
+pings were delivered to the default application instead of egressing — FSMAR2 never
+had this problem (it read `previous` off the request's session, always).
+
+Fix: on a fresh composition, a CLIENT-transaction request (`isServer() == false` —
+an app-originated send; the SIPREC @SipApplicationKey join case is a server
+transaction, so the 8.3 fix is untouched) takes `previous` from its session's
+application name, FSMAR2-style. The originating app's state typically has no
+forward transition, the default-application fallback stays gated on
+`previous == "null"`, FSMAR returns null, and OCCAS sends the request out. The
+FSMAR log line now shows the true originator (`previous=proxy-balancer`).
+
+### Proxy Balancer: v3 configuration model (BREAKING for existing balancer configs)
+
+`ProxyBalancerConfig` (v2 `ProxyPlan`/`ProxyTier` shape) is replaced by
+`config.BalancerConfig` in the service. Existing `proxy-balancer.json` files must be
+rewritten — the regenerated `_samples` shows the new shape. What changed and why:
+
+- **Named endpoint registry** — endpoints defined once at top level (name → `{uri,
+  weight, enabled, ping}`), referenced by name from tiers. The name is the stable
+  health/dashboard identity (URI edits no longer reset health); no duplication when
+  the same box appears in several tiers/plans. Dangling references are warned at
+  publish and shown as `! UNDEFINED` on the dashboard.
+- **`weighted` strategy** — per-endpoint `weight` + smooth weighted round-robin hunt
+  order (deterministic, nginx-style, same per-node counter as roundrobin: over any
+  totalWeight consecutive calls each endpoint gets exactly weight first attempts);
+  the strategy the flat `List<URI>` shape couldn't support.
+- **Drain and ping opt-out** — `enabled: false` = no new calls, still monitored
+  (shown `▢ DRAINED`); `ping: false` = health from live traffic only.
+- **Plans are bare tier arrays** — the `ProxyPlan` wrapper held only `id`/
+  `description` (per-element descriptions are banned in v3; `notes` covers it).
+  Plan keys support `*.suffix` wildcards (longest wins) plus `"*"`.
+- **`health` block** — `pingEnabled` (live toggle), `pingInterval`, and
+  `defaultBackoff` for 503s without Retry-After (recovery when pings are off).
+- **Ping verdict fix** — ANY final response except 408/503 now marks an endpoint
+  alive: a 405 Method Not Allowed proves the box is up; the old 200-only rule would
+  have marked OPTIONS-hostile endpoints permanently down.
+- Tier `timeout` default (180s) is now explicit in the schema instead of a hidden
+  constant. v2 `ProxyPlan`/`ProxyTier` remain in the framework untouched.
+- **LCR-grade failover classification** — tier order is priority order (cheapest
+  first = least-cost routing). Route-level failures (408/timeout, 480, 404, 5xx,
+  3xx) escalate to the next tier; user-state and auth responses are relayed and
+  NEVER escalate: 486 (called party busy, not a broken route), 401/407 (auth must
+  reach the caller), 487, and all 6xx (RFC 3261 §16.7: no further branches after a
+  global failure). Also fixes a real bug: a caller who CANCELed mid-hunt used to
+  trigger tier failover from the losing leg's 487 — new INVITEs up the cost ladder
+  for a caller who was gone. Failover now also requires the caller leg uncommitted.
+
+### Proxy Balancer: geo map + live operations console (sites, RTT, history, counters)
+
+The balancer dashboard grows from a status table into a three-view console
+(`blade/balancer` → Endpoint Health: Map / Topology / Grid tabs), fed by new
+instrumentation in the service. All config additions are optional — schema stays v3.
+
+- **Sites** — new top-level `sites` registry (`name → {label, lat, lon}`), an optional
+  `site` reference per endpoint, and `clusterSite` naming where the OCCAS cluster runs.
+  Dangling site references warn at publish like dangling endpoint refs.
+- **Map view** — sites placed geographically: Albers USA projection (with the AK/HI
+  insets) when every placed site is US-bound, else a world projection. Site glyphs
+  carry rollups by shape (solid circle all-up / diamond degraded / square down) plus an
+  always-printed `n/m UP` count; traffic arcs from the cluster site animate when calls
+  flowed to a site since the last poll; coordinate-less sites land in an "Unplaced"
+  tray. Projection math via locally-vendored `d3-geo` + `topojson-client` + Natural
+  Earth atlases (`webapp/map/`, licenses included, no CDN — the flow-editor precedent);
+  all rendering stays hand-built SVG on brand.css.
+- **Topology view** — per-plan pipeline (engines → tier → tier with failover arrows);
+  endpoint cards show per-node status glyphs, an OPTIONS RTT sparkline, a heartbeat
+  strip of recent observations (short bar up / full-height bar down — shape first),
+  a traffic-share bar (watch the weighted 3:1 split prove itself), and counters; cards
+  flash when they took calls since the last poll. Tiers over 12 endpoints render as a
+  one-card summary (counts by state + active endpoints) that expands on demand —
+  Optum-sized tiers don't dump hundreds of cards. Clicking a map site jumps here
+  filtered to that site. Clicking any endpoint opens a detail panel: per-node RTT
+  comparison, counters, and a time-stamped observation log.
+- **OPTIONS RTT measured** — the ping cycle timestamps each send and records the
+  round trip per verdict (the locally-generated 408 is not a round trip and is
+  excluded). Divergent RTT on one engine fingers that network path, not the endpoint.
+- **Observation ring + traffic counters** — `EndpointHealth` keeps a bounded ring
+  (120 entries) of ping and passive observations and counts attempts/successes/
+  failovers per INVITE leg-final; all published through the health MBean JSON
+  (`endpointDetails` carries the ring once per endpoint, not per tier row).
+- **Health survives config publishes** — a node-level registry keyed by endpoint name
+  carries `EndpointHealth` objects across publishes; a surviving name keeps status,
+  history, and counters (previously everything reset to UP). Removed names drop; new
+  names start fresh.
+- **Fix: stale backoff neutralized DOWN** — `markDown` without a Retry-After used to
+  leave an old, already-expired `downUntil` in place, so `isRoutable()` stayed true
+  for an endpoint the ping cycle had just marked down. A plain down now clears the
+  backoff window.
+
 ### New: Trace (admin call-trace tool — display name; earlier notes call it "Callflow Viewer")
 
 A new admin tool — `admin/callflow` (context-root `blade/callflow`, finalName

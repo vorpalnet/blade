@@ -71,7 +71,16 @@ public class AboutInfo {
 		ObjectNode platform = out.putObject("platform");
 		File oracleHome = oracleHome();
 		if (oracleHome != null) {
-			platform.put("oracleHome", oracleHome.getAbsolutePath());
+			// Canonicalize for display: MW_HOME is typically exported by the WLS
+			// env scripts as the literal "$WL_HOME/.." and getAbsolutePath()
+			// would pass the ".." straight through to the UI.
+			String homePath;
+			try {
+				homePath = oracleHome.getCanonicalPath();
+			} catch (java.io.IOException e) {
+				homePath = oracleHome.getAbsolutePath();
+			}
+			platform.put("oracleHome", homePath);
 			readComps(oracleHome, platform);
 		}
 		// JVM + OS from this (Admin) JVM — same product install everywhere in a cluster.

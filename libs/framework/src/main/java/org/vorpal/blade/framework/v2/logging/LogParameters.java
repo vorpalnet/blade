@@ -65,41 +65,41 @@ public class LogParameters implements Serializable {
 		KB, KiB, MB, MiB, GB, GiB
 	}
 
-	@JsonProperty(defaultValue = "./servers/${weblogic.Name}/logs/vorpal")
+	@JsonProperty(defaultValue = "./servers/${weblogic.Name}/logs/vorpal", required=true)
 	protected String directory = null;
 
-	@JsonProperty(defaultValue = "${sip.application.name}.%g.log")
+	@JsonProperty(defaultValue = "${sip.application.name}.%g.log", required=true)
 	protected String fileName = null;
 
-	@JsonProperty(defaultValue = "INFO")
+	@JsonProperty(defaultValue = "INFO", required=true)
 	protected LoggingLevel loggingLevel = null;
 
-	@JsonProperty(defaultValue = "FINE")
+	@JsonProperty(defaultValue = "FINE", required=true)
 	protected LoggingLevel sequenceDiagramLoggingLevel = null;
 
-	@JsonProperty(defaultValue = "INFO")
+	@JsonProperty(defaultValue = "INFO", required=true)
 	protected LoggingLevel configurationLoggingLevel = null;
 
-	@JsonProperty(defaultValue = "INFO")
+	@JsonProperty(defaultValue = "INFO", required=true)
 	protected LoggingLevel analyticsLoggingLevel = null;
 
-	@JsonProperty(defaultValue = "OFF")
+	@JsonProperty(defaultValue = "OFF", required=true)
 	protected LoggingLevel snmpTrapLevel = null;
 
-	@JsonProperty(defaultValue = "false")
+	@JsonProperty(defaultValue = "false", required=true)
 	protected Boolean useParentLogging = null;
 
-	@JsonProperty(defaultValue = "100MiB")
+	@JsonProperty(defaultValue = "100MiB", required=true)
 	protected String fileSize = null;
 
-	@JsonProperty(defaultValue = "25")
+	@JsonProperty(defaultValue = "25", required=true)
 	protected Integer fileCount = null;
 
-	@JsonProperty(defaultValue = "true")
+	@JsonProperty(defaultValue = "true", required=true)
 	protected Boolean appendFile = null;
 
 	@JsonPropertyDescription("Support ANSI colors in logging?")
-	@JsonProperty(defaultValue = "false")
+	@JsonProperty(defaultValue = "false", required=true)
 	protected Boolean colorsEnabled = false;
 
 	public LogParameters() {

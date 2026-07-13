@@ -62,11 +62,6 @@
     --dirty-bg: #fbbf24;
     --dirty-text: #78350f;
 
-    /* Help icon */
-    --help-bg: #e0e7ff;
-    --help-text: #4338ca;
-    --help-bg-hover: #4338ca;
-    --help-text-hover: #ffffff;
 
     /* Tooltip */
     --tooltip-bg: #1e293b;
@@ -82,7 +77,6 @@
     --shadow-tooltip: 0 4px 6px rgba(0, 0, 0, 0.3);
 
     /* Misc */
-    --label-required: #dc2626;
     --field-error-border: #ef4444;
     --field-error-bg: #fef2f2;
     --field-error-text: #dc2626;
@@ -150,10 +144,6 @@
     --dirty-bg: #d97706;
     --dirty-text: #fef3c7;
 
-    --help-bg: #312e81;
-    --help-text: #a5b4fc;
-    --help-bg-hover: #4f46e5;
-    --help-text-hover: #ffffff;
 
     --tooltip-bg: #0f172a;
     --tooltip-text: #e2e8f0;
@@ -165,7 +155,6 @@
     --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
     --shadow-tooltip: 0 4px 6px rgba(0, 0, 0, 0.5);
 
-    --label-required: #f87171;
     --field-error-border: #ef4444;
     --field-error-bg: #450a0a;
     --field-error-text: #fca5a5;
@@ -233,10 +222,6 @@
     --dirty-bg: #b45309;
     --dirty-text: #fef3c7;
 
-    --help-bg: #1e1b4b;
-    --help-text: #818cf8;
-    --help-bg-hover: #4338ca;
-    --help-text-hover: #ffffff;
 
     --tooltip-bg: #0c1222;
     --tooltip-text: #c0d0e0;
@@ -248,7 +233,6 @@
     --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.6);
     --shadow-tooltip: 0 4px 6px rgba(0, 0, 0, 0.5);
 
-    --label-required: #f87171;
     --field-error-border: #ef4444;
     --field-error-bg: #3c0a0a;
     --field-error-text: #fca5a5;
@@ -314,10 +298,6 @@
     --dirty-bg: #f59e0b;
     --dirty-text: #78350f;
 
-    --help-bg: #fef3c7;
-    --help-text: #92400e;
-    --help-bg-hover: #d97706;
-    --help-text-hover: #ffffff;
 
     --tooltip-bg: #3d2e1e;
     --tooltip-text: #faf6f1;
@@ -329,7 +309,6 @@
     --shadow-lg: 0 20px 60px rgba(61, 46, 30, 0.2);
     --shadow-tooltip: 0 4px 6px rgba(61, 46, 30, 0.3);
 
-    --label-required: #dc2626;
     --field-error-border: #ef4444;
     --field-error-bg: #fef2f2;
     --field-error-text: #dc2626;
@@ -397,10 +376,6 @@
     --dirty-bg: #d97706;
     --dirty-text: #fef3c7;
 
-    --help-bg: #1a1a2e;
-    --help-text: #51cbee;
-    --help-bg-hover: #38a6f0;
-    --help-text-hover: #ffffff;
 
     --tooltip-bg: #000000;
     --tooltip-text: #dddddd;
@@ -412,7 +387,6 @@
     --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.8), inset 0 0 2px 1px rgba(255, 255, 255, 0.08);
     --shadow-tooltip: 0 4px 6px rgba(0, 0, 0, 0.6);
 
-    --label-required: #f87171;
     --field-error-border: #ef4444;
     --field-error-bg: #1a0505;
     --field-error-text: #fca5a5;
@@ -509,9 +483,13 @@ h2 {
     flex: 1 1 220px;
     min-width: 0;
 }
+/* Children size to their content vertically — never flex-grow or use a
+   percentage basis here: in a column container those are HEIGHT, and Safari
+   resolves the percentage against the ancestor, ballooning one-line tiles.
+   Full column width comes free from the column's align-items stretch. */
 .form-layout-column > .form-group,
 .form-layout-column > .add-property-placeholder {
-    flex: 1 0 100%;
+    flex: 0 0 auto;
     margin-bottom: 0;
 }
 
@@ -537,19 +515,26 @@ h2 {
     align-items: flex-start;
 }
 
-/* Required-field asterisk next to a label. */
-.required-marker {
-    color: var(--label-required, #c43);
-    margin-left: 2px;
-    font-weight: 700;
-}
-
-/* Live validation error — invalid input gets a red border + hover tooltip. */
+/* Live validation error — invalid input gets a red border + hover tooltip.
+   The border alone is color-only, so a text marker is added below for
+   colorblind users; the tooltip (title attribute, set in JS) still carries
+   the specific reason either way. */
 input.invalid,
 textarea.invalid,
 select.invalid {
     border-color: #c43 !important;
     box-shadow: 0 0 0 2px rgba(204, 51, 51, 0.15);
+}
+
+.form-group-header.inline:has(> input.invalid)::after,
+.form-group-header.inline:has(> select.invalid)::after,
+.form-group:has(> textarea.invalid)::after {
+    content: "\2717 invalid";
+    color: #c43;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 6px;
+    white-space: nowrap;
 }
 
 /* Multi-line editor sizing. */
@@ -1235,6 +1220,28 @@ body.inspector-open .inspector-panel {
     color: var(--status-success-text);
 }
 
+/* SIP URI syntax-validity badge (see FormUriPreview.java / wireUriPreviewBadge
+   in configurator.js). Glyph carries the meaning, color only supplements —
+   readable in grayscale. */
+.uri-preview-badge {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 0 6px;
+    border-radius: 10px;
+    cursor: help;
+}
+
+.uri-preview-badge.valid {
+    background: var(--status-success-bg);
+    color: var(--status-success-text);
+}
+
+.uri-preview-badge.invalid {
+    background: var(--status-warning-bg);
+    color: var(--status-warning-text);
+}
+
 .tabs {
     display: flex;
     border-bottom: 2px solid var(--border-item);
@@ -1347,9 +1354,6 @@ label {
     font-size: 13px;
 }
 
-.label-required {
-    color: var(--label-required);
-}
 
 input, select, textarea {
     width: 100%;
@@ -1981,26 +1985,15 @@ button.btn {
     border: 1px solid var(--border-item);
 }
 
-/* Feature: Field Help Tooltips */
-.field-help-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    background: var(--help-bg);
-    color: var(--help-text);
-    border-radius: 50%;
-    font-size: 12px;
-    font-weight: bold;
+/* Feature: Field Help Tooltips — a label/title carrying a schema description
+   is the hover target itself (no ? badge). The dotted underline is the
+   shape-based cue that a hint exists; the tooltip is one shared element
+   positioned by the delegated mouseenter handler. */
+.has-help {
     cursor: help;
-    margin-left: 6px;
-    position: relative;
-}
-
-.field-help-icon:hover {
-    background: var(--help-bg-hover);
-    color: var(--help-text-hover);
+    text-decoration: underline dotted var(--border-strong);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
 }
 
 .field-help-tooltip {
@@ -2231,6 +2224,34 @@ button.btn {
 .form-group-header label {
     margin-bottom: 0;
     flex: 1;
+}
+
+/* Single-line simple fields: the control rides in the header row beside the
+   label — one line, matching the checkbox-group layout. Multi-line editors
+   (textarea) keep the stacked two-row layout and never get .inline. */
+.form-group-header.inline {
+    gap: 8px;
+    margin-bottom: 0;
+    flex-wrap: wrap;
+}
+
+.form-group-header.inline label {
+    flex: 0 0 auto;
+}
+
+.form-group-header.inline > input,
+.form-group-header.inline > select,
+.form-group-header.inline > .password-field {
+    flex: 1 1 60px;
+    width: auto;
+    min-width: 0;
+}
+
+/* Save-time error messages append after the control; wrap them onto their
+   own line instead of squeezing into the flex row. */
+.form-group-header.inline > .field-error-message {
+    flex: 1 0 100%;
+    margin-top: 0;
 }
 
 /* Feature: Jackson Identity References */

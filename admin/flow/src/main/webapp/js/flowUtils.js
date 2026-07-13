@@ -15,7 +15,8 @@ window.flowUtils = (function() {
 	var tooltipsByIcon = {
 		'folder-open.svg':       'Open / Load FSMAR — choose a file, paste JSON, or load the live config / sample',
 		'save.svg':              'Save / Export FSMAR — download, copy, or publish to the live config (with validation)',
-		'image.svg':             'Export image',
+		'image.svg':             'Export image — download the diagram as a scalable SVG file',
+		'print.svg':             'Print Report — open the current routing plan as a printable report (diagram + transitions table)',
 		'simulate.svg':          'Route Simulator — simulate, replay, and live traffic overlay',
 		'braces.svg':            'Live JSON view — read-only peek at the FSMAR 3 config for the current diagram',
 		'mouse-pointer.svg':     'Select tool',
@@ -126,10 +127,73 @@ window.flowUtils = (function() {
 		input.click();
 	}
 
+	// Renders the whole graph model into a STANDALONE SVG string via
+	// mxImageExport + mxSvgCanvas2D — the same registry-driven pass the editor
+	// paints with, so stencils (ingress/egress clouds) and HTML labels
+	// (foreignObject) come out identical to the canvas. No server round-trip,
+	// no dependence on the live container DOM. Used by the exportImage action
+	// (SVG download) and the printable report (inline diagram).
+	function graphToSvgString(graph, border) {
+		border = (border == null) ? 12 : border;
+		var bounds = graph.getGraphBounds();
+		var vs = graph.view.scale;
+		var w = Math.ceil(bounds.width / vs + 2 * border);
+		var h = Math.ceil(bounds.height / vs + 2 * border);
+
+		var svgDoc = mxUtils.createXmlDocument();
+		var root = (svgDoc.createElementNS != null)
+			? svgDoc.createElementNS(mxConstants.NS_SVG, 'svg')
+			: svgDoc.createElement('svg');
+		if (root.setAttributeNS != null) {
+			root.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xlink', mxConstants.NS_XLINK);
+		} else {
+			root.setAttribute('xmlns', mxConstants.NS_SVG);
+			root.setAttribute('xmlns:xlink', mxConstants.NS_XLINK);
+		}
+		root.setAttribute('width', w + 'px');
+		root.setAttribute('height', h + 'px');
+		root.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+		root.setAttribute('version', '1.1');
+		svgDoc.appendChild(root);
+
+		var group = (svgDoc.createElementNS != null)
+			? svgDoc.createElementNS(mxConstants.NS_SVG, 'g')
+			: svgDoc.createElement('g');
+		root.appendChild(group);
+
+		var svgCanvas = new mxSvgCanvas2D(group);
+		svgCanvas.foAltText = '[label]';
+		svgCanvas.translate(Math.floor(border - bounds.x / vs), Math.floor(border - bounds.y / vs));
+		svgCanvas.scale(1 / vs);
+
+		var imgExport = new mxImageExport();
+		imgExport.drawState(graph.getView().getState(graph.model.root), svgCanvas);
+
+		return mxUtils.getXml(root);
+	}
+
+	// The exportImage toolbar action: a real SVG download (the stock mxEditor
+	// action expected a server-side image servlet and fell back to a bare
+	// mxUtils.show popup).
+	function downloadSvg(graph, filename) {
+		var svg = '<?xml version="1.0" encoding="UTF-8"?>\n' + graphToSvgString(graph);
+		var blob = new Blob([svg], { type: 'image/svg+xml' });
+		var url = URL.createObjectURL(blob);
+		var a = document.createElement('a');
+		a.href = url;
+		a.download = filename || 'fsmar-diagram.svg';
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}
+
 	return {
 		selectFile: selectFile,
 		saveFile: saveFile,
-		applyToolbarTooltips: applyToolbarTooltips
+		applyToolbarTooltips: applyToolbarTooltips,
+		graphToSvgString: graphToSvgString,
+		downloadSvg: downloadSvg
 	};
 
 })();

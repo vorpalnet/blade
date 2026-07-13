@@ -1,0 +1,665 @@
+/* Balancer Health console. Each panel sits on a proper brand SURFACE —
+ * content is never drawn bare on the glass backdrop. Colors come from the
+ * brand.css variables. Status is conveyed by SHAPE + TEXT (● UP / ■ DOWN /
+ * ◆ BACKOFF / ▢ DRAINED); color only reinforces. Radius appears only on the
+ * card surfaces, per house style. */
+
+/* ---- View tabs (the Trace detail-tab idiom, on a surface strip) ---- */
+
+.bal-tabs {
+	display: inline-flex;
+	gap: 2px;
+	padding: 0 8px;
+	margin: 0 0 18px 0;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-slate-200);
+	box-shadow: var(--vorpal-shadow-sm);
+}
+
+.bal-tab {
+	font: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--vorpal-slate-600);
+	background: none;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	padding: 9px 14px;
+	cursor: pointer;
+}
+
+.bal-tab:hover {
+	color: var(--vorpal-ink-900);
+	background: var(--vorpal-slate-100);
+}
+
+.bal-tab-active,
+.bal-tab.bal-tab-active {
+	color: var(--vorpal-ink-900);
+	border-bottom-color: var(--vorpal-purple);
+}
+
+/* ---- Shared surface panel ---- */
+
+.bal-plan {
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
+	border: 1px solid var(--vorpal-slate-200);
+	border-left: 4px solid var(--vorpal-purple);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-sm);
+	padding: 24px 28px;
+	margin: 0 0 24px 0;
+}
+
+.bal-plan h2 {
+	margin: 0 0 14px 0;
+	font-size: 17px;
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
+	letter-spacing: -0.01em;
+}
+
+.bal-empty {
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-700);
+	border: 1px solid var(--vorpal-slate-200);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-sm);
+	padding: 24px 28px;
+}
+
+.bal-refresh {
+	font-size: 13px;
+	margin-right: 12px;
+	white-space: nowrap;
+	user-select: none;
+}
+
+.bal-refresh input {
+	vertical-align: middle;
+}
+
+/* ---- Status chips (shape + label; class only tints) ---- */
+
+.bal-chip {
+	display: inline-block;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+}
+
+.bal-chip.bal-up      { color: var(--vorpal-success); }
+.bal-chip.bal-down    { color: var(--vorpal-error); }
+.bal-chip.bal-backoff { color: var(--vorpal-warn); }
+.bal-chip.bal-unknown { color: var(--vorpal-slate-600); }
+
+.bal-note,
+.bal-age {
+	display: block;
+	color: var(--vorpal-slate-600);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+/* ---- Grid view ---- */
+
+.bal-scroll {
+	overflow-x: auto;
+}
+
+.bal-table {
+	border-collapse: collapse;
+	width: 100%;
+	font-size: 13px;
+	background: var(--vorpal-surface);
+}
+
+.bal-table th {
+	background: var(--vorpal-slate-100);
+	color: var(--vorpal-slate-600);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	font-size: 11px;
+}
+
+.bal-table th,
+.bal-table td {
+	border: 1px solid var(--vorpal-divider);
+	padding: 8px 12px;
+	text-align: left;
+	vertical-align: top;
+}
+
+.bal-table tbody tr[data-ep] {
+	cursor: pointer;
+}
+
+.bal-table tbody tr[data-ep]:hover td {
+	background: var(--vorpal-slate-100);
+}
+
+.bal-tier {
+	white-space: nowrap;
+	font-weight: 600;
+	color: var(--vorpal-ink-700);
+	background: var(--vorpal-surface-alt);
+}
+
+.bal-uri {
+	font-family: var(--vorpal-font-mono);
+	white-space: nowrap;
+	color: var(--vorpal-ink-700);
+}
+
+.bal-uri strong {
+	color: var(--vorpal-ink-900);
+}
+
+.bal-missing {
+	text-align: center;
+	color: var(--vorpal-slate-400);
+}
+
+/* ---- Map view ---- */
+
+.bal-map-wrap {
+	display: flex;
+	gap: 20px;
+	align-items: flex-start;
+}
+
+.bal-map {
+	flex: 1 1 auto;
+	min-width: 0;
+	max-width: 100%;
+	height: auto;
+}
+
+.bal-map-sphere {
+	fill: none;
+	stroke: var(--vorpal-divider);
+}
+
+.bal-map-land {
+	fill: var(--vorpal-slate-100);
+	stroke: var(--vorpal-slate-200);
+	stroke-width: 0.5;
+}
+
+.bal-map-borders {
+	fill: none;
+	stroke: var(--vorpal-slate-200);
+	stroke-width: 0.7;
+}
+
+.bal-site {
+	cursor: pointer;
+}
+
+.bal-site-up   { fill: var(--vorpal-success); stroke: var(--vorpal-ink-900); stroke-width: 1; }
+.bal-site-warn { fill: var(--vorpal-warn);    stroke: var(--vorpal-ink-900); stroke-width: 1; }
+.bal-site-down { fill: var(--vorpal-error);   stroke: var(--vorpal-ink-900); stroke-width: 1; }
+
+.bal-site-name {
+	fill: var(--vorpal-ink-900);
+	font-size: 12px;
+	font-weight: 700;
+	text-anchor: middle;
+	paint-order: stroke;
+	stroke: var(--vorpal-surface);
+	stroke-width: 3;
+}
+
+.bal-site-count {
+	fill: var(--vorpal-slate-600);
+	font-size: 11px;
+	font-weight: 600;
+	text-anchor: middle;
+	paint-order: stroke;
+	stroke: var(--vorpal-surface);
+	stroke-width: 3;
+}
+
+.bal-site-pulse {
+	fill: none;
+	stroke: var(--vorpal-purple);
+	stroke-width: 2;
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: bal-ring 1.6s ease-out infinite;
+}
+
+@keyframes bal-ring {
+	from { transform: scale(1);   opacity: 0.8; }
+	to   { transform: scale(2.6); opacity: 0; }
+}
+
+.bal-cluster-ring {
+	fill: none;
+	stroke: var(--vorpal-purple);
+	stroke-width: 2;
+	stroke-dasharray: 3 3;
+}
+
+.bal-arc {
+	fill: none;
+	stroke: var(--vorpal-slate-400);
+	stroke-width: 1.2;
+	opacity: 0.7;
+}
+
+.bal-arc-pulse {
+	stroke: var(--vorpal-purple);
+	stroke-width: 2;
+	stroke-dasharray: 6 6;
+	opacity: 1;
+	animation: bal-dash 1.2s linear infinite;
+}
+
+@keyframes bal-dash {
+	to { stroke-dashoffset: -24; }
+}
+
+.bal-tray {
+	flex: 0 0 220px;
+	border-left: 1px solid var(--vorpal-divider);
+	padding-left: 16px;
+}
+
+.bal-tray h3 {
+	margin: 0 0 10px 0;
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--vorpal-slate-600);
+}
+
+.bal-tray p {
+	font-size: 11px;
+	color: var(--vorpal-slate-400);
+}
+
+.bal-tray-site {
+	display: block;
+	width: 100%;
+	text-align: left;
+	font: inherit;
+	font-size: 13px;
+	color: var(--vorpal-ink-900);
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-slate-200);
+	padding: 8px 10px;
+	margin-bottom: 6px;
+	cursor: pointer;
+}
+
+.bal-tray-site:hover {
+	background: var(--vorpal-slate-100);
+}
+
+.bal-tray-site span {
+	color: var(--vorpal-slate-600);
+	font-size: 12px;
+}
+
+.bal-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 20px;
+	margin-top: 14px;
+	padding-top: 12px;
+	border-top: 1px solid var(--vorpal-divider);
+	font-size: 12px;
+	color: var(--vorpal-slate-600);
+}
+
+.bal-key {
+	display: inline-block;
+	width: 11px;
+	height: 11px;
+	vertical-align: -1px;
+	margin-right: 5px;
+	border: 1px solid var(--vorpal-ink-900);
+}
+
+.bal-key-circle  { border-radius: 50%; background: var(--vorpal-success); }
+.bal-key-diamond { transform: rotate(45deg); background: var(--vorpal-warn); }
+.bal-key-square  { background: var(--vorpal-error); }
+.bal-key-arc {
+	width: 20px;
+	height: 0;
+	border: 0;
+	border-top: 2px dashed var(--vorpal-purple);
+	vertical-align: 3px;
+}
+
+/* ---- Topology view ---- */
+
+.bal-pipe {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	overflow-x: auto;
+	padding-bottom: 6px;
+}
+
+.bal-engines {
+	flex: 0 0 auto;
+	min-width: 110px;
+	padding-top: 4px;
+}
+
+.bal-engines h4,
+.bal-tierbox header {
+	margin: 0 0 8px 0;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--vorpal-slate-600);
+}
+
+.bal-engine {
+	background: var(--vorpal-surface-alt);
+	border: 1px solid var(--vorpal-slate-200);
+	padding: 7px 12px;
+	margin-bottom: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--vorpal-ink-700);
+	white-space: nowrap;
+}
+
+.bal-arrow {
+	flex: 0 0 auto;
+	align-self: center;
+	text-align: center;
+	color: var(--vorpal-slate-600);
+}
+
+.bal-arrow span {
+	display: block;
+	font-size: 22px;
+	line-height: 1;
+}
+
+.bal-arrow em {
+	display: block;
+	font-size: 10px;
+	font-style: normal;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.bal-arrow-failover span {
+	color: var(--vorpal-warn);
+}
+
+.bal-tierbox {
+	flex: 0 0 auto;
+	background: var(--vorpal-slate-100);
+	border: 1px solid var(--vorpal-slate-200);
+	padding: 10px 12px;
+}
+
+.bal-tierbox header span {
+	display: block;
+	font-weight: 400;
+	text-transform: none;
+	letter-spacing: 0;
+}
+
+.bal-card {
+	width: 196px;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-slate-200);
+	padding: 10px 12px;
+	margin-bottom: 8px;
+	cursor: pointer;
+	font-size: 13px;
+}
+
+.bal-card:hover {
+	border-color: var(--vorpal-purple);
+}
+
+.bal-card-pulse {
+	animation: bal-cardpulse 1.4s ease-out 2;
+}
+
+@keyframes bal-cardpulse {
+	0%   { box-shadow: 0 0 0 0 rgba(124, 58, 144, 0.55); }
+	100% { box-shadow: 0 0 0 9px rgba(124, 58, 144, 0); }
+}
+
+.bal-card-dim {
+	opacity: 0.35;
+}
+
+.bal-card-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.bal-card-head strong {
+	color: var(--vorpal-ink-900);
+}
+
+.bal-card-chip {
+	margin-left: auto;
+	font-size: 11px;
+}
+
+.bal-badge {
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--vorpal-slate-600);
+	background: var(--vorpal-slate-100);
+	border: 1px solid var(--vorpal-slate-200);
+	padding: 1px 5px;
+	white-space: nowrap;
+}
+
+.bal-card-uri {
+	font-family: var(--vorpal-font-mono);
+	font-size: 11px;
+	color: var(--vorpal-slate-600);
+	margin: 4px 0 6px 0;
+	word-break: break-all;
+}
+
+.bal-nodes {
+	margin-bottom: 6px;
+	letter-spacing: 3px;
+	font-size: 12px;
+	cursor: help;
+}
+
+.bal-mini.bal-up      { color: var(--vorpal-success); }
+.bal-mini.bal-down    { color: var(--vorpal-error); }
+.bal-mini.bal-backoff { color: var(--vorpal-warn); }
+.bal-mini.bal-unknown { color: var(--vorpal-slate-400); }
+
+.bal-sparkrow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.bal-spark polyline {
+	stroke: var(--vorpal-slate-600);
+	stroke-width: 1.2;
+	opacity: 0.8;
+}
+
+.bal-spark-label {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--vorpal-ink-700);
+	white-space: nowrap;
+}
+
+.bal-spark-label em {
+	font-style: normal;
+	font-weight: 400;
+	color: var(--vorpal-slate-400);
+}
+
+.bal-nortt {
+	font-size: 11px;
+	font-style: italic;
+	color: var(--vorpal-slate-400);
+	margin: 2px 0;
+}
+
+.bal-beat {
+	display: block;
+	margin: 5px 0;
+}
+
+.bal-beat-up   { fill: var(--vorpal-success); opacity: 0.75; }
+.bal-beat-down { fill: var(--vorpal-error); }
+
+.bal-share {
+	height: 6px;
+	background: var(--vorpal-slate-100);
+	border: 1px solid var(--vorpal-slate-200);
+	margin: 6px 0 4px 0;
+}
+
+.bal-share div {
+	height: 100%;
+	background: var(--vorpal-purple);
+}
+
+.bal-counts {
+	font-size: 11px;
+	color: var(--vorpal-slate-600);
+	white-space: nowrap;
+}
+
+.bal-card-agg strong {
+	color: var(--vorpal-ink-900);
+}
+
+.bal-expand {
+	font: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--vorpal-purple);
+	background: none;
+	border: 1px solid var(--vorpal-slate-200);
+	padding: 3px 8px;
+	margin-top: 6px;
+	cursor: pointer;
+}
+
+.bal-expand:hover {
+	background: var(--vorpal-slate-100);
+}
+
+.bal-filter {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--vorpal-slate-600);
+	background: var(--vorpal-slate-100);
+	border: 1px solid var(--vorpal-slate-200);
+	padding: 2px 8px;
+	margin-left: 8px;
+	vertical-align: 2px;
+}
+
+.bal-filter button,
+.bal-close {
+	font: inherit;
+	color: var(--vorpal-slate-600);
+	background: none;
+	border: 0;
+	cursor: pointer;
+	padding: 0 2px;
+}
+
+.bal-filter button:hover,
+.bal-close:hover {
+	color: var(--vorpal-error);
+}
+
+/* ---- Endpoint detail panel ---- */
+
+.bal-detail {
+	position: fixed;
+	top: 76px;
+	right: 16px;
+	bottom: 16px;
+	width: 348px;
+	overflow-y: auto;
+	z-index: 50;
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
+	border: 1px solid var(--vorpal-slate-200);
+	border-left: 4px solid var(--vorpal-purple);
+	border-radius: var(--vorpal-radius-lg);
+	box-shadow: var(--vorpal-shadow-sm);
+	padding: 16px 18px;
+	font-size: 13px;
+}
+
+.bal-detail-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.bal-detail-head strong {
+	font-size: 15px;
+}
+
+.bal-detail-head .bal-close {
+	margin-left: auto;
+	font-size: 15px;
+}
+
+.bal-detail h4 {
+	margin: 16px 0 6px 0;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--vorpal-slate-600);
+}
+
+.bal-detail-node {
+	padding: 6px 0;
+	border-bottom: 1px solid var(--vorpal-divider);
+}
+
+.bal-detail-node h4 {
+	margin: 0 0 3px 0;
+}
+
+.bal-log {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	font-size: 11px;
+	color: var(--vorpal-ink-700);
+}
+
+.bal-log li {
+	padding: 3px 0;
+	border-bottom: 1px solid var(--vorpal-divider);
+}
+
+.bal-log time {
+	font-family: var(--vorpal-font-mono);
+	color: var(--vorpal-slate-600);
+	margin-right: 4px;
+}
+
+.bal-log em {
+	font-style: normal;
+	color: var(--vorpal-slate-400);
+}

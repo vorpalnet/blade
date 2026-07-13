@@ -23,10 +23,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * REST API for WebLogic server tuning settings.
  *
  * Manages per-server settings: thread pool sizing, socket readers,
- * message size limits, and connection timeouts.
+ * message size limits, and minimum log severity.
  */
 @Path("/server-tuning")
-@Tag(name = "Server Tuning", description = "Per-server thread pool, network, and timeout settings")
+@Tag(name = "Server Tuning", description = "Per-server thread pool, network, and logging settings")
 public class ServerTuningSettings {
 
 	private static final ObjectMapper mapper = new ObjectMapper();
@@ -78,8 +78,13 @@ public class ServerTuningSettings {
 				setIfPresent(editMbs, serverConfig, "SelfTuningThreadPoolSizeMax", input, "threadPoolMax", Integer.class);
 				setIfPresent(editMbs, serverConfig, "SocketReaders", input, "socketReaders", Integer.class);
 				setIfPresent(editMbs, serverConfig, "MaxMessageSize", input, "maxMessageSize", Integer.class);
-				setIfPresent(editMbs, serverConfig, "CompleteMessageTimeout", input, "completeMessageTimeout", Integer.class);
-				setIfPresent(editMbs, serverConfig, "IdleConnectionTimeout", input, "idleConnectionTimeout", Integer.class);
+
+				// MinimumSeverityToLog lives on the server's child Log MBean,
+				// not on Server itself (WLST: /Servers/<name>/Log/<name>).
+				ObjectName logConfig = (ObjectName) editMbs.getAttribute(serverConfig, "Log");
+				if (logConfig != null) {
+					setIfPresent(editMbs, logConfig, "MinimumSeverityToLog", input, "minimumSeverityToLog", String.class);
+				}
 
 				editMbs.invoke(editConfigManager, "save", null, null);
 				editMbs.invoke(editConfigManager, "activate",
@@ -107,8 +112,11 @@ public class ServerTuningSettings {
 		node.put("threadPoolMax", attrInt(mbs, server, "SelfTuningThreadPoolSizeMax", 0));
 		node.put("socketReaders", attrInt(mbs, server, "SocketReaders", 0));
 		node.put("maxMessageSize", attrInt(mbs, server, "MaxMessageSize", 0));
-		node.put("completeMessageTimeout", attrInt(mbs, server, "CompleteMessageTimeout", 0));
-		node.put("idleConnectionTimeout", attrInt(mbs, server, "IdleConnectionTimeout", 0));
+
+		// MinimumSeverityToLog lives on the server's child Log MBean, not on Server itself.
+		ObjectName log = (ObjectName) mbs.getAttribute(server, "Log");
+		node.put("minimumSeverityToLog", log != null ? attr(mbs, log, "MinimumSeverityToLog", "Notice") : "Notice");
+
 		return node;
 	}
 

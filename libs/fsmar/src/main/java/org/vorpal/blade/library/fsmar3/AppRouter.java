@@ -158,20 +158,47 @@ public class AppRouter implements SipApplicationRouter {
 
 			// Determine the previous application — the FSM state to evaluate from.
 			//
-			// On a fresh composition the chain starts at the "null" state. We must
-			// NOT read the previous app off the session here: for a second initial
-			// INVITE that the container has joined to an existing SipApplicationSession
-			// via an @SipApplicationKey (e.g. a second SIPREC recording dialog keyed on
-			// the same UCID), getSipApplicationSessionImpl() returns the session owned
-			// by the LAST application in the chain. Starting the FSM from that terminal
-			// state finds no forward INVITE transition, getNextApplication returns null,
-			// and OCCAS 8.3 renders that as a 500 "No handler found" (8.0 tolerated the
-			// null AR result; the default-application fallback below is likewise gated
-			// on previous == "null"). Only trust the session's application name on
+			// On a fresh composition the chain normally starts at the "null" state.
+			// We must NOT blindly read the previous app off the session here: for a
+			// second initial INVITE that the container has joined to an existing
+			// SipApplicationSession via an @SipApplicationKey (e.g. a second SIPREC
+			// recording dialog keyed on the same UCID), getSipApplicationSessionImpl()
+			// returns the session owned by the LAST application in the chain. Starting
+			// the FSM from that terminal state finds no forward INVITE transition,
+			// getNextApplication returns null, and OCCAS 8.3 renders that as a 500
+			// "No handler found" (8.0 tolerated the null AR result; the
+			// default-application fallback below is likewise gated on
+			// previous == "null"). Only trust the session's application name on
 			// continuation hops, where the container hands our stateInfo back.
+			//
+			// EXCEPTION — app-originated sends. The container also consults the AR
+			// when an application acting as UAC sends an initial request
+			// (ClientTransaction.dispatch -> needConsultARWhileSendingOut ->
+			// ContainerProcessInternalRequest.getNextApplication), and that consult
+			// is also a fresh composition. Those requests are CLIENT transactions
+			// (isServer() == false) whose session genuinely names the ORIGINATING
+			// app — the SIPREC join case above is a server transaction, so the two
+			// are cleanly distinguishable. Start the FSM AFTER the originator
+			// (FSMAR2 semantics, fsmar2 AppRouter.java:115): typically no forward
+			// transition matches, we return null, and OCCAS sends the request out
+			// to the wire ("shouldReqBeSentOut") instead of internally dispatching
+			// it to the top of the chain — e.g. proxy-balancer's OPTIONS health
+			// pings egress instead of landing on the default application.
 			String previous;
 			if (freshComposition) {
 				previous = "null";
+				try {
+					com.bea.wcp.sip.engine.server.SipServletRequestImpl impl =
+							((SipServletRequestAdapter) request).getImpl();
+					if (!impl.isServer()) {
+						SipApplicationSessionImpl sasi = impl.getSipApplicationSessionImpl();
+						if (sasi != null && sasi.getApplicationName() != null) {
+							previous = SettingsManager.basename(sasi.getApplicationName());
+						}
+					}
+				} catch (Exception ignore) {
+					// best-effort: anything unexpected keeps chain-top routing
+				}
 			} else if (routingState.getCurrentStateId() != null) {
 				// Resume at the exact state we last routed INTO, carried in our
 				// stateInfo. This — not the session's application name — is what

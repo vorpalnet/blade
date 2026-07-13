@@ -1153,6 +1153,30 @@ public abstract class Callflow implements Serializable {
 	/// @throws IOException
 	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
 			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
+		sendRequestsInSerial(milliseconds, requests, lambdaFunction, null);
+	}
+
+	/// Request attribute marking a serial-hunt request abandoned by its timer.
+	/// The late final response (487 after our CANCEL) must not advance the
+	/// hunt a second time — the timeout path already did.
+	private static final String SERIAL_ABANDONED = "serialRequestAbandoned";
+
+	/// Sends multiple requests (INVITE) in serial, with a per-leg observer.
+	/// `legResponse` (may be null) is called with EVERY response each leg
+	/// produces — provisional and final — before any hunt logic runs; use it
+	/// to relay ringing upstream or track endpoint health. Provisional
+	/// responses never stop the per-request timer, advance the hunt, or reach
+	/// `lambdaFunction`; only final responses do.
+	///
+	/// @param milliseconds   timer duration in milliseconds for each request
+	/// @param requests       a list of SipServletRequest objects
+	/// @param lambdaFunction supplies the winning (or last failing) final response
+	/// @param legResponse    observer for every per-leg response, or null
+	/// @throws ServletException
+	/// @throws IOException
+	public void sendRequestsInSerial(long milliseconds, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> legResponse)
+			throws ServletException, IOException {
 
 		if (requests.isEmpty()) {
 			sipLogger.warning("#1.7 Callflow.sendRequestsInSerial... Empty request list.");
@@ -1161,18 +1185,35 @@ public abstract class Callflow implements Serializable {
 
 		SipServletRequest request = requests.remove(0);
 		String timerId = startTimer(request.getApplicationSession(), milliseconds, false, (timeout) -> {
+			request.setAttribute(SERIAL_ABANDONED, Boolean.TRUE);
 			sendRequest(request.createCancel());
-			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, request);
+			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, legResponse, request);
 		});
 
 		try {
 			sendRequest(request, (response) -> {
+
+				if (legResponse != null) {
+					legResponse.accept(response);
+				}
+
+				if (provisional(response)) {
+					// keep the timer running; await a final response
+					return;
+				}
+
+				if (Boolean.TRUE.equals(response.getRequest().getAttribute(SERIAL_ABANDONED))) {
+					// late final (e.g. 487 after our CANCEL); the timeout
+					// path already advanced the hunt
+					return;
+				}
+
 				stopTimer(response.getApplicationSession(), timerId);
 				if (!failure(response) || requests.isEmpty()) {
 					lambdaFunction.accept(response);
 				} else {
 					// failure and more requests remain; try the next one
-					sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+					sendRequestsInSerial(milliseconds, requests, lambdaFunction, legResponse);
 				}
 			});
 		} catch (Exception ex500) {
@@ -1180,7 +1221,7 @@ public abstract class Callflow implements Serializable {
 					"#1.6 Callflow.sendRequestsInSerial - catch Exception ex500: " + ex500.getMessage());
 			sipLogger.severe(request, ex500.getMessage());
 			stopTimer(request.getApplicationSession(), timerId);
-			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, request);
+			sendNextInSerialOrFail(milliseconds, requests, lambdaFunction, legResponse, request);
 		}
 
 	}
@@ -1188,10 +1229,10 @@ public abstract class Callflow implements Serializable {
 	/// Continue with the next request in the serial list, or deliver a dummy
 	/// 408 response built from the request that just failed if none remain.
 	private void sendNextInSerialOrFail(long milliseconds, List<SipServletRequest> requests,
-			Callback<SipServletResponse> lambdaFunction, SipServletRequest request)
-			throws ServletException, IOException {
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> legResponse,
+			SipServletRequest request) throws ServletException, IOException {
 		if (!requests.isEmpty()) {
-			sendRequestsInSerial(milliseconds, requests, lambdaFunction);
+			sendRequestsInSerial(milliseconds, requests, lambdaFunction, legResponse);
 		} else {
 			// No valid responses, create a dummy one
 			lambdaFunction.accept(request.createResponse(RESPONSE_CODE_408));
@@ -1222,6 +1263,26 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void sendRequestsInParallel(long timeout, List<SipServletRequest> requests,
 			Callback<SipServletResponse> lambdaFunction) throws ServletException, IOException {
+		sendRequestsInParallel(timeout, requests, lambdaFunction, null);
+	}
+
+	/**
+	 * Sends multiple requests (INVITE) in parallel, with a timeout and a per-leg
+	 * observer. {@code legResponse} (may be null) is called with EVERY response
+	 * each leg produces — provisional and final — before the race logic runs;
+	 * use it to relay ringing upstream or track endpoint health. Provisional
+	 * responses never affect the race and never reach {@code lambdaFunction}.
+	 *
+	 * @param timeout        timer duration in milliseconds for all requests
+	 * @param requests       a list of SipServletRequest objects
+	 * @param lambdaFunction supplies the winning (or last failing) final response
+	 * @param legResponse    observer for every per-leg response, or null
+	 * @throws ServletException
+	 * @throws IOException
+	 */
+	public void sendRequestsInParallel(long timeout, List<SipServletRequest> requests,
+			Callback<SipServletResponse> lambdaFunction, Callback<SipServletResponse> legResponse)
+			throws ServletException, IOException {
 
 		// Save requests in appSession memory.
 		// Use a unique identifier to prevent simultaneous invocations of
@@ -1270,6 +1331,10 @@ public abstract class Callflow implements Serializable {
 		for (SipServletRequest request : requests) {
 
 			sendRequest(request, (response) -> {
+
+				if (legResponse != null) {
+					legResponse.accept(response);
+				}
 
 				if (!provisional(response)) {
 

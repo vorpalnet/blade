@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>iRouter Dial Plan</title>
+	<style>
+		/* Print-first document styling — deliberately self-contained (no CDN,
+		   no bootstrap, no brand.css): the report must render identically on
+		   screen, on paper, and in print-to-PDF. Same skin as the other BLADE
+		   reports so the printed documents read as one family. */
+		* { box-sizing: border-box; }
+		body { margin: 0; background: #e9e9ee; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c1c22; }
+		.page { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px 48px 56px; min-height: 100vh; }
+		.mono { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+		.toolbar { max-width: 900px; margin: 0 auto; padding: 10px 0; display: flex; gap: 12px; align-items: center; }
+		.toolbar a { color: #333; font-size: 13px; }
+		.toolbar button { font-size: 13px; padding: 5px 14px; cursor: pointer; border: 1px solid #888; background: #fff; }
+
+		.rpt-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1c1c22; padding-bottom: 14px; margin-bottom: 8px; }
+		.rpt-head img { height: 44px; }
+		.rpt-title { text-align: right; }
+		.rpt-title h1 { margin: 0; font-size: 22px; }
+		.rpt-title .sub { color: #555; font-size: 13px; margin-top: 2px; }
+
+		h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+		h3 { font-size: 13.5px; margin: 16px 0 4px; }
+		h3 .muted { font-weight: 400; }
+
+		table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 4px 0 10px; }
+		th, td { border: 1px solid #d5d5da; padding: 4px 7px; text-align: left; vertical-align: top; }
+		th { background: #f2f2f5; font-weight: 600; }
+
+		.tiles { display: flex; gap: 12px; margin: 10px 0 12px; }
+		.tile { flex: 1; border: 1px solid #d5d5da; padding: 10px 14px 12px; }
+		.tile .val { font-size: 30px; font-weight: 600; line-height: 1.15; }
+		.tile .lbl { font-size: 12px; color: #555; margin-top: 2px; }
+
+		.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 10px 0; }
+		.kv dt { font-weight: 600; color: #555; white-space: nowrap; }
+		.kv dd { margin: 0; }
+		.muted { color: #666; }
+		.unavail { color: #777; font-style: italic; }
+
+		.tbl-cap { font-size: 12px; color: #555; margin: 6px 0 2px; }
+		.conn-desc { font-size: 12.5px; color: #444; margin: 2px 0 4px; }
+		.route-default { border: 1px solid #d5d5da; background: #f7f7fa; padding: 6px 10px; font-size: 12.5px; margin: 6px 0 10px; }
+
+		.rpt-foot { margin-top: 36px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 11.5px; color: #666; display: flex; justify-content: space-between; }
+
+		@media print {
+			body { background: #fff; }
+			.page { max-width: none; padding: 0; min-height: 0; }
+			.toolbar { display: none; }
+			h2, h3 { page-break-after: avoid; }
+			table, .tiles, .route-default { page-break-inside: avoid; }
+			@page { margin: 16mm 14mm; }
+		}
+	</style>
+</head>
+<body>
+
+	<div class="toolbar">
+		<a href="index.html">&larr; Portal</a>
+		<button onclick="window.print()">Print</button>
+		<span class="muted" style="font-size:12px">Use the browser's print dialog to save as PDF.</span>
+	</div>
+
+	<div class="page">
+		<div class="rpt-head">
+			<img src="brand/vorpal_logo.svg" alt="Vorpal Networks" onerror="this.style.display='none'">
+			<div class="rpt-title">
+				<h1>iRouter Dial Plan</h1>
+				<div class="sub" id="rpt-sub">Loading&hellip;</div>
+			</div>
+		</div>
+
+		<h2>Summary</h2>
+		<div id="rpt-summary" class="unavail">Loading&hellip;</div>
+
+		<h2>Phase 1 &mdash; Pipeline (classify &amp; enrich)</h2>
+		<p class="muted" style="font-size:12.5px; margin:4px 0 8px">
+			Connectors run in order on each initial request. Each one extracts or looks up
+			values and writes them into the call's context; later connectors and the routing
+			phase reference them as <span class="mono">${variables}</span>.
+		</p>
+		<div id="rpt-pipeline" class="unavail">Loading&hellip;</div>
+
+		<h2>Phase 2 &mdash; Routing (decide the destination)</h2>
+		<div id="rpt-routing" class="unavail">Loading&hellip;</div>
+
+		<div class="rpt-foot">
+			<span>Generated <span id="rpt-ts"></span> from the running iRouter configuration</span>
+			<span>&copy; Vorpal Networks &middot; BLADE is MIT-licensed open source</span>
+		</div>
+	</div>
+
+	<script>
+		function he(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+		document.getElementById('rpt-ts').textContent = new Date().toLocaleString();
+
+		// The portal reads the RUNNING config off the service's Configuration
+		// MBean (federated JMX) — what the engines are routing with right now,
+		// which can differ from the file on disk until a publish.
+		var DOMAIN = new URLSearchParams(location.search).get('domain') || 'irouter';
+
+		fetch('api/v1/config/' + encodeURIComponent(DOMAIN), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+			.then(function (r) {
+				if (!r.ok) { return r.text().then(function (t) { throw new Error(t || ('HTTP ' + r.status)); }); }
+				return r.json();
+			})
+			.then(function (data) { render(data.config || {}, data.servers || []); })
+			.catch(function (err) {
+				document.getElementById('rpt-sub').textContent = 'error';
+				document.getElementById('rpt-summary').textContent =
+					'Could not read the running configuration: ' + err.message;
+				document.getElementById('rpt-pipeline').textContent = '—';
+				document.getElementById('rpt-routing').textContent = '—';
+			});
+
+		function matchWord(m) {
+			switch (m || 'hash') {
+			case 'prefix': return 'longest matching prefix wins';
+			case 'range':  return 'integer range match (keys like "8-17")';
+			default:       return 'exact match';
+			}
+		}
+
+		// One Route as printable lines: destination first, then stamped headers.
+		function routeHtml(route) {
+			if (!route) { return '<span class="muted">—</span>'; }
+			var lines = [];
+			if (route.statusCode != null) {
+				lines.push('<strong>answer ' + he(route.statusCode) + (route.reasonPhrase ? ' ' + he(route.reasonPhrase) : '') + '</strong> (no forward)');
+			} else if (route.requestUri) {
+				lines.push('<span class="mono">' + he(route.requestUri) + '</span>');
+			}
+			Object.keys(route.headers || {}).forEach(function (n) {
+				lines.push('<span class="mono" style="font-size:11px">' + he(n) + ': ' + he(route.headers[n]) + '</span>');
+			});
+			(route.conditionalHeaders || []).forEach(function (ch) {
+				lines.push('<span class="mono" style="font-size:11px">' + he(ch.name) + ': ' + he(ch.value)
+					+ '</span> <span class="muted" style="font-size:11px">when ' + he(ch.when) + '</span>');
+			});
+			return lines.length ? lines.join('<br>') : '<span class="muted">—</span>';
+		}
+
+		function translationTableHtml(tbl, ordinal) {
+			var keys = Object.keys(tbl.translations || {});
+			var h = '<div class="tbl-cap">Lookup table ' + ordinal + ' &mdash; key <span class="mono">' + he(tbl.keyExpression || '—')
+				+ '</span> &middot; ' + matchWord(tbl.match) + ' &middot; first table to match wins</div>';
+			h += '<table><thead><tr><th style="width:30%">Key</th><th>Sets in context</th></tr></thead><tbody>';
+			keys.forEach(function (k) {
+				var extras = tbl.translations[k] || {};
+				var sets = Object.keys(extras).map(function (n) {
+					return '<span class="mono" style="font-size:11px">' + he(n) + ' = ' + he(extras[n]) + '</span>';
+				}).join('<br>');
+				h += '<tr><td class="mono">' + (k === '' ? '<span class="muted">(any / catch-all)</span>' : he(k)) + '</td>'
+					+ '<td>' + (sets || '<span class="muted">—</span>') + '</td></tr>';
+			});
+			if (!keys.length) { h += '<tr><td colspan="2" class="muted">empty table</td></tr>'; }
+			h += '</tbody></table>';
+			return h;
+		}
+
+		function renderSummary(config, servers) {
+			var el = document.getElementById('rpt-summary');
+			var pipeline = config.pipeline || [];
+			var routing = config.routing || {};
+
+			var tTables = 0;
+			pipeline.forEach(function (c) { tTables += (c.tables || []).length; });
+			var rTables = (routing.tables || []).length;
+
+			var routeRows = 0;
+			(routing.tables || []).forEach(function (t) { routeRows += Object.keys(t.routes || {}).length; });
+			routeRows += (routing.clauses || []).length;
+			if (routing.type === 'direct') { routeRows += 1; }
+
+			document.getElementById('rpt-sub').innerHTML =
+				'running configuration' + (config.version != null ? ' v' + he(config.version) : '')
+				+ ' &middot; ' + new Date().toLocaleDateString();
+
+			var routingWord = routing.type === 'conditional' ? 'conditional (first true clause wins)'
+				: routing.type === 'direct' ? 'direct (single inline destination)'
+				: 'table-driven (first table to match wins)';
+
+			var h = '<div class="tiles">';
+			h += '<div class="tile"><div class="val">' + pipeline.length + '</div><div class="lbl">pipeline connectors (classify &amp; enrich)</div></div>';
+			h += '<div class="tile"><div class="val">' + (tTables + rTables) + '</div><div class="lbl">lookup tables (' + tTables + ' translation, ' + rTables + ' routing)</div></div>';
+			h += '<div class="tile"><div class="val">' + routeRows + '</div><div class="lbl">route entries' + (routing['default'] ? ' + a default route' : '') + '</div></div>';
+			h += '</div>';
+
+			h += '<dl class="kv">';
+			h += '<dt>Routing style</dt><dd>' + routingWord + '</dd>';
+			if (servers.length) { h += '<dt>Running on</dt><dd class="mono">' + servers.map(he).join(', ') + '</dd>'; }
+			if (config.notes) { h += '<dt>Notes</dt><dd>' + he(config.notes) + '</dd>'; }
+			h += '</dl>';
+
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderPipeline(config) {
+			var el = document.getElementById('rpt-pipeline');
+			var pipeline = config.pipeline || [];
+			if (!pipeline.length) { el.textContent = 'No pipeline connectors configured — routing sees only the raw request attributes.'; return; }
+
+			var h = '';
+			pipeline.forEach(function (c, i) {
+				var type = c.type || 'sip';
+				h += '<h3>' + (i + 1) + '. <span class="mono">' + he(c.id || type) + '</span>'
+					+ ' <span class="muted">&middot; ' + he(type) + ' connector</span></h3>';
+				if (c.description) { h += '<div class="conn-desc">' + he(c.description) + '</div>'; }
+
+				// Source-specific scalar settings (url, dataSource, queryTemplate…)
+				// print generically so new connector types show up unedited.
+				var skip = { type: 1, id: 1, description: 1, selectors: 1, tables: 1 };
+				var kv = '';
+				Object.keys(c).forEach(function (k) {
+					if (skip[k] || c[k] == null || typeof c[k] === 'object') { return; }
+					kv += '<dt>' + he(k) + '</dt><dd class="mono">' + he(c[k]) + '</dd>';
+				});
+				if (kv) { h += '<dl class="kv" style="margin:4px 0">' + kv + '</dl>'; }
+
+				if ((c.selectors || []).length) {
+					h += '<table style="max-width:560px"><thead><tr><th>Writes</th><th>Type</th><th>Extracts from</th></tr></thead><tbody>';
+					c.selectors.forEach(function (s) {
+						h += '<tr><td class="mono">${' + he(s.id) + '}</td><td class="mono">' + he(s.type || 'attribute')
+							+ '</td><td class="mono">' + he(s.attribute || '—') + '</td></tr>';
+					});
+					h += '</tbody></table>';
+				}
+				(c.tables || []).forEach(function (t, ti) { h += translationTableHtml(t, ti + 1); });
+			});
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderRouting(config) {
+			var el = document.getElementById('rpt-routing');
+			var routing = config.routing;
+			if (!routing) { el.textContent = 'No routing phase configured.'; return; }
+			var h = '';
+
+			if (routing.type === 'direct') {
+				h += '<p style="font-size:12.5px">Every request forwards to one inline destination:</p>';
+				h += '<div class="route-default">' + routeHtml(routing) + '</div>';
+			} else if (routing.type === 'conditional') {
+				h += '<div class="tbl-cap">Clauses evaluate in order; the first <span class="mono">when</span> that is true wins.</div>';
+				h += '<table><thead><tr><th style="width:45%">When</th><th>Route</th></tr></thead><tbody>';
+				(routing.clauses || []).forEach(function (cl) {
+					h += '<tr><td class="mono">' + he(cl.when || '(always)') + '</td><td>' + routeHtml(cl.route) + '</td></tr>';
+				});
+				h += '</tbody></table>';
+			} else {
+				(routing.tables || []).forEach(function (t, i) {
+					var keys = Object.keys(t.routes || {});
+					h += '<div class="tbl-cap">Routing table ' + (i + 1) + ' &mdash; key <span class="mono">' + he(t.keyExpression || '—')
+						+ '</span> &middot; ' + matchWord(t.match) + ' &middot; first table to match wins</div>';
+					h += '<table><thead><tr><th style="width:30%">Key</th><th>Route</th></tr></thead><tbody>';
+					keys.forEach(function (k) {
+						h += '<tr><td class="mono">' + (k === '' ? '<span class="muted">(any / catch-all)</span>' : he(k)) + '</td>'
+							+ '<td>' + routeHtml(t.routes[k]) + '</td></tr>';
+					});
+					if (!keys.length) { h += '<tr><td colspan="2" class="muted">empty table</td></tr>'; }
+					h += '</tbody></table>';
+				});
+			}
+
+			if (routing['default']) {
+				h += '<div class="route-default"><strong>Default route</strong> (no table matched) &mdash; ' + routeHtml(routing['default']) + '</div>';
+			} else if (routing.type !== 'direct') {
+				h += '<div class="route-default"><strong>No default route</strong> &mdash; a request nothing matches is not forwarded by the iRouter.</div>';
+			}
+
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function render(config, servers) {
+			renderSummary(config, servers);
+			renderPipeline(config);
+			renderRouting(config);
+		}
+	</script>
+</body>
+</html>

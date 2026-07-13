@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>SIP Call Trace Report</title>
+	<script src="trace-model.js"></script>
+	<style>
+		/* Print-first document styling — deliberately self-contained (no CDN,
+		   no bootstrap, no brand.css): the report must render identically on
+		   screen, on paper, and in print-to-PDF. Same skin as the Tuning
+		   report so the printed BLADE documents read as one family. */
+		* { box-sizing: border-box; }
+		body { margin: 0; background: #e9e9ee; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c1c22; }
+		.page { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px 48px 56px; min-height: 100vh; }
+		.mono { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+		.toolbar { max-width: 900px; margin: 0 auto; padding: 10px 0; display: flex; gap: 12px; align-items: center; }
+		.toolbar a { color: #333; font-size: 13px; }
+		.toolbar button { font-size: 13px; padding: 5px 14px; cursor: pointer; border: 1px solid #888; background: #fff; }
+
+		.rpt-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1c1c22; padding-bottom: 14px; margin-bottom: 8px; }
+		.rpt-head img { height: 44px; }
+		.rpt-title { text-align: right; }
+		.rpt-title h1 { margin: 0; font-size: 22px; }
+		.rpt-title .sub { color: #555; font-size: 13px; margin-top: 2px; }
+
+		h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+
+		.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 10px 0; }
+		.kv dt { font-weight: 600; color: #555; white-space: nowrap; }
+		.kv dd { margin: 0; }
+		.muted { color: #666; }
+		.unavail { color: #777; font-style: italic; }
+
+		/* Call picker (no ?session= given) */
+		.pick a { display: block; padding: 6px 10px; border: 1px solid #d5d5da; margin: 4px 0; color: #1c1c22; text-decoration: none; }
+		.pick a:hover { background: #f2f2f5; }
+		.pick .when { color: #666; font-size: 12px; }
+
+		/* Ladder — trace-model.js emits the same classes the live viewer
+		   styles; this is the monochrome ink-on-white print skin. */
+		.ladder-wrap { overflow-x: auto; }
+		.tr-ladder-svg { max-width: 100%; height: auto; display: block; margin: 8px auto; }
+		.tr-life { stroke: #bbb; stroke-width: 1; stroke-dasharray: 4 3; }
+		.tr-life-app { stroke: #888; stroke-dasharray: none; }
+		.tr-lane-box { fill: #f2f2f5; stroke: #444; stroke-width: 1; }
+		.tr-lane-label { font: 11px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #333; }
+		.tr-lane-app { font-weight: 600; fill: #1c1c22; }
+		.tr-larrow-line { stroke: #1c1c22; stroke-width: 1.5; fill: none; }
+		.tr-larrow-head { stroke: #1c1c22; stroke-width: 1.5; fill: none; }
+		.tr-larrow-label { font: 10.5px SFMono-Regular, Menlo, Consolas, monospace; fill: #1c1c22; }
+		.tr-larrow-hit { fill: none; }
+
+		/* Per-step message detail */
+		.step { border: 1px solid #d5d5da; margin: 10px 0; }
+		.step-head { background: #f2f2f5; border-bottom: 1px solid #d5d5da; padding: 5px 10px; font-size: 12.5px; }
+		.step-head strong { font-size: 13px; }
+		.step-src { padding: 4px 10px 0; color: #555; font-size: 11px; }
+		.step pre { margin: 4px 0 0; padding: 6px 10px 10px; font-size: 10.5px; line-height: 1.35; white-space: pre-wrap; word-break: break-all; }
+
+		.rpt-foot { margin-top: 36px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 11.5px; color: #666; display: flex; justify-content: space-between; }
+
+		@media print {
+			body { background: #fff; }
+			.page { max-width: none; padding: 0; min-height: 0; }
+			.toolbar { display: none; }
+			h2 { page-break-after: avoid; }
+			.kv, .step { page-break-inside: avoid; }
+			@page { margin: 18mm 15mm; }
+		}
+	</style>
+</head>
+<body>
+
+	<div class="toolbar">
+		<a href="traces.html">&larr; Traces</a>
+		<button onclick="window.print()">Print</button>
+		<span class="muted" style="font-size:12px">Use the browser's print dialog to save as PDF.</span>
+	</div>
+
+	<div class="page">
+		<div class="rpt-head">
+			<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks" onerror="this.style.display='none'">
+			<div class="rpt-title">
+				<h1>SIP Call Trace Report</h1>
+				<div class="sub" id="rpt-sub">Loading&hellip;</div>
+			</div>
+		</div>
+
+		<div id="rpt-body" class="unavail">Loading captured calls&hellip;</div>
+
+		<div class="rpt-foot">
+			<span>Generated <span id="rpt-ts"></span> by the BLADE Trace console</span>
+			<span>&copy; Vorpal Networks &middot; BLADE is MIT-licensed open source</span>
+		</div>
+	</div>
+
+	<script>
+		var he = escapeHtml; // from trace-model.js
+
+		// From/To for the summary block: the raw header value, minus the tag
+		// param nobody prints on paper.
+		function partyHeader(call, name, compact) {
+			for (var i = 0; i < call.steps.length; i++) {
+				var v = sipHeader(call.steps[i].message, name, compact);
+				if (v) { return v.replace(/;\s*tag=[^;]*/i, ''); }
+			}
+			return null;
+		}
+
+		function fmtDuration(ms) {
+			if (ms < 1000) { return ms + ' ms'; }
+			return (ms / 1000).toFixed(ms < 10000 ? 2 : 1) + ' s';
+		}
+
+		function uniq(list) {
+			return list.filter(function (v, i) { return v && list.indexOf(v) === i; });
+		}
+
+		document.getElementById('rpt-ts').textContent = new Date().toLocaleString();
+		var want = new URLSearchParams(location.search).get('session');
+
+		fetch('api/traces', { headers: { Accept: 'application/json' } })
+			.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+			.then(function (data) { render(aggregate(data.sources)); })
+			.catch(function (err) {
+				document.getElementById('rpt-sub').textContent = 'error';
+				document.getElementById('rpt-body').textContent = 'Could not load traces: ' + err.message;
+			});
+
+		function render(calls) {
+			var call = want ? calls.find(function (c) { return c.sessionId === want; }) : null;
+			if (call) { renderReport(call); return; }
+			renderPicker(calls, want);
+		}
+
+		// No ?session= (or a stale one): list the captured calls to pick from.
+		function renderPicker(calls, missing) {
+			document.getElementById('rpt-sub').textContent =
+				calls.length + ' captured call' + (calls.length === 1 ? '' : 's');
+			var el = document.getElementById('rpt-body');
+			var h = missing
+				? '<p>Call <span class="mono">' + he(missing) + '</span> is no longer in the capture buffer. '
+					+ 'The buffer rotates; save a snapshot to keep a call permanently.</p>'
+				: '';
+			if (!calls.length) {
+				el.className = ''; el.innerHTML = h + '<p class="unavail">Nothing captured. Arm a rule on the Traces page, then place a matching call.</p>';
+				return;
+			}
+			h += '<h2>Captured Calls</h2><div class="pick">';
+			calls.forEach(function (c) {
+				h += '<a href="report.html?session=' + encodeURIComponent(c.sessionId) + '">'
+					+ '<span class="mono">' + he(c.sessionId) + '</span> &middot; ' + c.steps.length + ' steps'
+					+ ' <span class="when">' + he(new Date(c.firstMillis).toLocaleString())
+					+ ' &middot; ' + he(uniq(c.apps).join(', ')) + '</span></a>';
+			});
+			h += '</div>';
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderReport(call) {
+			var steps = call.steps;
+			var first = steps[0], last = steps[steps.length - 1];
+			document.getElementById('rpt-sub').innerHTML =
+				'Session ' + he(call.sessionId) + ' &middot; ' + he(new Date(call.firstMillis).toLocaleDateString());
+
+			var from = partyHeader(call, 'from', 'f');
+			var to = partyHeader(call, 'to', 't');
+
+			var h = '<h2>Call Summary</h2><dl class="kv">';
+			function row(k, v, mono) {
+				if (v) { h += '<dt>' + he(k) + '</dt><dd' + (mono ? ' class="mono"' : '') + '>' + he(v) + '</dd>'; }
+			}
+			row('Session', call.sessionId, true);
+			row('Captured', new Date(call.firstMillis).toLocaleString());
+			row('Duration', fmtDuration(last.epochMillis - first.epochMillis) + ' recorded, ' + steps.length + ' steps');
+			row('From', from, true);
+			row('To', to, true);
+			row('Applications', uniq(call.apps).join(', '));
+			row('Servers', uniq(steps.map(function (s) { return s.server; })).join(', '));
+			h += '</dl>';
+
+			h += '<h2>Sequence Diagram</h2><div class="ladder-wrap">' + ladderSvg(call, -1) + '</div>';
+
+			h += '<h2>Message Detail</h2>';
+			steps.forEach(function (s, i) {
+				var kindWord = s.kind === 'request' ? 'request' : 'response';
+				var dirWord = s.direction === 'in' ? 'received by' : 'sent by';
+				var src = s.direction === 'in'
+					? (isHandlerMethod(s.methodName) ? s.className + '.' + s.methodName + ' (handler)' : 'received by ' + s.className)
+					: s.className + '.' + s.methodName + (s.line > 0 ? ':' + s.line : '');
+				h += '<div class="step">'
+					+ '<div class="step-head"><strong>#' + (i + 1) + ' &middot; ' + he(s.label) + '</strong> &mdash; '
+					+ kindWord + ' ' + dirWord + ' ' + he(s.app)
+					+ ' &middot; ' + he(hhmmss(s.epochMillis))
+					+ (s.server ? ' &middot; recorded on ' + he(s.server) : '') + '</div>'
+					+ (src ? '<div class="step-src mono">' + he(src) + '</div>' : '')
+					+ '<pre class="mono">' + he(s.message || '(no raw SIP message was recorded for this step)') + '</pre>'
+					+ '</div>';
+			});
+
+			var el = document.getElementById('rpt-body');
+			el.className = ''; el.innerHTML = h;
+		}
+	</script>
+</body>
+</html>

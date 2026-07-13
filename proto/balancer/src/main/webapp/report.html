@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Balancer Site Health &amp; Capacity Report</title>
+	<script src="balancer-model.js"></script>
+	<style>
+		/* Print-first document styling — deliberately self-contained (no CDN,
+		   no bootstrap, no brand.css): the report must render identically on
+		   screen, on paper, and in print-to-PDF. Same skin as the Tuning and
+		   Trace reports so the printed BLADE documents read as one family. */
+		* { box-sizing: border-box; }
+		body { margin: 0; background: #e9e9ee; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1c1c22; }
+		.page { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px 48px 56px; min-height: 100vh; }
+		.mono { font-family: SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+		.toolbar { max-width: 900px; margin: 0 auto; padding: 10px 0; display: flex; gap: 12px; align-items: center; }
+		.toolbar a { color: #333; font-size: 13px; }
+		.toolbar button { font-size: 13px; padding: 5px 14px; cursor: pointer; border: 1px solid #888; background: #fff; }
+
+		.rpt-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #1c1c22; padding-bottom: 14px; margin-bottom: 8px; }
+		.rpt-head img { height: 44px; }
+		.rpt-title { text-align: right; }
+		.rpt-title h1 { margin: 0; font-size: 22px; }
+		.rpt-title .sub { color: #555; font-size: 13px; margin-top: 2px; }
+
+		h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+		h3 { font-size: 13px; margin: 14px 0 4px; color: #444; text-transform: uppercase; letter-spacing: .5px; }
+
+		table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0 10px; }
+		th, td { border: 1px solid #d5d5da; padding: 4px 7px; text-align: left; vertical-align: top; }
+		th { background: #f2f2f5; font-weight: 600; }
+		tr.sect td { background: #f7f7fa; font-weight: 600; }
+
+		/* Executive summary — monochrome stat tiles; the impaired tile is
+		   distinguished by border weight and label, never by color alone. */
+		.tiles { display: flex; gap: 12px; margin: 10px 0 12px; }
+		.tile { flex: 1; border: 1px solid #d5d5da; padding: 10px 14px 12px; }
+		.tile .val { font-size: 30px; font-weight: 600; line-height: 1.15; }
+		.tile .val small { font-size: 16px; font-weight: 400; color: #555; }
+		.tile .lbl { font-size: 12px; color: #555; margin-top: 2px; }
+		.tile.alert { border: 2.5px solid #1c1c22; }
+		.exec-summary { font-size: 14px; margin: 8px 0 4px; }
+		.exec-action { font-size: 14px; font-weight: 600; margin: 10px 0 4px; }
+		.exec-action span { font-weight: 400; }
+
+		/* State glyphs mirror the console's shape-first convention: the shape
+		   and word carry the state; bad states additionally go bold. */
+		.st { white-space: nowrap; }
+		.st-bad { font-weight: 700; }
+
+		.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 10px 0; }
+		.kv dt { font-weight: 600; color: #555; white-space: nowrap; }
+		.kv dd { margin: 0; }
+		.muted { color: #666; }
+		.unavail { color: #777; font-style: italic; }
+		.tier-head { font-size: 12.5px; color: #444; margin: 10px 0 2px; }
+		.tier-head strong { color: #1c1c22; }
+
+		.rpt-foot { margin-top: 36px; border-top: 1px solid #ccc; padding-top: 8px; font-size: 11.5px; color: #666; display: flex; justify-content: space-between; }
+
+		@media print {
+			body { background: #fff; }
+			.page { max-width: none; padding: 0; min-height: 0; }
+			.toolbar { display: none; }
+			h2 { page-break-after: avoid; }
+			table, .tiles { page-break-inside: avoid; }
+			@page { margin: 18mm 15mm; }
+		}
+	</style>
+</head>
+<body>
+
+	<div class="toolbar">
+		<a href="health.html">&larr; Endpoint Health</a>
+		<button onclick="window.print()">Print</button>
+		<span class="muted" style="font-size:12px">Use the browser's print dialog to save as PDF.</span>
+	</div>
+
+	<div class="page">
+		<div class="rpt-head">
+			<img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks" onerror="this.style.display='none'">
+			<div class="rpt-title">
+				<h1>Site Health &amp; Capacity Report</h1>
+				<div class="sub" id="rpt-sub">Loading&hellip;</div>
+			</div>
+		</div>
+
+		<h2>Executive Summary</h2>
+		<div id="rpt-exec" class="unavail">Loading&hellip;</div>
+
+		<h2>Sites</h2>
+		<div id="rpt-sites" class="unavail">Loading&hellip;</div>
+
+		<h2>Plans &amp; Failover Tiers</h2>
+		<div id="rpt-plans" class="unavail">Loading&hellip;</div>
+
+		<h2>Node Agreement</h2>
+		<div id="rpt-agreement" class="unavail">Loading&hellip;</div>
+
+		<h2>Health Checking</h2>
+		<div id="rpt-config" class="unavail">Loading&hellip;</div>
+
+		<div class="rpt-foot">
+			<span>Generated <span id="rpt-ts"></span> by the BLADE Balancer console</span>
+			<span>&copy; Vorpal Networks &middot; BLADE is MIT-licensed open source</span>
+		</div>
+	</div>
+
+	<script>
+		function he(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+		function nf(n) { return (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString('en-US'); }
+		function pct(ok, total) { return total > 0 ? Math.round(100 * ok / total) + '%' : '—'; }
+
+		// Same shape-first vocabulary as the console's chips, in print ink.
+		function stateWord(state, ep) {
+			switch (state) {
+			case 'up':        return '<span class="st">&#9679; up</span>';
+			case 'down':      return '<span class="st st-bad">&#9632; DOWN</span>';
+			case 'undefined': return '<span class="st st-bad">! UNDEFINED</span>';
+			case 'drained':   return '<span class="st">&#9634; drained</span>';
+			case 'backoff':
+				var left = ep && ep.downUntil ? Math.max(0, Math.round((ep.downUntil - Date.now()) / 1000)) : 0;
+				return '<span class="st st-bad">&#9670; BACKOFF' + (left ? ' ' + left + 's' : '') + '</span>';
+			default:          return '<span class="st">? unknown</span>';
+			}
+		}
+
+		// Last OPTIONS RTT across the nodes' views: one value or a min–max range.
+		function rttRange(agg) {
+			var vals = [];
+			Object.keys(agg.perNode).forEach(function (srv) {
+				var r = agg.perNode[srv].lastRttMs;
+				if (r != null && r >= 0) { vals.push(r); }
+			});
+			if (!vals.length) { return '—'; }
+			var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+			return lo === hi ? lo + ' ms' : lo + '–' + hi + ' ms';
+		}
+
+		document.getElementById('rpt-ts').textContent = new Date().toLocaleString();
+
+		fetch('api/health', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+			.then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+			.then(function (data) {
+				if (data.error || !data.nodes) { throw new Error(data.error || 'no nodes in response'); }
+				render(data.nodes);
+			})
+			.catch(function (err) {
+				document.getElementById('rpt-sub').textContent = 'error';
+				document.getElementById('rpt-exec').textContent = 'Could not load endpoint health: ' + err.message;
+			});
+
+		function render(nodes) {
+			var siteInfo = mergedSites(nodes);
+			var index = buildIndex(nodes);
+			var roll = siteRollup(index, siteInfo);
+			var names = Object.keys(index);
+			var siteKeys = Object.keys(roll);
+
+			document.getElementById('rpt-sub').innerHTML =
+				names.length + ' endpoints &middot; ' + siteKeys.length + ' site' + (siteKeys.length === 1 ? '' : 's')
+				+ ' &middot; ' + new Date().toLocaleDateString();
+
+			renderExec(nodes, index, names, siteKeys);
+			renderSites(roll, index);
+			renderPlans(nodes, index);
+			renderAgreement(nodes, index, names);
+			renderConfig(nodes, siteInfo);
+		}
+
+		// ============================================================
+		// Executive Summary — written for a reader who will not scroll
+		// into per-endpoint detail.
+		// ============================================================
+		function renderExec(nodes, index, names, siteKeys) {
+			var el = document.getElementById('rpt-exec');
+			if (!names.length) { el.textContent = 'No endpoints configured.'; return; }
+
+			var up = 0, drained = 0, impaired = [];
+			var attempts = 0, successes = 0, failovers = 0;
+			names.forEach(function (n) {
+				var a = index[n], w = worstState(a);
+				if (w === 'up') { up++; }
+				else if (w === 'drained') { drained++; }
+				else if (w !== 'unknown') { impaired.push({ name: n, state: w }); }
+				attempts += a.attempts; successes += a.successes; failovers += a.failovers;
+			});
+
+			var h = '<p class="exec-summary">This report covers the proxy-balancer’s ' + names.length
+				+ ' configured endpoints across ' + siteKeys.length + ' site' + (siteKeys.length === 1 ? '' : 's')
+				+ ', as observed independently by ' + nodes.length + ' engine node' + (nodes.length === 1 ? '' : 's')
+				+ ' &mdash; where nodes disagree, the worst view is reported.</p>';
+
+			h += '<div class="tiles">';
+			h += '<div class="tile"><div class="val">' + up + '<small> of ' + names.length + '</small></div>'
+				+ '<div class="lbl">endpoints up and taking calls'
+				+ (drained ? ' (' + drained + ' more deliberately drained)' : '') + '</div></div>';
+			h += '<div class="tile' + (impaired.length ? ' alert' : '') + '"><div class="val">' + impaired.length + '</div>'
+				+ '<div class="lbl">impaired endpoint' + (impaired.length === 1 ? '' : 's')
+				+ ' (down, in backoff, or undefined)</div></div>';
+			h += '<div class="tile"><div class="val">' + nf(attempts) + '</div>'
+				+ '<div class="lbl">call legs attempted since start &middot; ' + pct(successes, attempts) + ' answered'
+				+ (failovers ? ' &middot; ' + nf(failovers) + ' failovers' : '') + '</div></div>';
+			h += '</div>';
+
+			var action;
+			if (impaired.length) {
+				action = impaired.map(function (i) { return i.name + ' (' + i.state + ')'; }).join(', ')
+					+ ' — investigate before relying on this capacity.';
+			} else {
+				action = 'Every configured endpoint is taking calls' + (drained ? ' or deliberately drained' : '') + '. No action required.';
+			}
+			h += '<p class="exec-action">Status: <span>' + he(action) + '</span></p>';
+
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderSites(roll, index) {
+			var el = document.getElementById('rpt-sites');
+			var keys = Object.keys(roll);
+			if (!keys.length) { el.textContent = 'No sites configured.'; return; }
+			var h = '<table><thead><tr><th>Site</th><th>Endpoints up</th><th>Worst state</th><th>Call legs</th><th>Answered</th></tr></thead><tbody>';
+			keys.forEach(function (k) {
+				var r = roll[k];
+				var attempts = 0, successes = 0;
+				r.endpoints.forEach(function (n) { attempts += index[n].attempts; successes += index[n].successes; });
+				h += '<tr><td><strong>' + he(r.label) + '</strong>' + (r.label !== r.key ? ' <span class="muted mono">' + he(r.key) + '</span>' : '') + '</td>';
+				h += '<td>' + r.up + ' of ' + r.total + '</td>';
+				h += '<td>' + stateWord(r.worst, null) + '</td>';
+				h += '<td class="mono">' + nf(attempts) + '</td><td class="mono">' + pct(successes, attempts) + '</td></tr>';
+			});
+			h += '</tbody></table>';
+			el.className = ''; el.innerHTML = h;
+		}
+
+		// Tier skeleton from the first node carrying each plan (all nodes run
+		// the same published config); live columns from the cross-node index.
+		function renderPlans(nodes, index) {
+			var el = document.getElementById('rpt-plans');
+			var planKeys = [];
+			nodes.forEach(function (n) {
+				Object.keys((n.health || {}).plans || {}).forEach(function (pk) {
+					if (planKeys.indexOf(pk) < 0) { planKeys.push(pk); }
+				});
+			});
+			if (!planKeys.length) { el.textContent = 'No plans configured.'; return; }
+
+			var h = '';
+			planKeys.forEach(function (pk) {
+				var tiers = null;
+				nodes.some(function (n) { tiers = ((n.health || {}).plans || {})[pk]; return !!tiers; });
+				h += '<h3>Plan: ' + he(pk) + '</h3>';
+				(tiers || []).forEach(function (tier, ti) {
+					h += '<div class="tier-head"><strong>Tier ' + (ti + 1) + (tier.name ? ' — ' + he(tier.name) : '') + '</strong>'
+						+ ' &middot; strategy ' + he(tier.strategy || '—')
+						+ (tier.timeout != null ? ' &middot; timeout ' + tier.timeout + 's' : '')
+						+ (ti > 0 ? ' &middot; used when tier ' + ti + ' fails' : '') + '</div>';
+					h += '<table><thead><tr><th>Endpoint</th><th>URI</th><th>Site</th><th>Weight</th><th>State</th>'
+						+ '<th>RTT</th><th>Call legs (answered)</th><th>Failovers</th></tr></thead><tbody>';
+					(tier.endpoints || []).forEach(function (te) {
+						var a = index[te.name];
+						if (!a) { return; }
+						var w = worstState(a);
+						h += '<tr><td><strong>' + he(a.name) + '</strong></td>';
+						h += '<td class="mono" style="font-size:10.5px">' + he(a.uri || '—') + '</td>';
+						h += '<td>' + he(a.site || '—') + '</td>';
+						h += '<td class="mono">' + (a.weight != null ? a.weight : '—') + '</td>';
+						h += '<td>' + stateWord(w, null) + '</td>';
+						h += '<td class="mono">' + rttRange(a) + '</td>';
+						h += '<td class="mono">' + nf(a.attempts) + ' (' + pct(a.successes, a.attempts) + ')</td>';
+						h += '<td class="mono">' + nf(a.failovers) + '</td></tr>';
+					});
+					h += '</tbody></table>';
+				});
+			});
+			el.className = ''; el.innerHTML = h;
+		}
+
+		// Nodes legitimately disagree (independent OPTIONS pings, independent
+		// backoff windows) — persistent disagreement usually means a network
+		// path problem between one engine and the endpoint.
+		function renderAgreement(nodes, index, names) {
+			var el = document.getElementById('rpt-agreement');
+			if (!names.length) { el.textContent = 'No endpoints configured.'; return; }
+			var rows = [];
+			names.forEach(function (n) {
+				var a = index[n];
+				var srvs = Object.keys(a.perNode);
+				var states = srvs.map(function (s) { return stateOf(a.perNode[s]); });
+				if (states.some(function (s) { return s !== states[0]; })) {
+					rows.push({ name: n, srvs: srvs, agg: a });
+				}
+			});
+			if (!rows.length) {
+				el.className = '';
+				el.innerHTML = '<p>&#10003; All ' + nodes.length + ' engine nodes agree on every endpoint’s state.</p>';
+				return;
+			}
+			var h = '<p>The engine nodes disagree on ' + rows.length + ' endpoint' + (rows.length === 1 ? '' : 's')
+				+ ' — persistent disagreement usually means a network-path problem between one engine and that endpoint.</p>';
+			h += '<table><thead><tr><th>Endpoint</th><th>Node</th><th>State</th><th>Last check</th></tr></thead><tbody>';
+			rows.forEach(function (r) {
+				r.srvs.forEach(function (srv, i) {
+					var ep = r.agg.perNode[srv];
+					h += '<tr>' + (i === 0 ? '<td rowspan="' + r.srvs.length + '"><strong>' + he(r.name) + '</strong></td>' : '');
+					h += '<td class="mono">' + he(srv) + '</td><td>' + stateWord(stateOf(ep), ep) + '</td>';
+					h += '<td class="mono">' + (ep.lastChecked ? he(new Date(ep.lastChecked).toLocaleString()) : '—')
+						+ (ep.note ? ' <span class="muted">' + he(ep.note) + '</span>' : '') + '</td></tr>';
+				});
+			});
+			h += '</tbody></table>';
+			el.className = ''; el.innerHTML = h;
+		}
+
+		function renderConfig(nodes, siteInfo) {
+			var el = document.getElementById('rpt-config');
+			var h0 = (nodes[0] || {}).health || {};
+			var h = '<dl class="kv">';
+			h += '<dt>OPTIONS ping</dt><dd>' + (h0.pingEnabled === false
+				? '<strong>disabled</strong> — endpoint states rely on live-call outcomes only'
+				: 'enabled, every ' + (h0.pingInterval != null ? h0.pingInterval : '—') + ' s') + '</dd>';
+			if (h0.clusterSite) {
+				var cs = (siteInfo.sites || {})[h0.clusterSite];
+				h += '<dt>Cluster site</dt><dd>' + he(cs && cs.label ? cs.label : h0.clusterSite) + '</dd>';
+			}
+			h += '<dt>Reporting nodes</dt><dd class="mono">' + nodes.map(function (n) { return he(n.server); }).join(', ') + '</dd>';
+			h += '</dl>';
+			h += '<p class="muted" style="font-size:12px">Counters accumulate from each engine’s start and reset on restart. '
+				+ 'RTT is the OPTIONS round-trip as measured by each engine node.</p>';
+			el.className = ''; el.innerHTML = h;
+		}
+	</script>
+</body>
+</html>

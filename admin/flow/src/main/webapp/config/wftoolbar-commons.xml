@@ -6,6 +6,7 @@
 	     copy, or publish to the live fsmar3 (with validation). -->
 	<add as="exportFsmar" action="exportFsmar" icon="svg/save.svg"/>
 	<add as="exportImage" action="exportImage" icon="svg/image.svg"/>
+	<add as="printReport" action="printReport" icon="svg/print.svg"/>
 
 	<br/><hr/>
 	<add as="simulateFsmar" action="simulateFsmar" icon="svg/simulate.svg"/>

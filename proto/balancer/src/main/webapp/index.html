@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Balancer</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/balancer/favicon.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/balancer/">Balancer</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html" class="vorpal-active">Overview</a>
+			<a href="health.html">Endpoint Health</a>
+			<a href="report.html">Report</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Read-only</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>Is every endpoint taking calls?</h1>
+					<p>
+						The Proxy Balancer distributes calls across tiered pools of
+						downstream endpoints, skipping any it believes are down —
+						from its OPTIONS pings and from live 503s. Every engine
+						node keeps its <strong>own independent view</strong>; this
+						dashboard shows them all, side by side. When one node
+						disagrees with the rest, that disagreement is the
+						diagnostic: the path between that engine and that endpoint
+						is the thing to look at.
+					</p>
+				</div>
+				<div class="vorpal-hero-meta">
+					<span>Health · live from every engine</span>
+					<span>Read-only</span>
+				</div>
+			</section>
+
+			<section class="vorpal-card-grid">
+				<a href="health.html" class="vorpal-card">
+					<span class="vorpal-card-icon">&#9878;</span>
+					<h3>Endpoint Health</h3>
+					<p>
+						Every plan, tier, and endpoint — marked UP, DOWN, or
+						backing off (503 Retry-After) — as each engine node sees
+						it, with the last observation that decided the state.
+					</p>
+				</a>
+				<a href="docs/index.html" class="vorpal-card">
+					<span class="vorpal-card-icon">&#128214;</span>
+					<h3>Documentation</h3>
+					<p>
+						How health is decided: the OPTIONS ping cycle, passive
+						503 marking with Retry-After backoff, and what each
+						status means for routing.
+					</p>
+				</a>
+			</section>
+
+		</div>
+	</main>
+
+</div>
+</body>
+</html>

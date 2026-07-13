@@ -23,6 +23,7 @@
 		<nav class="vorpal-nav" aria-label="Primary">
 			<a href="index.html">Overview</a>
 			<a href="traces.html" class="vorpal-active">Traces</a>
+			<a href="report.html">Report</a>
 			<a href="docs/index.html">Documentation</a>
 		</nav>
 		<div class="vorpal-topbar-right">
@@ -63,6 +64,7 @@
 					<button id="tr-clear" type="button" class="tr-btn">Clear Buffer</button>
 					<button id="tr-save" type="button" class="tr-btn" title="Download the captured calls as one self-contained HTML file anyone can open — no OCCAS or login needed.">Save Snapshot</button>
 					<button id="tr-load" type="button" class="tr-btn" title="View a previously saved snapshot file. Refresh returns to live data.">Load Snapshot</button>
+					<button id="tr-report" type="button" class="tr-btn" title="Open the selected call as a printable report — sequence diagram plus every SIP message.">Print Report</button>
 					<input id="tr-file" type="file" accept=".html,.json" hidden>
 					<button id="tr-refresh" type="button" class="tr-btn">Refresh</button>
 					<label class="tr-auto"><input id="tr-auto" type="checkbox"> auto-refresh</label>
@@ -108,6 +110,7 @@
 	</main>
 
 </div>
+<script src="trace-model.js"></script>
 <script src="traces.js"></script>
 </body>
 </html>

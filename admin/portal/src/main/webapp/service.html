@@ -47,6 +47,7 @@
 					</p>
 					<p style="margin-top:12px;">
 						<a class="vorpal-btn" id="svc-configure" href="#">Open in Configurator</a>
+						<a class="vorpal-btn" id="svc-report" href="#" style="display:none;">Printable Report</a>
 					</p>
 				</div>
 
@@ -92,6 +93,7 @@
 		description: document.getElementById('svc-description'),
 		configureWrap: document.getElementById('svc-configure-wrap'),
 		configure: document.getElementById('svc-configure'),
+		report: document.getElementById('svc-report'),
 		error: document.getElementById('svc-error'),
 		errorMsg: document.getElementById('svc-error-msg')
 	};
@@ -135,6 +137,13 @@
 			var domain = card.configuratorDomain || card.name;
 			els.configure.href = '/blade/configurator/configurator.html?schema=' + encodeURIComponent(domain);
 			els.configureWrap.style.display = '';
+
+			// Services with a bespoke printable report, keyed by config domain.
+			var SERVICE_REPORTS = { 'irouter': 'report-irouter.html' };
+			if (SERVICE_REPORTS[domain]) {
+				els.report.href = SERVICE_REPORTS[domain] + '?domain=' + encodeURIComponent(domain);
+				els.report.style.display = '';
+			}
 		})
 		.catch(function (err) {
 			showError('Could not load service details: ' + err.message);

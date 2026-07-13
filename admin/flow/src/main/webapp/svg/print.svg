@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Print report: printer with a page feeding out -->
+  <path d="M128 176 L128 80 L384 80 L384 176" fill="none" stroke="currentColor" stroke-width="36" stroke-linejoin="round"/>
+  <rect x="72" y="176" width="368" height="160" rx="24" fill="none" stroke="currentColor" stroke-width="36"/>
+  <rect x="152" y="288" width="208" height="144" fill="none" stroke="currentColor" stroke-width="36" stroke-linejoin="round"/>
+  <line x1="192" y1="352" x2="320" y2="352" stroke="currentColor" stroke-width="24" stroke-linecap="round"/>
+  <line x1="192" y1="396" x2="288" y2="396" stroke="currentColor" stroke-width="24" stroke-linecap="round"/>
+</svg>

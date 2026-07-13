@@ -9,6 +9,7 @@
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/css/bootstrap.min.css">
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.6.0/js/bootstrap.bundle.min.js"></script>
+	<script src="recommendations.js"></script>
 
 	<style>
 		body { padding: 0; background: #f5f5f5; font-size: 14px; }
@@ -88,8 +89,14 @@
 			line-height: 1; color: #5c4a12; opacity: .6; }
 		.restart-banner .rb-close:hover { opacity: 1; }
 
-		/* Section anchor nav */
-		.section-nav { position: sticky; top: 0; z-index: 100; background: #f5f5f5; padding: 8px 0; margin-bottom: 12px; border-bottom: 1px solid #ddd; }
+		/* Section anchor nav — styled as a card surface (same background,
+		   border, radius, shadow, and horizontal padding as the cards below)
+		   so it reads as part of the same family instead of a bare strip. */
+		.section-nav { position: sticky; top: 0; z-index: 100;
+			background: var(--vorpal-surface, #fff);
+			border: 1px solid rgba(0, 0, 0, .08); border-radius: 4px;
+			box-shadow: var(--vorpal-shadow-md, 0 6px 20px -8px rgba(0, 0, 0, .45));
+			padding: 10px 15px; margin-bottom: 16px; }
 		.section-nav a { font-size: 13px; margin-right: 16px; color: #555; }
 		.section-nav a:hover { color: #007bff; text-decoration: none; }
 
@@ -186,6 +193,7 @@
 		<nav class="vorpal-nav" aria-label="Primary">
 			<a href="index.html">Overview</a>
 			<a href="tuning.html" class="vorpal-active">Dashboard</a>
+			<a href="report.html">Report</a>
 			<a href="docs/index.html">Documentation</a>
 		</nav>
 		<div class="vorpal-topbar-right">
@@ -195,6 +203,22 @@
 
 	<div class="container-fluid">
 		<h4>OCCAS Performance Settings</h4>
+
+		<!-- Quick nav -->
+		<div class="section-nav">
+			<a href="#section-about">About</a>
+			<a href="#section-domain-mode">Domain</a>
+			<a href="#section-health">Health Check</a>
+			<a href="#section-jvm">JVM</a>
+			<a href="#section-server">Server Tuning</a>
+			<a href="#section-jdbc">JDBC Pools</a>
+			<a href="#section-snmp">SNMP</a>
+			<a href="#section-sip">SIP Timers</a>
+			<a href="#section-wm">OCCAS Threads</a>
+			<a href="#section-cluster">Cluster</a>
+			<a href="#section-coherence">Coherence</a>
+			<a href="#section-kernel">Kernel</a>
+		</div>
 
 		<!-- ============================================================ -->
 		<!-- ABOUT THIS DEPLOYMENT -->
@@ -211,22 +235,6 @@
 			</div>
 		</div>
 
-		<!-- Quick nav -->
-		<div class="section-nav">
-			<a href="#section-about">About</a>
-			<a href="#section-domain-mode">Domain Mode</a>
-			<a href="#section-health">Health Check</a>
-			<a href="#section-jvm">JVM</a>
-			<a href="#section-server">Server Tuning</a>
-			<a href="#section-jdbc">JDBC Pools</a>
-			<a href="#section-snmp">SNMP</a>
-			<a href="#section-sip">SIP Timers</a>
-			<a href="#section-wm">OCCAS Threads</a>
-			<a href="#section-cluster">Cluster</a>
-			<a href="#section-coherence">Coherence</a>
-			<a href="#section-kernel">Kernel</a>
-		</div>
-
 		<!-- Restart-required banner — raised by any save that returns
 		     requiresRestart; a single standing reminder for the whole page. -->
 		<div id="restart-banner" class="restart-banner" role="status">
@@ -236,23 +244,17 @@
 		</div>
 
 		<!-- ============================================================ -->
-		<!-- DOMAIN MODE (production vs development) -->
+		<!-- DOMAIN (mode, config archive, config audit) -->
 		<!-- ============================================================ -->
 		<div id="section-domain-mode"></div>
 		<div class="card">
 			<div class="card-header">
-				<strong>Domain Mode</strong>
+				<strong>Domain</strong>
 				<span class="text-muted" id="domain-mode-sub"></span>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadDomainMode()">Refresh</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendDomain()" title="Pre-fill Config Archive on with 20 archives kept, and Config Audit = Log. Does NOT touch the Production checkbox — the mode is a deliberate operator decision, not a tuning value. Review, then Save.">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadDomainMode()">Refresh</button>
 			</div>
 			<div class="card-body">
-				<div class="info-box">
-					Whether this WebLogic domain runs in <strong>production</strong> or <strong>development</strong>
-					mode. WebLogic reads this at server boot, so a change is written to the domain config
-					immediately but only takes effect after the AdminServer and every engine node restart.
-					The mode also drives WebLogic defaults (auto-deployment, demo-certificate handling, default
-					log levels), so flip it deliberately.
-				</div>
 				<div id="domain-mode-container"><span class="text-muted">Loading…</span></div>
 			</div>
 		</div>
@@ -267,13 +269,10 @@
 				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadHealthData()">Re-run</button>
 			</div>
 			<div class="card-body">
-				<div class="info-box">
-					Read-only static checks against the current JVM configuration — predictable-latency
-					and JDK-21 readiness. Nothing here changes config; fixes are applied in the sections below.
-				</div>
-				<div id="health-container"><span class="text-muted">Loading...</span></div>
-				<div class="mt-3 mb-1" style="font-size:12px;font-weight:600;color:#555;border-bottom:1px solid #eee;padding-bottom:2px">OS &amp; Limits <span class="text-muted" style="font-weight:400">(from the platform OperatingSystem MBean)</span></div>
+				<div class="mb-1" style="font-size:12px;font-weight:600;color:#555;border-bottom:1px solid #eee;padding-bottom:2px">OS &amp; Limits <span class="text-muted" style="font-weight:400">(from the platform OperatingSystem MBean)</span></div>
 				<div id="os-container"><span class="text-muted">Loading...</span></div>
+				<div class="mt-3 mb-1" style="font-size:12px;font-weight:600;color:#555;border-bottom:1px solid #eee;padding-bottom:2px">Findings <span class="text-muted" style="font-weight:400">(static checks of the current JVM configuration; fixes are applied in the sections below)</span></div>
+				<div id="health-container"><span class="text-muted">Loading...</span></div>
 			</div>
 		</div>
 
@@ -284,13 +283,15 @@
 		<div class="card">
 			<div class="card-header">
 				<strong>JVM Profiles</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendJvmZgc()" title="Low-latency preset for JDK 21 applied to the selected profile: ZGC + Generational + AlwaysPreTouch + -Xms=-Xmx. (JDK 21/22; do not carry the Generational flag past JDK 23.)">Low-Latency (ZGC)</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="recommendJvm()" title="Set -Xms = -Xmx on the selected profile so the heap is fully committed at startup (no runtime resize pauses).">Recommended</button>
-				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadJvmProfiles()">Refresh</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendJvmZgc()" title="Low-latency preset for JDK 21 applied to the selected profile: ZGC + Generational + AlwaysPreTouch + -Xms=-Xmx + Fast SecureRandom (urandom) + concurrent System.gc() (ExplicitGCInvokesConcurrent) + Exit on OOM + wlss.maddr.enable. (JDK 21/22; do not carry the Generational flag past JDK 23.)">Low-Latency (ZGC)</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="recommendJvm()" title="Set -Xms = -Xmx on the selected profile so the heap is fully committed at startup (no runtime resize pauses), plus Fast SecureRandom (urandom), concurrent System.gc() (ExplicitGCInvokesConcurrent), Exit on OOM, and wlss.maddr.enable.">Deterministic (G1GC)</button>
+				<span class="float-right text-muted mr-2" style="font-size:12px; line-height:31px">Apply template to selected profile:</span>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-3" onclick="loadJvmProfiles()">Refresh</button>
 			</div>
 			<div class="card-body">
 				<div class="info-box">
 					<strong>Note:</strong> A profile is a complete set of JVM arguments. Assign one to each node, then <strong>Apply</strong> to write it into that node's Server-Start arguments. Restart the engine tier to activate.
+					The <strong>Deterministic (G1GC)</strong> and <strong>Low-Latency (ZGC)</strong> buttons above are templates &mdash; each fills the selected profile with Vorpal's recommended values for that collector. Review the result, then <strong>Save</strong>.
 				</div>
 				<div id="jvm-container"><span class="text-muted">Loading...</span></div>
 			</div>
@@ -303,7 +304,7 @@
 		<div class="card">
 			<div class="card-header">
 				<strong>Server Tuning</strong>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendServerTuning()" title="Pre-fill Max Message Size to 4× its current value (the WLS default is 10 MB → 40 MB) on every server. Review, then Save each server.">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendServerTuning()" title="Pre-fill Max Message Size to 40,000,000 bytes (~40 MB), Socket Readers to 4, Thread Pool Min = Thread Pool Max, and Min Severity to Log = Warning, on every server. Review, then Save each server.">Recommended</button>
 				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadServerTuning()">Refresh</button>
 			</div>
 			<div class="card-body">
@@ -361,7 +362,8 @@
 			<div class="card-header">
 				<strong>SIP Protocol</strong>
 				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveSipTimers()">Save</button>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="loadSipTimers()">Refresh</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendSipTimers()" title="Enable the Engine Call State Cache — the one setting on this panel with a universal recommendation. Everything else here (timers, rport, DNS SRV, outbound, overload thresholds) is a protocol or per-site decision with no one-size-fits-all value. Review, then Save.">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadSipTimers()">Refresh</button>
 			</div>
 			<div class="card-body">
 				<div class="info-box">
@@ -583,7 +585,7 @@
 		// ================================================================
 		var gcCollectors = [
 			{ value: '',                       label: '(default)' },
-			{ value: '-XX:+UseG1GC',           label: 'G1 GC (recommended)' },
+			{ value: '-XX:+UseG1GC',           label: 'G1GC (Deterministic)' },
 			{ value: '-XX:+UseZGC',            label: 'ZGC (low-pause — also check Generational on JDK 21)' },
 			{ value: '-XX:+UseShenandoahGC',   label: 'Shenandoah GC' },
 			{ value: '-XX:+UseParallelGC',     label: 'Parallel GC (throughput)' }
@@ -592,6 +594,16 @@
 		// Short names for the GC collectors, for validation messages.
 		var GC_LABEL = { '-XX:+UseG1GC': 'G1', '-XX:+UseZGC': 'ZGC', '-XX:+UseShenandoahGC': 'Shenandoah', '-XX:+UseParallelGC': 'Parallel' };
 		var GC_G1 = '-XX:+UseG1GC', GC_Z = '-XX:+UseZGC', GC_SHEN = '-XX:+UseShenandoahGC', GC_PAR = '-XX:+UseParallelGC';
+
+		// What System.gc() does — a 3-way choice, not two checkboxes, because
+		// DisableExplicitGC and ExplicitGCInvokesConcurrent are mutually exclusive.
+		// Not JDK-version-gated (unlike ZGenerational below) — both flags are stable
+		// across every JDK this app targets; the real axis is GC/RMI-DGC strategy.
+		var explicitGcModes = [
+			{ value: '',                                  label: 'Enabled' },
+			{ value: '-XX:+DisableExplicitGC',            label: 'Disabled' },
+			{ value: '-XX:+ExplicitGCInvokesConcurrent',  label: 'Invokes Concurrent' }
+		];
 
 		// Modeled valued ("scalar") args. `group` decides which panel renders it:
 		// 'heap' | 'gc' | 'occas'. `gc` (optional) restricts a 'gc' item to the
@@ -608,7 +620,7 @@
 				tip: 'Maximum Metaspace size. Caps memory used for class metadata; if unset, Metaspace grows without bound.' },
 
 			{ name: 'maxGcPauseMillis', group: 'gc', gc: [GC_G1, GC_PAR], prefix: '-XX:MaxGCPauseMillis=', label: 'GC Pause ms', ph: '200', cols: 3,
-				tip: 'Target maximum GC pause time in ms. G1 and Parallel treat it as a goal. ZGC ignores it (already sub-millisecond).' },
+				tip: 'Target maximum GC pause time in ms. G1 and Parallel treat it as a goal. ZGC ignores it (pauses are typically sub-millisecond by design).' },
 			{ name: 'parallelGcThreads', group: 'gc', gc: [GC_G1, GC_PAR, GC_SHEN], prefix: '-XX:ParallelGCThreads=', label: 'Parallel GC Thr', ph: '', cols: 3,
 				tip: 'Threads for stop-the-world parallel GC work (-XX:ParallelGCThreads). Defaults scale with CPU count.' },
 			{ name: 'concGcThreads', group: 'gc', gc: [GC_G1, GC_Z, GC_SHEN], prefix: '-XX:ConcGCThreads=', label: 'Conc GC Thr', ph: '', cols: 3,
@@ -689,8 +701,7 @@
 		// Valueless boolean flags (present = on). `group`: 'gc' | 'universal'.
 		var JVM_FLAGS = [
 			{ flag: '-XX:+HeapDumpOnOutOfMemoryError', group: 'universal', label: 'HeapDump OOM', tip: 'Dump the heap to a file on OutOfMemoryError. Essential for post-mortem analysis; the dump can be large (heap size).' },
-			{ flag: '-XX:+DisableExplicitGC', group: 'universal', label: 'DisableExplicitGC', tip: 'Ignore System.gc() calls entirely. Prevents app/library code from triggering full GC pauses. Mutually exclusive with ExplicitGCInvokesConcurrent — this one wins. With WebLogic RMI DGC, pair it with -Dsun.rmi.dgc.*.gcInterval to avoid remote-ref buildup.' },
-			{ flag: '-XX:+ExplicitGCInvokesConcurrent', group: 'universal', label: 'ExplicitGCInvokesConcurrent', tip: 'When System.gc() is called, run it as a concurrent (non-stop-the-world) collection instead of a full pause. The WebLogic-friendly alternative to DisableExplicitGC: keeps RMI distributed GC working without a STW pause. Mutually exclusive with DisableExplicitGC.' },
+			{ flag: '-XX:+ExitOnOutOfMemoryError', group: 'universal', label: 'Exit on OOM', tip: 'Exit the JVM immediately on OutOfMemoryError (after the heap dump is written, when HeapDump OOM is also on) so Node Manager restarts the server and calls fail over to the cluster — instead of a corrupted-state JVM limping along. Relies on Node Manager auto-restart.' },
 			{ flag: '-XX:+AlwaysPreTouch', group: 'universal', label: 'AlwaysPreTouch', tip: 'Touch every heap page at startup so the cost is paid once at boot, not as latency spikes. Pairs with -Xms=-Xmx. Recommended for low-latency SIP nodes.' },
 			{ flag: '-XX:+UnlockExperimentalVMOptions', group: 'universal', label: 'Unlock Experimental Options', tip: 'Permit experimental -XX flags (e.g. G1NewSizePercent, G1MixedGCLiveThresholdPercent). Required before those flags or the JVM refuses to start.' },
 			{ flag: '-XX:+PerfDisableSharedMem', group: 'universal', label: 'PerfDisableSharedMem', tip: 'Disable the hsperfdata shared-memory file (-XX:+PerfDisableSharedMem). Avoids GC pauses caused by disk I/O stalls writing that file.' },
@@ -794,8 +805,8 @@
 			h += kv('Config ver.', p.configVersion);
 			h += kv('Java', p.java);
 			h += kv('OS', p.os);
+			h += kv('Oracle Home', p.oracleHome);
 			h += '</dl>';
-			if (p.oracleHome) h += '<div class="text-muted mono" style="font-size:11px;margin-top:6px">' + he(p.oracleHome) + '</div>';
 			h += '</div>';
 
 			// --- Patches ----------------------------------------------
@@ -859,11 +870,16 @@
 			$.getJSON('api/v1/os', function (rows) {
 				if (!rows || !rows.length) { $('#os-container').html('<span class="text-muted">No OS info available.</span>'); return; }
 				var html = '<table class="table table-compact table-sm mb-0" style="font-size:12px"><thead class="thead-light"><tr>';
-				html += '<th>Server</th><th>Kernel</th><th>CPUs</th><th>Load</th><th>RAM free/total</th><th>Swap free/total</th><th data-toggle="tooltip" title="Process open-file limit (ulimit -n) and current open count. Each socket is a file descriptor — high-CPS SIP engines need a high limit (65536+).">Open / Max FDs</th>';
-				html += '</tr></thead><tbody>';
+				html += '<th>Server</th>';
+				html += '<th data-toggle="tooltip" title="Lifecycle state from ServerLifeCycleRuntime: RUNNING, STARTING, SHUTDOWN, FAILED, UNKNOWN…">State</th>';
+				html += '<th>Kernel</th><th>CPUs</th><th>Load</th>';
+				html += '<th data-toggle="tooltip" title="Free excludes memory the OS holds as page cache, so low free numbers are normal on a busy, healthy box. On macOS, swap reads 0/0 until a dynamic swapfile is actually in use.">RAM free/total</th>';
+				html += '<th>Swap free/total</th><th data-toggle="tooltip" title="Process open-file limit (ulimit -n) and current open count. Each socket is a file descriptor — high-CPS SIP engines need a high limit (65536+).">Open / Max FDs</th>';
+				html += '<th></th></tr></thead><tbody>';
 				$.each(rows, function (i, r) {
 					var lowFd = r.maxFds > 0 && r.maxFds < 16384;
 					html += '<tr><td><strong>' + he(r.server) + '</strong> <span class="text-muted">' + he(r.arch || '') + '</span></td>';
+					html += '<td class="mono">' + he(r.state || '—') + '</td>';
 					html += '<td class="mono">' + he((r.name ? r.name + ' ' : '') + (r.kernel || '')) + '</td>';
 					html += '<td class="mono">' + fmtNum(r.processors) + '</td>';
 					html += '<td class="mono">' + fmtLoad(r.loadAverage) + '</td>';
@@ -871,7 +887,9 @@
 					html += '<td class="mono">' + fmtMB(r.swapFreeMB) + ' / ' + fmtMB(r.swapTotalMB) + '</td>';
 					html += '<td class="mono">' + fmtNum(r.openFds) + ' / ' + fmtNum(r.maxFds);
 					if (lowFd) html += ' <span class="badge badge-warning" data-toggle="tooltip" title="Open-file limit looks low for a high-CPS SIP engine — raise nofile (ulimit -n) toward 65536.">&#9650; low for SIP</span>';
-					html += '</td></tr>';
+					html += '</td>';
+					html += '<td><button class="btn btn-sm btn-outline-danger" onclick="restartServer(\'' + he(r.server) + '\',' + (r.adminServer ? 'true' : 'false') + ')">Restart</button></td>';
+					html += '</tr>';
 				});
 				html += '</tbody></table>';
 				$('#os-container').html(html);
@@ -879,6 +897,45 @@
 			}).fail(function (xhr) {
 				$('#os-container').html('<span class="text-danger">Unable to load OS info. ' + parseError(xhr) + '</span>');
 			});
+		}
+
+		function restartServer(name, isAdmin) {
+			var warning = isAdmin
+				? 'Restart ' + name + '?\n\nThis is the AdminServer — the console goes dark, this page counts down 90 seconds, then reloads. Node Manager must have started the server (blade.sh boot service) or it will NOT come back.'
+				: 'Restart ' + name + '?\n\nThe server is force-shut-down and started again via Node Manager. In-flight calls on this engine fail over.';
+			if (!confirm(warning)) return;
+			$.ajax({ url: 'api/v1/servers/' + encodeURIComponent(name) + '/restart', method: 'POST', dataType: 'json',
+				success: function (r) {
+					if (r && r.admin) { adminRestartCountdown(r.countdown || 90); return; }
+					showStatus('info', 'Restarting ' + name + ' — watch the State column.');
+					var polls = 0;
+					var timer = setInterval(function () {
+						loadOsInfo();
+						if (++polls >= 18) clearInterval(timer); // ~90s of 5s polls
+					}, 5000);
+				},
+				error: function (xhr) { showStatus('danger', 'Restart failed: ' + parseError(xhr)); }
+			});
+		}
+
+		// Wifi-router restart UX for the AdminServer: full-screen countdown, then
+		// reload. Node Manager is restarting the server underneath us.
+		function adminRestartCountdown(secs) {
+			var overlay = $('<div>').css({ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+				background: 'rgba(18, 12, 36, .94)', 'z-index': 99999, display: 'flex',
+				'flex-direction': 'column', 'align-items': 'center', 'justify-content': 'center', color: '#fff' });
+			overlay.append($('<div>').css({ 'font-size': '20px', 'margin-bottom': '14px' }).text('Restarting the AdminServer…'));
+			var big = $('<div>').css({ 'font-size': '64px', 'font-family': 'SFMono-Regular, Menlo, monospace' }).text(secs);
+			overlay.append(big);
+			overlay.append($('<div>').css({ 'font-size': '13px', 'margin-top': '14px', opacity: .8 })
+				.text('Node Manager is restarting the server. This page reloads automatically.'));
+			$('body').append(overlay);
+			var left = secs;
+			var timer = setInterval(function () {
+				left--;
+				big.text(left > 0 ? left : 0);
+				if (left <= 0) { clearInterval(timer); location.reload(); }
+			}, 1000);
 		}
 		function fmtNum(n) { return (n == null || n < 0) ? '—' : String(n); }
 		function fmtMB(mb) { return (mb == null || mb < 0) ? '—' : (mb >= 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb + ' MB'); }
@@ -947,7 +1004,7 @@
 
 		function parseArgs(str) {
 			var tokens = jvmTokenize(str);
-			var st = { scalars: {}, gc: '', flags: {} };
+			var st = { scalars: {}, gc: '', explicitGc: '', flags: {} };
 			JVM_SCALARS.forEach(function (s) {
 				var found = false, val = '';
 				for (var i = 0; i < tokens.length; i++) { if (tokens[i].indexOf(s.prefix) === 0) { val = tokens[i].substring(s.prefix.length); found = true; break; } }
@@ -956,6 +1013,7 @@
 				else st.scalars[s.name] = val;
 			});
 			gcCollectors.forEach(function (g) { if (g.value && tokens.indexOf(g.value) >= 0) st.gc = g.value; });
+			explicitGcModes.forEach(function (m) { if (m.value && tokens.indexOf(m.value) >= 0) st.explicitGc = m.value; });
 			JVM_FLAGS.forEach(function (f) {
 				var off = flagOff(f.flag);
 				// "-XX:+Name" present -> on; "-XX:-Name" present -> off; neither -> the JVM default.
@@ -979,7 +1037,10 @@
 			var u = (m[2] || '').toLowerCase();
 			return Math.round(parseFloat(m[1]) * (u === 'g' ? 1073741824 : u === 'm' ? 1048576 : u === 'k' ? 1024 : 1));
 		}
-		function fmtMB(bytes) { return Math.round(bytes / 1048576) + 'm'; }
+		// Bytes -> a JVM size token like "512m". Named fmtMetaMB (not fmtMB) so it
+		// cannot shadow the OS-table megabyte formatter of the same former name —
+		// the collision rendered every RAM/swap value as "0m".
+		function fmtMetaMB(bytes) { return Math.round(bytes / 1048576) + 'm'; }
 		// Metaspace holds CLASS METADATA (off-heap) and is really sized by how many
 		// classes load, not by -Xmx — so this is a clamped convenience, not a true
 		// formula: the cap tracks heap (Xmx/16) bounded 256m..1g, while the initial
@@ -990,7 +1051,7 @@
 			if (!b) return null;
 			var MB = 1048576;
 			var max = Math.min(Math.max(Math.round(b / 16), 256 * MB), 1024 * MB);
-			return { metaspaceSize: fmtMB(Math.min(max, 256 * MB)), maxMetaspaceSize: fmtMB(max) };
+			return { metaspaceSize: fmtMetaMB(Math.min(max, 256 * MB)), maxMetaspaceSize: fmtMetaMB(max) };
 		}
 		// Reflect the "Auto" checkbox onto the two Metaspace fields: when on, disable
 		// them and show the computed values; when off, re-enable for manual editing.
@@ -1031,6 +1092,14 @@
 				}
 				if (want) { if (gidx >= 0) tokens[gidx] = want; else tokens.push(want); }
 				else if (gidx >= 0) tokens.splice(gidx, 1);
+			}
+			if ('explicitGc' in st) {
+				var wantEgc = st.explicitGc || '', eidx = -1;
+				for (var i = 0; i < tokens.length && eidx < 0; i++) {
+					for (var j = 0; j < explicitGcModes.length; j++) { if (explicitGcModes[j].value && tokens[i] === explicitGcModes[j].value) { eidx = i; break; } }
+				}
+				if (wantEgc) { if (eidx >= 0) tokens[eidx] = wantEgc; else tokens.push(wantEgc); }
+				else if (eidx >= 0) tokens.splice(eidx, 1);
 			}
 			JVM_FLAGS.forEach(function (f) {
 				if (!(f.flag in st.flags)) return; // not currently rendered -> leave it alone
@@ -1098,9 +1167,21 @@
 			});
 			$('#jvm-about').on('input', function () {
 				if (jvm.sel >= 0 && jvm.profiles[jvm.sel]) jvm.profiles[jvm.sel].about = $(this).val();
+				jvmAboutAutosize();
 			});
+			jvmAboutAutosize();
 
 			if (jvm.sel >= 0 && jvm.profiles[jvm.sel]) jvmRefreshEditor();
+		}
+
+		// Grow the About box to fit its content (rows="2" is only the minimum),
+		// so a profile's full description is readable without scrolling.
+		function jvmAboutAutosize() {
+			var el = document.getElementById('jvm-about');
+			if (!el) return;
+			el.style.overflowY = 'hidden';
+			el.style.height = 'auto';
+			el.style.height = (el.scrollHeight + 2) + 'px';
 		}
 
 		function jvmPanelHeader(t) {
@@ -1138,6 +1219,8 @@
 
 			h += jvmPanelHeader('Performance');
 			h += '<div class="row">';
+			h += enumField(id, 'explicitGc', 'Explicit GC (System.gc())', st.explicitGc, explicitGcModes, 4,
+				'What happens when application/library code calls System.gc(). Enabled: JVM default — a normal (usually full, stop-the-world) collection runs. Disabled: ignore System.gc() entirely (-XX:+DisableExplicitGC) — prevents app/library code from triggering full GC pauses, but pair it with -Dsun.rmi.dgc.*.gcInterval or WebLogic RMI distributed GC can build up remote refs. Invokes Concurrent: run it as a concurrent, non-stop-the-world collection instead (-XX:+ExplicitGCInvokesConcurrent) — the WebLogic-friendly middle ground that keeps RMI DGC working without a full pause.');
 			JVM_FLAGS.filter(function (f) { return f.group === 'universal'; }).forEach(function (f) { h += tipCb(id, f.flag, f.label, st.flags, f.tip); });
 			h += '</div>';
 
@@ -1160,14 +1243,6 @@
 			$('#jvm-controls').html(h);
 
 			// The collector swaps the GC panel; everything else just rebuilds the string.
-			// DisableExplicitGC and ExplicitGCInvokesConcurrent contradict each other —
-			// checking one unchecks the other. Bound BEFORE jvmControlsToArgs so the
-			// sibling is already cleared when the args string is rebuilt.
-			$('#jvm-controls').find('.jvm-flag[data-flag="-XX:+DisableExplicitGC"], .jvm-flag[data-flag="-XX:+ExplicitGCInvokesConcurrent"]').on('change', function () {
-				if (!$(this).is(':checked')) return;
-				var other = $(this).data('flag') === '-XX:+DisableExplicitGC' ? '-XX:+ExplicitGCInvokesConcurrent' : '-XX:+DisableExplicitGC';
-				$('#jvm-controls .jvm-flag[data-flag="' + other + '"]').prop('checked', false);
-			});
 			$('#jvm-controls').find('input, select').not('#p-gcCollector').on('change', jvmControlsToArgs);
 			$('#p-gcCollector').on('change', jvmGcChanged);
 			$('#p-metaAuto').on('change', function () {
@@ -1185,6 +1260,7 @@
 		function readControlState() {
 			var st = { scalars: {}, flags: {} };
 			if ($('#p-gcCollector').length) st.gc = v('p-gcCollector') || '';
+			if ($('#p-explicitGc').length) st.explicitGc = v('p-explicitGc') || '';
 			JVM_SCALARS.forEach(function (s) {
 				var el = $('#p-' + s.name);
 				if (!el.length) return;
@@ -1261,6 +1337,7 @@
 				if (s.type === 'bool') el.prop('checked', !!st.scalars[s.name]); else el.val(st.scalars[s.name]);
 			});
 			if ($('#p-gcCollector').length) $('#p-gcCollector').val(st.gc);
+			if ($('#p-explicitGc').length) $('#p-explicitGc').val(st.explicitGc);
 			$('#jvm-controls .jvm-flag').each(function () { $(this).prop('checked', !!st.flags[$(this).data('flag')]); });
 			if ($('#p-jfrEnable').length) {
 				$('#p-jfrEnable').prop('checked', !!st.jfr.enabled);
@@ -1289,13 +1366,15 @@
 			if (!ta || !hl) return;
 			var text = ta.value;
 			var collector = parseArgs(text).gc;
-			var gcCount = 0;
+			var gcCount = 0, egcCount = 0;
 			var issues = [];
 			var html = text.split(/(\s+)/).map(function (part) {
 				if (part === '' || /^\s+$/.test(part)) return he(part);
 				var reason = null;
 				var isGc = gcCollectors.some(function (g) { return g.value && part === g.value; });
+				var isExplicitGc = explicitGcModes.some(function (m) { return m.value && part === m.value; });
 				if (isGc) { gcCount++; if (gcCount > 1) reason = 'Multiple GC collectors selected — keep only one.'; }
+				else if (isExplicitGc) { egcCount++; if (egcCount > 1) reason = 'DisableExplicitGC and ExplicitGCInvokesConcurrent are mutually exclusive — keep only one.'; }
 				else if (part.charAt(0) !== '-') { reason = 'Not a JVM option (should start with "-").'; }
 				else {
 					var req = gcRequirement(part);
@@ -1383,6 +1462,16 @@
 		// ================================================================
 		// Server Tuning
 		// ================================================================
+		var SEVERITY_LEVELS = ['Emergency', 'Alert', 'Critical', 'Error', 'Warning', 'Notice', 'Info', 'Debug', 'Trace'];
+
+		function severitySelect(id, value) {
+			var h = '<select class="form-control form-control-sm" id="' + id + '" style="width:110px">';
+			$.each(SEVERITY_LEVELS, function (i, level) {
+				h += '<option value="' + level + '"' + (level === value ? ' selected' : '') + '>' + level + '</option>';
+			});
+			return h + '</select>';
+		}
+
 		function loadServerTuning() {
 			$.getJSON('api/v1/server-tuning', function (data) {
 				if (!data || data.length === 0) { $('#server-tuning-container').html('<span class="text-muted">No servers found.</span>'); return; }
@@ -1391,9 +1480,8 @@
 				html += '<th data-toggle="tooltip" title="Minimum size of the self-tuning thread pool. WebLogic dynamically adjusts thread count above this floor. Higher values guarantee more threads for SIP processing under load. Engine servers typically need 100+, AdminServer much less.">Thread Pool Min</th>';
 				html += '<th data-toggle="tooltip" title="Maximum size of the self-tuning thread pool (KernelMBean SelfTuningThreadPoolSizeMax). WebLogic default is 400; can be raised to 65534. Set Min = Max to pin the pool and avoid thread ramp-up under sudden load.">Thread Pool Max</th>';
 				html += '<th data-toggle="tooltip" title="Number of threads dedicated to reading from network sockets. Critical for high-throughput SIP — too few readers starves the transport layer. Increase when you see SIP message queueing at the network level. Each reader is a dedicated thread outside the self-tuning pool.">Socket Readers</th>';
-				html += '<th data-toggle="tooltip" title="Maximum allowed size (in bytes) for a single incoming message. Protects against oversized SIP messages consuming memory. 40MB default is generous — most SIP messages are under 10KB, but SDP with many media lines can grow larger.">Max Message (bytes)</th>';
-				html += '<th data-toggle="tooltip" title="Maximum time (in seconds) to wait for a complete message to arrive after the first bytes are received. Prevents slow-sender attacks and cleans up stalled connections.">Msg Timeout (s)</th>';
-				html += '<th data-toggle="tooltip" title="Time (in seconds) before an idle connection is closed. Applies to HTTP and SIP-over-TCP/TLS connections. Lower values free resources faster but may cause reconnection overhead for persistent SIP connections.">Idle Timeout (s)</th>';
+				html += '<th data-toggle="tooltip" title="Maximum size (in bytes) of a message this server can receive — including the domain configuration WebLogic pushes to this managed node when it starts up. The WLS default (10 MB) is too small for that push on a non-trivial domain; a managed node can fail to pick up an updated configuration at boot. Recommended: 40,000,000 (~40 MB).">Max Message (bytes)</th>';
+				html += '<th data-toggle="tooltip" title="Minimum severity a log message must have to be written to this server\'s log. Lower severities are suppressed below this floor — useful for quieting chatty Notice-level subsystem noise (e.g. transport idle-socket-close messages) without touching code. Does not affect a BLADE app\'s own log output when that app has an explicit Logging Level configured. Recommended: Warning.">Min Severity to Log</th>';
 				html += '<th></th></tr></thead><tbody>';
 				$.each(data, function (i, s) {
 					var id = esc(s.server);
@@ -1404,8 +1492,7 @@
 					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-threadPoolMax" value="' + s.threadPoolMax + '" style="width:80px"></td>';
 					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-socketReaders" value="' + s.socketReaders + '" style="width:70px"></td>';
 					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-maxMessageSize" value="' + s.maxMessageSize + '" style="width:120px"></td>';
-					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-completeMessageTimeout" value="' + s.completeMessageTimeout + '" style="width:70px"></td>';
-					html += '<td><input type="number" class="form-control form-control-sm mono" id="st-' + id + '-idleConnectionTimeout" value="' + s.idleConnectionTimeout + '" style="width:70px"></td>';
+					html += '<td>' + severitySelect('st-' + id + '-minimumSeverityToLog', s.minimumSeverityToLog) + '</td>';
 					html += '<td><button class="btn btn-sm btn-outline-primary" onclick="saveServerTuning(\'' + s.server + '\',\'' + id + '\')">Save</button></td>';
 					html += '</tr>';
 				});
@@ -1422,8 +1509,7 @@
 				threadPoolMax: parseInt(v('st-' + id + '-threadPoolMax')) || 0,
 				socketReaders: parseInt(v('st-' + id + '-socketReaders')) || 0,
 				maxMessageSize: parseInt(v('st-' + id + '-maxMessageSize')) || 0,
-				completeMessageTimeout: parseInt(v('st-' + id + '-completeMessageTimeout')) || 0,
-				idleConnectionTimeout: parseInt(v('st-' + id + '-idleConnectionTimeout')) || 0
+				minimumSeverityToLog: v('st-' + id + '-minimumSeverityToLog')
 			};
 			showStatus('info', 'Saving server tuning for ' + serverName + '...');
 			$.ajax({ url: 'api/v1/server-tuning/' + encodeURIComponent(serverName), method: 'PUT',
@@ -1458,6 +1544,13 @@
 			}).fail(function (xhr) {
 				showStatus('danger', 'Unable to load SIP timers. ' + parseError(xhr));
 			});
+		}
+
+		// The one universally defensible value on this panel: the engine call
+		// state cache. Everything else (timers, rport, DNS SRV, outbound, local
+		// dispatch, overload thresholds) is a protocol or per-site decision.
+		function recommendSipTimers() {
+			$('#sip-engineCallStateCache').prop('checked', true);
 		}
 
 		function saveSipTimers() {
@@ -1656,9 +1749,14 @@
 			var p = jvm.profiles[jvm.sel], st = parseArgs(p.arguments);
 			if (!st.scalars.heapMax) { showStatus('danger', 'Set Max Heap (-Xmx) on this profile first.'); return; }
 			st.scalars.heapInitial = st.scalars.heapMax; // -Xms = -Xmx
+			st.flags['-Djava.security.egd=file:/dev/./urandom'] = true;
+			st.flags['-XX:+ExitOnOutOfMemoryError'] = true;
+			// Concurrent System.gc(), not DisableExplicitGC — keeps WebLogic RMI
+			// DGC working without letting it force a stop-the-world full pause.
+			st.explicitGc = '-XX:+ExplicitGCInvokesConcurrent';
+			st.scalars.wlssMaddrEnable = true;
 			p.arguments = buildArgs(p.arguments, st);
 			jvmRefreshEditor();
-			showStatus('warning', 'Set -Xms = -Xmx on profile "' + p.name + '". Save or Apply when ready.');
 		}
 
 		function recommendJvmZgc() {
@@ -1667,44 +1765,22 @@
 			st.gc = '-XX:+UseZGC';
 			st.flags['-XX:+ZGenerational'] = true;
 			st.flags['-XX:+AlwaysPreTouch'] = true;
+			st.flags['-Djava.security.egd=file:/dev/./urandom'] = true;
+			st.flags['-XX:+ExitOnOutOfMemoryError'] = true;
+			st.explicitGc = '-XX:+ExplicitGCInvokesConcurrent';
+			st.scalars.wlssMaddrEnable = true;
 			if (st.scalars.heapMax) st.scalars.heapInitial = st.scalars.heapMax; // -Xms = -Xmx
 			p.arguments = buildArgs(p.arguments, st);
 			jvmRefreshEditor();
-			showStatus('warning', 'Applied low-latency ZGC preset to profile "' + p.name + '" (JDK 21/22 only). Save or Apply when ready.');
 		}
 
 		// ================================================================
 		// Health Check — read-only static checks on current JVM config
 		// ================================================================
+		// The findings logic lives in recommendations.js (computeJvmFindings) so
+		// the printable report reproduces exactly what this panel shows.
 		function runHealthCheck() {
-			var issues = [];
-			$.each(jvmData || [], function (i, s) {
-				var raw = s.rawArguments || '';
-				var name = s.server;
-				if (s.heapMax && s.heapInitial !== s.heapMax) {
-					issues.push({ server: name, msg: 'Heap not pinned: -Xms (' + (s.heapInitial || 'unset') + ') != -Xmx (' + s.heapMax + ')', fix: 'Set initial = max to avoid heap-resize pauses.' });
-				}
-				if (raw.indexOf('-XX:+UseConcMarkSweepGC') >= 0 || raw.indexOf('-XX:+UseParNewGC') >= 0) {
-					issues.push({ server: name, msg: 'CMS / ParNew GC flag present — removed in JDK 14, fatal on JDK 21', fix: 'Switch to G1, ZGC, or Shenandoah.' });
-				}
-				if (raw.indexOf('-Xshare:off') >= 0) {
-					issues.push({ server: name, msg: 'Class Data Sharing disabled (-Xshare:off) — slower warmup', fix: 'Remove it; the default CDS archive is enabled for free since JDK 12.' });
-				}
-				var mux = raw.match(/-Dweblogic\.MuxerClass=(\S+)/);
-				if (mux && mux[1].indexOf('NIOSocketMuxer') < 0) {
-					issues.push({ server: name, msg: 'Non-default socket muxer: ' + mux[1], fix: 'WLS 14.1.2 recommends the default NIO muxer; remove the override unless intentional.' });
-				}
-				if (raw.indexOf('-XX:+UseZGC') >= 0 && raw.indexOf('-XX:+ZGenerational') < 0) {
-					issues.push({ server: name, msg: 'ZGC selected without -XX:+ZGenerational — running the legacy non-generational collector on JDK 21', fix: 'Add -XX:+ZGenerational (JDK 21/22 only).' });
-				}
-				var vm = (s.javaHome || '').match(/(?:jdk-?|java-?|1\.)(\d{1,2})/i);
-				if (vm) {
-					var maj = parseInt(vm[1]);
-					if (maj === 1) issues.push({ server: name, msg: 'JDK appears to be 1.x (pre-Java 9) per JavaHome: ' + s.javaHome, fix: 'OCCAS 8.3 targets JDK 17 or 21.' });
-					else if (maj > 8 && maj < 21) issues.push({ server: name, msg: 'JDK appears to be ' + maj + ' per JavaHome — below the JDK 21 target', fix: 'OCCAS 8.3 supports JDK 17 or 21; 21 unlocks Generational ZGC.' });
-				}
-			});
-			renderHealth(issues);
+			renderHealth(computeJvmFindings(jvmData || []));
 		}
 
 		function renderHealth(issues) {
@@ -1714,24 +1790,34 @@
 				el.html('<span class="text-muted">&#10003; No configuration issues detected across ' + ((jvmData || []).length) + ' server(s).</span>');
 				return;
 			}
+			// Critical (boot-blocker) findings sort to the top, labeled — never
+			// distinguished by color alone.
+			issues.sort(function (a, b) { return (a.sev === 'critical' ? 0 : 1) - (b.sev === 'critical' ? 0 : 1); });
 			var html = '<ul class="mb-0" style="padding-left:18px">';
 			$.each(issues, function (i, it) {
-				html += '<li style="margin-bottom:4px"><strong>' + it.server + ':</strong> ' + it.msg + ' <span class="text-muted">&mdash; ' + it.fix + '</span></li>';
+				html += '<li style="margin-bottom:4px"><strong>' + it.server + ':</strong> '
+					+ (it.sev === 'critical' ? '<strong>CRITICAL &mdash; </strong>' : '') + it.msg
+					+ ' <span class="text-muted">&mdash; ' + it.fix + '</span></li>';
 			});
 			html += '</ul>';
 			el.html(html);
 		}
 
+		// Values come from TUNING_REC (recommendations.js) — flat targets, not
+		// multipliers, so repeated clicks converge instead of compounding.
 		function recommendServerTuning() {
 			$('#server-tuning-container input[id$="-maxMessageSize"]').each(function () {
-				var cur = parseInt($(this).val()) || 10485760; // WLS default 10 MB
-				$(this).val(cur * 4); // quadruple
+				$(this).val(TUNING_REC.serverTuning.maxMessageSize);
 			});
-			// OCCAS engine rec: raise socket readers from the default 2 to 10.
 			$('#server-tuning-container input[id$="-socketReaders"]').each(function () {
-				if ((parseInt($(this).val()) || 0) < 10) $(this).val(10);
+				$(this).val(TUNING_REC.serverTuning.socketReaders);
 			});
-			showStatus('warning', 'Filled Max Message Size = 4x current and Socket Readers >= 10 on each server. Review, then Save each server.');
+			// Pin the pool: Min = Max avoids thread ramp-up under sudden load.
+			$('#server-tuning-container tr[id^="st-"]').each(function () {
+				var rowId = this.id.substring(3);
+				$('#st-' + rowId + '-threadPoolMin').val(v('st-' + rowId + '-threadPoolMax'));
+			});
+			$('#server-tuning-container select[id$="-minimumSeverityToLog"]').val(TUNING_REC.serverTuning.minimumSeverityToLog);
 		}
 
 		function recommendWorkManagers() {
@@ -1751,10 +1837,10 @@
 				// 3) OCCAS engine capacity recs (per the 8.0 tuning doc; stable
 				//    across versions — confirm against the 8.3 guide).
 				if (wm.name === 'wlss.transport' && wm.capacityName) {
-					$('#wm-' + id + '-capacity').val(5000000);
+					$('#wm-' + id + '-capacity').val(TUNING_REC.workManagers['wlss.transport'].capacity);
 				}
 				if (wm.name === 'wlss.timer' && wm.capacityName) {
-					$('#wm-' + id + '-capacity').val(150000);
+					$('#wm-' + id + '-capacity').val(TUNING_REC.workManagers['wlss.timer'].capacity);
 				}
 			});
 			showStatus('warning', 'Filled timer Max = 200, Min = Max where both exist, and OCCAS transport/timer capacities. Review, then Save All.');
@@ -1764,12 +1850,11 @@
 			if (!jdbcData.length) { showStatus('warning', 'Data sources not loaded yet.'); return; }
 			$.each(jdbcData, function (i, p) {
 				var id = esc(p.name);
-				var target = Math.max(parseInt(v('jdbc-' + id + '-maxCapacity')) || 0, 300);
+				var target = Math.max(parseInt(v('jdbc-' + id + '-maxCapacity')) || 0, TUNING_REC.jdbc.minimumPool);
 				$('#jdbc-' + id + '-maxCapacity').val(target);
 				$('#jdbc-' + id + '-minCapacity').val(target);
 				$('#jdbc-' + id + '-initialCapacity').val(target); // Initial = Min = Max
 			});
-			showStatus('warning', 'Filled Initial = Min = Max (>= 300) on each pool. Review, then Save each pool.');
 		}
 
 
@@ -2133,43 +2218,90 @@
 			$.getJSON('api/v1/domain-mode', function (data) {
 				domainModeData = data || {};
 				var prod = !!data.productionMode;
-				$('#domain-mode-sub').text(data.domain ? '— domain ' + data.domain : '');
-				var h = '<div class="row align-items-center">';
-				h += '<div class="col-md-4 field-group"><label>Mode</label>'
-					+ '<div class="custom-control custom-switch">'
-					+ '<input type="checkbox" class="custom-control-input" id="domain-mode-toggle"' + (prod ? ' checked' : '') + '>'
-					+ '<label class="custom-control-label" for="domain-mode-toggle" id="domain-mode-label">' + (prod ? 'Production' : 'Development') + '</label>'
-					+ '</div></div>';
-				h += '<div class="col-md-8 field-group" style="align-self:flex-end">'
-					+ '<button class="btn btn-sm btn-primary" onclick="saveDomainMode()">Save mode</button>'
-					+ '<span class="text-muted ml-2" style="font-size:12px">On = production, off = development.</span>'
+				$('#domain-mode-sub').text(data.domain ? '— ' + data.domain : '');
+				var h = '<div class="row">';
+				h += '<div class="col-md-3 field-group">'
+					+ '<label data-toggle="tooltip" title="Whether this WebLogic domain runs in production or development mode. WebLogic reads this at server boot — the config is written immediately, but the mode only takes effect after the AdminServer and every engine node restart. The mode also drives WebLogic defaults (auto-deployment, demo-certificate handling, default log levels), so flip it deliberately.">Mode *</label>'
+					+ '<div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input" id="dm-prod"' + (prod ? ' checked' : '') + '><label class="custom-control-label" for="dm-prod">Production</label></div>'
+					+ '</div>';
+				h += '<div class="col-md-3 field-group">'
+					+ '<label data-toggle="tooltip" title="Archive the previous domain configuration under DOMAIN_HOME/configArchive each time a configuration change is activated — cheap insurance against a bad config push.">Config Archive</label>'
+					+ '<div class="custom-control custom-checkbox"><input type="checkbox" class="custom-control-input" id="dm-backup"' + (data.configBackupEnabled ? ' checked' : '') + '><label class="custom-control-label" for="dm-backup">Archive on activation</label></div>'
+					+ '</div>';
+				h += '<div class="col-md-3 field-group">'
+					+ '<label data-toggle="tooltip" title="How many archived configurations to keep in DOMAIN_HOME/configArchive before the oldest is discarded. 0 keeps every archive forever (unbounded disk growth on the AdminServer); around 20 is a sensible operating value.">Archive Count</label>'
+					+ '<input type="number" class="form-control form-control-sm mono" id="dm-archcount" value="' + (data.archiveConfigurationCount || 0) + '" style="width:90px">'
+					+ '<div class="text-muted" style="font-size:11px;margin-top:2px">0 = keep all (unbounded)</div>'
+					+ '</div>';
+				h += '<div class="col-md-3 field-group">'
+					+ '<label data-toggle="tooltip" title="Record every configuration change: Log writes it to the server log, Audit sends it to the security audit provider (one must be configured), Log + Audit does both.">Config Audit</label>'
+					+ '<select class="form-control form-control-sm" id="dm-audit">'
+					+ '<option value="none"' + (data.configurationAuditType === 'none' || !data.configurationAuditType ? ' selected' : '') + '>(none)</option>'
+					+ '<option value="log"' + (data.configurationAuditType === 'log' ? ' selected' : '') + '>Log</option>'
+					+ '<option value="audit"' + (data.configurationAuditType === 'audit' ? ' selected' : '') + '>Audit</option>'
+					+ '<option value="logaudit"' + (data.configurationAuditType === 'logaudit' ? ' selected' : '') + '>Log + Audit</option>'
+					+ '</select>'
 					+ '</div>';
 				h += '</div>';
+				h += '<div id="dm-audit-warning" style="display:none;font-size:12px;margin-top:4px" class="text-danger">'
+					+ 'Warning: no Auditing provider is configured in the security realm, so audit records have nowhere to go. '
+					+ 'Add one under Security Realms &rarr; myrealm &rarr; Providers &rarr; Auditing (restart required), or use Log instead.</div>';
+				h += '<div class="mt-2"><button class="btn btn-sm btn-primary" onclick="saveDomainMode()">Save</button>'
+					+ '<span class="text-muted ml-3" style="font-size:12px">* Requires restart of the AdminServer and every engine node.</span></div>';
 				$('#domain-mode-container').html(h);
-				// Live label so the slider reads as the mode it will become.
-				$('#domain-mode-toggle').on('change', function () {
-					$('#domain-mode-label').text(this.checked ? 'Production' : 'Development');
+
+				// Enabling the archive with count 0 would silently mean "keep
+				// every archive forever" — pre-fill a bounded default instead
+				// (still editable before Save).
+				$('#dm-backup').on('change', function () {
+					if (this.checked && !(parseInt(v('dm-archcount')) > 0)) $('#dm-archcount').val(TUNING_REC.domain.archiveConfigurationCount);
 				});
+				$('#dm-audit').on('change', dmAuditWarn);
+				dmAuditWarn();
 			}).fail(function (xhr) {
-				$('#domain-mode-container').html('<span class="text-danger">Unable to load domain mode. ' + parseError(xhr) + '</span>');
+				$('#domain-mode-container').html('<span class="text-danger">Unable to load domain settings. ' + parseError(xhr) + '</span>');
 			});
 		}
+		// Recommended domain settings: archive every activation (bounded), log
+		// config changes. Deliberately does NOT touch the Production checkbox —
+		// the mode is an operator decision, not a tuning value.
+		function recommendDomain() {
+			$('#dm-backup').prop('checked', true);
+			$('#dm-archcount').val(TUNING_REC.domain.archiveConfigurationCount);
+			$('#dm-audit').val(TUNING_REC.domain.configurationAuditType);
+			dmAuditWarn();
+		}
+
+		// Show the no-auditor warning only when the chosen audit type actually
+		// routes records to the realm's auditor stack.
+		function dmAuditWarn() {
+			var t = v('dm-audit');
+			var routesToAuditor = (t === 'audit' || t === 'logaudit');
+			$('#dm-audit-warning').toggle(routesToAuditor && domainModeData.auditorConfigured === false);
+		}
 		function saveDomainMode() {
-			var desired = $('#domain-mode-toggle').is(':checked');
+			var desired = $('#dm-prod').is(':checked');
 			var was = !!domainModeData.productionMode;
-			if (desired === was) { showStatus('info', 'Domain is already in ' + (was ? 'production' : 'development') + ' mode.'); return; }
-			var to = desired ? 'production' : 'development';
-			if (!confirm('Switch this domain to ' + to + ' mode?\n\n'
-				+ 'The config changes now, but the new mode only applies after the AdminServer '
-				+ 'and every engine node are restarted.')) { return; }
-			showStatus('info', 'Setting ' + to + ' mode…');
+			if (desired !== was) {
+				var to = desired ? 'production' : 'development';
+				if (!confirm('Switch this domain to ' + to + ' mode?\n\n'
+					+ 'The config changes now, but the new mode only applies after the AdminServer '
+					+ 'and every engine node are restarted.')) { return; }
+			}
+			var payload = {
+				productionMode: desired,
+				configBackupEnabled: $('#dm-backup').is(':checked'),
+				archiveConfigurationCount: parseInt(v('dm-archcount')) || 0,
+				configurationAuditType: v('dm-audit')
+			};
+			showStatus('info', 'Saving domain settings…');
 			$.ajax({ url: 'api/v1/domain-mode', method: 'PUT', contentType: 'application/json',
-				data: JSON.stringify({ productionMode: desired }), dataType: 'json',
+				data: JSON.stringify(payload), dataType: 'json',
 				success: function (r) {
 					domainModeData.productionMode = desired;
-					showStatus('success', 'Domain set to ' + to + ' mode.');
+					showStatus('success', 'Domain settings saved.');
 					if (r && r.requiresRestart) {
-						notifyRestart('Domain mode changed to ' + to + '. Restart the AdminServer and every engine node for it to take effect.');
+						notifyRestart('Domain mode changed to ' + (desired ? 'production' : 'development') + '. Restart the AdminServer and every engine node for it to take effect.');
 					}
 				},
 				error: function (xhr) { showStatus('danger', 'Save failed: ' + parseError(xhr)); }

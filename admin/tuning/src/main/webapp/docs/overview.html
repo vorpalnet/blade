@@ -121,15 +121,21 @@
 
 					<h2>Recommended presets</h2>
 					<p>
-						The JVM, Server Tuning, OCCAS Threads, and JDBC Pools
-						sections each have a <strong>Recommended</strong> button.
-						It only <em>pre-fills</em> the standard high-CPS tuning
+						Every editable section has a <strong>Recommended</strong>
+						button; JVM has two templates instead —
+						<strong>Deterministic (G1GC)</strong> and
+						<strong>Low-Latency (ZGC)</strong>. Each only
+						<em>pre-fills</em> the standard high-CPS tuning
 						values — heap <code>-Xms = -Xmx</code>, Max Message Size
-						×4, <code>wlss.timer</code> Max Threads ≥ 200 with Min = Max
-						where both constraints exist, and JDBC
-						<code>Initial = Min = Max</code> (≥ 300). Nothing is
-						written until you review the filled-in values and Save, so
-						the preset is a starting point, not an auto-apply.
+						40&nbsp;MB, <code>wlss.timer</code> Max Threads ≥ 200 with
+						Min = Max and the transport/timer queue capacities, JDBC
+						<code>Initial = Min = Max</code> (≥ 300), the SIP engine
+						call state cache, and domain config archive (20 kept) +
+						config-change logging. The domain preset never touches
+						production/development mode, and read-only or site-specific
+						sections (Cluster, Kernel, SNMP, Coherence) have no preset.
+						Nothing is written until you review the filled-in values and
+						Save, so the preset is a starting point, not an auto-apply.
 					</p>
 
 					<div class="vorpal-callout vorpal-callout-note">
