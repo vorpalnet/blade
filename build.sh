@@ -757,7 +757,7 @@ echo ""
 INCLUDED_CSV=$(printf '%s' "$INCLUDED_MODULES" | tr '\n' ',' | sed 's/^,*//;s/,*$//')
 
 set +e
-"${SCRIPT_DIR}/mvnw" \
+"${SCRIPT_DIR}/mvnw" -f "${SCRIPT_DIR}/pom.xml" \
     "${MAVEN_GOALS[@]}" \
     "${MAVEN_FLAGS[@]+"${MAVEN_FLAGS[@]}"}" \
     "${JAVADOC_FLAGS[@]+"${JAVADOC_FLAGS[@]}"}" \
