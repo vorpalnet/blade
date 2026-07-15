@@ -76,6 +76,18 @@ WLST a CustomTrust pointing at the env trust store so `nmConnect` works
 against the non-demo NM. Customers replace the generated PKI via
 `./certs.sh <env> import` + re-run `secure`.
 
+New `engines` step (the true finale of `all`): engine boxes are node-local in
+this layout (per `sync-occas.sh` — nothing mounts the admin box's disks), so
+each engine gets everything rsync'd to the same absolute paths over key-based
+ssh: the OCCAS home with the domain inside it (server logs/tmp/cache
+excluded), the runtime JDK, and the env certs (the domain config and
+`nodemanager.properties` bake those paths in). Then its NodeManager is
+started over ssh and its engine server brought up via `nmStart` (dynamic
+servers map 1:1 onto `machine1..N`). Unreachable or sudo-less boxes are
+skipped with a loud warning and the step resumes on re-run. The no-arg flow
+picks `engines` when the AdminServer is up but an engine box's NodeManager
+isn't reachable.
+
 New `start` step (and the finale of `all`): writes AdminServer
 `boot.properties` (mode 600; WebLogic encrypts it on first boot), starts the
 per-domain NodeManager if its port isn't listening, drives

@@ -21,7 +21,8 @@
 #               time), configure if the domain is missing, start if the
 #               AdminServer is down, and stops when everything is up
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
-#     <step>  init | prep | download | install | configure | secure | start | all
+#     <step>  init | prep | download | install | configure | secure | start
+#             | engines | all
 #
 #   init       short interview → writes the env conf (env name = the WebLogic
 #              domain name; machines auto-named machine0=admin, machine1..N)
@@ -73,8 +74,12 @@
 #              starts the per-domain NodeManager, nmStart(AdminServer) via
 #              misc/start-admin-nm.sh, waits for the console and prints its
 #              URL; engine boxes get a copy-paste NodeManager one-liner
-#   all        install → configure → secure → start (auto-downloading as
-#              needed; certs auto-generate — WebLogic demo certs are never
+#   engines    ship each engine box what it needs at the SAME paths (rsync over
+#              key-based ssh: OCCAS home incl. the domain, runtime JDK, env
+#              certs), start its NodeManager, then nmStart its engine server.
+#              Unreachable boxes are skipped with a warning; re-runs resume.
+#   all        install → configure → secure → start → engines (auto-downloads
+#              as needed; certs auto-generate — WebLogic demo certs are never
 #              used, and NodeManager is re-pointed at the env identity too;
 #              replace the generated PKI later via './certs.sh <env> import')
 #
@@ -122,7 +127,7 @@ ENV_ARG=""; STEP=""; DRY_RUN=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,95p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,100p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
@@ -211,16 +216,34 @@ if [ -z "$STEP" ]; then
         else
             _AP="$(read_prop "$CONF_FILE" "admin.port")"; _AP="${_AP:-7001}"
             if (exec 3<>"/dev/tcp/127.0.0.1/${_AP}") 2>/dev/null; then
-                ok "Nothing to do: OCCAS installed, domain '${_DN}' exists, AdminServer up on :${_AP}."
-                log "  Rebuild the domain (OVERWRITES it):  ./install-occas.sh ${ENV_NAME} configure"
-                log "  Wire TLS into it:                    ./install-occas.sh ${ENV_NAME} secure"
-                exit 0
+                # AdminServer is up — are the engine boxes' NodeManagers?
+                _TO=""; command -v timeout >/dev/null 2>&1 && _TO="timeout 3"
+                _i=2; _DOWN=""
+                while :; do
+                    _M="$(read_prop "$CONF_FILE" "machine.${_i}")"
+                    [ -n "$_M" ] || break
+                    IFS=: read -r _MN _MA _MP _ <<< "$_M"
+                    if ! $_TO bash -c "exec 3<>/dev/tcp/${_MA}/${_MP:-5556}" 2>/dev/null; then
+                        _DOWN="$_MN"; break
+                    fi
+                    _i=$((_i + 1))
+                done
+                if [ -n "$_DOWN" ]; then
+                    STEP="engines"
+                    info "AdminServer is up, but ${_DOWN}'s NodeManager isn't reachable — running the engines step."
+                else
+                    ok "Nothing to do: OCCAS installed, domain '${_DN}' up, engine NodeManagers reachable."
+                    log "  Rebuild the domain (OVERWRITES it):  ./install-occas.sh ${ENV_NAME} configure"
+                    log "  Re-push to engine boxes:             ./install-occas.sh ${ENV_NAME} engines"
+                    exit 0
+                fi
+            else
+                STEP="start"
             fi
-            STEP="start"
         fi
     fi
 fi
-case "$STEP" in init|prep|download|install|configure|secure|start|all) ;; *) die "Unknown step: ${STEP}" ;; esac
+case "$STEP" in init|prep|download|install|configure|secure|start|engines|all) ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # Interactive builder for build-profiles/occas/<env>.conf (+ optional secret).
 # Crisp on purpose: the environment name IS the WebLogic domain name; machines
@@ -974,6 +997,21 @@ Machine${idx}NodemanagerNMType=${type}"
 # domain lives on the shared filesystem, so the path is the same there).
 listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
+# When secure_nodemanager swapped NM onto the env certificate, WLST's nmConnect
+# must trust the env CA instead of Oracle's demo trust. The passphrase rides a
+# -D flag — visible in ps on this box for the seconds WLST runs.
+nm_wlst_props() {  # <domain_dir> → echoes WLST_PROPERTIES ('' when NM is on demo certs)
+    local cdir pw
+    if grep -q "^CustomIdentityKeyStoreFileName=" "$1/nodemanager/nodemanager.properties" 2>/dev/null; then
+        # read-only password lookup — runs inside $(…), so no minting/printing here
+        pw="${STORE_PW:-${BLADE_STORE_PASSWORD:-}}"
+        [ -z "$pw" ] && [ -f "$SECRET_FILE" ] && pw="$(read_prop "$SECRET_FILE" "store.password")"
+        [ -n "$pw" ] || return 0
+        cdir="$(certs_dir)"
+        printf '%s' "-Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${cdir}/trust.p12 -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=${pw}"
+    fi
+}
+
 do_start() {
     local domain_dir="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}"
     local name addr port type admin_port wait_secs
@@ -1013,21 +1051,8 @@ do_start() {
         nohup "${domain_dir}/bin/startNodeManager.sh" >> "${domain_dir}/nodemanager/nodemanager.out" 2>&1 &
     fi
 
-    # When secure_nodemanager swapped NM onto the env certificate, WLST's
-    # nmConnect must trust the env CA instead of Oracle's demo trust. The
-    # passphrase rides a -D flag — visible in ps on this box for the seconds
-    # WLST runs; acceptable on the box being installed.
-    local wlst_props="" cdir
-    if grep -q "^CustomIdentityKeyStoreFileName=" "${domain_dir}/nodemanager/nodemanager.properties" 2>/dev/null; then
-        cdir="$(certs_dir)"
-        ensure_store_pw
-        wlst_props="-Dweblogic.security.TrustKeyStore=CustomTrust"
-        wlst_props="${wlst_props} -Dweblogic.security.CustomTrustKeyStoreFileName=${cdir}/trust.p12"
-        wlst_props="${wlst_props} -Dweblogic.security.CustomTrustKeyStoreType=PKCS12"
-        wlst_props="${wlst_props} -Dweblogic.security.CustomTrustKeyStorePassPhrase=${STORE_PW}"
-    fi
-
     # start-admin-nm.sh waits for the NM listener itself, then nmStart()s.
+    local wlst_props; wlst_props="$(nm_wlst_props "$domain_dir")"
     info "Starting AdminServer through Node Manager …"
     MW_HOME="$ORACLE_HOME" DOMAIN_NAME="$DOMAIN_NAME" NM_HOST="localhost" \
     NM_PORT="$port" NM_TYPE="$type" NM_USER="$ADMIN_USER" NM_PASSWORD="$ADMIN_PW" \
@@ -1047,13 +1072,89 @@ do_start() {
     ok "AdminServer up — console: http://${addr}:${admin_port}/console  (user: ${ADMIN_USER})"
 
     if [ ${#MACHINES[@]} -gt 1 ]; then
-        log ""
-        log "Engine NodeManagers — run once per engine box, then start the engines from the console:"
-        local m
-        for m in "${MACHINES[@]:1}"; do
-            IFS=: read -r name addr port type <<< "$m"
-            log "  ssh ${addr}  'nohup ${domain_dir}/bin/startNodeManager.sh > /tmp/nodemanager.out 2>&1 &'"
-        done
+        log "  Engine boxes: './install-occas.sh ${ENV_NAME} engines' ships everything and starts them ('all' does it next)."
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# Step 4 — engines: ship binaries/JDK/certs/domain to each engine box, start it
+# ----------------------------------------------------------------------------
+# Engines are node-LOCAL in this layout (see sync-occas.sh: "engines don't
+# depend on the shared FS at runtime") — nothing mounts the admin box's disks.
+# So everything an engine needs goes over rsync to the SAME absolute paths
+# (the domain config bakes them in): the OCCAS home (the domain lives inside
+# it under user_projects/), the runtime JDK, and the env certs. Then the
+# engine's NodeManager is started over ssh and its server through nmStart.
+# Requires key-based ssh (BatchMode) to each engine; a box that isn't
+# reachable is skipped with a warning — fix ssh and re-run, it resumes.
+do_engines() {
+    if [ ${#MACHINES[@]} -le 1 ]; then
+        ok "No engine machines in the conf — nothing to do."
+        return 0
+    fi
+    local domain_dir="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}"
+    local cdir; cdir="$(certs_dir)"
+    local sshu; sshu="$(read_prop "$CONF_FILE" "ssh.user")"; sshu="${sshu:-$(id -un)}"
+    local jdk=""; [ -n "$JAVA_RUNTIME" ] && jdk="$(jdk_home_of "$JAVA_RUNTIME")"
+    local wlst_props; wlst_props="$(nm_wlst_props "$domain_dir")"
+    local m name addr port type i=0 failed=""
+
+    for m in "${MACHINES[@]:1}"; do
+        i=$((i + 1))
+        IFS=: read -r name addr port type <<< "$m"
+        if [ "$DRY_RUN" = true ]; then
+            log "${C_DIM}  [dry-run] ${name} (${addr}): ssh sudo install -d dirs; rsync ${ORACLE_HOME}, ${jdk:-<jdk>}, ${cdir}; start NM; nmStart(engine${i})${C_RESET}"
+            continue
+        fi
+        info "Engine ${name} (${addr}) as ${sshu} …"
+        if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "${sshu}@${addr}" true 2>/dev/null; then
+            warn "${name}: no key-based ssh to ${sshu}@${addr} — skipped. (ssh-copy-id ${sshu}@${addr}, then re-run './install-occas.sh ${ENV_NAME} engines')"
+            failed="${failed} ${name}"; continue
+        fi
+        if ! ssh "${sshu}@${addr}" "sudo install -d -o ${sshu} '$(dirname "$ORACLE_HOME")' '${JAVA_DIR}' '$(dirname "$cdir")'" 2>/dev/null; then
+            warn "${name}: could not create target dirs (passwordless sudo?) — skipped."
+            failed="${failed} ${name}"; continue
+        fi
+        info "  rsync OCCAS home + domain (first run moves a few GB) …"
+        rsync -a \
+              --exclude 'user_projects/domains/*/servers/*/logs/' \
+              --exclude 'user_projects/domains/*/servers/*/tmp/' \
+              --exclude 'user_projects/domains/*/servers/*/cache/' \
+              --exclude 'user_projects/domains/*/nodemanager/*.log*' \
+              --exclude 'user_projects/domains/*/nodemanager/*.pid' \
+              "${ORACLE_HOME}/" "${sshu}@${addr}:${ORACLE_HOME}/" \
+            || { warn "${name}: rsync of ${ORACLE_HOME} failed — skipped."; failed="${failed} ${name}"; continue; }
+        if [ -n "$jdk" ]; then
+            rsync -a "$jdk" "${sshu}@${addr}:${JAVA_DIR}/" \
+                || { warn "${name}: rsync of ${jdk} failed — skipped."; failed="${failed} ${name}"; continue; }
+        fi
+        rsync -a "${cdir}/" "${sshu}@${addr}:${cdir}/" \
+            || { warn "${name}: rsync of ${cdir} failed — skipped."; failed="${failed} ${name}"; continue; }
+
+        if ssh "${sshu}@${addr}" "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port}'" 2>/dev/null; then
+            ok "  NodeManager already listening on ${name}:${port}"
+        else
+            info "  Starting NodeManager on ${name} …"
+            ssh "${sshu}@${addr}" "mkdir -p '${domain_dir}/nodemanager'; nohup '${domain_dir}/bin/startNodeManager.sh' >> '${domain_dir}/nodemanager/nodemanager.out' 2>&1 & disown" \
+                || { warn "${name}: NodeManager start failed."; failed="${failed} ${name}"; continue; }
+        fi
+
+        # Dynamic servers map 1:1 onto machine1..N in creation order → engine<i>.
+        info "  Starting server engine${i} through ${name}'s Node Manager …"
+        ensure_admin_pw
+        if ! MW_HOME="$ORACLE_HOME" DOMAIN_NAME="$DOMAIN_NAME" ADMIN_SERVER="engine${i}" \
+             NM_HOST="$addr" NM_PORT="$port" NM_TYPE="$type" NM_USER="$ADMIN_USER" \
+             NM_PASSWORD="$ADMIN_PW" NM_ACTION="start" WLST_PROPERTIES="$wlst_props" \
+             "${SCRIPT_DIR}/misc/start-admin-nm.sh"; then
+            warn "${name}: nmStart(engine${i}) failed — start it from the console once NM is up."
+            failed="${failed} ${name}"
+        fi
+    done
+
+    if [ -n "$failed" ]; then
+        warn "Engines with issues:${failed} — fix and re-run './install-occas.sh ${ENV_NAME} engines' (it resumes)."
+    else
+        [ "$DRY_RUN" = true ] || ok "All engine boxes provisioned and started."
     fi
 }
 
@@ -1224,7 +1325,8 @@ case "$STEP" in
     configure) do_configure ;;
     secure)    do_secure ;;
     start)     do_start ;;
-    all)       do_install; log ""; do_configure; log ""; do_secure; log ""; do_start ;;
+    engines)   do_engines ;;
+    all)       do_install; log ""; do_configure; log ""; do_secure; log ""; do_start; log ""; do_engines ;;
 esac
 
 log ""

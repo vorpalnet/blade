@@ -62,10 +62,12 @@ Manual form, if you prefer to see it happen: `sudo ./install-occas.sh oci prep`
 ## After the install
 
 - The `start` step (part of `all`) already booted the admin box: NodeManager,
-  then the AdminServer through it, and printed the console URL. Engine boxes
-  need only their NodeManager — the script prints a copy-paste `ssh … 
-  startNodeManager.sh` one-liner per box; start the engine servers from the
-  console (or `nmStart`) once those are up.
+  then the AdminServer through it, and printed the console URL. The `engines`
+  step (also part of `all`) then provisions each engine box over key-based
+  ssh — rsyncs the OCCAS home (domain included), the runtime JDK, and the env
+  certs to the same paths, starts the box's NodeManager, and `nmStart`s its
+  engine server. Boxes without working ssh are skipped with a warning;
+  `./install-occas.sh <env> engines` re-runs resume where they left off.
 - TLS is already wired: `all` generated a self-signed PKI and ran `secure`
   (SSL ports on AdminServer + engines, NodeManager on the env certificate).
   To switch to customer-issued certs: set the `cert.import.*` conf keys, run
