@@ -23,24 +23,22 @@
 #     <step>  init | download | install | configure | secure | all
 #
 #   init       interactively interview you and WRITE the env conf (+ optional secret)
-#   download   fetch the OCCAS media from Oracle eDelivery — headless (curl), no
-#              browser simulation: auth is Oracle's own CLI endpoint
-#              (/osdc/cliauth, HTTP basic with your oracle.com SSO account). The
-#              per-file URLs carry a license-acceptance token that only the
-#              website can mint, so ONCE per OCCAS version, in a browser:
+#   download   fetch the OCCAS media from Oracle eDelivery — headless (curl),
+#              mirroring Oracle's generated wget.sh: the per-file URLs carry a
+#              license-acceptance token (valid ~8 h) and each request sends the
+#              dialog's access token as a Bearer header (valid ~1 h). Neither
+#              can be minted from the CLI, so in a browser:
 #                1. sign in at https://edelivery.oracle.com, cart the OCCAS
 #                   release, pick the platform, accept the license
-#                2. click 'WGET Options' and download the generated wget.sh —
-#                   the script asks for its path and stashes it as
-#                   build-profiles/occas/<env>.urls (gitignored)
-#              After that it runs headlessly until Oracle expires the token
-#              (then it says so and asks for a fresh wget.sh on re-run). Files
-#              land next to installer.jar (override: download.dir), zips are
-#              unpacked, and it's a no-op once installer.jar exists.
-#              SSO creds: $BLADE_SSO_USERNAME / $BLADE_SSO_PASSWORD, or
-#              sso.username in the conf + sso.password in <env>.secret, else
-#              prompted. 'install' auto-runs this step when installer.jar is
-#              missing and the .urls file is present.
+#                2. 'WGET Options' → 'Download wget.sh' — the script asks for
+#                   its path and stashes it as build-profiles/occas/<env>.urls
+#                   (gitignored)
+#                3. 'WGET Options' → 'Generate Token' → Copy — pasted at the
+#                   prompt (or $BLADE_EDELIVERY_TOKEN for headless runs)
+#              Files land next to installer.jar (override: download.dir; falls
+#              back to ~/occas-media when that's not writable), zips are
+#              unpacked, and it's a no-op once installer.jar exists. 'install'
+#              auto-runs this step when installer.jar is missing.
 #   install    silent product install — idempotent: skips if ORACLE_HOME already
 #              populated, so on a SHARED filesystem it installs once, not per node
 #   configure  create the dynamic-cluster domain
@@ -82,8 +80,7 @@
 # !! configure writes the domain with OverwriteDomain=true. If domain.name
 #    points at an EXISTING domain dir, it is CLOBBERED. Back up first.
 #
-# Secrets: admin.password (build-profiles/occas/<env>.secret) or $BLADE_WLS_PASSWORD;
-#          sso.password (same file) or $BLADE_SSO_PASSWORD for the download step.
+# Secrets: admin.password (build-profiles/occas/<env>.secret) or $BLADE_WLS_PASSWORD.
 # ============================================================================
 
 set -euo pipefail
@@ -106,7 +103,7 @@ ENV_ARG=""; STEP=""; DRY_RUN=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,79p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,76p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
@@ -359,36 +356,12 @@ get_store_pw() {
 # ----------------------------------------------------------------------------
 # Step 0 — download: OCCAS media from Oracle eDelivery (headless)
 # ----------------------------------------------------------------------------
-# Same auth model as Oracle's own generated wget.sh: HTTP basic against the
-# cliauth endpoint with your oracle.com SSO account to get session cookies,
-# then plain GETs of the tokened softwareDownload URLs. The token encodes the
-# license acceptance you clicked in the browser — it can't be minted from the
-# CLI, which is why the .urls file comes from a one-time browser step (see the
-# header). An expired token comes back as an HTTP-200 HTML page, not an error,
-# so validity is checked with unzip -t.
-EDELIVERY_CLIAUTH="https://edelivery.oracle.com/osdc/cliauth"
-
-# --- Oracle SSO creds (download only): env > conf/secret > prompt ---
-get_sso_user() {
-    local v="${BLADE_SSO_USERNAME:-}"
-    [ -z "$v" ] && v="$(read_prop "$CONF_FILE" "sso.username")"
-    if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
-        read -r -p "Oracle SSO username (oracle.com account email): " v
-        [ -n "$v" ] || die "No username provided."
-    fi
-    printf '%s' "$v"
-}
-
-get_sso_pw() {
-    local v="${BLADE_SSO_PASSWORD:-}"
-    [ -z "$v" ] && [ -f "$SECRET_FILE" ] && v="$(read_prop "$SECRET_FILE" "sso.password")"
-    if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
-        read -rs -p "Oracle SSO password for ${1}: " v; echo
-        [ -n "$v" ] || die "No password provided."
-    fi
-    printf '%s' "$v"
-}
-
+# Same auth model as Oracle's generated wget.sh (2026 token flavor): each
+# softwareDownload URL embeds a license-acceptance token (URLs are valid ~8 h),
+# and the request carries "Authorization: Bearer <access token>" — the token
+# the WGET Options dialog's 'Generate Token' button mints (valid ~1 h). Both
+# come from the browser; neither can be minted from the CLI, which is why the
+# one-time browser step exists.
 do_download() {
     if [ -f "$INSTALLER_JAR" ]; then
         ok "Installer already present: ${INSTALLER_JAR} — skipping download."
@@ -403,15 +376,16 @@ do_download() {
         log "  1. sign in at https://edelivery.oracle.com and cart the OCCAS release"
         log "     (search 'Oracle Communications Converged Application Server'),"
         log "     pick the platform, accept the license"
-        log "  2. click 'WGET Options' → download the generated wget.sh"
+        log "  2. click 'WGET Options' → 'Download wget.sh'"
         log "     (browsing on another machine is fine — scp it to this box)"
+        log "  3. in the same dialog, click 'Generate Token' → Copy — you'll paste it here"
         local wsh=""
         [ -t 0 ] && ask wsh "Path to that wget.sh (Enter to quit)" ""
         [ -n "$wsh" ] || die "No wget.sh yet — do the browser step above, then just re-run this; it resumes where it left off."
         wsh="${wsh/#\~/$HOME}"
         [ -f "$wsh" ] || die "Not found: ${wsh}"
         cp "$wsh" "$URLS_FILE"
-        ok "Saved as ${URLS_FILE} (gitignored) — re-runs reuse it until the token expires."
+        ok "Saved as ${URLS_FILE} (gitignored) — Oracle says its URLs are good for ~8 hours."
     fi
 
     # Pull the tokened URLs out of whatever was saved (Oracle's whole wget.sh,
@@ -424,31 +398,27 @@ do_download() {
     info "Download ${#urls[@]} file(s) from eDelivery → ${DL_DIR}"
     if [ "$DRY_RUN" = true ]; then
         for u in "${urls[@]}"; do f="${u##*fileName=}"; f="${f%%&*}"; log "${C_DIM}  [dry-run] ${f}${C_RESET}"; done
-        log "${C_DIM}  [dry-run] curl basic-auth → ${EDELIVERY_CLIAUTH} (cookie jar), fetch each URL, unzip into ${DL_DIR}${C_RESET}"
+        log "${C_DIM}  [dry-run] curl each URL with the Bearer access token, unzip into ${DL_DIR}${C_RESET}"
         return 0
     fi
 
     command -v curl  >/dev/null || die "curl not found."
     command -v unzip >/dev/null || die "unzip not found."
-    mkdir -p "$DL_DIR"
-    local sso_user sso_pw
-    sso_user="$(get_sso_user)"
-    sso_pw="$(get_sso_pw "$sso_user")"
-    [ -n "$sso_user" ] && [ -n "$sso_pw" ] || die "Oracle SSO credentials required (see --help, 'download')."
+    # installer.jar often lives under another user's home (per-box conf) — if
+    # that's not writable, download to ~/occas-media and adopt the jar there.
+    if ! mkdir -p "$DL_DIR" 2>/dev/null || [ ! -w "$DL_DIR" ]; then
+        warn "Can't write to ${DL_DIR} — downloading to ${HOME}/occas-media instead."
+        DL_DIR="${HOME}/occas-media"
+        mkdir -p "$DL_DIR" || die "Can't create ${DL_DIR}."
+    fi
 
-    local cookies; cookies="$(mktemp /tmp/occas-edelivery.XXXXXX.cookies)"
-    trap 'rm -f "$cookies"' RETURN
-    local ua="Mozilla/5.0 (install-occas.sh)"
-
-    # Session cookies via cliauth (it answers with a basic-auth challenge).
-    # Credentials go in through --config on stdin so they never appear in the
-    # process list; --location-trusted keeps them attached if the auth flow
-    # redirects (older eDelivery bounced through login.oracle.com).
-    info "Signing in to eDelivery as ${sso_user} …"
-    curl -fsS -L --location-trusted -A "$ua" -c "$cookies" -o /dev/null \
-         --config - "$EDELIVERY_CLIAUTH" <<EOF || die "eDelivery sign-in failed — check the SSO username/password."
-user = "${sso_user}:${sso_pw}"
-EOF
+    # The Bearer access token from the WGET Options dialog (valid ~1 hour).
+    local token="${BLADE_EDELIVERY_TOKEN:-}"
+    if [ -z "$token" ]; then
+        [ -t 0 ] || die "No access token — set \$BLADE_EDELIVERY_TOKEN (browser: WGET Options → 'Generate Token')."
+        ask token "Access token ('Generate Token' in the WGET Options dialog, valid ~1 h)" ""
+        [ -n "$token" ] || die "No access token given."
+    fi
 
     local dest zips=()
     for u in "${urls[@]}"; do
@@ -459,12 +429,14 @@ EOF
             ok "${f} — already downloaded and intact."
         else
             info "Fetching ${f} …"
-            curl -f -L --progress-bar -A "$ua" -b "$cookies" -C - -o "$dest" "$u" \
-                || die "Download failed: ${f}"
+            # The token goes in via --config on stdin so it stays out of `ps`.
+            curl -f -L --progress-bar -C - -o "$dest" --config - "$u" <<EOF || die "Download failed: ${f} — 401/403 means the access token (~1 h) or the URLs (~8 h) expired. Re-run with a fresh token; if it still fails, delete ${URLS_FILE} and re-run for a fresh wget.sh."
+header = "Authorization: Bearer ${token}"
+EOF
             if ! unzip -tqq "$dest" >/dev/null 2>&1; then
                 if head -c 1024 "$dest" | grep -qi "<html"; then
-                    rm -f "$dest" "$URLS_FILE"
-                    die "eDelivery sent an HTML page instead of ${f} — the token has expired. Removed the stale ${URLS_FILE}; re-run and you'll be walked through a fresh wget.sh (browser step)."
+                    rm -f "$dest"
+                    die "eDelivery sent an HTML page instead of ${f} — token or URLs expired. Re-run with a fresh token; if it still fails, delete ${URLS_FILE} and re-run for a fresh wget.sh."
                 fi
                 die "${dest} is not a valid zip (truncated download?) — delete it and re-run."
             fi
@@ -481,8 +453,9 @@ EOF
     else
         local found; found="$(find "$DL_DIR" -maxdepth 3 -name occas_generic.jar 2>/dev/null | head -1)"
         if [ -n "$found" ]; then
-            warn "Extracted ${found}, but the conf expects installer.jar=${INSTALLER_JAR}."
-            warn "Fix the conf, or:  BLADE_OCCAS_INSTALLER='${found}' ./install-occas.sh ${ENV_NAME} install"
+            INSTALLER_JAR="$found"
+            ok "Installer ready: ${INSTALLER_JAR}"
+            log "  (not where the conf's installer.jar points — this run uses the downloaded one)"
         else
             warn "No occas_generic.jar in the downloaded media — check what ${URLS_FILE} points at."
         fi
