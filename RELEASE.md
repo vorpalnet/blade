@@ -9,11 +9,21 @@ most one sudo password prompt; none on OCI's passwordless `opc`): creates the
 `install.user` (`oracle`) and `inventory.group` (`oinstall`), plus the
 `oracle.home` / installer / inventory / `java.dir` directories — owned by the
 invoking admin user and group-shared with `oracle` via setgid, so there is no
-logout/login and no later sudo. Media parked in the `~/occas-media` fallback
-by a pre-prep run is reclaimed automatically instead of re-downloaded.
+logout/login and no later sudo. Re-runs do no repeated work: an
+already-extracted `occas_generic.jar` is adopted from the download (or
+fallback) directory wherever the media unzipped it, skipping the zip
+verify/unpack entirely; media parked in the `~/occas-media` fallback by a
+pre-prep run is reclaimed instead of re-downloaded; and JDKs left under the
+old `~/java` default are moved into `java.dir` instead of re-fetched.
 `install` pre-checks `oracle.home` and `inventory.loc` writability and names
 `prep` in the error instead of surfacing the installer's "Invalid Central
-Inventory location". The full zero-to-domain walkthrough (including the
+Inventory location". Prep also writes `/etc/profile.d/blade-occas.sh` so new
+logins get `$MW_HOME` (blade's build convention) and a `JAVA_HOME`/`PATH`
+(preferring the javadoc JDK; the OCCAS runtime uses the JAVA_HOME recorded in
+the domain, not the login env). The `configure`/`secure` WLST subshells export
+`MW_HOME` and relax `set -u` before sourcing `setWLSEnv.sh` — Oracle's env
+scripts (`commEnv.sh`, `commBaseEnv.sh`) read unset variables and die under
+strict mode. The full zero-to-domain walkthrough (including the
 eDelivery browser clicks) lives in `build-profiles/occas/README.md`.
 
 New `download` step fetches the installer media headlessly with curl — same

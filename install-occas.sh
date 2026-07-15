@@ -387,6 +387,7 @@ do_prep() {
         for d in "${dirs[@]}"; do
             log "${C_DIM}  [dry-run] mkdir -p ${d}; chown ${owner}:${INV_GROUP}; chmod 2775${C_RESET}"
         done
+        log "${C_DIM}  [dry-run] write /etc/profile.d/blade-occas.sh (MW_HOME=${ORACLE_HOME}, JAVA_HOME from ${JAVA_DIR})${C_RESET}"
         return 0
     fi
     [ "$(id -u)" -eq 0 ] || die "prep needs root:  sudo ./install-occas.sh ${ENV_NAME} prep"
@@ -405,13 +406,39 @@ do_prep() {
         chmod 2775 "$d"
         ok "${d}  → ${owner}:${INV_GROUP} (setgid, group-shared with ${INSTALL_USER})"
     done
+
+    # System-wide env for future shells: $MW_HOME (blade's build.sh/bootstrap.sh
+    # convention) and a JAVA_HOME/PATH. Prefers the javadoc JDK so blade builds
+    # on this box produce javadocs; the OCCAS runtime doesn't care — the domain
+    # records its own JAVA_HOME (the JDK the installer ran on) at create time.
+    local prof="/etc/profile.d/blade-occas.sh" jglobs=""
+    [ -n "$JAVA_JAVADOC" ] && jglobs="\"${JAVA_DIR}\"/jdk-${JAVA_JAVADOC}*"
+    [ -n "$JAVA_RUNTIME" ] && jglobs="${jglobs} \"${JAVA_DIR}\"/jdk-${JAVA_RUNTIME}*"
+    {
+        echo "# Written by blade install-occas.sh ('${ENV_NAME}' prep) — safe to delete."
+        echo "export MW_HOME=\"${ORACLE_HOME}\""
+        if [ -n "$jglobs" ]; then
+            echo 'if [ -z "${JAVA_HOME:-}" ]; then'
+            echo "    for __d in ${jglobs}; do"
+            echo '        if [ -d "$__d" ]; then export JAVA_HOME="$__d"; break; fi'
+            echo '    done'
+            echo '    unset __d'
+            echo '    [ -n "${JAVA_HOME:-}" ] && export PATH="$JAVA_HOME/bin:$PATH"'
+            echo 'fi'
+        fi
+    } > "$prof"
+    chmod 644 "$prof"
+    ok "${prof}  (MW_HOME + JAVA_HOME for new logins)"
 }
 
 # Runs prep via sudo the first time a step needs the directories — at most
 # one sudo password prompt, and nothing else to do by hand.
 ensure_prepped() {
     if [ -w "$ORACLE_HOME" ] || { [ ! -e "$ORACLE_HOME" ] && [ -w "$(dirname "$ORACLE_HOME")" ]; }; then
-        return 0
+        # dirs are fine — but re-prep if an older prep didn't write the env drop-in
+        if [ "$(uname -s)" != "Linux" ] || [ -f /etc/profile.d/blade-occas.sh ]; then
+            return 0
+        fi
     fi
     if [ "$DRY_RUN" = true ]; then
         if [ -z "${PREP_NOTED:-}" ]; then
@@ -435,9 +462,29 @@ ensure_prepped() {
 # the WGET Options dialog's 'Generate Token' button mints (valid ~1 h). Both
 # come from the browser; neither can be minted from the CLI, which is why the
 # one-time browser step exists.
+# The extracted occas_generic.jar often isn't exactly where the conf's
+# installer.jar points (the media unzips into subdirs like combined_scan/) —
+# adopt it from wherever a previous run left it, so re-runs do NOTHING.
+adopt_installer() {
+    local d found
+    for d in "$DL_DIR" "${HOME}/occas-media"; do
+        [ -d "$d" ] || continue
+        found="$(find "$d" -maxdepth 3 -name occas_generic.jar 2>/dev/null | head -1)"
+        if [ -n "$found" ]; then
+            INSTALLER_JAR="$found"
+            return 0
+        fi
+    done
+    return 1
+}
+
 do_download() {
     if [ -f "$INSTALLER_JAR" ]; then
         ok "Installer already present: ${INSTALLER_JAR} — skipping download."
+        return 0
+    fi
+    if adopt_installer; then
+        ok "Installer already downloaded: ${INSTALLER_JAR} — skipping download."
         return 0
     fi
     ensure_prepped
@@ -552,15 +599,11 @@ EOF
 
     if [ -f "$INSTALLER_JAR" ]; then
         ok "Installer ready: ${INSTALLER_JAR}"
+    elif adopt_installer; then
+        ok "Installer ready: ${INSTALLER_JAR}"
+        log "  (not where the conf's installer.jar points — using the downloaded one)"
     else
-        local found; found="$(find "$DL_DIR" -maxdepth 3 -name occas_generic.jar 2>/dev/null | head -1)"
-        if [ -n "$found" ]; then
-            INSTALLER_JAR="$found"
-            ok "Installer ready: ${INSTALLER_JAR}"
-            log "  (not where the conf's installer.jar points — this run uses the downloaded one)"
-        else
-            warn "No occas_generic.jar in the downloaded media — check what ${URLS_FILE} points at."
-        fi
+        warn "No occas_generic.jar in the downloaded media — check what ${URLS_FILE} points at."
     fi
 }
 
@@ -580,12 +623,24 @@ jdk_home_of() {  # <version> → echoes the jdk-<version>* dir under JAVA_DIR, i
 }
 
 ensure_jdk() {  # <version> <label>
-    local ver="$1" label="$2" existing os_arch tarball url want got
+    local ver="$1" label="$2" existing old os_arch tarball url want got
     [ -n "$ver" ] || return 0
     existing="$(jdk_home_of "$ver")"
     if [ -n "$existing" ]; then
         ok "JDK ${ver} (${label}): ${existing}"
         return 0
+    fi
+    # Reclaim a JDK an earlier run put under ~/java (the old default) rather
+    # than re-downloading it.
+    if [ -d "${HOME}/java" ] && [ "$JAVA_DIR" != "${HOME}/java" ]; then
+        old="$(find "${HOME}/java" -maxdepth 1 -type d -name "jdk-${ver}*" 2>/dev/null | head -1)"
+        if [ -n "$old" ] && [ "$DRY_RUN" = false ]; then
+            mkdir -p "$JAVA_DIR"
+            if mv "$old" "${JAVA_DIR}/" 2>/dev/null; then
+                ok "JDK ${ver} (${label}): reclaimed from ${old}"
+                return 0
+            fi
+        fi
     fi
     case "$(uname -s)-$(uname -m)" in
         Linux-x86_64)  os_arch="linux-x64" ;;
@@ -824,6 +879,10 @@ Machine${idx}NodemanagerNMType=${type}"
     # Run Oracle's offline WLST from the workdir.
     (
         cd "$work"
+        # Oracle's env scripts predate 'set -u' and read unset vars
+        # (commEnv.sh wants MW_HOME, commBaseEnv.sh reads JAVA_VENDOR, …).
+        export MW_HOME="$ORACLE_HOME"
+        set +u
         # shellcheck disable=SC1090
         . "$setwls" >/dev/null
         export BEA_HOME="$ORACLE_HOME"          # the .py uses BEA_HOME for the domain dir
@@ -940,6 +999,9 @@ print('secure: domain updated')"
 
     (
         cd "$work"
+        # Oracle's env scripts predate 'set -u' — see do_configure.
+        export MW_HOME="$ORACLE_HOME"
+        set +u
         # shellcheck disable=SC1090
         . "$setwls" >/dev/null
         java weblogic.WLST secure-domain.py
