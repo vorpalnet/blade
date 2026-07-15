@@ -76,8 +76,8 @@
 		     framework source (InitialInvite, Transfer, CallflowHold, ...) rides
 		     inside the framework JAR itself. The per-app SourceMXBean serves it
 		     from there to the Callflow Viewer — the browsed source is always
-		     byte-identical to the deployed code. The -sources.jar below still
-		     exists for IDE source attachment. -->
+		     byte-identical to the deployed code. No separate -sources.jar; an
+		     IDE that wants source attachment can attach the JAR to itself. -->
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -85,22 +85,6 @@
 				<configuration>
 					<skip>false</skip>
 				</configuration>
-			</plugin>
-			<!-- Produce vorpal-blade-library-framework-<ver>-sources.jar so
-			     Eclipse can attach source for the framework JAR pulled from
-			     ~/.m2 (otherwise IDE shows "no source attachment"). -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-source-plugin</artifactId>
-				<version>${maven-source-plugin.version}</version>
-				<executions>
-					<execution>
-						<id>attach-sources</id>
-						<goals>
-							<goal>jar-no-fork</goal>
-						</goals>
-					</execution>
-				</executions>
 			</plugin>
 		</plugins>
 	</build>
