@@ -16,13 +16,19 @@
 #
 # Usage:
 #   ./install-occas.sh [<env> [<step>]] [--dry-run]
-#     no args → just does the next thing: init if there's no conf, all if
-#               OCCAS isn't installed, configure if the domain is missing,
-#               and stops (saying so) when there's nothing left to do
+#     no args → just does the next thing: init if there's no conf, prep
+#               guidance if the box isn't set up yet, all if OCCAS isn't
+#               installed, configure if the domain is missing, and stops
+#               (saying so) when there's nothing left to do
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
-#     <step>  init | download | install | configure | secure | all
+#     <step>  init | prep | download | install | configure | secure | all
 #
 #   init       interactively interview you and WRITE the env conf (+ optional secret)
+#   prep       one-time root setup (sudo): creates install.user ('oracle') +
+#              inventory.group ('oinstall'), the oracle.home / installer /
+#              inventory / java.dir directories (oracle:oinstall, mode 2775),
+#              and adds you to oinstall so every other step runs without sudo.
+#              Log out/in afterwards to pick up the group membership.
 #   download   fetch the OCCAS media from Oracle eDelivery — headless (curl),
 #              mirroring Oracle's generated wget.sh: the per-file URLs carry a
 #              license-acceptance token (valid ~8 h) and each request sends the
@@ -108,7 +114,7 @@ ENV_ARG=""; STEP=""; DRY_RUN=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,81p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,87p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
@@ -173,7 +179,17 @@ if [ -z "$STEP" ]; then
         _OH="$(read_prop "$CONF_FILE" "oracle.home")"
         _DN="$(read_prop "$CONF_FILE" "domain.name")"
         if [ ! -d "${_OH}/wlserver" ]; then
-            STEP="all"
+            if [ "$(id -u)" -eq 0 ]; then
+                STEP="prep"
+            elif [ -w "$_OH" ] || [ -w "$(dirname "$_OH")" ]; then
+                STEP="all"
+            else
+                info "This box isn't prepped yet (no write access to ${_OH})."
+                log  "  Run:   sudo ./install-occas.sh ${ENV_NAME} prep"
+                log  "  (creates the oracle user + oinstall group and the install/inventory/java"
+                log  "   dirs, and adds you to oinstall — then log out/in and re-run this)"
+                exit 1
+            fi
         elif [ -n "$_DN" ] && [ ! -d "${_OH}/user_projects/domains/${_DN}" ]; then
             STEP="configure"
         else
@@ -184,7 +200,7 @@ if [ -z "$STEP" ]; then
         fi
     fi
 fi
-case "$STEP" in init|download|install|configure|secure|all) ;; *) die "Unknown step: ${STEP}" ;; esac
+case "$STEP" in init|prep|download|install|configure|secure|all) ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # Interactive builder for build-profiles/occas/<env>.conf (+ optional secret).
 do_init() {
@@ -304,6 +320,7 @@ INSTALLER_JAR=$(read_prop "$CONF_FILE" "installer.jar")
 INSTALLER_JAR="${BLADE_OCCAS_INSTALLER:-$INSTALLER_JAR}"
 INV_LOC=$(read_prop      "$CONF_FILE" "inventory.loc")
 INV_GROUP=$(read_prop    "$CONF_FILE" "inventory.group"); INV_GROUP="${INV_GROUP:-oinstall}"
+INSTALL_USER=$(read_prop "$CONF_FILE" "install.user");    INSTALL_USER="${INSTALL_USER:-oracle}"
 INSTALL_TYPE=$(read_prop "$CONF_FILE" "install.type");    INSTALL_TYPE="${INSTALL_TYPE:-Complete with Examples}"
 
 DOMAIN_NAME=$(read_prop  "$CONF_FILE" "domain.name")
@@ -365,6 +382,47 @@ get_store_pw() {
 }
 
 # ----------------------------------------------------------------------------
+# Step -1 — prep: one-time root setup (user, group, directories)
+# ----------------------------------------------------------------------------
+# Oracle-convention layout: install.user ('oracle') owns the product dirs;
+# inventory.group ('oinstall') is shared with the admin user (you) so every
+# later step runs WITHOUT sudo. Idempotent — safe to re-run.
+do_prep() {
+    local admin_user="${SUDO_USER:-}" d
+    local dirs=("$ORACLE_HOME" "$INV_LOC" "$JAVA_DIR")
+    [ -n "$INSTALLER_JAR" ] && dirs+=("$(dirname "$INSTALLER_JAR")")
+    if [ "$DRY_RUN" = true ]; then
+        log "${C_DIM}  [dry-run] group ${INV_GROUP}; user ${INSTALL_USER} (-m -g ${INV_GROUP})${C_RESET}"
+        for d in "${dirs[@]}"; do
+            log "${C_DIM}  [dry-run] mkdir -p ${d}; chown ${INSTALL_USER}:${INV_GROUP}; chmod 2775${C_RESET}"
+        done
+        [ -n "$admin_user" ] && log "${C_DIM}  [dry-run] usermod -aG ${INV_GROUP} ${admin_user}${C_RESET}"
+        return 0
+    fi
+    [ "$(id -u)" -eq 0 ] || die "prep needs root:  sudo ./install-occas.sh ${ENV_NAME} prep"
+    info "Prep: users, groups, directories"
+    getent group "$INV_GROUP" >/dev/null 2>&1 || { groupadd "$INV_GROUP"; ok "group ${INV_GROUP} created"; }
+    if id -u "$INSTALL_USER" >/dev/null 2>&1; then
+        usermod -aG "$INV_GROUP" "$INSTALL_USER"
+        ok "user ${INSTALL_USER} exists — ensured ${INV_GROUP} membership"
+    else
+        useradd -m -g "$INV_GROUP" -s /bin/bash "$INSTALL_USER"
+        ok "user ${INSTALL_USER} created (group ${INV_GROUP})"
+    fi
+    for d in "${dirs[@]}"; do
+        mkdir -p "$d"
+        chown "${INSTALL_USER}:${INV_GROUP}" "$d"
+        chmod 2775 "$d"
+        ok "${d}  → ${INSTALL_USER}:${INV_GROUP}, group-writable (setgid)"
+    done
+    if [ -n "$admin_user" ] && [ "$admin_user" != "$INSTALL_USER" ]; then
+        usermod -aG "$INV_GROUP" "$admin_user"
+        ok "${admin_user} added to ${INV_GROUP}"
+        warn "Group membership needs a fresh login: log out/in (or 'newgrp ${INV_GROUP}'), then run  ./install-occas.sh ${ENV_NAME}"
+    fi
+}
+
+# ----------------------------------------------------------------------------
 # Step 0 — download: OCCAS media from Oracle eDelivery (headless)
 # ----------------------------------------------------------------------------
 # Same auth model as Oracle's generated wget.sh (2026 token flavor): each
@@ -390,6 +448,7 @@ do_download() {
         log "  2. click 'WGET Options' → 'Download wget.sh'"
         log "     (browsing on another machine is fine — scp it to this box)"
         log "  3. in the same dialog, click 'Generate Token' → Copy — you'll paste it here"
+        log "  (full walkthrough: build-profiles/occas/README.md)"
         local wsh=""
         [ -t 0 ] && ask wsh "Path to that wget.sh (Enter to quit)" ""
         [ -n "$wsh" ] || die "No wget.sh yet — do the browser step above, then just re-run this; it resumes where it left off."
@@ -596,7 +655,7 @@ do_install() {
     fi
     info "Silent install → ${ORACLE_HOME}  (installer: ${INSTALLER_JAR}, java: ${javabin})"
 
-    local rsp inv
+    local rsp inv d
     rsp="$(mktemp /tmp/occas-install.XXXXXX.rsp)"
     inv="$(mktemp /tmp/occas-oraInst.XXXXXX.loc)"
     cat > "$rsp" <<EOF
@@ -620,6 +679,13 @@ EOF
         rm -f "$rsp" "$inv"; return 0
     fi
     [ -f "$INSTALLER_JAR" ] || { rm -f "$rsp" "$inv"; die "installer.jar not found: ${INSTALLER_JAR}"; }
+    # Fail with the fix, not the installer's cryptic inventory/home errors.
+    for d in "$ORACLE_HOME" "$INV_LOC"; do
+        [ -d "$d" ] || mkdir -p "$d" 2>/dev/null \
+            || die "Can't create ${d} — run:  sudo ./install-occas.sh ${ENV_NAME} prep"
+        [ -w "$d" ] \
+            || die "No write access to ${d} — run:  sudo ./install-occas.sh ${ENV_NAME} prep  (then log out/in for the group)"
+    done
     "$javabin" -jar "$INSTALLER_JAR" -silent -responseFile "$rsp" -invPtrLoc "$inv" -ignoreSysPrereqs
     rm -f "$rsp" "$inv"
     ok "Product installed at ${ORACLE_HOME}"
@@ -880,6 +946,7 @@ log "  step:         ${STEP}"
 log ""
 
 case "$STEP" in
+    prep)      do_prep ;;
     download)  do_download; do_java ;;
     install)   do_install ;;
     configure) do_configure ;;
