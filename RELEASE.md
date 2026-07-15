@@ -64,6 +64,16 @@ to stdout, which the `$(…)` capture kept as a LEADING newline in the password 
 splitting the generated `.properties` line so WLST saw an empty password and
 rejected domain creation with error 60455. The newline now goes to stderr.
 
+New `start` step (and the finale of `all`): writes AdminServer
+`boot.properties` (mode 600; WebLogic encrypts it on first boot), starts the
+per-domain NodeManager if its port isn't listening, drives
+`nmStart(AdminServer)` through `misc/start-admin-nm.sh`, waits for the console
+port and prints the console URL — plus a copy-paste `ssh … startNodeManager.sh`
+one-liner for each engine box. The no-arg flow picks `start` when the domain
+exists but the AdminServer is down, and "nothing to do" now means everything
+is actually up. The admin password is asked once per run (a shared
+`ensure_admin_pw` global serves both configure and start).
+
 The init interview was cut to a handful of answers (the static test engine
 `engine0` on the admin box is always written — no longer asked): the
 environment name IS the

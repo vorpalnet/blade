@@ -18,10 +18,10 @@
 #   ./install-occas.sh [<env> [<step>]] [--dry-run]
 #     no args → just does the next thing: init if there's no conf, all if
 #               OCCAS isn't installed (prep auto-runs via sudo the first
-#               time), configure if the domain is missing, and stops
-#               (saying so) when there's nothing left to do
+#               time), configure if the domain is missing, start if the
+#               AdminServer is down, and stops when everything is up
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
-#     <step>  init | prep | download | install | configure | secure | all
+#     <step>  init | prep | download | install | configure | secure | start | all
 #
 #   init       short interview → writes the env conf (env name = the WebLogic
 #              domain name; machines auto-named machine0=admin, machine1..N)
@@ -69,7 +69,11 @@
 #              trust.keystore.type (PKCS12), identity.alias (server).
 #              Secret: store.password (or $BLADE_STORE_PASSWORD) — same one
 #              certs.sh used.
-#   all        install then configure (install auto-downloads when needed)
+#   start      boot the domain on THIS box: writes AdminServer boot.properties,
+#              starts the per-domain NodeManager, nmStart(AdminServer) via
+#              misc/start-admin-nm.sh, waits for the console and prints its
+#              URL; engine boxes get a copy-paste NodeManager one-liner
+#   all        install then configure then start (auto-downloading as needed)
 #
 # Examples:
 #   ./install-occas.sh oci init              # build the env conf interactively
@@ -115,7 +119,7 @@ ENV_ARG=""; STEP=""; DRY_RUN=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,88p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,92p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
@@ -202,14 +206,18 @@ if [ -z "$STEP" ]; then
         elif [ -n "$_DN" ] && [ ! -d "${_OH}/user_projects/domains/${_DN}" ]; then
             STEP="configure"
         else
-            ok "Nothing to do: OCCAS is at ${_OH} and domain '${_DN}' exists."
-            log "  Rebuild the domain (OVERWRITES it):  ./install-occas.sh ${ENV_NAME} configure"
-            log "  Wire TLS into it:                    ./install-occas.sh ${ENV_NAME} secure"
-            exit 0
+            _AP="$(read_prop "$CONF_FILE" "admin.port")"; _AP="${_AP:-7001}"
+            if (exec 3<>"/dev/tcp/127.0.0.1/${_AP}") 2>/dev/null; then
+                ok "Nothing to do: OCCAS installed, domain '${_DN}' exists, AdminServer up on :${_AP}."
+                log "  Rebuild the domain (OVERWRITES it):  ./install-occas.sh ${ENV_NAME} configure"
+                log "  Wire TLS into it:                    ./install-occas.sh ${ENV_NAME} secure"
+                exit 0
+            fi
+            STEP="start"
         fi
     fi
 fi
-case "$STEP" in init|prep|download|install|configure|secure|all) ;; *) die "Unknown step: ${STEP}" ;; esac
+case "$STEP" in init|prep|download|install|configure|secure|start|all) ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # Interactive builder for build-profiles/occas/<env>.conf (+ optional secret).
 # Crisp on purpose: the environment name IS the WebLogic domain name; machines
@@ -371,19 +379,18 @@ while :; do
     i=$((i + 1))
 done
 
-# --- Password (configure only): env > secret > prompt ---
-get_admin_pw() {
-    local v="${BLADE_WLS_PASSWORD:-}"
-    [ -z "$v" ] && [ -f "$SECRET_FILE" ] && v=$(read_prop "$SECRET_FILE" "admin.password")
-    if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
-        # The function's stdout IS the password (pw="$(get_admin_pw)"), so the
-        # cosmetic newline after silent input must go to stderr — on stdout it
-        # becomes a LEADING newline in the captured value, which splits the
-        # generated .properties line and WLST sees an empty password (60455).
-        read -rs -p "Admin (${ADMIN_USER}) password for the new domain: " v; echo >&2
-        [ -n "$v" ] || die "No password provided."
+# --- Admin password (configure + start): env > secret > prompt, asked ONCE ---
+# Sets the ADMIN_PW global instead of echoing (a $(…) capture once swallowed
+# the post-read newline into the password — see RELEASE 2.9.9).
+ADMIN_PW=""
+ensure_admin_pw() {
+    [ -n "$ADMIN_PW" ] && return 0
+    ADMIN_PW="${BLADE_WLS_PASSWORD:-}"
+    [ -z "$ADMIN_PW" ] && [ -f "$SECRET_FILE" ] && ADMIN_PW=$(read_prop "$SECRET_FILE" "admin.password")
+    if [ -z "$ADMIN_PW" ] && [ "$DRY_RUN" = false ]; then
+        read -rs -p "Admin (${ADMIN_USER}) password: " ADMIN_PW; echo >&2
+        [ -n "$ADMIN_PW" ] || die "No password provided."
     fi
-    printf '%s' "$v"
 }
 
 # --- Keystore password (secure only): env > secret > prompt — certs.sh's convention ---
@@ -828,7 +835,7 @@ do_configure() {
 
     local tmpl_dir="${ORACLE_HOME}/${TEMPLATE_REL}"
     local src_py="${tmpl_dir}/occas-replicated-dynamiccluster.py"
-    local pw; pw="$(get_admin_pw)"
+    local pw; ensure_admin_pw; pw="$ADMIN_PW"
 
     info "Configure domain '${DOMAIN_NAME}' (${START_MODE}) — dynamic cluster"
     log  "  prefix=${SRV_PREFIX}  match=${MATCH_EXPR}  count=${DYN_COUNT}  max=${MAX_SIZE}"
@@ -915,7 +922,86 @@ Machine${idx}NodemanagerNMType=${type}"
         java weblogic.WLST occas-replicated-dynamiccluster.py
     )
     ok "Domain '${DOMAIN_NAME}' written under ${ORACLE_HOME}/user_projects/domains/"
-    warn "Start the NodeManager on each machine, then start the AdminServer (see misc/start-admin-nm.sh)."
+}
+
+# ----------------------------------------------------------------------------
+# Step 3 — start: NodeManager + AdminServer on THIS box (engines get a one-liner)
+# ----------------------------------------------------------------------------
+# Boots the freshly configured domain: writes AdminServer boot.properties
+# (unattended starts; WebLogic encrypts it on first boot), starts the
+# per-domain NodeManager if it isn't listening, then drives nmStart(AdminServer)
+# through misc/start-admin-nm.sh and waits for the console port. Engine boxes
+# only need their NodeManager started — printed as a per-box one-liner (the
+# domain lives on the shared filesystem, so the path is the same there).
+listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+do_start() {
+    local domain_dir="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}"
+    local name addr port type admin_port wait_secs
+    IFS=: read -r name addr port type <<< "${MACHINES[0]:-machine0:localhost:5556:ssl}"
+    port="${port:-5556}"; type="${type:-ssl}"
+    admin_port="$(read_prop "$CONF_FILE" "admin.port")"; admin_port="${admin_port:-7001}"
+    wait_secs="${BLADE_START_WAIT:-240}"
+
+    if [ "$DRY_RUN" = true ]; then
+        log "${C_DIM}  [dry-run] write ${domain_dir}/servers/AdminServer/security/boot.properties${C_RESET}"
+        log "${C_DIM}  [dry-run] nohup ${domain_dir}/bin/startNodeManager.sh  (unless :${port} already listens)${C_RESET}"
+        log "${C_DIM}  [dry-run] nmStart(AdminServer) via misc/start-admin-nm.sh (NM ${port}/${type}); wait for console :${admin_port}${C_RESET}"
+        return 0
+    fi
+    [ -d "$domain_dir" ] || die "Domain not found: ${domain_dir} — run the configure step first."
+
+    if listening "$admin_port"; then
+        ok "AdminServer already listening — console: http://${addr}:${admin_port}/console"
+        return 0
+    fi
+
+    ensure_admin_pw
+
+    local bootdir="${domain_dir}/servers/AdminServer/security"
+    if [ ! -f "${bootdir}/boot.properties" ]; then
+        mkdir -p "$bootdir"
+        printf 'username=%s\npassword=%s\n' "$ADMIN_USER" "$ADMIN_PW" > "${bootdir}/boot.properties"
+        chmod 600 "${bootdir}/boot.properties"
+        ok "boot.properties written (encrypted by WebLogic on first start)"
+    fi
+
+    if listening "$port"; then
+        ok "NodeManager already listening on :${port}"
+    else
+        info "Starting NodeManager (:${port} ${type}) …"
+        mkdir -p "${domain_dir}/nodemanager"
+        nohup "${domain_dir}/bin/startNodeManager.sh" >> "${domain_dir}/nodemanager/nodemanager.out" 2>&1 &
+    fi
+
+    # start-admin-nm.sh waits for the NM listener itself, then nmStart()s.
+    info "Starting AdminServer through Node Manager …"
+    MW_HOME="$ORACLE_HOME" DOMAIN_NAME="$DOMAIN_NAME" NM_HOST="localhost" \
+    NM_PORT="$port" NM_TYPE="$type" NM_USER="$ADMIN_USER" NM_PASSWORD="$ADMIN_PW" \
+    NM_ACTION="start" "${SCRIPT_DIR}/misc/start-admin-nm.sh" \
+        || die "AdminServer start failed — see ${domain_dir}/servers/AdminServer/logs/ and ${domain_dir}/nodemanager/nodemanager.out"
+
+    info "Waiting for the console on :${admin_port} (up to ${wait_secs}s) …"
+    local i=0
+    until listening "$admin_port"; do
+        i=$((i + 2))
+        if [ "$i" -ge "$wait_secs" ]; then
+            warn "Console not up after ${wait_secs}s — it may still be starting; check ${domain_dir}/servers/AdminServer/logs/AdminServer.log"
+            return 0
+        fi
+        sleep 2
+    done
+    ok "AdminServer up — console: http://${addr}:${admin_port}/console  (user: ${ADMIN_USER})"
+
+    if [ ${#MACHINES[@]} -gt 1 ]; then
+        log ""
+        log "Engine NodeManagers — run once per engine box, then start the engines from the console:"
+        local m
+        for m in "${MACHINES[@]:1}"; do
+            IFS=: read -r name addr port type <<< "$m"
+            log "  ssh ${addr}  'nohup ${domain_dir}/bin/startNodeManager.sh > /tmp/nodemanager.out 2>&1 &'"
+        done
+    fi
 }
 
 # ----------------------------------------------------------------------------
@@ -1052,7 +1138,8 @@ case "$STEP" in
     install)   do_install ;;
     configure) do_configure ;;
     secure)    do_secure ;;
-    all)       do_install; log ""; do_configure ;;
+    start)     do_start ;;
+    all)       do_install; log ""; do_configure; log ""; do_start ;;
 esac
 
 log ""

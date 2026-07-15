@@ -56,8 +56,11 @@ Manual form, if you prefer to see it happen: `sudo ./install-occas.sh oci prep`
 
 ## After the install
 
-- Start the NodeManager on each machine, then the AdminServer
-  (`misc/start-admin-nm.sh`).
+- The `start` step (part of `all`) already booted the admin box: NodeManager,
+  then the AdminServer through it, and printed the console URL. Engine boxes
+  need only their NodeManager — the script prints a copy-paste `ssh … 
+  startNodeManager.sh` one-liner per box; start the engine servers from the
+  console (or `nmStart`) once those are up.
 - TLS: `./certs.sh <env> generate` (or `import`), then, with the domain
   stopped, `./install-occas.sh <env> secure`.
 - Adding an engine node later: add a `machine.N` line to the conf, bump
