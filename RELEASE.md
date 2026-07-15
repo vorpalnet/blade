@@ -12,7 +12,9 @@ the request carries the WGET-Options-dialog access token as an
 `$BLADE_EDELIVERY_TOKEN`). Browser step: accept the license, download the
 generated wget.sh (the script asks for its path and stashes it as
 `build-profiles/occas/<env>.urls`, gitignored), and Generate Token → Copy.
-Expired tokens are detected and reported as such, not as a corrupt file. Zips
+Expired tokens are detected and reported as such, not as a corrupt file. The
+requests send a wget-style `User-Agent` — Akamai in front of eDelivery rejects
+curl's default UA (and arbitrary custom strings) with 403. Zips
 are unpacked next to `installer.jar` (falling back to `~/occas-media` when
 that directory isn't writable, and using the downloaded `occas_generic.jar`
 for the run), the step is a no-op once the installer is present, and `install`

@@ -430,7 +430,10 @@ do_download() {
         else
             info "Fetching ${f} …"
             # The token goes in via --config on stdin so it stays out of `ps`.
-            curl -f -L --progress-bar -C - -o "$dest" --config - "$u" <<EOF || die "Download failed: ${f} — 401/403 means the access token (~1 h) or the URLs (~8 h) expired. Re-run with a fresh token; if it still fails, delete ${URLS_FILE} and re-run for a fresh wget.sh."
+            # -A: Akamai in front of eDelivery sniffs the User-Agent — curl's
+            # default and even custom Mozilla strings get 403; a wget UA (what
+            # Oracle's own script sends) passes. Verified 2026-07-15.
+            curl -f -L --progress-bar -A "Wget/1.21" -C - -o "$dest" --config - "$u" <<EOF || die "Download failed: ${f} — 401/403 means the access token (~1 h) or the URLs (~8 h) expired. Re-run with a fresh token; if it still fails, delete ${URLS_FILE} and re-run for a fresh wget.sh."
 header = "Authorization: Bearer ${token}"
 EOF
             if ! unzip -tqq "$dest" >/dev/null 2>&1; then
