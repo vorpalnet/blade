@@ -25,9 +25,9 @@
 package org.vorpal.blade.framework.v2.b2bua;
 
 /**
- * This class accepts a Cancel message and passes it on.
- * 
- * @deprecated Use the Terminate class in the future.
+ * Legacy CANCEL callflow handler.
+ *
+ * @deprecated Use {@link Terminate} instead.
  */
 @Deprecated
 public class Cancel extends Terminate {

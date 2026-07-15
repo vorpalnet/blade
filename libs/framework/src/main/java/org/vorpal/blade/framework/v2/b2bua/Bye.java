@@ -22,11 +22,6 @@
  *  SOFTWARE.
  */
 
-/**
- * This class accepts a BYE message and passes it on.
- *
- * @deprecated Use the Terminate class instead.
- */
 package org.vorpal.blade.framework.v2.b2bua;
 
 /**

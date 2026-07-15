@@ -3,6 +3,8 @@ package org.vorpal.blade.services.analytics.jms;
 import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -383,6 +385,13 @@ public class AnalyticsJmsListener implements MessageListener {
 			sessionPkByVorpalId.put(vorpalId, session.getId());
 			logInfo("AnalyticsJmsListener: Persisted Session id=" + session.getId()
 					+ " cluster=" + session.getClusterName() + " vorpal_id=" + vorpalId);
+			// replay any keys that arrived before this session row existed
+			List<SessionKey> parked = pendingKeysByVorpalId.remove(vorpalId);
+			if (parked != null) {
+				for (SessionKey sk : parked) {
+					persistSessionKey(em, sk);
+				}
+			}
 		} else {
 			// Session stopped: resolve the open row and stamp destroyed.
 			Long pk = resolveSessionPk(em, vorpalId);
@@ -392,6 +401,7 @@ public class AnalyticsJmsListener implements MessageListener {
 					managed.setDestroyed(session.getDestroyed());
 				}
 				sessionPkByVorpalId.remove(vorpalId);
+				pendingKeysByVorpalId.remove(vorpalId); // orphaned parked keys die with the call
 				logInfo("AnalyticsJmsListener: Closed Session id=" + pk + " vorpal_id=" + vorpalId);
 			} else {
 				logWarning("AnalyticsJmsListener: Session stop for unknown vorpal_id=" + vorpalId);
@@ -425,8 +435,16 @@ public class AnalyticsJmsListener implements MessageListener {
 		long vorpalId = sk.getId().getSessionId();
 		Long pk = resolveSessionPk(em, vorpalId);
 		if (pk == null) {
-			logWarning("AnalyticsJmsListener: SessionKey for unknown vorpal_id=" + vorpalId
-					+ " (name=" + sk.getId().getName() + ") — skipped");
+			if (pendingKeysByVorpalId.size() < PENDING_KEY_LIMIT) {
+				pendingKeysByVorpalId
+						.computeIfAbsent(vorpalId, k -> Collections.synchronizedList(new ArrayList<>()))
+						.add(sk);
+				logInfo("AnalyticsJmsListener: SessionKey for vorpal_id=" + vorpalId
+						+ " (name=" + sk.getId().getName() + ") parked awaiting its Session");
+			} else {
+				logWarning("AnalyticsJmsListener: SessionKey for unknown vorpal_id=" + vorpalId
+						+ " (name=" + sk.getId().getName() + ") — skipped (pending limit reached)");
+			}
 			return;
 		}
 		sk.getId().setSessionId(pk);
@@ -474,6 +492,15 @@ public class AnalyticsJmsListener implements MessageListener {
 	// resolve through it, falling back to the open session row in the DB
 	// on a cold cache (restart / clustered consumer) — see resolveSessionPk.
 	private static final ConcurrentMap<Long, Long> sessionPkByVorpalId = new ConcurrentHashMap<>();
+
+	// SessionKeys can arrive before their Session row: the framework publishes
+	// the index key while processing the initial INVITE, but sessionStart is
+	// published later in the callflow (observed live 2026-07-14: every fromSel
+	// key skipped as "unknown vorpal_id"). Park early keys here and replay them
+	// when the session lands. Bounded — a key still parked at the limit is an
+	// orphan whose session start was lost, exactly what the old skip discarded.
+	private static final int PENDING_KEY_LIMIT = 1000;
+	private static final ConcurrentMap<Long, List<SessionKey>> pendingKeysByVorpalId = new ConcurrentHashMap<>();
 
 	/// This analytics server's hosting-environment id, from the service config
 	/// (analytics.json), falling back to the WebLogic domain name. Stamped as
