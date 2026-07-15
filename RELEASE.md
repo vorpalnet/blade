@@ -4,17 +4,17 @@
 
 ### install-occas.sh: download OCCAS media from Oracle eDelivery
 
-New `prep` step (`sudo ./install-occas.sh <env> prep`, run once per box)
-creates the Oracle-convention layout from the conf: the `install.user`
-(`oracle`) and `inventory.group` (`oinstall`), the `oracle.home` / installer /
-inventory / `java.dir` directories (owned `oracle:oinstall`, group-writable
-setgid), and adds the invoking admin user to `oinstall` so every other step
-runs without sudo. The no-arg flow detects an unprepped box and prints the
-exact sudo command; `install` pre-checks `oracle.home` and `inventory.loc`
-writability and names `prep` in the error instead of surfacing the installer's
-"Invalid Central Inventory location". The full zero-to-domain walkthrough
-(including the eDelivery browser clicks) lives in
-`build-profiles/occas/README.md`.
+New `prep` step, **auto-invoked via sudo** the first time a step needs it (at
+most one sudo password prompt; none on OCI's passwordless `opc`): creates the
+`install.user` (`oracle`) and `inventory.group` (`oinstall`), plus the
+`oracle.home` / installer / inventory / `java.dir` directories — owned by the
+invoking admin user and group-shared with `oracle` via setgid, so there is no
+logout/login and no later sudo. Media parked in the `~/occas-media` fallback
+by a pre-prep run is reclaimed automatically instead of re-downloaded.
+`install` pre-checks `oracle.home` and `inventory.loc` writability and names
+`prep` in the error instead of surfacing the installer's "Invalid Central
+Inventory location". The full zero-to-domain walkthrough (including the
+eDelivery browser clicks) lives in `build-profiles/occas/README.md`.
 
 New `download` step fetches the installer media headlessly with curl — same
 auth model as Oracle's generated wget.sh (2026 token flavor): each

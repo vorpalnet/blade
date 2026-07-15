@@ -1,42 +1,31 @@
 # Installing OCCAS from scratch
 
 Zero to a running OCCAS dynamic-cluster domain on a fresh Linux box (the OCI
-`opc` user is the running example — any sudo-capable admin user works).
-Everything is driven by `./install-occas.sh <env>` reading
-`build-profiles/occas/<env>.conf`; with no arguments it works out the next
-step itself and tells you what it's doing.
-
-## 0. Get BLADE and an env conf
+`opc` user is the running example — any sudo-capable admin user works). One
+driver script, one command:
 
 ```
 git clone https://github.com/vorpalnet/blade.git
 cd blade
+./install-occas.sh
 ```
 
-Use the committed `oci.conf` as-is, edit it, or build a new env interactively:
+With no arguments it works out the next step itself: builds the env conf if
+there is none (`init` interview), preps the box (via sudo, automatically),
+downloads the OCCAS media and the Oracle JDKs, runs the silent product
+install, and creates the dynamic-cluster domain. Re-running is always safe —
+every step skips whatever already succeeded and resumes where it left off.
 
-```
-./install-occas.sh myenv init
-```
+The only things it will ever ask you for:
 
-## 1. Prep the box — once, as root
+| Prompt | Where it comes from |
+|---|---|
+| sudo password (maybe) | first run only — `prep` creates users/dirs; passwordless sudo (OCI `opc`) asks nothing |
+| path to Oracle's `wget.sh` | the one-time eDelivery browser step below |
+| eDelivery access token | same browser dialog, "Generate Token" |
+| `weblogic` admin password | the new domain's admin account (or put `admin.password` in `<env>.secret`) |
 
-```
-sudo ./install-occas.sh oci prep
-```
-
-This creates the Oracle-convention layout from the conf:
-
-- the `oracle` user (`install.user`) and `oinstall` group (`inventory.group`)
-- `oracle.home` (e.g. `/opt/oracle/occas/8.3`), the installer directory
-  (dirname of `installer.jar`), `inventory.loc`, and `java.dir` — all owned
-  `oracle:oinstall`, group-writable with setgid
-- adds **you** to `oinstall`, so every later step runs as you without sudo
-
-**Log out and back in** (or `newgrp oinstall`) so your shell picks up the
-group, then continue.
-
-## 2. Get the OCCAS media from eDelivery — once per release, in a browser
+## The eDelivery browser step (once per OCCAS release)
 
 Oracle requires a human license click; everything after it is scripted.
 
@@ -44,32 +33,28 @@ Oracle requires a human license click; everything after it is scripted.
 2. Search **Oracle Communications Converged Application Server**, pick the
    release (e.g. 8.3), **Add to Cart**, then **Checkout**.
 3. Pick the platform (**Linux x86-64**) and **accept the license**.
-4. Click **WGET Options** (bottom of the download page), then
+4. Click **WGET Options** (bottom of the download page) →
    **Download wget.sh**. If you browsed on another machine, copy it over:
    `scp wget.sh opc@<box>:`
-5. Same dialog: click **Generate Token** → **Copy**. You'll paste this token
-   at the script's prompt. Tokens last **~1 hour**, the URLs inside wget.sh
-   **~8 hours** — both are free to regenerate by repeating this step.
+5. Same dialog: **Generate Token** → **Copy** — you'll paste it at the
+   script's prompt.
 
-## 3. Run it
+Lifetimes (Oracle's): the token **~1 hour**, the URLs inside wget.sh
+**~8 hours**. Both are free to regenerate by repeating this step; the script
+tells you which one expired.
 
-```
-./install-occas.sh
-```
+## What prep sets up (automatic, sudo, idempotent)
 
-With the box prepped and no OCCAS installed it runs `all`: it asks for the
-wget.sh path (stashed as `build-profiles/occas/<env>.urls`, gitignored) and
-the access token, then downloads the media, unzips the nested archives to the
-installer jar, fetches the Oracle JDKs (`java.runtime` for OCCAS per the
-certification matrix, `java.javadoc` for BLADE javadoc builds — straight from
-download.oracle.com, no login), runs the silent product install on the
-runtime JDK, and creates the dynamic-cluster domain (you'll be asked for the
-new `weblogic` admin password unless it's in `<env>.secret`).
+- the `oracle` runtime user (`install.user`) and `oinstall` group
+  (`inventory.group`)
+- `oracle.home` (e.g. `/opt/oracle/occas/8.3`), the installer directory,
+  `inventory.loc`, and `java.dir` — owned by **you**, group-shared with
+  `oracle` via setgid (mode 2775), so nothing needs a re-login and no later
+  step needs sudo
 
-Every piece is idempotent: re-running skips whatever already succeeded, so if
-a token expires mid-way, paste a fresh one and it resumes where it left off.
+Manual form, if you prefer to see it happen: `sudo ./install-occas.sh oci prep`
 
-## 4. After the install
+## After the install
 
 - Start the NodeManager on each machine, then the AdminServer
   (`misc/start-admin-nm.sh`).
@@ -79,12 +64,16 @@ a token expires mid-way, paste a fresh one and it resumes where it left off.
   `dynamic.server.count`, re-run `./install-occas.sh <env> configure`
   (**overwrites** the domain — see the script header).
 
+## Environments
+
+`./install-occas.sh <env> <step>` runs one explicit step
+(`init | prep | download | install | configure | secure | all`) against
+`build-profiles/occas/<env>.conf`. New env: `./install-occas.sh myenv init`.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
-| `403 Forbidden` on download | Access token (~1 h) or wget.sh URLs (~8 h) expired — redo step 2.4/2.5. (The script already sends the wget-style User-Agent that Akamai requires.) |
-| `Can't write to <dir>` warnings | Prep not run, or you haven't re-logged-in since it added you to `oinstall`. |
-| `Invalid Central Inventory location` | Same — `inventory.loc` must exist and be writable; prep sets it up. |
-| Downloads landed in `~/occas-media` | Fallback used before prep existed. Move them: `mv ~/occas-media/* <installer dir>/` and re-run. |
-| Token prompt but nothing to download | Doesn't happen — the token is only requested when a fetch is actually needed. |
+| `403 Forbidden` on download | Access token (~1 h) or wget.sh URLs (~8 h) expired — redo the browser step. (The script already sends the wget-style User-Agent that Akamai requires.) |
+| `Can't write to <dir>` / inventory errors | Prep hasn't run and passwordless sudo isn't available — run `sudo ./install-occas.sh <env> prep` once. |
+| Media sitting in `~/occas-media` | The pre-prep fallback location — the next run reclaims it automatically. |
