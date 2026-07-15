@@ -37,8 +37,13 @@
 #                   prompt (or $BLADE_EDELIVERY_TOKEN for headless runs)
 #              Files land next to installer.jar (override: download.dir; falls
 #              back to ~/occas-media when that's not writable), zips are
-#              unpacked, and it's a no-op once installer.jar exists. 'install'
-#              auto-runs this step when installer.jar is missing.
+#              unpacked (recursively — Oracle nests the media), and it's a
+#              no-op once installer.jar exists. 'install' auto-runs this step
+#              when installer.jar is missing.
+#              Also fetches the official Oracle JDKs into java.dir (~/java):
+#              java.runtime (the OCCAS-certified JDK, used to run the
+#              installer) and java.javadoc (for blade javadoc builds) — from
+#              download.oracle.com permalinks, no login, sha256-verified.
 #   install    silent product install — idempotent: skips if ORACLE_HOME already
 #              populated, so on a SHARED filesystem it installs once, not per node
 #   configure  create the dynamic-cluster domain
@@ -103,7 +108,7 @@ ENV_ARG=""; STEP=""; DRY_RUN=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,76p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,81p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
@@ -319,6 +324,12 @@ if [ -n "$DL_DIR" ]; then DL_DIR="${DL_DIR/#\~/$HOME}"
 elif [ -n "$INSTALLER_JAR" ]; then DL_DIR="$(dirname "$INSTALLER_JAR")"
 else DL_DIR="."; fi
 
+# --- Oracle JDKs (fetched by 'download'; 'install' runs on java.runtime) ---
+JAVA_DIR=$(read_prop "$CONF_FILE" "java.dir")
+if [ -n "$JAVA_DIR" ]; then JAVA_DIR="${JAVA_DIR/#\~/$HOME}"; else JAVA_DIR="${HOME}/java"; fi
+JAVA_RUNTIME=$(read_prop "$CONF_FILE" "java.runtime")
+JAVA_JAVADOC=$(read_prop "$CONF_FILE" "java.javadoc")
+
 [ -n "$ORACLE_HOME" ] || die "${CONF_FILE}: missing oracle.home"
 
 # --- Machines (machine.1, machine.2, … = name:addr:port:type) ---
@@ -483,6 +494,83 @@ EOF
 }
 
 # ----------------------------------------------------------------------------
+# Step 0b — Oracle JDKs (download.oracle.com permalinks — no login, no token)
+# ----------------------------------------------------------------------------
+# java.runtime = the JDK OCCAS runs on (keep to Oracle's certification matrix);
+# java.javadoc = the JDK for blade javadoc builds (Markdown /// needs 23+).
+# Tarballs come from https://download.oracle.com/java/<ver>/latest/ under the
+# NFTC license, sha256-verified, unpacked side by side into java.dir. (When a
+# version ages out of NFTC — roughly a year after the next LTS ships — new
+# updates move behind an OTN login; place a JDK in java.dir by hand then.)
+
+jdk_home_of() {  # <version> → echoes the jdk-<version>* dir under JAVA_DIR, if any
+    [ -d "$JAVA_DIR" ] || return 0   # find on a missing dir + pipefail = silent set -e death
+    find "$JAVA_DIR" -maxdepth 1 -type d -name "jdk-${1}*" 2>/dev/null | head -1
+}
+
+ensure_jdk() {  # <version> <label>
+    local ver="$1" label="$2" existing os_arch tarball url want got
+    [ -n "$ver" ] || return 0
+    existing="$(jdk_home_of "$ver")"
+    if [ -n "$existing" ]; then
+        ok "JDK ${ver} (${label}): ${existing}"
+        return 0
+    fi
+    case "$(uname -s)-$(uname -m)" in
+        Linux-x86_64)  os_arch="linux-x64" ;;
+        Linux-aarch64) os_arch="linux-aarch64" ;;
+        Darwin-arm64)  os_arch="macos-aarch64" ;;
+        Darwin-x86_64) os_arch="macos-x64" ;;
+        *) die "No Oracle JDK download mapping for $(uname -s)/$(uname -m)." ;;
+    esac
+    tarball="jdk-${ver}_${os_arch}_bin.tar.gz"
+    url="https://download.oracle.com/java/${ver}/latest/${tarball}"
+    if [ "$DRY_RUN" = true ]; then
+        log "${C_DIM}  [dry-run] JDK ${ver} (${label}): curl ${url} → tar -xz into ${JAVA_DIR}${C_RESET}"
+        return 0
+    fi
+    info "Fetching Oracle JDK ${ver} (${label}) …"
+    mkdir -p "$JAVA_DIR"
+    curl -f -L --progress-bar -o "${JAVA_DIR}/${tarball}" "$url" \
+        || die "JDK ${ver} download failed: ${url}"
+    want="$(curl -fsSL "${url}.sha256" 2>/dev/null | awk '{print $1; exit}')"
+    if [ -n "$want" ]; then
+        if command -v sha256sum >/dev/null 2>&1; then got="$(sha256sum "${JAVA_DIR}/${tarball}" | cut -d' ' -f1)"
+        else got="$(shasum -a 256 "${JAVA_DIR}/${tarball}" | cut -d' ' -f1)"; fi
+        [ "$got" = "$want" ] || die "JDK ${ver}: sha256 mismatch — delete ${JAVA_DIR}/${tarball} and retry."
+    else
+        warn "JDK ${ver}: no .sha256 published — skipping checksum."
+    fi
+    tar -xzf "${JAVA_DIR}/${tarball}" -C "$JAVA_DIR" || die "Extract failed: ${JAVA_DIR}/${tarball}"
+    rm -f "${JAVA_DIR}/${tarball}"
+    existing="$(jdk_home_of "$ver")"
+    [ -n "$existing" ] || die "JDK ${ver}: extracted, but no jdk-${ver}* dir appeared under ${JAVA_DIR}."
+    ok "JDK ${ver} (${label}) → ${existing}"
+}
+
+do_java() {
+    [ -n "${JAVA_RUNTIME}${JAVA_JAVADOC}" ] || return 0
+    info "Oracle JDKs → ${JAVA_DIR}"
+    ensure_jdk "$JAVA_RUNTIME" "OCCAS runtime"
+    ensure_jdk "$JAVA_JAVADOC" "javadoc build"
+}
+
+# The java to launch the OCCAS installer with: the managed runtime JDK when
+# configured, else whatever 'java' is on the PATH.
+runtime_java() {
+    local jh
+    if [ -n "$JAVA_RUNTIME" ]; then
+        jh="$(jdk_home_of "$JAVA_RUNTIME")"
+        if [ -n "$jh" ]; then
+            if   [ -x "${jh}/bin/java" ];               then printf '%s' "${jh}/bin/java"; return 0
+            elif [ -x "${jh}/Contents/Home/bin/java" ]; then printf '%s' "${jh}/Contents/Home/bin/java"; return 0
+            fi
+        fi
+    fi
+    printf 'java'
+}
+
+# ----------------------------------------------------------------------------
 # Step 1 — silent product install
 # ----------------------------------------------------------------------------
 do_install() {
@@ -501,7 +589,12 @@ do_install() {
         [ "$DRY_RUN" = true ] || [ -f "$INSTALLER_JAR" ] \
             || die "Still no installer at ${INSTALLER_JAR} after the download — fix installer.jar in ${CONF_FILE} (or set BLADE_OCCAS_INSTALLER)."
     fi
-    info "Silent install → ${ORACLE_HOME}  (installer: ${INSTALLER_JAR})"
+    do_java
+    local javabin; javabin="$(runtime_java)"
+    if [ "$javabin" = "java" ] && ! command -v java >/dev/null 2>&1; then
+        die "No java on the PATH and no managed JDK — set java.runtime in ${CONF_FILE} (the download step fetches it)."
+    fi
+    info "Silent install → ${ORACLE_HOME}  (installer: ${INSTALLER_JAR}, java: ${javabin})"
 
     local rsp inv
     rsp="$(mktemp /tmp/occas-install.XXXXXX.rsp)"
@@ -523,11 +616,11 @@ EOF
     if [ "$DRY_RUN" = true ]; then
         log "${C_DIM}  [dry-run] response file:${C_RESET}"; sed 's/^/    /' "$rsp"
         log "${C_DIM}  [dry-run] oraInst.loc:${C_RESET}";   sed 's/^/    /' "$inv"
-        log "${C_DIM}  [dry-run] java -jar ${INSTALLER_JAR} -silent -responseFile <rsp> -invPtrLoc <oraInst.loc> -ignoreSysPrereqs${C_RESET}"
+        log "${C_DIM}  [dry-run] ${javabin} -jar ${INSTALLER_JAR} -silent -responseFile <rsp> -invPtrLoc <oraInst.loc> -ignoreSysPrereqs${C_RESET}"
         rm -f "$rsp" "$inv"; return 0
     fi
     [ -f "$INSTALLER_JAR" ] || { rm -f "$rsp" "$inv"; die "installer.jar not found: ${INSTALLER_JAR}"; }
-    java -jar "$INSTALLER_JAR" -silent -responseFile "$rsp" -invPtrLoc "$inv" -ignoreSysPrereqs
+    "$javabin" -jar "$INSTALLER_JAR" -silent -responseFile "$rsp" -invPtrLoc "$inv" -ignoreSysPrereqs
     rm -f "$rsp" "$inv"
     ok "Product installed at ${ORACLE_HOME}"
 }
@@ -787,7 +880,7 @@ log "  step:         ${STEP}"
 log ""
 
 case "$STEP" in
-    download)  do_download ;;
+    download)  do_download; do_java ;;
     install)   do_install ;;
     configure) do_configure ;;
     secure)    do_secure ;;

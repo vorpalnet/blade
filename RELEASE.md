@@ -22,6 +22,13 @@ that directory isn't writable, and using the downloaded `occas_generic.jar`
 for the run), the step is a no-op once the installer is present, and `install`
 auto-runs it when the installer is missing.
 
+The download step also fetches the official Oracle JDKs from
+`download.oracle.com` permalinks (NFTC — no login), sha256-verified, unpacked
+side by side under `java.dir` (default `~/java`): `java.runtime` (the
+OCCAS-certified JDK, which the silent install is launched with) and
+`java.javadoc` (JDK 23+ for the Markdown `///` javadoc builds). `install` no
+longer assumes a `java` on the PATH.
+
 `./install-occas.sh` with no arguments now just does the next thing — no menu:
 env auto-selected when only one conf exists (prompted otherwise, `init`
 interview when none); then `init` if the conf is missing, `all` if OCCAS isn't
