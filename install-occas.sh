@@ -153,7 +153,10 @@ if [ -z "$ENV_ARG" ]; then
     elif [ ${#CONFS[@]} -eq 0 ]; then
         [ -t 0 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
         warn "No env confs in build-profiles/occas/ yet — starting the init interview."
-        ask ENV_ARG "Environment name" "$(hostname -s)"
+        log "An environment names this SITE's profile — build-profiles/occas/<name>.conf"
+        log "(+ .secret, .urls). It is not the WebLogic domain (asked later); pick a"
+        log "site label like 'prod', 'lab', or a customer name."
+        ask ENV_ARG "Environment name" "prod"
         [ -n "$ENV_ARG" ] || die "No environment name given."
     else
         [ -t 0 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
