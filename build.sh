@@ -641,7 +641,9 @@ INCLUDED_COUNT=$(echo "$INCLUDED_MODULES" | wc -l | tr -d ' ')
 # Detect the JDK that will run the build (mvnw uses $JAVA_HOME if set, else
 # the `java` on PATH). Surfaces both "what's compiling" and "what bytecode
 # you're producing" so people stop confusing the two.
-BUILD_JDK_VERSION=$(java -version 2>&1 | head -1 \
+# Match the actual version line, not merely the first line: with
+# JAVA_TOOL_OPTIONS/_JAVA_OPTIONS set, the JVM prints "Picked up ..." first.
+BUILD_JDK_VERSION=$(java -version 2>&1 | grep -m1 -E '^[^ ]+ version ' \
     | sed 's/^[^ ]* version //;s/"//g' | awk '{print $1}')
 BUILD_JDK_MAJOR=$(printf '%s' "$BUILD_JDK_VERSION" \
     | awk -F. '{if ($1 == "1") print $2; else print $1}')
