@@ -976,7 +976,7 @@ public abstract class Callflow implements Serializable {
 	/// 3. `Session-Expires` SIP header value (in seconds, converted to minutes)
 	///
 	/// Skipped for non-initial requests and for OPTIONS, INFO and MESSAGE.
-	protected static void applySessionExpiration(SipServletRequest request, SipApplicationSession appSession)
+	public static void applySessionExpiration(SipServletRequest request, SipApplicationSession appSession)
 			throws ServletParseException {
 
 		if (!request.isInitial()) {
@@ -991,6 +991,18 @@ public abstract class Callflow implements Serializable {
 		default:
 			break;
 		}
+
+		extendSessionExpiration(request, appSession);
+	}
+
+	/// Public seam for UAS-style apps whose dialogs never traverse
+	/// [#sendRequest] — e.g. a held dialog answered locally with 200 OK —
+	/// so [#applySessionExpiration] never runs for them. Applies the same
+	/// highest-value-wins rule, but without the initial-request guard so a
+	/// session-timer refresh (re-INVITE) can also push the appSession
+	/// expiration out on long calls.
+	public static void extendSessionExpiration(SipServletRequest request, SipApplicationSession appSession)
+			throws ServletParseException {
 
 		long expirationTime = appSession.getExpirationTime();
 

@@ -517,6 +517,14 @@ public abstract class AsyncSipServlet extends SipServlet
 						} else {
 							sipLogger.superArrow(Direction.RECEIVE, request, null, callflow.getClass().getSimpleName());
 
+							// Apply session.expiration (default 60 min) on inbound initial
+							// requests too. Callflow.sendRequest covers B2BUA/UAC dialogs
+							// (idempotent — highest value wins), but a pure-UAS app that
+							// answers locally never sends an initial request, and its SAS
+							// would otherwise sit at the container default and expire under
+							// the peer's eventual BYE. Not applied on the proxy branch.
+							Callflow.applySessionExpiration(request, appSession);
+
 							// create any index keys defined by selectors in the config file
 							if (request.isInitial() && Callflow.getSessionParameters() != null) {
 								applyOriginSelectors(request, appSession, sipSession);
