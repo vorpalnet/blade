@@ -68,6 +68,7 @@ import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -433,6 +434,12 @@ public class SettingsManager<T> {
 		mapper.setSerializationInclusion(Include.NON_NULL);
 
 		mapper.configure(SerializationFeature.FAIL_ON_SELF_REFERENCES, false);
+
+		// Tolerate unknown JSON keys so a config written for a newer (or older)
+		// schema still loads: a removed property must not brick the app on
+		// deploy. Consistent with the generated .jschema, which also permits
+		// additional properties (no FORBIDDEN_ADDITIONAL_PROPERTIES option).
+		mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 	}
 
 	/**
