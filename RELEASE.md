@@ -15,7 +15,9 @@ generated wget.sh (the script asks for its path and stashes it as
 Expired tokens are detected and reported as such, not as a corrupt file. The
 requests send a wget-style `User-Agent` — Akamai in front of eDelivery rejects
 curl's default UA (and arbitrary custom strings) with 403. Zips
-are unpacked next to `installer.jar` (falling back to `~/occas-media` when
+are unpacked recursively — Oracle nests the real media zip (e.g.
+`OCCAS8.3GA.zip`) inside the V-numbered download — next to `installer.jar`
+(falling back to `~/occas-media` when
 that directory isn't writable, and using the downloaded `occas_generic.jar`
 for the run), the step is a no-op once the installer is present, and `install`
 auto-runs it when the installer is missing.

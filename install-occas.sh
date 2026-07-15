@@ -412,13 +412,9 @@ do_download() {
         mkdir -p "$DL_DIR" || die "Can't create ${DL_DIR}."
     fi
 
-    # The Bearer access token from the WGET Options dialog (valid ~1 hour).
+    # The Bearer access token from the WGET Options dialog (valid ~1 hour) —
+    # asked for lazily, only when a file actually needs fetching.
     local token="${BLADE_EDELIVERY_TOKEN:-}"
-    if [ -z "$token" ]; then
-        [ -t 0 ] || die "No access token — set \$BLADE_EDELIVERY_TOKEN (browser: WGET Options → 'Generate Token')."
-        ask token "Access token ('Generate Token' in the WGET Options dialog, valid ~1 h)" ""
-        [ -n "$token" ] || die "No access token given."
-    fi
 
     local dest zips=()
     for u in "${urls[@]}"; do
@@ -428,6 +424,11 @@ do_download() {
         if [ -f "$dest" ] && unzip -tqq "$dest" >/dev/null 2>&1; then
             ok "${f} — already downloaded and intact."
         else
+            if [ -z "$token" ]; then
+                [ -t 0 ] || die "No access token — set \$BLADE_EDELIVERY_TOKEN (browser: WGET Options → 'Generate Token')."
+                ask token "Access token ('Generate Token' in the WGET Options dialog, valid ~1 h)" ""
+                [ -n "$token" ] || die "No access token given."
+            fi
             info "Fetching ${f} …"
             # The token goes in via --config on stdin so it stays out of `ps`.
             # -A: Akamai in front of eDelivery sniffs the User-Agent — curl's
@@ -448,8 +449,24 @@ EOF
     done
 
     info "Unpacking into ${DL_DIR} …"
-    local z
-    for z in "${zips[@]}"; do unzip -oq "$z" -d "$DL_DIR"; done
+    local z unpacked=" "
+    for z in "${zips[@]}"; do unzip -oq "$z" -d "$DL_DIR"; unpacked="${unpacked}${z} "; done
+
+    # Oracle nests the media (V*.zip → OCCAS<ver>GA.zip → occas_generic.jar):
+    # keep unpacking whatever zips fall out until the installer shows up.
+    local inner found_new
+    while [ ! -f "$INSTALLER_JAR" ] \
+          && ! find "$DL_DIR" -maxdepth 3 -name occas_generic.jar 2>/dev/null | grep -q .; do
+        found_new=false
+        while IFS= read -r inner; do
+            case "$unpacked" in *" ${inner} "*) continue ;; esac
+            info "Unpacking nested $(basename "$inner") …"
+            unzip -oq "$inner" -d "$DL_DIR"
+            unpacked="${unpacked}${inner} "
+            found_new=true
+        done < <(find "$DL_DIR" -maxdepth 3 -name '*.zip' 2>/dev/null)
+        [ "$found_new" = true ] || break
+    done
 
     if [ -f "$INSTALLER_JAR" ]; then
         ok "Installer ready: ${INSTALLER_JAR}"
