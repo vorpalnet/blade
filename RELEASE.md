@@ -2,6 +2,21 @@
 
 ## 2.9.9 (unreleased)
 
+### install-occas.sh: download OCCAS media from Oracle eDelivery
+
+New `download` step fetches the installer media headlessly with curl — same
+auth model as Oracle's own generated wget.sh (HTTP basic against
+`edelivery.oracle.com/osdc/cliauth` with an oracle.com SSO account, then the
+tokened `softwareDownload` URLs). One-time browser step per OCCAS version to
+accept the license and save the generated wget.sh as
+`build-profiles/occas/<env>.urls` (gitignored — the URLs embed
+license-acceptance tokens); after that, downloads are scriptable until the
+token expires (detected and reported as such, not as a corrupt file). Zips are
+unpacked next to `installer.jar`, the step is a no-op once the installer is
+present, and `install` auto-runs it when the installer is missing and the
+`.urls` file exists. Credentials: `$BLADE_SSO_USERNAME` / `$BLADE_SSO_PASSWORD`,
+or `sso.username` (conf) + `sso.password` (`<env>.secret`), else prompted.
+
 ### iRouter: printable Dial Plan report
 
 The iRouter's routing policy on paper (`blade/portal/report-irouter.html`,

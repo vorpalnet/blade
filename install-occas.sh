@@ -17,9 +17,27 @@
 # Usage:
 #   ./install-occas.sh <env> <step> [--dry-run]
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
-#     <step>  init | install | configure | secure | all
+#     <step>  init | download | install | configure | secure | all
 #
 #   init       interactively interview you and WRITE the env conf (+ optional secret)
+#   download   fetch the OCCAS media from Oracle eDelivery — headless (curl), no
+#              browser simulation: auth is Oracle's own CLI endpoint
+#              (/osdc/cliauth, HTTP basic with your oracle.com SSO account). The
+#              per-file URLs carry a license-acceptance token that only the
+#              website can mint, so ONCE per OCCAS version, in a browser:
+#                1. sign in at https://edelivery.oracle.com, cart the OCCAS
+#                   release, pick the platform, accept the license
+#                2. click 'WGET Options' and save the generated wget.sh as
+#                   build-profiles/occas/<env>.urls  (gitignored; any file
+#                   holding the URLs works — they're grepped out)
+#              After that this step runs headlessly until Oracle expires the
+#              token (then it fails with a clear message — redo 1-2). Files
+#              land next to installer.jar (override: download.dir), zips are
+#              unpacked, and it's a no-op once installer.jar exists.
+#              SSO creds: $BLADE_SSO_USERNAME / $BLADE_SSO_PASSWORD, or
+#              sso.username in the conf + sso.password in <env>.secret, else
+#              prompted. 'install' auto-runs this step when installer.jar is
+#              missing and the .urls file is present.
 #   install    silent product install — idempotent: skips if ORACLE_HOME already
 #              populated, so on a SHARED filesystem it installs once, not per node
 #   configure  create the dynamic-cluster domain
@@ -38,10 +56,11 @@
 #              trust.keystore.type (PKCS12), identity.alias (server).
 #              Secret: store.password (or $BLADE_STORE_PASSWORD) — same one
 #              certs.sh used.
-#   all        install then configure
+#   all        install then configure (install auto-downloads when needed)
 #
 # Examples:
 #   ./install-occas.sh oci init              # build the env conf interactively
+#   ./install-occas.sh oci download          # fetch media from eDelivery (see 'download')
 #   ./install-occas.sh oci all --dry-run     # preview install + configure
 #   ./install-occas.sh oci install           # just the silent product install
 #   ./install-occas.sh oci configure         # just the domain (dynamic cluster)
@@ -60,7 +79,8 @@
 # !! configure writes the domain with OverwriteDomain=true. If domain.name
 #    points at an EXISTING domain dir, it is CLOBBERED. Back up first.
 #
-# Secrets: admin.password (build-profiles/occas/<env>.secret) or $BLADE_WLS_PASSWORD.
+# Secrets: admin.password (build-profiles/occas/<env>.secret) or $BLADE_WLS_PASSWORD;
+#          sso.password (same file) or $BLADE_SSO_PASSWORD for the download step.
 # ============================================================================
 
 set -euo pipefail
@@ -83,17 +103,17 @@ ENV_ARG=""; STEP=""; DRY_RUN=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,55p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,76p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
     esac
     shift
 done
-[ ${#POSITIONAL[@]} -ge 1 ] || die "Usage: ./install-occas.sh <env> <init|install|configure|all> [--dry-run]"
+[ ${#POSITIONAL[@]} -ge 1 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
 ENV_ARG="${POSITIONAL[0]}"
 STEP="${POSITIONAL[1]:-}"
-case "$STEP" in init|install|configure|secure|all) ;; "") die "Missing step (init|install|configure|secure|all)." ;; *) die "Unknown step: ${STEP}" ;; esac
+case "$STEP" in init|download|install|configure|secure|all) ;; "") die "Missing step (init|download|install|configure|secure|all)." ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # --- Resolve conf + secret ---
 if [ -f "$ENV_ARG" ]; then
@@ -250,6 +270,15 @@ DYN_COUNT=$(read_prop    "$CONF_FILE" "dynamic.server.count")
 MAX_SIZE=$(read_prop     "$CONF_FILE" "max.dynamic.cluster.size")
 STATIC_SRV=$(read_prop   "$CONF_FILE" "static.server")
 
+# --- eDelivery download (download step; 'install' auto-runs it when needed) ---
+URLS_FILE=$(read_prop "$CONF_FILE" "download.urls.file")
+if [ -n "$URLS_FILE" ]; then URLS_FILE="${URLS_FILE/#\~/$HOME}"
+else URLS_FILE="${OCCAS_DIR}/${ENV_NAME}.urls"; fi
+DL_DIR=$(read_prop "$CONF_FILE" "download.dir")
+if [ -n "$DL_DIR" ]; then DL_DIR="${DL_DIR/#\~/$HOME}"
+elif [ -n "$INSTALLER_JAR" ]; then DL_DIR="$(dirname "$INSTALLER_JAR")"
+else DL_DIR="."; fi
+
 [ -n "$ORACLE_HOME" ] || die "${CONF_FILE}: missing oracle.home"
 
 # --- Machines (machine.1, machine.2, … = name:addr:port:type) ---
@@ -285,6 +314,128 @@ get_store_pw() {
 }
 
 # ----------------------------------------------------------------------------
+# Step 0 — download: OCCAS media from Oracle eDelivery (headless)
+# ----------------------------------------------------------------------------
+# Same auth model as Oracle's own generated wget.sh: HTTP basic against the
+# cliauth endpoint with your oracle.com SSO account to get session cookies,
+# then plain GETs of the tokened softwareDownload URLs. The token encodes the
+# license acceptance you clicked in the browser — it can't be minted from the
+# CLI, which is why the .urls file comes from a one-time browser step (see the
+# header). An expired token comes back as an HTTP-200 HTML page, not an error,
+# so validity is checked with unzip -t.
+EDELIVERY_CLIAUTH="https://edelivery.oracle.com/osdc/cliauth"
+
+# --- Oracle SSO creds (download only): env > conf/secret > prompt ---
+get_sso_user() {
+    local v="${BLADE_SSO_USERNAME:-}"
+    [ -z "$v" ] && v="$(read_prop "$CONF_FILE" "sso.username")"
+    if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
+        read -r -p "Oracle SSO username (oracle.com account email): " v
+        [ -n "$v" ] || die "No username provided."
+    fi
+    printf '%s' "$v"
+}
+
+get_sso_pw() {
+    local v="${BLADE_SSO_PASSWORD:-}"
+    [ -z "$v" ] && [ -f "$SECRET_FILE" ] && v="$(read_prop "$SECRET_FILE" "sso.password")"
+    if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
+        read -rs -p "Oracle SSO password for ${1}: " v; echo
+        [ -n "$v" ] || die "No password provided."
+    fi
+    printf '%s' "$v"
+}
+
+do_download() {
+    if [ -f "$INSTALLER_JAR" ]; then
+        ok "Installer already present: ${INSTALLER_JAR} — skipping download."
+        return 0
+    fi
+    [ -f "$URLS_FILE" ] || die "URL file not found: ${URLS_FILE}
+  One-time browser step (mints the license-acceptance token Oracle requires):
+    1. sign in at https://edelivery.oracle.com, cart the OCCAS release
+       (search 'Oracle Communications Converged Application Server'),
+       pick the platform, accept the license
+    2. click 'WGET Options' and save the generated wget.sh as ${URLS_FILE}
+       (any file holding the download URLs works — they're grepped out)
+  then re-run:  ./install-occas.sh ${ENV_NAME} download"
+
+    # Pull the tokened URLs out of whatever was saved (Oracle's whole wget.sh,
+    # or bare URLs one per line).
+    local urls=() u f
+    while IFS= read -r u; do urls+=("$u"); done \
+        < <(grep -oE 'https://edelivery\.oracle\.com/osdc/softwareDownload\?[^"'"'"'[:space:]]+' "$URLS_FILE" | sort -u)
+    [ ${#urls[@]} -ge 1 ] || die "No eDelivery softwareDownload URLs found in ${URLS_FILE}."
+
+    info "Download ${#urls[@]} file(s) from eDelivery → ${DL_DIR}"
+    if [ "$DRY_RUN" = true ]; then
+        for u in "${urls[@]}"; do f="${u##*fileName=}"; f="${f%%&*}"; log "${C_DIM}  [dry-run] ${f}${C_RESET}"; done
+        log "${C_DIM}  [dry-run] curl basic-auth → ${EDELIVERY_CLIAUTH} (cookie jar), fetch each URL, unzip into ${DL_DIR}${C_RESET}"
+        return 0
+    fi
+
+    command -v curl  >/dev/null || die "curl not found."
+    command -v unzip >/dev/null || die "unzip not found."
+    mkdir -p "$DL_DIR"
+    local sso_user sso_pw
+    sso_user="$(get_sso_user)"
+    sso_pw="$(get_sso_pw "$sso_user")"
+    [ -n "$sso_user" ] && [ -n "$sso_pw" ] || die "Oracle SSO credentials required (see --help, 'download')."
+
+    local cookies; cookies="$(mktemp /tmp/occas-edelivery.XXXXXX.cookies)"
+    trap 'rm -f "$cookies"' RETURN
+    local ua="Mozilla/5.0 (install-occas.sh)"
+
+    # Session cookies via cliauth (it answers with a basic-auth challenge).
+    # Credentials go in through --config on stdin so they never appear in the
+    # process list; --location-trusted keeps them attached if the auth flow
+    # redirects (older eDelivery bounced through login.oracle.com).
+    info "Signing in to eDelivery as ${sso_user} …"
+    curl -fsS -L --location-trusted -A "$ua" -c "$cookies" -o /dev/null \
+         --config - "$EDELIVERY_CLIAUTH" <<EOF || die "eDelivery sign-in failed — check the SSO username/password."
+user = "${sso_user}:${sso_pw}"
+EOF
+
+    local dest zips=()
+    for u in "${urls[@]}"; do
+        f="${u##*fileName=}"; f="${f%%&*}"
+        { [ -n "$f" ] && [ "$f" != "$u" ]; } || die "Could not parse fileName= from URL: ${u}"
+        dest="${DL_DIR}/${f}"
+        if [ -f "$dest" ] && unzip -tqq "$dest" >/dev/null 2>&1; then
+            ok "${f} — already downloaded and intact."
+        else
+            info "Fetching ${f} …"
+            curl -f -L --progress-bar -A "$ua" -b "$cookies" -C - -o "$dest" "$u" \
+                || die "Download failed: ${f}"
+            if ! unzip -tqq "$dest" >/dev/null 2>&1; then
+                if head -c 1024 "$dest" | grep -qi "<html"; then
+                    rm -f "$dest"
+                    die "eDelivery sent an HTML page instead of ${f} — the token in ${URLS_FILE} has expired. Regenerate the wget.sh in the browser (see --help, 'download') and re-run."
+                fi
+                die "${dest} is not a valid zip (truncated download?) — delete it and re-run."
+            fi
+        fi
+        zips+=("$dest")
+    done
+
+    info "Unpacking into ${DL_DIR} …"
+    local z
+    for z in "${zips[@]}"; do unzip -oq "$z" -d "$DL_DIR"; done
+
+    if [ -f "$INSTALLER_JAR" ]; then
+        ok "Installer ready: ${INSTALLER_JAR}"
+    else
+        local found; found="$(find "$DL_DIR" -maxdepth 3 -name occas_generic.jar 2>/dev/null | head -1)"
+        if [ -n "$found" ]; then
+            warn "Extracted ${found}, but the conf expects installer.jar=${INSTALLER_JAR}."
+            warn "Fix the conf, or:  BLADE_OCCAS_INSTALLER='${found}' ./install-occas.sh ${ENV_NAME} install"
+        else
+            warn "No occas_generic.jar in the downloaded media — check what ${URLS_FILE} points at."
+        fi
+    fi
+}
+
+# ----------------------------------------------------------------------------
 # Step 1 — silent product install
 # ----------------------------------------------------------------------------
 do_install() {
@@ -297,6 +448,10 @@ do_install() {
     fi
     [ -n "$INSTALLER_JAR" ] || die "${CONF_FILE}: missing installer.jar"
     [ -n "$INV_LOC" ]       || die "${CONF_FILE}: missing inventory.loc"
+    if [ ! -f "$INSTALLER_JAR" ] && [ -f "$URLS_FILE" ]; then
+        do_download
+        log ""
+    fi
     info "Silent install → ${ORACLE_HOME}  (installer: ${INSTALLER_JAR})"
 
     local rsp inv
@@ -583,6 +738,7 @@ log "  step:         ${STEP}"
 log ""
 
 case "$STEP" in
+    download)  do_download ;;
     install)   do_install ;;
     configure) do_configure ;;
     secure)    do_secure ;;

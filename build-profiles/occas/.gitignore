@@ -1,2 +1,4 @@
 *.secret
 !*.secret.example
+# eDelivery URL files carry license-acceptance bearer tokens — never commit.
+*.urls
