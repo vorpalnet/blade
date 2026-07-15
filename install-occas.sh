@@ -15,9 +15,12 @@
 # Run this ON the box being installed.
 #
 # Usage:
-#   ./install-occas.sh <env> <step> [--dry-run]
+#   ./install-occas.sh [<env> [<step>]] [--dry-run]
+#     no args → interactive: picks the env (asks if there's more than one conf)
+#               and suggests the next step from what's already on the box
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
 #     <step>  init | download | install | configure | secure | all
+#             (omitted → suggested interactively, same as no args)
 #
 #   init       interactively interview you and WRITE the env conf (+ optional secret)
 #   download   fetch the OCCAS media from Oracle eDelivery — headless (curl), no
@@ -103,24 +106,16 @@ ENV_ARG=""; STEP=""; DRY_RUN=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,76p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,79p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
     esac
     shift
 done
-[ ${#POSITIONAL[@]} -ge 1 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
-ENV_ARG="${POSITIONAL[0]}"
+ENV_ARG="${POSITIONAL[0]:-}"
 STEP="${POSITIONAL[1]:-}"
-case "$STEP" in init|download|install|configure|secure|all) ;; "") die "Missing step (init|download|install|configure|secure|all)." ;; *) die "Unknown step: ${STEP}" ;; esac
 
-# --- Resolve conf + secret ---
-if [ -f "$ENV_ARG" ]; then
-    CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"; SECRET_FILE="${ENV_ARG%.conf}.secret"
-else
-    ENV_NAME="$ENV_ARG"; CONF_FILE="${OCCAS_DIR}/${ENV_NAME}.conf"; SECRET_FILE="${OCCAS_DIR}/${ENV_NAME}.secret"
-fi
 read_prop() {
     local file="$1" key="$2"
     { grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
@@ -140,6 +135,58 @@ defask() {
     local __def; __def="$(read_prop "$CONF_FILE" "$4")"; [ -z "$__def" ] && __def="$3"
     ask "$1" "$2" "$__def"
 }
+
+# --- No <env> arg → pick one interactively (./install-occas.sh alone works) ---
+if [ -z "$ENV_ARG" ]; then
+    [ -t 0 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
+    log "${C_BOLD}OCCAS install${C_RESET} — interactive (no arguments; --help shows the CLI)"
+    CONFS=()
+    for f in "$OCCAS_DIR"/*.conf; do [ -e "$f" ] && CONFS+=("$(basename "${f%.conf}")"); done
+    if [ ${#CONFS[@]} -eq 0 ]; then
+        warn "No env confs in build-profiles/occas/ yet — 'init' will write one."
+        ask ENV_ARG "Environment name" "$(hostname -s)"
+        [ -n "$ENV_ARG" ] || die "No environment name given."
+    elif [ ${#CONFS[@]} -eq 1 ]; then
+        ENV_ARG="${CONFS[0]}"
+        info "Environment: ${ENV_ARG} (the only conf in build-profiles/occas/)"
+    else
+        log "Environments in build-profiles/occas/:  ${CONFS[*]}"
+        ask ENV_ARG "Environment" "${CONFS[0]}"
+        [ -n "$ENV_ARG" ] || die "No environment given."
+    fi
+fi
+
+# --- Resolve conf + secret ---
+if [ -f "$ENV_ARG" ]; then
+    CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"; SECRET_FILE="${ENV_ARG%.conf}.secret"
+else
+    ENV_NAME="$ENV_ARG"; CONF_FILE="${OCCAS_DIR}/${ENV_NAME}.conf"; SECRET_FILE="${OCCAS_DIR}/${ENV_NAME}.secret"
+fi
+
+# --- No <step> arg → suggest the next logical one from on-box state ---
+if [ -z "$STEP" ]; then
+    [ -t 0 ] || die "Missing step (init|download|install|configure|secure|all)."
+    if [ ! -f "$CONF_FILE" ]; then
+        SUGG="init"
+        log "No conf at ${CONF_FILE} → 'init' interviews you and writes it."
+    else
+        _OH="$(read_prop "$CONF_FILE" "oracle.home")"
+        _DN="$(read_prop "$CONF_FILE" "domain.name")"
+        if [ -n "$_OH" ] && [ ! -d "${_OH}/wlserver" ]; then
+            SUGG="all"
+            log "No product at ${_OH} → 'all' (auto-download if needed, install, configure)."
+        elif [ -n "$_DN" ] && [ ! -d "${_OH}/user_projects/domains/${_DN}" ]; then
+            SUGG="configure"
+            log "Product installed but no domain '${_DN}' yet → 'configure'."
+        else
+            SUGG="configure"
+            [ -n "$_DN" ] && warn "Domain '${_DN}' already EXISTS — configure OVERWRITES it (the add-a-node flow; back up first)."
+        fi
+    fi
+    ask STEP "Step (init|download|install|configure|secure|all)" "$SUGG"
+    log ""
+fi
+case "$STEP" in init|download|install|configure|secure|all) ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # Interactive builder for build-profiles/occas/<env>.conf (+ optional secret).
 do_init() {

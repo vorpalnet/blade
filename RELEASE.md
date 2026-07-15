@@ -17,6 +17,14 @@ present, and `install` auto-runs it when the installer is missing and the
 `.urls` file exists. Credentials: `$BLADE_SSO_USERNAME` / `$BLADE_SSO_PASSWORD`,
 or `sso.username` (conf) + `sso.password` (`<env>.secret`), else prompted.
 
+`./install-occas.sh` with no arguments now runs interactively: it picks the env
+(auto-selected when only one conf exists, prompted otherwise, offered for `init`
+when none do) and suggests the next step from on-box state — no product at
+`oracle.home` → `all`; product but no domain → `configure`; domain already
+present → `configure` with an explicit it-will-be-overwritten warning. Omitting
+just the step (`./install-occas.sh oci`) prompts the same way. Non-tty
+invocations still fail fast with the usage line.
+
 ### iRouter: printable Dial Plan report
 
 The iRouter's routing policy on paper (`blade/portal/report-irouter.html`,
