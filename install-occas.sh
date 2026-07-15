@@ -244,9 +244,9 @@ do_init() {
         i=$((i + 1))
     done
 
-    local yn static_line=""
-    ask yn "Test engine on this admin box? (y/N)" "N"
-    [[ "$yn" =~ ^[Yy] ]] && static_line="engine0:machine0:8001:5060:5061"
+    # Always included: static test engine 'engine0' on the admin box — used for
+    # testing and BLADE config-file generation, never SBC-targeted.
+    local yn static_line="engine0:machine0:8001:5060:5061"
 
     if [ -f "$CONF_FILE" ]; then
         ask yn "Overwrite ${CONF_FILE}? (y/N)" "N"
@@ -286,11 +286,9 @@ do_init() {
         echo "#   ./install-occas.sh ${ENV_NAME} configure"
         local idx=1 m
         for m in "${machines[@]}"; do echo "machine.${idx}=${m}"; idx=$((idx + 1)); done
-        if [ -n "$static_line" ]; then
-            echo ""
-            echo "# --- Static test engine on the admin box (never SBC-targeted) ---"
-            echo "static.server=${static_line}"
-        fi
+        echo ""
+        echo "# --- Static test engine on the admin box (never SBC-targeted; remove to drop) ---"
+        echo "static.server=${static_line}"
     } > "$CONF_FILE"
     ok "Wrote ${CONF_FILE}"
 

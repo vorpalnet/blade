@@ -64,7 +64,9 @@ to stdout, which the `$(…)` capture kept as a LEADING newline in the password 
 splitting the generated `.properties` line so WLST saw an empty password and
 rejected domain creation with error 60455. The newline now goes to stderr.
 
-The init interview was cut to eight answers: the environment name IS the
+The init interview was cut to a handful of answers (the static test engine
+`engine0` on the admin box is always written — no longer asked): the
+environment name IS the
 WebLogic domain name (one concept — no more everyone-picks-`replicated`, no
 more "Domain name" reading as DNS); machines are auto-named `machine0` (the
 admin box, whose address defaults to the box's own IP) and `machine1..N` (one
