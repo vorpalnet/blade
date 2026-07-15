@@ -68,7 +68,12 @@ Manual form, if you prefer to see it happen: `sudo ./install-occas.sh oci prep`
 
 `./install-occas.sh <env> <step>` runs one explicit step
 (`init | prep | download | install | configure | secure | all`) against
-`build-profiles/occas/<env>.conf`. New env: `./install-occas.sh myenv init`.
+`build-profiles/occas/<env>.conf`.
+
+**No env confs ship with the repo** — they carry your site's hostnames, IPs,
+and topology, and are gitignored (like the `.secret` and `.urls` files). On a
+fresh clone, plain `./install-occas.sh` starts the `init` interview and writes
+your env's conf; or copy `example.conf.example` to `<env>.conf` and edit.
 
 ## Troubleshooting
 

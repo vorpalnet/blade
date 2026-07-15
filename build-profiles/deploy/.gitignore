@@ -2,5 +2,11 @@
 # This is a belt-and-suspenders guard; the top-level .gitignore also blocks *.secret.
 *.secret
 
+# Env confs are per-site (admin URLs, node names, SANs with real IPs) — never
+# commit. The repo ships only *.conf.example templates: copy one to <env>.conf
+# and edit.
+*.conf
+
 # Keep committed templates.
 !*.secret.example
+!*.conf.example

@@ -203,10 +203,18 @@ do_init() {
     local oracle_home installer inv_loc inv_grp inst_type
     log "Step 1 — silent product install:"
     defask oracle_home "ORACLE_HOME (shared install dir)"        "/opt/oracle/occas/8.3"                       "oracle.home"
-    defask installer   "Installer jar (occas_generic.jar path)"  "/home/oracle/install/occas-8.3/occas_generic.jar" "installer.jar"
-    defask inv_loc     "Oracle inventory location"               "/home/oracle/oraInventory"                   "inventory.loc"
+    defask installer   "Installer jar (occas_generic.jar path)"  "/opt/oracle/install/occas-8.3/occas_generic.jar" "installer.jar"
+    defask inv_loc     "Oracle inventory location"               "/opt/oracle/oraInventory"                    "inventory.loc"
     defask inv_grp     "Inventory group"                         "oinstall"                                    "inventory.group"
     defask inst_type   "Install type"                            "Complete with Examples"                      "install.type"
+
+    local java_runtime java_javadoc java_dir jdef
+    jdef="$(dirname "$(dirname "$oracle_home")")/java"
+    log ""
+    log "Oracle JDKs (the download step fetches these from download.oracle.com):"
+    defask java_runtime "OCCAS runtime JDK (per the certification matrix)" "21"    "java.runtime"
+    defask java_javadoc "Javadoc-build JDK (23+; for blade builds)"        "25"    "java.javadoc"
+    defask java_dir     "JDK install dir (shared, created by prep)"        "$jdef" "java.dir"
 
     local domain_name start_mode admin_user srv_prefix match_expr dyn_count max_size
     log ""
@@ -258,6 +266,11 @@ do_init() {
         echo "inventory.loc=${inv_loc}"
         echo "inventory.group=${inv_grp}"
         echo "install.type=${inst_type}"
+        echo ""
+        echo "# --- Oracle JDKs (fetched by the download step; runtime = certification matrix) ---"
+        echo "java.runtime=${java_runtime}"
+        echo "java.javadoc=${java_javadoc}"
+        echo "java.dir=${java_dir}"
         echo ""
         echo "# --- Step 2: dynamic-cluster domain ---"
         echo "domain.name=${domain_name}"
@@ -354,7 +367,11 @@ get_admin_pw() {
     local v="${BLADE_WLS_PASSWORD:-}"
     [ -z "$v" ] && [ -f "$SECRET_FILE" ] && v=$(read_prop "$SECRET_FILE" "admin.password")
     if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
-        read -rs -p "Admin (${ADMIN_USER}) password for the new domain: " v; echo
+        # The function's stdout IS the password (pw="$(get_admin_pw)"), so the
+        # cosmetic newline after silent input must go to stderr — on stdout it
+        # becomes a LEADING newline in the captured value, which splits the
+        # generated .properties line and WLST sees an empty password (60455).
+        read -rs -p "Admin (${ADMIN_USER}) password for the new domain: " v; echo >&2
         [ -n "$v" ] || die "No password provided."
     fi
     printf '%s' "$v"
@@ -365,7 +382,7 @@ get_store_pw() {
     local v="${BLADE_STORE_PASSWORD:-}"
     [ -z "$v" ] && [ -f "$SECRET_FILE" ] && v=$(read_prop "$SECRET_FILE" "store.password")
     if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
-        read -rs -p "Keystore password (stores + keys, from certs.sh): " v; echo
+        read -rs -p "Keystore password (stores + keys, from certs.sh): " v; echo >&2   # >&2: see get_admin_pw
         [ -n "$v" ] || die "No password provided."
     fi
     printf '%s' "$v"

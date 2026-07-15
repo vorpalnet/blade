@@ -51,6 +51,19 @@ OCCAS-certified JDK, which the silent install is launched with) and
 `java.javadoc` (JDK 23+ for the Markdown `///` javadoc builds). `install` no
 longer assumes a `java` on the PATH.
 
+Environment confs no longer ship in the repo: `build-profiles/occas/oci.conf`
+and `build-profiles/deploy/oci.conf` are untracked (they carried real site
+hostnames/IPs — the deploy conf even public ones in `tls.san`), and
+`deploy/production.conf` became the `production.conf.example` template. Both
+directories now gitignore `*.conf` (keeping `*.conf.example`), so a customer
+install starts from the `init` interview — which now also asks the Java
+questions (`java.runtime` / `java.javadoc` / `java.dir`) and defaults the
+installer/inventory paths to the prep-managed `/opt/oracle` layout. The
+`get_admin_pw`/`get_store_pw` prompts sent their cosmetic post-`read` newline
+to stdout, which the `$(…)` capture kept as a LEADING newline in the password —
+splitting the generated `.properties` line so WLST saw an empty password and
+rejected domain creation with error 60455. The newline now goes to stderr.
+
 `./install-occas.sh` with no arguments now just does the next thing — no menu:
 env auto-selected when only one conf exists (prompted otherwise, `init`
 interview when none); then `init` if the conf is missing, `all` if OCCAS isn't

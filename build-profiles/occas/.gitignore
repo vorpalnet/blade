@@ -2,3 +2,8 @@
 !*.secret.example
 # eDelivery URL files carry license-acceptance bearer tokens — never commit.
 *.urls
+# Env confs are per-site (hostnames, IPs, topology) — never commit; the repo
+# ships only the commented example template. './install-occas.sh <env> init'
+# interviews you and writes a fresh one.
+*.conf
+!*.conf.example

@@ -302,9 +302,11 @@ BLADE deploys in four tiers — shared library, admin apps, services (+ test app
 
 ```bash
 ./build.sh production                 # produce dist/<ver>-<build>/
-$EDITOR build-profiles/deploy/production.conf          # adminurl, user, targets, engine.nodes
+cp build-profiles/deploy/production.conf.example \
+   build-profiles/deploy/production.conf               # then edit: adminurl, user, targets, engine.nodes
 cp build-profiles/deploy/production.secret.example \
    build-profiles/deploy/production.secret             # fill in wls.password
+# (env confs are gitignored — they carry your site's hostnames/IPs)
 
 ./deploy.sh production --dry-run      # sanity check the whole environment
 ./deploy.sh production                # deploy everything, in order: shared → fsmar → admin → services

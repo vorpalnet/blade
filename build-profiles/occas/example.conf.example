@@ -1,37 +1,32 @@
-# OCCAS silent install + dynamic-cluster domain config — OCI environment.
-# Consumed by ./install-occas.sh. Run it ON the box being installed.
-# Admin password lives in oci.secret (gitignored), not here.
+# OCCAS silent install + dynamic-cluster domain config — EXAMPLE TEMPLATE.
+# Copy to <env>.conf and edit, or better: run './install-occas.sh <env> init'
+# and let the interview write it for you. Real env confs are gitignored —
+# they carry your site's hostnames/IPs and must never be committed.
+# Full walkthrough: build-profiles/occas/README.md
+# Admin password lives in <env>.secret (gitignored), not here.
 
 # ============================================================================
 # Step -1 — prep (runs AUTOMATICALLY via sudo when first needed)
 # ============================================================================
 # Creates install.user + inventory.group and the oracle.home / installer /
 # inventory / java directories, owned by YOU (group-shared with the oracle
-# user via setgid) — so no logout/login, and every later step runs without
-# sudo. Manual form:  sudo ./install-occas.sh oci prep
-# Full walkthrough: build-profiles/occas/README.md
+# user via setgid). Manual form:  sudo ./install-occas.sh <env> prep
 # install.user=oracle
 
 # ============================================================================
-# Step 0 — download the media from Oracle eDelivery (optional)
+# Step 0 — download the media from Oracle eDelivery
 # ============================================================================
-# './install-occas.sh oci download' fetches the installer media headlessly
-# (curl); 'install' auto-runs it when installer.jar is missing. Browser step:
-# sign in at https://edelivery.oracle.com, cart the OCCAS release, accept the
-# license, then in the 'WGET Options' dialog download wget.sh (the script asks
-# for its path and stashes it as oci.urls here, gitignored; its URLs last ~8 h)
-# and 'Generate Token' → Copy the access token (pasted at the prompt, ~1 h;
-# $BLADE_EDELIVERY_TOKEN for headless runs).
-# Defaults shown; uncomment to override.
-# download.urls.file=build-profiles/occas/oci.urls
+# './install-occas.sh <env> download' fetches the installer media headlessly
+# (curl); 'install' auto-runs it when installer.jar is missing. One-time
+# browser step per release (license click + wget.sh + access token) — the
+# script walks you through it; details in the README.
+# download.urls.file=build-profiles/occas/<env>.urls
 # download.dir=<dirname of installer.jar; falls back to ~/occas-media>
 
 # --- Oracle JDKs (official tarballs from download.oracle.com — no login) ---
 # java.runtime: what OCCAS runs on — keep to Oracle's certification matrix
 # for this OCCAS release (8.3 → JDK 21). java.javadoc: for blade javadoc
-# builds (Markdown /// needs JDK 23+). Fetched by 'download' (and before
-# 'install'), sha256-verified, unpacked side by side under java.dir.
-# Blank/absent = skip that one.
+# builds (Markdown /// needs JDK 23+). Blank/absent = skip that one.
 java.runtime=21
 java.javadoc=25
 # Shared location (created by prep) — NOT under a user home: the servers run
@@ -56,8 +51,7 @@ install.type=Complete with Examples
 # Step 2 — dynamic-cluster domain (occas-replicated-dynamiccluster.py)
 # ============================================================================
 # Domain name. NOTE: configure writes with OverwriteDomain=true — pointing this
-# at an EXISTING domain dir CLOBBERS it. Your systemd units use 'replicated';
-# confirm you want the dynamic domain to take that name (and back up first).
+# at an EXISTING domain dir CLOBBERS it. Back up first.
 domain.name=replicated
 # 'prod' or 'dev'
 server.start.mode=prod
@@ -78,33 +72,27 @@ max.dynamic.cluster.size=8
 # The AdminServer host is registered too (so it's NM-managed) but its name does
 # NOT match machine.match.expression, so no engine servers land on it.
 # To ADD A NODE: add a machine.N line here, bump dynamic.server.count, re-run
-#   ./install-occas.sh oci configure   (see the header of install-occas.sh).
-machine.1=admin:10.0.0.10:5556:ssl
-machine.2=engine1:10.0.0.26:5556:ssl
-machine.3=engine2:10.0.0.130:5556:ssl
+#   ./install-occas.sh <env> configure   (see the header of install-occas.sh).
+machine.1=admin:10.0.0.11:5556:ssl
+machine.2=engine1:10.0.0.12:5556:ssl
+machine.3=engine2:10.0.0.13:5556:ssl
 
 # --- Optional static test engine on the AdminServer box ---
 # A fixed engine-tier member for testing / BLADE config-file generation, on the
-# admin machine. NEVER SBC-targeted. The admin machine does NOT match
-# machine.match.expression, so no DYNAMIC server lands there — this static one
-# is how you get an engine on the admin box. A configured server doesn't inherit
-# BEA_ENGINE_TIER_CLUST-template, so install-occas.sh adds its sip/sips channels
-# explicitly (mirroring the template). Leave blank to skip.
+# admin machine (which doesn't match machine.match.expression, so no dynamic
+# server lands there). Leave blank to skip.
 # Format: name:machine:listenPort:sipPort:sipsPort
 static.server=engine0:admin:8001:5060:5061
 
-# --- TLS (steps: certs.sh + 'install-occas.sh oci secure') ---
-# 1. ./certs.sh oci generate        (test PKI)  — or 'import' for customer-issued
-# 2. ./install-occas.sh oci secure  (domain stopped) — wires the keystores + SSL
-#    ports into AdminServer, the engine template, and the static engine.
-# Defaults shown; uncomment to override. store.password lives in oci.secret.
-# certs.dir=~/.blade/certs/oci
+# --- TLS (steps: certs.sh + 'install-occas.sh <env> secure') ---
+# 1. ./certs.sh <env> generate      (test PKI)  — or 'import' for customer-issued
+# 2. ./install-occas.sh <env> secure  (domain stopped) — wires the keystores +
+#    SSL ports into AdminServer, the engine template, and the static engine.
+# Defaults shown; uncomment to override. store.password lives in <env>.secret.
+# certs.dir=~/.blade/certs/<env>
 # admin.ssl.port=7002
 # ssl.listen.port=8002
 # identity.keystore={certs.dir}/identity.p12
 # trust.keystore={certs.dir}/trust.p12
 # identity.alias=server
 # tls.only=false
-# tls.only=true disables the plaintext HTTP listen ports and deletes the
-# plaintext 'sip' channels (HTTPS/SIPS/t3s only — the 2027 posture). Flip it
-# after certs are proven good over plain-available TLS.

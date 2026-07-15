@@ -12,7 +12,8 @@
 #   a NAME    → build-profiles/deploy/<name>.conf  (+ paired <name>.secret)
 #   a PATH    → that file directly (secret = same path with .secret)
 # The conf is the single source of truth: connection, targets, engine nodes,
-# approuter path, and which apps to deploy. See production.conf for the keys.
+# approuter path, and which apps to deploy. Env confs are gitignored (per-site
+# hostnames/IPs); copy production.conf.example to <env>.conf and edit.
 #
 # Tiers (omit the tier to do them ALL, in dependency-safe order):
 #   shared       WebLogic shared library → wls.targets.both
