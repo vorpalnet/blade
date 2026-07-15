@@ -64,6 +64,19 @@ to stdout, which the `$(…)` capture kept as a LEADING newline in the password 
 splitting the generated `.properties` line so WLST saw an empty password and
 rejected domain creation with error 60455. The newline now goes to stderr.
 
+The init interview was cut to eight answers: the environment name IS the
+WebLogic domain name (one concept — no more everyone-picks-`replicated`, no
+more "Domain name" reading as DNS); machines are auto-named `machine0` (the
+admin box, whose address defaults to the box's own IP) and `machine1..N` (one
+per engine server); `machine.match.expression` is emitted as the explicit
+machine list so no engine can land on the admin box; NM port/type, engine
+prefix, max cluster size (99), and the installer/inventory/java paths (derived
+from ORACLE_HOME) are assumed and remain conf-editable. On OCI the environment
+name defaults to the region from the instance metadata service
+(`us-ashburn-1` → `ashburn`; 2-second probe, falls back to `prod` elsewhere).
+After a no-arg init, the script continues straight into the full install
+instead of stopping.
+
 `./install-occas.sh` with no arguments now just does the next thing — no menu:
 env auto-selected when only one conf exists (prompted otherwise, `init`
 interview when none); then `init` if the conf is missing, `all` if OCCAS isn't

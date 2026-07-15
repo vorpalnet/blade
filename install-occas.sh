@@ -23,7 +23,8 @@
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
 #     <step>  init | prep | download | install | configure | secure | all
 #
-#   init       interactively interview you and WRITE the env conf (+ optional secret)
+#   init       short interview → writes the env conf (env name = the WebLogic
+#              domain name; machines auto-named machine0=admin, machine1..N)
 #   prep       root setup, run AUTOMATICALLY via sudo when first needed:
 #              creates install.user ('oracle') + inventory.group ('oinstall')
 #              and the oracle.home / installer / inventory / java.dir dirs —
@@ -83,9 +84,9 @@
 #       ./install-occas.sh <env> configure
 #     (or online: connect()/edit(); cd to the cluster's DynamicServers;
 #      setMaximumDynamicServerCount(n); activate(); start the new servers.)
-#   * A new physical host → add a machine.N line in the conf (its NodeManager),
-#     make sure its name matches machine.match.expression, bump
-#     dynamic.server.count, then re-run configure.
+#   * A new physical host → add a machine.N line (machineK:<ip>:5556:ssl),
+#     append machineK to machine.match.expression, bump dynamic.server.count,
+#     then re-run configure.
 # ----------------------------------------------------------------------------
 #
 # !! configure writes the domain with OverwriteDomain=true. If domain.name
@@ -114,7 +115,7 @@ ENV_ARG=""; STEP=""; DRY_RUN=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,87p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,88p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
@@ -144,6 +145,21 @@ defask() {
     ask "$1" "$2" "$__def"
 }
 
+# Default environment name: on OCI, the instance metadata service knows the
+# region ('us-ashburn-1' → 'ashburn'); elsewhere the 2s probes fail fast → 'prod'.
+guess_env_name() {
+    local r
+    r="$(curl -sf --max-time 2 -H 'Authorization: Bearer Oracle' \
+         http://169.254.169.254/opc/v2/instance/canonicalRegionName 2>/dev/null)" || r=""
+    [ -z "$r" ] && { r="$(curl -sf --max-time 2 \
+         http://169.254.169.254/opc/v1/instance/canonicalRegionName 2>/dev/null)" || r=""; }
+    if [ -n "$r" ]; then
+        printf '%s' "$r" | awk -F- '{print $(NF-1)}'
+    else
+        printf 'prod'
+    fi
+}
+
 # --- No <env> arg → the only conf wins; otherwise ask ---
 if [ -z "$ENV_ARG" ]; then
     CONFS=()
@@ -152,11 +168,9 @@ if [ -z "$ENV_ARG" ]; then
         ENV_ARG="${CONFS[0]}"
     elif [ ${#CONFS[@]} -eq 0 ]; then
         [ -t 0 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
-        warn "No env confs in build-profiles/occas/ yet — starting the init interview."
-        log "An environment names this SITE's profile — build-profiles/occas/<name>.conf"
-        log "(+ .secret, .urls). It is not the WebLogic domain (asked later); pick a"
-        log "site label like 'prod', 'lab', or a customer name."
-        ask ENV_ARG "Environment name" "prod"
+        warn "No env confs in build-profiles/occas/ yet."
+        log "The environment names this site's conf AND its WebLogic domain (not DNS)."
+        ask ENV_ARG "Environment name" "$(guess_env_name)"
         [ -n "$ENV_ARG" ] || die "No environment name given."
     else
         [ -t 0 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
@@ -174,10 +188,12 @@ else
 fi
 
 # --- No <step> arg → just do the next logical thing, no menu ---
+INIT_THEN_ALL=false
 if [ -z "$STEP" ]; then
     if [ ! -f "$CONF_FILE" ]; then
         STEP="init"
-        info "No conf for '${ENV_NAME}' yet — running init."
+        INIT_THEN_ALL=true
+        info "No conf for '${ENV_NAME}' yet — a short interview, then the full install."
     else
         _OH="$(read_prop "$CONF_FILE" "oracle.home")"
         _DN="$(read_prop "$CONF_FILE" "domain.name")"
@@ -196,100 +212,83 @@ fi
 case "$STEP" in init|prep|download|install|configure|secure|all) ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # Interactive builder for build-profiles/occas/<env>.conf (+ optional secret).
+# Crisp on purpose: the environment name IS the WebLogic domain name; machines
+# are auto-named machine0 (this admin box) and machine1..N (one per engine);
+# NM port 5556/ssl, engine prefix, max cluster size 99, and the installer/
+# inventory/java paths (derived from ORACLE_HOME) are assumed — everything is
+# editable in the written conf.
 do_init() {
-    log "${C_BOLD}OCCAS env builder${C_RESET} → ${CONF_FILE}"
+    log "${C_BOLD}OCCAS env builder${C_RESET} → ${CONF_FILE}   (WebLogic domain: '${ENV_NAME}')"
     [ -f "$CONF_FILE" ] && warn "${CONF_FILE} exists — its values are offered as defaults; you'll confirm overwrite at the end."
-    log "  Shared-filesystem note: 'install' runs ONCE (every node mounts the same"
-    log "  ORACLE_HOME); the domain is created once; only NodeManager runs per host."
-    log ""
 
-    local oracle_home installer inv_loc inv_grp inst_type
-    log "Step 1 — silent product install:"
-    defask oracle_home "ORACLE_HOME (shared install dir)"        "/opt/oracle/occas/8.3"                       "oracle.home"
-    defask installer   "Installer jar (occas_generic.jar path)"  "/opt/oracle/install/occas-8.3/occas_generic.jar" "installer.jar"
-    defask inv_loc     "Oracle inventory location"               "/opt/oracle/oraInventory"                    "inventory.loc"
-    defask inv_grp     "Inventory group"                         "oinstall"                                    "inventory.group"
-    defask inst_type   "Install type"                            "Complete with Examples"                      "install.type"
+    local oracle_home admin_user dyn_count base ver
+    defask oracle_home "ORACLE_HOME"    "/opt/oracle/occas/8.3" "oracle.home"
+    defask admin_user  "Admin username" "weblogic"              "admin.username"
+    defask dyn_count   "Engine servers" "2"                     "dynamic.server.count"
+    case "$dyn_count" in ''|*[!0-9]*|0) die "Engine servers must be a number ≥ 1." ;; esac
+    base="$(dirname "$(dirname "$oracle_home")")"
+    ver="$(basename "$oracle_home")"
 
-    local java_runtime java_javadoc java_dir jdef
-    jdef="$(dirname "$(dirname "$oracle_home")")/java"
-    log ""
-    log "Oracle JDKs (the download step fetches these from download.oracle.com):"
-    defask java_runtime "OCCAS runtime JDK (per the certification matrix)" "21"    "java.runtime"
-    defask java_javadoc "Javadoc-build JDK (23+; for blade builds)"        "25"    "java.javadoc"
-    defask java_dir     "JDK install dir (shared, created by prep)"        "$jdef" "java.dir"
-
-    local domain_name start_mode admin_user srv_prefix match_expr dyn_count max_size
-    log ""
-    log "Step 2 — dynamic-cluster domain:"
-    defask domain_name "Domain name (OverwriteDomain=true CLOBBERS an existing one)" "replicated" "domain.name"
-    defask start_mode  "Server start mode (prod|dev)"            "prod"     "server.start.mode"
-    defask admin_user  "Admin username"                          "weblogic" "admin.username"
-    defask srv_prefix  "Dynamic server name prefix"              "engine"   "server.name.prefix"
-    defask match_expr  "Machine name match expression"           "engine*"  "machine.match.expression"
-    defask dyn_count   "Dynamic server count (now)"              "2"        "dynamic.server.count"
-    defask max_size    "Max dynamic cluster size (ceiling)"      "8"        "max.dynamic.cluster.size"
-
-    log ""
-    log "Machines (NodeManager hosts) — enter a blank name to finish:"
-    local machines=() n=1 mname maddr mport mtype
-    while true; do
-        ask mname "machine ${n} name (blank = done)" ""
-        [ -z "$mname" ] && break
-        ask maddr "${mname} NM listen address" ""
-        ask mport "${mname} NM listen port" "5556"
-        ask mtype "${mname} NM type (ssl|plain)" "ssl"
-        machines+=("${mname}:${maddr}:${mport}:${mtype}")
-        n=$((n + 1))
+    # machine0 = this admin box; machine1..N = one engine host per server.
+    local machines=() match="" addr my_ip="" i=1
+    my_ip="$(hostname -I 2>/dev/null | awk '{print $1}')" || true
+    log "NodeManager addresses (port 5556, ssl — edit the conf to change):"
+    ask addr "machine0 = this admin box" "$my_ip"
+    [ -n "$addr" ] || die "machine0 address required."
+    machines=("machine0:${addr}:5556:ssl")
+    while [ "$i" -le "$dyn_count" ]; do
+        ask addr "machine${i} = engine host" ""
+        [ -n "$addr" ] || die "machine${i} address required."
+        machines+=("machine${i}:${addr}:5556:ssl")
+        match="${match:+${match},}machine${i}"
+        i=$((i + 1))
     done
-    [ ${#machines[@]} -ge 1 ] || die "At least one machine is required."
 
-    local yn static_line="" s_def
-    log ""
-    ask yn "Add a static test engine on the admin box? (y/N)" "N"
-    if [[ "$yn" =~ ^[Yy] ]]; then
-        s_def="$(read_prop "$CONF_FILE" "static.server")"; [ -z "$s_def" ] && s_def="engine0:admin:8001:5060:5061"
-        ask static_line "static.server (name:machine:listen:sip:sips)" "$s_def"
-    fi
+    local yn static_line=""
+    ask yn "Test engine on this admin box? (y/N)" "N"
+    [[ "$yn" =~ ^[Yy] ]] && static_line="engine0:machine0:8001:5060:5061"
 
-    log ""
     if [ -f "$CONF_FILE" ]; then
         ask yn "Overwrite ${CONF_FILE}? (y/N)" "N"
         [[ "$yn" =~ ^[Yy] ]] || die "Aborted — conf not written."
     fi
     mkdir -p "$(dirname "$CONF_FILE")"
     {
-        echo "# OCCAS silent install + dynamic-cluster domain — built by 'install-occas.sh ${ENV_NAME} init'."
+        echo "# OCCAS install + dynamic-cluster domain '${ENV_NAME}' — by 'install-occas.sh ${ENV_NAME} init'."
         echo "# Admin password lives in $(basename "$SECRET_FILE") (gitignored), not here."
         echo "# NOTE: keep comments on their OWN lines — trailing '# ...' becomes part of the value."
         echo ""
-        echo "# --- Step 1: silent product install (runs once; ORACLE_HOME is shared) ---"
+        echo "# --- Silent product install (paths derived from ORACLE_HOME) ---"
         echo "oracle.home=${oracle_home}"
-        echo "installer.jar=${installer}"
-        echo "inventory.loc=${inv_loc}"
-        echo "inventory.group=${inv_grp}"
-        echo "install.type=${inst_type}"
+        echo "installer.jar=${base}/install/occas-${ver}/occas_generic.jar"
+        echo "inventory.loc=${base}/oraInventory"
+        echo "inventory.group=oinstall"
+        echo "install.type=Complete with Examples"
         echo ""
         echo "# --- Oracle JDKs (fetched by the download step; runtime = certification matrix) ---"
-        echo "java.runtime=${java_runtime}"
-        echo "java.javadoc=${java_javadoc}"
-        echo "java.dir=${java_dir}"
+        echo "java.runtime=21"
+        echo "java.javadoc=25"
+        echo "java.dir=${base}/java"
         echo ""
-        echo "# --- Step 2: dynamic-cluster domain ---"
-        echo "domain.name=${domain_name}"
-        echo "server.start.mode=${start_mode}"
+        echo "# --- Dynamic-cluster domain (domain name = environment name) ---"
+        echo "domain.name=${ENV_NAME}"
+        echo "server.start.mode=prod"
         echo "admin.username=${admin_user}"
-        echo "server.name.prefix=${srv_prefix}"
-        echo "machine.match.expression=${match_expr}"
+        echo "server.name.prefix=engine"
+        echo "machine.match.expression=${match}"
         echo "dynamic.server.count=${dyn_count}"
-        echo "max.dynamic.cluster.size=${max_size}"
+        echo "max.dynamic.cluster.size=99"
         echo ""
         echo "# --- Machines + NodeManagers (name:nmAddr:nmPort:nmType) ---"
+        echo "# machine0 = the admin box; deliberately NOT in machine.match.expression, so"
+        echo "# no dynamic engine lands on it. To ADD a host: add a machine.N line, append"
+        echo "# its name to machine.match.expression, bump dynamic.server.count, then"
+        echo "#   ./install-occas.sh ${ENV_NAME} configure"
         local idx=1 m
         for m in "${machines[@]}"; do echo "machine.${idx}=${m}"; idx=$((idx + 1)); done
         if [ -n "$static_line" ]; then
             echo ""
-            echo "# --- Optional static test engine on the admin box (never SBC-targeted) ---"
+            echo "# --- Static test engine on the admin box (never SBC-targeted) ---"
             echo "static.server=${static_line}"
         fi
     } > "$CONF_FILE"
@@ -311,11 +310,20 @@ do_init() {
         ok "Wrote ${SECRET_FILE} (mode 600)"
     fi
 
-    log ""
-    ok "Done. Preview the run:  ./install-occas.sh ${ENV_NAME} all --dry-run"
 }
 
-if [ "$STEP" = "init" ]; then do_init; exit 0; fi
+if [ "$STEP" = "init" ]; then
+    do_init
+    if [ "$INIT_THEN_ALL" = true ]; then
+        STEP="all"
+        log ""
+        info "Conf written — continuing with the full install (Ctrl-C to stop; re-runs resume)."
+    else
+        log ""
+        ok "Done. Preview the run:  ./install-occas.sh ${ENV_NAME} all --dry-run"
+        exit 0
+    fi
+fi
 
 [ -f "$CONF_FILE" ] || die "Conf not found: ${CONF_FILE} — run './install-occas.sh ${ENV_NAME} init' to build it."
 

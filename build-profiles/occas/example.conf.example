@@ -50,39 +50,39 @@ install.type=Complete with Examples
 # ============================================================================
 # Step 2 — dynamic-cluster domain (occas-replicated-dynamiccluster.py)
 # ============================================================================
-# Domain name. NOTE: configure writes with OverwriteDomain=true — pointing this
-# at an EXISTING domain dir CLOBBERS it. Back up first.
-domain.name=replicated
+# Domain name — by convention the SAME as the environment name (init enforces
+# this). NOTE: configure writes with OverwriteDomain=true — pointing this at
+# an EXISTING domain dir CLOBBERS it. Back up first.
+domain.name=example
 # 'prod' or 'dev'
 server.start.mode=prod
 admin.username=weblogic
 
 # --- Dynamic cluster shape (BEA_ENGINE_TIER_CLUST) ---
 # Generated servers are named <prefix>1, <prefix>2, … and auto-assigned to the
-# machines whose names match machine.match.expression.
+# machines listed in machine.match.expression (comma-separated names; machine0
+# — the admin box — is deliberately NOT listed, so no engine lands on it).
 server.name.prefix=engine
-machine.match.expression=engine*
+machine.match.expression=machine1,machine2
 # MaximumDynamicServerCount — how many engine servers exist now.
 dynamic.server.count=2
 # MaxDynamicClusterSize — the growth ceiling.
-max.dynamic.cluster.size=8
+max.dynamic.cluster.size=99
 
 # --- Physical machines + their Node Managers ---
 # CSV per machine: name:nmListenAddress:nmListenPort:nmType  (nmType = ssl|plain)
-# The AdminServer host is registered too (so it's NM-managed) but its name does
-# NOT match machine.match.expression, so no engine servers land on it.
-# To ADD A NODE: add a machine.N line here, bump dynamic.server.count, re-run
-#   ./install-occas.sh <env> configure   (see the header of install-occas.sh).
-machine.1=admin:10.0.0.11:5556:ssl
-machine.2=engine1:10.0.0.12:5556:ssl
-machine.3=engine2:10.0.0.13:5556:ssl
+# machine0 = the admin box (NM-managed, but no engines). To ADD A NODE: add a
+# machine.N line, append its name to machine.match.expression, bump
+# dynamic.server.count, re-run:  ./install-occas.sh <env> configure
+machine.1=machine0:10.0.0.11:5556:ssl
+machine.2=machine1:10.0.0.12:5556:ssl
+machine.3=machine2:10.0.0.13:5556:ssl
 
-# --- Optional static test engine on the AdminServer box ---
-# A fixed engine-tier member for testing / BLADE config-file generation, on the
-# admin machine (which doesn't match machine.match.expression, so no dynamic
-# server lands there). Leave blank to skip.
+# --- Optional static test engine on the admin box ---
+# A fixed engine-tier member for testing / BLADE config-file generation, on
+# machine0. Leave blank to skip.
 # Format: name:machine:listenPort:sipPort:sipsPort
-static.server=engine0:admin:8001:5060:5061
+static.server=engine0:machine0:8001:5060:5061
 
 # --- TLS (steps: certs.sh + 'install-occas.sh <env> secure') ---
 # 1. ./certs.sh <env> generate      (test PKI)  — or 'import' for customer-issued
