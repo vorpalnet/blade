@@ -16,11 +16,11 @@
 #
 # Usage:
 #   ./install-occas.sh [<env> [<step>]] [--dry-run]
-#     no args → interactive: picks the env (asks if there's more than one conf)
-#               and suggests the next step from what's already on the box
+#     no args → just does the next thing: init if there's no conf, all if
+#               OCCAS isn't installed, configure if the domain is missing,
+#               and stops (saying so) when there's nothing left to do
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
 #     <step>  init | download | install | configure | secure | all
-#             (omitted → suggested interactively, same as no args)
 #
 #   init       interactively interview you and WRITE the env conf (+ optional secret)
 #   download   fetch the OCCAS media from Oracle eDelivery — headless (curl), no
@@ -30,11 +30,11 @@
 #              website can mint, so ONCE per OCCAS version, in a browser:
 #                1. sign in at https://edelivery.oracle.com, cart the OCCAS
 #                   release, pick the platform, accept the license
-#                2. click 'WGET Options' and save the generated wget.sh as
-#                   build-profiles/occas/<env>.urls  (gitignored; any file
-#                   holding the URLs works — they're grepped out)
-#              After that this step runs headlessly until Oracle expires the
-#              token (then it fails with a clear message — redo 1-2). Files
+#                2. click 'WGET Options' and download the generated wget.sh —
+#                   the script asks for its path and stashes it as
+#                   build-profiles/occas/<env>.urls (gitignored)
+#              After that it runs headlessly until Oracle expires the token
+#              (then it says so and asks for a fresh wget.sh on re-run). Files
 #              land next to installer.jar (override: download.dir), zips are
 #              unpacked, and it's a no-op once installer.jar exists.
 #              SSO creds: $BLADE_SSO_USERNAME / $BLADE_SSO_PASSWORD, or
@@ -136,21 +136,20 @@ defask() {
     ask "$1" "$2" "$__def"
 }
 
-# --- No <env> arg → pick one interactively (./install-occas.sh alone works) ---
+# --- No <env> arg → the only conf wins; otherwise ask ---
 if [ -z "$ENV_ARG" ]; then
-    [ -t 0 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
-    log "${C_BOLD}OCCAS install${C_RESET} — interactive (no arguments; --help shows the CLI)"
     CONFS=()
     for f in "$OCCAS_DIR"/*.conf; do [ -e "$f" ] && CONFS+=("$(basename "${f%.conf}")"); done
-    if [ ${#CONFS[@]} -eq 0 ]; then
-        warn "No env confs in build-profiles/occas/ yet — 'init' will write one."
+    if [ ${#CONFS[@]} -eq 1 ]; then
+        ENV_ARG="${CONFS[0]}"
+    elif [ ${#CONFS[@]} -eq 0 ]; then
+        [ -t 0 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
+        warn "No env confs in build-profiles/occas/ yet — starting the init interview."
         ask ENV_ARG "Environment name" "$(hostname -s)"
         [ -n "$ENV_ARG" ] || die "No environment name given."
-    elif [ ${#CONFS[@]} -eq 1 ]; then
-        ENV_ARG="${CONFS[0]}"
-        info "Environment: ${ENV_ARG} (the only conf in build-profiles/occas/)"
     else
-        log "Environments in build-profiles/occas/:  ${CONFS[*]}"
+        [ -t 0 ] || die "Usage: ./install-occas.sh <env> <init|download|install|configure|secure|all> [--dry-run]"
+        log "Environments:  ${CONFS[*]}"
         ask ENV_ARG "Environment" "${CONFS[0]}"
         [ -n "$ENV_ARG" ] || die "No environment given."
     fi
@@ -163,28 +162,25 @@ else
     ENV_NAME="$ENV_ARG"; CONF_FILE="${OCCAS_DIR}/${ENV_NAME}.conf"; SECRET_FILE="${OCCAS_DIR}/${ENV_NAME}.secret"
 fi
 
-# --- No <step> arg → suggest the next logical one from on-box state ---
+# --- No <step> arg → just do the next logical thing, no menu ---
 if [ -z "$STEP" ]; then
-    [ -t 0 ] || die "Missing step (init|download|install|configure|secure|all)."
     if [ ! -f "$CONF_FILE" ]; then
-        SUGG="init"
-        log "No conf at ${CONF_FILE} → 'init' interviews you and writes it."
+        STEP="init"
+        info "No conf for '${ENV_NAME}' yet — running init."
     else
         _OH="$(read_prop "$CONF_FILE" "oracle.home")"
         _DN="$(read_prop "$CONF_FILE" "domain.name")"
-        if [ -n "$_OH" ] && [ ! -d "${_OH}/wlserver" ]; then
-            SUGG="all"
-            log "No product at ${_OH} → 'all' (auto-download if needed, install, configure)."
+        if [ ! -d "${_OH}/wlserver" ]; then
+            STEP="all"
         elif [ -n "$_DN" ] && [ ! -d "${_OH}/user_projects/domains/${_DN}" ]; then
-            SUGG="configure"
-            log "Product installed but no domain '${_DN}' yet → 'configure'."
+            STEP="configure"
         else
-            SUGG="configure"
-            [ -n "$_DN" ] && warn "Domain '${_DN}' already EXISTS — configure OVERWRITES it (the add-a-node flow; back up first)."
+            ok "Nothing to do: OCCAS is at ${_OH} and domain '${_DN}' exists."
+            log "  Rebuild the domain (OVERWRITES it):  ./install-occas.sh ${ENV_NAME} configure"
+            log "  Wire TLS into it:                    ./install-occas.sh ${ENV_NAME} secure"
+            exit 0
         fi
     fi
-    ask STEP "Step (init|download|install|configure|secure|all)" "$SUGG"
-    log ""
 fi
 case "$STEP" in init|download|install|configure|secure|all) ;; *) die "Unknown step: ${STEP}" ;; esac
 
@@ -398,14 +394,25 @@ do_download() {
         ok "Installer already present: ${INSTALLER_JAR} — skipping download."
         return 0
     fi
-    [ -f "$URLS_FILE" ] || die "URL file not found: ${URLS_FILE}
-  One-time browser step (mints the license-acceptance token Oracle requires):
-    1. sign in at https://edelivery.oracle.com, cart the OCCAS release
-       (search 'Oracle Communications Converged Application Server'),
-       pick the platform, accept the license
-    2. click 'WGET Options' and save the generated wget.sh as ${URLS_FILE}
-       (any file holding the download URLs works — they're grepped out)
-  then re-run:  ./install-occas.sh ${ENV_NAME} download"
+    if [ ! -f "$URLS_FILE" ]; then
+        if [ "$DRY_RUN" = true ]; then
+            log "${C_DIM}  [dry-run] no ${URLS_FILE} — would ask for Oracle's wget.sh${C_RESET}"
+            return 0
+        fi
+        log "Getting the OCCAS media takes a ONE-TIME browser step (Oracle's license click):"
+        log "  1. sign in at https://edelivery.oracle.com and cart the OCCAS release"
+        log "     (search 'Oracle Communications Converged Application Server'),"
+        log "     pick the platform, accept the license"
+        log "  2. click 'WGET Options' → download the generated wget.sh"
+        log "     (browsing on another machine is fine — scp it to this box)"
+        local wsh=""
+        [ -t 0 ] && ask wsh "Path to that wget.sh (Enter to quit)" ""
+        [ -n "$wsh" ] || die "No wget.sh yet — do the browser step above, then just re-run this; it resumes where it left off."
+        wsh="${wsh/#\~/$HOME}"
+        [ -f "$wsh" ] || die "Not found: ${wsh}"
+        cp "$wsh" "$URLS_FILE"
+        ok "Saved as ${URLS_FILE} (gitignored) — re-runs reuse it until the token expires."
+    fi
 
     # Pull the tokened URLs out of whatever was saved (Oracle's whole wget.sh,
     # or bare URLs one per line).
@@ -456,8 +463,8 @@ EOF
                 || die "Download failed: ${f}"
             if ! unzip -tqq "$dest" >/dev/null 2>&1; then
                 if head -c 1024 "$dest" | grep -qi "<html"; then
-                    rm -f "$dest"
-                    die "eDelivery sent an HTML page instead of ${f} — the token in ${URLS_FILE} has expired. Regenerate the wget.sh in the browser (see --help, 'download') and re-run."
+                    rm -f "$dest" "$URLS_FILE"
+                    die "eDelivery sent an HTML page instead of ${f} — the token has expired. Removed the stale ${URLS_FILE}; re-run and you'll be walked through a fresh wget.sh (browser step)."
                 fi
                 die "${dest} is not a valid zip (truncated download?) — delete it and re-run."
             fi
@@ -495,9 +502,11 @@ do_install() {
     fi
     [ -n "$INSTALLER_JAR" ] || die "${CONF_FILE}: missing installer.jar"
     [ -n "$INV_LOC" ]       || die "${CONF_FILE}: missing inventory.loc"
-    if [ ! -f "$INSTALLER_JAR" ] && [ -f "$URLS_FILE" ]; then
+    if [ ! -f "$INSTALLER_JAR" ]; then
         do_download
         log ""
+        [ "$DRY_RUN" = true ] || [ -f "$INSTALLER_JAR" ] \
+            || die "Still no installer at ${INSTALLER_JAR} after the download — fix installer.jar in ${CONF_FILE} (or set BLADE_OCCAS_INSTALLER)."
     fi
     info "Silent install → ${ORACLE_HOME}  (installer: ${INSTALLER_JAR})"
 

@@ -17,13 +17,15 @@ present, and `install` auto-runs it when the installer is missing and the
 `.urls` file exists. Credentials: `$BLADE_SSO_USERNAME` / `$BLADE_SSO_PASSWORD`,
 or `sso.username` (conf) + `sso.password` (`<env>.secret`), else prompted.
 
-`./install-occas.sh` with no arguments now runs interactively: it picks the env
-(auto-selected when only one conf exists, prompted otherwise, offered for `init`
-when none do) and suggests the next step from on-box state — no product at
-`oracle.home` → `all`; product but no domain → `configure`; domain already
-present → `configure` with an explicit it-will-be-overwritten warning. Omitting
-just the step (`./install-occas.sh oci`) prompts the same way. Non-tty
-invocations still fail fast with the usage line.
+`./install-occas.sh` with no arguments now just does the next thing — no menu:
+env auto-selected when only one conf exists (prompted otherwise, `init`
+interview when none); then `init` if the conf is missing, `all` if OCCAS isn't
+installed, `configure` if the domain is missing, and a clean "nothing to do"
+(with the configure/secure follow-ups spelled out) when both exist — it never
+overwrites an existing domain unless you name `configure` explicitly. When the
+installer media is missing and there's no `.urls` file, it prints the browser
+steps and asks for the path to the downloaded wget.sh instead of dying on
+`installer.jar not found`.
 
 ### iRouter: printable Dial Plan report
 
