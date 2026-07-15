@@ -64,6 +64,18 @@ to stdout, which the `$(…)` capture kept as a LEADING newline in the password 
 splitting the generated `.properties` line so WLST saw an empty password and
 rejected domain creation with error 60455. The newline now goes to stderr.
 
+WebLogic's demo certificates are never used: `all` now runs `secure` between
+configure and start, and `secure` auto-generates the env PKI when missing
+(`certs.sh generate` — self-signed CA + server identity whose SAN covers every
+machine in the conf; keystore password auto-minted into `<env>.secret`).
+`secure` also re-points **NodeManager** at the env identity — its keystore
+config lives in `nodemanager.properties`, outside the domain config, and its
+default is the demo cert whose private key ships in every WebLogic download
+(NM encrypts the passphrases in-place on next start). The `start` step passes
+WLST a CustomTrust pointing at the env trust store so `nmConnect` works
+against the non-demo NM. Customers replace the generated PKI via
+`./certs.sh <env> import` + re-run `secure`.
+
 New `start` step (and the finale of `all`): writes AdminServer
 `boot.properties` (mode 600; WebLogic encrypts it on first boot), starts the
 per-domain NodeManager if its port isn't listening, drives

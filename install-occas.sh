@@ -73,7 +73,10 @@
 #              starts the per-domain NodeManager, nmStart(AdminServer) via
 #              misc/start-admin-nm.sh, waits for the console and prints its
 #              URL; engine boxes get a copy-paste NodeManager one-liner
-#   all        install then configure then start (auto-downloading as needed)
+#   all        install → configure → secure → start (auto-downloading as
+#              needed; certs auto-generate — WebLogic demo certs are never
+#              used, and NodeManager is re-pointed at the env identity too;
+#              replace the generated PKI later via './certs.sh <env> import')
 #
 # Examples:
 #   ./install-occas.sh oci init              # build the env conf interactively
@@ -119,7 +122,7 @@ ENV_ARG=""; STEP=""; DRY_RUN=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,92p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,95p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
@@ -393,15 +396,51 @@ ensure_admin_pw() {
     fi
 }
 
-# --- Keystore password (secure only): env > secret > prompt — certs.sh's convention ---
-get_store_pw() {
-    local v="${BLADE_STORE_PASSWORD:-}"
-    [ -z "$v" ] && [ -f "$SECRET_FILE" ] && v=$(read_prop "$SECRET_FILE" "store.password")
-    if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
-        read -rs -p "Keystore password (stores + keys, from certs.sh): " v; echo >&2   # >&2: see get_admin_pw
-        [ -n "$v" ] || die "No password provided."
+# --- Keystore password: env > secret > AUTO-GENERATED into the env secret ---
+# certs.sh's convention (one password for stores + keys). Minted on first need
+# so the whole TLS bootstrap is hands-off; users with their own certs put
+# their password in <env>.secret (store.password) before running.
+STORE_PW=""
+ensure_store_pw() {
+    [ -n "$STORE_PW" ] && return 0
+    STORE_PW="${BLADE_STORE_PASSWORD:-}"
+    [ -z "$STORE_PW" ] && [ -f "$SECRET_FILE" ] && STORE_PW=$(read_prop "$SECRET_FILE" "store.password")
+    if [ -z "$STORE_PW" ] && [ "$DRY_RUN" = false ]; then
+        STORE_PW="$(head -c 18 /dev/urandom | base64 | tr -d '/+=' | head -c 20)"
+        [ "${#STORE_PW}" -ge 12 ] || die "Could not generate a keystore password."
+        printf 'store.password=%s\n' "$STORE_PW" >> "$SECRET_FILE"
+        chmod 600 "$SECRET_FILE"
+        ok "Keystore password minted → $(basename "$SECRET_FILE") (store.password)"
     fi
-    printf '%s' "$v"
+}
+
+# The env's certs directory (certs.sh's convention).
+certs_dir() {
+    local d; d="$(read_prop "$CONF_FILE" "certs.dir")"; d="${d/#\~/$HOME}"
+    [ -n "$d" ] || d="${HOME}/.blade/certs/${ENV_NAME}"
+    printf '%s' "$d"
+}
+
+# Fresh self-signed PKI when the env has none — NEVER WebLogic's demo certs
+# (their private key ships in every WLS download). Customers replace it later
+# with './certs.sh <env> import'.
+ensure_certs() {
+    local cdir; cdir="$(certs_dir)"
+    if [ -f "${cdir}/identity.p12" ]; then
+        ok "Certs present: ${cdir}"
+        return 0
+    fi
+    if [ "$DRY_RUN" = true ]; then
+        log "${C_DIM}  [dry-run] ./certs.sh ${ENV_NAME} generate — self-signed PKI → ${cdir} (replace later via import)${C_RESET}"
+        return 0
+    fi
+    ensure_store_pw
+    info "No certs for '${ENV_NAME}' — generating a fresh PKI (replace later: ./certs.sh ${ENV_NAME} import) …"
+    local rj jhome=""
+    rj="$(runtime_java)"; [ "$rj" != "java" ] && jhome="${rj%/bin/java}"
+    BLADE_STORE_PASSWORD="$STORE_PW" JAVA_HOME="${jhome:-${JAVA_HOME:-}}" \
+        "${SCRIPT_DIR}/certs.sh" "$CONF_FILE" generate \
+        || die "certs.sh generate failed."
 }
 
 # ----------------------------------------------------------------------------
@@ -974,11 +1013,25 @@ do_start() {
         nohup "${domain_dir}/bin/startNodeManager.sh" >> "${domain_dir}/nodemanager/nodemanager.out" 2>&1 &
     fi
 
+    # When secure_nodemanager swapped NM onto the env certificate, WLST's
+    # nmConnect must trust the env CA instead of Oracle's demo trust. The
+    # passphrase rides a -D flag — visible in ps on this box for the seconds
+    # WLST runs; acceptable on the box being installed.
+    local wlst_props="" cdir
+    if grep -q "^CustomIdentityKeyStoreFileName=" "${domain_dir}/nodemanager/nodemanager.properties" 2>/dev/null; then
+        cdir="$(certs_dir)"
+        ensure_store_pw
+        wlst_props="-Dweblogic.security.TrustKeyStore=CustomTrust"
+        wlst_props="${wlst_props} -Dweblogic.security.CustomTrustKeyStoreFileName=${cdir}/trust.p12"
+        wlst_props="${wlst_props} -Dweblogic.security.CustomTrustKeyStoreType=PKCS12"
+        wlst_props="${wlst_props} -Dweblogic.security.CustomTrustKeyStorePassPhrase=${STORE_PW}"
+    fi
+
     # start-admin-nm.sh waits for the NM listener itself, then nmStart()s.
     info "Starting AdminServer through Node Manager …"
     MW_HOME="$ORACLE_HOME" DOMAIN_NAME="$DOMAIN_NAME" NM_HOST="localhost" \
     NM_PORT="$port" NM_TYPE="$type" NM_USER="$ADMIN_USER" NM_PASSWORD="$ADMIN_PW" \
-    NM_ACTION="start" "${SCRIPT_DIR}/misc/start-admin-nm.sh" \
+    NM_ACTION="start" WLST_PROPERTIES="$wlst_props" "${SCRIPT_DIR}/misc/start-admin-nm.sh" \
         || die "AdminServer start failed — see ${domain_dir}/servers/AdminServer/logs/ and ${domain_dir}/nodemanager/nodemanager.out"
 
     info "Waiting for the console on :${admin_port} (up to ${wait_secs}s) …"
@@ -1052,19 +1105,20 @@ PYBLOCK
 
 do_secure() {
     local domain_dir="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}"
-    local certs_dir admin_name admin_ssl engine_ssl tmpl_name
+    local cdir admin_name admin_ssl engine_ssl tmpl_name
 
-    certs_dir="$(read_prop "$CONF_FILE" "certs.dir")"; certs_dir="${certs_dir/#\~/$HOME}"
-    [ -z "$certs_dir" ] && certs_dir="${HOME}/.blade/certs/${ENV_NAME}"
+    ensure_certs
+
+    cdir="$(certs_dir)"
     admin_name="$(read_prop "$CONF_FILE" "admin.server.name")";    admin_name="${admin_name:-AdminServer}"
     admin_ssl="$(read_prop "$CONF_FILE" "admin.ssl.port")";        admin_ssl="${admin_ssl:-7002}"
     engine_ssl="$(read_prop "$CONF_FILE" "ssl.listen.port")";      engine_ssl="${engine_ssl:-8002}"
     tmpl_name="$(read_prop "$CONF_FILE" "engine.template.name")";  tmpl_name="${tmpl_name:-BEA_ENGINE_TIER_CLUST-template}"
     TLS_ONLY="$(read_prop "$CONF_FILE" "tls.only")";               TLS_ONLY="${TLS_ONLY:-false}"
-    ID_STORE="$(read_prop "$CONF_FILE" "identity.keystore")";      ID_STORE="${ID_STORE:-${certs_dir}/identity.p12}"; ID_STORE="${ID_STORE/#\~/$HOME}"
+    ID_STORE="$(read_prop "$CONF_FILE" "identity.keystore")";      ID_STORE="${ID_STORE:-${cdir}/identity.p12}"; ID_STORE="${ID_STORE/#\~/$HOME}"
     ID_TYPE="$(read_prop "$CONF_FILE" "identity.keystore.type")";  ID_TYPE="${ID_TYPE:-PKCS12}"
     ID_ALIAS="$(read_prop "$CONF_FILE" "identity.alias")";         ID_ALIAS="${ID_ALIAS:-server}"
-    TRUST_STORE="$(read_prop "$CONF_FILE" "trust.keystore")";      TRUST_STORE="${TRUST_STORE:-${certs_dir}/trust.p12}"; TRUST_STORE="${TRUST_STORE/#\~/$HOME}"
+    TRUST_STORE="$(read_prop "$CONF_FILE" "trust.keystore")";      TRUST_STORE="${TRUST_STORE:-${cdir}/trust.p12}"; TRUST_STORE="${TRUST_STORE/#\~/$HOME}"
     TRUST_TYPE="$(read_prop "$CONF_FILE" "trust.keystore.type")";  TRUST_TYPE="${TRUST_TYPE:-PKCS12}"
     STORE_PW_TOKEN="__STORE_PW__"
 
@@ -1094,6 +1148,7 @@ print('secure: domain updated')"
         log "${C_DIM}  [dry-run] generated WLST (password redacted):${C_RESET}"
         printf '%s\n' "$py" | sed 's/^/    /'
         log "${C_DIM}  [dry-run] source setWLSEnv.sh; java weblogic.WLST secure-domain.py${C_RESET}"
+        log "${C_DIM}  [dry-run] nodemanager.properties → custom identity keystore (replaces the DEMO cert)${C_RESET}"
         return 0
     fi
 
@@ -1103,7 +1158,8 @@ print('secure: domain updated')"
     local setwls="${ORACLE_HOME}/wlserver/server/bin/setWLSEnv.sh"
     [ -f "$setwls" ] || die "setWLSEnv.sh not found: ${setwls}"
 
-    local pw; pw="$(get_store_pw)"
+    ensure_store_pw
+    local pw="$STORE_PW"
     local work; work="$(mktemp -d /tmp/occas-secure.XXXXXX)"
     trap 'rm -rf "$work"' RETURN
     printf '%s\n' "${py//${STORE_PW_TOKEN}/$pw}" > "${work}/secure-domain.py"
@@ -1118,10 +1174,39 @@ print('secure: domain updated')"
         . "$setwls" >/dev/null
         java weblogic.WLST secure-domain.py
     )
+    secure_nodemanager
     ok "Domain '${DOMAIN_NAME}' secured — restart NodeManagers + servers."
     if [ "$TLS_ONLY" = "true" ]; then
         warn "tls.only: plaintext HTTP and sip are OFF. Use https://…:${admin_ssl} for the console, t3s in deploy confs, and SIPS/TLS toward the SBC."
     fi
+}
+
+# NodeManager's SSL listener has its OWN keystore config (nodemanager.properties)
+# — the domain-level secure step doesn't reach it, and its default is Oracle's
+# DEMO certificate, whose private key ships in every WebLogic download. Point it
+# at the env identity keystore; NM encrypts the passphrases in-place on its
+# next start. (Pre-creating the file works — NM merges its defaults in.)
+secure_nodemanager() {
+    local nmdir="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}/nodemanager"
+    local props="${nmdir}/nodemanager.properties"
+    local kv key
+    mkdir -p "$nmdir"
+    touch "$props"; chmod 600 "$props"
+    for kv in "SecureListener=true" \
+              "KeyStores=CustomIdentityAndCustomTrust" \
+              "CustomIdentityKeyStoreFileName=${ID_STORE}" \
+              "CustomIdentityKeyStoreType=${ID_TYPE}" \
+              "CustomIdentityKeyStorePassPhrase=${STORE_PW}" \
+              "CustomIdentityAlias=${ID_ALIAS}" \
+              "CustomIdentityPrivateKeyPassPhrase=${STORE_PW}"; do
+        key="${kv%%=*}"
+        if grep -q "^${key}=" "$props" 2>/dev/null; then
+            sed -i.bak "s|^${key}=.*|${kv//&/\\&}|" "$props" && rm -f "${props}.bak"
+        else
+            printf '%s\n' "$kv" >> "$props"
+        fi
+    done
+    ok "NodeManager SSL → ${ID_STORE} (demo cert replaced; NM encrypts the passphrases on next start)"
 }
 
 # --- Header + dispatch ---
@@ -1139,7 +1224,7 @@ case "$STEP" in
     configure) do_configure ;;
     secure)    do_secure ;;
     start)     do_start ;;
-    all)       do_install; log ""; do_configure; log ""; do_start ;;
+    all)       do_install; log ""; do_configure; log ""; do_secure; log ""; do_start ;;
 esac
 
 log ""

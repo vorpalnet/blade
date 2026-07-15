@@ -13,8 +13,13 @@ cd blade
 With no arguments it works out the next step itself: builds the env conf if
 there is none (`init` interview), preps the box (via sudo, automatically),
 downloads the OCCAS media and the Oracle JDKs, runs the silent product
-install, and creates the dynamic-cluster domain. Re-running is always safe —
-every step skips whatever already succeeded and resumes where it left off.
+install, creates the dynamic-cluster domain, secures it with a freshly
+generated PKI — WebLogic's demo certificates are never used; NodeManager's
+keystore config is re-pointed too, and the keystore password is auto-minted
+into `<env>.secret` (replace the PKI later with customer-issued certs via
+`./certs.sh <env> import` + re-run `secure`) — and boots NodeManager and the
+AdminServer, printing the console URL. Re-running is always safe — every step
+skips whatever already succeeded and resumes where it left off.
 
 The only things it will ever ask you for:
 
@@ -61,8 +66,11 @@ Manual form, if you prefer to see it happen: `sudo ./install-occas.sh oci prep`
   need only their NodeManager — the script prints a copy-paste `ssh … 
   startNodeManager.sh` one-liner per box; start the engine servers from the
   console (or `nmStart`) once those are up.
-- TLS: `./certs.sh <env> generate` (or `import`), then, with the domain
-  stopped, `./install-occas.sh <env> secure`.
+- TLS is already wired: `all` generated a self-signed PKI and ran `secure`
+  (SSL ports on AdminServer + engines, NodeManager on the env certificate).
+  To switch to customer-issued certs: set the `cert.import.*` conf keys, run
+  `./certs.sh <env> import`, then re-run `./install-occas.sh <env> secure`
+  with the domain stopped.
 - Adding an engine node later: add a `machine.N` line to the conf, bump
   `dynamic.server.count`, re-run `./install-occas.sh <env> configure`
   (**overwrites** the domain — see the script header).
