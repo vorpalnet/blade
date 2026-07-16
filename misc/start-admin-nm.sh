@@ -49,14 +49,19 @@ if [ "$NM_WAIT_SECS" -gt 0 ]; then
         [ "$i" -ge "$NM_WAIT_SECS" ] && { echo "Node Manager not listening on ${NM_HOST}:${NM_PORT} after ${NM_WAIT_SECS}s" >&2; exit 1; }
         sleep 1
     done
-    exec 3>&- 2>/dev/null || true
+    # NB: no '2>/dev/null' here — on a bare 'exec' redirections are PERMANENT,
+    # and it silenced the script's stderr (including WLST errors) forever after.
+    exec 3>&- || true
 fi
 
 PY="$(mktemp /tmp/nmstart.XXXXXX.py)"
 trap 'rm -f "$PY"' EXIT
 
-# WLST is Jython 2.x — note the 'except Exception, e' syntax.
+# WLST is Jython 2.x — note the 'except Exception, e' syntax. The generated
+# file must declare an encoding (PEP 263): Jython hard-fails on any non-ASCII
+# byte without it, with the real error otherwise easy to miss.
 cat > "$PY" <<EOF
+# -*- coding: utf-8 -*-
 try:
     nmConnect('${NM_USER}', '${NM_PASSWORD}', '${NM_HOST}', '${NM_PORT}',
               '${DOMAIN_NAME}', '${DOMAIN_HOME}', '${NM_TYPE}')
@@ -69,7 +74,7 @@ try:
         # not hit "address already in use"), then start. nmKill is synchronous
         # but the short poll guards the port-release race without heavy retry
         # scaffolding. A kill that fails because the server is already down is
-        # not fatal — fall through to start.
+        # not fatal - fall through to start.
         try:
             nmKill('${ADMIN_SERVER}')
             print('killed; status: ' + nmServerStatus('${ADMIN_SERVER}'))

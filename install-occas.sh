@@ -22,7 +22,7 @@
 #               AdminServer is down, and stops when everything is up
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
 #     <step>  init | prep | download | install | configure | secure | start
-#             | engines | all
+#             | engines | all | uninstall
 #
 #   init       short interview → writes the env conf (env name = the WebLogic
 #              domain name; machines auto-named machine0=admin, machine1..N)
@@ -78,6 +78,11 @@
 #              key-based ssh: OCCAS home incl. the domain, runtime JDK, env
 #              certs), start its NodeManager, then nmStart its engine server.
 #              Unreachable boxes are skipped with a warning; re-runs resume.
+#   uninstall  stop everything and DELETE the product, domain, inventory, and
+#              certs — this box AND the engine boxes (type the env name to
+#              confirm, or pass --yes). KEEPS the eDelivery media, the JDKs,
+#              the env conf/secret, and prep's users/dirs — so the next run
+#              reinstalls end-to-end unattended. Built for repeated testing.
 #   all        install → configure → secure → start → engines (auto-downloads
 #              as needed; certs auto-generate — WebLogic demo certs are never
 #              used, and NodeManager is re-pointed at the env identity too;
@@ -123,12 +128,13 @@ warn() { printf '%s⚠%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 die()  { printf '%s✗%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 
 # --- Parse args ---
-ENV_ARG=""; STEP=""; DRY_RUN=false
+ENV_ARG=""; STEP=""; DRY_RUN=false; ASSUME_YES=false
 POSITIONAL=()
 while [ $# -gt 0 ]; do
     case "$1" in
-        -h|--help) sed -n '2,100p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,104p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         --dry-run) DRY_RUN=true ;;
+        --yes|-y)  ASSUME_YES=true ;;
         -*) die "Unknown option: $1" ;;
         *)  POSITIONAL+=("$1") ;;
     esac
@@ -243,7 +249,7 @@ if [ -z "$STEP" ]; then
         fi
     fi
 fi
-case "$STEP" in init|prep|download|install|configure|secure|start|engines|all) ;; *) die "Unknown step: ${STEP}" ;; esac
+case "$STEP" in init|prep|download|install|configure|secure|start|engines|all|uninstall) ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # Interactive builder for build-profiles/occas/<env>.conf (+ optional secret).
 # Crisp on purpose: the environment name IS the WebLogic domain name; machines
@@ -971,6 +977,22 @@ Machine${idx}NodemanagerNMType=${type}"
             > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
     fi
 
+    # Seed the domain's NodeManager credentials (Oracle's template doesn't) —
+    # without them every nmConnect gets "Access to domain ... denied". Uses the
+    # admin account; injected before writeDomain like the static block.
+    {
+        echo "# --- BLADE: NodeManager credentials (nmConnect auth) ---"
+        echo "cd('/SecurityConfiguration/' + domainName)"
+        echo "set('NodeManagerUsername', '${ADMIN_USER}')"
+        echo "set('NodeManagerPasswordEncrypted', '${pw}')"
+    } > "${work}/nm-creds.block"
+    awk 'NR==FNR { blk = blk $0 ORS; next }
+         /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
+         { print }' \
+        "${work}/nm-creds.block" "${work}/occas-replicated-dynamiccluster.py" \
+        > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
+    chmod 600 "${work}/nm-creds.block" "${work}/occas-replicated-dynamiccluster.py"
+
     # Run Oracle's offline WLST from the workdir.
     (
         cd "$work"
@@ -995,7 +1017,7 @@ Machine${idx}NodemanagerNMType=${type}"
 # through misc/start-admin-nm.sh and waits for the console port. Engine boxes
 # only need their NodeManager started — printed as a per-box one-liner (the
 # domain lives on the shared filesystem, so the path is the same there).
-listening() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+listening() { (exec 3<>"/dev/tcp/$1/$2") 2>/dev/null; }   # <host> <port>
 
 # When secure_nodemanager swapped NM onto the env certificate, WLST's nmConnect
 # must trust the env CA instead of Oracle's demo trust. The passphrase rides a
@@ -1018,7 +1040,7 @@ do_start() {
     IFS=: read -r name addr port type <<< "${MACHINES[0]:-machine0:localhost:5556:ssl}"
     port="${port:-5556}"; type="${type:-ssl}"
     admin_port="$(read_prop "$CONF_FILE" "admin.port")"; admin_port="${admin_port:-7001}"
-    wait_secs="${BLADE_START_WAIT:-240}"
+    wait_secs="${BLADE_START_WAIT:-480}"   # first prod-mode boot exceeds 240s
 
     if [ "$DRY_RUN" = true ]; then
         log "${C_DIM}  [dry-run] write ${domain_dir}/servers/AdminServer/security/boot.properties${C_RESET}"
@@ -1028,7 +1050,7 @@ do_start() {
     fi
     [ -d "$domain_dir" ] || die "Domain not found: ${domain_dir} — run the configure step first."
 
-    if listening "$admin_port"; then
+    if listening 127.0.0.1 "$admin_port"; then
         ok "AdminServer already listening — console: http://${addr}:${admin_port}/console"
         return 0
     fi
@@ -1043,10 +1065,12 @@ do_start() {
         ok "boot.properties written (encrypted by WebLogic on first start)"
     fi
 
-    if listening "$port"; then
-        ok "NodeManager already listening on :${port}"
+    # NM binds the ListenAddress from nodemanager.properties (machine0's addr),
+    # not localhost — probe and connect to THAT address.
+    if listening "$addr" "$port"; then
+        ok "NodeManager already listening on ${addr}:${port}"
     else
-        info "Starting NodeManager (:${port} ${type}) …"
+        info "Starting NodeManager (${addr}:${port} ${type}) …"
         mkdir -p "${domain_dir}/nodemanager"
         nohup "${domain_dir}/bin/startNodeManager.sh" >> "${domain_dir}/nodemanager/nodemanager.out" 2>&1 &
     fi
@@ -1054,14 +1078,14 @@ do_start() {
     # start-admin-nm.sh waits for the NM listener itself, then nmStart()s.
     local wlst_props; wlst_props="$(nm_wlst_props "$domain_dir")"
     info "Starting AdminServer through Node Manager …"
-    MW_HOME="$ORACLE_HOME" DOMAIN_NAME="$DOMAIN_NAME" NM_HOST="localhost" \
+    MW_HOME="$ORACLE_HOME" DOMAIN_NAME="$DOMAIN_NAME" NM_HOST="$addr" \
     NM_PORT="$port" NM_TYPE="$type" NM_USER="$ADMIN_USER" NM_PASSWORD="$ADMIN_PW" \
     NM_ACTION="start" WLST_PROPERTIES="$wlst_props" "${SCRIPT_DIR}/misc/start-admin-nm.sh" \
         || die "AdminServer start failed — see ${domain_dir}/servers/AdminServer/logs/ and ${domain_dir}/nodemanager/nodemanager.out"
 
     info "Waiting for the console on :${admin_port} (up to ${wait_secs}s) …"
     local i=0
-    until listening "$admin_port"; do
+    until listening 127.0.0.1 "$admin_port"; do
         i=$((i + 2))
         if [ "$i" -ge "$wait_secs" ]; then
             warn "Console not up after ${wait_secs}s — it may still be starting; check ${domain_dir}/servers/AdminServer/logs/AdminServer.log"
@@ -1130,6 +1154,11 @@ do_engines() {
         fi
         rsync -a "${cdir}/" "${sshu}@${addr}:${cdir}/" \
             || { warn "${name}: rsync of ${cdir} failed — skipped."; failed="${failed} ${name}"; continue; }
+
+        # The synced nodemanager.properties carries the ADMIN box's
+        # ListenAddress — repoint it at this machine's own address.
+        ssh "${sshu}@${addr}" "sed -i 's/^ListenAddress=.*/ListenAddress=${addr}/' '${domain_dir}/nodemanager/nodemanager.properties'" \
+            || { warn "${name}: could not set NM ListenAddress — skipped."; failed="${failed} ${name}"; continue; }
 
         if ssh "${sshu}@${addr}" "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port}'" 2>/dev/null; then
             ok "  NodeManager already listening on ${name}:${port}"
@@ -1310,6 +1339,65 @@ secure_nodemanager() {
     ok "NodeManager SSL → ${ID_STORE} (demo cert replaced; NM encrypts the passphrases on next start)"
 }
 
+# ----------------------------------------------------------------------------
+# uninstall — tear it all down, keep what's expensive (repeatable E2E testing)
+# ----------------------------------------------------------------------------
+# Removes: domain processes (this box + engines), the domain, the OCCAS
+# product, the inventory, the env certs; engines lose their synced copies.
+# Keeps: the eDelivery media (re-downloading needs a browser trip), the JDKs,
+# the env conf/secret/urls, and prep's users/dirs/profile — so the next
+# './install-occas.sh <env>' runs the whole install again unattended.
+# The pkill pattern uses the [d]omains trick so it can never match itself.
+do_uninstall() {
+    local domain_dir="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}"
+    local cdir; cdir="$(certs_dir)"
+    local sshu; sshu="$(read_prop "$CONF_FILE" "ssh.user")"; sshu="${sshu:-$(id -un)}"
+    local m name addr port type
+
+    warn "UNINSTALL '${ENV_NAME}' — this box and $(( ${#MACHINES[@]} > 0 ? ${#MACHINES[@]} - 1 : 0 )) engine box(es):"
+    log  "  stops  : all processes of domain '${DOMAIN_NAME}'"
+    log  "  deletes: ${ORACLE_HOME} (product + domain), ${INV_LOC}, ${cdir}"
+    log  "  keeps  : media in $(dirname "$INSTALLER_JAR"), JDKs in ${JAVA_DIR}, the env conf/secret, prep's users+dirs"
+    if [ "$DRY_RUN" = true ]; then
+        log "${C_DIM}  [dry-run] nothing removed${C_RESET}"
+        return 0
+    fi
+    if [ "$ASSUME_YES" != true ]; then
+        [ -t 0 ] || die "Refusing without confirmation — run interactively or pass --yes."
+        local confirm; ask confirm "Type the environment name to confirm" ""
+        [ "$confirm" = "$ENV_NAME" ] || die "Not confirmed — nothing removed."
+    fi
+
+    if [ ${#MACHINES[@]} -gt 1 ]; then
+        for m in "${MACHINES[@]:1}"; do
+            IFS=: read -r name addr port type <<< "$m"
+            if ssh -o BatchMode=yes -o ConnectTimeout=5 "${sshu}@${addr}" true 2>/dev/null; then
+                info "Engine ${name} (${addr}): stopping + removing synced copies …"
+                if ssh "${sshu}@${addr}" "pkill -f '[d]omains/${DOMAIN_NAME}' 2>/dev/null; sleep 2; pkill -9 -f '[d]omains/${DOMAIN_NAME}' 2>/dev/null; rm -rf '${ORACLE_HOME}' '${cdir}'; true"; then
+                    ok "  ${name} cleaned"
+                else
+                    warn "  ${name}: cleanup incomplete — check by hand."
+                fi
+            else
+                warn "Engine ${name} (${addr}): unreachable — clean it by hand or re-run uninstall when ssh works."
+            fi
+        done
+    fi
+
+    info "This box: stopping domain '${DOMAIN_NAME}' processes …"
+    pkill -f "[d]omains/${DOMAIN_NAME}" 2>/dev/null || true
+    sleep 3
+    pkill -9 -f "[d]omains/${DOMAIN_NAME}" 2>/dev/null || true
+
+    # Empty rather than delete ORACLE_HOME/INV_LOC — prep created the dirs
+    # themselves (their root-owned parents make them non-recreatable as us).
+    info "Removing product, domain, inventory, certs …"
+    rm -rf "${ORACLE_HOME:?}"/* "${ORACLE_HOME}"/.[!.]* 2>/dev/null || true
+    rm -rf "${INV_LOC:?}"/* "${INV_LOC}"/.[!.]* 2>/dev/null || true
+    rm -rf "$cdir"
+    ok "Uninstalled '${ENV_NAME}'. Re-run:  ./install-occas.sh ${ENV_NAME}   (media + JDKs kept — no token, no interview)"
+}
+
 # --- Header + dispatch ---
 log "${C_BOLD}OCCAS install${C_RESET}"
 log "  environment:  ${ENV_NAME}  (${CONF_FILE})"
@@ -1326,6 +1414,7 @@ case "$STEP" in
     secure)    do_secure ;;
     start)     do_start ;;
     engines)   do_engines ;;
+    uninstall) do_uninstall ;;
     all)       do_install; log ""; do_configure; log ""; do_secure; log ""; do_start; log ""; do_engines ;;
 esac
 

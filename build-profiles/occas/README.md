@@ -77,6 +77,14 @@ Manual form, if you prefer to see it happen: `sudo ./install-occas.sh oci prep`
   `dynamic.server.count`, re-run `./install-occas.sh <env> configure`
   (**overwrites** the domain — see the script header).
 
+## Tearing it down (test cycles)
+
+`./install-occas.sh <env> uninstall` stops everything and deletes the product,
+domain, inventory, and certs — on the admin box and the engines — while
+keeping the media, JDKs, conf/secret, and prep's users/dirs. The next no-arg
+run then reinstalls end-to-end with zero prompts (the admin password comes
+from `<env>.secret`). Confirm by typing the env name, or pass `--yes`.
+
 ## Environments
 
 `./install-occas.sh <env> <step>` runs one explicit step

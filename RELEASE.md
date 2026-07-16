@@ -76,6 +76,16 @@ WLST a CustomTrust pointing at the env trust store so `nmConnect` works
 against the non-demo NM. Customers replace the generated PKI via
 `./certs.sh <env> import` + re-run `secure`.
 
+New `uninstall` step for repeatable end-to-end testing: stops every process of
+the domain (the `[d]omains/<name>` pkill trick keeps it from matching itself),
+empties `oracle.home` and the inventory (the dirs themselves stay — their
+root-owned parents make them non-recreatable as the admin user), deletes the
+env certs, and cleans the engine boxes' synced copies over ssh. It keeps the
+eDelivery media (re-downloading needs a browser trip), the JDKs, the env
+conf/secret, and prep's users/dirs/profile, so the next no-arg run reinstalls
+the whole environment unattended. Confirmation = typing the env name (or
+`--yes` for automation); `--dry-run` prints the plan.
+
 New `engines` step (the true finale of `all`): engine boxes are node-local in
 this layout (per `sync-occas.sh` — nothing mounts the admin box's disks), so
 each engine gets everything rsync'd to the same absolute paths over key-based
