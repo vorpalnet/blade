@@ -76,6 +76,18 @@ WLST a CustomTrust pointing at the env trust store so `nmConnect` works
 against the non-demo NM. Customers replace the generated PKI via
 `./certs.sh <env> import` + re-run `secure`.
 
+Cluster firewall handling: OCI/OEL images ship firewalld allowing only ssh,
+which silently blocks NodeManager (5556), t3 (7001), SIP, and coherence
+traffic between the machines (nmConnect from the admin box just times out).
+`prep` and the `engines` step now add the cluster subnet
+(`firewall.trusted.source`, default machine0's /24, `none` to opt out) to
+firewalld's trusted zone on every box — public interfaces stay filtered.
+Engine servers are started with `AdminURL` passed through `nmStart`
+(`NM_ADMINURL` in `misc/start-admin-nm.sh`) so they register with the
+AdminServer instead of booting into independence mode. `uninstall` refuses to
+run if `installer.jar` lives inside `oracle.home`, where it would delete the
+eDelivery media along with the product.
+
 New `uninstall` step for repeatable end-to-end testing: stops every process of
 the domain (the `[d]omains/<name>` pkill trick keeps it from matching itself),
 empties `oracle.home` and the inventory (the dirs themselves stay — their

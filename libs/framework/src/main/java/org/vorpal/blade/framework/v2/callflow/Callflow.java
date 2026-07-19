@@ -851,6 +851,12 @@ public abstract class Callflow implements Serializable {
 			SipSession sipSession) throws ServletParseException {
 
 		String vorpalSessionId = getVorpalSessionId(appSession);
+		if (vorpalSessionId == null && appSession != null && message instanceof SipServletRequest) {
+			// REST/UAC-originated calls (e.g. 3PCC) have no inbound first-touch to
+			// stamp them; mint the tracking id here, on the way out, so the initial
+			// request carries X-Vorpal-ID and its birth timestamp for Analytics.
+			vorpalSessionId = createVorpalSessionId(appSession);
+		}
 		if (vorpalSessionId != null) {
 			String dialogId = getVorpalDialogId(sipSession);
 

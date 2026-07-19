@@ -6,9 +6,7 @@
 /// ## Core Classes
 ///
 /// - [Dialog] - Represents a complete SIP dialog with request URI, local party, remote party, and custom attributes
-/// - [DialogRequest] - Request model for creating new dialogs with callback URL support and party information
-/// - [DialogResponse] - Response model containing dialog attributes after operations
-/// - [DialogConnectRequest] - Request model for connecting two existing dialogs using dialog identifiers
+/// - [DialogResponse] - Response from create-leg: echoes the sessionId and the new dialogId
 /// - [DialogProperties] - Read-only view of dialog properties including remote party and attributes
 /// - [DialogPutAttributes] - Request model for updating dialog attributes with key-value pairs
 ///
@@ -26,7 +24,6 @@
 /// - **SIP Integration**: Classes provide constructors that accept `SipSession` objects for
 ///   seamless integration with SIP servlet containers
 /// - **Party Information**: Support for tracking local and remote party identifiers in dialogs
-/// - **Connection Support**: Specialized request models for connecting existing dialogs
 ///
 /// ## Usage Context
 ///
@@ -36,8 +33,6 @@
 /// SIP dialogs without direct SIP protocol handling.
 ///
 /// @see Dialog
-/// @see DialogRequest
-/// @see DialogConnectRequest
 /// @see DialogProperties
 /// @see DialogPutAttributes
 /// @see DialogResponse

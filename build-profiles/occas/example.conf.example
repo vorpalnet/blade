@@ -69,6 +69,13 @@ dynamic.server.count=2
 # MaxDynamicClusterSize — the growth ceiling.
 max.dynamic.cluster.size=99
 
+# --- Cluster firewall (prep + engines steps) ---
+# firewalld on OCI/OEL images allows only ssh, which blocks NodeManager (5556),
+# t3 (7001), SIP, and coherence replication between the machines. prep/engines
+# add this source to the trusted zone on every box (public stays filtered).
+# Default: machine0's /24. Set 'none' to manage the firewall yourself.
+# firewall.trusted.source=10.0.0.0/24
+
 # --- Physical machines + their Node Managers ---
 # CSV per machine: name:nmListenAddress:nmListenPort:nmType  (nmType = ssl|plain)
 # machine0 = the admin box (NM-managed, but no engines). To ADD A NODE: add a

@@ -508,6 +508,17 @@ do_prep() {
         ok "${d}  → ${owner}:${INV_GROUP} (setgid, group-shared with ${INSTALL_USER})"
     done
 
+    # Let cluster traffic flow between the machines: firewalld on OCI/OEL
+    # images allows only ssh, which blocks NM (5556), t3 (7001), SIP, and
+    # coherence replication. Trust the cluster subnet; public stays filtered.
+    local fw_src; fw_src="$(trusted_source)"
+    if [ -n "$fw_src" ] && [ "$fw_src" != "none" ] \
+       && command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+        firewall-cmd --permanent --zone=trusted --add-source="$fw_src" >/dev/null
+        firewall-cmd --reload >/dev/null
+        ok "firewalld: trusted source ${fw_src} (cluster traffic; public interfaces stay filtered)"
+    fi
+
     # System-wide env for future shells: $MW_HOME (blade's build.sh/bootstrap.sh
     # convention) and a JAVA_HOME/PATH. Prefers the javadoc JDK so blade builds
     # on this box produce javadocs; the OCCAS runtime doesn't care — the domain
@@ -530,6 +541,19 @@ do_prep() {
     } > "$prof"
     chmod 644 "$prof"
     ok "${prof}  (MW_HOME + JAVA_HOME for new logins)"
+}
+
+# The subnet whose traffic the cluster boxes trust (NM 5556, t3 7001, SIP,
+# coherence replication all flow machine-to-machine, and OCI images ship
+# firewalld allowing only ssh). Default: machine0's /24; conf override
+# firewall.trusted.source=<cidr> (or 'none' to leave firewalld alone).
+trusted_source() {
+    local s; s="$(read_prop "$CONF_FILE" "firewall.trusted.source")"
+    if [ -z "$s" ] && [ ${#MACHINES[@]} -gt 0 ]; then
+        local a0; IFS=: read -r _ a0 _ _ <<< "${MACHINES[0]}"
+        case "$a0" in *.*.*.*) s="${a0%.*}.0/24" ;; esac
+    fi
+    printf '%s' "$s"
 }
 
 # Runs prep via sudo the first time a step needs the directories — at most
@@ -1121,6 +1145,10 @@ do_engines() {
     local sshu; sshu="$(read_prop "$CONF_FILE" "ssh.user")"; sshu="${sshu:-$(id -un)}"
     local jdk=""; [ -n "$JAVA_RUNTIME" ] && jdk="$(jdk_home_of "$JAVA_RUNTIME")"
     local wlst_props; wlst_props="$(nm_wlst_props "$domain_dir")"
+    local fw_src; fw_src="$(trusted_source)"
+    local admin_addr admin_port
+    IFS=: read -r _ admin_addr _ _ <<< "${MACHINES[0]:-machine0:localhost:5556:ssl}"
+    admin_port="$(read_prop "$CONF_FILE" "admin.port")"; admin_port="${admin_port:-7001}"
     local m name addr port type i=0 failed=""
 
     for m in "${MACHINES[@]:1}"; do
@@ -1138,6 +1166,11 @@ do_engines() {
         if ! ssh "${sshu}@${addr}" "sudo install -d -o ${sshu} '$(dirname "$ORACLE_HOME")' '${JAVA_DIR}' '$(dirname "$cdir")'" 2>/dev/null; then
             warn "${name}: could not create target dirs (passwordless sudo?) — skipped."
             failed="${failed} ${name}"; continue
+        fi
+        # Same firewalld opening prep did on the admin box (see trusted_source).
+        if [ -n "$fw_src" ] && [ "$fw_src" != "none" ]; then
+            ssh "${sshu}@${addr}" "command -v firewall-cmd >/dev/null 2>&1 && sudo firewall-cmd --state >/dev/null 2>&1 && { sudo firewall-cmd --permanent --zone=trusted --add-source='${fw_src}' >/dev/null; sudo firewall-cmd --reload >/dev/null; } || true" \
+                || warn "${name}: firewalld opening failed — cluster ports may be blocked."
         fi
         info "  rsync OCCAS home + domain (first run moves a few GB) …"
         rsync -a \
@@ -1160,7 +1193,7 @@ do_engines() {
         ssh "${sshu}@${addr}" "sed -i 's/^ListenAddress=.*/ListenAddress=${addr}/' '${domain_dir}/nodemanager/nodemanager.properties'" \
             || { warn "${name}: could not set NM ListenAddress — skipped."; failed="${failed} ${name}"; continue; }
 
-        if ssh "${sshu}@${addr}" "timeout 3 bash -c 'exec 3<>/dev/tcp/127.0.0.1/${port}'" 2>/dev/null; then
+        if ssh "${sshu}@${addr}" "timeout 3 bash -c 'exec 3<>/dev/tcp/${addr}/${port}'" 2>/dev/null; then
             ok "  NodeManager already listening on ${name}:${port}"
         else
             info "  Starting NodeManager on ${name} …"
@@ -1174,6 +1207,7 @@ do_engines() {
         if ! MW_HOME="$ORACLE_HOME" DOMAIN_NAME="$DOMAIN_NAME" ADMIN_SERVER="engine${i}" \
              NM_HOST="$addr" NM_PORT="$port" NM_TYPE="$type" NM_USER="$ADMIN_USER" \
              NM_PASSWORD="$ADMIN_PW" NM_ACTION="start" WLST_PROPERTIES="$wlst_props" \
+             NM_ADMINURL="t3://${admin_addr}:${admin_port}" \
              "${SCRIPT_DIR}/misc/start-admin-nm.sh"; then
             warn "${name}: nmStart(engine${i}) failed — start it from the console once NM is up."
             failed="${failed} ${name}"
@@ -1353,6 +1387,13 @@ do_uninstall() {
     local cdir; cdir="$(certs_dir)"
     local sshu; sshu="$(read_prop "$CONF_FILE" "ssh.user")"; sshu="${sshu:-$(id -un)}"
     local m name addr port type
+
+    # The media must survive uninstall (re-downloading needs an eDelivery
+    # browser trip) — refuse if the conf parks it inside oracle.home.
+    case "$(dirname "$INSTALLER_JAR")" in
+        "$ORACLE_HOME"|"$ORACLE_HOME"/*)
+            die "installer.jar lives INSIDE oracle.home (${INSTALLER_JAR}) — uninstall would delete the downloaded media. Move it (download.dir / installer.jar in ${CONF_FILE}) first." ;;
+    esac
 
     warn "UNINSTALL '${ENV_NAME}' — this box and $(( ${#MACHINES[@]} > 0 ? ${#MACHINES[@]} - 1 : 0 )) engine box(es):"
     log  "  stops  : all processes of domain '${DOMAIN_NAME}'"

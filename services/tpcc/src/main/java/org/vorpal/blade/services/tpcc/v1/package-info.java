@@ -23,11 +23,13 @@
 ///
 /// The [DialogAPI] class provides the following REST endpoints:
 ///
-/// - `POST /api/v1/dialog/{sessionId}` - Creates a new dialog
-/// - `GET /api/v1/dialog/{sessionId}/{dialogId}` - Returns dialog properties
-/// - `DELETE /api/v1/dialog/{sessionId}/{dialogId}` - Tears down a dialog
-/// - `PUT /api/v1/dialog/{sessionId}/{dialogId}` - Sets dialog properties
-/// - `PUT /api/v1/dialog/{sessionId}/{dialog01}/connect/{dialog02}` - Connects two dialogs together
+/// - `POST /api/v1/session` - Creates a session, returns {sessionId}
+/// - `POST /api/v1/dialog/{sessionId}` - Creates a leg, returns {sessionId, dialogId}
+/// - `GET /api/v1/dialog/{sessionId}` - Lists the session's legs
+/// - `GET /api/v1/dialog/{sessionId}/{dialogId}` - Returns a leg's properties
+/// - `PUT /api/v1/dialog/{sessionId}/{dialogId}` - Sets a leg's attributes
+/// - `PUT /api/v1/dialog/{sessionId}/{dialogA}/connect/{dialogB}` - Bridges two legs
+/// - `DELETE /api/v1/dialog/{sessionId}/{dialogId}` - Tears a leg down (BYE)
 ///
 /// ## Integration Points
 ///
@@ -51,9 +53,10 @@
 ///
 /// Main REST controller at path `api/v1`, extending `Callflow` and implementing `Serializable`.
 /// Annotated with `@OpenAPIDefinition` for Swagger documentation. Contains an inner class
-/// `ResponseStuff` that pairs a `UriInfo` with an `AsyncResponse` for tracking pending
-/// asynchronous REST requests. Maintains a static `ConcurrentHashMap<String, ResponseStuff>`
-/// for correlating SIP session IDs with their REST responses. Provides the following endpoints:
+/// `ResponseStuff` that carries a `UriInfo`, an `AsyncResponse`, and the sessionId for
+/// tracking pending asynchronous REST requests. Maintains a static
+/// `ConcurrentHashMap<String, ResponseStuff>` for correlating SIP session IDs with their
+/// REST responses. Provides the following endpoints:
 ///
 /// ### POST dialog/{sessionId}
 ///
@@ -62,11 +65,15 @@
 /// the `AsyncResponse` in the response map keyed by SIP session ID, and delegates to
 /// [CreateDialog][org.vorpal.blade.services.tpcc.callflows.CreateDialog] to send the INVITE asynchronously.
 ///
+/// ### GET dialog/{sessionId}
+///
+/// Lists every leg in the session as a `SessionGetResponse` (dialogs keyed by dialogId),
+/// so a UI can discover and poll call state.
+///
 /// ### GET dialog/{sessionId}/{dialogId}
 ///
-/// Returns the properties of a specific dialog by iterating over all SIP sessions in the
-/// application session, building a map by Vorpal dialog ID, and constructing a
-/// `DialogProperties` response object from the matching session.
+/// Returns the properties of one leg, located by its Vorpal dialog id (`findLeg`), as a
+/// `DialogProperties` response object.
 ///
 /// ### PUT dialog/{sessionId}/{dialogId}
 ///
@@ -79,7 +86,7 @@
 /// Terminates a dialog by sending a BYE request on the matching SIP session. The response
 /// is returned asynchronously through the JAX-RS `AsyncResponse`.
 ///
-/// ### GET dialog/{sessionId}/{dialogId}/connect/{dialogId2}
+/// ### PUT dialog/{sessionId}/{dialogId}/connect/{dialogId2}
 ///
 /// Connects two existing dialogs using a delayed offer/answer exchange. Sends an empty
 /// re-INVITE to the first dialog (Alice), forwards Alice's SDP offer to the second dialog
@@ -90,7 +97,7 @@
 ///
 /// ### [org.vorpal.blade.services.tpcc.v1.dialog]
 /// Provides data transfer objects for SIP dialog management including [Dialog][org.vorpal.blade.services.tpcc.v1.dialog.Dialog],
-/// [DialogRequest][org.vorpal.blade.services.tpcc.v1.dialog.DialogRequest], [DialogResponse][org.vorpal.blade.services.tpcc.v1.dialog.DialogResponse], [DialogConnectRequest][org.vorpal.blade.services.tpcc.v1.dialog.DialogConnectRequest], [DialogProperties][org.vorpal.blade.services.tpcc.v1.dialog.DialogProperties],
+/// [DialogResponse][org.vorpal.blade.services.tpcc.v1.dialog.DialogResponse], [DialogProperties][org.vorpal.blade.services.tpcc.v1.dialog.DialogProperties],
 /// and [DialogPutAttributes][org.vorpal.blade.services.tpcc.v1.dialog.DialogPutAttributes]. These classes bridge HTTP API endpoints and the
 /// underlying SIP servlet container, abstracting SIP session complexity for
 /// third-party call control scenarios.

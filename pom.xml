@@ -21,7 +21,7 @@
 	</modules>
 
 	<properties>
-		<revision>3.0.2</revision>
+		<revision>3.0.3</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<blade.java.version>11</blade.java.version>
 		<blade.weblogic.version>14.1.1</blade.weblogic.version>
@@ -327,6 +327,16 @@
 		<dependency>
 			<groupId>com.oracle.occas</groupId>
 			<artifactId>wlssapi</artifactId>
+			<version>${blade.occas.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<!-- JSR-309 Media Server Control API (javax.media.mscontrol.*). Provided by
+		     OCCAS at runtime (occas/server/modules/mscontrol.jar); present on the
+		     compile classpath for the v3 media lambda API (MediaCallflow) and the
+		     Gryphon Kurento driver. Provided scope keeps it out of skinny WARs. -->
+		<dependency>
+			<groupId>com.oracle.occas</groupId>
+			<artifactId>mscontrol</artifactId>
 			<version>${blade.occas.version}</version>
 			<scope>provided</scope>
 		</dependency>

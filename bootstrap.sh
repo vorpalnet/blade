@@ -144,6 +144,8 @@ install_jar com.oracle.occas wlss "$OCCAS_VERSION" jar \
     "$OCCAS_HOME/wlserver/sip/server/lib/wlss.jar"
 install_jar com.oracle.occas wlssapi "$OCCAS_VERSION" jar \
     "$OCCAS_HOME/wlserver/sip/server/lib/wlssapi.jar"
+install_jar com.oracle.occas mscontrol "$OCCAS_VERSION" jar \
+    "$OCCAS_HOME/occas/server/modules/mscontrol.jar"
 install_jar com.oracle.weblogic weblogic-maven-plugin "$WL_VERSION" maven-plugin \
     "$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.jar" \
     "$PLUGIN_BASE/$WL_VERSION/weblogic-maven-plugin-$WL_VERSION.pom"

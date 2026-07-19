@@ -26,6 +26,7 @@ NM_PORT="${NM_PORT:-5556}"
 NM_USER="${NM_USER:-weblogic}"
 NM_TYPE="${NM_TYPE:-ssl}"          # ssl|plain — must match SecureListener in nodemanager.properties
 NM_ACTION="${NM_ACTION:-start}"    # start | kill (stop) | restart, via Node Manager
+NM_ADMINURL="${NM_ADMINURL:-}"     # for MANAGED servers: t3://<admin>:<port> passed as AdminURL
 
 # NM password: env var, else a gitignored secret file next to this script, else prompt.
 SECRET="$(dirname "$0")/.nmsecret"          # one line:  NM_PASSWORD=...
@@ -89,7 +90,10 @@ try:
         nmStart('${ADMIN_SERVER}')
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     else:
-        nmStart('${ADMIN_SERVER}')
+        if '${NM_ADMINURL}' != '':
+            nmStart('${ADMIN_SERVER}', props=makePropertiesObject('AdminURL=${NM_ADMINURL}'))
+        else:
+            nmStart('${ADMIN_SERVER}')
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     nmDisconnect()
 except Exception, e:

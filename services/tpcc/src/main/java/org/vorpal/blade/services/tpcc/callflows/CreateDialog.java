@@ -7,10 +7,12 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.ws.rs.core.Response;
 
+import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 import org.vorpal.blade.framework.v3.media.CallflowHold;
 import org.vorpal.blade.services.tpcc.v1.DialogAPI;
 import org.vorpal.blade.services.tpcc.v1.DialogAPI.ResponseStuff;
+import org.vorpal.blade.services.tpcc.v1.dialog.DialogResponse;
 
 /// Create-and-park: the REST-initiated 3PCC first leg (RFC 3725 Flow I).
 ///
@@ -44,16 +46,26 @@ public class CreateDialog extends ClientCallflow {
 				}
 				sendRequest(ack);
 
+				// Return the leg's dialogId so the caller can chain connect/delete.
 				ResponseStuff rstuff = DialogAPI.responseMap.remove(inviteResponse.getSession().getId());
-				Response response = Response.status(inviteResponse.getStatus(), inviteResponse.getReasonPhrase())
-						.build();
-				rstuff.asyncResponse.resume(response);
+				if (rstuff != null) {
+					String dialogId = Callflow.getVorpalDialogId(inviteResponse.getSession());
+					DialogResponse body = new DialogResponse(rstuff.sessionId, dialogId, inviteResponse.getStatus(),
+							inviteResponse.getReasonPhrase());
+					rstuff.asyncResponse.resume(Response.ok(body).build());
+				}
 
 			} else if (failure(inviteResponse)) {
 
-				ResponseStuff rstuff = DialogAPI.responseMap.get(inviteResponse.getSession().getId());
-				rstuff.asyncResponse
-						.resume(Response.status(inviteResponse.getStatus(), inviteResponse.getReasonPhrase()).build());
+				// `remove` (not `get`) so the parked continuation never leaks.
+				ResponseStuff rstuff = DialogAPI.responseMap.remove(inviteResponse.getSession().getId());
+				if (rstuff != null) {
+					String dialogId = Callflow.getVorpalDialogId(inviteResponse.getSession());
+					DialogResponse body = new DialogResponse(rstuff.sessionId, dialogId, inviteResponse.getStatus(),
+							inviteResponse.getReasonPhrase());
+					rstuff.asyncResponse.resume(Response
+							.status(inviteResponse.getStatus(), inviteResponse.getReasonPhrase()).entity(body).build());
+				}
 
 			}
 		});
