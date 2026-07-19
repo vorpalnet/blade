@@ -225,27 +225,11 @@ if [ -z "$STEP" ]; then
             # localhost; probe that, falling back to localhost for dev domains.
             IFS=: read -r _ _AA _ _ <<< "$(read_prop "$CONF_FILE" "machine.1")"; _AA="${_AA:-127.0.0.1}"
             if (exec 3<>"/dev/tcp/${_AA}/${_AP}") 2>/dev/null || (exec 3<>"/dev/tcp/127.0.0.1/${_AP}") 2>/dev/null; then
-                # AdminServer is up — are the engine boxes' NodeManagers?
-                _TO=""; command -v timeout >/dev/null 2>&1 && _TO="timeout 3"
-                _i=2; _DOWN=""
-                while :; do
-                    _M="$(read_prop "$CONF_FILE" "machine.${_i}")"
-                    [ -n "$_M" ] || break
-                    IFS=: read -r _MN _MA _MP _ <<< "$_M"
-                    if ! $_TO bash -c "exec 3<>/dev/tcp/${_MA}/${_MP:-5556}" 2>/dev/null; then
-                        _DOWN="$_MN"; break
-                    fi
-                    _i=$((_i + 1))
-                done
-                if [ -n "$_DOWN" ]; then
-                    STEP="engines"
-                    info "AdminServer is up, but ${_DOWN}'s NodeManager isn't reachable — running the engines step."
-                else
-                    ok "Nothing to do: OCCAS installed, domain '${_DN}' up, engine NodeManagers reachable."
-                    log "  Rebuild the domain (OVERWRITES it):  ./install-occas.sh ${ENV_NAME} configure"
-                    log "  Re-push to engine boxes:             ./install-occas.sh ${ENV_NAME} engines"
-                    exit 0
-                fi
+                # AdminServer already up → (re)sync + (re)start the engine boxes.
+                # engines is idempotent — rsync resumes, and an already-running
+                # engine server is left as-is — so there's no step to choose:
+                # the no-arg run just re-syncs. (Single-box domains: no-op.)
+                STEP="engines"
             else
                 STEP="start"
             fi

@@ -90,7 +90,12 @@ try:
         nmStart('${ADMIN_SERVER}')
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     else:
-        if '${NM_ADMINURL}' != '':
+        # Idempotent: a re-sync run may target an engine (or admin) that's
+        # already up. nmStart on a RUNNING server errors ("already running"),
+        # so skip it — leave the running server as-is and report success.
+        if nmServerStatus('${ADMIN_SERVER}') == 'RUNNING':
+            print('${ADMIN_SERVER} already RUNNING — nothing to start')
+        elif '${NM_ADMINURL}' != '':
             nmStart('${ADMIN_SERVER}', props=makePropertiesObject('AdminURL=${NM_ADMINURL}'))
         else:
             nmStart('${ADMIN_SERVER}')
