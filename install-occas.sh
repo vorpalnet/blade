@@ -221,7 +221,10 @@ if [ -z "$STEP" ]; then
             STEP="configure"
         else
             _AP="$(read_prop "$CONF_FILE" "admin.port")"; _AP="${_AP:-7001}"
-            if (exec 3<>"/dev/tcp/127.0.0.1/${_AP}") 2>/dev/null; then
+            # AdminServer binds machine.1's addr (dynamic-cluster domains), not
+            # localhost; probe that, falling back to localhost for dev domains.
+            IFS=: read -r _ _AA _ _ <<< "$(read_prop "$CONF_FILE" "machine.1")"; _AA="${_AA:-127.0.0.1}"
+            if (exec 3<>"/dev/tcp/${_AA}/${_AP}") 2>/dev/null || (exec 3<>"/dev/tcp/127.0.0.1/${_AP}") 2>/dev/null; then
                 # AdminServer is up — are the engine boxes' NodeManagers?
                 _TO=""; command -v timeout >/dev/null 2>&1 && _TO="timeout 3"
                 _i=2; _DOWN=""
@@ -1043,6 +1046,10 @@ Machine${idx}NodemanagerNMType=${type}"
 # domain lives on the shared filesystem, so the path is the same there).
 listening() { (exec 3<>"/dev/tcp/$1/$2") 2>/dev/null; }   # <host> <port>
 
+# AdminServer up? Dynamic-cluster domains bind it to machine0's configured
+# address (not localhost); dev domains bind localhost/all — accept either.
+admin_listening() { listening "$1" "$2" || listening 127.0.0.1 "$2"; }   # <admin-addr> <port>
+
 # When secure_nodemanager swapped NM onto the env certificate, WLST's nmConnect
 # must trust the env CA instead of Oracle's demo trust. The passphrase rides a
 # -D flag — visible in ps on this box for the seconds WLST runs.
@@ -1074,7 +1081,7 @@ do_start() {
     fi
     [ -d "$domain_dir" ] || die "Domain not found: ${domain_dir} — run the configure step first."
 
-    if listening 127.0.0.1 "$admin_port"; then
+    if admin_listening "$addr" "$admin_port"; then
         ok "AdminServer already listening — console: http://${addr}:${admin_port}/console"
         return 0
     fi
@@ -1109,7 +1116,7 @@ do_start() {
 
     info "Waiting for the console on :${admin_port} (up to ${wait_secs}s) …"
     local i=0
-    until listening 127.0.0.1 "$admin_port"; do
+    until admin_listening "$addr" "$admin_port"; do
         i=$((i + 2))
         if [ "$i" -ge "$wait_secs" ]; then
             warn "Console not up after ${wait_secs}s — it may still be starting; check ${domain_dir}/servers/AdminServer/logs/AdminServer.log"
