@@ -906,6 +906,36 @@ set('ListenPort',${ssips})
 PYBLOCK
 }
 
+# Per-server ServerStart so NodeManager — in MBean-mode start
+# (weblogic.StartScriptEnabled=false) — builds each server's java line from the
+# ServerStart MBean instead of sourcing setDomainEnv.sh. This moves the JVM args
+# (heap/GC) into config the Tuning app can drive PER SERVER (ServerStart.Arguments),
+# while still carrying the SIP baseline setDomainEnv used to supply: the SIP jars
+# on ClassPath, and the wlss/security flags in Arguments. Applied to the engine
+# ServerTemplate (covers the dynamic engines, which have no per-server MBean), the
+# AdminServer, and the static engine if any. The heap here is only a baseline —
+# Tuning overwrites Arguments per server. Args: <template> <admin> [static]
+emit_serverstart_block() {
+    local tmpl="$1" admin="$2" static="$3" OH="$ORACLE_HOME"
+    local cp="${OH}/wlserver/server/lib/weblogic.jar:${OH}/wlserver/../oracle_common/modules/thirdparty/ant-contrib-1.0b3.jar:${OH}/wlserver/modules/features/oracle.wls.common.nodemanager.jar:${OH}/occas/server/lib/platform/oracle.sdp.occas.depended.jar:${OH}/wlserver/sip/server/lib/wlss-runtime-rest-proxy.jar:${OH}/wlserver/sip/server/lib/weblogic_sip.jar:${OH}/wlserver/common/derby/lib/derbytools.jar:${OH}/wlserver/common/derby/lib/derbyclient.jar:${OH}/wlserver/common/derby/lib/derby.jar:${OH}/wlserver/common/derby/lib/derbyshared.jar"
+    local args="-Xms256m -Xmx512m -da -javaagent:${OH}/wlserver/server/lib/debugpatch-agent.jar -Dwls.home=${OH}/wlserver/server -Dweblogic.home=${OH}/wlserver/server -Dwlss.maddr.enable=true -Dwlss.replication=on -Dwlss.callstate.manager.classname=com.bea.wcp.sip.replicatedstore.server.CoherenceCallStateManager -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Dweblogic.servlet.ClasspathServlet.disableSecureMode=false"
+    echo "# --- BLADE: per-server ServerStart (MBean-mode JVM args + SIP classpath) ---"
+    local spec coll nm
+    for spec in "ServerTemplates:${tmpl}" "Servers:${admin}" ${static:+"Servers:${static}"}; do
+        coll="${spec%%:*}"; nm="${spec##*:}"
+        cat <<PYSS
+cd('/${coll}/${nm}')
+try:
+    create('${nm}','ServerStart')
+except:
+    pass
+cd('/${coll}/${nm}/ServerStart/${nm}')
+set('ClassPath','${cp}')
+set('Arguments','${args}')
+PYSS
+    done
+}
+
 # ----------------------------------------------------------------------------
 # Step 2 — dynamic-cluster domain (Oracle's template, parameterized)
 # ----------------------------------------------------------------------------
@@ -1008,6 +1038,19 @@ Machine${idx}NodemanagerNMType=${type}"
         > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
     chmod 600 "${work}/nm-creds.block" "${work}/occas-replicated-dynamiccluster.py"
 
+    # Per-server ServerStart (MBean-mode JVM args + SIP classpath), injected
+    # before writeDomain like the blocks above so the template/AdminServer/static
+    # engine already exist when we set it.
+    local tmpl_name; tmpl_name="$(read_prop "$CONF_FILE" "engine.template.name")"; tmpl_name="${tmpl_name:-BEA_ENGINE_TIER_CLUST-template}"
+    local admin_name; admin_name="$(read_prop "$CONF_FILE" "admin.server.name")"; admin_name="${admin_name:-AdminServer}"
+    local static_name=""; [ -n "$STATIC_SRV" ] && IFS=: read -r static_name _ <<< "$STATIC_SRV"
+    emit_serverstart_block "$tmpl_name" "$admin_name" "$static_name" > "${work}/serverstart.block"
+    awk 'NR==FNR { blk = blk $0 ORS; next }
+         /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
+         { print }' \
+        "${work}/serverstart.block" "${work}/occas-replicated-dynamiccluster.py" \
+        > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
+
     # Run Oracle's offline WLST from the workdir.
     (
         cd "$work"
@@ -1020,6 +1063,20 @@ Machine${idx}NodemanagerNMType=${type}"
         export BEA_HOME="$ORACLE_HOME"          # the .py uses BEA_HOME for the domain dir
         java weblogic.WLST occas-replicated-dynamiccluster.py
     )
+
+    # NodeManager MBean-mode start: build each server's java line from the
+    # ServerStart MBeans above, not setDomainEnv.sh — so the Tuning app's
+    # ServerStart.Arguments actually drive the JVM. NOTE: this OCCAS NodeManager
+    # honors the PREFIXED key 'weblogic.StartScriptEnabled'; the plain
+    # 'StartScriptEnabled' is silently ignored. (Distributed to engine nodes by
+    # do_engines' domain rsync; each NM reads it on its next fresh start.)
+    local nmprops="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}/nodemanager/nodemanager.properties"
+    if [ -f "$nmprops" ]; then
+        sed -i '/^weblogic\.StartScriptEnabled=/d; /^StartScriptEnabled=/d' "$nmprops"
+        printf 'weblogic.StartScriptEnabled=false\n' >> "$nmprops"
+        ok "NodeManager set to MBean-mode start (weblogic.StartScriptEnabled=false)"
+    fi
+
     harden_domain
     ok "Domain '${DOMAIN_NAME}' written under ${ORACLE_HOME}/user_projects/domains/"
 }
