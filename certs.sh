@@ -106,18 +106,33 @@ get_store_pw() {
     printf '%s' "$v"
 }
 
-# --- SAN list: admin + every machine address + certs.hosts extras ---
+# --- SAN list: every machine's name + address + reverse-DNS FQDN, + certs.hosts ---
 build_san() {
-    local san="dns:localhost,ip:127.0.0.1" entry addr
+    local san="dns:localhost,ip:127.0.0.1" entry addr name fqdn
     local i=1 m
     while :; do
         m=$(read_prop "$CONF_FILE" "machine.${i}")
         [ -n "$m" ] || break
-        IFS=: read -r _ addr _ _ <<< "$m"
+        IFS=: read -r name addr _ _ <<< "$m"
+        # The machine's own name is a short-hostname SAN (engine1, engine2, …).
+        case "$name" in *[a-zA-Z]*) san="${san},dns:${name}" ;; esac
         if [ -n "$addr" ]; then
             case "$addr" in
                 *[a-zA-Z]*) san="${san},dns:${addr}" ;;
-                *)          san="${san},ip:${addr}" ;;
+                *)
+                    san="${san},ip:${addr}"
+                    # Reverse-resolve the IP to its FQDN (OCI VCN DNS gives e.g.
+                    # engine1.sub….oraclevcn.com) and add it + its short form, so
+                    # the cert matches how servers verify each other by hostname.
+                    # Without this the FQDN is absent and AdminServer→NodeManager
+                    # SSL fails hostname verification. (certs.hosts still overrides
+                    # for anything reverse-DNS can't reach, e.g. public IPs.)
+                    fqdn="$(getent hosts "$addr" 2>/dev/null | awk '{print $2}' | head -1)"
+                    if [ -n "$fqdn" ] && [ "$fqdn" != "$addr" ]; then
+                        san="${san},dns:${fqdn}"
+                        case "${fqdn%%.*}" in *[a-zA-Z]*) san="${san},dns:${fqdn%%.*}" ;; esac
+                    fi
+                    ;;
             esac
         fi
         i=$((i + 1))
@@ -135,7 +150,8 @@ build_san() {
             esac
         done
     fi
-    printf '%s' "$san"
+    # dedup, order-preserving (machine name + FQDN short form can collide).
+    printf '%s' "$san" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -
 }
 
 KEYTOOL="${JAVA_HOME:+$JAVA_HOME/bin/}keytool"
