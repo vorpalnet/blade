@@ -1020,6 +1020,7 @@ Machine${idx}NodemanagerNMType=${type}"
         export BEA_HOME="$ORACLE_HOME"          # the .py uses BEA_HOME for the domain dir
         java weblogic.WLST occas-replicated-dynamiccluster.py
     )
+    harden_domain
     ok "Domain '${DOMAIN_NAME}' written under ${ORACLE_HOME}/user_projects/domains/"
 }
 
@@ -1231,6 +1232,11 @@ do_engines() {
         ssh "${sshu}@${addr}" "sed -i 's/^ListenAddress=.*/ListenAddress=${addr}/' '${domain_dir}/nodemanager/nodemanager.properties'" \
             || { warn "${name}: could not set NM ListenAddress — skipped."; failed="${failed} ${name}"; continue; }
 
+        # Prod-mode file hardening on the engine (BEA-090985); rsync -a already
+        # carries the admin box's hardened perms, this covers standalone runs.
+        ssh "${sshu}@${addr}" "chmod -R g-w,o-rwx '${domain_dir}'; f='${domain_dir}/config/nodemanager/nm_password.properties'; [ -f \"\$f\" ] && chmod 600 \"\$f\"; true" \
+            || warn "${name}: domain perm hardening failed (non-fatal)."
+
         if ssh "${sshu}@${addr}" "timeout 3 bash -c 'exec 3<>/dev/tcp/${addr}/${port}'" 2>/dev/null; then
             ok "  NodeManager already listening on ${name}:${port}"
         else
@@ -1281,6 +1287,10 @@ emit_tls_block() {
 
 # --- ${name}: keystores + SSL :${sslport} ---
 cd('${path}')
+# Prod-mode hardening (BEA-091031): the default internal servlets allow
+# T3/IIOP tunneling over HTTP(S). BLADE uses t3/t3s directly, not tunneled,
+# so disable them.
+set('DefaultInternalServletsDisabled','true')
 set('KeyStores','CustomIdentityAndCustomTrust')
 set('CustomIdentityKeyStoreFileName','${ID_STORE}')
 set('CustomIdentityKeyStoreType','${ID_TYPE}')
@@ -1387,6 +1397,7 @@ print('secure: domain updated')"
         java weblogic.WLST secure-domain.py
     )
     secure_nodemanager
+    harden_domain
     ok "Domain '${DOMAIN_NAME}' secured — restart NodeManagers + servers."
     if [ "$TLS_ONLY" = "true" ]; then
         warn "tls.only: plaintext HTTP and sip are OFF. Use https://…:${admin_ssl} for the console, t3s in deploy confs, and SIPS/TLS toward the SBC."
@@ -1419,6 +1430,21 @@ secure_nodemanager() {
         fi
     done
     ok "NodeManager SSL → ${ID_STORE} (demo cert replaced; NM encrypts the passphrases on next start)"
+}
+
+# Prod-mode file hardening (BEA-090985): WebLogic in production mode flags any
+# domain file looser than umask 027. prep's group-shared setgid dirs (2775) plus
+# the domain-creation umask leave bin/ and config/ group-writable and
+# other-readable. Strip group-write and every 'other' bit — dirs land at 2750
+# (setgid kept, so the group still shares read/exec) and files at 640 — and lock
+# the NodeManager password file to 600. Idempotent; the domain need not be stopped.
+harden_domain() {
+    local domain_dir="${1:-${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}}"
+    [ -d "$domain_dir" ] || return 0
+    chmod -R g-w,o-rwx "$domain_dir"
+    local nmpw="${domain_dir}/config/nodemanager/nm_password.properties"
+    [ -f "$nmpw" ] && chmod 600 "$nmpw"
+    ok "Domain files hardened to umask 027 (prod-mode BEA-090985)"
 }
 
 # ----------------------------------------------------------------------------
