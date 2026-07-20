@@ -1403,7 +1403,18 @@
 			var name = prompt('New profile name:');
 			if (!name) return; name = name.trim(); if (!name) return;
 			if (jvm.profiles.some(function (p) { return p.name === name; })) { showStatus('danger', 'A profile named "' + name + '" already exists.'); return; }
-			jvm.profiles.push({ name: name, about: '', metaAuto: false, arguments: '-Xms2g -Xmx2g -XX:+UseG1GC' });
+			// Extend the currently-selected profile: seed the new one from its
+			// loaded values (a template just applied, or its tuned args) rather
+			// than resetting to a blank default — creating a profile with a
+			// template loaded should carry that template over. Falls back to a
+			// G1 baseline only when nothing is selected.
+			var base = (jvm.sel >= 0 && jvm.profiles[jvm.sel]) ? jvm.profiles[jvm.sel] : null;
+			jvm.profiles.push({
+				name: name,
+				about: base ? base.about : '',
+				metaAuto: base ? base.metaAuto : false,
+				arguments: base ? base.arguments : '-Xms2g -Xmx2g -XX:+UseG1GC'
+			});
 			jvm.sel = jvm.profiles.length - 1;
 			renderJvmPanel();
 		}
