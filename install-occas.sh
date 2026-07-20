@@ -1195,6 +1195,16 @@ do_engines() {
         # Dynamic servers map 1:1 onto machine1..N in creation order → engine<i>.
         info "  Starting server engine${i} through ${name}'s Node Manager …"
         ensure_admin_pw
+        # A prod-mode managed server with no boot.properties prompts for the boot
+        # username/password on stdin — which NM has redirected — and dies with
+        # BEA-090782. do_start writes this for the AdminServer; the engine servers
+        # need their own. Piped over ssh via stdin (never on the command line, so
+        # the password can't leak into 'ps'); WebLogic encrypts it on first boot.
+        if ! printf 'username=%s\npassword=%s\n' "$ADMIN_USER" "$ADMIN_PW" \
+             | ssh "${sshu}@${addr}" "d='${domain_dir}/servers/engine${i}/security'; mkdir -p \"\$d\" && umask 177 && cat > \"\$d/boot.properties\""; then
+            warn "${name}: could not write engine${i} boot.properties — skipped."
+            failed="${failed} ${name}"; continue
+        fi
         if ! MW_HOME="$ORACLE_HOME" DOMAIN_NAME="$DOMAIN_NAME" ADMIN_SERVER="engine${i}" \
              NM_HOST="$addr" NM_PORT="$port" NM_TYPE="$type" NM_USER="$ADMIN_USER" \
              NM_PASSWORD="$ADMIN_PW" NM_ACTION="start" WLST_PROPERTIES="$wlst_props" \
