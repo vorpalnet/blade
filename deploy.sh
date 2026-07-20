@@ -461,12 +461,12 @@ deploy_shared() {
             run_mvn "${WLS_PLUGIN}:deploy" \
                 -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" \
                 -Dtargets="$WLS_TGT_BOTH" -Dsource="$SHARED_LIB_WAR" \
-                -Dname="$SHARED_LIB_NAME" -DlibraryModule=true -Dupload=true
+                -Dname="$SHARED_LIB_NAME" -Dlibrary=true -Dupload=true
             ;;
         undeploy)
             run_mvn "${WLS_PLUGIN}:undeploy" \
                 -Dadminurl="$WLS_ADMINURL" -Duser="$WLS_USER" -Dpassword="$WLS_PASSWORD" \
-                -Dname="$SHARED_LIB_NAME" -DlibraryModule=true
+                -Dname="$SHARED_LIB_NAME" -Dlibrary=true
             ;;
         status)
             run_mvn "${WLS_PLUGIN}:list-apps" \
