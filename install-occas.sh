@@ -22,7 +22,7 @@
 #               AdminServer is down, and stops when everything is up
 #     <env>   name → build-profiles/occas/<name>.conf (+ <name>.secret), or a path
 #     <step>  init | prep | download | install | configure | secure | start
-#             | engines | all | uninstall
+#             | engines | console | all | uninstall
 #
 #   init       short interview → writes the env conf (env name = the WebLogic
 #              domain name; machines auto-named machine0=admin, machine1..N)
@@ -78,12 +78,16 @@
 #              key-based ssh: OCCAS home incl. the domain, runtime JDK, env
 #              certs), start its NodeManager, then nmStart its engine server.
 #              Unreachable boxes are skipped with a warning; re-runs resume.
+#   console    deploy the hosted WebLogic Remote Console (/rconsole) to the
+#              AdminServer — WLS 14.1.2's browser-based replacement for the
+#              dropped /console. Needs the AdminServer up; idempotent (skips if
+#              already deployed). Reach it over an ssh tunnel to the admin box.
 #   uninstall  stop everything and DELETE the product, domain, inventory, and
 #              certs — this box AND the engine boxes (type the env name to
 #              confirm, or pass --yes). KEEPS the eDelivery media, the JDKs,
 #              the env conf/secret, and prep's users/dirs — so the next run
 #              reinstalls end-to-end unattended. Built for repeated testing.
-#   all        install → configure → secure → start → engines (auto-downloads
+#   all        install → configure → secure → start → console → engines (auto-downloads
 #              as needed; certs auto-generate — WebLogic demo certs are never
 #              used, and NodeManager is re-pointed at the env identity too;
 #              replace the generated PKI later via './certs.sh <env> import')
@@ -236,7 +240,7 @@ if [ -z "$STEP" ]; then
         fi
     fi
 fi
-case "$STEP" in init|prep|download|install|configure|secure|start|engines|all|uninstall) ;; *) die "Unknown step: ${STEP}" ;; esac
+case "$STEP" in init|prep|download|install|configure|secure|start|engines|console|all|uninstall) ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # Interactive builder for build-profiles/occas/<env>.conf (+ optional secret).
 # Crisp on purpose: the environment name IS the WebLogic domain name; machines
@@ -1108,10 +1112,53 @@ do_start() {
         fi
         sleep 2
     done
-    ok "AdminServer up — console: http://${addr}:${admin_port}/console  (user: ${ADMIN_USER})"
+    ok "AdminServer up — user: ${ADMIN_USER}  (browser admin: the 'console' step deploys http://${addr}:${admin_port}/rconsole)"
 
     if [ ${#MACHINES[@]} -gt 1 ]; then
         log "  Engine boxes: './install-occas.sh ${ENV_NAME} engines' ships everything and starts them ('all' does it next)."
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# Step — console: deploy the hosted WebLogic Remote Console to the AdminServer
+# ----------------------------------------------------------------------------
+# WLS 14.1.2 dropped the classic /console webapp; the hosted Remote Console
+# (wls-remote-console.war → served at /rconsole) is its browser-based successor.
+# Oracle ships a WLST deployer, and the management REST extension is built into
+# 14.1.2 (no separate management-services-ext install). Deploys over t3, so the
+# AdminServer must be up. Idempotent: skips if already in the domain config.
+# AdminServer binds machine0's addr (not localhost), so the t3 URL uses it.
+do_console() {
+    local name addr admin_port
+    IFS=: read -r name addr _ _ <<< "${MACHINES[0]:-machine0:localhost:5556:ssl}"
+    admin_port="$(read_prop "$CONF_FILE" "admin.port")"; admin_port="${admin_port:-7001}"
+    local deployer="${ORACLE_HOME}/wlserver/server/bin/remote_console_deployment.py"
+    local wlst="${ORACLE_HOME}/oracle_common/common/bin/wlst.sh"
+    local adminurl="t3://${addr}:${admin_port}"
+    local config="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}/config/config.xml"
+
+    if [ "$DRY_RUN" = true ]; then
+        log "${C_DIM}  [dry-run] ${wlst} remote_console_deployment.py ${adminurl} ${ADMIN_USER} <pw-on-stdin> → deploys /rconsole${C_RESET}"
+        return 0
+    fi
+
+    # Idempotent: skip if the Remote Console app is already registered.
+    if grep -q 'weblogic-remote-console-app' "$config" 2>/dev/null; then
+        ok "Hosted Remote Console already deployed — http://${addr}:${admin_port}/rconsole"
+        return 0
+    fi
+
+    [ -f "$deployer" ] || die "Remote Console deployer not found: ${deployer} — needs OCCAS/WLS 14.1.2+."
+    [ -x "$wlst" ]     || die "wlst.sh not found/executable: ${wlst}"
+    admin_listening "$addr" "$admin_port" || die "AdminServer not listening on ${addr}:${admin_port} — run the start step first."
+
+    ensure_admin_pw
+    info "Deploying hosted Remote Console to ${adminurl} …"
+    # Password piped on stdin (the deployer reads it there) — never on argv/ps.
+    if printf '%s\n' "$ADMIN_PW" | "$wlst" "$deployer" "$adminurl" "$ADMIN_USER"; then
+        ok "Hosted Remote Console deployed — browse http://${addr}:${admin_port}/rconsole  (Provider: 'This Server')"
+    else
+        die "Remote Console deployment failed — see the WLST output above."
     fi
 }
 
@@ -1456,8 +1503,9 @@ case "$STEP" in
     secure)    do_secure ;;
     start)     do_start ;;
     engines)   do_engines ;;
+    console)   do_console ;;
     uninstall) do_uninstall ;;
-    all)       do_install; log ""; do_configure; log ""; do_secure; log ""; do_start; log ""; do_engines ;;
+    all)       do_install; log ""; do_configure; log ""; do_secure; log ""; do_start; log ""; do_console; log ""; do_engines ;;
 esac
 
 log ""
