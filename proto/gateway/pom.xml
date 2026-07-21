@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-proto-gateway</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Gateway (proto) — SIP trunk registration</name>
+	<description>Registers N independent "virtual gateways" (each with its own Contact IP)
+		with upstream SIP trunks (Flowroute, etc.) via a pluggable per-carrier registration
+		"style". The PSTN front door into BLADE/Gryphon.</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.13.2</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<!-- Inherits the parent pom's war-plugin packagingExcludes (bundles ONLY
+		     vorpal-blade-library-framework.jar; all 3rd-party JARs come from the
+		     blade-shared shared library). -->
+		<finalName>blade-gateway</finalName>
+	</build>
+
+</project>

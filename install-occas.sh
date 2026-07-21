@@ -54,7 +54,12 @@
 #              download.oracle.com permalinks, no login, sha256-verified.
 #   install    silent product install — idempotent: skips if ORACLE_HOME already
 #              populated, so on a SHARED filesystem it installs once, not per node
-#   configure  create the dynamic-cluster domain
+#   configure  create the dynamic-cluster domain (auto-splices engine0, the
+#              static test engine on the admin box, into config.xml)
+#   add-engine0 splice engine0 into an ALREADY-BUILT domain (configure would
+#              clobber a live domain, so use this to add it after the fact).
+#              AdminServer MUST be stopped — WebLogic rewrites config.xml on
+#              shutdown and would discard a live edit. Idempotent.
 #   secure     wire TLS into the EXISTING domain (offline WLST readDomain/
 #              updateDomain — run with the domain STOPPED): enable the SSL
 #              listen ports with the certs.sh keystores on the AdminServer,
@@ -240,7 +245,7 @@ if [ -z "$STEP" ]; then
         fi
     fi
 fi
-case "$STEP" in init|prep|download|install|configure|secure|start|engines|console|all|uninstall) ;; *) die "Unknown step: ${STEP}" ;; esac
+case "$STEP" in init|prep|download|install|configure|add-engine0|secure|start|engines|console|all|uninstall) ;; *) die "Unknown step: ${STEP}" ;; esac
 
 # Interactive builder for build-profiles/occas/<env>.conf (+ optional secret).
 # Crisp on purpose: the environment name IS the WebLogic domain name; machines
@@ -401,6 +406,34 @@ while :; do
     MACHINES+=("$m")
     i=$((i + 1))
 done
+
+# --- engine0: the static test engine on the admin box (MANDATORY) ------------
+# Every install gets one engine-tier member co-located with AdminServer, so the
+# admin box can run SIP apps for test/config-gen. It is NEVER SBC-targeted. The
+# admin machine does NOT match machine.match.expression, so no DYNAMIC engine
+# lands there — this static one is the only way to get an engine on that box.
+#
+# It is created by splicing a <server> block straight into config.xml AFTER
+# writeDomain (see do_configure), not via offline WLST: OCCAS's offline-config /
+# Remote Console layer refuses to create/clone servers carrying SIP channels, so
+# hand-authored XML is the only mechanism that produces a working SIP engine0.
+# Default to the admin machine (MACHINES[0]) on 8001/5060/5061 if the conf omits
+# static.server.
+if [ -z "$STATIC_SRV" ] && [ ${#MACHINES[@]} -ge 1 ]; then
+    IFS=: read -r _m0name _ _ _ <<< "${MACHINES[0]}"
+    STATIC_SRV="engine0:${_m0name}:8001:5060:5061"
+fi
+# Resolve engine0's listen-address from its machine's NM address (the box it runs
+# on). Falls back to MACHINES[0]'s address.
+STATIC_ADDR=""
+if [ -n "$STATIC_SRV" ]; then
+    IFS=: read -r _e0name _e0mach _ _ _ <<< "$STATIC_SRV"
+    for _m in "${MACHINES[@]}"; do
+        IFS=: read -r _mn _ma _ _ <<< "$_m"
+        [ "$_mn" = "$_e0mach" ] && STATIC_ADDR="$_ma" && break
+    done
+    [ -n "$STATIC_ADDR" ] || { IFS=: read -r _ STATIC_ADDR _ _ <<< "${MACHINES[0]:-::}"; }
+fi
 
 # --- Admin password (configure + start): env > secret > prompt, asked ONCE ---
 # Sets the ADMIN_PW global instead of echoing (a $(…) capture once swallowed
@@ -875,35 +908,102 @@ EOF
     ok "Product installed at ${ORACLE_HOME}"
 }
 
-# Emit the offline-WLST block that creates the optional static test engine as a
-# configured member of BEA_ENGINE_TIER_CLUST, with the sip/sips channels added
-# by hand (a configured server doesn't inherit the dynamic server template).
-# Arg: name:machine:listenPort:sipPort:sipsPort
-emit_static_block() {
-    local sname smach sport ssip ssips
+# The SIP-tier ServerStart classpath + JVM args, shared by the engine template /
+# AdminServer ServerStart WLST (emit_serverstart_block) and the spliced engine0
+# <server-start> XML — one source so they can't drift.
+_engine_serverstart_cp() {
+    local OH="$ORACLE_HOME"
+    printf '%s' "${OH}/wlserver/server/lib/weblogic.jar:${OH}/wlserver/../oracle_common/modules/thirdparty/ant-contrib-1.0b3.jar:${OH}/wlserver/modules/features/oracle.wls.common.nodemanager.jar:${OH}/occas/server/lib/platform/oracle.sdp.occas.depended.jar:${OH}/wlserver/sip/server/lib/wlss-runtime-rest-proxy.jar:${OH}/wlserver/sip/server/lib/weblogic_sip.jar:${OH}/wlserver/common/derby/lib/derbytools.jar:${OH}/wlserver/common/derby/lib/derbyclient.jar:${OH}/wlserver/common/derby/lib/derby.jar:${OH}/wlserver/common/derby/lib/derbyshared.jar"
+}
+_engine_serverstart_args() {
+    local OH="$ORACLE_HOME"
+    printf '%s' "-Xms256m -Xmx512m -da -javaagent:${OH}/wlserver/server/lib/debugpatch-agent.jar -Dwls.home=${OH}/wlserver/server -Dweblogic.home=${OH}/wlserver/server -Dwlss.maddr.enable=true -Dwlss.replication=on -Dwlss.callstate.manager.classname=com.bea.wcp.sip.replicatedstore.server.CoherenceCallStateManager -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Dweblogic.servlet.ClasspathServlet.disableSecureMode=false"
+}
+
+# Emit the config.xml <server> block for the static test engine (engine0), a
+# CONFIGURED member of BEA_ENGINE_TIER_CLUST co-located with AdminServer. This is
+# spliced into config.xml AFTER writeDomain because OCCAS's offline-config /
+# Remote Console layer won't create a server carrying SIP channels — hand XML is
+# the only mechanism that works. A configured server does NOT inherit the dynamic
+# engine template, so its sip/sips channels and SIP ServerStart classpath are
+# spelled out here. Element order follows a booting engine's own block.
+# Args: <name:machine:listenPort:sipPort:sipsPort> <listen-address>
+emit_engine0_xml() {
+    local sname smach sport ssip ssips addr cp args
     IFS=: read -r sname smach sport ssip ssips <<< "$1"
-    [ -n "$sname" ] && [ -n "$smach" ] && [ -n "$sport" ] && [ -n "$ssip" ] && [ -n "$ssips" ] \
-        || die "bad static.server '$1' (want name:machine:listenPort:sipPort:sipsPort)"
-    cat <<PYBLOCK
-# --- BLADE: static test engine '${sname}' on machine '${smach}' (config-gen; never SBC-targeted) ---
-# A configured server does NOT inherit BEA_ENGINE_TIER_CLUST-template, so its SIP
-# channels are added explicitly to mirror that template (sip ${ssip}, sips ${ssips}).
-cd('/')
-create('${sname}','Server')
-cd('/Servers/${sname}')
-set('Cluster','BEA_ENGINE_TIER_CLUST')
-set('Machine','${smach}')
-set('ListenPort',${sport})
-create('sip','NetworkAccessPoint')
-cd('/Servers/${sname}/NetworkAccessPoints/sip')
-set('Protocol','sip')
-set('ListenPort',${ssip})
-cd('/Servers/${sname}')
-create('sips','NetworkAccessPoint')
-cd('/Servers/${sname}/NetworkAccessPoints/sips')
-set('Protocol','sips')
-set('ListenPort',${ssips})
-PYBLOCK
+    addr="$2"
+    [ -n "$sname" ] && [ -n "$smach" ] && [ -n "$sport" ] && [ -n "$ssip" ] && [ -n "$ssips" ] && [ -n "$addr" ] \
+        || die "bad static.server '$1' / address '$2' (want name:machine:listenPort:sipPort:sipsPort + address)"
+    cp="$(_engine_serverstart_cp)"; args="$(_engine_serverstart_args)"
+    cat <<XML
+  <server>
+    <name>${sname}</name>
+    <machine>${smach}</machine>
+    <listen-port>${sport}</listen-port>
+    <listen-port-enabled>true</listen-port-enabled>
+    <cluster>BEA_ENGINE_TIER_CLUST</cluster>
+    <listen-address>${addr}</listen-address>
+    <network-access-point>
+      <name>sipchannel</name>
+      <protocol>sip</protocol>
+      <listen-address>${addr}</listen-address>
+      <listen-port>${ssip}</listen-port>
+      <public-port>${ssip}</public-port>
+      <outbound-enabled>true</outbound-enabled>
+      <enabled>true</enabled>
+    </network-access-point>
+    <network-access-point>
+      <name>sips</name>
+      <protocol>sips</protocol>
+      <listen-address>${addr}</listen-address>
+      <listen-port>${ssips}</listen-port>
+      <public-port>${ssips}</public-port>
+      <outbound-enabled>true</outbound-enabled>
+      <enabled>true</enabled>
+    </network-access-point>
+    <server-start>
+      <class-path>${cp}</class-path>
+      <arguments>${args}</arguments>
+    </server-start>
+  </server>
+XML
+}
+
+# Splice the engine0 <server> block into a freshly-written config.xml, right
+# after AdminServer's </server> (keeps it among the <server> elements, in schema
+# order). Backs up config.xml first, verifies the result is well-formed, and
+# restores the backup on any failure. Idempotent: a pre-existing engine0 is left
+# as-is. Args: <config.xml path> <block file>
+splice_engine0() {
+    local cfg="$1" block="$2"
+    command -v python3 >/dev/null || die "python3 required to splice engine0 into config.xml (install python3 on the admin box)"
+    [ -f "$cfg" ]   || die "config.xml not found: ${cfg}"
+    [ -f "$block" ] || die "engine0 block not found: ${block}"
+    cp -p "$cfg" "${cfg}.pre-engine0.bak"
+    python3 - "$cfg" "$block" <<'PY'
+import sys, xml.etree.ElementTree as ET
+cfg_path, block_path = sys.argv[1], sys.argv[2]
+data  = open(cfg_path,  encoding='utf-8').read()
+block = open(block_path, encoding='utf-8').read().rstrip('\n')
+if '<name>engine0</name>' in data:
+    sys.exit(3)                                  # already present — idempotent
+i = data.find('<name>AdminServer</name>')
+if i < 0:
+    sys.stderr.write('AdminServer <server> not found in config.xml\n'); sys.exit(1)
+j = data.find('</server>', i)
+if j < 0:
+    sys.stderr.write("AdminServer's </server> not found in config.xml\n"); sys.exit(1)
+j += len('</server>')
+out = data[:j] + '\n' + block + data[j:]
+ET.fromstring(out)                               # well-formedness gate
+open(cfg_path, 'w', encoding='utf-8').write(out)
+PY
+    local rc=$?
+    case $rc in
+        0) rm -f "${cfg}.pre-engine0.bak"; ok "engine0 spliced into config.xml" ;;
+        3) rm -f "${cfg}.pre-engine0.bak"; info "engine0 already in config.xml — left as-is" ;;
+        *) mv -f "${cfg}.pre-engine0.bak" "$cfg"; die "engine0 splice failed (rc=${rc}) — config.xml restored" ;;
+    esac
 }
 
 # Per-server ServerStart so NodeManager — in MBean-mode start
@@ -916,9 +1016,8 @@ PYBLOCK
 # AdminServer, and the static engine if any. The heap here is only a baseline —
 # Tuning overwrites Arguments per server. Args: <template> <admin> [static]
 emit_serverstart_block() {
-    local tmpl="$1" admin="$2" static="$3" OH="$ORACLE_HOME"
-    local cp="${OH}/wlserver/server/lib/weblogic.jar:${OH}/wlserver/../oracle_common/modules/thirdparty/ant-contrib-1.0b3.jar:${OH}/wlserver/modules/features/oracle.wls.common.nodemanager.jar:${OH}/occas/server/lib/platform/oracle.sdp.occas.depended.jar:${OH}/wlserver/sip/server/lib/wlss-runtime-rest-proxy.jar:${OH}/wlserver/sip/server/lib/weblogic_sip.jar:${OH}/wlserver/common/derby/lib/derbytools.jar:${OH}/wlserver/common/derby/lib/derbyclient.jar:${OH}/wlserver/common/derby/lib/derby.jar:${OH}/wlserver/common/derby/lib/derbyshared.jar"
-    local args="-Xms256m -Xmx512m -da -javaagent:${OH}/wlserver/server/lib/debugpatch-agent.jar -Dwls.home=${OH}/wlserver/server -Dweblogic.home=${OH}/wlserver/server -Dwlss.maddr.enable=true -Dwlss.replication=on -Dwlss.callstate.manager.classname=com.bea.wcp.sip.replicatedstore.server.CoherenceCallStateManager -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Dweblogic.servlet.ClasspathServlet.disableSecureMode=false"
+    local tmpl="$1" admin="$2" static="$3"
+    local cp args; cp="$(_engine_serverstart_cp)"; args="$(_engine_serverstart_args)"
     echo "# --- BLADE: per-server ServerStart (MBean-mode JVM args + SIP classpath) ---"
     local spec coll nm
     for spec in "ServerTemplates:${tmpl}" "Servers:${admin}" ${static:+"Servers:${static}"}; do
@@ -975,20 +1074,16 @@ Machine${idx}NodemanagerNMType=${type}"
         idx=$((idx + 1))
     done
 
-    if [ -n "$STATIC_SRV" ]; then
-        log  "  static test engine: ${STATIC_SRV}  (name:machine:listen:sip:sips)"
-    fi
+    log  "  static test engine: ${STATIC_SRV}  on ${STATIC_ADDR}  (spliced into config.xml post-writeDomain)"
 
     if [ "$DRY_RUN" = true ]; then
         log "${C_DIM}  [dry-run] stage ${src_py} + generated .properties into a workdir${C_RESET}"
         log "${C_DIM}  [dry-run] generated .properties (password redacted):${C_RESET}"
         printf '%s\n' "$props" | sed 's/^/    /'
         log "${C_DIM}  [dry-run] sed .py: domainName='${DOMAIN_NAME}', ServerStartMode='${START_MODE}'${C_RESET}"
-        if [ -n "$STATIC_SRV" ]; then
-            log "${C_DIM}  [dry-run] inject static-engine WLST before writeDomain:${C_RESET}"
-            emit_static_block "$STATIC_SRV" | sed 's/^/    /'
-        fi
         log "${C_DIM}  [dry-run] source setWLSEnv.sh; BEA_HOME=${ORACLE_HOME}; java weblogic.WLST occas-replicated-dynamiccluster.py${C_RESET}"
+        log "${C_DIM}  [dry-run] splice engine0 <server> into config.xml (after AdminServer's </server>):${C_RESET}"
+        emit_engine0_xml "$STATIC_SRV" "$STATIC_ADDR" | sed 's/^/    /'
         return 0
     fi
 
@@ -1011,16 +1106,9 @@ Machine${idx}NodemanagerNMType=${type}"
         "${work}/occas-replicated-dynamiccluster.py" > "${work}/.py.tmp" \
         && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
 
-    # Inject the static test-engine WLST just before writeDomain (so the 'admin'
-    # machine the loop created already exists when we reference it).
-    if [ -n "$STATIC_SRV" ]; then
-        emit_static_block "$STATIC_SRV" > "${work}/static-engine.block"
-        awk 'NR==FNR { blk = blk $0 ORS; next }
-             /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
-             { print }' \
-            "${work}/static-engine.block" "${work}/occas-replicated-dynamiccluster.py" \
-            > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
-    fi
+    # NOTE: engine0 (the static test engine) is NOT created here. OCCAS's
+    # offline-config layer can't build a server with SIP channels, so it is
+    # spliced into config.xml as hand XML after writeDomain (see below).
 
     # Seed the domain's NodeManager credentials (Oracle's template doesn't) —
     # without them every nmConnect gets "Access to domain ... denied". Uses the
@@ -1039,12 +1127,12 @@ Machine${idx}NodemanagerNMType=${type}"
     chmod 600 "${work}/nm-creds.block" "${work}/occas-replicated-dynamiccluster.py"
 
     # Per-server ServerStart (MBean-mode JVM args + SIP classpath), injected
-    # before writeDomain like the blocks above so the template/AdminServer/static
-    # engine already exist when we set it.
+    # before writeDomain like the block above so the template/AdminServer already
+    # exist when we set it. engine0 doesn't exist yet here (it's spliced later),
+    # so it carries its own <server-start> in the spliced XML instead.
     local tmpl_name; tmpl_name="$(read_prop "$CONF_FILE" "engine.template.name")"; tmpl_name="${tmpl_name:-BEA_ENGINE_TIER_CLUST-template}"
     local admin_name; admin_name="$(read_prop "$CONF_FILE" "admin.server.name")"; admin_name="${admin_name:-AdminServer}"
-    local static_name=""; [ -n "$STATIC_SRV" ] && IFS=: read -r static_name _ <<< "$STATIC_SRV"
-    emit_serverstart_block "$tmpl_name" "$admin_name" "$static_name" > "${work}/serverstart.block"
+    emit_serverstart_block "$tmpl_name" "$admin_name" "" > "${work}/serverstart.block"
     awk 'NR==FNR { blk = blk $0 ORS; next }
          /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
          { print }' \
@@ -1063,6 +1151,16 @@ Machine${idx}NodemanagerNMType=${type}"
         export BEA_HOME="$ORACLE_HOME"          # the .py uses BEA_HOME for the domain dir
         java weblogic.WLST occas-replicated-dynamiccluster.py
     )
+
+    # Splice the static test engine (engine0) into the freshly-written config.xml.
+    # Done here — after writeDomain, before AdminServer ever starts — because the
+    # offline-config / Remote Console layer refuses to create a server carrying
+    # SIP channels; hand XML is the only mechanism that yields a working engine0.
+    # do_secure's later readDomain/updateDomain round-trips it (it already does so
+    # for the SIP ServerTemplate), so TLS still gets applied to /Servers/engine0.
+    local cfg_xml="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}/config/config.xml"
+    emit_engine0_xml "$STATIC_SRV" "$STATIC_ADDR" > "${work}/engine0.block"
+    splice_engine0 "$cfg_xml" "${work}/engine0.block"
 
     # NodeManager MBean-mode start: build each server's java line from the
     # ServerStart MBeans above, not setDomainEnv.sh — so the Tuning app's
@@ -1403,7 +1501,7 @@ do_secure() {
 
     info "Secure domain '${DOMAIN_NAME}' — TLS on admin + engines"
     log  "  admin:    ${admin_name}  SSL :${admin_ssl}"
-    log  "  engines:  ${tmpl_name} (+ static, if any)  SSL :${engine_ssl}"
+    log  "  engines:  ${tmpl_name} (+ engine0)  SSL :${engine_ssl}"
     log  "  identity: ${ID_STORE} (${ID_TYPE}, alias '${ID_ALIAS}')"
     log  "  trust:    ${TRUST_STORE} (${TRUST_TYPE})"
     log  "  tls.only: ${TLS_ONLY}$([ "$TLS_ONLY" = "true" ] && echo '  — plaintext HTTP + sip channels OFF (HTTPS/SIPS/t3s only)')"
@@ -1570,6 +1668,49 @@ do_uninstall() {
     ok "Uninstalled '${ENV_NAME}'. Re-run:  ./install-occas.sh ${ENV_NAME}   (media + JDKs kept — no token, no interview)"
 }
 
+# ----------------------------------------------------------------------------
+# add-engine0 — splice the static test engine into an EXISTING live domain
+# ----------------------------------------------------------------------------
+# do_configure splices engine0 into a FRESH domain, but it writes with
+# OverwriteDomain=true, so re-running it to add engine0 would clobber a live
+# domain. This step does the same config.xml surgery against the existing domain
+# instead. AdminServer MUST be down: WebLogic reads config.xml into its MBean
+# tree at boot and rewrites the whole file on shutdown / any console|WLST edit,
+# so an edit made while it runs is silently discarded. Idempotent (splice_engine0
+# leaves a pre-existing engine0 as-is).
+do_add_engine0() {
+    local domain_dir="${ORACLE_HOME}/user_projects/domains/${DOMAIN_NAME}"
+    local cfg_xml="${domain_dir}/config/config.xml"
+    local addr admin_port
+    IFS=: read -r _ addr _ _ <<< "${MACHINES[0]:-machine0:localhost:5556:ssl}"
+    admin_port="$(read_prop "$CONF_FILE" "admin.port")"; admin_port="${admin_port:-7001}"
+
+    [ -n "$STATIC_SRV" ] || die "no static.server (and no machine.1 to derive it from) — nothing to add"
+
+    info "Add engine0 to existing domain '${DOMAIN_NAME}'"
+    log  "  engine0:  ${STATIC_SRV}  on ${STATIC_ADDR}"
+    log  "  config:   ${cfg_xml}"
+
+    if [ "$DRY_RUN" = true ]; then
+        log "${C_DIM}  [dry-run] require AdminServer DOWN on ${addr}:${admin_port}${C_RESET}"
+        log "${C_DIM}  [dry-run] back up config.xml, splice engine0 <server> after AdminServer's </server>, verify well-formed:${C_RESET}"
+        emit_engine0_xml "$STATIC_SRV" "$STATIC_ADDR" | sed 's/^/    /'
+        return 0
+    fi
+
+    [ -d "$domain_dir" ] || die "Domain not found: ${domain_dir} — run the configure step first."
+    [ -f "$cfg_xml" ]    || die "config.xml not found: ${cfg_xml}"
+    if admin_listening "$addr" "$admin_port"; then
+        die "AdminServer is UP on ${addr}:${admin_port}. Stop it first — WebLogic rewrites config.xml on shutdown and would discard this edit."
+    fi
+
+    local work; work="$(mktemp -d /tmp/occas-e0.XXXXXX)"
+    trap 'rm -rf "$work"' RETURN
+    emit_engine0_xml "$STATIC_SRV" "$STATIC_ADDR" > "${work}/engine0.block"
+    splice_engine0 "$cfg_xml" "${work}/engine0.block"
+    log  "  next: start the admin box's NodeManager, then nmStart('engine0') — or start engine0 from the console."
+}
+
 # --- Header + dispatch ---
 log "${C_BOLD}OCCAS install${C_RESET}"
 log "  environment:  ${ENV_NAME}  (${CONF_FILE})"
@@ -1583,6 +1724,7 @@ case "$STEP" in
     download)  do_download; do_java ;;
     install)   do_install ;;
     configure) do_configure ;;
+    add-engine0) do_add_engine0 ;;
     secure)    do_secure ;;
     start)     do_start ;;
     engines)   do_engines ;;

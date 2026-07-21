@@ -85,6 +85,14 @@
 		</div>
 		<div class="egress-kind" style="font-weight:bold; margin-top:2px;"></div>
 
+		<label style="margin-top: 14px;">Virtual gateway <span class="hint">(trunk)</span></label>
+		<div class="state-hint" style="margin-top: 0;">
+			Pick a virtual gateway from the deployed <code>gateway</code> app; the editor keeps
+			<code>;vgw=&lt;name&gt;</code> on the route(s) below, so the gateway app forwards the call
+			out that trunk (binding its Contact IP and trunk identity).
+		</div>
+		<select class="egress-vgw"><option value="">(none)</option></select>
+
 		<label style="margin-top: 14px;">Route URIs
 			<svg class="add-btn add-egress-route" title="Add route" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>
 		</label>

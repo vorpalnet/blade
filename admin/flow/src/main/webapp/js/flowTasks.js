@@ -102,6 +102,7 @@ window.flowTasks = (function() {
 					? 'Back to origin (ROUTE_BACK) → resumes at ' + ret
 					: 'To destination (ROUTE_FINAL)');
 			renderEgressRoutes(cell);
+			populateVgws(cell);
 			return;
 		}
 
@@ -200,6 +201,43 @@ window.flowTasks = (function() {
 		});
 	}
 
+	// The virtual-gateway (;vgw=) param on a route URI: read / set / clear.
+	function getVgwParam(uri) {
+		var m = /;vgw=([^;>\s]*)/i.exec(uri || '');
+		return m ? m[1] : '';
+	}
+	function setVgwParam(uri, vgw) {
+		var stripped = (uri || '').replace(/;vgw=[^;>\s]*/ig, '');
+		return vgw ? stripped + ';vgw=' + vgw : stripped;
+	}
+
+	// Populate the egress's virtual-gateway dropdown from the deployed gateway
+	// app's config (/gatewayVgws), pre-selecting whatever ;vgw= the first route
+	// already carries. If the app isn't reachable, keep the existing value.
+	function populateVgws(cell) {
+		var $sel = panel(cell).find('.egress-vgw');
+		if (!$sel.length) return;
+		var routes = getChildElements(cell, 'route');
+		var current = routes.length ? getVgwParam(routes[0].getAttribute('uri') || '') : '';
+		$.get('gatewayVgws').done(function(data) {
+			var names = Array.isArray(data) ? data : [];
+			var html = '<option value="">(none)</option>';
+			for (var i = 0; i < names.length; i++) {
+				html += '<option value="' + escapeAttr(names[i]) + '">' + escapeAttr(names[i]) + '</option>';
+			}
+			if (current && names.indexOf(current) < 0) {
+				html += '<option value="' + escapeAttr(current) + '">' + escapeAttr(current) + ' (not deployed)</option>';
+			}
+			$sel.html(html).val(current);
+		}).fail(function() {
+			var html = '<option value="">(none)</option>';
+			if (current) {
+				html += '<option value="' + escapeAttr(current) + '" selected>' + escapeAttr(current) + '</option>';
+			}
+			$sel.html(html);
+		});
+	}
+
 	function bindEgress() {
 		// No modifier control: the exit kind is inferred from the egress's
 		// out-edge (a route-back line), recomputed in loadNode on every model
@@ -217,6 +255,16 @@ window.flowTasks = (function() {
 			return false;
 		});
 		$(document).off('change.flowEg', '.egress-routes input').on('change.flowEg', '.egress-routes input', function() {
+			saveEgressRoutes();
+		});
+		// Virtual-gateway dropdown: stamp/replace ;vgw=<name> on every egress route, then persist.
+		$(document).off('change.flowEgVgw', '.egress-vgw').on('change.flowEgVgw', '.egress-vgw', function() {
+			var cell = window.flowSelectedCell;
+			if (!cell) return;
+			var vgw = $(this).val();
+			panel(cell).find('.egress-routes .egress-route-uri').each(function() {
+				$(this).val(setVgwParam($(this).val(), vgw));
+			});
 			saveEgressRoutes();
 		});
 	}

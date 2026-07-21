@@ -21,7 +21,7 @@
 	</modules>
 
 	<properties>
-		<revision>3.0.3</revision>
+		<revision>3.0.4</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<blade.java.version>11</blade.java.version>
 		<blade.weblogic.version>14.1.1</blade.weblogic.version>
@@ -597,6 +597,11 @@ fi
 			<id>acl</id>
 			<activation><property><name>!skip.acl</name></property></activation>
 			<modules><module>proto/acl</module></modules>
+		</profile>
+		<profile>
+			<id>gateway</id>
+			<activation><property><name>!skip.gateway</name></property></activation>
+			<modules><module>proto/gateway</module></modules>
 		</profile>
 		<profile>
 			<id>analytics</id>
