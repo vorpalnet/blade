@@ -31,9 +31,9 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 	private static final String ATTR_DO_NOT_PROCESS = "doNotProcess";
 
 	@Override
-	protected org.vorpal.blade.framework.v2.callflow.Callflow chooseCallflow(SipServletRequest inboundRequest)
+	protected org.vorpal.blade.framework.Callflow chooseCallflow(SipServletRequest inboundRequest)
 			throws ServletException, IOException {
-		org.vorpal.blade.framework.v2.callflow.Callflow callflow;
+		org.vorpal.blade.framework.Callflow callflow;
 
 		switch (inboundRequest.getMethod()) {
 		case Callflow.INVITE:
@@ -89,7 +89,7 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 			return;
 		}
 		outboundRequest.setAttribute(ATTR_DO_NOT_PROCESS, true);
-		SipSession linkedSession = org.vorpal.blade.framework.v2.callflow.Callflow
+		SipSession linkedSession = org.vorpal.blade.framework.Callflow
 				.getLinkedSession(outboundRequest.getSession());
 		if (linkedSession == null) {
 			return;
@@ -110,7 +110,7 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 			return;
 		}
 		outboundRequest.setAttribute(ATTR_DO_NOT_PROCESS, true);
-		SipSession linkedSession = org.vorpal.blade.framework.v2.callflow.Callflow
+		SipSession linkedSession = org.vorpal.blade.framework.Callflow
 				.getLinkedSession(outboundRequest.getSession());
 		if (linkedSession == null) {
 			return;
@@ -129,7 +129,7 @@ public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListe
 		if (outboundRequest == null) {
 			return null;
 		}
-		SipSession linkedSession = org.vorpal.blade.framework.v2.callflow.Callflow
+		SipSession linkedSession = org.vorpal.blade.framework.Callflow
 				.getLinkedSession(outboundRequest.getSession());
 		if (linkedSession == null) {
 			return null;

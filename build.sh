@@ -507,9 +507,28 @@ fi
 # $MW_HOME we have no path to the OCCAS install, so we can't self-bootstrap and
 # fall back to the manual instruction below.
 M2_REPO="${HOME}/.m2/repository"
-WLS_JAR="${M2_REPO}/com/oracle/weblogic/weblogic-server/${WL_VERSION}/weblogic-server-${WL_VERSION}.jar"
-WLSS_JAR="${M2_REPO}/com/oracle/occas/wlss/${OCCAS_VERSION}/wlss-${OCCAS_VERSION}.jar"
-occas_installed() { [ -f "$WLS_JAR" ] && [ -f "$WLSS_JAR" ]; }
+# The full set of version-keyed jars bootstrap.sh installs (keep in sync with
+# bootstrap.sh). Checking only a sentinel jar let a bootstrap from BEFORE a
+# jar joined the set pass as "installed" — e.g. mscontrol, added in 3.0.3,
+# missing from any earlier bootstrap. (weblogic-maven-plugin is deliberately
+# omitted: its coordinate version can differ from WL_VERSION and it's a
+# deploy-time, not build-time, dependency.)
+REQUIRED_PLATFORM_JARS=(
+    "${M2_REPO}/javax/javaee-api/8.0-occas/javaee-api-8.0-occas.jar"
+    "${M2_REPO}/com/oracle/weblogic/weblogic-server/${WL_VERSION}/weblogic-server-${WL_VERSION}.jar"
+    "${M2_REPO}/com/oracle/weblogic/weblogic-logging/${WL_VERSION}/weblogic-logging-${WL_VERSION}.jar"
+    "${M2_REPO}/com/oracle/weblogic/weblogic-security-encryption/${WL_VERSION}/weblogic-security-encryption-${WL_VERSION}.jar"
+    "${M2_REPO}/com/oracle/occas/sipservlet-api/${OCCAS_VERSION}/sipservlet-api-${OCCAS_VERSION}.jar"
+    "${M2_REPO}/com/oracle/occas/wlss/${OCCAS_VERSION}/wlss-${OCCAS_VERSION}.jar"
+    "${M2_REPO}/com/oracle/occas/wlssapi/${OCCAS_VERSION}/wlssapi-${OCCAS_VERSION}.jar"
+    "${M2_REPO}/com/oracle/occas/mscontrol/${OCCAS_VERSION}/mscontrol-${OCCAS_VERSION}.jar"
+)
+occas_installed() {
+    local jar
+    for jar in "${REQUIRED_PLATFORM_JARS[@]}"; do
+        [ -f "$jar" ] || return 1
+    done
+}
 
 if ! occas_installed && [ -n "${MW_HOME:-}" ] && [ -d "${MW_HOME}/wlserver" ]; then
     echo "OCCAS/WebLogic libraries not found in local Maven repo for platform ${PLATFORM}."
@@ -521,8 +540,9 @@ fi
 
 if ! occas_installed; then
     missing_libs=()
-    [ -f "$WLS_JAR" ]  || missing_libs+=("$WLS_JAR")
-    [ -f "$WLSS_JAR" ] || missing_libs+=("$WLSS_JAR")
+    for jar in "${REQUIRED_PLATFORM_JARS[@]}"; do
+        [ -f "$jar" ] || missing_libs+=("$jar")
+    done
     echo "Error: OCCAS/WebLogic libraries not found in local Maven repo for platform ${PLATFORM}:"
     printf '  %s\n' "${missing_libs[@]}"
     echo ""

@@ -11,7 +11,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v3.B2buaServlet;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v3.media.CallflowHold;
 import org.vorpal.blade.framework.v2.config.Translation;
 import org.vorpal.blade.framework.v3.crud.RuleSet;

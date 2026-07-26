@@ -23,7 +23,7 @@ public class Expectation implements Serializable {
 	private final SipApplicationSession appSession;
 	private final SipSession sipSession;
 	private final String method;
-	private final Callback<SipServletRequest> callback;
+	private final org.vorpal.blade.framework.Callback<SipServletRequest> callback;
 
 	/**
 	 * Creates an expectation for a specific SIP method on a SIP session.
@@ -32,7 +32,7 @@ public class Expectation implements Serializable {
 	 * @param method the SIP method to expect (e.g., "CANCEL", "BYE")
 	 * @param callback the lambda function to invoke when the method arrives
 	 */
-	public Expectation(SipSession sipSession, String method, Callback<SipServletRequest> callback) {
+	public Expectation(SipSession sipSession, String method, org.vorpal.blade.framework.Callback<SipServletRequest> callback) {
 		this.sipSession = sipSession;
 		this.appSession = null;
 		this.method = method;
@@ -46,7 +46,7 @@ public class Expectation implements Serializable {
 	 * @param method the SIP method to expect (e.g., "CANCEL", "BYE")
 	 * @param callback the lambda function to invoke when the method arrives
 	 */
-	public Expectation(SipApplicationSession appSession, String method, Callback<SipServletRequest> callback) {
+	public Expectation(SipApplicationSession appSession, String method, org.vorpal.blade.framework.Callback<SipServletRequest> callback) {
 		this.appSession = appSession;
 		this.sipSession = null;
 		this.method = method;

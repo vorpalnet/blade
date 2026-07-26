@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_ID" version="4.0">
+	<display-name>events</display-name>
+
+	<!--
+	  The ingress (POST /events/api/v1/events) is intentionally left
+	  UNAUTHENTICATED for the in-network demo: the producer is the Gumball
+	  attendant, a trusted Python sidecar on the same private network, and adding
+	  BASIC would mean changing that producer to send credentials.
+
+	  HARDENING (before this leaves proto/): add a security-constraint on
+	  /api/v1/* with BASIC auth and role authenticated-users (as services/analytics
+	  and services/context do), or terminate mTLS at the ingress. Tracked in
+	  README.md.
+	-->
+
+</web-app>

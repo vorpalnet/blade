@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>On-net Attendant &mdash; BLADE Demo</title>
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+<link rel="stylesheet" href="assets/demo.css">
+</head>
+<body>
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="/blade/portal/" title="Return to the BLADE Admin Portal.">
+    <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+    <span class="vorpal-brand-text">
+      <span class="vorpal-brand-product">BLADE Admin Portal</span>
+      <span class="vorpal-brand-tagline">Unified Administration</span>
+    </span>
+  </a>
+  <a class="vorpal-appmark" href="index.html">Demo Kit</a>
+  <div class="vorpal-nav" aria-hidden="true"></div>
+  <div class="vorpal-topbar-right">
+    <a class="vorpal-topbar-link" href="index.html" title="Back to the demo matrix">&larr; All demos</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="demo-head">
+    <span class="pill">Voice</span>
+    <h1>On&#8209;net Voice Attendant</h1>
+    <p class="tagline">Dial the number and talk. Speech is recognized <strong>inside the network on CPU</strong> &mdash; the audio never reaches a third&#8209;party cloud. BLADE transcribes, extracts intent, a policy gate decides, and it acts on the live call.</p>
+    <p class="wins">Voice &middot; audio never leaves your network</p>
+  </div>
+
+  <div class="grid2">
+    <form class="panel" onsubmit="return blade.launch(event)">
+      <h2 class="panel-title">Start the attendant</h2>
+      <div class="field">
+        <label for="did">Demo number to dial</label>
+        <input id="did" name="did" type="tel" value="+1 913 555 0177" readonly>
+        <span class="hint">Call it from any phone, or simulate a caller below.</span>
+      </div>
+      <div class="field">
+        <label for="say">Simulate the caller says&hellip;</label>
+        <select id="say" name="say">
+          <option>Schedule a follow&#8209;up Tuesday at 3 with Sarah</option>
+          <option>Transfer me to sales</option>
+          <option>Transfer me to Narnia</option>
+          <option>What are your hours?</option>
+        </select>
+      </div>
+      <button class="btn" type="submit">Start listening</button>
+    </form>
+
+    <aside class="panel stage" id="stage">
+      <span class="runbadge">&#9658; listening (mock)</span>
+      <h2 class="panel-title">What the rep sees</h2>
+      <ol class="storyboard">
+        <li><span class="t">Caller connects, audio pinned to on&#8209;net ASR</span><span class="d">Recognition runs on Ampere CPU cores &mdash; no cloud, no egress.</span></li>
+        <li><span class="t">Live transcript appears</span><span class="d">Words show up as they're spoken.</span></li>
+        <li><span class="t">Intent extracted &rarr; policy gate decides</span><span class="d">"Schedule Tuesday at 3" <strong>fires</strong>; "Transfer me to Narnia" is <strong>held</strong> &mdash; model proposes, policy disposes.</span></li>
+        <li><span class="t">It acts on the live call</span><span class="d">A calendar invite is sent, or a blind transfer dials sales &mdash; and the phone shows "Transferring."</span></li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<footer class="foot">Mockup &mdash; front-end only. Backed by the Gryphon attendant (on&#8209;net ASR) once wired.</footer>
+<script src="assets/demo.js"></script>
+</body>
+</html>

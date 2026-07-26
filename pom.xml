@@ -601,7 +601,22 @@ fi
 		<profile>
 			<id>gateway</id>
 			<activation><property><name>!skip.gateway</name></property></activation>
-			<modules><module>proto/gateway</module></modules>
+			<modules><module>services/gateway</module></modules>
+		</profile>
+		<profile>
+			<id>player</id>
+			<activation><property><name>!skip.player</name></property></activation>
+			<modules><module>proto/player</module></modules>
+		</profile>
+		<profile>
+			<id>demo</id>
+			<activation><property><name>!skip.demo</name></property></activation>
+			<modules><module>proto/demo</module></modules>
+		</profile>
+		<profile>
+			<id>events</id>
+			<activation><property><name>!skip.events</name></property></activation>
+			<modules><module>proto/events</module></modules>
 		</profile>
 		<profile>
 			<id>analytics</id>

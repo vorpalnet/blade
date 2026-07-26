@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cluster Load Run &mdash; BLADE Demo</title>
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+<link rel="stylesheet" href="assets/demo.css">
+</head>
+<body>
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="/blade/portal/" title="Return to the BLADE Admin Portal.">
+    <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+    <span class="vorpal-brand-text">
+      <span class="vorpal-brand-product">BLADE Admin Portal</span>
+      <span class="vorpal-brand-tagline">Unified Administration</span>
+    </span>
+  </a>
+  <a class="vorpal-appmark" href="index.html">Demo Kit</a>
+  <div class="vorpal-nav" aria-hidden="true"></div>
+  <div class="vorpal-topbar-right">
+    <a class="vorpal-topbar-link" href="index.html" title="Back to the demo matrix">&larr; All demos</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="demo-head">
+    <span class="pill">Operate</span>
+    <h1>Cluster Load Run</h1>
+    <p class="tagline">Fire a load test across every node and watch throughput, latency, and pass/fail stream in live. The proof that BLADE holds up at call&#8209;center scale &mdash; 1000+ CPS.</p>
+    <p class="wins">Operate &middot; production&#8209;grade at scale</p>
+  </div>
+
+  <div class="grid2">
+    <form class="panel" onsubmit="return blade.launch(event)">
+      <h2 class="panel-title">Configure the run</h2>
+      <div class="field">
+        <label for="scenario">Scenario</label>
+        <select id="scenario" name="scenario">
+          <option>Basic INVITE / 200 / BYE</option>
+          <option>Register, then Invite</option>
+          <option>Proxy with failover</option>
+          <option>B2BUA with media</option>
+        </select>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label for="cps">CPS per node</label>
+          <input id="cps" name="cps" type="number" value="250" min="1">
+        </div>
+        <div class="field">
+          <label for="conc">Concurrent per node</label>
+          <input id="conc" name="conc" type="number" value="2000" min="1">
+        </div>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label for="dur">Duration (s)</label>
+          <input id="dur" name="dur" type="number" value="120" min="1">
+        </div>
+        <div class="field">
+          <label for="max">Max calls <span class="hint">(0 = unlimited)</span></label>
+          <input id="max" name="max" type="number" value="0" min="0">
+        </div>
+      </div>
+      <button class="btn" type="submit">Start load run on all nodes</button>
+    </form>
+
+    <aside class="panel stage" id="stage">
+      <span class="runbadge">&#9658; running (mock)</span>
+      <h2 class="panel-title">What the rep sees</h2>
+      <ol class="storyboard">
+        <li><span class="t">Fans out to every tester node</span><span class="d">One click starts the run cluster&#8209;wide.</span></li>
+        <li><span class="t">Live metrics stream in</span><span class="d">Calls, CPS, latency percentiles, and assertion pass/fail per scenario.</span></li>
+        <li><span class="t">Holds at target</span><span class="d">Watch it sustain the load without errors.</span></li>
+        <li><span class="t">Stop &rarr; summary</span><span class="d">Totals and worst&#8209;node latency, ready to screenshot.</span></li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<footer class="foot">Mockup &mdash; front-end only. Backed by the Test Console (cluster load generators) once wired.</footer>
+<script src="assets/demo.js"></script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Call Blocking &mdash; BLADE Demo</title>
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+<link rel="stylesheet" href="assets/demo.css">
+</head>
+<body>
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="/blade/portal/" title="Return to the BLADE Admin Portal.">
+    <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+    <span class="vorpal-brand-text">
+      <span class="vorpal-brand-product">BLADE Admin Portal</span>
+      <span class="vorpal-brand-tagline">Unified Administration</span>
+    </span>
+  </a>
+  <a class="vorpal-appmark" href="index.html">Demo Kit</a>
+  <div class="vorpal-nav" aria-hidden="true"></div>
+  <div class="vorpal-topbar-right">
+    <a class="vorpal-topbar-link" href="index.html" title="Back to the demo matrix">&larr; All demos</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="demo-head">
+    <span class="pill">Trust</span>
+    <h1>Call Blocking</h1>
+    <p class="tagline">One of the most&#8209;requested features, and one of the simplest. Block a number or pattern right in the signaling core &mdash; no edge appliance &mdash; then place a test call to prove it.</p>
+    <p class="wins">Trust &middot; enforced in the core</p>
+  </div>
+
+  <div class="grid2">
+    <form class="panel" onsubmit="return blade.launch(event)">
+      <h2 class="panel-title">Add a block rule</h2>
+      <div class="field">
+        <label for="rule">Block number or pattern</label>
+        <input id="rule" name="rule" type="text" placeholder="+1800*  or  +19135550142" required>
+        <span class="hint">Exact number, or a wildcard pattern.</span>
+      </div>
+      <div class="field">
+        <label for="action">When it matches</label>
+        <select id="action" name="action">
+          <option>Reject the call (SIP 603 Decline)</option>
+          <option>Silently drop</option>
+          <option>Send to voicemail</option>
+          <option>Play "number not in service"</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="test">Place a test call from</label>
+        <input id="test" name="test" type="tel" placeholder="+1 800 555 0100">
+        <span class="hint">Try a matching and a non&#8209;matching number.</span>
+      </div>
+      <button class="btn" type="submit">Save rule &amp; place test call</button>
+    </form>
+
+    <aside class="panel stage" id="stage">
+      <span class="runbadge">&#9658; running (mock)</span>
+      <h2 class="panel-title">What the rep sees</h2>
+      <ol class="storyboard">
+        <li><span class="t">Rule takes effect instantly</span><span class="d">No restart &mdash; the block list is live config in the core.</span></li>
+        <li><span class="t">Matching call &rarr; blocked</span><span class="d">The test call is handled per the chosen action, before it ever reaches an agent.</span></li>
+        <li><span class="t">Everyone else &rarr; passes through</span><span class="d">A non&#8209;matching number rings normally.</span></li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<footer class="foot">Mockup &mdash; front-end only. Backed by an iRouter / FSMAR block rule once wired.</footer>
+<script src="assets/demo.js"></script>
+</body>
+</html>

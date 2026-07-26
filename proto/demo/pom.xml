@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<!-- Incubator (proto/) app. Built by hand or under `./build.sh full`:
+	     ./mvnw -f proto/demo/pom.xml package -->
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+	<artifactId>vorpal-blade-demo</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Demo Launcher</name>
+	<!-- The rep-facing demo hub (proto/demo). Static today — no framework
+	     dependency yet — so it deploys anywhere. The guided player calls the
+	     tpcc REST API; hosting this WAR on the same server as the services makes
+	     those calls same-origin and sidesteps CORS. Servlets/callflows drop in
+	     later (see README) without moving files; add the framework dep +
+	     blade-shared library-ref at that point. -->
+	<build>
+		<finalName>blade-demo</finalName>
+	</build>
+</project>

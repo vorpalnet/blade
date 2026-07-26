@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Click-to-Call &mdash; BLADE Demo</title>
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+<link rel="stylesheet" href="assets/demo.css">
+</head>
+<body>
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="/blade/portal/" title="Return to the BLADE Admin Portal.">
+    <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+    <span class="vorpal-brand-text">
+      <span class="vorpal-brand-product">BLADE Admin Portal</span>
+      <span class="vorpal-brand-tagline">Unified Administration</span>
+    </span>
+  </a>
+  <a class="vorpal-appmark" href="index.html">Demo Kit</a>
+  <div class="vorpal-nav" aria-hidden="true"></div>
+  <div class="vorpal-topbar-right">
+    <a class="vorpal-topbar-link" href="index.html" title="Back to the demo matrix">&larr; All demos</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="demo-head">
+    <span class="pill">Route</span>
+    <h1>Click&#8209;to&#8209;Call</h1>
+    <p class="tagline">Enter two phone numbers. BLADE dials both legs and bridges them into one call &mdash; a REST request in, a live call out. The simplest proof that BLADE controls real calls.</p>
+    <p class="wins">Route &middot; third&#8209;party call control (tpcc)</p>
+  </div>
+
+  <div class="grid2">
+    <form class="panel" onsubmit="return blade.launch(event)">
+      <h2 class="panel-title">Set up the call</h2>
+      <div class="two">
+        <div class="field">
+          <label for="from">From &mdash; agent</label>
+          <input id="from" name="from" type="tel" placeholder="+1 913 555 0142" required>
+        </div>
+        <div class="field">
+          <label for="to">To &mdash; customer</label>
+          <input id="to" name="to" type="tel" placeholder="+1 415 555 0199" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="cid">Caller ID to present <span class="hint">(optional)</span></label>
+        <input id="cid" name="cid" type="tel" placeholder="+1 800 555 0100">
+      </div>
+      <button class="btn" type="submit">Connect call</button>
+    </form>
+
+    <aside class="panel stage" id="stage">
+      <span class="runbadge">&#9658; running (mock)</span>
+      <h2 class="panel-title">What the rep sees</h2>
+      <ol class="storyboard">
+        <li><span class="t">Agent's phone rings first</span><span class="d">BLADE dials the agent leg and waits for answer.</span></li>
+        <li><span class="t">Customer's phone rings</span><span class="d">On answer, the second leg is placed with the chosen caller ID.</span></li>
+        <li><span class="t">Both answer &rarr; media bridged</span><span class="d">Two&#8209;way audio flows; the call is live.</span></li>
+        <li><span class="t">Either hangs up &rarr; both released</span><span class="d">BLADE tears the whole call down cleanly.</span></li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<footer class="foot">Mockup &mdash; front-end only. This form will POST to the tpcc service once wired.</footer>
+<script src="assets/demo.js"></script>
+</body>
+</html>

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLADE Demo Kit &mdash; Pillar &times; Altitude Matrix</title>
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+<style>
+  :root {
+    /* Aliased to the BLADE brand tokens (/blade/portal/brand/brand.css) so the
+       matrix reads as family with the admin apps: light + Vorpal purple.
+       Readiness borrows the brand status colors, but the glyph SHAPE
+       (filled / half / hollow) carries the meaning, not the color. */
+    --ground:var(--vorpal-slate-100); --surface:var(--vorpal-surface); --surface-2:var(--vorpal-surface-alt); --sunk:var(--vorpal-slate-100);
+    --ink:var(--vorpal-ink-900); --muted:var(--vorpal-slate-600); --faint:var(--vorpal-slate-400); --line:var(--vorpal-divider);
+    --accent:var(--vorpal-purple); --accent-2:var(--vorpal-purple-700);
+    --ready:var(--vorpal-success); --caveat:var(--vorpal-warn); --roadmap:var(--vorpal-slate-400);
+    --chip:var(--vorpal-surface); --chip-line:var(--vorpal-divider);
+    --shadow:var(--vorpal-shadow-sm);
+    --mono:var(--vorpal-font-mono);
+    --sans:var(--vorpal-font-sans);
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .page{
+    background:var(--ground); color:var(--ink);
+    font-family:var(--sans); line-height:1.5;
+    -webkit-font-smoothing:antialiased; padding:clamp(20px,4vw,56px) clamp(16px,4vw,48px) 72px;
+  }
+  .wrap{max-width:1240px; margin:0 auto;}
+
+  /* ---- masthead ---- */
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--accent-2); margin:0 0 14px;
+  }
+  h1{
+    font-family:var(--sans); font-weight:680; letter-spacing:-.02em;
+    font-size:clamp(28px,4.4vw,44px); line-height:1.05; margin:0 0 14px; text-wrap:balance;
+  }
+  .lede{font-size:clamp(15px,1.5vw,17px); color:var(--muted); max-width:66ch; margin:0;}
+  .masthead{border-bottom:1px solid var(--line); padding-bottom:26px; margin-bottom:26px;}
+
+  /* ---- how to read: legend + audience ---- */
+  .keys{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin-bottom:14px;}
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px; box-shadow:var(--shadow);
+  }
+  .card h2{
+    font-family:var(--mono); font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--faint); margin:0 0 12px; font-weight:600;
+  }
+  .legend-row{display:flex; gap:11px; align-items:baseline; margin:9px 0;}
+  .legend-row:first-of-type{margin-top:0;}
+  .state-name{font-family:var(--mono); font-size:12px; letter-spacing:.08em; font-weight:600; min-width:74px;}
+  .legend-row p{margin:0; font-size:13px; color:var(--muted);}
+
+  /* readiness glyph &mdash; shape carries the meaning, color only supplements */
+  .g{display:inline-block; width:14px; height:14px; border-radius:50%; position:relative; flex:0 0 auto; transform:translateY(2px);}
+  .g.ready{background:var(--ready); border:1.5px solid var(--ready);}
+  .g.caveat{background:linear-gradient(90deg,var(--caveat) 0 50%, transparent 50% 100%); border:1.5px solid var(--caveat);}
+  .g.roadmap{background:transparent; border:1.5px solid var(--roadmap);}
+
+  .audience-row{display:flex; gap:10px; align-items:baseline; margin:9px 0; font-size:13px;}
+  .audience-row:first-of-type{margin-top:0;}
+  .aud-tag{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    font-weight:600; color:var(--ink); background:var(--surface-2); border:1px solid var(--line);
+    padding:2px 7px; border-radius:5px; white-space:nowrap;
+  }
+  .audience-row span.who{color:var(--muted);}
+
+  /* ---- the matrix ---- */
+  .section-head{margin:34px 0 14px;}
+  .section-head h2{
+    font-family:var(--mono); font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--accent-2); margin:0 0 5px; font-weight:600;
+  }
+  .section-head p{margin:0; font-size:13.5px; color:var(--muted); max-width:70ch;}
+
+  .matrix-scroll{overflow-x:auto; border:1px solid var(--line); border-radius:14px; background:var(--surface); box-shadow:var(--shadow);}
+  .matrix{display:grid; grid-template-columns:108px repeat(5,minmax(208px,1fr)); min-width:1240px;}
+  .cell{border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:13px;}
+  .matrix > .cell:nth-child(6n){border-right:none;}
+  .matrix > .row-last{border-bottom:none;}
+
+  /* corner + pillar headers */
+  .corner{background:var(--surface-2); border-bottom:1px solid var(--line); border-right:1px solid var(--line);}
+  .corner span{
+    font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--faint); display:block; padding:14px;
+  }
+  .pillar-head{background:var(--surface-2);}
+  .pillar-name{font-family:var(--mono); font-weight:700; font-size:15px; letter-spacing:.02em; margin:0 0 3px; color:var(--ink);}
+  .pillar-sku{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--accent-2); text-transform:uppercase; margin:0 0 8px;}
+  .pillar-aud{font-size:12px; color:var(--muted); margin:0 0 9px; line-height:1.4;}
+  .pillar-state{display:flex; gap:6px; flex-wrap:wrap;}
+  .mini{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.05em; text-transform:uppercase;
+    display:inline-flex; align-items:center; gap:5px; color:var(--muted);
+  }
+  .mini .g{width:9px; height:9px; transform:none;}
+
+  /* row (altitude) labels */
+  .alt-label{background:var(--surface-2); display:flex; flex-direction:column; justify-content:flex-start; gap:6px;}
+  .alt-name{font-family:var(--mono); font-weight:700; font-size:13px; letter-spacing:.02em; writing-mode:horizontal-tb;}
+  .alt-desc{font-size:11px; color:var(--muted); line-height:1.35;}
+  .alt-dur{font-family:var(--mono); font-size:10px; color:var(--faint); letter-spacing:.04em;}
+
+  /* demo chips */
+  .chips{display:flex; flex-direction:column; gap:8px;}
+  .chip{
+    display:grid; grid-template-columns:16px 1fr; gap:9px; align-items:start;
+    background:var(--chip); border:1px solid var(--chip-line); border-radius:9px; padding:9px 11px;
+  }
+  .chip .g{transform:translateY(3px);}
+  .chip .body{min-width:0;}
+  .chip .name{font-size:13px; font-weight:560; letter-spacing:-.005em; line-height:1.3;}
+  .chip .sub{font-size:11.5px; color:var(--muted); margin-top:2px; line-height:1.35;}
+  .tag{
+    display:inline-block; font-family:var(--mono); font-size:9px; letter-spacing:.09em; text-transform:uppercase;
+    font-weight:700; padding:1.5px 6px; border-radius:4px; margin-top:6px; border:1px solid;
+  }
+  .tag.caveat{color:var(--caveat); border-color:var(--caveat); background:transparent;}
+  .tag.roadmap{color:var(--roadmap); border-color:var(--roadmap); background:transparent;}
+  .tag.star{color:var(--accent-2); border-color:var(--accent); background:transparent;}
+  .chip .name a.demolink{color:inherit; text-decoration:none; border-bottom:1.5px solid var(--accent);}
+  .chip .name a.demolink:hover{color:var(--accent-2);}
+  .chip .name a.demolink::after{content:" \2197"; color:var(--accent-2); font-weight:700; font-size:.82em;}
+  .chip .name a.demolink:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:2px;}
+  .empty-note{font-size:12px; color:var(--faint); font-style:italic;}
+
+  /* ---- playlists ---- */
+  .plist-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:16px;}
+  .plist{background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:18px 19px; box-shadow:var(--shadow); display:flex; flex-direction:column;}
+  .plist .who{font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--accent-2); margin:0 0 4px;}
+  .plist h3{font-size:16px; margin:0 0 12px; letter-spacing:-.01em; font-weight:640;}
+  .steps{list-style:none; margin:0 0 13px; padding:0; display:flex; flex-direction:column; gap:0;}
+  .steps li{display:flex; gap:10px; align-items:flex-start; font-size:13px; padding:5px 0; position:relative;}
+  .steps li .n{font-family:var(--mono); font-size:11px; color:var(--faint); flex:0 0 auto; width:16px; padding-top:1px;}
+  .steps li .s{color:var(--ink);}
+  .steps li:not(:last-child) .n::after{content:""; position:absolute; left:7px; top:22px; bottom:-4px; width:1px; background:var(--line);}
+  .promise{font-size:13px; color:var(--muted); font-style:italic; border-top:1px solid var(--line); padding-top:12px; margin-top:auto;}
+
+  /* ---- guardrails ---- */
+  .guard{background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--caveat); border-radius:12px; padding:20px 22px; box-shadow:var(--shadow);}
+  .guard ul{margin:0; padding:0; list-style:none; display:grid; gap:12px;}
+  .guard li{display:grid; grid-template-columns:auto 1fr; gap:12px; align-items:start; font-size:13.5px;}
+  .guard .badge{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:700;
+    padding:3px 8px; border-radius:5px; white-space:nowrap; border:1px solid var(--line);
+    background:var(--surface-2); color:var(--ink); margin-top:1px;
+  }
+  .guard .badge.no{border-color:var(--roadmap);}
+  .guard strong{font-weight:640;}
+  .guard .why{color:var(--muted);}
+
+  .foundation{border:1px solid var(--line); border-top:3px solid var(--accent); border-radius:14px; background:var(--surface); box-shadow:var(--shadow); padding:26px clamp(20px,3vw,36px); margin-bottom:22px;}
+  .f-eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent-2); margin:0 0 13px;}
+  .f-thesis{font-size:clamp(19px,2.7vw,27px); line-height:1.3; letter-spacing:-.018em; font-weight:520; margin:0 0 15px; max-width:34ch; text-wrap:balance; color:var(--ink);}
+  .f-thesis .quiet{color:var(--faint);}
+  .f-sub{font-size:14px; color:var(--muted); max-width:72ch; margin:0; line-height:1.55;}
+  .f-sub em{color:var(--ink); font-style:italic;}
+  /* app footer now uses the shared .vorpal-footer (brand.css) */
+
+  a:focus-visible,.chip:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  @media (max-width:640px){
+    h1{font-size:26px;}
+    .matrix{grid-template-columns:92px repeat(5,minmax(194px,1fr));}
+  }
+
+  /* --- demo project: whole box is a link to a local demo page --- */
+  a.chip{cursor:pointer; text-decoration:none; color:inherit; position:relative; padding-right:22px;}
+  a.chip:hover{border-color:var(--accent); background:var(--surface-2); box-shadow:0 3px 12px rgba(12,90,102,.14); transform:translateY(-1px);}
+  a.chip:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  a.chip::after{content:"\2197"; position:absolute; top:7px; right:9px; color:var(--accent-2); font-family:var(--mono); font-size:11px; font-weight:700; opacity:.6;}
+  a.chip:hover::after{opacity:1;}
+</style>
+</head>
+<body>
+<div class="vorpal-app">
+
+  <header class="vorpal-topbar">
+    <a class="vorpal-brand" href="/blade/portal/" title="Return to the BLADE Admin Portal.">
+      <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+      <span class="vorpal-brand-text">
+        <span class="vorpal-brand-product">BLADE Admin Portal</span>
+        <span class="vorpal-brand-tagline">Unified Administration</span>
+      </span>
+    </a>
+    <a class="vorpal-appmark" href="index.html">Demo Kit</a>
+    <div class="vorpal-nav" aria-hidden="true"></div>
+    <div class="vorpal-topbar-right">
+      <a class="vorpal-topbar-link" href="/blade/portal/" title="All admin tools">Portal</a>
+    </div>
+  </header>
+
+  <main class="vorpal-main">
+<div class="page">
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">BLADE Demo Catalog</p>
+    <h1>Every BLADE demo, organized by what it shows and how deep it goes.</h1>
+    <p class="lede">Five capability areas across three depths. Each demo carries a readiness mark &mdash; built, works-with-care, or roadmap &mdash; so it's clear what's real. Below the grid: a few suggested sequences, and prep notes for the demos that need one.</p>
+  </header>
+
+  <section class="foundation">
+    <p class="f-eyebrow">The idea under all five pillars</p>
+    <p class="f-thesis">A SIP conversation, written top to bottom like a poem &mdash; <span class="quiet">not scattered across handlers like a choose-your-own-adventure.</span></p>
+    <p class="f-sub">This is the reason BLADE exists. Every capability below is quick to build because the development model is simple: one callflow reads start to finish, the call's state carried in the code itself. Any single feature can be matched elsewhere &mdash; <em>the way you write them</em> is what's different.</p>
+  </section>
+
+  <div class="keys">
+    <div class="card">
+      <h2>Readiness &mdash; read the shape, not the color</h2>
+      <div class="legend-row"><span class="g ready"></span><span class="state-name" style="color:var(--ready)">READY</span><p>Built and validated against a live cluster.</p></div>
+      <div class="legend-row"><span class="g caveat"></span><span class="state-name" style="color:var(--caveat)">CAVEAT</span><p>Works, with a prep step or a caveat &mdash; see the notes below.</p></div>
+      <div class="legend-row"><span class="g roadmap"></span><span class="state-name" style="color:var(--roadmap)">ROADMAP</span><p>Not built yet &mdash; direction only, shown as intent, not as a working feature.</p></div>
+    </div>
+    <div class="card">
+      <h2>Who each pillar speaks to</h2>
+      <div class="audience-row"><span class="aud-tag">Developers</span><span class="who"><strong>Route + Voice</strong> &mdash; a call is readable code.</span></div>
+      <div class="audience-row"><span class="aud-tag">Operators</span><span class="who"><strong>Operate</strong> &mdash; stand it up, tune it, watch it run.</span></div>
+      <div class="audience-row"><span class="aud-tag">Security</span><span class="who"><strong>Trust</strong> &mdash; logic stays in the core, on-net.</span></div>
+      <div class="audience-row"><span class="aud-tag">Integrators</span><span class="who"><strong>Integrate</strong> &mdash; slot any third-party service into the call path.</span></div>
+    </div>
+  </div>
+
+  <div class="section-head">
+    <h2>The matrix &mdash; Pillar &times; Altitude</h2>
+    <p>Depth increases downward: <strong>Hooks</strong> are quick looks, <strong>Capability</strong> shows the feature genuinely working, <strong>Proof</strong> is an end-to-end scenario. Boxes with a &#8599; open a live demo page &mdash; hover to highlight, click to open.</p>
+    <p style="margin-top:11px;font-size:13px;color:var(--muted);border-left:2px solid var(--accent);padding-left:13px;max-width:76ch;"><strong style="color:var(--ink)">Trust</strong> (security logic in the core) and <strong style="color:var(--ink)">Integrate</strong> (open to any third party) look contradictory &mdash; and both hold, because BLADE is a <em>development environment</em>, not a finished product. You pick the features you want; integrators build them out.</p>
+  </div>
+
+  <div class="matrix-scroll">
+    <div class="matrix">
+
+      <!-- header row -->
+      <div class="corner"><span>Altitude &darr; / Pillar &rarr;</span></div>
+
+      <div class="cell pillar-head">
+        <p class="pillar-name">ROUTE</p>
+        <p class="pillar-sku">Platform &middot; call control</p>
+        <p class="pillar-aud">The programmable network &mdash; routing, proxy, B2BUA, all as readable callflows.</p>
+        <div class="pillar-state"><span class="mini"><span class="g ready"></span>built &amp; deep</span></div>
+      </div>
+
+      <div class="cell pillar-head">
+        <p class="pillar-name">VOICE</p>
+        <p class="pillar-sku">In-network AI</p>
+        <p class="pillar-aud">On-net, CPU-only listen-and-act. Audio never leaves the network.</p>
+        <div class="pillar-state"><span class="mini"><span class="g ready"></span>built</span><span class="mini"><span class="g caveat"></span>caveats</span><span class="mini"><span class="g roadmap"></span>not yet</span></div>
+      </div>
+
+      <div class="cell pillar-head">
+        <p class="pillar-name">OPERATE</p>
+        <p class="pillar-sku">Platform &middot; run it</p>
+        <p class="pillar-aud">Stand up, tune, observe, and load-test a cluster.</p>
+        <div class="pillar-state"><span class="mini"><span class="g ready"></span>built &amp; deep</span></div>
+      </div>
+
+      <div class="cell pillar-head">
+        <p class="pillar-name">TRUST</p>
+        <p class="pillar-sku">In-network security</p>
+        <p class="pillar-aud">Logic runs in the core, not bolted on outside; security and data stay on-net.</p>
+        <div class="pillar-state"><span class="mini"><span class="g ready"></span>built</span></div>
+      </div>
+
+      <div class="cell pillar-head">
+        <p class="pillar-name">INTEGRATE</p>
+        <p class="pillar-sku">Open stack &middot; dev platform</p>
+        <p class="pillar-aud">Embed any third-party service into the call path.</p>
+        <div class="pillar-state"><span class="mini"><span class="g ready"></span>built</span></div>
+      </div>
+
+      <!-- ROW: HOOKS -->
+      <div class="cell alt-label">
+        <span class="alt-name">HOOKS</span>
+        <span class="alt-dur">30&ndash;90s</span>
+        <span class="alt-desc">One feature, instant wow, no setup. Your YouTube row.</span>
+      </div>
+
+      <div class="cell"><div class="chips">
+        <a class="chip" href="trace.html"><span class="g ready"></span><div class="body"><div class="name">Trace &mdash; "see the code behind the call"</div><div class="sub">Arm a filter, place a call &rarr; sequence ladder + the actual source lines that ran.</div></div></a>
+        <a class="chip" href="/blade/flow/" target="_blank" rel="noopener"><span class="g ready"></span><div class="body"><div class="name">FSMAR Flow Simulator</div><div class="sub">A call animates hop-by-hop through the routing diagram; live traffic heat; replay real calls.</div></div></a>
+        <a class="chip" href="/blade/configurator/" target="_blank" rel="noopener"><span class="g ready"></span><div class="body"><div class="name">Configurator &rarr; publish-to-live</div><div class="sub">Edit a schema-built form, hit Publish, cluster picks it up &mdash; no restart.</div></div></a>
+        <a class="chip" href="irouter.html"><span class="g ready"></span><div class="body"><div class="name">iRouter live routing</div><div class="sub">Build a pipeline visually; INVITE routed by <code>${var}</code> with zero Java.</div></div></a>
+      </div></div>
+
+      <div class="cell"><div class="chips">
+        <a class="chip" href="talk-to-alice.html"><span class="g caveat"></span><div class="body"><div class="name">Dial a number, talk to Alice</div><div class="sub">A real phone call to a live two-way voice agent &mdash; she listens and talks back.</div><span class="tag caveat">LLM via cloud API</span></div></a>
+        <a class="chip" href="attendant.html"><span class="g caveat"></span><div class="body"><div class="name">Live on-net ASR</div><div class="sub">Speak &rarr; words appear in real time, on CPU, audio never leaves the box.</div><span class="tag caveat">use clean audio</span></div></a>
+        <a class="chip" href="attendant.html"><span class="g ready"></span><div class="body"><div class="name">Intent &rarr; Gate (FIRE vs HELD)</div><div class="sub">"Schedule Tue 3pm" fires; "transfer to narnia" is held. Model proposes, policy disposes.</div></div></a>
+        <a class="chip" href="attendant.html"><span class="g ready"></span><div class="body"><div class="name">Voice-commanded transfer</div><div class="sub">"Transfer me to sales" &rarr; the phone shows <em>Transferring</em>.</div></div></a>
+        <a class="chip" href="attendant.html"><span class="g ready"></span><div class="body"><div class="name">Spoken request &rarr; real .ics invite</div><div class="sub">A calendar invite lands from a sentence said on the call.</div></div></a>
+      </div></div>
+
+      <div class="cell"><div class="chips">
+        <div class="chip"><span class="g caveat"></span><div class="body"><div class="name">install-occas.sh &mdash; one-command cluster</div><div class="sub">Bare box &rarr; TLS-secured dynamic-cluster OCCAS in one line. Years of wiki, one command.</div><span class="tag caveat">pre-stage media</span></div></div>
+        <a class="chip" href="/blade/tuning/" target="_blank" rel="noopener"><span class="g ready"></span><div class="body"><div class="name">Tuning &mdash; one-click "Recommended"</div><div class="sub">Years of GC/JVM trial-and-error as presets + a per-server health check.</div></div></a>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Balancer health map</div><div class="sub">Live D3 map; shape-coded up/down/backoff glyphs; failover in view.</div></div></div>
+        <a class="chip" href="load-test.html"><span class="g ready"></span><div class="body"><div class="name">Test Console load run</div><div class="sub">Launch a cluster-wide run; live CPS / latency percentiles / pass-fail.</div></div></a>
+      </div></div>
+
+      <div class="cell"><div class="chips">
+        <a class="chip" href="call-blocking.html"><span class="g ready"></span><div class="body"><div class="name">Call blocking</div><div class="sub">Reject unwanted callers by number or pattern &mdash; a block-list enforced in the core.</div></div></a>
+        <a class="chip" href="attendant.html"><span class="g caveat"></span><div class="body"><div class="name">On-net ASR &mdash; no audio egress</div><div class="sub">Speech recognized inside the network; call audio never reaches a third-party cloud.</div><span class="tag caveat">use clean audio</span></div></a>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">TLS / SIPS everywhere</div><div class="sub">Fresh PKI at install, SIPS + t3s only &mdash; never WebLogic's shipped demo certs.</div></div></div>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">ACL at the signaling core</div><div class="sub">Block a subnet at the SIP layer, inside the engine &mdash; not at an edge appliance.</div></div></div>
+      </div></div>
+
+      <div class="cell"><div class="chips">
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">"Can you add ___?" &mdash; slot a vendor in</div><div class="sub">Point at the stack, slot a third-party service into the call path &mdash; config, not a rebuild.</div></div></div>
+      </div></div>
+
+      <!-- ROW: CAPABILITY -->
+      <div class="cell alt-label">
+        <span class="alt-name">CAPABILITY</span>
+        <span class="alt-dur">2&ndash;5 min</span>
+        <span class="alt-desc">The feature genuinely working &mdash; enough to believe it. Evaluation.</span>
+      </div>
+
+      <div class="cell"><div class="chips">
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Proxy-balancer failover</div><div class="sub">Tiered pools; an endpoint drops, calls fail over to the next tier.</div></div></div>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Registrar fork-and-ring</div><div class="sub">Register contacts; inbound call rings all, first answer wins.</div></div></div>
+        <a class="chip" href="guided.html?flow=3pcc"><span class="g ready"></span><div class="body"><div class="name">Transfer &middot; Hold &middot; Click-to-dial</div><div class="sub">REFER transfer (attended/blind), SDP hold/resume, REST-triggered call (tpcc).</div></div></a>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">CRUD rewrite &middot; Context recovery</div><div class="sub">Rewrite headers in-flight; recover headers a cloud trunk scrubbed.</div></div></div>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Presence &middot; Queue &middot; Overload-drain</div><div class="sub">SIMPLE roster; ACD queue stats; OPTIONS flips to 503 under load.</div></div></div>
+      </div></div>
+
+      <div class="cell"><div class="chips">
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Intent &amp; entity extraction</div><div class="sub">"Follow-up Tuesday at 3 with Sarah" &rarr; structured {intent, when, who}.</div></div></div>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Call-announce correlation</div><div class="sub">In-band datagram stamps every event with the framework call id.</div></div></div>
+        <div class="chip"><span class="g caveat"></span><div class="body"><div class="name">Analytics &mdash; ADB + OAC dashboard</div><div class="sub">Calls/day, intents fired-vs-held, call journal.</div><span class="tag caveat">start DB/OAC first</span></div></div>
+      </div></div>
+
+      <div class="cell"><div class="chips">
+        <a class="chip" href="/blade/api/" target="_blank" rel="noopener"><span class="g ready"></span><div class="body"><div class="name">API Explorer</div><div class="sub">Live OpenAPI reference for every running service (Scalar, air-gapped).</div></div></a>
+        <a class="chip" href="/blade/analytics/" target="_blank" rel="noopener"><span class="g ready"></span><div class="body"><div class="name">Analytics console</div><div class="sub">One-click JMS provisioning + multi-tenant sample-data generator.</div></div></a>
+        <a class="chip" href="/blade/logs/" target="_blank" rel="noopener"><span class="g ready"></span><div class="body"><div class="name">Log tailer &middot; Files &middot; SSO status</div><div class="sub">Cluster log tail; guarded config editor with versioned backups; JWT self-check.</div></div></a>
+      </div></div>
+
+      <div class="cell"><div class="chips">
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">SSO / JWT admin security</div><div class="sub">The whole admin tier behind bearer-token single sign-on.</div></div></div>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Header hygiene &amp; recovery</div><div class="sub">Sanitize/normalize headers in-flight (CRUD); recover headers a cloud trunk scrubbed (Context).</div></div></div>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Engine overload protection</div><div class="sub">Self-protecting 503 drain under load &mdash; resilience built into the core.</div></div></div>
+        <div class="chip"><span class="g roadmap"></span><div class="body"><div class="name">On-net deepfake detection</div><div class="sub">Spot synthetic/spoofed voices on-CPU in the media server &mdash; no audio egress. Gryphon W2: infra ready, model pending.</div><span class="tag roadmap">roadmap &mdash; the in-core answer</span></div></div>
+      </div></div>
+
+      <div class="cell"><div class="chips">
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Partner integrations</div><div class="sub">Third-party voice services &mdash; TTS, voice security, branded calling &mdash; embedded in the call path via FSMAR.</div></div></div>
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">FSMAR service chaining</div><div class="sub">The application router composes services into the call path &mdash; how any vendor drops in.</div></div></div>
+      </div></div>
+
+      <!-- ROW: PROOF -->
+      <div class="cell alt-label row-last">
+        <span class="alt-name">PROOF</span>
+        <span class="alt-dur">end-to-end</span>
+        <span class="alt-desc">A real scenario with a business outcome, end to end.</span>
+      </div>
+
+      <div class="cell row-last"><div class="chips">
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Live call, end to end</div><div class="sub">Real INVITE &rarr; FSMAR &rarr; service &rarr; destination, narrated in Trace.</div></div></div>
+      </div></div>
+
+      <div class="cell row-last"><div class="chips">
+        <div class="chip"><span class="g caveat"></span><div class="body"><div class="name">Full attendant call</div><div class="sub">Caller speaks &rarr; on-net transcribe &rarr; gate &rarr; CloudEvent &rarr; .ics + dashboard + REFER transfer.</div><span class="tag caveat">nft backstop live</span></div></div>
+        <a class="chip" href="talk-to-alice.html"><span class="g caveat"></span><div class="body"><div class="name">Talk to Alice &mdash; two-way voice agent</div><div class="sub">Dial a real number and converse: on-net ASR + TTS, replies spoken back on CPU.</div><span class="tag caveat">LLM via cloud API</span></div></a>
+      </div></div>
+
+      <div class="cell row-last"><div class="chips">
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Stand up &rarr; tune &rarr; test &rarr; observe</div><div class="sub">One arc: install-occas.sh, Tuning presets, a load run, analytics &mdash; a cluster proven live.</div></div></div>
+      </div></div>
+
+      <div class="cell row-last"><div class="chips">
+        <div class="chip"><span class="g caveat"></span><div class="body"><div class="name">The on-net story, end to end</div><div class="sub">A call whose media, policy, and access control all execute inside the core &mdash; nothing egresses to a cloud.</div><span class="tag caveat">narrative framing</span></div></div>
+      </div></div>
+
+      <div class="cell row-last"><div class="chips">
+        <div class="chip"><span class="g ready"></span><div class="body"><div class="name">Live call through an integrated stack</div><div class="sub">A third-party service doing real work mid-call, orchestrated by BLADE.</div></div></div>
+      </div></div>
+
+    </div>
+  </div>
+
+  <div class="section-head">
+    <h2>Suggested sequences</h2>
+    <p>A few ordered paths through the demos, each building one story end to end.</p>
+  </div>
+
+  <div class="plist-grid">
+    <div class="plist">
+      <p class="who">For developers</p>
+      <h3>Why BLADE</h3>
+      <ul class="steps">
+        <li><span class="n">1</span><span class="s">Trace &mdash; "see the code behind the call"</span></li>
+        <li><span class="n">2</span><span class="s">Configurator &mdash; publish to a live cluster</span></li>
+        <li><span class="n">3</span><span class="s">FSMAR Flow Simulator</span></li>
+      </ul>
+      <p class="promise">"A whole SIP conversation reads top to bottom like a poem &mdash; not a choose-your-own-adventure of scattered handlers."</p>
+    </div>
+
+    <div class="plist">
+      <p class="who">Healthcare</p>
+      <h3>The on-net voice story</h3>
+      <ul class="steps">
+        <li><span class="n">1</span><span class="s">Live on-net ASR</span></li>
+        <li><span class="n">2</span><span class="s">Intent &rarr; Gate (FIRE vs HELD)</span></li>
+        <li><span class="n">3</span><span class="s">Spoken request &rarr; .ics invite</span></li>
+        <li><span class="n">4</span><span class="s">Analytics dashboard</span></li>
+      </ul>
+      <p class="promise">"AI that listens and acts &mdash; your voice data never leaves your network."</p>
+    </div>
+
+    <div class="plist">
+      <p class="who">For operators</p>
+      <h3>Enterprise-grade</h3>
+      <ul class="steps">
+        <li><span class="n">1</span><span class="s">install-occas.sh &mdash; bare box to cluster</span></li>
+        <li><span class="n">2</span><span class="s">Tuning &mdash; one-click "Recommended"</span></li>
+        <li><span class="n">3</span><span class="s">Balancer health map</span></li>
+        <li><span class="n">4</span><span class="s">Test Console load run &rarr; Analytics</span></li>
+      </ul>
+      <p class="promise">"Stood up, tuned, and proven at 1000+ CPS &mdash; production-grade, observable."</p>
+    </div>
+
+    <div class="plist">
+      <p class="who">Telecom / carrier</p>
+      <h3>Routing &amp; resilience</h3>
+      <ul class="steps">
+        <li><span class="n">1</span><span class="s">iRouter &mdash; config-driven routing</span></li>
+        <li><span class="n">2</span><span class="s">Proxy-balancer failover</span></li>
+        <li><span class="n">3</span><span class="s">OPTIONS overload-drain</span></li>
+        <li><span class="n">4</span><span class="s">FSMAR canary / gold-silver-bronze tiering</span></li>
+      </ul>
+      <p class="promise">"Config-driven, self-protecting, zero-downtime routing."</p>
+    </div>
+  </div>
+
+  <div class="section-head">
+    <h2>Known limits &amp; prep</h2>
+    <p>What isn't built yet, and the demos that need a setup step first.</p>
+  </div>
+
+  <div class="guard">
+    <ul>
+      <li><span class="badge">Cloud LLM</span><span><strong>Alice's answers use the cloud Claude API.</strong> <span class="why">The two-way agent is live &mdash; on-net ASR and TTS run on CPU and the call audio never egresses &mdash; but the <em>thinking</em> step sends the transcript text to the Claude API in the cloud. A fully on-net LLM (Gryphon W2) is the roadmap. Say it plainly; Alice does.</span></span></li>
+      <li><span class="badge no">Not built</span><span><strong>Media node-kill recovery.</strong> <span class="why">The media-server <code>reattach</code> handshake is still a TODO &mdash; failover isn't shown on the media plane yet.</span></span></li>
+      <li><span class="badge">Prep first</span><span><strong>On-net ASR: use clean audio.</strong> <span class="why">8&nbsp;kHz narrowband degrades ("sales" &rarr; "SAILS"); policy-file aliases mitigate it, but don't tempt it live.</span></span></li>
+      <li><span class="badge">Prep first</span><span><strong>Pre-stage the OCCAS install.</strong> <span class="why">The one-time eDelivery media fetch needs a manual Oracle license click &mdash; run <code>download</code> beforehand so the live run is genuinely one hands-off command. The nft keepalive shield is still the live backstop.</span></span></li>
+      <li><span class="badge">Prep first</span><span><strong>Wake the analytics stack.</strong> <span class="why">The Autonomous DB auto-stops after 7 idle days and the OAC dashboard bills while running &mdash; spin both up before recording.</span></span></li>
+    </ul>
+  </div>
+
+</div>
+</div>
+
+  <footer class="vorpal-footer">
+    <a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+      <img src="/blade/portal/brand/vorpal_logo.svg" alt="Vorpal Networks">
+    </a>
+    <span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+    <a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+  </footer>
+
+  </main>
+</div>
+</body>
+</html>

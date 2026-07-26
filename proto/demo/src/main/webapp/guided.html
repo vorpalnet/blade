@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guided Demo &mdash; BLADE</title>
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+<link rel="stylesheet" href="assets/demo.css">
+<link rel="stylesheet" href="assets/guided.css">
+</head>
+<body>
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="/blade/portal/" title="Return to the BLADE Admin Portal.">
+    <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+    <span class="vorpal-brand-text">
+      <span class="vorpal-brand-product">BLADE Admin Portal</span>
+      <span class="vorpal-brand-tagline">Unified Administration</span>
+    </span>
+  </a>
+  <a class="vorpal-appmark" href="index.html">Demo Kit</a>
+  <div class="vorpal-nav" aria-hidden="true"></div>
+  <div class="vorpal-topbar-right">
+    <a class="vorpal-topbar-link" href="index.html" title="Back to the demo matrix">&larr; All demos</a>
+  </div>
+</header>
+
+<div class="gwrap">
+  <div class="ghead">
+    <span class="pill">Route</span>
+    <h1 id="gtitle">Guided Demo</h1>
+    <p class="blurb" id="gblurb"></p>
+    <div class="modebar">
+      <div class="seg" role="group" aria-label="Run mode">
+        <button type="button" data-mode="mock">Mock</button>
+        <button type="button" data-mode="live">Live</button>
+      </div>
+      <span class="note" id="modenote"></span>
+    </div>
+  </div>
+
+  <div class="ginputs" id="ginputs"></div>
+
+  <div class="gcols">
+    <section class="panel">
+      <h2>Steps</h2>
+      <button class="runall" id="runall" type="button">Run the whole flow</button>
+      <ol class="steps" id="steps"></ol>
+    </section>
+
+    <section class="panel">
+      <h2>Call state</h2>
+      <div class="canvas">
+        <div class="phone" id="phone_a" data-st="idle">
+          <span class="glyph">&#9742;</span>
+          <div><div class="who">Phone A &mdash; agent</div><div class="num">from</div></div>
+          <span class="st">idle</span>
+        </div>
+        <div class="bridge" id="bridge" data-on="false"><span class="lbl">not bridged</span></div>
+        <div class="phone" id="phone_b" data-st="idle">
+          <span class="glyph">&#9742;</span>
+          <div><div class="who">Phone B &mdash; customer</div><div class="num">to</div></div>
+          <span class="st">idle</span>
+        </div>
+        <div class="ctxbox" id="ctx"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Requests</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </div>
+</div>
+
+<footer class="foot">Mockup &mdash; front-end only. Live mode drives the real 3PCC REST once the WAR is deployed (needs CORS).</footer>
+
+<script src="assets/flows.js"></script>
+<script src="assets/guided.js"></script>
+</body>
+</html>

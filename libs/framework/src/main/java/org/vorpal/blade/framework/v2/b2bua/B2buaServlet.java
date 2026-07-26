@@ -34,7 +34,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.UAMode;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
-import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.Callflow;
 
 /**
  * This class implements a simple back-to-back user agent. It accepts an

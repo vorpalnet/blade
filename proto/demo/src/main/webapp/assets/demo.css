@@ -1,0 +1,128 @@
+/* BLADE Demo Launcher — shared design system, aliased to the BLADE brand
+   tokens (/blade/portal/brand/brand.css) so the demo pages match the admin
+   apps: light + Vorpal purple. Colorblind-safe — state is carried by shape +
+   label, never color alone. (Each page must load brand.css before this file.) */
+:root{
+  --ground:var(--vorpal-slate-100); --surface:var(--vorpal-surface); --surface-2:var(--vorpal-surface-alt); --sunk:var(--vorpal-slate-100);
+  --ink:var(--vorpal-ink-900); --muted:var(--vorpal-slate-600); --faint:var(--vorpal-slate-400); --line:var(--vorpal-divider);
+  --accent:var(--vorpal-purple); --accent-2:var(--vorpal-purple-700); --on-accent:#ffffff;
+  --ready:var(--vorpal-success); --caveat:var(--vorpal-warn); --plan:var(--vorpal-slate-400);
+  --chip:var(--vorpal-surface); --chip-line:var(--vorpal-divider);
+  --shadow:var(--vorpal-shadow-sm);
+  --mono:var(--vorpal-font-mono);
+  --sans:var(--vorpal-font-sans);
+}
+*{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); line-height:1.5; -webkit-font-smoothing:antialiased;}
+
+/* ---- top bar ---- */
+.topbar{display:flex; align-items:center; gap:16px; justify-content:space-between;
+  padding:14px clamp(16px,4vw,40px); border-bottom:1px solid var(--line);
+  background:var(--surface); position:sticky; top:0; z-index:5;}
+.topbar .brand{font-family:var(--mono); font-size:13px; letter-spacing:.08em; font-weight:700;}
+.topbar .brand small{color:var(--faint); font-weight:500; letter-spacing:.14em; text-transform:uppercase; font-size:10px;}
+.back{font-family:var(--mono); font-size:12px; letter-spacing:.04em; color:var(--accent-2); text-decoration:none;}
+.back:hover{text-decoration:underline;}
+
+.wrap{max-width:1180px; margin:0 auto; padding:clamp(20px,4vw,44px) clamp(16px,4vw,40px) 72px;}
+
+/* ---- foundation line (hub) ---- */
+.foundation{border:1px solid var(--line); border-top:3px solid var(--accent);
+  border-radius:14px; background:var(--surface); box-shadow:var(--shadow);
+  padding:24px clamp(18px,3vw,32px); margin-bottom:30px;}
+.foundation .eyebrow{font-family:var(--mono); font-size:10.5px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--accent-2); margin:0 0 11px;}
+.foundation .thesis{font-size:clamp(18px,2.4vw,24px); line-height:1.32; letter-spacing:-.015em;
+  font-weight:520; margin:0; max-width:44ch; text-wrap:balance;}
+.foundation .thesis .quiet{color:var(--faint);}
+
+h1.hub-title{font-size:clamp(22px,3vw,30px); letter-spacing:-.02em; margin:0 0 6px; font-weight:680;}
+.hub-sub{color:var(--muted); margin:0 0 8px; max-width:64ch;}
+
+/* ---- pillar sections + cards (hub) ---- */
+.pillar-sec{margin-top:34px;}
+.pillar-sec > h2{font-family:var(--mono); font-size:12px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--accent-2); margin:0 0 3px; font-weight:600;}
+.pillar-sec > p{margin:0 0 14px; font-size:13px; color:var(--muted);}
+.cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(258px,1fr)); gap:14px;}
+.card{display:flex; flex-direction:column; gap:8px; background:var(--surface);
+  border:1px solid var(--line); border-radius:12px; padding:16px 17px; box-shadow:var(--shadow);
+  text-decoration:none; color:inherit; transition:transform .12s ease, border-color .12s ease;}
+a.card:hover{transform:translateY(-2px); border-color:var(--accent);}
+.card .cname{font-weight:600; font-size:15px; letter-spacing:-.01em;}
+.card .cdesc{font-size:12.5px; color:var(--muted); line-height:1.4; flex:1;}
+.card .crow{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+.card.planned{opacity:.62;}
+.launch{font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--accent-2); font-weight:600;}
+
+/* readiness / state tag &mdash; shape + word, not color */
+.state{display:inline-flex; align-items:center; gap:6px; font-family:var(--mono);
+  font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; font-weight:700; color:var(--muted);}
+.dot{width:11px; height:11px; border-radius:50%; flex:0 0 auto;}
+.dot.ready{background:var(--ready); border:1.5px solid var(--ready);}
+.dot.plan{background:transparent; border:1.5px solid var(--plan);}
+
+/* pillar label pill &mdash; identity is the WORD, uniform styling (no color code) */
+.pill{display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.12em;
+  text-transform:uppercase; font-weight:700; padding:3px 9px; border-radius:6px;
+  border:1px solid var(--line); background:var(--surface-2); color:var(--ink);}
+
+/* ---- demo page ---- */
+.demo-head{margin-bottom:22px;}
+.demo-head h1{font-size:clamp(24px,3.4vw,34px); letter-spacing:-.02em; margin:10px 0 8px; font-weight:680; text-wrap:balance;}
+.demo-head .tagline{color:var(--muted); margin:0; max-width:70ch; font-size:15px;}
+.demo-head .wins{font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--faint); margin-top:8px; text-transform:uppercase;}
+
+.grid2{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start;}
+@media (max-width:760px){ .grid2{grid-template-columns:1fr;} }
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:14px;
+  padding:20px 22px; box-shadow:var(--shadow);}
+.panel-title{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--faint); margin:0 0 16px; font-weight:600;}
+
+/* form */
+.field{display:flex; flex-direction:column; gap:6px; margin-bottom:15px;}
+.field label{font-size:12.5px; font-weight:600; letter-spacing:.01em;}
+.field .hint{font-size:11.5px; color:var(--faint); margin-top:-2px;}
+.field input, .field select{font-family:inherit; font-size:14px; color:var(--ink);
+  background:var(--sunk); border:1px solid var(--line); border-radius:9px; padding:10px 12px; width:100%;}
+.field input[readonly]{color:var(--muted); font-family:var(--mono); letter-spacing:.02em;}
+.field input:focus, .field select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent);}
+.two{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+@media (max-width:460px){ .two{grid-template-columns:1fr;} }
+
+.btn{font-family:var(--sans); font-size:14px; font-weight:640; letter-spacing:.01em;
+  background:var(--accent); color:var(--on-accent); border:none; border-radius:10px;
+  padding:12px 20px; cursor:pointer; margin-top:4px; width:100%;}
+.btn:hover{filter:brightness(1.06);}
+.btn:focus-visible{outline:2px solid var(--accent-2); outline-offset:2px;}
+
+/* storyboard / what-the-rep-sees */
+.stage{position:relative;}
+.stage .runbadge{display:none; position:absolute; top:16px; right:18px; font-family:var(--mono);
+  font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; font-weight:700;
+  color:var(--accent-2); border:1px solid var(--accent); border-radius:5px; padding:2px 7px;}
+.stage.live .runbadge{display:inline-block;}
+.storyboard{list-style:none; margin:0; padding:0; counter-reset:step; display:flex; flex-direction:column; gap:0;}
+.storyboard li{position:relative; padding:0 0 16px 34px; font-size:13.5px;}
+.storyboard li:last-child{padding-bottom:0;}
+.storyboard li::before{counter-increment:step; content:counter(step); position:absolute; left:0; top:-1px;
+  width:22px; height:22px; border-radius:50%; background:var(--surface-2); border:1px solid var(--line);
+  font-family:var(--mono); font-size:11px; font-weight:700; color:var(--accent-2);
+  display:flex; align-items:center; justify-content:center;}
+.storyboard li:not(:last-child)::after{content:""; position:absolute; left:11px; top:23px; bottom:2px; width:1px; background:var(--line);}
+.storyboard li .t{font-weight:600;}
+.storyboard li .d{color:var(--muted); display:block; margin-top:1px; font-size:12.5px;}
+
+/* toast (injected by demo.js) */
+.toast{position:fixed; left:50%; bottom:26px; transform:translate(-50%,14px);
+  background:var(--ink); color:var(--ground); font-size:13px; padding:11px 18px; border-radius:10px;
+  box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; z-index:20; max-width:90vw;}
+.toast.show{opacity:1; transform:translate(-50%,0);}
+
+.foot{border-top:1px solid var(--line); padding:18px clamp(16px,4vw,40px);
+  font-family:var(--mono); font-size:11px; letter-spacing:.04em; color:var(--faint); text-align:center;}
+
+@media (prefers-reduced-motion:reduce){ *{transition:none !important; scroll-behavior:auto !important;} }

@@ -148,6 +148,19 @@ public final class CredentialEncryption {
 		}
 	}
 
+	/// Resolve a stored credential to its usable plaintext, whichever prefix it
+	/// carries: strips `{CLEARTEXT}`, decrypts `{AES}`, and passes an already-bare
+	/// value through unchanged. Use this at the point of use (e.g. computing a
+	/// digest) — `decrypt()` alone leaves a `{CLEARTEXT}` prefix in place, so the
+	/// literal marker would otherwise end up in the credential.
+	public static String plaintext(String value) {
+		if (value == null) return null;
+		if (value.startsWith(CLEARTEXT_PREFIX)) {
+			return value.substring(CLEARTEXT_PREFIX.length());
+		}
+		return decrypt(value);
+	}
+
 	/// Process a config value: if `{CLEARTEXT}`, encrypt it and return
 	/// the encrypted form. If `{AES}`, return as-is (already encrypted).
 	/// Otherwise return the value unchanged.

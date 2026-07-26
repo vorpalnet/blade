@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>iRouter &mdash; config-driven routing &mdash; BLADE Demo</title>
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+<link rel="stylesheet" href="assets/demo.css">
+</head>
+<body>
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="/blade/portal/" title="Return to the BLADE Admin Portal.">
+    <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+    <span class="vorpal-brand-text">
+      <span class="vorpal-brand-product">BLADE Admin Portal</span>
+      <span class="vorpal-brand-tagline">Unified Administration</span>
+    </span>
+  </a>
+  <a class="vorpal-appmark" href="index.html">Demo Kit</a>
+  <div class="vorpal-nav" aria-hidden="true"></div>
+  <div class="vorpal-topbar-right">
+    <a class="vorpal-topbar-link" href="index.html" title="Back to the demo matrix">&larr; All demos</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="demo-head">
+    <span class="pill">Route</span>
+    <h1>iRouter &mdash; Routing Without Code</h1>
+    <p class="tagline">Send a call in and watch it routed entirely by lookup tables and <code>${variables}</code> &mdash; the destination comes from config, never from hand&#8209;written Java. Change routing without a build.</p>
+    <p class="wins">Route &middot; config&#8209;driven proxy</p>
+  </div>
+
+  <div class="grid2">
+    <form class="panel" onsubmit="return blade.launch(event)">
+      <h2 class="panel-title">Route a call</h2>
+      <div class="two">
+        <div class="field">
+          <label for="caller">Caller number</label>
+          <input id="caller" name="caller" type="tel" placeholder="+1 415 555 0199" required>
+        </div>
+        <div class="field">
+          <label for="dialed">Dialed number / URI</label>
+          <input id="dialed" name="dialed" type="text" placeholder="+1 800 555 0100" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="table">Routing table</label>
+        <select id="table" name="table">
+          <option>Gold / Silver / Bronze tiering</option>
+          <option>Geographic (by area code)</option>
+          <option>Time&#8209;of&#8209;day</option>
+          <option>Percentage canary</option>
+        </select>
+      </div>
+      <button class="btn" type="submit">Route call</button>
+    </form>
+
+    <aside class="panel stage" id="stage">
+      <span class="runbadge">&#9658; routing (mock)</span>
+      <h2 class="panel-title">What the rep sees</h2>
+      <ol class="storyboard">
+        <li><span class="t">INVITE arrives, context enriched</span><span class="d">Pipeline connectors run lookups (table / REST / LDAP / JDBC).</span></li>
+        <li><span class="t">Named values written to <code>${vars}</code></span><span class="d">The enriched context is available to the routing step.</span></li>
+        <li><span class="t">Routing table resolves the destination</span><span class="d">A SIP URI + outbound headers &mdash; straight from config.</span></li>
+        <li><span class="t">Call proxied &mdash; zero Java</span><span class="d">Change the table, change the routing. No rebuild.</span></li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<footer class="foot">Mockup &mdash; front-end only. Backed by the iRouter universal proxy once wired.</footer>
+<script src="assets/demo.js"></script>
+</body>
+</html>

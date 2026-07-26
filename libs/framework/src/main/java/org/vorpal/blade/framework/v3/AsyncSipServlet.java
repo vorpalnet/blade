@@ -10,8 +10,8 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSession.State;
 
-import org.vorpal.blade.framework.v2.callflow.Callback;
-import org.vorpal.blade.framework.v2.callflow.Callflow.GlareState;
+import org.vorpal.blade.framework.Callback;
+import org.vorpal.blade.framework.Callflow.GlareState;
 import org.vorpal.blade.framework.v2.callflow.CallflowAckBye;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 
@@ -27,7 +27,7 @@ import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 /// A servlet opts in with a one-line base-class swap (same pattern as the
 /// callflow v3 migration); everything else is inherited unchanged. A disarmed
 /// call costs one boolean read per trace event.
-public abstract class AsyncSipServlet extends org.vorpal.blade.framework.v2.AsyncSipServlet {
+public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSipServlet {
 	private static final long serialVersionUID = 1L;
 
 	/// Copied from v2 AsyncSipServlet.doRequest (AsyncSipServlet.java:415–570)
@@ -54,7 +54,7 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.v2.Asyn
 
 			SipApplicationSession appSession = request.getApplicationSession();
 			String method = request.getMethod();
-			SipSession linkedSession = org.vorpal.blade.framework.v2.callflow.Callflow
+			SipSession linkedSession = org.vorpal.blade.framework.Callflow
 					.getLinkedSession(request.getSession());
 
 			// passively track endpoint UPDATE support for the keep-alive style
@@ -68,7 +68,7 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.v2.Asyn
 				case "MESSAGE":
 					break;
 				default:
-					String indexKey = org.vorpal.blade.framework.v2.callflow.Callflow.getVorpalSessionId(request);
+					String indexKey = org.vorpal.blade.framework.Callflow.getVorpalSessionId(request);
 					if (indexKey != null) {
 						appSession.addIndexKey(indexKey);
 					}
@@ -125,7 +125,7 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.v2.Asyn
 
 					} else {
 
-						org.vorpal.blade.framework.v2.callflow.Callflow callflow = chooseCallflow(request);
+						org.vorpal.blade.framework.Callflow callflow = chooseCallflow(request);
 
 						if (callflow == null) {
 
@@ -221,7 +221,7 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.v2.Asyn
 			SipSession sipSession = response.getSession();
 			SipApplicationSession appSession = response.getApplicationSession();
 			String method = response.getMethod();
-			SipSession linkedSession = org.vorpal.blade.framework.v2.callflow.Callflow
+			SipSession linkedSession = org.vorpal.blade.framework.Callflow
 					.getLinkedSession(response.getSession());
 
 			// passively track endpoint UPDATE support for the keep-alive style

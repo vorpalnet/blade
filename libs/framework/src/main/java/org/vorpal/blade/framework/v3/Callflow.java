@@ -13,7 +13,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.callflow.Callback;
+import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.v2.testing.DummyResponse;
@@ -59,7 +59,7 @@ import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 ///
 /// Because no ACK or BYE ever reaches us after drop-out, OCCAS won't
 /// auto-invalidate — so we tear down both legs and the app session ourselves.
-public abstract class Callflow extends org.vorpal.blade.framework.v2.callflow.Callflow {
+public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	private static final long serialVersionUID = 1L;
 
 	// INVITE is inherited (public) from v2.Callflow — do not redeclare it, or it
@@ -495,7 +495,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.v2.callflow.Ca
 			String handlerClass;
 			if (handler == null || handler instanceof String) {
 				handlerClass = handler != null ? (String) handler : "?";
-			} else if (handler instanceof org.vorpal.blade.framework.v2.callflow.Callflow) {
+			} else if (handler instanceof org.vorpal.blade.framework.Callflow) {
 				handlerClass = processDeclarer(handler.getClass()).getName();
 			} else {
 				String[] target = lambdaTarget(handler);
@@ -648,7 +648,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.v2.callflow.Ca
 		java.util.HashSet<String> owners = new java.util.HashSet<>();
 		for (Class<?> c = this.getClass(); c != null
 				&& c != Callflow.class
-				&& c != org.vorpal.blade.framework.v2.callflow.Callflow.class; c = c.getSuperclass()) {
+				&& c != org.vorpal.blade.framework.Callflow.class; c = c.getSuperclass()) {
 			owners.add(c.getName());
 		}
 		for (StackTraceElement e : Thread.currentThread().getStackTrace()) {

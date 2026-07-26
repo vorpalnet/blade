@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-proto-player</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Player/Recorder (proto) — JSR-309 media</name>
+	<description>Answers an inbound call, anchors its media on a JSR-309 media server, and plays a
+		prompt or music to the caller (optionally recording). Vendor-neutral: it speaks only
+		javax.media.mscontrol.* and finds its media server through a registered 309 driver.</description>
+
+	<build>
+		<finalName>blade-player</finalName>
+	</build>
+
+	<dependencies>
+		<!-- Only the framework (skinny WAR). The JSR-309 API (com.oracle.occas:mscontrol, provided)
+		     is inherited from the parent pom; the 309 driver is discovered at runtime via the SPI,
+		     so there is no compile dependency on any media-server vendor (incl. Gryphon). -->
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.13.2</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+</project>

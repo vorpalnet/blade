@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Talk to Alice &mdash; BLADE Demo</title>
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+<link rel="stylesheet" href="assets/demo.css">
+<style>
+  /* page-local additions, all on the shared brand tokens */
+  .dial{display:flex; flex-direction:column; gap:12px; margin-bottom:6px;}
+  .dial a.dialrow, .dial .dialrow{
+    display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:center;
+    background:var(--sunk); border:1px solid var(--line); border-radius:11px; padding:13px 15px;
+    text-decoration:none; color:inherit;
+  }
+  .dial a.dialrow:hover{border-color:var(--accent); background:var(--surface-2);}
+  .dial a.dialrow:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .dial .kind{font-family:var(--mono); font-size:9.5px; letter-spacing:.1em; text-transform:uppercase;
+    font-weight:700; color:var(--accent-2); border:1px solid var(--accent); border-radius:5px; padding:2px 7px; white-space:nowrap;}
+  .dial .num{font-family:var(--mono); font-size:15px; letter-spacing:.01em; color:var(--ink); font-weight:600;}
+  .dial .num small{display:block; font-family:var(--sans); font-weight:400; font-size:11.5px; color:var(--muted); letter-spacing:0; margin-top:2px;}
+  .dial .go{font-family:var(--mono); font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:.08em;}
+
+  /* on-net vs cloud path &mdash; distinguished by border style + explicit label, never by color alone */
+  .arch{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:2px 0 4px;}
+  .arch .node{flex:1 1 0; min-width:96px; background:var(--surface); border:1.5px solid var(--line);
+    border-radius:10px; padding:11px 12px; position:relative;}
+  .arch .node.cloud{border-style:dashed;}
+  .arch .node .zone{font-family:var(--mono); font-size:8.5px; letter-spacing:.11em; text-transform:uppercase;
+    font-weight:700; margin-bottom:5px;}
+  .arch .node.onnet .zone{color:var(--accent-2);}
+  .arch .node.cloud .zone{color:var(--caveat);}
+  .arch .node .what{font-size:12.5px; font-weight:600; line-height:1.25;}
+  .arch .node .how{font-size:11px; color:var(--muted); margin-top:3px; line-height:1.3;}
+  .arch .arrow{align-self:center; font-family:var(--mono); color:var(--faint); font-size:14px; font-weight:700; padding:0 1px;}
+  @media (max-width:760px){ .arch .arrow{transform:rotate(90deg);} }
+
+  .note{background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--caveat);
+    border-radius:12px; padding:16px 18px; margin-top:20px; box-shadow:var(--shadow);}
+  .note h3{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--caveat); margin:0 0 9px; font-weight:700;}
+  .note p{margin:0 0 8px; font-size:13.5px; color:var(--ink); line-height:1.5;}
+  .note p:last-child{margin-bottom:0;}
+  .note .why{color:var(--muted);}
+  .specs{display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:12px; font-family:var(--mono);
+    font-size:11px; color:var(--muted); letter-spacing:.02em;}
+  .specs b{color:var(--ink); font-weight:700;}
+</style>
+</head>
+<body>
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="/blade/portal/" title="Return to the BLADE Admin Portal.">
+    <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+    <span class="vorpal-brand-text">
+      <span class="vorpal-brand-product">BLADE Admin Portal</span>
+      <span class="vorpal-brand-tagline">Unified Administration</span>
+    </span>
+  </a>
+  <a class="vorpal-appmark" href="index.html">Demo Kit</a>
+  <div class="vorpal-nav" aria-hidden="true"></div>
+  <div class="vorpal-topbar-right">
+    <a class="vorpal-topbar-link" href="index.html" title="Back to the demo matrix">&larr; All demos</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="demo-head">
+    <span class="pill">Voice</span>
+    <h1>Talk to Alice</h1>
+    <p class="tagline">Dial the number and have a real conversation. BLADE answers the SIP call; your speech is recognized and her replies are spoken back <strong>on CPU, inside the network</strong>. Alice is the two&#8209;way voice agent &mdash; she listens, thinks, and talks back over an ordinary phone line.</p>
+    <p class="wins">Voice &middot; on&#8209;net ASR + TTS &middot; live two&#8209;way agent</p>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2 class="panel-title">Call her</h2>
+      <div class="dial">
+        <div class="dialrow">
+          <span class="kind">PSTN</span>
+          <span class="num">+1 415 376 0002<small>From any phone &mdash; a real number on a live SIP trunk.</small></span>
+          <span class="go">dial</span>
+        </div>
+        <a class="dialrow" href="sip:claude@150.136.67.13:5061;transport=tcp">
+          <span class="kind">SIP</span>
+          <span class="num">sip:claude@150.136.67.13:5061<small>From a softphone &mdash; use TCP transport.</small></span>
+          <span class="go">&#9658;</span>
+        </a>
+      </div>
+      <p class="field hint" style="margin-top:4px;">The SIP address still reads <code>claude</code> &mdash; that's the routing name; she answers as <strong>Alice</strong>. Softphones behind port&#8209;restricted NAT must use <b>TCP</b>, since the engine replies from an ephemeral UDP port.</p>
+
+      <div class="specs">
+        <span><b>Latency</b> ~2&ndash;3 s/turn</span>
+        <span><b>Codec</b> G.711 &mu;-law</span>
+        <span><b>ASR</b> streaming zipformer (int8)</span>
+        <span><b>TTS</b> Piper / VITS</span>
+        <span><b>Silicon</b> Ampere CPU (OCI A4)</span>
+      </div>
+    </div>
+
+    <aside class="panel stage live" id="stage">
+      <span class="runbadge">&#9658; live</span>
+      <h2 class="panel-title">What happens on the call</h2>
+      <ol class="storyboard">
+        <li><span class="t">You dial &rarr; BLADE answers</span><span class="d">The INVITE arrives over a real PSTN trunk; FSMAR routes it to the voice agent. No SBC, no media gateway in between.</span></li>
+        <li><span class="t">Alice greets you</span><span class="d">Her opening line is synthesized on&#8209;CPU and returned over symmetric RTP &mdash; the audio path is set up before you say a word.</span></li>
+        <li><span class="t">You speak &rarr; recognized on&#8209;net</span><span class="d">Streaming ASR on Ampere cores turns your voice into text as you talk. The audio never leaves the network.</span></li>
+        <li><span class="t">She thinks, then answers</span><span class="d">The transcript is answered by an LLM; the reply streams back sentence&#8209;by&#8209;sentence, spoken on&#8209;CPU, about two to three seconds after you stop.</span></li>
+        <li><span class="t">Hang up &rarr; call released</span><span class="d">Either side hangs up and BLADE tears the whole call down cleanly.</span></li>
+      </ol>
+    </aside>
+  </div>
+
+  <div class="section-head" style="margin:26px 0 12px;"></div>
+
+  <div class="arch" aria-label="Signal path: which stages run on-net versus in the cloud">
+    <div class="node onnet"><div class="zone">On-net</div><div class="what">Your voice</div><div class="how">G.711 RTP into the media node</div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node onnet"><div class="zone">On-net &middot; CPU</div><div class="what">Speech &rarr; text</div><div class="how">Streaming ASR, Ampere cores</div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node cloud"><div class="zone">Cloud</div><div class="what">Text &rarr; reply</div><div class="how">Claude API &mdash; transcript egresses</div></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node onnet"><div class="zone">On-net &middot; CPU</div><div class="what">Text &rarr; speech</div><div class="how">On&#8209;CPU TTS, back over RTP</div></div>
+  </div>
+
+  <div class="note">
+    <h3>Honest caveat &mdash; where the data goes</h3>
+    <p><strong>The audio stays on&#8209;net.</strong> <span class="why">Recognition and synthesis both run on CPU inside the network &mdash; the call's audio never reaches a third&#8209;party cloud.</span></p>
+    <p><strong>The LLM is the cloud Claude API.</strong> <span class="why">Only for the thinking step: the <em>transcript text</em> of what's said is sent to the Claude API and the reply comes back as text. That text does leave the network. A fully on&#8209;net language model is the Gryphon roadmap &mdash; the infrastructure (log&#8209;mel front end, int8 runtime) is in place; the on&#8209;CPU model is the remaining piece.</span></p>
+    <p class="why">Alice says this herself if a caller asks how the call works &mdash; the honesty is built into the persona.</p>
+  </div>
+
+</div>
+
+<footer class="foot">Live on the ashburn cluster &mdash; not a mockup. On&#8209;net ASR + TTS on OCI A4; LLM via the cloud Claude API.</footer>
+</body>
+</html>

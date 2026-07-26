@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Trace &mdash; the code behind the call &mdash; BLADE Demo</title>
+<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/favicon.svg">
+<link rel="stylesheet" href="assets/demo.css">
+</head>
+<body>
+<header class="vorpal-topbar">
+  <a class="vorpal-brand" href="/blade/portal/" title="Return to the BLADE Admin Portal.">
+    <img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+    <span class="vorpal-brand-text">
+      <span class="vorpal-brand-product">BLADE Admin Portal</span>
+      <span class="vorpal-brand-tagline">Unified Administration</span>
+    </span>
+  </a>
+  <a class="vorpal-appmark" href="index.html">Demo Kit</a>
+  <div class="vorpal-nav" aria-hidden="true"></div>
+  <div class="vorpal-topbar-right">
+    <a class="vorpal-topbar-link" href="index.html" title="Back to the demo matrix">&larr; All demos</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="demo-head">
+    <span class="pill">Route</span>
+    <h1>See the Code Behind the Call</h1>
+    <p class="tagline">Arm a filter, place a matching call, and watch it render as a sequence ladder &mdash; then click a hop to see the <em>actual callflow source that ran</em>. This is the whole thesis in sixty seconds: a call reads top to bottom, like a poem.</p>
+    <p class="wins">Route &middot; the flagship demo</p>
+  </div>
+
+  <div class="grid2">
+    <form class="panel" onsubmit="return blade.launch(event)">
+      <h2 class="panel-title">Arm a trace</h2>
+      <div class="field">
+        <label for="on">Match on</label>
+        <select id="on" name="on">
+          <option>Call-ID</option>
+          <option selected>From URI</option>
+          <option>To URI</option>
+          <option>Custom header</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="pattern">Pattern <span class="hint">(regex)</span></label>
+        <input id="pattern" name="pattern" type="text" placeholder=".*5551234.*" required>
+      </div>
+      <div class="field">
+        <label for="label">Label <span class="hint">(optional)</span></label>
+        <input id="label" name="label" type="text" placeholder="Acme onboarding call">
+      </div>
+      <button class="btn" type="submit">Arm trace</button>
+    </form>
+
+    <aside class="panel stage" id="stage">
+      <span class="runbadge">&#9658; armed (mock)</span>
+      <h2 class="panel-title">What the rep sees</h2>
+      <ol class="storyboard">
+        <li><span class="t">Filter armed across the whole app chain</span><span class="d">Every BLADE app in the path watches for a match.</span></li>
+        <li><span class="t">Place a matching call</span><span class="d">The flight recorder captures it end to end.</span></li>
+        <li><span class="t">It renders as a sequence ladder</span><span class="d">Every SIP message, in order, as a diagram.</span></li>
+        <li><span class="t">Click a hop &rarr; the source that ran</span><span class="d">The highlighted callflow lines &mdash; readable top to bottom, not scattered handlers.</span></li>
+      </ol>
+    </aside>
+  </div>
+</div>
+
+<footer class="foot">Mockup &mdash; front-end only. Backed by the Callflow / Trace console once wired.</footer>
+<script src="assets/demo.js"></script>
+</body>
+</html>
