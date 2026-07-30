@@ -218,14 +218,6 @@ module_dir() {
 dist_subdir_for() {
     case "$1" in
         apps/*)                    echo "" ;;     # the EARs (blade-admin/test.ear) → dist root
-        # Built for blade-test.ear (engine0) but NEVER shipped to the production
-        # cluster. proxy-registrar accepts REGISTERs with no authentication; it
-        # is a test fixture, not a service. This used to be enforced implicitly
-        # by blade-services.ear's ear-<name> profile list acting as an
-        # allowlist — proxy-registrar simply had no profile there. With the
-        # services EAR gone that filter went with it, so the exclusion is
-        # explicit and named here instead of being a side effect.
-        services/proxy-registrar)  echo "skip" ;;
         services/*)                echo "services" ;; # each service WAR is its own deploy unit — see below
         admin/*|test/*)            echo "skip" ;; # component WARs: the EAR is the deploy unit, not copied to dist
         proto/*)                   echo "proto" ;; # incubator apps — built, deployed by hand
