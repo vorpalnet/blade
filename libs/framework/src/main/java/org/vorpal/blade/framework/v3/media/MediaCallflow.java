@@ -25,6 +25,7 @@ import javax.media.mscontrol.networkconnection.SdpPortManager;
 import javax.media.mscontrol.networkconnection.SdpPortManagerEvent;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
 
 import com.bea.wcp.sip.WlssAction;
 import com.bea.wcp.sip.WlssSipApplicationSession;
@@ -207,6 +208,88 @@ public abstract class MediaCallflow extends Callflow {
 	/// the media server's answer is ready. The answer bytes are on the event:
 	/// [SdpPortManagerEvent#getMediaServerSdp] — hand them straight to your
 	/// `200 OK`. This is the 309 side of the 3PCC anchor.
+	/// Ask the media server to offer **first**, and run `onOffer` when its offer is ready. The SDP is
+	/// on the event: [SdpPortManagerEvent#getMediaServerSdp].
+	///
+	/// This is the mirror of [#offer] and it is what two things need:
+	///
+	/// - **Late media** — an INVITE arrives with no SDP, so the offer must go out in the `200 OK`
+	///   and the caller's answer comes back in the `ACK`. See [#answerWithLateMedia].
+	/// - **Dropping the media server into a call that is already up** — a browser-to-browser call
+	///   being escalated to recording or conferencing has to be re-offered from the media server,
+	///   because the two endpoints' media is encrypted directly to each other and cannot be tapped.
+	///
+	/// Completion arrives as [SdpPortManagerEvent#OFFER_GENERATED].
+	protected void generateOffer(NetworkConnection networkConnection, Callback<SdpPortManagerEvent> onOffer)
+			throws MsControlException {
+		SdpPortManager sdp = networkConnection.getSdpPortManager();
+		arm(sdp, SDP, onOffer);
+		sdp.generateSdpOffer();
+		captureRecovery(appOf(networkConnection.getMediaSession()), networkConnection.getMediaSession());
+	}
+
+	/// Feed the peer's answer to an offer this media server generated, and run `onProcessed` once the
+	/// negotiation is complete ([SdpPortManagerEvent#ANSWER_PROCESSED]).
+	protected void processAnswer(NetworkConnection networkConnection, byte[] peerAnswer,
+			Callback<SdpPortManagerEvent> onProcessed) throws MsControlException {
+		SdpPortManager sdp = networkConnection.getSdpPortManager();
+		arm(sdp, SDP, onProcessed);
+		sdp.processSdpAnswer(peerAnswer);
+	}
+
+	/// Answer an INVITE that arrived with **no SDP**: offer from the media server in the `200 OK`,
+	/// and take the caller's answer out of the `ACK`.
+	///
+	/// Carriers do send SDP-less INVITEs, and a gateway that only knows how to consume an offer
+	/// cannot complete the call at all. No new machinery is needed for the ACK —
+	/// [org.vorpal.blade.framework.Callflow#sendResponse] already delivers it to a continuation.
+	///
+	/// @param invite       the SDP-less initial INVITE
+	/// @param nc           the media leg facing the caller
+	/// @param onNegotiated run once the answer from the ACK has been applied; may be null
+	protected void answerWithLateMedia(SipServletRequest invite, NetworkConnection nc,
+			Callback<SipServletRequest> onNegotiated) throws MsControlException {
+
+		generateOffer(nc, offerEvent -> {
+			SipServletResponse ok = invite.createResponse(200);
+			ok.setContent(offerEvent.getMediaServerSdp(), "application/sdp");
+			sendResponse(ok, ack -> {
+				byte[] answer = rawContent(ack);
+				if (answer != null) {
+					processAnswer(nc, answer, processed -> {
+						if (onNegotiated != null) {
+							onNegotiated.accept(ack);
+						}
+					});
+				} else if (onNegotiated != null) {
+					// An ACK with no body is not fatal — some peers answer in a PRACK-negotiated
+					// early dialog instead, leaving the leg as the media server already set it.
+					onNegotiated.accept(ack);
+				}
+			});
+		});
+	}
+
+	/// True when `request` carries no body — the late-media case for an INVITE.
+	protected static boolean isLateMedia(SipServletRequest request) {
+		return rawContent(request) == null;
+	}
+
+	/// A message's body as bytes, or null when there is none.
+	protected static byte[] rawContent(javax.servlet.sip.SipServletMessage message) {
+		try {
+			Object content = message.getContent();
+			if (content == null) {
+				return null;
+			}
+			byte[] bytes = (content instanceof byte[]) ? (byte[]) content
+					: content.toString().getBytes(StandardCharsets.UTF_8);
+			return bytes.length == 0 ? null : bytes;
+		} catch (java.io.IOException e) {
+			return null;
+		}
+	}
+
 	protected void offer(NetworkConnection networkConnection, byte[] callerSdpOffer,
 			Callback<SdpPortManagerEvent> onAnswer) throws MsControlException {
 		SdpPortManager sdp = networkConnection.getSdpPortManager();

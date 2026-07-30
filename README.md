@@ -144,7 +144,7 @@ BLADE deploys in **four tiers**, each with its own scope:
 OCCAS Domain
 ├── approuter/               ← (1) fsmar.jar         [engine-tier reboot]
 ├── AdminServer              ← (2) shared library  + (3) admin WARs
-└── Cluster (engine tier)    ← (2) shared library  + (4) services EAR
+└── Cluster (engine tier)    ← (2) shared library  + (4) service WARs (one each)
 ```
 
 See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full deployment guide, `./deploy.sh` reference, FSMAR install walkthrough, and troubleshooting.
@@ -280,7 +280,7 @@ dist/<version>-<build>/
 Admin-tier WARs are named `blade-<app>.war` so their WebLogic app names never collide with the like-named services-tier WARs (e.g. admin `blade-crud.war` vs. a service `crud.war`); `blade-configurator.war` still deploys at `/blade/configurator` because the WAR filename and the `<wls:context-root>` are independent. Services-tier WAR filenames still match the last segment of their context-root (`hold.war` → `/hold`). The `blade-` prefix doesn't always equal the context — `blade-crud.war` → `/blade/crud-editor`, `blade-analytics.war` → `/blade/analytics`, `blade-test.war` → `/blade/test-console` — those three are deliberately shortened.
 
 - The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
-- **EAR (currently disabled)**: the `services/` aggregator no longer produces a `vorpal-blade-services-<profile>.ear`. Services are deployed individually as WARs while the EAR logic is offline. See `services/pom.xml` for the TODO marker.
+- **No services EAR — by design.** Service WARs are copied to `dist/<ver>-<build>/services/` and deploy one at a time. Oracle's Remote Console cannot show the status of an application bundled inside an EAR, so a single `blade-services.ear` left every service individually invisible: you could see the EAR was running, not which service inside it was. Separate WARs cost a longer deploy loop and buy per-service state, start/stop and targeting. The admin and test tiers keep their EARs (`blade-admin.ear`, `blade-test.ear`).
 - **FSMAR JAR** must be installed manually into the OCCAS approuter `lib/` folder.
 - **Admin WARs** are skinny like service WARs — `WEB-INF/lib` carries only the framework jar; 3rd-party JARs come from the `blade-shared` shared library. They deploy to AdminServer (as `blade-admin.ear`, or individually).
 - On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
@@ -321,14 +321,14 @@ Each `./build.sh` invocation auto-increments a build number stored in `build.num
 
 The `build.sh` script accepts one or more **module profiles** (which apps to build), an optional **platform** (which OCCAS/Java version to target), and optional Maven arguments.
 
-Each profile produces its own EAR named `vorpal-blade-services-<profile>.ear`. When multiple profiles are specified, all required modules are built once, then each profile's EAR is packaged separately.
+A profile decides which modules are built, and therefore what lands in `dist/`: the admin tier as `blade-admin.ear`, the test tier as `blade-test.ear`, and each service as its own WAR under `dist/<ver>-<build>/services/`.
 
 ```bash
 ./build.sh                              # full build, platform from $MW_HOME
-./build.sh production                   # vorpal-blade-services-production.ear
+./build.sh production                   # production services only
 ./build.sh production occas-8.2         # production services, OCCAS 8.2 (overrides $MW_HOME)
 ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3 (overrides $MW_HOME)
-./build.sh production minimal           # two EARs: production + minimal
+./build.sh production minimal           # both profiles' modules
 ./build.sh production clean package     # with explicit Maven goals
 ./build.sh -- -Pjavadocs                # full build with extra Maven flags
 ```
@@ -358,10 +358,10 @@ Module profiles (`build-profiles/*.conf`):
 
 | Profile | Description |
 | --- | --- |
-| `default` | Used when no profile is specified. Builds `framework`, `shared`, `fsmar`, the admin tier, most services (no `irouter`/`crud`), test apps. → `vorpal-blade-services-default.ear` |
-| `full` | Every library, admin, service, and test module → `vorpal-blade-services-full.ear` |
-| `production` | All libraries + admin apps + services (no test apps) → `vorpal-blade-services-production.ear` |
-| `minimal` | `framework` + `shared` + proxy-registrar/proxy-router → `vorpal-blade-services-minimal.ear` |
+| `default` | Used when no profile is specified. Builds `framework`, `shared`, `fsmar`, the admin tier, most services, test apps |
+| `full` | Every library, admin, service and test module, plus the `proto/` incubator apps |
+| `production` | All libraries + admin apps + services (no test apps) |
+| `minimal` | `framework` + `shared` + core routing |
 
 Each conf file is a flat list of module directory names. Anything **not** listed is excluded with `-Dskip.<name>`. The four module categories — `libs/`, `admin/`, `services/`, `test/` — are all treated uniformly: any of them can be opted in or out.
 
@@ -415,7 +415,7 @@ Traditional `/** */` comments remain fully compatible and can coexist with `///`
 
 ## Deploy
 
-Use `./deploy.sh <env>` — see **[DEPLOYMENT.md](DEPLOYMENT.md)**. Per-tier Maven profiles (`-Pdeploy`, `-Pundeploy`, `-Pstop`, `-Pstart`) still exist under `services/pom.xml` as the underlying implementation; `deploy.sh` is the user-facing wrapper.
+Use `./deploy.sh <env>` — see **[DEPLOYMENT.md](DEPLOYMENT.md)**. It deploys the whole environment in dependency-safe order (shared → fsmar → admin → services), or one tier at a time; the services tier loops the WARs in `dist/<ver>-<build>/services/`, narrowable with `deploy.services` in the env conf.
 
 ## Eclipse
 

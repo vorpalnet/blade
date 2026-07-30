@@ -55,13 +55,16 @@ import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.analytics.Event;
+import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
+import org.vorpal.blade.framework.v3.events.EventBusSettings;
+import org.vorpal.blade.framework.v3.metrics.MetricsControl;
+import org.vorpal.blade.framework.v3.metrics.MetricsRegistry;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -135,6 +138,10 @@ public class SettingsManager<T> {
 	protected static String applicationVersion;
 
 	private static Analytics analytics = null;
+
+	/// This application's event-bus settings, hoisted from its `Configuration`
+	/// alongside [#analytics]. See [#getEventBus()].
+	private static EventBusSettings eventBus = null;
 	private static SessionParameters sessionParameters = null;
 	private static LogParameters logParameters = null;
 
@@ -148,6 +155,10 @@ public class SettingsManager<T> {
 
 	protected javax.servlet.ServletContext servletContext;
 	protected String servletContextName;
+
+	/// This app's metrics MBean on this node, or null when registration was
+	/// skipped or failed. See [#registerMetrics()].
+	protected MetricsControl metricsControl;
 	protected Path domainPath;
 	protected Path clusterPath;
 	protected Path serverPath;
@@ -314,6 +325,8 @@ public class SettingsManager<T> {
 
 			register();
 
+			registerMetrics();
+
 			settings.reload();
 
 			if (current != null) {
@@ -329,11 +342,13 @@ public class SettingsManager<T> {
 			// set analytics to a static variable, useful for finding it later
 			if (current instanceof Configuration) {
 				analytics = ((Configuration) current).getAnalytics();
+				eventBus = ((Configuration) current).getEvents();
 				sessionParameters = ((Configuration) current).getSession();
 				logParameters = ((Configuration) current).getLogging();
 			}
 
 			analytics = (analytics != null) ? analytics : new Analytics();
+			eventBus = (eventBus != null) ? eventBus : new EventBusSettings();
 			logParameters = (logParameters != null) ? logParameters : new LogParametersDefault();
 			sessionParameters = (sessionParameters != null) ? sessionParameters : new SessionParametersDefault();
 
@@ -473,11 +488,66 @@ public class SettingsManager<T> {
 	}
 
 	public void unregister() throws ServletException, IOException {
+		unregisterMetrics();
 		try {
 			server.unregisterMBean(objectName);
 		} catch (Exception e) {
 			throw new IOException(e);
 		}
+	}
+
+	/// Give this app a metrics registry and publish it as
+	/// `vorpal.blade:Name=<app>,Type=Metrics[,Cluster=…]` — the same keys as the
+	/// Configuration MBean registered just above, so a console joins the two on
+	/// a value it already has.
+	///
+	/// Every app that constructs a SettingsManager gets counters from this, with
+	/// no per-app code. That is the whole point: an opt-in metrics API would be
+	/// adopted by the two apps whose author remembered it.
+	///
+	/// **Never fatal.** This runs inside the constructor that 38 modules call at
+	/// startup, so a failure here must not stop an app from deploying. It is
+	/// caught, logged and abandoned — the same treatment `AsyncSipServlet` gives
+	/// a failed analytics publisher. Metrics are worth having; they are not worth
+	/// a node that will not start.
+	private void registerMetrics() {
+		try {
+			if (servletContext == null) {
+				return; // name-only constructor: no context, no registry
+			}
+			MetricsRegistry registry = MetricsRegistry.from(servletContext);
+			MetricsRegistry.bind(servletContextName, registry);
+			MetricsControl control = new MetricsControl(registry, servletContextName, clusterName);
+			control.register();
+			metricsControl = control;
+		} catch (Throwable t) {
+			if (sipLogger != null) {
+				sipLogger.warning("SettingsManager - metrics MBean not registered for " + servletContextName + ": " + t);
+			}
+		}
+	}
+
+	/// Drop the metrics MBean at undeploy. Also never fatal — a stale MBean is a
+	/// smaller problem than an app that cannot shut down.
+	private void unregisterMetrics() {
+		try {
+			if (metricsControl != null) {
+				metricsControl.unregister();
+				metricsControl = null;
+			}
+			MetricsRegistry.unbind(servletContextName);
+		} catch (Throwable t) {
+			if (sipLogger != null) {
+				sipLogger.warning("SettingsManager - metrics MBean not unregistered for " + servletContextName + ": " + t);
+			}
+		}
+	}
+
+	/// This app's metrics, or null if the registry could not be created.
+	/// Declare metrics at startup and hold the returned objects; never look one
+	/// up on a call path.
+	public MetricsRegistry getMetrics() {
+		return (servletContext == null) ? null : MetricsRegistry.from(servletContext);
 	}
 
 	/// Seam mirroring [#configureMapper]: override to customize the JSON Schema
@@ -964,45 +1034,50 @@ public class SettingsManager<T> {
 		SettingsManager.analytics = analytics;
 	}
 
-	public static Event createEvent(String name, JsonNode message) {
-		Event event = null;
+	/// This application's event-bus settings, never null once the app has
+	/// built its SettingsManager. Hoisted to a static for the same reason
+	/// [#getAnalytics] is: `AsyncSipServlet` needs it at
+	/// `servletInitialized` time, before any callflow exists to carry it.
+	public static EventBusSettings getEventBus() {
+		return eventBus;
+	}
 
-		if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
-			event = analytics.createEvent(name, message);
+	public static void setEventBus(EventBusSettings eventBus) {
+		SettingsManager.eventBus = eventBus;
+	}
+
+	/// Whether this application should be building analytics events at all.
+	///
+	/// **Its own configuration, not the publisher's existence.** This used to ask
+	/// whether a `JmsPublisher` static happened to be non-null — which is
+	/// per-WAR state set by whichever code path ran first, not a statement about
+	/// what this application was configured to do.
+	private static boolean collecting() {
+		return (analytics != null && Boolean.TRUE.equals(analytics.isEnabled()))
+				|| (sipLogger != null && sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel()));
+	}
+
+	public static AnalyticsEvent createEvent(String name, JsonNode message) {
+		return collecting() ? analytics.createEvent(name, message) : null;
+	}
+
+	public static AnalyticsEvent createEvent(String name, SipServletMessage message) {
+		if (!collecting()) {
+			return null;
 		}
-
+		AnalyticsEvent event = analytics.createEvent(name, message);
+		message.setAttribute("event", event);
 		return event;
 	}
 
-	public static Event createEvent(String name, SipServletMessage message) {
-		Event event = null;
-
-		if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
-			event = analytics.createEvent(name, message);
-			message.setAttribute("event", event);
-		}
-
-		return event;
-	}
-
-	public static Event createEvent(String name, SipServletContextEvent context) {
-		Event event = null;
-
-		if (Analytics.jmsPublisher != null || sipLogger.isLoggable(sipLogger.getAnalyticsLoggingLevel())) {
-			event = analytics.createEvent(name, context);
-
-			// jwm - this is a bad idea
-			// context.getServletContext().setAttribute("event", event);
-
-		}
-
-		return event;
+	public static AnalyticsEvent createEvent(String name, SipServletContextEvent context) {
+		return collecting() ? analytics.createEvent(name, context) : null;
 	}
 
 	public static void sendEvent(SipServletMessage message) {
 		if (message != null) {
 
-			Event event = (Event) message.getAttribute("event");
+			AnalyticsEvent event = (AnalyticsEvent) message.getAttribute("event");
 			if (event != null) {
 				analytics.addDestinationAttributes(event, message);
 				message.removeAttribute("event");
@@ -1016,14 +1091,35 @@ public class SettingsManager<T> {
 
 	public static void sendEvent(SipServletContextEvent ssce) {
 		if (ssce != null) {
-			Event event = (Event) ssce.getServletContext().getAttribute("event");
+			AnalyticsEvent event = (AnalyticsEvent) ssce.getServletContext().getAttribute("event");
 			if (event != null) {
-				analytics.addDestinationAttributes(event, ssce);
 				ssce.getServletContext().removeAttribute("event");
-				sipLogger.logEvent(null, event);
-				analytics.sendEvent(event);
+				sendEvent(event, ssce);
 			}
 		}
+	}
+
+	/// Finish and publish a context-scoped event, passing it directly rather than
+	/// through a `ServletContext` attribute.
+	///
+	/// **The lifecycle events never actually got sent.** `createEvent(name,
+	/// SipServletContextEvent)` deliberately does not stash the event on the
+	/// context — the line that did is commented "this is a bad idea", and rightly:
+	/// a `ServletContext` attribute is global and outlives the event, so two
+	/// overlapping lifecycle events would clobber each other. But the one caller,
+	/// `AsyncSipServlet.servletInitialized`, then called
+	/// [#sendEvent(SipServletContextEvent)], which looks the event *up* by that
+	/// same attribute — found nothing, and published nothing. The `start(...)`
+	/// hook has been decorating an event that was dropped on the floor.
+	///
+	/// Handing the event over directly fixes it without reintroducing the global.
+	public static void sendEvent(AnalyticsEvent event, SipServletContextEvent ssce) {
+		if (event == null || analytics == null) {
+			return;
+		}
+		analytics.addDestinationAttributes(event, ssce);
+		sipLogger.logEvent(null, event);
+		analytics.sendEvent(event);
 	}
 
 	public static LogParameters getLogParameters() {

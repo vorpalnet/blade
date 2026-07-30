@@ -14,10 +14,11 @@
 	<url>https://vorpal.net</url>
 
 	<modules>
-		<!-- Libraries, admin, service, and test modules — including the admin
-		     EAR (admin/ear) and the cluster/services EAR (services/cluster) —
-		     are all controlled by profiles below. Exclude any module with
-		     -Dskip.<name>, e.g. -Dskip.analytics, -Dskip.cluster. -->
+		<!-- Libraries, admin, service and test modules — including the admin
+		     EAR (apps/admin) and the test EAR (apps/test) — are all controlled
+		     by the profiles below. Exclude any module with -Dskip.<name>, e.g.
+		     -Dskip.analytics. Services have no EAR: each deploys as its own
+		     WAR, see the apps/ profile comment further down. -->
 	</modules>
 
 	<properties>
@@ -28,6 +29,29 @@
 		<blade.occas.version>8.1</blade.occas.version>
 		<maven.compiler.release>${blade.java.version}</maven.compiler.release>
 		<build.number>0</build.number>
+		<!-- ==================================================================
+		     DEV vs PROD app versioning.
+
+		     WebLogic side-by-side versioning keys off WebLogic-Application-Version.
+		     Every distinct value mints a NEW version of the application, so a
+		     build.number that moves on each build means every redeploy leaves the
+		     previous version registered and you must undeploy it by name before
+		     the next one will replace it. During a test loop that is pure friction.
+
+		     dev  (default)  blade.app.version = ${revision}          e.g. 3.0.4
+		                     stable across builds, so OCCAS replaces the app in
+		                     place on redeploy. What you want while iterating.
+		     prod            blade.app.version = ${revision}-${build.number}
+		                     distinct per build, so releases are traceable and can
+		                     sit side by side. What you want when shipping.
+
+		     Select with -Dblade.mode=prod, which build.sh passes when given its
+		     prod flag (it also stamps the mode into DEPLOYMENT.txt). The mode is recorded in
+		     every artifact's manifest as Blade-Build-Mode so a deployed WAR can
+		     always be traced back to how it was built.
+		     ================================================================== -->
+		<blade.mode>dev</blade.mode>
+		<blade.app.version>${revision}</blade.app.version>
 		<ear.profile>full</ear.profile>
 		<build.platform>occas-8.1</build.platform>
 		<blade.skip.install>true</blade.skip.install>
@@ -53,6 +77,10 @@
 		<jsonpath.version>2.10.0</jsonpath.version>
 		<victools.version>4.38.0</victools.version>
 		<json-schema-validator.version>1.5.6</json-schema-validator.version>
+		<!-- Test-only. Surefire 3.2.5 (inherited) runs JUnit 5 as soon as
+		     junit-jupiter is on a module's test classpath — no plugin config
+		     needed. Test scope, so nothing reaches WEB-INF/lib. -->
+		<junit.version>5.11.4</junit.version>
 		<findbugs.version>3.0.2</findbugs.version>
 		<gson-fire.version>1.9.0</gson-fire.version>
 		<okhttp.version>4.12.0</okhttp.version>
@@ -282,6 +310,15 @@
 				<artifactId>taglibs-standard-impl</artifactId>
 				<version>1.2.5</version>
 			</dependency>
+
+			<!-- JUnit 5, test scope. Declare it in a module's <dependencies>
+			     with <scope>test</scope> to write real tests there. -->
+			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter</artifactId>
+				<version>${junit.version}</version>
+				<scope>test</scope>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
@@ -389,9 +426,11 @@
 		<!-- Bundle .java sources alongside .class files in every module's
 		     output (target/classes/, then WEB-INF/classes/ in WARs). Lets
 		     us read source straight out of a deployed artifact when
-		     troubleshooting on a customer cluster. The framework library
-		     opts out of this and emits a separate -sources.jar instead;
-		     see libs/framework/pom.xml. -->
+		     troubleshooting on a customer cluster, and is what the Callflow
+		     Viewer serves. Every module inherits this, the framework library
+		     included — there is no separate -sources.jar anywhere, so browsed
+		     source is always byte-identical to the deployed code. See the
+		     matching note in libs/framework/pom.xml. -->
 		<resources>
 			<resource>
 				<directory>src/main/resources</directory>
@@ -432,7 +471,8 @@
 						<archive>
 							<manifestEntries>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
-								<WebLogic-Application-Version>${revision}-${build.number}</WebLogic-Application-Version>
+								<WebLogic-Application-Version>${blade.app.version}</WebLogic-Application-Version>
+								<Blade-Build-Mode>${blade.mode}</Blade-Build-Mode>
 								<Copyright>${blade.copyright}</Copyright>
 								<License>${blade.license}</License>
 								<Built-By>${user.name}</Built-By>
@@ -457,7 +497,8 @@
 						<archive>
 							<manifestEntries>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
-								<WebLogic-Application-Version>${revision}-${build.number}</WebLogic-Application-Version>
+								<WebLogic-Application-Version>${blade.app.version}</WebLogic-Application-Version>
+								<Blade-Build-Mode>${blade.mode}</Blade-Build-Mode>
 								<Copyright>${blade.copyright}</Copyright>
 								<License>${blade.license}</License>
 								<Built-By>${user.name}</Built-By>
@@ -473,7 +514,8 @@
 						<archive>
 							<manifestEntries>
 								<Implementation-Build-Date>${maven.build.timestamp}</Implementation-Build-Date>
-								<WebLogic-Application-Version>${revision}-${build.number}</WebLogic-Application-Version>
+								<WebLogic-Application-Version>${blade.app.version}</WebLogic-Application-Version>
+								<Blade-Build-Mode>${blade.mode}</Blade-Build-Mode>
 								<Copyright>${blade.copyright}</Copyright>
 								<License>${blade.license}</License>
 								<Built-By>${user.name}</Built-By>
@@ -571,6 +613,22 @@ fi
 	</build>
 
 	<profiles>
+		<!-- Release builds: put the build number back into the app version, so each
+		     build is a distinct WebLogic application version. Activate with
+		     -Dblade.mode=prod, which build.sh passes in prod mode. -->
+		<profile>
+			<id>blade-prod-versioning</id>
+			<activation>
+				<property>
+					<name>blade.mode</name>
+					<value>prod</value>
+				</property>
+			</activation>
+			<properties>
+				<blade.app.version>${revision}-${build.number}</blade.app.version>
+			</properties>
+		</profile>
+
 		<!-- Library module profiles. Active by default; exclude with -Dskip.<name>.
 		     Build-profiles/*.conf files select which libraries to include.
 		     Note: most service/admin/test modules depend on `framework` and
@@ -609,6 +667,11 @@ fi
 			<modules><module>proto/player</module></modules>
 		</profile>
 		<profile>
+			<id>webrtc</id>
+			<activation><property><name>!skip.webrtc</name></property></activation>
+			<modules><module>proto/webrtc</module></modules>
+		</profile>
+		<profile>
 			<id>demo</id>
 			<activation><property><name>!skip.demo</name></property></activation>
 			<modules><module>proto/demo</module></modules>
@@ -616,7 +679,7 @@ fi
 		<profile>
 			<id>events</id>
 			<activation><property><name>!skip.events</name></property></activation>
-			<modules><module>proto/events</module></modules>
+			<modules><module>services/events</module></modules>
 		</profile>
 		<profile>
 			<id>analytics</id>
@@ -759,6 +822,16 @@ fi
 			<modules><module>admin/logs</module></modules>
 		</profile>
 		<profile>
+			<id>metrics</id>
+			<activation><property><name>!skip.metrics</name></property></activation>
+			<modules><module>admin/metrics</module></modules>
+		</profile>
+		<profile>
+			<id>events-console</id>
+			<activation><property><name>!skip.events-console</name></property></activation>
+			<modules><module>admin/events-console</module></modules>
+		</profile>
+		<profile>
 			<id>analytics-console</id>
 			<activation><property><name>!skip.analytics-console</name></property></activation>
 			<modules><module>admin/analytics-console</module></modules>
@@ -779,24 +852,24 @@ fi
 			<modules><module>admin/callflow</module></modules>
 		</profile>
 
-		<!-- The three deployable EARs under apps/ — one per deploy target. Active
+		<!-- The two deployable EARs under apps/ — one per deploy target. Active
 		     by default; exclude with -Dskip.<name>. Each is assembled from its
 		     component WARs via ear-<name> profiles inside the EAR pom (activated by
 		     !skip.<name>), so an EAR shrinks to match a trimmed build profile:
 		       apps/admin    -> blade-admin.ear     -> AdminServer    (skip.admin)
-		       apps/services -> blade-services.ear  -> engine cluster (skip.services)
 		       apps/test     -> blade-test.ear      -> engine0        (skip.test)
 		     The javadoc WAR rides the `javadocs` profile id — blade-admin.ear
-		     carries javadoc.war exactly when docs are generated. -->
+		     carries javadoc.war exactly when docs are generated.
+
+		     There is deliberately NO services EAR. Oracle's Remote Console cannot
+		     show the status of an application bundled inside an EAR, so a single
+		     blade-services.ear left every service individually invisible — you
+		     could see the EAR was running, not which service inside it was. The
+		     service WARs ship loose in dist/services/ and deploy one by one. -->
 		<profile>
 			<id>admin</id>
 			<activation><property><name>!skip.admin</name></property></activation>
 			<modules><module>apps/admin</module></modules>
-		</profile>
-		<profile>
-			<id>services</id>
-			<activation><property><name>!skip.services</name></property></activation>
-			<modules><module>apps/services</module></modules>
 		</profile>
 		<profile>
 			<id>test</id>

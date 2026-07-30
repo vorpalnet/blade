@@ -6,31 +6,50 @@
 >
 
 	<persistence-unit name="BladeAnalytics" transaction-type="RESOURCE_LOCAL">
-       <!-- Specify the persistence provider (EclipseLink is common) -->
 		<provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
 		<non-jta-data-source>jdbc/BladeAnalytics</non-jta-data-source>
-		<class>org.vorpal.blade.framework.v2.analytics.Application</class>
-		<class>org.vorpal.blade.framework.v2.analytics.Attribute</class>
-		<class>org.vorpal.blade.framework.v2.analytics.AttributeName</class>
-		<class>org.vorpal.blade.framework.v2.analytics.AttributePK</class>
-		<class>org.vorpal.blade.framework.v2.analytics.Event</class>
-		<class>org.vorpal.blade.framework.v2.analytics.EventType</class>
-		<class>org.vorpal.blade.framework.v2.analytics.Session</class>
-		<class>org.vorpal.blade.framework.v2.analytics.SessionKey</class>
-		<class>org.vorpal.blade.framework.v2.analytics.SessionKeyPK</class>
+		<class>org.vorpal.blade.services.analytics.model.Application</class>
+		<class>org.vorpal.blade.services.analytics.model.Attribute</class>
+		<class>org.vorpal.blade.services.analytics.model.AttributeName</class>
+		<class>org.vorpal.blade.services.analytics.model.AttributePK</class>
+		<class>org.vorpal.blade.services.analytics.model.Event</class>
+		<class>org.vorpal.blade.services.analytics.model.EventType</class>
+		<class>org.vorpal.blade.services.analytics.model.Session</class>
+		<class>org.vorpal.blade.services.analytics.model.SessionKey</class>
+		<class>org.vorpal.blade.services.analytics.model.SessionKeyPK</class>
 		<exclude-unlisted-classes>true</exclude-unlisted-classes>
 		<properties>
-            <!-- EclipseLink specific properties for DDL generation and logging -->
 			<property name="eclipselink.target-server" value="WebLogic" />
-			<property name="javax.persistence.jdbc.driver" value="com.mysql.jdbc.Driver" />
 			<property name="eclipselink.logging.level" value="WARNING" />
 			<property name="eclipselink.logging.thread" value="true" />
 			<property name="eclipselink.logging.timestamp" value="true" />
-			<property name="eclipselink.ddl-generation.output-mode" value="database"/>
-			<property name="eclipselink.ddl-generation" value="create-or-extend-tables" />
-			<!--property name="eclipselink.ddl-generation" value="none" /-->
-			<!--property name="eclipselink.ddl-generation" value="create-tables" /-->
-			<!--property name="eclipselink.ddl-generation" value="drop-and-create-tables" /-->
+
+			<!-- DDL generation is OFF, and must stay off.
+
+			     `create-or-extend-tables` was previously on. The entities in this
+			     unit declare no JPA relationships at all — every foreign key is a
+			     plain column the consumer populates by hand — so a schema
+			     EclipseLink generates has **none** of the foreign keys, unique
+			     constraints or generated columns that sql/MySQL-database-schema.sql
+			     defines. With it on, whether a domain actually has
+			     `session_open_uk`, the `applications` FK or the partitioning-ready
+			     primary keys depended entirely on whether someone had run the
+			     script first, and EclipseLink could silently extend a
+			     hand-built schema out from under it.
+
+			     sql/MySQL-database-schema.sql is the single source of truth
+			     (its Oracle sibling is regenerated from it). Run it. -->
+			<property name="eclipselink.ddl-generation" value="none" />
+
+			<!-- Deliberately NO javax.persistence.jdbc.driver.
+
+			     It used to hard-code com.mysql.jdbc.Driver — the deprecated class
+			     name, and simply wrong for the Oracle ADB deployment path that
+			     notes/configure-oracle-adb.py provisions. With a
+			     <non-jta-data-source> the container supplies the connection and
+			     the driver property has no business here; leaving it set meant a
+			     MySQL name sitting in the config of an Oracle deployment,
+			     inviting exactly the wrong conclusion during an incident. -->
 		</properties>
 	</persistence-unit>
 

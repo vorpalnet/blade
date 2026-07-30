@@ -48,7 +48,7 @@ public class AuditAPI {
 			ObjectNode root = mapper.createObjectNode();
 			ObjectNode expected = mapper.createObjectNode();
 			expected.put("connectionFactoryJndi", WlsResourceAudit.EXPECTED_CONNECTION_FACTORY_JNDI);
-			expected.put("queueJndi", WlsResourceAudit.EXPECTED_QUEUE_JNDI);
+			expected.put("topicJndi", WlsResourceAudit.EXPECTED_TOPIC_JNDI);
 			expected.put("dataSourceJndi", WlsResourceAudit.EXPECTED_DATASOURCE_JNDI);
 			root.set("expected", expected);
 

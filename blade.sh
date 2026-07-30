@@ -2191,8 +2191,12 @@ do_remove_repo() {
 # dist/<ver>-<build>/ (override with $BLADE_DIST).
 #   shared    blade-shared.war  (library) -> AdminServer + cluster
 #   admin     blade-admin.ear              -> AdminServer
-#   services  blade-services.ear           -> BEA_ENGINE_TIER_CLUST
+#   services  dist/services/*.war (loose)  -> BEA_ENGINE_TIER_CLUST
 #   test      blade-test.ear               -> the static engine (engine0)
+#
+# The services tier has no EAR: Oracle's Remote Console cannot show the status
+# of an application bundled inside one, so each service deploys as its own WAR
+# and shows up individually.
 # ============================================================================
 _dist_dir() {
     if [ -n "${BLADE_DIST:-}" ]; then printf '%s' "${BLADE_DIST%/}"; return; fi
@@ -2267,6 +2271,30 @@ _deploy_one() {
         bash "${SCRIPT_DIR}/misc/deploy-wls.sh" || { warn "deploy ${action} ${name} failed"; return 1; }
 }
 
+# Deploy/undeploy every service WAR in dist/services/, one at a time.
+#
+# The app name is the WAR basename, which is also its context root — so a
+# service shows up in Remote Console under the name you'd expect ("transfer",
+# "events") and can be stopped, started and retargeted on its own. That is the
+# whole reason this tier is loose WARs rather than one EAR.
+#
+# Keeps going after a failure so one bad service doesn't strand the rest, and
+# reports non-zero if any of them failed.
+_deploy_services() {
+    local action="$1" dist="$2" rc=0 war app
+    local src="${dist}/services"
+    [ -d "$src" ] || { warn "no ${src}/ in this build — run ./build.sh first."; return 1; }
+    shopt -s nullglob
+    local wars=("$src"/*.war)
+    shopt -u nullglob
+    [ ${#wars[@]} -gt 0 ] || { warn "no service WARs in ${src}."; return 1; }
+    for war in "${wars[@]}"; do
+        app="$(basename "${war%.war}")"
+        _deploy_one "$action" "$app" "$war" "BEA_ENGINE_TIER_CLUST" || rc=1
+    done
+    return "$rc"
+}
+
 # Deploy/undeploy a single tier. tier = shared|admin|services|test.
 do_deploy_tier() {
     local tier="$1" action="${2:-deploy}" dist; dist="$(_dist_dir)"
@@ -2274,7 +2302,7 @@ do_deploy_tier() {
     case "$tier" in
         shared)   _deploy_one "$action" blade-shared   "${dist}/blade-shared.war"  "AdminServer,BEA_ENGINE_TIER_CLUST" true ;;
         admin)    _deploy_one "$action" blade-admin    "${dist}/blade-admin.ear"    "AdminServer" ;;
-        services) _deploy_one "$action" blade-services "${dist}/blade-services.ear" "BEA_ENGINE_TIER_CLUST" ;;
+        services) _deploy_services "$action" "$dist" ;;
         test)     _deploy_one "$action" blade-test     "${dist}/blade-test.ear"     "$(_test_target)" ;;
         *) warn "unknown deploy tier: $tier"; return 1 ;;
     esac

@@ -20,6 +20,15 @@
 			<groupId>org.vorpal.blade</groupId>
 			<artifactId>vorpal-blade-library-framework</artifactId>
 		</dependency>
+
+		<!-- Test scope only. The sink's wire-reading is pure and belongs under
+		     test; everything else in it needs a live domain. Version managed in
+		     the parent POM; nothing reaches WEB-INF/lib. -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

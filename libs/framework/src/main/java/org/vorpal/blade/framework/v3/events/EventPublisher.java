@@ -1,37 +1,63 @@
 package org.vorpal.blade.framework.v3.events;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
+import javax.jms.Connection;
+import javax.jms.ConnectionFactory;
+import javax.jms.Destination;
 import javax.jms.JMSException;
+import javax.jms.MessageProducer;
 import javax.jms.Session;
 import javax.jms.TextMessage;
-import javax.jms.Topic;
-import javax.jms.TopicConnection;
-import javax.jms.TopicConnectionFactory;
-import javax.jms.TopicPublisher;
-import javax.jms.TopicSession;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 
-/// Publishes [CloudEvent]s to the v3 event-bus topic as JSON `TextMessage`s.
+/// Publishes [CloudEvent]s to an event-bus destination as JSON `TextMessage`s.
 ///
-/// Structurally this mirrors the analytics `JmsPublisher`: the shared
-/// [TopicConnection] is created once in [#init()] and reused across threads
-/// (Connection objects are thread-safe per the JMS spec), while a separate
-/// [TopicSession] + [TopicPublisher] pair is created lazily per calling thread
-/// because WebLogic JMS sessions are not thread-safe.
+/// **The only publisher.** Analytics used to have a second one of its own,
+/// writing Java-serialized JPA entities to a queue — which meant a consumer had
+/// to be on BLADE's classpath to read a message at all, and had to discriminate
+/// by `instanceof` because nothing on the wire said what a message was. Here the
+/// payload is JSON in a `TextMessage`, and the `type`, `subject` and `id`
+/// attributes are copied into JMS string properties so a consumer can select on
+/// them without parsing the body. Analytics now publishes through this like
+/// everything else.
 ///
-/// Two differences from the analytics publisher, both deliberate: it publishes
-/// to a **Topic** (pub/sub, fan-out to every subscriber) rather than a Queue,
-/// and it sends the CloudEvent as a JSON **`TextMessage`** rather than a
-/// Java-serialized `ObjectMessage`, so consumers are not bound to BLADE's
-/// classpath. The `type` and `subject` attributes are copied into JMS string
-/// properties so a consumer can select on them without parsing the body.
+/// **Topics and queues.** This uses the JMS 1.1 unified domain
+/// ([Session]/[MessageProducer]/[Destination]) rather than the topic-specific
+/// interfaces, so one code path serves both. The catalog decides which a given
+/// event type gets; nothing here needs to know.
+///
+/// **Why a bounded session pool.** A JMS `Session` must not be used by two
+/// threads at once, so a publisher needs more than one under load. The obvious
+/// implementation — cache a session per calling thread — is what this class did
+/// originally, and it leaks: WebLogic's self-tuning thread pool creates and
+/// retires threads over the life of the server, and a map keyed by `Thread`
+/// keeps a session (a real server-side resource) alive for every thread that
+/// ever published, forever.
+///
+/// A bounded free-list makes that structurally impossible instead of policing
+/// it. A publish borrows a sender, uses it, and returns it; if the pool is full
+/// on return the sender is simply closed. At most [#DEFAULT_POOL_SIZE] senders
+/// are ever retained regardless of how many threads pass through, and a burst
+/// wider than the pool degrades to create-use-close rather than failing or
+/// blocking.
+///
+/// A borrowed sender is only ever used by one thread at a time — the queue hands
+/// it to exactly one borrower and establishes the happens-before edge before it
+/// is touched again. Note that the JMS specification forbids *concurrent* use of
+/// a session; I have no citation that explicitly blesses serial handoff between
+/// threads, which is what this does and what session pools generally do. If that
+/// turns out to be a problem on OCCAS, the fix is a pool size of zero — every
+/// publish creating and closing its own session — which this already degrades to
+/// naturally.
 public class EventPublisher {
 
 	/// JMS string-property name carrying the CloudEvents `type` — the primary
 	/// message-selector key (e.g. `eventType = 'net.vorpal.attendant.meeting.scheduled'`).
+	/// [EventType#selector()] builds selectors from this constant so a consumer's
+	/// filter cannot disagree with what is actually stamped.
 	public static final String PROP_TYPE = "eventType";
 
 	/// JMS string-property name carrying the CloudEvents `subject` (the Vorpal
@@ -42,61 +68,99 @@ public class EventPublisher {
 	/// idempotency / dedupe.
 	public static final String PROP_ID = "eventId";
 
+	/// How many sessions a publisher retains between sends. Sized for the number
+	/// of threads realistically publishing at once on one engine node, not for
+	/// the number of threads that exist.
+	public static final int DEFAULT_POOL_SIZE = 16;
+
 	private final String connectionFactoryJndi;
-	private final String topicJndi;
+	private final String destinationJndi;
+	private final BlockingQueue<Sender> pool;
 
-	private TopicConnectionFactory tconFactory;
-	private TopicConnection tcon;
-	private Topic topic;
+	private ConnectionFactory factory;
+	private Connection connection;
+	private Destination destination;
+	private volatile boolean closed;
 
-	private final ConcurrentMap<Thread, ThreadResources> threadResources = new ConcurrentHashMap<>();
+	/// A session and its producer, borrowed and returned as one unit.
+	private final class Sender {
+		private final Session session;
+		private final MessageProducer producer;
 
-	private static final class ThreadResources {
-		final TopicSession session;
-		final TopicPublisher publisher;
-
-		ThreadResources(TopicSession session, TopicPublisher publisher) {
+		private Sender(Session session, MessageProducer producer) {
 			this.session = session;
-			this.publisher = publisher;
+			this.producer = producer;
+		}
+
+		private void close() {
+			try {
+				producer.close();
+			} catch (JMSException e) {
+				// Nothing useful to do: we are discarding this sender anyway.
+			}
+			try {
+				session.close();
+			} catch (JMSException e) {
+				// Same.
+			}
 		}
 	}
 
-	/// @param connectionFactoryJndi the topic connection factory JNDI name
-	///                              (typically [EventBus#CONNECTION_FACTORY_JNDI])
-	/// @param topicJndi             the topic JNDI name (typically [EventBus#TOPIC_JNDI])
-	public EventPublisher(String connectionFactoryJndi, String topicJndi) {
-		this.connectionFactoryJndi = connectionFactoryJndi;
-		this.topicJndi = topicJndi;
+	/// @param connectionFactoryJndi the connection factory JNDI name (typically
+	///                              [EventBus#CONNECTION_FACTORY_JNDI])
+	/// @param destinationJndi       the topic or queue JNDI name (typically
+	///                              [EventBus#TOPIC_JNDI])
+	public EventPublisher(String connectionFactoryJndi, String destinationJndi) {
+		this(connectionFactoryJndi, destinationJndi, DEFAULT_POOL_SIZE);
 	}
 
-	/// Look up the connection factory and topic, open the shared connection, and
-	/// start delivery. Per-thread sessions and publishers are created lazily.
+	/// @param connectionFactoryJndi the connection factory JNDI name
+	/// @param destinationJndi       the topic or queue JNDI name
+	/// @param poolSize              how many sessions to retain between sends;
+	///                              zero means create and close one per publish
+	public EventPublisher(String connectionFactoryJndi, String destinationJndi, int poolSize) {
+		this.connectionFactoryJndi = connectionFactoryJndi;
+		this.destinationJndi = destinationJndi;
+		this.pool = (poolSize > 0) ? new ArrayBlockingQueue<Sender>(poolSize) : null;
+	}
+
+	/// The destination this publisher sends to — the key the bus registers it
+	/// under.
+	public String getDestinationJndi() {
+		return destinationJndi;
+	}
+
+	/// Look up the connection factory and destination, open the shared
+	/// connection, and start delivery. Sessions are created on demand.
 	///
 	/// @throws NamingException if a JNDI lookup fails
 	/// @throws JMSException    if the connection cannot be created or started
 	public void init() throws NamingException, JMSException {
 		InitialContext ctx = new InitialContext();
-		tconFactory = (TopicConnectionFactory) ctx.lookup(connectionFactoryJndi);
-		tcon = tconFactory.createTopicConnection();
-		topic = (Topic) ctx.lookup(topicJndi);
-		tcon.start();
+		factory = (ConnectionFactory) ctx.lookup(connectionFactoryJndi);
+		destination = (Destination) ctx.lookup(destinationJndi);
+		connection = factory.createConnection();
+		connection.start();
 	}
 
-	private ThreadResources getThreadResources() throws JMSException {
-		Thread me = Thread.currentThread();
-		ThreadResources tr = threadResources.get(me);
-		if (tr == null) {
-			TopicSession session = tcon.createTopicSession(false, Session.AUTO_ACKNOWLEDGE);
-			TopicPublisher publisher = session.createPublisher(topic);
-			tr = new ThreadResources(session, publisher);
-			ThreadResources existing = threadResources.putIfAbsent(me, tr);
-			if (existing != null) {
-				publisher.close();
-				session.close();
-				tr = existing;
+	private Sender borrow() throws JMSException {
+		if (pool != null) {
+			Sender pooled = pool.poll();
+			if (pooled != null) {
+				return pooled;
 			}
 		}
-		return tr;
+		Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+		return new Sender(session, session.createProducer(destination));
+	}
+
+	/// Return a sender to the pool, or close it when the pool is full or the
+	/// publisher has since shut down. Never throws — a failure to recycle must
+	/// not turn a successful publish into an error.
+	private void release(Sender sender) {
+		if (closed || pool == null || !pool.offer(sender)) {
+			sender.close();
+		}
 	}
 
 	/// Publish a CloudEvent. The envelope is serialized to JSON and sent as a
@@ -104,26 +168,31 @@ public class EventPublisher {
 	/// properties for selector-based routing.
 	///
 	/// @param event the event to publish
-	/// @throws JMSException          if the send fails
-	/// @throws java.io.IOException   if the envelope cannot be serialized
+	/// @throws JMSException        if the send fails
+	/// @throws java.io.IOException if the envelope cannot be serialized
 	public void publish(CloudEvent event) throws JMSException, java.io.IOException {
-		ThreadResources tr = getThreadResources();
-		TextMessage message = tr.session.createTextMessage(event.toJson());
-		if (event.getType() != null) {
-			message.setStringProperty(PROP_TYPE, event.getType());
+		String json = event.toJson();
+		Sender sender = borrow();
+		try {
+			TextMessage message = sender.session.createTextMessage(json);
+			if (event.getType() != null) {
+				message.setStringProperty(PROP_TYPE, event.getType());
+			}
+			if (event.getSubject() != null) {
+				message.setStringProperty(PROP_SUBJECT, event.getSubject());
+			}
+			if (event.getId() != null) {
+				message.setStringProperty(PROP_ID, event.getId());
+			}
+			sender.producer.send(message);
+		} finally {
+			release(sender);
 		}
-		if (event.getSubject() != null) {
-			message.setStringProperty(PROP_SUBJECT, event.getSubject());
-		}
-		if (event.getId() != null) {
-			message.setStringProperty(PROP_ID, event.getId());
-		}
-		tr.publisher.publish(message);
 	}
 
 	/// Publish a raw CloudEvents JSON envelope — the ingress path, where bytes
-	/// arrive over HTTP and are republished verbatim. Parses the envelope to
-	/// populate the routing properties.
+	/// arrive over HTTP and are republished. Parses the envelope to populate the
+	/// routing properties.
 	///
 	/// @param json a CloudEvents 1.0 JSON envelope
 	/// @throws JMSException        if the send fails
@@ -132,32 +201,24 @@ public class EventPublisher {
 		publish(CloudEvent.fromJson(json));
 	}
 
-	/// Close all per-thread sessions/publishers and the shared connection.
+	/// Close every pooled session and the shared connection. Senders currently
+	/// borrowed by an in-flight publish close themselves on release, because
+	/// [#release] sees `closed`.
 	public void close() {
-		for (ThreadResources tr : threadResources.values()) {
-			try {
-				if (tr.publisher != null) {
-					tr.publisher.close();
-				}
-			} catch (JMSException e) {
-				e.printStackTrace();
-			}
-			try {
-				if (tr.session != null) {
-					tr.session.close();
-				}
-			} catch (JMSException e) {
-				e.printStackTrace();
+		closed = true;
+		if (pool != null) {
+			Sender sender = pool.poll();
+			while (sender != null) {
+				sender.close();
+				sender = pool.poll();
 			}
 		}
-		threadResources.clear();
-
 		try {
-			if (tcon != null) {
-				tcon.close();
+			if (connection != null) {
+				connection.close();
 			}
 		} catch (JMSException e) {
-			e.printStackTrace();
+			// Shutting down regardless.
 		}
 	}
 }

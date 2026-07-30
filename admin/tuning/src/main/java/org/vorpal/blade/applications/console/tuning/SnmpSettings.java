@@ -102,9 +102,8 @@ public class SnmpSettings {
 		try (CloseableContext ctx = new CloseableContext()) {
 			ObjectNode input = (ObjectNode) mapper.readTree(body);
 
-			MBeanServer editMbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/edit");
-			ObjectName editConfigManager = new ObjectName(
-					"com.bea:Name=ConfigurationManager,Type=weblogic.management.mbeanservers.edit.ConfigurationManagerMBean");
+			MBeanServer editMbs = EditMBeans.edit(ctx);
+			ObjectName editConfigManager = EditMBeans.configManager();
 
 			editMbs.invoke(editConfigManager, "startEdit",
 					new Object[]{0, 120000}, new String[]{"int", "int"});

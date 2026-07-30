@@ -232,15 +232,18 @@ public class JvmSettings {
 				return Response.ok(mapper.writeValueAsString(out)).build();
 			}
 
-			MBeanServer editMbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/edit");
-			ObjectName editConfigManager = new ObjectName(
-					"com.bea:Name=ConfigurationManager,Type=weblogic.management.mbeanservers.edit.ConfigurationManagerMBean");
+			MBeanServer editMbs = EditMBeans.edit(ctx);
+			ObjectName editConfigManager = EditMBeans.configManager();
 			editMbs.invoke(editConfigManager, "startEdit",
 					new Object[]{0, 120000}, new String[]{"int", "int"});
 
 			try {
-				// One edit session for the whole cluster; each assigned server's
-				// ServerStart.Arguments is overwritten with its profile, verbatim.
+				// One edit session for the whole cluster. A profile is a tuning OVERLAY, not a
+				// replacement for the server's whole JVM line: in MBean mode setDomainEnv.sh never
+				// runs, so ServerStart.Arguments is the only place -Dwls.home, -Dweblogic.home, the
+				// debugpatch javaagent and -Dwlss.callstate.manager.classname exist. Overwriting
+				// verbatim silently dropped whichever of those a profile did not restate, which
+				// stops the server booting or quietly disables SIP call-state replication.
 				for (Map.Entry<String, String> e : resolved.entrySet()) {
 					ObjectNode r = results.addObject();
 					r.put("server", e.getKey());
@@ -252,10 +255,18 @@ public class JvmSettings {
 							// per-node identity the AdminServer can derive from config MBeans — so a
 							// shared profile can hold node-specific paths (e.g. JFR filename).
 							String resolvedArgs = resolveServerVars(editMbs, serverConfig, e.getKey(), e.getValue());
+							String existing = (String) editMbs.getAttribute(serverStart, "Arguments");
+							List<String> kept = new ArrayList<>();
+							String merged = mergeArguments(existing, resolvedArgs, kept);
 							editMbs.setAttribute(serverStart,
-									new javax.management.Attribute("Arguments", resolvedArgs));
+									new javax.management.Attribute("Arguments", merged));
 							r.put("ok", true);
-							r.put("arguments", resolvedArgs);
+							r.put("arguments", merged);
+							r.put("profile", resolvedArgs);
+							// Surface what the profile did not mention, so an operator can see the
+							// platform baseline survived rather than having to diff by eye.
+							ArrayNode keptOut = r.putArray("preserved");
+							for (String k : kept) keptOut.add(k);
 						} else {
 							r.put("ok", false);
 							r.put("error", "no ServerStart MBean");
@@ -401,6 +412,85 @@ public class JvmSettings {
 	 * the node's own runtime env/sysprops are deliberately NOT used (they'd resolve
 	 * to the AdminServer's, which would be wrong).
 	 */
+	/**
+	 * Overlay {@code profile} onto the server's {@code existing} ServerStart arguments.
+	 *
+	 * A profile carries the tuning knobs an operator wants to control; it is not the server's whole
+	 * JVM command line. In MBean mode Node Manager builds that line from ServerStart alone —
+	 * setDomainEnv.sh never runs — so {@code existing} is the only home for the platform baseline:
+	 * {@code -Dwls.home}, {@code -Dweblogic.home}, the debugpatch {@code -javaagent}, and
+	 * {@code -Dwlss.callstate.manager.classname}, which is the class that actually implements
+	 * replicated SIP call state. Replacing rather than overlaying dropped whichever of those a
+	 * profile happened not to restate: a missing wls.home stops the server booting, and a missing
+	 * call-state manager disables failover quietly, which is worse.
+	 *
+	 * Overlay rule: a profile token replaces any existing token with the same <em>key</em> (see
+	 * {@link #argumentKey}), and every other existing token is kept. Setting a garbage collector is
+	 * special-cased — collectors are mutually exclusive, so naming one removes all the others.
+	 *
+	 * @param kept  populated with the existing tokens the profile did not mention, for reporting
+	 * @return the merged argument line
+	 */
+	String mergeArguments(String existing, String profile, List<String> kept) {
+		List<String> profileTokens = tokenize(profile);
+		if (existing == null || existing.trim().isEmpty()) {
+			return String.join(" ", profileTokens);
+		}
+
+		java.util.Set<String> overridden = new java.util.HashSet<>();
+		boolean profileSetsCollector = false;
+		for (String token : profileTokens) {
+			overridden.add(argumentKey(token));
+			for (String gc : GC_COLLECTORS) {
+				if (gc.equals(token)) profileSetsCollector = true;
+			}
+		}
+
+		List<String> merged = new ArrayList<>();
+		for (String token : tokenize(existing)) {
+			if (overridden.contains(argumentKey(token))) {
+				continue; // the profile is authoritative for this knob
+			}
+			if (profileSetsCollector && isCollector(token)) {
+				continue; // only one collector may be active
+			}
+			merged.add(token);
+			if (kept != null) kept.add(token);
+		}
+		merged.addAll(profileTokens);
+		return String.join(" ", merged);
+	}
+
+	private static boolean isCollector(String token) {
+		for (String gc : GC_COLLECTORS) {
+			if (gc.equals(token)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The identity of a JVM argument for overlay purposes — what makes two tokens "the same knob".
+	 *
+	 * {@code -Xmx512m} and {@code -Xmx4g} are the same knob; so are {@code -XX:+AlwaysPreTouch} and
+	 * {@code -XX:-AlwaysPreTouch}, and {@code -Dwlss.replication=on} and {@code =off}. Anything
+	 * unrecognised is its own key, so it is never silently displaced.
+	 */
+	static String argumentKey(String token) {
+		for (String prefix : new String[]{"-Xms", "-Xmx", "-Xss", "-Xlog", "-javaagent", "-agentlib"}) {
+			if (token.startsWith(prefix)) return prefix;
+		}
+		if (token.startsWith("-XX:+") || token.startsWith("-XX:-")) {
+			return "-XX:" + token.substring(5);
+		}
+		if (token.startsWith("-XX:") && token.indexOf('=') > 0) {
+			return "-XX:" + token.substring(4, token.indexOf('='));
+		}
+		if (token.startsWith("-D") && token.indexOf('=') > 0) {
+			return token.substring(0, token.indexOf('='));
+		}
+		return token;
+	}
+
 	private String resolveServerVars(MBeanServer editMbs, ObjectName serverConfig, String serverName, String args) {
 		java.util.Map<String, String> attrs = new java.util.HashMap<>();
 		attrs.put("server", serverName);

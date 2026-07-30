@@ -18,10 +18,12 @@ import javax.servlet.ServletResponse;
 import javax.servlet.annotation.WebFilter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
+import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -52,20 +54,27 @@ public class AnalyticsFilter implements Filter {
 	private static final Pattern pattern = Pattern.compile("([^/]+)/?$");
 
 	private void processAnalytics(Logger sipLogger, Analytics analytics,
-			BufferedResponseWrapper wrappedResponse, Event event) throws IOException {
+			BufferedResponseWrapper wrappedResponse, AnalyticsEvent event) throws IOException {
 
 		SipServletRequest sipRequest = Analytics.sipServletRequest.get();
 		if (sipRequest != null) {
 
-			sipLogger.severe(sipRequest.getSession(), "AnalyticsFilter.doFilter - sipRequest.id="+sipRequest.getId());
+			sipLogger.finer(sipRequest.getSession(), "AnalyticsFilter.doFilter - sipRequest.id=" + sipRequest.getId());
 
-			event.setVorpalId(Analytics.getVorpalId(sipRequest.getApplicationSession()));
+			// Both halves of the correlator. Attaching only the id would produce
+			// an event whose subject collides with every earlier call that held
+			// the same 32-bit id — they are reused.
+			SipApplicationSession appSession = sipRequest.getApplicationSession();
+			event.correlateWith(Analytics.getVorpalId(appSession), Analytics.getCallStartedAt(appSession));
 			Analytics.sipServletRequest.remove();
-		}else {
-			sipLogger.severe("AnalyticsFilter.doFilter - Could not find sipServletRequest.");
+		} else {
+			sipLogger.finer("AnalyticsFilter.doFilter - Could not find sipServletRequest.");
 		}
 
-		sipLogger.logEvent(sipRequest.getSession(), event);
+		// Null-safe: the branch above already tolerates no SIP request, and this
+		// line used to dereference it regardless — a guaranteed NPE on exactly
+		// the path that had just logged "could not find" it.
+		sipLogger.logEvent((sipRequest == null) ? null : sipRequest.getSession(), event);
 		analytics.sendEvent(event);
 
 		// Now build and send events with both request and response attributes
@@ -86,7 +95,7 @@ public class AnalyticsFilter implements Filter {
 			throws IOException, ServletException {
 
 		Analytics analytics = SettingsManager.getAnalytics();
-		Event event = null;
+		AnalyticsEvent event = null;
 
 		if (analytics != null && request instanceof HttpServletRequest && response instanceof HttpServletResponse) {
 			HttpServletRequest httpRequest = (HttpServletRequest) request;
@@ -128,7 +137,7 @@ public class AnalyticsFilter implements Filter {
 			chain.doFilter(wrappedRequest, wrappedResponse);
 
 			if (wrappedRequest.isAsyncStarted()) {
-				final Event asyncEvent = event;
+				final AnalyticsEvent asyncEvent = event;
 				wrappedRequest.getAsyncContext().addListener(new AsyncListener() {
 					@Override
 					public void onComplete(AsyncEvent e) throws IOException {

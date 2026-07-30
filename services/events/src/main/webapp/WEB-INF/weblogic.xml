@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wls:weblogic-web-app xmlns:wls="http://xmlns.oracle.com/weblogic/weblogic-web-app" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd">
+	<wls:weblogic-version>14.1.1.0</wls:weblogic-version>
+	<wls:context-root>events</wls:context-root>
+
+	<wls:library-ref>
+		<wls:library-name>blade-shared</wls:library-name>
+		<wls:specification-version>3.0</wls:specification-version>
+		<wls:exact-match>false</wls:exact-match>
+	</wls:library-ref>
+
+	<wls:session-descriptor>
+		<wls:url-rewriting-enabled>false</wls:url-rewriting-enabled>
+	</wls:session-descriptor>
+
+	<!-- Any defined user can publish to the bus. Same mapping services/analytics
+	     uses for its REST API. -->
+	<wls:security-role-assignment>
+		<wls:role-name>authenticated-users</wls:role-name>
+		<wls:principal-name>users</wls:principal-name>
+	</wls:security-role-assignment>
+
+	<!-- The tap's roles map to realm groups of the same name, as every admin
+	     app does. Without these the role names match nothing and the constraint
+	     rejects everyone — which fails safe, but confusingly. -->
+	<wls:security-role-assignment>
+		<wls:role-name>Admin</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+	<wls:security-role-assignment>
+		<wls:role-name>Operator</wls:role-name>
+		<wls:externally-defined/>
+	</wls:security-role-assignment>
+
+</wls:weblogic-web-app>

@@ -29,7 +29,7 @@
 		errorEl.hidden = true;
 
 		expCf.textContent = data.expected.connectionFactoryJndi;
-		expQ.textContent = data.expected.queueJndi;
+		expQ.textContent = data.expected.topicJndi;
 		expDs.textContent = data.expected.dataSourceJndi;
 
 		for (const f of data.findings) {

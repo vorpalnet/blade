@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Events · Designer</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="events.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/events/">Events</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="catalog.html">Catalog</a>
+			<a href="designer.html" class="vorpal-active">Designer</a>
+			<a href="destinations.html">Destinations</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span id="status-pill" class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>Designer</h1>
+					<p>
+						Describe an event once. The payload class, its JSON Schema, a
+						consumer already bound to the right selector, a producer snippet
+						and a sample envelope all regenerate as you type — from the same
+						declaration, so none of them can drift from the others.
+					</p>
+				</div>
+			</section>
+
+			<div class="ev-grid">
+
+				<div class="ev-panel">
+					<header><span>Declaration</span></header>
+					<div class="ev-body">
+						<div class="vorpal-form-row">
+							<label for="d-type">Event type</label>
+							<input id="d-type" type="text" placeholder="net.vorpal.attendant.meeting.scheduled">
+						</div>
+						<div class="vorpal-form-row">
+							<label for="d-title">Title</label>
+							<input id="d-title" type="text" placeholder="Meeting Scheduled">
+						</div>
+						<div class="vorpal-form-row">
+							<label for="d-description">Description</label>
+							<input id="d-description" type="text" placeholder="What this event means and when it is emitted">
+						</div>
+						<div class="vorpal-form-row">
+							<label for="d-package">Java package</label>
+							<input id="d-package" type="text" placeholder="com.example.events">
+						</div>
+						<div class="vorpal-form-row">
+							<label for="d-class">Java class</label>
+							<input id="d-class" type="text" placeholder="derived from the last segment if blank">
+						</div>
+						<div class="vorpal-form-row">
+							<label for="d-destination">Destination JNDI</label>
+							<input id="d-destination" type="text" value="jms/BladeEventBusTopic">
+						</div>
+						<div class="vorpal-form-row">
+							<label for="d-kind">Delivery</label>
+							<select id="d-kind">
+								<option value="TOPIC">TOPIC — every subscriber gets a copy</option>
+								<option value="QUEUE">QUEUE — exactly one consumer</option>
+							</select>
+						</div>
+						<div class="vorpal-form-row">
+							<label for="d-persist">Persist</label>
+							<input id="d-persist" type="checkbox">
+							<span class="ev-muted">The analytics sink writes this event to the database. Read from the live catalog per message, so turning it on takes effect without a redeploy.</span>
+						</div>
+
+						<h3 style="margin-top:1rem">Fields</h3>
+						<p class="ev-muted">
+							The wire name is what appears in the JSON. A snake_case name
+							becomes a camelCase Java property with the wire form preserved
+							by <code>@JsonProperty</code> — the bytes never change shape to
+							suit Java.
+						</p>
+						<div id="d-fields"></div>
+						<button id="d-add-field" class="vorpal-btn vorpal-btn-secondary" type="button">Add field</button>
+
+						<h3 style="margin-top:1.25rem">Subscriber</h3>
+						<p class="ev-muted">
+							Who listens is a separate declaration from what an event is,
+							because several applications may want the same event and each
+							needs its own subscription identity to receive its own copy.
+							Two subscribers sharing a name are not two subscriptions — they
+							are one subscription named twice, and the two applications
+							compete for a single stream.
+						</p>
+						<div class="vorpal-form-row">
+							<label for="s-name">Subscription name</label>
+							<input id="s-name" type="text" placeholder="calendar">
+							<span class="ev-muted">Name the <em>subscriber</em>, not the event. Becomes the JMS client id, the durable subscription name and the consumer's class name.</span>
+						</div>
+						<div class="vorpal-form-row">
+							<label for="s-description">What it does</label>
+							<input id="s-description" type="text" placeholder="Creates the appointment when a meeting is confirmed">
+						</div>
+						<div class="vorpal-form-row">
+							<label for="s-package">Java package</label>
+							<input id="s-package" type="text" placeholder="com.example.consumer">
+						</div>
+						<div class="vorpal-form-row">
+							<label for="s-mode">Filtering</label>
+							<select id="s-mode">
+								<option value="DERIVED">At the broker — a selector naming this event type</option>
+								<option value="NONE">In code — take everything on the destination</option>
+							</select>
+							<span class="ev-muted" id="s-mode-note">A selector fails closed: an event type nobody added is never enqueued. Filtering in code fails open, which is what a sink wants.</span>
+						</div>
+						<div class="vorpal-form-row">
+							<label for="s-durable">Durable</label>
+							<input id="s-durable" type="checkbox" checked>
+							<span class="ev-muted">Hold events while this subscriber is down. On for a sink; consider off for something that takes action, where a stale action can be worse than a missed one. Ignored on a queue.</span>
+						</div>
+					</div>
+				</div>
+
+				<div class="ev-panel">
+					<header>
+						<span>Preview</span>
+						<span id="d-selector" class="vorpal-pill">—</span>
+					</header>
+					<div class="ev-body">
+						<div class="ev-tabs" role="tablist">
+							<button class="ev-tab" role="tab" data-tab="java" aria-selected="true">Java</button>
+							<button class="ev-tab" role="tab" data-tab="schema" aria-selected="false">Schema</button>
+							<button class="ev-tab" role="tab" data-tab="sample" aria-selected="false">Sample</button>
+							<button class="ev-tab" role="tab" data-tab="consumer" aria-selected="false">Consumer</button>
+							<button class="ev-tab" role="tab" data-tab="producer" aria-selected="false">Producer</button>
+						</div>
+						<pre class="ev-code" id="d-preview">Start typing an event type…</pre>
+						<div id="d-findings" class="ev-muted" hidden style="margin-top:.75rem"></div>
+						<div class="ev-toolbar" style="margin-top:.75rem">
+							<button id="d-copy" class="vorpal-btn vorpal-btn-secondary" type="button">Copy</button>
+							<button id="d-download" class="vorpal-btn" type="button">Download event .zip</button>
+							<button id="s-download" class="vorpal-btn vorpal-btn-secondary" type="button">Download consumer .zip</button>
+						</div>
+						<p class="ev-muted" style="margin-top:.5rem">
+							Source only — the server never compiles this or publishes a jar.
+							The wire contract is the schema. The consumer module goes into
+							the consuming application's own source tree, never into the
+							framework: every BLADE WAR bundles the framework jar and EJB
+							scanning covers <code>WEB-INF/lib</code>, so a consumer placed
+							there would activate in every deployed application at once, all
+							of them contending for one client id.
+						</p>
+					</div>
+				</div>
+
+			</div>
+
+		</div>
+	</main>
+
+	<footer class="vorpal-footer">
+		<div class="vorpal-footer-meta">BLADE Events Console</div>
+	</footer>
+</div>
+<script src="events.js"></script>
+<script>events.initDesigner();</script>
+</body>
+</html>

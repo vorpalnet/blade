@@ -34,8 +34,8 @@ final class WlsResourceProvisioner {
 	static final String MODULE = "BladeAnalyticsSystemModule";
 	static final String MODULE_DESCRIPTOR = "BladeAnalytics/BladeAnalytics-jms.xml";
 	static final String SUBDEPLOYMENT = "BladeAnalyticsSubdeployment";
-	static final String CONNECTION_FACTORY = "BladeAnalyticsConnectionFactory";
-	static final String QUEUE = "BladeAnalyticsDistributedQueue";
+	static final String CONNECTION_FACTORY = "BladeEventBusConnectionFactory";
+	static final String TOPIC = "BladeEventBusTopic";
 
 	private WlsResourceProvisioner() {
 	}
@@ -97,6 +97,16 @@ final class WlsResourceProvisioner {
 				ObjectName security = (ObjectName) editMbs.getAttribute(cf, "SecurityParams");
 				editMbs.setAttribute(security, new Attribute("AttachJMSXUserId", false));
 				ObjectName client = (ObjectName) editMbs.getAttribute(cf, "ClientParams");
+				// Restricted/Exclusive are WebLogic's defaults, and they stay. They
+				// look wrong for a topic several applications subscribe to — Oracle
+				// documents Restricted as "only one connection ... can exist in a
+				// cluster at any given time for a particular Client ID" — but the MDB
+				// container never uses them here. JMSConnectionPoller calls
+				// setClientID(id, CLIENT_ID_POLICY_UNRESTRICTED) and
+				// setSubscriptionSharingPolicy(SUBSCRIPTION_SHARABLE) per connection
+				// whenever the destination is a distributed topic in
+				// One-Copy-Per-Server or One-Copy-Per-Application mode, which every
+				// BLADE consumer is. Relaxing them domain-wide would buy nothing.
 				editMbs.setAttribute(client, new Attribute("ClientIdPolicy", "Restricted"));
 				editMbs.setAttribute(client, new Attribute("SubscriptionSharingPolicy", "Exclusive"));
 				editMbs.setAttribute(client, new Attribute("MessagesMaximum", 10)); // int attr — must be Integer, not Long
@@ -104,11 +114,15 @@ final class WlsResourceProvisioner {
 				editMbs.setAttribute(tx, new Attribute("XAConnectionFactoryEnabled", true));
 				editMbs.setAttribute(cf, new Attribute("SubDeploymentName", SUBDEPLOYMENT));
 
-				// 6. Uniform distributed queue + JNDI, on the same subdeployment.
-				ObjectName queue = createIfAbsent(editMbs, jmsResource, "UniformDistributedQueues",
-						"createUniformDistributedQueue", QUEUE, "uniform distributed queue", log);
-				editMbs.setAttribute(queue, new Attribute("JNDIName", WlsResourceAudit.EXPECTED_QUEUE_JNDI));
-				editMbs.setAttribute(queue, new Attribute("SubDeploymentName", SUBDEPLOYMENT));
+				// 6. Uniform distributed topic + JNDI, on the same subdeployment.
+				//
+				// A topic, not the queue this used to create: analytics is a
+				// subscriber now, and several applications may consume the same
+				// event. A topic fans out, so each gets its own copy.
+				ObjectName topic = createIfAbsent(editMbs, jmsResource, "UniformDistributedTopics",
+						"createUniformDistributedTopic", TOPIC, "uniform distributed topic", log);
+				editMbs.setAttribute(topic, new Attribute("JNDIName", WlsResourceAudit.EXPECTED_TOPIC_JNDI));
+				editMbs.setAttribute(topic, new Attribute("SubDeploymentName", SUBDEPLOYMENT));
 
 				editMbs.invoke(cfgMgr, "save", null, null);
 				editMbs.invoke(cfgMgr, "activate", new Object[]{120000L}, new String[]{"long"});

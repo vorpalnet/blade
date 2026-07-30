@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Metrics · Documentation</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="../metrics.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/"><img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text"><span class="vorpal-brand-product">BLADE Admin Portal</span>
+			<span class="vorpal-brand-tagline">Unified Administration</span></span></a>
+		<a class="vorpal-appmark" href="/blade/metrics/">Metrics</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Applications</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+	</header>
+	<main class="vorpal-main"><div class="vorpal-page vorpal-page-narrow vorpal-docs"><div class="vorpal-docs-content">
+
+		<h1>Metrics</h1>
+
+		<h2>Where the numbers come from</h2>
+		<p>
+			Every BLADE application registers a <code>vorpal.blade:Name=&lt;app&gt;,Type=Metrics</code>
+			MBean when it starts — the same <code>Name</code> key as its
+			<code>Type=Configuration</code> MBean, so the two join on a value this
+			console already has. This page discovers them over the federated
+			DomainRuntime connection and aggregates.
+		</p>
+		<p>
+			Applications get SIP counters without writing any code:
+			<code>sip.requests</code> by method, <code>sip.responses</code> by status
+			class, <code>sip.errors</code>, and <code>sip.service.time</code>.
+			An app declares its own with a few lines.
+		</p>
+
+		<h2>How aggregation works, and where it would be wrong</h2>
+		<ul>
+			<li><strong>Counters sum.</strong> Including per-label breakdowns.</li>
+			<li><strong>Gauges sum.</strong> Each node reports its own share, so the
+				total is the cluster figure.</li>
+			<li><strong>Histograms merge by bucket.</strong> Every node publishes the
+				same boundaries and this console adds the arrays, then computes the
+				percentile from the total.</li>
+		</ul>
+		<div class="vorpal-callout">
+			<div class="vorpal-callout-title">Why latency is not averaged</div>
+			<p>
+				Percentiles do not merge. Averaging each node's p95 produces a number
+				that is not a percentile of anything, and taking the worst node's is a
+				different metric wearing the same label. Summing the bucket arrays
+				reconstructs the real distribution, which is why the wire format
+				carries buckets rather than percentiles alone.
+			</p>
+		</div>
+		<p>
+			If a node reports different bucket boundaries — a rolling upgrade, most
+			likely — its samples are <em>excluded</em> and the histogram is flagged,
+			rather than summed into a plausible but wrong distribution.
+		</p>
+
+		<h2>What this is not</h2>
+		<p>
+			Not a time-series database. There is no query language, no dashboard
+			builder and no retention: this reads live counters and displays them.
+			Long-term history belongs in a warehouse, fed through an export.
+		</p>
+
+		<h2>Cost</h2>
+		<p>
+			Counting is a <code>LongAdder</code> increment on a handle resolved once
+			at startup — no map lookup, no string building, no allocation on the call
+			path. Reading is one JMX call per app per node per refresh, which is why
+			the refresh interval is a setting: a short interval on a large cluster is
+			real work on the AdminServer, not on the engines.
+		</p>
+
+		<h2>Troubleshooting</h2>
+		<h3>An app is missing</h3>
+		<p>
+			It registers its MBean at startup, so an app that has not restarted since
+			the framework was upgraded will not appear. Check the Configurator — the
+			app's <code>Type=Configuration</code> MBean exists whether or not its
+			metrics one does.
+		</p>
+		<h3>Counters exist but are all zero</h3>
+		<p>
+			The app registered but has handled nothing. SIP counters only move when
+			messages arrive.
+		</p>
+		<h3>A label reads <code>(other)</code></h3>
+		<p>
+			Something used a label value the counter did not declare. Label spaces are
+			finite by design — an unbounded one, keyed by a Call-ID or a phone number,
+			is what turns in-process metrics into an outage — so undeclared values are
+			bucketed rather than allowed to grow. The app logs the first occurrence.
+		</p>
+
+	</div></div></main>
+	<footer class="vorpal-footer"><div class="vorpal-footer-meta">BLADE Metrics</div></footer>
+</div>
+</body>
+</html>

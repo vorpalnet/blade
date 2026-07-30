@@ -1,13 +1,22 @@
-/// Event collection and publishing for SIP applications with JMS integration
-/// and database persistence.
+/// Event collection for SIP applications: what to capture from a call, and how
+/// to pull it out of a SIP message.
 ///
 ///
 /// ## Overview
 ///
 /// The analytics subsystem captures events from SIP call lifecycles and HTTP REST
 /// operations, extracts configurable attributes via regex patterns, and publishes
-/// them asynchronously to a JMS queue. A downstream consumer (typically the
-/// analytics service) persists events to a relational database for reporting.
+/// each as a CloudEvent on the BLADE event bus. Whoever wants them subscribes —
+/// the analytics service persists them to a relational database; another
+/// application may act on the same events without knowing that one exists.
+///
+/// **This package produces facts; it does not know about a database.** It used to:
+/// the JPA entities lived here and the producer filled in the rows — primary
+/// keys, foreign keys and all — which meant every consumer had to be a database,
+/// on BLADE's classpath, reading Java-serialized objects. Those entities now live
+/// with the service that owns the schema, in
+/// `org.vorpal.blade.services.analytics.model`, and thirty WARs stopped shipping
+/// persistence classes they never used.
 ///
 ///
 /// ## How It Works
@@ -22,11 +31,13 @@
 ///       {@link Analytics#createEvent(String, javax.servlet.sip.SipServletMessage)}
 ///       at lifecycle points (e.g. callStarted, callCompleted), extracting
 ///       configured attributes automatically</li>
-///   <li><b>Publish events</b> &mdash; {@link Analytics#sendEvent(Event)} serializes
-///       the event and sends it via {@link JmsPublisher} as a JMS
-///       {@code ObjectMessage}</li>
-///   <li><b>Persist events</b> &mdash; a downstream JMS consumer deserializes the
-///       {@link Event} JPA entity and persists it to the database</li>
+///   <li><b>Publish events</b> &mdash;
+///       {@link Analytics#sendEvent(org.vorpal.blade.framework.v3.events.AnalyticsEvent)}
+///       closes the event and puts it on the bus as a CloudEvent</li>
+///   <li><b>Whoever wants it, subscribes</b> &mdash; the analytics service writes
+///       the events its catalog marks persisted into the database; any other
+///       application may subscribe to the same events independently, and each
+///       subscriber receives its own copy</li>
 /// </ol>
 ///
 ///
@@ -78,20 +89,22 @@
 /// Applications typically extend the appropriate sample and add custom events.
 ///
 ///
-/// ## Data Model
+/// ## What goes on the wire
 ///
-/// Events are stored as JPA entities in a relational database:
+/// Each event is a CloudEvent, and its `type` is the identity a subscriber
+/// selects on. The framework's own names — the eleven `callStarted`,
+/// `transferRequested` and the rest, a closed set defined in framework code —
+/// each get a type of their own, so an application can subscribe to precisely
+/// the events it acts on. A name an operator invents in the {@code events} map
+/// below has no declaration to select on and travels as
+/// {@code net.vorpal.blade.call.event} with the name in the payload, which is
+/// why adding the eleven broke nobody's existing configuration. See
+/// {@link org.vorpal.blade.framework.v3.events.BladeEventTypes}.
 ///
-/// <ul>
-///   <li>{@link Application} &mdash; one row per application deployment, tracking
-///       server name, version, and start/stop timestamps</li>
-///   <li>{@link Session} &mdash; one row per {@code SipApplicationSession}, tracking
-///       creation and destruction timestamps</li>
-///   <li>{@link Event} &mdash; one row per event, linked to a session, with a name
-///       and timestamp</li>
-///   <li>{@link Attribute} &mdash; one row per extracted attribute, linked to an event
-///       via composite key ({@link AttributePK})</li>
-/// </ul>
+/// The correlator is the Vorpal-ID **plus the call's birth instant**, in the
+/// envelope's {@code subject}. A Vorpal-ID is 32 bits and is only checked for
+/// uniqueness among live sessions, so ids are reused: the id alone is a
+/// correlator, and only the pair is an identity.
 ///
 ///
 /// ## HTTP Analytics
@@ -108,16 +121,10 @@
 ///
 /// ### Engine
 ///
-/// - {@link Analytics} - Configuration and event factory: creates events, extracts attributes, publishes via JMS
+/// - {@link Analytics} - Configuration and event factory: creates events, extracts attributes, publishes to the bus
 /// - {@link EventSelector} - Defines which attributes to extract for a specific event type
-/// - {@link JmsPublisher} - JMS connection lifecycle and {@code ObjectMessage} publishing
-///
-/// ### JPA Entities
-///
-/// - {@link Application} - Application deployment metadata
-/// - {@link Session} - SIP application session lifecycle
-/// - {@link Event} - Individual analytics event with attributes
-/// - {@link Attribute} - Key-value attribute linked to an event
+/// - {@link org.vorpal.blade.framework.v3.events.AnalyticsEvent} - One fact, while it is still being assembled
+/// - {@link org.vorpal.blade.framework.v3.events.AnalyticsEventMapper} - Shapes the CloudEvents this package emits
 ///
 /// ### HTTP Integration
 ///
@@ -127,6 +134,6 @@
 ///
 /// @see Analytics
 /// @see EventSelector
-/// @see Event
-/// @see JmsPublisher
+/// @see org.vorpal.blade.framework.v3.events.AnalyticsEvent
+/// @see org.vorpal.blade.framework.v3.events.BladeEventTypes
 package org.vorpal.blade.framework.v2.analytics;

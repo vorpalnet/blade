@@ -1,16 +1,15 @@
 package org.vorpal.blade.services.player;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Properties;
+import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.media.mscontrol.MediaSession;
 import javax.media.mscontrol.MsControlFactory;
 import javax.media.mscontrol.mediagroup.MediaGroup;
 import javax.media.mscontrol.spi.Driver;
-import javax.media.mscontrol.spi.DriverManager;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
@@ -76,15 +75,30 @@ public class PlayerServlet extends AsyncSipServlet {
 			props.putAll(cfg.getDriverProperties());
 		}
 		try {
+			// Discovery goes through ServiceLoader rather than
+			// javax.media.mscontrol.spi.DriverManager. That class dates from 2009 and finds drivers
+			// via sun.misc.Service, which Java 9 removed — so on a modern JVM merely touching it
+			// throws ClassNotFoundException: sun.misc.Service, and from a loadOnStartup servlet that
+			// fails the whole deployment. ServiceLoader reads the same
+			// META-INF/services/javax.media.mscontrol.spi.Driver entries, so nothing else changes.
 			String name = cfg.getDriverName();
-			if (name != null && !name.isEmpty()) {
-				return DriverManager.getFactory(name, props);
+			Driver fallback = null;
+			for (Driver driver : ServiceLoader.load(Driver.class, PlayerServlet.class.getClassLoader())) {
+				if (name != null && !name.isEmpty()) {
+					if (name.equals(driver.getName())) {
+						return driver.getFactory(props);
+					}
+				} else if (fallback == null) {
+					fallback = driver;
+				}
 			}
-			Iterator<Driver> drivers = DriverManager.getDrivers();
-			if (!drivers.hasNext()) {
+			if (name != null && !name.isEmpty()) {
+				throw new ServletException("no JSR-309 driver named '" + name + "' is registered");
+			}
+			if (fallback == null) {
 				throw new ServletException("no JSR-309 driver is registered");
 			}
-			return drivers.next().getFactory(props);
+			return fallback.getFactory(props);
 		} catch (ServletException e) {
 			throw e;
 		} catch (Exception e) {

@@ -1,56 +1,64 @@
-/// The root of the BLADE analytics service — a SIP analytics pipeline that
-/// captures call lifecycle events and persists them to a relational
-/// database. The architecture is asynchronous and JMS-based.
+/// The BLADE analytics service: **one subscriber** on the BLADE event bus, whose
+/// job is to write what happens on a call into a relational database.
 ///
 /// ## Key Components
 ///
-/// The analytics service is composed of two cooperating sub-systems:
-///
-/// - **SIP Servlet Layer** -- A B2BUA servlet that observes call and session lifecycle
-///   transitions (started, answered, connected, completed, declined, abandoned) and
-///   publishes JPA analytics entities to a JMS distributed queue
-/// - **JMS Consumer Layer** -- A message-driven bean that consumes analytics entities
-///   from the queue and persists them to a database via JPA, with built-in resilience
-///   for database outages including automatic suspend/resume of JMS delivery
+/// - **Subscriber** — a message-driven bean holding the durable `analytics-db`
+///   subscription. It takes everything on the bus and writes the event types the
+///   catalog marks persisted, with backpressure that holds events rather than
+///   losing them when the database is unavailable.
+/// - **SIP servlet layer** — a B2BUA that observes call and session lifecycle
+///   transitions, and owns this application's own configuration
+///   (`healthCheckInterval`, `healthCheckSql`, `domainId`)
+/// - **Model** — the JPA entities. They live here, with the service that owns
+///   the schema, rather than in the framework jar where they used to ship inside
+///   every BLADE WAR.
 ///
 /// ## Architecture
 ///
-/// The service uses a decoupled, asynchronous pipeline:
+/// 1. Every BLADE application publishes each analytics fact as a **CloudEvent**
+///    on the shared event bus. It states that something happened; it does not
+///    know or care who acts on it.
+/// 2. [AnalyticsEventListener][org.vorpal.blade.services.analytics.jms.AnalyticsEventListener]
+///    subscribes and records. Another application may subscribe to exactly the
+///    same events and act on them — a transfer app performing a transfer while
+///    this one logs it — with neither aware of the other, because a topic gives
+///    every subscriber its own copy.
+/// 3. The surrogate keys are resolved here, from natural keys the wire carries:
+///    an application instance from `(name, domain, server, appStartedAt)`, a call
+///    from `(cluster_name, vorpal_id, created)`. The producer has no database and
+///    no longer invents keys for one.
+/// 4. When the database is unavailable, JMS delivery is suspended through JMX and
+///    a health-check timer tests connectivity before resuming. A durable
+///    subscription means the events wait rather than vanish.
 ///
-/// 1. [AnalyticsSipServlet][org.vorpal.blade.services.analytics.sip.AnalyticsSipServlet] intercepts SIP call lifecycle events as a B2BUA
-/// 2. Analytics entities (Application, Session, Event) are published as JMS
-///    `ObjectMessage` payloads to a WebLogic distributed queue
-/// 3. [AnalyticsJmsListener][org.vorpal.blade.services.analytics.jms.AnalyticsJmsListener] MDB consumes these messages and merges them into
-///    the database using JPA
-/// 4. When the database is unavailable, JMS delivery is automatically suspended
-///    and a health-check timer periodically tests connectivity before resuming
-///
-/// This design ensures that analytics data is captured without impacting SIP call
-/// processing latency, and that transient database outages do not cause data loss
-/// thanks to the persistent JMS store.
+/// **This is no longer a private pipeline.** It used to be: the producer filled
+/// in JPA entities, Java-serialized them onto a queue of this service's own, and
+/// the consumer discriminated by `instanceof` — which made every consumer
+/// necessarily a database and necessarily on BLADE's classpath. Analytics is now
+/// one subscriber among however many an operator declares, on the same bus, in
+/// the same format, selected the same way.
 ///
 /// ## Sub-packages
 ///
 /// ### [org.vorpal.blade.services.analytics.jms]
-/// Provides the JMS message consumer for the analytics service. The
-/// [AnalyticsJmsListener][org.vorpal.blade.services.analytics.jms.AnalyticsJmsListener] MDB receives JPA entity objects via JMS `ObjectMessage`
-/// from the `jms/BladeAnalyticsDistributedQueue` and persists them using JPA with
-/// bean-managed transactions. Includes database resilience logic that detects
-/// connection errors (inspecting the cause chain for `SQLTransientConnectionException`,
-/// `ConnectException`, `SocketException`), suspends JMS delivery via WebLogic JMX,
-/// and starts a periodic EJB timer health check that resumes delivery when the
-/// database recovers.
+/// The subscription and everything it needs: the MDB, the natural-key resolvers,
+/// the live catalog read for `persist` flags, and the pure payload reader. See
+/// that package's own documentation for why this subscriber deliberately has no
+/// message selector, and for the millisecond-precision requirement the natural
+/// keys depend on.
 ///
 /// ### [org.vorpal.blade.services.analytics.sip]
 /// Provides the SIP-facing components of the analytics service. The
 /// [AnalyticsSipServlet][org.vorpal.blade.services.analytics.sip.AnalyticsSipServlet] operates as a B2BUA that captures call lifecycle
-/// transitions and session lifecycle events, logging them and publishing analytics
-/// entities to the JMS queue. [AnalyticsConfig][org.vorpal.blade.services.analytics.sip.AnalyticsConfig] defines database health-check
-/// settings (`healthCheckInterval` and `healthCheckSql`), and
+/// transitions and session lifecycle events. [AnalyticsConfig][org.vorpal.blade.services.analytics.sip.AnalyticsConfig] defines this
+/// service's own settings — the database health-check
+/// (`healthCheckInterval`, `healthCheckSql`) and the `domainId` stamped as
+/// `cluster_name` so a shared database can tell environments apart — and
 /// [AnalyticsConfigSample][org.vorpal.blade.services.analytics.sip.AnalyticsConfigSample] provides default configuration with a 60-second
 /// interval and `"SELECT 1"` query.
 ///
-/// @see [org.vorpal.blade.services.analytics.jms.AnalyticsJmsListener]
+/// @see [org.vorpal.blade.services.analytics.jms.AnalyticsEventListener]
 /// @see [org.vorpal.blade.services.analytics.sip.AnalyticsSipServlet]
 /// @see [org.vorpal.blade.services.analytics.sip.AnalyticsConfig]
 package org.vorpal.blade.services.analytics;

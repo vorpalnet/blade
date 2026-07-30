@@ -54,7 +54,7 @@
 				<h2>Expected JNDI bindings</h2>
 				<dl id="expected-list">
 					<dt>Connection Factory</dt><dd id="exp-cf">—</dd>
-					<dt>Distributed Queue</dt><dd id="exp-q">—</dd>
+					<dt>Distributed Topic</dt><dd id="exp-q">—</dd>
 					<dt>Data Source</dt><dd id="exp-ds">—</dd>
 				</dl>
 			</section>
@@ -71,9 +71,12 @@
 					<button id="fix-jms-btn" type="button" class="vorpal-btn vorpal-btn-publish">Create missing JMS resources</button>
 					<p class="audit-fix-note">
 						Provisions the file store, JMS server, system module, connection factory and
-						uniform distributed queue on the engine-tier cluster. Safe to re-run — anything
+						uniform distributed topic on the engine-tier cluster. Safe to re-run — anything
 						that already exists is left alone. Does <strong>not</strong> create the JDBC data
 						source (that needs database credentials).
+						<br><br>
+						A <em>topic</em>, because analytics is one subscriber among however many
+						this domain declares. It used to be a queue of this service's own.
 					</p>
 				</div>
 				<pre id="fix-log" class="audit-fix-log" hidden></pre>

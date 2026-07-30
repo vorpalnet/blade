@@ -1,0 +1,141 @@
+/* Events console — layered after /blade/portal/brand/brand.css, which supplies
+   the shell (topbar, page, hero, cards, tables, pills). Only what is specific
+   to this app lives here.
+
+   State is signalled by glyph + word + border position, never by hue alone. */
+
+.ev-toolbar {
+	display: flex;
+	gap: .5rem;
+	align-items: center;
+	flex-wrap: wrap;
+	margin-bottom: 1rem;
+}
+
+.ev-grid {
+	display: grid;
+	grid-template-columns: minmax(320px, 1fr) minmax(320px, 1.2fr);
+	gap: 1rem;
+	align-items: start;
+}
+
+@media (max-width: 900px) {
+	.ev-grid { grid-template-columns: 1fr; }
+}
+
+.ev-panel {
+	border: 1px solid var(--vorpal-slate-300, #cbd2da);
+	border-radius: 8px;
+	background: #fff;
+	overflow: hidden;
+}
+
+.ev-panel > header {
+	padding: .6rem .85rem;
+	border-bottom: 1px solid var(--vorpal-slate-300, #cbd2da);
+	font-weight: 600;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: .5rem;
+}
+
+.ev-panel > .ev-body { padding: .85rem; }
+
+/* Read-only previews are a <pre>, not an embedded editor. The Configurator
+   pulls Ace from a CDN and lazy-fetches themes at runtime, which breaks on an
+   air-gapped domain — no reason to inherit that for output nobody edits. */
+.ev-code {
+	margin: 0;
+	padding: .85rem;
+	overflow: auto;
+	max-height: 30rem;
+	font-family: var(--vorpal-font-mono, ui-monospace, monospace);
+	font-size: 12px;
+	line-height: 1.5;
+	white-space: pre;
+	background: var(--vorpal-slate-100, #f4f6f8);
+}
+
+.ev-tabs { display: flex; gap: .25rem; flex-wrap: wrap; }
+
+.ev-tab {
+	padding: .3rem .7rem;
+	border: 1px solid var(--vorpal-slate-300, #cbd2da);
+	border-radius: 6px 6px 0 0;
+	background: var(--vorpal-slate-100, #f4f6f8);
+	cursor: pointer;
+	font-size: 13px;
+}
+
+.ev-tab[aria-selected="true"] {
+	background: #fff;
+	border-bottom-color: #fff;
+	font-weight: 600;
+}
+
+.ev-field-row {
+	display: grid;
+	grid-template-columns: 1.4fr 1fr auto auto;
+	gap: .4rem;
+	align-items: center;
+	margin-bottom: .4rem;
+}
+
+.ev-field-row input, .ev-field-row select { width: 100%; padding: .3rem .4rem; }
+
+table.ev-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.ev-table th, table.ev-table td {
+	text-align: left;
+	padding: .45rem .6rem;
+	border-bottom: 1px solid var(--vorpal-slate-200, #e3e8ed);
+	vertical-align: top;
+}
+table.ev-table th { font-weight: 600; white-space: nowrap; }
+table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Findings and status. The left border carries the state as position, the
+   glyph and word carry it as content — three independent signals, none of
+   which is colour alone. */
+.ev-finding {
+	border-left: 4px solid var(--vorpal-slate-400, #9aa5b1);
+	padding: .5rem .75rem;
+	margin-bottom: .5rem;
+	background: var(--vorpal-slate-100, #f4f6f8);
+}
+.ev-finding.is-problem { border-left-width: 8px; }
+.ev-finding .ev-kind { font-weight: 600; }
+.ev-finding .ev-detail { font-size: 13px; }
+
+.ev-muted { color: var(--vorpal-slate-600, #5b6672); font-size: 13px; }
+.ev-empty { padding: 1.25rem; text-align: center; }
+
+/* Metrics-specific. A bar is a second, redundant encoding of a number that is
+   also printed next to it — never the only way to read a value. */
+.m-app { margin-bottom: 1rem; }
+.m-app > header .m-nodes { font-weight: 400; font-size: 13px; }
+
+.m-bar {
+	display: inline-block;
+	height: .55rem;
+	min-width: 1px;
+	background: var(--vorpal-slate-400, #9aa5b1);
+	border-radius: 2px;
+	vertical-align: middle;
+}
+
+.m-hist { display: flex; align-items: flex-end; gap: 2px; height: 3rem; margin: .35rem 0; }
+.m-hist > div {
+	flex: 1 1 0;
+	background: var(--vorpal-slate-400, #9aa5b1);
+	min-height: 1px;
+	border-radius: 2px 2px 0 0;
+}
+.m-hist-axis {
+	display: flex;
+	gap: 2px;
+	font-size: 10px;
+	color: var(--vorpal-slate-600, #5b6672);
+	font-variant-numeric: tabular-nums;
+}
+.m-hist-axis > div { flex: 1 1 0; text-align: center; }

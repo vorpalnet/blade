@@ -82,7 +82,7 @@
 /// ## Integration Points
 ///
 /// This package integrates with several companion packages:
-/// - `analytics` - Event publishing and call detail record generation via [org.vorpal.blade.framework.v2.analytics.Event] objects
+/// - `analytics` - Event publishing and call detail record generation via [org.vorpal.blade.framework.v3.events.AnalyticsEvent] objects
 /// - `callflow` - Callback-based call flow processing patterns through [org.vorpal.blade.framework.v2.callflow.Callflow] implementations
 /// - `config` - Session parameter extraction using [org.vorpal.blade.framework.v2.config.SessionParameters] and [org.vorpal.blade.framework.v2.config.AttributeSelector]
 /// - `logging` - Centralized logging with SIP message tracing via [org.vorpal.blade.framework.v2.logging.Logger]
@@ -140,7 +140,7 @@
 /// ### [org.vorpal.blade.framework.v2.analytics]
 /// Provides comprehensive analytics and monitoring capabilities for SIP servlet applications.
 /// The [Analytics][org.vorpal.blade.framework.v2.analytics.Analytics] engine configures event collection with JMS publishing support, while JPA
-/// entities like [Event][org.vorpal.blade.framework.v2.analytics.Event], [Application][org.vorpal.blade.framework.v2.analytics.Application], and [Session][org.vorpal.blade.framework.v2.analytics.Session] enable database persistence of call
+/// facts published as CloudEvents let any number of subscribers record or act on call
 /// detail records and session lifecycle data.
 ///
 /// ### [org.vorpal.blade.framework.v2.b2bua]

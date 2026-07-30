@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_EventsConsole" version="4.0">
+
+	<!-- display-name → JMX MBean key and the on-disk config file name.
+	     Deliberately NOT "events": that would collide with the events CLUSTER
+	     SERVICE, which registers Name=events for its own catalog. Context root
+	     stays blade/events (see weblogic.xml), so SettingsManager.flatten gives
+	     this app blade-events and the service keeps events — disjoint, with no
+	     special-casing. Same shape as analytics-console beside analytics. -->
+	<display-name>events-console</display-name>
+
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+
+	<!-- no security required: the login form and its assets -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>login</web-resource-name>
+			<url-pattern>/login/*</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
+	<!-- Everything else requires an admin role. "/" is WebLogic's catch-all, so
+	     the REST API is FORM-protected along with the pages — this is a
+	     browser-driven console, not a machine API, and there is no Basic
+	     carve-out to make.
+
+	     Note the roles are coarse here by design; per-operation authorization
+	     lives in the REST layer, because a servlet constraint cannot tell a
+	     read from a destructive write. Deleting a destination, purging one, or
+	     reading message bodies are Admin-only and are checked there. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>events-console</web-resource-name>
+			<url-pattern>/</url-pattern>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+			<role-name>Deployer</role-name>
+			<role-name>Monitor</role-name>
+		</auth-constraint>
+	</security-constraint>
+
+	<login-config>
+		<auth-method>CLIENT-CERT,FORM</auth-method>
+		<realm-name>default</realm-name>
+		<form-login-config>
+			<form-login-page>/login/login.jsp</form-login-page>
+			<form-error-page>/login/login.jsp</form-error-page>
+		</form-login-config>
+	</login-config>
+
+	<security-role>
+		<role-name>Admin</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Operator</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Deployer</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Monitor</role-name>
+	</security-role>
+
+</web-app>

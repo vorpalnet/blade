@@ -68,6 +68,22 @@
 			<groupId>com.nimbusds</groupId>
 			<artifactId>oauth2-oidc-sdk</artifactId>
 		</dependency>
+
+		<!-- Tests. Version managed in the parent POM. -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Test scope only. Lets the mapper's output be validated against the
+		     schema the catalog declares for it — two files that must agree, and
+		     nothing else would notice if they stopped. At runtime this ships in
+		     the blade-shared library, so nothing reaches WEB-INF/lib. -->
+		<dependency>
+			<groupId>com.networknt</groupId>
+			<artifactId>json-schema-validator</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

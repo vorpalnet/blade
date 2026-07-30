@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_AnalyticsConsole" version="4.0">
+
+	<!-- display-name → JMX MBean key (vorpal.blade:Name=metrics) and
+	     the on-disk config file name. Deliberately NOT "analytics": that would
+	     collide with the analytics CLUSTER SERVICE, which also registers
+	     Name=analytics. Context-root stays blade/metrics (see weblogic.xml). -->
+	<display-name>metrics</display-name>
+
+	<welcome-file-list>
+		<welcome-file>index.html</welcome-file>
+	</welcome-file-list>
+
+	<!-- no security required: the login form and its assets -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>login</web-resource-name>
+			<url-pattern>/login/*</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
+	<!-- Everything else requires an admin role. Matches the constraint every
+	     other admin app declares; closes the gap where /blade/metrics exposed
+	     the audit API and POST /api/provision/jms (which creates WebLogic JMS
+	     resources) with no auth. The "/" pattern is WebLogic's catch-all, so
+	     the provision endpoint is FORM-protected like the rest of the app —
+	     no Basic carve-out, since it is a browser-driven configuration check. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>metrics</web-resource-name>
+			<url-pattern>/</url-pattern>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+			<role-name>Deployer</role-name>
+			<role-name>Monitor</role-name>
+		</auth-constraint>
+	</security-constraint>
+
+	<login-config>
+		<auth-method>CLIENT-CERT,FORM</auth-method>
+		<realm-name>default</realm-name>
+		<form-login-config>
+			<form-login-page>/login/login.jsp</form-login-page>
+			<form-error-page>/login/login.jsp</form-error-page>
+		</form-login-config>
+	</login-config>
+
+	<security-role>
+		<role-name>Admin</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Operator</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Deployer</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Monitor</role-name>
+	</security-role>
+
+</web-app>

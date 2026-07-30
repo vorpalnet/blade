@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Events · Destinations</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="events.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/events/">Events</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="catalog.html">Catalog</a>
+			<a href="designer.html">Designer</a>
+			<a href="destinations.html" class="vorpal-active">Destinations</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span id="status-pill" class="vorpal-pill">Loading…</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>Destinations</h1>
+					<p>
+						The domain's JMS resources with their live numbers. Nothing in
+						BLADE has ever read a JMS runtime MBean, so depth, pending count,
+						consumer count and durable-subscription state have simply been
+						invisible until now.
+					</p>
+				</div>
+				<div class="vorpal-hero-meta">
+					<button id="new-destination" class="vorpal-btn" type="button">New destination</button>
+					<button id="refresh" class="vorpal-btn vorpal-btn-secondary" type="button">Refresh</button>
+				</div>
+			</section>
+
+			<div class="ev-panel" id="create-panel" hidden style="margin-bottom:1rem">
+				<header><span>New destination</span></header>
+				<div class="ev-body">
+					<div class="vorpal-form-row">
+						<label for="c-name">Name</label>
+						<input id="c-name" type="text" placeholder="BladeEventBusTopic">
+					</div>
+					<div class="vorpal-form-row">
+						<label for="c-jndi">JNDI name</label>
+						<input id="c-jndi" type="text" placeholder="jms/BladeEventBusTopic">
+					</div>
+					<div class="vorpal-form-row">
+						<label for="c-kind">Kind</label>
+						<select id="c-kind">
+							<option value="TOPIC">TOPIC — every subscriber gets a copy</option>
+							<option value="QUEUE">QUEUE — exactly one consumer</option>
+						</select>
+					</div>
+					<div class="vorpal-form-row">
+						<label for="c-targets">Target</label>
+						<select id="c-targets"><option value="">(the only cluster)</option></select>
+					</div>
+					<div class="vorpal-form-row">
+						<label for="c-quota">Quota (bytes)</label>
+						<input id="c-quota" type="number" value="1073741824">
+						<span class="ev-muted">Its own quota, so one destination cannot fill a shared store and starve the others.</span>
+					</div>
+					<div class="ev-toolbar" style="margin-top:.75rem">
+						<button id="c-create" class="vorpal-btn" type="button">Create</button>
+						<button id="c-cancel" class="vorpal-btn vorpal-btn-secondary" type="button">Cancel</button>
+					</div>
+					<p class="ev-muted">
+						An existing BLADE JMS module is adopted rather than duplicated —
+						WebLogic cannot rename a JMS resource, and destroy-and-recreate
+						would orphan its file store.
+					</p>
+				</div>
+			</div>
+
+			<pre class="ev-code" id="action-log" hidden></pre>
+
+			<div id="jms-error" class="ev-finding is-problem" hidden>
+				<div class="ev-kind">✕ Cannot read JMS</div>
+				<div class="ev-detail" id="jms-error-detail"></div>
+			</div>
+
+			<div class="ev-panel">
+				<header>
+					<span>Destinations</span>
+					<span id="destination-count" class="vorpal-pill">—</span>
+				</header>
+				<div class="ev-body">
+					<table class="ev-table" id="destinations-table">
+						<thead>
+							<tr>
+								<th>Destination</th>
+								<th>JNDI</th>
+								<th>Module</th>
+								<th>Kind</th>
+								<th class="ev-num">Current</th>
+								<th class="ev-num">Pending</th>
+								<th class="ev-num">Received</th>
+								<th class="ev-num">Consumers</th>
+								<th>State</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+					<div id="destinations-empty" class="ev-empty ev-muted" hidden>
+						No JMS destinations found in this domain. Provision them with
+						<code>configure-messaging-jms.py</code>.
+					</div>
+				</div>
+			</div>
+
+			<div class="ev-panel" style="margin-top:1rem">
+				<header>
+					<span>Durable subscriptions</span>
+					<span id="subscription-count" class="vorpal-pill">—</span>
+				</header>
+				<div class="ev-body">
+					<p class="ev-muted">
+						A subscription's selector is the one thing that decides whether it
+						receives anything. If it does not match what the publisher stamps,
+						the subscription gets nothing — and that is indistinguishable from
+						no events being published.
+					</p>
+					<table class="ev-table" id="subscriptions-table">
+						<thead>
+							<tr>
+								<th>Subscription</th>
+								<th>Destination</th>
+								<th>Client ID</th>
+								<th>Selector</th>
+								<th>Active</th>
+								<th class="ev-num">Pending</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+					<div id="subscriptions-empty" class="ev-empty ev-muted" hidden>
+						No durable subscriptions. A consumer that has never started leaves
+						none behind.
+					</div>
+				</div>
+			</div>
+
+			<div class="ev-panel" id="browse-panel" hidden style="margin-top:1rem">
+				<header>
+					<span id="browse-title">Messages</span>
+					<button id="browse-close" class="vorpal-btn vorpal-btn-secondary" type="button">Close</button>
+				</header>
+				<div class="ev-body">
+					<p class="ev-muted">
+						Non-destructive: this reads what is at rest through a cursor and
+						takes nothing, so it cannot steal a message from the real
+						consumer. Bodies are truncated for display. Every browse is
+						logged with your username — an event body carries the call
+						correlator and whatever the producer put in it.
+					</p>
+					<pre class="ev-code" id="browse-body"></pre>
+				</div>
+			</div>
+
+			<div class="ev-panel" style="margin-top:1rem">
+				<header>
+					<span>JMS servers</span>
+					<span id="server-count" class="vorpal-pill">—</span>
+				</header>
+				<div class="ev-body">
+					<table class="ev-table" id="servers-table">
+						<thead>
+							<tr>
+								<th>Server</th>
+								<th>Store</th>
+								<th>Targets</th>
+								<th class="ev-num">Destinations</th>
+								<th class="ev-num">Current</th>
+								<th class="ev-num">Pending</th>
+								<th>Health</th>
+							</tr>
+						</thead>
+						<tbody></tbody>
+					</table>
+				</div>
+			</div>
+
+		</div>
+	</main>
+
+	<footer class="vorpal-footer">
+		<div class="vorpal-footer-meta">BLADE Events Console</div>
+	</footer>
+</div>
+<script src="events.js"></script>
+<script>events.initDestinations();</script>
+</body>
+</html>

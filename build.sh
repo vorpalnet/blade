@@ -3,7 +3,7 @@
 # build.sh - Profile-driven build wrapper for BLADE
 #
 # Usage:
-#   ./build.sh [profile...] [platform] [--no-dist] [--no-javadoc] [maven-args...]
+#   ./build.sh [profile...] [platform] [--dev|--prod] [--no-dist] [--no-javadoc] [maven-args...]
 #
 # Examples:
 #   ./build.sh                              # full build, auto-detected platform
@@ -14,6 +14,14 @@
 #   ./build.sh clean                        # also purges org.vorpal.blade from ~/.m2
 #   ./build.sh --no-dist                    # full build, skip dist/ copy
 #   ./build.sh --no-javadoc                 # full build, skip javadoc generation
+#   ./build.sh                              # dev versioning (default): app version 3.0.4
+#   ./build.sh --prod                       # release versioning: app version 3.0.4-<build>
+#
+# Dev vs prod versioning: WebLogic side-by-side versioning keys off
+# WebLogic-Application-Version, so a build number that moves every build mints a NEW
+# application version -- the previous one stays registered and blocks an in-place
+# redeploy until undeployed by name. dev keeps the version stable (3.0.4) so OCCAS
+# replaces the app on redeploy; prod appends the build number for traceable releases.
 #   ./build.sh -- -Pfoo                     # full build with extra Maven flags
 #
 # Module profiles:   build-profiles/*.conf
@@ -184,7 +192,11 @@ cleanup_failed_dist() {
 module_dir() {
     local name="$1"
     for d in libs admin services test apps proto; do
-        if [ -d "${SCRIPT_DIR}/${d}/${name}" ]; then
+        # Require a pom.xml, matching discover_modules. A bare directory is not
+        # a module: services/acl is nothing but leftover Eclipse metadata and a
+        # stale target/, and matching it shadowed the real proto/acl and shipped
+        # a WAR from an old build.
+        if [ -f "${SCRIPT_DIR}/${d}/${name}/pom.xml" ]; then
             echo "${d}/${name}"
             return
         fi
@@ -196,10 +208,26 @@ module_dir() {
 # deploys. Libraries stay at dist root — they have their own special-cased
 # deployment paths (WebLogic shared library, approuter/ JAR drop) that don't
 # fit the generic admin/services tier model.
+#
+# Services are the exception to "the EAR is the deploy unit": they ship as loose
+# WARs in dist/services/ and deploy one by one. Oracle's Remote Console cannot
+# show the status of an application bundled inside an EAR, so a single
+# blade-services.ear made every service invisible individually — you could see
+# that the EAR was running, not which service inside it was. Separate WARs cost
+# a longer deploy loop and buy per-service state, start/stop and targeting.
 dist_subdir_for() {
     case "$1" in
-        apps/*)                    echo "" ;;     # the 3 EARs (blade-admin/services/test.ear) → dist root
-        admin/*|services/*|test/*) echo "skip" ;; # component WARs: the EAR is the deploy unit, not copied to dist
+        apps/*)                    echo "" ;;     # the EARs (blade-admin/test.ear) → dist root
+        # Built for blade-test.ear (engine0) but NEVER shipped to the production
+        # cluster. proxy-registrar accepts REGISTERs with no authentication; it
+        # is a test fixture, not a service. This used to be enforced implicitly
+        # by blade-services.ear's ear-<name> profile list acting as an
+        # allowlist — proxy-registrar simply had no profile there. With the
+        # services EAR gone that filter went with it, so the exclusion is
+        # explicit and named here instead of being a side effect.
+        services/proxy-registrar)  echo "skip" ;;
+        services/*)                echo "services" ;; # each service WAR is its own deploy unit — see below
+        admin/*|test/*)            echo "skip" ;; # component WARs: the EAR is the deploy unit, not copied to dist
         proto/*)                   echo "proto" ;; # incubator apps — built, deployed by hand
         libs/*)                    echo "" ;;     # libraries at root (shared lib + approuter jar)
         *)                         echo "" ;;
@@ -244,9 +272,13 @@ copy_all_to_dist() {
         # Copy the artifact the module declares via <finalName>, not whatever
         # WARs happen to be in target/. See the function header for why a blind
         # glob ships stale duplicates.
+        # `|| true`: a pom without <finalName> makes grep exit 1, and under
+        # `set -euo pipefail` that aborts the whole script — which made the
+        # no-finalName fallback below unreachable. Modules reaching this point
+        # used to all declare one; services/acl does not.
         final_name=$(grep -o '<finalName>[^<]*</finalName>' \
             "${SCRIPT_DIR}/${mdir}/pom.xml" 2>/dev/null \
-            | head -1 | sed 's/<[^>]*>//g')
+            | head -1 | sed 's/<[^>]*>//g' || true)
         if [ -n "$final_name" ]; then
             for f in "$target/${final_name}.war" "$target/${final_name}.jar" "$target/${final_name}.ear"; do
                 [ -f "$f" ] || continue
@@ -296,6 +328,8 @@ write_deployment_manifest() {
             blade-redirect.war)     echo "admin|AdminServer|Bare /blade 302 → /blade/portal/ (context: /)" ;;
             blade-api.war)          echo "admin|AdminServer|API explorer (context: /blade/api)" ;;
             blade-configurator.war) echo "admin|AdminServer|Config editor (context: /blade/configurator)" ;;
+            blade-events.war)       echo "admin|AdminServer|Events console — catalog, designer, JMS admin (context: /blade/events)" ;;
+            blade-metrics.war)      echo "admin|AdminServer|Metrics — per-app counters across the cluster (context: /blade/metrics)" ;;
             blade-flow.war)         echo "admin|AdminServer|FSMAR diagram editor (context: /blade/flow)" ;;
             blade-tuning.war)       echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /blade/tuning)" ;;
             blade-files.war)        echo "admin|AdminServer|Config file manager (context: /blade/files)" ;;
@@ -325,6 +359,10 @@ write_deployment_manifest() {
                 echo "shared-lib|admin+cluster|WebLogic shared library (3rd-party JARs)" ;;
             blade-framework.jar)
                 echo "framework|bundled in WARs|BLADE framework library (not deployed directly)" ;;
+            blade-admin.ear)
+                echo "admin|AdminServer|Admin tier EAR — every admin console in one deployable" ;;
+            blade-test.ear)
+                echo "test|engine0|Test tier EAR — test harness apps (never the production cluster)" ;;
             *.conf)
                 echo "metadata|n/a|Build profile / platform used for this build" ;;
             *)
@@ -383,6 +421,15 @@ write_deployment_manifest() {
         echo "BLADE ${REVISION}-${BUILD_NUM} deployment manifest"
         echo "See DEPLOYMENT.md for the four-tier deployment model."
         echo ""
+        # Which app version the artifacts actually carry. In dev the build number is
+        # deliberately NOT in the app version, so OCCAS redeploys in place instead of
+        # registering a new side-by-side version on every build.
+        if [ "$BLADE_MODE" = "prod" ]; then
+            echo "Build mode:  prod  (app version ${REVISION}-${BUILD_NUM} - traceable, side-by-side)"
+        else
+            echo "Build mode:  dev   (app version ${REVISION} - redeploys in place; NOT for production)"
+        fi
+        echo ""
         print_row "Artifact" "Tier" "Target" "Purpose"
         print_row "--------------------------------" "-----------" "---------------" "-------"
         print_root_section
@@ -427,6 +474,20 @@ case "${BLADE_SKIP_JAVADOC:-}" in
     1|true|yes|on) SKIP_JAVADOC=true ;;
 esac
 
+# App-version mode. WebLogic side-by-side versioning keys off
+# WebLogic-Application-Version, so a build number that moves every build mints a
+# NEW application version each time -- the old one stays registered and must be
+# undeployed by name before a redeploy will replace it. That is friction in a test
+# loop, so dev is the default:
+#
+#   dev  (default)  WebLogic-Application-Version = <revision>          e.g. 3.0.4
+#                   stable, so OCCAS replaces the app in place on redeploy
+#   prod (--prod)   WebLogic-Application-Version = <revision>-<build>  e.g. 3.0.4-7
+#                   distinct per build: traceable, side-by-side capable
+#
+# Override the default with BLADE_MODE=prod in the environment.
+BLADE_MODE="${BLADE_MODE:-dev}"
+
 for arg in "$@"; do
     if [ "$arg" = "--" ]; then
         continue
@@ -434,6 +495,10 @@ for arg in "$@"; do
         SKIP_DIST=true
     elif [ "$arg" = "--no-javadoc" ]; then
         SKIP_JAVADOC=true
+    elif [ "$arg" = "--prod" ]; then
+        BLADE_MODE=prod
+    elif [ "$arg" = "--dev" ]; then
+        BLADE_MODE=dev
     elif [[ "$arg" == -* ]]; then
         MAVEN_ARGS+=("$arg")
     elif [ -f "${PROFILES_DIR}/${arg}.conf" ]; then
@@ -489,6 +554,20 @@ fi
 JAVA_VERSION=$(grep '^java\.version=' "$PLATFORM_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')
 WL_VERSION=$(grep '^weblogic\.version=' "$PLATFORM_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')
 OCCAS_VERSION=$(grep '^occas\.version=' "$PLATFORM_FILE" | head -1 | cut -d= -f2 | tr -d '[:space:]')
+
+# Validated inline rather than via die(), which is not defined this early in the
+# script. An unvalidated mode is worse than a loud failure: no versioning profile
+# would match, so the build would silently produce dev-versioned artifacts.
+case "$BLADE_MODE" in
+    dev|prod) ;;
+    *)
+        echo "ERROR: unknown BLADE_MODE '${BLADE_MODE}'. Expected 'dev' or 'prod'." >&2
+        echo "       dev  = app version ${REVISION} (redeploys in place)" >&2
+        echo "       prod = app version ${REVISION}-<build> (traceable releases)" >&2
+        exit 2
+        ;;
+esac
+MAVEN_ARGS+=("-Dblade.mode=${BLADE_MODE}")
 
 PLATFORM_FLAGS=()
 if [ -n "$JAVA_VERSION" ]; then

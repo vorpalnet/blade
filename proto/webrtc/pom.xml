@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-proto-webrtc</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE WebRTC Gateway (proto) — browser endpoints on OCCAS</name>
+	<description>Puts a browser on one end of a SIP call: JSON events over a WebSocket to the
+		browser, ordinary SIP to the network, with media anchored on a WebRTC-capable media server
+		that terminates ICE and DTLS-SRTP. The SIP-to-browser translation is a compiled BLADE
+		callflow rather than deployment-authored scripting, and the media plane is reached through
+		the framework's vendor-neutral WebRTC SPI, so no media-server vendor is named here.</description>
+
+	<build>
+		<finalName>blade-webrtc</finalName>
+	</build>
+
+	<dependencies>
+		<!-- Only the framework (skinny WAR). javax.websocket comes from the inherited
+		     javaee-api (provided) — WebLogic supplies Tyrus at runtime — and the media plane is
+		     discovered at runtime through WebrtcMediaProvider, so there is no compile dependency
+		     on any media-server vendor. -->
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.13.2</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+</project>

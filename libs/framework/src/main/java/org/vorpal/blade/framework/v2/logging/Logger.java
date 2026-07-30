@@ -41,8 +41,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
-import org.vorpal.blade.framework.v2.analytics.Attribute;
-import org.vorpal.blade.framework.v2.analytics.Event;
+import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.snmp.Snmp;
@@ -227,31 +226,29 @@ public class Logger extends java.util.logging.Logger implements Serializable {
 		super(name, resourceBundleName);
 	}
 
-	public void logEvent(SipSession sipSession, Event event) {
+	public void logEvent(SipSession sipSession, AnalyticsEvent event) {
 		if (event != null && isLoggable(analyticsLoggingLevel)) {
-			if (this.isLoggable(analyticsLoggingLevel)) {
-				StringBuilder strBuilder = new StringBuilder();
-				strBuilder.append("event=");
-				strBuilder.append(event.getName());
+			StringBuilder strBuilder = new StringBuilder();
+			strBuilder.append("event=");
+			strBuilder.append(event.getName());
 
-				Iterator<Entry<String, Attribute>> itr = event.getAttributes().entrySet().iterator();
-				Entry<String, Attribute> entry;
+			Iterator<Entry<String, String>> itr = event.getAttributes().entrySet().iterator();
+			Entry<String, String> entry;
 
+			if (itr.hasNext()) {
+				strBuilder.append(", ");
+			}
+
+			while (itr.hasNext()) {
+				entry = itr.next();
+				strBuilder.append(entry.getKey() + "=" + entry.getValue());
 				if (itr.hasNext()) {
 					strBuilder.append(", ");
 				}
-
-				while (itr.hasNext()) {
-					entry = itr.next();
-					strBuilder.append(entry.getKey() + "=" + entry.getValue().getValue());
-					if (itr.hasNext()) {
-						strBuilder.append(", ");
-					}
-				}
-
-				String comments = strBuilder.toString();
-				log(this.analyticsLoggingLevel, sipSession, comments);
 			}
+
+			String comments = strBuilder.toString();
+			log(this.analyticsLoggingLevel, sipSession, comments);
 		}
 	}
 

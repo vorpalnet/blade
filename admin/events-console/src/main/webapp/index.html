@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Events · Overview</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="events.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/events/">Events</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html" class="vorpal-active">Overview</a>
+			<a href="catalog.html">Catalog</a>
+			<a href="designer.html">Designer</a>
+			<a href="destinations.html">Destinations</a>
+			<a href="docs/index.html">Documentation</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span id="status-pill" class="vorpal-pill">Loading…</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+			<section class="vorpal-hero">
+				<div>
+					<span class="vorpal-eyebrow">Messaging</span>
+					<h1>Events</h1>
+					<p>
+						One place for BLADE messaging. Declare what an event is and
+						generate the code that produces and consumes it; then administer
+						the WebLogic JMS resources that actually carry it — destinations,
+						quotas, durable subscriptions, depths and consumers.
+					</p>
+				</div>
+			</section>
+
+			<div class="vorpal-card-grid">
+				<a class="vorpal-card" href="catalog.html">
+					<div class="vorpal-card-icon">▤</div>
+					<h2>Catalog</h2>
+					<p>Every event type on the bus — what it carries, where it flows, and
+					   whether the running domain agrees with the declaration.</p>
+					<span class="vorpal-card-link">Open the catalog</span>
+				</a>
+				<a class="vorpal-card" href="designer.html">
+					<div class="vorpal-card-icon">✎</div>
+					<h2>Designer</h2>
+					<p>Describe an event's fields once and take away the payload class,
+					   its JSON Schema, a consumer already bound to the right selector,
+					   and a producer snippet.</p>
+					<span class="vorpal-card-link">Design an event</span>
+				</a>
+				<a class="vorpal-card" href="destinations.html">
+					<div class="vorpal-card-icon">⇄</div>
+					<h2>Destinations</h2>
+					<p>The domain's JMS resources with their live numbers: depth, pending,
+					   consumers, and every durable subscription with the selector it
+					   actually subscribed with.</p>
+					<span class="vorpal-card-link">Inspect destinations</span>
+				</a>
+			</div>
+
+			<section class="vorpal-callout">
+				<div class="vorpal-callout-title">Why a selector matters</div>
+				<p>
+					A consumer whose message selector does not match what the publisher
+					stamps receives nothing — and that looks exactly like no events being
+					published. The selector is a quoted string literal no compiler ever
+					checks. This console derives it from the catalog, generates consumers
+					with it filled in, and reports any live subscription that has drifted.
+				</p>
+			</section>
+		</div>
+	</main>
+
+	<footer class="vorpal-footer">
+		<div class="vorpal-footer-meta">BLADE Events Console</div>
+	</footer>
+</div>
+<script src="events.js"></script></body></html>

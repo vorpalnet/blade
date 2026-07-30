@@ -1,0 +1,174 @@
+package org.vorpal.blade.framework.v3.events;
+
+/// The canonical CloudEvents `type` names BLADE itself emits.
+///
+/// These exist so the analytics stream stops being discriminated by
+/// `instanceof` on a deserialized Java class — the mechanism that ties every
+/// consumer to BLADE's classpath and makes selector-based routing impossible.
+/// Stamping one of these as [EventPublisher#PROP_TYPE] costs nothing today and
+/// is what lets a consumer filter with a JMS selector tomorrow.
+///
+/// **Start and stop are distinct types on purpose.** On the wire today a
+/// `Session` start and a `Session` stop are the *same class*, told apart by
+/// whether `destroyed` is null — and `Application` likewise. That forces every
+/// consumer to infer intent from a null field. Naming them separately retires
+/// the inference.
+///
+/// **The call and transfer names are types, not payload fields.** They were
+/// briefly collapsed into [#CALL_EVENT] with the real name buried in
+/// `data.eventName`, on the reasoning that event names are operator-defined at
+/// runtime in each app's `analytics.events` configuration. That reasoning is only
+/// half right: an operator can invent names, but the framework's own names are a
+/// **closed set defined in framework code** — `InitialInvite`, `Terminate`,
+/// `BlindTransfer` and `ReferTransfer` publish exactly the eleven below and no
+/// configuration changes that. Collapsing them cost the thing this bus is for: a
+/// transfer app could not select on `eventType` for refer events, and would have
+/// had to receive every call event on the bus and filter in code. So the closed
+/// set gets real types, and [#CALL_EVENT] stays as the fallback for names an
+/// operator invents — which means nobody's existing configuration breaks.
+///
+/// **One namespace: `net.vorpal.blade.`** These were briefly under
+/// `net.vorpal.blade.analytics.` — from when the only consumer was the analytics
+/// database. They are not analytics events; they are facts about a call that
+/// analytics happens to record, and a transfer app subscribing to
+/// `net.vorpal.blade.analytics.transfer.requested` would be reading a name that
+/// lies about who it is for. The rename was free: nothing outside this file
+/// referenced the old strings, and no durable subscription exists to orphan. It
+/// will not be free again once a customer has one.
+public final class BladeEventTypes {
+
+	/// An application instance started. One per app, per node, per restart —
+	/// published at `servletInitialized`, before the load balancer sends any
+	/// traffic to this node.
+	public static final String APPLICATION_STARTED = "net.vorpal.blade.application.started";
+
+	/// An application instance stopped.
+	public static final String APPLICATION_STOPPED = "net.vorpal.blade.application.stopped";
+
+	/// A call began. The session is the *call* as it flows through every app in
+	/// a chain, so several apps may report the same one; the correlator makes
+	/// them the same session rather than competing rows.
+	public static final String SESSION_STARTED = "net.vorpal.blade.session.started";
+
+	/// A call ended.
+	public static final String SESSION_STOPPED = "net.vorpal.blade.session.stopped";
+
+	/// An index key attached to a call — a configured origin selector that
+	/// matched, e.g. a correlation header or a caller number.
+	public static final String SESSION_KEY = "net.vorpal.blade.session.key";
+
+	/// An analytics event whose name the framework does not define — one an
+	/// operator added to an application's `analytics.events` configuration.
+	///
+	/// The fallback, and only the fallback. A framework-emitted name resolves to
+	/// one of the eleven types below through [#forEventName]; anything else lands
+	/// here with its name in the payload, exactly as before, so an existing
+	/// customer configuration keeps flowing without a catalog edit.
+	public static final String CALL_EVENT = "net.vorpal.blade.call.event";
+
+	// ------------------------------------------------------------------ the call
+
+	/// A call began — `InitialInvite` received an initial INVITE and is placing
+	/// the outbound leg. Published beside `Analytics.sessionStart`.
+	public static final String CALL_STARTED = "net.vorpal.blade.call.started";
+
+	/// The callee's leg returned a success response, on its way back to the
+	/// caller.
+	public static final String CALL_ANSWERED = "net.vorpal.blade.call.answered";
+
+	/// The caller's ACK was relayed to the callee, completing the handshake.
+	///
+	/// **After [#CALL_ANSWERED], not before it.** This is the ACK, not a
+	/// provisional response — `InitialInvite` publishes it while building
+	/// `bobAck`.
+	public static final String CALL_CONNECTED = "net.vorpal.blade.call.connected";
+
+	/// An answered call was terminated — `Terminate` saw the dialog in
+	/// `CONFIRMED` and is sending BYE.
+	public static final String CALL_COMPLETED = "net.vorpal.blade.call.completed";
+
+	/// A call was terminated before it was answered — `Terminate` saw the dialog
+	/// in `EARLY` and is cancelling the INVITE.
+	public static final String CALL_ABANDONED = "net.vorpal.blade.call.abandoned";
+
+	/// The callee's leg returned a failure response.
+	///
+	/// Any failure response, from anywhere on that leg — an intermediary's 503
+	/// counts, so this says the call did not succeed rather than that the callee
+	/// personally refused it.
+	public static final String CALL_DECLINED = "net.vorpal.blade.call.declined";
+
+	// -------------------------------------------------------------- the transfer
+
+	/// A REFER arrived from the transferor, before anything was done about it.
+	///
+	/// This is the one an actor subscribes to, and it is a *fact*: the publisher
+	/// states that a REFER was received and does not know or care who acts on it.
+	/// A transfer app subscribes and performs the transfer; analytics subscribes
+	/// to the same fact and records it; neither knows about the other.
+	public static final String TRANSFER_REQUESTED = "net.vorpal.blade.transfer.requested";
+
+	/// The transfer is under way — `BlindTransfer` sent the INVITE to the target,
+	/// or `ReferTransfer` saw a `100 Trying` sipfrag come back in a NOTIFY.
+	public static final String TRANSFER_INITIATED = "net.vorpal.blade.transfer.initiated";
+
+	/// The transfer target answered — a success response to the target INVITE, or
+	/// a `200 OK` sipfrag in a NOTIFY.
+	public static final String TRANSFER_COMPLETED = "net.vorpal.blade.transfer.completed";
+
+	/// The transfer did not succeed: the target's leg returned a failure response,
+	/// or the REFER itself was refused.
+	///
+	/// Both cases land here — `ReferTransfer` publishes it for a failed REFER as
+	/// well as for a `486` sipfrag — so this means "the transfer was refused",
+	/// not specifically "the target said no".
+	public static final String TRANSFER_DECLINED = "net.vorpal.blade.transfer.declined";
+
+	/// The transferee gave up before the transfer completed — a BYE or CANCEL
+	/// from the transferee, or a `487` from the target because of one.
+	public static final String TRANSFER_ABANDONED = "net.vorpal.blade.transfer.abandoned";
+
+	/// The CloudEvents type for an analytics event name — one of the eleven when
+	/// the framework defines the name, [#CALL_EVENT] otherwise.
+	///
+	/// The one place the mapping lives, so the producer, the catalog and any
+	/// consumer that wants to reverse it cannot disagree. Deliberately a `switch`
+	/// over constants rather than a lookup table: the compiler checks the right
+	/// side, this runs on the SIP container thread, and there is no initialization
+	/// order to reason about.
+	public static String forEventName(String eventName) {
+		if (eventName == null) {
+			return CALL_EVENT;
+		}
+		switch (eventName) {
+		case "callStarted":
+			return CALL_STARTED;
+		case "callAnswered":
+			return CALL_ANSWERED;
+		case "callConnected":
+			return CALL_CONNECTED;
+		case "callCompleted":
+			return CALL_COMPLETED;
+		case "callAbandoned":
+			return CALL_ABANDONED;
+		case "callDeclined":
+			return CALL_DECLINED;
+		case "transferRequested":
+			return TRANSFER_REQUESTED;
+		case "transferInitiated":
+			return TRANSFER_INITIATED;
+		case "transferCompleted":
+			return TRANSFER_COMPLETED;
+		case "transferDeclined":
+			return TRANSFER_DECLINED;
+		case "transferAbandoned":
+			return TRANSFER_ABANDONED;
+		default:
+			// An operator-defined name from an app's analytics.events config.
+			return CALL_EVENT;
+		}
+	}
+
+	private BladeEventTypes() {
+	}
+}

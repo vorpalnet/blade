@@ -11,6 +11,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v3.configuration.Context;
+import org.vorpal.blade.framework.v3.events.EventBusSettings;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -19,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
  * Base configuration class with logging, session parameters, and utility
  * methods.
  */
-@JsonPropertyOrder({ "version", "notes", "logging", "session", "analytics" })
+@JsonPropertyOrder({ "version", "notes", "logging", "session", "analytics", "events" })
 public class Configuration implements Serializable {
 	private static final long serialVersionUID = 1L;
 	public static final String SIP_ADDRESS_PATTERN = "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$";
@@ -30,6 +31,11 @@ public class Configuration implements Serializable {
 	protected SessionParameters session = new SessionParameters();
 
 	protected Analytics analytics;
+
+	/// Whether and how this application publishes to the v3 event bus. Beside
+	/// `analytics` because they are the same kind of thing — a per-app decision
+	/// to open a JMS connection — and because the two pipelines are converging.
+	protected EventBusSettings events;
 
 	private final static long SECONDS_FACTOR = 1;
 	private final static long MINUTES_FACTOR = 60 * SECONDS_FACTOR;
@@ -217,6 +223,16 @@ public class Configuration implements Serializable {
 
 	public Configuration setAnalytics(Analytics analytics) {
 		this.analytics = analytics;
+		return this;
+	}
+
+	@JsonPropertyDescription("Event bus parameters — whether this application publishes CloudEvents, and to which destination")
+	public EventBusSettings getEvents() {
+		return events;
+	}
+
+	public Configuration setEvents(EventBusSettings events) {
+		this.events = events;
 		return this;
 	}
 

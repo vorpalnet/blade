@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE Events · Documentation</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="../events.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/portal/brand/vorpal_splotch.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/events/">Events</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="../index.html">Overview</a>
+			<a href="../catalog.html">Catalog</a>
+			<a href="../designer.html">Designer</a>
+			<a href="../destinations.html">Destinations</a>
+			<a href="index.html" class="vorpal-active">Documentation</a>
+		</nav>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page vorpal-page-narrow vorpal-docs">
+			<div class="vorpal-docs-content">
+
+				<h1>Events</h1>
+
+				<h2>What problem this solves</h2>
+				<p>
+					An event in BLADE used to be four hand-written things that nothing
+					checked against each other: the destination, provisioned by a WLST
+					script; the publisher's JNDI constants; a consumer with a
+					<strong>hand-typed message selector</strong>; and a payload shape that
+					existed nowhere at all.
+				</p>
+				<div class="vorpal-callout">
+					<div class="vorpal-callout-title">The failure that motivated all of this</div>
+					<p>
+						A message selector is a quoted string literal. No compiler checks
+						it. A consumer whose selector does not match what the publisher
+						stamps receives <em>nothing</em> — and that is indistinguishable
+						from no events being published. People lose days to it.
+					</p>
+				</div>
+				<p>
+					Now one declaration in the catalog is the source of truth, and the
+					selector, the payload class, the JSON Schema, the consumer skeleton
+					and the ingress validation are all derived from it.
+				</p>
+
+				<h2>Catalog</h2>
+				<p>
+					The catalog is domain-wide and lives at
+					<code>config/custom/vorpal/events.json</code>. Publishing writes it
+					through the versioned file store — every publish keeps a backup — and
+					the engine tier picks it up with no redeploy.
+				</p>
+				<p>
+					It also carries the event types <em>BLADE itself</em> emits: the
+					application and session lifecycle, session keys, and call events. Those
+					used to be described only by their extraction rules in each app's
+					<code>analytics</code> config, which says where a value comes from but
+					never what shape it is.
+				</p>
+
+				<h3>Contract here, extraction there</h3>
+				<p>
+					Deliberately split. The catalog is the <strong>contract</strong> —
+					what an event is called, what fields it has, where it flows — and it is
+					domain-wide. The <strong>extraction</strong> rules stay per-app in
+					<code>analytics.events</code>, because the same logical event
+					legitimately comes from different headers in different applications.
+					The Catalog page cross-checks the two and reports drift.
+				</p>
+
+				<h2>Designer</h2>
+				<p>
+					Describe the fields once; take away the payload class, its JSON Schema,
+					a consumer already bound to the right selector, a producer snippet and
+					a sample envelope. Or download the lot as a Maven module.
+				</p>
+				<p>
+					Wire names are preserved exactly. A field named
+					<code>when_text</code> becomes a Java <code>whenText</code> property
+					carrying <code>@JsonProperty("when_text")</code> — the bytes on the
+					destination never change shape to suit Java naming.
+				</p>
+				<p>
+					The server generates <em>source</em> and stops there. It does not
+					compile it and does not publish a jar into the shared library: the wire
+					contract for this bus is the JSON Schema, which is what keeps a
+					consumer written in another language a first-class citizen.
+				</p>
+
+				<h2>Destinations</h2>
+				<p>
+					The domain's JMS resources with their live numbers — depth, pending,
+					received, consumers — plus every durable subscription and the selector
+					it actually subscribed with.
+				</p>
+				<p>
+					A distributed destination has one runtime MBean per member; the
+					console sums the counters and reports the destination as a whole,
+					because that is the question an operator is asking.
+				</p>
+
+				<h2>One stack, not two</h2>
+				<p>
+					Analytics and the event bus used to be provisioned by two scripts that
+					were the same six steps with different names and identical
+					connection-factory settings — two file stores, two JMS servers, two
+					modules and two subdeployments, for one queue and one topic.
+				</p>
+				<p>
+					They are now one: <code>configure-messaging-jms.py</code>. On a domain
+					that already has the analytics stack it <strong>adopts</strong> it and
+					adds the topic, rather than renaming anything — WebLogic cannot rename
+					a JMS resource, and destroy-and-recreate would orphan the file store.
+					Every JNDI name is unchanged. Each destination gets its own quota, so
+					one cannot starve the other out of the shared store.
+				</p>
+
+				<h2>Troubleshooting</h2>
+				<h3>A consumer receives nothing</h3>
+				<p>
+					Check the Destinations page for its durable subscription and compare
+					the selector against the catalog. The Catalog page reports this
+					automatically as <code>selector-drift</code>. A subscription with a
+					growing pending count and an old last-received time is the signature.
+				</p>
+				<h3>The destinations page is empty or errors</h3>
+				<p>
+					The console reads JMX on the AdminServer. If it cannot,
+					the reason is shown verbatim on the page rather than hidden behind a
+					500. The most common cause is that the JMS resources have not been
+					provisioned yet.
+				</p>
+				<h3>Publishing appears to do nothing</h3>
+				<p>
+					An application only opens a connection to the bus when its own
+					<code>events.enabled</code> configuration says so — off by default, so
+					an app that does not publish never holds a JMS connection. Check that
+					block in the Configurator before looking further.
+				</p>
+
+			</div>
+		</div>
+	</main>
+
+	<footer class="vorpal-footer">
+		<div class="vorpal-footer-meta">BLADE Events Console</div>
+	</footer>
+</div>
+</body>
+</html>

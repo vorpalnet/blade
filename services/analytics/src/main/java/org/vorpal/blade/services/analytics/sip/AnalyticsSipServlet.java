@@ -10,7 +10,6 @@ import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.analytics.Application;
 import org.vorpal.blade.framework.v2.b2bua.B2buaListener;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
@@ -23,8 +22,6 @@ public class AnalyticsSipServlet extends B2buaServlet implements B2buaListener, 
 	private static final long serialVersionUID = 1L;
 
 	public static SettingsManager<AnalyticsConfig> settingsManager;
-
-	public static Application application;
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {

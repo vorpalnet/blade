@@ -115,7 +115,7 @@
 ///     <td>{@code analyticsLoggingLevel}</td>
 ///     <td>{@code INFO}</td>
 ///     <td>Analytics events emitted by
-///         {@link Logger#logEvent(javax.servlet.sip.SipSession, org.vorpal.blade.framework.v2.analytics.Event)}</td>
+///         {@link Logger#logEvent(javax.servlet.sip.SipSession, org.vorpal.blade.framework.v3.events.AnalyticsEvent)}</td>
 ///   </tr>
 /// </table>
 ///
@@ -271,7 +271,7 @@
 /// ## Analytics Logging
 ///
 /// When the analytics subsystem is enabled, events are logged via
-/// {@link Logger#logEvent(javax.servlet.sip.SipSession, org.vorpal.blade.framework.v2.analytics.Event)}.
+/// {@link Logger#logEvent(javax.servlet.sip.SipSession, org.vorpal.blade.framework.v3.events.AnalyticsEvent)}.
 /// The {@code analyticsLoggingLevel} controls the verbosity of these entries independently
 /// from other log output.
 ///

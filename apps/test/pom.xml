@@ -14,7 +14,7 @@
 	<artifactId>vorpal-blade-test-ear</artifactId>
 	<packaging>ear</packaging>
 	<name>BLADE Test</name>
-	<description>Single deployable for the standalone engine0 test server: every BLADE service (including the wide-open proxy-registrar) plus the test harness apps. Same self-contained per-WAR model as blade-services.ear; bundles no libraries. Never deployed to the production cluster.</description>
+	<description>Single deployable for the standalone engine0 test server: every BLADE service (including the wide-open proxy-registrar) plus the test harness apps. Self-contained skinny WARs; bundles no libraries. Never deployed to the production cluster.</description>
 
 	<build>
 		<finalName>blade-test</finalName>

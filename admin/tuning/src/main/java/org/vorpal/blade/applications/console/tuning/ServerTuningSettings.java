@@ -64,10 +64,9 @@ public class ServerTuningSettings {
 	public Response update(@PathParam("serverName") String serverName, String body) {
 		try (CloseableContext ctx = new CloseableContext()) {
 			ObjectNode input = (ObjectNode) mapper.readTree(body);
-			MBeanServer editMbs = (MBeanServer) ctx.lookup("java:comp/env/jmx/edit");
+			MBeanServer editMbs = EditMBeans.edit(ctx);
 
-			ObjectName editConfigManager = new ObjectName(
-					"com.bea:Name=ConfigurationManager,Type=weblogic.management.mbeanservers.edit.ConfigurationManagerMBean");
+			ObjectName editConfigManager = EditMBeans.configManager();
 			editMbs.invoke(editConfigManager, "startEdit",
 					new Object[]{0, 120000}, new String[]{"int", "int"});
 

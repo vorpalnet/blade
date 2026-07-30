@@ -3,6 +3,7 @@ package org.vorpal.blade.framework;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -37,10 +38,13 @@ import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
-import org.vorpal.blade.framework.v2.analytics.Event;
-import org.vorpal.blade.framework.v2.analytics.JmsPublisher;
-import org.vorpal.blade.framework.v2.analytics.SessionKey;
-import org.vorpal.blade.framework.v2.analytics.SessionKeyPK;
+import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
+import org.vorpal.blade.framework.v3.events.EventBus;
+import org.vorpal.blade.framework.v3.events.EventBusSettings;
+import org.vorpal.blade.framework.v3.events.EventPublisher;
+import org.vorpal.blade.framework.v3.metrics.Counter;
+import org.vorpal.blade.framework.v3.metrics.Histogram;
+import org.vorpal.blade.framework.v3.metrics.MetricsRegistry;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
 import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.Callflow;
@@ -107,6 +111,30 @@ public abstract class AsyncSipServlet extends SipServlet
 
 	/// SIP sessions utility for looking up application sessions by key
 	protected static SipSessionsUtil sipUtil;
+
+	/// SIP methods broken out by [#sipRequests]. Anything else is counted under
+	/// `(other)` — the label space is declared rather than discovered, because
+	/// an unbounded one is what turns in-process metrics into an outage.
+	private static final List<String> SIP_METHODS = Arrays.asList("INVITE", "ACK", "BYE", "CANCEL", "OPTIONS",
+			"REGISTER", "PRACK", "SUBSCRIBE", "NOTIFY", "PUBLISH", "INFO", "REFER", "MESSAGE", "UPDATE");
+
+	/// Response classes broken out by [#sipResponses].
+	private static final List<String> STATUS_CLASSES = Arrays.asList("1xx", "2xx", "3xx", "4xx", "5xx", "6xx");
+
+	/// Inbound requests by method. Null until [#servletInitialized] declares it,
+	/// or if the metrics registry was unavailable — every use is null-guarded so
+	/// a missing registry costs a null check, not a call.
+	private transient Counter sipRequests;
+
+	/// Inbound responses by status class.
+	private transient Counter sipResponses;
+
+	/// Messages whose handling threw, already resolved to its cell.
+	private transient Counter.Series sipErrors;
+
+	/// How long this app's handler took per message. The signal that degrades
+	/// first under load, and the reason [#service] is timed at all.
+	private transient Histogram sipServiceTime;
 
 	/// Timer service for creating and managing servlet timers
 	protected static TimerService timerService;
@@ -220,6 +248,8 @@ public abstract class AsyncSipServlet extends SipServlet
 			// previous, possibly null, logger.)
 			Callflow.setLogger(sipLogger);
 
+			initializeMetrics(event);
+
 			Package pkg = AsyncSipServlet.class.getPackage();
 			String title = pkg.getSpecificationTitle();
 			String version = pkg.getImplementationVersion();
@@ -231,6 +261,14 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			servletCreated(event);
 
+			// AFTER servletCreated, not before. This is where the application
+			// builds its SettingsManager, and that is the only place `events` and
+			// `analytics` are hoisted out of its Configuration — so running this
+			// earlier read nulls, returned early, and left every app without a
+			// publisher. EventBus.publish is a deliberate no-op when none is
+			// registered, so nothing said a word.
+			initializeEventBus();
+
 			// Note: servletCreated used to be invoked a SECOND time here when
 			// getAnalytics() returned null — a double-init for every app without
 			// analytics configured. Removed; it now runs exactly once (above).
@@ -239,21 +277,17 @@ public abstract class AsyncSipServlet extends SipServlet
 
 				logSystemConfiguration(event);
 
-				if (Boolean.TRUE.equals(analytics.isEnabled())) {
-					try {
-						Analytics.jmsPublisher = new JmsPublisher("jms/BladeAnalyticsConnectionFactory",
-								"jms/BladeAnalyticsDistributedQueue");
-						Analytics.jmsPublisher.init();
-						Analytics.jmsPublisher.applicationStart();
-					} catch (Exception e) {
-						sipLogger.severe(
-								"AsyncSipServlet.servletInitialized - Cannot create JmsPublisher for Analytics. Ensure jms/BladeAnalyticsConnectionFactory and jms/BladeAnalyticsDistributedQueue is configured.");
-					}
+				if (analyticsEnabled()) {
+					// Before the load balancer sends any SIP to this node, so the
+					// fact is on the bus ahead of any session that references it.
+					Analytics.applicationStart();
 				}
 
-				Event servletCreated = SettingsManager.createEvent("start", event);
-				start(servletCreated);
-				SettingsManager.sendEvent(event);
+				AnalyticsEvent servletCreated = SettingsManager.createEvent("start", event);
+				if (servletCreated != null) {
+					start(servletCreated);
+					SettingsManager.sendEvent(servletCreated, event);
+				}
 
 			}
 
@@ -307,6 +341,139 @@ public abstract class AsyncSipServlet extends SipServlet
 		}
 	}
 
+	/// Declares this app's built-in SIP metrics, so every BLADE application gets
+	/// them without writing a line of code.
+	///
+	/// Called from [#servletInitialized]. Never fatal: an app that cannot count
+	/// must still answer calls, so a failure here is logged and dropped and the
+	/// null-guards in [#service] take over.
+	private void initializeMetrics(SipServletContextEvent event) {
+		try {
+			MetricsRegistry metrics = MetricsRegistry.from(event.getServletContext());
+			if (metrics == null) {
+				return;
+			}
+			sipRequests = metrics.counter("sip.requests", "Inbound SIP requests, by method", "method", SIP_METHODS);
+			sipResponses = metrics.counter("sip.responses", "Inbound SIP responses, by status class", "class",
+					STATUS_CLASSES);
+			sipErrors = metrics.counter("sip.errors", "Messages whose handling threw").series();
+			sipServiceTime = metrics.histogram("sip.service.time", "Handler time per SIP message, milliseconds");
+		} catch (Throwable t) {
+			if (sipLogger != null) {
+				sipLogger.warning("AsyncSipServlet.initializeMetrics - SIP metrics unavailable: " + t);
+			}
+		}
+	}
+
+	/// Gives this application its own connection to the event bus, so
+	/// [org.vorpal.blade.framework.v3.events.EventBus#publish] actually
+	/// publishes something.
+	///
+	/// **Why every app needs its own.** The framework jar ships *inside* each
+	/// WAR — `libs/shared` carries third-party jars only — so `EventBus`'s
+	/// publisher registry is per-WAR static state. The publisher that
+	/// `services/events` installs is invisible to every other application. Until
+	/// this ran, a SIP app calling `EventBus.publish` reached
+	/// `publisherFor(...) == null` and returned **silently**: the same
+	/// looks-like-no-events-yet failure the catalog was built to abolish,
+	/// reappearing one layer down.
+	///
+	/// Opt-in per app through the `"events"` config block, for the same reason
+	/// analytics is: an app that does not publish should not hold a JMS
+	/// connection open. Never fatal — a bus that cannot be reached must not stop
+	/// an application from answering calls, so this logs and carries on exactly
+	/// as the analytics publisher does.
+	private void initializeEventBus() {
+		EventBusSettings settings = SettingsManager.getEventBus();
+		if (settings == null) {
+			// `SettingsManager.build` always leaves a non-null EventBusSettings,
+			// defaults included — so null here does not mean "not configured", it
+			// means this ran before the application built its SettingsManager.
+			// Say so. Returning quietly is how this went unnoticed the first time.
+			sipLogger.warning("AsyncSipServlet.initializeEventBus - no settings yet; this must run after "
+					+ "servletCreated. Nothing this application publishes will reach the bus.");
+			return;
+		}
+		// Analytics publishes through this same bus, so its switch turns the bus
+		// on too. Requiring both would mean an app with analytics enabled and
+		// events not could extract every attribute, build every event, and
+		// publish exactly nothing — with no error anywhere, because
+		// EventBus.publish is a deliberate no-op when no publisher is
+		// registered. One system, so one thing to turn on.
+		if (!Boolean.TRUE.equals(settings.isEnabled()) && !analyticsEnabled()) {
+			return;
+		}
+		try {
+			EventPublisher publisher = new EventPublisher(settings.getConnectionFactoryJndi(),
+					settings.getDestinationJndi());
+			publisher.init();
+			EventBus.register(publisher);
+			EventBus.setDefaultDestinationJndi(settings.getDestinationJndi());
+			sipLogger.info("AsyncSipServlet.initializeEventBus - publishing to " + settings.getDestinationJndi());
+		} catch (Exception e) {
+			sipLogger.severe("AsyncSipServlet.initializeEventBus - cannot reach the event bus. Ensure "
+					+ settings.getConnectionFactoryJndi() + " and " + settings.getDestinationJndi()
+					+ " are provisioned. Publishing will be a no-op until they are.");
+		}
+	}
+
+	/// Counts and times every SIP message this application handles, then
+	/// delegates.
+	///
+	/// **Why here.** `service` is the one funnel both handler generations pass
+	/// through: `v3.AsyncSipServlet` overrides `doRequest`/`doResponse` outright
+	/// and does not call `super`, so instrumenting those would miss every v3 app.
+	/// One override here covers all of them.
+	///
+	/// **What it costs.** A null check, one hash lookup on a string already in
+	/// hand, a [java.util.concurrent.atomic.LongAdder] increment, and two
+	/// `nanoTime` reads. No allocation, no locks, no string building. At 1000 CPS
+	/// that is a rounding error against parsing and dispatching the message
+	/// itself — but it is on the call path of every BLADE app, so it is written
+	/// to be measured rather than assumed: run the Test Console against a build
+	/// with and without it.
+	@Override
+	public void service(javax.servlet.ServletRequest request, javax.servlet.ServletResponse response)
+			throws ServletException, IOException {
+
+		final Histogram timer = sipServiceTime;
+		final long startNanos = (timer == null) ? 0L : System.nanoTime();
+
+		try {
+			if (request instanceof SipServletRequest) {
+				Counter counter = sipRequests;
+				if (counter != null) {
+					counter.increment(((SipServletRequest) request).getMethod());
+				}
+			} else if (response instanceof SipServletResponse) {
+				Counter counter = sipResponses;
+				if (counter != null) {
+					counter.increment(statusClassOf(((SipServletResponse) response).getStatus()));
+				}
+			}
+
+			super.service(request, response);
+
+		} catch (ServletException | IOException | RuntimeException e) {
+			Counter.Series errors = sipErrors;
+			if (errors != null) {
+				errors.increment();
+			}
+			throw e;
+		} finally {
+			if (timer != null) {
+				timer.record((System.nanoTime() - startNanos) / 1000000L);
+			}
+		}
+	}
+
+	/// `180` becomes `1xx`. Anything outside 100–699 is left for the counter's
+	/// `(other)` bucket.
+	private static String statusClassOf(int status) {
+		int family = status / 100;
+		return (family >= 1 && family <= 6) ? STATUS_CLASSES.get(family - 1) : null;
+	}
+
 	/// Customizes the analytics start event before it is published
 	///
 	/// Override this method to add application-specific data to the analytics
@@ -314,7 +481,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// published after this method returns.
 	///
 	/// @param event the analytics start event to customize
-	public void start(Event event) {
+	public void start(AnalyticsEvent event) {
 		// override by user
 	}
 
@@ -325,7 +492,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// published after this method returns.
 	///
 	/// @param event the analytics stop event to customize
-	public void stop(Event event) {
+	public void stop(AnalyticsEvent event) {
 		// override by user
 	}
 
@@ -377,18 +544,25 @@ public abstract class AsyncSipServlet extends SipServlet
 
 			servletDestroyed(initialSipServletContextEvent);
 
-			if (Analytics.jmsPublisher != null) {
-
-// jwm - FIXME				
-
-//				Event stopEvent = SettingsManager.createEvent("stop", initialSipServletContextEvent);
-//				stop(stopEvent);
-//				SettingsManager.sendEvent(stopEvent);
-
-				Analytics.jmsPublisher.applicationStop();
-				Analytics.jmsPublisher.close();
-				Analytics.jmsPublisher = null;
+			// The stop event, published before the bus connection closes under it.
+			// This was previously commented out with a FIXME: `sendEvent` took a
+			// SipServletContextEvent and looked the event up by a ServletContext
+			// attribute that `createEvent` deliberately never set, so it could
+			// only ever have been a no-op. It now takes the event directly.
+			AnalyticsEvent servletStopped = SettingsManager.createEvent("stop", initialSipServletContextEvent);
+			if (servletStopped != null) {
+				stop(servletStopped);
+				SettingsManager.sendEvent(servletStopped, initialSipServletContextEvent);
 			}
+
+			if (analyticsEnabled()) {
+				Analytics.applicationStop();
+			}
+
+			// Close this app's bus connection, last: everything above still needs
+			// to publish. Per-WAR static state, so this only tears down what this
+			// application registered.
+			EventBus.unregisterAll();
 
 		} catch (Exception ex1) {
 			sipLogger.warning("AsyncSipServlet.contextDestroyed - Exception #ex1");
@@ -666,8 +840,15 @@ public abstract class AsyncSipServlet extends SipServlet
 	}
 
 	/// Process the configured non-destination AttributeSelectors on an initial
-	/// request: create appSession index keys, publish SessionKey analytics rows,
+	/// request: create appSession index keys, publish session.key events,
 	/// and copy named regex groups onto the sessions.
+	/// Whether this application's own configuration has analytics switched on.
+	/// The publisher being non-null is not the same question.
+	private static boolean analyticsEnabled() {
+		Analytics analytics = SettingsManager.getAnalytics();
+		return analytics != null && Boolean.TRUE.equals(analytics.isEnabled());
+	}
+
 	protected static void applyOriginSelectors(SipServletRequest request, SipApplicationSession appSession,
 			SipSession sipSession) {
 
@@ -700,27 +881,17 @@ public abstract class AsyncSipServlet extends SipServlet
 				}
 				appSession.addIndexKey(rr.key);
 
-				// Publish a SessionKey row for post-call DB lookups.
-				// Composite PK (session_id, name, value) makes this
-				// naturally idempotent on retransmissions.
-				if (Analytics.jmsPublisher != null) {
-					try {
-						Long vorpalId = Analytics.getVorpalId(appSession);
-						if (vorpalId != null) {
-							SessionKey sk = new SessionKey();
-							SessionKeyPK pk = new SessionKeyPK();
-							// vorpal-id on the wire; the consumer
-							// resolves it to the DB session PK.
-							pk.setSessionId(vorpalId);
-							pk.setName(selector.getId());
-							pk.setValue(rr.key);
-							sk.setId(pk);
-							Analytics.jmsPublisher.send(sk);
-						}
-					} catch (Exception ex) {
-						sipLogger.warning(request,
-								"AsyncSipServlet - failed to publish SessionKey: " + ex.getMessage());
-					}
+				// Publish the index key so the call can be found afterwards by
+				// something other than its Vorpal-ID. Naturally idempotent on a
+				// retransmission: the correlator, the selector id and the matched
+				// value are the same every time.
+				//
+				// Gated on this application's own analytics.enabled, and nothing
+				// else. It used to be gated on a static publisher reference being
+				// non-null as well — per-WAR state set by whichever code path ran
+				// first, not a statement about what this app was configured to do.
+				if (analyticsEnabled()) {
+					Analytics.sessionKey(appSession, selector.getId(), rr.key);
 				}
 			}
 
@@ -1513,23 +1684,23 @@ public abstract class AsyncSipServlet extends SipServlet
 	///
 	/// @param message the SIP message to get the event from
 	/// @return the associated analytics event, or null if none exists
-	public static Event getEvent(SipServletMessage message) {
-		return (Event) message.getAttribute("event");
+	public static AnalyticsEvent getEvent(SipServletMessage message) {
+		return (AnalyticsEvent) message.getAttribute("event");
 	}
 
 	/// Retrieves the analytics event associated with a servlet context event
 	///
 	/// @param contextEvent the context event to get the event from
 	/// @return the associated analytics event, or null if none exists
-	public static Event getEvent(SipServletContextEvent contextEvent) {
-		return (Event) contextEvent.getServletContext().getAttribute("event");
+	public static AnalyticsEvent getEvent(SipServletContextEvent contextEvent) {
+		return (AnalyticsEvent) contextEvent.getServletContext().getAttribute("event");
 	}
 
 	/// Associates an analytics event with a SIP message
 	///
 	/// @param event the analytics event to associate
 	/// @param message the SIP message to associate the event with
-	public static void setEvent(Event event, SipServletMessage message) {
+	public static void setEvent(AnalyticsEvent event, SipServletMessage message) {
 		message.setAttribute("event", event);
 	}
 
@@ -1537,7 +1708,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	///
 	/// @param event the analytics event to associate
 	/// @param contextEvent the context event to associate the event with
-	public static void setEvent(Event event, SipServletContextEvent contextEvent) {
+	public static void setEvent(AnalyticsEvent event, SipServletContextEvent contextEvent) {
 		contextEvent.getServletContext().setAttribute("event", event);
 	}
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_Webrtc" version="4.0">
+	<display-name>webrtc</display-name>
+	<!-- The SIP servlet (WebrtcServlet) and the WebSocket endpoint (SignalEndpoint) are both
+	     annotation-declared; there is nothing to map here. -->
+</web-app>

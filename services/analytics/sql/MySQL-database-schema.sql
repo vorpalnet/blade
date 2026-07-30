@@ -4,10 +4,18 @@
 -- dialect scripts are regenerated from this one when needed.
 --
 -- Design notes:
---   * `sessions.id` / `events.id` are DB-assigned (AUTO_INCREMENT). The producer
---     propagates the SIP-tier correlator (cluster_name, vorpal_id); the consumer
---     maps it to the session row and lets the DB mint the key.
+--   * Every surrogate key is DB-assigned (AUTO_INCREMENT). The producer sends
+--     facts with natural keys — (name, domain, server, created) for an
+--     application, (cluster_name, vorpal_id, created) for a call — and the
+--     consumer resolves them to rows. The producer used to mint the application
+--     id itself, as a random 64-bit value with a stated ~1e-11 collision risk:
+--     a surrogate primary key invented by the one participant with no database.
 --   * created/destroyed are DATETIME (not TIMESTAMP) to dodge the 2038 limit.
+--   * DATETIME(3) wherever a column takes part in a natural key. The wire carries
+--     ISO-8601 instants with milliseconds; a DATETIME(0) column silently truncates
+--     them, and the consumer then compares an un-truncated Date against the
+--     truncated column and never matches. Every lookup would miss and insert a
+--     duplicate — quietly, and at full call rate.
 --   * `events.application_id` is a plain FK (no cascade); event cleanup flows
 --     applications -> sessions -> events -> attributes, plus time-based retention.
 --   * Table names are plural — `session` (singular) is a reserved word in Oracle,
@@ -26,8 +34,8 @@ DROP TABLE IF EXISTS applications;
 
 -- application instances — unique deployments in time
 CREATE TABLE applications(
-   -- producer-generated random 64-bit value (collision risk ~10^-11)
-   id BIGINT NOT NULL,
+   -- DB-assigned; resolved from the natural key below
+   id BIGINT NOT NULL AUTO_INCREMENT,
    CONSTRAINT application_pk PRIMARY KEY(id),
    name VARCHAR(32) NOT NULL,          -- e.g. 'transfer' (no version)
    version VARCHAR(16) DEFAULT NULL,   -- e.g. '1.0.1'
@@ -35,9 +43,18 @@ CREATE TABLE applications(
    domain VARCHAR(64) DEFAULT NULL,    -- weblogic cluster domain; not DNS
    server VARCHAR(64) DEFAULT NULL,    -- weblogic server name; not hostname
    tenant VARCHAR(64) DEFAULT NULL,    -- customer code for multi-tenant RLS; NULL = single-tenant
-   created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-   destroyed DATETIME NULL DEFAULT NULL,
+   created DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+   destroyed DATETIME(3) NULL DEFAULT NULL,
    comments TEXT NULL,                 -- user-defined data (JSON)
+
+   -- An application INSTANCE is one app, on one server, with one configuration —
+   -- a restart is a new instance, deliberately. That is exactly what these four
+   -- columns say, so they are the identity and the consumer resolves on them.
+   -- Without this constraint two cluster members racing the same
+   -- application.started would each insert their own row and every later event
+   -- would attach to whichever one it happened to find.
+   CONSTRAINT application_natural_uk UNIQUE (name, domain, server, created),
+
    -- tenant discriminator: session/event rows reach their tenant via
    -- application_id; this index keeps the RLS predicate (tenant = :TENANT) cheap.
    INDEX idx_application_tenant (tenant)
@@ -61,8 +78,10 @@ CREATE TABLE sessions(
    cluster_name VARCHAR(64) NOT NULL,
    vorpal_id    BIGINT      NOT NULL,
 
-   created   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,  -- real call-start time
-   destroyed DATETIME NULL DEFAULT NULL,                   -- NULL while open
+   -- Millisecond precision is load-bearing: this column is part of the natural
+   -- key the consumer resolves on, and the wire carries milliseconds.
+   created   DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),  -- real call-start time
+   destroyed DATETIME(3) NULL DEFAULT NULL,                      -- NULL while open
 
    INDEX idx_session_correlator (cluster_name, vorpal_id, destroyed),
    INDEX idx_session_created (created),
@@ -112,7 +131,17 @@ CREATE TABLE events(
    CONSTRAINT event_fk3 FOREIGN KEY (event_type_id)
       REFERENCES event_types(id),
 
-   created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+   -- The CloudEvent id, so a redelivery does not become a second row.
+   -- A durable topic subscription redelivers as a matter of course — a rolling
+   -- restart makes it certain — and `events` has no other natural key to
+   -- collide on. Nullable, so a row written by anything that does not carry one
+   -- is still accepted; NULLs do not collide in a UNIQUE index.
+   event_uid CHAR(36) NULL,
+   CONSTRAINT event_uid_uk UNIQUE (event_uid),
+
+   -- DATETIME, not TIMESTAMP: the 2038 limit the header calls out applies here
+   -- too, and this column was the one place it had been missed.
+   created DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
    INDEX idx_event_session (session_id, created),
    INDEX idx_event_type_created (event_type_id, created),

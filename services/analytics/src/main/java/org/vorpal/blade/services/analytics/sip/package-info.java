@@ -14,7 +14,7 @@
 /// (started, answered, connected, completed, declined, abandoned) and session lifecycle
 /// events (created, destroyed, expired, ready-to-invalidate). These events are logged and
 /// can be published as analytics entities to the JMS queue for database persistence by
-/// [AnalyticsJmsListener][org.vorpal.blade.services.analytics.jms.AnalyticsJmsListener].
+/// [AnalyticsEventListener][org.vorpal.blade.services.analytics.jms.AnalyticsEventListener].
 ///
 /// ## Detailed Class Reference
 ///
@@ -35,7 +35,7 @@
 /// `Serializable`. Adds two analytics-specific fields:
 ///
 /// - `healthCheckInterval` (Integer) -- seconds between database health-check attempts
-///   when the database is down (used by [AnalyticsJmsListener][org.vorpal.blade.services.analytics.jms.AnalyticsJmsListener])
+///   when the database is down (used by [AnalyticsEventListener][org.vorpal.blade.services.analytics.jms.AnalyticsEventListener])
 /// - `healthCheckSql` (String) -- SQL statement to verify database connectivity
 ///   (e.g., `"SELECT 1"`)
 ///
@@ -45,7 +45,7 @@
 /// `SessionParametersDefault`, includes an `AnalyticsB2buaSample` analytics configuration,
 /// and configures health checks with a 60-second interval and `"SELECT 1"` SQL query.
 ///
-/// @see [org.vorpal.blade.services.analytics.jms.AnalyticsJmsListener]
+/// @see [org.vorpal.blade.services.analytics.jms.AnalyticsEventListener]
 /// @see [org.vorpal.blade.framework.v2.b2bua.B2buaServlet]
 /// @see [org.vorpal.blade.framework.v2.config.Configuration]
 package org.vorpal.blade.services.analytics.sip;

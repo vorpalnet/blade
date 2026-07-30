@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+	xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+	id="WebApp_ID" version="4.0">
+	<display-name>events</display-name>
+
+	<!--
+	  The ingress publishes onto a cluster-wide bus, so an unauthenticated POST
+	  means anyone who can reach the engine tier can inject events that
+	  downstream apps will act on. It was deliberately left open while this
+	  lived in proto/ and the only producer was a trusted in-network sidecar;
+	  that does not survive the move to services/.
+
+	  BASIC rather than FORM: the callers are machines (the Gumball attendant
+	  sidecar), not browsers. services/analytics and services/context already
+	  establish this pattern for service-tier APIs.
+	-->
+	<!--
+	  The tap is a WIRETAP on production traffic, and it is separated out
+	  deliberately. It returns live event bodies, and a body on this bus carries
+	  the call correlator plus whatever the producer put in it. Publishing an
+	  event and reading everyone else's are not the same risk, so they do not
+	  share a role: the ingress takes any authenticated caller, the tap takes an
+	  admin one.
+
+	  A more specific url-pattern wins over a less specific one, so this
+	  constraint governs /api/v1/tap and the one below governs the rest.
+	-->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>Event Tap</web-resource-name>
+			<url-pattern>/api/v1/tap</url-pattern>
+			<http-method>GET</http-method>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+		</auth-constraint>
+	</security-constraint>
+
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>Event Bus API</web-resource-name>
+			<url-pattern>/api/v1/*</url-pattern>
+			<http-method>GET</http-method>
+			<http-method>POST</http-method>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>authenticated-users</role-name>
+		</auth-constraint>
+	</security-constraint>
+
+	<login-config>
+		<auth-method>BASIC</auth-method>
+		<realm-name>default</realm-name>
+	</login-config>
+	<security-role>
+		<role-name>authenticated-users</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Admin</role-name>
+	</security-role>
+	<security-role>
+		<role-name>Operator</role-name>
+	</security-role>
+
+</web-app>

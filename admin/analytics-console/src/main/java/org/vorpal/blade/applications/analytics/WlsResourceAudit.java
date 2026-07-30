@@ -18,7 +18,7 @@ import javax.management.ObjectName;
 /// - **Connection Factory** — a `ConnectionFactory` bound to the JNDI name
 ///   [#EXPECTED_CONNECTION_FACTORY_JNDI]
 /// - **Distributed Queue** — a `DistributedQueue` (or plain `Queue`) bound
-///   to [#EXPECTED_QUEUE_JNDI]
+///   to [#EXPECTED_TOPIC_JNDI]
 /// - **JDBC Data Source** — a `JDBCSystemResource` whose data source params
 ///   bind to [#EXPECTED_DATASOURCE_JNDI]
 ///
@@ -29,8 +29,15 @@ public class WlsResourceAudit {
 
 	private static final Logger log = Logger.getLogger(WlsResourceAudit.class.getName());
 
-	public static final String EXPECTED_CONNECTION_FACTORY_JNDI = "jms/BladeAnalyticsConnectionFactory";
-	public static final String EXPECTED_QUEUE_JNDI = "jms/BladeAnalyticsDistributedQueue";
+	public static final String EXPECTED_CONNECTION_FACTORY_JNDI = "jms/BladeEventBusConnectionFactory";
+	/// The destination analytics actually consumes from.
+	///
+	/// It used to be `jms/BladeAnalyticsDistributedQueue` — a queue of this
+	/// service's own, carrying Java-serialized JPA entities. Analytics is now one
+	/// subscriber on the shared event-bus topic, so auditing the queue would
+	/// report a healthy resource that nothing uses and say nothing about whether
+	/// events can actually reach the database.
+	public static final String EXPECTED_TOPIC_JNDI = "jms/BladeEventBusTopic";
 	public static final String EXPECTED_DATASOURCE_JNDI = "jdbc/BladeAnalytics";
 
 	/// One row of the audit result — a single resource and whether it was found.
@@ -65,13 +72,13 @@ public class WlsResourceAudit {
 			out.add(auditJmsResource(mbs, domain,
 					"Connection Factory", "connectionFactory", EXPECTED_CONNECTION_FACTORY_JNDI,
 					"ConnectionFactories"));
-			// A "Distributed Queue" created in a modern WLS console is a UNIFORM
-			// distributed queue (UniformDistributedQueues); older domains used a
-			// weighted DistributedQueue, and a single-server domain may use a
-			// plain Queue. Check all three for the expected JNDI name.
+			// A "Distributed Topic" created in a modern WLS console is a UNIFORM
+			// distributed topic (UniformDistributedTopics); older domains used a
+			// weighted DistributedTopic, and a single-server domain may use a
+			// plain Topic. Check all three for the expected JNDI name.
 			out.add(auditJmsResource(mbs, domain,
-					"Distributed Queue", "distributedQueue", EXPECTED_QUEUE_JNDI,
-					"UniformDistributedQueues", "DistributedQueues", "Queues"));
+					"Distributed Topic", "distributedTopic", EXPECTED_TOPIC_JNDI,
+					"UniformDistributedTopics", "DistributedTopics", "Topics"));
 			out.add(auditJdbcDataSource(mbs, domain));
 		}
 		return out;
