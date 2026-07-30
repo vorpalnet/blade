@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-admin-phone</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE WebRTC Phone</name>
+	<description>Browser softphone for the BLADE WebRTC gateway. A static admin app:
+		it serves the UI and the client library, and every call is negotiated over a
+		WebSocket to the webrtc service on the ENGINE tier. Nothing here talks to SIP
+		or to a media server, so the app has no Java, no framework dependency and no
+		server-side state — the gateway address is configuration, which is what lets
+		the same page be hosted anywhere.</description>
+
+	<build>
+		<finalName>blade-phone</finalName>
+	</build>
+</project>

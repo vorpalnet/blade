@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE WebRTC Phone</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="assets/phone.css">
+	<link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/phone/">Phone</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html" class="vorpal-active">Phone</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill" id="pill">Offline</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>WebRTC Phone</h1>
+					<p>
+						A browser as a first&#8209;class SIP endpoint. This page speaks a small set of
+						JSON events over a WebSocket to the gateway on the engine tier &mdash; not SIP &mdash;
+						while the network sees an ordinary SIP call. Dial another registered browser and
+						the media runs peer&#8209;to&#8209;peer with no media server at all; dial a phone
+						number and the call is anchored, because a phone cannot speak ICE or DTLS.
+					</p>
+				</div>
+			</section>
+
+			<div class="phone-grid">
+
+				<!-- ------------------------------------------------ the handset -->
+				<div class="phone-handset">
+					<div class="phone-display" id="display" data-live="false">
+						<div class="phone-state">
+							<span class="phone-state-dot"></span>
+							<span id="state-label">Not registered</span>
+						</div>
+						<div class="phone-party phone-party-empty" id="party">No call</div>
+						<div class="phone-timer" id="timer">&nbsp;</div>
+					</div>
+
+					<div class="phone-incoming" id="incoming" hidden>
+						<div class="phone-incoming-label">Incoming call</div>
+						<div class="phone-incoming-from" id="incoming-from">&mdash;</div>
+						<div class="phone-incoming-actions">
+							<button class="phone-btn phone-btn-primary" id="btn-answer" style="grid-column:auto">
+								<span class="phone-btn-icon" aria-hidden="true">&#9742;</span> Answer
+							</button>
+							<button class="phone-btn" id="btn-decline">Decline</button>
+						</div>
+					</div>
+
+					<div class="phone-dial-field">
+						<input id="target" inputmode="tel" autocomplete="off" spellcheck="false"
+						       placeholder="Number or user@host" aria-label="Number to dial">
+						<button class="phone-backspace" id="btn-back" title="Backspace" aria-label="Backspace">&#9003;</button>
+					</div>
+
+					<div class="phone-keypad" id="keypad" role="group" aria-label="Dial pad"></div>
+
+					<div class="phone-actions">
+						<button class="phone-btn phone-btn-primary" id="btn-call" disabled>
+							<span class="phone-btn-icon" aria-hidden="true">&#9742;</span> Call
+						</button>
+						<button class="phone-btn" id="btn-hangup" disabled>Hang up</button>
+						<button class="phone-btn" id="btn-mute" aria-pressed="false" disabled>Mute</button>
+						<button class="phone-btn phone-btn-wide" id="btn-record" aria-pressed="false" disabled>
+							<span class="phone-btn-icon" aria-hidden="true">&#9679;</span> Record
+						</button>
+					</div>
+				</div>
+
+				<!-- ------------------------------------------------ side panels -->
+				<div class="phone-stack">
+
+					<section class="phone-panel">
+						<h2 class="phone-panel-title">Connection</h2>
+						<div class="phone-field">
+							<label for="gateway">Gateway (engine tier)</label>
+							<input id="gateway" autocomplete="off" spellcheck="false">
+							<div class="phone-field-hint">
+								The <code>webrtc</code> service runs on the <strong>engine</strong> tier; this
+								page is served from the admin tier, so the address is configuration rather
+								than this page&rsquo;s own origin.
+							</div>
+						</div>
+						<div class="phone-field">
+							<label for="aor">Your address</label>
+							<input id="aor" value="alice@vorpal.net" autocomplete="off" spellcheck="false">
+						</div>
+						<div class="phone-field">
+							<label for="stun">STUN server</label>
+							<input id="stun" value="stun:stun.l.google.com:19302" autocomplete="off" spellcheck="false">
+							<div class="phone-field-hint">
+								Browsers publish <code>&lt;uuid&gt;.local</code> mDNS candidates instead of private
+								addresses, so a reachable STUN or TURN server is required, not optional.
+							</div>
+						</div>
+						<div class="phone-row">
+							<button class="vorpal-btn" id="btn-register">Register</button>
+							<button class="vorpal-btn vorpal-btn-secondary" id="btn-unregister" disabled>Disconnect</button>
+						</div>
+					</section>
+
+					<section class="phone-panel">
+						<h2 class="phone-panel-title">Media</h2>
+						<div class="phone-meter">
+							<div class="phone-meter-head"><b>Microphone</b><span id="mic-state">idle</span></div>
+							<div class="phone-meter-track" id="meter-mic"></div>
+						</div>
+						<div class="phone-meter">
+							<div class="phone-meter-head"><b>Remote</b><span id="rx-state">idle</span></div>
+							<div class="phone-meter-track" id="meter-rx"></div>
+						</div>
+						<dl class="phone-facts">
+							<div class="phone-fact"><dt>Media path</dt><dd><span class="phone-badge" id="fact-path">&mdash;</span></dd></div>
+							<div class="phone-fact"><dt>ICE</dt><dd><span class="phone-badge" id="fact-ice">&mdash;</span></dd></div>
+							<div class="phone-fact"><dt>Candidate pair</dt><dd id="fact-pair">&mdash;</dd></div>
+							<div class="phone-fact"><dt>Codec</dt><dd id="fact-codec">&mdash;</dd></div>
+						</dl>
+					</section>
+
+					<section class="phone-panel">
+						<h2 class="phone-panel-title">Signaling</h2>
+						<ul class="phone-log" id="log"><li class="phone-log-empty">Nothing yet.</li></ul>
+					</section>
+
+				</div>
+			</div>
+
+			<footer class="vorpal-footer">
+				<span>Keyboard: digits dial &middot; Enter calls &middot; Escape hangs up</span>
+			</footer>
+
+		</div>
+	</main>
+</div>
+
+<audio id="remote" autoplay></audio>
+<script type="module" src="assets/phone.js"></script>
+</body>
+</html>

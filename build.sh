@@ -324,6 +324,7 @@ write_deployment_manifest() {
             blade-metrics.war)      echo "admin|AdminServer|Metrics — per-app counters across the cluster (context: /blade/metrics)" ;;
             blade-flow.war)         echo "admin|AdminServer|FSMAR diagram editor (context: /blade/flow)" ;;
             blade-tuning.war)       echo "admin|AdminServer|OCCAS/WebLogic tuning (context: /blade/tuning)" ;;
+            blade-phone.war)        echo "admin|AdminServer|WebRTC softphone -- signals to the webrtc service on the ENGINE tier (context: /blade/phone)" ;;
             blade-files.war)        echo "admin|AdminServer|Config file manager (context: /blade/files)" ;;
             blade-logs.war)         echo "admin|AdminServer|Log viewer (context: /blade/logs)" ;;
             blade-javadoc.war)      echo "admin|AdminServer|Javadoc site (context: /blade/javadoc)" ;;

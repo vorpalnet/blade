@@ -812,6 +812,11 @@ fi
 			<modules><module>admin/tuning</module></modules>
 		</profile>
 		<profile>
+			<id>phone</id>
+			<activation><property><name>!skip.phone</name></property></activation>
+			<modules><module>admin/phone</module></modules>
+		</profile>
+		<profile>
 			<id>security</id>
 			<activation><property><name>!skip.security</name></property></activation>
 			<modules><module>proto/security</module></modules>
