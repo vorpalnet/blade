@@ -358,8 +358,8 @@
 						<webModule>
 							<groupId>org.vorpal.blade</groupId>
 							<artifactId>vorpal-blade-admin-phone</artifactId>
-							<contextRoot>blade/tuning</contextRoot>
-							<bundleFileName>blade-tuning.war</bundleFileName>
+							<contextRoot>blade/phone</contextRoot>
+							<bundleFileName>blade-phone.war</bundleFileName>
 						</webModule>
 					</modules>
 				</configuration>
