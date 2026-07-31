@@ -83,17 +83,27 @@
 #
 #   $MW_HOME/oracle_common/common/bin/wlst.sh configure-messaging-jms.py
 
+# NOTE ON NAMING: every global here is blade_-prefixed on purpose. WLST pre-imports
+# the weblogic.* Java packages into this namespace, so a bare global named "cluster"
+# is silently shadowed by the weblogic.cluster PACKAGE -- the assignment appears to
+# work, and the failure surfaces much later as
+#   javax.management.InvalidAttributeValueException: Array has at least one null element
+# from set('Targets', ...), because the ObjectName was built as
+#   com.bea:Name=<java package weblogic.cluster>,Type=Cluster
+# and resolves to null. "pwd" is shadowed the same way and breaks cd(). Prefix, or
+# print the value before you trust it.
+
 import os
 
 wl_user = os.environ.get('WL_USER')
 wl_pass = os.environ.get('WL_PASS')
 wl_admin = os.environ.get('WL_ADMIN')
-cluster = os.environ.get('BLADE_ENGINE_CLUSTER', 'BEA_ENGINE_TIER_CLUST')
-quota_bytes = long(os.environ.get('BLADE_QUOTA_BYTES', '1073741824'))
+blade_cluster = os.environ.get('BLADE_ENGINE_CLUSTER', 'BEA_ENGINE_TIER_CLUST')
+blade_quota_bytes = long(os.environ.get('BLADE_QUOTA_BYTES', '1073741824'))
 
 connect(wl_user, wl_pass, wl_admin)
 
-target = ObjectName('com.bea:Name=%s,Type=Cluster' % cluster)
+blade_target = ObjectName('com.bea:Name=%s,Type=Cluster' % blade_cluster)
 
 # ── Decide which stack we are working in ────────────────────────────────────
 # Preference order: an existing BladeMessaging stack, then an existing
@@ -132,7 +142,7 @@ if cmo.lookupFileStore(STORE) is None:
     cmo.createFileStore(STORE)
 cd('/FileStores/%s' % STORE)
 cmo.setDirectory(STORE_DIR)
-set('Targets', jarray.array([target], ObjectName))
+set('Targets', jarray.array([blade_target], ObjectName))
 save()
 activate()
 
@@ -143,7 +153,7 @@ if cmo.lookupJMSServer(SERVER) is None:
     cmo.createJMSServer(SERVER)
 cd('/JMSServers/%s' % SERVER)
 cmo.setPersistentStore(getMBean('/FileStores/%s' % STORE))
-set('Targets', jarray.array([target], ObjectName))
+set('Targets', jarray.array([blade_target], ObjectName))
 save()
 activate()
 
@@ -153,18 +163,18 @@ cd('/')
 if cmo.lookupJMSSystemResource(MODULE) is None:
     cmo.createJMSSystemResource(MODULE, DESCRIPTOR)
 cd('/JMSSystemResources/%s' % MODULE)
-set('Targets', jarray.array([target], ObjectName))
+set('Targets', jarray.array([blade_target], ObjectName))
 save()
 activate()
 
 # ── Subdeployment (targets the JMS server) ──────────────────────────────────
-jmsServerTarget = ObjectName('com.bea:Name=%s,Type=JMSServer' % SERVER)
+blade_jms_server_target = ObjectName('com.bea:Name=%s,Type=JMSServer' % SERVER)
 startEdit()
 cd('/JMSSystemResources/%s' % MODULE)
 if cmo.lookupSubDeployment(SUBDEPLOYMENT) is None:
     cmo.createSubDeployment(SUBDEPLOYMENT)
 cd('/JMSSystemResources/%s/SubDeployments/%s' % (MODULE, SUBDEPLOYMENT))
-set('Targets', jarray.array([jmsServerTarget], ObjectName))
+set('Targets', jarray.array([blade_jms_server_target], ObjectName))
 save()
 activate()
 
@@ -192,10 +202,10 @@ def ensure_connection_factory(name, jndi):
     # These looked like a problem for a bus several applications subscribe to.
     # Oracle's own text for ClientIdPolicy, shipped in
     # wlserver/modules/com.bea.core.descriptor.wl.jar, says Restricted means
-    # "only one connection that uses this policy can exist in a cluster at any
+    # "only one connection that uses this policy can exist in a blade_cluster at any
     # given time for a particular Client ID ... attempts to create new
     # connections using this policy with the same Client ID fail with an
-    # exception" — and every member of a cluster attaches with the same client
+    # exception" — and every member of a blade_cluster attaches with the same client
     # id under distributedDestinationConnection=EveryMember. On that reading it
     # would fail with ONE subscribing application, never mind two.
     #
@@ -250,7 +260,7 @@ def ensure_quota(name):
     if cmo.lookupQuota(name) is None:
         cmo.createQuota(name)
     cd('%s/Quotas/%s' % (RESOURCE, name))
-    cmo.setBytesMaximum(quota_bytes)
+    cmo.setBytesMaximum(blade_quota_bytes)
     cmo.setPolicy('FIFO')
     cmo.setShared(false)
     save()
@@ -293,7 +303,7 @@ print('  file store    %s' % STORE)
 print('  JMS server    %s' % SERVER)
 print('  module        %s' % MODULE)
 print('  subdeployment %s' % SUBDEPLOYMENT)
-print('  destination   jms/BladeEventBusTopic (topic, quota %d bytes)' % quota_bytes)
+print('  destination   jms/BladeEventBusTopic (topic, quota %d bytes)' % blade_quota_bytes)
 if ADOPTED:
     print('')
     print('The event topic was adopted into the existing analytics module. If a separate')
