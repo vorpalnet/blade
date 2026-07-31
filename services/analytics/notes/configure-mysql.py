@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # This script configures a MySQL JDBC data source for writing analytics events.
 #
 # MySQL server note (my.cnf, not set here): for the consumer to batch event

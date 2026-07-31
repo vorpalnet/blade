@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Provisions the JMS resources for ALL BLADE messaging — the analytics queue and
 # the event-bus topic — in ONE stack.
 #

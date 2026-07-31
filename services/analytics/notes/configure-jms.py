@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # MOVED — and analytics no longer has a destination of its own.
 #
 # This script used to stand up a private JMS stack for analytics: its own file
