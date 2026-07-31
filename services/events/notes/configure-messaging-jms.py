@@ -109,6 +109,16 @@ blade_target = ObjectName('com.bea:Name=%s,Type=Cluster' % blade_cluster)
 # Preference order: an existing BladeMessaging stack, then an existing
 # BladeAnalytics stack to adopt, then create BladeMessaging fresh.
 edit()
+
+# Discard an edit session left open by an earlier failed run. Without this a
+# failure part-way through poisons every subsequent attempt, because startEdit()
+# silently continues in the stale session instead of starting a clean one.
+try:
+    stopEdit('y')
+    print('NOTE: discarded a pre-existing edit session')
+except:
+    pass
+
 cd('/')
 
 ADOPTED = cmo.lookupJMSSystemResource('BladeMessagingSystemModule') is None \
@@ -291,6 +301,20 @@ cd(RESOURCE)
 if cmo.lookupUniformDistributedTopic('BladeEventBusTopic') is None:
     cmo.createUniformDistributedTopic('BladeEventBusTopic')
 cd('%s/UniformDistributedTopics/BladeEventBusTopic' % RESOURCE)
+# Partitioned, not the Replicated default. Two reasons, and the first is not
+# optional:
+#
+#   1. WebLogic refuses the combination outright -- a cluster-targeted JMS server
+#      cannot host a Replicated Distributed Topic:
+#        [JMSExceptions:045116] The Replicated Distributed Topic (RDT) cannot have
+#        its members hosted by a cluster targeted JMSServer.
+#      and it fails at save(), after every other resource has been created, so a
+#      run that gets this wrong leaves a half-built stack behind.
+#   2. Partitioned is the documented pairing for the delivery BLADE wants. Every
+#      consumer the framework generates is One-Copy-Per-Application, and Oracle
+#      pairs that mode with a PDT so each subscribing application receives each
+#      event exactly once across the cluster rather than once per member.
+cmo.setForwardingPolicy('Partitioned')
 cmo.setJNDIName('jms/BladeEventBusTopic')
 cmo.setSubDeploymentName(SUBDEPLOYMENT)
 cmo.setQuota(getMBean(eventbus_quota))
