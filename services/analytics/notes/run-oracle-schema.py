@@ -36,9 +36,23 @@ blade_user = os.environ.get('DB_USER')
 blade_pass = os.environ.get('DB_PASS')
 blade_url = os.environ.get('DB_URL')
 blade_confirm = os.environ.get('BLADE_CONFIRM_DROP', '')
-blade_sql_file = os.environ.get(
-    'BLADE_SQL_FILE',
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'sql', 'Oracle-database-schema.sql'))
+# WLST does not define __file__, so the script cannot locate itself. Look in the
+# usual places relative to the working directory and let BLADE_SQL_FILE override.
+blade_candidates = [
+    'services/analytics/sql/Oracle-database-schema.sql',   # run from the repo root
+    '../sql/Oracle-database-schema.sql',                   # run from notes/
+    'sql/Oracle-database-schema.sql',                      # run from services/analytics/
+]
+blade_sql_file = os.environ.get('BLADE_SQL_FILE')
+if not blade_sql_file:
+    for blade_c in blade_candidates:
+        if os.path.exists(blade_c):
+            blade_sql_file = blade_c
+            break
+if not blade_sql_file or not os.path.exists(blade_sql_file):
+    print('FATAL: cannot find Oracle-database-schema.sql. Run from the repo root,')
+    print('       or set BLADE_SQL_FILE to its full path.')
+    raise SystemExit(2)
 
 if not blade_user or not blade_pass or not blade_url:
     print('FATAL: set DB_USER, DB_PASS and DB_URL')
