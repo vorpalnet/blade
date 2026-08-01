@@ -55,6 +55,31 @@ if [ "$NM_WAIT_SECS" -gt 0 ]; then
     exec 3>&- || true
 fi
 
+# Same race, one level up. A MANAGED server pulls its configuration from the
+# AdminServer at boot, so nmStart fails outright if the admin box isn't up yet.
+# On an engine box at boot that is a coin flip: engine and admin machines power
+# on together and systemd on the engine has no way to order itself behind a
+# service on a DIFFERENT host. So wait here instead. Only applies when
+# NM_ADMINURL is set (that is what makes this a managed server);
+# ADMIN_WAIT_SECS=0 disables. Kept under the unit's TimeoutStartSec=600.
+ADMIN_WAIT_SECS="${ADMIN_WAIT_SECS:-300}"
+if [ -n "$NM_ADMINURL" ] && [ "$ADMIN_WAIT_SECS" -gt 0 ]; then
+    _hp="${NM_ADMINURL#*://}"       # t3://host:port -> host:port
+    _hp="${_hp%%/*}"                # drop any trailing path
+    _ah="${_hp%%:*}"
+    _ap="${_hp##*:}"
+    [ "$_ap" = "$_ah" ] && _ap=7001 # no port in the URL
+    echo "Waiting for AdminServer at ${_ah}:${_ap} (up to ${ADMIN_WAIT_SECS}s)..."
+    i=0
+    until (exec 3<>"/dev/tcp/${_ah}/${_ap}") 2>/dev/null; do
+        i=$((i + 1))
+        [ "$i" -ge "$ADMIN_WAIT_SECS" ] && { echo "AdminServer not reachable at ${_ah}:${_ap} after ${ADMIN_WAIT_SECS}s" >&2; exit 1; }
+        sleep 1
+    done
+    exec 3>&- || true
+    echo "AdminServer is reachable."
+fi
+
 PY="$(mktemp /tmp/nmstart.XXXXXX.py)"
 trap 'rm -f "$PY"' EXIT
 

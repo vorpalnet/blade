@@ -530,10 +530,33 @@ deploy_fsmar() {
     return $rc
 }
 
+# WebLogic answers a shared-library deploy with
+#   [Deployer:149169] Requires server restart for completion
+# and until the engines actually restart, every service that references it fails
+# to deploy with "Unresolved Webapp Library references". On a fresh install that
+# is guaranteed, and the only recovery was restarting by hand and re-running.
+# Restart the engines through their boot services between 'shared' and the tiers
+# that depend on it.
+restart_engine_tier() {
+    [ "$ACTION" = deploy ] || return 0
+    [ "${#ENGINE_NODES[@]}" -gt 0 ] || { warn "no engine.nodes — restart the engines yourself before deploying services."; return 0; }
+    local n
+    info "Restarting engine servers so the shared library resolves …"
+    for n in "${ENGINE_NODES[@]}"; do
+        # The admin box's own engine has a differently-named unit; try both and
+        # do not fail the deploy over a host that is simply not an engine host.
+        ssh -o BatchMode=yes -o ConnectTimeout=8 "${SSH_USER:-opc}@${n}" \
+            'sudo systemctl restart weblogic-engine.service 2>/dev/null \
+             || sudo systemctl restart "weblogic-engine0.service" 2>/dev/null || true' \
+            2>/dev/null && log "  restarted engines on ${n}" \
+            || warn "  ${n}: could not restart its engine — services may fail to resolve the library."
+    done
+}
+
 run_tier() {
     case "$1" in
         admin|services) deploy_subdir "$1" "$ACTION" ;;
-        shared)         deploy_shared "$ACTION" ;;
+        shared)         deploy_shared "$ACTION" && restart_engine_tier ;;
         fsmar)          deploy_fsmar  "$ACTION" ;;
     esac
 }

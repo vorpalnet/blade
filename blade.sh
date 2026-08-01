@@ -20,6 +20,7 @@
 # or "all" — so you can re-run a single phase to refine it without the full
 # interview. Everything EXCEPT build and deploy lives here:
 #   - create/edit a profile, phase by phase
+#   - download the OCCAS media from Oracle eDelivery (RUN: dl)
 #   - install OCCAS binaries (silent)
 #   - create + start the standalone Node Manager domain 'nmdomain' (RUN: n).
 #     Node Manager runs in its OWN basic domain, binding 0.0.0.0, so app/cluster
@@ -27,7 +28,14 @@
 #   - create the dynamic-cluster app domain and enroll it into that NM (RUN: c)
 #   - start the AdminServer via Node Manager (RUN: s; misc/start-admin-nm.sh)
 #   - install systemd boot services so Node Manager (RUN: e) and the AdminServer
-#     (RUN: w) come back up on reboot
+#     (RUN: w) come back up on reboot. Nothing else starts Node Manager at boot,
+#     so without these a host that reboots simply stays down.
+#   - provision the ENGINE hosts (RUN: E): rsync the OCCAS home, JDK and certs to
+#     the same absolute paths, install their boot services, start their servers
+#   - add the static test engine to a LIVE domain (RUN: j), for when the domain
+#     already exists and re-running 'c' would clobber it
+#   - deploy the hosted WebLogic Remote Console at /rconsole (RUN: o) — WLS
+#     14.1.2 dropped the built-in /console
 #   - stop Node Manager to re-read enrollments (RUN: k)
 #   - open the firewalld ports OCCAS needs (RUN: f)
 #   - set up TLS  (RUN: g/t; tls/make-certs.sh, tls/install-ssl.sh)
@@ -128,14 +136,21 @@ case "${1:-}" in
     -h|--help)            sed -n '2,50p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -v|--version|version) printf 'BLADE %s\n' "$BLADE_VERSION"; exit 0 ;;
 esac
-NAME="${1:-}"
+# A leading FLAG is not a profile name. './blade.sh --dry-run' used to create a
+# profile directory literally called '--dry-run' and then offer to install it.
+NAME=""
+__rest_from=1
+case "${1:-}" in
+    -*) ;;                                  # flag: no name given, parse from $1
+    *)  NAME="${1:-}"; __rest_from=2 ;;
+esac
 JUMP=""          # subcommand: wizard|preflight|install|uninstall|status|backup
 ASSUME_YES=0     # -y/--yes: auto-answer every yesno prompt
 BACKUP=1         # snapshot before a domain teardown; --no-backup disables
 PURGE=0          # uninstall --purge: also product, dirs, user/group
 KEEP_PROFILE=0   # set by the uninstall ladder so a reinstall can reuse the profile
 # First non-flag arg after <name> is the subcommand; flags may appear anywhere.
-for __a in "${@:2}"; do
+for __a in "${@:${__rest_from}}"; do
     case "$__a" in
         -y|--yes)      ASSUME_YES=1 ;;
         -n|--dry-run)  DRY=on ;;
@@ -238,13 +253,22 @@ load_profile() {
     DOMAIN="$(d domain.name "")"
     START_MODE="$(d server.start.mode dev)"
     ADMIN_USER="$(d admin.username weblogic)"
-    MEM_ARGS="$(d server.mem.args "-Xms512m -Xmx1024m -XX:MaxMetaspaceSize=512m")"
+    # MaxMetaspaceSize is a CAP, not a reservation — raising it costs nothing
+    # until the space is actually used. 512m is too low for BLADE's app set: a
+    # full deploy dies with "OutOfMemoryError: Metaspace" partway through, and a
+    # BLADE engine needs well over 1g for the full service set. Keep -Xms modest
+    # so the two
+    # JVMs on an admin box don't reserve the machine out from under each other.
+    MEM_ARGS="$(d server.mem.args "-Xms512m -Xmx1536m -XX:MaxMetaspaceSize=2g")"
     MWHOME="$(d oracle.home "${MW_HOME:-}")"
     OCCAS_VERSION="$(d occas.version "")"
     INSTALLER_JAR="$(d installer.jar "")"
     INV_LOC="$(d inventory.loc /home/oracle/oraInventory)"
     INV_GRP="$(d inventory.group oinstall)"
     INSTALL_USER="$(d install.user oracle)"
+    # Optional numeric IDs — empty means "let the OS pick". See phase_occas.
+    INSTALL_UID="$(d install.uid "")"
+    INSTALL_GID="$(d install.gid "")"
     INSTALL_TYPE="$(d install.type 'Complete with Examples')"
     JAVA_HOME_VAL="$(d java.home "${JAVA_HOME:-}")"
     prefix="$(d server.name.prefix engine)"
@@ -255,7 +279,10 @@ load_profile() {
     NM_TYPE="$(d nm.type ssl)"
     DCOUNT="$(d dynamic.server.count "")"
     DMAX="$(d max.dynamic.cluster.size "")"
-    STATIC="$(d static.server "")"
+    # Server names follow the machines: machine0 runs <prefix>0, machine1 runs
+    # <prefix>1. Starting at 0 is what lets the local machine's engine come from
+    # the same template as every other one -- there is no static server any more.
+    SRV_START_INDEX="$(d server.name.starting.index 0)"
     SHARED_FS="$(d shared.filesystem true)"
     BUILD_PROFILE="$(d build.profile production)"
     SSH_USER="$(d ssh.user oracle)"
@@ -267,6 +294,25 @@ load_profile() {
     SIP_PORT="$(d sip.tls.port 5061)"
     SIP_VER="$(d sip.tls.versions TLSv1.2)"
     SIP_TWOWAY="$(d sip.tls.twoway false)"
+    # Plain SIP is on by default -- that is how OCCAS builds a domain. Turning it
+    # off is a deliberate SIPS-only posture.
+    SIP_PLAIN="$(d sip.plain.enabled true)"
+    SIP_PLAIN_PORT="$(d sip.plain.port 5060)"
+    # generate = self-signed internal CA; supply = the site's own certificate.
+    # The WebLogic demo certificate is never an option: it is publicly known.
+    # Where the p12s live on every node, and the private-key alias inside them.
+    # emit_tls_block writes both into the server template, so they must come from
+    # the profile -- not a default that silently disagrees with what certs.sh made.
+    KEYSTORE_DIR="$(d tls.keystore.dir /opt/oracle/occas/8.3/security)"
+    ID_ALIAS="$(d tls.identity.alias blade-identity)"
+    # false = every engine on the template's ports (the production shape);
+    # true = base+index, which only suits several engines on one host.
+    DYN_CALC_PORTS="$(d dynamic.calculated.ports false)"
+    CERT_SOURCE="$(d cert.source generate)"
+    CERT_P12="$(d cert.import.p12 "")"
+    CERT_PEM="$(d cert.import.cert "")"
+    CERT_KEY="$(d cert.import.key "")"
+    CERT_CHAIN="$(d cert.import.chain "")"
     CA_CN="$(d tls.ca.cn 'BLADE Internal CA')"
     ID_CN="$(d tls.identity.cn "")"
     # hosts → arrays. machine.N = name:addr:port:type; pub/fqdn in host.N.*
@@ -280,6 +326,51 @@ load_profile() {
         [ "$i" -eq 1 ] && H_ROLE+=("admin") || H_ROLE+=("engine")
         i=$((i + 1))
     done
+    migrate_profile
+    return 0
+}
+
+# Bring a pre-"add a machine" profile up to date, in memory and on disk.
+#
+# Profiles written before this change carry two things that are now wrong:
+#   * static.server=engine0:machine0:...  -- there is no static server; engine0
+#     comes from the template like every other engine
+#   * a match expression that EXCLUDES the admin machine (machine1,machine2),
+#     because engines used to live only on the other boxes
+# Left alone, the first would try to create a server that collides with the
+# dynamic engine0, and the second would leave machine0 running no engine at all.
+# Migrating is mechanical, so do it rather than refuse to open the profile.
+migrate_profile() {
+    [ -f "$OCCAS_CONF" ] || return 0
+    local old_static old_match want_match changed=0
+    old_static="$(read_prop "$OCCAS_CONF" static.server)"
+    old_match="$(read_prop "$OCCAS_CONF" machine.match.expression)"
+
+    # Every machine now carries an engine, so the expression is just the list.
+    local n; want_match=""
+    for n in "${H_NAME[@]}"; do want_match="${want_match:+${want_match},}${n}"; done
+
+    if [ -n "$old_static" ]; then
+        set_conf_prop "$OCCAS_CONF" static.server ""
+        changed=1
+    fi
+    if [ -n "$want_match" ] && [ "$old_match" != "$want_match" ]; then
+        set_conf_prop "$OCCAS_CONF" machine.match.expression "$want_match"
+        match="$want_match"
+        changed=1
+    fi
+    if [ -z "$(read_prop "$OCCAS_CONF" server.name.starting.index)" ]; then
+        set_conf_prop "$OCCAS_CONF" server.name.starting.index 0
+        SRV_START_INDEX=0
+        changed=1
+    fi
+    # The count is derived from the machines now; nothing else may set it.
+    if [ "$(read_prop "$OCCAS_CONF" dynamic.server.count)" != "${#H_NAME[@]}" ]; then
+        set_conf_prop "$OCCAS_CONF" dynamic.server.count "${#H_NAME[@]}"
+        DCOUNT="${#H_NAME[@]}"
+        changed=1
+    fi
+    [ "$changed" = 1 ] && warn "profile migrated: engines now follow the machines (machine0 → ${prefix:-engine}0); static.server dropped."
     return 0
 }
 
@@ -326,6 +417,24 @@ EOF
     # 2. The OS user + group that will own OCCAS (the 'u' step creates them).
     ask INSTALL_USER "Install OS user (owns the OCCAS install)" "$INSTALL_USER"
     ask INV_GRP      "Install OS group"                         "$INV_GRP"
+    if [ "${#H_NAME[@]}" -gt 1 ] || [ -n "$INSTALL_UID" ] || [ -n "$INSTALL_GID" ]; then
+        help <<'EOF'
+On a multi-host cluster you can pin the numeric IDs so every box agrees.
+
+Engine provisioning rsyncs as an ordinary ssh user, which cannot chown, so the
+copied files simply end up owned by that user on the far side — names match and
+the numbers do not have to. Pinning matters in two cases:
+
+  - MW_HOME on shared storage (NFS): the server checks NUMBERS, not names, so
+    'oracle' as 1001 here and 1002 there is a genuine permission failure.
+  - anything that copies as root, which does preserve numeric uid/gid.
+
+Enter to leave blank and let the OS choose. That is the right answer for a
+single host, and for the ordinary non-shared multi-host case too.
+EOF
+        ask INSTALL_UID "Numeric uid for ${INSTALL_USER} (blank = OS picks)" "$INSTALL_UID"
+        ask INSTALL_GID "Numeric gid for ${INV_GRP} (blank = OS picks)"      "$INSTALL_GID"
+    fi
 
     # 3. Where OCCAS is / will be installed.
     while :; do
@@ -420,82 +529,51 @@ EOF
     ask prefix  "SIP engine server name prefix"   "$prefix"
     match="${prefix}*"
 
-    # Snapshot current hosts for per-field defaults, then rebuild the arrays.
-    local cur_an="${H_NAME[0]:-admin}" cur_aa="${H_ADDR[0]:-127.0.0.1}" cur_ap="${H_PUB[0]:-}" cur_af="${H_FQDN[0]:-}"
-    local cur_eng=$(( ${#H_NAME[@]} > 1 ? ${#H_NAME[@]} - 1 : 0 ))
-    local old_name=("${H_NAME[@]}") old_addr=("${H_ADDR[@]}") old_pub=("${H_PUB[@]}") old_fqdn=("${H_FQDN[@]}")
+    # THIS machine only. A blade install is complete on one box -- AdminServer
+    # plus engine0 -- and extra capacity is added afterwards with "Add a machine",
+    # which is an online operation. Asking for a three-box cluster up front forced
+    # everyone through a shape most installs do not have, and growing later meant
+    # hand-editing the profile and re-running configure, which clobbers the domain.
+    local cur_an="${H_NAME[0]:-machine0}" cur_aa="${H_ADDR[0]:-}" cur_ap="${H_PUB[0]:-}" cur_af="${H_FQDN[0]:-}"
+    [ -n "$cur_aa" ] || cur_aa="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [ -n "$cur_aa" ] || cur_aa="127.0.0.1"
     H_NAME=(); H_ADDR=(); H_PORT=(); H_TYPE=(); H_PUB=(); H_FQDN=(); H_ROLE=()
 
     log ""
-    log "  ${C_BOLD}AdminServer host${C_RESET}"
+    log "  ${C_BOLD}This machine${C_RESET} — runs the AdminServer and ${prefix}0"
     local aname aaddr apub afqdn
-    ask aname "  host / machine name (the HOST, e.g. 'admin' — not a server)" "$cur_an"
-    ask aaddr "  reachable address (IP/host the AdminServer dials for NM)"    "$cur_aa"
+    ask aname "  machine name (the HOST, not a server)" "$cur_an"
+    ask aaddr "  reachable address (IP/host others dial for Node Manager)" "$cur_aa"
     ask apub  "  public IP (for the cert SAN; Enter to skip)" "$cur_ap"
     ask afqdn "  fully-qualified DNS name (for SAN; Enter to skip)" "$cur_af"
     H_NAME+=("$aname"); H_ADDR+=("$aaddr"); H_PORT+=("$NM_PORT"); H_TYPE+=("$NM_TYPE")
     H_PUB+=("$apub");   H_FQDN+=("$afqdn"); H_ROLE+=("admin")
 
-    local neng
+    # Everything that was entered as an "engine host" here is now added later.
     log ""
-    [ "$cur_eng" -ge 1 ] || cur_eng=2
-    ask neng "Number of SIP engine hosts" "$cur_eng"
-    case "$neng" in ''|*[!0-9]*) neng=0 ;; esac
-    local i ename eaddr epub efqdn dn da dp df
-    i=1
-    while [ "$i" -le "$neng" ]; do
-        log ""
-        log "  ${C_BOLD}Engine host ${i}${C_RESET}"
-        dn="${old_name[$i]:-${prefix}${i}}"; da="${old_addr[$i]:-127.0.0.1}"
-        dp="${old_pub[$i]:-}";               df="${old_fqdn[$i]:-}"
-        ask ename "  host / machine name" "$dn"
-        ask eaddr "  reachable address (IP/host the AdminServer dials for NM)" "$da"
-        ask epub  "  public IP (for SAN; Enter to skip)" "$dp"
-        ask efqdn "  fully-qualified DNS name (for SAN; Enter to skip)" "$df"
-        H_NAME+=("$ename"); H_ADDR+=("$eaddr"); H_PORT+=("$NM_PORT"); H_TYPE+=("$NM_TYPE")
-        H_PUB+=("$epub");   H_FQDN+=("$efqdn"); H_ROLE+=("engine")
-        i=$((i + 1))
-    done
+    log "  ${C_DIM}More machines are added afterwards (dashboard: Add a machine),${C_RESET}"
+    log "  ${C_DIM}which creates machine1 with ${prefix}1, machine2 with ${prefix}2, and so on.${C_RESET}"
     return 0
 }
 
 # ----- phase 4: dynamic cluster shape ----------------------------------------
 phase_cluster() {
-    log ""; log "${C_BOLD}Dynamic cluster — engine count${C_RESET}"
+    log ""; log "${C_BOLD}Dynamic cluster${C_RESET}"
     help <<'EOF'
-The engine cluster (BEA_ENGINE_TIER_CLUST) generates its servers from a count
-rather than a hand-written list, so adding capacity later is a number bump.
-EOF
-    local neng defcount defmax
-    neng=$(( ${#H_NAME[@]} > 1 ? ${#H_NAME[@]} - 1 : 0 ))
-    defcount="${DCOUNT:-$neng}"; case "$defcount" in ''|*[!0-9]*) defcount="$neng" ;; esac
-    [ "$defcount" -ge 1 ] || defcount=1
-    defmax="${DMAX:-8}"; case "$defmax" in ''|*[!0-9]*) defmax=8 ;; esac
-    [ "$defcount" -gt "$defmax" ] && defmax=$((defcount * 2))
-    ask DCOUNT "Dynamic server count (now)"        "$defcount"
-    ask DMAX   "Max dynamic cluster size (ceiling)" "$defmax"
-    return 0
-}
+Every engine in BEA_ENGINE_TIER_CLUST is generated from one server template, so
+they all carry the same certificate, the same SIP channels and the same ports.
+Server names start at 0 and follow the machines: machine0 runs engine0,
+machine1 runs engine1, and so on.
 
-# ----- phase 5: static test engine -------------------------------------------
-phase_static() {
-    log ""; log "${C_BOLD}Static test engine${C_RESET}"
-    help <<'EOF'
-A fixed engine-tier member on the AdminServer box, for testing and BLADE config
-file generation. It is never SBC-targeted. Recommended.
+The server COUNT is not asked for -- it is however many machines you have, and
+"Add a machine" maintains it. Only the ceiling is a choice.
 EOF
-    local adminhost="${H_NAME[0]:-admin}"
-    if yesno "Add a static test engine on '${adminhost}'?" "Y"; then
-        local sn sl ss sp
-        IFS=: read -r sn _ sl ss sp <<< "${STATIC:-::::}"
-        ask sn "  test engine server name" "${sn:-${prefix}0}"
-        ask sl "  HTTP listen port"        "${sl:-8001}"
-        ask ss "  SIP (udp/tcp) port"      "${ss:-5060}"
-        ask sp "  SIPS (tls) port"         "${sp:-5061}"
-        STATIC="${sn}:${adminhost}:${sl}:${ss}:${sp}"
-    else
-        STATIC=""
-    fi
+    local defmax="${DMAX:-8}"; case "$defmax" in ''|*[!0-9]*) defmax=8 ;; esac
+    ask DMAX "Max dynamic cluster size (ceiling)" "$defmax"
+    # Count always tracks the machine list; nothing else may set it.
+    DCOUNT="${#H_NAME[@]}"
+    [ "$DCOUNT" -ge 1 ] || DCOUNT=1
+    [ "$DCOUNT" -gt "$DMAX" ] && DMAX=$((DCOUNT * 2))
     return 0
 }
 
@@ -519,15 +597,55 @@ identity cert satisfies hostname verification however a client connects.
 EOF
     [ -n "$ID_CN" ] || ID_CN="${H_FQDN[0]:-${H_NAME[0]:-}}"
     if yesno "Set up TLS settings now?" "Y"; then
-        ask SSL_PORT "  HTTPS / t3s SSL port" "$SSL_PORT"
-        if yesno "  Enable SIP TLS (sips channel on the engines)?" "$([ "$SIP_TLS" = false ] && echo N || echo Y)"; then SIP_TLS=true; else SIP_TLS=false; fi
-        if [ "$SIP_TLS" = "true" ]; then
-            ask SIP_PORT "  SIPS port"            "$SIP_PORT"
-            ask SIP_VER  "  Enabled TLS versions" "$SIP_VER"
-            if yesno "  Mutual TLS to the SBC (two-way)?" "$([ "$SIP_TWOWAY" = true ] && echo Y || echo N)"; then SIP_TWOWAY=true; else SIP_TWOWAY=false; fi
+        # --- where the certificate comes from --------------------------------
+        # A production site almost always has its own. Generating one is for test
+        # rigs. Either way the SAME keystore layout comes out, so everything
+        # downstream (the server template, the engines) is identical.
+        help <<'EOF'
+Two ways to get a server certificate:
+
+  supply    you already have one (the normal production answer) — a PKCS12,
+            or a PEM cert + key, optionally with a CA chain
+  generate  create a self-signed internal CA and a server identity from it.
+            Fine for a lab; browsers and SBCs will not trust it by default.
+
+Whichever you pick, WebLogic's built-in DEMO certificate is never used — it is
+publicly known and is a real security risk on an internet-facing SIPS port.
+EOF
+        ask CERT_SOURCE "  Certificate: supply or generate?" "${CERT_SOURCE:-generate}"
+        case "$CERT_SOURCE" in
+            [Ss]*) CERT_SOURCE=supply ;;
+            *)     CERT_SOURCE=generate ;;
+        esac
+        if [ "$CERT_SOURCE" = supply ]; then
+            log "  ${C_DIM}Give a PKCS12, or a PEM cert+key. Enter to skip a field.${C_RESET}"
+            ask CERT_P12   "    PKCS12 file (.p12/.pfx)"      "$CERT_P12"
+            if [ -z "$CERT_P12" ]; then
+                ask CERT_PEM   "    server certificate (PEM)" "$CERT_PEM"
+                ask CERT_KEY   "    private key (PEM)"        "$CERT_KEY"
+            fi
+            ask CERT_CHAIN "    CA chain (PEM, optional)"     "$CERT_CHAIN"
+        else
+            ask CA_CN "  Internal CA common name"   "$CA_CN"
         fi
-        ask CA_CN "  Internal CA common name"   "$CA_CN"
         ask ID_CN "  Identity cert common name" "$ID_CN"
+
+        # --- SIP channels ----------------------------------------------------
+        # OCCAS gives every engine a plain 'sip' channel by default. These two
+        # answers are written into the SERVER TEMPLATE at configure time, so
+        # every dynamic engine — including ones added later — is stamped the
+        # same way. No per-server retrofit.
+        ask SSL_PORT "  HTTPS / t3s SSL port" "$SSL_PORT"
+        if yesno "  Enable SIPS (SIP over TLS)?" "$([ "$SIP_TLS" = false ] && echo N || echo Y)"; then SIP_TLS=true; else SIP_TLS=false; fi
+        if [ "$SIP_TLS" = "true" ]; then
+            ask SIP_PORT "    SIPS port"            "$SIP_PORT"
+            ask SIP_VER  "    Enabled TLS versions" "$SIP_VER"
+            if yesno "    Mutual TLS to the SBC (two-way)?" "$([ "$SIP_TWOWAY" = true ] && echo Y || echo N)"; then SIP_TWOWAY=true; else SIP_TWOWAY=false; fi
+            if yesno "  Disable plain SIP (${SIP_PLAIN_PORT:-5060}) — SIPS only?" "$([ "$SIP_PLAIN" = false ] && echo Y || echo N)"; then SIP_PLAIN=false; else SIP_PLAIN=true; fi
+        else
+            SIP_PLAIN=true
+        fi
+        [ "$SIP_PLAIN" != false ] && ask SIP_PLAIN_PORT "  Plain SIP port" "${SIP_PLAIN_PORT:-5060}"
         # Generate passphrases once; keep existing ones so re-running TLS is safe.
         if [ -z "$(read_prop "$DEPLOY_SECRET" tls.ca.passphrase)" ]; then
             if write_secret "$DEPLOY_SECRET" tls.ca.passphrase "$(gen_pass)"; then
@@ -617,6 +735,11 @@ save_profile() {
         echo "inventory.loc=${INV_LOC}"
         echo "inventory.group=${INV_GRP}"
         echo "install.user=${INSTALL_USER}"
+        echo "# Numeric IDs. Blank = the OS picks, which is right for most setups."
+        echo "# Pin them when MW_HOME is on shared storage (NFS matches on NUMBERS,"
+        echo "# not names) or when anything copies the install as root."
+        echo "install.uid=${INSTALL_UID}"
+        echo "install.gid=${INSTALL_GID}"
         echo "install.type=${INSTALL_TYPE}"
         echo "# JDK the installer (and the servers it configures) run on."
         echo "java.home=${JAVA_HOME_VAL}"
@@ -655,11 +778,6 @@ save_profile() {
             [ -n "${H_FQDN[$idx]}" ] && echo "host.$((idx+1)).fqdn=${H_FQDN[$idx]}"
             idx=$((idx + 1))
         done
-        if [ -n "$STATIC" ]; then
-            echo ""
-            echo "# --- Static test engine on the admin box (name:machine:listen:sip:sips) ---"
-            echo "static.server=${STATIC}"
-        fi
     } > "$OCCAS_CONF"
 
     # --- deploy.conf ---
@@ -700,6 +818,18 @@ save_profile() {
         echo "tls.key.size=2048"
         echo "tls.keystore.dir=${KEYSTORE_DIR}"
         echo "tls.ssl.port=${SSL_PORT}"
+        echo "# Where the server certificate comes from: 'supply' (the site's own,"
+        echo "# the normal production answer) or 'generate' (self-signed internal CA)."
+        echo "# WebLogic's demo certificate is never used -- it is publicly known."
+        echo "cert.source=${CERT_SOURCE}"
+        echo "cert.import.p12=${CERT_P12}"
+        echo "cert.import.cert=${CERT_PEM}"
+        echo "cert.import.key=${CERT_KEY}"
+        echo "cert.import.chain=${CERT_CHAIN}"
+        echo "# SIP channels, written into the SERVER TEMPLATE at configure time so"
+        echo "# every dynamic engine -- present and future -- is stamped identically."
+        echo "sip.plain.enabled=${SIP_PLAIN}"
+        echo "sip.plain.port=${SIP_PLAIN_PORT}"
         echo "sip.tls.enabled=${SIP_TLS}"
         echo "sip.tls.port=${SIP_PORT}"
         echo "sip.tls.versions=${SIP_VER}"
@@ -717,7 +847,7 @@ run_wizard() {
     load_profile
     # Journey order; phase_occas opens with the environment scan.
     phase_occas; phase_domain; phase_hosts; phase_cluster
-    phase_static; phase_tls; phase_runtime
+    phase_tls; phase_runtime
     if [ -z "$NAME" ]; then ask NAME "Save profile as" "$DOMAIN"; set_paths; fi
     [ -n "$NAME" ] || die "a profile name is required."
     save_profile
@@ -751,6 +881,16 @@ _sum_tls() {
     else printf 'https :%s · sip-tls off' "$SSL_PORT"; fi
 }
 _pw_set() { [ -f "$OCCAS_SECRET" ] && [ -n "$(read_prop "$OCCAS_SECRET" admin.password)" ]; }
+_sum_lastmachine() {
+    local n=$(( ${#H_NAME[@]} - 1 ))
+    [ "$n" -ge 1 ] && printf '%s (%s%s)' "${H_NAME[$n]}" "${prefix:-engine}" "$n" || printf 'none — single machine'
+}
+_sum_engines() {
+    local n=0 i
+    for i in "${!H_NAME[@]}"; do [ "${H_ROLE[$i]}" = "engine" ] && n=$((n + 1)); done
+    [ "$n" -eq 0 ] && { printf 'none — single host'; return; }
+    printf '%d host(s) as %s' "$n" "${SSH_USER:-oracle}"
+}
 
 # Build the current menu into MR_* parallel arrays (shared by TUI + fallback):
 #   MR_TYPE head|phase|action   MR_ID   MR_LABEL   MR_VAL   MR_DONE(1|0|-)
@@ -761,7 +901,6 @@ build_menu_rows() {
     local p_ident=0; [ -n "$DOMAIN" ] && p_ident=1
     local p_hosts=0; [ "$nhosts" -ge 1 ] && p_hosts=1
     local p_clu=0;   { [ -n "$DCOUNT" ] && [ -n "$DMAX" ]; } && p_clu=1
-    local p_stat=0;  [ -n "$STATIC" ] && p_stat=1
     local p_tls=0;   [ -n "$SSL_PORT" ] && p_tls=1
     local p_run=0;   { [ -n "$BUILD_PROFILE" ] && [ -n "$ADMINURL" ]; } && p_run=1
     local a_i=0; [ -d "${MWHOME}/wlserver" ] && a_i=1
@@ -782,14 +921,19 @@ build_menu_rows() {
     _row phase  occas "Where OCCAS lives — home, version, Java"  "$(_sum_occas)" "$p_occas"
     _row action u     "Create install user & group"             "${INSTALL_USER:-oracle}:${INV_GRP:-oinstall}" "$a_u"
     _row action m     "Create install dirs & chown"             "MW_HOME + inventory" "$a_m"
+    # "Done" means the media is no longer needed — either it's downloaded, or the
+    # product is already installed and never will be.
+    local a_dl=0 dl_lbl=""
+    if [ -d "${MWHOME}/wlserver" ]; then a_dl=1; dl_lbl="not needed — installed"
+    elif [ -n "$INSTALLER_JAR" ] && [ -f "$INSTALLER_JAR" ]; then a_dl=1; dl_lbl="installer present"; fi
+    _row action dl    "Download OCCAS media (eDelivery)"        "$dl_lbl" "$a_dl"
     _row action p     "Preflight host checks"                    "" "-"
     _row action i     "Install OCCAS"                            "$([ "$a_i" = 1 ] && echo installed || echo '')" "$a_i"
     _row head ""      "STEP 2 · Name it & set the admin login"   "" "-"
     _row phase  ident "Domain name + admin user & password"      "${DOMAIN:-—} / ${ADMIN_USER} · pw ${pwlbl}" "$p_ident"
     _row head ""      "STEP 3 · Describe your machines"          "" "-"
     _row phase  hosts   "Hosts & Node Manager"     "${nhosts} host(s) · ${NM_DOMAIN}@${NM_BIND}:${NM_PORT} ${NM_TYPE}" "$p_hosts"
-    _row phase  cluster "How many engine servers"  "$([ -n "$DCOUNT" ] && echo "count ${DCOUNT}, max ${DMAX}" || echo —)" "$p_clu"
-    _row phase  static  "Test engine (optional)"   "${STATIC:-—}" "$p_stat"
+    _row phase  cluster "Dynamic cluster ceiling"  "$(printf '%s engine(s) · max %s' "${#H_NAME[@]}" "${DMAX:-—}")" "$p_clu"
     _row head ""      "STEP 4 · Start it up (in order)"          "" "-"
     _row action n "Create & start Node Manager" "${NM_DOMAIN} — ${nm_state}" "$a_n"
     _row action c "Create the cluster domain"   "${DOMAIN:-?}" "$a_c"
@@ -798,10 +942,14 @@ build_menu_rows() {
     _row action k "Stop Node Manager"           "" "-"
     _row action e "Install Node Manager boot service (systemd)"  "nodemanager.service" "$a_e"
     _row action w "Install AdminServer boot service (via NM)"    "weblogic.service"    "$a_w"
+    _row action addm "Add a machine (grows the cluster online)" "$(printf 'next: machine%s → %s%s' "${#H_NAME[@]}" "${prefix:-engine}" "${#H_NAME[@]}")" "-"
+    _row action remm "Remove the last machine"                   "$(_sum_lastmachine)" "-"
+    _row action E "Re-provision every engine host"               "$(_sum_engines)" "-"
+    _row action o "Deploy WebLogic Remote Console (/rconsole)" "" "-"
     _row action f "Open firewall ports (firewalld)"              "NM/admin/ssl$([ "${SIP_TLS:-false}" = true ] && printf /sip)" "-"
     _row head ""      "STEP 5 · TLS (optional)"                  "" "-"
     _row phase  tls "TLS settings"          "$(_sum_tls)" "$p_tls"
-    _row action g "Make certificates"       "" "-"
+    _row action g "Certificate (${CERT_SOURCE:-generate})" "$([ "${CERT_SOURCE:-generate}" = supply ] && echo "${CERT_P12:-${CERT_PEM:-not set}}" || echo "self-signed CA")" "-"
     _row action t "Turn on HTTPS / SIP-TLS" "" "-"
     _row head ""      "STEP 6 · Deploy settings (build profile, SSH, admin URL)" "" "-"
     _row phase runtime "Build profile, SSH user, admin URL" "${BUILD_PROFILE} · ${ADMINURL}" "$p_run"
@@ -832,11 +980,11 @@ dispatch_row() {
         ident)   phase_domain;  phase_password; save_profile ;;
         hosts)   phase_hosts;   save_profile ;;
         cluster) phase_cluster; save_profile ;;
-        static)  phase_static;  save_profile ;;
         tls)     phase_tls;     save_profile ;;
         runtime) phase_runtime; save_profile ;;
         u) do_makeuser  || true ;;
         m) do_makedirs  || true ;;
+        dl) do_download  || true ;;
         p) do_preflight || true ;;
         i) do_install   || warn "install returned an error" ;;
         n) do_nmdomain  || warn "nm-domain returned an error" ;;
@@ -844,6 +992,10 @@ dispatch_row() {
         s) start_admin "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
         e) do_install_nm_service  || true ;;
         w) do_install_wls_service || true ;;
+        addm) do_add_machine      || true ;;
+        remm) do_remove_machine   || true ;;
+        E) do_provision_engines   || true ;;
+        o) do_console             || true ;;
         f) do_open_firewall || true ;;
         x) stop_admin  "$MWHOME" "$DOMAIN" "$ADMIN_USER" || true ;;
         k) stop_nm || true ;;
@@ -856,7 +1008,14 @@ dispatch_row() {
         md)   do_remove_dirs   || true ;;
         ug)   do_remove_usergrp || true ;;
         repo) do_remove_repo   || true ;;
-        g) "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error" ;;
+        g) if [ "${CERT_SOURCE:-generate}" = supply ]; then
+               # The site's own certificate -- certs.sh packages a PKCS12, or a
+               # PEM cert+key(+chain), into the same keystore layout generate
+               # produces, so everything downstream is identical either way.
+               "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
+           else
+               "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
+           fi ;;
         t) [ "$DRY" = "on" ] && dr="--dry-run"; "${SCRIPT_DIR}/tls/install-ssl.sh" "$DEPLOY_CONF" $dr || warn "install-ssl returned an error" ;;
         *) warn "unknown row: $1" ;;
     esac
@@ -979,7 +1138,7 @@ dashboard_menu() {
         local tok quit=0
         for tok in $(printf '%s' "$line" | tr ',' ' '); do
             case "$tok" in
-                all) local k; for k in occas ident hosts cluster static tls runtime; do dispatch_row "$k"; done ;;
+                all) local k; for k in occas ident hosts cluster tls runtime; do dispatch_row "$k"; done ;;
                 d)   [ "$DRY" = "on" ] && DRY="off" || DRY="on"; log "  dry-run: ${DRY}" ;;
                 q)   quit=1 ;;
                 *[!0-9]*) warn "unknown choice: $tok" ;;
@@ -1027,6 +1186,18 @@ stop_nm() {
     local port="${NM_PORT:-$(read_prop "$OCCAS_CONF" nm.listen.port)}"; port="${port:-5556}"
     if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] stop Node Manager listening on :${port}${C_RESET}"; return 0; fi
     nm_listening "$port" || { ok "Node Manager not running on :${port}."; return 0; }
+    # When the boot service owns THIS nmdomain, go through systemd. Reading the
+    # PID out of `ss` needs root, so an unprivileged run would otherwise fail
+    # here with "couldn't resolve the PID" and leave the old NM running --
+    # which then serves a stale nodemanager.domains.
+    local _nmhome="${MWHOME}/user_projects/domains/${NM_DOMAIN}"
+    if command -v systemctl >/dev/null 2>&1 \
+       && grep -qsF -- "$_nmhome" /etc/systemd/system/nodemanager.service; then
+        if sudo -n systemctl stop nodemanager.service 2>/dev/null; then
+            ok "stopped Node Manager via nodemanager.service."
+            return 0
+        fi
+    fi
     command -v ss >/dev/null 2>&1 || { warn "need 'ss' to find the Node Manager PID — stop it manually."; return 1; }
     local pids p killed=0 cmd
     pids="$(ss -ltnpH "( sport = :${port} )" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)"
@@ -1082,6 +1253,105 @@ remove_domain_systemd_unit() {
     $sudo systemctl disable "$unit" >/dev/null 2>&1 || true
     $sudo rm -f "$unitfile" && ok "removed systemd unit ${unitfile}."
     $sudo systemctl daemon-reload   >/dev/null 2>&1 || true
+}
+
+# The engine-side counterpart of do_provision_engines: undo what it put there.
+#
+# Two reasons this is not optional. An enabled unit pointing at a deleted domain
+# is a boot failure planted for whenever that host next reboots. And the engine's
+# COPY of the domain would otherwise survive a teardown, so the next provisioning
+# rsync (which has no --delete, deliberately) would merge new files into stale
+# ones — the kind of half-state that produces symptoms nobody can trace.
+#
+# Reachability problems are warnings, not failures: the admin-side teardown must
+# still proceed.
+remove_engine_systemd_units() {
+    local domhome="$1" nmhome="$2" sshu="${SSH_USER:-oracle}" i tgt unit
+    [ "${#H_NAME[@]}" -gt 1 ] || return 0
+    for i in "${!H_NAME[@]}"; do
+        [ "${H_ROLE[$i]}" = "engine" ] || continue
+        tgt="${sshu}@${H_ADDR[$i]}"
+        if [ "$DRY" = "on" ]; then
+            log "${C_DIM}  [dry-run] ${tgt}: stop/disable/remove weblogic-engine.service + nodemanager.service (if they point here); rm -rf ${domhome}${C_RESET}"
+            continue
+        fi
+        if ! ssh -o BatchMode=yes -o ConnectTimeout=8 "$tgt" true 2>/dev/null; then
+            warn "${H_NAME[$i]}: unreachable — its boot services were NOT removed. Clean up by hand or they will fail on next boot."
+            continue
+        fi
+        # Stop what is RUNNING before deleting what it is running from. A live
+        # server JVM holds its log open and recreates servers/<name>/logs under
+        # the tree as fast as rm removes it, so the delete "succeeds" and the
+        # directory is still there afterwards. Units first (the clean path),
+        # then any JVM still rooted in this domain.
+        #
+        # The pgrep pattern is bracketed — 'weblogic[.]Name=' does not match the
+        # literal text of this very ssh command, which is how a plain pkill -f
+        # ends up killing the shell that issued it.
+        ssh -o BatchMode=yes "$tgt" "
+            for u in weblogic-engine.service nodemanager.service; do
+                systemctl list-unit-files \"\$u\" >/dev/null 2>&1 && sudo systemctl stop \"\$u\" >/dev/null 2>&1
+            done
+            for p in \$(pgrep -f 'weblogic[.]Name=' 2>/dev/null); do
+                if tr '\\0' ' ' < /proc/\$p/cmdline 2>/dev/null | grep -qF -- '${domhome}'; then
+                    kill \$p 2>/dev/null && echo \"  stopped pid \$p on \$(hostname)\"
+                fi
+            done
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+                pgrep -f 'weblogic[.]Name=' >/dev/null 2>&1 || break
+                sleep 2
+            done
+            for p in \$(pgrep -f 'weblogic[.]Name=' 2>/dev/null); do
+                tr '\\0' ' ' < /proc/\$p/cmdline 2>/dev/null | grep -qF -- '${domhome}' && kill -9 \$p 2>/dev/null
+            done
+            true
+        " 2>/dev/null || warn "${H_NAME[$i]}: could not stop its servers — the domain delete may not stick."
+
+        for unit in weblogic-engine.service nodemanager.service; do
+            local guard="$domhome"
+            [ "$unit" = nodemanager.service ] && guard="$nmhome"
+            ssh -o BatchMode=yes "$tgt" "
+                f=/etc/systemd/system/${unit}
+                [ -f \"\$f\" ] || exit 0
+                grep -qF -- '${guard}' \"\$f\" || { echo \"  left ${unit} alone on \$(hostname) — it doesn't point at ${guard}.\"; exit 0; }
+                sudo systemctl stop '${unit}' >/dev/null 2>&1
+                sudo systemctl disable '${unit}' >/dev/null 2>&1
+                sudo rm -f \"\$f\" && echo \"  removed ${unit} on \$(hostname).\"
+                sudo systemctl daemon-reload >/dev/null 2>&1
+            " 2>/dev/null || warn "${H_NAME[$i]}: could not remove ${unit}."
+        done
+        # The engine's copy of the app domain. nmdomain is left alone — it is
+        # this host's Node Manager and is not owned by the domain being removed.
+        if [ -n "$domhome" ]; then
+            ssh -o BatchMode=yes "$tgt" "
+                [ -d '${domhome}' ] || exit 0
+                rm -rf '${domhome}' && echo \"  removed ${domhome} on \$(hostname).\"
+            " 2>/dev/null || warn "${H_NAME[$i]}: could not remove ${domhome}."
+        fi
+    done
+}
+
+# Who ACTUALLY owns a path, as "user:group" — for the systemd User=/Group= lines.
+# The configured install.user is what we'd LIKE to own the install; it isn't
+# necessarily what does. An install done as an ordinary login user (ashburn's
+# OCCAS is owned by 'opc') would otherwise get units that cannot read their own
+# domain and fail at boot with a permission error far from the cause. Falls back
+# to the configured pair when the path doesn't exist yet, which is the dry-run
+# and pre-install case. host="" means look locally.
+owner_of_path() {
+    local path="$1" host="${2:-}" out=""
+    if [ -n "$host" ]; then
+        out="$(ssh -o BatchMode=yes -o ConnectTimeout=8 "$host" \
+                   "stat -c '%U:%G' '${path}' 2>/dev/null" 2>/dev/null)"
+    else
+        # GNU stat first, then BSD/macOS — blade.sh dry-runs on a Mac.
+        out="$(stat -c '%U:%G' "$path" 2>/dev/null)" \
+            || out="$(stat -f '%Su:%Sg' "$path" 2>/dev/null)" || out=""
+    fi
+    case "$out" in
+        ?*:?*) printf '%s' "$out" ;;
+        *)     printf '%s:%s' "${INSTALL_USER:-oracle}" "${INV_GRP:-oinstall}" ;;
+    esac
 }
 
 # --- systemd boot services -------------------------------------------------
@@ -1142,17 +1412,67 @@ install_systemd_unit() {
         || ok "installed ${unitfile} (enable it with: sudo systemctl enable ${unit})."
 }
 
-# Emit the AdminServer-via-Node-Manager unit to stdout. Unlike the NM unit this
-# is Type=oneshot + RemainAfterExit: misc/start-admin-nm.sh does nmStart and
-# exits, and the AdminServer JVM is a child of Node Manager (not of this unit),
-# so there's no foreground process to babysit and no Restart=. ExecStop is an
-# OS-level kill (misc/stop-admin-os.sh) because pure-Java NM can't reliably
-# nmKill. NM_PASSWORD comes from a 0600 EnvironmentFile, never the unit text.
+# Same as install_systemd_unit, but on another host over ssh. Engine boxes need
+# the identical units; only the delivery differs. The unit text goes over stdin,
+# never on the command line — an ssh command line is visible in 'ps' on the far
+# side. Requires passwordless sudo there, same as the rest of the engine work.
+install_systemd_unit_remote() {
+    local host="$1" unit="$2" text="$3"
+    local unitfile="/etc/systemd/system/${unit}"
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] ${host}: write ${unitfile}:${C_RESET}"
+        printf '%s\n' "$text" | sed 's/^/    /'
+        log "${C_DIM}  [dry-run] ${host}: systemctl daemon-reload; systemctl enable ${unit}${C_RESET}"
+        return 0
+    fi
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=8 "$host" \
+             "command -v systemctl >/dev/null 2>&1" 2>/dev/null; then
+        warn "${host}: no systemctl — cannot install ${unit}."; return 1
+    fi
+    printf '%s\n' "$text" \
+        | ssh -o BatchMode=yes "$host" "sudo tee '${unitfile}' >/dev/null && sudo chmod 644 '${unitfile}'" \
+        || { warn "${host}: could not write ${unitfile} (passwordless sudo?)."; return 1; }
+    ssh -o BatchMode=yes "$host" "sudo systemctl daemon-reload" \
+        || { warn "${host}: daemon-reload failed for ${unit}."; return 1; }
+    ssh -o BatchMode=yes "$host" "sudo systemctl enable '${unit}' >/dev/null 2>&1" \
+        && ok "${host}: installed + enabled ${unitfile}." \
+        || ok "${host}: installed ${unitfile} (enable it with: sudo systemctl enable ${unit})."
+}
+
+# Remote twin of write_nm_envfile. The password goes over ssh STDIN under a
+# tight umask — never as an argument, which would show up in 'ps' on the engine.
+# Same shape do_provision_engines already uses for engine boot.properties.
+write_nm_envfile_remote() {
+    local host="$1" envfile="$2" user="$3" pw="$4"
+    [ -n "$pw" ] || warn "${host}: no admin password in the profile — the boot service will fail to nmConnect until NM_PASSWORD is set in ${envfile}."
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] ${host}: write ${envfile} (NM_PASSWORD=****, 0600, owner ${user})${C_RESET}"
+        return 0
+    fi
+    { printf 'NM_PASSWORD=%s\n' "$pw"; printf 'WLST_PROPERTIES=%s\n' "$(nm_wlst_props)"; } \
+        | ssh -o BatchMode=yes "$host" \
+              "umask 077 && sudo tee '${envfile}' >/dev/null && sudo chown '${user}' '${envfile}' && sudo chmod 600 '${envfile}'" \
+        || { warn "${host}: could not write ${envfile}."; return 1; }
+    ok "${host}: wrote ${envfile} (NM password for boot, 0600)."
+}
+
+# Emit a server-via-Node-Manager unit to stdout — the AdminServer on the admin
+# box, or one engine on an engine box. Unlike the NM unit this is Type=oneshot +
+# RemainAfterExit: misc/start-admin-nm.sh does nmStart and exits, and the server
+# JVM is a child of Node Manager (not of this unit), so there's no foreground
+# process to babysit and no Restart=. ExecStop is an OS-level kill
+# (misc/stop-admin-os.sh) because pure-Java NM can't reliably nmKill.
+# NM_PASSWORD comes from a 0600 EnvironmentFile, never the unit text.
+#
+# server   which server to start: AdminServer, or engine1/engine2/...
+# adminurl t3://<admin>:<port> — REQUIRED for a managed server (it has to be
+#          told where the AdminServer is), empty for the AdminServer itself.
 render_admin_nm_unit() {
     local dom="$1" domhome="$2" scriptdir="$3" user="$4" group="$5" envfile="$6"
+    local server="${7:-AdminServer}" adminurl="${8:-}"
     local nmport="${NM_PORT:-5556}" nmtype="${NM_TYPE:-ssl}" nmuser="${ADMIN_USER:-weblogic}"
     printf '%s\n' "[Unit]"
-    printf 'Description=WebLogic AdminServer via Node Manager (BLADE %s)\n' "$dom"
+    printf 'Description=WebLogic %s via Node Manager (BLADE %s)\n' "$server" "$dom"
     printf 'After=network-online.target nodemanager.service\n'
     printf 'Wants=network-online.target\n'
     printf 'Requires=nodemanager.service\n'
@@ -1163,11 +1483,14 @@ render_admin_nm_unit() {
     printf 'Environment=MW_HOME=%s\n' "$MWHOME"
     printf 'Environment=DOMAIN_NAME=%s\n' "$dom"
     printf 'Environment=DOMAIN_HOME=%s\n' "$domhome"
-    printf 'Environment=ADMIN_SERVER=AdminServer\n'
+    printf 'Environment=ADMIN_SERVER=%s\n' "$server"
     printf 'Environment=NM_HOST=localhost\n'
     printf 'Environment=NM_PORT=%s\n' "$nmport"
     printf 'Environment=NM_TYPE=%s\n' "$nmtype"
     printf 'Environment=NM_USER=%s\n' "$nmuser"
+    # A managed server must reach the AdminServer to boot. start-admin-nm.sh
+    # waits for it (ADMIN_WAIT_SECS) rather than racing the admin box's own boot.
+    [ -n "$adminurl" ] && printf 'Environment=NM_ADMINURL=%s\n' "$adminurl"
     printf 'EnvironmentFile=%s\n' "$envfile"
     printf 'ExecStart=%s/start-admin-nm.sh\n' "$scriptdir"
     printf 'ExecStop=%s/stop-admin-os.sh\n'  "$scriptdir"
@@ -1176,6 +1499,30 @@ render_admin_nm_unit() {
     printf 'TimeoutStartSec=600\n'
     printf '\n[Install]\n'
     printf 'WantedBy=multi-user.target\n'
+}
+
+# The boot units must NOT point into the repo checkout. Engine hosts have no
+# clone at all — the rsync carries the DOMAIN, not the repo — and blade.sh can
+# delete the clone itself (RUN: repo). Either way an ExecStart under
+# ${SCRIPT_DIR} is a boot service that breaks later, for a reason nobody will
+# connect back to this. Stage the two helpers inside the domain instead, where
+# they travel with it to every host.
+BOOT_SCRIPT_SUBDIR="bin/blade"
+stage_boot_scripts() {
+    local domhome="$1" dest="${domhome}/${BOOT_SCRIPT_SUBDIR}" s
+    for s in start-admin-nm.sh stop-admin-os.sh; do
+        [ -f "${SCRIPT_DIR}/misc/${s}" ] || { warn "missing ${SCRIPT_DIR}/misc/${s}."; return 1; }
+    done
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] copy misc/{start-admin-nm,stop-admin-os}.sh -> ${dest}/${C_RESET}"
+        return 0
+    fi
+    mkdir -p "$dest" || { warn "could not create ${dest}."; return 1; }
+    for s in start-admin-nm.sh stop-admin-os.sh; do
+        cp "${SCRIPT_DIR}/misc/${s}" "${dest}/${s}" || { warn "could not stage ${s}."; return 1; }
+        chmod +x "${dest}/${s}"
+    done
+    ok "staged boot scripts in ${dest}."
 }
 
 # Write the NM password to a 0600 EnvironmentFile that misc/start-admin-nm.sh
@@ -1190,7 +1537,8 @@ write_nm_envfile() {
     fi
     local sudo=""
     if [ "$(id -u)" != 0 ] && [ "$(id -un)" != "$user" ] && command -v sudo >/dev/null 2>&1; then sudo="sudo"; fi
-    printf 'NM_PASSWORD=%s\n' "$pw" | ( umask 077; $sudo tee "$envfile" >/dev/null ) \
+    { printf 'NM_PASSWORD=%s\n' "$pw"; printf 'WLST_PROPERTIES=%s\n' "$(nm_wlst_props)"; } \
+        | ( umask 077; $sudo tee "$envfile" >/dev/null ) \
         || { warn "could not write ${envfile}."; return 1; }
     $sudo chown "$user" "$envfile" 2>/dev/null || true
     $sudo chmod 600 "$envfile" 2>/dev/null || true
@@ -1199,10 +1547,11 @@ write_nm_envfile() {
 
 # Install nodemanager.service for our nmdomain (RUN: e).
 do_install_nm_service() {
-    local mw="$MWHOME" nmdom="$NM_DOMAIN" user="${INSTALL_USER:-oracle}" grp="${INV_GRP:-oinstall}"
+    local mw="$MWHOME" nmdom="$NM_DOMAIN"
     [ -n "$nmdom" ] || { warn "no nm.domain.name."; return 1; }
     local nmhome="${mw}/user_projects/domains/${nmdom}"
     [ "$DRY" = "on" ] || [ -d "$nmhome" ] || { warn "nmdomain not found: ${nmhome} — create it first ('n')."; return 1; }
+    local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$nmhome")"
     local text
     text="$(render_systemd_unit "WebLogic Node Manager (BLADE ${nmdom})" \
         "$nmhome" "${nmhome}/bin/startNodeManager.sh" "${nmhome}/bin/stopNodeManager.sh" \
@@ -1216,27 +1565,416 @@ do_install_nm_service() {
 # that — enrollment persists in nodemanager.domains across reboots). Ordered
 # after nodemanager.service and waits for its listener (start-admin-nm.sh).
 do_install_wls_service() {
-    local mw="$MWHOME" dom="$DOMAIN" user="${INSTALL_USER:-oracle}" grp="${INV_GRP:-oinstall}"
+    local mw="$MWHOME" dom="$DOMAIN"
     [ -n "$dom" ] || { warn "no domain name."; return 1; }
     local domhome="${mw}/user_projects/domains/${dom}"
     [ "$DRY" = "on" ] || [ -d "$domhome" ] || { warn "app domain not found: ${domhome} — create it first ('c')."; return 1; }
+    local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$domhome")"
     # Boot start is nmConnect/nmStart, so the domain must be enrolled in NM. Warn
     # (don't fail) if it isn't yet — 'c' or a first 's' enrolls it persistently.
     local nmfile="${mw}/user_projects/domains/${NM_DOMAIN}/nodemanager/nodemanager.domains"
     if [ "$DRY" != "on" ] && { [ ! -f "$nmfile" ] || ! grep -q "^${dom}=" "$nmfile" 2>/dev/null; }; then
         warn "'${dom}' isn't enrolled in ${NM_DOMAIN} yet — run 'c' (or 's') once so boot start works."
     fi
-    # The boot service runs the same scripts blade.sh uses; make sure both exist.
-    [ -f "${SCRIPT_DIR}/misc/start-admin-nm.sh" ] || { warn "missing ${SCRIPT_DIR}/misc/start-admin-nm.sh."; return 1; }
-    [ -f "${SCRIPT_DIR}/misc/stop-admin-os.sh" ]  || { warn "missing ${SCRIPT_DIR}/misc/stop-admin-os.sh.";  return 1; }
-    chmod +x "${SCRIPT_DIR}/misc/start-admin-nm.sh" "${SCRIPT_DIR}/misc/stop-admin-os.sh" 2>/dev/null || true
+    # The boot service runs the same scripts blade.sh uses, but from inside the
+    # domain so the unit doesn't depend on this checkout still being here.
+    stage_boot_scripts "$domhome" || return 1
     local pw="${BLADE_WLS_PASSWORD:-}"
     [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
     local envfile="${domhome}/.blade-nm.env"
     write_nm_envfile "$envfile" "$user" "$pw" || true
     local text
-    text="$(render_admin_nm_unit "$dom" "$domhome" "${SCRIPT_DIR}/misc" "$user" "$grp" "$envfile")"
-    install_systemd_unit weblogic.service "$text"
+    text="$(render_admin_nm_unit "$dom" "$domhome" "${domhome}/${BOOT_SCRIPT_SUBDIR}" "$user" "$grp" "$envfile")"
+    install_systemd_unit weblogic.service "$text" || return 1
+
+    # machine0 runs the AdminServer AND the first engine, so that engine needs its
+    # own unit: weblogic.service starts only the AdminServer, and the engine units
+    # live on the engine hosts. Without this it is the one server that stays down
+    # after a reboot.
+    local sname="${prefix:-engine}${SRV_START_INDEX:-0}"
+    write_boot_properties "$domhome" "$sname" "${ADMIN_USER:-weblogic}" "$pw" || true
+    local stext
+    stext="$(render_admin_nm_unit "$dom" "$domhome" "${domhome}/${BOOT_SCRIPT_SUBDIR}" \
+        "$user" "$grp" "$envfile" "$sname" "${ADMINURL:-t3://${H_ADDR[0]}:7001}")"
+    install_systemd_unit "weblogic-${sname}.service" "$stext"
+}
+
+# ----------------------------------------------------------------------------
+# Deploy the hosted WebLogic Remote Console (RUN: o).
+#
+# WLS 14.1.2 dropped the built-in /console, so without this there is no browser
+# admin UI at all. Oracle ships the deployer with the product; this just drives
+# it. Idempotent — checks config.xml for the app before doing anything.
+# ----------------------------------------------------------------------------
+do_console() {
+    local mw="$MWHOME" dom="$DOMAIN"
+    local addr="${H_ADDR[0]:-localhost}"
+    local admin_port; admin_port="$(printf '%s' "${ADMINURL:-}" | sed -E 's#.*:([0-9]+).*#\1#')"
+    admin_port="${admin_port:-7001}"
+    local deployer="${mw}/wlserver/server/bin/remote_console_deployment.py"
+    local wlst="${mw}/oracle_common/common/bin/wlst.sh"
+    local adminurl="t3://${addr}:${admin_port}"
+    local config="${mw}/user_projects/domains/${dom}/config/config.xml"
+
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] ${wlst} remote_console_deployment.py ${adminurl} ${ADMIN_USER} <pw-on-stdin> -> deploys /rconsole${C_RESET}"
+        return 0
+    fi
+    if grep -q 'weblogic-remote-console-app' "$config" 2>/dev/null; then
+        ok "Hosted Remote Console already deployed — http://${addr}:${admin_port}/rconsole"
+        return 0
+    fi
+    [ -f "$deployer" ] || { warn "Remote Console deployer not found: ${deployer} — needs OCCAS/WLS 14.1.2+."; return 1; }
+    [ -x "$wlst" ]     || { warn "wlst.sh not found/executable: ${wlst}"; return 1; }
+    local pw; pw="$(get_admin_pw)" || return 1
+    info "Deploying hosted Remote Console to ${adminurl} …"
+    # Password piped on stdin (the deployer reads it there) — never on argv/ps.
+    if printf '%s\n' "$pw" | "$wlst" "$deployer" "$adminurl" "${ADMIN_USER:-weblogic}"; then
+        ok "Hosted Remote Console deployed — http://${addr}:${admin_port}/rconsole  (Provider: 'This Server')"
+    else
+        warn "Remote Console deployment failed — see the WLST output above."; return 1
+    fi
+}
+
+# ----------------------------------------------------------------------------
+# Provision the engine hosts (RUN: E).
+#
+# Everything an engine needs sits at the SAME absolute paths as on the admin box,
+# so this is: rsync ORACLE_HOME (product + both domains) + the runtime JDK + the
+# env certs, install the boot services, start them. Unreachable hosts are skipped
+# with a warning and the run resumes on a re-run.
+#
+# Two things the old install-occas.sh version had to do are gone:
+#   * No per-host nodemanager.properties rewrite. NM binds 0.0.0.0 here
+#     (nm.bind.address), so the copied file is already right.
+#   * No separate enrollment step. NM lives in nmdomain, which the same rsync
+#     carries along with its nodemanager.domains file; identical paths on every
+#     host mean the enrollment arrives correct.
+#
+# And the servers are started THROUGH systemd rather than nohup, so provisioning
+# exercises the exact path a reboot will take. If this works, boot works.
+# ----------------------------------------------------------------------------
+# Provision ONE host: everything an engine needs, at the same absolute paths.
+#
+# Split out of the fleet loop so "Add a machine" and "re-provision everything"
+# share one implementation. idx is the index into the H_* arrays; the server it
+# runs is <prefix><idx>, which is why machine0 runs engine0.
+#
+# Skips the multi-GB rsync when OCCAS is already present -- a VM cloned from
+# machine0 only needs registering, not re-shipping.
+provision_one_host() {
+    local idx="$1"
+
+    local mw="$MWHOME" dom="$DOMAIN" nmdom="$NM_DOMAIN"
+    local sshu="${SSH_USER:-oracle}"
+    local nhosts="${#H_NAME[@]}"
+    [ -n "$mw" ] && [ -n "$dom" ] || { warn "profile incomplete (oracle.home / domain.name)."; return 1; }
+    if [ "$nhosts" -le 1 ]; then
+        ok "No engine hosts in this profile — nothing to provision."
+        return 0
+    fi
+
+    local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"
+    cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
+    local domhome="${mw}/user_projects/domains/${dom}"
+    local nmhome="${mw}/user_projects/domains/${nmdom}"
+    local jdk="${JAVA_HOME_VAL:-}"
+    local adminurl="${ADMINURL:-t3://${H_ADDR[0]}:7001}"
+    local pw; pw="${BLADE_WLS_PASSWORD:-}"
+    [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
+    local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$mw")"
+
+    # Stage the boot helpers into the domain BEFORE the rsync, so each engine
+    # receives them as part of the domain copy rather than needing a repo clone.
+    stage_boot_scripts "$domhome" || return 1
+    local eng name addr
+    [ "${H_ROLE[$idx]}" = "engine" ] || return 0
+    name="${H_NAME[$idx]}"; addr="${H_ADDR[$idx]}"
+    eng="${prefix:-engine}${idx}"
+    local tgt="${sshu}@${addr}"
+    rule
+    info "${name} (${addr}) → server ${eng}"
+
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] ssh ${tgt} true${C_RESET}"
+        log "${C_DIM}  [dry-run] sudo install -d $(dirname "$mw") $(dirname "$cdir")${jdk:+ $(dirname "$jdk")}${C_RESET}"
+        log "${C_DIM}  [dry-run] rsync -a ${mw}/ ${tgt}:${mw}/   (first run moves several GB)${C_RESET}"
+        [ -n "$jdk" ] && log "${C_DIM}  [dry-run] rsync -a ${jdk} ${tgt}:$(dirname "$jdk")/${C_RESET}"
+        log "${C_DIM}  [dry-run] rsync -a ${cdir}/ ${tgt}:${cdir}/${C_RESET}"
+        log "${C_DIM}  [dry-run] write ${domhome}/servers/${eng}/security/boot.properties${C_RESET}"
+        install_systemd_unit_remote "$tgt" nodemanager.service \
+            "$(render_systemd_unit "WebLogic Node Manager (BLADE ${nmdom})" \
+                "$nmhome" "${nmhome}/bin/startNodeManager.sh" "${nmhome}/bin/stopNodeManager.sh" \
+                "$user" "$grp" "")"
+        write_nm_envfile_remote "$tgt" "${domhome}/.blade-nm.env" "$user" "$pw"
+        install_systemd_unit_remote "$tgt" weblogic-engine.service \
+            "$(render_admin_nm_unit "$dom" "$domhome" "${domhome}/${BOOT_SCRIPT_SUBDIR}" "$user" "$grp" \
+                "${domhome}/.blade-nm.env" "$eng" "$adminurl")"
+        log "${C_DIM}  [dry-run] systemctl start nodemanager.service weblogic-engine.service${C_RESET}"
+        continue
+    fi
+
+    # --- reachability -----------------------------------------------------
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=8 "$tgt" true 2>/dev/null; then
+        warn "${name}: no key-based ssh to ${tgt} — skipped. (ssh-copy-id ${tgt}, then re-run 'E')"
+        return 1
+    fi
+    if ! ssh -o BatchMode=yes "$tgt" "sudo -n true" 2>/dev/null; then
+        warn "${name}: no passwordless sudo for ${sshu} — needed for dirs, firewall and the boot services. Skipped."
+        return 1
+    fi
+
+    # The units name User=/Group= from the ADMIN box's owner, so BOTH have to
+    # exist here. A missing group is not a warning you get to ignore: systemd
+    # refuses the unit with 216/GROUP ("Failed to determine group
+    # credentials"), which says nothing about which group or which host.
+    # Create it with the SAME gid so the two boxes agree.
+    if ! ssh -o BatchMode=yes "$tgt" "id '${user}' >/dev/null 2>&1"; then
+        warn "${name}: user '${user}' does not exist there — the boot services would fail. Run 'u' on that host first. Skipped."
+        return 1
+    fi
+    local ggid; ggid="$(getent group "$grp" 2>/dev/null | cut -d: -f3)"
+    if ! ssh -o BatchMode=yes "$tgt" "getent group '${grp}' >/dev/null 2>&1"; then
+        info "  group '${grp}' missing there — creating it${ggid:+ (gid ${ggid})}"
+        if ! ssh -o BatchMode=yes "$tgt" "sudo groupadd ${ggid:+-g ${ggid}} '${grp}' && sudo usermod -aG '${grp}' '${user}'"; then
+            warn "${name}: could not create group '${grp}' — the boot services would fail with 216/GROUP. Skipped."
+            return 1
+        fi
+    fi
+
+    # --- landing zone -----------------------------------------------------
+    if ! ssh -o BatchMode=yes "$tgt" \
+         "sudo install -d -o '${sshu}' '$(dirname "$mw")' '$(dirname "$cdir")'${jdk:+ '$(dirname "$jdk")'}" 2>/dev/null; then
+        warn "${name}: could not create target dirs — skipped."
+        return 1
+    fi
+    do_open_firewall_remote "$tgt" || warn "${name}: firewall opening failed — cluster ports may be blocked."
+
+    # --- copy -------------------------------------------------------------
+    info "  rsync OCCAS home + domains (first run moves several GB) …"
+    if ! rsync -a \
+          --exclude 'user_projects/domains/*/servers/*/logs/' \
+          --exclude 'user_projects/domains/*/servers/*/tmp/' \
+          --exclude 'user_projects/domains/*/servers/*/cache/' \
+          --exclude 'user_projects/domains/*/nodemanager/*.log*' \
+          --exclude 'user_projects/domains/*/nodemanager/*.pid' \
+          "${mw}/" "${tgt}:${mw}/"; then
+        warn "${name}: rsync of ${mw} failed — skipped."; return 1
+    fi
+    if [ -n "$jdk" ] && ! rsync -a "$jdk" "${tgt}:$(dirname "$jdk")/"; then
+        warn "${name}: rsync of ${jdk} failed — skipped."; return 1
+    fi
+    if [ -d "$cdir" ] && ! rsync -a "${cdir}/" "${tgt}:${cdir}/"; then
+        warn "${name}: rsync of ${cdir} failed — skipped."; return 1
+    fi
+    ssh -o BatchMode=yes "$tgt" \
+        "chmod -R g-w,o-rwx '${domhome}'; f='${domhome}/config/nodemanager/nm_password.properties'; [ -f \"\$f\" ] && chmod 600 \"\$f\"; true" \
+        || warn "${name}: domain permission hardening failed (non-fatal)."
+
+    # --- boot identity ----------------------------------------------------
+    # A prod-mode managed server with no boot.properties prompts for the boot
+    # username/password on a stdin Node Manager has redirected, and dies with
+    # BEA-090782. Piped over ssh stdin so it never reaches a command line.
+    # Same BEA-090782 trap as the AdminServer; written before the rsync would
+    # be lost, so it goes over ssh stdin here (never a command line).
+    if ! printf 'username=%s\npassword=%s\n' "${ADMIN_USER:-weblogic}" "$pw" \
+         | ssh -o BatchMode=yes "$tgt" \
+               "d='${domhome}/servers/${eng}/security'; mkdir -p \"\$d\" && umask 177 && cat > \"\$d/boot.properties\""; then
+        warn "${name}: could not write ${eng} boot.properties — skipped."
+        return 1
+    fi
+
+    # --- boot services ----------------------------------------------------
+    install_systemd_unit_remote "$tgt" nodemanager.service \
+        "$(render_systemd_unit "WebLogic Node Manager (BLADE ${nmdom})" \
+            "$nmhome" "${nmhome}/bin/startNodeManager.sh" "${nmhome}/bin/stopNodeManager.sh" \
+            "$user" "$grp" "")" \
+        || { warn "${name}: nodemanager.service not installed."; return 1; }
+    write_nm_envfile_remote "$tgt" "${domhome}/.blade-nm.env" "$user" "$pw" || true
+    install_systemd_unit_remote "$tgt" weblogic-engine.service \
+        "$(render_admin_nm_unit "$dom" "$domhome" "${domhome}/${BOOT_SCRIPT_SUBDIR}" "$user" "$grp" \
+            "${domhome}/.blade-nm.env" "$eng" "$adminurl")" \
+        || { warn "${name}: weblogic-engine.service not installed."; return 1; }
+
+    # --- start, through systemd (the same path a reboot takes) ------------
+    info "  starting nodemanager.service …"
+    if ! ssh -o BatchMode=yes "$tgt" "sudo systemctl restart nodemanager.service"; then
+        warn "${name}: nodemanager.service failed to start — 'journalctl -u nodemanager' on that host."
+        return 1
+    fi
+    info "  starting ${eng} (weblogic-engine.service) …"
+    if ! ssh -o BatchMode=yes "$tgt" "sudo systemctl restart weblogic-engine.service"; then
+        warn "${name}: ${eng} did not start — 'journalctl -u weblogic-engine' on that host."
+        return 1
+    fi
+    ok "${name}: provisioned, boot services enabled, ${eng} started."
+    return 0
+}
+
+# Add a machine (dashboard: addm).
+#
+# The domain grows ONLINE: create the Machine, append it to the match expression,
+# raise the server count, and the template stamps a new engine with the same
+# certificate, the same SIP channels and the same ports as every other one. No
+# domain rebuild, no downtime -- which is only possible because nothing is a
+# static server any more (a static server with SIP channels needs offline WLST).
+do_add_machine() {
+    [ -n "$DOMAIN" ] && [ "${#H_NAME[@]}" -ge 1 ] || { warn "profile incomplete."; return 1; }
+    local n="${#H_NAME[@]}"                  # next index == next server number
+    local dn="machine${n}" name addr pub fqdn
+    log ""; log "${C_BOLD}Add machine${n}${C_RESET} — will run ${prefix:-engine}${n}"
+    ask name "  machine name"                                        "$dn"
+    ask addr "  reachable address (IP/host the AdminServer dials)"   ""
+    [ -n "$addr" ] || { warn "an address is required."; return 1; }
+    ask pub  "  public IP (cert SAN; Enter to skip)"                 ""
+    ask fqdn "  fully-qualified DNS name (SAN; Enter to skip)"       ""
+
+    local i
+    for i in "${!H_NAME[@]}"; do
+        [ "${H_NAME[$i]}" = "$name" ] && { warn "'${name}' is already in this profile."; return 1; }
+    done
+
+    # Extend the in-memory view first so provision_one_host can use it.
+    H_NAME+=("$name"); H_ADDR+=("$addr"); H_PORT+=("$NM_PORT"); H_TYPE+=("$NM_TYPE")
+    H_PUB+=("$pub");   H_FQDN+=("$fqdn");  H_ROLE+=("engine")
+    DCOUNT="${#H_NAME[@]}"
+    local newmatch="" h
+    for h in "${H_NAME[@]}"; do newmatch="${newmatch:+${newmatch},}${h}"; done
+    match="$newmatch"
+
+    # 1. the host itself
+    stage_boot_scripts "${MWHOME}/user_projects/domains/${DOMAIN}" || return 1
+    if ! provision_one_host "$n"; then
+        warn "provisioning ${name} failed — profile not changed."
+        unset 'H_NAME[-1]' 'H_ADDR[-1]' 'H_PORT[-1]' 'H_TYPE[-1]' 'H_PUB[-1]' 'H_FQDN[-1]' 'H_ROLE[-1]'
+        return 1
+    fi
+
+    # 2. the domain
+    if ! cluster_resize "$name" "$addr" "$newmatch" "$DCOUNT"; then
+        warn "${name} is provisioned but the domain was not updated — re-run to retry."
+        return 1
+    fi
+
+    # 3. the profile, only once both halves worked
+    save_profile
+    ok "machine${n} added — ${prefix:-engine}${n} on ${name} (${addr})."
+    return 0
+}
+
+# Remove the LAST machine (dashboard: remm).
+#
+# Only the highest-numbered one. Server index N lands on the Nth machine in the
+# match expression, so removing from the middle would silently re-home every
+# engine after it onto a different box.
+do_remove_machine() {
+    local n=$(( ${#H_NAME[@]} - 1 ))
+    [ "$n" -ge 1 ] || { warn "nothing to remove — ${H_NAME[0]:-this host} is the install itself."; return 1; }
+    local name="${H_NAME[$n]}" addr="${H_ADDR[$n]}" eng="${prefix:-engine}${n}"
+    local domhome="${MWHOME}/user_projects/domains/${DOMAIN}"
+
+    yesno "Remove ${name} (${addr}) and its server ${eng}? Stops it, deletes its domain copy and boot services." "N" || return 1
+
+    # Domain first: stop targeting the machine before tearing the host down.
+    local newmatch="" i
+    for i in $(seq 0 $((n - 1))); do newmatch="${newmatch:+${newmatch},}${H_NAME[$i]}"; done
+    cluster_resize "" "" "$newmatch" "$n" || warn "domain not updated — continuing with host teardown."
+
+    # Host: reuse the guarded teardown, which stops running servers first.
+    local keep_name=("${H_NAME[@]}") keep_addr=("${H_ADDR[@]}") keep_role=("${H_ROLE[@]}")
+    H_NAME=("$name"); H_ADDR=("$addr"); H_ROLE=("engine")
+    remove_engine_systemd_units "$domhome" "${MWHOME}/user_projects/domains/${NM_DOMAIN}"
+    H_NAME=("${keep_name[@]}"); H_ADDR=("${keep_addr[@]}"); H_ROLE=("${keep_role[@]}")
+
+    unset 'H_NAME[-1]' 'H_ADDR[-1]' 'H_PORT[-1]' 'H_TYPE[-1]' 'H_PUB[-1]' 'H_FQDN[-1]' 'H_ROLE[-1]'
+    DCOUNT="${#H_NAME[@]}"; match="$newmatch"
+    save_profile
+    ok "${name} removed — cluster is now ${DCOUNT} engine(s)."
+    return 0
+}
+
+# Online WLST: create/drop a Machine and resize the dynamic cluster.
+# Empty machine name = resize only (used by remove).
+cluster_resize() {
+    local mname="$1" maddr="$2" newmatch="$3" count="$4"
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] online WLST: ${mname:+create Machine ${mname} (${maddr}); }match=${newmatch}; count=${count}${C_RESET}"
+        return 0
+    fi
+    local pw; pw="$(get_admin_pw)" || return 1
+    local work; work="$(mktemp -d /tmp/blade-resize.XXXXXX)"
+    cat > "${work}/resize.py" <<PYEOF
+# -*- coding: utf-8 -*-
+connect('${ADMIN_USER:-weblogic}', '${pw}', '${ADMINURL:-t3://${H_ADDR[0]}:7001}')
+edit(); startEdit()
+mname = '${mname}'
+if mname:
+    try:
+        cd('/')
+        cmo.createUnixMachine(mname)
+    except:
+        pass
+    cd('/Machines/' + mname + '/NodeManager/' + mname)
+    cmo.setListenAddress('${maddr}')
+    cmo.setListenPort(int('${NM_PORT:-5556}'))
+    cmo.setNMType('${NM_TYPE:-ssl}')
+cd('/Clusters/BEA_ENGINE_TIER_CLUST')
+ds = cmo.getDynamicServers()
+ds.setMachineNameMatchExpression('${newmatch}')
+ds.setMaximumDynamicServerCount(int('${count}'))
+save(); activate(block='true')
+print('CLUSTER_RESIZED match=${newmatch} count=${count}')
+PYEOF
+    chmod 600 "${work}/resize.py"
+    local rc=0
+    "${MWHOME}/oracle_common/common/bin/wlst.sh" "${work}/resize.py" 2>&1 \
+        | grep -E "CLUSTER_RESIZED|Error|error|Exception" | head -5 || rc=$?
+    rm -rf "$work"
+    return 0
+}
+
+# Re-provision every engine host (dashboard: E). Repair after a rebuild.
+do_provision_engines() {
+    local nhosts="${#H_NAME[@]}" idx failed="" neng=0
+    for idx in "${!H_NAME[@]}"; do [ "${H_ROLE[$idx]}" = "engine" ] && neng=$((neng + 1)); done
+    if [ "$neng" -eq 0 ]; then
+        ok "No other machines yet — this install is complete on ${H_NAME[0]:-this host} alone."
+        log "  ${C_DIM}Add capacity with the 'Add a machine' row.${C_RESET}"
+        return 0
+    fi
+    stage_boot_scripts "${MWHOME}/user_projects/domains/${DOMAIN}" || return 1
+    info "Re-provision ${neng} engine host(s) as ${SSH_USER:-oracle}"
+    for idx in $(seq 1 $((nhosts - 1))); do
+        [ "${H_ROLE[$idx]}" = "engine" ] || continue
+        provision_one_host "$idx" || failed="${failed} ${H_NAME[$idx]}"
+    done
+    rule
+    if [ -n "$failed" ]; then
+        warn "Hosts with issues:${failed} — fix and re-run (it resumes)."
+        return 1
+    fi
+    [ "$DRY" = "on" ] || ok "All engine hosts provisioned and started."
+    return 0
+}
+
+# The remote half of do_open_firewall. Same ports, same idempotence; no-ops when
+# the far host has no firewalld.
+do_open_firewall_remote() {
+    local tgt="$1"
+    local nmport="${NM_PORT:-5556}" sslport="${SSL_PORT:-7002}"
+    local sipport="${SIP_PORT:-5061}"
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] ${tgt}: firewall-cmd --add-port ${nmport},${sslport},${sipport}${C_RESET}"
+        return 0
+    fi
+    ssh -o BatchMode=yes "$tgt" "
+        command -v firewall-cmd >/dev/null 2>&1 || exit 0
+        sudo firewall-cmd --state >/dev/null 2>&1 || exit 0
+        for p in ${nmport}/tcp ${sslport}/tcp ${sipport}/tcp ${sipport}/udp; do
+            sudo firewall-cmd --permanent --add-port=\$p >/dev/null 2>&1 || true
+        done
+        sudo firewall-cmd --reload >/dev/null 2>&1 || true
+    " 2>/dev/null
 }
 
 # ----------------------------------------------------------------------------
@@ -1514,32 +2252,48 @@ download_jdk() {
 # ----------------------------------------------------------------------------
 do_makeuser() {
     local user="${INSTALL_USER:-oracle}" grp="${INV_GRP:-oinstall}"
-    info "Install user/group: ${user}:${grp}"
+    local uid="${INSTALL_UID:-}" gid="${INSTALL_GID:-}"
+    # install.uid/gid pin the NUMERIC ids so every host in the cluster agrees --
+    # rsync -a carries numbers, not names (see phase_occas). Blank = OS picks.
+    local gflag="" uflag=""
+    [ -n "$gid" ] && gflag="-g ${gid}"
+    [ -n "$uid" ] && uflag="-u ${uid}"
+    info "Install user/group: ${user}${uid:+(${uid})}:${grp}${gid:+(${gid})}"
     [ "$(uname -s)" = "Linux" ] || { warn "user/group creation is Linux-only (host prep)."; return 0; }
     local SUDO=""; [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && SUDO="sudo"
 
     if [ "$DRY" = "on" ]; then
         getent group "$grp" >/dev/null 2>&1 \
             && log "${C_DIM}  [dry-run] group ${grp} already exists${C_RESET}" \
-            || log "${C_DIM}  [dry-run] ${SUDO:+sudo }groupadd ${grp}${C_RESET}"
+            || log "${C_DIM}  [dry-run] ${SUDO:+sudo }groupadd ${gflag} ${grp}${C_RESET}"
         id "$user" >/dev/null 2>&1 \
             && log "${C_DIM}  [dry-run] user ${user} already exists${C_RESET}" \
-            || log "${C_DIM}  [dry-run] ${SUDO:+sudo }useradd -g ${grp} -m ${user}${C_RESET}"
+            || log "${C_DIM}  [dry-run] ${SUDO:+sudo }useradd ${uflag} -g ${grp} -m ${user}${C_RESET}"
         return 0
     fi
 
     # group
-    if getent group "$grp" >/dev/null 2>&1; then ok "group '${grp}' already exists."
-    elif $SUDO groupadd "$grp"; then ok "created group '${grp}'."
+    if getent group "$grp" >/dev/null 2>&1; then
+        ok "group '${grp}' already exists."
+        # A pre-existing group with a DIFFERENT gid than the one pinned is exactly
+        # the mismatch install.gid exists to prevent — say so rather than let the
+        # engine rsync bake it in.
+        local havegid; havegid="$(getent group "$grp" | cut -d: -f3)"
+        [ -n "$gid" ] && [ "$havegid" != "$gid" ] \
+            && warn "group '${grp}' is gid ${havegid} here, but install.gid=${gid}. Fix one or the other before provisioning engines."
+    elif $SUDO groupadd $gflag "$grp"; then ok "created group '${grp}'${gid:+ (gid ${gid})}."
     else warn "could not create group '${grp}' (need root?)."; return 1; fi
 
     # user (+ ensure membership in the group)
     if id "$user" >/dev/null 2>&1; then
         ok "user '${user}' already exists."
+        local haveuid; haveuid="$(id -u "$user")"
+        [ -n "$uid" ] && [ "$haveuid" != "$uid" ] \
+            && warn "user '${user}' is uid ${haveuid} here, but install.uid=${uid}. Fix one or the other before provisioning engines."
         if id -nG "$user" 2>/dev/null | tr ' ' '\n' | grep -qx "$grp"; then ok "user '${user}' is in '${grp}'."
         elif $SUDO usermod -aG "$grp" "$user"; then ok "added '${user}' to '${grp}'."
         else warn "could not add '${user}' to '${grp}'."; fi
-    elif $SUDO useradd -g "$grp" -m "$user"; then ok "created user '${user}' (primary group ${grp})."
+    elif $SUDO useradd $uflag -g "$grp" -m "$user"; then ok "created user '${user}'${uid:+ (uid ${uid})} (primary group ${grp})."
     else warn "could not create user '${user}' (need root?)."; return 1; fi
     return 0
 }
@@ -1577,6 +2331,159 @@ do_makedirs() {
         warn "could not set up ${inv} (need root?)."; return 1
     fi
     return 0
+}
+
+# ----------------------------------------------------------------------------
+# Fetch the OCCAS media from Oracle eDelivery (RUN: d).
+#
+# Headless, mirroring what Oracle's own generated wget.sh does. Two separate
+# short-lived credentials are involved and NEITHER can be minted from a CLI:
+#   * the per-file URLs carry a license-acceptance token, good ~8 hours
+#   * each request needs the dialog's access token as a Bearer header, ~1 hour
+# So there is a one-time browser step; after that this resumes and re-runs
+# cheaply. No-op once the installer jar exists.
+# ----------------------------------------------------------------------------
+
+# Find a downloaded occas_generic.jar and point INSTALLER_JAR at it. Oracle nests
+# the media, so search a few levels down rather than assuming a layout.
+adopt_installer() {
+    local found
+    found="$(find "$DL_DIR" -maxdepth 4 -name occas_generic.jar 2>/dev/null | head -1)"
+    [ -n "$found" ] || return 1
+    INSTALLER_JAR="$found"
+    return 0
+}
+
+do_download() {
+    [ -n "$PROFILE_DIR" ] || { warn "no profile loaded."; return 1; }
+    # Where the media lands: explicit conf, else next to the configured jar,
+    # else a per-user default that is always writable.
+    DL_DIR="$(read_prop "$OCCAS_CONF" download.dir)"; DL_DIR="${DL_DIR/#\~/$HOME}"
+    if [ -z "$DL_DIR" ]; then
+        [ -n "$INSTALLER_JAR" ] && DL_DIR="$(dirname "$INSTALLER_JAR")" || DL_DIR="${HOME}/occas-media"
+    fi
+    URLS_FILE="${PROFILE_DIR}/occas.urls"
+
+    # Already installed beats already downloaded. Rebuilding a domain on a box
+    # that has the product is the common case, and there is no reason to send
+    # someone back to eDelivery for media they will never open.
+    if [ -d "${MWHOME}/wlserver" ]; then
+        ok "OCCAS is already installed at ${MWHOME} — no media needed."
+        return 0
+    fi
+    if [ -n "$INSTALLER_JAR" ] && [ -f "$INSTALLER_JAR" ]; then
+        ok "Installer already present: ${INSTALLER_JAR} — nothing to download."
+        return 0
+    fi
+    if adopt_installer; then
+        ok "Installer already downloaded: ${INSTALLER_JAR}"
+        set_conf_prop "$OCCAS_CONF" installer.jar "$INSTALLER_JAR"
+        return 0
+    fi
+
+    if [ ! -f "$URLS_FILE" ]; then
+        if [ "$DRY" = "on" ]; then
+            log "${C_DIM}  [dry-run] no ${URLS_FILE} — would ask for Oracle's wget.sh${C_RESET}"
+            return 0
+        fi
+        log ""
+        log "Getting the OCCAS media takes a ONE-TIME browser step (Oracle's license click):"
+        log "  1. sign in at https://edelivery.oracle.com and cart the OCCAS release"
+        log "     (search 'Oracle Communications Converged Application Server'),"
+        log "     pick the platform, accept the license"
+        log "  2. click 'WGET Options' -> 'Download wget.sh'"
+        log "     (browsing on another machine is fine — scp it to this box)"
+        log "  3. in the same dialog, click 'Generate Token' -> Copy — you'll paste it here"
+        local wsh=""
+        [ -t 0 ] && ask wsh "Path to that wget.sh (Enter to stop)" ""
+        [ -n "$wsh" ] || { warn "No wget.sh yet — do the browser step above, then re-run 'd'; it resumes."; return 1; }
+        wsh="${wsh/#\~/$HOME}"
+        [ -f "$wsh" ] || { warn "Not found: ${wsh}"; return 1; }
+        cp "$wsh" "$URLS_FILE" || { warn "could not save ${URLS_FILE}."; return 1; }
+        ok "Saved as ${URLS_FILE} (inside the gitignored profile) — URLs are good for ~8 hours."
+    fi
+
+    # Accept Oracle's whole wget.sh or a bare list of URLs.
+    local urls=() u f
+    while IFS= read -r u; do urls+=("$u"); done \
+        < <(grep -oE 'https://edelivery\.oracle\.com/osdc/softwareDownload\?[^"'"'"'[:space:]]+' "$URLS_FILE" | sort -u)
+    [ "${#urls[@]}" -ge 1 ] || { warn "No eDelivery softwareDownload URLs found in ${URLS_FILE}."; return 1; }
+
+    info "Download ${#urls[@]} file(s) from eDelivery -> ${DL_DIR}"
+    if [ "$DRY" = "on" ]; then
+        for u in "${urls[@]}"; do f="${u##*fileName=}"; f="${f%%&*}"; log "${C_DIM}  [dry-run] ${f}${C_RESET}"; done
+        log "${C_DIM}  [dry-run] curl each URL with the Bearer access token, unzip into ${DL_DIR}${C_RESET}"
+        return 0
+    fi
+    command -v curl  >/dev/null || { warn "curl not found."; return 1; }
+    command -v unzip >/dev/null || { warn "unzip not found."; return 1; }
+    if ! mkdir -p "$DL_DIR" 2>/dev/null || [ ! -w "$DL_DIR" ]; then
+        warn "Can't write to ${DL_DIR} — downloading to ${HOME}/occas-media instead."
+        DL_DIR="${HOME}/occas-media"; mkdir -p "$DL_DIR" || { warn "Can't create ${DL_DIR}."; return 1; }
+    fi
+
+    local token="${BLADE_EDELIVERY_TOKEN:-}" dest zips=()
+    for u in "${urls[@]}"; do
+        f="${u##*fileName=}"; f="${f%%&*}"
+        { [ -n "$f" ] && [ "$f" != "$u" ]; } || { warn "Could not parse fileName= from: ${u}"; return 1; }
+        dest="${DL_DIR}/${f}"
+        if [ -f "$dest" ] && unzip -tqq "$dest" >/dev/null 2>&1; then
+            ok "${f} — already downloaded and intact."
+        else
+            if [ -z "$token" ]; then
+                [ -t 0 ] || { warn "No access token — set \$BLADE_EDELIVERY_TOKEN (browser: WGET Options -> 'Generate Token')."; return 1; }
+                ask token "Access token ('Generate Token' in the WGET Options dialog, valid ~1 h)" ""
+                [ -n "$token" ] || { warn "No access token given."; return 1; }
+            fi
+            info "Fetching ${f} …"
+            # Token goes in via --config on stdin so it stays out of 'ps'.
+            # -A: Akamai in front of eDelivery sniffs the User-Agent — curl's
+            # default and even custom Mozilla strings get 403; a wget UA (what
+            # Oracle's own script sends) passes. Verified 2026-07-15.
+            if ! curl -f -L --progress-bar -A "Wget/1.21" -C - -o "$dest" --config - "$u" <<EOF
+header = "Authorization: Bearer ${token}"
+EOF
+            then
+                warn "Download failed: ${f} — 401/403 means the access token (~1 h) or the URLs (~8 h) expired."
+                warn "Re-run 'd' with a fresh token; if it still fails, delete ${URLS_FILE} for a fresh wget.sh."
+                return 1
+            fi
+            if ! unzip -tqq "$dest" >/dev/null 2>&1; then
+                if head -c 1024 "$dest" | grep -qi "<html"; then
+                    rm -f "$dest"
+                    warn "eDelivery sent an HTML page instead of ${f} — token or URLs expired."; return 1
+                fi
+                warn "${dest} is not a valid zip (truncated?) — delete it and re-run."; return 1
+            fi
+        fi
+        zips+=("$dest")
+    done
+
+    info "Unpacking into ${DL_DIR} …"
+    local z unpacked=" "
+    for z in "${zips[@]}"; do unzip -oq "$z" -d "$DL_DIR"; unpacked="${unpacked}${z} "; done
+    # Oracle nests the media (V*.zip -> OCCAS<ver>GA.zip -> occas_generic.jar):
+    # keep unpacking whatever zips fall out until the installer shows up.
+    local inner found_new
+    while ! find "$DL_DIR" -maxdepth 4 -name occas_generic.jar 2>/dev/null | grep -q .; do
+        found_new=false
+        while IFS= read -r inner; do
+            case "$unpacked" in *" ${inner} "*) continue ;; esac
+            info "Unpacking nested $(basename "$inner") …"
+            unzip -oq "$inner" -d "$DL_DIR"; unpacked="${unpacked}${inner} "; found_new=true
+        done < <(find "$DL_DIR" -maxdepth 4 -name '*.zip' 2>/dev/null)
+        [ "$found_new" = true ] || break
+    done
+
+    if adopt_installer; then
+        ok "Installer ready: ${INSTALLER_JAR}"
+        set_conf_prop "$OCCAS_CONF" installer.jar "$INSTALLER_JAR"
+        local v; v="$(installer_version "$INSTALLER_JAR" 2>/dev/null)"
+        [ -n "$v" ] && { OCCAS_VERSION="$v"; set_conf_prop "$OCCAS_CONF" occas.version "$v"; ok "OCCAS version ${v}"; }
+    else
+        warn "No occas_generic.jar in the downloaded media — check what ${URLS_FILE} points at."
+        return 1
+    fi
 }
 
 # ----------------------------------------------------------------------------
@@ -1633,29 +2540,109 @@ EOF
 # Emit the WLST that adds the optional static test engine as a configured member
 # of BEA_ENGINE_TIER_CLUST (a configured server doesn't inherit the dynamic
 # template, so its sip/sips channels are added by hand). Arg: name:mach:listen:sip:sips
-emit_static_block() {
-    local sname smach sport ssip ssips
-    IFS=: read -r sname smach sport ssip ssips <<< "$1"
-    [ -n "$sname" ] && [ -n "$smach" ] && [ -n "$sport" ] && [ -n "$ssip" ] && [ -n "$ssips" ] \
-        || { warn "bad static.server '$1' (want name:machine:listen:sip:sips)"; return 1; }
-    cat <<PYBLOCK
-# --- BLADE: static test engine '${sname}' on machine '${smach}' ---
-cd('/')
-create('${sname}','Server')
-cd('/Servers/${sname}')
-set('Cluster','BEA_ENGINE_TIER_CLUST')
-set('Machine','${smach}')
-set('ListenPort',${sport})
-create('sip','NetworkAccessPoint')
-cd('/Servers/${sname}/NetworkAccessPoints/sip')
-set('Protocol','sip')
-set('ListenPort',${ssip})
-cd('/Servers/${sname}')
-create('sips','NetworkAccessPoint')
-cd('/Servers/${sname}/NetworkAccessPoints/sips')
-set('Protocol','sips')
-set('ListenPort',${ssips})
+# Emit the offline-WLST that puts the real certificate and the SIP channels onto
+# the domain at CREATE time.
+#
+# This is the whole reason the TLS retrofit was painful: engine1..N are DYNAMIC,
+# so there is no /Servers/<name> to configure after the fact -- their identity
+# and channels come from the cluster's ServerTemplate. Writing it here means
+# every engine, including ones added years later by raising the server count, is
+# stamped identically and nothing has to be reached into afterwards.
+#
+# WebLogic's demo certificate is never left in place on a SIPS port: it is
+# publicly known, so anyone can impersonate the server or decrypt a capture.
+#
+# NOTE the ...PassPhraseEncrypted attribute names: offline WLST rejects the plain
+# ...PassPhrase setters while a domain is being created. The Encrypted variants
+# accept plaintext and store it encrypted with the new domain's key.
+emit_tls_block() {
+    local tmpl="${1}-template" ksdir="${KEYSTORE_DIR:-/opt/oracle/occas/8.3/security}"
+    local kspw trpw
+    kspw="$(read_prop "$DEPLOY_SECRET" tls.keystore.passphrase)"
+    trpw="$(read_prop "$DEPLOY_SECRET" tls.trust.passphrase)"
+    local alias="${ID_ALIAS:-blade-identity}"
+    [ -n "$kspw" ] && [ -n "$trpw" ] || { warn "TLS passphrases missing from deploy.secret."; return 1; }
+
+    # Identity + trust, applied to the template AND to the real servers.
+    _emit_keystores() {
+        cat <<PYBLOCK
+cd('${1}')
+set('KeyStores','CustomIdentityAndCustomTrust')
+set('CustomIdentityKeyStoreFileName','${ksdir}/blade-identity.p12')
+set('CustomIdentityKeyStoreType','PKCS12')
+set('CustomIdentityKeyStorePassPhraseEncrypted','${kspw}')
+set('CustomTrustKeyStoreFileName','${ksdir}/blade-trust.p12')
+set('CustomTrustKeyStoreType','PKCS12')
+set('CustomTrustKeyStorePassPhraseEncrypted','${trpw}')
+# Offline, a Server has no SSL child until one is created (the ServerTemplate
+# ships with one). create() on an existing child errors, so guard both ways.
+try:
+    create('${2}','SSL')
+except:
+    pass
+cd('${1}/SSL/${2}')
+set('Enabled','true')
+set('ListenPort',${SSL_PORT:-7002})
+set('ServerPrivateKeyAlias','${alias}')
+set('ServerPrivateKeyPassPhraseEncrypted','${kspw}')
 PYBLOCK
+    }
+
+    echo "# --- BLADE: real certificate + SIP channels (no demo certs) ---"
+    _emit_keystores "/ServerTemplates/${tmpl}" "${tmpl}"
+    _emit_keystores "/Servers/AdminServer" "AdminServer"
+
+    # Dynamic-server shape, set at CREATE time so a rebuild keeps it.
+    #
+    # ServerNameStartingIndex=0 is what makes machine0 run engine0 -- the local
+    # engine is stamped from the same template as every other one, so there is no
+    # static server to special-case.
+    #
+    # CalculatedListenPorts=false gives every engine the template's ports
+    # verbatim (5060/5061/8001) instead of base+index. Incrementing only makes
+    # sense when several engines share a host -- a developer laptop, not a SIP
+    # tier. The trade is one engine per machine, which is exactly the shape
+    # "add a machine" produces.
+    #
+    # The DynamicServers child is named after the server prefix in the domain
+    # this template builds. Try the cluster name too rather than fail the whole
+    # domain build if a future template names it differently.
+    cat <<PYBLOCK
+for _dsn in ['${prefix:-engine}','${1}']:
+    try:
+        cd('/Clusters/${1}/DynamicServers/' + _dsn)
+        set('ServerNameStartingIndex',${SRV_START_INDEX:-0})
+        set('CalculatedListenPorts','$([ "${DYN_CALC_PORTS:-false}" = true ] && echo true || echo false)')
+        set('MachineNameMatchExpression','${match:-machine0}')
+        set('MaximumDynamicServerCount',${DCOUNT:-1})
+        break
+    except:
+        pass
+PYBLOCK
+
+    # Plain SIP: on by default, exactly as OCCAS builds a domain. Turning it off
+    # is the deliberate SIPS-only posture.
+    cat <<PYBLOCK
+cd('/ServerTemplates/${tmpl}/NetworkAccessPoints/sip')
+set('Enabled','$([ "$SIP_PLAIN" = false ] && echo false || echo true)')
+set('ListenPort',${SIP_PLAIN_PORT:-5060})
+PYBLOCK
+
+    if [ "$SIP_TLS" = "true" ]; then
+        cat <<PYBLOCK
+cd('/ServerTemplates/${tmpl}/NetworkAccessPoints/sips')
+set('Enabled','true')
+set('ListenPort',${SIP_PORT:-5061})
+set('TwoWaySSLEnabled','$([ "$SIP_TWOWAY" = true ] && echo true || echo false)')
+set('ClientCertificateEnforced','$([ "$SIP_TWOWAY" = true ] && echo true || echo false)')
+PYBLOCK
+    else
+        cat <<PYBLOCK
+cd('/ServerTemplates/${tmpl}/NetworkAccessPoints/sips')
+set('Enabled','false')
+PYBLOCK
+    fi
+    unset -f _emit_keystores
 }
 
 # Admin password: env > occas.secret > prompt (skipped under dry-run).
@@ -1684,7 +2671,6 @@ do_configure() {
     match="$(read_prop "$OCCAS_CONF" machine.match.expression)"
     dcount="$(read_prop "$OCCAS_CONF" dynamic.server.count)"
     dmax="$(read_prop "$OCCAS_CONF" max.dynamic.cluster.size)"
-    static="$(read_prop "$OCCAS_CONF" static.server)"
     for chk in mwhome domain prefix match dcount dmax; do
         [ -n "${!chk}" ] || { warn "occas.conf: missing $chk (required for configure)"; return 1; }
     done
@@ -1730,10 +2716,10 @@ Machine${idx}NodemanagerNMType=${type}"
         log "${C_DIM}  [dry-run] generated .properties (password redacted):${C_RESET}"
         printf '%s\n' "$props" | sed 's/^/    /'
         log "${C_DIM}  [dry-run] sed .py: domainName='${domain}', ServerStartMode='${mode}'${C_RESET}"
-        if [ -n "$static" ]; then
-            log "${C_DIM}  [dry-run] inject static-engine WLST before writeDomain:${C_RESET}"
-            emit_static_block "$static" | sed 's/^/    /'
-        fi
+        log "${C_DIM}  [dry-run] inject TLS/SIP WLST before writeDomain (passphrases redacted):${C_RESET}"
+        emit_tls_block "BEA_ENGINE_TIER_CLUST" 2>/dev/null \
+            | sed -E "s/(PassPhrase','')[^']*/\1<REDACTED>/" | sed 's/^/    /' \
+            || log "${C_DIM}    (TLS block unavailable — passphrases not generated yet)${C_RESET}"
         log "${C_DIM}  [dry-run] setWLSEnv + java weblogic.WLST occas-replicated-dynamiccluster.py${C_RESET}"
         return 0
     fi
@@ -1761,13 +2747,31 @@ Machine${idx}NodemanagerNMType=${type}"
         "${work}/occas-replicated-dynamiccluster.py" > "${work}/.py.tmp" \
         && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
 
-    if [ -n "$static" ]; then
-        if ! emit_static_block "$static" > "${work}/static.block"; then rm -rf "$work"; return 1; fi
-        awk 'NR==FNR { blk = blk $0 ORS; next }
-             /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
-             { print }' \
-            "${work}/static.block" "${work}/occas-replicated-dynamiccluster.py" \
-            > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
+    # The template is about to reference blade-identity.p12 / blade-trust.p12 by
+    # path, so they have to exist first. Placing them is install-ssl's
+    # 'keystores' tier; its ssl/sip tiers are NOT used any more -- that work now
+    # happens here, on the template, where dynamic servers can actually get it.
+    local ksdir="${KEYSTORE_DIR:-/opt/oracle/occas/8.3/security}"
+    if [ "$DRY" != "on" ] && [ ! -f "${ksdir}/blade-identity.p12" ]; then
+        info "Placing keystores in ${ksdir} …"
+        "${SCRIPT_DIR}/tls/install-ssl.sh" "$DEPLOY_CONF" keystores apply \
+            || warn "keystore placement failed — the domain will be built without TLS."
+    fi
+
+    # TLS goes in FIRST so the template already carries the real certificate
+    # before any server is written from it.
+    if [ "${SIP_TLS:-}" != "" ] || [ "${CERT_SOURCE:-}" != "" ]; then
+        if emit_tls_block "BEA_ENGINE_TIER_CLUST" > "${work}/tls.block" 2>/dev/null; then
+            chmod 600 "${work}/tls.block"
+            awk 'NR==FNR { blk = blk $0 ORS; next }
+                 /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
+                 { print }' \
+                "${work}/tls.block" "${work}/occas-replicated-dynamiccluster.py" \
+                > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
+            log "  TLS: real certificate on the server template; sip=$([ "$SIP_PLAIN" = false ] && echo off || echo on):${SIP_PLAIN_PORT:-5060} sips=$([ "$SIP_TLS" = true ] && echo on:${SIP_PORT:-5061} || echo off)"
+        else
+            warn "TLS block not generated — domain will be built without it."
+        fi
     fi
 
     local jh rc=0; jh="$(read_prop "$OCCAS_CONF" java.home)"
@@ -1925,10 +2929,166 @@ register_domain_with_nm() {
     fi
     set_conf_prop "$nmfile" "$domname" "$domhome"
     ok "enrolled ${domname} → ${domhome} in ${nmdom}'s nodemanager.domains"
+    # Registering the PATH is only half of enrollment; NM also has to accept our
+    # credentials for this domain. Skipped when the domain is running, since this
+    # is an offline edit and WebLogic would overwrite it on shutdown.
+    if ! pgrep -f "weblogic.Name=.*${domname}" >/dev/null 2>&1; then
+        local apw="${BLADE_WLS_PASSWORD:-}"
+        [ -z "$apw" ] && [ -f "$OCCAS_SECRET" ] && apw="$(read_prop "$OCCAS_SECRET" admin.password)"
+        set_domain_nm_credentials "$domhome" "$domname" "${ADMIN_USER:-weblogic}" "$apw" || true
+    fi
+    # Node Manager reads nodemanager.domains ONCE, at startup. A running NM has
+    # therefore not seen what we just wrote, and every later nmConnect for this
+    # domain fails with "no domain" — which is what an unattended install hits
+    # between 'c' and 's'. Telling the user to go restart it by hand leaves a
+    # half-done operation behind, so finish it here.
     if nm_listening "${NM_PORT:-$(read_prop "$OCCAS_CONF" nm.listen.port)}"; then
-        warn "Node Manager is running — run 'n' to restart it so it picks up this enrollment, then 's'."
+        info "Restarting Node Manager so it picks up the '${domname}' enrollment …"
+        restart_nm || { warn "could not restart Node Manager — run 'k' then 'n', or the AdminServer start will fail."; return 1; }
     fi
     return 0
+}
+
+# Write a server's boot identity.
+#
+# In PRODUCTION mode WebLogic asks for the boot username/password on stdin — and
+# Node Manager has redirected stdin, so the server dies immediately with
+# BEA-090782 ("the System Console to read the password securely was not found").
+# The fix is this file; WebLogic encrypts it in place on first boot.
+# 0600 via umask, and the password never reaches a command line.
+write_boot_properties() {
+    local domhome="$1" server="$2" auser="$3" pw="$4"
+    local dir="${domhome}/servers/${server}/security"
+    [ -n "$pw" ] || { warn "no admin password — cannot write boot.properties for ${server}."; return 1; }
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] write ${dir}/boot.properties (0600)${C_RESET}"
+        return 0
+    fi
+    mkdir -p "$dir" || { warn "could not create ${dir}."; return 1; }
+    ( umask 177; printf 'username=%s\npassword=%s\n' "$auser" "$pw" > "${dir}/boot.properties"; ) \
+        || { warn "could not write ${dir}/boot.properties."; return 1; }
+    ok "wrote boot identity for ${server}."
+}
+
+# Set a domain's Node Manager credentials to the admin credentials.
+#
+# Needed because Node Manager is STANDALONE here. NM authenticates a connection
+# for domain X against X's own config/nodemanager/nm_password.properties, and the
+# domain template seeds that with a hash we do not know — so nmConnect comes back
+# "Access to domain 'X' for user 'weblogic' denied" even though the enrollment
+# and the SSL handshake are both fine. (The old per-domain-NM layout never hit
+# this: NM lived inside the domain and used its credentials by construction.)
+#
+# Offline WLST, so it must run with the domain STOPPED — which is where it is
+# called from: right after configure writes the domain.
+set_domain_nm_credentials() {
+    local domhome="$1" domname="$2" auser="$3" pw="$4"
+    local mw="${MWHOME:-$(read_prop "$OCCAS_CONF" oracle.home)}"
+    [ -n "$pw" ] || { warn "no admin password — cannot set Node Manager credentials for '${domname}'."; return 1; }
+    local setwls="${mw}/wlserver/server/bin/setWLSEnv.sh"
+    [ -f "$setwls" ] || { warn "setWLSEnv.sh not found: ${setwls}"; return 1; }
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] offline WLST: set NodeManagerUsername/PasswordEncrypted on ${domname}${C_RESET}"
+        return 0
+    fi
+    local work; work="$(mktemp -d /tmp/blade-nmcred.XXXXXX)"
+    cat > "${work}/nmcred.py" <<PYEOF
+# -*- coding: utf-8 -*-
+readDomain('${domhome}')
+cd('/SecurityConfiguration/${domname}')
+set('NodeManagerUsername', '${auser}')
+set('NodeManagerPasswordEncrypted', '${pw}')
+updateDomain()
+closeDomain()
+PYEOF
+    chmod 600 "${work}/nmcred.py"
+    local jh rc=0; jh="$(read_prop "$OCCAS_CONF" java.home)"
+    (
+        cd "$work"
+        if [ -n "$jh" ] && [ -d "$jh" ]; then export JAVA_HOME="$jh"; PATH="${jh}/bin:$PATH"; fi
+        export MW_HOME="$mw" BEA_HOME="$mw"
+        set +u
+        # shellcheck disable=SC1090
+        . "$setwls" >/dev/null
+        java weblogic.WLST nmcred.py
+    ) >/dev/null 2>&1 || rc=$?
+    rm -rf "$work"
+    [ "$rc" -eq 0 ] || { warn "could not set Node Manager credentials for '${domname}' (WLST rc=${rc})."; return 1; }
+    ok "Node Manager credentials set on '${domname}' (user ${auser})."
+}
+
+# WLST_PROPERTIES needed to nmConnect to OUR Node Manager, echoed to stdout.
+#
+# NM's listener is SSL, so WLST must trust whatever cert NM presents — and WLST
+# trusts only the JDK cacerts by default, which contains neither. That surfaces
+# as a bare PKIX "unable to find valid certification path", nowhere near the
+# actual cause.
+#
+# Two cases, and both need handling:
+#   * NM on the env PKI (after the TLS step) -> CustomTrust + the env trust.p12
+#   * NM on WebLogic's DemoIdentity (a fresh nmdomain) -> DemoTrust
+# Hostname verification is off either way: the cert names the host, while the
+# units and interactive runs both nmConnect to 'localhost'.
+nm_wlst_props() {
+    local mw="${MWHOME:-$(read_prop "$OCCAS_CONF" oracle.home)}"
+    local nmdom="${NM_DOMAIN:-$(read_prop "$OCCAS_CONF" nm.domain.name)}"
+    local nmprops="${mw}/user_projects/domains/${nmdom}/nodemanager/nodemanager.properties"
+    local common="-Dweblogic.security.SSL.ignoreHostnameVerification=true"
+    if grep -q "^CustomIdentityKeyStoreFileName=" "$nmprops" 2>/dev/null; then
+        local pw cdir
+        pw="${BLADE_STORE_PASSWORD:-}"
+        [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" store.password)"
+        cdir="$(read_prop "$OCCAS_CONF" certs.dir)"; cdir="${cdir/#\~/$HOME}"
+        cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
+        if [ -n "$pw" ] && [ -f "${cdir}/trust.p12" ]; then
+            printf '%s' "-Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${cdir}/trust.p12 -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=${pw} ${common}"
+            return 0
+        fi
+        # Custom identity but no usable truststore — say so rather than fall
+        # through to the demo store, which fails with the same opaque PKIX error.
+        warn "Node Manager uses a custom identity but ${cdir}/trust.p12 or store.password is missing." >&2
+    fi
+    # Demo certs. NOT -Dweblogic.security.TrustKeyStore=DemoTrust: that resolves
+    # to $WL_HOME/server/lib/DemoTrust.jks, which contains only the 2012
+    # 'wlscertgenca'. WLS 14.1.2 generates a PER-DOMAIN demo CA instead
+    # (CN=CertGenCA_<domain>) and keeps it in the domain's own
+    # security/DemoTrust.p12, so the shipped store can never validate it — the
+    # symptom is a bare PKIX failure that looks like a broken install.
+    local demotrust="${mw}/user_projects/domains/${nmdom}/security/DemoTrust.p12"
+    if [ -f "$demotrust" ]; then
+        printf '%s' "-Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${demotrust} -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=DemoTrustKeyStorePassPhrase ${common}"
+        return 0
+    fi
+    printf '%s' "-Dweblogic.security.TrustKeyStore=DemoTrust ${common}"
+}
+
+# Stop Node Manager and start it again from its own domain. Used after an
+# enrollment; also available as its own step.
+restart_nm() {
+    local mw="${MWHOME:-$(read_prop "$OCCAS_CONF" oracle.home)}"
+    local nmdom="${NM_DOMAIN:-$(read_prop "$OCCAS_CONF" nm.domain.name)}"
+    local port="${NM_PORT:-$(read_prop "$OCCAS_CONF" nm.listen.port)}"; port="${port:-5556}"
+    local nmhome="${mw}/user_projects/domains/${nmdom}"
+    [ -d "$nmhome" ] || { warn "nmdomain not found: ${nmhome}"; return 1; }
+    if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] restart Node Manager (${nmhome})${C_RESET}"; return 0; fi
+
+    # Prefer the boot service when it's installed and owns this nmdomain: that
+    # keeps systemd's idea of the process and ours from diverging.
+    if command -v systemctl >/dev/null 2>&1 \
+       && grep -qsF -- "$nmhome" /etc/systemd/system/nodemanager.service; then
+        sudo systemctl restart nodemanager.service 2>/dev/null || { warn "systemctl restart nodemanager.service failed."; return 1; }
+    else
+        stop_nm || true
+        local nmlog="${nmhome}/nodemanager/nodemanager.out"
+        JAVA_HOME="${JAVA_HOME_VAL:-${JAVA_HOME:-}}" nohup "${nmhome}/bin/startNodeManager.sh" > "$nmlog" 2>&1 &
+    fi
+    local i=0
+    while [ "$i" -lt 40 ]; do
+        nm_listening "$port" && { ok "Node Manager restarted, listening on :${port}."; return 0; }
+        sleep 1; i=$((i + 1))
+    done
+    warn "Node Manager did not come back on :${port} within 40s."
+    return 1
 }
 
 # Write <domain>/bin/setUserOverrides.sh so every server launched in this domain
@@ -1975,9 +3135,14 @@ nm_admin() {
     # NM credentials = the admin creds (env > occas.secret).
     local pw="${BLADE_WLS_PASSWORD:-}"
     [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
+    # Production mode dies on a missing boot identity (BEA-090782).
+    [ "$action" = "start" ] && write_boot_properties "$domhome" "AdminServer" "$auser" "$pw"
     info "${verb} AdminServer for '${dom}' via Node Manager localhost:${nmport} (${nmtype})"
+    # NM's listener is SSL; without a truststore WLST fails with a bare PKIX error.
+    local wlstp; wlstp="$(nm_wlst_props)"
     MW_HOME="$oh" DOMAIN_NAME="$dom" DOMAIN_HOME="$domhome" ADMIN_SERVER="AdminServer" NM_ACTION="$action" \
         NM_HOST="localhost" NM_PORT="$nmport" NM_USER="$auser" NM_TYPE="$nmtype" NM_PASSWORD="$pw" \
+        WLST_PROPERTIES="$wlstp" \
         bash "${SCRIPT_DIR}/misc/start-admin-nm.sh" || warn "start-admin-nm returned an error"
 }
 start_admin() { nm_admin start "$@"; }
@@ -2036,6 +3201,7 @@ do_remove_domain() {
     if [ "$DRY" = "on" ]; then
         log "${C_DIM}  [dry-run] stop AdminServer; kill stray JVMs; un-enroll ${dom}; rm -rf ${domhome}; remove weblogic.service (if it points here)${profnote}${C_RESET}"
         [ "$have_dom" = 1 ] && remove_domain_systemd_unit "$domhome" weblogic.service
+        remove_engine_systemd_units "$domhome" "${MWHOME}/user_projects/domains/${NM_DOMAIN}"
         return 0
     fi
     yesno "Remove domain '${dom}'${proflabel}? Stops its servers, DELETES ${domhome}, removes its weblogic.service unit${proflabel:+, and erases the profile config + secrets at ${PROFILE_DIR}}." "N" \
@@ -2052,6 +3218,8 @@ do_remove_domain() {
                 && ok "un-enrolled '${dom}' from ${nmdom} (restart NM with 'k' then 'n' to apply)."
         fi
         remove_domain_systemd_unit "$domhome" weblogic.service
+        # Engines first: once $domhome is gone the guard below can't match.
+        remove_engine_systemd_units "$domhome" "${MWHOME}/user_projects/domains/${NM_DOMAIN}"
         rm -rf "$domhome" && ok "removed ${domhome}."
     fi
     # Delete the profile last: the domain teardown above reads OCCAS_CONF, which
@@ -2238,8 +3406,13 @@ _wls_adminurl() {
     printf '%s://%s:%s' "$scheme" "$addr" "$port"
 }
 
-# The static engine / test server name (static.server field 1).
-_test_target() { local s; s="$(read_prop "$OCCAS_CONF" static.server | cut -d: -f1)"; printf '%s' "${s:-engine0}"; }
+# The engine on THIS machine -- prefix + starting index (machine0 runs engine0).
+_test_target() {
+    local pfx idx
+    pfx="$(read_prop "$OCCAS_CONF" server.name.prefix)"; pfx="${pfx:-engine}"
+    idx="$(read_prop "$OCCAS_CONF" server.name.starting.index)"; idx="${idx:-0}"
+    printf '%s%s' "$pfx" "$idx"
+}
 
 # One WLST deploy/undeploy/status via misc/deploy-wls.sh.
 _deploy_one() {
@@ -2363,22 +3536,25 @@ admin_running() {
 
 # Unattended install: STEP 1→4 in order, no menu. Each worker is idempotent and
 # skips when its target already exists, so this is safe to re-run. Boot services
-# (e/w) are intentionally left out — they need systemd/sudo and aren't needed to
-# get a laptop running; add them from the menu when you want reboot survival.
+# The boot services (e/w) and the engine hosts (E) ARE part of the ladder: an
+# install that does not survive a reboot is not finished, and that is exactly how
+# an engine host once sat dead for eight days. On a laptop with no systemctl the
+# service steps warn and move on, and E is a no-op for a single-host profile, so
+# the ladder stays useful there too. Order matters — s brings the AdminServer up,
+# which the engines need before they can boot.
 run_install_ladder() {
     load_profile
     info "Unattended install of profile '${NAME}' → ${MWHOME:-?}"
     yesno "Install OCCAS + Node Manager + cluster domain for '${NAME}' now?" "Y" \
         || { warn "aborted."; return 1; }
     local id
-    for id in u m i n c f s; do
+    for id in u m dl i g c n f s e w o; do
         rule; info "install step '${id}'"
         dispatch_row "$id"
     done
     rule
     ok "install complete for '${NAME}'."
     log "  verify with:  ./blade.sh ${NAME} status"
-    log "  boot services (optional): ./blade.sh ${NAME}   → rows e, w"
 }
 
 # Unattended uninstall. Default tears down just the app + NM domains and KEEPS

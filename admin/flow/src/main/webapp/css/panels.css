@@ -186,6 +186,149 @@
 	min-height: 48px;
 }
 
+/* --- "Elsewhere in this configuration" aside (root panel) ------------ */
+
+.config-aside {
+	margin-top: 20px;
+	padding-top: 12px;
+	border-top: 1px solid var(--vorpal-slate-200);
+	font-size: 11px;
+	line-height: 1.6;
+	color: var(--vorpal-ink-700);
+}
+.config-aside h4 {
+	margin: 0 0 6px;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--vorpal-ink-700);
+}
+.config-aside p {
+	margin: 0 0 8px;
+}
+.config-aside p:last-child {
+	margin-bottom: 0;
+}
+.config-aside code {
+	font-family: var(--vorpal-font-mono);
+	font-size: 10.5px;
+}
+
+/* --- Expression reference (under the transition `when` box) ---------- */
+
+.expr-help {
+	margin-top: 6px;
+	font-size: 11px;
+}
+.expr-help summary {
+	cursor: pointer;
+	color: var(--vorpal-ink-700);
+	user-select: none;
+}
+.expr-help-body {
+	margin-top: 6px;
+	padding: 8px;
+	border: 1px solid var(--vorpal-slate-200);
+	background: var(--vorpal-slate-100);
+}
+.expr-help-group {
+	margin: 0 0 7px;
+	line-height: 1.7;
+}
+.expr-help-group:last-of-type {
+	margin-bottom: 0;
+}
+.expr-help-group b {
+	display: block;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--vorpal-ink-700);
+	margin-bottom: 2px;
+}
+.expr-help code {
+	font-family: var(--vorpal-font-mono);
+	font-size: 10.5px;
+	padding: 1px 4px;
+	border: 1px solid var(--vorpal-slate-200);
+	background: #fff;
+	white-space: nowrap;
+}
+.expr-help .hint {
+	margin-right: 6px;
+}
+.expr-help-note {
+	margin: 8px 0 0;
+	padding-top: 7px;
+	border-top: 1px solid var(--vorpal-slate-200);
+	color: var(--vorpal-ink-700);
+	line-height: 1.6;
+}
+
+/* --- Checkbox field (e.g. attribute selector allInstances) ----------- */
+
+/* Label wraps the box so the text is part of the hit target; overrides the
+   block layout .sel-field label uses for text inputs. */
+.sel-field label.sel-check {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+	cursor: pointer;
+}
+.sel-field label.sel-check input[type=checkbox] {
+	width: auto;
+	margin: 0;
+	flex: none;
+}
+.sel-field label.sel-check + .hint {
+	display: block;
+	margin-top: 3px;
+}
+
+/* --- Ingress entry-transition rows (method / subscriber / region) ---- */
+
+.dispatch-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 3px;
+}
+.dispatch-row .dispatch-method {
+	flex: 0 0 74px;
+	font-family: var(--vorpal-font-mono);
+	font-size: 10.5px;
+	color: var(--vorpal-ink-700);
+}
+.dispatch-row .dispatch-subscriber {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.dispatch-row .dispatch-region {
+	flex: 0 0 42%;
+}
+
+/* --- XML namespace rows (prefix -> URI) ------------------------------ */
+
+.sel-ns-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 3px;
+}
+.sel-ns-row .sel-ns-prefix {
+	flex: 0 0 30%;
+}
+.sel-ns-row .sel-ns-uri {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-family: var(--vorpal-font-mono);
+	font-size: 11px;
+}
+.sel-ns-row .remove-btn {
+	flex: none;
+}
+
 /* --- Table-selector grid (translation table editor) ------------------ */
 
 .tbl-grid {

@@ -45,6 +45,22 @@
 		<input class="node-match" type="text" placeholder="${originIP} insubnet '10.20.0.0/16'" />
 	</div>
 
+	<!-- The transition that classifies traffic into this ingress. The editor
+	     re-derives it from the match above rather than drawing it, so without
+	     this block its JSR-289 fields would round-trip invisibly: set, carried,
+	     but never shown. One row per SIP method leaving this ingress, since
+	     that is the set the export generates a dispatch for. -->
+	<div class="ingress-dispatch-section">
+		<label style="margin-top: 14px;">Entry transition</label>
+		<div class="state-hint" style="margin-top: 0;">
+			Applied as traffic enters this ingress, before any application runs.
+			Both are optional and matter most on an initial request:
+			<b>subscriber</b> names the header whose URI the container is handed;
+			<b>region</b> is the JSR-289 routing region (blank = NEUTRAL).
+		</div>
+		<div class="ingress-dispatch-rows"></div>
+	</div>
+
 	<!-- Selectors run on entry to this state; each extracts a value from the
 	     request into the routing context for transition conditions and ${}
 	     route templates. Hidden for Egress (nothing routes FROM egress). -->

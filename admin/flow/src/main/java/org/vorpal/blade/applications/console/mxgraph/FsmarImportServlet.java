@@ -75,8 +75,19 @@ public class FsmarImportServlet extends HttpServlet {
 	static final Set<String> TRIGGER_KNOWN = setOf("transitions");
 	static final Set<String> TRANSITION_KNOWN = setOf("id", "when", "next", "subscriber",
 			"region", "routes", "routeModifier");
+	// `allInstances` (AttributeSelector) and `namespaces` (XmlSelector) are
+	// first-class v3 model fields with their own controls in the selector
+	// editor — not unknowns. Keep this in sync with the @JsonSubTypes of
+	// framework v3 configuration.selectors.Selector.
 	static final Set<String> SELECTOR_KNOWN = setOf("id", "type",
-			"attribute", "pattern", "expression");
+			"attribute", "pattern", "expression", "allInstances", "namespaces");
+	// Fields of an absorbed null→ingress dispatch transition that export
+	// re-derives from the ingress itself. Everything else on that transition
+	// (id, subscriber, region, routes, routeModifier, unknowns) is preserved
+	// in the ingress cell's `dispatchExtra` and merged back on export —
+	// otherwise a hand-written entry transition silently loses the region and
+	// subscriber header that matter most on an initial request.
+	static final Set<String> DISPATCH_REGENERATED = setOf("when", "next");
 	// Egress diagram fields handled explicitly: `routes` bake as <route> children,
 	// `returnState` is topology (the route-back out-edge). Everything else — e.g.
 	// the retired `description` (folded into Configuration.notes) — rides the
@@ -180,6 +191,9 @@ public class FsmarImportServlet extends HttpServlet {
 		// State name (incl "null") -> cell id. An ingress box IS a state, so
 		// edges resolve to vertices directly — no gateway attachment maps.
 		Map<String, String> stateCellIds = new HashMap<>();
+		// Ingress state name -> its <Gateway> wrapper, so the transition pass
+		// can hang absorbed dispatch fields on it.
+		Map<String, Element> ingressEls = new HashMap<>();
 		int nextId = 2;
 		int ingressRow = 0;   // left-column stacking for ingress boxes
 
@@ -187,8 +201,8 @@ public class FsmarImportServlet extends HttpServlet {
 		// point. Rendered as an ingress cloud labeled "default"; carries the
 		// shared selectors that run for all traffic.
 		String nullCellId = String.valueOf(nextId++);
-		createIngressBox(doc, root, nullCellId, "null", "default", null,
-				states.path("null"), statePlacements, MARGIN_X, MARGIN_Y + ingressRow++ * ROW_SPACING);
+		ingressEls.put("null", createIngressBox(doc, root, nullCellId, "null", "default", null,
+				states.path("null"), statePlacements, MARGIN_X, MARGIN_Y + ingressRow++ * ROW_SPACING));
 		stateCellIds.put("null", nullCellId);
 
 		// Enumerate the named vertices: every non-null state, plus any `next`
@@ -230,9 +244,9 @@ public class FsmarImportServlet extends HttpServlet {
 			String cellId = String.valueOf(nextId++);
 			JsonNode stateJson = states.path(name);
 			if (entry.getValue()) {
-				createIngressBox(doc, root, cellId, name, name,
+				ingressEls.put(name, createIngressBox(doc, root, cellId, name, name,
 						ingresses.path(name).path("match").asText(""),
-						stateJson, statePlacements, MARGIN_X, MARGIN_Y + ingressRow++ * ROW_SPACING);
+						stateJson, statePlacements, MARGIN_X, MARGIN_Y + ingressRow++ * ROW_SPACING));
 			} else {
 				int col = stateIdx % COLS;
 				int row = stateIdx / COLS;
@@ -306,8 +320,15 @@ public class FsmarImportServlet extends HttpServlet {
 						boolean egressTx = finalEgress || routeBackEgress;
 
 						// Absorb generated dispatch transitions (null → ingress).
+						// Export re-derives `when`/`next` from the ingress, so only
+						// those two may be dropped; anything else the transition
+						// carried is stashed on the ingress cell and merged back.
 						if (!egressTx && !targetName.isEmpty() && "null".equals(sourceName)
 								&& ingresses.path(targetName).isObject()) {
+							ObjectNode kept = leftover(tx, DISPATCH_REGENERATED);
+							if (kept.size() > 0) {
+								addDispatchExtra(ingressEls.get(targetName), method, kept);
+							}
 							seq++;
 							continue;
 						}
@@ -449,7 +470,10 @@ public class FsmarImportServlet extends HttpServlet {
 	/// the `"null"` state). A non-empty `match` is stored as the `match`
 	/// attribute (export reads it to regenerate the null dispatch). The state's
 	/// own selectors/extras/trigger-extras ride the box — per-ingress, now real.
-	private String createIngressBox(Document doc, Element root, String cellId,
+	/// Returns the created `<Gateway>` wrapper so the caller can attach
+	/// absorbed dispatch fields (`dispatchExtra`) to it once the transition
+	/// pass has run.
+	private Element createIngressBox(Document doc, Element root, String cellId,
 			String stateName, String label, String match, JsonNode stateJson,
 			JsonNode placements, int defX, int defY) {
 		Element gateway = doc.createElement("Gateway");
@@ -473,7 +497,7 @@ public class FsmarImportServlet extends HttpServlet {
 		appendGeometry(doc, cell, placements, stateName, defX, defY, 120, 114);
 		gateway.appendChild(cell);
 		root.appendChild(gateway);
-		return cellId;
+		return gateway;
 	}
 
 	/// Creates an egress box: a `<Gateway role="egress">` exit node. The mirror
@@ -618,6 +642,16 @@ public class FsmarImportServlet extends HttpServlet {
 			setIfPresent(selEl, "attribute", sel.path("attribute").asText(""));
 			setIfPresent(selEl, "pattern", sel.path("pattern").asText(""));
 			setIfPresent(selEl, "expression", sel.path("expression").asText(""));
+			// AttributeSelector.allInstances — omitted when false (the model
+			// marks it @JsonInclude(NON_DEFAULT)), so only carry it when set.
+			if (sel.path("allInstances").asBoolean(false)) {
+				selEl.setAttribute("allInstances", "true");
+			}
+			// XmlSelector.namespaces — a prefix→URI map; rides as a JSON object
+			// string on the cell, edited as a key/value grid in the panel.
+			if (sel.path("namespaces").isObject() && sel.path("namespaces").size() > 0) {
+				selEl.setAttribute("namespaces", sel.path("namespaces").toString());
+			}
 			setExtra(selEl, sel, SELECTOR_KNOWN);
 			parent.appendChild(selEl);
 		}
@@ -639,6 +673,37 @@ public class FsmarImportServlet extends HttpServlet {
 		}
 		if (extras.size() > 0) {
 			stateEl.setAttribute("triggerExtras", extras.toString());
+		}
+	}
+
+	/// Records the fields of an absorbed null→ingress dispatch transition on
+	/// the ingress's `<Gateway>` element, as a `dispatchExtra` JSON object
+	/// keyed by SIP method — the same shape as `triggerExtras`.
+	///
+	/// The dispatch transition itself is never drawn (the editor re-derives it
+	/// from the ingress's `match`), so without this its `subscriber`, `region`,
+	/// `routes`, `routeModifier` and `id` would be lost on the round trip. If
+	/// two dispatch transitions for one ingress share a method — possible only
+	/// in a hand-written config — the first wins; the second's fields would be
+	/// unreachable anyway, since export emits one dispatch per (ingress, method).
+	private void addDispatchExtra(Element ingressEl, String method, ObjectNode fields) {
+		if (ingressEl == null) {
+			return;
+		}
+		ObjectNode extras;
+		String raw = ingressEl.getAttribute("dispatchExtra");
+		if (raw == null || raw.isEmpty()) {
+			extras = mapper.createObjectNode();
+		} else {
+			try {
+				extras = (ObjectNode) mapper.readTree(raw);
+			} catch (IOException | ClassCastException e) {
+				extras = mapper.createObjectNode();
+			}
+		}
+		if (!extras.has(method)) {
+			extras.set(method, fields);
+			ingressEl.setAttribute("dispatchExtra", extras.toString());
 		}
 	}
 

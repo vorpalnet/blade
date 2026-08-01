@@ -15,13 +15,11 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.configuration.Context;
 
-import com.fasterxml.jackson.annotation.JsonIdentityInfo;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 
 /// Pulls a value out of whatever payload its parent
 /// [org.vorpal.blade.framework.v3.configuration.connectors.Connector]
@@ -41,7 +39,27 @@ import com.fasterxml.jackson.annotation.ObjectIdGenerators;
 /// on top of a JSON-extracted value, chain a [JsonSelector] (writes
 /// its result into the session) followed by a [RegexSelector]
 /// (reads from the session attribute by name and applies its pattern).
-@JsonIdentityInfo(generator = ObjectIdGenerators.PropertyGenerator.class, property = "id")
+// NO @JsonIdentityInfo here, deliberately. The v2 config classes carry
+// `@JsonIdentityInfo(PropertyGenerator, property = "id")` as a house pattern,
+// and in v2 it earns its keep: a config declares selectors once and then
+// references them by bare-string id elsewhere (see
+// services/transfer/testing/selectors/transfer.json, whose `maps[].selectors`
+// are ["Refer-To"] / ["Referred-By"]).
+//
+// No v3 shape does that. Every v3 selector site is an inline list — State
+// .selectors, Connector.selectors, TraceRule.selector — so the annotation
+// bought nothing here and cost a great deal: it promotes `id` to a
+// DOCUMENT-GLOBAL Jackson object key, so two selectors sharing an id anywhere
+// in the file (different states, even different subclasses) fail the whole
+// config with "Already had POJO for id". Reload is fail-safe (the last-good
+// config keeps routing), but a cold start leaves the config null and the App
+// Router answers 500 on every initial request — so the mistake lies dormant
+// until the next restart or cluster scale-up.
+//
+// Without it a duplicate id is simply last-writer-wins on the context
+// variable, which is what an author would expect. v2's Selector keeps the
+// annotation; do not "restore" it here. (v2's own AttributeSelector already
+// has it commented out.)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type",
 		defaultImpl = AttributeSelector.class)
 @JsonSubTypes({
@@ -68,7 +86,9 @@ public abstract class Selector implements Serializable {
 	public Selector() {
 	}
 
-	@JsonPropertyDescription("Unique identifier; also the default session attribute name for the extracted value")
+	@JsonPropertyDescription("Names the context variable this selector writes (${id}), and namespaces"
+			+ " derived values such as regex groups (${id.group}). Optional, but a repeated id means"
+			+ " whichever selector runs later overwrites the earlier value.")
 	public String getId() { return id; }
 	public void setId(String id) { this.id = id; }
 

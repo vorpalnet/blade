@@ -56,8 +56,11 @@ window.flowPlans = (function() {
 
 	// ----- authoring dialog ---------------------------------------------------
 
-	var SIP_METHODS = ['INVITE', 'REGISTER', 'SUBSCRIBE', 'OPTIONS', 'MESSAGE',
-			'PUBLISH', 'REFER', 'NOTIFY'];
+	// From the model, via flowMeta — this used to be a second hand-maintained
+	// copy of the transition panel's method list.
+	function sipMethods() {
+		return window.flowMeta.methods();
+	}
 
 	function rowHtml(value, app) {
 		return '<div class="plan-row" style="display:flex; gap:4px; margin-top:4px;">' +
@@ -82,7 +85,7 @@ window.flowPlans = (function() {
 		div.style.fontSize = '12px';
 		div.style.fontFamily = 'Arial';
 
-		var methodOptions = SIP_METHODS.map(function(m) {
+		var methodOptions = sipMethods().map(function(m) {
 			return '<option>' + m + '</option>';
 		}).join('');
 

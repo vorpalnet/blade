@@ -10,20 +10,35 @@
 # OS level — the same thing blade.sh's stop_admin ('x') does.
 #
 # Required env: DOMAIN_HOME (the app domain whose servers to stop).
+# Optional env: ADMIN_SERVER — stop ONLY that server.
+#
+# The units set ADMIN_SERVER, and they must: several servers of one domain can
+# run on the same box (the AdminServer and the static test engine both live on
+# the admin box, each with its own unit). Without this narrowing, a
+# 'systemctl restart weblogic.service' matches every JVM under DOMAIN_HOME and
+# silently kills the static engine too — whose own unit still believes it is
+# active, so nothing restarts it. blade.sh's stop_admin ('x') deliberately wants
+# the whole domain and so leaves ADMIN_SERVER unset.
 set -euo pipefail
 
 : "${DOMAIN_HOME:?set DOMAIN_HOME to the app domain home whose servers to stop}"
+ADMIN_SERVER="${ADMIN_SERVER:-}"
 command -v pgrep >/dev/null 2>&1 || { echo "no pgrep — cannot OS-stop servers" >&2; exit 1; }
 
 pids=""
 for p in $(pgrep -f weblogic.Name 2>/dev/null || true); do
     cmd="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)"
-    case "$cmd" in *"$DOMAIN_HOME"*) pids="${pids} ${p}" ;; esac
+    case "$cmd" in *"$DOMAIN_HOME"*) ;; *) continue ;; esac
+    if [ -n "$ADMIN_SERVER" ]; then
+        # Trailing space so 'engine1' can't also match 'engine10'.
+        case "$cmd" in *"-Dweblogic.Name=${ADMIN_SERVER} "*) ;; *) continue ;; esac
+    fi
+    pids="${pids} ${p}"
 done
 pids="${pids# }"
-[ -n "$pids" ] || { echo "no servers running under ${DOMAIN_HOME}"; exit 0; }
+[ -n "$pids" ] || { echo "no ${ADMIN_SERVER:-servers} running under ${DOMAIN_HOME}"; exit 0; }
 
-echo "stopping servers under ${DOMAIN_HOME}: ${pids}"
+echo "stopping ${ADMIN_SERVER:-servers} under ${DOMAIN_HOME}: ${pids}"
 # shellcheck disable=SC2086
 kill ${pids} 2>/dev/null || true
 

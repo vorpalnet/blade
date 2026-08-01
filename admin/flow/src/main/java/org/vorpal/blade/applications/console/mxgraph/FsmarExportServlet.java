@@ -425,15 +425,42 @@ public class FsmarExportServlet extends HttpServlet {
 		for (Map.Entry<String, String> ing : ingressMatch.entrySet()) {
 			String name = ing.getKey();
 			String match = ing.getValue();
+			// Fields the original dispatch transition carried, absorbed on
+			// import and keyed by method (see FsmarImportServlet#addDispatchExtra).
+			ObjectNode preservedByMethod = parseDispatchExtras(realStates.get(name));
 			Map<String, List<TxEntry>> ingTriggers = collected.get(name);
-			java.util.Set<String> methods = (ingTriggers != null && !ingTriggers.isEmpty())
-					? ingTriggers.keySet()
-					: java.util.Collections.singleton("INVITE");
+			// Methods the ingress state handles, plus any method we absorbed a
+			// dispatch for — otherwise a dispatch whose ingress has no trigger
+			// of its own (e.g. REGISTER classified in, handled downstream) would
+			// not be re-emitted.
+			java.util.Set<String> methods = new java.util.LinkedHashSet<>();
+			if (ingTriggers != null) {
+				methods.addAll(ingTriggers.keySet());
+			}
+			if (preservedByMethod != null) {
+				preservedByMethod.fieldNames().forEachRemaining(methods::add);
+			}
+			if (methods.isEmpty()) {
+				methods.add("INVITE");
+			}
 			for (String method : methods) {
+				ObjectNode preserved = (preservedByMethod != null
+						&& preservedByMethod.path(method).isObject())
+								? (ObjectNode) preservedByMethod.get(method)
+								: null;
 				ObjectNode d = mapper.createObjectNode();
-				d.put("id", "dispatch-" + name);
+				// Transition's @JsonPropertyOrder: id, when, next, subscriber,
+				// region, routes, routeModifier. id/when/next are set here (the
+				// editor owns them); mergeInto supplies the rest and, being
+				// first-writer-wins, cannot clobber them.
+				d.put("id", (preserved != null && preserved.hasNonNull("id"))
+						? preserved.get("id").asText()
+						: "dispatch-" + name);
 				d.put("when", match);
 				d.put("next", name);
+				if (preserved != null) {
+					mergeInto(d, preserved);
+				}
 				dispatchByMethod.computeIfAbsent(method, k -> new ArrayList<>()).add(d);
 			}
 		}
@@ -665,12 +692,36 @@ public class FsmarExportServlet extends HttpServlet {
 			addIfPresent(selNode, "type", sel.getAttribute("type"));
 			addIfPresent(selNode, "id", sel.getAttribute("id"));
 			addIfPresent(selNode, "attribute", sel.getAttribute("attribute"));
+			// allInstances is a real boolean in the model, not a string — and is
+			// omitted entirely when false, matching @JsonInclude(NON_DEFAULT).
+			if ("true".equals(sel.getAttribute("allInstances"))) {
+				selNode.put("allInstances", true);
+			}
+			addNamespaces(selNode, sel.getAttribute("namespaces"));
 			addIfPresent(selNode, "pattern", sel.getAttribute("pattern"));
 			addIfPresent(selNode, "expression", sel.getAttribute("expression"));
 			mergeExtra(selNode, sel.getAttribute("extra"));
 			arr.add(selNode);
 		}
 		return arr;
+	}
+
+	/// Emits `XmlSelector.namespaces` (a prefix→URI object) from the selector
+	/// cell's `namespaces` attribute. Empty or malformed is simply omitted —
+	/// the panel writes this attribute itself, so a bad value means a stale
+	/// hand-edited cell, not operator input worth a 400.
+	private void addNamespaces(ObjectNode selNode, String raw) {
+		if (raw == null || raw.isEmpty()) {
+			return;
+		}
+		try {
+			JsonNode parsed = mapper.readTree(raw);
+			if (parsed.isObject() && parsed.size() > 0) {
+				selNode.set("namespaces", parsed);
+			}
+		} catch (IOException e) {
+			// Not representable; leave it out rather than emit invalid config.
+		}
 	}
 
 	private ObjectNode parseTriggerExtras(Element stateEl) {
@@ -683,6 +734,22 @@ public class FsmarExportServlet extends HttpServlet {
 		} catch (IOException e) {
 			throw new IllegalArgumentException("Malformed triggerExtras JSON on state '"
 					+ stateEl.getAttribute("label") + "': " + e.getMessage());
+		}
+	}
+
+	/// Reads an ingress `<Gateway>`'s `dispatchExtra` attribute: the fields of
+	/// the absorbed null→ingress dispatch transition, keyed by SIP method.
+	/// Mirror of [FsmarImportServlet#addDispatchExtra].
+	private ObjectNode parseDispatchExtras(Element ingressEl) {
+		if (ingressEl == null) return null;
+		String raw = ingressEl.getAttribute("dispatchExtra");
+		if (raw == null || raw.isEmpty()) return null;
+		try {
+			JsonNode parsed = mapper.readTree(raw);
+			return parsed.isObject() ? (ObjectNode) parsed : null;
+		} catch (IOException e) {
+			throw new IllegalArgumentException("Malformed dispatchExtra JSON on ingress '"
+					+ ingressEl.getAttribute("label") + "': " + e.getMessage());
 		}
 	}
 

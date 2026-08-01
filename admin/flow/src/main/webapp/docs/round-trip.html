@@ -82,7 +82,8 @@
 					<ol>
 						<li>Paste FSMAR&nbsp;3 JSON into the Import dialog.</li>
 						<li>Each entry in <code>states</code> becomes a State vertex; its <code>selectors</code> ride along on the vertex (edit them in the State properties panel).</li>
-						<li>The <code>"null"</code> state becomes the Ingress cloud — its selectors (run against initial requests) live on the cloud. Transitions targeting <code>"null"</code> get an Egress cloud.</li>
+						<li>The <code>"null"</code> state becomes the default Ingress cloud — its selectors (run against initial requests) live on the cloud. Each entry in <code>diagram.ingresses</code> becomes its own named ingress cloud carrying that entry's source <code>match</code>; the dispatch transitions that classify traffic into them are re-derived from the match rather than drawn as arrows.</li>
+						<li>A transition that routes the call out of OCCAS becomes an Egress node, which owns the <code>routes</code>. Its kind is topology, not a stored flag: a line back to a state makes it <code>ROUTE_BACK</code> (that state is where the call resumes), no line makes it <code>ROUTE_FINAL</code>.</li>
 						<li>Each transition becomes a directed edge labeled with its SIP method, carrying <code>when</code>, <code>subscriber</code>, <code>region</code>, <code>routes</code>, and <code>routeModifier</code> — plus a sequence number, because transitions in a trigger are evaluated <em>first match wins</em> and edge order on a canvas is meaningless without it.</li>
 						<li>A config the diagram cannot represent faithfully (e.g. a transition with no <code>next</code>) is <em>rejected with a named reason</em> — never imported lossily.</li>
 					</ol>
@@ -90,7 +91,7 @@
 					<h2>What happens on Export</h2>
 					<ol>
 						<li>Editor serializes the current graph and POSTs it; the servlet rebuilds the FSMAR&nbsp;3 JSON tree.</li>
-						<li>Ingress and Egress clouds round-trip as the literal string <code>null</code>.</li>
+						<li>The default Ingress cloud round-trips as the literal state key <code>"null"</code>; named ingresses and egresses round-trip under their own names in the <code>diagram</code> block.</li>
 						<li>Transitions are emitted in evaluation order (their sequence numbers), grouped by state and SIP method.</li>
 						<li>Validation runs automatically; findings appear above the JSON.</li>
 						<li>Download or copy the JSON and apply it like any FSMAR&nbsp;3 config change. A dangling edge (not connected at both ends) fails the export with a named reason.</li>
@@ -146,13 +147,37 @@
 						editor does not read or write.
 					</p>
 
-					<h2>What does NOT round-trip: layout</h2>
+					<h2>Browser-side tests</h2>
 					<p>
-						Canvas positions are <em>not</em> stored in the FSMAR JSON —
-						importing always produces an auto-layout. If you care about
-						a hand-arranged canvas, save the diagram itself (the toolbar's
-						mxGraph XML save) alongside the exported JSON; the JSON is the
-						deployable artifact, the XML is your drawing.
+						The servlets are covered by JUnit under <code>src/test/java</code> and run
+						with the build. The editor's own JavaScript is covered separately, by a
+						dependency-free harness that the Maven build does <em>not</em> run &mdash;
+						there is no node toolchain in the build, and requiring one would break
+						<code>build.sh</code> wherever node is absent. Run it by hand after touching
+						anything under <code>src/main/webapp/js</code>:
+					</p>
+					<pre>node admin/flow/src/test/js/run.js</pre>
+					<p>
+						It currently covers <code>flowMeta.js</code> &mdash; the model-derived
+						dropdown values and their fallback. The rest of the editor's JavaScript is
+						still uncovered.
+					</p>
+
+				<h2>Layout round-trips too</h2>
+					<p>
+						Canvas positions <em>are</em> stored, in the config's
+						<code>diagram</code> block: vertex coordinates for every state,
+						each ingress's source match, and each named egress's routes and
+						return state. Export rebuilds that block from the live canvas on
+						every save, so a hand-arranged diagram comes back the way you
+						left it.
+					</p>
+					<p>
+						<code>diagram</code> is presentation only — the App Router never
+						reads it, and deleting it is safe. The Configurator shows it
+						read-only and collapsed for that reason. A config with no
+						<code>diagram</code> block still imports; it just gets an
+						auto-layout the first time.
 					</p>
 				</article>
 			</section>

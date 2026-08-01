@@ -8,6 +8,239 @@
 
 window.flowFsmar = (function() {
 
+	// ----- publish target (domain / cluster / server) -------------------------
+	//
+	// SettingsManager merges domain -> _clusters/<c>/ -> _servers/<s>/, so a
+	// narrower file overrides the broader one. Almost every deployment only
+	// ever uses the domain file, so that is the default everywhere and the
+	// overlay choices carry a warning: this editor exports a COMPLETE config,
+	// and a complete config in an overlay overrides the domain wholesale — that
+	// cluster stops picking up domain changes until the overlay is deleted.
+	// (Overlays merge per-field, so a hand-written partial overlay is a
+	// different, subtler thing; the editor cannot produce one.)
+
+	var DEFAULT_TARGET = 'domain';
+
+	// The target is session state, not a per-dialog control: whichever config
+	// you loaded is the one you publish back to. Two independent pickers would
+	// let you load a cluster overlay in the import dialog and then publish it
+	// domain-wide from the export dialog, because that dialog's picker had
+	// reset to the default — reading and writing different scopes in two
+	// clicks. Both pickers share this instead.
+	var currentTarget = DEFAULT_TARGET;
+
+	// Builds a labelled <select> of publish targets and hands it back with the
+	// row to insert. `onChange` fires with the selected target object.
+	// Falls back to a domain-only list if /fsmarTargets is unreachable, so the
+	// dialogs still work on an older deployment.
+	function buildTargetPicker(onChange) {
+		var row = document.createElement('div');
+		row.style.margin = '0 0 6px';
+		row.style.flexShrink = '0';
+
+		var label = document.createElement('span');
+		label.textContent = 'Configuration: ';
+		label.style.fontSize = '11px';
+		row.appendChild(label);
+
+		var select = document.createElement('select');
+		select.style.fontSize = '11px';
+		row.appendChild(select);
+
+		var note = document.createElement('div');
+		note.style.fontSize = '10.5px';
+		note.style.marginTop = '3px';
+		note.style.display = 'none';
+		row.appendChild(note);
+
+		var targets = [];
+
+		function selected() {
+			for (var i = 0; i < targets.length; i++) {
+				if (targets[i].id === select.value) return targets[i];
+			}
+			return { id: DEFAULT_TARGET, type: 'domain', displayName: 'Domain (all servers)' };
+		}
+
+		function refreshNote() {
+			var t = selected();
+			if (t.type === 'domain') {
+				note.style.display = 'none';
+			} else {
+				note.style.display = '';
+				note.textContent = 'Overrides the domain configuration for this '
+					+ t.type + ' only. It will stop inheriting later domain changes.';
+			}
+		}
+
+		select.onchange = function() {
+			currentTarget = select.value;
+			refreshNote();
+			if (onChange) onChange(selected());
+		};
+
+		function render() {
+			select.innerHTML = '';
+			for (var i = 0; i < targets.length; i++) {
+				var opt = document.createElement('option');
+				opt.value = targets[i].id;
+				opt.textContent = targets[i].displayName
+					+ (targets[i].exists === false ? ' — none yet' : '');
+				select.appendChild(opt);
+			}
+			// Carry the session's target across dialogs, falling back to the
+			// domain if it has gone away since (a server stopped, say).
+			select.value = currentTarget;
+			if (!select.value) {
+				select.value = DEFAULT_TARGET;
+				currentTarget = DEFAULT_TARGET;
+			}
+			refreshNote();
+		}
+
+		targets = [{ id: DEFAULT_TARGET, type: 'domain', displayName: 'Domain (all servers)' }];
+		render();
+
+		flowRequest('fsmarTargets', null, 'GET', function(resp) {
+			if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
+				try {
+					var parsed = JSON.parse(resp.getText());
+					if (parsed && parsed.targets && parsed.targets.length) {
+						targets = parsed.targets;
+						render();
+					}
+				} catch (e) {
+					// keep the domain-only fallback
+				}
+			}
+		});
+
+		return {
+			row: row,
+			target: function() { return selected().id; },
+			targetInfo: selected
+		};
+	}
+
+	// ----- publish diff -------------------------------------------------------
+	//
+	// The editor models the routing topology; logging/analytics/events and any
+	// future root block ride through untouched only if the live config was
+	// loaded first. Publishing something built from a sample therefore drops
+	// them. FsmarDiffServlet does the comparison; this renders it.
+	//
+	// Operations are named in words (added / removed / changed), never carried
+	// by color alone.
+
+	function fetchDiff(target, json, done) {
+		flowRequest('fsmarDiff',
+				'target=' + encodeURIComponent(target) + '&json=' + encodeURIComponent(json),
+				'POST', function(resp) {
+			if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
+				try {
+					done(JSON.parse(resp.getText()));
+					return;
+				} catch (e) {
+					done(null, 'unreadable response');
+					return;
+				}
+			}
+			done(null, resp.getStatus() + ' ' + resp.getText());
+		});
+	}
+
+	function diffSummary(diff) {
+		var bits = [];
+		if (diff.removed) bits.push(diff.removed + ' removed');
+		if (diff.added) bits.push(diff.added + ' added');
+		if (diff.changed) bits.push(diff.changed + ' changed');
+		return bits.length ? bits.join(', ') : 'no differences';
+	}
+
+	var DIFF_LABEL = { REMOVED: 'removed', ADDED: 'added', CHANGED: 'changed' };
+
+	function showDiff(diff, info) {
+		var div = document.createElement('div');
+		div.style.padding = '8px';
+		div.style.height = '100%';
+		div.style.boxSizing = 'border-box';
+		div.style.overflow = 'auto';
+		div.style.fontSize = '11px';
+
+		var head = document.createElement('div');
+		head.style.marginBottom = '6px';
+		head.innerHTML = '<b>' + escapeHtml(info.displayName) + '</b> &mdash; '
+			+ escapeHtml(diff.path);
+		div.appendChild(head);
+
+		if (!diff.targetExists) {
+			var none = document.createElement('div');
+			none.textContent = 'Nothing published here yet — publishing creates this file.';
+			div.appendChild(none);
+		} else if (diff.identical) {
+			var same = document.createElement('div');
+			same.textContent = 'Identical to the live configuration.';
+			div.appendChild(same);
+		} else {
+			var sum = document.createElement('div');
+			sum.style.marginBottom = '6px';
+			sum.textContent = diffSummary(diff)
+				+ (diff.truncated ? ' (showing the first ' + diff.entries.length + ')' : '');
+			div.appendChild(sum);
+
+			if (diff.removedRootKeys && diff.removedRootKeys.length) {
+				var warn = document.createElement('div');
+				warn.style.margin = '0 0 8px';
+				warn.style.padding = '6px';
+				warn.style.border = '1px solid var(--vorpal-slate-200, #ccc)';
+				warn.innerHTML = '<b>Removes live top-level settings:</b> '
+					+ escapeHtml(diff.removedRootKeys.join(', '))
+					+ '. These are edited in the Configurator, not here — load the live'
+					+ ' configuration first if you meant to keep them.';
+				div.appendChild(warn);
+			}
+
+			var table = document.createElement('table');
+			table.style.borderCollapse = 'collapse';
+			table.style.width = '100%';
+			table.innerHTML = '<thead><tr>'
+				+ '<th style="text-align:left; padding:2px 6px 2px 0;">Change</th>'
+				+ '<th style="text-align:left; padding:2px 6px 2px 0;">Where</th>'
+				+ '<th style="text-align:left; padding:2px 6px 2px 0;">Live</th>'
+				+ '<th style="text-align:left; padding:2px 0;">After publish</th>'
+				+ '</tr></thead>';
+			var tbody = document.createElement('tbody');
+			for (var i = 0; i < diff.entries.length; i++) {
+				var e = diff.entries[i];
+				var tr = document.createElement('tr');
+				tr.innerHTML =
+					'<td style="padding:2px 6px 2px 0; white-space:nowrap;"><b>'
+						+ escapeHtml(DIFF_LABEL[e.op] || e.op) + '</b></td>'
+					+ '<td style="padding:2px 6px 2px 0; font-family:monospace;">'
+						+ escapeHtml(e.path) + '</td>'
+					+ '<td style="padding:2px 6px 2px 0; font-family:monospace;">'
+						+ escapeHtml(e.from === undefined ? '—' : e.from) + '</td>'
+					+ '<td style="padding:2px 0; font-family:monospace;">'
+						+ escapeHtml(e.to === undefined ? '—' : e.to) + '</td>';
+				tbody.appendChild(tr);
+			}
+			table.appendChild(tbody);
+			div.appendChild(table);
+		}
+
+		var wnd = new mxWindow('Compare with live', div, 80, 80, 720, 420, true, true);
+		wnd.setMaximizable(true);
+		wnd.setScrollable(true);
+		wnd.setResizable(true);
+		wnd.setClosable(true);
+		wnd.setVisible(true);
+	}
+
+	function escapeHtml(s) {
+		return String(s === undefined || s === null ? '' : s)
+			.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+
 	// Serializes the current diagram and converts it to FSMAR 3 JSON via the
 	// export servlet. Shared by the export dialog and the Route Simulator
 	// (which simulates the diagram being edited, before anything is saved).
@@ -342,6 +575,12 @@ window.flowFsmar = (function() {
 		textarea.value = json;
 		div.appendChild(textarea);
 
+		// Where "Save to fsmar" writes. Defaults to the domain; overlays only
+		// appear if their directory exists on this domain.
+		var picker = buildTargetPicker();
+		picker.row.style.marginTop = '6px';
+		div.appendChild(picker.row);
+
 		// Publish outcome, labeled by text (PUBLISHED/FAILED), not color alone.
 		var status = document.createElement('div');
 		status.style.marginTop = '6px';
@@ -354,26 +593,67 @@ window.flowFsmar = (function() {
 		btnDiv.style.textAlign = 'right';
 		btnDiv.style.flexShrink = '0';
 
-		// Writes config/custom/vorpal/fsmar.json on AdminServer — the same
+		// Writes the fsmar.json of the selected target on AdminServer — the same
 		// file a Configurator save writes; the engine SettingsManager reloads
-		// it live. Overwrites the running config, hence the confirm().
+		// it live. Overwrites the running config, hence the confirm(), which
+		// names the target so a cluster/server publish can't be a slip.
 		var pubBtn = document.createElement('button');
 		pubBtn.textContent = 'Save to fsmar';
 		pubBtn.style.cssFloat = 'left';
-		pubBtn.title = 'Publish to the live fsmar configuration (config/custom/vorpal/fsmar.json)';
+		pubBtn.title = 'Publish to the live fsmar configuration';
 		pubBtn.onclick = function() {
-			if (!confirm('Overwrite the live fsmar configuration?')) {
-				return;
-			}
+			var info = picker.targetInfo();
+			// Check what this would change before asking. The editor only
+			// models part of the config, so publishing something built from a
+			// sample can drop live root blocks (logging/analytics/events) that
+			// were never on screen — name them in the prompt rather than
+			// letting them vanish quietly.
+			pubBtn.disabled = true;
+			status.style.color = '';
+			status.textContent = 'Checking what would change…';
+			fetchDiff(picker.target(), textarea.value, function(diff) {
+				pubBtn.disabled = false;
+				status.textContent = '';
+				var prompt = 'Overwrite the live fsmar configuration for '
+					+ info.displayName + '?';
+				if (diff && diff.targetExists) {
+					if (diff.identical) {
+						prompt = 'No differences from the live configuration for '
+							+ info.displayName + '. Publish anyway?';
+					} else {
+						prompt += '\n\n' + diffSummary(diff);
+						if (diff.removedRootKeys && diff.removedRootKeys.length) {
+							prompt += '\n\nThis REMOVES top-level settings that are live now:\n  '
+								+ diff.removedRootKeys.join(', ')
+								+ '\n\nThose are edited in the Configurator, not here. Load the'
+								+ ' live configuration first if you meant to keep them.';
+						}
+					}
+				} else if (diff) {
+					prompt = 'Nothing has been published to ' + info.displayName
+						+ ' yet. Create it?';
+				}
+				if (!confirm(prompt)) {
+					return;
+				}
+				doPublish();
+			});
+		};
+
+		function doPublish() {
 			pubBtn.disabled = true;
 			status.textContent = 'Publishing…';
-			flowRequest('fsmarPublish', 'json=' + encodeURIComponent(textarea.value), 'POST', function(resp) {
+			flowRequest('fsmarPublish',
+					'target=' + encodeURIComponent(picker.target())
+						+ '&json=' + encodeURIComponent(textarea.value),
+					'POST', function(resp) {
 				pubBtn.disabled = false;
 				if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
 					var r = {};
 					try { r = JSON.parse(resp.getText()); } catch (e) { /* show without detail */ }
 					status.style.color = '#060';
-					status.textContent = 'PUBLISHED: ' + (r.path || 'fsmar.json')
+					status.textContent = 'PUBLISHED to ' + (r.displayName || 'fsmar') + ': '
+						+ (r.path || 'fsmar.json')
 						+ (r.bytes ? ' (' + r.bytes + ' bytes)' : '');
 					// Work is now saved to the live config — no unsaved edits.
 					if (window.flowDirty) window.flowDirty.clear();
@@ -382,8 +662,32 @@ window.flowFsmar = (function() {
 					status.textContent = 'FAILED: ' + resp.getStatus() + ' ' + resp.getText();
 				}
 			});
-		};
+		}
 		btnDiv.appendChild(pubBtn);
+
+		// The same comparison the publish prompt runs, on demand and in full —
+		// for when you want to read the change rather than be warned about it.
+		var diffBtn = document.createElement('button');
+		diffBtn.textContent = 'Compare with live';
+		diffBtn.style.cssFloat = 'left';
+		diffBtn.style.marginLeft = '6px';
+		diffBtn.title = 'Show what publishing would change at the selected target';
+		diffBtn.onclick = function() {
+			diffBtn.disabled = true;
+			status.style.color = '';
+			status.textContent = 'Comparing…';
+			fetchDiff(picker.target(), textarea.value, function(diff, error) {
+				diffBtn.disabled = false;
+				if (!diff) {
+					status.style.color = '#a00';
+					status.textContent = 'COMPARE FAILED: ' + error;
+					return;
+				}
+				status.textContent = '';
+				showDiff(diff, picker.targetInfo());
+			});
+		};
+		btnDiv.appendChild(diffBtn);
 
 		var dlBtn = document.createElement('button');
 		dlBtn.textContent = 'Download FSMAR.json';
@@ -630,6 +934,12 @@ window.flowFsmar = (function() {
 		var textarea = dialogTextarea();
 		div.appendChild(textarea);
 
+		// Which configuration "Load live fsmar" reads. Same picker as the export
+		// dialog; the sample is domain-level only and ignores it.
+		var picker = buildTargetPicker();
+		picker.row.style.marginTop = '6px';
+		div.appendChild(picker.row);
+
 		var btnDiv = document.createElement('div');
 		btnDiv.style.marginTop = '8px';
 		btnDiv.style.textAlign = 'right';
@@ -657,7 +967,8 @@ window.flowFsmar = (function() {
 		liveBtn.style.cssFloat = 'left';
 		liveBtn.title = 'Fill the textarea with the live fsmar configuration';
 		liveBtn.onclick = function() {
-			flowRequest('fsmarPublish', null, 'GET', function(resp) {
+			flowRequest('fsmarPublish?target=' + encodeURIComponent(picker.target()),
+					null, 'GET', function(resp) {
 				if (resp.getStatus() >= 200 && resp.getStatus() < 300) {
 					textarea.value = resp.getText();
 				} else {

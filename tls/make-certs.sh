@@ -159,7 +159,11 @@ echo "    CA cert → ${CA_PEM}"
 
 # --- 2. Identity keypair + CSR ------------------------------------------------
 if [ -f "$ID_P12" ] && [ "$FORCE" != true ]; then
-    echo "==> ${ID_P12} exists. Use --force to overwrite." >&2; exit 1
+    # Already generated. That is the normal state on any re-run, so it is a
+    # SUCCESS -- exiting non-zero made an idempotent step report failure and
+    # print a spurious error in the install ladder.
+    echo "==> ${ID_P12} already present — keeping it (use --force to regenerate)."
+    exit 0
 fi
 rm -f "$ID_P12"
 echo "==> Generating identity keypair"

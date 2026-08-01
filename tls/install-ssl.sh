@@ -258,6 +258,10 @@ run_wlst() {
     local py; py="$(mktemp /tmp/blade-ssl.XXXXXX.py)"
     trap 'rm -f "$py"' RETURN
     cat > "$py" <<'PYEOF'
+# -*- coding: utf-8 -*-
+# WLST is Jython 2.x: without this declaration a single non-ASCII byte ANYWHERE
+# in the file -- including an em-dash inside a comment -- is a hard SyntaxError
+# (PEP 263), and the reported line is 'None', which points at nothing.
 import os
 adminurl = os.environ['BLADE_WLS_ADMINURL']
 user     = os.environ['BLADE_WLS_USER']

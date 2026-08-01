@@ -8,9 +8,10 @@
 //
 // Model notes (must match FsmarImportServlet/FsmarExportServlet):
 //  - Selectors live on State/Ingress vertices as <selector> children with
-//    id/type/description/attribute/pattern/expression attributes plus an
-//    `extra` attribute (JSON blob) preserving fields the form doesn't show
-//    (table, namespaces, anything future).
+//    id/type/attribute/pattern/expression/allInstances/namespaces attributes,
+//    plus an `extra` attribute (JSON blob) preserving fields the form doesn't
+//    show (table data, anything future). There is no `description` attribute —
+//    that field was retired from the model and folded into Configuration.notes.
 //  - Transitions carry when/subscriber/region/routeModifier/seq attributes;
 //    seq is the evaluation order within (state, method) — first match wins.
 //  - `extra` attributes anywhere are round-trip passthrough; the UI never
@@ -122,6 +123,16 @@ window.flowTasks = (function() {
 			$p.find('.node-match').val(cell.getAttribute('match') || '');
 		}
 
+		// Entry-transition fields. Only a NAMED ingress gets a generated
+		// dispatch transition — the default ingress IS the "null" state, which
+		// nothing dispatches into.
+		var hasMatchNow = (cell.getAttribute('match') || '').length > 0;
+		var showDispatch = isIngress && hasMatchNow;
+		$p.find('.ingress-dispatch-section').css('display', showDispatch ? '' : 'none');
+		if (showDispatch) {
+			renderDispatchRows(cell);
+		}
+
 		// State ID: the unique JSON key, separate from the application name
 		// (the label). Shown for a State or a NAMED ingress; blank means "use
 		// the name as the id" (the common one-instance-per-app case). Set a
@@ -155,6 +166,110 @@ window.flowTasks = (function() {
 				setAttr(cell, 'stateId', ($(this).val() || '').trim());
 				if (window.flowGraph) { window.flowGraph.refresh(); }
 			}
+		});
+	}
+
+	// ----- ingress entry transition -------------------------------------------
+	//
+	// A named ingress's dispatch transition (null -> this ingress) is never
+	// drawn: import absorbs it and export regenerates it from the ingress's
+	// `match`. Its other fields ride the cell's `dispatchExtra` attribute — a
+	// JSON object keyed by SIP method, the same shape as `triggerExtras` —
+	// which FsmarExportServlet merges back over the regenerated transition.
+	// This panel is what makes those fields visible and editable rather than
+	// merely preserved.
+
+	function parseDispatchExtra(cell) {
+		var raw = cell.getAttribute('dispatchExtra') || '';
+		if (!raw) return {};
+		try {
+			var o = JSON.parse(raw);
+			return (o && typeof o === 'object') ? o : {};
+		} catch (e) {
+			return {};
+		}
+	}
+
+	// Methods leaving this ingress — exactly the set export generates a
+	// dispatch for. Falls back to INVITE when nothing is drawn yet, and
+	// includes any method already carrying data so an imported config's fields
+	// are never hidden just because its edge was deleted.
+	function dispatchMethods(cell, extra) {
+		var methods = [];
+		function add(m) {
+			if (m && methods.indexOf(m) < 0) methods.push(m);
+		}
+		if (cell && cell.edges) {
+			for (var i = 0; i < cell.edges.length; i++) {
+				var e = cell.edges[i];
+				if (e.source === cell && e.value && e.value.tagName === 'Transition') {
+					add(e.getAttribute('label') || 'INVITE');
+				}
+			}
+		}
+		for (var k in extra) {
+			if (extra.hasOwnProperty(k)) add(k);
+		}
+		if (!methods.length) add('INVITE');
+		return methods;
+	}
+
+	function renderDispatchRows(cell) {
+		var extra = parseDispatchExtra(cell);
+		var methods = dispatchMethods(cell, extra);
+		var regions = window.flowMeta.regions();
+		var $c = panel(cell).find('.ingress-dispatch-rows').empty();
+
+		for (var i = 0; i < methods.length; i++) {
+			var m = methods[i];
+			var vals = extra[m] || {};
+			var opts = '<option value=""></option>';
+			for (var r = 0; r < regions.length; r++) {
+				opts += '<option' + (regions[r] === vals.region ? ' selected' : '') + '>'
+					+ regions[r] + '</option>';
+			}
+			$c.append(
+				'<div class="dispatch-row" data-method="' + escapeAttr(m) + '">' +
+					'<span class="dispatch-method">' + escapeAttr(m) + '</span>' +
+					'<input class="dispatch-subscriber" type="text" placeholder="From"' +
+						' title="Subscriber header" value="' + escapeAttr(vals.subscriber || '') + '" />' +
+					'<select class="dispatch-region" title="Routing region">' + opts + '</select>' +
+				'</div>');
+		}
+	}
+
+	// Writes the rows back, preserving any fields this panel doesn't model
+	// (a custom id, unknown keys) and dropping a method entry that has been
+	// emptied so the exported config stays minimal.
+	function saveDispatchRows() {
+		var cell = window.flowSelectedCell;
+		if (!cell || !cell.value) return;
+		var extra = parseDispatchExtra(cell);
+
+		panel(cell).find('.ingress-dispatch-rows .dispatch-row').each(function() {
+			var $row = $(this);
+			var method = $row.attr('data-method');
+			var entry = extra[method] || {};
+			var subscriber = $.trim($row.find('.dispatch-subscriber').val() || '');
+			var region = $row.find('.dispatch-region').val() || '';
+
+			if (subscriber) { entry.subscriber = subscriber; } else { delete entry.subscriber; }
+			if (region) { entry.region = region; } else { delete entry.region; }
+
+			if (Object.keys(entry).length) {
+				extra[method] = entry;
+			} else {
+				delete extra[method];
+			}
+		});
+
+		setAttr(cell, 'dispatchExtra', Object.keys(extra).length ? JSON.stringify(extra) : '');
+	}
+
+	function bindDispatch() {
+		$(document).off('change.flowDispatch', '.ingress-dispatch-rows input, .ingress-dispatch-rows select')
+				.on('change.flowDispatch', '.ingress-dispatch-rows input, .ingress-dispatch-rows select', function() {
+			saveDispatchRows();
 		});
 	}
 
@@ -271,7 +386,12 @@ window.flowTasks = (function() {
 
 	// ----- state selectors ----------------------------------------------------
 
-	var SELECTOR_TYPES = ['attribute', 'regex', 'json', 'xml', 'sdp', 'table'];
+	// From Selector's @JsonSubTypes, via flowMeta. Rendering order is the
+	// model's own; ATTRIBUTE_LABELS below supplies the per-type wording and a
+	// type with no entry there simply shows the generic label.
+	function selectorTypes() {
+		return window.flowMeta.selectorTypes();
+	}
 
 	// What the `attribute` field means per selector type (matches the
 	// framework v3 selector classes). Empty label = field hidden.
@@ -294,6 +414,65 @@ window.flowTasks = (function() {
 	// single source saveStateSelectors() reads back — in sync underneath.
 
 	var MATCH_STRATEGIES = ['hash', 'prefix', 'range'];
+
+	// Pseudo-headers understood by Selector.readSource (framework v3
+	// configuration.selectors.Selector). A closed, case-sensitive set with one
+	// canonical spelling each — anything else is read as an ordinary SIP
+	// header, so a typo fails silently. Offered as a datalist: suggestions,
+	// not a constraint, since real header names are equally valid here.
+	var PSEUDO_HEADERS = [
+		['requestURI',        'the request URI'],
+		['originIP',          'originating IP (X-Vorpal-ID, Via received=, remote addr)'],
+		['peerIP',            'immediate peer IP'],
+		['body',              'the message body'],
+		['transport',         'UDP | TCP | TLS | WS | WSS'],
+		['isSecure',          '"true" | "false"'],
+		['clientCertSubject', 'TLS client certificate subject'],
+		['clientCertIssuer',  'TLS client certificate issuer'],
+		['tlsCipher',         'negotiated TLS cipher']
+	];
+
+	function pseudoHeaderDatalist(listId) {
+		var opts = PSEUDO_HEADERS.map(function(p) {
+			return '<option value="' + p[0] + '">' + escapeAttr(p[1]) + '</option>';
+		}).join('');
+		return '<datalist id="' + listId + '">' + opts + '</datalist>';
+	}
+
+	// ----- xml namespace editor -----------------------------------------------
+	// XmlSelector.namespaces is a prefix -> URI map. Without it the XPath
+	// evaluator stays namespace-unaware and a namespaced expression silently
+	// extracts nothing, so it needs a real control, not the raw JSON blob.
+
+	function namespaceRowHtml(prefix, uri) {
+		return '<div class="sel-ns-row">' +
+			'<input class="sel-ns-prefix" type="text" value="' + escapeAttr(prefix || '') + '" placeholder="prefix" />' +
+			' <input class="sel-ns-uri" type="text" value="' + escapeAttr(uri || '') + '" placeholder="urn:example:ns" />' +
+			' ' + removeSvg('sel-ns-remove', '14') +
+			'</div>';
+	}
+
+	function namespaceEditorHtml(ns) {
+		var rows = '';
+		for (var p in ns) {
+			if (ns.hasOwnProperty(p)) rows += namespaceRowHtml(p, ns[p]);
+		}
+		return '<label>Namespaces <span class="hint">(prefix → URI; required for a namespaced XPath)</span></label>' +
+			'<div class="sel-ns-rows">' + rows + '</div>' +
+			'<span class="add-btn sel-ns-add" title="Add namespace">+ add namespace</span>';
+	}
+
+	// Read the namespace rows back into a prefix -> URI object. Rows missing
+	// either half are dropped (an unnamed prefix cannot resolve anything).
+	function readNamespaces($row) {
+		var ns = {};
+		$row.find('.sel-ns-row').each(function() {
+			var prefix = $.trim($(this).find('.sel-ns-prefix').val() || '');
+			var uri = $.trim($(this).find('.sel-ns-uri').val() || '');
+			if (prefix && uri) ns[prefix] = uri;
+		});
+		return ns;
+	}
 
 	function parseExtraObj(s) {
 		if (!s) return {};
@@ -408,21 +587,25 @@ window.flowTasks = (function() {
 	function renderStateSelectors(cell) {
 		var $c = panel(cell).find('.state-selectors').empty();
 		var selectors = getChildElements(cell, 'selector');
+		// state.html is loaded into four panels (#State, #Gateway, #Ingress,
+		// #Egress), so a row index alone is not a unique DOM id — scope the
+		// datalist ids by the owning panel's tag.
+		var scope = (cell && cell.value) ? cell.value.tagName : 'State';
 		for (var i = 0; i < selectors.length; i++) {
-			$c.append(selectorRowHtml(selectors[i], i));
+			$c.append(selectorRowHtml(selectors[i], i, scope));
 		}
 	}
 
-	function selectorRowHtml(el, idx) {
+	function selectorRowHtml(el, idx, scope) {
 		var type = (el.getAttribute('type') || 'attribute').toLowerCase();
-		if (SELECTOR_TYPES.indexOf(type) < 0) type = 'attribute';
+		if (selectorTypes().indexOf(type) < 0) type = 'attribute';
 		var id = el.getAttribute('id') || '';
 		var attribute = el.getAttribute('attribute') || '';
 		var pattern = el.getAttribute('pattern') || '';
 		var expression = el.getAttribute('expression') || '';
 		var extra = el.getAttribute('extra') || '';
 
-		var typeOptions = SELECTOR_TYPES.map(function(opt) {
+		var typeOptions = selectorTypes().map(function(opt) {
 			return '<option' + (opt === type ? ' selected' : '') + '>' + opt + '</option>';
 		}).join('');
 
@@ -430,6 +613,17 @@ window.flowTasks = (function() {
 		var attrLabel = ATTRIBUTE_LABELS[type];
 		var hideAttr = attrLabel ? '' : ' style="display:none;"';
 		var hideRegex = isRegex ? '' : ' style="display:none;"';
+		// allInstances is an AttributeSelector field only; namespaces an
+		// XmlSelector one. Both are real model fields, not `extra` passengers.
+		var isAttribute = (type === 'attribute');
+		var isXml = (type === 'xml');
+		var allInstances = (el.getAttribute('allInstances') === 'true');
+		var namespaces = parseExtraObj(el.getAttribute('namespaces'));
+		// Pseudo-headers are only meaningful where `attribute` names a source:
+		// the attribute and regex selectors. JsonPath/XPath/SDP take their own
+		// syntax there.
+		var attrListId = 'sel-src-list-' + (scope || 'State') + '-' + idx;
+		var attrList = (isAttribute || isRegex) ? ' list="' + attrListId + '"' : '';
 		// Table selectors get a dedicated grid editor; their data still rides in
 		// the `extra` blob, but the raw textarea is hidden and used only as the
 		// sync sink. Other types: the blob carries what the form doesn't model
@@ -439,9 +633,10 @@ window.flowTasks = (function() {
 		var tableBlock = isTable
 			? '<div class="sel-field sel-table">' + tableEditorHtml(tableObj) + '</div>'
 			: '';
-		// Show the raw blob when it carries data, or always for xml (namespaces
-		// are entered there). Never for table — the grid owns that data.
-		var hideExtra = (!isTable && (extra || type === 'xml')) ? '' : ' style="display:none;"';
+		// Show the raw blob only when it actually carries something. XML
+		// namespaces used to live here; they have their own editor now, so xml
+		// no longer forces it open. Never for table — the grid owns that data.
+		var hideExtra = (!isTable && extra) ? '' : ' style="display:none;"';
 
 		return '' +
 			'<fieldset class="selector-row" data-idx="' + idx + '">' +
@@ -461,8 +656,21 @@ window.flowTasks = (function() {
 
 				'<div class="sel-field sel-attribute-field"' + hideAttr + '>' +
 					'<label class="sel-attribute-label">' + (attrLabel || '') + '</label>' +
-					'<input class="sel-attribute" type="text" value="' + escapeAttr(attribute) + '" />' +
+					'<input class="sel-attribute" type="text" value="' + escapeAttr(attribute) + '"' + attrList + ' />' +
+					((isAttribute || isRegex) ? pseudoHeaderDatalist(attrListId) : '') +
 				'</div>' +
+
+				(isAttribute ?
+				'<div class="sel-field sel-allinstances-field">' +
+					'<label class="sel-check">' +
+						'<input class="sel-allinstances" type="checkbox"' + (allInstances ? ' checked' : '') + ' /> ' +
+						'Read every instance of a repeating header' +
+					'</label>' +
+					'<span class="hint">Joins all instances so a <b>matches</b> condition is true if <i>any</i> instance matches. Off = first instance only.</span>' +
+				'</div>' : '') +
+
+				(isXml ?
+				'<div class="sel-field sel-ns-field">' + namespaceEditorHtml(namespaces) + '</div>' : '') +
 
 				'<div class="sel-field sel-pattern-field"' + hideRegex + '>' +
 					'<label>Pattern <span class="hint">(regex; named groups become ${id.group} variables)</span></label>' +
@@ -492,12 +700,18 @@ window.flowTasks = (function() {
 		var items = [];
 		panel(cell).find('.state-selectors .selector-row').each(function() {
 			var $row = $(this);
+			var type = $row.find('.sel-type').val();
 			items.push({
-				type: $row.find('.sel-type').val(),
+				type: type,
 				id: $row.find('.sel-id').val(),
 				attribute: $row.find('.sel-attribute').val(),
 				pattern: $row.find('.sel-pattern').val(),
 				expression: $row.find('.sel-expression').val(),
+				// Only read the type-specific controls when that type is
+				// rendered — switching type re-renders, and a stale hidden
+				// control must not write into the new subclass.
+				allInstances: (type === 'attribute') && $row.find('.sel-allinstances').is(':checked'),
+				namespaces: (type === 'xml') ? readNamespaces($row) : null,
 				extra: $row.find('.sel-extra').val()
 			});
 		});
@@ -510,6 +724,12 @@ window.flowTasks = (function() {
 			if (item.type === 'regex') {
 				if (item.pattern) el.setAttribute('pattern', item.pattern);
 				if (item.expression) el.setAttribute('expression', item.expression);
+			}
+			// Omitted when false / empty, matching the model's NON_DEFAULT and
+			// NON_NULL inclusion so round-tripped configs stay minimal.
+			if (item.allInstances) el.setAttribute('allInstances', 'true');
+			if (item.namespaces && Object.keys(item.namespaces).length > 0) {
+				el.setAttribute('namespaces', JSON.stringify(item.namespaces));
 			}
 			if (item.extra) el.setAttribute('extra', item.extra);
 		});
@@ -550,6 +770,19 @@ window.flowTasks = (function() {
 			var $row = $(this).closest('.selector-row');
 			if ($row.find('.sel-type').val() === 'table') syncTableToExtra($row);
 			saveStateSelectors();
+		});
+
+		// XML namespaces: add a prefix → URI row (blank; persists once filled).
+		$(document).off('click.flowSel', '.sel-ns-add').on('click.flowSel', '.sel-ns-add', function() {
+			$(this).closest('.sel-ns-field').find('.sel-ns-rows').append(namespaceRowHtml('', ''));
+			return false;
+		});
+
+		// XML namespaces: remove a row.
+		$(document).off('click.flowSel', '.sel-ns-remove').on('click.flowSel', '.sel-ns-remove', function() {
+			$(this).closest('.sel-ns-row').remove();
+			saveStateSelectors();
+			return false;
 		});
 
 		// Table editor: add a translation row (blank — it persists once keyed).
@@ -611,7 +844,24 @@ window.flowTasks = (function() {
 	// ----- transition panel --------------------------------------------------
 
 	function loadTransition(cell) {
-		$('#transition-method').val(cell.getAttribute('label') || 'INVITE');
+		// Fill the closed-value selects from the model before reading the cell
+		// into them: the options in transition.html are only a static fallback
+		// for a failed /fsmarMeta fetch. Region and routeModifier keep a blank
+		// first option — unset means "container default" (NEUTRAL / ROUTE).
+		var method = cell.getAttribute('label') || 'INVITE';
+		var methods = window.flowMeta.methods();
+		// A canvas rename (F2) can set any label, including an in-dialog method
+		// the router will never see. Show it rather than silently displaying
+		// INVITE — the validator reports it as an error on export.
+		if (methods.indexOf(method) < 0) {
+			methods = [method].concat(methods);
+		}
+		window.flowMeta.fillSelect($('#transition-method'), methods, false);
+		window.flowMeta.fillSelect($('#transition-region'), window.flowMeta.regions(), true);
+		window.flowMeta.fillSelect($('#transition-route-modifier'),
+				window.flowMeta.routeModifiers(), true);
+
+		$('#transition-method').val(method);
 		$('#transition-when').val(cell.getAttribute('when') || '');
 		$('#transition-seq').val(cell.getAttribute('seq') || '');
 		$('#transition-txid').val(cell.getAttribute('txId') || '');
@@ -622,14 +872,15 @@ window.flowTasks = (function() {
 		$('#transition-next').val(target ? (target.getAttribute('label') || '') : '');
 		renderRoutes(cell);
 
-		// Routes belong at the egress (or are pointless app-to-app). Show this
-		// transition's own route editor only for a legacy app-to-app transition
-		// that already carries routes; for an egress target, point to the node.
+		// An egress node owns its own routes, so for an egress target we point
+		// at the node instead of offering a second place to set them. For every
+		// other target the editor is shown: routes on an app-to-app hop are NOT
+		// pointless — AppRouter passes them to createRouterInfo alongside the
+		// resolved app (AppRouter.java:381-385, Transition.java:207-213), which
+		// is the JSR-289 "invoke this app AND push these Route headers" shape.
 		var targetIsEgress = !!(target && target.getAttribute('role') === 'egress');
-		var hasRoutes = getChildElements(cell, 'route').length > 0;
 		$('#transition-egress-note').css('display', targetIsEgress ? '' : 'none');
-		$('#transition-routes-section').css('display',
-				(!targetIsEgress && hasRoutes) ? '' : 'none');
+		$('#transition-routes-section').css('display', targetIsEgress ? 'none' : '');
 	}
 
 	function renderRoutes(cell) {
@@ -897,6 +1148,7 @@ window.flowTasks = (function() {
 	$(function() {
 		bindNode();
 		bindEgress();
+		bindDispatch();
 		bindStateSelectors();
 		bindTransition();
 		bindFlowModel();

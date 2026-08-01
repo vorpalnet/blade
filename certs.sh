@@ -7,7 +7,7 @@
 # from customer-issued material (e.g. a corporate certificate process that
 # hands you PEM or PKCS12 files). The output feeds:
 #
-#   ./install-occas.sh <env> secure     wire the keystores + SSL ports into
+#   ./blade.sh <profile>  (row: Turn on HTTPS / SIP-TLS)  wires the keystores
 #                                       the domain (admin, engine template,
 #                                       static engine)
 #
@@ -79,7 +79,7 @@ done
 ENV_ARG="${POSITIONAL[0]}"; MODE="${POSITIONAL[1]}"
 case "$MODE" in generate|import|show) ;; *) die "Unknown mode: ${MODE}" ;; esac
 
-# --- Resolve conf + secret (same convention as install-occas.sh) ---
+# --- Resolve conf + secret (same convention as blade.sh profiles) ---
 if [ -f "$ENV_ARG" ]; then
     CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"; SECRET_FILE="${ENV_ARG%.conf}.secret"
 else
@@ -278,7 +278,7 @@ do_show() {
 next_steps() {
     log ""
     log "${C_BOLD}Next steps${C_RESET}"
-    log "  1. Wire the domain:        ./install-occas.sh ${ENV_NAME} secure"
+    log "  1. Wire the domain:        ./blade.sh ${ENV_NAME}  -> Turn on HTTPS / SIP-TLS"
     log "  2. Trust the CA JVM-wide on every box that CALLS this environment"
     log "     (deploy hosts for t3s, peers for REST):"
     log "       keytool -importcert -cacerts -alias blade-${ENV_NAME} -file ${CERTS_DIR}/ca.pem"

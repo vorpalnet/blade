@@ -1,5 +1,14 @@
 # Installing OCCAS from scratch
 
+> **This page describes the deprecated `install-occas.sh`.** Use **`./blade.sh`**
+> instead — it does everything below plus the two things this script never did:
+> it installs the **systemd boot services**, so a host that reboots comes back on
+> its own, and it reaches the **engine hosts** to provision them. It also puts
+> Node Manager in its own `nmdomain`, so the app domain can be rebuilt without
+> taking Node Manager down. Profiles live in `.conf/<name>/`, not here.
+> `install-occas.sh` now refuses to run without `BLADE_ALLOW_DEPRECATED_INSTALLER=1`
+> and is scheduled for deletion.
+
 Zero to a running OCCAS dynamic-cluster domain on a fresh Linux box (the OCI
 `opc` user is the running example — any sudo-capable admin user works). One
 driver script, one command:
@@ -7,7 +16,8 @@ driver script, one command:
 ```
 git clone https://github.com/vorpalnet/blade.git
 cd blade
-./install-occas.sh
+./blade.sh                 # pick or create a profile, then the dashboard
+./blade.sh <name> install   # or: unattended, end to end
 ```
 
 With no arguments it works out the next step itself: builds the env conf if

@@ -32,6 +32,69 @@
 			<label>When <span class="hint">(condition over extracted values; empty = always matches)</span></label>
 			<textarea id="transition-when" placeholder="${To.user} == 'bob' &amp;&amp; ${tier} == 'gold'"></textarea>
 
+			<!-- What the expression engine actually supports. None of this was
+			     discoverable from the editor before, so configs used == and
+			     little else. Operators: Expression.java. Variables: the
+			     pseudo-variables AppRouter publishes before selectors run,
+			     plus the Context meta-variables. -->
+			<details class="expr-help">
+				<summary>Operators and built-in variables</summary>
+				<div class="expr-help-body">
+					<p class="expr-help-group">
+						<b>Compare</b>
+						<code>==</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code>
+						<code>&lt;=</code> <code>&gt;=</code>
+						<span class="hint">numeric when both sides are numbers, otherwise text</span>
+					</p>
+					<p class="expr-help-group">
+						<b>Combine</b>
+						<code>&amp;&amp;</code> <code>||</code> <code>!</code> <code>(&nbsp;)</code>
+					</p>
+					<p class="expr-help-group">
+						<b>Match</b>
+						<code>matches</code>
+						<span class="hint">full-string regex</span>
+						<code>contains</code>
+						<span class="hint">substring</span>
+						<code>insubnet</code>
+						<span class="hint">CIDR, IPv4 and IPv6 — e.g. <code>${originIP} insubnet '10.0.0.0/8'</code></span>
+					</p>
+					<p class="expr-help-group">
+						<b>Request</b>
+						<code>${method}</code> <code>${requestURI}</code>
+						<code>${region}</code> <code>${regionLabel}</code> <code>${directive}</code>
+					</p>
+					<p class="expr-help-group">
+						<b>For route templates, not conditions</b>
+						<code>${previousApp}</code> <code>${previousState}</code>
+						<span class="hint">name the application that just ran. Inside a
+							condition they are <em>constants</em> &mdash; always this state
+							&mdash; so testing one always matches (or never does) and hides
+							every transition below it. Use them in a Route URI.</span>
+					</p>
+					<p class="expr-help-group">
+						<b>Time and sampling</b>
+						<code>${hour}</code>
+						<span class="hint">0&ndash;23, server local</span>
+						<code>${dayOfWeek}</code>
+						<span class="hint">MONDAY&hellip;SUNDAY</span>
+						<code>${hash100}</code>
+						<span class="hint">0&ndash;99, stable per call &mdash; use for percentage rollout,
+							e.g. <code>${hash100} &lt; 5</code> sends 5% of calls this way</span>
+					</p>
+					<p class="expr-help-group">
+						<b>Also</b>
+						<code>${now}</code> <code>${now:yyyy-MM-dd}</code> <code>${uuid}</code>
+						<span class="hint">a name that resolves to nothing falls back to an
+							environment variable, then a system property, then stays literal</span>
+					</p>
+					<p class="expr-help-note">
+						A selector may reuse any of these names to override it. An unresolved
+						<code>${x}</code> compares as empty and is false in a boolean test.
+					</p>
+				</div>
+			</details>
+
 			<label>Evaluation Order <span class="hint">(within same state+method; lower runs first — first match wins)</span></label>
 			<input id="transition-seq" type="number" min="0" step="1" />
 
@@ -61,9 +124,10 @@
 				and modifier are set on the egress node itself (select it to edit).
 			</div>
 
-			<!-- Route URIs + modifier. Routes are pointless on app-to-app hops
-			     (the next app routes itself) and belong at the egress, so this
-			     section is hidden unless the transition already carries routes. -->
+			<!-- Route URIs + modifier. Shown for every target except an egress
+			     node, which owns its own routes. On an app-to-app hop these are
+			     passed to the container along with the selected application —
+			     "invoke this app AND push these Route headers". -->
 			<div id="transition-routes-section">
 				<label>Route URIs</label>
 				<div style="margin-bottom: 4px;">

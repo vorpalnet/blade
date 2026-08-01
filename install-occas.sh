@@ -1,5 +1,24 @@
 #!/usr/bin/env bash
 # ============================================================================
+# DEPRECATED — use ./blade.sh instead. This script is scheduled for deletion.
+#
+# blade.sh now does everything this does and more, from one re-runnable
+# dashboard: eDelivery download, silent install, the dynamic-cluster domain,
+# Node Manager, the AdminServer, the ENGINE hosts, TLS, the Remote Console,
+# uninstall — plus the systemd boot services this script never had. That gap
+# is why an engine host once sat dead for eight days after a reboot.
+#
+# The two also disagree on where Node Manager lives. This script puts NM inside
+# the app domain; blade.sh gives it its own 'nmdomain' so the app domain can be
+# rebuilt without taking NM down. Running BOTH against one host will produce a
+# confusing half-and-half. Pick blade.sh.
+#
+#   ./blade.sh <profile>            dashboard
+#   ./blade.sh <profile> install    unattended, includes boot services + engines
+#
+# Kept only until the ashburn rebuild confirms the replacement end-to-end.
+# ============================================================================
+# ============================================================================
 # install-occas.sh - Silent install + dynamic-cluster domain config for OCCAS.
 #
 # The OCCAS GUI installer needs X11, which is painful/broken over modern macOS
@@ -125,6 +144,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OCCAS_DIR="${SCRIPT_DIR}/build-profiles/occas"
+
+# Loud, and requires an explicit opt-out — the failure mode of using this by
+# habit is a host with no boot services and a Node Manager in the wrong domain,
+# neither of which is visible until something reboots.
+if [ -z "${BLADE_ALLOW_DEPRECATED_INSTALLER:-}" ]; then
+    printf '\n\033[33m%s\033[0m\n' "install-occas.sh is DEPRECATED and will be deleted."
+    printf '%s\n'   "Use ./blade.sh instead — it does all of this plus the systemd boot"
+    printf '%s\n'   "services this script never had, and it reaches the engine hosts."
+    printf "\n%s\n"   "  ./blade.sh ${1:-<profile>}            dashboard"
+    printf "%s\n\n" "  ./blade.sh ${1:-<profile>} install    unattended"
+    printf '%s\n\n' "To run this anyway: BLADE_ALLOW_DEPRECATED_INSTALLER=1 $0 $*"
+    exit 2
+fi
 
 if [ -z "${NO_COLOR:-}" ] && [ -t 1 ]; then
     C_BLUE=$'\033[34m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[31m'

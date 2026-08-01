@@ -47,12 +47,17 @@ public class FsmarValidateServlet extends HttpServlet {
 
 	private final ObjectMapper mapper = new ObjectMapper();
 
-	private static final Set<String> REGIONS = FsmarImportServlet.setOf(
-			"ORIGINATING", "TERMINATING", "NEUTRAL");
-	private static final Set<String> ROUTE_MODIFIERS = FsmarImportServlet.setOf(
-			"ROUTE", "ROUTE_BACK", "ROUTE_FINAL", "NO_ROUTE");
-	private static final Set<String> SELECTOR_TYPES = FsmarImportServlet.setOf(
-			"attribute", "json", "xml", "sdp", "regex", "table");
+	// Read from the framework model (see FsmarMeta), not transcribed here — a
+	// new selector subclass or routing region must not need an edit in this
+	// file to stop being reported as invalid.
+	private static final Set<String> REGIONS = FsmarMeta.REGION_SET;
+	private static final Set<String> ROUTE_MODIFIERS = FsmarMeta.ROUTE_MODIFIER_SET;
+	private static final Set<String> SELECTOR_TYPES = FsmarMeta.SELECTOR_TYPE_SET;
+	/// SIP methods that can start a dialog (or are dialog-less). The container
+	/// invokes an application router for **initial requests only** — in-dialog
+	/// requests follow the path established at setup — so a trigger keyed by
+	/// BYE, CANCEL, ACK, INFO, PRACK or UPDATE can never fire.
+	static final Set<String> INITIAL_REQUEST_METHODS = FsmarMeta.METHOD_SET;
 
 	@Override
 	protected void doPost(HttpServletRequest request, HttpServletResponse response)
@@ -151,6 +156,15 @@ public class FsmarValidateServlet extends HttpServlet {
 			}
 		}
 
+		// A selector id is the name of the context variable it writes, so a
+		// repeat means the later selector overwrites the earlier one's value —
+		// last writer wins, config-wide, since the context spans states.
+		// Usually a mistake, no longer fatal: v3's Selector deliberately does
+		// not carry @JsonIdentityInfo (it did until 2026-08-01, which made a
+		// duplicate fail the entire config to load). Tracked across every
+		// state, id -> where it was first seen.
+		Map<String, String> selectorIdOwner = new java.util.LinkedHashMap<>();
+
 		// Pass 2: per-state checks
 		it = states.fields();
 		while (it.hasNext()) {
@@ -171,6 +185,18 @@ public class FsmarValidateServlet extends HttpServlet {
 						+ " (it only matters if '" + stateName + "' can be a previous app some other way)");
 			}
 
+			// `app` on the entry state selects nothing. The walk only ever
+			// resolves a *target* state's app (AppRouter:379) — never the
+			// state it is currently standing in — and "null" means "no
+			// previous application", not an application. Setting it only
+			// rewrites ${previousApp} on the first hop, where it then
+			// contradicts ${previousState}.
+			if ("null".equals(stateName) && !state.path("app").asText("").isEmpty()) {
+				warnings.add(at + ".app has no effect — the entry state is not an application."
+						+ " It only changes ${previousApp} on the first hop (where ${previousState}"
+						+ " still reports 'null'), and redirects any transition with next: \"null\"");
+			}
+
 			warnUnknown(state, FsmarImportServlet.STATE_KNOWN, at, warnings);
 
 			// Selectors
@@ -180,7 +206,18 @@ public class FsmarValidateServlet extends HttpServlet {
 			} else if (selectors.isArray()) {
 				int i = 0;
 				for (JsonNode sel : selectors) {
-					validateSelector(sel, at + ".selectors[" + i + "]", errors, warnings);
+					String selAt = at + ".selectors[" + i + "]";
+					validateSelector(sel, selAt, errors, warnings);
+					String selId = sel.path("id").asText("");
+					if (!selId.isEmpty()) {
+						String owner = selectorIdOwner.putIfAbsent(selId, selAt);
+						if (owner != null) {
+							warnings.add(selAt + " reuses selector id '" + selId + "' (already used by "
+									+ owner + ") — the id is the context variable name and the context"
+									+ " spans states, so whichever runs later overwrites the earlier"
+									+ " value. Use distinct ids unless that is what you want");
+						}
+					}
 					i++;
 				}
 			}
@@ -198,6 +235,15 @@ public class FsmarValidateServlet extends HttpServlet {
 				String trigAt = at + ".triggers['" + method + "']";
 				JsonNode trigger = trigEntry.getValue();
 
+				// Reachable at all? The App Router only ever sees initial
+				// requests, so an in-dialog method here is dead config — it
+				// serializes fine and simply never matches.
+				if (!INITIAL_REQUEST_METHODS.contains(method)) {
+					errors.add(trigAt + " can never fire — the application router is only invoked"
+							+ " for initial requests, and '" + method + "' is not one of: "
+							+ INITIAL_REQUEST_METHODS);
+				}
+
 				warnUnknown(trigger, FsmarImportServlet.TRIGGER_KNOWN, trigAt, warnings);
 
 				JsonNode txList = trigger.path("transitions");
@@ -212,7 +258,43 @@ public class FsmarValidateServlet extends HttpServlet {
 					i++;
 				}
 				validateShadowing(txList, trigAt, warnings);
+				validateConstantConditions(txList, stateName, state, trigAt, warnings);
 			}
+		}
+	}
+
+	/// Flags a `when` that tests `${previousState}` or `${previousApp}`.
+	///
+	/// Both are constants inside a condition. `AppRouter` sets them from the
+	/// same state id it just used to look the state up (`previousState` = the
+	/// enclosing state's key; `previousApp` = that state's `app`, defaulting to
+	/// the key) immediately before evaluating that state's transitions. So a
+	/// comparison against either is always-true or always-false for every call
+	/// — it reads like a discriminator and behaves like an unconditional
+	/// transition, silently making everything below it unreachable.
+	///
+	/// [#validateShadowing] cannot see this: the `when` is neither empty nor a
+	/// duplicate. The variables are genuinely useful in **route** templates,
+	/// where they name the application that just ran — this only applies to
+	/// `when`.
+	private static void validateConstantConditions(JsonNode txList, String stateName,
+			JsonNode state, String trigAt, List<String> warnings) {
+		String app = state.path("app").asText("");
+		String previousApp = app.isEmpty() ? stateName : app;
+		int i = 0;
+		for (JsonNode tx : txList) {
+			String when = tx.path("when").asText("");
+			if (when.contains("${previousState}")) {
+				warnings.add(trigAt + ".transitions[" + i + "].when tests ${previousState},"
+						+ " which is always '" + stateName + "' here — the condition is a constant,"
+						+ " not a test. Use it in a route template instead");
+			}
+			if (when.contains("${previousApp}")) {
+				warnings.add(trigAt + ".transitions[" + i + "].when tests ${previousApp},"
+						+ " which is always '" + previousApp + "' here — the condition is a constant,"
+						+ " not a test. Use it in a route template instead");
+			}
+			i++;
 		}
 	}
 
@@ -299,6 +381,21 @@ public class FsmarValidateServlet extends HttpServlet {
 					+ "fine for a terminal application, a typo otherwise");
 		}
 
+		// next + ROUTE_BACK + routes is not an ordinary hop. AppRouter checks
+		// this shape (:360-371) BEFORE it resolves the target application, and
+		// returns a null-app decision: the call leaves OCCAS via these routes
+		// and `next` is where it RESUMES when the container routes it back.
+		// The target's application does not run now. On the canvas this looks
+		// like any other arrow, and the editor's own way of drawing it is an
+		// egress node with a return state — so say so.
+		if (!next.isEmpty() && hasRoutes
+				&& "ROUTE_BACK".equals(tx.path("routeModifier").asText(""))) {
+			warnings.add(at + " is a route-back, not a hop to '" + next + "': the call leaves"
+					+ " OCCAS via these routes first and only resumes at '" + next + "' when it"
+					+ " comes back, so that application does not run on this hop."
+					+ " The editor draws this as an egress node with a return state");
+		}
+
 		String when = tx.path("when").asText("");
 		if (!when.isEmpty()) {
 			try {
@@ -352,7 +449,9 @@ public class FsmarValidateServlet extends HttpServlet {
 			String name = names.next();
 			if (!allowed.contains(name)) {
 				warnings.add(at + " has unknown field '" + name
-						+ "' — preserved on round-trip, but check it is not a typo");
+						+ "' — preserved on round-trip but ignored by the engine"
+						+ " (SettingsManager reads with FAIL_ON_UNKNOWN_PROPERTIES off),"
+						+ " so check it is not a typo");
 			}
 		}
 	}

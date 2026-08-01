@@ -20,6 +20,25 @@
 	<div class="config-hint" style="margin-top: 16px;">
 		Select a state or transition on the canvas to edit its properties.
 	</div>
+
+	<!-- The rest of the FSMAR config is real and editable, just not here: this
+	     editor owns the routing topology, the Configurator owns everything
+	     else. Saying so beats leaving operators to assume defaultApplication
+	     is all there is. Those fields are preserved untouched on every
+	     round-trip through this editor. -->
+	<div class="config-aside">
+		<h4>Elsewhere in this configuration</h4>
+		<p>
+			Logging, analytics, the event bus and free-text notes are part of the
+			same <code>fsmar</code> configuration but are edited in the
+			Configurator, along with per-cluster and per-server overrides. This
+			editor leaves them untouched.
+		</p>
+		<p>
+			<a href="/blade/configurator/configurator.html?schema=fsmar" target="_blank"
+				rel="noopener">Open fsmar in the Configurator &rarr;</a>
+		</p>
+	</div>
 </div>
 
 </body>
