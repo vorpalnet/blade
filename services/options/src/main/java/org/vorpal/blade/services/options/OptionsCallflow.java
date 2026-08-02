@@ -23,6 +23,23 @@ public class OptionsCallflow extends Callflow implements Serializable {
 				settings = new OptionsSettingsSample();
 			}
 
+			// Administrative drain: the operator took this node out of rotation
+			// via the Drain MBean (runtime state, not config — see DrainControl).
+			// Checked BEFORE the overload signal: explicit intent outranks
+			// automatic protection. The "Draining" reason phrase distinguishes
+			// this 503 from the overload one in a trace; load balancers treat
+			// them the same.
+			DrainControl drain = OptionsSipServlet.drainControl;
+			if (drain != null && drain.isDrained()) {
+				SipServletResponse draining = request.createResponse(503, "Draining");
+				int drainRetryAfter = settings.getDrainRetryAfter();
+				if (drainRetryAfter > 0) {
+					draining.setHeader("Retry-After", Integer.toString(drainRetryAfter));
+				}
+				sendResponse(draining);
+				return;
+			}
+
 			// Drain signal: while OCCAS overload protection is rejecting traffic,
 			// answer the health check 503 so a SIP-aware load balancer stops
 			// routing new calls here. Falls through to the normal 200 OK whenever

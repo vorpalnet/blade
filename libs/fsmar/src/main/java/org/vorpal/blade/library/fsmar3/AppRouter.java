@@ -117,8 +117,12 @@ public class AppRouter implements SipApplicationRouter {
 		try {
 			vsession = AsyncSipServlet.getVorpalSessionIdFromMessage(request);
 			vdialog = AsyncSipServlet.getVorpalDialogIdFromMessage(request);
-		} catch (Exception ignore) {
-			// best-effort correlation id; never affects routing
+		} catch (Throwable ignore) {
+			// best-effort correlation id; never affects routing. Throwable, not
+			// Exception: outside a real container AsyncSipServlet's superclass
+			// chain can fail static init (ExceptionInInitializerError — same
+			// precedent as Selector.resolveOriginalSourceIp), and no correlation
+			// id is ever worth failing the routing decision.
 		}
 
 		try {
@@ -247,12 +251,13 @@ public class AppRouter implements SipApplicationRouter {
 			String decision = "none (routed downstream)";
 			java.util.List<String> bypassed = new java.util.ArrayList<>();
 
-			// True once a terminal transition routes the call out of OCCAS via its
-			// own routes (an egress). Such a decision has a null application name,
-			// which would otherwise look identical to "no decision" to the
-			// default-application fallback below — this flag keeps the fallback from
-			// clobbering an egress hung off the entry ("null") state.
-			boolean routedExternally = false;
+			// True once ANY transition matched during this invocation — including
+			// a transition that selects no application (a stop/downstream exit,
+			// an egress, a route-back) and the implicit match of an empty
+			// trigger. The default-application fallback below is gated on this:
+			// the default is for "no matches whatsoever", never for a matched
+			// decision that deliberately chose no application.
+			boolean anyMatch = false;
 
 			// For targeted sessions, route directly
 			if (requestInfo != null) {
@@ -344,6 +349,7 @@ public class AppRouter implements SipApplicationRouter {
 					if (matched == null) {
 						break;
 					}
+					anyMatch = true;
 					if (trace != null) {
 						trace.matched(matched.getId(), matched.getNext());
 					}
@@ -362,7 +368,6 @@ public class AppRouter implements SipApplicationRouter {
 							&& matched.getRoutes() != null && matched.getRoutes().length > 0) {
 						routingState.setCurrentStateId(next);
 						nextApp = matched.createRouterInfo(null, routingState, ctx, request);
-						routedExternally = true;
 						decision = "matched=" + matched.getId() + " -> (route-back, resume " + next + ")";
 						if (trace != null) {
 							trace.routed(nextApp);
@@ -401,7 +406,6 @@ public class AppRouter implements SipApplicationRouter {
 						// to push, OCCAS routes downstream on the Request-URI.
 						if (matched.getRoutes() != null && matched.getRoutes().length > 0) {
 							nextApp = matched.createRouterInfo(null, routingState, ctx, request);
-							routedExternally = true;
 							decision = "matched=" + matched.getId() + " -> (egress)";
 							if (trace != null) {
 								trace.routed(nextApp);
@@ -432,12 +436,19 @@ public class AppRouter implements SipApplicationRouter {
 				}
 			}
 
-			// Default application fallback. defaultApplication is optional —
+			// Default application fallback — for "no matches whatsoever" ONLY.
+			// A matched transition that selects no application (a stop/downstream
+			// exit, an egress, a route-back, an empty trigger's implicit match)
+			// is a decision, not a miss — anyMatch keeps the fallback off it.
+			// startState (not previous, which bypass advances) keeps the fallback
+			// off app-originated sends: a client transaction starts the FSM after
+			// the originating app, and an unmatched health ping must egress, not
+			// land on the default application. defaultApplication is optional —
 			// guard it: ConcurrentHashMap.get(null) throws NPE, which would
 			// escape to the outer catch as a silent 500. With no default
 			// configured, nextApp stays null and OCCAS routes downstream.
-			if (config.getDefaultApplication() != null && !routedExternally
-					&& previous.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
+			if (config.getDefaultApplication() != null && !anyMatch
+					&& startState.equals("null") && (nextApp == null || nextApp.getNextApplicationName() == null
 					|| nextApp.getNextApplicationName().equals("null"))) {
 				metrics.countDefaultFallback();
 				if (trace != null) {
@@ -587,9 +598,13 @@ public class AppRouter implements SipApplicationRouter {
 	/// two mistakes that otherwise eat traffic silently:
 	///
 	/// - a malformed `when` expression (which evaluates to false forever) → SEVERE
-	/// - a transition whose `next` names an application that isn't deployed
-	///   (legitimate mid-rollout, but worth a WARNING — the bypass logic will
-	///   skip it)
+	/// - a transition whose `next` is neither a deployed application nor a
+	///   virtual state with onward triggers → WARNING (a typo, or a retired
+	///   terminal app — the request routes downstream). A next that names a
+	///   state entry WITH its own triggers is a deliberate virtual waypoint
+	///   (an ingress/external hop, or an app retired mid-incident whose state
+	///   still routes onward): the bypass continues the walk there, so it logs
+	///   INFO, not a warning — designed virtual states must not cry wolf.
 	static void validateConfiguration(AppRouterConfiguration config) {
 		if (config == null || config.getStates() == null) {
 			return;
@@ -628,9 +643,22 @@ public class AppRouter implements SipApplicationRouter {
 					if (next != null && !routeBackEgress) {
 						String targetApp = appOf(config, next);
 						if (!deployed.containsKey(targetApp)) {
-							sipLogger.warning("FSMAR config: " + where + " routes to state '" + next
-									+ "' (app '" + targetApp + "'), which is not currently deployed "
-									+ "(bypass logic will skip it).");
+							State targetState = config.getStates().get(next);
+							boolean virtualWaypoint = targetState != null
+									&& targetState.getTriggers() != null
+									&& !targetState.getTriggers().isEmpty();
+							if (virtualWaypoint) {
+								// Designed virtual state (or an app retired mid-incident
+								// whose state still routes onward): the walk continues.
+								sipLogger.info("FSMAR config: " + where + " routes to virtual state '"
+										+ next + "' (app '" + targetApp + "' not deployed) — bypass runs "
+										+ "its selectors and continues per its triggers.");
+							} else {
+								sipLogger.warning("FSMAR config: " + where + " routes to '" + next
+										+ "' (app '" + targetApp + "'), which is neither deployed nor a "
+										+ "state with onward triggers — the request will route downstream "
+										+ "(a typo, or a retired terminal application).");
+							}
 						}
 					}
 				}

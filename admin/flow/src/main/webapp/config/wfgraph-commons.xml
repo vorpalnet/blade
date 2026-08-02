@@ -117,12 +117,13 @@
 				}
 				return label;
 			}
-			// A State/ingress whose state id differs from its application name
-			// (a second instance of the same app) shows the id as a qualifier so
-			// the two boxes read distinctly: "b2bua\n(b2bua-caller)".
+			// A State whose state id differs from its application name (a second
+			// instance of the same app) shows the id as a qualifier so the two
+			// boxes read distinctly: "b2bua\n(b2bua-caller)". States only — an
+			// ingress's name IS its state id (a stale stateId attribute from
+			// older saved XML is ignored, matching the export).
 			var lbl = cell.getAttribute('label');
-			if (cell.value &amp;&amp; (cell.value.tagName === 'State' || cell.value.tagName === 'Gateway')
-					&amp;&amp; cell.getAttribute('role') !== 'egress') {
+			if (cell.value &amp;&amp; cell.value.tagName === 'State') {
 				var sid = cell.getAttribute('stateId');
 				if (sid &amp;&amp; sid.length &gt; 0 &amp;&amp; sid !== lbl) {
 					return lbl + '\n(' + sid + ')';

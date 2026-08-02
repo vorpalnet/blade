@@ -251,4 +251,37 @@ class FsmarValidationRulesTest {
 					() -> "method " + method + " should be valid, got: " + errors);
 		}
 	}
+
+	// ---- routes discarded by NO_ROUTE ------------------------------------
+
+	@Test
+	@DisplayName("routes with NO_ROUTE are flagged — the container discards them")
+	void routesWithNoRouteAreFlagged() throws Exception {
+		// Transition.createRouterInfo passes the chosen modifier through, and
+		// NO_ROUTE tells the container not to examine the routes array — so
+		// this shape silently throws the operator's routes away.
+		List<String> warnings = warningsOf("{\"version\":3,\"states\":{"
+				+ "\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":["
+				+ "  {\"id\":\"INV-1\",\"next\":\"screening\","
+				+ "   \"routes\":[\"sip:edge.example.com;lr\"],\"routeModifier\":\"NO_ROUTE\"}]}}},"
+				+ "\"screening\":{\"triggers\":{}}}}");
+
+		assertTrue(warnings.stream().anyMatch(w -> w.contains("NO_ROUTE")
+						&& w.contains("ignores the routes")),
+				() -> "routes+NO_ROUTE not flagged: " + warnings);
+	}
+
+	@Test
+	@DisplayName("NO_ROUTE without routes gets only the modifier-ignored warning")
+	void noRouteWithoutRoutesIsTheExistingWarning() throws Exception {
+		List<String> warnings = warningsOf("{\"version\":3,\"states\":{"
+				+ "\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":["
+				+ "  {\"id\":\"INV-1\",\"next\":\"screening\",\"routeModifier\":\"NO_ROUTE\"}]}}},"
+				+ "\"screening\":{\"triggers\":{}}}}");
+
+		assertTrue(warnings.stream().anyMatch(w -> w.contains("the modifier is ignored")),
+				() -> "modifier-without-routes warning missing: " + warnings);
+		assertTrue(warnings.stream().noneMatch(w -> w.contains("ignores the routes")),
+				() -> "the discards-routes warning should need routes: " + warnings);
+	}
 }

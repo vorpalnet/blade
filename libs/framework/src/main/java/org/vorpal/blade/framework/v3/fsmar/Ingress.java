@@ -25,6 +25,8 @@ public class Ingress implements Serializable {
 
 	/// Source-match `when` expression (e.g. `${originIP} insubnet '10.20.0.0/16'`)
 	/// the editor compiles into this ingress's dispatch transition on `"null"`.
+	/// Derived data: if the dispatch's `when` is hand-edited to differ, the
+	/// editor adopts the `when` as this match on import — routing wins.
 	@JsonPropertyDescription("Source-match 'when' expression that classifies inbound traffic into this ingress")
 	public String getMatch() {
 		return match;

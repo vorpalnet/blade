@@ -17,7 +17,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// ROUTE_FINAL (the call leaves OCCAS for good); present → ROUTE_BACK (the call
 /// goes out to the routes, then the container routes it back and the flow
 /// resumes at that state — see `AppRouter` and the route-back line in the Flow
-/// editor).
+/// editor). A third kind has no routes at all: the DOWNSTREAM exit — the
+/// terminal transition carries neither routes nor a modifier, application
+/// chaining stops, and OCCAS routes the request on its Request-URI
+/// (`AppRouter`'s no-target break). A route-back egress always needs routes.
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({ "routes", "returnState" })
 // `description` retired (folded into Configuration.notes); tolerate in old configs.
@@ -38,8 +41,9 @@ public class Egress implements Serializable {
 
 	/// SIP route URIs the editor bakes onto each transition that targets this
 	/// egress. May contain `${}` placeholders resolved against the context,
-	/// e.g. `sip:${To.user}@carrier-trunk`.
-	@JsonPropertyDescription("SIP route URIs pushed when the call exits here; may contain ${} placeholders, e.g. sip:${To.user}@carrier-trunk")
+	/// e.g. `sip:${To.user}@carrier-trunk`. Absent for a downstream exit
+	/// (nothing pushed; the call continues on its Request-URI).
+	@JsonPropertyDescription("SIP route URIs pushed when the call exits here; may contain ${} placeholders, e.g. sip:${To.user}@carrier-trunk. Absent = downstream exit (nothing pushed)")
 	public String[] getRoutes() {
 		return routes;
 	}

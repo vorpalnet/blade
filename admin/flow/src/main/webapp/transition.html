@@ -137,12 +137,14 @@
 				<div id="transition-routes"></div>
 
 				<label>Route Modifier <span class="hint">(how routes are applied; blank = ROUTE)</span></label>
+				<!-- NO_ROUTE is deliberately not offered: with routes the container
+				     ignores them, without routes it is the default anyway. An
+				     imported NO_ROUTE is re-added by the panel so it stays visible. -->
 				<select id="transition-route-modifier">
 					<option value=""></option>
 					<option>ROUTE</option>
 					<option>ROUTE_BACK</option>
 					<option>ROUTE_FINAL</option>
-					<option>NO_ROUTE</option>
 				</select>
 			</div>
 		</div>

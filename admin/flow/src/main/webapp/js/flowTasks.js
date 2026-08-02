@@ -99,9 +99,28 @@ window.flowTasks = (function() {
 			$p.find('.state-selectors-section, .state-dispatch-section, .ingress-match-section, .state-id-section')
 					.css('display', 'none');
 			var ret = egressReturnState(cell);
-			$p.find('.egress-kind').text(ret
-					? 'Back to origin (ROUTE_BACK) → resumes at ' + ret
-					: 'To destination (ROUTE_FINAL)');
+			// The exit kind follows the routes too: no routes at all = the
+			// downstream exit (nothing pushed; the call continues on the
+			// Request-URI). A route-back line without routes cannot export —
+			// say so here rather than only at save time.
+			var egRoutes = getChildElements(cell, 'route');
+			var hasEgRoutes = false;
+			for (var er = 0; er < egRoutes.length; er++) {
+				if ((egRoutes[er].getAttribute('uri') || '').length > 0) {
+					hasEgRoutes = true;
+					break;
+				}
+			}
+			var kind;
+			if (ret) {
+				kind = 'Back to origin (ROUTE_BACK) → resumes at ' + ret
+					+ (hasEgRoutes ? '' : ' — needs at least one route below');
+			} else if (hasEgRoutes) {
+				kind = 'To destination (ROUTE_FINAL)';
+			} else {
+				kind = 'Downstream — no Route pushed; the call continues on the Request-URI';
+			}
+			$p.find('.egress-kind').text(kind);
 			renderEgressRoutes(cell);
 			populateVgws(cell);
 			return;
@@ -134,11 +153,10 @@ window.flowTasks = (function() {
 		}
 
 		// State ID: the unique JSON key, separate from the application name
-		// (the label). Shown for a State or a NAMED ingress; blank means "use
-		// the name as the id" (the common one-instance-per-app case). Set a
-		// distinct id to invoke the same application from two states.
-		var hasMatch = (cell.getAttribute('match') || '').length > 0;
-		var showId = cell.value.tagName === 'State' || (isIngress && hasMatch);
+		// (the label). States only — for an ingress the NAME is the state id
+		// (renaming the box renames the state; export keys on the label), so
+		// there is no separate id to edit.
+		var showId = cell.value.tagName === 'State';
 		$p.find('.state-id-section').css('display', showId ? '' : 'none');
 		if (showId) {
 			$p.find('.node-stateid').val(cell.getAttribute('stateId') || '');
@@ -858,8 +876,18 @@ window.flowTasks = (function() {
 		}
 		window.flowMeta.fillSelect($('#transition-method'), methods, false);
 		window.flowMeta.fillSelect($('#transition-region'), window.flowMeta.regions(), true);
-		window.flowMeta.fillSelect($('#transition-route-modifier'),
-				window.flowMeta.routeModifiers(), true);
+		// NO_ROUTE is never a useful choice here: with routes the container
+		// ignores them, without routes it is the default anyway. Not offered —
+		// but an imported value stays visible rather than silently rewriting
+		// to blank (the validator flags it on export).
+		var modifiers = window.flowMeta.routeModifiers().filter(function(m) {
+			return m !== 'NO_ROUTE';
+		});
+		var curModifier = cell.getAttribute('routeModifier') || '';
+		if (curModifier && modifiers.indexOf(curModifier) < 0) {
+			modifiers = [curModifier].concat(modifiers);
+		}
+		window.flowMeta.fillSelect($('#transition-route-modifier'), modifiers, true);
 
 		$('#transition-method').val(method);
 		$('#transition-when').val(cell.getAttribute('when') || '');

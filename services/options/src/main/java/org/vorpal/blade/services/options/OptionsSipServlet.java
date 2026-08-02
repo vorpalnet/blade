@@ -43,6 +43,11 @@ public class OptionsSipServlet extends AsyncSipServlet {
 	private static final long serialVersionUID = 1L;
 	public static SettingsManager<OptionsSettings> settingsManager;
 
+	/// This node's administrative drain flag, exposed over JMX as
+	/// `vorpal.blade:Name=<app>,Type=Drain[,Cluster=…]`. Static like
+	/// `settingsManager`: one per engine JVM, read by [OptionsCallflow].
+	public static DrainControl drainControl;
+
 	/**
 	 * This is an attempt at optimization. Instead of creating a new
 	 * SipApplicationSession for ever OPTIONS ping, reuse an existing one. We'll use
@@ -67,12 +72,32 @@ public class OptionsSipServlet extends AsyncSipServlet {
 			}
 		}
 
+		// Drain MBean — never fatal: the app must deploy (and answer pings)
+		// even if drain control is unavailable.
+		try {
+			DrainControl control = new DrainControl();
+			control.register(settingsManager != null ? settingsManager.getName() : "options");
+			drainControl = control;
+		} catch (Exception ex) {
+			if (sipLogger != null) {
+				sipLogger.warning("Options - drain MBean not registered; the node cannot be"
+						+ " drained over JMX: " + ex.getMessage());
+			}
+		}
 	}
 
 	@Override
 	protected void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
+		// Unregister the drain MBean first: settingsManager.unregister() below
+		// can throw, and must not strand a stale drain MBean on redeploy.
+		if (drainControl != null) {
+			drainControl.unregister();
+			drainControl = null;
+		}
 		try {
-			settingsManager.unregister();
+			if (settingsManager != null) {
+				settingsManager.unregister();
+			}
 		} catch (Exception e) {
 			// do nothing;
 		}

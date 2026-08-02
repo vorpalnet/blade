@@ -48,6 +48,10 @@ public class OptionsSettingsSample extends OptionsSettings implements Serializab
 
 		unavailableWhenOverloaded = true;
 		overloadRetryAfter = 5;
+		// Administrative drain advertises no Retry-After by default: our own
+		// proxy-balancer treats a ping 503 as sticky-down until a ping succeeds
+		// (the ideal drain semantics), so a backoff hint adds nothing there.
+		drainRetryAfter = 0;
 	}
 
 }

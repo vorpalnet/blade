@@ -8,7 +8,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 /// A trigger defines the transitions available for a specific SIP method.
 ///
 /// Transitions are evaluated in order; the first match wins. If no transitions
-/// are defined, the trigger implicitly matches with no routing action.
+/// are defined, the trigger implicitly matches with no routing action — and
+/// that implicit match COUNTS as a match: the defaultApplication fallback (for
+/// "no matches whatsoever") does not fire, and the request routes downstream
+/// on its Request-URI, exactly like a matched stop transition.
 public class Trigger implements Serializable {
 	private static final long serialVersionUID = 1L;
 

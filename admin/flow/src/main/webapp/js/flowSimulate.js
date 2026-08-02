@@ -55,7 +55,9 @@ window.flowSimulate = (function() {
 	// NAMED ingress (has a `match`) is the state named by its label; a
 	// matchless ingress (the default) is "null". Legacy Ingress/Egress are
 	// "null".
-	// A node's state id (the JSON key): its `stateId` attribute, else its label.
+	// A State's id (the JSON key): its `stateId` attribute, else its label.
+	// An ingress has no separate id — its label IS the state id (matching
+	// FsmarExportServlet).
 	function stateIdOf(v) {
 		return v.getAttribute('stateId') || v.getAttribute('label') || '';
 	}
@@ -68,7 +70,7 @@ window.flowSimulate = (function() {
 			// target, never a source. Excluded so it can't be mistaken for null.
 			if (v.getAttribute('role') === 'egress') return null;
 			var match = v.getAttribute('match');
-			return (match && match.length > 0) ? stateIdOf(v) : 'null';
+			return (match && match.length > 0) ? (v.getAttribute('label') || '') : 'null';
 		}
 		if (tag === 'Ingress' || tag === 'Egress') return 'null';
 		if (tag === 'State') return stateIdOf(v);

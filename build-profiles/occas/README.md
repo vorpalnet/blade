@@ -1,115 +1,66 @@
-# Installing OCCAS from scratch
+# Installing OCCAS
 
-> **This page describes the deprecated `install-occas.sh`.** Use **`./blade.sh`**
-> instead — it does everything below plus the two things this script never did:
-> it installs the **systemd boot services**, so a host that reboots comes back on
-> its own, and it reaches the **engine hosts** to provision them. It also puts
-> Node Manager in its own `nmdomain`, so the app domain can be rebuilt without
-> taking Node Manager down. Profiles live in `.conf/<name>/`, not here.
-> `install-occas.sh` now refuses to run without `BLADE_ALLOW_DEPRECATED_INSTALLER=1`
-> and is scheduled for deletion.
-
-Zero to a running OCCAS dynamic-cluster domain on a fresh Linux box (the OCI
-`opc` user is the running example — any sudo-capable admin user works). One
-driver script, one command:
+**Use `./blade.sh`.** This directory no longer drives the install — it survives only for
+legacy env conf files. Profiles live in `.conf/<name>/` (gitignored) and are created and
+edited by the installer itself.
 
 ```
-git clone https://github.com/vorpalnet/blade.git
-cd blade
-./blade.sh                 # pick or create a profile, then the dashboard
-./blade.sh <name> install   # or: unattended, end to end
+./blade.sh                    pick or create a profile, then the dashboard
+./blade.sh <name> install     unattended, end to end
+./blade.sh <name> status      health snapshot, including patch level per host
 ```
 
-With no arguments it works out the next step itself: builds the env conf if
-there is none (`init` interview), preps the box (via sudo, automatically),
-downloads the OCCAS media and the Oracle JDKs, runs the silent product
-install, creates the dynamic-cluster domain, secures it with a freshly
-generated PKI — WebLogic's demo certificates are never used; NodeManager's
-keystore config is re-pointed too, and the keystore password is auto-minted
-into `<env>.secret` (replace the PKI later with customer-issued certs via
-`./certs.sh <env> import` + re-run `secure`) — and boots NodeManager and the
-AdminServer, printing the console URL. Re-running is always safe — every step
-skips whatever already succeeded and resumes where it left off.
+`install-occas.sh` was deleted once `blade.sh` had been exercised end-to-end on a real
+cluster. It is in git history if you need it.
 
-The only things it will ever ask you for:
+## What the installer does
 
-| Prompt | Where it comes from |
+One machine at a time. `./blade.sh <name> install` builds **AdminServer + engine0 on the
+machine it runs on**, and that is a complete, working deployment — not a stepping stone to a
+cluster. Growth is a separate, online step.
+
+| step | what it does |
 |---|---|
-| sudo password (maybe) | first run only — `prep` creates users/dirs; passwordless sudo (OCI `opc`) asks nothing |
-| path to Oracle's `wget.sh` | the one-time eDelivery browser step below |
-| eDelivery access token | same browser dialog, "Generate Token" |
-| `weblogic` admin password | the new domain's admin account (or put `admin.password` in `<env>.secret`) |
+| user / dirs | creates the install user, group and directories |
+| download | fetches the OCCAS media from Oracle eDelivery (one browser step for the licence click) |
+| install | silent product install into `<base>/<version>` |
+| **patch** | builds a **patched copy** of the home, out-of-place — see below |
+| certificate | your own certificate, or a generated self-signed one. The WebLogic demo certificate is never used |
+| domain | dynamic cluster; the certificate and both SIP channels go onto the server template |
+| Node Manager / AdminServer | started, plus systemd units so a reboot recovers unattended |
+| **Add a machine** | grows the cluster online: machine1 runs engine1, machine2 runs engine2, … |
 
-## The eDelivery browser step (once per OCCAS release)
+## Layout
 
-Oracle requires a human license click; everything after it is scripted.
+The Oracle home is reached through a **symlink**, so patching is atomic and reversible:
 
-1. Sign in at <https://edelivery.oracle.com> (any oracle.com account).
-2. Search **Oracle Communications Converged Application Server**, pick the
-   release (e.g. 8.3), **Add to Cart**, then **Checkout**.
-3. Pick the platform (**Linux x86-64**) and **accept the license**.
-4. Click **WGET Options** (bottom of the download page) →
-   **Download wget.sh**. If you browsed on another machine, copy it over:
-   `scp wget.sh opc@<box>:`
-5. Same dialog: **Generate Token** → **Copy** — you'll paste it at the
-   script's prompt.
+```
+/opt/oracle/occas/8.3.0        real GA home
+/opt/oracle/occas/8.3.0_p1     patched copy
+/opt/oracle/occas/current ->   the link; oracle.home points here
+/opt/oracle/domains/<name>     domains live OUTSIDE the Oracle home
+```
 
-Lifetimes (Oracle's): the token **~1 hour**, the URLs inside wget.sh
-**~8 hours**. Both are free to regenerate by repeating this step; the script
-tells you which one expired.
+Domains are outside deliberately. Inside, flipping the symlink would swing the domain path
+onto the patched copy's stale snapshot and lose every config change since it was taken.
 
-## What prep sets up (automatic, sudo, idempotent)
+## Patching
 
-- the `oracle` runtime user (`install.user`) and `oinstall` group
-  (`inventory.group`)
-- `oracle.home` (e.g. `/opt/oracle/occas/8.3`), the installer directory,
-  `inventory.loc`, and `java.dir` — owned by **you**, group-shared with
-  `oracle` via setgid (mode 2775), so nothing needs a re-login and no later
-  step needs sudo
+Oracle's eDelivery media ships buggy; the fixes come from My Oracle Support. Download the
+zips in a browser into `patch.dir` (default `~/occas-patches`) and list the patch IDs, in
+the order they must be applied, in `.conf/<name>/patches.list`.
 
-Manual form, if you prefer to see it happen: `sudo ./install-occas.sh oci prep`
+The patch step copies the home that `current` resolves to, patches the **copy**, and stops.
+Nothing is switched, so a failed patch costs nothing and the running install is untouched.
+Promote it deliberately:
 
-## After the install
+```
+./sync-occas.sh <name> distribute 8.3.0_p1     # ship it to the other machines
+./sync-occas.sh <name> switch     8.3.0_p1     # repoint 'current' (--nodes for a canary)
+```
 
-- The `start` step (part of `all`) already booted the admin box: NodeManager,
-  then the AdminServer through it, and printed the console URL. The `engines`
-  step (also part of `all`) then provisions each engine box over key-based
-  ssh — rsyncs the OCCAS home (domain included), the runtime JDK, and the env
-  certs to the same paths, starts the box's NodeManager, and `nmStart`s its
-  engine server. Boxes without working ssh are skipped with a warning;
-  `./install-occas.sh <env> engines` re-runs resume where they left off.
-- TLS is already wired: `all` generated a self-signed PKI and ran `secure`
-  (SSL ports on AdminServer + engines, NodeManager on the env certificate).
-  To switch to customer-issued certs: set the `cert.import.*` conf keys, run
-  `./certs.sh <env> import`, then re-run `./install-occas.sh <env> secure`
-  with the domain stopped.
-- Adding an engine node later: add a `machine.N` line to the conf, bump
-  `dynamic.server.count`, re-run `./install-occas.sh <env> configure`
-  (**overwrites** the domain — see the script header).
+Rollback is switching back — the previous home is still on disk.
 
-## Tearing it down (test cycles)
-
-`./install-occas.sh <env> uninstall` stops everything and deletes the product,
-domain, inventory, and certs — on the admin box and the engines — while
-keeping the media, JDKs, conf/secret, and prep's users/dirs. The next no-arg
-run then reinstalls end-to-end with zero prompts (the admin password comes
-from `<env>.secret`). Confirm by typing the env name, or pass `--yes`.
-
-## Environments
-
-`./install-occas.sh <env> <step>` runs one explicit step
-(`init | prep | download | install | configure | secure | all`) against
-`build-profiles/occas/<env>.conf`.
-
-**No env confs ship with the repo** — they carry your site's hostnames, IPs,
-and topology, and are gitignored (like the `.secret` and `.urls` files). On a
-fresh clone, plain `./install-occas.sh` starts the `init` interview and writes
-your env's conf; or copy `example.conf.example` to `<env>.conf` and edit.
-
-## Troubleshooting
-
-| Symptom | Cause / fix |
-|---|---|
-| `403 Forbidden` on download | Access token (~1 h) or wget.sh URLs (~8 h) expired — redo the browser step. (The script already sends the wget-style User-Agent that Akamai requires.) |
-| `Can't write to <dir>` / inventory errors | Prep hasn't run and passwordless sudo isn't available — run `sudo ./install-occas.sh <env> prep` once. |
-| Media sitting in `~/occas-media` | The pre-prep fallback location — the next run reclaims it automatically. |
+**Engines are never patched.** They receive a home that was patched and validated once, on
+machine0. `./blade.sh <name> status` reports the patch level of every host and warns if they
+disagree.

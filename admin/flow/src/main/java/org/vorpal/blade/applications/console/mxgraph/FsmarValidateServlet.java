@@ -27,17 +27,18 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// can't do. POST a `json` parameter; returns
 /// `{ "errors": [..], "warnings": [..], "infos": [..] }`.
 ///
-/// - **errors** — the config will not route as written: a transition with no
-///   `next`, a `when` expression that doesn't parse (fsmar3 evaluates a
-///   malformed condition to false at runtime — i.e. the transition silently
-///   never fires), an unknown region/routeModifier value, a regex selector
-///   whose pattern doesn't compile.
+/// - **errors** — the config will not route as written: a `when` expression
+///   that doesn't parse (fsmar3 evaluates a malformed condition to false at
+///   runtime — i.e. the transition silently never fires), an unknown
+///   region/routeModifier value, a regex selector whose pattern doesn't
+///   compile.
 /// - **warnings** — probably a mistake: unknown fields (preserved by the
 ///   editor's round-trip passthrough, but a likely typo of a real field),
 ///   a selector without an id (its value has no variable name), states
 ///   defined but unreachable.
 /// - **infos** — worth knowing: a `next` naming an application with no state
-///   entry (legal — a terminal app), no defaultApplication.
+///   entry (legal — a terminal app), a terminal transition with no routes
+///   (legal — the downstream exit), no defaultApplication.
 ///
 /// Uses the same Expression parser the router itself compiles `when` with
 /// (framework v3), so "parses here" means "parses on the engine".
@@ -372,9 +373,15 @@ public class FsmarValidateServlet extends HttpServlet {
 		boolean hasRoutes = tx.path("routes").isArray() && tx.path("routes").size() > 0;
 		if (next.isEmpty()) {
 			// A terminal transition with routes is an egress (the call leaves
-			// OCCAS); only a transition with neither next nor routes is an error.
+			// OCCAS via them); with NO routes it is the downstream exit —
+			// application chaining stops and OCCAS routes the request on its
+			// Request-URI (AppRouter's no-target break). Legal, worth noting.
+			// A matched stop counts as a match, so the defaultApplication
+			// fallback (for "no matches whatsoever") never overrides it — even
+			// on the entry state.
 			if (!hasRoutes) {
-				errors.add(at + " has neither 'next' nor 'routes' — it cannot route");
+				infos.add(at + " has no 'next' and no 'routes' — terminal: application"
+						+ " chaining stops and the request routes downstream on the Request-URI");
 			}
 		} else if (!"null".equals(next) && !states.has(next)) {
 			infos.add(at + " routes to '" + next + "' which has no state entry — "
@@ -416,6 +423,15 @@ public class FsmarValidateServlet extends HttpServlet {
 		String modifier = tx.path("routeModifier").asText("");
 		if (!modifier.isEmpty() && !ROUTE_MODIFIERS.contains(modifier)) {
 			errors.add(at + ".routeModifier '" + modifier + "' — one of: " + ROUTE_MODIFIERS);
+		}
+		// NO_ROUTE tells the container not to examine the routes array, so
+		// routes + NO_ROUTE silently discards the routes (and without routes
+		// NO_ROUTE is the default anyway — the without-routes case is covered
+		// by the modifier-ignored warning below).
+		if ("NO_ROUTE".equals(modifier) && hasRoutes) {
+			warnings.add(at + " sets routes with routeModifier NO_ROUTE — the container"
+					+ " ignores the routes; drop the modifier (ROUTE is the default)"
+					+ " or remove the routes");
 		}
 
 		JsonNode routes = tx.path("routes");

@@ -126,6 +126,16 @@ public final class RouteSimulator {
 		Set<String> visited = new HashSet<>();
 		visited.add(previous);
 
+		// Mirror of the engine's fallback gate: the defaultApplication is for
+		// "no matches whatsoever" only. anyMatch = any transition matched during
+		// the CURRENT invocation (including a stop, an egress, and an empty
+		// trigger's implicit match — decisions, not misses); invocationStart =
+		// the state the current invocation entered the FSM at (the engine's
+		// startState — bypass advances `previous`, routing starts a new
+		// invocation).
+		boolean anyMatch = false;
+		String invocationStart = previous;
+
 		String defaultApplication = config.path("defaultApplication").asText("");
 		JsonNode states = config.path("states");
 		Map<String, List<Selector>> selectorCache = new HashMap<>();
@@ -195,12 +205,12 @@ public final class RouteSimulator {
 
 			hop.put("bypassed", false);
 			String routedTo = null;
-			boolean egressedHop = false;
 
 			if (matched == null) {
 				// No transition: this invocation routes nothing.
 				done = true;
 			} else {
+				anyMatch = true;
 				if (matched.hasNonNull("id")) {
 					hop.put("matched", matched.path("id").asText());
 				}
@@ -225,7 +235,6 @@ public final class RouteSimulator {
 					hop.put("routeModifier", "ROUTE_BACK");
 					hop.put("egress", true);
 					hop.put("returnsTo", next);
-					egressedHop = true;
 					routedTo = next;   // continue the walk at the return state
 				} else if (next == null) {
 					// Terminal ROUTE_FINAL egress: the call leaves OCCAS via its
@@ -237,7 +246,6 @@ public final class RouteSimulator {
 						}
 						hop.put("routeModifier", matched.path("routeModifier").asText("ROUTE"));
 						hop.put("egress", true);
-						egressedHop = true;
 						finalEgress = true;
 					}
 					done = true;
@@ -284,11 +292,12 @@ public final class RouteSimulator {
 				}
 			}
 
-			// Default application fallback — engine condition: fires only while
-			// the walk never advanced past the initial state AND the call didn't
-			// already egress (an egress at "null" has no app but is a decision,
-			// so it must not be clobbered — mirrors AppRouter's routedExternally).
-			if (done && previous.equals("null") && finalApp == null && !egressedHop) {
+			// Default application fallback — engine condition: "no matches
+			// whatsoever" on an invocation that entered the FSM at the entry
+			// state. A matched decision that selected no application (stop,
+			// egress, empty trigger) suppresses it via anyMatch — mirrors
+			// AppRouter's gate exactly.
+			if (done && "null".equals(invocationStart) && !anyMatch && finalApp == null) {
 				defaultFallback = true;
 				if (defaultApplication.isEmpty()) {
 					problems.add("No defaultApplication configured — the engine would route to null");
@@ -305,10 +314,13 @@ public final class RouteSimulator {
 			if (routedTo != null) {
 				// The container invokes the routed application and the call
 				// continues from its state — the next getNextApplication
-				// invocation, with a fresh per-invocation visited set.
+				// invocation, with a fresh per-invocation visited set and
+				// per-invocation match tracking.
 				previous = routedTo;
 				visited.clear();
 				visited.add(previous);
+				invocationStart = previous;
+				anyMatch = false;
 			}
 		}
 		// ===== end mirror =====

@@ -22,9 +22,10 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///   transitions on `"null"` (those whose `next` is a listed ingress) as
 ///   classification plumbing rather than drawn arrows.
 /// - [#getEgresses]: the exit points — where the call leaves OCCAS. The mirror
-///   of ingresses: each carries the routes and route-modifier the editor bakes
-///   onto the terminal transition that targets it (whose `next` becomes
-///   `null`). The editor renders these as egress clouds.
+///   of ingresses: each carries the routes the editor bakes onto the terminal
+///   transitions that target it (whose `next` becomes `null`); the exit kind
+///   is derived from topology, and an egress with no routes is the downstream
+///   exit (nothing pushed). The editor renders these as egress clouds.
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonPropertyOrder({ "states", "ingresses", "egresses" })
 public class Diagram implements Serializable {

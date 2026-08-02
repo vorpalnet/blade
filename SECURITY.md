@@ -293,7 +293,7 @@ packaged into the identical keystore layout. Same downstream steps either way.
 
 ### Wiring the domain
 
-`./install-occas.sh <env> secure` (offline WLST, domain stopped) enables the
+blade.sh writes the certificate onto the server template at configure time, which enables the
 SSL listen port with the keystores on the AdminServer (:7002), the engine
 server-template, and the static engine (:8002). With `tls.only=true` in the
 env conf it also **disables the plaintext HTTP listen ports and deletes the
@@ -382,7 +382,7 @@ Deploy-only (Jeff, in an OCCAS domain — "after you deploy, look for…"):
 - JWT SSO against the real IdP (issuer/JWKS/aud and the role-bearing claim).
 - SIP: mTLS/SIPS handshake on the SBC↔engine channel; and, if digest is enabled,
   that a `407` is issued and validated against the JDBC digest store.
-- TLS: after `certs.sh` + `install-occas.sh <env> secure`, the console answers
+- TLS: once the certificate is on the template (blade.sh rows `g`/`t`), the console answers
   on `https://…:7002`, engines on `:8002`, `openssl s_client -connect host:5061`
   shows the expected chain; with `tls.only=true`, ports 7001/8001/5060 refuse
   connections and `./deploy.sh <env> status` works over `t3s`. The `secure`

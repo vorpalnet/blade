@@ -866,7 +866,65 @@
 		// OS / limits readout from the platform OperatingSystem MBean. Sysctl kernel
 		// tunables are NOT here (JMX has no /proc/sys window) — just kernel version,
 		// memory, load, and the process file-descriptor limit (ulimit -n).
+		// The drain column rides the same table: per-server state from the options
+		// app's Drain MBean plus OCCAS's SIP activity numbers (api/v1/servers/drain).
+		var drainByServer = {};
 		function loadOsInfo() {
+			$.getJSON('api/v1/servers/drain', function (rows) {
+				drainByServer = {};
+				$.each(rows || [], function (i, r) { drainByServer[r.server] = r; });
+				loadOsTable();
+			}).fail(function () {
+				drainByServer = {};
+				loadOsTable();
+			});
+		}
+
+		// Drain cell: state in WORDS first (never color alone). "quiet" = drained
+		// AND the node measured no SIP work this period — the safe-to-restart
+		// signal. Active sessions being nonzero does NOT block a restart: dialogs
+		// fail over via the replicated state tier; throughput is what matters.
+		function drainCellHtml(r) {
+			var d = drainByServer[r.server];
+			if (!d) return '<td class="mono">&mdash;</td>';
+			var counts = '';
+			if (d.activeSipSessions >= 0 || d.sipThroughput >= 0) {
+				counts = ' <span class="text-muted">(' +
+					(d.activeSipSessions >= 0 ? 'sessions ' + fmtNum(d.activeSipSessions) : '') +
+					(d.sipThroughput >= 0 ? (d.activeSipSessions >= 0 ? ' · ' : '') + 'work/period ' + fmtNum(d.sipThroughput) : '') +
+					')</span>';
+			}
+			var html = '<td class="mono">';
+			if (d.drained) {
+				var since = d.drainedSinceMillis > 0 ? new Date(d.drainedSinceMillis).toLocaleTimeString() : '';
+				html += '<strong>DRAINING</strong>' + (since ? ' since ' + since : '') + counts;
+				if (d.sipThroughput === 0) {
+					html += ' <span class="badge badge-success" data-toggle="tooltip" title="Drained and no SIP work measured this period — safe to restart. Established dialogs fail over via the replicated state tier.">quiet &mdash; safe to restart</span>';
+				}
+				html += ' <button class="btn btn-sm btn-outline-success ml-1" onclick="drainServer(\'' + he(r.server) + '\', false)">Resume</button>';
+			} else {
+				html += 'in service' + counts;
+				html += ' <button class="btn btn-sm btn-outline-warning ml-1" onclick="drainServer(\'' + he(r.server) + '\', true)">Drain</button>';
+			}
+			return html + '</td>';
+		}
+
+		function drainServer(name, drain) {
+			var warning = drain
+				? 'Drain ' + name + '?\n\nIts OPTIONS health pings answer 503 Draining, so the load balancer stops sending NEW calls (allow one ping interval). Established dialogs continue. The flag is runtime state — it clears when the server restarts.'
+				: 'Resume ' + name + '?\n\nOPTIONS answers 200 again; the load balancer restores the node on its next ping.';
+			if (!confirm(warning)) return;
+			$.ajax({ url: 'api/v1/servers/' + encodeURIComponent(name) + '/' + (drain ? 'drain' : 'resume'),
+				method: 'POST', dataType: 'json',
+				success: function () {
+					showStatus('info', (drain ? 'Draining ' : 'Resuming ') + name + ' — watch the Drain column.');
+					loadOsInfo();
+				},
+				error: function (xhr) { showStatus('danger', (drain ? 'Drain' : 'Resume') + ' failed: ' + parseError(xhr)); }
+			});
+		}
+
+		function loadOsTable() {
 			$.getJSON('api/v1/os', function (rows) {
 				if (!rows || !rows.length) { $('#os-container').html('<span class="text-muted">No OS info available.</span>'); return; }
 				var html = '<table class="table table-compact table-sm mb-0" style="font-size:12px"><thead class="thead-light"><tr>';
@@ -875,6 +933,7 @@
 				html += '<th>Kernel</th><th>CPUs</th><th>Load</th>';
 				html += '<th data-toggle="tooltip" title="Free excludes memory the OS holds as page cache, so low free numbers are normal on a busy, healthy box. On macOS, swap reads 0/0 until a dynamic swapfile is actually in use.">RAM free/total</th>';
 				html += '<th>Swap free/total</th><th data-toggle="tooltip" title="Process open-file limit (ulimit -n) and current open count. Each socket is a file descriptor — high-CPS SIP engines need a high limit (65536+).">Open / Max FDs</th>';
+				html += '<th data-toggle="tooltip" title="Administrative drain: the node answers its OPTIONS health pings 503 Draining so the load balancer stops sending NEW calls. Runtime state (a JMX flag on the options app) — clears on restart. Requires the options app deployed on that server.">Drain</th>';
 				html += '<th></th></tr></thead><tbody>';
 				$.each(rows, function (i, r) {
 					var lowFd = r.maxFds > 0 && r.maxFds < 16384;
@@ -888,6 +947,7 @@
 					html += '<td class="mono">' + fmtNum(r.openFds) + ' / ' + fmtNum(r.maxFds);
 					if (lowFd) html += ' <span class="badge badge-warning" data-toggle="tooltip" title="Open-file limit looks low for a high-CPS SIP engine — raise nofile (ulimit -n) toward 65536.">&#9650; low for SIP</span>';
 					html += '</td>';
+					html += drainCellHtml(r);
 					html += '<td><button class="btn btn-sm btn-outline-danger" onclick="restartServer(\'' + he(r.server) + '\',' + (r.adminServer ? 'true' : 'false') + ')">Restart</button></td>';
 					html += '</tr>';
 				});
@@ -900,9 +960,13 @@
 		}
 
 		function restartServer(name, isAdmin) {
+			var d = drainByServer[name];
+			var undrainedHint = (d && !d.drained)
+				? '\n\nTip: Drain first (Drain column) so the load balancer stops sending new calls before the restart.'
+				: '';
 			var warning = isAdmin
 				? 'Restart ' + name + '?\n\nThis is the AdminServer — the console goes dark, this page counts down 90 seconds, then reloads. Node Manager must have started the server (blade.sh boot service) or it will NOT come back.'
-				: 'Restart ' + name + '?\n\nThe server is force-shut-down and started again via Node Manager. In-flight calls on this engine fail over.';
+				: 'Restart ' + name + '?\n\nThe server is force-shut-down and started again via Node Manager. In-flight calls on this engine fail over.' + undrainedHint;
 			if (!confirm(warning)) return;
 			$.ajax({ url: 'api/v1/servers/' + encodeURIComponent(name) + '/restart', method: 'POST', dataType: 'json',
 				success: function (r) {

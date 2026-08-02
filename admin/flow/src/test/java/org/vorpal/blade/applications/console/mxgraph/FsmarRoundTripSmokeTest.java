@@ -11,9 +11,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// selectors (regex/json/table with table data), when conditions, region,
 /// routeModifier, ordered same-method transitions, and unknown fields at
 /// every level — must survive import → export byte-for-byte semantically
-/// (JsonNode equality). Also covers the two named-rejection paths (transition
-/// without `next` on import; obsolete selectorGroup model on export) and the
-/// semantic validator.
+/// (JsonNode equality). Also covers the downstream exit (a terminal transition
+/// with no `next` and no `routes` — legal: application chaining stops and the
+/// request routes downstream), the named-rejection path (obsolete
+/// selectorGroup model on export) and the semantic validator.
 ///
 /// Same `main()` convention as the framework smoke tests; exits non-zero on
 /// the first failed expectation.
@@ -89,7 +90,7 @@ public class FsmarRoundTripSmokeTest {
 		stateIdAndAppRoundTrip();
 		bareConfigGetsDiagramOnExport();
 		cellIdsLiveOnWrappers();
-		importRejectsTransitionWithoutNext();
+		stopTransitionRoundTrips();
 		exportRejectsObsoleteSelectorGroups();
 		validatorFlagsRealProblems();
 		validatorFlagsShadowing();
@@ -458,16 +459,21 @@ public class FsmarRoundTripSmokeTest {
 				"must flag duplicate-when shadowing: " + warnings, null);
 	}
 
-	static void importRejectsTransitionWithoutNext() throws Exception {
+	static void stopTransitionRoundTrips() throws Exception {
+		// A terminal transition with no `next` and no `routes` is the downstream
+		// exit — AppRouter's no-target break: application chaining stops and the
+		// request routes downstream on the Request-URI. The editor draws it as a
+		// routeless egress node; it must import and round-trip unchanged.
+		// (See FsmarDownstreamExitTest for the full JUnit coverage.)
 		String cfg = "{\"states\":{\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":["
-				+ "{\"id\":\"BAD\"}]}}}}}";
-		try {
-			new FsmarImportServlet().buildMxGraphXml(mapper.readTree(cfg));
-			expect(false, "import must reject a transition without next", null);
-		} catch (IllegalArgumentException e) {
-			expect(e.getMessage().contains("transitions[0]") && e.getMessage().contains("next"),
-					"rejection must name the location (got: " + e.getMessage() + ")", null);
-		}
+				+ "{\"id\":\"STOP\",\"when\":\"${To.user} == 'external'\"},"
+				+ "{\"id\":\"T1\",\"next\":\"b2bua\"}]}}},"
+				+ "\"b2bua\":{\"triggers\":{}}}}";
+		JsonNode original = mapper.readTree(cfg);
+		String xml = new FsmarImportServlet().buildMxGraphXml(original);
+		JsonNode exported = stripDiagram(new FsmarExportServlet().buildFsmarJson(xml));
+		expect(original.equals(exported),
+				"a stop (downstream) transition must round-trip", () -> diff(original, exported));
 	}
 
 	static void exportRejectsObsoleteSelectorGroups() throws Exception {

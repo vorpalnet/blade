@@ -763,9 +763,11 @@ window.flowFsmar = (function() {
 	// State name an edge's source vertex represents: a plain State by label,
 	// a named ingress (Gateway with a match) by its label, the default
 	// ingress (matchless Gateway / legacy cloud) as "null".
-	// A node's state id (the JSON states-map key): its `stateId` attribute, else
-	// its label (the app name). Two States can share a label but have distinct
-	// ids, so the id — not the label — is what edges and the FSM key on.
+	// A State's state id (the JSON states-map key): its `stateId` attribute,
+	// else its label (the app name). Two States can share a label but have
+	// distinct ids, so the id — not the label — is what edges and the FSM key
+	// on. An ingress has no separate id: its NAME (label) is the state id, so
+	// gateways always key by label (matching FsmarExportServlet).
 	function stateIdOf(v) {
 		return v.getAttribute('stateId') || v.getAttribute('label') || 'null';
 	}
@@ -778,7 +780,7 @@ window.flowFsmar = (function() {
 			// An egress is never a transition source; treat it as no state.
 			if (v.getAttribute('role') === 'egress') return 'null';
 			var m = v.getAttribute('match');
-			return (m && m.length > 0) ? stateIdOf(v) : 'null';
+			return (m && m.length > 0) ? (v.getAttribute('label') || 'null') : 'null';
 		}
 		return 'null';
 	}
@@ -792,9 +794,11 @@ window.flowFsmar = (function() {
 			return '/states/' + stateIdOf(cell);
 		}
 		if (tag === 'Gateway' || tag === 'Ingress') {
-			// Named ingress (has a match) = its own state; default = null.
+			// Named ingress (has a match) = its own state, keyed by its label;
+			// default = null.
 			var m = cell.getAttribute('match');
-			return '/states/' + ((m && m.length > 0) ? stateIdOf(cell) : 'null');
+			return '/states/' + ((m && m.length > 0)
+					? (cell.getAttribute('label') || 'null') : 'null');
 		}
 		if (tag !== 'Transition' || cell.source == null || cell.source.value == null) {
 			return null;

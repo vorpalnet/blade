@@ -43,9 +43,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 /// (a JSON object string) on the corresponding XML element, and
 /// [FsmarExportServlet] merges it back on export. Trigger-level unknown
 /// fields ride a `triggerExtras` attribute on the State element (keyed by
-/// SIP method). A config the editor can't faithfully represent at all —
-/// e.g. a transition with no `next` — is rejected with 400 and a named
-/// reason rather than imported lossily.
+/// SIP method). Every terminal transition (no `next`) maps to an egress
+/// node: with routes it is a pushed exit (ROUTE_FINAL/ROUTE_BACK); with
+/// none it is the downstream exit — application chaining stops and OCCAS
+/// routes the request on its Request-URI (`AppRouter`'s no-target break).
 ///
 /// **Transition order matters**: `Trigger.transitions` is evaluated
 /// first-match-wins, but mxGraph edges have no inherent order, so each
@@ -72,6 +73,11 @@ public class FsmarImportServlet extends HttpServlet {
 	// root extra — FsmarExportServlet always re-emits it from live geometry.
 	static final Set<String> ROOT_KNOWN = setOf("defaultApplication", "states", "diagram");
 	static final Set<String> STATE_KNOWN = setOf("app", "selectors", "triggers");
+	// For ingress boxes (and the default ingress = the "null" state): like
+	// STATE_KNOWN but WITHOUT `app`. An ingress's label IS its state id, so
+	// export cannot re-derive a hand-written `app` from the cell — it rides
+	// the extra blob instead and merges back verbatim (no silent strip).
+	static final Set<String> INGRESS_STATE_KNOWN = setOf("selectors", "triggers");
 	static final Set<String> TRIGGER_KNOWN = setOf("transitions");
 	static final Set<String> TRANSITION_KNOWN = setOf("id", "when", "next", "subscriber",
 			"region", "routes", "routeModifier");
@@ -86,7 +92,9 @@ public class FsmarImportServlet extends HttpServlet {
 	// (id, subscriber, region, routes, routeModifier, unknowns) is preserved
 	// in the ingress cell's `dispatchExtra` and merged back on export —
 	// otherwise a hand-written entry transition silently loses the region and
-	// subscriber header that matter most on an initial request.
+	// subscriber header that matter most on an initial request. The dispatch's
+	// POSITION within its trigger is stored alongside as `seq` (first-match-
+	// wins order is semantics), so export re-emits it exactly where it was.
 	static final Set<String> DISPATCH_REGENERATED = setOf("when", "next");
 	// Egress diagram fields handled explicitly: `routes` bake as <route> children,
 	// `returnState` is topology (the route-back out-edge). Everything else — e.g.
@@ -172,10 +180,6 @@ public class FsmarImportServlet extends HttpServlet {
 		layerCell.setAttribute("parent", "0");
 		layer.appendChild(layerCell);
 		root.appendChild(layer);
-
-		// Reject transitions the diagram cannot represent before building
-		// anything: a transition with no `next` has no edge target.
-		validateRepresentable(fsmar);
 
 		JsonNode states = fsmar.path("states");
 		JsonNode diagram = fsmar.path("diagram");
@@ -290,6 +294,11 @@ public class FsmarImportServlet extends HttpServlet {
 		// "null" (whose `next` is a listed ingress) are classification
 		// plumbing the editor re-derives from each ingress's match — absorb
 		// them, don't draw them as arrows.
+		//
+		// Ingresses whose match has been reconciled against an absorbed
+		// dispatch's `when` (routing wins over presentation; first dispatch
+		// per ingress decides).
+		Set<String> matchAdopted = new HashSet<>();
 		if (states.isObject()) {
 			Iterator<Map.Entry<String, JsonNode>> stateIt = states.fields();
 			while (stateIt.hasNext()) {
@@ -310,12 +319,14 @@ public class FsmarImportServlet extends HttpServlet {
 						String targetName = tx.path("next").asText("");
 						boolean hasRoutes = tx.path("routes").isArray() && tx.path("routes").size() > 0;
 						boolean routeBack = "ROUTE_BACK".equals(tx.path("routeModifier").asText(""));
-						// An egress transition routes the call out of OCCAS via its
-						// routes: ROUTE_FINAL (no next, the call leaves) or ROUTE_BACK
-						// (next = the resume state after an external round-trip). For
+						// An egress transition takes the call out of the application
+						// chain: ROUTE_FINAL (no next, exits via its routes), ROUTE_BACK
+						// (next = the resume state after an external round-trip), or the
+						// downstream exit (no next, NO routes — nothing pushed, OCCAS
+						// routes on the Request-URI; AppRouter's no-target break). For
 						// ROUTE_BACK the `next` is the egress's return state, NOT a
 						// normal edge target — it's drawn as the egress's out-edge.
-						boolean finalEgress = targetName.isEmpty() && hasRoutes;
+						boolean finalEgress = targetName.isEmpty();
 						boolean routeBackEgress = !targetName.isEmpty() && hasRoutes && routeBack;
 						boolean egressTx = finalEgress || routeBackEgress;
 
@@ -325,10 +336,28 @@ public class FsmarImportServlet extends HttpServlet {
 						// carried is stashed on the ingress cell and merged back.
 						if (!egressTx && !targetName.isEmpty() && "null".equals(sourceName)
 								&& ingresses.path(targetName).isObject()) {
-							ObjectNode kept = leftover(tx, DISPATCH_REGENERATED);
-							if (kept.size() > 0) {
-								addDispatchExtra(ingressEls.get(targetName), method, kept);
+							// Routing wins over presentation: if this dispatch's `when`
+							// was hand-edited and no longer equals the ingress's match
+							// (diagram metadata), adopt the `when` as the match —
+							// otherwise the round trip would silently revert a routing
+							// condition from presentation data. The first dispatch per
+							// ingress decides; a hand-written second dispatch with yet
+							// another condition is not representable and regenerates
+							// from the adopted match.
+							String dispatchWhen = tx.path("when").asText("");
+							Element ingressEl = ingressEls.get(targetName);
+							if (ingressEl != null && !dispatchWhen.isEmpty()
+									&& matchAdopted.add(targetName)
+									&& !dispatchWhen.equals(ingressEl.getAttribute("match"))) {
+								ingressEl.setAttribute("match", dispatchWhen);
 							}
+							ObjectNode kept = leftover(tx, DISPATCH_REGENERATED);
+							// Position within this trigger. First-match-wins order is
+							// semantics, and a hand-authored config may put an override
+							// BEFORE the dispatch — export re-emits the dispatch at this
+							// seq instead of unconditionally leading the trigger.
+							kept.put("seq", seq);
+							addDispatchExtra(ingressEls.get(targetName), method, kept);
 							seq++;
 							continue;
 						}
@@ -346,7 +375,8 @@ public class FsmarImportServlet extends HttpServlet {
 							targetId = egressCellIdByKey.get(key);
 							if (targetId == null) {
 								targetId = String.valueOf(nextId++);
-								String synthName = synthEgressName(routeBackEgress, egressCellIdByKey.size());
+								String synthName = synthEgressName(routeBackEgress, hasRoutes,
+										egressCellIdByKey.size());
 								createEgressBox(doc, root, targetId, synthName, tx.path("routes"), null,
 										statePlacements, egressCol, MARGIN_Y + egressRow++ * ROW_SPACING);
 								egressCellIdByKey.put(key, targetId);
@@ -359,8 +389,8 @@ public class FsmarImportServlet extends HttpServlet {
 							targetId = stateCellIds.get(targetName);
 						}
 						if (sourceId == null || targetId == null) {
-							// validateRepresentable guarantees a routable transition
-							// and every named target got a vertex — unreachable,
+							// Every named target got a vertex and every terminal
+							// transition synthesized an egress — unreachable,
 							// but fail loudly rather than drop a transition.
 							throw new IllegalArgumentException("Cannot place transition "
 									+ sourceName + "/" + method + "[" + seq + "] -> '"
@@ -427,43 +457,6 @@ public class FsmarImportServlet extends HttpServlet {
 		return sw.toString();
 	}
 
-	/// Rejects configs the diagram cannot represent without loss. Currently:
-	/// a transition with no `next` (an edge needs a target; fsmar3 cannot
-	/// route it either). Throws IllegalArgumentException with the exact
-	/// location so the admin can fix the JSON.
-	private static void validateRepresentable(JsonNode fsmar) {
-		JsonNode states = fsmar.path("states");
-		if (!states.isObject()) return;
-		Iterator<Map.Entry<String, JsonNode>> stateIt = states.fields();
-		while (stateIt.hasNext()) {
-			Map.Entry<String, JsonNode> stateEntry = stateIt.next();
-			JsonNode triggers = stateEntry.getValue().path("triggers");
-			if (!triggers.isObject()) continue;
-			Iterator<Map.Entry<String, JsonNode>> trigIt = triggers.fields();
-			while (trigIt.hasNext()) {
-				Map.Entry<String, JsonNode> trigEntry = trigIt.next();
-				JsonNode txList = trigEntry.getValue().path("transitions");
-				if (!txList.isArray()) continue;
-				int i = 0;
-				for (JsonNode tx : txList) {
-					boolean hasNext = !tx.path("next").asText("").isEmpty();
-					boolean hasRoutes = tx.path("routes").isArray() && tx.path("routes").size() > 0;
-					// A transition needs SOMETHING to do: route to a next
-					// application, or carry routes (a terminal egress that sends
-					// the call out of OCCAS). Neither = unroutable.
-					if (!hasNext && !hasRoutes) {
-						throw new IllegalArgumentException(
-								"Transition states['" + stateEntry.getKey() + "'].triggers['"
-								+ trigEntry.getKey() + "'].transitions[" + i + "] has neither 'next' "
-								+ "nor 'routes' — the editor (and FSMAR 3 itself) cannot route it. "
-								+ "Fix the JSON and re-import.");
-					}
-					i++;
-				}
-			}
-		}
-	}
-
 	/// Creates an ingress box: a `<Gateway>`-styled vertex for an entry state.
 	/// `stateName` keys its stored position and is what edges resolve against;
 	/// `label` is the displayed text (the default ingress shows "default" for
@@ -478,16 +471,17 @@ public class FsmarImportServlet extends HttpServlet {
 			JsonNode placements, int defX, int defY) {
 		Element gateway = doc.createElement("Gateway");
 		gateway.setAttribute("label", label);
-		// The state id (map key). For the default ingress this is "null" while the
-		// label shows "default"; for a named ingress id and label coincide.
-		gateway.setAttribute("stateId", stateName);
+		// No stateId attribute: for an ingress the LABEL is the state id (export
+		// keys on it, so a rename renames the state). The default ingress maps to
+		// "null" by being matchless, not by an id. `stateName` still keys the
+		// stored placement below.
 		gateway.setAttribute("id", cellId);
 		if (match != null && !match.isEmpty()) {
 			gateway.setAttribute("match", match);
 		}
 		if (stateJson != null && stateJson.isObject()) {
 			appendSelectorChildren(doc, gateway, stateJson.path("selectors"));
-			setExtra(gateway, stateJson, STATE_KNOWN);
+			setExtra(gateway, stateJson, INGRESS_STATE_KNOWN);
 			setTriggerExtras(gateway, stateJson.path("triggers"));
 		}
 		Element cell = doc.createElement("mxCell");
@@ -577,9 +571,10 @@ public class FsmarImportServlet extends HttpServlet {
 	}
 
 	/// Names an egress synthesized for a transition that had no diagram.egresses
-	/// entry (a hand-edited config): by direction, deduped.
-	private static String synthEgressName(boolean routeBack, int index) {
-		String base = routeBack ? "back-to-origin" : "to-destination";
+	/// entry (a hand-edited config): by direction, deduped. A terminal transition
+	/// with no routes is the downstream exit (nothing pushed).
+	private static String synthEgressName(boolean routeBack, boolean hasRoutes, int index) {
+		String base = routeBack ? "back-to-origin" : (hasRoutes ? "to-destination" : "downstream");
 		return index == 0 ? base : base + "-" + (index + 1);
 	}
 

@@ -62,6 +62,8 @@ public class OptionsSettings extends Configuration implements Serializable {
 
 	protected int overloadRetryAfter;
 
+	protected int drainRetryAfter;
+
 	public String getAllow() {
 		return allow;
 	}
@@ -126,6 +128,15 @@ public class OptionsSettings extends Configuration implements Serializable {
 
 	public void setOverloadRetryAfter(int overloadRetryAfter) {
 		this.overloadRetryAfter = overloadRetryAfter;
+	}
+
+	@JsonPropertyDescription("Seconds advertised in the Retry-After header of the 503 Draining sent while this node is administratively drained. 0 omits the header. The drain SWITCH is not configuration — it is the per-node JMX attribute vorpal.blade:Name=<app>,Type=Drain / Drained; this field only sets the wait the 503 advertises.")
+	public int getDrainRetryAfter() {
+		return drainRetryAfter;
+	}
+
+	public void setDrainRetryAfter(int drainRetryAfter) {
+		this.drainRetryAfter = drainRetryAfter;
 	}
 
 }

@@ -147,6 +147,57 @@ class FsmarDispatchFidelityTest {
 	}
 
 	@Test
+	@DisplayName("an override authored before the dispatch keeps its position")
+	void overrideBeforeDispatchKeepsPosition() throws Exception {
+		// First-match-wins: an emergency override placed BEFORE the dispatch
+		// must not come back re-ordered behind it. The absorbed dispatch's
+		// position rides dispatchExtra's seq; export re-emits it in place.
+		String cfg = "{\"defaultApplication\":\"b2bua\",\"states\":{"
+				+ "\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":["
+				+ "  {\"id\":\"emergency\",\"when\":\"${To.user} == '911'\",\"next\":\"e911\"},"
+				+ "  {\"id\":\"from-carrier\",\"when\":\"${originIP} insubnet '10.0.0.0/8'\","
+				+ "   \"next\":\"inbound\"}]}}},"
+				+ "\"e911\":{\"triggers\":{}},"
+				+ "\"inbound\":{\"triggers\":{\"INVITE\":{\"transitions\":[{\"id\":\"INB-1\",\"next\":\"b2bua\"}]}}},"
+				+ "\"b2bua\":{\"triggers\":{}}},"
+				+ "\"diagram\":{\"ingresses\":{\"inbound\":{\"match\":\"${originIP} insubnet '10.0.0.0/8'\"}}}}";
+
+		JsonNode txs = roundTrip(cfg).path("states").path("null")
+				.path("triggers").path("INVITE").path("transitions");
+		assertEquals("emergency", txs.path(0).path("id").asText(),
+				"the override must stay before the dispatch");
+		assertEquals("from-carrier", txs.path(1).path("id").asText(),
+				"the dispatch must stay at its authored position");
+		assertTrue(!txs.path(1).has("seq"),
+				"the positional seq must not leak into the config");
+
+		// And the order must hold on a second pass, not just the first.
+		JsonNode twice = roundTrip(roundTrip(cfg).toString())
+				.path("states").path("null").path("triggers").path("INVITE").path("transitions");
+		assertEquals("emergency", twice.path(0).path("id").asText(),
+				"the order drifted on a second round trip");
+	}
+
+	@Test
+	@DisplayName("a dispatch with no stored position leads the trigger")
+	void generatedDispatchLeads() throws Exception {
+		// Fresh ingress drawn in the editor (no absorbed position): the
+		// generated dispatch defaults to the head of the trigger, ahead of
+		// null's own routing.
+		String cfg = "{\"states\":{"
+				+ "\"null\":{\"triggers\":{\"INVITE\":{\"transitions\":[{\"id\":\"def\",\"next\":\"b2bua\"}]}}},"
+				+ "\"inbound\":{\"triggers\":{\"INVITE\":{\"transitions\":[{\"id\":\"INB-1\",\"next\":\"b2bua\"}]}}},"
+				+ "\"b2bua\":{\"triggers\":{}}},"
+				+ "\"diagram\":{\"ingresses\":{\"inbound\":{\"match\":\"${originIP} insubnet '10.0.0.0/8'\"}}}}";
+
+		JsonNode txs = roundTrip(cfg).path("states").path("null")
+				.path("triggers").path("INVITE").path("transitions");
+		assertEquals("dispatch-inbound", txs.path(0).path("id").asText(),
+				"a generated dispatch (no stored position) must lead");
+		assertEquals("def", txs.path(1).path("id").asText());
+	}
+
+	@Test
 	@DisplayName("control: same config without a diagram block round-trips too")
 	void noDiagramControl() throws Exception {
 		// With no diagram.ingresses there is nothing to absorb — the transition

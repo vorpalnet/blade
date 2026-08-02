@@ -53,10 +53,13 @@
 	<div class="ingress-dispatch-section">
 		<label style="margin-top: 14px;">Entry transition</label>
 		<div class="state-hint" style="margin-top: 0;">
-			Applied as traffic enters this ingress, before any application runs.
-			Both are optional and matter most on an initial request:
-			<b>subscriber</b> names the header whose URI the container is handed;
-			<b>region</b> is the JSR-289 routing region (blank = NEUTRAL).
+			Carried on the generated entry transition, and applied only when this
+			ingress's name is a <b>deployed application</b> (the entry transition
+			then invokes it directly): <b>subscriber</b> names the header whose URI
+			the container is handed; <b>region</b> is the JSR-289 routing region
+			(blank = NEUTRAL). For a pure ingress (SBC, trunk &mdash; not an
+			application) the entry transition is bypassed &mdash; set subscriber
+			and region on this ingress's <b>outgoing arrows</b> instead.
 		</div>
 		<div class="ingress-dispatch-rows"></div>
 	</div>
@@ -97,7 +100,9 @@
 			Inferred from the diagram: with no line out, the call leaves OCCAS for
 			good (<b>ROUTE_FINAL</b>). Draw a line from this egress back to a state
 			and it becomes <b>ROUTE_BACK</b> — the call goes out to the routes
-			below, then resumes the flow at that state when it returns.
+			below, then resumes the flow at that state when it returns. With no
+			routes at all it is the <b>downstream</b> exit: nothing is pushed and
+			the call simply leaves the application chain on its Request-URI.
 		</div>
 		<div class="egress-kind" style="font-weight:bold; margin-top:2px;"></div>
 
