@@ -11,19 +11,20 @@ import javax.servlet.sip.annotation.SipApplication;
 import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
 
-import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.Callflow;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
-import org.vorpal.blade.framework.v2.config.Translation;
-import org.vorpal.blade.framework.v3.crud.CrudConfiguration;
+import org.vorpal.blade.framework.v3.B2buaServlet;
+import org.vorpal.blade.framework.v3.configuration.Context;
+import org.vorpal.blade.framework.v3.configuration.SettingsManager;
 import org.vorpal.blade.framework.v3.crud.CrudConfigurationSample;
 import org.vorpal.blade.framework.v3.crud.CrudSettings;
 import org.vorpal.blade.framework.v3.crud.RuleSet;
 
 /**
  * B2BUA servlet that applies configurable CRUD rules to SIP messages
- * at every lifecycle point. Uses standard framework callflows — rule
- * application happens in the B2BUA lifecycle callbacks.
+ * at every lifecycle point. On an initial request the v3 enrichment
+ * pipeline runs and selects a rule set by writing the `ruleSet`
+ * context variable; rule application happens in the B2BUA lifecycle
+ * callbacks.
  */
 @WebListener
 @SipApplication(distributable = true)
@@ -36,7 +37,12 @@ public class CrudServlet extends B2buaServlet {
 
 	@Override
 	protected void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
-		settingsManager = new SettingsManager<>(event, CrudSettings.class, new CrudConfigurationSample());
+		settingsManager = new SettingsManager<CrudSettings>(event) {
+			@Override
+			protected CrudSettings sample() {
+				return new CrudConfigurationSample();
+			}
+		};
 	}
 
 	@Override
@@ -50,18 +56,13 @@ public class CrudServlet extends B2buaServlet {
 
 	@Override
 	protected Callflow chooseCallflow(SipServletRequest inboundRequest) throws ServletException, IOException {
-		CrudConfiguration settings = settingsManager.getCurrent();
+		CrudSettings settings = settingsManager.getCurrent();
 
-		if (inboundRequest.isInitial()) {
-			Translation t = settings.findTranslation(inboundRequest);
-			if (t != null) {
-				String ruleSetId = (String) t.getAttribute("ruleSet");
-				if (ruleSetId != null) {
-					RuleSet ruleSet = settings.getRuleSets().get(ruleSetId);
-					if (ruleSet != null) {
-						inboundRequest.getApplicationSession().setAttribute(RULESET_ATTR, ruleSet);
-					}
-				}
+		if (inboundRequest.isInitial() && settings != null && !settings.getPipeline().isEmpty()) {
+			Context ctx = settings.enrich(inboundRequest);
+			RuleSet ruleSet = settings.selectedRuleSet(ctx);
+			if (ruleSet != null) {
+				inboundRequest.getApplicationSession().setAttribute(RULESET_ATTR, ruleSet);
 			}
 		}
 

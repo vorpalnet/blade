@@ -4,6 +4,7 @@
 	<meta charset="utf-8">
 	<title>CRUD rule preview</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="/blade/portal/lib/blade-editor.css">
 	<style>
 		:root {
 			/* Dark shell, light document: the page chrome (topbar) and the
@@ -307,6 +308,68 @@
 			font-style: italic;
 			padding: 10px 12px;
 		}
+
+		/* ---- crud-editor page-specific editor styles (the shared kit
+		   styles load from /blade/portal/lib/blade-editor.css) ---- */
+		.editor-body {
+			display: grid;
+			grid-template-columns: 230px 1fr;
+			gap: 0;
+			border-top: 1px solid var(--border);
+			min-height: 200px;
+		}
+		.rs-list {
+			border-right: 1px solid var(--border);
+			padding: 8px;
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+		}
+		.rs-list .rs-item {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 6px;
+			text-align: left;
+			background: var(--panel);
+			color: var(--text);
+			border: 1px solid var(--border);
+			border-radius: 4px;
+			font-weight: 400;
+			padding: 6px 6px 6px 10px;
+			font-family: "JetBrains Mono", Menlo, monospace;
+			font-size: 12px;
+			word-break: break-all;
+			cursor: pointer;
+		}
+		.rs-list .rs-item.active {
+			border-color: var(--accent);
+			color: var(--accent);
+			font-weight: 600;
+		}
+		.rs-list .rs-item .rs-name { flex: 1; min-width: 0; }
+		.rs-list .rs-item .rs-del {
+			flex: 0 0 auto;
+			background: transparent;
+			color: var(--muted);
+			border: none;
+			padding: 0 4px;
+			font-size: 15px;
+			font-weight: 400;
+			line-height: 1;
+			cursor: pointer;
+		}
+		.rs-list .rs-item .rs-del:hover { color: var(--bad); }
+		.rs-detail { padding: 12px; min-width: 0; }
+		.rs-head {
+			display: flex;
+			gap: 10px;
+			align-items: end;
+			flex-wrap: wrap;
+			margin-bottom: 12px;
+		}
+		.op-list { margin: 4px 0 8px 18px; }
+
 	</style>
 </head>
 <body class="vorpal-glass">
@@ -332,16 +395,93 @@
 	<main class="crud-content">
 	<h1>CRUD rule preview</h1>
 	<p class="subtitle">
-		Paste a SIP message, pick a rule set, and click Run. The transformation runs
-		in-process on the AdminServer against the live <code>crud.json</code> — nothing
-		touches the wire.
+		Three steps: the <em>pipeline</em> decides which rule set each call gets, the
+		<em>rule sets</em> say what happens to it, and the <em>preview</em> runs your
+		unsaved draft against a sample message so you see every change before you save.
+		Save writes <code>crud.json</code> (previous version kept); Publish tells the
+		running CRUD service to reload it. New here? Hit <strong>? Help</strong>.
 	</p>
+
+	<details class="editor-shell" id="editorShell" open>
+		<summary>
+			<span>Rule sets</span>
+			<span class="src-badge" id="srcBadge">loading…</span>
+			<span class="dirty-badge" id="dirtyBadge" style="display:none;">unsaved changes</span>
+		</summary>
+
+		<div class="editor-toolbar editor-actions">
+			<label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text);">
+				<input type="checkbox" id="livePreview" checked style="width:15px;height:15px;">
+				re-run preview on change
+			</label>
+			<div class="spacer"></div>
+			<button id="helpBtn" class="secondary" type="button" title="What is all this?">? Help</button>
+			<button id="reloadEditor" class="secondary" type="button" title="Discard the draft and reload from disk">Reload</button>
+			<button id="showJson" class="secondary" type="button" title="Read-only view of the document Save would write">JSON</button>
+			<button id="showVersions" class="secondary" type="button">Versions</button>
+			<button id="saveConfig" type="button">Save</button>
+			<button id="publishConfig" type="button">Publish</button>
+			<a class="handoff" href="/blade/configurator/configurator.html?schema=crud"
+				title="Logging, session settings, and cluster/server overlays are edited in the Configurator">
+				logging &amp; session → Configurator</a>
+		</div>
+
+		<div class="versions-panel" id="versionsPanel" style="display:none;">
+			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">Version history</h2>
+			<div id="versionsBody"></div>
+			<pre id="versionPreview" style="display:none;"></pre>
+		</div>
+
+		<div class="versions-panel" id="jsonPanel" style="display:none;">
+			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;">
+				<span>Draft crud.json — read-only, exactly what Save writes</span>
+				<button id="copyJson" type="button" class="mini">copy</button>
+			</h2>
+			<pre id="jsonBody"></pre>
+		</div>
+
+		<div class="section-head">
+			<span class="step">1</span>
+			<span class="section-title">Pipeline — which rule set does each call get?</span>
+			<button class="mini help-mini" type="button" data-help="pipeline">?</button>
+			<span class="section-sub">Connectors run in order on each initial request, extracting values from
+				the message into variables; selection happens when one of them writes the
+				<code>ruleSet</code> variable.</span>
+		</div>
+		<div id="pipelinePanel" class="pipeline-panel"></div>
+
+		<div class="section-head">
+			<span class="step">2</span>
+			<span class="section-title">Rule sets — what happens to the selected calls?</span>
+			<button class="mini help-mini" type="button" data-help="rulesets">?</button>
+			<span class="section-sub">Each rule filters by method / lifecycle event / <code>when</code>
+				expression, then runs its operations in order.</span>
+		</div>
+		<div class="editor-body">
+			<div class="rs-list" id="rsList"></div>
+			<div class="rs-detail" id="rsDetail">
+				<div class="vars-empty">loading configuration…</div>
+			</div>
+		</div>
+
+	</details>
+
+	<div class="section-head on-glass">
+		<span class="step">3</span>
+		<span class="section-title">Preview — try it on a real message</span>
+		<button class="mini help-mini" type="button" data-help="preview">?</button>
+		<span class="section-sub">Runs your unsaved draft in-process on the AdminServer; nothing touches the wire.</span>
+	</div>
 
 	<div class="grid">
 		<div class="controls">
 			<div>
 				<label for="ruleSet">Rule set</label>
 				<select id="ruleSet"><option value="">(loading…)</option></select>
+				<button id="autoSelect" type="button" style="font-size:11px;padding:3px 8px;margin-top:4px;"
+					title="Run the enrichment pipeline against the input message and pick the rule set it selects">
+					Auto-select from message
+				</button>
 			</div>
 			<div>
 				<label for="event">Lifecycle event</label>
@@ -378,7 +518,7 @@
 			<h2>
 				<span>Variables</span>
 				<span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">
-					editable · persists across runs · simulates Attribute Selectors / env-var overrides
+					editable · persists across runs · simulates the enrichment pipeline / env-var overrides
 				</span>
 			</h2>
 			<div id="varsGrid" class="vars-grid">
@@ -413,6 +553,118 @@
 		<pre id="warnBody" style="border-color:var(--bad);"></pre>
 	</div>
 
+	<dialog id="helpDialog" class="help-dialog">
+		<div class="help-head">
+			<span>How the CRUD service works</span>
+			<button type="button" id="helpClose" class="mini">close</button>
+		</div>
+		<div class="help-body">
+			<section id="help-pipeline">
+				<h3>The pipeline</h3>
+				<p>When a call arrives, the CRUD service has to answer one question before it can
+				transform anything: <em>which rule set applies to this call?</em> The pipeline answers
+				it. It is an ordered list of <strong>connectors</strong> that each pull values out of
+				somewhere and store them as named <strong>variables</strong>. Selection happens when
+				one of them writes the variable named <code>ruleSet</code> — its value names an entry
+				in your rule sets. If nothing writes it, the <strong>default rule set</strong> applies;
+				with no default either, the call passes through untransformed.</p>
+				<p>The everyday shape is two connectors: a <code>sip</code> connector that extracts a
+				value from the message (say, the dialed number from the To header), then a
+				<code>table</code> connector that looks that value up and writes <code>ruleSet</code>.
+				That's the whole trick — everything else is optional power.</p>
+				<p>Every variable the pipeline extracts is also available inside rule operations as
+				<code>${name}</code>, so the pipeline does double duty: selection and data
+				gathering.</p>
+			</section>
+			<section id="help-connectors">
+				<h3>Connector types</h3>
+				<p><strong>sip</strong> — reads the SIP request itself; no I/O. Its selectors pull
+				headers, the Request-URI, the body, or transport facts (<code>originIP</code>,
+				<code>transport</code>, …). Almost every pipeline starts with one.</p>
+				<p><strong>table</strong> — looks a variable up in one or more translation tables and
+				spreads the matched row's values into variables. First table that matches wins. This is
+				the usual place <code>ruleSet</code> gets written.</p>
+				<p><strong>rest / jdbc / ldap</strong> — fetch enrichment data from an external service,
+				database, or directory, then run selectors over the response. These do real I/O
+				<em>inline on the call path</em>, so every millisecond they take is added to INVITE
+				processing — prefer message-derived selection when you can.</p>
+			</section>
+			<section id="help-selectors">
+				<h3>Selectors</h3>
+				<p>A selector pulls one value out of whatever its connector produced and stores it
+				under the selector's <code>id</code> — that id is the variable name you reference
+				later as <code>${id}</code>.</p>
+				<p><strong>attribute</strong> takes a value verbatim (a header, a map field).
+				<strong>regex</strong> matches a pattern with named groups —
+				<code>(?&lt;user&gt;[^@]+)</code> — and stores each named group as its own variable,
+				plus an optional rendered <code>expression</code> template under the selector's id.
+				<strong>json / xml / sdp</strong> extract by JsonPath, XPath, or SDP field from a
+				payload. <strong>table</strong> classifies an already-extracted value through a
+				translation table.</p>
+			</section>
+			<section id="help-tables">
+				<h3>Translation tables and match strategies</h3>
+				<p>A table has a <code>keyExpression</code> (a <code>${var}</code> template
+				that produces the lookup key), a match strategy, and rows. The strategies:
+				<strong>hash</strong> is an exact match; <strong>prefix</strong> is longest-prefix
+				(dial plans: row <code>1816</code> matches key <code>18165551234</code>);
+				<strong>range</strong> matches integer intervals (row <code>8-17</code> matches key
+				<code>9</code> — time-of-day buckets, score bands). Each row's values all become
+				variables when it matches; a row with a <code>ruleSet</code> column is what makes
+				selection happen.</p>
+			</section>
+			<section id="help-rulesets">
+				<h3>Rule sets, rules, and filters</h3>
+				<p>A rule set is an ordered list of rules, applied at every point in the call's life —
+				the outbound INVITE (<code>callStarted</code>), the answer (<code>callAnswered</code>),
+				the ACK (<code>callConnected</code>), the BYE (<code>callCompleted</code>), and
+				in-dialog traffic (<code>requestEvent</code> / <code>responseEvent</code>). Every rule
+				whose filters all pass runs its operations, in order.</p>
+				<p>Filters are null-tolerant — an empty filter matches everything. <code>method</code>
+				and <code>event</code> accept comma-separated alternatives and <code>!</code> negation
+				(<code>INVITE,REGISTER</code>, <code>!BYE</code>). <code>statusRange</code> matches
+				response codes: <code>200-299</code>, <code>4xx</code>, <code>!5xx</code> — setting it
+				implicitly limits the rule to responses. <code>when</code> is a boolean expression over
+				variables: <code>${customerTier} == premium</code>, with
+				<code>==&nbsp;!=&nbsp;&lt;&nbsp;&gt;&nbsp;&amp;&amp;&nbsp;||&nbsp;!</code> plus
+				<code>matches</code> (regex), <code>contains</code>, and <code>insubnet</code>
+				(CIDR). A malformed <code>when</code> never fires the rule.</p>
+			</section>
+			<section id="help-operations">
+				<h3>Operations — where the name CRUD comes from</h3>
+				<p>CRUD = <strong>Create, Read, Update, Delete</strong> — the four verbs a rule can
+				apply to any part of a message. <strong>create</strong> adds a header, body part, or
+				node; <strong>read</strong> captures values into variables; <strong>update</strong>
+				rewrites in place; <strong>delete</strong> removes. Each verb comes in four addressing
+				modes: the plain family addresses SIP headers, the Request-URI, and the raw body by
+				regex; the <code>xml*</code> family uses XPath; <code>json*</code> uses JsonPath;
+				<code>sdp*</code> uses JsonPath over the SDP parsed to a structured model
+				(<code>$.media[0].port</code>,
+				<code>$.media[?('inactive' in @.attributes[*].name)]</code>). Multipart MIME bodies
+				are handled part by part — target one part by content type, the rest ride through —
+				and <code>keepPart</code> strips a multipart down to one part.</p>
+				<p>Values support <code>${var}</code> substitution from everything read so far
+				— pipeline variables, read-operation captures, plus <code>${now}</code> and
+				<code>${uuid}</code>. The remove-and-restore trick: an <code>sdpRead</code> of a
+				filter path saves whole media blocks in a variable; a later <code>sdpCreate</code> with
+				parent <code>$.media</code> and value <code>${thatVariable}</code> splices them
+				back — that's the minsdp pattern.</p>
+			</section>
+			<section id="help-preview">
+				<h3>Preview, Save, Publish</h3>
+				<p>The preview always runs your <em>unsaved draft</em>: Auto-select runs the draft
+				pipeline and reports which rule set it picks (and fills the variables grid with what it
+				extracted); Run replays the message through a rule set and shows the before/after diff,
+				which rules fired, and any warnings the engine logged. Nothing touches the wire.</p>
+				<p><strong>Save</strong> validates the document exactly as the CRUD service would load
+				it, keeps the previous file in version history, and writes <code>crud.json</code>.
+				<strong>Publish</strong> is the separate act that tells the running service to reload
+				what was last saved. Logging, session settings, and per-cluster overlays are edited in
+				the Configurator — both tools share the same file politely.</p>
+			</section>
+		</div>
+	</dialog>
+
 	<details id="diagPanel" class="diag" style="display:none;">
 		<summary id="diagSummary">Diagnostics</summary>
 		<div class="diag-grid">
@@ -435,7 +687,18 @@
 	</details>
 	</main>
 
+	<script src="/blade/portal/lib/blade-editor.js"></script>
 	<script>
+		// Shared machinery from the portal-hosted editor kit
+		// (/blade/portal/lib/blade-editor.js) — schema resolution, field
+		// renderers, card lists, help dialog. Initialized in loadEditor once
+		// the schema arrives.
+		const { escapeHtml, cleanJson, derefNode, variantsFromAnyOf, isStringMapDef,
+			titleEl, miniBtn, smallAddBtn, moveInArr,
+			fieldEl, blurFieldEl, listFieldEl, selectFieldEl, checkboxFieldEl, kvFieldEl,
+			renderSchemaField, renderFieldsInto, polyListField, objListField,
+			mapOfObjectsField, polyObjectField, rawJsonBound, helpMini, openHelp } = BladeEditor;
+
 		// Compute the API base from the document URL so the fetches work
 		// regardless of how the operator landed on the page (with or
 		// without a trailing slash, via a redirect, etc.). The webapp
@@ -692,6 +955,103 @@ a=sendrecv
 			if (autoOpen) panel.open = true;
 		}
 
+		// Selection dry-run: ask the server which rule set the enrichment
+		// pipeline picks for the pasted message, select it in the dropdown,
+		// and fold the post-enrichment variables into the grid so a
+		// subsequent Run sees what production rules would see.
+		document.getElementById('autoSelect').addEventListener('click', async () => {
+			const message = document.getElementById('input').value;
+			const status = document.getElementById('status');
+			const warnPanel = document.getElementById('warnPanel');
+			const warnBody = document.getElementById('warnBody');
+			const btn = document.getElementById('autoSelect');
+
+			if (!message.trim()) {
+				status.textContent = 'Paste a SIP request first.';
+				status.className = 'status err';
+				return;
+			}
+
+			status.textContent = 'Selecting…';
+			status.className = 'status';
+			btn.disabled = true;
+
+			const url = API_BASE + 'selection';
+			const requestBody = JSON.stringify(Object.assign(
+				{ message: message, variables: getVarsMap() }, draftFields()), null, 2);
+
+			let resp = null;
+			let rawResponse = '';
+			let data = null;
+			try {
+				resp = await fetch(url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: requestBody,
+				});
+				rawResponse = await resp.text();
+				data = JSON.parse(rawResponse);
+			} catch (e) {
+				status.textContent = 'Selection failed (' + (e.name || 'Error') + '): ' + e.message;
+				status.className = 'status err';
+				showDiagnostics({
+					url: url, requestBody: requestBody,
+					status: resp ? resp.status + ' ' + resp.statusText : null,
+					contentType: resp ? (resp.headers.get('Content-Type') || '') : null,
+					rawResponse: rawResponse || '(no response)',
+					isError: true, autoOpen: true,
+				});
+				btn.disabled = false;
+				return;
+			}
+
+			const warnings = (data.warnings || []);
+			if (warnings.length > 0) {
+				warnPanel.style.display = '';
+				warnBody.textContent = warnings.join('\n\n');
+			} else {
+				warnPanel.style.display = 'none';
+			}
+
+			if (data.error) {
+				status.textContent = 'Error: ' + data.error;
+				status.className = 'status err';
+				showDiagnostics({
+					url: url, requestBody: requestBody, status: resp.status + ' ' + resp.statusText,
+					contentType: resp.headers.get('Content-Type') || '', rawResponse: rawResponse,
+					stack: data.stack, isError: true, autoOpen: true,
+				});
+				btn.disabled = false;
+				return;
+			}
+
+			mergeCapturedVars(data.variables || {});
+
+			const sel = document.getElementById('ruleSet');
+			if (data.ruleSet) {
+				if (![...sel.options].some(o => o.value === data.ruleSet)) {
+					const opt = document.createElement('option');
+					opt.value = data.ruleSet;
+					opt.textContent = data.ruleSet;
+					sel.appendChild(opt);
+				}
+				sel.value = data.ruleSet;
+				status.textContent = 'Pipeline selected “' + data.ruleSet + '” · ' +
+					Object.keys(data.variables || {}).length + ' var(s)' +
+					(warnings.length > 0 ? ' · ' + warnings.length + ' warning(s)' : '');
+				status.className = warnings.length > 0 ? 'status err' : 'status ok';
+			} else {
+				status.textContent = 'No rule set selected — this call would pass through untransformed.';
+				status.className = 'status';
+			}
+			showDiagnostics({
+				url: url, requestBody: requestBody, status: resp.status + ' ' + resp.statusText,
+				contentType: resp.headers.get('Content-Type') || '', rawResponse: rawResponse,
+				isError: false, autoOpen: false,
+			});
+			btn.disabled = false;
+		});
+
 		document.getElementById('run').addEventListener('click', async () => {
 			const ruleSet = document.getElementById('ruleSet').value.trim();
 			const event = document.getElementById('event').value;
@@ -715,12 +1075,12 @@ a=sendrecv
 			document.getElementById('run').disabled = true;
 
 			const url = API_BASE + 'preview';
-			const requestPayload = {
+			const requestPayload = Object.assign({
 				ruleSet: ruleSet,
 				lifecycleEvent: event || null,
 				message: message,
 				variables: initVars,
-			};
+			}, draftFields());
 			const requestBody = JSON.stringify(requestPayload, null, 2);
 
 			let resp = null;
@@ -835,10 +1195,716 @@ a=sendrecv
 			document.getElementById('run').disabled = false;
 		});
 
-		function escapeHtml(s) {
-			return String(s).replace(/[&<>"']/g, c =>
-				({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+		// =====================================================================
+		// Rules editor
+		// =====================================================================
+		// One source of truth: `ed.doc`, the full crud.json document. Only
+		// `ruleSets` and `defaultRuleSet` are edited here; every other section
+		// rides through Save untouched (the Flow editor's round-trip contract).
+		// The preview endpoints receive the draft on every run, so the operator
+		// is always previewing the buffer, not the disk.
+
+		const ed = {
+			doc: null,          // full config document (object)
+			baseline: null,     // deep copy of ruleSets+defaultRuleSet as loaded
+			source: null,       // live | sample | builtin
+			opVariants: null,   // [{type, fields, javaClass}] from the schema, or null
+			ruleProps: null,    // schema $defs.Rule.properties, for tooltips
+			current: null,      // selected rule set id
+			dirty: false,
+		};
+
+		const LIFECYCLE_EVENTS = ['callStarted', 'callAnswered', 'callConnected',
+			'callCompleted', 'callDeclined', 'callAbandoned', 'requestEvent', 'responseEvent'];
+
+		function draftFields() {
+			if (!ed.doc) return {};
+			return {
+				draftRuleSets: cleanJson(ed.doc.ruleSets || {}),
+				draftDefaultRuleSet: ed.doc.defaultRuleSet || '',
+				draftPipeline: cleanJson(ed.doc.pipeline || []),
+			};
 		}
+
+		const cleanRuleSets = cleanJson;
+
+		let jsonViewerRef = null;
+
+		function markDirty() {
+			ed.dirty = true;
+			document.getElementById('dirtyBadge').style.display = '';
+			if (jsonViewerRef) jsonViewerRef.refresh();
+			scheduleAutoPreview();
+		}
+
+		function clearDirty() {
+			ed.dirty = false;
+			document.getElementById('dirtyBadge').style.display = 'none';
+		}
+
+		let autoPreviewTimer = null;
+		function scheduleAutoPreview() {
+			if (!document.getElementById('livePreview').checked) return;
+			if (!document.getElementById('input').value.trim()) return;
+			if (!document.getElementById('ruleSet').value) return;
+			clearTimeout(autoPreviewTimer);
+			autoPreviewTimer = setTimeout(() => document.getElementById('run').click(), 600);
+		}
+
+		// ---- schema resolution ----
+
+		function buildOpVariants(schema) {
+			try {
+				return variantsFromAnyOf(schema.$defs.Rule.properties.operations.items.anyOf);
+			} catch (e) {
+				return null; // degrade to raw-JSON operation editing
+			}
+		}
+
+
+		// ---- load / render ----
+
+		async function loadEditor() {
+			const detail = document.getElementById('rsDetail');
+			try {
+				const resp = await fetch(API_BASE + 'config');
+				if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+				const data = await resp.json();
+				if (data.error) throw new Error(data.error);
+
+				ed.doc = data.config || {};
+				if (!ed.doc.ruleSets) ed.doc.ruleSets = {};
+				if (!ed.doc.pipeline) ed.doc.pipeline = [];
+				ed.source = data.source;
+				ed.defs = (data.schema && data.schema.$defs) || null;
+				// Init the kit BEFORE resolving variants — variantsFromAnyOf
+				// reads the kit's internal defs and returns null until then.
+				BladeEditor.init({ defs: ed.defs, onDirty: markDirty });
+				ed.opVariants = data.schema ? buildOpVariants(data.schema) : null;
+				ed.connVariants = (data.schema && data.schema.properties && data.schema.properties.pipeline)
+					? variantsFromAnyOf(data.schema.properties.pipeline.items.anyOf) : null;
+				ed.ruleProps = (ed.defs && ed.defs.Rule) ? ed.defs.Rule.properties : {};
+				ed.baseline = {
+					ruleSets: cleanJson(ed.doc.ruleSets),
+					defaultRuleSet: ed.doc.defaultRuleSet || '',
+					pipeline: cleanJson(ed.doc.pipeline),
+				};
+				clearDirty();
+
+				const badge = document.getElementById('srcBadge');
+				badge.textContent = ed.source === 'live' ? 'live crud.json'
+					: ed.source === 'sample' ? 'generated sample — Save creates crud.json'
+					: 'built-in sample — Save creates crud.json';
+
+				const ids = Object.keys(ed.doc.ruleSets);
+				ed.current = ids.includes(ed.current) ? ed.current : (ids[0] || null);
+				renderAll();
+			} catch (e) {
+				detail.innerHTML = '<div class="vars-empty">failed to load configuration — '
+					+ escapeHtml(e.message) + '</div>';
+			}
+		}
+
+		function renderAll() {
+			renderPipeline();
+			renderRuleSetList();
+			renderRuleSetDetail();
+			syncRuleSetDropdowns();
+		}
+
+		function syncRuleSetDropdowns() {
+			const ids = Object.keys(ed.doc.ruleSets);
+			const sel = document.getElementById('ruleSet');
+			const prev = sel.value;
+			sel.innerHTML = ids.length === 0
+				? '<option value="">(no rule sets)</option>'
+				: ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
+			if (ids.includes(prev)) sel.value = prev;
+			else if (ed.current) sel.value = ed.current;
+
+			const dflt = document.getElementById('defaultRuleSetSel');
+			if (dflt) {
+				const prevD = ed.doc.defaultRuleSet || '';
+				dflt.innerHTML = '<option value="">(none — passthrough)</option>'
+					+ ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
+				dflt.value = ids.includes(prevD) ? prevD : '';
+			}
+		}
+
+		function renderRuleSetList() {
+			const list = document.getElementById('rsList');
+			list.innerHTML = '';
+			for (const id of Object.keys(ed.doc.ruleSets)) {
+				const item = document.createElement('div');
+				item.className = 'rs-item' + (id === ed.current ? ' active' : '');
+				item.setAttribute('role', 'button');
+				item.tabIndex = 0;
+				const name = document.createElement('span');
+				name.className = 'rs-name';
+				name.textContent = id;
+				item.appendChild(name);
+				const del = document.createElement('button');
+				del.type = 'button';
+				del.className = 'rs-del';
+				del.title = 'Delete rule set "' + id + '"';
+				del.textContent = '×';
+				del.addEventListener('click', (e) => {
+					e.stopPropagation();
+					deleteRuleSet(id);
+				});
+				item.appendChild(del);
+				item.addEventListener('click', () => { ed.current = id; renderAll(); });
+				item.addEventListener('keydown', (e) => {
+					if (e.key === 'Enter' || e.key === ' ') { ed.current = id; renderAll(); }
+				});
+				list.appendChild(item);
+			}
+			const add = document.createElement('button');
+			add.type = 'button';
+			add.className = 'rs-item';
+			add.textContent = '+ new rule set';
+			add.addEventListener('click', () => {
+				let n = 1, id;
+				do { id = 'rule-set-' + n++; } while (ed.doc.ruleSets[id]);
+				ed.doc.ruleSets[id] = { id: id, rules: [] };
+				ed.current = id;
+				markDirty();
+				renderAll();
+			});
+			list.appendChild(add);
+		}
+
+		function renderRuleSetDetail() {
+			const detail = document.getElementById('rsDetail');
+			detail.innerHTML = '';
+			const rs = ed.current ? ed.doc.ruleSets[ed.current] : null;
+			if (!rs) {
+				detail.innerHTML = '<div class="vars-empty">no rule set selected — add one on the left</div>';
+				return;
+			}
+
+			// Header: id (rename), description, delete. Rename commits on
+			// blur/Enter — renaming re-renders the whole panel, which would
+			// steal focus if it fired per keystroke.
+			const head = document.createElement('div');
+			head.className = 'rs-head';
+			head.appendChild(blurFieldEl('id', rs.id || ed.current, 'Unique identifier — renames the rule set', v => {
+				renameRuleSet(ed.current, v);
+			}));
+			const desc = fieldEl('description', rs.description || '', 'Shown in the configurator', v => {
+				rs.description = v; markDirty();
+			});
+			desc.classList.add('wide');
+			head.appendChild(desc);
+			detail.appendChild(head);
+
+			// Rules
+			if (!rs.rules) rs.rules = [];
+			rs.rules.forEach((rule, idx) => detail.appendChild(ruleCard(rs, rule, idx)));
+
+			const addRule = document.createElement('button');
+			addRule.type = 'button';
+			addRule.textContent = '+ add rule';
+			addRule.style.cssText = 'font-size:12px;padding:5px 12px;';
+			addRule.addEventListener('click', () => {
+				rs.rules.push({ id: 'rule-' + (rs.rules.length + 1), operations: [] });
+				markDirty();
+				renderRuleSetDetail();
+			});
+			detail.appendChild(addRule);
+		}
+
+		function deleteRuleSet(id) {
+			const rs = ed.doc.ruleSets[id];
+			const ruleCount = (rs && rs.rules) ? rs.rules.length : 0;
+			if (!confirm('Delete rule set "' + id + '" (' + ruleCount + ' rule(s))?')) return;
+			delete ed.doc.ruleSets[id];
+			if (ed.doc.defaultRuleSet === id) ed.doc.defaultRuleSet = null;
+			if (ed.current === id) ed.current = Object.keys(ed.doc.ruleSets)[0] || null;
+			markDirty();
+			renderAll();
+		}
+
+		function renameRuleSet(oldId, newId) {
+			newId = newId.trim();
+			if (!newId || newId === oldId || ed.doc.ruleSets[newId]) return;
+			const rebuilt = {};
+			for (const [k, v] of Object.entries(ed.doc.ruleSets)) {
+				if (k === oldId) { v.id = newId; rebuilt[newId] = v; }
+				else rebuilt[k] = v;
+			}
+			ed.doc.ruleSets = rebuilt;
+			if (ed.doc.defaultRuleSet === oldId) ed.doc.defaultRuleSet = newId;
+			ed.current = newId;
+			markDirty();
+			renderAll();
+		}
+
+		function ruleCard(rs, rule, idx) {
+			const card = document.createElement('div');
+			card.className = 'rule-card';
+
+			const head = document.createElement('div');
+			head.className = 'card-head';
+			head.appendChild(titleEl('rule ' + (idx + 1) + ' — ' + (rule.id || '(no id)')));
+			head.appendChild(miniBtn('▲', 'Move up', () => moveItem(rs.rules, idx, -1)));
+			head.appendChild(miniBtn('▼', 'Move down', () => moveItem(rs.rules, idx, +1)));
+			head.appendChild(miniBtn('⧉', 'Duplicate', () => {
+				rs.rules.splice(idx + 1, 0, JSON.parse(JSON.stringify(rule)));
+				markDirty(); renderRuleSetDetail();
+			}));
+			head.appendChild(miniBtn('×', 'Remove rule', () => {
+				rs.rules.splice(idx, 1);
+				markDirty(); renderRuleSetDetail();
+			}, true));
+			card.appendChild(head);
+
+			const body = document.createElement('div');
+			body.className = 'card-body';
+
+			const row1 = document.createElement('div');
+			row1.className = 'field-row';
+			row1.appendChild(fieldEl('id', rule.id || '', ruleHint('id'), v => {
+				rule.id = v; markDirty();
+				head.querySelector('.card-title').textContent = 'rule ' + (idx + 1) + ' — ' + (v || '(no id)');
+			}));
+			row1.appendChild(listFieldEl('method', rule.method || '', ruleHint('method'),
+				['INVITE', 'BYE', 'CANCEL', 'ACK', 'INFO', 'MESSAGE', 'OPTIONS', 'REFER', 'UPDATE', '!BYE'],
+				v => { rule.method = v; markDirty(); }));
+			row1.appendChild(selectFieldEl('messageType', rule.messageType || '', ruleHint('messageType'),
+				['', 'request', 'response'], v => { rule.messageType = v; markDirty(); }));
+			row1.appendChild(listFieldEl('event', rule.event || '', ruleHint('event'),
+				LIFECYCLE_EVENTS, v => { rule.event = v; markDirty(); }));
+			row1.appendChild(fieldEl('statusRange', rule.statusRange || '', ruleHint('statusRange'),
+				v => { rule.statusRange = v; markDirty(); }));
+			body.appendChild(row1);
+
+			const row2 = document.createElement('div');
+			row2.className = 'field-row';
+			const when = fieldEl('when', rule.when || '', ruleHint('when'), v => { rule.when = v; markDirty(); });
+			when.classList.add('wide');
+			row2.appendChild(when);
+			row2.appendChild(checkboxFieldEl('resetVariables', !!rule.resetVariables, ruleHint('resetVariables'),
+				v => { rule.resetVariables = v; markDirty(); }));
+			body.appendChild(row2);
+
+			// Operations
+			if (!rule.operations) rule.operations = [];
+			const opWrap = document.createElement('div');
+			opWrap.className = 'op-list';
+			rule.operations.forEach((op, oi) => opWrap.appendChild(opCard(rule, op, oi)));
+			const addOp = document.createElement('button');
+			addOp.type = 'button';
+			addOp.textContent = '+ add operation';
+			addOp.style.cssText = 'font-size:11px;padding:4px 10px;background:var(--panel);color:var(--text);border:1px solid var(--border);font-weight:400;';
+			addOp.addEventListener('click', () => {
+				rule.operations.push({ type: (ed.opVariants ? ed.opVariants[0].type : 'create') });
+				markDirty(); renderRuleSetDetail();
+			});
+			opWrap.appendChild(addOp);
+			body.appendChild(opWrap);
+
+			card.appendChild(body);
+			return card;
+		}
+
+		function opCard(rule, op, oi) {
+			const card = document.createElement('div');
+			card.className = 'op-card';
+
+			const head = document.createElement('div');
+			head.className = 'card-head';
+
+			// Type dropdown — switching resets the operation to the new shape.
+			const typeSel = document.createElement('select');
+			typeSel.style.cssText = 'font-family:"JetBrains Mono",Menlo,monospace;font-size:12px;padding:3px 6px;';
+			const types = ed.opVariants ? ed.opVariants.map(v => v.type)
+				: ['read', 'create', 'update', 'delete', 'xmlRead', 'xmlCreate', 'xmlUpdate', 'xmlDelete',
+					'jsonRead', 'jsonCreate', 'jsonUpdate', 'jsonDelete', 'keepPart',
+					'sdpRead', 'sdpCreate', 'sdpUpdate', 'sdpDelete'];
+			typeSel.innerHTML = types.map(t => `<option value="${t}">${t}</option>`).join('');
+			if (op.type && !types.includes(op.type)) {
+				typeSel.innerHTML += `<option value="${escapeHtml(op.type)}">${escapeHtml(op.type)}</option>`;
+			}
+			typeSel.value = op.type || types[0];
+			typeSel.addEventListener('change', () => {
+				const keep = op.contentType; // shared by nearly every operation
+				for (const k of Object.keys(op)) delete op[k];
+				op.type = typeSel.value;
+				if (keep) op.contentType = keep;
+				markDirty(); renderRuleSetDetail();
+			});
+			head.appendChild(typeSel);
+			head.appendChild(titleEl(''));
+			head.appendChild(miniBtn('▲', 'Move up', () => moveItem(rule.operations, oi, -1)));
+			head.appendChild(miniBtn('▼', 'Move down', () => moveItem(rule.operations, oi, +1)));
+			head.appendChild(miniBtn('⧉', 'Duplicate', () => {
+				rule.operations.splice(oi + 1, 0, JSON.parse(JSON.stringify(op)));
+				markDirty(); renderRuleSetDetail();
+			}));
+			head.appendChild(miniBtn('×', 'Remove operation', () => {
+				rule.operations.splice(oi, 1);
+				markDirty(); renderRuleSetDetail();
+			}, true));
+			card.appendChild(head);
+
+			const body = document.createElement('div');
+			body.className = 'card-body';
+			const variant = ed.opVariants ? ed.opVariants.find(v => v.type === op.type) : null;
+			if (variant) renderFieldsInto(variant.fields, op, body);
+			else body.appendChild(rawJsonBound(op));
+			card.appendChild(body);
+			return card;
+		}
+
+		// ---- small element builders ----
+
+
+
+		function moveItem(arr, idx, delta) {
+			const to = idx + delta;
+			if (to < 0 || to >= arr.length) return;
+			const [item] = arr.splice(idx, 1);
+			arr.splice(to, 0, item);
+			markDirty();
+			renderRuleSetDetail();
+		}
+
+
+
+
+
+
+
+		function ruleHint(name) {
+			return (ed.ruleProps && ed.ruleProps[name] && ed.ruleProps[name].description) || '';
+		}
+
+		// ---- save / publish / versions ----
+
+		function changeSummary() {
+			const before = ed.baseline.ruleSets;
+			const after = cleanRuleSets(ed.doc.ruleSets);
+			const lines = [];
+			for (const id of Object.keys(after)) {
+				if (!(id in before)) lines.push('added rule set "' + id + '" (' + (after[id].rules || []).length + ' rule(s))');
+				else if (JSON.stringify(before[id]) !== JSON.stringify(after[id])) lines.push('changed rule set "' + id + '"');
+			}
+			for (const id of Object.keys(before)) {
+				if (!(id in after)) lines.push('removed rule set "' + id + '"');
+			}
+			const dNow = ed.doc.defaultRuleSet || '';
+			if (dNow !== ed.baseline.defaultRuleSet) {
+				lines.push('defaultRuleSet: "' + ed.baseline.defaultRuleSet + '" → "' + dNow + '"');
+			}
+			const pipeNow = cleanJson(ed.doc.pipeline || []);
+			if (JSON.stringify(pipeNow) !== JSON.stringify(ed.baseline.pipeline)) {
+				lines.push('changed pipeline (' + pipeNow.length + ' connector(s))');
+			}
+			return lines;
+		}
+
+		/// The exact document Save writes — also what the JSON viewer shows.
+		function buildPayload() {
+			const payload = Object.assign({}, ed.doc, {
+				ruleSets: cleanJson(ed.doc.ruleSets),
+				pipeline: cleanJson(ed.doc.pipeline || []),
+			});
+			if (!payload.defaultRuleSet) delete payload.defaultRuleSet;
+			if (payload.pipeline.length === 0) delete payload.pipeline;
+			return payload;
+		}
+
+		async function saveConfig() {
+			const status = document.getElementById('status');
+			const lines = changeSummary();
+			if (lines.length === 0 && ed.source === 'live') {
+				status.textContent = 'Nothing to save — no rule-set changes.';
+				status.className = 'status';
+				return;
+			}
+			const preamble = ed.source === 'live' ? '' : 'This will CREATE crud.json (currently running on the '
+				+ ed.source + ' sample).\n\n';
+			if (!confirm(preamble + 'Save these changes?\n\n'
+					+ (lines.length ? '• ' + lines.join('\n• ') : '(no rule-set changes — writes the loaded document)'))) return;
+
+			const payload = buildPayload();
+
+			try {
+				const resp = await fetch(API_BASE + 'config/save', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
+				});
+				const data = await resp.json();
+				if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
+				ed.baseline = {
+					ruleSets: cleanJson(ed.doc.ruleSets),
+					defaultRuleSet: ed.doc.defaultRuleSet || '',
+					pipeline: cleanJson(ed.doc.pipeline || []),
+				};
+				ed.source = 'live';
+				document.getElementById('srcBadge').textContent = 'live crud.json';
+				clearDirty();
+				status.textContent = 'Saved (' + data.bytes + ' bytes). Publish to reload the running service.';
+				status.className = 'status ok';
+			} catch (e) {
+				status.textContent = 'Save failed: ' + e.message;
+				status.className = 'status err';
+			}
+		}
+
+		async function publishConfig() {
+			const status = document.getElementById('status');
+			const warning = ed.dirty
+				? 'You have UNSAVED changes — publish reloads the last SAVED crud.json, not the draft.\n\n'
+				: '';
+			if (!confirm(warning + 'Tell the running CRUD service to reload crud.json?')) return;
+			try {
+				const resp = await fetch(API_BASE + 'config/publish', { method: 'POST' });
+				const data = await resp.json();
+				if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
+				status.textContent = 'Published: ' + (data.actions || []).join(' · ');
+				status.className = 'status ok';
+			} catch (e) {
+				status.textContent = 'Publish failed: ' + e.message;
+				status.className = 'status err';
+			}
+		}
+
+		async function showVersions() {
+			const panel = document.getElementById('versionsPanel');
+			const body = document.getElementById('versionsBody');
+			const preview = document.getElementById('versionPreview');
+			if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+			panel.style.display = '';
+			preview.style.display = 'none';
+			body.innerHTML = '<div class="vars-empty">loading…</div>';
+			try {
+				const resp = await fetch(API_BASE + 'config/versions');
+				const data = await resp.json();
+				if (data.error) throw new Error(data.error);
+				const versions = data.versions || [];
+				if (versions.length === 0) {
+					body.innerHTML = '<div class="vars-empty">no saved versions yet</div>';
+					return;
+				}
+				const table = document.createElement('table');
+				for (const v of versions) {
+					const tr = document.createElement('tr');
+					const when = document.createElement('td');
+					when.textContent = new Date(v.timestamp).toLocaleString();
+					const size = document.createElement('td');
+					size.textContent = (v.sizeBytes / 1024).toFixed(1) + ' KiB';
+					const act = document.createElement('td');
+					const pv = miniBtn('view', 'Preview this version', async () => {
+						const r = await fetch(API_BASE + 'config/versions/' + v.timestamp);
+						preview.textContent = await r.text();
+						preview.style.display = '';
+					});
+					const rs = miniBtn('restore', 'Restore this version (current file is backed up first)', async () => {
+						if (!confirm('Restore the version from ' + when.textContent
+							+ '? The current crud.json is backed up first. Unsaved draft changes are discarded.')) return;
+						const r = await fetch(API_BASE + 'config/versions/' + v.timestamp + '/restore', { method: 'POST' });
+						if (!r.ok) {
+							const err = await r.json().catch(() => ({}));
+							alert('Restore failed: ' + (err.error || r.status));
+							return;
+						}
+						panel.style.display = 'none';
+						await loadEditor();
+						document.getElementById('status').textContent =
+							'Restored version from ' + when.textContent + '. Publish to reload the running service.';
+						document.getElementById('status').className = 'status ok';
+					});
+					act.appendChild(pv);
+					act.appendChild(document.createTextNode(' '));
+					act.appendChild(rs);
+					tr.appendChild(when);
+					tr.appendChild(size);
+					tr.appendChild(act);
+					table.appendChild(tr);
+				}
+				body.innerHTML = '';
+				body.appendChild(table);
+			} catch (e) {
+				body.innerHTML = '<div class="vars-empty">failed to load versions — ' + escapeHtml(e.message) + '</div>';
+			}
+		}
+
+		// ---- wire up ----
+
+		document.getElementById('saveConfig').addEventListener('click', saveConfig);
+		document.getElementById('publishConfig').addEventListener('click', publishConfig);
+		document.getElementById('showVersions').addEventListener('click', showVersions);
+		document.getElementById('reloadEditor').addEventListener('click', () => {
+			if (ed.dirty && !confirm('Discard unsaved changes and reload from disk?')) return;
+			loadEditor();
+		});
+		document.getElementById('input').addEventListener('input', () => scheduleAutoPreview());
+
+		// =====================================================================
+		// Pipeline editor — generic schema-driven forms
+		// =====================================================================
+		// Connectors, selectors, and authentication all follow the same schema
+		// pattern the operations use: an anyOf of `<Type>-N` variants, each
+		// carrying `properties.type.const` and a $ref to the def with the real
+		// fields. One resolver serves them all; anything it can't resolve
+		// degrades to a raw-JSON textarea rather than losing data.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		// ---- the pipeline panel ----
+
+		function renderPipeline() {
+			const panel = document.getElementById('pipelinePanel');
+			panel.innerHTML = '';
+			if (!ed.doc.pipeline) ed.doc.pipeline = [];
+			const pipe = ed.doc.pipeline;
+
+			if (pipe.length === 0) {
+				const guide = document.createElement('div');
+				guide.className = 'empty-guide';
+				guide.innerHTML = 'No pipeline yet — every call gets the <em>default rule set</em> below, '
+					+ 'or passes through untransformed when there is none. The usual shape is two steps: '
+					+ 'a <code>sip</code> connector extracts a value from the message (like the dialed '
+					+ 'number), then a <code>table</code> connector looks it up and writes the '
+					+ '<code>ruleSet</code> variable. The starter buttons below add exactly that.';
+				panel.appendChild(guide);
+
+				const starters = document.createElement('div');
+				starters.style.cssText = 'display:flex;gap:8px;margin:10px 0;';
+				starters.appendChild(smallAddBtn('+ sip connector (extract dialed number)', () => {
+					pipe.push({
+						type: 'sip', id: 'sip',
+						description: 'Extract the dialed number from the To header',
+						selectors: [{
+							type: 'regex', id: 'dialedNumber', attribute: 'To',
+							pattern: '.*<?sips?:\\+?(?<did>[^@;>]+)@.*', expression: '${did}',
+						}],
+					});
+					markDirty(); renderAll();
+				}));
+				starters.appendChild(smallAddBtn('+ table connector (map number → rule set)', () => {
+					pipe.push({
+						type: 'table', id: 'rule-selection',
+						description: 'Map the dialed number to a rule set',
+						tables: [{ match: 'hash', keyExpression: '${dialedNumber}', translations: {} }],
+					});
+					markDirty(); renderAll();
+				}));
+				panel.appendChild(starters);
+			} else {
+				pipe.forEach((conn, idx) => panel.appendChild(connectorCard(pipe, conn, idx)));
+				panel.appendChild(smallAddBtn('+ add connector', () => {
+					pipe.push({ type: ed.connVariants ? ed.connVariants[0].type : 'sip' });
+					markDirty(); renderAll();
+				}));
+			}
+
+			// Default rule set — the selection fallback lives with the pipeline.
+			const dfltRow = document.createElement('div');
+			dfltRow.style.cssText = 'display:flex;gap:10px;align-items:end;margin-top:12px;flex-wrap:wrap;';
+			const dfltWrap = document.createElement('div');
+			dfltWrap.className = 'field';
+			const dl = document.createElement('label');
+			dl.textContent = 'default rule set';
+			dl.title = 'Applied when the pipeline writes no ruleSet variable. None means unmatched calls pass through untransformed.';
+			const sel = document.createElement('select');
+			sel.id = 'defaultRuleSetSel';
+			sel.addEventListener('change', () => {
+				ed.doc.defaultRuleSet = sel.value || null;
+				markDirty();
+			});
+			dfltWrap.appendChild(dl);
+			dfltWrap.appendChild(sel);
+			dfltRow.appendChild(dfltWrap);
+			const note = document.createElement('span');
+			note.style.cssText = 'font-size:12px;color:var(--muted);align-self:center;';
+			note.textContent = 'Applied when no connector writes the ruleSet variable.';
+			dfltRow.appendChild(note);
+			panel.appendChild(dfltRow);
+		}
+
+		function connectorCard(pipe, conn, idx) {
+			const card = document.createElement('div');
+			card.className = 'conn-card';
+			const head = document.createElement('div');
+			head.className = 'card-head';
+
+			const typeSel = document.createElement('select');
+			typeSel.style.cssText = 'font-family:"JetBrains Mono",Menlo,monospace;font-size:12px;padding:3px 6px;';
+			const types = ed.connVariants ? ed.connVariants.map(v => v.type)
+				: ['sip', 'rest', 'jdbc', 'ldap', 'table'];
+			typeSel.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+			if (conn.type && !types.includes(conn.type)) {
+				typeSel.innerHTML += `<option value="${escapeHtml(conn.type)}">${escapeHtml(conn.type)}</option>`;
+			}
+			typeSel.value = conn.type || types[0];
+			typeSel.addEventListener('change', () => {
+				const keepId = conn.id;
+				for (const k of Object.keys(conn)) delete conn[k];
+				conn.type = typeSel.value;
+				if (keepId) conn.id = keepId;
+				markDirty(); renderAll();
+			});
+			head.appendChild(typeSel);
+			head.appendChild(titleEl('connector ' + (idx + 1) + (conn.id ? ' — ' + conn.id : '')));
+			head.appendChild(helpMini('connectors'));
+			head.appendChild(miniBtn('▲', 'Move up (connectors run in order)', () => { moveInArr(pipe, idx, -1); renderAll(); }));
+			head.appendChild(miniBtn('▼', 'Move down', () => { moveInArr(pipe, idx, +1); renderAll(); }));
+			head.appendChild(miniBtn('⧉', 'Duplicate', () => {
+				pipe.splice(idx + 1, 0, JSON.parse(JSON.stringify(conn)));
+				markDirty(); renderAll();
+			}));
+			head.appendChild(miniBtn('×', 'Remove connector', () => {
+				pipe.splice(idx, 1);
+				markDirty(); renderAll();
+			}, true));
+			card.appendChild(head);
+
+			const body = document.createElement('div');
+			body.className = 'card-body';
+			const variant = ed.connVariants ? ed.connVariants.find(v => v.type === conn.type) : null;
+			if (variant) renderFieldsInto(variant.fields, conn, body);
+			else body.appendChild(rawJsonBound(conn));
+			card.appendChild(body);
+			return card;
+		}
+
+		// ---- help ----
+
+
+
+		document.getElementById('helpBtn').addEventListener('click', () => openHelp(null));
+		document.getElementById('helpClose').addEventListener('click', () =>
+			document.getElementById('helpDialog').close());
+		document.querySelectorAll('.section-head .help-mini').forEach(b =>
+			b.addEventListener('click', () => openHelp(b.dataset.help)));
+
+		jsonViewerRef = BladeEditor.jsonViewer({
+			button: document.getElementById('showJson'),
+			panel: document.getElementById('jsonPanel'),
+			pre: document.getElementById('jsonBody'),
+			copyButton: document.getElementById('copyJson'),
+			getJson: buildPayload,
+		});
+
+		loadEditor();
 	</script>
 </body>
 </html>

@@ -44,6 +44,43 @@
 		</auth-constraint>
 	</security-constraint>
 
+	<!-- The REST surface, named explicitly rather than left to the "/" pattern
+	     above. "/" is the default-servlet pattern, so by the mapping rules it
+	     should already cover /api/*; naming the prefix removes the need to rely
+	     on that reading. iRouter-editor declares its API the same way. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>api</web-resource-name>
+			<url-pattern>/api/*</url-pattern>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+			<role-name>Deployer</role-name>
+			<role-name>Monitor</role-name>
+		</auth-constraint>
+	</security-constraint>
+
+	<!-- Downloading a whole file and scanning one on a production engine node
+	     are heavier than reading a window, which is why they live under their
+	     own path prefixes: a longer prefix wins over /api/*, so the role set
+	     below is the only thing to change to hold them to fewer people.
+	     Left at the same four roles for now — narrowing this is a policy call
+	     about how Monitor is handed out, not a code change. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>bulk</web-resource-name>
+			<url-pattern>/api/download/*</url-pattern>
+			<url-pattern>/api/search/*</url-pattern>
+		</web-resource-collection>
+		<auth-constraint>
+			<role-name>Admin</role-name>
+			<role-name>Operator</role-name>
+			<role-name>Deployer</role-name>
+			<role-name>Monitor</role-name>
+		</auth-constraint>
+	</security-constraint>
+
 	<login-config>
 		<auth-method>CLIENT-CERT,FORM</auth-method>
 		<realm-name>default</realm-name>

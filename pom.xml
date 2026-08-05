@@ -22,7 +22,7 @@
 	</modules>
 
 	<properties>
-		<revision>3.0.4</revision>
+		<revision>3.0.5</revision>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<blade.java.version>11</blade.java.version>
 		<blade.weblogic.version>14.1.1</blade.weblogic.version>
@@ -84,6 +84,7 @@
 		<findbugs.version>3.0.2</findbugs.version>
 		<gson-fire.version>1.9.0</gson-fire.version>
 		<okhttp.version>4.12.0</okhttp.version>
+		<anthropic-java.version>2.52.0</anthropic-java.version>
 		<nimbus-jose-jwt.version>9.37.4</nimbus-jose-jwt.version>
 		<commons-lang3.version>3.18.0</commons-lang3.version>
 		<jakarta-mail.version>1.6.8</jakarta-mail.version>
@@ -250,6 +251,16 @@
 				<version>${okhttp.version}</version>
 			</dependency>
 
+			<!-- Anthropic Java SDK — the Configurator's "Use AI" config
+			     authoring (structured outputs constrained to the app's own
+			     JSON Schema). Ships in blade-shared like every 3rd-party JAR;
+			     the feature is config-gated and off by default. -->
+			<dependency>
+				<groupId>com.anthropic</groupId>
+				<artifactId>anthropic-java</artifactId>
+				<version>${anthropic-java.version}</version>
+			</dependency>
+
 			<!-- OAuth2 — Nimbus OAuth 2.0 + OIDC SDK: the comprehensive
 			     OAuth/OIDC client library. Drives every RestConnector
 			     Authentication subtype (password, client credentials,
@@ -369,8 +380,8 @@
 		</dependency>
 		<!-- JSR-309 Media Server Control API (javax.media.mscontrol.*). Provided by
 		     OCCAS at runtime (occas/server/modules/mscontrol.jar); present on the
-		     compile classpath for the v3 media lambda API (MediaCallflow) and the
-		     Gryphon Kurento driver. Provided scope keeps it out of skinny WARs. -->
+		     compile classpath for the v3 media lambda API (MediaCallflow) and any
+		     JSR-309 media controller driver. Provided scope keeps it out of skinny WARs. -->
 		<dependency>
 			<groupId>com.oracle.occas</groupId>
 			<artifactId>mscontrol</artifactId>
@@ -800,6 +811,11 @@ fi
 			<id>crud-editor</id>
 			<activation><property><name>!skip.crud-editor</name></property></activation>
 			<modules><module>admin/crud-editor</module></modules>
+		</profile>
+		<profile>
+			<id>irouter-editor</id>
+			<activation><property><name>!skip.irouter-editor</name></property></activation>
+			<modules><module>admin/irouter-editor</module></modules>
 		</profile>
 		<profile>
 			<id>flow</id>

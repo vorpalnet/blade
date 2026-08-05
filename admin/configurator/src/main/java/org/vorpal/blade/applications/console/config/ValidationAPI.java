@@ -38,6 +38,7 @@ import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.info.Info;
 
+import org.vorpal.blade.framework.v2.config.ConfigPublisher;
 import org.vorpal.blade.framework.v2.config.SettingsMXBean;
 
 @OpenAPIDefinition(info = @Info(title = "BLADE Configurator", version = "1", description = "Configuration Validation and Deployment APIs"))
@@ -314,117 +315,65 @@ public class ValidationAPI {
 	}
 
 	private Map<String, Object> publishApp(String app) {
-		Map<String, Object> result = new LinkedHashMap<>();
-		result.put("app", app);
-		List<String> actions = new ArrayList<>();
-
-		try {
-			InitialContext ctx = new InitialContext();
-			try {
-				MBeanServer mbeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
-				ObjectName pattern = new ObjectName("vorpal.blade:Name=" + app + ",Type=Configuration,*");
-				Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(pattern, null);
-
-				if (mbeans.isEmpty()) {
-					result.put("published", false);
-					result.put("message", "No MBeans found for " + app);
-					return result;
-				}
-
-				for (ObjectInstance mbean : mbeans) {
-					ObjectName name = mbean.getObjectName();
-					SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
-
-					// Push domain config
-					propagateConfig(settings, "domain", Paths.get(CONFIG_BASE + app + ".json"), actions);
-
-					// Push cluster configs
-					String clusterKey = name.getKeyProperty("Cluster");
-					if (clusterKey != null) {
-						Path clusterConfig = Paths.get(CLUSTERS_DIR + clusterKey + "/" + app + ".json");
-						propagateConfig(settings, "cluster", clusterConfig, actions);
-					}
-
-					// Push server configs
-					String locationKey = name.getKeyProperty("Location");
-					if (locationKey != null) {
-						Path serverConfig = Paths.get(SERVERS_DIR + locationKey + "/" + app + ".json");
-						propagateConfig(settings, "server", serverConfig, actions);
-					}
-
-					// Reload
-					settings.reload();
-					actions.add("Reloaded " + name);
-				}
-
-				result.put("published", true);
-				result.put("actions", actions);
-			} finally {
-				ctx.close();
-			}
-		} catch (Exception e) {
-			logger.log(Level.SEVERE, "Publish failed for " + app, e);
-			result.put("published", false);
-			result.put("error", e.getMessage());
-		}
-
-		return result;
+		return pushAndReload(app, "published");
 	}
 
 	// --- Deploy Logic ---
 
 	private Map<String, Object> deployApp(String app) {
+		return pushAndReload(app, "deployed");
+	}
+
+	/// The shared body of publish and deploy — the two were identical apart
+	/// from the result key. For each Configuration MBean of `app`: push the
+	/// domain / cluster / server config files (skipped on shared filesystems
+	/// where timestamps already match), then reload.
+	private Map<String, Object> pushAndReload(String app, String resultKey) {
 		Map<String, Object> result = new LinkedHashMap<>();
 		result.put("app", app);
 		List<String> actions = new ArrayList<>();
 
 		try {
-			InitialContext ctx = new InitialContext();
-			try {
-				MBeanServer mbeanServer = (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
-				ObjectName pattern = new ObjectName("vorpal.blade:Name=" + app + ",Type=Configuration,*");
-				Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(pattern, null);
+			MBeanServer mbeanServer = ConfigPublisher.domainRuntimeMBeanServer();
+			Map<ObjectName, SettingsMXBean> proxies = ConfigPublisher.configurationMBeans(mbeanServer, app);
 
-				if (mbeans.isEmpty()) {
-					result.put("deployed", false);
-					result.put("message", "No MBeans found for " + app);
-					return result;
-				}
-
-				for (ObjectInstance mbean : mbeans) {
-					ObjectName name = mbean.getObjectName();
-					SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
-
-					// Push domain config
-					propagateConfig(settings, "domain", Paths.get(CONFIG_BASE + app + ".json"), actions);
-
-					// Push cluster configs
-					String clusterKey = name.getKeyProperty("Cluster");
-					if (clusterKey != null) {
-						Path clusterConfig = Paths.get(CLUSTERS_DIR + clusterKey + "/" + app + ".json");
-						propagateConfig(settings, "cluster", clusterConfig, actions);
-					}
-
-					// Push server configs
-					String locationKey = name.getKeyProperty("Location");
-					if (locationKey != null) {
-						Path serverConfig = Paths.get(SERVERS_DIR + locationKey + "/" + app + ".json");
-						propagateConfig(settings, "server", serverConfig, actions);
-					}
-
-					// Reload
-					settings.reload();
-					actions.add("Reloaded " + name);
-				}
-
-				result.put("deployed", true);
-				result.put("actions", actions);
-			} finally {
-				ctx.close();
+			if (proxies.isEmpty()) {
+				result.put(resultKey, false);
+				result.put("message", "No MBeans found for " + app);
+				return result;
 			}
+
+			for (Map.Entry<ObjectName, SettingsMXBean> entry : proxies.entrySet()) {
+				ObjectName name = entry.getKey();
+				SettingsMXBean settings = entry.getValue();
+
+				// Push domain config
+				propagateConfig(settings, "domain", Paths.get(CONFIG_BASE + app + ".json"), actions);
+
+				// Push cluster configs
+				String clusterKey = name.getKeyProperty("Cluster");
+				if (clusterKey != null) {
+					Path clusterConfig = Paths.get(CLUSTERS_DIR + clusterKey + "/" + app + ".json");
+					propagateConfig(settings, "cluster", clusterConfig, actions);
+				}
+
+				// Push server configs
+				String locationKey = name.getKeyProperty("Location");
+				if (locationKey != null) {
+					Path serverConfig = Paths.get(SERVERS_DIR + locationKey + "/" + app + ".json");
+					propagateConfig(settings, "server", serverConfig, actions);
+				}
+
+				// Reload
+				settings.reload();
+				actions.add("Reloaded " + name);
+			}
+
+			result.put(resultKey, true);
+			result.put("actions", actions);
 		} catch (Exception e) {
-			logger.log(Level.SEVERE, "Deploy failed for " + app, e);
-			result.put("deployed", false);
+			logger.log(Level.SEVERE, "Publish failed for " + app, e);
+			result.put(resultKey, false);
 			result.put("error", e.getMessage());
 		}
 

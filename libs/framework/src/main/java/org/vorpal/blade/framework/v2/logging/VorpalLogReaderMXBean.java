@@ -18,4 +18,28 @@ public interface VorpalLogReaderMXBean {
 	/// the updated cursor. If the file rotated under us, the slice's
 	/// `truncatedAtStart` flag is set and the cursor is reset to the live file.
 	LogSlice tail(String relativePath, long cursor, int maxBytes);
+
+	/// Scan `relativePath` for lines matching `pattern`, starting at
+	/// `fromOffset`.
+	///
+	/// The scan runs on the node that owns the bytes, so only the matches cross
+	/// the wire. Reading a large file back to the AdminServer to grep it there
+	/// would move the whole file per search.
+	///
+	/// Bounded on both axes — it stops at `maxMatches` or `maxBytesScanned`,
+	/// whichever comes first — because the caller is an operator at a console
+	/// and the file may be gigabytes. Resume with the returned `nextOffset`.
+	///
+	/// When `regex` is false the pattern is a literal substring, which is the
+	/// default the viewer offers: a regex here is supplied by a human and runs
+	/// on a production engine node, where a pathological pattern would burn CPU
+	/// that is carrying calls. Implementations must bound that exposure.
+	///
+	/// ADDING methods to this interface is safe; changing existing signatures is
+	/// not. Note also that a node keeps the reader registered by the first BLADE
+	/// WAR to start in that JVM, so a node that has not restarted since this
+	/// method was added will not have it — callers must probe with
+	/// `MBeanServer.getMBeanInfo` rather than assume.
+	LogSearchResult search(String relativePath, String pattern, boolean regex,
+			boolean ignoreCase, long fromOffset, int maxMatches, long maxBytesScanned);
 }

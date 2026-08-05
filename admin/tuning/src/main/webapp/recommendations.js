@@ -31,8 +31,15 @@ var TUNING_REC = {
 		// Plus: Min = Max wherever both constraints exist.
 	},
 	sip: {
-		// The one universally defensible value on the SIP panel.
-		engineCallStateCache: true
+		engineCallStateCache: true,
+		// OCCAS's RFC 4320 guard is ON by default (compiled-in; absent from
+		// sipserver.xml): a timer at T2 (4 s) per non-INVITE server transaction
+		// that auto-sends 100 Trying if the app hasn't answered. Against
+		// fast-answering apps it never helps, and it misfires as ERROR-level
+		// BEA-331601 ("Client timer task failed ... This transaction has been
+		// completed already") when a request was answered through another path,
+		// e.g. a retransmission processed as a fresh request.
+		enableSend100ForNonInvite: false
 	},
 	domain: {
 		configBackupEnabled: true,

@@ -1,6 +1,8 @@
 package org.vorpal.blade.services.gateway;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -12,7 +14,19 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// the registrar (and inbound calls) are steered to that local address, selected from
 /// the container's SIP outbound interfaces. The {@link RegistrationStyle} decides HOW
 /// this gateway stays registered (digest REGISTER, IP‑auth, …).
-@JsonPropertyOrder({ "name", "contactHost", "contactPort", "transport", "registrarDomain", "outboundProxy", "style" })
+///
+/// A trunk describes **both directions**:
+///
+///  - {@link #getRegistrarDomain()} — where we send calls **to**, via
+///    {@link #trunkRequestUri(String)}.
+///  - {@link #getSourceHosts()} — where the carrier signals **from**, via
+///    {@link #matchesSource(String)}.
+///
+/// Inbound, {@link #matchesInterface(String, int)} identifies which trunk a call
+/// arrived on (its Contact IP is the address the carrier was told to use), and
+/// `sourceHosts` then confirms the call really came from that carrier.
+@JsonPropertyOrder({ "name", "contactHost", "contactPort", "transport", "registrarDomain", "sourceHosts",
+		"outboundProxy", "style" })
 public class VirtualGateway implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -21,6 +35,7 @@ public class VirtualGateway implements Serializable {
 	private int contactPort = 5060;
 	private String transport = "udp";
 	private String registrarDomain;
+	private List<String> sourceHosts = new ArrayList<>();
 	private String outboundProxy;
 	private RegistrationStyle style;
 
@@ -70,6 +85,18 @@ public class VirtualGateway implements Serializable {
 		this.registrarDomain = registrarDomain;
 	}
 
+	@JsonPropertyDescription("Addresses the carrier signals inbound calls FROM — bare IPs or CIDR blocks, "
+			+ "e.g. [\"203.0.113.0/24\", \"198.51.100.7\"]. The inbound counterpart to registrarDomain: "
+			+ "an INVITE arriving on this trunk's Contact IP is accepted only if its source is listed here. "
+			+ "Leave empty to accept any source on that interface.")
+	public List<String> getSourceHosts() {
+		return sourceHosts;
+	}
+
+	public void setSourceHosts(List<String> sourceHosts) {
+		this.sourceHosts = (sourceHosts != null) ? sourceHosts : new ArrayList<>();
+	}
+
 	@JsonPropertyDescription("Optional outbound proxy (host[:port]) to route requests through instead of the registrar directly.")
 	public String getOutboundProxy() {
 		return outboundProxy;
@@ -100,6 +127,41 @@ public class VirtualGateway implements Serializable {
 			sb.append(";transport=").append(transport);
 		}
 		return sb.toString();
+	}
+
+	/// True if `ip` is one of this trunk's {@link #getSourceHosts()} — a bare address match or
+	/// CIDR containment. An empty `sourceHosts` accepts anything (the trunk is identified by the
+	/// Contact interface alone).
+	///
+	/// Same subnet math as the FSMAR `insubnet` operator
+	/// (`v3.configuration.expressions.Expression`): the `ipaddress` library, so any prefix
+	/// boundary works and IPv4/IPv6 are both handled. A malformed entry is skipped, never thrown —
+	/// one bad line in the config must not reject live calls.
+	public boolean matchesSource(String ip) {
+		if (sourceHosts == null || sourceHosts.isEmpty()) {
+			return true;
+		}
+		if (ip == null) {
+			return false;
+		}
+		inet.ipaddr.IPAddress source = new inet.ipaddr.IPAddressString(ip).getAddress();
+		if (source == null) {
+			return false;
+		}
+		for (String entry : sourceHosts) {
+			if (entry == null || entry.isEmpty()) {
+				continue;
+			}
+			try {
+				inet.ipaddr.IPAddress block = new inet.ipaddr.IPAddressString(entry.trim()).getAddress();
+				if (block != null && block.toPrefixBlock().contains(source)) {
+					return true;
+				}
+			} catch (RuntimeException malformed) {
+				continue;
+			}
+		}
+		return false;
 	}
 
 	/// True if a container SIP outbound interface `host`/`port` satisfies this gateway's

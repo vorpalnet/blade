@@ -45,7 +45,7 @@ class BladeEventTypesTest {
 	@DisplayName("every type is reverse-DNS under the framework's own namespace")
 	void typesAreNamespaced() throws Exception {
 		for (String type : allTypes()) {
-			assertTrue(type.startsWith("net.vorpal.blade."),
+			assertTrue(type.startsWith("org.vorpal.blade."),
 					type + " is outside the framework's namespace; app events belong in their own");
 			assertFalse(type.endsWith("."), type + " is truncated");
 			assertFalse(type.contains(".analytics."),

@@ -20,7 +20,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 ///
 /// Payload sources (via [Selector#readSource]):
 ///
-/// - `Map<String,String>` (REST/JDBC/LDAP/Map connectors) — `attribute`
+/// - `Map<String,String>` (REST/JDBC/LDAP connectors) — `attribute`
 ///   is the map key.
 /// - [javax.servlet.sip.SipServletRequest] (SipConnector) —
 ///   `attribute` is a SIP header name, with pseudo-headers

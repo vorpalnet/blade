@@ -23,6 +23,16 @@ public class OptionsCallflow extends Callflow implements Serializable {
 				settings = new OptionsSettingsSample();
 			}
 
+			// Boot gate: OCCAS accepts SIP traffic while deployments are still
+			// in progress, and the App Router would route early calls through a
+			// partial chain (missing apps bypass as virtual states). Until this
+			// server reaches RUNNING — the end of the deploy phase, ALL apps
+			// processed — keep the load balancer away. See ServerReady.
+			if (settings.isUnavailableUntilRunning() && !ServerReady.isReady()) {
+				sendResponse(request.createResponse(503, "Starting"));
+				return;
+			}
+
 			// Administrative drain: the operator took this node out of rotation
 			// via the Drain MBean (runtime state, not config — see DrainControl).
 			// Checked BEFORE the overload signal: explicit intent outranks

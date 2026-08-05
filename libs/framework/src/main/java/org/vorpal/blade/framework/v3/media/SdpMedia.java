@@ -16,7 +16,7 @@ import javax.mail.util.ByteArrayDataSource;
 import org.vorpal.blade.framework.v2.sdp.Sdp;
 
 /// Pure SDP direction/answer helpers for the v3 media callflows — everything
-/// here is static, container-free, and unit-tested ([SdpMediaSmokeTest]).
+/// here is static, container-free, and unit-tested (`SdpMediaSmokeTest`).
 ///
 /// This is the RFC 3264 replacement for the v2 blackhole style: directions are
 /// expressed with `a=sendrecv/sendonly/recvonly/inactive` on real addresses.

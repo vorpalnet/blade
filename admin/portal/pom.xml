@@ -15,16 +15,12 @@
 	<packaging>war</packaging>
 	<name>BLADE Admin Portal</name>
 	<description>
-		Unified admin shell. Owns the top bar, left-rail navigation, and
-		content area; loads each admin app (Configurator, Flow, Explorer,
-		JSON Forms, Logs, Tuning, Files, CRUD Editor, Watcher) into the
-		content area based on a customer-editable manifest. Replaces the
-		retired blade/admin/console iframe shell.
-
-		Carries a small JAX-RS surface at /api/* that queries the
-		AdminServer's DomainRuntime MBean tree to tell the shell which
-		admin apps are currently deployed and ACTIVE. The shell
-		intersects that with manifest.json so only present apps appear.
+		Unified admin shell. Launcher deck for every admin app on this
+		AdminServer, built live from JMX — WebApplicationRuntime MBeans
+		for deployed blade/* webapps, Configuration MBeans for services
+		with a SchemaAbout identity. No manifest; an app that registers
+		a SettingsMXBean appears with no portal redeploy. Also owns the
+		master login.jsp and the /brand assets the other admin WARs use.
 	</description>
 
 	<dependencies>

@@ -258,7 +258,7 @@ cleartext secrets; never transcribe a secret into a log or doc.
 
 ## 6. Transport security — TLS everywhere (HTTPS / SIPS / t3s)
 
-Driven by the UHG/Optum mandate that all apps be TLS-encrypted by 2027 —
+Driven by a customer mandate that all apps be TLS-encrypted by 2027 —
 HTTPS and SIPS only. BLADE-side, this is tooling plus an operator switch;
 OCCAS terminates TLS for both HTTP and SIP. The WARs themselves do **not**
 force TLS: developers keep plain HTTP on :7001/:8001, and a customer goes
@@ -287,7 +287,7 @@ in the env conf, and a trust keystore — all PKCS12, written OUTSIDE the repo
 serverAuth **and** clientAuth, so the same identity keystore serves as the
 client certificate where mutual TLS is demanded.
 
-Customers with their own certificate process (e.g. Optum) use
+Customers with their own certificate process use
 `./certs.sh <env> import` — a ready-made PKCS12, or PEM cert+key+chain,
 packaged into the identical keystore layout. Same downstream steps either way.
 

@@ -1,87 +1,44 @@
-# services/hold
+# Hold Service
 
-## Overview
+Javadocs: `/blade/javadoc/hold/` on the Admin Portal
 
-The `services/hold` module provides call hold functionality for VoIP communications within the Vorpal Blade platform. This service manages the suspension and resumption of active calls, handling media stream management, signaling protocols, and state transitions during hold operations. It integrates seamlessly with the broader Vorpal Blade ecosystem to ensure reliable call hold capabilities across different SIP scenarios.
+A single-leg parking endpoint: route a call leg here and its media goes quiet until the
+far end re-INVITEs it somewhere else. No media server is involved — the service answers
+with SDP of its own construction.
 
-## Architecture
+## How it works
 
-This module implements a comprehensive hold service that:
-- Manages SIP-based call hold and resume operations
-- Handles media stream suspension and restoration
-- Maintains call state consistency during hold transitions
-- Provides integration points for call control applications
-- Supports both user-initiated and system-initiated hold scenarios
+`HoldServlet` is a UAS built on the framework's `v3.AsyncSipServlet`. An INVITE (initial
+or re-INVITE) runs the framework's `CallflowHold`, which answers 200 OK with an RFC 3264
+**`a=inactive`** answer: one inactive m-line per offered m-line, a real address and a
+non-zero port — deliberately not the legacy `c=0.0.0.0` blackhole, so streams stay
+recoverable rather than rejected. Offerless re-INVITEs (RFC 4028 session refreshes)
+replay the cached SDP byte for byte; `Session-Expires` is echoed with `refresher=uac`
+when the caller didn't state one. Multipart offers (SIPREC-style) are handled; the answer
+is always plain `application/sdp`.
 
-## Packages
+BYE and CANCEL tear the leg down; any other method gets `405` with an accurate `Allow`
+header — a single-leg UAS has no peer to forward to.
 
-### [`org.vorpal.blade.services.hold`](#orgvorpalbladeserviceshold)
-
-Core package containing the hold service implementation, including:
-- Hold service controllers and managers
-- SIP message processors for hold/resume operations
-- Media stream management components
-- State machine implementations for hold workflows
-- Integration adapters for external call control systems
-
-## Dependencies
-
-### Core Dependencies
-
-- **org.vorpal.blade:vorpal-blade-library-framework** - Provides the foundational framework components, SIP stack integration, and core service abstractions required for implementing hold functionality
-
-## Related Modules
-
-### Framework and Shared Libraries
-- [libs/framework](../libs/framework) - Core framework and SIP handling capabilities
-- [libs/shared/bin](../libs/shared/bin) - Shared binary utilities and common components
-- [libs/fsmar](../libs/fsmar) - Finite State Machine and Application Router library
-
-### Administration
-- [admin/console](../admin/console) - Administrative console for hold service management
-- [admin/configurator](../admin/configurator) - Configuration management for hold parameters
-
-### Related Services
-- [services/acl](../services/acl) - Access control for hold operations
-- [services/analytics](../services/analytics) - Hold operation metrics and reporting
-- [services/options](../services/options) - SIP OPTIONS handling for held calls
-- [services/presence](../services/presence) - Presence integration for hold status
-- [services/proxy-balancer](../services/proxy-balancer) - Load balancing for hold requests
-- [services/proxy-block](../services/proxy-block) - Request blocking and filtering
-- [services/proxy-registrar](../services/proxy-registrar) - Registration services integration
-- [services/proxy-router](../services/proxy-router) - SIP routing for hold scenarios
-- [services/queue](../services/queue) - Call queuing integration with hold functionality
-- [services/tpcc](../services/tpcc) - Third-party call control integration
-- [services/transfer](../services/transfer) - Call transfer coordination with hold operations
-
-## Integration Guide
-
-### Basic Integration
-
-1. **Add Maven Dependency**: Include this module in your project's POM file
-2. **Service Registration**: Register the hold service with the Vorpal Blade service registry
-3. **Configuration**: Configure hold-specific parameters through the admin configurator
-4. **Event Handling**: Implement hold event listeners for application-specific logic
-
-### Key Integration Points
-
-- **Call Control Applications**: Integrate with existing call control logic to enable hold capabilities
-- **Media Management**: Coordinate with media servers for stream suspension/restoration
-- **State Synchronization**: Ensure proper state management across distributed components
-- **Monitoring**: Leverage analytics service for hold operation monitoring and troubleshooting
-
-## Features
-
-- **Standards Compliance**: Full SIP RFC compliance for hold operations
-- **Media Handling**: Intelligent media stream management during hold states
-- **State Management**: Robust state machine implementation for complex hold scenarios
-- **Scalability**: Designed for high-volume call environments
-- **Integration Ready**: Seamless integration with other Vorpal Blade services
+There is no "resume" operation here: a parked leg resumes when whoever routed it here
+re-INVITEs it with a live offer. The inactive-answer builder is reusable framework code
+(`CallflowHold.inactiveAnswerFor`) — the [TPCC service](../tpcc/README.md) uses it to
+park newly created dialogs.
 
 ## Configuration
 
-The hold service can be configured through the admin configurator module, supporting:
-- Hold timeout settings
-- Media handling preferences  
-- Integration service endpoints
-- Monitoring and logging levels
+Nothing service-specific — only the framework's standard `logging` and `session` blocks,
+edited through the [Configurator](../../admin/configurator/README.md).
+
+## Related modules
+
+- [services/tpcc](../tpcc/README.md) — parks its REST-created dialogs with the same framework callflow
+- [Framework v3 API](../../libs/framework/src/main/java/org/vorpal/blade/framework/v3/README.md) — home of `v3.media` and `CallflowHold`
+- [BLADE](../../README.md) — project home
+
+## Maven Coordinates
+
+```xml
+<groupId>org.vorpal.blade</groupId>
+<artifactId>vorpal-blade-services-hold</artifactId>
+```

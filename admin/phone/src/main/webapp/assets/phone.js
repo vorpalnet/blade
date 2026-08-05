@@ -48,7 +48,7 @@ const ENGINE_HTTP_PORT = 8001;
   const scheme = secure ? 'wss' : 'ws';
   const port = secure ? location.port : ENGINE_HTTP_PORT;
   const host = location.hostname + (port ? `:${port}` : '');
-  els.gateway.value = `${scheme}://${host}/blade/webrtc/signal`;
+  els.gateway.value = `${scheme}://${host}/webrtc/signal`;
 }
 
 // ---------------------------------------------------------------- log

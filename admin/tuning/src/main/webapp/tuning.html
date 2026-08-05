@@ -362,7 +362,7 @@
 			<div class="card-header">
 				<strong>SIP Protocol</strong>
 				<button class="btn btn-sm btn-primary float-right ml-2" onclick="saveSipTimers()">Save</button>
-				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendSipTimers()" title="Enable the Engine Call State Cache — the one setting on this panel with a universal recommendation. Everything else here (timers, rport, DNS SRV, outbound, overload thresholds) is a protocol or per-site decision with no one-size-fits-all value. Review, then Save.">Recommended</button>
+				<button class="btn btn-sm btn-outline-secondary float-right" onclick="recommendSipTimers()" title="Enable the Engine Call State Cache, and turn OFF Send 100 for Non-INVITE (the default-on RFC 4320 guard that produces BEA-331601 errors against fast-answering applications). Everything else here (timers, rport, DNS SRV, outbound, overload thresholds) is a protocol or per-site decision with no one-size-fits-all value. Review, then Save.">Recommended</button>
 				<button class="btn btn-sm btn-outline-secondary float-right mr-2" onclick="loadSipTimers()">Refresh</button>
 			</div>
 			<div class="card-body">
@@ -465,16 +465,16 @@
 						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableDnsSrvLookup"><label class="custom-control-label" for="sip-enableDnsSrvLookup" data-toggle="tooltip" title="Use DNS SRV record lookups (RFC 3263) to discover SIP servers by domain. Enables proper SIP routing via NAPTR/SRV/A records instead of hardcoded addresses.">DNS SRV Lookup</label>
 					</div></div>
 					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableTimerAffinity"><label class="custom-control-label" for="sip-enableTimerAffinity" data-toggle="tooltip" title="When enabled, SIP timer callbacks are dispatched to the same server that created them. Improves cache locality but reduces load distribution flexibility. (TODO: confirm behavior in clustered deployments)">Timer Affinity</label>
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableTimerAffinity"><label class="custom-control-label" for="sip-enableTimerAffinity" data-toggle="tooltip" title="Process each SIP timer on the engine that set it. Off (the default), a timer riding replicated call state may fire on a different engine than the one that created it — correct either way, since the callflow state travels with the call. Turn it on only if an application keeps node-local state a timer callback depends on. Meaningless outside a replicated/clustered call-state deployment.">Timer Affinity</label>
 					</div></div>
 					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
 						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableRPort"><label class="custom-control-label" for="sip-enableRPort" data-toggle="tooltip" title="RFC 3581: Add rport parameter to Via header. Allows the server to send responses back to the port the request came from, which helps with NAT traversal.">RPort (RFC 3581)</label>
 					</div></div>
 					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableLocalDispatch"><label class="custom-control-label" for="sip-enableLocalDispatch" data-toggle="tooltip" title="When enabled, if a request targets a session that exists on the local server, dispatch it locally instead of going through the load balancer. Can reduce latency but may bypass load balancing. (TODO: confirm interaction with call state cache)">Local Dispatch</label>
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableLocalDispatch"><label class="custom-control-label" for="sip-enableLocalDispatch" data-toggle="tooltip" title="When this engine sends or forwards a request whose destination address is one of its own SIP listen addresses — or the cluster's load-balancer public address — deliver it in-process instead of out through the network. The decision is by destination address, not by session location. Saves a socket round-trip on app-to-app hops within one engine; the trade-off is that a request aimed at the load balancer stays on this engine instead of being re-distributed.">Local Dispatch</label>
 					</div></div>
 					<div class="col-md-4 mb-2"><div class="custom-control custom-checkbox">
-						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableSend100ForNonInvite"><label class="custom-control-label" for="sip-enableSend100ForNonInvite" data-toggle="tooltip" title="Automatically send a 100 Trying provisional response for non-INVITE requests. Normally only INVITE triggers 100 Trying, but enabling this prevents upstream retransmissions for slow-processing requests like REGISTER or SUBSCRIBE.">Send 100 for Non-INVITE</label>
+						<input type="checkbox" class="custom-control-input sip-check" id="sip-enableSend100ForNonInvite"><label class="custom-control-label" for="sip-enableSend100ForNonInvite" data-toggle="tooltip" title="OCCAS's RFC 4320 guard, ON by default (the default is compiled in — no sipserver.xml entry means enabled): every non-INVITE server transaction arms a timer at T2 (4 s), and if the application has not answered by then the container sends 100 Trying itself. BLADE applications answer in milliseconds, so the guard never fires usefully — but it can misfire: when the request was answered through another path (e.g. a retransmission processed as a fresh request), the timer trips over the completed transaction and logs BEA-331601 'Client timer task failed … This transaction has been completed already' at ERROR level. Recommended: off. If you see BEA-331601 on REGISTER/SUBSCRIBE traffic, this is the switch.">Send 100 for Non-INVITE</label>
 					</div></div>
 				</div>
 				<!-- Overload protection (classic <overload> element: OverloadBean) -->
@@ -577,7 +577,10 @@
 	</div>
 
 	<!-- Floating status message -->
-	<div id="status-message" class="alert alert-floating" style="display:none;" role="alert"></div>
+	<div id="status-message" class="alert alert-floating alert-dismissible" style="display:none;" role="alert">
+		<span id="status-message-text"></span>
+		<button type="button" class="close" aria-label="Close" onclick="$('#status-message').fadeOut()"><span aria-hidden="true">&times;</span></button>
+	</div>
 
 	<script>
 		// ================================================================
@@ -1621,11 +1624,15 @@
 			});
 		}
 
-		// The one universally defensible value on this panel: the engine call
-		// state cache. Everything else (timers, rport, DNS SRV, outbound, local
+		// Two defensible values on this panel: the engine call state cache on,
+		// and the RFC 4320 send-100-for-non-INVITE guard OFF (default-on; arms a
+		// T2 timer per non-INVITE transaction and misfires as BEA-331601 when
+		// the request was answered through another path — see the checkbox
+		// tooltip). Everything else (timers, rport, DNS SRV, outbound, local
 		// dispatch, overload thresholds) is a protocol or per-site decision.
 		function recommendSipTimers() {
 			$('#sip-engineCallStateCache').prop('checked', true);
+			$('#sip-enableSend100ForNonInvite').prop('checked', false);
 		}
 
 		function saveSipTimers() {
@@ -1652,10 +1659,9 @@
 			$.ajax({ url: 'api/v1/sip-timers', method: 'PUT', contentType: 'application/json',
 				data: JSON.stringify(data), dataType: 'json',
 				success: function (r) {
+					showStatus('success', 'SIP settings saved to sipserver.xml.');
 					if (r && r.requiresRestart) {
-						showStatus('warning', 'SIP settings saved to sipserver.xml. Timer changes take effect only after each engine node is restarted (rolling restart).');
-					} else {
-						showStatus('success', 'SIP settings saved.');
+						notifyRestart('SIP protocol changes take effect after each engine node is restarted (rolling restart).');
 					}
 				},
 				error: function (xhr) { showStatus('danger', 'SIP save failed: ' + parseError(xhr)); }
@@ -2269,10 +2275,19 @@
 		function v(id) { return $('#' + id).val(); }
 		function esc(s) { return s.replace(/[^a-zA-Z0-9]/g, '_'); }
 		function he(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+		// Every status is dismissible via the × (the message text lives in a
+		// child span so setting it doesn't wipe the button). Successes and
+		// informational saves fade on their own; only danger stays until
+		// dismissed, since an error you didn't see is an error you'll repeat.
+		var statusTimer = null;
 		function showStatus(type, msg) {
 			$('#status-message').removeClass('alert-info alert-success alert-danger alert-warning')
-				.addClass('alert-' + type).text(msg).show();
-			if (type === 'success') setTimeout(function () { $('#status-message').fadeOut(); }, 5000);
+				.addClass('alert-' + type).show();
+			$('#status-message-text').text(msg);
+			if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
+			if (type !== 'danger') {
+				statusTimer = setTimeout(function () { $('#status-message').fadeOut(); }, 8000);
+			}
 		}
 		function parseError(xhr) {
 			try { var e = JSON.parse(xhr.responseText); return e.error || ''; } catch (x) { return ''; }

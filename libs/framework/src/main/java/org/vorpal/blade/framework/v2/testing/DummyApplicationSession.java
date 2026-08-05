@@ -29,6 +29,23 @@ public class DummyApplicationSession implements SipApplicationSession {
 	int expires = 3;
 	String appName = "Dummy";
 
+	// Real registry so getSipSession(id) resolves, which is what
+	// Callflow.getLinkedSession needs to walk from one leg to the other.
+	private final Map<String, SipSession> sipSessions = new LinkedHashMap<>();
+	private static final java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger();
+	private final String id = "dummy-app-" + counter.incrementAndGet();
+	private final Set<String> indexKeys = new java.util.LinkedHashSet<>();
+	private boolean valid = true;
+	private boolean invalidateWhenReady;
+	private long lastAccessedTime = System.currentTimeMillis();
+
+	/** Registers a session so {@link #getSipSession(String)} can find it by id. */
+	public void register(SipSession sipSession) {
+		if (sipSession != null && sipSession.getId() != null) {
+			sipSessions.put(sipSession.getId(), sipSession);
+		}
+	}
+
 	/**
 	 * Constructs a DummyApplicationSession with the specified application name.
 	 *
@@ -68,9 +85,10 @@ public class DummyApplicationSession implements SipApplicationSession {
 		attributes.put(key, value);
 	}
 
-	/** Stub implementation - does nothing. */
+	/** {@inheritDoc} */
 	@Override
 	public void addIndexKey(String arg0) {
+		indexKeys.add(arg0);
 	}
 
 	/** Stub implementation - does nothing. */
@@ -108,28 +126,28 @@ public class DummyApplicationSession implements SipApplicationSession {
 		return (expires * 1000 * 60) + System.currentTimeMillis();
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public String getId() {
-		return null;
+		return id;
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public Set<String> getIndexKeys() {
-		return null;
+		return indexKeys;
 	}
 
-	/** Stub implementation - returns false. */
+	/** {@inheritDoc} */
 	@Override
 	public boolean getInvalidateWhenReady() {
-		return false;
+		return invalidateWhenReady;
 	}
 
-	/** Stub implementation - returns 0. */
+	/** {@inheritDoc} */
 	@Override
 	public long getLastAccessedTime() {
-		return 0;
+		return lastAccessedTime;
 	}
 
 	/** Stub implementation - returns null. */
@@ -138,34 +156,34 @@ public class DummyApplicationSession implements SipApplicationSession {
 		return null;
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public Set<?> getSessionSet() {
-		return null;
+		return new java.util.LinkedHashSet<>(sipSessions.values());
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public Set<?> getSessionSet(String arg0) {
-		return null;
+		return "SIP".equalsIgnoreCase(arg0) ? getSessionSet() : new java.util.LinkedHashSet<>();
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public Iterator<?> getSessions() {
-		return null;
+		return new java.util.ArrayList<>(sipSessions.values()).iterator();
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public Iterator<?> getSessions(String arg0) {
-		return null;
+		return "SIP".equalsIgnoreCase(arg0) ? getSessions() : java.util.Collections.emptyIterator();
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public SipSession getSipSession(String arg0) {
-		return null;
+		return sipSessions.get(arg0);
 	}
 
 	/** Stub implementation - returns null. */
@@ -192,9 +210,15 @@ public class DummyApplicationSession implements SipApplicationSession {
 		return null;
 	}
 
-	/** Stub implementation - does nothing. */
+	/** {@inheritDoc} */
 	@Override
 	public void invalidate() {
+		this.valid = false;
+		for (SipSession sipSession : sipSessions.values()) {
+			if (sipSession.isValid()) {
+				sipSession.invalidate();
+			}
+		}
 	}
 
 	/** Stub implementation - returns false. */
@@ -203,15 +227,16 @@ public class DummyApplicationSession implements SipApplicationSession {
 		return false;
 	}
 
-	/** Stub implementation - returns false. */
+	/** {@inheritDoc} */
 	@Override
 	public boolean isValid() {
-		return false;
+		return valid;
 	}
 
-	/** Stub implementation - does nothing. */
+	/** {@inheritDoc} */
 	@Override
 	public void removeIndexKey(String arg0) {
+		indexKeys.remove(arg0);
 	}
 
 	/** {@inheritDoc} */
@@ -221,9 +246,10 @@ public class DummyApplicationSession implements SipApplicationSession {
 		return this.expires;
 	}
 
-	/** Stub implementation - does nothing. */
+	/** {@inheritDoc} */
 	@Override
 	public void setInvalidateWhenReady(boolean arg0) {
+		this.invalidateWhenReady = arg0;
 	}
 
 }

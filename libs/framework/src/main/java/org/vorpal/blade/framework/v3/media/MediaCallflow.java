@@ -99,12 +99,12 @@ import org.vorpal.blade.framework.v3.Callflow;
 /// **lock re-entry on a media/driver thread** ([MediaDispatcher#onEvent]): whether
 /// a given driver fires `onEvent` already under the SAS lock (in which case
 /// `doAction` is a cheap re-entrant no-op) or on a foreign thread (where `doAction`
-/// must acquire it). The Gryphon Kurento driver — which we control — will fire
+/// must acquire it). The JSR-309 media controller driver — which we control — will fire
 /// events under the lock; this defensive `doAction` makes the API correct for
 /// arbitrary drivers too. **Failover re-attach** (re-resolving live media objects
 /// by URI and re-registering dispatchers on the node that takes over) is not yet
 /// implemented here — the continuations survive in the replicated SAS, but the
-/// live media objects/listeners must be rebuilt on failover; see [#TODO_reattach].
+/// live media objects/listeners must be rebuilt on failover.
 public abstract class MediaCallflow extends Callflow {
 	private static final long serialVersionUID = 1L;
 

@@ -110,8 +110,8 @@
 					<h2>What's NOT in scope</h2>
 					<ul>
 						<li>Aggregation — there's no merged-across-servers view. Pick one server at a time.</li>
-						<li>Indexed search — the read is byte-offset slicing, not a search index. For full-text search across history, point Splunk / Loki / OpenSearch at the same files on disk.</li>
-						<li>Real-time streaming — the viewer polls; it doesn't hold a long-lived WebSocket. Adequate for incident triage; not adequate for a wall-of-logs dashboard.</li>
+						<li>An index — search is a bounded linear scan of one file on one node, which finds anything but re-reads the file each time. For repeated full-text search across history, point Splunk / Loki / OpenSearch at the same files on disk.</li>
+						<li>Real-time streaming — follow mode polls once a second; it doesn't hold a long-lived WebSocket. Adequate for incident triage; not adequate for a wall-of-logs dashboard.</li>
 					</ul>
 
 					<div class="vorpal-callout vorpal-callout-note">

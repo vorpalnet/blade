@@ -71,6 +71,7 @@ function connectWebSocket() {
         lastPongTime = Date.now();
         startHeartbeat(); // Start sending pings
         sendWebSocketMessage('get_autopublish', {}); // sync the auto-publish toggle
+        sendWebSocketMessage('get_ai_status', {});   // show the Use AI button only when enabled
     };
 
     websocket.onmessage = function(event) {
@@ -142,6 +143,15 @@ function handleWebSocketMessage(message) {
             handleTemplateList(message.content);
             break;
 
+        case 'ai_status':
+            handleAiStatus(message.content);
+            break;
+        case 'ai_result':
+            handleAiResult(message.content);
+            break;
+        case 'ai_error':
+            handleAiError(message.content);
+            break;
         case 'template_loaded':
             handleTemplateLoaded(message.content);
             break;
@@ -4247,6 +4257,117 @@ function escapeHtml(s) {
 /// RegexSelector.pattern input; runs the pattern against a sample string
 /// and shows matched groups (numbered + named).
 let regexTestBoundPatternInput = null;
+// ---------------------------------------------------------------------------
+// AI config assistant — the operator describes the configuration in plain
+// language; the server asks Claude for a draft constrained by the app's own
+// schema, validates it, and returns a proposal. The proposal lands in the
+// editor exactly like a template or restored version (currentData +
+// generateFormWithData + setDirty) so the diff view shows AI changes vs. the
+// server copy, and Save/Publish stay the operator's explicit steps.
+
+function handleAiStatus(content) {
+    const btn = document.getElementById('btn-ai');
+    if (btn) btn.style.display = (content === 'true') ? '' : 'none';
+}
+
+function openAiAssist() {
+    if (!currentSchemaName) {
+        showSyncStatus('Please select a schema first', 'warning');
+        return;
+    }
+    const modal = document.getElementById('aiModal');
+    const statusEl = document.getElementById('ai-status');
+    if (!modal) return;
+    if (statusEl) statusEl.innerHTML = '';
+    modal.style.display = 'flex';
+    const instructionEl = document.getElementById('ai-instruction');
+    if (instructionEl) instructionEl.focus();
+}
+
+function closeAiAssist() {
+    const modal = document.getElementById('aiModal');
+    if (modal) modal.style.display = 'none';
+    setAiBusy(false);
+}
+
+function setAiBusy(busy) {
+    const btn = document.getElementById('ai-generate-btn');
+    if (btn) {
+        btn.disabled = busy;
+        btn.textContent = busy ? 'Generating…' : 'Generate';
+    }
+}
+
+function aiStatusMessage(text, isError) {
+    const statusEl = document.getElementById('ai-status');
+    if (statusEl) {
+        statusEl.textContent = text;
+        statusEl.style.color = isError ? 'var(--btn-danger, #c0392b)' : '';
+    }
+}
+
+function runAiGenerate() {
+    const instructionEl = document.getElementById('ai-instruction');
+    const instruction = instructionEl ? instructionEl.value.trim() : '';
+    if (!instruction) {
+        aiStatusMessage('Describe the configuration you want first.', true);
+        return;
+    }
+
+    // Baseline = whatever the operator is looking at right now (same source
+    // selection as saveData): unsaved edits are part of the instruction's context.
+    let data;
+    const activeTab = document.querySelector('.tab-content.active').id;
+    if (activeTab === 'form-tab') {
+        data = getFormData();
+    } else {
+        try {
+            data = JSON.parse(jsonEditor.getValue());
+        } catch (e) {
+            aiStatusMessage('The JSON tab contains invalid JSON — fix it or switch to the form tab.', true);
+            return;
+        }
+    }
+
+    setAiBusy(true);
+    aiStatusMessage('Asking Claude — this can take a minute for large schemas…', false);
+    sendWebSocketMessage('ai_generate', {
+        appName: currentSchemaName,
+        instruction: instruction,
+        config: JSON.stringify(data)
+    });
+}
+
+function handleAiResult(raw) {
+    setAiBusy(false);
+    let result;
+    try { result = JSON.parse(raw); }
+    catch (e) {
+        aiStatusMessage('The server returned an unreadable result: ' + e.message, true);
+        return;
+    }
+
+    currentData = result.config || {};
+    generateFormWithData(currentData);
+    if (jsonEditor) jsonEditor.setValue(JSON.stringify(currentData, null, 2), -1);
+    setDirty();
+    closeAiAssist();
+
+    if (result.valid) {
+        showSyncStatus('AI proposal loaded — review the diff, then Save', 'success');
+    } else {
+        const count = (result.errors || []).length;
+        showSyncStatus('AI proposal loaded with ' + count + ' validation error' + (count === 1 ? '' : 's')
+            + ' — review carefully before saving', 'warning');
+    }
+    showDiff();
+}
+
+function handleAiError(message) {
+    setAiBusy(false);
+    aiStatusMessage(message || 'AI generate failed.', true);
+}
+
 function openRegexTest(patternInput) {
     regexTestBoundPatternInput = patternInput;
     const modal = document.getElementById('regexTestModal');

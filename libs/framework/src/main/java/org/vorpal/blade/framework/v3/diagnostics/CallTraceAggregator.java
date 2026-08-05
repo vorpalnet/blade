@@ -18,7 +18,7 @@ import org.vorpal.blade.framework.v3.CallStep;
 /// tie-breaker (two sends in the same millisecond keep their emit order).
 ///
 /// Pure and dependency-free on purpose — it's the correctness core, unit-tested
-/// without a SIP container ([CallTraceSmokeTest]).
+/// without a SIP container (`CallTraceSmokeTest`).
 public final class CallTraceAggregator {
 
 	private CallTraceAggregator() {

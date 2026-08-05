@@ -19,7 +19,9 @@ import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
 
-/// Checks a published payload against the schema its event type declares.
+/// Checks a published event against its type's declaration — the payload
+/// against the declared schema, the stated `dataversion` against the declared
+/// version.
 ///
 /// This is the half of the catalog that has teeth. A declaration that only fed
 /// code generation would drift the moment a producer changed shape without
@@ -73,11 +75,14 @@ public class EventValidator {
 
 	private static final Result VALID = new Result(true, new ArrayList<String>());
 
-	/// Validate an event's payload against the schema its type declares.
+	/// Validate an event against its type's declaration: the payload against the
+	/// declared schema, and the envelope's `dataversion` against the declared
+	/// version.
 	///
-	/// Returns valid when the catalog does not declare the type, or declares it
-	/// with no fields — deciding what to do about an unknown type is
-	/// [EventCatalog#isRejectUnknownTypes]'s job, not this one's.
+	/// Returns valid when the catalog does not declare the type — deciding what
+	/// to do about an unknown type is [EventCatalog#isRejectUnknownTypes]'s job,
+	/// not this one's. An envelope with no `dataversion` predates versioning and
+	/// is not a skew; only a *stated* version that disagrees is a problem.
 	///
 	/// @param catalog the current catalog
 	/// @param event   the event being published
@@ -87,24 +92,32 @@ public class EventValidator {
 			return VALID;
 		}
 		EventType declaration = catalog.findType(event.getType());
-		if (declaration == null || declaration.fieldsOrEmpty().isEmpty()) {
+		if (declaration == null) {
 			return VALID;
 		}
 
-		JsonSchema schema = schemaFor(catalog, declaration);
-		if (schema == null) {
-			return VALID;
+		List<String> problems = new ArrayList<>();
+
+		if (declaration.getVersion() != null && event.getDataversion() != null
+				&& !declaration.getVersion().equals(event.getDataversion())) {
+			problems.add("dataversion " + event.getDataversion() + " does not match version "
+					+ declaration.getVersion() + " declared for " + event.getType()
+					+ " — the producer was generated against a different revision");
 		}
 
-		JsonNode data = (event.getData() == null) ? MissingNode.getInstance() : event.getData();
-		Set<ValidationMessage> errors = schema.validate(data);
-		if (errors.isEmpty()) {
-			return VALID;
+		if (!declaration.fieldsOrEmpty().isEmpty()) {
+			JsonSchema schema = schemaFor(catalog, declaration);
+			if (schema != null) {
+				JsonNode data = (event.getData() == null) ? MissingNode.getInstance() : event.getData();
+				Set<ValidationMessage> errors = schema.validate(data);
+				for (ValidationMessage message : errors) {
+					problems.add(message.getMessage());
+				}
+			}
 		}
 
-		List<String> problems = new ArrayList<>(errors.size());
-		for (ValidationMessage message : errors) {
-			problems.add(message.getMessage());
+		if (problems.isEmpty()) {
+			return VALID;
 		}
 		return new Result(false, problems);
 	}

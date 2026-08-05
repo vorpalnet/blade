@@ -10,9 +10,11 @@ import javax.servlet.annotation.WebListener;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 /// Registers the API Explorer's SettingsManager at WAR startup so the framework
-/// auto-creates the `vorpal.blade:Name=api,Type=Configuration,*` MBean — which
-/// makes the app visible in the Configurator's app dropdown and on the Portal
-/// deck. Settings live at `./config/custom/vorpal/api.json` (Domain scope).
+/// auto-creates the `vorpal.blade:Name=blade-api,Type=Configuration,*` MBean —
+/// which makes the app visible in the Configurator's app dropdown and on the
+/// Portal deck. The settings file name derives from the deployment name
+/// (`blade-api.war`), so settings live at `./config/custom/vorpal/blade-api.json`
+/// (Domain scope) — not `api.json`.
 @WebListener
 public class ApiStartupListener implements ServletContextListener {
 
@@ -27,7 +29,7 @@ public class ApiStartupListener implements ServletContextListener {
 	public void contextInitialized(ServletContextEvent event) {
 		try {
 			settingsManager = new SettingsManager<>(event, ApiSettings.class, new ApiSettingsSample());
-			log.info("API Explorer SettingsManager registered; config at ./config/custom/vorpal/api.json");
+			log.info("API Explorer SettingsManager registered; config at ./config/custom/vorpal/blade-api.json");
 		} catch (Exception e) {
 			log.log(Level.SEVERE, "Failed to register API Explorer SettingsManager — discovery and spec proxy will return 503 until configured", e);
 		}

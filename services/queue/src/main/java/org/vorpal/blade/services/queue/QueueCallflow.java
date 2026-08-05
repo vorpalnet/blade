@@ -119,7 +119,7 @@ public class QueueCallflow extends Callflow {
 														(aliceAckOrPrack) -> {
 															cancelWhileCallingMedia.clear();
 															stopTimers();
-															sendAckOrPrack(aliceAckOrPrack, mediaResponse);
+															sendAcknowledgement(aliceAckOrPrack, mediaResponse);
 														});
 											}
 
@@ -165,6 +165,22 @@ public class QueueCallflow extends Callflow {
 			}
 		}
 
+	}
+
+	/// A failed release attempt worth retrying: the destination may recover.
+	/// 408 (transaction timeout — the unreachable-network case), 480 Temporarily
+	/// Unavailable, 486 Busy Here, and 5xx server failures except 501 Not
+	/// Implemented. Everything else — the rest of 4xx and all of 6xx — is
+	/// definitive: retrying re-fails forever, so the call leaves the queue.
+	private static boolean retryable(int status) {
+		switch (status) {
+		case 408:
+		case 480:
+		case 486:
+			return true;
+		default:
+			return status >= 500 && status < 600 && status != 501;
+		}
 	}
 
 	public void complete() throws ServletException, IOException {
@@ -229,12 +245,29 @@ public class QueueCallflow extends Callflow {
 									});
 								}
 								if (failure(bobResponse)) {
-									// put this back on the queue to try again
-									sipLogger.finer(bobResponse,
-											"QueueCallflow.complete - Call failure, returning to queue. status="
-													+ bobResponse.getStatus() + ", from=" + bobResponse.getFrom()
-													+ ", to=" + bobResponse.getTo());
-									QueueServlet.queues.get(queueId).callflows.add(this);
+									int status = bobResponse.getStatus();
+									if (retryable(status)) {
+										// The destination may recover; back on the release end
+										// of the queue so this call keeps its priority and is
+										// retried on the next tick. Bounded by the caller
+										// hanging up (byeExpectation stays armed) and by the
+										// app session expiration.
+										sipLogger.warning(bobResponse,
+												"QueueCallflow.complete - Retryable call failure, returning to queue. status="
+														+ status + ", from=" + bobResponse.getFrom()
+														+ ", to=" + bobResponse.getTo());
+										QueueServlet.queues.get(queueId).callflows.add(this);
+									} else {
+										// Definitive failure: this call can never succeed. End both legs.
+										sipLogger.warning(bobResponse,
+												"QueueCallflow.complete - Call failure, removing from queue. status="
+														+ status + ", from=" + bobResponse.getFrom()
+														+ ", to=" + bobResponse.getTo());
+										byeExpectation.clear();
+										sendRequest(mediaRequest.getSession().createRequest(BYE));
+										sendRequest(aliceRequest.getSession().createRequest(BYE));
+										setState(QueueState.CANCELED);
+									}
 								}
 							});
 							break;

@@ -1,6 +1,6 @@
 # Test User Agent Server (UAS)
 
-[Javadocs](https://vorpal.net/javadocs/blade/test-uas)
+Javadocs: `/blade/javadoc/test-uas/` on the Admin Portal
 
 A scriptable SIP test server built on the BLADE framework. It sits at the end
 of a call path and plays whatever part the test needs — a ringing endpoint, a
@@ -84,7 +84,7 @@ sip:bob@uas.test;scenario=answer-486   ; run a configured scenario
 
 ## Configuration
 
-Managed by [SettingsManager](https://vorpal.net/javadocs/blade/framework) at
+Managed by `SettingsManager` at
 `config/custom/vorpal/test-uas.json` — scenarios, rule sets, and scenario
 selection are all edited schema-validated in the **Configurator**. The
 generated `test-uas.json.SAMPLE` contains worked examples (scripted

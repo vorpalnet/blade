@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>iRouter pipeline &amp; routing</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="stylesheet" href="/blade/portal/lib/blade-editor.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/irouter-editor/favicon.svg">
+	<style>
+		:root {
+			/* Dark shell, light document — same aliasing of the shared
+			   --vorpal-* tokens the other editors use; the kit CSS depends
+			   on these names. */
+			--bg: var(--vorpal-slate-100);
+			--panel: var(--vorpal-surface);
+			--text: var(--vorpal-ink-900);
+			--muted: var(--vorpal-slate-600);
+			--accent: var(--vorpal-purple);
+			--good: #1a7f37;
+			--bad: #cf222e;
+			--border: var(--vorpal-divider);
+		}
+		* { box-sizing: border-box; }
+		body {
+			font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+			color: var(--text);
+			margin: 0;
+		}
+		.page-content { max-width: 1400px; margin: 0 auto; padding: 24px; }
+		.vorpal-glass .page-content > h1 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
+		.vorpal-glass .page-content > .subtitle { color: rgba(240, 242, 247, 0.92); }
+		.vorpal-glass .page-content > .subtitle code { color: #fff; }
+		h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+		.subtitle { color: var(--muted); margin-bottom: 24px; }
+		label {
+			display: block;
+			color: var(--muted);
+			font-size: 12px;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin-bottom: 4px;
+		}
+		input, select, textarea, button {
+			background: var(--panel);
+			color: var(--text);
+			border: 1px solid var(--border);
+			border-radius: 4px;
+			padding: 8px 10px;
+			font: inherit;
+		}
+		textarea {
+			width: 100%;
+			min-height: 280px;
+			font: 12px/1.45 "JetBrains Mono", Menlo, "Cascadia Code", "Consolas", monospace;
+			tab-size: 2;
+			resize: vertical;
+		}
+		button {
+			background: var(--accent);
+			color: #fff;
+			font-weight: 600;
+			border: none;
+			cursor: pointer;
+			padding: 8px 18px;
+		}
+		button:hover { filter: brightness(1.1); }
+		button:disabled { opacity: 0.5; cursor: not-allowed; }
+		.panel {
+			background: var(--panel);
+			border: 1px solid var(--border);
+			border-radius: 6px;
+			padding: 12px;
+		}
+		.panel h2 {
+			font-size: 13px;
+			color: var(--muted);
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin: 0 0 8px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		.dry-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 16px;
+			max-width: 1400px;
+		}
+		.status { font-size: 13px; color: var(--muted); }
+		.status.ok { color: var(--good); }
+		.status.err { color: var(--bad); }
+		.outcome {
+			font-size: 15px;
+			line-height: 1.5;
+			padding: 10px 12px;
+			border: 1px solid var(--border);
+			border-left: 4px solid var(--accent);
+			border-radius: 4px;
+			background: var(--bg);
+			margin-bottom: 10px;
+			word-break: break-all;
+		}
+		.result-table {
+			width: 100%;
+			border-collapse: collapse;
+			font-family: "JetBrains Mono", Menlo, monospace;
+			font-size: 12px;
+			margin-bottom: 10px;
+		}
+		.result-table td { padding: 4px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+		.result-table td.k { color: var(--accent); white-space: nowrap; }
+		.result-note { font-size: 12px; color: var(--muted); margin: 6px 0; }
+		.dry-warn {
+			border: 1px solid var(--bad);
+			border-radius: 4px;
+			padding: 8px 10px;
+			margin-top: 10px;
+			font-size: 12px;
+			white-space: pre-wrap;
+			color: var(--bad);
+		}
+		details.raw { margin-top: 10px; font-size: 12px; }
+		details.raw pre {
+			background: var(--bg);
+			border: 1px solid var(--border);
+			border-radius: 4px;
+			padding: 8px 10px;
+			max-height: 240px;
+			overflow: auto;
+			font: 11px/1.4 "JetBrains Mono", Menlo, monospace;
+			white-space: pre-wrap;
+			word-break: break-all;
+		}
+	</style>
+</head>
+<body class="vorpal-glass">
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/irouter-editor/">IROUTER</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html">Overview</a>
+			<a href="irouter-editor.html" class="vorpal-active">Editor</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="page-content">
+	<h1>iRouter pipeline &amp; routing</h1>
+	<p class="subtitle">
+		Three steps: the <em>pipeline</em> gathers facts about each call into variables,
+		the <em>routing</em> decision turns them into a Route, and the <em>dry-run</em>
+		shows exactly what would happen to a pasted request — against your unsaved
+		draft. Save writes <code>irouter.json</code> (previous version kept); Publish
+		tells the running iRouter to reload it. New here? Hit <strong>? Help</strong>.
+	</p>
+
+	<details class="editor-shell" id="editorShell" open>
+		<summary>
+			<span>Configuration</span>
+			<span class="src-badge" id="srcBadge">loading…</span>
+			<span class="dirty-badge" id="dirtyBadge" style="display:none;">unsaved changes</span>
+		</summary>
+
+		<div class="editor-toolbar editor-actions">
+			<label style="display:flex;align-items:center;gap:6px;margin:0;text-transform:none;letter-spacing:0;font-size:12px;color:var(--text);">
+				<input type="checkbox" id="liveDryRun" checked style="width:15px;height:15px;">
+				re-run dry-run on change
+			</label>
+			<div class="spacer"></div>
+			<button id="helpBtn" class="secondary" type="button" title="What is all this?">? Help</button>
+			<button id="reloadEditor" class="secondary" type="button" title="Discard the draft and reload from disk">Reload</button>
+			<button id="showJson" class="secondary" type="button" title="Read-only view of the document Save would write">JSON</button>
+			<button id="showVersions" class="secondary" type="button">Versions</button>
+			<button id="saveConfig" type="button">Save</button>
+			<button id="publishConfig" type="button">Publish</button>
+			<a class="handoff" href="/blade/configurator/configurator.html?schema=irouter"
+				title="Logging, session settings, and cluster/server overlays are edited in the Configurator">
+				logging &amp; session → Configurator</a>
+		</div>
+
+		<div class="versions-panel" id="versionsPanel" style="display:none;">
+			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">Version history</h2>
+			<div id="versionsBody"></div>
+			<pre id="versionPreview" style="display:none;"></pre>
+		</div>
+
+		<div class="versions-panel" id="jsonPanel" style="display:none;">
+			<h2 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;">
+				<span>Draft irouter.json — read-only, exactly what Save writes</span>
+				<button id="copyJson" type="button" class="mini">copy</button>
+			</h2>
+			<pre id="jsonBody"></pre>
+		</div>
+
+		<div class="section-head">
+			<span class="step">1</span>
+			<span class="section-title">Pipeline — gather the facts</span>
+			<button class="mini help-mini" type="button" data-help="pipeline">?</button>
+			<span class="section-sub">Connectors run in order on each initial INVITE, extracting values from
+				the message (and, optionally, REST / database / directory lookups) into variables the
+				routing decision reads.</span>
+		</div>
+		<div id="pipelinePanel" class="pipeline-panel"></div>
+
+		<div class="section-head">
+			<span class="step">2</span>
+			<span class="section-title">Routing — make the decision</span>
+			<button class="mini help-mini" type="button" data-help="routing">?</button>
+			<span class="section-sub">One decision strategy — a key-driven <code>table</code>, an
+				if/else-if <code>conditional</code> chain, or a fixed <code>direct</code> route —
+				produces the Route: forward downstream, or answer with a final response.</span>
+		</div>
+		<div id="routingPanel" class="pipeline-panel"></div>
+
+	</details>
+
+	<div class="section-head on-glass">
+		<span class="step">3</span>
+		<span class="section-title">Dry-run — which Route does this request get?</span>
+		<button class="mini help-mini" type="button" data-help="dryrun">?</button>
+		<span class="section-sub">Runs your unsaved draft in-process on the AdminServer; nothing is proxied.
+			An I/O connector (rest / jdbc / ldap) in the pipeline really contacts its backend.</span>
+	</div>
+
+	<div class="dry-grid">
+		<div class="panel">
+			<h2>
+				<span>Input request</span>
+				<button id="loadSample" style="font-size:11px;padding:3px 8px;">Load sample INVITE</button>
+			</h2>
+			<textarea id="input" spellcheck="false" placeholder="INVITE sip:bob@example.com SIP/2.0&#10;From: ...&#10;To: ...&#10;..."></textarea>
+			<div style="display:flex;gap:12px;align-items:center;margin-top:8px;">
+				<button id="run">Dry-run</button>
+				<span id="status" class="status"></span>
+			</div>
+		</div>
+
+		<div class="panel">
+			<h2>Decision</h2>
+			<div id="outcome" class="outcome" style="display:none;"></div>
+			<div id="headersWrap" style="display:none;">
+				<div class="result-note">Headers stamped on the outbound message:</div>
+				<table class="result-table" id="headersTable"></table>
+			</div>
+			<div id="skippedWrap" class="result-note" style="display:none;"></div>
+			<div id="varsWrap" style="display:none;">
+				<div class="result-note">Variables after enrichment:</div>
+				<table class="result-table" id="varsTable"></table>
+			</div>
+			<div id="warnPanel" class="dry-warn" style="display:none;"></div>
+			<details class="raw" id="rawWrap" style="display:none;">
+				<summary>Raw response</summary>
+				<pre id="rawBody"></pre>
+			</details>
+		</div>
+	</div>
+
+	<dialog id="helpDialog" class="help-dialog">
+		<div class="help-head">
+			<span>How the iRouter works</span>
+			<button type="button" id="helpClose" class="mini">close</button>
+		</div>
+		<div class="help-body">
+			<section id="help-pipeline">
+				<h3>The pipeline</h3>
+				<p>When an INVITE arrives, the iRouter runs an ordered list of
+				<strong>connectors</strong>. Each one pulls values out of somewhere — the SIP message
+				itself, an in-memory table, a REST API, a database, a directory — and stores them as
+				named <strong>variables</strong>. The pipeline never makes the routing decision; it
+				gathers the facts the decision reads. "Gather the facts, then make the decision" is
+				the whole model.</p>
+				<p>Everything a connector extracts is available downstream as
+				<code>${name}</code> — in later connectors' URLs and queries, in routing keys and
+				<code>when</code> clauses, and in the Route's URI and header templates.</p>
+			</section>
+			<section id="help-connectors">
+				<h3>Connector types</h3>
+				<p><strong>sip</strong> — reads the SIP request itself; no I/O. Its selectors pull
+				headers, the Request-URI, or transport facts (<code>originIP</code>,
+				<code>transport</code>, …). Almost every pipeline starts with one.</p>
+				<p><strong>table</strong> — looks a variable up in one or more translation tables and
+				spreads the matched row's values into variables (customer identity, tier, API keys).
+				First table that matches wins.</p>
+				<p><strong>rest / jdbc / ldap</strong> — fetch enrichment data from an external
+				service, database, or directory, then run selectors over the response. In production
+				these run asynchronously off the container thread; in a dry-run they execute inline
+				and really contact their backends.</p>
+			</section>
+			<section id="help-selectors">
+				<h3>Selectors</h3>
+				<p>A selector pulls one value out of whatever its connector produced and stores it
+				under the selector's <code>id</code> — the variable name you reference later as
+				<code>${id}</code>. <strong>attribute</strong> takes a value verbatim;
+				<strong>regex</strong> matches named groups — <code>(?&lt;user&gt;[^@]+)</code> —
+				storing each group as its own variable plus an optional rendered
+				<code>expression</code>; <strong>json / xml / sdp</strong> extract by JsonPath,
+				XPath, or SDP field; <strong>table</strong> classifies an already-extracted value.</p>
+			</section>
+			<section id="help-tables">
+				<h3>Translation tables and match strategies</h3>
+				<p>A table has a <code>keyExpression</code> (a <code>${var}</code> template producing
+				the lookup key), a match strategy, and rows. <strong>hash</strong> is exact;
+				<strong>prefix</strong> is longest-prefix (dial plans); <strong>range</strong>
+				matches integer intervals (<code>8-17</code> for business hours). A matched row's
+				values all become variables.</p>
+			</section>
+			<section id="help-routing">
+				<h3>The routing decision</h3>
+				<p>After the pipeline completes, exactly one <strong>routing strategy</strong> reads
+				the variables and produces a Route. <strong>table</strong> is a key-driven lookup —
+				the routing analog of a dial plan. <strong>conditional</strong> is an ordered
+				if/else-if chain of boolean expressions (<code>${action} == allow &amp;&amp;
+				${shift} == business</code>); the first clause that's true wins, with an optional
+				default. <strong>direct</strong> always produces the same Route — useful when the
+				pipeline's templating does all the work. No decision means the router answers
+				<code>503</code>.</p>
+			</section>
+			<section id="help-route">
+				<h3>Routes</h3>
+				<p>A Route either <strong>forwards</strong> (a <code>requestUri</code>, proxied
+				downstream — leave it empty to forward to the inbound Request-URI unchanged) or
+				<strong>responds</strong> (a <code>statusCode</code> like <code>603 Decline</code> —
+				the call ends here, no downstream leg). Either way it can stamp headers, plain or
+				conditional (<code>when: ${customerTier} == premium</code>), all
+				<code>${var}</code>-resolved at decision time.</p>
+			</section>
+			<section id="help-dryrun">
+				<h3>Dry-run, Save, Publish</h3>
+				<p>The dry-run always uses your <em>unsaved draft</em>: paste a request, and the
+				decision panel states in words what production would do — the resolved forward URI or
+				final response, the stamped headers (with skipped conditional headers listed), and
+				every variable the pipeline extracted. Nothing is proxied.</p>
+				<p><strong>Save</strong> validates the document exactly as the iRouter would load it,
+				keeps the previous file in version history, and writes <code>irouter.json</code>.
+				<strong>Publish</strong> tells the running iRouter nodes to reload what was last
+				saved. Logging, session settings, and per-cluster overlays are edited in the
+				Configurator — both tools share the same file politely.</p>
+			</section>
+		</div>
+	</dialog>
+	</main>
+
+	<script src="/blade/portal/lib/blade-editor.js"></script>
+	<script>
+		// Shared machinery from the portal-hosted editor kit.
+		const { escapeHtml, cleanJson, derefNode, variantsFromAnyOf,
+			titleEl, miniBtn, smallAddBtn, moveInArr,
+			renderFieldsInto, polyObjectField, rawJsonBound, helpMini, openHelp } = BladeEditor;
+
+		const API_BASE = (function () {
+			const path = location.pathname;
+			const ctx = path.substring(0, path.lastIndexOf('/'));
+			return (ctx || '') + '/resources/api/';
+		})();
+
+		const SAMPLE_INVITE = `INVITE sip:18005551234@pbx.example.com SIP/2.0
+Via: SIP/2.0/TCP 10.0.0.10:5060;branch=z9hG4bK-demo
+From: <sip:+18165550100@example.com>;tag=1
+To: <sip:18005551234@pbx.example.com>
+Call-ID: dryrun-1@example.com
+CSeq: 1 INVITE
+Contact: <sip:+18165550100@10.0.0.10>
+Max-Forwards: 70
+`;
+
+		document.getElementById('loadSample').addEventListener('click', () => {
+			document.getElementById('input').value = SAMPLE_INVITE;
+			scheduleDryRun();
+		});
+
+		// ---- editor state ----
+
+		const ed = {
+			doc: null,
+			baseline: null,
+			source: null,
+			connVariants: null,
+			routingProp: null,   // the schema property node for `routing`
+			dirty: false,
+		};
+
+		function draftFields() {
+			if (!ed.doc) return {};
+			return {
+				draftPipeline: cleanJson(ed.doc.pipeline || []),
+				draftRouting: ed.doc.routing ? cleanJson(ed.doc.routing) : null,
+			};
+		}
+
+		let jsonViewerRef = null;
+
+		function markDirty() {
+			ed.dirty = true;
+			document.getElementById('dirtyBadge').style.display = '';
+			if (jsonViewerRef) jsonViewerRef.refresh();
+			scheduleDryRun();
+		}
+
+		function clearDirty() {
+			ed.dirty = false;
+			document.getElementById('dirtyBadge').style.display = 'none';
+		}
+
+		let dryRunTimer = null;
+		function scheduleDryRun() {
+			if (!document.getElementById('liveDryRun').checked) return;
+			if (!document.getElementById('input').value.trim()) return;
+			clearTimeout(dryRunTimer);
+			dryRunTimer = setTimeout(() => document.getElementById('run').click(), 600);
+		}
+
+		// ---- load / render ----
+
+		async function loadEditor() {
+			const pipelinePanel = document.getElementById('pipelinePanel');
+			try {
+				const resp = await fetch(API_BASE + 'config');
+				if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+				const data = await resp.json();
+				if (data.error) throw new Error(data.error);
+
+				ed.doc = data.config || {};
+				if (!ed.doc.pipeline) ed.doc.pipeline = [];
+				ed.source = data.source;
+				BladeEditor.init({ defs: (data.schema && data.schema.$defs) || null, onDirty: markDirty });
+				ed.connVariants = (data.schema && data.schema.properties && data.schema.properties.pipeline)
+					? variantsFromAnyOf(data.schema.properties.pipeline.items.anyOf) : null;
+				ed.routingProp = (data.schema && data.schema.properties)
+					? data.schema.properties.routing : null;
+				ed.baseline = {
+					pipeline: cleanJson(ed.doc.pipeline),
+					routing: ed.doc.routing ? cleanJson(ed.doc.routing) : null,
+				};
+				clearDirty();
+
+				document.getElementById('srcBadge').textContent =
+					ed.source === 'live' ? 'live irouter.json'
+					: ed.source === 'sample' ? 'generated sample — Save creates irouter.json'
+					: 'built-in sample — Save creates irouter.json';
+
+				renderAll();
+			} catch (e) {
+				pipelinePanel.innerHTML = '<div class="empty-guide">failed to load configuration — '
+					+ escapeHtml(e.message) + '</div>';
+			}
+		}
+
+		function renderAll() {
+			renderPipeline();
+			renderRouting();
+		}
+
+		function renderPipeline() {
+			const panel = document.getElementById('pipelinePanel');
+			panel.innerHTML = '';
+			if (!ed.doc.pipeline) ed.doc.pipeline = [];
+			const pipe = ed.doc.pipeline;
+
+			if (pipe.length === 0) {
+				const guide = document.createElement('div');
+				guide.className = 'empty-guide';
+				guide.innerHTML = 'No pipeline yet — the routing decision below will run with no '
+					+ 'variables, so only a <code>direct</code> route (or literal table keys) can '
+					+ 'work. The usual first step: a <code>sip</code> connector extracting values '
+					+ 'like the dialed number and caller into variables the decision reads.';
+				panel.appendChild(guide);
+
+				const starters = document.createElement('div');
+				starters.style.cssText = 'display:flex;gap:8px;margin:10px 0;';
+				starters.appendChild(smallAddBtn('+ sip connector (extract dialed number & caller)', () => {
+					pipe.push({
+						type: 'sip', id: 'sip',
+						description: 'Extract the dialed number and caller from the message',
+						selectors: [
+							{ type: 'regex', id: 'dialedNumber', attribute: 'To',
+								pattern: '.*<?sips?:\\+?(?<did>[^@;>]+)@.*', expression: '${did}' },
+							{ type: 'regex', id: 'caller', attribute: 'From',
+								pattern: '.*<?sips?:\\+?(?<ani>[^@;>]+)@.*', expression: '${ani}' },
+						],
+					});
+					markDirty(); renderAll();
+				}));
+				panel.appendChild(starters);
+			} else {
+				pipe.forEach((conn, idx) => panel.appendChild(connectorCard(pipe, conn, idx)));
+				panel.appendChild(smallAddBtn('+ add connector', () => {
+					pipe.push({ type: ed.connVariants ? ed.connVariants[0].type : 'sip' });
+					markDirty(); renderAll();
+				}));
+			}
+		}
+
+		function connectorCard(pipe, conn, idx) {
+			const card = document.createElement('div');
+			card.className = 'conn-card';
+			const head = document.createElement('div');
+			head.className = 'card-head';
+
+			const typeSel = document.createElement('select');
+			typeSel.className = 'type-select';
+			const types = ed.connVariants ? ed.connVariants.map(v => v.type)
+				: ['sip', 'rest', 'jdbc', 'ldap', 'table'];
+			typeSel.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+			if (conn.type && !types.includes(conn.type)) {
+				typeSel.innerHTML += `<option value="${escapeHtml(conn.type)}">${escapeHtml(conn.type)}</option>`;
+			}
+			typeSel.value = conn.type || types[0];
+			typeSel.addEventListener('change', () => {
+				const keepId = conn.id;
+				for (const k of Object.keys(conn)) delete conn[k];
+				conn.type = typeSel.value;
+				if (keepId) conn.id = keepId;
+				markDirty(); renderAll();
+			});
+			head.appendChild(typeSel);
+			head.appendChild(titleEl('connector ' + (idx + 1) + (conn.id ? ' — ' + conn.id : '')));
+			head.appendChild(helpMini('connectors'));
+			head.appendChild(miniBtn('▲', 'Move up (connectors run in order)', () => { moveInArr(pipe, idx, -1); renderAll(); }));
+			head.appendChild(miniBtn('▼', 'Move down', () => { moveInArr(pipe, idx, +1); renderAll(); }));
+			head.appendChild(miniBtn('⧉', 'Duplicate', () => {
+				pipe.splice(idx + 1, 0, JSON.parse(JSON.stringify(conn)));
+				markDirty(); renderAll();
+			}));
+			head.appendChild(miniBtn('×', 'Remove connector', () => {
+				pipe.splice(idx, 1);
+				markDirty(); renderAll();
+			}, true));
+			card.appendChild(head);
+
+			const body = document.createElement('div');
+			body.className = 'card-body';
+			const variant = ed.connVariants ? ed.connVariants.find(v => v.type === conn.type) : null;
+			if (variant) renderFieldsInto(variant.fields, conn, body);
+			else body.appendChild(rawJsonBound(conn));
+			card.appendChild(body);
+			return card;
+		}
+
+		function renderRouting() {
+			const panel = document.getElementById('routingPanel');
+			panel.innerHTML = '';
+			const anyOf = ed.routingProp
+				? (ed.routingProp.anyOf || derefNode(ed.routingProp).anyOf) : null;
+			if (anyOf) {
+				const field = polyObjectField('routing', anyOf, ed.doc,
+					(ed.routingProp && ed.routingProp.description) || '');
+				// The kit labels the field; the section heading already does.
+				field.querySelector('label').remove();
+				panel.appendChild(field);
+				if (!ed.doc.routing) {
+					const guide = document.createElement('div');
+					guide.className = 'empty-guide';
+					guide.style.marginTop = '8px';
+					guide.innerHTML = 'No routing strategy selected — every call would be answered '
+						+ '<code>503</code>. Pick a type above: <code>conditional</code> for '
+						+ 'if/else-if rules, <code>table</code> for key-driven lookups, '
+						+ '<code>direct</code> for a fixed route.';
+					panel.appendChild(guide);
+				}
+			} else {
+				// No schema — raw JSON, nothing lost.
+				if (!ed.doc.routing) ed.doc.routing = {};
+				panel.appendChild(rawJsonBound(ed.doc.routing));
+			}
+		}
+
+		// ---- dry-run ----
+
+		document.getElementById('run').addEventListener('click', async () => {
+			const message = document.getElementById('input').value;
+			const status = document.getElementById('status');
+			if (!message.trim()) {
+				status.textContent = 'Paste a SIP request first.';
+				status.className = 'status err';
+				return;
+			}
+			status.textContent = 'Running…';
+			status.className = 'status';
+			document.getElementById('run').disabled = true;
+
+			const url = API_BASE + 'route';
+			const requestBody = JSON.stringify(Object.assign({ message: message }, draftFields()), null, 2);
+			let resp = null;
+			let rawResponse = '';
+			let data = null;
+			try {
+				resp = await fetch(url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: requestBody,
+				});
+				rawResponse = await resp.text();
+				data = JSON.parse(rawResponse);
+			} catch (e) {
+				status.textContent = 'Dry-run failed (' + (e.name || 'Error') + '): ' + e.message;
+				status.className = 'status err';
+				document.getElementById('run').disabled = false;
+				return;
+			}
+
+			renderResult(data, rawResponse);
+			if (data.error) {
+				status.textContent = 'Error: ' + data.error;
+				status.className = 'status err';
+			} else {
+				const warnings = data.warnings || [];
+				status.textContent = 'OK' + (warnings.length ? ' · ' + warnings.length + ' warning(s)' : '');
+				status.className = warnings.length ? 'status err' : 'status ok';
+			}
+			document.getElementById('run').disabled = false;
+		});
+
+		function renderResult(data, rawResponse) {
+			const outcome = document.getElementById('outcome');
+			const headersWrap = document.getElementById('headersWrap');
+			const headersTable = document.getElementById('headersTable');
+			const skippedWrap = document.getElementById('skippedWrap');
+			const varsWrap = document.getElementById('varsWrap');
+			const varsTable = document.getElementById('varsTable');
+			const warnPanel = document.getElementById('warnPanel');
+			const rawWrap = document.getElementById('rawWrap');
+
+			document.getElementById('rawBody').textContent = rawResponse;
+			rawWrap.style.display = '';
+
+			if (data.error) {
+				outcome.style.display = '';
+				outcome.textContent = data.error;
+				headersWrap.style.display = 'none';
+				skippedWrap.style.display = 'none';
+				varsWrap.style.display = 'none';
+				warnPanel.style.display = 'none';
+				return;
+			}
+
+			outcome.style.display = '';
+			if (data.outcome === 'forward') {
+				outcome.textContent = data.requestUri
+					? 'Forwards (proxies) the call to ' + data.requestUri
+					: 'Forwards the call to the inbound Request-URI unchanged (passthrough).';
+			} else if (data.outcome === 'respond') {
+				outcome.textContent = 'Responds ' + data.statusCode
+					+ (data.reasonPhrase ? ' ' + data.reasonPhrase : '')
+					+ ' — the call ends here, no downstream leg.';
+			} else {
+				outcome.textContent = 'No routing decision — production would answer 503.';
+			}
+
+			const headers = data.headers || {};
+			const headerNames = Object.keys(headers);
+			headersWrap.style.display = headerNames.length ? '' : 'none';
+			headersTable.innerHTML = headerNames.map(h =>
+				`<tr><td class="k">${escapeHtml(h)}</td><td>${escapeHtml(headers[h])}</td></tr>`).join('');
+
+			const skipped = data.skippedConditionalHeaders || [];
+			skippedWrap.style.display = skipped.length ? '' : 'none';
+			skippedWrap.textContent = skipped.length
+				? 'Conditional headers NOT stamped (their when failed): ' + skipped.join(' · ') : '';
+
+			const vars = data.variables || {};
+			const varNames = Object.keys(vars);
+			varsWrap.style.display = varNames.length ? '' : 'none';
+			varsTable.innerHTML = varNames.map(v =>
+				`<tr><td class="k">${escapeHtml(v)}</td><td>${escapeHtml(vars[v])}</td></tr>`).join('');
+
+			const warnings = data.warnings || [];
+			warnPanel.style.display = warnings.length ? '' : 'none';
+			warnPanel.textContent = warnings.join('\n\n');
+		}
+
+		// ---- save / publish / versions ----
+
+		function changeSummary() {
+			const lines = [];
+			const pipeNow = cleanJson(ed.doc.pipeline || []);
+			if (JSON.stringify(pipeNow) !== JSON.stringify(ed.baseline.pipeline)) {
+				lines.push('changed pipeline (' + pipeNow.length + ' connector(s))');
+			}
+			const routeNow = ed.doc.routing ? cleanJson(ed.doc.routing) : null;
+			if (JSON.stringify(routeNow) !== JSON.stringify(ed.baseline.routing)) {
+				lines.push('changed routing (' + (routeNow ? routeNow.type : 'none') + ')');
+			}
+			return lines;
+		}
+
+		/// The exact document Save writes — also what the JSON viewer shows.
+		function buildPayload() {
+			const payload = Object.assign({}, ed.doc, {
+				pipeline: cleanJson(ed.doc.pipeline || []),
+			});
+			if (ed.doc.routing) payload.routing = cleanJson(ed.doc.routing);
+			else delete payload.routing;
+			if (payload.pipeline.length === 0) delete payload.pipeline;
+			return payload;
+		}
+
+		async function saveConfig() {
+			const status = document.getElementById('status');
+			const lines = changeSummary();
+			if (lines.length === 0 && ed.source === 'live') {
+				status.textContent = 'Nothing to save — no changes.';
+				status.className = 'status';
+				return;
+			}
+			const preamble = ed.source === 'live' ? '' : 'This will CREATE irouter.json (currently showing the '
+				+ ed.source + ' sample).\n\n';
+			if (!confirm(preamble + 'Save these changes?\n\n'
+					+ (lines.length ? '• ' + lines.join('\n• ') : '(no changes — writes the loaded document)'))) return;
+
+			const payload = buildPayload();
+
+			try {
+				const resp = await fetch(API_BASE + 'config/save', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload),
+				});
+				const data = await resp.json();
+				if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
+				ed.baseline = {
+					pipeline: cleanJson(ed.doc.pipeline || []),
+					routing: ed.doc.routing ? cleanJson(ed.doc.routing) : null,
+				};
+				ed.source = 'live';
+				document.getElementById('srcBadge').textContent = 'live irouter.json';
+				clearDirty();
+				status.textContent = 'Saved (' + data.bytes + ' bytes). Publish to reload the running iRouter.';
+				status.className = 'status ok';
+			} catch (e) {
+				status.textContent = 'Save failed: ' + e.message;
+				status.className = 'status err';
+			}
+		}
+
+		async function publishConfig() {
+			const status = document.getElementById('status');
+			const warning = ed.dirty
+				? 'You have UNSAVED changes — publish reloads the last SAVED irouter.json, not the draft.\n\n'
+				: '';
+			if (!confirm(warning + 'Tell the running iRouter to reload irouter.json?')) return;
+			try {
+				const resp = await fetch(API_BASE + 'config/publish', { method: 'POST' });
+				const data = await resp.json();
+				if (!resp.ok || data.error) throw new Error(data.error || ('HTTP ' + resp.status));
+				status.textContent = 'Published: ' + (data.actions || []).join(' · ');
+				status.className = 'status ok';
+			} catch (e) {
+				status.textContent = 'Publish failed: ' + e.message;
+				status.className = 'status err';
+			}
+		}
+
+		async function showVersions() {
+			const panel = document.getElementById('versionsPanel');
+			const body = document.getElementById('versionsBody');
+			const preview = document.getElementById('versionPreview');
+			if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+			panel.style.display = '';
+			preview.style.display = 'none';
+			body.innerHTML = '<div class="result-note">loading…</div>';
+			try {
+				const resp = await fetch(API_BASE + 'config/versions');
+				const data = await resp.json();
+				if (data.error) throw new Error(data.error);
+				const versions = data.versions || [];
+				if (versions.length === 0) {
+					body.innerHTML = '<div class="result-note">no saved versions yet</div>';
+					return;
+				}
+				const table = document.createElement('table');
+				for (const v of versions) {
+					const tr = document.createElement('tr');
+					const when = document.createElement('td');
+					when.textContent = new Date(v.timestamp).toLocaleString();
+					const size = document.createElement('td');
+					size.textContent = (v.sizeBytes / 1024).toFixed(1) + ' KiB';
+					const act = document.createElement('td');
+					const pv = miniBtn('view', 'Preview this version', async () => {
+						const r = await fetch(API_BASE + 'config/versions/' + v.timestamp);
+						preview.textContent = await r.text();
+						preview.style.display = '';
+					});
+					const rs = miniBtn('restore', 'Restore this version (current file is backed up first)', async () => {
+						if (!confirm('Restore the version from ' + when.textContent
+							+ '? The current irouter.json is backed up first. Unsaved draft changes are discarded.')) return;
+						const r = await fetch(API_BASE + 'config/versions/' + v.timestamp + '/restore', { method: 'POST' });
+						if (!r.ok) {
+							const err = await r.json().catch(() => ({}));
+							alert('Restore failed: ' + (err.error || r.status));
+							return;
+						}
+						panel.style.display = 'none';
+						await loadEditor();
+						document.getElementById('status').textContent =
+							'Restored version from ' + when.textContent + '. Publish to reload the running iRouter.';
+						document.getElementById('status').className = 'status ok';
+					});
+					act.appendChild(pv);
+					act.appendChild(document.createTextNode(' '));
+					act.appendChild(rs);
+					tr.appendChild(when);
+					tr.appendChild(size);
+					tr.appendChild(act);
+					table.appendChild(tr);
+				}
+				body.innerHTML = '';
+				body.appendChild(table);
+			} catch (e) {
+				body.innerHTML = '<div class="result-note">failed to load versions — ' + escapeHtml(e.message) + '</div>';
+			}
+		}
+
+		// ---- wire up ----
+
+		document.getElementById('saveConfig').addEventListener('click', saveConfig);
+		document.getElementById('publishConfig').addEventListener('click', publishConfig);
+		document.getElementById('showVersions').addEventListener('click', showVersions);
+		document.getElementById('reloadEditor').addEventListener('click', () => {
+			if (ed.dirty && !confirm('Discard unsaved changes and reload from disk?')) return;
+			loadEditor();
+		});
+		document.getElementById('input').addEventListener('input', () => scheduleDryRun());
+		document.getElementById('helpBtn').addEventListener('click', () => openHelp(null));
+		document.getElementById('helpClose').addEventListener('click', () =>
+			document.getElementById('helpDialog').close());
+		document.querySelectorAll('.section-head .help-mini').forEach(b =>
+			b.addEventListener('click', () => openHelp(b.dataset.help)));
+
+		jsonViewerRef = BladeEditor.jsonViewer({
+			button: document.getElementById('showJson'),
+			panel: document.getElementById('jsonPanel'),
+			pre: document.getElementById('jsonBody'),
+			copyButton: document.getElementById('copyJson'),
+			getJson: buildPayload,
+		});
+
+		// The overview page's "How it works" card lands here with a hint to
+		// open the help dialog directly.
+		if (sessionStorage.getItem('openHelp')) {
+			sessionStorage.removeItem('openHelp');
+			openHelp(null);
+		}
+
+		loadEditor();
+	</script>
+</body>
+</html>

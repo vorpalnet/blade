@@ -89,6 +89,29 @@
 					</table>
 					<p>Increase T1 on lossy / high-latency networks; decrease only if you've measured and know you can.</p>
 
+					<h3>Send 100 for Non-INVITE (BEA-331601)</h3>
+					<p>The behavior checkbox with the least obvious meaning. RFC 4320 permits a server
+					to answer a non-INVITE request with 100 Trying once the client's retransmission
+					interval has backed off to T2. OCCAS implements that as a guard timer, <strong>on by
+					default</strong> — the default is compiled into the descriptor bean, so an empty
+					<code>sipserver.xml</code> means <em>enabled</em>: every non-INVITE server
+					transaction (every REGISTER, SUBSCRIBE, OPTIONS, …) arms a timer at T2 (4&nbsp;s),
+					and if the application has not answered by then the container sends 100 Trying
+					itself.</p>
+					<p>Applications that answer in milliseconds never benefit, but they can still pay:
+					when a request ends up answered through a different path than the transaction the
+					timer watches — the classic case is a retransmission processed as a fresh request
+					while the original dispatch was stalled behind a session invalidation — the timer
+					fires, finds the transaction already completed, and the engine logs
+					<code>BEA-331601 &lt;Client timer task failed with fatal status&gt;
+					java.lang.IllegalStateException: This transaction has been completed already</code>
+					at ERROR severity. The message says "client timer" but it is the <em>server</em>
+					transaction's guard; the label is a shared catch-all in the transaction layer.</p>
+					<p>If BEA-331601 appears in your engine logs on REGISTER or SUBSCRIBE traffic,
+					uncheck this box. The error is harmless — the endpoint always recovers by
+					retransmission — but each occurrence is an ERROR-severity line and a retransmission
+					delay you can remove.</p>
+
 					<h2>Work Manager</h2>
 					<p>How WLS schedules incoming work across threads. <strong>Runtime-tunable.</strong></p>
 					<table>

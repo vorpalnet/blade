@@ -27,10 +27,12 @@ import org.vorpal.blade.services.proxy.balancer.config.Endpoint;
 /// makes a superseded chain die quietly even if a publish races a firing
 /// timer, so there is never more than one chain per node.
 ///
-/// Verdicts: ANY final response except 408/503 proves the box is alive —
-/// a 405 Method Not Allowed is an endpoint that dislikes OPTIONS, not a dead
-/// endpoint. The container-generated 408 (nothing answered) and 503
-/// (overload) mark it down.
+/// Verdicts ([PingVerdict]): ANY final response except 408/503 proves the box
+/// is alive — a 405 Method Not Allowed is an endpoint that dislikes OPTIONS,
+/// not a dead endpoint. The container-generated 408 (nothing answered) and
+/// 503 (overloaded / draining / starting) mark it down. An endpoint with
+/// `pingRequire2xx: true` (a BLADE engine) is up ONLY on a 2xx, so a booting
+/// container's error responses can't enroll a half-started node.
 public class OptionsPingCallflow extends Callflow implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -122,6 +124,7 @@ public class OptionsPingCallflow extends Callflow implements Serializable {
 				SipServletRequest options = sipFactory.createRequest(sipFactory.createApplicationSession(),
 						OPTIONS, ProxyBalancerServlet.servletContextName, endpoint.getUri());
 
+				final boolean require2xx = Boolean.TRUE.equals(endpoint.getPingRequire2xx());
 				final long pingStart = System.nanoTime();
 				sendRequest(options, (response) -> {
 					int rttMs = (int) Math.min(Integer.MAX_VALUE, (System.nanoTime() - pingStart) / 1_000_000L);
@@ -130,13 +133,13 @@ public class OptionsPingCallflow extends Callflow implements Serializable {
 						// nothing answered — the 408 is locally generated, so
 						// the elapsed time is the timeout, not a round trip
 						health.markDown("OPTIONS 408", null, "ping", -1);
-					} else if (status == 503) {
-						// the endpoint said it's overloaded (it DID answer, so
-						// the round trip is real)
-						health.markDown("OPTIONS 503", null, "ping", rttMs);
+					} else if (!PingVerdict.marksUp(status, require2xx)) {
+						// the endpoint said so (503: overloaded / draining /
+						// starting), or a require2xx engine answered non-2xx
+						// (it DID answer, so the round trip is real)
+						health.markDown("OPTIONS " + status, null, "ping", rttMs);
 					} else {
-						// any other final response proves the box is alive —
-						// a 405 is an endpoint that dislikes OPTIONS, not a dead one
+						// alive by the verdict rule — see PingVerdict
 						health.markUp("OPTIONS " + status, "ping", rttMs);
 					}
 

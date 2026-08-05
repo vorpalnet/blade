@@ -38,6 +38,8 @@ class BladeEventCatalogTest {
 			assertNotNull(type.getDescription(), type.getType() + " has no description");
 			assertNotNull(type.effectiveJavaClassName(), type.getType() + " has no class name");
 			assertFalse(type.fieldsOrEmpty().isEmpty(), type.getType() + " declares no fields");
+			assertNotNull(type.getVersion(),
+					type.getType() + " has no version — the producer could not stamp dataversion");
 		}
 	}
 
@@ -111,6 +113,18 @@ class BladeEventCatalogTest {
 	void operatorDefinedNamesFallBack() {
 		assertEquals(BladeEventTypes.CALL_EVENT, BladeEventTypes.forEventName("agentWrapUp"));
 		assertEquals(BladeEventTypes.CALL_EVENT, BladeEventTypes.forEventName(null));
+	}
+
+	/// `versionOf` is what the framework's own producers stamp as `dataversion`,
+	/// so it must agree with the declarations — and stay null for a type the
+	/// catalog does not declare, rather than inventing a revision.
+	@Test
+	@DisplayName("versionOf agrees with the declarations and is null for unknown types")
+	void versionLookupMatchesDeclarations() {
+		for (EventType type : BladeEventCatalog.analyticsTypes()) {
+			assertEquals(type.getVersion(), BladeEventCatalog.versionOf(type.getType()), type.getType());
+		}
+		assertNull(BladeEventCatalog.versionOf("net.example.not.declared"));
 	}
 
 	/// The eleven descriptions are contract prose — they become the schema

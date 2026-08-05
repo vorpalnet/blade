@@ -1,0 +1,338 @@
+/*
+ * BLADE editor kit styles — shared by the purpose-built config editors
+ * (crud-editor, irouter-editor). Loaded alongside blade-editor.js:
+ *   <link rel="stylesheet" href="/blade/portal/lib/blade-editor.css">
+ * Uses the pages' local aliases of the --vorpal-* tokens (--bg, --panel,
+ * --text, --muted, --accent, --good, --bad, --border).
+ */
+
+.editor-shell {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	margin-bottom: 16px;
+}
+.editor-shell > summary {
+	cursor: pointer;
+	padding: 10px 12px;
+	font-size: 13px;
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	user-select: none;
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+.editor-shell > summary .src-badge {
+	text-transform: none;
+	letter-spacing: 0;
+	font-size: 11px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	padding: 1px 10px;
+	color: var(--text);
+}
+.editor-shell > summary .dirty-badge {
+	text-transform: none;
+	letter-spacing: 0;
+	font-size: 11px;
+	color: var(--bad);
+	font-weight: 600;
+}
+.editor-toolbar {
+	display: flex;
+	gap: 10px;
+	align-items: end;
+	flex-wrap: wrap;
+	padding: 10px 12px;
+	border-top: 1px solid var(--border);
+}
+.editor-toolbar .spacer { flex: 1; }
+.editor-toolbar a.handoff {
+	font-size: 12px;
+	color: var(--muted);
+	align-self: center;
+}
+.rule-card, .op-card {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	margin-bottom: 10px;
+	background: var(--bg);
+}
+.rule-card > .card-head, .op-card > .card-head {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	padding: 6px 10px;
+	border-bottom: 1px solid var(--border);
+}
+.card-head .card-title {
+	font-family: "JetBrains Mono", Menlo, monospace;
+	font-size: 12px;
+	color: var(--accent);
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.card-head .mini {
+	background: var(--panel);
+	color: var(--muted);
+	border: 1px solid var(--border);
+	font-size: 12px;
+	font-weight: 400;
+	padding: 2px 7px;
+	line-height: 1.2;
+	cursor: pointer;
+}
+.card-head .mini:hover { border-color: var(--accent); color: var(--accent); }
+.card-head .mini.danger:hover { border-color: var(--bad); color: var(--bad); }
+.card-body { padding: 10px; }
+.field-row {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-bottom: 8px;
+}
+.field {
+	display: flex;
+	flex-direction: column;
+	min-width: 120px;
+}
+.field.wide { flex: 1 1 100%; }
+.field label {
+	margin-bottom: 2px;
+	font-size: 11px;
+}
+.field input, .field select {
+	background: var(--panel);
+	padding: 5px 8px;
+	font-family: "JetBrains Mono", Menlo, monospace;
+	font-size: 12px;
+}
+.field input[type=checkbox] {
+	width: 16px; height: 16px;
+	align-self: flex-start;
+}
+.field .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.kv-grid {
+	display: grid;
+	grid-template-columns: 180px 1fr 26px;
+	gap: 4px 8px;
+	align-items: center;
+	font-family: "JetBrains Mono", Menlo, monospace;
+	font-size: 12px;
+}
+.kv-grid input {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	padding: 4px 6px;
+	font: inherit;
+	color: var(--text);
+	width: 100%;
+}
+.editor-actions button.secondary, .versions-panel button.secondary {
+	background: var(--panel);
+	color: var(--text);
+	border: 1px solid var(--border);
+	font-weight: 400;
+	font-size: 12px;
+	padding: 5px 12px;
+}
+.editor-actions button.secondary:hover { border-color: var(--accent); color: var(--accent); filter: none; }
+.versions-panel { border-top: 1px solid var(--border); padding: 10px 12px; }
+.versions-panel table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+	font-family: "JetBrains Mono", Menlo, monospace;
+}
+.versions-panel td { padding: 4px 8px; border-top: 1px solid var(--border); }
+.versions-panel pre {
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 8px 10px;
+	max-height: 260px;
+	overflow: auto;
+	font: 11px/1.4 "JetBrains Mono", Menlo, monospace;
+	white-space: pre-wrap;
+}
+.raw-op {
+	width: 100%;
+	min-height: 80px;
+	font: 11px/1.4 "JetBrains Mono", Menlo, monospace;
+}
+/* ---- numbered sections + pipeline + help ---- */
+.section-head {
+	display: flex;
+	gap: 10px;
+	align-items: baseline;
+	flex-wrap: wrap;
+	padding: 12px 12px 8px;
+	border-top: 1px solid var(--border);
+}
+.section-head .step {
+	flex: 0 0 auto;
+	width: 22px; height: 22px;
+	border-radius: 50%;
+	border: 2px solid var(--accent);
+	color: var(--accent);
+	font-weight: 700;
+	font-size: 13px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	align-self: center;
+}
+.section-head .section-title {
+	font-size: 13px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	color: var(--text);
+}
+.section-head .section-sub {
+	flex-basis: 100%;
+	font-size: 12px;
+	color: var(--muted);
+	padding-left: 32px;
+}
+.section-head.on-glass {
+	border: none;
+	padding: 18px 0 8px;
+}
+.vorpal-glass .section-head.on-glass .section-title { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
+.vorpal-glass .section-head.on-glass .section-sub { color: rgba(240,242,247,0.85); }
+.vorpal-glass .section-head.on-glass .step { border-color: #fff; color: #fff; }
+.help-mini {
+	background: var(--panel);
+	color: var(--muted);
+	border: 1px solid var(--border);
+	border-radius: 50%;
+	width: 20px; height: 20px;
+	padding: 0;
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1;
+	cursor: pointer;
+	align-self: center;
+}
+.help-mini:hover { border-color: var(--accent); color: var(--accent); }
+.pipeline-panel { padding: 10px 12px; }
+.pipeline-panel .empty-guide {
+	border: 1px dashed var(--border);
+	border-radius: 6px;
+	padding: 12px;
+	font-size: 13px;
+	color: var(--muted);
+}
+.pipeline-panel .empty-guide code { color: var(--text); }
+.conn-card {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	margin-bottom: 10px;
+	background: var(--bg);
+}
+.conn-card > .card-head { border-bottom: 1px solid var(--border); }
+.nested-list { margin: 4px 0 8px 18px; }
+.nested-card {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	margin-bottom: 8px;
+	background: var(--panel);
+}
+.nested-card > .card-head { border-bottom: 1px solid var(--border); padding: 4px 8px; }
+.map-obj { border-left: 2px solid var(--border); padding-left: 10px; margin: 6px 0; }
+.map-obj .map-key-row { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.map-obj .map-key-row input.map-key {
+	font-family: "JetBrains Mono", Menlo, monospace;
+	font-size: 12px;
+	padding: 4px 8px;
+	background: var(--panel);
+	color: var(--accent);
+}
+.help-dialog {
+	max-width: 760px;
+	width: 90vw;
+	max-height: 85vh;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 0;
+	color: var(--text);
+}
+.help-dialog::backdrop { background: rgba(10, 12, 20, 0.6); }
+.help-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--border);
+	font-size: 13px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	position: sticky;
+	top: 0;
+	background: var(--panel);
+}
+.help-body { padding: 4px 16px 16px; overflow-y: auto; max-height: calc(85vh - 50px); }
+.help-body h3 {
+	font-size: 14px;
+	margin: 18px 0 6px;
+	color: var(--accent);
+}
+.help-body p { margin: 6px 0; font-size: 13px; line-height: 1.55; }
+.help-body code {
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 3px;
+	padding: 0 4px;
+	font-size: 12px;
+}
+.help-body section:target h3 { text-decoration: underline; }
+/* kit-only controls */
+/* .mini works anywhere, not just inside a card head — copy buttons,
+   version-row actions, etc. The .card-head rules refine it there. */
+.mini {
+	background: var(--panel);
+	color: var(--muted);
+	border: 1px solid var(--border);
+	font-size: 12px;
+	font-weight: 400;
+	padding: 2px 7px;
+	line-height: 1.2;
+	cursor: pointer;
+}
+.mini:hover { border-color: var(--accent); color: var(--accent); }
+.mini.danger:hover { border-color: var(--bad); color: var(--bad); }
+
+.small-add {
+	font-size: 11px;
+	padding: 4px 10px;
+	background: var(--panel);
+	color: var(--text);
+	border: 1px solid var(--border);
+	font-weight: 400;
+	cursor: pointer;
+}
+.small-add:hover { border-color: var(--accent); color: var(--accent); }
+.type-select {
+	font-family: "JetBrains Mono", Menlo, monospace;
+	font-size: 12px;
+	padding: 3px 6px;
+	align-self: flex-start;
+}
+.kv-grid .remove {
+	background: transparent;
+	color: var(--muted);
+	border: none;
+	cursor: pointer;
+	padding: 0;
+	font-size: 15px;
+	line-height: 1;
+}
+.kv-grid .remove:hover { color: var(--bad); }

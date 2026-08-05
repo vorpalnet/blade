@@ -90,6 +90,9 @@
                 <button type="button" class="btn btn-primary" onclick="saveData()">Save</button>
                 <button type="button" class="btn btn-secondary" onclick="loadConfig()">Load</button>
                 <button type="button" class="btn btn-publish" onclick="publishConfig()">Publish</button>
+                <button type="button" id="btn-ai" class="btn btn-secondary" style="display:none"
+                        title="Describe the configuration in plain language; Claude drafts it for review"
+                        onclick="openAiAssist()">Use AI</button>
 
                 <input id="form-filter" class="form-filter-input" type="search"
                        placeholder="Filter fields..." aria-label="Filter form fields"
@@ -302,6 +305,33 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeRegexTest()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI config assistant modal — opened by the "Use AI" toolbar button. -->
+    <div id="aiModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>AI Config Assistant</h2>
+                <button class="modal-close" onclick="closeAiAssist()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Describe the configuration you want. Claude drafts it against this app's
+                   schema; the draft loads into the editor as a proposal — review the diff,
+                   then Save and Publish as usual. Nothing is applied automatically.</p>
+                <div class="regex-test-row">
+                    <label for="ai-instruction">Instruction</label>
+                    <textarea id="ai-instruction" rows="5" spellcheck="false"
+                              placeholder="e.g. Add a queue named support that releases 2 calls every 10 seconds, with the announcement server sip:ann1@10.0.0.5"></textarea>
+                </div>
+                <div class="regex-test-row">
+                    <button type="button" id="ai-generate-btn" class="btn btn-primary" onclick="runAiGenerate()">Generate</button>
+                </div>
+                <div id="ai-status" class="regex-test-result"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeAiAssist()">Close</button>
             </div>
         </div>
     </div>

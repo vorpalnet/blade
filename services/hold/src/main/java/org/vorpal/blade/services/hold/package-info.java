@@ -1,49 +1,51 @@
-/// This package provides a SIP B2BUA (Back-to-Back User Agent) service implementation 
-/// that handles call hold functionality. The service extends the Vorpal Blade framework
-/// to manage SIP calls with hold and resume capabilities.
+/// Call parking: this service answers a leg and holds it, so the far end hears
+/// nothing and the dialog stays up until someone resumes or hangs up.
+///
+/// It is a single-leg UAS, not a B2BUA. There is no second party — the service
+/// answers the INVITE itself rather than forwarding it, which is why it has no
+/// `callStarted` / `callAnswered` / `callConnected` lifecycle callbacks. Those
+/// belong to [org.vorpal.blade.framework.v3.B2buaServlet], which this service
+/// does not extend.
 ///
 /// ## Core Components
 ///
-/// - [HoldServlet] - Main servlet implementing the B2BUA with hold transfer capabilities
-/// - [HoldSettings] - Configuration class extending `RouterConfig` for service settings
-/// - [HoldSettingsSample] - Sample configuration implementation
+/// - [HoldServlet] - the servlet; dispatches by SIP method
+/// - [HoldSettings] - configuration, extending the framework baseline
+///   [org.vorpal.blade.framework.v2.config.Configuration]
+/// - [HoldSettingsSample] - the configuration written on first deployment
 ///
 /// ## Call Flow Handlers
 ///
-/// - `CallflowHold` - Processes SIP INVITE requests to place/resume calls on hold
-/// - `Terminate` - Handles SIP CANCEL and BYE requests to tear down the call
-/// - [HoldMethodNotAllowed] - Fallback callflow for unsupported SIP methods
+/// - `CallflowHold` - answers an INVITE or re-INVITE with inactive media
+/// - `Terminate` - handles CANCEL and BYE to tear the call down
+/// - [HoldMethodNotAllowed] - answers 405 for anything else
 ///
 /// ## Architecture
 ///
-/// The service follows the Vorpal Blade framework's callflow architecture where the
-/// main servlet ([HoldServlet]) routes incoming SIP requests to appropriate callflow
-/// handlers based on the SIP method. The servlet manages the complete call lifecycle
-/// including call establishment, hold/resume operations, and call termination through
-/// dedicated callback methods (`callStarted`, `callAnswered`, `callConnected`, etc.).
+/// [HoldServlet] extends [org.vorpal.blade.framework.v3.AsyncSipServlet] and
+/// implements one method of consequence, `chooseCallflow`, which picks a
+/// callflow per inbound request. Everything else — transaction bookkeeping,
+/// glare handling, session replication — is inherited.
 ///
-/// The [HoldServlet] extends `B2buaServlet` and uses a `SettingsManager` to handle
-/// configuration. It implements the `chooseCallflow` method to route requests to
-/// appropriate handlers and provides comprehensive lifecycle management through
-/// servlet context events.
-///
-/// The service is configured as a distributable SIP application with automatic startup
-/// and includes comprehensive lifecycle management through servlet context events.
+/// The service is distributable, so its sessions replicate across the cluster
+/// and a call survives the loss of the node that answered it.
 ///
 /// ## Detailed Class Reference
 ///
 /// ### HoldServlet
 ///
-/// The main servlet class annotated with `@WebListener`, `@SipApplication(distributable=true)`,
-/// and `@SipServlet(loadOnStartup=1)`. It extends `B2buaServlet` and routes incoming
-/// requests via `chooseCallflow`:
+/// Annotated `@WebListener`, `@SipApplication(distributable=true)`,
+/// `@SipServlet(loadOnStartup=1)` and `@SipListener`. It extends
+/// [org.vorpal.blade.framework.v3.AsyncSipServlet] and dispatches via
+/// `chooseCallflow`:
 ///
-/// - Initial INVITE requests are routed to `CallflowHold`
-/// - CANCEL and BYE requests are routed to `Terminate`
-/// - Unrecognized methods fall back to [HoldMethodNotAllowed]
+/// - INVITE (initial or re-INVITE) is routed to `CallflowHold`
+/// - CANCEL and BYE are routed to `Terminate`
+/// - ACK returns null, letting the container absorb it
+/// - anything else falls back to [HoldMethodNotAllowed]
 ///
-/// Lifecycle methods `servletCreated` and `servletDestroyed` manage the
-/// [HoldSettings] configuration through a static `SettingsManager`.
+/// `servletCreated` and `servletDestroyed` open and close the static
+/// `SettingsManager` that owns [HoldSettings].
 ///
 /// ### CallflowHold (framework, `v3.media`)
 ///
@@ -55,25 +57,27 @@
 ///
 /// ### Terminate (framework)
 ///
-/// Handles CANCEL and BYE to tear down the call with a 200 OK.
+/// Handles CANCEL and BYE to tear down the call with a 200 OK. Hold constructs
+/// it with a null listener, since there are no lifecycle callbacks to fire.
 ///
 /// ### HoldMethodNotAllowed
 ///
-/// A fallback callflow handler for SIP methods that the hold service does not support.
-/// Responds with 405 (Method Not Allowed) to indicate the method is not implemented.
+/// Answers 405 with an `Allow` header naming the methods this service does
+/// support, as RFC 3261 §21.4.5 requires.
 ///
 /// ### HoldSettings
 ///
-/// Configuration class extending `RouterConfig` and implementing `Serializable`.
-/// Provides the configuration structure for the hold service, inheriting routing
-/// configuration capabilities from the framework.
+/// Extends [org.vorpal.blade.framework.v2.config.Configuration] and carries no
+/// settings of its own — the service has nothing to tune. It exists to carry
+/// the `@SchemaAbout` identity the Admin Portal reads to render this service's
+/// card, and to inherit the baseline `logging` and `session` parameters.
 ///
 /// ### HoldSettingsSample
 ///
-/// Sample configuration subclass of [HoldSettings] used as the default configuration
-/// when no external configuration file is present.
+/// The configuration written on first deployment when the operator has not
+/// supplied one.
 ///
 /// @see HoldServlet
-/// @see [org.vorpal.blade.framework.v2.b2bua.B2buaServlet]
-/// @see [org.vorpal.blade.framework.v2.callflow.Callflow]
+/// @see [org.vorpal.blade.framework.v3.AsyncSipServlet]
+/// @see [org.vorpal.blade.framework.v3.Callflow]
 package org.vorpal.blade.services.hold;

@@ -1,6 +1,6 @@
 # Balancer Health (admin app)
 
-[Javadocs](https://vorpal.net/javadocs/blade/balancer)
+Javadocs: `/blade/javadoc/balancer/` on the Admin Portal
 
 Endpoint-health dashboard for the [proxy-balancer service](../../services/proxy-balancer):
 every engine node's independent view of every plan/tier/endpoint — UP, DOWN, or

@@ -1,6 +1,88 @@
 # BLADE Release Notes
 
-## 2.9.9 (unreleased)
+## 3.0.4 (unreleased)
+
+### Framework baseline refactor: version-neutral `org.vorpal.blade.framework`
+
+The framework root package is now a small version-neutral baseline
+(`AsyncSipServlet`, `Callflow`, `Callback`) that both API generations extend:
+`v2` is frozen, `v3` is where new work happens, and the two live side by side
+in one JAR. Servlets were re-parented accordingly; a v2 application migrates
+to the traced v3 dispatch with a one-line base-class swap and inherits
+everything else unchanged.
+
+### JSR-309 media: `v3.media` lambda verbs, DTMF; new proto/player and proto/webrtc
+
+The v3 media package now drives standard JSR-309 (`javax.media.mscontrol`)
+media servers with the same lambda style as the SIP side (`MediaCallflow`),
+including a DTMF sink. The media server stays behind the JSR-309 SPI driver —
+the applications carry no vendor dependency. Two new incubator apps ride on
+it: `proto/player` (media player/recorder service) and `proto/webrtc`
+(WebRTC-to-SIP gateway). Both joined the `full` build profile.
+
+### New admin app: Phone (`blade/phone`) — browser softphone
+
+A static admin WAR (no Java, no server-side state) serving a browser
+softphone for the WebRTC gateway: JSON over a WebSocket to the engine-tier
+`webrtc` service, peer-to-peer media browser-to-browser, anchored media for
+calls to phone numbers, Web Audio for ringback/DTMF/level meters. Bundled
+into `blade-admin.ear` (`ear-phone`), with its roles and context-root
+corrected shortly after.
+
+### New service: Gateway (`services/gateway`) — SIP trunk gateway
+
+Begun as `proto/gateway` and promoted to `services/` in the same cycle:
+registration styles, virtual gateways, and a `TrunkRegistrar` for
+carrier-trunk registration, with the FSMAR routing convention naming the
+trunk. See `services/gateway/README.md`.
+
+### Event bus: catalog-driven event sources; transfer events end-to-end
+
+The events upgrade landed the catalog → code-generation path: event types
+declared in the catalog generate their producer/consumer sources
+(`org.vorpal.blade.events.*`). The transfer service is the first full
+producer — `requested` / `initiated` / `completed` / `declined` / `abandoned`
+lifecycle events — and ships its own durable subscriber (subscription
+`transfer`) as the worked example of two applications each getting their own
+copy of one event: the same events land in analytics under its separate
+`analytics-db` subscription.
+
+### FSMAR: default-application fallback re-gated on "any match"
+
+The default-application fallback now applies only when **no transition
+matched at all**. A matched transition that deliberately selects no
+application — a stop/downstream exit, an egress, a route-back, an empty
+trigger's implicit match — is a decision, not a miss, and no longer falls
+through to the default application. The fallback is also keyed on the FSM's
+start state rather than the bypass-advanced previous state, so app-originated
+sends (e.g. an unmatched health ping) egress instead of landing on the
+default application. Covered by a new `AppRouterFallbackTest` suite.
+
+### Flow editor: config diff, metadata, and deploy-target endpoints
+
+Flow gained server-side endpoints for diffing an edited FSMAR config against
+the published one (`/fsmarDiff`), reading config metadata (`/fsmarMeta`), and
+listing deploy targets (`/fsmarTargets`), plus reworked state/transition/task
+editing panels and a dispatch-fidelity test suite for the round-trip.
+
+### Installer and operations
+
+- `install-occas.sh`: servers are configured for MBean-mode start so
+  Tuning-driven JVM arguments actually apply; production-mode hardening
+  (domain file permissions, internal servlets); a new `console` step deploys
+  the hosted WebLogic Remote Console; `boot.properties` is written for each
+  engine before `nmStart`; a no-arg run re-syncs engines idempotently and
+  detects an already-running AdminServer by its real bind address.
+- `certs.sh` auto-derives machine hostnames and reverse-DNS FQDNs as SANs.
+- `deploy.sh` deploys `blade-shared` as a shared library via `-Dlibrary`
+  (not `-DlibraryModule`).
+- Tuning: creating a new JVM profile extends the selected profile instead of
+  resetting to defaults.
+- Analytics WLST notes: an Oracle schema runner that needs no sqlplus, and
+  JMS provisioning fixes (the topic must be Partitioned; scripts survive
+  their own failures and declare utf-8).
+
+## 3.0.3 (2026-07-19)
 
 ### install-occas.sh: download OCCAS media from Oracle eDelivery
 
@@ -144,6 +226,8 @@ overwrites an existing domain unless you name `configure` explicitly. When the
 installer media is missing and there's no `.urls` file, it prints the browser
 steps and asks for the path to the downloaded wget.sh instead of dying on
 `installer.jar not found`.
+
+## 3.0.2 (2026-07-13)
 
 ### iRouter: printable Dial Plan report
 
@@ -451,7 +535,7 @@ instrumentation in the service. All config additions are optional — schema sta
   a traffic-share bar (watch the weighted 3:1 split prove itself), and counters; cards
   flash when they took calls since the last poll. Tiers over 12 endpoints render as a
   one-card summary (counts by state + active endpoints) that expands on demand —
-  Optum-sized tiers don't dump hundreds of cards. Clicking a map site jumps here
+  call-center-sized tiers don't dump hundreds of cards. Clicking a map site jumps here
   filtered to that site. Clicking any endpoint opens a detail panel: per-node RTT
   comparison, counters, and a time-stamped observation log.
 - **OPTIONS RTT measured** — the ping cycle timestamps each send and records the
@@ -469,6 +553,8 @@ instrumentation in the service. All config additions are optional — schema sta
   leave an old, already-expired `downUntil` in place, so `isRoutable()` stayed true
   for an endpoint the ping cycle had just marked down. A plain down now clears the
   backoff window.
+
+## 3.0.1 (2026-07-04)
 
 ### New: Trace (admin call-trace tool — display name; earlier notes call it "Callflow Viewer")
 
@@ -814,7 +900,7 @@ applies) and `CallflowHold` answers echo the full offered format list rather tha
 
 ### Blackhole sweep — every remaining 2543-era SDP site fixed or ruled
 
-Audit of blade + optum for the same diseases the v3.media rebuild fixed. Fixed:
+Audit of blade + the customer application suite for the same diseases the v3.media rebuild fixed. Fixed:
 
 - **tpcc create-dialog is now OFFERLESS** (Jeff: "offerless is correct — the Internet is full
   of bad advice on this"). `DialogAPI.createDialog` no longer sends the static blackhole offer
@@ -828,8 +914,8 @@ Audit of blade + optum for the same diseases the v3.media rebuild fixed. Fixed:
   no longer speaks the deprecated pattern at the thing being tested. `inactiveAnswerFor` was
   extracted from `v3.media.CallflowHold` as a public static (message-typed: works on requests
   AND on the 200-carrying-offer case) and is now the single shared implementation.
-- **optum `mediahub3.holdLocally`** swapped from v2 `Callflow.buildHoldAnswerSdp` (offer echo,
-  zeroed `c=`, caller's `o=` line) to `inactiveAnswerFor` — full optum build verified against
+- **customer `mediahub3.holdLocally`** swapped from v2 `Callflow.buildHoldAnswerSdp` (offer echo,
+  zeroed `c=`, caller's `o=` line) to `inactiveAnswerFor` — the full customer build verified against
   framework 3.0.1.
 - **Deleted** the unfinished `test-uac` `tpcc/Simple.java` stub (empty lambdas, never
   referenced). Docs de-blackholed: tpcc v1 + test-uas + test-uac tpcc package-infos, and the
@@ -838,7 +924,7 @@ Audit of blade + optum for the same diseases the v3.media rebuild fixed. Fixed:
 
 Ruled, not fixed: **mediahub2** is defunct per Jeff (its `RemoveMediaSession` static-blackhole
 re-INVITE — which also violates RFC 3264 §8's m-line count rule against SIPREC's two-stream
-sessions — stays as-is); **optum `legacy/hold`** stays as a museum piece.
+sessions — stays as-is); the customer `legacy/hold` stays as a museum piece.
 
 ### v3 proxy drop-out (`session.passthru`) — foundation
 
@@ -1452,6 +1538,8 @@ carry the standard four `<externally-defined/>` assignments
 (Admin/Operator/Monitor/Deployer), matching the rest of the admin tier. All
 other admin apps, services, and test WARs audited — no other mismatches.
 
+## 3.0.0 (2026-06-12)
+
 ### iRouter: routing decision re-dispatched onto a container thread
 
 `IRouterInvite` now wraps `applyRouting` in a 0-ms ServletTimer. When the
@@ -1461,6 +1549,8 @@ the HttpClient executor thread, where the container has no call context —
 forward routes behind a REST screening call). The timer fires the routing
 decision on a container thread with appSession context regardless of which
 thread completed the chain; sync-only pipelines just take one extra 0-ms hop.
+
+## 2.9.9 (2026-06-10)
 
 ### Enterprise SIP test suite: scenario-driven test-uac / test-uas + Test Console
 

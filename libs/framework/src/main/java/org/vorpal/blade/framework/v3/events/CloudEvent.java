@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +24,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// [EventPublisher] so consumers can filter with message selectors without
 /// deserializing the body. `subject` carries the Vorpal session id, the same
 /// correlation key BLADE already matches on for the live call.
+/// **Unknown attributes are ignored on parse.** CloudEvents senders may stamp
+/// extension attributes this class predates (exactly what `dataversion` is to a
+/// consumer built before it existed). A consumer must keep reading such an
+/// envelope, not throw — otherwise adding any attribute would break every
+/// consumer built against an older framework jar.
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class CloudEvent implements Serializable {
 
@@ -38,6 +45,7 @@ public class CloudEvent implements Serializable {
 	private String time;
 	private String datacontenttype = "application/json";
 	private String subject;
+	private Integer dataversion;
 	private JsonNode data;
 
 	public CloudEvent() {
@@ -59,6 +67,17 @@ public class CloudEvent implements Serializable {
 		ce.data = data;
 		ce.id = UUID.randomUUID().toString();
 		ce.time = DateTimeFormatter.ISO_INSTANT.format(Instant.now());
+		return ce;
+	}
+
+	/// [#create(String, String, String, JsonNode)] plus the payload's declared
+	/// revision — [EventType#getVersion] at the time the producer was written.
+	///
+	/// @param dataversion the declared payload revision, or null when the type is
+	///                    undeclared (an operator-invented name)
+	public static CloudEvent create(String type, String source, String subject, JsonNode data, Integer dataversion) {
+		CloudEvent ce = create(type, source, subject, data);
+		ce.dataversion = dataversion;
 		return ce;
 	}
 
@@ -126,6 +145,20 @@ public class CloudEvent implements Serializable {
 
 	public void setSubject(String subject) {
 		this.subject = subject;
+	}
+
+	/// The payload revision this event was published with — [EventType#getVersion]
+	/// as of when its producer was generated. A CloudEvents *extension attribute*
+	/// (spec 1.0 reserves the core names and passes extensions through), absent
+	/// from the wire when the producer predates versioning or the type is
+	/// undeclared. Consumers compare it against the revision they were generated
+	/// from and warn on mismatch — see the generated MDB.
+	public Integer getDataversion() {
+		return dataversion;
+	}
+
+	public void setDataversion(Integer dataversion) {
+		this.dataversion = dataversion;
 	}
 
 	public JsonNode getData() {

@@ -15,6 +15,7 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
 import org.vorpal.blade.framework.v2.testing.DummyRequest;
 import org.vorpal.blade.framework.v2.testing.DummyResponse;
+import org.vorpal.blade.framework.v2.testing.DummySipSession;
 import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -61,6 +62,7 @@ public final class CrudSmokeTest {
 		testCreateAttachesXmlPart();
 		testCreateAttachesXmlPartToMultipart();
 		testReadDeleteRestoreAcrossMessages();
+		testFilterCaptureRestoreMultiple();
 
 		testOperationsPolymorphicRoundTrip();
 		testRuleProcessOrder();
@@ -86,6 +88,11 @@ public final class CrudSmokeTest {
 		testStatusRangeNegation();
 		testStatusRangeRequiresResponse();
 		testStatusRangeMalformedIgnored();
+
+		testPipelineRuleSetSelection();
+		testPromotedVarInRuleTemplate();
+		testWhenExpression();
+		testConfigRoundTrip();
 
 		System.out.println();
 		System.out.println("Passed: " + passed + " / " + (passed + failed));
@@ -417,6 +424,89 @@ public final class CrudSmokeTest {
 		check("restore.ok-has-h264", okOut.contains("a=rtpmap:96 H264/90000"));
 	}
 
+	/// Filter-capture save/restore with MULTIPLE media blocks — the minsdp
+	/// pattern: strip every `a=inactive` m-line from the offer (stashing
+	/// them as one JSON-array variable), then splice them all back into the
+	/// answer. `sdpCreate` appends a JSON-array value elementwise.
+	private static void testFilterCaptureRestoreMultiple() throws Exception {
+		DummyApplicationSession appSession = new DummyApplicationSession("siprec-dialog");
+		String filter = "$.media[?('inactive' in @.attributes[*].name)]";
+
+		DummyRequest invite = new DummyRequest("INVITE", "<sip:rec@x>", "<sip:srs@y>");
+		invite.setApplicationSession(appSession);
+		String offer = "v=0\r\n"
+				+ "o=- 1 1 IN IP4 1.1.1.1\r\n"
+				+ "s=-\r\n"
+				+ "c=IN IP4 1.1.1.1\r\n"
+				+ "t=0 0\r\n"
+				+ "m=audio 10000 RTP/AVP 0\r\n"
+				+ "a=sendonly\r\n"
+				+ "a=label:101\r\n"
+				+ "m=audio 10002 RTP/AVP 0\r\n"
+				+ "a=label:102\r\n"
+				+ "a=inactive\r\n"
+				+ "m=audio 10004 RTP/AVP 0\r\n"
+				+ "a=sendonly\r\n"
+				+ "a=label:103\r\n"
+				+ "m=audio 10006 RTP/AVP 0\r\n"
+				+ "a=label:104\r\n"
+				+ "a=inactive\r\n";
+		invite.setContent(offer, "application/sdp");
+
+		SdpReadOperation save = new SdpReadOperation();
+		save.setContentType("application/sdp");
+		save.getExpressions().put("removedMedia", filter);
+		save.process(invite);
+
+		SdpDeleteOperation strip = new SdpDeleteOperation(filter);
+		strip.setContentType("application/sdp");
+		strip.process(invite);
+
+		String offerOut = (String) invite.getContent();
+		check("minsdp.offer-stripped", !offerOut.contains("a=inactive"));
+		check("minsdp.offer-kept-both", offerOut.contains("a=label:101") && offerOut.contains("a=label:103"));
+
+		DummyRequest ok = new DummyRequest("INVITE", "<sip:rec@x>", "<sip:srs@y>");
+		ok.setApplicationSession(appSession);
+		String answer = "v=0\r\n"
+				+ "o=- 2 1 IN IP4 2.2.2.2\r\n"
+				+ "s=-\r\n"
+				+ "c=IN IP4 2.2.2.2\r\n"
+				+ "t=0 0\r\n"
+				+ "m=audio 20000 RTP/AVP 0\r\n"
+				+ "a=recvonly\r\n"
+				+ "a=label:101\r\n"
+				+ "m=audio 20002 RTP/AVP 0\r\n"
+				+ "a=recvonly\r\n"
+				+ "a=label:103\r\n";
+		ok.setContent(answer, "application/sdp");
+
+		SdpCreateOperation restore = new SdpCreateOperation();
+		restore.setContentType("application/sdp");
+		restore.setParentPath("$.media");
+		restore.setValue("${removedMedia}");
+		restore.process(ok);
+
+		String answerOut = (String) ok.getContent();
+		int mLines = 0;
+		for (String line : answerOut.split("\r?\n")) if (line.startsWith("m=audio")) mLines++;
+		check("minsdp.answer-has-four", mLines == 4);
+		check("minsdp.answer-restored-inactive",
+				answerOut.contains("a=label:102") && answerOut.contains("a=label:104"));
+
+		// An offer with nothing to strip stashes "[]"; restoring it appends
+		// nothing rather than corrupting the answer.
+		DummyRequest clean = new DummyRequest("INVITE", "<sip:rec@x>", "<sip:srs@y>");
+		clean.setApplicationSession(appSession);
+		clean.setContent(answer, "application/sdp");
+		save.process(clean);
+		check("minsdp.empty-capture", "[]".equals(appSession.getAttribute("removedMedia")));
+		restore.process(clean);
+		int cleanLines = 0;
+		for (String line : ((String) clean.getContent()).split("\r?\n")) if (line.startsWith("m=audio")) cleanLines++;
+		check("minsdp.empty-restore-noop", cleanLines == 2);
+	}
+
 	// --- polymorphic JSON ---
 
 	private static void testOperationsPolymorphicRoundTrip() throws Exception {
@@ -668,6 +758,96 @@ public final class CrudSmokeTest {
 		DummyRequest req = new DummyRequest("INVITE", "<sip:a@x>", "<sip:b@y>");
 		req.setApplicationSession(new DummyApplicationSession("test"));
 		return req;
+	}
+
+	/// End-to-end selection through the sample's v3 pipeline: SipConnector
+	/// extracts the dialed number, TableConnector writes the `ruleSet`
+	/// variable, and `selectedRuleSet` resolves it against `ruleSets`. An
+	/// unmatched number falls back to `defaultRuleSet`; with no default it
+	/// selects nothing (passthrough). Enrichment values are promoted to the
+	/// application session, where rule `${var}` templates resolve from.
+	private static void testPipelineRuleSetSelection() throws Exception {
+		CrudConfigurationSample cfg = new CrudConfigurationSample();
+
+		DummyRequest hit = new DummyRequest("INVITE", "<sip:alice@x>", "<sip:8003@pbx.example.com>");
+		hit.setSession(new DummySipSession(hit.getApplicationSession()));
+		Context ctx = cfg.enrich(hit);
+		check("pipeline.selects-update",
+				cfg.selectedRuleSet(ctx) == cfg.getRuleSets().get("example-update"));
+		check("pipeline.promoted-to-appsession",
+				"8003".equals(hit.getApplicationSession().getAttribute("dialedNumber")));
+
+		DummyRequest miss = new DummyRequest("INVITE", "<sip:alice@x>", "<sip:5551000@pbx.example.com>");
+		miss.setSession(new DummySipSession(miss.getApplicationSession()));
+		check("pipeline.unmatched-default",
+				cfg.selectedRuleSet(cfg.enrich(miss)) == cfg.getRuleSets().get("example-create"));
+
+		cfg.setDefaultRuleSet(null);
+		DummyRequest miss2 = new DummyRequest("INVITE", "<sip:alice@x>", "<sip:5551000@pbx.example.com>");
+		miss2.setSession(new DummySipSession(miss2.getApplicationSession()));
+		check("pipeline.no-default-passthrough", cfg.selectedRuleSet(cfg.enrich(miss2)) == null);
+	}
+
+	/// The payoff of promotion: a rule template referencing a
+	/// pipeline-extracted variable actually resolves. Sample example-create
+	/// stamps `X-Trace-Id: trace-${dialedNumber}`.
+	private static void testPromotedVarInRuleTemplate() throws Exception {
+		CrudConfigurationSample cfg = new CrudConfigurationSample();
+		DummyRequest req = new DummyRequest("INVITE", "<sip:alice@x>", "<sip:8001@pbx.example.com>");
+		req.setSession(new DummySipSession(req.getApplicationSession()));
+		RuleSet rs = cfg.selectedRuleSet(cfg.enrich(req));
+		rs.applyRules(req, "callStarted");
+		check("promotion.rule-template-resolves", "trace-8001".equals(req.getHeader("X-Trace-Id")));
+	}
+
+	/// `when` gates a rule on session variables through the Expression
+	/// grammar. Null matches always; a malformed expression never matches
+	/// (fail closed, same as ConditionalHeader).
+	private static void testWhenExpression() throws Exception {
+		Rule r = new Rule();
+		r.setId("gated");
+		r.setWhen("${tier} == premium");
+
+		DummyRequest req = invite();
+		req.getApplicationSession().setAttribute("tier", "standard");
+		check("when.blocks", !r.matches(req, null));
+
+		req.getApplicationSession().setAttribute("tier", "premium");
+		check("when.passes", r.matches(req, null));
+
+		Rule bad = new Rule();
+		bad.setId("bad");
+		bad.setWhen("${tier} ==");
+		check("when.malformed-never-fires", !bad.matches(req, null));
+	}
+
+	/// The v3 config shape survives a JSON round-trip: polymorphic
+	/// connectors/selectors in `pipeline` plus the `ruleSets` map.
+	private static void testConfigRoundTrip() throws Exception {
+		String json = mapper.writeValueAsString(new CrudConfigurationSample());
+		CrudConfiguration back = mapper.readValue(json, CrudConfiguration.class);
+		check("config.roundtrip.pipeline", back.getPipeline().size() == 2);
+		check("config.roundtrip.rulesets", back.getRuleSets().size() == 4);
+		check("config.roundtrip.default", "example-create".equals(back.getDefaultRuleSet()));
+
+		// The rules editor's save gate: a document the CRUD service couldn't
+		// load must be rejected before it can clobber a working config.
+		boolean threw = false;
+		try {
+			mapper.readValue("{\"ruleSets\":{\"x\":{\"id\":\"x\",\"rules\":[{\"id\":\"r\","
+					+ "\"operations\":[{\"type\":\"bogusOp\"}]}]}}}", CrudSettings.class);
+		} catch (Exception e) {
+			threw = true;
+		}
+		check("config.rejects-unknown-op-type", threw);
+
+		threw = false;
+		try {
+			mapper.readValue("{\"ruleSets\":{\"x\":{\"id\":\"x\",\"bogusField\":1}}}", CrudSettings.class);
+		} catch (Exception e) {
+			threw = true;
+		}
+		check("config.rejects-unknown-field", threw);
 	}
 
 	private static DummyRequest bye() throws Exception {

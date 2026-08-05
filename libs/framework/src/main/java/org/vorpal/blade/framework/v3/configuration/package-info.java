@@ -20,7 +20,7 @@
 /// Subpackages:
 ///
 /// - [org.vorpal.blade.framework.v3.configuration.connectors] — pipeline
-///   stages (SIP, REST, JDBC, LDAP, Map, Table).
+///   stages (SIP, REST, JDBC, LDAP, Table).
 /// - [org.vorpal.blade.framework.v3.configuration.selectors] — extract
 ///   values from a connector's payload (regex, JsonPath, XPath, SDP,
 ///   attribute).

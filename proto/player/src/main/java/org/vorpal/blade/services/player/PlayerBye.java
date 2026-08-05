@@ -44,7 +44,7 @@ public class PlayerBye extends Callflow {
 		// Failed-over node: the live media objects died with the old engine and LIVE is empty here.
 		// Rebuild the session from the replicated SAS and release the still-running pipeline, so the
 		// failover doesn't leak it on the media server (KMS finalizes any recording on pipeline
-		// release). Nothing here knows about Kurento — the driver does the reclaim behind reattach().
+		// release). Nothing here knows about the media server — the driver does the reclaim behind reattach().
 		try {
 			MediaSession ms = MediaCallflow.reattach(appId);
 			if (ms != null) {

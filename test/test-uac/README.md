@@ -1,6 +1,6 @@
 # Test User Agent Client (UAC)
 
-[Javadocs](https://vorpal.net/javadocs/blade/test-uac)
+Javadocs: `/blade/javadoc/test-uac/` on the Admin Portal
 
 A scenario-driven SIP load generator and test client built on the BLADE
 framework. The Test UAC originates SIP calls at scale — replacing SIPp with a
@@ -151,7 +151,7 @@ report over federated JMX — no per-node curl needed.
 
 ## Configuration
 
-Managed by [SettingsManager](https://vorpal.net/javadocs/blade/framework) at
+Managed by `SettingsManager` at
 `config/custom/vorpal/test-uac.json`; edit in the Configurator, by file, or
 via JMX. The generated `test-uac.json.SAMPLE` contains worked scenarios.
 

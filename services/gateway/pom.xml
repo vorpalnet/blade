@@ -15,8 +15,8 @@
 	<packaging>war</packaging>
 	<name>BLADE Gateway Service — SIP trunk registration</name>
 	<description>Registers N independent "virtual gateways" (each with its own Contact IP)
-		with upstream SIP trunks (Flowroute, etc.) via a pluggable per-carrier registration
-		"style". The PSTN front door into BLADE/Gryphon.</description>
+		with upstream SIP trunks via a pluggable per-carrier registration
+		"style". The PSTN front door into BLADE.</description>
 
 	<dependencies>
 		<dependency>
@@ -35,7 +35,10 @@
 		<!-- Inherits the parent pom's war-plugin packagingExcludes (bundles ONLY
 		     vorpal-blade-library-framework.jar; all 3rd-party JARs come from the
 		     blade-shared shared library). -->
-		<finalName>blade-gateway</finalName>
+		<!-- A SIP servlet application is named for its context root: that is the
+		     name the container reports to the App Router, and the name FSMAR
+		     configs target. Do not prefix it. -->
+		<finalName>gateway</finalName>
 	</build>
 
 </project>

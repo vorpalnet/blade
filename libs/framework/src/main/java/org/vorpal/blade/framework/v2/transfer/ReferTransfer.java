@@ -73,6 +73,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
+import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
@@ -149,7 +150,21 @@ public class ReferTransfer extends Transfer {
 				sipLogger.finer("ReferTransfer.process - SettingsManager.sendEvent(transfereeRequest); #3");
 				SettingsManager.sendEvent(transfereeRequest);
 
-				sendRequest(continueRequest(transferorSession, cancel));
+				// A CANCEL can only come from the INVITE it cancels — neither
+				// SipSession.createRequest nor SipFactory.createRequest will build
+				// one (both throw IllegalArgumentException on ACK and CANCEL), which
+				// is what the previous 'continueRequest(transferorSession, cancel)'
+				// tried to do. Same shape as Terminate: take the outstanding UAC
+				// INVITE on the transferor leg and cancel that.
+				SipServletRequest transferorInvite = transferorSession.getActiveInvite(UAMode.UAC);
+				if (transferorInvite != null && transferorInvite.isCommitted()) {
+					SipServletRequest transferorCancel = transferorInvite.createCancel();
+					copyContentAndHeaders(cancel, transferorCancel);
+					sendRequest(transferorCancel);
+				} else {
+					sipLogger.finer(transferorSession, "ReferTransfer.process - no outstanding INVITE on the "
+							+ "transferor leg; nothing to cancel.");
+				}
 			});
 
 			// Expect to receive NOTIFY messages from transferee (alice)

@@ -8,6 +8,9 @@ import java.util.Map;
 
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletMessage;
+import javax.servlet.sip.SipServletRequest;
+
+import org.vorpal.blade.framework.v3.configuration.Context;
 
 /// Glues [SipMessageParser] → rule application → [SipMessageSerializer]
 /// into a single dry-run pass. The "try-it" sandbox in the configurator
@@ -36,9 +39,9 @@ public class PreviewEngine implements Serializable {
 	///                           to skip event-based filters
 	/// @param initialVariables   name → value pairs pre-loaded onto the session
 	///                           before any rule runs. Use this to simulate
-	///                           values that an upstream Attribute Selector
-	///                           would have written, or to override an
-	///                           environment variable for the run. May be null.
+	///                           values that the enrichment pipeline would
+	///                           have written, or to override an environment
+	///                           variable for the run. May be null.
 	public static PreviewResult preview(CrudConfiguration config, String ruleSetId,
 			String messageText, String lifecycleEvent, Map<String, String> initialVariables) {
 		PreviewResult result = new PreviewResult();
@@ -67,9 +70,9 @@ public class PreviewEngine implements Serializable {
 		}
 
 		// Pre-populate the session with operator-supplied variables — this
-		// stands in for the Attribute Selectors / routing layer that would
-		// have run before this rule set in production, and lets operators
-		// override env vars for the dry run.
+		// stands in for the enrichment pipeline that would have run before
+		// this rule set in production, and lets operators override env vars
+		// for the dry run.
 		if (initialVariables != null && !initialVariables.isEmpty()) {
 			SipApplicationSession appSession = msg.getApplicationSession();
 			if (appSession != null) {
@@ -93,6 +96,58 @@ public class PreviewEngine implements Serializable {
 
 		result.output = SipMessageSerializer.serialize(msg);
 		result.variables = snapshotVariables(msg.getApplicationSession());
+		return result;
+	}
+
+	/// Dry-runs the enrichment pipeline against a pasted SIP request and
+	/// reports which rule set it selects — the selection-side counterpart
+	/// of [#preview]. Parse → seed variables → [CrudConfiguration#enrich]
+	/// → [CrudConfiguration#selectedRuleSet]. A null `ruleSet` in the
+	/// result means passthrough (no match and no `defaultRuleSet`); an
+	/// unknown-id selection also comes back null, with the engine's
+	/// warning surfaced through the caller's capturing logger.
+	///
+	/// @param config             the deployed CRUD configuration
+	/// @param messageText        the raw SIP wire text; must be a request
+	/// @param initialVariables   name → value pairs pre-loaded onto the
+	///                           session before the pipeline runs. May be null.
+	public static SelectionResult selectionPreview(CrudConfiguration config, String messageText,
+			Map<String, String> initialVariables) {
+		SelectionResult result = new SelectionResult();
+
+		if (config == null) {
+			result.error = "no CrudConfiguration loaded";
+			return result;
+		}
+
+		SipServletMessage msg;
+		try {
+			msg = SipMessageParser.parse(messageText);
+		} catch (Exception e) {
+			result.error = "failed to parse SIP message: " + e.getMessage();
+			return result;
+		}
+		if (!(msg instanceof SipServletRequest)) {
+			result.error = "selection runs on initial requests — paste a SIP request, not a response";
+			return result;
+		}
+		SipServletRequest request = (SipServletRequest) msg;
+
+		if (initialVariables != null && !initialVariables.isEmpty()) {
+			SipApplicationSession appSession = request.getApplicationSession();
+			if (appSession != null) {
+				for (Map.Entry<String, String> e : initialVariables.entrySet()) {
+					if (e.getKey() != null && e.getValue() != null) {
+						appSession.setAttribute(e.getKey(), e.getValue());
+					}
+				}
+			}
+		}
+
+		Context ctx = config.enrich(request);
+		RuleSet ruleSet = config.selectedRuleSet(ctx);
+		result.ruleSet = (ruleSet != null) ? ruleSet.getId() : null;
+		result.variables = snapshotVariables(request.getApplicationSession());
 		return result;
 	}
 
@@ -125,6 +180,19 @@ public class PreviewEngine implements Serializable {
 		public Map<String, String> variables = new LinkedHashMap<>();
 		public List<String> warnings = new ArrayList<>();
 		public String output;
+		public String error;
+	}
+
+	/// Result of a selection dry-run. `ruleSet` is the selected rule set's
+	/// id, or null for passthrough; `variables` is the post-enrichment
+	/// application-session snapshot (what rule templates would see);
+	/// `warnings` is populated by callers that bracket the run with a
+	/// capturing logger, same as [PreviewResult#warnings].
+	public static class SelectionResult implements Serializable {
+		private static final long serialVersionUID = 1L;
+		public String ruleSet;
+		public Map<String, String> variables = new LinkedHashMap<>();
+		public List<String> warnings = new ArrayList<>();
 		public String error;
 	}
 }

@@ -54,11 +54,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// client id.
 ///
 /// Handles:
-///  - `net.vorpal.blade.transfer.requested` — Transfer Requested
-///  - `net.vorpal.blade.transfer.initiated` — Transfer Initiated
-///  - `net.vorpal.blade.transfer.completed` — Transfer Completed
-///  - `net.vorpal.blade.transfer.declined` — Transfer Declined
-///  - `net.vorpal.blade.transfer.abandoned` — Transfer Abandoned
+///  - `org.vorpal.blade.transfer.requested` — Transfer Requested
+///  - `org.vorpal.blade.transfer.initiated` — Transfer Initiated
+///  - `org.vorpal.blade.transfer.completed` — Transfer Completed
+///  - `org.vorpal.blade.transfer.declined` — Transfer Declined
+///  - `org.vorpal.blade.transfer.abandoned` — Transfer Abandoned
 ///
 /// The selector is derived from those types rather than typed by a human,
 /// so it cannot drift from what the publisher actually stamps — a mistyped
@@ -90,7 +90,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 		@ActivationConfigProperty(propertyName = "distributedDestinationConnection", propertyValue = "EveryMember"),
 		// Selector derived from the 5 types this subscription declares. The broker filters, so this app
 		// never wakes for an event it would ignore.
-		@ActivationConfigProperty(propertyName = "messageSelector", propertyValue = "eventType IN ('net.vorpal.blade.transfer.requested', 'net.vorpal.blade.transfer.initiated', 'net.vorpal.blade.transfer.completed', 'net.vorpal.blade.transfer.declined', 'net.vorpal.blade.transfer.abandoned')"),
+		@ActivationConfigProperty(propertyName = "messageSelector", propertyValue = "eventType IN ('org.vorpal.blade.transfer.requested', 'org.vorpal.blade.transfer.initiated', 'org.vorpal.blade.transfer.completed', 'org.vorpal.blade.transfer.declined', 'org.vorpal.blade.transfer.abandoned')"),
 		@ActivationConfigProperty(propertyName = "acknowledgeMode", propertyValue = "Auto-acknowledge") })
 public class TransferEventListener implements MessageListener {
 
@@ -141,19 +141,19 @@ public class TransferEventListener implements MessageListener {
 			}
 
 			switch (String.valueOf(event.getType())) {
-			case "net.vorpal.blade.transfer.requested":
+			case "org.vorpal.blade.transfer.requested":
 				onTransferRequested(event, MAPPER.treeToValue(event.getData(), TransferRequested.class));
 				break;
-			case "net.vorpal.blade.transfer.initiated":
+			case "org.vorpal.blade.transfer.initiated":
 				onTransferInitiated(event, MAPPER.treeToValue(event.getData(), TransferInitiated.class));
 				break;
-			case "net.vorpal.blade.transfer.completed":
+			case "org.vorpal.blade.transfer.completed":
 				onTransferCompleted(event, MAPPER.treeToValue(event.getData(), TransferCompleted.class));
 				break;
-			case "net.vorpal.blade.transfer.declined":
+			case "org.vorpal.blade.transfer.declined":
 				onTransferDeclined(event, MAPPER.treeToValue(event.getData(), TransferDeclined.class));
 				break;
-			case "net.vorpal.blade.transfer.abandoned":
+			case "org.vorpal.blade.transfer.abandoned":
 				onTransferAbandoned(event, MAPPER.treeToValue(event.getData(), TransferAbandoned.class));
 				break;
 			default:
@@ -175,7 +175,7 @@ public class TransferEventListener implements MessageListener {
 	/// subscribes and performs the transfer; analytics subscribes to the same fact and records it;
 	/// neither knows about the other.
 	///
-	/// `net.vorpal.blade.transfer.requested`
+	/// `org.vorpal.blade.transfer.requested`
 	private void onTransferRequested(CloudEvent event, TransferRequested payload) {
 		logger.info(describe("a transfer was asked for", event, payload.getAppName(), payload.getOccurredAt()));
 	}
@@ -183,7 +183,7 @@ public class TransferEventListener implements MessageListener {
 	/// The transfer is under way — a blind transfer sent the INVITE to the target, or a refer transfer
 	/// saw a 100 Trying sipfrag come back in a NOTIFY.
 	///
-	/// `net.vorpal.blade.transfer.initiated`
+	/// `org.vorpal.blade.transfer.initiated`
 	private void onTransferInitiated(CloudEvent event, TransferInitiated payload) {
 		logger.info(describe("the transfer is under way", event, payload.getAppName(), payload.getOccurredAt()));
 	}
@@ -191,7 +191,7 @@ public class TransferEventListener implements MessageListener {
 	/// The transfer target answered — a success response to the target INVITE, or a 200 OK sipfrag in
 	/// a NOTIFY.
 	///
-	/// `net.vorpal.blade.transfer.completed`
+	/// `org.vorpal.blade.transfer.completed`
 	private void onTransferCompleted(CloudEvent event, TransferCompleted payload) {
 		logger.info(describe("the transfer target answered", event, payload.getAppName(), payload.getOccurredAt()));
 	}
@@ -200,7 +200,7 @@ public class TransferEventListener implements MessageListener {
 	/// itself was refused. Both land here, so this means the transfer did not happen — not
 	/// specifically that the target said no.
 	///
-	/// `net.vorpal.blade.transfer.declined`
+	/// `org.vorpal.blade.transfer.declined`
 	private void onTransferDeclined(CloudEvent event, TransferDeclined payload) {
 		logger.info(describe("the transfer was refused", event, payload.getAppName(), payload.getOccurredAt()));
 	}
@@ -208,7 +208,7 @@ public class TransferEventListener implements MessageListener {
 	/// The transferee gave up before the transfer completed — a BYE or CANCEL from the transferee, or
 	/// a 487 from the target caused by one.
 	///
-	/// `net.vorpal.blade.transfer.abandoned`
+	/// `org.vorpal.blade.transfer.abandoned`
 	private void onTransferAbandoned(CloudEvent event, TransferAbandoned payload) {
 		logger.info(describe("the transferee gave up", event, payload.getAppName(), payload.getOccurredAt()));
 	}

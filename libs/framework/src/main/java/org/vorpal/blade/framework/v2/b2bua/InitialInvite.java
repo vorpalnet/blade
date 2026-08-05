@@ -181,9 +181,7 @@ public class InitialInvite extends org.vorpal.blade.framework.v3.Callflow {
 						try {
 
 							SettingsManager.createEvent("callAnswered", aliceResponse);
-							if (b2buaListener != null) {
-								b2buaListener.callAnswered(aliceResponse);
-							}
+							b2buaListener.callAnswered(aliceResponse);
 //							sipLogger.finer("InitialInvite.processContinue - SettingsManager.sendEvent(aliceResponse); #2");
 							SettingsManager.sendEvent(aliceResponse);
 
@@ -212,26 +210,25 @@ public class InitialInvite extends org.vorpal.blade.framework.v3.Callflow {
 				if (!this.doNotProcess) {
 
 					sendResponse(aliceResponse, (aliceAck) -> {
-						if (aliceAck.getMethod().equals(PRACK)) {
-							SipServletRequest bobPrack = copyContentAndHeaders(aliceAck, bobResponse.createPrack());
+						// Matches whichever arrived — an unexpected method throws
+						// rather than falling through the way the old else-branch did.
+						SipServletRequest bobAckOrPrack = createAcknowledgement(bobResponse, aliceAck);
 
+						if (aliceAck.getMethod().equals(PRACK)) {
 //					if (b2buaListener != null) {
-//						b2buaListener.callEvent(bobPrack);
+//						b2buaListener.callEvent(bobAckOrPrack);
 //					}
-							sendRequest(bobPrack, (prackResponse) -> {
+							sendRequest(bobAckOrPrack, (prackResponse) -> {
 								sendResponse(aliceAck.createResponse(prackResponse.getStatus()));
 							});
-						} else if (aliceAck.getMethod().equals(ACK)) {
-							SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-							SettingsManager.createEvent("callConnected", bobAck);
-							if (b2buaListener != null) {
-								b2buaListener.callConnected(bobAck);
-							}
-//							sipLogger.finer(bobAck, "InitialInvite.processContinue - SettingsManager.sendEvent(bobAck); #4");
-							SettingsManager.sendEvent(bobAck);
-							sendRequest(bobAck);
 						} else {
-							// implement GLARE here?
+							SettingsManager.createEvent("callConnected", bobAckOrPrack);
+							if (b2buaListener != null) {
+								b2buaListener.callConnected(bobAckOrPrack);
+							}
+//							sipLogger.finer(bobAckOrPrack, "InitialInvite.processContinue - SettingsManager.sendEvent(bobAckOrPrack); #4");
+							SettingsManager.sendEvent(bobAckOrPrack);
+							sendRequest(bobAckOrPrack);
 						}
 
 					});

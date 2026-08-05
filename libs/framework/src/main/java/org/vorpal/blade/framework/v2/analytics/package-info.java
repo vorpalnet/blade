@@ -97,7 +97,7 @@
 /// each get a type of their own, so an application can subscribe to precisely
 /// the events it acts on. A name an operator invents in the {@code events} map
 /// below has no declaration to select on and travels as
-/// {@code net.vorpal.blade.call.event} with the name in the payload, which is
+/// {@code org.vorpal.blade.call.event} with the name in the payload, which is
 /// why adding the eleven broke nobody's existing configuration. See
 /// {@link org.vorpal.blade.framework.v3.events.BladeEventTypes}.
 ///

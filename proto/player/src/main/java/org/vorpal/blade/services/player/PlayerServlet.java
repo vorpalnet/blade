@@ -27,9 +27,9 @@ import org.vorpal.blade.framework.v3.media.MediaCallflow;
 /// call's media on a 309 media server, plays a prompt/music, and optionally records the caller.
 ///
 /// It speaks only `javax.media.mscontrol.*`. At startup it obtains the [MsControlFactory] from a
-/// registered 309 [Driver] (the Gryphon Kurento driver in our deployment, but any 309 driver works)
-/// and installs it on [MediaCallflow]. Nothing here knows about Kurento — that lives entirely behind
-/// the driver.
+/// registered 309 [Driver] (any JSR-309 media controller driver works)
+/// and installs it on [MediaCallflow]. Nothing here knows about the media server — that lives
+/// entirely behind the driver.
 @WebListener
 @SipApplication(distributable = true)
 @SipServlet(loadOnStartup = 1)

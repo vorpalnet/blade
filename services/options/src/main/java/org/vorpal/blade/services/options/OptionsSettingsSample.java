@@ -52,6 +52,10 @@ public class OptionsSettingsSample extends OptionsSettings implements Serializab
 		// proxy-balancer treats a ping 503 as sticky-down until a ping succeeds
 		// (the ideal drain semantics), so a backoff hint adds nothing there.
 		drainRetryAfter = 0;
+		// Boot gate on: answer 503 Starting until the deploy phase completes
+		// (server RUNNING), so the load balancer never enrolls a half-started
+		// node. Existing configs without the field default to off.
+		unavailableUntilRunning = true;
 	}
 
 }

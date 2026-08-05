@@ -6,7 +6,6 @@ import javax.servlet.ServletException;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.sip.SipServletContextEvent;
 import javax.servlet.sip.SipServletRequest;
-import javax.servlet.sip.SipServletResponse;
 
 import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.b2bua.Terminate;
@@ -14,11 +13,11 @@ import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v3.media.CallflowHold;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 
-/**
- * This class implements an example B2BUA with transfer capabilities.
- * 
- * @author Jeff McDonald
- */
+/// Parks a call: answers the leg itself with inactive media and holds the
+/// dialog open until the far end resumes or hangs up. A single-leg UAS — there
+/// is no second party and no transfer.
+///
+/// @author Jeff McDonald
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)

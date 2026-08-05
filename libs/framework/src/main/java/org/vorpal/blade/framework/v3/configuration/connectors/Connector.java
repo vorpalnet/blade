@@ -18,8 +18,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 /// A protocol connector handles "how to talk to" a data source — SIP
 /// passively, REST over HTTP, JDBC over SQL, LDAP over LDAP, or an
-/// in-memory hash map. Each connector fetches its raw payload, then
-/// runs its [Selector]s against the payload to extract values into
+/// in-memory translation table. Each connector fetches its raw payload,
+/// then runs its [Selector]s against the payload to extract values into
 /// the SIP session.
 ///
 /// Connectors run sequentially in the iRouter pipeline; later connectors
@@ -63,7 +63,6 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 		defaultImpl = SipConnector.class)
 @JsonSubTypes({
 		@JsonSubTypes.Type(value = SipConnector.class, name = "sip"),
-		@JsonSubTypes.Type(value = MapConnector.class, name = "map"),
 		@JsonSubTypes.Type(value = RestConnector.class, name = "rest"),
 		@JsonSubTypes.Type(value = JdbcConnector.class, name = "jdbc"),
 		@JsonSubTypes.Type(value = LdapConnector.class, name = "ldap"),

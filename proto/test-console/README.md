@@ -1,6 +1,6 @@
 # BLADE Test Console
 
-[Javadocs](https://vorpal.net/javadocs/blade/test-console)
+Javadocs: `/blade/javadoc/test-console/` on the Admin Portal
 
 Cluster-wide control surface for the BLADE test apps
 ([test-uac](../../test/test-uac), [test-uas](../../test/test-uas)): start and
@@ -36,7 +36,7 @@ Run targets are **per node** — 3 nodes × 100 CPS = 300 CPS aggregate.
 
 Scenarios themselves (response scripts, transformation rule sets, templates,
 assertions) live in `test-uac.json` / `test-uas.json` and are edited
-schema-validated in the [Configurator](../configurator). The console runs
+schema-validated in the [Configurator](../../admin/configurator/README.md). The console runs
 them; it doesn't define them.
 
 ## Deployment

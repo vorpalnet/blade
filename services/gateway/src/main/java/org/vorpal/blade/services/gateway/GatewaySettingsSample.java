@@ -1,12 +1,13 @@
 package org.vorpal.blade.services.gateway;
 
 import java.io.Serializable;
+import java.util.Arrays;
 
 import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
 /// The default/sample config written on first deploy: two virtual gateways on distinct
-/// Contact IPs — one Flowroute trunk kept up with digest REGISTER, one IP‑authenticated
+/// Contact IPs — one credentialed trunk kept up with digest REGISTER, one IP‑authenticated
 /// carrier that needs no REGISTER. Credentials are placeholders; set the real ones (and
 /// let the Configurator encrypt the password) via the console.
 public class GatewaySettingsSample extends GatewaySettings implements Serializable {
@@ -22,6 +23,9 @@ public class GatewaySettingsSample extends GatewaySettings implements Serializab
 		flowroute.setContactPort(5060);
 		flowroute.setTransport("tcp");
 		flowroute.setRegistrarDomain("us-east-nj.sip.flowroute.com");
+		// Where the carrier signals inbound calls FROM — placeholders; use the ranges the
+		// carrier publishes. Empty accepts any source arriving on this trunk's Contact IP.
+		flowroute.setSourceHosts(Arrays.asList("203.0.113.0/24", "198.51.100.7"));
 		RegisterDigestStyle digest = new RegisterDigestStyle();
 		digest.setUserId("15551234567");
 		digest.setAuthName("00000000");

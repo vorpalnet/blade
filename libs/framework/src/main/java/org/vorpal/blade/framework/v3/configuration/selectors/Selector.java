@@ -116,7 +116,7 @@ public abstract class Selector implements Serializable {
 	/// Read a raw string value identified by `name` from the connector
 	/// payload:
 	///
-	/// - `Map<String,String>` payload (REST/JDBC/LDAP/Map connectors):
+	/// - `Map<String,String>` payload (REST/JDBC/LDAP connectors):
 	///   name is a map key.
 	/// - [SipServletRequest] payload (SipConnector): name is a SIP
 	///   header name, with special pseudo-headers handled directly. Each has
@@ -125,6 +125,8 @@ public abstract class Selector implements Serializable {
 	///   - `requestURI` — request URI
 	///   - `originIP` — original caller (fallback chain)
 	///   - `peerIP` — immediate transport peer
+	///   - `localIP` — the local SIP interface the message ARRIVED on
+	///   - `localPort` — the local SIP port it arrived on
 	///   - `body` — message body
 	///   - `transport` — `UDP` / `TCP` / `TLS` / `WS` / `WSS`
 	///   - `isSecure` — `true` if transport is `TLS` or `WSS`
@@ -161,6 +163,17 @@ public abstract class Selector implements Serializable {
 					String peer = request.getRemoteAddr();
 					return (peer != null) ? peer : "127.0.0.1";
 				}
+
+				case "localIP":
+					// OUR side of the socket: which configured SIP channel the
+					// message landed on. The multi-homed discriminator — a trunk
+					// that advertises its own Contact IP is identified by the
+					// address the far end was told to use, with no knowledge of
+					// the carrier's source ranges required.
+					return request.getLocalAddr();
+
+				case "localPort":
+					return Integer.toString(request.getLocalPort());
 
 				case "body":
 					if (request.getContent() == null) return null;

@@ -12,7 +12,6 @@
 /// | `rest`  | [org.vorpal.blade.framework.v3.configuration.connectors.RestConnector]  | HTTP response body from an asynchronously-dispatched request; supports polymorphic authentication and HTTP-message body templates |
 /// | `jdbc`  | [org.vorpal.blade.framework.v3.configuration.connectors.JdbcConnector]  | First row of a parameterized SQL query against a WebLogic `DataSource` |
 /// | `ldap`  | [org.vorpal.blade.framework.v3.configuration.connectors.LdapConnector]  | First entry of an LDAP search |
-/// | `map`   | [org.vorpal.blade.framework.v3.configuration.connectors.MapConnector]   | Entry matched from an inline key→attributes map |
 /// | `table` | [org.vorpal.blade.framework.v3.configuration.connectors.TableConnector] | First-match-wins lookup across a list of [org.vorpal.blade.framework.v3.configuration.translations.TranslationTable]s |
 ///
 /// Each connector (except `table`) carries a list of
@@ -24,5 +23,5 @@
 /// Connectors run sequentially on the SIP container thread until they
 /// return their `CompletableFuture<Void>`, at which point the
 /// container thread is released. REST/JDBC/LDAP connectors complete
-/// asynchronously; SIP, Map, and Table complete instantly.
+/// asynchronously; SIP and Table complete instantly.
 package org.vorpal.blade.framework.v3.configuration.connectors;

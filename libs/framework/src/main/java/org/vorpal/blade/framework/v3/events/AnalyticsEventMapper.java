@@ -68,7 +68,7 @@ public final class AnalyticsEventMapper {
 			put(data, "stoppedAt", stopped);
 		}
 		// No subject: application lifecycle is not call-scoped.
-		return CloudEvent.create(type, source, null, data);
+		return CloudEvent.create(type, source, null, data, BladeEventCatalog.versionOf(type));
 	}
 
 	/// `session.started` / `session.stopped`.
@@ -88,7 +88,7 @@ public final class AnalyticsEventMapper {
 			type = BladeEventTypes.SESSION_STOPPED;
 			put(data, "stoppedAt", destroyed);
 		}
-		return CloudEvent.create(type, source, subject(vorpalId, created), data);
+		return CloudEvent.create(type, source, subject(vorpalId, created), data, BladeEventCatalog.versionOf(type));
 	}
 
 	/// `session.key` — an index key attached to a call.
@@ -116,7 +116,8 @@ public final class AnalyticsEventMapper {
 		put(data, "appStartedAt", appStarted);
 		data.put("name", name);
 		data.put("value", value);
-		return CloudEvent.create(BladeEventTypes.SESSION_KEY, source, subject(vorpalId, created), data);
+		return CloudEvent.create(BladeEventTypes.SESSION_KEY, source, subject(vorpalId, created), data,
+				BladeEventCatalog.versionOf(BladeEventTypes.SESSION_KEY));
 	}
 
 	/// A named analytics event, with its attributes flattened from the
@@ -160,7 +161,8 @@ public final class AnalyticsEventMapper {
 		}
 
 		String subject = (vorpalId == null) ? null : subject(vorpalId.longValue(), created);
-		return CloudEvent.create(BladeEventTypes.forEventName(eventName), source, subject, data);
+		String type = BladeEventTypes.forEventName(eventName);
+		return CloudEvent.create(type, source, subject, data, BladeEventCatalog.versionOf(type));
 	}
 
 	private static void put(ObjectNode node, String field, String value) {

@@ -147,7 +147,12 @@ discover_modules() {
             case "$name" in
                 applications) continue ;;
             esac
-            [ -f "$dir/pom.xml" ] && echo "$name"
+            # `|| true` matters under `set -e`: this test is the last command in
+            # the loop, so a directory without a pom.xml (leftover Eclipse
+            # metadata, a stale target/) makes the function return non-zero. When
+            # that directory sorts last, `ALL_MODULES=$(discover_modules)` fails
+            # and the build dies with no message at all.
+            { [ -f "$dir/pom.xml" ] && echo "$name"; } || true
         done
     done
 }
@@ -706,6 +711,30 @@ fi
 
 ALL_MODULES=$(discover_modules)
 TOTAL_COUNT=$(echo "$ALL_MODULES" | wc -l | tr -d ' ')
+
+# --- Module directory names must be unique across the category directories ---
+# Every module is addressed by its bare directory name: the conf files list bare
+# names, skip flags are -Dskip.<name>, and module_dir() resolves a name by taking
+# the FIRST match in libs/admin/services/test/apps/proto order. Two modules
+# sharing a name therefore make one of them unaddressable — it cannot be skipped
+# independently, and the dist copy silently takes the artifact of whichever
+# directory sorts first. That shipped a stale WAR once already (services/acl
+# shadowing proto/acl). Fail loudly instead.
+DUPLICATE_MODULES=$(echo "$ALL_MODULES" | sort | uniq -d)
+if [ -n "$DUPLICATE_MODULES" ]; then
+    echo "Error: duplicate module directory names."
+    while IFS= read -r dup; do
+        [ -z "$dup" ] && continue
+        echo "  '${dup}' exists in:"
+        for d in libs admin services test apps proto; do
+            [ -f "${SCRIPT_DIR}/${d}/${dup}/pom.xml" ] && echo "    ${d}/${dup}"
+        done
+    done <<< "$DUPLICATE_MODULES"
+    echo
+    echo "Module names must be unique across libs/, admin/, services/, test/,"
+    echo "apps/ and proto/. Rename one, or delete the leftover directory."
+    exit 1
+fi
 
 # --- One profile per invocation: a build is one Maven reactor, and the admin
 #     EAR contents are derived from that reactor's skip flags. Different profiles

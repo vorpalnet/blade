@@ -103,7 +103,11 @@ public class RegisterCallflow extends TrunkRegistrar {
 				sipLogger.severe("gateway " + name() + ": REGISTER auth rejected (" + status + ")");
 				return;
 			}
-			SipServletRequest retry = createRequest(response, "REGISTER");
+			// Built on the challenged REGISTER's own session, so the registration
+			// keeps its dialog and CSeq continuity — and deliberately not cloned
+			// from the original request, since the stale Authorization header
+			// checked for above must not come along.
+			SipServletRequest retry = response.getSession().createRequest("REGISTER");
 			retry.setRequestURI(getSipFactory().createURI(
 					"sip:" + gateway.getRegistrarDomain() + ";transport=" + gateway.getTransport()));
 			bindOutbound(retry);

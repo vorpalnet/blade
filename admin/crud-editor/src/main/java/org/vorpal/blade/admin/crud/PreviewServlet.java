@@ -16,6 +16,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import org.vorpal.blade.framework.v2.callflow.Callflow;
+import org.vorpal.blade.framework.v2.logging.CapturingLogger;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.crud.CrudConfiguration;
 import org.vorpal.blade.framework.v3.crud.CrudConfigurationSample;
@@ -85,6 +86,10 @@ public class PreviewServlet extends HttpServlet {
 	}
 
 	private void handlePost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+		if ("/resources/api/selection".equals(req.getServletPath())) {
+			handleSelection(req, resp);
+			return;
+		}
 		PreviewRequest body;
 		try {
 			body = MAPPER.readValue(readBody(req), PreviewRequest.class);
@@ -102,6 +107,7 @@ public class PreviewServlet extends HttpServlet {
 					"failed to load CRUD config: " + e.getMessage(), stackTrace(e));
 			return;
 		}
+		applyDraft(config, body);
 
 		PreviewResult result;
 		java.util.List<String> captured;
@@ -144,6 +150,64 @@ public class PreviewServlet extends HttpServlet {
 		resp.getOutputStream().write(payload);
 	}
 
+	/// Selection dry-run: `{message, variables}` → which rule set the
+	/// enrichment pipeline picks, plus the post-enrichment variable
+	/// snapshot. Same capturing-logger bracketing as the rule preview so
+	/// table-miss diagnostics surface in the UI.
+	private void handleSelection(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+		SelectionRequest body;
+		try {
+			body = MAPPER.readValue(readBody(req), SelectionRequest.class);
+		} catch (Exception e) {
+			respondError(resp, HttpServletResponse.SC_BAD_REQUEST,
+					"malformed JSON body: " + e.getMessage(), null);
+			return;
+		}
+
+		CrudConfiguration config;
+		try {
+			config = loadConfig();
+		} catch (Exception e) {
+			respondError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+					"failed to load CRUD config: " + e.getMessage(), stackTrace(e));
+			return;
+		}
+		applyDraft(config, body);
+
+		PreviewEngine.SelectionResult result;
+		java.util.List<String> captured;
+		CapturingLogger.begin();
+		try {
+			result = PreviewEngine.selectionPreview(config, body.message, body.variables);
+		} catch (Throwable t) {
+			captured = CapturingLogger.end();
+			String hint = captured.isEmpty() ? "" : " · " + captured.size() + " logged event(s)";
+			respondError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+					"engine threw " + t.getClass().getSimpleName() + ": " + t.getMessage() + hint,
+					stackTrace(t) + (captured.isEmpty() ? "" : "\n--- captured logs ---\n" + String.join("\n", captured)));
+			return;
+		}
+		captured = CapturingLogger.end();
+		result.warnings = captured;
+
+		byte[] payload;
+		try {
+			payload = MAPPER.writeValueAsBytes(result);
+		} catch (Exception e) {
+			respondError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+					"failed to serialize selection result: " + e.getMessage(), stackTrace(e));
+			return;
+		}
+
+		resp.setStatus(result.error == null
+				? HttpServletResponse.SC_OK
+				: HttpServletResponse.SC_BAD_REQUEST);
+		resp.setContentType("application/json");
+		resp.setCharacterEncoding("UTF-8");
+		resp.setContentLength(payload.length);
+		resp.getOutputStream().write(payload);
+	}
+
 	private void handleGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
 		if (!"/resources/api/ruleSets".equals(req.getServletPath())) {
 			respondError(resp, HttpServletResponse.SC_NOT_FOUND, "unknown endpoint", null);
@@ -172,6 +236,33 @@ public class PreviewServlet extends HttpServlet {
 			return MAPPER.readValue(CONFIG_FILE.toFile(), CrudConfiguration.class);
 		}
 		return new CrudConfigurationSample();
+	}
+
+	/// Overlays the rules editor's unsaved buffer onto the live config so
+	/// preview and selection run against what the operator is TYPING, not
+	/// what was last published. Null draft fields mean "no draft — use live".
+	private static void applyDraft(CrudConfiguration config, DraftFields draft) {
+		if (draft.draftRuleSets != null) {
+			config.setRuleSets(draft.draftRuleSets);
+		}
+		if (draft.draftDefaultRuleSet != null) {
+			config.setDefaultRuleSet(draft.draftDefaultRuleSet.isEmpty() ? null : draft.draftDefaultRuleSet);
+		}
+		if (draft.draftPipeline != null) {
+			config.setPipeline(draft.draftPipeline);
+		}
+	}
+
+	/// The editor's unsaved buffer, shared by preview and selection requests.
+	public static class DraftFields {
+		/// When present, replaces the live config's rule sets for this run
+		/// only. Nothing touches disk.
+		public java.util.Map<String, org.vorpal.blade.framework.v3.crud.RuleSet> draftRuleSets;
+		/// Draft defaultRuleSet; empty string means "draft cleared it".
+		public String draftDefaultRuleSet;
+		/// Draft enrichment pipeline — lets Auto-select dry-run an unsaved
+		/// selection table.
+		public java.util.List<org.vorpal.blade.framework.v3.configuration.connectors.Connector> draftPipeline;
 	}
 
 	private static String readBody(HttpServletRequest req) throws IOException {
@@ -217,12 +308,18 @@ public class PreviewServlet extends HttpServlet {
 		return sw.toString();
 	}
 
-	public static class PreviewRequest {
+	public static class PreviewRequest extends DraftFields {
 		public String ruleSet;
 		public String message;
 		public String lifecycleEvent;
-		/// Pre-set session attributes — simulate Attribute Selectors having
-		/// run earlier, or override env vars. Applied before rules fire.
+		/// Pre-set session attributes — simulate the enrichment pipeline
+		/// having run earlier, or override env vars. Applied before rules fire.
+		public java.util.Map<String, String> variables;
+	}
+
+	public static class SelectionRequest extends DraftFields {
+		public String message;
+		/// Pre-set session attributes applied before the pipeline runs.
 		public java.util.Map<String, String> variables;
 	}
 

@@ -107,7 +107,7 @@ class EventBusSettingsTest {
 			EventBus.unregisterAll();
 			assertFalse(EventBus.isReady(), "no publisher installed");
 
-			CloudEvent event = CloudEvent.create("net.vorpal.test.thing", "/blade/test", "subject-1", null);
+			CloudEvent event = CloudEvent.create("org.vorpal.test.thing", "/blade/test", "subject-1", null);
 			EventBus.publish(event); // must not throw
 
 			assertNull(EventBus.publisherFor(null));

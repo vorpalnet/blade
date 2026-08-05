@@ -24,7 +24,7 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipWebSocketContext;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.Callflow;
 
 /**
  * A mock implementation of SipServletMessage for unit testing.
@@ -154,61 +154,52 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public Set<Locale> getAcceptLanguageSet() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Iterator<Locale> getAcceptLanguages() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Address getAddressHeader(String key) throws ServletParseException {
-		return AsyncSipServlet.getSipFactory().createAddress(headers.get(key));
+		return Callflow.getSipFactory().createAddress(headers.get(key));
 	}
 
 	@Override
 	public List<Address> getAddressHeaderList(String key) throws ServletParseException {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public ListIterator<Address> getAddressHeaders(String arg0) throws ServletParseException {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public SipApplicationSession getApplicationSession() {
-		// TODO Auto-generated method stub
 		return this.sipApplicationSession;
 	}
 
 	@Override
 	public SipApplicationSession getApplicationSession(boolean arg0) {
-		// TODO Auto-generated method stub
 		return this.sipApplicationSession;
 	}
 
 	@Override
 	public Enumeration<String> getAttributeNames() {
-		// TODO Auto-generated method stub
 		return java.util.Collections.enumeration(this.attributes.keySet());
 	}
 
 	@Override
 	public String getCallId() {
-		// TODO Auto-generated method stub
-		return null;
+		return headers.get("Call-ID");
 	}
 
 	@Override
 	public String getCharacterEncoding() {
-		// TODO Auto-generated method stub
-		return null;
+		return characterEncoding;
 	}
 
 	@Override
@@ -218,7 +209,6 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public Locale getContentLanguage() {
-		// TODO Auto-generated method stub
 		return this.contentLanguage;
 	}
 
@@ -249,7 +239,7 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	public Address getFrom() {
 		Address from = null;
 		try {
-			from = AsyncSipServlet.getSipFactory().createAddress(headers.get("From"));
+			from = Callflow.getSipFactory().createAddress(headers.get("From"));
 		} catch (Exception e) {
 			// Failed to parse From address
 		}
@@ -283,49 +273,41 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public Iterator<String> getHeaderNames() {
-		// TODO Auto-generated method stub
 		return headers.keySet().iterator();
 	}
 
 	@Override
 	public ListIterator<String> getHeaders(String arg0) {
-		// TODO Auto-generated method stub
 		return new ArrayList<>(headers.keySet()).listIterator();
 	}
 
 	@Override
 	public String getInitialRemoteAddr() {
-		// TODO Auto-generated method stub
-		return null;
+		return "127.0.0.1";
 	}
 
 	@Override
 	public int getInitialRemotePort() {
-		// TODO Auto-generated method stub
-		return 0;
+		return 5060;
 	}
 
 	@Override
 	public String getInitialTransport() {
-		// TODO Auto-generated method stub
-		return null;
+		return "UDP";
 	}
 
 	@Override
 	public String getLocalAddr() {
-		// TODO Auto-generated method stub
-		return null;
+		return "127.0.0.1";
 	}
 
 	@Override
 	public int getLocalPort() {
-		// TODO Auto-generated method stub
-		return 0;
+		return 5060;
 	}
 
 	@Override
 	public SipWebSocketContext getLocalSipWebSocketContext() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
@@ -337,13 +319,10 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	@Override
 	public Parameterable getParameterableHeader(String key) throws ServletParseException {
 		// Match getHeader semantics: absent header → null, with no need to
-		// touch SipFactory. Otherwise tests that probe a missing header
-		// trigger AsyncSipServlet → GenericServlet class init, which fails
-		// on the missing javax.servlet LocalStrings ResourceBundle outside
-		// a real container.
+		// touch SipFactory at all.
 		String value = headers.get(key);
 		if (value == null) return null;
-		return AsyncSipServlet.getSipFactory().createParameterable(value);
+		return Callflow.getSipFactory().createParameterable(value);
 	}
 
 	@Override
@@ -353,37 +332,31 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public ListIterator<? extends Parameterable> getParameterableHeaders(String arg0) throws ServletParseException {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public String getProtocol() {
-		// TODO Auto-generated method stub
-		return null;
+		return "SIP/2.0";
 	}
 
 	@Override
 	public byte[] getRawContent() throws IOException {
-		// TODO Auto-generated method stub
 		return content.toString().getBytes();
 	}
 
 	@Override
 	public String getRemoteAddr() {
-		// TODO Auto-generated method stub
-		return null;
+		return "127.0.0.1";
 	}
 
 	@Override
 	public int getRemotePort() {
-		// TODO Auto-generated method stub
-		return 0;
+		return 5060;
 	}
 
 	@Override
 	public String getRemoteUser() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
@@ -399,7 +372,6 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public Preference getSessionKeepAlivePreference() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
@@ -407,7 +379,7 @@ public class DummyMessage implements SipServletMessage, Serializable {
 	public Address getTo() {
 		Address to = null;
 		try {
-			to = AsyncSipServlet.getSipFactory().createAddress(headers.get("To"));
+			to = Callflow.getSipFactory().createAddress(headers.get("To"));
 		} catch (Exception e) {
 			// Failed to parse To address
 		}
@@ -416,37 +388,31 @@ public class DummyMessage implements SipServletMessage, Serializable {
 
 	@Override
 	public String getTransport() {
-		// TODO Auto-generated method stub
-		return null;
+		return "UDP";
 	}
 
 	@Override
 	public Principal getUserPrincipal() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public boolean isCommitted() {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public boolean isInternallyRouted() {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public boolean isSecure() {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public boolean isUserInRole(String arg0) {
-		// TODO Auto-generated method stub
 		return false;
 	}
 

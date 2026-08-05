@@ -1,118 +1,528 @@
+/* BLADE Logs viewer — layered after /blade/portal/brand/brand.css, which
+   supplies the shell (topbar, pills, buttons, callouts, footer). Only what is
+   specific to this app lives here, and every value comes from a --vorpal-*
+   token except inside the log pane itself (see below).
+
+   State is signalled by glyph + word + border position, never by hue alone —
+   the same rule the events console states at the top of events.css. Severity
+   here is a literal token in a fixed-width gutter plus a left-border weight
+   step; the pane's colours are decoration layered on top of those two, and
+   removing them loses nothing. */
+
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; font-family: var(--vorpal-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif); }
 
-/* Dark shell, light document.
-   The brand topbar is pinned to the top as dark glass (via
-   body.vorpal-glass in brand.css); the controls + log pane float
-   together as one light sheet on the purple backdrop. */
-body {
-	display: flex;
-	flex-direction: column;
-	/* Clear the fixed 64px topbar (+ gap) so the sheet starts below it,
-	   and leave a purple margin on the other sides. */
-	padding: calc(var(--vorpal-topbar-height, 64px) + 16px) 16px 16px;
+/* The `hidden` attribute is only a UA-stylesheet `display: none`, so any class
+   rule that sets `display` silently outranks it — which .log-menu-items and
+   .log-results both do, leaving the download menu and the results drawer
+   permanently on screen. Restore it once here rather than remembering to guard
+   every such rule. */
+[hidden] { display: none !important; }
+
+/* ---- Full-viewport work surface -----------------------------------------
+   The viewer is a fixed-frame tool, not a document: the log pane owns the
+   only scrollbar on the page, because the sliding window is driven by that
+   scrollbar's position. So the shell must not scroll. brand.css sizes
+   .vorpal-app at min-height:100vh and lets .vorpal-main scroll; both are
+   inverted here. The Configurator is the same shape — a work page rather
+   than a landing page — which is why there is no .vorpal-hero on this
+   page. The hero lives on index.html, where the explanatory prose belongs. */
+.vorpal-app {
+	height: 100vh;
 	min-height: 0;
+	grid-template-rows: auto 1fr;   /* topbar, then the tool. No footer row. */
 }
 
-/* Pin the brand topbar across the top. */
-.vorpal-topbar {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	z-index: 6;
-}
-
-/* The light work sheet — controls header + main, floating on the
-   purple backdrop with a generous rounded frame and drop shadow. */
-.work-sheet {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-	background: var(--vorpal-surface, #fff);
-	border: 1px solid var(--vorpal-divider, #dde2ec);
-	border-radius: var(--vorpal-radius-lg, 10px);
-	box-shadow: var(--vorpal-shadow-lg, 0 16px 40px rgba(26, 36, 52, 0.10));
+.vorpal-main {
 	overflow: hidden;
+	display: flex;
+	min-height: 0;
 }
 
-/* Controls header — light surface, dark ink. */
-.work-sheet > header {
-	padding: 14px 18px;
-	border-bottom: 1px solid var(--vorpal-divider, #dde2ec);
-	background: var(--vorpal-surface-alt, #fafbfd);
-}
-.work-sheet > header h1 {
-	margin: 0 0 10px;
-	font-size: 18px;
-	color: var(--vorpal-ink-900, #1a2434);
-}
-.controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: end; }
-.controls label {
+/* Mirrors .vorpal-page, but full width: log lines are long, and capping the
+   sheet at 1200px would waste half a wide screen on backdrop. */
+.log-page {
+	flex: 1;
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
-	font-size: 12px;
-	color: var(--vorpal-slate-600, #5a6677);
+	min-height: 0;
+	min-width: 0;
+	padding: 14px 20px 12px;
+	gap: 8px;
 }
-.controls select, .controls input {
-	font: 13px/1.4 var(--vorpal-font-sans, inherit);
+
+body.embedded .log-page { padding-top: 8px; }
+
+/* ---- Toolbars ------------------------------------------------------------ */
+
+.log-toolbar {
+	display: flex;
+	gap: 10px;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	flex: 0 0 auto;
+}
+
+.log-spacer { flex: 1 1 auto; }
+
+.log-sep {
+	width: 1px;
+	align-self: stretch;
+	background: var(--vorpal-divider);
+	margin: 2px 4px;
+}
+
+.log-field {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--vorpal-slate-600);
+}
+
+.log-field-wide { flex: 1 1 220px; min-width: 160px; }
+
+.log-field select,
+.log-field input {
+	font: 13px/1.4 var(--vorpal-font-sans);
 	padding: 5px 8px;
-	min-width: 160px;
-	border: 1px solid var(--vorpal-slate-300, #d0d6e2);
-	border-radius: 0;
-	background: var(--vorpal-surface, #fff);
-	color: var(--vorpal-ink-900, #1a2434);
+	min-width: 150px;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: var(--vorpal-radius-sm);
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-900);
+	text-transform: none;
+	letter-spacing: normal;
 }
-.controls select:focus, .controls input:focus {
+
+.log-field-wide input { min-width: 0; width: 100%; }
+
+.log-field select:focus,
+.log-field input:focus,
+.log-mini:focus-visible,
+.log-chip:focus-visible {
 	outline: none;
-	border-color: var(--vorpal-purple, #602671);
-	box-shadow: 0 0 0 2px var(--vorpal-purple-100, #ece1f0);
+	border-color: var(--vorpal-purple);
+	box-shadow: 0 0 0 2px var(--vorpal-purple-100);
 }
-.controls button {
-	font: 13px/1.4 var(--vorpal-font-sans, inherit);
-	padding: 6px 16px;
+
+/* Small square-ish buttons for navigation. The brand .vorpal-btn is sized for
+   page actions and is too tall to sit in a dense control strip. */
+.log-mini {
+	font: 12px/1.4 var(--vorpal-font-sans);
+	padding: 6px 10px;
+	height: 30px;
 	cursor: pointer;
-	border: 1px solid var(--vorpal-purple, #602671);
-	border-radius: 0;
-	background: var(--vorpal-purple, #602671);
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: var(--vorpal-radius-sm);
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-700);
+	white-space: nowrap;
+}
+.log-mini:hover { background: var(--vorpal-slate-100); border-color: var(--vorpal-slate-400); }
+.log-mini[disabled] { opacity: .45; cursor: default; }
+
+.log-toolbar .vorpal-btn { padding: 6px 14px; height: 30px; font-size: 12px; }
+
+/* A pressed toggle reads as pressed by border weight and a filled ground, not
+   by hue — Follow is the one control whose state you must be able to see at a
+   glance from across a desk. */
+.vorpal-btn[aria-pressed="true"] {
+	background: var(--vorpal-purple);
+	border-color: var(--vorpal-purple-700);
 	color: #fff;
-}
-.controls button:hover {
-	background: var(--vorpal-purple-700, #4a1c58);
-	border-color: var(--vorpal-purple-700, #4a1c58);
+	box-shadow: inset 0 0 0 1px var(--vorpal-purple-700);
 }
 
-main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-
-/* Status line — light, inside the sheet. The error message text itself
-   carries the "...failed" wording (set by logs.js), and the error state
-   adds bold weight, so severity reads without relying on color alone. */
-.status {
-	padding: 7px 18px;
+.log-meta {
 	font-size: 12px;
-	color: var(--vorpal-slate-600, #444);
-	min-height: 24px;
-	border-bottom: 1px solid var(--vorpal-divider, #dde2ec);
-	background: var(--vorpal-surface, #fff);
+	color: var(--vorpal-slate-600);
+	font-variant-numeric: tabular-nums;
+	padding-bottom: 6px;
+	white-space: nowrap;
 }
-.status.error { color: var(--vorpal-error, #800); font-weight: 600; }
 
-/* Log pane — a DELIBERATE dark console. The original design uses the
-   classic VS Code dark scheme (#1e1e1e / #d4d4d4), the conventional
-   look for tailing logs. Per the "light document" policy's stated
-   exception, it's kept as a SELF-CONTAINED dark panel framed by the
-   white sheet (never bare on the purple backdrop) — light text on a
-   deliberate dark surface, readable for long monospace dumps. */
-.output {
-	flex: 1;
-	margin: 0;
-	padding: 14px 18px;
+.log-toggle {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 12px;
+	color: var(--vorpal-slate-600);
+	padding-bottom: 6px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+/* ---- Severity chips ------------------------------------------------------ */
+
+.log-chips { display: flex; gap: 4px; padding-bottom: 4px; }
+
+.log-chip {
+	font: 12px/1 var(--vorpal-font-sans);
+	padding: 6px 10px;
+	cursor: pointer;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: 999px;
+	background: var(--vorpal-surface);
+	color: var(--vorpal-slate-600);
+	white-space: nowrap;
+}
+
+/* Off is the marked state: struck through and faded, so "excluded" is legible
+   without comparing two greys. */
+.log-chip[aria-pressed="false"] {
+	text-decoration: line-through;
+	opacity: .5;
+	background: var(--vorpal-slate-100);
+}
+
+.log-chip[aria-pressed="true"] {
+	border-color: var(--vorpal-purple);
+	background: var(--vorpal-purple-100);
+	color: var(--vorpal-ink-900);
+}
+
+/* ---- Position slider ----------------------------------------------------- */
+
+.log-scrubber {
+	flex: 1 1 260px;
+	min-width: 140px;
+	height: 30px;
+	accent-color: var(--vorpal-purple);
+	cursor: pointer;
+}
+
+/* ---- Panel --------------------------------------------------------------- */
+
+.log-panel {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: var(--vorpal-radius-md);
+	background: var(--vorpal-surface);
+	overflow: hidden;
+	box-shadow: var(--vorpal-shadow-sm);
+}
+
+.log-panel > header {
+	flex: 0 0 auto;
+	padding: .5rem .85rem;
+	border-bottom: 1px solid var(--vorpal-slate-300);
+	font-weight: 600;
+	font-size: 13px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: .5rem;
+}
+
+#paneTitle {
+	font-family: var(--vorpal-font-mono);
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.log-panel > .vorpal-callout {
+	margin: .6rem .85rem 0;
+	flex: 0 0 auto;
+}
+
+/* ---- The pane -----------------------------------------------------------
+   A DELIBERATE dark console, kept from the original design: light text on a
+   dark surface is the conventional look for tailing logs and the right call
+   for long monospace dumps. Per the light-document policy's stated exception
+   it stays a SELF-CONTAINED dark panel framed by the white sheet, never bare
+   on the purple backdrop. Pane-local custom properties keep the dark palette
+   from leaking into the rest of the page. */
+.log-pane {
+	--pane-bg:    #1e1e1e;
+	--pane-fg:    #d4d4d4;
+	--pane-dim:   #7f8c98;
+	--pane-rule:  #333a42;
+	--pane-error: #f48771;
+	--pane-warn:  #dcb67a;
+	--pane-mark:  #6f5a1e;
+
+	flex: 1 1 auto;
+	min-height: 0;
 	overflow: auto;
-	font-family: var(--vorpal-font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+	overflow-anchor: none;         /* we manage scrollTop ourselves */
+	position: relative;            /* chunk offsetTop must be pane-relative */
+	background: var(--pane-bg);
+	color: var(--pane-fg);
+	font-family: var(--vorpal-font-mono);
 	font-size: 12px;
-	white-space: pre;
-	background: #1e1e1e;
-	color: #d4d4d4;
+	line-height: 1.45;
+	padding: 6px 0;
 }
+
+.log-pane:focus-visible { outline: 2px solid var(--vorpal-purple); outline-offset: -2px; }
+
+.log-placeholder {
+	padding: 2rem;
+	color: var(--pane-dim);
+	font-family: var(--vorpal-font-sans);
+	font-size: 14px;
+	max-width: 46rem;
+	line-height: 1.6;
+}
+
+/* One grid row per RECORD, not per line: a stack trace carries its severity
+   token once, at the top, with the whole trace aligned beneath it. */
+.log-rec {
+	display: grid;
+	grid-template-columns: 8ch 1fr;
+	gap: 0 10px;
+	padding: 0 12px 0 8px;
+	border-left: 3px solid transparent;
+}
+
+.log-pane.show-offsets .log-rec { grid-template-columns: 11ch 8ch 1fr; }
+
+.log-off {
+	display: none;
+	color: var(--pane-dim);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+	user-select: none;
+}
+.log-pane.show-offsets .log-off { display: block; }
+
+.log-lvl {
+	color: var(--pane-dim);
+	white-space: nowrap;
+	overflow: hidden;
+	user-select: none;
+}
+
+.log-body { white-space: pre; overflow-wrap: normal; min-width: 0; }
+.log-pane.wrap .log-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Severity: the token in .log-lvl says which it is, the left-border weight
+   says how much it matters, and colour merely agrees with both. */
+.log-rec[data-sev="error"]   { border-left-color: var(--pane-error); border-left-width: 6px; background: rgba(244,135,113,.07); }
+.log-rec[data-sev="error"]   .log-lvl { color: var(--pane-error); font-weight: 700; }
+.log-rec[data-sev="warning"] { border-left-color: var(--pane-warn); border-left-width: 4px; }
+.log-rec[data-sev="warning"] .log-lvl { color: var(--pane-warn); font-weight: 600; }
+.log-rec[data-sev="info"]    { border-left-color: var(--pane-rule); }
+.log-rec[data-sev="debug"]   .log-body { color: var(--pane-dim); }
+
+/* Filtering is a class on the pane, so toggling a chip costs one style
+   recalculation instead of a re-render of the whole window. */
+.log-pane.hide-error   .log-rec[data-sev="error"],
+.log-pane.hide-warning .log-rec[data-sev="warning"],
+.log-pane.hide-info    .log-rec[data-sev="info"],
+.log-pane.hide-debug   .log-rec[data-sev="debug"],
+.log-pane.hide-plain   .log-rec[data-sev="plain"] { display: none; }
+
+/* Long records collapse to their first line. Open by default — a log viewer
+   must never hide content until asked. */
+.log-rec details > summary {
+	cursor: pointer;
+	list-style-position: outside;
+}
+.log-rec details > summary::marker { color: var(--pane-dim); }
+.log-more { color: var(--pane-dim); font-style: italic; }
+
+.log-sep-marker {
+	padding: 4px 12px;
+	margin: 6px 0;
+	color: var(--pane-dim);
+	border-top: 1px dashed var(--pane-rule);
+	border-bottom: 1px dashed var(--pane-rule);
+	background: rgba(255,255,255,.03);
+	font-style: italic;
+}
+
+.log-pane mark {
+	background: var(--pane-mark);
+	color: #fff;
+	border-radius: 2px;
+}
+.log-pane mark.is-current {
+	background: #fff;
+	color: #1e1e1e;
+	box-shadow: 0 0 0 2px #fff;
+}
+
+/* ANSI SGR rendering. The framework writes real escape sequences into the
+   file (Logger wraps SEVERE/WARNING message text via Color.*), so without
+   this the pane shows control characters. Bright variants only — the dim
+   half of the 3-bit palette is unreadable on #1e1e1e. */
+.a-bold { font-weight: 700; }
+.a-dim { opacity: .65; }
+.a-ital { font-style: italic; }
+.a-under { text-decoration: underline; }
+.a-fg-0 { color: #6b7076; } .a-fg-1 { color: #f48771; }
+.a-fg-2 { color: #89d185; } .a-fg-3 { color: #dcb67a; }
+.a-fg-4 { color: #75beff; } .a-fg-5 { color: #d69bd6; }
+.a-fg-6 { color: #6fc3c3; } .a-fg-7 { color: #e8e8e8; }
+.a-bg-0 { background: #3a3a3a; } .a-bg-1 { background: #5a2a24; }
+.a-bg-2 { background: #2c4a2c; } .a-bg-3 { background: #4f4020; }
+.a-bg-4 { background: #24405a; } .a-bg-5 { background: #452c45; }
+.a-bg-6 { background: #24484a; } .a-bg-7 { background: #55585c; }
+
+/* ---- Whole-file search results -------------------------------------------
+   A drawer beside the pane rather than a list below it: the point of the
+   results is to steer the pane, so both have to be visible at once. */
+
+.log-split {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: 1fr;
+}
+
+.log-split.with-results { grid-template-columns: 1fr minmax(260px, 26%); }
+
+.log-results {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	min-width: 0;
+	border-left: 1px solid var(--vorpal-slate-300);
+	background: var(--vorpal-surface);
+}
+
+.log-results > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: .5rem;
+	padding: .45rem .6rem;
+	border-bottom: 1px solid var(--vorpal-divider);
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
+}
+
+.log-results > header .log-mini { height: 24px; padding: 2px 8px; }
+
+.log-results-meta {
+	padding: .4rem .6rem;
+	font-size: 11.5px;
+	color: var(--vorpal-slate-600);
+	border-bottom: 1px solid var(--vorpal-divider);
+	font-variant-numeric: tabular-nums;
+}
+
+.log-results-list {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.log-results-list li {
+	padding: .35rem .6rem;
+	border-bottom: 1px solid var(--vorpal-slate-100);
+	cursor: pointer;
+	font-family: var(--vorpal-font-mono);
+	font-size: 11.5px;
+	line-height: 1.4;
+}
+.log-results-list li:hover { background: var(--vorpal-purple-100); }
+
+/* The current target is marked by an inset border on the leading edge, so it
+   stays distinguishable from a hover and from plain rows without relying on
+   the fill colour alone. */
+.log-results-list li.is-current {
+	background: var(--vorpal-purple-soft);
+	box-shadow: inset 3px 0 0 var(--vorpal-purple);
+	font-weight: 600;
+}
+
+.log-results-list .r-off {
+	display: block;
+	color: var(--vorpal-slate-400);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.log-results-list .r-text {
+	display: block;
+	color: var(--vorpal-ink-700);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.log-results-foot {
+	flex: 0 0 auto;
+	padding: .4rem .6rem;
+	border-top: 1px solid var(--vorpal-divider);
+}
+
+.log-results-empty { padding: 1rem .6rem; font-size: 12px; color: var(--vorpal-slate-600); }
+
+@media (max-width: 900px) {
+	.log-split.with-results { grid-template-columns: 1fr; grid-template-rows: 1fr 40%; }
+	.log-results { border-left: 0; border-top: 1px solid var(--vorpal-slate-300); }
+}
+
+/* ---- Status strip -------------------------------------------------------- */
+
+.log-status {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 5px .85rem;
+	border-top: 1px solid var(--vorpal-slate-300);
+	background: var(--vorpal-surface-alt);
+	font-size: 11.5px;
+	color: var(--vorpal-slate-600);
+	font-variant-numeric: tabular-nums;
+}
+
+.log-keys kbd {
+	font-family: var(--vorpal-font-mono);
+	font-size: 10.5px;
+	padding: 1px 4px;
+	border: 1px solid var(--vorpal-slate-300);
+	border-bottom-width: 2px;
+	border-radius: 3px;
+	background: var(--vorpal-surface);
+	color: var(--vorpal-ink-700);
+}
+
+@media (max-width: 900px) { .log-keys { display: none; } }
+
+/* ---- Download menu ------------------------------------------------------- */
+
+.log-menu { position: relative; }
+
+.log-menu-items {
+	position: absolute;
+	right: 0;
+	top: calc(100% + 4px);
+	z-index: 20;
+	min-width: 190px;
+	padding: 4px;
+	border: 1px solid var(--vorpal-slate-300);
+	border-radius: var(--vorpal-radius-md);
+	background: var(--vorpal-surface);
+	box-shadow: var(--vorpal-shadow-md);
+	display: flex;
+	flex-direction: column;
+}
+
+.log-menu-items button {
+	font: 13px/1.4 var(--vorpal-font-sans);
+	text-align: left;
+	padding: 7px 10px;
+	border: 0;
+	border-radius: var(--vorpal-radius-sm);
+	background: transparent;
+	color: var(--vorpal-ink-900);
+	cursor: pointer;
+}
+.log-menu-items button:hover { background: var(--vorpal-purple-100); }
+.log-menu-items button[disabled] { opacity: .45; cursor: default; background: transparent; }

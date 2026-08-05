@@ -21,8 +21,7 @@
 	<add as="autoLayout" action="autoLayout" icon="svg/auto-layout.svg"/>
 
 	<br/><hr/>
-	<add as="Gateway" template="gateway" style="gateway" icon="svg/cloud-download.svg"/>
-	<add as="Egress" template="egress" style="egress" icon="svg/cloud-upload.svg"/>
+	<add as="Gateway" template="gateway" style="gateway" icon="svg/cloud.svg"/>
 	<add as="State" template="state" style="state" icon="svg/rectangle-landscape.svg"/>
 
 	<br/><hr/>

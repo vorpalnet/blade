@@ -46,9 +46,59 @@ public final class PreviewEngineSmokeTest {
 		testBodyOpWithMismatchedContentTypeOnSinglePartReturnsNothing();
 		testExampleReadAgainstSinglePartSdp();
 
+		testSelectionPreviewMatched();
+		testSelectionPreviewDefault();
+		testSelectionPreviewNoDefault();
+		testSelectionPreviewRejectsResponse();
+
 		System.out.println();
 		System.out.println("Passed: " + passed + " / " + (passed + failed));
 		if (failed > 0) System.exit(1);
+	}
+
+	// ---------------------------------------------------------------------
+	// Selection preview (pipeline dry-run)
+	// ---------------------------------------------------------------------
+
+	private static String inviteTo(String user) {
+		return "INVITE sip:" + user + "@pbx.example.com SIP/2.0\r\n"
+				+ "From: <sip:alice@vorpal.net>;tag=1\r\n"
+				+ "To: <sip:" + user + "@pbx.example.com>\r\n"
+				+ "Call-ID: sel-" + user + "@vorpal.net\r\n"
+				+ "CSeq: 1 INVITE\r\n"
+				+ "\r\n";
+	}
+
+	private static void testSelectionPreviewMatched() throws Exception {
+		PreviewEngine.SelectionResult r = PreviewEngine.selectionPreview(
+				new CrudConfigurationSample(), inviteTo("8003"), null);
+		check("selection.matched.no-error", r.error == null || logFail(r.error));
+		check("selection.matched.rule-set", "example-update".equals(r.ruleSet));
+		check("selection.matched.variables", "8003".equals(r.variables.get("dialedNumber")));
+	}
+
+	private static void testSelectionPreviewDefault() throws Exception {
+		PreviewEngine.SelectionResult r = PreviewEngine.selectionPreview(
+				new CrudConfigurationSample(), inviteTo("5551000"), null);
+		check("selection.default.rule-set", "example-create".equals(r.ruleSet));
+	}
+
+	private static void testSelectionPreviewNoDefault() throws Exception {
+		CrudConfiguration cfg = new CrudConfigurationSample();
+		cfg.setDefaultRuleSet(null);
+		PreviewEngine.SelectionResult r = PreviewEngine.selectionPreview(cfg, inviteTo("5551000"), null);
+		check("selection.no-default.passthrough", r.error == null && r.ruleSet == null);
+	}
+
+	private static void testSelectionPreviewRejectsResponse() throws Exception {
+		String wire = "SIP/2.0 200 OK\r\n"
+				+ "From: <sip:alice@vorpal.net>;tag=1\r\n"
+				+ "To: <sip:bob@example.com>;tag=2\r\n"
+				+ "CSeq: 1 INVITE\r\n"
+				+ "\r\n";
+		PreviewEngine.SelectionResult r = PreviewEngine.selectionPreview(
+				new CrudConfigurationSample(), wire, null);
+		check("selection.response.rejected", r.error != null && r.ruleSet == null);
 	}
 
 	// ---------------------------------------------------------------------

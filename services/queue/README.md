@@ -1,110 +1,62 @@
-# Queue Service Module
+# Queue Service
 
-## Overview
+Javadocs: `/blade/javadoc/queue/` on the Admin Portal
 
-The Queue Service Module (`services/queue`) provides comprehensive queue management and processing capabilities for the Vorpal Blade platform. This module implements scalable queue systems for handling asynchronous operations, message routing, and task processing across distributed services.
+Holds inbound calls in a named queue when no downstream resource is available and
+releases them at a configured rate. B2BUA-based, so it stays in the dialog for the life
+of the queued call.
 
-## Features
+## How it works
 
-- High-performance message queue implementation
-- Configurable queue processing strategies
-- Dead letter queue support
-- Queue monitoring and metrics
-- Priority-based message handling
-- Integration with SIP servlet containers
+`QueueServlet` extends the framework's `v3.B2buaServlet`. On an initial INVITE, the
+standard selector/translation machinery picks a translation; its `queue` attribute names
+the queue. A call with no matching translation (or no `queue` attribute) passes through
+as an ordinary B2BUA call.
 
-## Architecture
+While queued, the caller hears ringing (`180`, re-sent on a configurable interval), and
+optionally — after `ringDuration` — gets connected to an announcement server for
+music/announcements, using the caller's own SDP. A per-queue timer releases up to `rate`
+calls every `period`, oldest first: each released call is B2BUA-connected to its original
+destination; a caller parked on the announcement is moved to the agent with an offerless
+re-INVITE and the announcement leg is BYEd. A CANCEL while queued cleans up both legs.
 
-The module is built on top of the Vorpal Blade framework and provides queue services that can be utilized by other platform services for asynchronous processing, event handling, and inter-service communication.
+When the outbound connect fails, the response decides the call's fate. **Retryable**
+failures — 408 (transaction timeout, the unreachable-network case), 480, 486, and 5xx
+other than 501 — put the call back at the release end of the queue, so the queue buffers
+against a failing or busy destination until it recovers; the retry loop is bounded by the
+caller hanging up and by the session expiration. **Definitive** failures — the rest of
+4xx and all of 6xx — remove the call from the queue and end both legs: a call that can
+never succeed doesn't sit in the queue forever.
 
-## Packages
-
-### [org.vorpal.blade.services.queue](#orgvorpalbladeservicesqueue)
-
-Core queue service implementation containing:
-- Queue managers and processors
-- Message handling interfaces
-- Queue lifecycle management
-- Processing strategies and policies
-- Integration points for external systems
-
-### [org.vorpal.blade.services.queue.config](#orgvorpalbladeservicesqueueconfig)
-
-Configuration management for queue services including:
-- Queue configuration models
-- Processing parameters
-- Connection settings
-- Performance tuning options
-- Service-specific configurations
-
-## Dependencies
-
-### Required Dependencies
-
-- **org.vorpal.blade:vorpal-blade-library-framework** - Core framework providing base services, dependency injection, configuration management, and common utilities
-
-## Related Modules
-
-### Core Framework
-- [libs/framework](../libs/framework) - Core framework and base services
-- [libs/shared/bin](../libs/shared/bin) - Shared binary utilities and common components
-- [libs/fsmar](../libs/fsmar) - Finite State Machine and routing capabilities
-
-### Administration
-- [admin/console](../admin/console) - Administrative console for queue monitoring
-- [admin/configurator](../admin/configurator) - Configuration management interface
-
-### Service Modules
-- [services/acl](../services/acl) - Access control integration
-- [services/analytics](../services/analytics) - Analytics and reporting services
-- [services/hold](../services/hold) - Call hold functionality
-- [services/options](../services/options) - SIP OPTIONS handling
-- [services/presence](../services/presence) - Presence and availability services
-- [services/proxy-balancer](../services/proxy-balancer) - Load balancing proxy
-- [services/proxy-block](../services/proxy-block) - Call blocking proxy
-- [services/proxy-registrar](../services/proxy-registrar) - SIP registration proxy
-- [services/proxy-router](../services/proxy-router) - Message routing proxy
-- [services/tpcc](../services/tpcc) - Third-party call control
-- [services/transfer](../services/transfer) - Call transfer services
-
-## Integration Guide
-
-### Maven Dependency
-
-```xml
-<dependency>
-    <groupId>org.vorpal.blade</groupId>
-    <artifactId>queue</artifactId>
-    <version>${vorpal.blade.version}</version>
-</dependency>
-```
-
-### Basic Usage
-
-1. **Configure Queue Settings**: Define queue parameters in your application configuration
-2. **Initialize Queue Service**: Bootstrap the queue service through the framework's dependency injection
-3. **Register Message Handlers**: Implement and register handlers for specific message types
-4. **Monitor Queue Health**: Utilize built-in monitoring capabilities for queue performance
-
-### Service Integration
-
-The queue service integrates seamlessly with other Vorpal Blade services:
-- **Analytics Service**: Provides queue metrics and processing statistics
-- **Proxy Services**: Handles asynchronous message processing for SIP operations
-- **Admin Console**: Offers real-time queue monitoring and management capabilities
+Queues are **per node**. BLADE runs no singletons, so each engine drains its own queues;
+capacity planning is per-node `rate × nodes`. Depth watermarks are logged per minute,
+hour, and day.
 
 ## Configuration
 
-Queue behavior can be customized through configuration properties including:
-- Queue capacity and processing threads
-- Message retention policies
-- Dead letter queue settings
-- Performance monitoring thresholds
+`queues` maps queue names to their attributes:
 
-## Monitoring
+| Setting | Description |
+| --- | --- |
+| `period` | Milliseconds between release ticks |
+| `rate` | Calls released per tick |
+| `ringPeriod` | Interval between 180 re-sends while queued |
+| `ringDuration` | How long to ring before connecting the caller to the announcement |
+| `announcement` | SIP URI of the announcement/MOH server (optional — omit for ringback-only queues) |
 
-The module provides comprehensive monitoring capabilities:
-- Queue depth and processing rates
-- Message processing times
-- Error rates and dead letter statistics
-- Integration with the admin console for real-time monitoring
+The sample config defines `fast` / `medium` / `slow` queues and shows both a hash map and
+a prefix map steering dialed numbers to queues. Edit and publish through the
+[Configurator](../../admin/configurator/README.md).
+
+## Related modules
+
+- [services/hold](../hold/README.md) — parking a single leg, when you don't need queue semantics
+- [Framework v3 API](../../libs/framework/src/main/java/org/vorpal/blade/framework/v3/README.md) — the B2BUA base and async primitives in use
+- [BLADE](../../README.md) — project home
+
+## Maven Coordinates
+
+```xml
+<groupId>org.vorpal.blade</groupId>
+<artifactId>vorpal-blade-services-queue</artifactId>
+```

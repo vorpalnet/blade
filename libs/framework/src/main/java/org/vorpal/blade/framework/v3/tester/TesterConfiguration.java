@@ -11,15 +11,14 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /// Configuration for BLADE test apps (test-uac, test-uas). Extends
-/// [CrudConfiguration], so transformation `ruleSets` and the selector /
-/// translation-map / plan machinery come along for free; this adds the
-/// scenario layer on top.
+/// [CrudConfiguration], so transformation `ruleSets` and the v3 enrichment
+/// `pipeline` come along for free; this adds the scenario layer on top.
 ///
 /// A call picks its [Scenario] in priority order:
 ///
 /// 1. a `scenario=` Request-URI parameter naming an entry in `scenarios`
-/// 2. a matched translation carrying a `scenario` attribute (or a bare
-///    `ruleSet` attribute, which behaves as an unnamed b2bua scenario —
+/// 2. the pipeline writing a `scenario` context variable (or a bare
+///    `ruleSet` variable, which behaves as an unnamed b2bua scenario —
 ///    full CRUD-service compatibility)
 /// 3. the `status` / `delay` / `refer` Request-URI shorthands, which
 ///    synthesize an ephemeral `answer` scenario
@@ -28,8 +27,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// Originated (load-generated) calls use `originate.scenario` unless the
 /// REST/JMX start request names one explicitly.
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
-@JsonPropertyOrder({ "logging", "session", "defaultScenario", "originate", "scenarios", "ruleSets", "selectors",
-		"defaultRoute", "maps", "plan" })
+@JsonPropertyOrder({ "logging", "session", "defaultScenario", "originate", "scenarios", "pipeline", "ruleSets" })
 public class TesterConfiguration extends CrudConfiguration implements Serializable {
 	private static final long serialVersionUID = 1L;
 

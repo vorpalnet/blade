@@ -51,7 +51,7 @@ public class SpecProxyResource {
 		String base = ApiStartupListener.engineBaseUrl();
 		if (base == null) {
 			return text(Response.Status.SERVICE_UNAVAILABLE,
-					"engineBaseUrl is not configured (config/custom/vorpal/api.json).");
+					"engineBaseUrl is not configured (config/custom/vorpal/blade-api.json).");
 		}
 
 		String safeApp = ApiHttp.sanitizeApp(app);

@@ -36,17 +36,22 @@
 				<div>
 					<h1>BLADE CRUD Editor</h1>
 					<p>
-						Browse and edit the resource tables exposed by any
-						BLADE service that mounts the CRUD REST API. The
-						editor auto-derives its forms from the service's
-						resource path (<code>/&lt;app&gt;/resources/api/</code>)
-						and renders rows, single-row editing, and dry-run
-						previews of mutating operations.
+						CRUD stands for the four things a rule can do to a
+						SIP message: <strong>Create</strong> it,
+						<strong>Read</strong> it, <strong>Update</strong> it,
+						<strong>Delete</strong> it — and the "it" can be any
+						part of the message: a header, the Request-URI, or
+						any body content, whether XML, JSON, SDP, or a
+						multipart MIME part. A pipeline decides which rule
+						set each call gets; the rules do the rewriting; a
+						live preview replays every unsaved change against a
+						real message before you save, and long before you
+						publish.
 					</p>
 				</div>
 				<div class="vorpal-hero-meta">
-					<span>API · CRUD service</span>
-					<span>Discovery · Auto from path</span>
+					<span>Edits · crud.json</span>
+					<span>Preview · production engine, in-process</span>
 				</div>
 			</section>
 
@@ -55,9 +60,9 @@
 					<span class="vorpal-card-icon">⌘</span>
 					<h3>Open Editor</h3>
 					<p>
-						Launch the editor. Type a rule path, fetch rows, click
-						to edit. Dry-run preview shows what a mutating
-						operation would do before you commit it.
+						Pipeline, rule sets, and preview in one page. Paste a
+						SIP message, watch the before/after diff track your
+						edits, then Save and Publish when it's right.
 					</p>
 					<span class="vorpal-card-link">Open CRUD Editor</span>
 				</a>
@@ -66,9 +71,9 @@
 					<span class="vorpal-card-icon">📖</span>
 					<h3>Documentation</h3>
 					<p>
-						Operator handbook — the CRUD REST contract every
-						BLADE service implements, how the editor discovers
-						its forms, and the dry-run preview semantics.
+						Operator handbook — the three-step editing model, the
+						preview endpoints, and the division of labour with
+						the Configurator.
 					</p>
 					<span class="vorpal-card-link">Browse Documentation</span>
 				</a>
@@ -77,9 +82,9 @@
 					<span class="vorpal-card-icon">≡</span>
 					<h3>API Contract</h3>
 					<p>
-						The REST shape the editor assumes — list, get, put,
-						delete, and the dry-run preview endpoint that
-						mutating operations use.
+						The endpoints this page calls: rule preview, selection
+						dry-run, and the config load / save / publish /
+						version-history surface.
 					</p>
 					<span class="vorpal-card-link">Read Contract</span>
 				</a>
@@ -88,9 +93,9 @@
 					<span class="vorpal-card-icon">⚠</span>
 					<h3>Troubleshooting</h3>
 					<p>
-						Resource path not resolving? Forms empty? Mutating
-						operation returns 4xx? The common failure modes and
-						what to look at next.
+						Rule not firing? Auto-select picks nothing? Save
+						rejected, or publish answered 409? The common failure
+						modes and what to look at next.
 					</p>
 					<span class="vorpal-card-link">View Runbook</span>
 				</a>

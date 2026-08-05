@@ -61,13 +61,19 @@
 # lives in them. If the stack is named BladeAnalytics* because this script
 # adopted it, that is only a name; see ADOPT, NEVER RENAME above.
 #
-# ── QUOTAS ───────────────────────────────────────────────────────────────────
+# ── QUOTAS AND TIME-TO-LIVE ──────────────────────────────────────────────────
 # The destination gets its own quota rather than drawing on the store's, so one
 # destination cannot fill the shared store. Worth watching now that several
 # applications subscribe: a durable subscription holds messages for a consumer
 # that is down, that backlog counts against the DESTINATION, and one stalled
 # subscriber can therefore push the topic to its quota and start failing
 # publishes for everybody.
+#
+# The time-to-live override on the topic is what bounds that in TIME as the
+# quota bounds it in bytes: the broker expires backlog older than the TTL
+# instead of letting one dead subscriber hold the destination hostage until
+# live publishes fail for applications that have nothing to do with it. The
+# trade is stated where it is set — see the topic section below.
 #
 # Idempotent: every resource is created only if absent, so it is safe to re-run
 # after a partial failure, or to add the topic to a domain that has only the
@@ -80,6 +86,9 @@
 #   BLADE_ENGINE_CLUSTER   (optional) engine-tier cluster name; defaults to
 #                          BEA_ENGINE_TIER_CLUST. Find yours with ls('/Clusters').
 #   BLADE_QUOTA_BYTES      (optional) per-destination byte quota; default 1 GiB.
+#   BLADE_EVENT_TTL_MILLIS (optional) time-to-live override stamped on every
+#                          message on the topic; default 24 hours. 0 would mean
+#                          never expire — see the topic section before choosing it.
 #
 #   $MW_HOME/oracle_common/common/bin/wlst.sh configure-messaging-jms.py
 
@@ -100,6 +109,7 @@ wl_pass = os.environ.get('WL_PASS')
 wl_admin = os.environ.get('WL_ADMIN')
 blade_cluster = os.environ.get('BLADE_ENGINE_CLUSTER', 'BEA_ENGINE_TIER_CLUST')
 blade_quota_bytes = long(os.environ.get('BLADE_QUOTA_BYTES', '1073741824'))
+blade_event_ttl_millis = long(os.environ.get('BLADE_EVENT_TTL_MILLIS', '86400000'))
 
 connect(wl_user, wl_pass, wl_admin)
 
@@ -318,6 +328,31 @@ cmo.setForwardingPolicy('Partitioned')
 cmo.setJNDIName('jms/BladeEventBusTopic')
 cmo.setSubDeploymentName(SUBDEPLOYMENT)
 cmo.setQuota(getMBean(eventbus_quota))
+
+# Time-to-live override: the broker expires anything on this destination older
+# than the TTL, whatever the producer asked for (BLADE's publisher asks for
+# nothing, i.e. live forever). Oracle's attribute doc (DeliveryParamsOverridesBean
+# in com.bea.core.descriptor.wl.jar): "The time-to-live assigned to all messages
+# that arrive at this destination, regardless of the TimeToLive value specified
+# by the message producer... only incoming messages are impacted; stored
+# messages are not." So re-running this on a domain that already has backlog
+# does NOT expire the backlog — only what arrives from then on.
+#
+# This is the TIME bound on the quota problem described at the top of the file.
+# The quota is shared by every durable subscription on the topic, so without a
+# TTL a subscriber that stays down accrues backlog until PUBLISHES start
+# failing — for every application on the bus, on the SIP container thread,
+# silently (Analytics swallows the exception; the events.publish.failures
+# counter and one warning line are the only trace).
+#
+# THE TRADE: a subscriber down longer than the TTL loses the events older than
+# it. That is deliberately the lesser evil — the analytics sink already
+# discards while its database is unreachable rather than queue forever, and an
+# ACTOR that wakes up to day-old facts should not act on them anyway (its
+# subscriptions are advised non-durable for exactly that reason). Losing
+# yesterday's analytics beats dropping today's live events for everyone.
+cd('%s/UniformDistributedTopics/BladeEventBusTopic/DeliveryParamsOverrides/BladeEventBusTopic' % RESOURCE)
+cmo.setTimeToLive(blade_event_ttl_millis)
 save()
 activate()
 
@@ -327,7 +362,8 @@ print('  file store    %s' % STORE)
 print('  JMS server    %s' % SERVER)
 print('  module        %s' % MODULE)
 print('  subdeployment %s' % SUBDEPLOYMENT)
-print('  destination   jms/BladeEventBusTopic (topic, quota %d bytes)' % blade_quota_bytes)
+print('  destination   jms/BladeEventBusTopic (topic, quota %d bytes, ttl %d ms)'
+      % (blade_quota_bytes, blade_event_ttl_millis))
 if ADOPTED:
     print('')
     print('The event topic was adopted into the existing analytics module. If a separate')

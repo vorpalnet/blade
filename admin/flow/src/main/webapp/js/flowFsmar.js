@@ -777,8 +777,8 @@ window.flowFsmar = (function() {
 		var tag = v.value.tagName;
 		if (tag === 'State') return stateIdOf(v);
 		if (tag === 'Gateway') {
-			// An egress is never a transition source; treat it as no state.
-			if (v.getAttribute('role') === 'egress') return 'null';
+			// An exit cloud is never a transition source; treat it as no state.
+			if (flowUtils.isExitCloud(v)) return 'null';
 			var m = v.getAttribute('match');
 			return (m && m.length > 0) ? (v.getAttribute('label') || 'null') : 'null';
 		}
@@ -788,8 +788,8 @@ window.flowFsmar = (function() {
 	function pathForCell(graph, cell) {
 		if (cell == null || cell.value == null || !cell.value.tagName) return null;
 		var tag = cell.value.tagName;
-		// An egress exit node isn't a state — nothing to simulate from it.
-		if (cell.getAttribute('role') === 'egress') return null;
+		// An exit cloud isn't a state — nothing to simulate from it.
+		if (flowUtils.isExitCloud(cell)) return null;
 		if (tag === 'State') {
 			return '/states/' + stateIdOf(cell);
 		}

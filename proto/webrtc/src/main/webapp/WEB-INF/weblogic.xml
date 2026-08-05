@@ -3,8 +3,13 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.9/weblogic-web-app.xsd">
 	<wls:weblogic-version>12.2.1.3</wls:weblogic-version>
-	<!-- Must start with "blade/" for the Admin Portal to discover this app's launcher card. -->
-	<wls:context-root>blade/webrtc</wls:context-root>
+	<!-- Flat, and equal to the WAR's finalName, because this is a SIP servlet
+	     application: the container reports this name to the App Router, so it is
+	     what an FSMAR transition's `next` resolves against. A "blade/" prefix
+	     would earn an Admin Portal launcher card but deploy the app under a name
+	     no FSMAR config could target — the wrong trade for a SIP app. The browser
+	     UI has its own card: admin/phone at "blade/phone", which connects here. -->
+	<wls:context-root>webrtc</wls:context-root>
 
 	<wls:library-ref>
 		<wls:library-name>blade-shared</wls:library-name>

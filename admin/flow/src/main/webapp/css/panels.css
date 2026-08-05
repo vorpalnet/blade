@@ -55,6 +55,57 @@
 	font-weight: normal;
 }
 
+/* --- Field-help popups ------------------------------------------------ */
+/* The long field explanations live behind an ⓘ icon in the label; the text
+ * rides hidden inside the icon (.info-tip-text) and shows in ONE shared
+ * popup (#info-tip-pop, built by flowUtils.initInfoTips). The popup is
+ * fixed-position because the tasks window scrolls and would clip an
+ * absolutely-positioned bubble at its edges. */
+.info-tip {
+	display: inline-block;
+	vertical-align: -2px;
+	margin-left: 4px;
+	color: var(--vorpal-slate-600);
+	cursor: help;
+	line-height: 0;
+}
+.info-tip svg {
+	width: 13px;
+	height: 13px;
+}
+.info-tip:hover,
+.info-tip:focus,
+.info-tip.info-tip-pinned {
+	color: var(--vorpal-purple);
+	outline: none;
+}
+.info-tip .info-tip-text {
+	display: none;
+}
+
+#info-tip-pop {
+	position: fixed;
+	z-index: 10000;
+	max-width: 300px;
+	padding: 8px 10px;
+	background: var(--vorpal-surface);
+	border: 1px solid var(--vorpal-slate-300);
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+	font-family: var(--vorpal-font-sans, Arial, sans-serif);
+	font-size: 11.5px;
+	font-style: normal;
+	font-weight: normal;
+	line-height: 1.55;
+	color: var(--vorpal-ink-700);
+}
+#info-tip-pop code {
+	font-family: var(--vorpal-font-mono);
+	font-size: 10.5px;
+	background: var(--vorpal-slate-100);
+	border: 1px solid var(--vorpal-slate-200);
+	padding: 0 3px;
+}
+
 /* --- Inputs ---------------------------------------------------------- */
 
 #transition-view input[type=text],

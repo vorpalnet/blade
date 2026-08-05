@@ -113,7 +113,8 @@ public class QueueServlet extends B2buaServlet {
 					if (queue != null) {
 						QueueAttributes queueAttributes = queue.attributes;
 						QueueCallflow queueCallflow = new QueueCallflow(queueName, queueAttributes);
-						queue.callflows.add(queueCallflow);
+						// addFirst + pollLast = FIFO: newest at the head, drain from the tail
+						queue.callflows.addFirst(queueCallflow);
 						queue.statistics.intervalTask();
 						callflow = queueCallflow;
 					} else {

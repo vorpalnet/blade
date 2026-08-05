@@ -19,13 +19,16 @@
 		javax.media.mscontrol.* and finds its media server through a registered 309 driver.</description>
 
 	<build>
-		<finalName>blade-player</finalName>
+		<!-- A SIP servlet application is named for its context root: that is the
+		     name the container reports to the App Router, and the name FSMAR
+		     configs target. Do not prefix it. -->
+		<finalName>player</finalName>
 	</build>
 
 	<dependencies>
 		<!-- Only the framework (skinny WAR). The JSR-309 API (com.oracle.occas:mscontrol, provided)
 		     is inherited from the parent pom; the 309 driver is discovered at runtime via the SPI,
-		     so there is no compile dependency on any media-server vendor (incl. Gryphon). -->
+		     so there is no compile dependency on any media-server vendor. -->
 		<dependency>
 			<groupId>org.vorpal.blade</groupId>
 			<artifactId>vorpal-blade-library-framework</artifactId>

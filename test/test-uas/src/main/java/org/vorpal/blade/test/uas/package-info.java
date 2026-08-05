@@ -10,7 +10,7 @@
 /// resolves a [Scenario][org.vorpal.blade.framework.v3.tester.Scenario] for
 /// every initial INVITE:
 ///
-/// - `;scenario=<name>` Request-URI parameter, or a translation-plan match
+/// - `;scenario=<name>` Request-URI parameter, or an enrichment-pipeline match
 /// - the classic shorthands — `;status=486`, `;delay=5s`, `;refer=sip:…` —
 ///   which synthesize an ephemeral answer scenario (fully backward
 ///   compatible with existing test scripts)

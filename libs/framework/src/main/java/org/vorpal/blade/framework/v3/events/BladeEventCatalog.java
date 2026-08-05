@@ -2,7 +2,9 @@ package org.vorpal.blade.framework.v3.events;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /// The event types BLADE itself emits, declared so the catalog describes the
 /// whole bus rather than only what applications add to it.
@@ -36,6 +38,27 @@ public final class BladeEventCatalog {
 	/// modules: this declaration, and the `@ActivationConfigProperty` values on
 	/// the sink's own MDB in `services/analytics`.
 	public static final String ANALYTICS_SUBSCRIPTION = "analytics-db";
+
+	/// Type name → declared [EventType#getVersion], built once from the
+	/// declarations below so a publish-time lookup does not rebuild the whole
+	/// catalog on the SIP container thread.
+	private static final Map<String, Integer> VERSIONS = versionIndex();
+
+	private static Map<String, Integer> versionIndex() {
+		Map<String, Integer> versions = new HashMap<>();
+		for (EventType declaration : analyticsTypes()) {
+			versions.put(declaration.getType(), declaration.getVersion());
+		}
+		return versions;
+	}
+
+	/// The declared payload revision of a framework-emitted type — what the
+	/// producer stamps as the envelope's `dataversion`. Null for a type this
+	/// catalog does not declare, so an undeclared name publishes an unversioned
+	/// envelope rather than lying.
+	public static Integer versionOf(String type) {
+		return VERSIONS.get(type);
+	}
 
 	private BladeEventCatalog() {
 	}

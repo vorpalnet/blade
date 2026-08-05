@@ -48,9 +48,41 @@
         <stroke/>
     </foreground>
 </shape>
-<!-- Ingress cloud: a filled cloud (the call enters here) with a small
-     down-arrow in the lower third, leaving the cloud's center for the
-     state name/id label. Used by the "gateway" style. -->
+<!-- Cloud: the network outside OCCAS — a carrier, an SBC, anything not BLADE.
+     A filled cloud with nothing in it but its label; DIRECTION IS CARRIED BY
+     THE TRANSITION ARROWS drawn to or from it, so one symbol serves traffic
+     coming in and going out. Used by the "gateway" style.
+
+     Canvas is the cloud's natural 640x448 aspect (it renders wider than tall).
+     The arrowed cloud-ingress/cloud-egress shapes below are kept only for
+     diagrams saved before the two symbols were merged. -->
+<shape aspect="variable" h="448" name="cloud" strokewidth="inherit" w="640">
+    <connections>
+        <constraint x="0" y="0.5" perimeter="0" name="W"/>
+        <constraint x="1" y="0.5" perimeter="0" name="E"/>
+        <constraint x="0.5" y="0" perimeter="0" name="N"/>
+        <constraint x="0.5" y="1" perimeter="0" name="S"/>
+    </connections>
+    <foreground>
+        <path>
+            <move x="571.7" y="206.8"/>
+            <curve x1="574.5" x2="576" x3="576" y1="196.9" y2="186.6" y3="176"/>
+            <curve x1="576" x2="525.9" x3="464" y1="114.1" y2="64" y3="64"/>
+            <curve x1="447.3" x2="431.1" x3="416" y1="64" y2="67.6" y3="74.8"/>
+            <curve x1="384.4" x2="331.7" x3="272" y1="29.8" y2="0" y3="0"/>
+            <curve x1="177.6" x2="100.3" x3="96.2" y1="0" y2="74.5" y3="168.2"/>
+            <curve x1="39.2" x2="0" x3="0" y1="188.2" y2="242.3" y3="304"/>
+            <curve x1="0" x2="64.4" x3="144" y1="383.6" y2="448" y3="448"/>
+            <line x="512" y="448"/>
+            <curve x1="582.7" x2="640" x3="640" y1="448" y2="390.8" y3="320"/>
+            <curve x1="640" x2="614.2" x3="571.7" y1="273" y2="229.2" y3="206.8"/>
+            <close/>
+        </path>
+        <fillstroke/>
+    </foreground>
+</shape>
+<!-- LEGACY (pre-merge): ingress cloud — a filled cloud with a small down-arrow
+     in the lower third. Retained so older saved diagrams still render. -->
 <!-- Canvas is h=608: the cloud occupies y 0..448 (its natural 640x448 aspect,
      so it renders wider-than-tall), and the extra space below (448..608) is
      where the arrow's lower 2/3 hangs beneath the cloud's bottom line. -->
@@ -95,9 +127,8 @@
         <fill/>
     </foreground>
 </shape>
-<!-- Egress cloud: a filled cloud (the call leaves here) with a small
-     up-arrow in the lower third, leaving the cloud's center for the
-     state name/id label. Used by the "egress" style. -->
+<!-- LEGACY (pre-merge): egress cloud — a filled cloud with a small up-arrow
+     in the lower third. Retained so older saved diagrams still render. -->
 <!-- Canvas is h=608: the cloud occupies y 0..448 (its natural 640x448 aspect,
      so it renders wider-than-tall), and the extra space below (448..608) is
      where the arrow's lower 2/3 hangs beneath the cloud's bottom line. -->

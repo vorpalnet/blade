@@ -13,6 +13,7 @@ import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
 import org.vorpal.blade.framework.v2.testing.DummyRequest;
 import org.vorpal.blade.framework.v2.testing.DummyResponse;
+import org.vorpal.blade.framework.v2.testing.DummySipSession;
 
 /// Parses raw SIP wire text into a [DummyRequest] or [DummyResponse]. Used
 /// by the preview endpoint so operators can paste a captured SIP message
@@ -95,7 +96,11 @@ public class SipMessageParser implements Serializable {
 		if (to == null) to = "<sip:anonymous@unknown>";
 
 		DummyRequest req = new DummyRequest(method, from, to);
-		req.setApplicationSession(new DummyApplicationSession("preview"));
+		DummyApplicationSession appSession = new DummyApplicationSession("preview");
+		req.setApplicationSession(appSession);
+		// A SipSession too, or the enrichment pipeline's Context.put writes
+		// (selection preview) silently vanish.
+		req.setSession(new DummySipSession(appSession));
 
 		// Always stash the raw URI so the serializer has a fallback when
 		// no SipFactory is available (AdminServer-side, no SIP container).

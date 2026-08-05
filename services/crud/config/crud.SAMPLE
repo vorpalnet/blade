@@ -1,24 +1,60 @@
 {
   "logging" : {
-    "useParentLogging" : false,
     "directory" : "./servers/${weblogic.Name}/logs/vorpal",
     "fileName" : "${sip.application.name}.%g.log",
-    "fileSize" : "100MiB",
-    "fileCount" : 25,
-    "appendFile" : true,
     "loggingLevel" : "FINER",
     "sequenceDiagramLoggingLevel" : "FINE",
     "configurationLoggingLevel" : "INFO",
     "analyticsLoggingLevel" : "INFO",
+    "snmpTrapLevel" : null,
+    "fileSize" : "100MiB",
+    "fileCount" : 25,
+    "useParentLogging" : false,
+    "appendFile" : true,
     "colorsEnabled" : false
   },
-  "selectors" : [ {
-    "id" : "dialed-number",
-    "description" : "Extract dialed number from To header",
-    "attribute" : "To",
-    "pattern" : "^(?:\"?(?<name>.*?)\"?\\s*)[<]*(?<proto>sips?):(?:(?<user>.*)@)*(?<host>[^:;>]*)(?:[:](?<port>[0-9]+))*(?:[;](?<uriparams>[^>]*))*[>]*[;]*(?<addrparams>.*)$",
-    "expression" : "${user}"
+  "session" : {
+    "expiration" : 60,
+    "indexVorpalSessionID" : null,
+    "keepAlive" : null,
+    "sessionSelectors" : null,
+    "passthru" : false
+  },
+  "pipeline" : [ {
+    "type" : "sip",
+    "id" : "sip",
+    "description" : "Extract the dialed number from the To header",
+    "selectors" : [ {
+      "type" : "regex",
+      "id" : "dialedNumber",
+      "attribute" : "To",
+      "pattern" : ".*<?sips?:\\+?(?<did>[^@;>]+)@.*",
+      "expression" : "${did}"
+    } ]
+  }, {
+    "type" : "table",
+    "id" : "rule-selection",
+    "description" : "Map the dialed number to a rule set",
+    "tables" : [ {
+      "match" : "hash",
+      "keyExpression" : "${dialedNumber}",
+      "translations" : {
+        "8001" : {
+          "ruleSet" : "example-create"
+        },
+        "8002" : {
+          "ruleSet" : "example-read"
+        },
+        "8003" : {
+          "ruleSet" : "example-update"
+        },
+        "8004" : {
+          "ruleSet" : "example-delete"
+        }
+      }
+    } ]
   } ],
+  "defaultRuleSet" : "example-create",
   "ruleSets" : {
     "example-create" : {
       "id" : "example-create",
@@ -34,7 +70,7 @@
         }, {
           "type" : "create",
           "attribute" : "X-Trace-Id",
-          "value" : "trace-${userPart}"
+          "value" : "trace-${dialedNumber}"
         }, {
           "type" : "create",
           "attribute" : "body",
@@ -133,58 +169,5 @@
       } ]
     }
   },
-  "defaultRoute" : {
-    "id" : "default",
-    "description" : null,
-    "list" : null,
-    "requestUri" : null,
-    "attributes" : {
-      "ruleSet" : "example-create"
-    }
-  },
-  "maps" : [ {
-    "type" : "hash",
-    "id" : "dialed-number-map",
-    "description" : "Map dialed numbers to rule sets",
-    "selectors" : [ "dialed-number" ],
-    "map" : {
-      "8002" : {
-        "id" : null,
-        "description" : null,
-        "list" : null,
-        "requestUri" : null,
-        "attributes" : {
-          "ruleSet" : "example-read"
-        }
-      },
-      "8003" : {
-        "id" : null,
-        "description" : null,
-        "list" : null,
-        "requestUri" : null,
-        "attributes" : {
-          "ruleSet" : "example-update"
-        }
-      },
-      "8001" : {
-        "id" : null,
-        "description" : null,
-        "list" : null,
-        "requestUri" : null,
-        "attributes" : {
-          "ruleSet" : "example-create"
-        }
-      },
-      "8004" : {
-        "id" : null,
-        "description" : null,
-        "list" : null,
-        "requestUri" : null,
-        "attributes" : {
-          "ruleSet" : "example-delete"
-        }
-      }
-    }
-  } ],
-  "plan" : [ "dialed-number-map" ]
+  "version" : 0
 }

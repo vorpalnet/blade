@@ -36,10 +36,9 @@
 				<div class="vorpal-eyebrow">Documentation</div>
 				<h1 class="vorpal-page-title">CRUD Editor Handbook</h1>
 				<p class="vorpal-page-subtitle">
-					Operator reference for the BLADE CRUD Editor. How it
-					discovers its API target, the contract every BLADE
-					service must implement, and the dry-run preview
-					mechanism.
+					Operator reference for the BLADE CRUD Editor: the
+					three-step editing model, the preview endpoints, and
+					what to check when something misbehaves.
 				</p>
 			</div>
 
@@ -67,24 +66,28 @@
 				<article class="vorpal-docs-content">
 					<h1>Welcome</h1>
 					<p>
-						The CRUD Editor is a generic browser for BLADE service
-						resource tables. Where the Configurator edits a
-						service's <em>configuration</em> (one JSON document
-						per app), the CRUD Editor edits its <em>resources</em>
-						(rows in a table-shaped REST API).
+						The CRUD Editor authors the CRUD service's rules —
+						the pipeline that selects a rule set for each call,
+						and the rule sets that transform the selected calls —
+						with a live preview that replays every unsaved change
+						against a pasted SIP message before anything is saved
+						or published. The editor's built-in
+						<strong>? Help</strong> dialog explains each concept
+						in place; these pages are the reference companion.
 					</p>
 
 					<h2>Reading order</h2>
 					<ol>
-						<li><a href="overview.html">Overview</a> — what's a "resource table" and which services have them.</li>
-						<li><a href="api-contract.html">API Contract</a> — the REST shape the editor assumes.</li>
+						<li><a href="overview.html">Overview</a> — the CRUD service, the three-step editing model, and the division of labour with the Configurator.</li>
+						<li><a href="api-contract.html">API Contract</a> — the preview and config endpoints the editor page calls.</li>
+						<li><a href="troubleshooting.html">Troubleshooting</a> — the common failure modes and what to look at next.</li>
 					</ol>
 
 					<h2>At a glance</h2>
 					<table>
-						<tr><th>Targets</th><td>Any BLADE service that mounts the CRUD REST endpoints under <code>/&lt;app&gt;/resources/api/</code></td></tr>
-						<tr><th>Discovery</th><td>The editor derives its API base URL from <code>location.pathname</code>; the same WAR can host the editor for any deployed app</td></tr>
-						<tr><th>Operations</th><td>list, get, put (create/update), delete; mutating operations support dry-run preview before commit</td></tr>
+						<tr><th>Edits</th><td><code>config/custom/vorpal/crud.json</code> — the pipeline, default rule set, and rule sets; logging and session stay in the Configurator</td></tr>
+						<tr><th>Preview</th><td>Runs the unsaved draft through the production engine in-process on the AdminServer; nothing touches the wire</td></tr>
+						<tr><th>Save / Publish</th><td>Save validates and writes the file (previous version kept); Publish reloads the running CRUD service via its Configuration MBeans</td></tr>
 					</table>
 				</article>
 			</section>

@@ -152,6 +152,51 @@ class EventSourceGeneratorTest {
 	}
 
 	@Nested
+	@DisplayName("declared versions travel")
+	class Versions {
+
+		private EventType versioned() {
+			EventType declaration = fixture();
+			declaration.setVersion(2);
+			return declaration;
+		}
+
+		@Test
+		@DisplayName("the payload class records the revision it was generated from")
+		void payloadCarriesVersionConstant() {
+			assertTrue(EventSourceGenerator.javaSource(versioned()).contains("public static final int VERSION = 2;"));
+			assertFalse(EventSourceGenerator.javaSource(fixture()).contains("VERSION"),
+					"an unversioned declaration must not invent a revision");
+		}
+
+		@Test
+		@DisplayName("the producer snippet stamps the payload's revision as dataversion")
+		void producerStampsVersion() {
+			assertTrue(EventSourceGenerator.producerSnippet(versioned()).contains("Scheduled.VERSION"));
+			assertFalse(EventSourceGenerator.producerSnippet(fixture()).contains("VERSION"));
+		}
+
+		@Test
+		@DisplayName("the consumer warns on skew — and emits no guard when nothing is versioned")
+		void consumerChecksVersion() {
+			EventSubscription subscription = new EventSubscription("calendar");
+			subscription.setTypes(java.util.Collections.singletonList(fixture().getType()));
+			subscription.setJavaPackage("com.example.consumer");
+
+			EventCatalog catalog = new EventCatalog();
+			catalog.setTypes(java.util.Collections.singletonList(versioned()));
+			String mdb = EventSourceGenerator.consumerSource(subscription, catalog);
+			assertTrue(mdb.contains("checkVersion(event, 2);"));
+			assertTrue(mdb.contains("regenerate this consumer"));
+
+			EventCatalog unversioned = new EventCatalog();
+			unversioned.setTypes(java.util.Collections.singletonList(fixture()));
+			String plain = EventSourceGenerator.consumerSource(subscription, unversioned);
+			assertFalse(plain.contains("checkVersion"), "no declared version, no guard");
+		}
+	}
+
+	@Nested
 	@DisplayName("generated payload class")
 	class PayloadClass {
 

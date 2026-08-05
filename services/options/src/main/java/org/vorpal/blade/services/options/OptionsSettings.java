@@ -64,6 +64,8 @@ public class OptionsSettings extends Configuration implements Serializable {
 
 	protected int drainRetryAfter;
 
+	protected boolean unavailableUntilRunning;
+
 	public String getAllow() {
 		return allow;
 	}
@@ -137,6 +139,15 @@ public class OptionsSettings extends Configuration implements Serializable {
 
 	public void setDrainRetryAfter(int drainRetryAfter) {
 		this.drainRetryAfter = drainRetryAfter;
+	}
+
+	@JsonPropertyDescription("When true, OPTIONS answers 503 Starting until this server has reached the RUNNING state — the end of the deploy phase — so a SIP-aware load balancer keeps the node out of rotation while applications are still deploying (OCCAS accepts SIP traffic before deployment completes, and early calls would route through a partial chain). Deploy the options app FIRST (low DeploymentOrder) so it owns the answer for the whole window. Requires the WebLogic runtime MBeans on the platform MBean server (the default); set false if the node never leaves Starting.")
+	public boolean isUnavailableUntilRunning() {
+		return unavailableUntilRunning;
+	}
+
+	public void setUnavailableUntilRunning(boolean unavailableUntilRunning) {
+		this.unavailableUntilRunning = unavailableUntilRunning;
 	}
 
 }

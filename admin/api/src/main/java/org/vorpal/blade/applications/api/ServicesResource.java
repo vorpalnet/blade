@@ -60,7 +60,7 @@ public class ServicesResource {
 		if (base == null) {
 			return Response.status(Response.Status.SERVICE_UNAVAILABLE)
 					.type(MediaType.APPLICATION_JSON)
-					.entity("{\"error\":\"engineBaseUrl is not configured. Set it in config/custom/vorpal/api.json (or via the Configurator).\",\"services\":[]}")
+					.entity("{\"error\":\"engineBaseUrl is not configured. Set it in config/custom/vorpal/blade-api.json (or via the Configurator).\",\"services\":[]}")
 					.build();
 		}
 

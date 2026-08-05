@@ -1,20 +1,17 @@
-# BLADE Framework Config
+# BLADE Framework Config (v2)
 
-See Javadocs: [org.vorpal.blade.framework.config](https://vorpalnet.github.io/vorpal-blade-library-framework/index.html?org/vorpal/blade/framework/config/package-summary.html)
+Javadocs: package `org.vorpal.blade.framework.v2.config` — browse at `/blade/javadoc/framework/` on the Admin Portal
 
-The 'config' package offers some nifty utilities to create and manage configuration files.
+The 'config' package turns a plain Java class into a live, hot-reloadable JSON configuration file.
 
-Here's an example of how to use it.
-
-1. Deploy the "vorpal-blade-console.war" file to the Admin server.
-It will monitor any changes to config files and notify applications running in the engine tiers.
+Here's how to use it.
 
 1. Create any ordinary Java (POJO) class to be your config file. Make sure that it implements the
 Serializable interface.
 
 Example:
 
-```
+```java
 public class KeepAliveConfig implements Serializable {
 	private int sessionExpires = 1800; // 30 minutes
 	private int minSE = 90; // 1.5 minutes
@@ -43,14 +40,13 @@ This example is taken from the Keep-Alive application. As you can tell, it only 
 You'll notice it contains default values. This is helpful, because when the configuration file is created, it
 will contain some example data.
 
-
-1. Next, use the
-[Settings](https://vorpalnet.github.io/vorpal-blade-library-framework/index.html?org/vorpal/blade/framework/config/Settings.html)
+2. Next, use the
+`SettingsManager`
 class to turn your POJO into a configuration file.
 
 Example:
 
-```
+```java
 @WebListener
 @javax.servlet.sip.annotation.SipApplication(distributable = true)
 @javax.servlet.sip.annotation.SipServlet(loadOnStartup = 1)
@@ -66,46 +62,56 @@ public class KeepAliveServlet extends B2buaServlet implements SipApplicationSess
 	
 ```
 
-What's going here? Basically, we created a public data member "settingsManager" by passing in the SipServletContextEvent which
-will name the config file based on the ServletContext name ("keep-alive" in this case.)
+What's going on here? We created a public data member "settingsManager" by passing in the SipServletContextEvent, which
+names the config file after the ServletContext name ("keep-alive" in this case).
 
-Upon startup of the application, the BLADE framework will create a configuration file:
+Upon startup of the application, the BLADE framework will create a sample configuration file:
 
-./config/custom/vorpal/keep-alive.SAMPLE
+./config/custom/vorpal/_samples/keep-alive.json.SAMPLE
 
-This will be created in the domain of the engine tier node hosting the application. To use it,
-copy the file to the same location in the Admin server's domain directory and rename it with a '.json' file extension.
+This is created in the domain directory of the engine tier node hosting the application,
+alongside the generated JSON Schema in `./config/custom/vorpal/_schemas/keep-alive.jschema`.
 
-In addition, you can create additional copies of the file for the specific cluster or server the application is deployed in.
+The normal way to create and edit the live configuration is the
+[Configurator](../../../../../../../../../../../admin/configurator/README.md) — it discovers the
+application's JSON Schema over JMX, presents a generated form, keeps version history, and
+publishes the config to the running cluster with one click. No restarts.
 
-Example:
+You can also manage the files by hand: copy the SAMPLE file out of `_samples/` into the
+domain directory below and drop the `.SAMPLE` suffix, leaving a `.json` extension. You can
+create additional copies of the file scoped to a specific cluster or server:
 
 * ./config/custom/vorpal/keep-alive.json
-* ./config/custom/vorpal/cluster/BEA_ENGINE_TIER_CLUS/keep-alive.json
-* ./config/custom/vorpal/server/engine1/keep-alive.json
+* ./config/custom/vorpal/_clusters/BEA_ENGINE_TIER_CLUST/keep-alive.json
+* ./config/custom/vorpal/_servers/engine1/keep-alive.json
 
-If you define multiple config files, the BLADE framework with merge the JSON files together, giving preference to 'server', 'cluster' and
-'domain' in that order. (The 'domain' config file in this case is: ./config/custom/vorpal/keep-alive.json.)
+The underscore-prefixed directory names are exact — `_clusters` and `_servers`, both plural.
+The framework creates them at startup (`SettingsManager.initConfigPaths`); a file placed
+anywhere else is simply never read, and the override silently does nothing.
 
-You can now edit the config file (on the Admin server) on the fly and the BLADE console application will detect the change and
-relay that information to the proper clustered application through JMX MBeans. Cool!
+If you define multiple config files, the BLADE framework merges them: it reads the domain
+file, overlays the cluster file on top, then overlays the server file. Preference therefore
+runs 'server', 'cluster', 'domain' — the narrowest scope wins. (The 'domain' config file in
+this case is: ./config/custom/vorpal/keep-alive.json.) Overlaying is per-field, so a cluster
+or server file need only carry the settings it changes.
 
-1. Now that you've created a config file and can manage them, you need to use it in your code.
+3. Now that you've created a config file, you need to use it in your code.
 
 Consider this simple example:
 
-```
+```java
 KeepAliveConfig config = settingsManager.getCurrent();
-System.out.println("SessionExpires: "+config.getSessionExpires());
-
+sipLogger.info("SessionExpires: " + config.getSessionExpires());
 ```
+
 Somewhere in your code, invoke the .getCurrent() method to return your POJO as defined by the JSON config files.
 The method .getCurrent() will return the latest configuration. In your SIP callflows, try to call it only once
-at the beginning of the callflow. This will preserve data integrity
-in case the config changes in mid callflow. Also, try to save only the data required as variables.
+at the beginning of the callflow. This preserves data integrity
+in case the config changes in mid callflow. Also, try to save only the data you need as variables.
 You don't want to store unnecessary data in session memory, especially if the callflow is huge.
 
+## See also
 
-
-
-
+- [v2 API overview](../README.md)
+- [Configurator](../../../../../../../../../../../admin/configurator/README.md) — browser-based config editing and publishing
+- [v3 API](../../v3/README.md) — the v3 configuration model (two-phase routing, schema-driven forms)

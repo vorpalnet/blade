@@ -42,6 +42,7 @@ public class Endpoint implements Serializable {
 	private Integer weight = 1;
 	private Boolean enabled = true;
 	private Boolean ping = true;
+	private Boolean pingRequire2xx = false;
 	private String site;
 
 	public Endpoint() {
@@ -145,6 +146,17 @@ public class Endpoint implements Serializable {
 
 	public Endpoint setPing(Boolean ping) {
 		this.ping = ping;
+		return this;
+	}
+
+	@JsonPropertyDescription("Set true when this endpoint is a BLADE engine: only a 2xx OPTIONS ping marks it up. The default (false) treats any final response except 408/503 as alive — right for third-party backends that answer OPTIONS with e.g. 405, wrong for a booting engine whose container may answer errors before its options app is deployed.")
+	@JsonProperty(defaultValue = "false")
+	public Boolean getPingRequire2xx() {
+		return pingRequire2xx;
+	}
+
+	public Endpoint setPingRequire2xx(Boolean pingRequire2xx) {
+		this.pingRequire2xx = pingRequire2xx;
 		return this;
 	}
 

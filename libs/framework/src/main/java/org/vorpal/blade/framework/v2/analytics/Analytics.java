@@ -208,7 +208,13 @@ public class Analytics implements Serializable {
 			EventBus.publish(event.toCloudEvent(source(), SettingsManager.getApplicationName(),
 					SettingsManager.getDomainName(), SettingsManager.getServerName(), applicationStartedAt));
 		} catch (Throwable t) {
-			Callflow.getSipLogger().warning("Analytics.sendEvent - " + event.getName() + " not published: " + t);
+			// Swallowed on purpose — a lost event must not cost a call — but say
+			// what was dropped and where. A full destination quota lands here, and
+			// this line plus the events.publish.failures counter is its only trace.
+			Callflow.getSipLogger()
+					.warning("Analytics.sendEvent - " + event.getName() + " DROPPED, not published to "
+							+ EventBus.getDefaultDestinationJndi() + ": " + t.getClass().getSimpleName() + ": "
+							+ t.getMessage());
 		}
 	}
 
@@ -341,7 +347,11 @@ public class Analytics implements Serializable {
 		try {
 			EventBus.publish(event);
 		} catch (Throwable t) {
-			Callflow.getSipLogger().warning("Analytics - " + event.getType() + " not published: " + t);
+			// Same contract as sendEvent: swallowed, but the drop is named.
+			Callflow.getSipLogger()
+					.warning("Analytics - " + event.getType() + " DROPPED, not published to "
+							+ EventBus.getDefaultDestinationJndi() + ": " + t.getClass().getSimpleName() + ": "
+							+ t.getMessage());
 		}
 	}
 }

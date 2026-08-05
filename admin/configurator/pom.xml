@@ -33,6 +33,17 @@
 			<artifactId>json-schema-validator</artifactId>
 			<scope>provided</scope>
 		</dependency>
+		<!-- AI config assistant (AiConfigService); runtime copy in blade-shared. -->
+		<dependency>
+			<groupId>com.anthropic</groupId>
+			<artifactId>anthropic-java</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>io.swagger.core.v3</groupId>
 			<artifactId>swagger-jaxrs2-servlet-initializer-v2</artifactId>

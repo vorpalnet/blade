@@ -117,11 +117,11 @@
 				<option>NEUTRAL</option>
 			</select>
 
-			<!-- Egress note: shown when this transition targets an egress node.
-			     Routes for the exit live on the egress node, not here. -->
+			<!-- Exit note: shown when this transition points into a cloud, which is
+			     what makes that cloud an exit. Its routes live on the cloud, not here. -->
 			<div id="transition-egress-note" class="state-hint" style="display:none;">
-				This transition exits to an <b>egress</b> node &mdash; its route URIs
-				and modifier are set on the egress node itself (select it to edit).
+				This transition leaves OCCAS through a <b>cloud</b> &mdash; its route URIs
+				and modifier are set on the cloud itself (select it to edit).
 			</div>
 
 			<!-- Route URIs + modifier. Shown for every target except an egress
@@ -129,6 +129,22 @@
 			     passed to the container along with the selected application —
 			     "invoke this app AND push these Route headers". -->
 			<div id="transition-routes-section">
+				<!-- Trunk picker. FSMAR can only push Route headers, so the trunk for
+				     an outbound call travels as ;vgw=<name> on the Route pushed by the
+				     transition INTO the gateway app — which reads it back with
+				     getPoppedRoute(). Shown only when the target app actually has
+				     virtual gateways configured. -->
+				<div id="transition-vgw-section" style="display:none;">
+					<label>Virtual gateway <span class="hint">(trunk)</span>
+						<span class="info-tip" tabindex="0" role="button" aria-label="About Virtual gateway"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
+							Pick a trunk from the target gateway app's config; the editor keeps
+							<code>;vgw=&lt;name&gt;</code> on the route(s) below, so that app sends the
+							call out that trunk (binding its Contact IP and trunk identity).
+						</span></span>
+					</label>
+					<select id="transition-vgw"><option value="">(none)</option></select>
+				</div>
+
 				<label>Route URIs</label>
 				<div style="margin-bottom: 4px;">
 					<svg class="add-btn" id="add-route" title="Add route" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>

@@ -20,27 +20,18 @@
 			</span>
 		</a>
 		<a class="vorpal-appmark" href="/blade/phone/">Phone</a>
-		<nav class="vorpal-nav" aria-label="Primary">
-			<a href="index.html" class="vorpal-active">Phone</a>
-		</nav>
 		<div class="vorpal-topbar-right">
 			<span class="vorpal-pill" id="pill">Offline</span>
 		</div>
 	</header>
 
 	<main class="vorpal-main">
-		<div class="vorpal-page">
+		<div class="vorpal-page phone-page">
 
-			<section class="vorpal-hero">
+			<section class="vorpal-hero phone-hero">
 				<div>
 					<h1>WebRTC Phone</h1>
-					<p>
-						A browser as a first&#8209;class SIP endpoint. This page speaks a small set of
-						JSON events over a WebSocket to the gateway on the engine tier &mdash; not SIP &mdash;
-						while the network sees an ordinary SIP call. Dial another registered browser and
-						the media runs peer&#8209;to&#8209;peer with no media server at all; dial a phone
-						number and the call is anchored, because a phone cannot speak ICE or DTLS.
-					</p>
+					<p>A browser as a first&#8209;class SIP endpoint.</p>
 				</div>
 			</section>
 
@@ -94,25 +85,27 @@
 					<section class="phone-panel">
 						<h2 class="phone-panel-title">Connection</h2>
 						<div class="phone-field">
-							<label for="gateway">Gateway (engine tier)</label>
+							<label for="gateway">Gateway (engine tier)<span class="phone-tip" tabindex="0"
+								aria-describedby="tip-gateway"><span class="phone-tip-mark" aria-hidden="true">?</span><span
+								class="phone-tip-bubble" role="tooltip" id="tip-gateway">The <code>webrtc</code> service runs on
+								the <strong>engine</strong> tier; this page is served from the admin tier, so the address is
+								configuration rather than this page&rsquo;s own origin.</span></span></label>
 							<input id="gateway" autocomplete="off" spellcheck="false">
-							<div class="phone-field-hint">
-								The <code>webrtc</code> service runs on the <strong>engine</strong> tier; this
-								page is served from the admin tier, so the address is configuration rather
-								than this page&rsquo;s own origin.
-							</div>
 						</div>
 						<div class="phone-field">
-							<label for="aor">Your address</label>
+							<label for="aor">Your address<span class="phone-tip" tabindex="0"
+								aria-describedby="tip-aor"><span class="phone-tip-mark" aria-hidden="true">?</span><span
+								class="phone-tip-bubble" role="tooltip" id="tip-aor">The address other browsers dial to reach
+								you, and the one the gateway binds this WebSocket to.</span></span></label>
 							<input id="aor" value="alice@vorpal.net" autocomplete="off" spellcheck="false">
 						</div>
 						<div class="phone-field">
-							<label for="stun">STUN server</label>
+							<label for="stun">STUN server<span class="phone-tip" tabindex="0"
+								aria-describedby="tip-stun"><span class="phone-tip-mark" aria-hidden="true">?</span><span
+								class="phone-tip-bubble" role="tooltip" id="tip-stun">Browsers publish <code>&lt;uuid&gt;.local</code>
+								mDNS candidates instead of private addresses, so a reachable STUN or TURN server is required,
+								not optional.</span></span></label>
 							<input id="stun" value="stun:stun.l.google.com:19302" autocomplete="off" spellcheck="false">
-							<div class="phone-field-hint">
-								Browsers publish <code>&lt;uuid&gt;.local</code> mDNS candidates instead of private
-								addresses, so a reachable STUN or TURN server is required, not optional.
-							</div>
 						</div>
 						<div class="phone-row">
 							<button class="vorpal-btn" id="btn-register">Register</button>

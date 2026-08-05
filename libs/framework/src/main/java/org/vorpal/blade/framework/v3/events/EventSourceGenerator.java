@@ -85,6 +85,13 @@ public final class EventSourceGenerator {
 		sb.append(NL);
 		sb.append("\tprivate static final long serialVersionUID = 1L;").append(NL);
 		sb.append(NL);
+		if (declaration.getVersion() != null) {
+			sb.append("\t/// The declaration revision this class was generated from. The producer").append(NL);
+			sb.append("\t/// stamps it as the envelope's `dataversion`, so a consumer can tell which").append(NL);
+			sb.append("\t/// shape an event was published with.").append(NL);
+			sb.append("\tpublic static final int VERSION = ").append(declaration.getVersion()).append(";").append(NL);
+			sb.append(NL);
+		}
 
 		appendBody(sb, declaration.fieldsOrEmpty(), "\t");
 
@@ -232,6 +239,13 @@ public final class EventSourceGenerator {
 		boolean durableTopic = resolved.isDurableTopic(subscription);
 		String selector = subscription.selector();
 		List<EventType> handled = handledTypes(subscription, resolved);
+		boolean versionGuard = false;
+		for (EventType declared : handled) {
+			if (declared.getVersion() != null) {
+				versionGuard = true;
+				break;
+			}
+		}
 
 		StringBuilder sb = new StringBuilder(4096);
 		if (subscription.getJavaPackage() != null && !subscription.getJavaPackage().isEmpty()) {
@@ -247,8 +261,14 @@ public final class EventSourceGenerator {
 		sb.append("import javax.jms.TextMessage;").append(NL);
 		sb.append(NL);
 		sb.append("import java.util.Collections;").append(NL);
+		if (versionGuard) {
+			sb.append("import java.util.HashSet;").append(NL);
+		}
 		sb.append("import java.util.LinkedHashMap;").append(NL);
 		sb.append("import java.util.Map;").append(NL);
+		if (versionGuard) {
+			sb.append("import java.util.Set;").append(NL);
+		}
 		sb.append("import java.util.logging.Level;").append(NL);
 		sb.append("import java.util.logging.Logger;").append(NL);
 		sb.append(NL);
@@ -310,6 +330,9 @@ public final class EventSourceGenerator {
 		sb.append(NL);
 
 		appendDedupe(sb);
+		if (versionGuard) {
+			appendVersionGuard(sb);
+		}
 		appendOnMessage(sb, subscription, handled, selector);
 		appendHandlers(sb, handled);
 
@@ -436,6 +459,35 @@ public final class EventSourceGenerator {
 		sb.append(NL);
 	}
 
+	/// Emit the version-skew guard. Fail open on purpose: the event is still
+	/// handled — a field addition is the common shape change — but the skew is
+	/// visible instead of silent. Warned combinations are remembered so a skewed
+	/// producer logs once per shape, not once per event; at bus volume a line per
+	/// event would be the loudest thing in the log and say nothing new.
+	private static void appendVersionGuard(StringBuilder sb) {
+		sb.append("\t/// Type+version pairs already warned about, so a skewed producer logs").append(NL);
+		sb.append("\t/// once per shape rather than once per event.").append(NL);
+		sb.append("\tprivate static final Set<String> WARNED_VERSIONS = Collections.synchronizedSet(new HashSet<String>());")
+				.append(NL);
+		sb.append(NL);
+		sb.append("\t/// Warn when an event was published from a different declaration revision").append(NL);
+		sb.append("\t/// than this consumer was generated against. The event is still handled —").append(NL);
+		sb.append("\t/// field additions are the common change — but the skew becomes visible.").append(NL);
+		sb.append("\t/// An envelope with no dataversion predates versioning and is not a skew.").append(NL);
+		sb.append("\tprivate static void checkVersion(CloudEvent event, int generatedAgainst) {").append(NL);
+		sb.append("\t\tInteger published = event.getDataversion();").append(NL);
+		sb.append("\t\tif (published == null || published.intValue() == generatedAgainst) {").append(NL);
+		sb.append("\t\t\treturn;").append(NL);
+		sb.append("\t\t}").append(NL);
+		sb.append("\t\tif (WARNED_VERSIONS.add(event.getType() + \":\" + published)) {").append(NL);
+		sb.append("\t\t\tlogger.warning(event.getType() + \" arrived at version \" + published").append(NL);
+		sb.append("\t\t\t\t\t+ \" but this consumer was generated against version \" + generatedAgainst").append(NL);
+		sb.append("\t\t\t\t\t+ \" — regenerate this consumer from the catalog\");").append(NL);
+		sb.append("\t\t}").append(NL);
+		sb.append("\t}").append(NL);
+		sb.append(NL);
+	}
+
 	private static void appendOnMessage(StringBuilder sb, EventSubscription subscription, List<EventType> handled,
 			String selector) {
 
@@ -462,6 +514,9 @@ public final class EventSourceGenerator {
 			for (EventType declared : handled) {
 				String payload = declared.effectiveJavaClassName();
 				sb.append("\t\t\tcase \"").append(escape(declared.getType())).append("\":").append(NL);
+				if (declared.getVersion() != null) {
+					sb.append("\t\t\t\tcheckVersion(event, ").append(declared.getVersion()).append(");").append(NL);
+				}
 				sb.append("\t\t\t\t").append(handlerName(declared))
 						.append("(event, MAPPER.treeToValue(event.getData(), ").append(payload).append(".class));")
 						.append(NL);
@@ -531,7 +586,7 @@ public final class EventSourceGenerator {
 		}
 	}
 
-	/// `net.vorpal.blade.transfer.requested` becomes `onTransferRequested`.
+	/// `org.vorpal.blade.transfer.requested` becomes `onTransferRequested`.
 	private static String handlerName(EventType declaration) {
 		return "on" + declaration.effectiveJavaClassName();
 	}
@@ -597,7 +652,13 @@ public final class EventSourceGenerator {
 		sb.append("\t\t\"").append(escape(declaration.getType())).append("\",").append(NL);
 		sb.append("\t\t\"/blade/events\",").append(NL);
 		sb.append("\t\tsipSession.getId(),   // subject: the correlation key for this call").append(NL);
-		sb.append("\t\tnew ObjectMapper().valueToTree(payload));").append(NL);
+		if (declaration.getVersion() != null) {
+			sb.append("\t\tnew ObjectMapper().valueToTree(payload),").append(NL);
+			sb.append("\t\t").append(className).append(".VERSION);   // the declaration revision this shape has")
+					.append(NL);
+		} else {
+			sb.append("\t\tnew ObjectMapper().valueToTree(payload));").append(NL);
+		}
 		sb.append("EventBus.publish(event);").append(NL);
 		return sb.toString();
 	}
@@ -762,7 +823,8 @@ public final class EventSourceGenerator {
 				(declaration == null) ? null : declaration.getType(),
 				"/blade/events",
 				"vorpal-session-1",
-				data);
+				data,
+				(declaration == null) ? null : declaration.getVersion());
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(event);
 	}
 

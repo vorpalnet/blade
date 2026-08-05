@@ -16,10 +16,9 @@
 ///
 /// ```java
 /// sendRequest(bobInvite, (bobResponse) -> {
-///     SipServletResponse aliceResponse = createResponse(bobResponse, aliceRequest);
+///     SipServletResponse aliceResponse = createResponse(aliceRequest, bobResponse);
 ///     sendResponse(aliceResponse, (aliceAck) -> {
-///         SipServletRequest bobAck = createAcknowlegement(bobResponse, aliceAck);
-///         sendRequest(bobAck);
+///         sendAcknowledgement(aliceAck, bobResponse);
 ///     });
 /// });
 /// ```
@@ -33,8 +32,12 @@
 /// lambda expression within 'sendRequest' can be invoked multiple times. Only when an
 /// ACK (or PRACK) is returned will the lambda expression within 'sendResponse' be invoked.
 /// 
-/// The 'createResponse' and 'createAcknowlegement' methods simply helper functions aiding
-/// in copying the content and headers from one message to another.
+/// 'createResponse' is a helper that copies the content and headers from one message
+/// to another. 'sendAcknowledgement' acknowledges the downstream response with whichever
+/// method arrived upstream — ACK or PRACK — and sends it, so the callflow never has to
+/// branch on the method itself. When something must modify the outbound request before
+/// it goes out, 'createAcknowledgement' builds the same request and leaves the sending
+/// to you.
 ///
 /// **Automatic state serialization** is the key innovation. [org.vorpal.blade.framework.v2.callflow.Callflow]
 /// implements `Serializable`, so lambda callbacks and all variables they close over are
@@ -118,12 +121,12 @@
 ///       {@code Serializable} so your entire call state survives cluster failover
 ///       automatically.</li>
 ///
-///   <li><b>{@link org.vorpal.blade.framework.v2.callflow.Callflow#sendRequest(javax.servlet.sip.SipServletRequest, org.vorpal.blade.framework.v2.callflow.Callback) sendRequest()}</b>
+///   <li><b>{@link org.vorpal.blade.framework.v2.callflow.Callflow#sendRequest(javax.servlet.sip.SipServletRequest, org.vorpal.blade.framework.Callback) sendRequest()}</b>
 ///       &mdash; Send a SIP request and register a lambda callback that fires when the
 ///       response arrives. This is how you advance the conversation forward &mdash; each
 ///       nested {@code sendRequest()} represents the next step in the call flow.</li>
 ///
-///   <li><b>{@link org.vorpal.blade.framework.v2.callflow.Callflow#sendResponse(javax.servlet.sip.SipServletResponse, org.vorpal.blade.framework.v2.callflow.Callback) sendResponse()}</b>
+///   <li><b>{@link org.vorpal.blade.framework.v2.callflow.Callflow#sendResponse(javax.servlet.sip.SipServletResponse, org.vorpal.blade.framework.Callback) sendResponse()}</b>
 ///       &mdash; Send a SIP response and register a lambda callback for the subsequent
 ///       request (e.g., ACK after a 200 OK). Together with {@code sendRequest()}, these
 ///       two methods are all you need to express any SIP message exchange.</li>

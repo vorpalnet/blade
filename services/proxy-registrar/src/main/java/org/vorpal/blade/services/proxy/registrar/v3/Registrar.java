@@ -22,9 +22,7 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 public class Registrar implements Serializable {
 	private static final long serialVersionUID = -9141916534493575461L;
 	public Map<String, ContactInfo> contactsMap = new HashMap<>();
-	private int maxExpires = 0;
 	private static Logger sipLogger = Callflow.getSipLogger();
-//	private List<String> allowHeaders = new LinkedList<>();
 
 	private int expires(SipServletRequest registerRequest, Address contact) {
 		String strExpires = null;
@@ -44,13 +42,19 @@ public class Registrar implements Serializable {
 		return Integer.toString(expires);
 	}
 
+	/// The account's currently registered contacts.
+	///
+	/// Expired entries are skipped. `updateContacts` prunes the map, but it only
+	/// runs on a REGISTER — and a phone that dies without deregistering never
+	/// sends another one. Without this check an INVITE would keep forking to a
+	/// contact whose registration lapsed hours ago.
 	public List<URI> getContacts(SipServletRequest request) {
 		List<URI> list = new LinkedList<>();
+		long currentTime = System.currentTimeMillis();
 		for (ContactInfo info : contactsMap.values()) {
-//			if (Callflow.getSipLogger().isLoggable(Level.FINER)) {
-//				Callflow.getSipLogger().finer(request, "Contact: " + info.getAddress().getURI());
-//			}
-			list.add(info.getAddress().getURI());
+			if (info.getExpiration() > currentTime) {
+				list.add(info.getAddress().getURI());
+			}
 		}
 		return list;
 	}
@@ -62,7 +66,6 @@ public class Registrar implements Serializable {
 //	}
 
 	public SipServletResponse updateContacts(SipServletRequest registerRequest) throws ServletParseException {
-		List<String> allowHeaders = null;
 
 		SipApplicationSession appSession = registerRequest.getApplicationSession();
 		List<Address> contacts = registerRequest.getAddressHeaderList("Contact");
@@ -74,7 +77,6 @@ public class Registrar implements Serializable {
 		for (Address address : contacts) {
 			strUri = address.getURI().toString();
 			expires = expires(registerRequest, address);
-			maxExpires = Math.max(maxExpires, expires);
 			if (expires > 0) {
 				copiedAddress = Callflow.getSipFactory().createAddress(address.toString()); // can only edit copies
 //				if (sipLogger.isLoggable(Level.FINER)) {
@@ -116,19 +118,48 @@ public class Registrar implements Serializable {
 		}
 
 		if (contactsMap.size() == 0) {
-			// invalidate in one minute
+			// The account has deregistered. Let the session expire in a minute
+			// rather than marking it invalidate-when-ready: every REGISTER for
+			// this account shares this one SipApplicationSession (keyed by
+			// PRServlet.sessionKey), so tearing it down the instant the
+			// deregister's own SipSession goes ready also destroys the call
+			// state of any sibling REGISTER still waiting to be answered.
+			//
+			// A residual collision survives this fix and is NOT ours to close
+			// here: a phone that re-registers on the same cadence as this
+			// expiry (Bria cycles ~60s) can arrive while the old appSession is
+			// mid-invalidation. That dispatch stalls past T1, the phone
+			// retransmits, and the retransmission is processed as a fresh
+			// request (new transaction, App Router re-run) and gets the 200.
+			// The first packet's transaction is left unanswered, and OCCAS's
+			// default-on RFC 4320 guard — a T2 (4s) timer per non-INVITE
+			// server transaction that auto-sends 100 Trying
+			// (enable-send100-for-non-invite-transaction, compiled-in true) —
+			// fires on it, finds the request answered elsewhere, and logs
+			// BEA-331601 "Client timer task failed ... This transaction has
+			// been completed already". Harmless but ERROR-severity; the fix is
+			// disabling that guard (Tuning app, SIP panel), not app code.
 
 			if (sipLogger.isLoggable(Level.FINER)) {
 				sipLogger.finer(registerRequest,
-						"Registrar.updateContacts - appSession.setInvalidateWhenReady(true), appSession.setExpires(1)");
+						"Registrar.updateContacts - appSession.setInvalidateWhenReady(false), appSession.setExpires(1)");
 			}
 
-			appSession.setInvalidateWhenReady(true);
+			appSession.setInvalidateWhenReady(false);
 			appSession.setExpires(1);
 		} else {
 
-			int exp = (int) Math.ceil(maxExpires / 60.0);
-			allowHeaders = registerRequest.getHeaderList("Allow");
+			// Outlive the longest-lived contact in the map, not merely the
+			// longest interval THIS request asked for. One account can hold
+			// contacts from several devices, so a second phone re-registering
+			// for 60 seconds must not expire the whole record while the first
+			// phone's hour-long registration still has time left. Floor of one
+			// minute: setExpires(0) means never expire.
+			long latest = 0;
+			for (ContactInfo contactInfo : contactsMap.values()) {
+				latest = Math.max(latest, contactInfo.getExpiration());
+			}
+			int exp = Math.max(1, (int) Math.ceil((latest - System.currentTimeMillis()) / 60000.0));
 
 			if (sipLogger.isLoggable(Level.FINER)) {
 				sipLogger.finer(registerRequest,

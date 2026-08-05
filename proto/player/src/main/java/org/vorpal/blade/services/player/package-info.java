@@ -7,6 +7,6 @@
 ///
 /// The app speaks only `javax.media.mscontrol.*`; it obtains its [javax.media.mscontrol.MsControlFactory]
 /// from whichever 309 driver is registered (via the SPI [javax.media.mscontrol.spi.DriverManager]), so
-/// nothing here is tied to a particular media server. In the Vorpal deployment that driver is the
-/// private Gryphon Kurento driver — but this app would run unchanged on any 309 driver.
+/// nothing here is tied to a particular media server. In the Vorpal deployment that driver is a
+/// private JSR-309 media controller driver — but this app would run unchanged on any 309 driver.
 package org.vorpal.blade.services.player;

@@ -64,24 +64,34 @@
 					<table>
 						<tr><th>Symptom</th><th>Likely cause</th><th>What to do</th></tr>
 						<tr>
-							<td>List request returns 404</td>
-							<td>The target service doesn't implement the CRUD endpoints, or the app name in the URL is wrong</td>
-							<td>Confirm <code>?app=&lt;name&gt;</code> matches a deployed service. Check that service's <code>web.xml</code> for the CRUD endpoint mapping.</td>
+							<td>Connector or operation forms show raw JSON instead of fields</td>
+							<td>The editor couldn't load or resolve the JSON Schema — the raw-JSON textarea is the deliberate no-data-loss fallback</td>
+							<td>Check the browser console and hard-refresh (the kit script <code>/blade/portal/lib/blade-editor.js</code> may be cached stale). If <code>_schemas/crud.jschema</code> is missing, the editor generates one in-process — a failure there means a framework-version mismatch between the portal and this WAR.</td>
 						</tr>
 						<tr>
-							<td>List returns rows but the form is text-only</td>
-							<td>The list response didn't include a schema</td>
-							<td>This is the expected fallback. To get typed forms, the service must include the <code>schema</code> field in its response.</td>
+							<td>Auto-select reports no rule set for a message that should match</td>
+							<td>The pipeline's regex didn't extract, or the table key doesn't match</td>
+							<td>Read the variables the selection returned — if <code>dialedNumber</code> (or your key variable) is missing, the selector's pattern didn't match the pasted message. Warnings from the engine (table misses log at FINER in production) appear under the preview.</td>
 						</tr>
 						<tr>
-							<td>PUT succeeds but list doesn't show the new row</td>
-							<td>List cache or pagination — the row exists but isn't in the visible page</td>
-							<td>Refresh. If still missing, search for the row by primary key.</td>
+							<td>A rule doesn't fire in preview</td>
+							<td>One of its filters failed — method, messageType, lifecycle event, statusRange, or <code>when</code></td>
+							<td>Check the lifecycle-event dropdown matches the rule's <code>event</code> filter. A <code>statusRange</code> restricts the rule to responses. A malformed <code>when</code> expression never fires — by design.</td>
 						</tr>
 						<tr>
-							<td>Preview returns 4xx</td>
-							<td>The change is invalid per the service's rules</td>
-							<td>Read the response body — services that implement preview should return a useful error message describing why.</td>
+							<td>Save returns 400 "config rejected"</td>
+							<td>The document wouldn't load in the CRUD service — unknown operation type, unknown field, malformed shape</td>
+							<td>Read the error: it's the actual parse failure the service would have logged. Nothing was written; the live config is untouched.</td>
+						</tr>
+						<tr>
+							<td>Publish returns 409</td>
+							<td>No Configuration MBean for <code>crud</code> — the CRUD service isn't deployed or isn't running</td>
+							<td>The file IS saved. Start or deploy the crud service, then publish again — or wait; a node picks the file up at its next start.</td>
+						</tr>
+						<tr>
+							<td>Published, but the running service behaves like the old config</td>
+							<td>The reload happened on a node that doesn't share this domain directory, or the publish reloaded before the save you meant</td>
+							<td>Check the vorpal log on an engine node for the configuration-reload lines; confirm the JSON panel matches what you expect, then Save and Publish in that order.</td>
 						</tr>
 						<tr>
 							<td>Editor returns 401 on every request</td>
@@ -91,12 +101,14 @@
 					</table>
 
 					<div class="vorpal-callout vorpal-callout-warn">
-						<div class="vorpal-callout-title">Always preview mutating ops</div>
+						<div class="vorpal-callout-title">Preview before you publish</div>
 						<p>
-							For table-shaped data, one wrong row can affect
-							every call that matches. Use the dry-run preview
-							for any production change — the few extra seconds
-							are worth more than a recovery story.
+							One wrong rule affects every call its filters
+							match. The preview runs the exact engine
+							production runs — paste a captured message and
+							prove the change before Save, and again before
+							Publish. The few extra seconds are worth more
+							than a recovery story.
 						</p>
 					</div>
 				</article>

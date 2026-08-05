@@ -382,7 +382,7 @@ export class BladePhone {
     this.ws.send(JSON.stringify({
       specversion: '1.0',
       type,
-      source: '/blade/webrtc/client',
+      source: '/webrtc/client',
       id: crypto.randomUUID(),
       time: new Date().toISOString(),
       datacontenttype: 'application/json',

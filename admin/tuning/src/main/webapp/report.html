@@ -317,6 +317,13 @@
 			if (d['sip-timers']) {
 				add('SIP Protocol', 'engine cluster', 'Engine Call State Cache',
 					d['sip-timers'].engineCallStateCache ? 'enabled' : 'disabled', 'enabled', !!d['sip-timers'].engineCallStateCache);
+				// Absent on OCCAS versions whose SipServerBean lacks the
+				// attribute — skip rather than report a false pass.
+				if (d['sip-timers'].enableSend100ForNonInvite != null) {
+					add('SIP Protocol', 'engine cluster', 'Send 100 for non-INVITE (BEA-331601 source)',
+						d['sip-timers'].enableSend100ForNonInvite ? 'enabled' : 'disabled', 'disabled',
+						!d['sip-timers'].enableSend100ForNonInvite);
+				}
 			}
 
 			if (d['domain-mode']) {

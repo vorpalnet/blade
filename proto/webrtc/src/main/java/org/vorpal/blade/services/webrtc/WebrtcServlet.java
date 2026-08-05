@@ -87,7 +87,7 @@ public class WebrtcServlet extends AsyncSipServlet {
 
 	/// Driver settings, read from servlet context parameters so a deployment can point the gateway at
 	/// its media server, STUN and TURN without a rebuild. Keys pass through verbatim; each driver
-	/// documents the ones it understands (see `GryphonDriver` for the Kurento plane).
+	/// documents the ones it understands (see the JSR-309 media controller driver's documentation).
 	private static Properties mediaProperties(SipServletContextEvent event) {
 		Properties properties = new Properties();
 		Enumeration<String> names = event.getServletContext().getInitParameterNames();

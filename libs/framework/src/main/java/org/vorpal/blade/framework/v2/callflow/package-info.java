@@ -14,10 +14,9 @@
 ///
 /// {@snippet :
 /// sendRequest(bobInvite, (bobResponse) -> {
-///     SipServletResponse aliceResponse = createResponse(bobResponse, aliceRequest);
+///     SipServletResponse aliceResponse = createResponse(aliceRequest, bobResponse);
 ///     sendResponse(aliceResponse, (aliceAck) -> {
-///         SipServletRequest bobAck = createAcknowlegement(bobResponse, aliceAck);
-///         sendRequest(bobAck);
+///         sendAcknowledgement(aliceAck, bobResponse);
 ///     });
 /// });
 /// }
@@ -30,8 +29,8 @@
 /// ## How Callbacks Work
 ///
 /// The two fundamental methods are
-/// {@link Callflow#sendRequest(javax.servlet.sip.SipServletRequest, Callback) sendRequest()}
-/// and {@link Callflow#sendResponse(javax.servlet.sip.SipServletResponse, Callback) sendResponse()}.
+/// {@link Callflow#sendRequest(javax.servlet.sip.SipServletRequest, org.vorpal.blade.framework.Callback) sendRequest()}
+/// and {@link Callflow#sendResponse(javax.servlet.sip.SipServletResponse, org.vorpal.blade.framework.Callback) sendResponse()}.
 /// Each accepts a SIP message and a [Callback] lambda:
 ///
 /// <ul>
@@ -92,7 +91,7 @@
 /// selects this callflow for an incoming request:
 ///
 /// {@snippet :
-/// public class MyCallflow extends org.vorpal.blade.framework.v3.Callflow {
+/// public class MyCallflow extends org.vorpal.blade.framework.v2.callflow.Callflow {
 ///     @Override
 ///     public void process(SipServletRequest request) throws ServletException, IOException {
 ///         // Your call logic here — use sendRequest(), sendResponse(), etc.
@@ -120,11 +119,10 @@
 ///     copyContentAndHeaders(aliceRequest, bobRequest);
 ///
 ///     sendRequest(bobRequest, (bobResponse) -> {                          // Step 1: forward to Bob
-///         SipServletResponse aliceResponse = createResponse(bobResponse, aliceRequest);
+///         SipServletResponse aliceResponse = createResponse(aliceRequest, bobResponse);
 ///
 ///         sendResponse(aliceResponse, (aliceAck) -> {                     // Step 2: relay response to Alice
-///             SipServletRequest bobAck = createAcknowlegement(bobResponse, aliceAck);
-///             sendRequest(bobAck);                                        // Step 3: forward ACK to Bob
+///             sendAcknowledgement(aliceAck, bobResponse);                 // Step 3: ACK (or PRACK) to Bob
 ///         });
 ///     });
 /// }
@@ -146,7 +144,7 @@
 ///     copyContentAndHeaders(aliceRequest, bobRequest);
 ///
 ///     sendRequest(bobRequest, (bobResponse) -> {                          // Step 1: forward to Bob
-///         SipServletResponse aliceResponse = createResponse(bobResponse, aliceRequest);
+///         SipServletResponse aliceResponse = createResponse(aliceRequest, bobResponse);
 ///         sendResponse(aliceResponse);                                    // Step 2: relay response (no ACK)
 ///     });
 /// }
@@ -175,14 +173,23 @@
 ///   <caption>Message Creation Helpers</caption>
 ///   <tr><th>Method</th><th>Purpose</th></tr>
 ///   <tr>
-///     <td>{@code createResponse(bobResponse, aliceRequest)}</td>
+///     <td>{@code createResponse(aliceRequest, bobResponse)}</td>
 ///     <td>Create an upstream response from a downstream response &mdash; copies
 ///         status code, reason phrase, headers, and content</td>
 ///   </tr>
 ///   <tr>
-///     <td>{@code createAcknowlegement(bobResponse, aliceAck)}</td>
-///     <td>Create a downstream ACK (or PRACK) from an upstream ACK &mdash; copies
-///         content and headers</td>
+///     <td>{@code sendAcknowledgement(aliceAck, bobResponse)}</td>
+///     <td>Acknowledge the downstream response with whichever method arrived
+///         upstream &mdash; builds the ACK or PRACK, copies content and headers,
+///         sends it, relays the PRACK's own response, and answers 486 on glare.
+///         Replaces the hand-written ACK-vs-PRACK branch entirely. Reach for
+///         this one by default</td>
+///   </tr>
+///   <tr>
+///     <td>{@code createAcknowledgement(bobResponse, aliceAck)}</td>
+///     <td>The same build step without the send, for when something must modify
+///         the outbound request first &mdash; a {@code B2buaListener} hook, say.
+///         Throws for a method that is neither ACK nor PRACK</td>
 ///   </tr>
 ///   <tr>
 ///     <td>{@code copyContentAndHeaders(from, to)}</td>
@@ -191,11 +198,15 @@
 ///   </tr>
 ///   <tr>
 ///     <td>{@code copyContent(from, to)}</td>
-///     <td>Copy just the message body and content type</td>
+///     <td>Copy the message body and content type &mdash; and, like
+///         {@code copyContentAndHeaders()}, link the sessions for INVITE/ACK</td>
 ///   </tr>
 ///   <tr>
 ///     <td>{@code copyHeaders(from, to)}</td>
-///     <td>Copy just the headers (excludes system headers like Via, Call-ID, CSeq)</td>
+///     <td>Copy just the headers (excludes system headers like Via, Call-ID, CSeq),
+///         but keeps Contact in the cases the spec exempts &mdash; REGISTER, 3xx,
+///         485, and 200/OPTIONS. {@code copyContentAndHeaders()} does not; call
+///         this one when Contact matters</td>
 ///   </tr>
 /// </table>
 ///
@@ -204,17 +215,30 @@
 ///
 /// In a B2BUA, two SIP dialogs (Alice&harr;App and App&harr;Bob) share a single
 /// {@code SipApplicationSession}. To navigate between them, BLADE stores a
-/// {@code LINKED_SESSION} attribute on each {@code SipSession} pointing to the other:
+/// {@code LINKED_SESSION} attribute on a {@code SipSession} naming the other:
 ///
 /// <ul>
 ///   <li>{@link Callflow#linkSession(javax.servlet.sip.SipServletMessage, javax.servlet.sip.SipServletMessage) linkSession(inbound, outbound)}
-///       &mdash; links two sessions bidirectionally (called automatically by
-///       {@code copyContentAndHeaders()} for INVITE/ACK messages)</li>
+///       &mdash; writes the link on the <b>outbound</b> session only, pointing back
+///       at the inbound one. Called automatically by {@code copyContentAndHeaders()}
+///       for INVITE and ACK messages</li>
 ///   <li>{@link Callflow#getLinkedSession(javax.servlet.sip.SipSession) getLinkedSession(session)}
-///       &mdash; retrieves the other leg's session</li>
+///       &mdash; retrieves the other leg's session, or null if this session has no
+///       link yet</li>
 ///   <li>{@link Callflow#unlinkSessions(javax.servlet.sip.SipSession, javax.servlet.sip.SipSession) unlinkSessions(s1, s2)}
-///       &mdash; removes the link between two sessions</li>
+///       &mdash; removes the attribute from both sessions</li>
 /// </ul>
+///
+/// <p><b>Each call links one way, and a normal B2BUA ends up linked both ways
+/// because it copies in both directions.</b> Forwarding Alice's INVITE runs
+/// {@code copyContentAndHeaders(aliceRequest, bobRequest)}, which links Bob's session
+/// to Alice's. Relaying Bob's response runs
+/// {@code copyContentAndHeaders(bobResponse, aliceResponse)}, which links Alice's
+/// session to Bob's. Until that second copy happens,
+/// {@code getLinkedSession(aliceSession)} returns null &mdash; which is why the link
+/// is absent while forwarding the initial INVITE and present for every re-INVITE
+/// after it. A callflow that skips either copy leaves the corresponding direction
+/// unlinked.</p>
 ///
 ///
 /// ## Glare Detection
@@ -285,7 +309,7 @@
 /// }
 ///
 /// For advanced routing, use
-/// {@link Callflow#proxyRequest(javax.servlet.sip.SipServletRequest, org.vorpal.blade.framework.v2.proxy.ProxyPlan, Callback) proxyRequest()}
+/// {@link Callflow#proxyRequest(javax.servlet.sip.SipServletRequest, org.vorpal.blade.framework.v2.proxy.ProxyPlan, org.vorpal.blade.framework.Callback) proxyRequest()}
 /// with a {@link org.vorpal.blade.framework.v2.proxy.ProxyPlan ProxyPlan} for
 /// multi-tier parallel/serial routing with failover.
 ///

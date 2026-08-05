@@ -97,4 +97,4 @@ FSMAR also cannot modify a SIP message. If that's your goal, write a SIP Servlet
 
 FSMAR tracks applications as they are deployed and undeployed. New calls are routed to updated applications while existing calls continue through the previous versions until they complete naturally. FSMAR also supports dynamic configuration changes, so you never need to reboot a server or drop a call to update routing rules. FSMAR maintains a per-call copy of the configuration, so in-flight calls aren't affected by config edits.
 
-Remember to update the `Weblogic-Application-Version` entry in your application's `META-INF/MANIFEST.MF` for seamless upgrades to work.
+Seamless upgrades key off the `WebLogic-Application-Version` manifest entry. The build writes it for you — the parent pom stamps every WAR, JAR and EAR from the `blade.app.version` property — so there is nothing to edit by hand. A `--dev` build (the default) stamps the bare `<revision>`, which keeps redeploys replacing one another during a test loop; `--prod` stamps `<revision>-<build.number>`, minting a distinct version per build so WebLogic keeps the old one serving in-flight calls.

@@ -91,6 +91,7 @@
 						<tr><td><code>POST&nbsp;/api/v1/deploy</code></td><td>Validate all; if all pass, propagate to the cluster via JMX and reload.</td></tr>
 						<tr><td><code>POST&nbsp;/api/v1/deploy/{app}</code></td><td>Validate one app; if it passes, propagate and reload it.</td></tr>
 						<tr><td><code>POST&nbsp;/api/v1/publish/{app}</code></td><td>Push one app's config to the cluster and reload, without the validate gate.</td></tr>
+						<tr><td><code>POST&nbsp;/api/v1/ai/generate/{app}</code></td><td>Draft a config from a plain-language instruction (text body). Returns <code>{config, valid, errors}</code> — a proposal only; nothing is written or published. Requires the AI assistant to be enabled in the Configurator's settings.</td></tr>
 					</table>
 					<p>
 						Validation walks all three target scopes

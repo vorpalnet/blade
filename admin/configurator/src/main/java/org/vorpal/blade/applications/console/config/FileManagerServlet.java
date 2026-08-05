@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -33,6 +34,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.vorpal.blade.framework.v2.io.VersionedFileStore;
+import org.vorpal.blade.framework.v2.config.ConfigPublisher;
 import org.vorpal.blade.framework.v2.config.SettingsMXBean;
 
 @WebServlet("/filemanager")
@@ -285,6 +287,34 @@ public class FileManagerServlet extends HttpServlet {
 				sendMessageToSession(session, createMessage("json_file_resolved", resolvedFile));
 				break;
 
+			case "get_ai_status":
+				sendMessageToSession(session, createMessage("ai_status", String.valueOf(loadAiSettings().isEnabled())));
+				break;
+
+			case "ai_generate": {
+				String aiApp = jsonNode.get("appName").asText();
+				String aiInstruction = jsonNode.get("instruction").asText();
+				String aiBaseline = jsonNode.has("config") ? jsonNode.get("config").asText() : null;
+				// A generate call can run for a minute; answer from a worker
+				// thread so this WebSocket keeps servicing pings meanwhile.
+				new Thread(() -> {
+					try {
+						AiSettings ai = loadAiSettings();
+						String schemaJson = loadSchemaFromFilesystem(aiApp);
+						if (schemaJson == null || schemaJson.trim().isEmpty()) {
+							sendMessageToSessionAsync(session, createMessage("ai_error", "Schema not found: " + aiApp));
+							return;
+						}
+						String result = AiConfigService.generate(ai, schemaJson, aiBaseline, aiInstruction);
+						sendMessageToSessionAsync(session, createMessage("ai_result", result));
+					} catch (Exception e) {
+						logger.log(Level.WARNING, "AI generate failed for " + aiApp, e);
+						sendMessageToSessionAsync(session, createMessage("ai_error", e.getMessage()));
+					}
+				}, "configurator-ai-generate").start();
+				break;
+			}
+
 			default:
 				sendMessageToSession(session, createMessage("error", "Unknown action: " + action));
 			}
@@ -371,35 +401,16 @@ public class FileManagerServlet extends HttpServlet {
 	// --- JMX Helper Methods ---
 
 	private MBeanServer getMBeanServer() throws NamingException {
-		InitialContext ctx = new InitialContext();
-		try {
-			return (MBeanServer) ctx.lookup("java:comp/env/jmx/domainRuntime");
-		} finally {
-			ctx.close();
-		}
+		return ConfigPublisher.domainRuntimeMBeanServer();
 	}
 
 	private SettingsMXBean getMBeanProxy(MBeanServer mbeanServer, String appName) throws Exception {
-		ObjectName pattern = new ObjectName("vorpal.blade:Name=" + appName + ",Type=Configuration,*");
-		Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(pattern, null);
-		if (mbeans.isEmpty()) {
-			return null;
-		}
-		ObjectName name = mbeans.iterator().next().getObjectName();
-		return JMX.newMXBeanProxy(mbeanServer, name, SettingsMXBean.class);
+		Map<ObjectName, SettingsMXBean> proxies = ConfigPublisher.configurationMBeans(mbeanServer, appName);
+		return proxies.isEmpty() ? null : proxies.values().iterator().next();
 	}
 
 	private void reloadViaMBean(String appName) throws Exception {
-		MBeanServer mbeanServer = getMBeanServer();
-		ObjectName pattern = new ObjectName("vorpal.blade:Name=" + appName + ",Type=Configuration,*");
-		Set<ObjectInstance> mbeans = mbeanServer.queryMBeans(pattern, null);
-		if (mbeans.isEmpty()) {
-			throw new IOException("No MBean found for application: " + appName);
-		}
-		for (ObjectInstance mbean : mbeans) {
-			SettingsMXBean settings = JMX.newMXBeanProxy(mbeanServer, mbean.getObjectName(), SettingsMXBean.class);
-			settings.reload();
-		}
+		ConfigPublisher.reload(appName);
 	}
 
 	/// Read the live auto-publish state from the Configurator's own MBean.
@@ -788,6 +799,34 @@ public class FileManagerServlet extends HttpServlet {
 		} catch (IOException e) {
 			logger.log(Level.SEVERE, "Error sending message to session " + session.getId(), e);
 		}
+	}
+
+	/// Send from a worker thread. The async remote is safe to call while the
+	/// container thread may be writing ping replies on the basic remote.
+	private void sendMessageToSessionAsync(Session session, String message) {
+		if (session.isOpen()) {
+			session.getAsyncRemote().sendText(message);
+		}
+	}
+
+	/// The Configurator's own AI settings, read live from its Configuration
+	/// MBean (already decrypted in memory) — same pattern as getAutoPublish().
+	private AiSettings loadAiSettings() {
+		try {
+			SettingsMXBean cfg = getMBeanProxy(getMBeanServer(), SELF_APP);
+			if (cfg != null) {
+				String json = cfg.getCurrentJson();
+				if (json != null) {
+					JsonNode ai = objectMapper.readTree(json).get("ai");
+					if (ai != null) {
+						return objectMapper.treeToValue(ai, AiSettings.class);
+					}
+				}
+			}
+		} catch (Exception e) {
+			logger.log(Level.WARNING, "could not read configurator AI settings", e);
+		}
+		return new AiSettings();
 	}
 
 	private void broadcastMessage(String message) {

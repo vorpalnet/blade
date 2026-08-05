@@ -5,7 +5,7 @@ ordinary SIP to the network. Two browsers call each other with no media server a
 media server joins when the call reaches the PSTN, or when someone hits record.
 
 ```
-browser ──wss://──> [ blade-webrtc ] ──SIP──> network
+browser ──wss://──> [   webrtc   ] ──SIP──> network
                      SignalEndpoint
                      InboundToBrowser   ← the SIP↔browser translation, compiled
                             │
@@ -127,12 +127,12 @@ was needed: `Callflow.sendResponse` already delivers the ACK to a continuation.
   candidate.
   Both apply only to anchored calls; a relayed browser-to-browser call needs neither.
 - Media-plane settings are passed as servlet context parameters and handed to the JSR-309
-  driver verbatim; see `GryphonDriver` for the keys the Kurento plane understands
-  (`kurento.ws.url`, `stun.address`, `stun.port`, `turn.url`, `external.ipv4`,
-  `network.interfaces`).
+  driver verbatim; see the JSR-309 media controller driver's documentation for the keys it
+  understands (the media server's WebSocket URL, `stun.address`, `stun.port`, `turn.url`,
+  `external.ipv4`, `network.interfaces`).
 - **The driver jar has to be visible to this WAR.** Skinny-WAR policy keeps everything but
   the framework out of `WEB-INF/lib` and `DriverManager` only finds what the classloader can
-  see, so `gryphon-jsr309` (and `gryphon-media`) must be deployed into the `blade-shared`
+  see, so the JSR-309 media controller driver jars must be deployed into the `blade-shared`
   shared library or the domain's `lib/` — the same deployment story as the driver behind
   `proto/player`. Without it the servlet logs "no JSR-309 driver registered" and says so
   plainly: browser-to-browser still works, PSTN and recording do not.
@@ -154,14 +154,15 @@ Built and unit-tested:
 | `call.update` renegotiation | done, 5 protocol tests |
 | JSR-309 driver: `generateSdpOffer` / `processSdpAnswer` / WebRTC legs | done, 17 tests |
 | `WebrtcServlet` — SIP entry, provider install | done |
-| `blade-webrtc.js` — browser client | done, syntax-checked |
-| `phone.html` — softphone page | done |
 | `MediaCallflow.generateOffer` / `answerWithLateMedia` | done |
-| Kurento `WebRtcEndpoint` facade (`gryphon-media`) | done, 10 tests |
+| JSR-309 media controller WebRTC endpoint facade | done, 10 tests |
 
-The page is served from the WAR itself: **`/blade/webrtc/phone.html`**. It defaults the
-gateway URL to this host, so registering and dialling needs no configuration beyond a STUN
-server.
+This WAR is Java only. It serves no page and ships no script: the browser side —
+the client library and the softphone UI — is [admin/phone](../../admin/phone/README.md),
+a separate static app on the admin tier that connects here at `/webrtc/signal`. The
+split is the point. A gateway that served its own client would keep a second copy of
+the protocol in step with this one, and would pin the UI to the engine tier. The UI is
+a static page; it can be hosted anywhere.
 
 **Not yet built** — real gaps, not polish:
 
@@ -180,12 +181,12 @@ server.
    parameters rather than a BLADE settings object, so it is not editable from the
    Configurator, and `MediaMode` is not yet wired to a config key.
 5. **Recording captures one leg, not the mix.** Escalation now completes: both legs are
-   re-offered, answered, and joined (`GryphonNetworkConnection.join` wires the Kurento
-   `connect` in each direction). But `GryphonRecorder` connects a single
-   `NetworkConnection` to its `RecorderEndpoint`, and `GryphonMediaSession.createMediaMixer`
-   still throws — so a two-party recording gets one side of the conversation. Mixing needs
-   the Kurento `Composite` hub, which is the largest single item left. Everything up to and
-   including "the media server is now in the media path of both browsers" works.
+   re-offered, answered, and joined (the driver's `NetworkConnection.join` wires the media
+   paths in each direction). But the driver's recorder connects a single
+   `NetworkConnection` to its recorder endpoint, and its `createMediaMixer` still throws —
+   so a two-party recording gets one side of the conversation. Mixing needs the JSR-309
+   media controller's compositing hub, which is the largest single item left. Everything up
+   to and including "the media server is now in the media path of both browsers" works.
 
 ## Build
 
@@ -195,3 +196,16 @@ server.
 
 Skinny WAR: `WEB-INF/lib` carries only `vorpal-blade-library-framework.jar`. `javax.websocket`
 comes from the inherited `javaee-api` (provided); WebLogic supplies Tyrus at runtime.
+
+## Related modules
+
+- [admin/phone](../../admin/phone/README.md) — the browser softphone that speaks this protocol
+- [proto/player](../player/README.md) — the vendor-neutral JSR-309 player, same driver deployment story
+- [BLADE](../../README.md) — project home
+
+## Maven Coordinates
+
+```xml
+<groupId>org.vorpal.blade</groupId>
+<artifactId>vorpal-blade-proto-webrtc</artifactId>
+```

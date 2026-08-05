@@ -488,19 +488,22 @@ public class FsmarImportServlet extends HttpServlet {
 		cell.setAttribute("vertex", "1");
 		cell.setAttribute("parent", "1");
 		cell.setAttribute("style", "gateway");
-		appendGeometry(doc, cell, placements, stateName, defX, defY, 120, 114);
+		appendGeometry(doc, cell, placements, stateName, defX, defY, 120, 84);
 		gateway.appendChild(cell);
 		root.appendChild(gateway);
 		return gateway;
 	}
 
-	/// Creates an egress box: a `<Gateway role="egress">` exit node. The mirror
-	/// of [#createIngressBox]. Unlike a state it carries no selectors/triggers;
-	/// it owns the `routes` (as `<route uri="…">` children). Its kind is
-	/// topology — a route-back line (its out-edge) makes it ROUTE_BACK, no
-	/// out-edge makes it ROUTE_FINAL — so no modifier is stored on the node.
-	/// `name` keys its stored position; the routes (+ return state) identify it
-	/// for round-trip matching.
+	/// Creates an exit box: the same cloud as [#createIngressBox], drawn where the
+	/// call leaves OCCAS. Unlike a state it carries no selectors/triggers; it owns
+	/// the `routes` (as `<route uri="…">` children). Its kind is topology — a
+	/// route-back line (its out-edge) makes it ROUTE_BACK, no out-edge makes it
+	/// ROUTE_FINAL — so no modifier is stored on the node. `name` keys its stored
+	/// position; the routes (+ return state) identify it for round-trip matching.
+	///
+	/// The transition drawn into this cloud is what marks it as an exit, and export
+	/// reads exactly that. `role="egress"` is still written so a re-export is
+	/// decided outright rather than inferred — belt and braces on the round trip.
 	private String createEgressBox(Document doc, Element root, String cellId,
 			String name, JsonNode routes, JsonNode egJson,
 			JsonNode placements, int defX, int defY) {
@@ -525,8 +528,8 @@ public class FsmarImportServlet extends HttpServlet {
 		Element cell = doc.createElement("mxCell");
 		cell.setAttribute("vertex", "1");
 		cell.setAttribute("parent", "1");
-		cell.setAttribute("style", "egress");
-		appendGeometry(doc, cell, placements, name, defX, defY, 120, 114);
+		cell.setAttribute("style", "gateway");
+		appendGeometry(doc, cell, placements, name, defX, defY, 120, 84);
 		gateway.appendChild(cell);
 		root.appendChild(gateway);
 		return cellId;

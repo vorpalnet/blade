@@ -1,115 +1,57 @@
-# TPCC Service Module
+# Third-Party Call Control (TPCC) Service
 
-A Third Party Call Control (TPCC) service implementation for the Vorpal Blade platform, providing comprehensive call control capabilities and SIP session management.
+Javadocs: `/blade/javadoc/tpcc/` on the Admin Portal
 
-## Overview
+Lets an external application set up and control SIP calls between other parties — RFC
+3725 third-party call control, driven entirely over REST. The controller creates a
+session, creates dialogs to each party, and connects them; the service does the SIP.
 
-The TPCC (Third Party Call Control) service module enables external applications to control and manipulate SIP calls and sessions. This module implements the core functionality for managing call flows, dialog states, and session lifecycle operations in a SIP-based telecommunications environment.
+## The call model (RFC 3725 Flow I)
 
-## Module Structure
+Each dialog is created with an **offerless INVITE**, so the answering party's 200 OK
+carries the real SDP offer. The ACK answers with an RFC 3264 `a=inactive` body (built by
+the same framework code the [Hold service](../hold/README.md) uses), parking the party's
+media. `connect` then bridges two parked legs: an offerless re-INVITE to leg A produces
+a fresh offer, which is passed to leg B, and the answers flow back — standard 3PCC
+bridging, no media server involved.
 
-```
-services/tpcc/
-├── src/main/java/
-│   └── org/vorpal/blade/services/tpcc/
-│       ├── callflows/
-│       └── v1/
-│           ├── dialog/
-│           └── session/
-└── pom.xml
-```
+## REST API
 
-## Packages
+Base path: `/tpcc/api/v1`. Long-running operations are asynchronous — the HTTP response
+resumes when the SIP transaction completes.
 
-### [`org.vorpal.blade.services.tpcc`](#orgvorpalbladeservicestpcc)
+| Method and path | Does |
+| --- | --- |
+| `POST session` | Create a control session; returns `{"sessionId"}`. Optional body sets expiry and attributes |
+| `POST dialog/{sessionId}` | Create a leg: `{localParty, remoteParty, requestUri?}` — sends the offerless INVITE |
+| `GET dialog/{sessionId}` | List the session's legs by dialog id |
+| `GET dialog/{sessionId}/{dialogId}` | One leg's properties |
+| `PUT dialog/{sessionId}/{dialogId}` | Set attributes on a leg |
+| `PUT dialog/{sessionId}/{a}/connect/{b}` | Bridge two legs |
+| `DELETE dialog/{sessionId}/{dialogId}` | BYE a leg |
 
-Core TPCC service implementation containing the main service classes, configuration handlers, and primary API interfaces for third-party call control operations.
+`sessionId` is the SIP application-session key (minted by `POST session`); `dialogId` is
+one leg's Vorpal dialog id. Roadmap noted in the source: per-leg hold/mute (the framework
+callflows exist), and a one-shot `POST /call {from, to}`.
 
-### [`org.vorpal.blade.services.tpcc.callflows`](#orgvorpalbladeservicestpcccallflows)
+**Deployment note:** as shipped, the API's `web.xml` carries no auth-constraint — unlike
+the other service-tier APIs (context, events), which use BASIC auth. Put authentication
+in front of it before exposing it beyond a lab.
 
-Call flow management components that define and execute various telecommunications call scenarios, including call setup, transfer, hold, and termination workflows.
+## Configuration
 
-### [`org.vorpal.blade.services.tpcc.v1`](#orgvorpalbladeservicestpccv1)
+Nothing service-specific — the framework's standard `logging` and `session` blocks,
+edited through the [Configurator](../../admin/configurator/README.md).
 
-Version 1 API implementation providing the public interface for TPCC operations, including REST endpoints and service contracts for external integration.
+## Related modules
 
-### [`org.vorpal.blade.services.tpcc.v1.dialog`](#orgvorpalbladeservicestpccv1dialog)
+- [services/hold](../hold/README.md) — the shared inactive-answer parking callflow
+- [services/context](../context/README.md) and [services/events](../events/README.md) — the other service-tier machine APIs
+- [BLADE](../../README.md) — project home
 
-SIP dialog management components handling dialog state tracking, dialog lifecycle events, and dialog-specific operations within the TPCC context.
-
-### [`org.vorpal.blade.services.tpcc.v1.session`](#orgvorpalbladeservicestpccv1session)
-
-Session management functionality for maintaining call session state, session attributes, and coordinating multi-party call scenarios.
-
-## Dependencies
-
-### Core Dependencies
-
-- **org.vorpal.blade:vorpal-blade-library-framework** - Provides the foundational framework for Vorpal Blade services, including SIP stack integration, service lifecycle management, and core utilities.
-
-## Related Modules
-
-### Framework & Libraries
-- [libs/framework](../libs/framework) - Core framework library
-- [libs/shared/bin](../libs/shared/bin) - Shared binary utilities
-- [libs/fsmar](../libs/fsmar) - Finite State Machine and Action Router library
-
-### Administration
-- [admin/console](../admin/console) - Administrative console interface
-- [admin/configurator](../admin/configurator) - Configuration management tools
-
-### Service Modules
-- [services/acl](../services/acl) - Access Control List service
-- [services/analytics](../services/analytics) - Call analytics and reporting
-- [services/hold](../services/hold) - Call hold functionality
-- [services/options](../services/options) - SIP OPTIONS handling
-- [services/presence](../services/presence) - Presence information management
-- [services/proxy-balancer](../services/proxy-balancer) - Load balancing proxy
-- [services/proxy-block](../services/proxy-block) - Call blocking proxy
-- [services/proxy-registrar](../services/proxy-registrar) - SIP registrar proxy
-- [services/proxy-router](../services/proxy-router) - SIP routing proxy
-- [services/queue](../services/queue) - Call queuing service
-- [services/transfer](../services/transfer) - Call transfer service
-
-## Integration
-
-### Maven Integration
-
-Add the following dependency to your `pom.xml`:
+## Maven Coordinates
 
 ```xml
-<dependency>
-    <groupId>org.vorpal.blade</groupId>
-    <artifactId>services-tpcc</artifactId>
-    <version>${vorpal.blade.version}</version>
-</dependency>
+<groupId>org.vorpal.blade</groupId>
+<artifactId>vorpal-blade-services-tpcc</artifactId>
 ```
-
-### Service Configuration
-
-The TPCC service integrates with the Vorpal Blade framework's configuration system and can be configured through the admin console or configuration files. Ensure proper SIP stack configuration and network settings are in place.
-
-### API Usage
-
-The v1 API provides RESTful endpoints for third-party call control operations. External applications can integrate with the TPCC service to:
-
-- Initiate and terminate calls
-- Transfer calls between parties
-- Manage multi-party conferences
-- Monitor call states and events
-- Control call flow routing
-
-## Features
-
-- **Third Party Call Control**: Complete SIP-based call control for external applications
-- **Dialog Management**: Comprehensive SIP dialog state tracking and management
-- **Session Coordination**: Multi-party call session management and coordination
-- **Call Flow Orchestration**: Predefined and customizable call flow patterns
-- **RESTful API**: Version-controlled REST API for easy integration
-- **Event Monitoring**: Real-time call event notifications and state updates
-
-## Build Requirements
-
-- Java 8 or higher
-- Maven 3.6+
-- Access to Vorpal Blade framework dependencies

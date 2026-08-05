@@ -1,4 +1,4 @@
-package org.vorpal.blade.admin.crud;
+package org.vorpal.blade.framework.v2.logging;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -10,7 +10,6 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipSession;
 
-import org.vorpal.blade.framework.v2.logging.Logger;
 
 /// A SIP-style [Logger] that doesn't NPE when called from a context that
 /// never initialised the framework's full logging stack (i.e. the
@@ -18,7 +17,7 @@ import org.vorpal.blade.framework.v2.logging.Logger;
 /// per-request error into a thread-local buffer so `PreviewEngine` callers
 /// can surface them to the operator instead of silently logging to a file.
 ///
-/// Wire it up once in [PreviewServlet#init], then bracket each preview
+/// Wire it up once in the preview servlet's `init()`, then bracket each preview
 /// request with [#begin] / [#end].
 public class CapturingLogger extends Logger {
 	private static final long serialVersionUID = 1L;
@@ -26,7 +25,7 @@ public class CapturingLogger extends Logger {
 	private static final ThreadLocal<List<String>> CAPTURED = new ThreadLocal<>();
 
 	public CapturingLogger() {
-		super("crud-preview", null);
+		super("editor-preview", null);
 	}
 
 	/// Start capturing for the current request. Call before invoking the
@@ -43,7 +42,7 @@ public class CapturingLogger extends Logger {
 	}
 
 	private static void capture(String severity, String body) {
-		System.err.println("[CRUD-preview/" + severity + "] " + body);
+		System.err.println("[editor-preview/" + severity + "] " + body);
 		List<String> buf = CAPTURED.get();
 		if (buf != null) buf.add(severity + ": " + body);
 	}

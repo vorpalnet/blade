@@ -98,6 +98,14 @@ the next reload; publishers for destinations that did not change are left alone.
    the old analytics script already provisioned. Every JNDI name is unchanged.
    Idempotent — safe to re-run.
 
+   The topic also carries a **time-to-live override** (default 24 hours,
+   `BLADE_EVENT_TTL_MILLIS`). The quota bounds a stalled subscriber's backlog
+   in bytes; the TTL bounds it in time. Without it, a durable subscriber that
+   stays down accrues backlog against the quota — which is shared — until
+   publishes start failing for every application on the bus. The trade is
+   stated in the script where it is set: a subscriber down longer than the TTL
+   loses the events older than it, which is the lesser evil.
+
 2. **Build and deploy.** `events` rides the standard build and lands in
    `dist/<ver>-<build>/services/events.war`, deployed on its own like every
    other service.
@@ -150,8 +158,18 @@ marks in `sensitiveFields` are masked before anything is returned; every tap is
 logged with its principal and selector; and the window is capped server-side at
 60 seconds and 500 messages regardless of what the caller asks for.
 
-## Still open
+## The redelivery contract
 
-- **Consumer idempotency.** A durable subscriber can see a redelivery. The
-  generated consumer says so in a comment, but deduping on the CloudEvent `id`
-  (exposed as the `eventId` JMS property) is the consumer's job.
+Delivery is **at-least-once, and that is the contract — not an open item**. A
+rolling restart, a failover or a rollback can replay events to a durable
+subscriber; the generated consumers are `Auto-acknowledge` and consume on
+exception rather than forcing redelivery, and nothing here is transactional.
+
+So: **a subscriber that acts on events must tolerate seeing one twice.** The
+generated `firstSight` LRU is a cheap first filter — per-JVM, and it forgets —
+not a guarantee. If repeating an action is expensive or wrong, dedupe against
+the durable state the action already writes (a row, a flag, a session
+attribute), keyed on the CloudEvent `id` (also the `eventId` JMS property).
+There is deliberately no cluster-wide dedup service behind this: it would be
+real machinery, every current subscriber tolerates redelivery without it, and
+the durable state an action writes is already the right place to check.

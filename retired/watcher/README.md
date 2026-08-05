@@ -1,14 +1,14 @@
 # BLADE Watcher (Headless Auto-Publish)
 
-> **Standalone, minimal-attack-surface alternative to the Configurator's
-> auto-publish.** This WAR was briefly retired when the
-> [Configurator](../configurator/) absorbed its behavior behind the
-> `autoPublish` setting, then restored: some sites cannot deploy the
-> Configurator UI at all (it doesn't pass their security scans), and
-> `watcher` — no UI, no servlets, no login — is what they deploy instead.
-> It is deliberately **not** bundled into `blade-admin.ear`; deploy
-> `blade-watcher.war` standalone. If you do run the Configurator, use its
-> `autoPublish` setting and leave this WAR undeployed.
+> **Retired.** This module lives in `retired/` for reference and is not
+> discovered or built by the standard build. The
+> [Configurator](../../admin/configurator/README.md) absorbed its behavior
+> behind the `autoPublish` setting — use that. The WAR's original niche
+> was sites whose security scans rejected any admin UI: `watcher` had no
+> UI, no servlets, no login. If that need returns, build it by hand
+> (`./mvnw -f retired/watcher/pom.xml package`) and deploy
+> `blade-watcher.war` standalone; it was deliberately never bundled into
+> `blade-admin.ear`.
 
 ## What it does
 
@@ -69,5 +69,6 @@ toggle — by design: a runtime toggle would mean an HTTP endpoint, and
 having none is the point of this WAR.
 
 The same auto-publish behavior is also available inside the
-[Configurator](../configurator/) via its `autoPublish` setting. If your
-site runs the Configurator, use that and leave `watcher` undeployed.
+[Configurator](../../admin/configurator/README.md) via its `autoPublish`
+setting. If your site runs the Configurator, use that and leave `watcher`
+undeployed.

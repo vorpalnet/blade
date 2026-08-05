@@ -36,8 +36,8 @@
 				<div class="vorpal-eyebrow">Documentation · Reference</div>
 				<h1 class="vorpal-page-title">API Contract</h1>
 				<p class="vorpal-page-subtitle">
-					The REST shape the editor assumes. Any BLADE service
-					that implements this surface can be edited.
+					The preview endpoints the editor page calls, served by
+					the editor WAR's own <code>PreviewServlet</code>.
 				</p>
 			</div>
 
@@ -67,76 +67,90 @@
 
 					<h2>Base path</h2>
 					<p>
-						All endpoints are rooted at
-						<code>/&lt;app&gt;/resources/api/</code>. The editor
-						derives <code>&lt;app&gt;</code> from the page URL.
+						Every endpoint is served by this WAR itself, under
+						its own context root:
+						<code>/blade/crud-editor/resources/api/</code>
+						(written <code>{base}</code> below). These are the
+						editor page's private backend — not an API the CRUD
+						service exposes. Every code path returns
+						<code>application/json</code>, even on error, so the
+						page can always parse what it receives.
 					</p>
 
 					<h2>Endpoints</h2>
 					<table>
 						<tr><th>Method</th><th>Path</th><th>Purpose</th></tr>
-						<tr><td><code>GET</code></td><td><code>{base}/{resource}</code></td><td>List all rows of the named resource.</td></tr>
-						<tr><td><code>GET</code></td><td><code>{base}/{resource}/{key}</code></td><td>Fetch one row by primary key.</td></tr>
-						<tr><td><code>PUT</code></td><td><code>{base}/{resource}/{key}</code></td><td>Create or update one row by primary key. Body is the row JSON.</td></tr>
-						<tr><td><code>DELETE</code></td><td><code>{base}/{resource}/{key}</code></td><td>Delete one row.</td></tr>
-						<tr><td><code>POST</code></td><td><code>{base}/{resource}/_preview</code></td><td>Dry-run preview of a mutating operation. Body describes the proposed change; response describes the effect without applying it.</td></tr>
+						<tr><td><code>GET</code></td><td><code>{base}/ruleSets</code></td><td>List the rule-set ids in the live config — populates the dropdown.</td></tr>
+						<tr><td><code>POST</code></td><td><code>{base}/selection</code></td><td>Selection dry-run: run the enrichment pipeline against a pasted SIP request and report which rule set it selects.</td></tr>
+						<tr><td><code>POST</code></td><td><code>{base}/preview</code></td><td>Rule dry-run: replay a pasted SIP message through a named rule set and return the transformed result.</td></tr>
+						<tr><td><code>GET</code></td><td><code>{base}/config</code></td><td>Load the config document and its JSON Schema for the rules editor: <code>{source, config, schema}</code>, where <code>source</code> is <code>live</code>, <code>sample</code>, or <code>builtin</code>.</td></tr>
+						<tr><td><code>POST</code></td><td><code>{base}/config/save</code></td><td>Save: body is the full config document. Rejected (400) if the CRUD service couldn't load it; credentials encrypted; previous file backed up to <code>.versions/</code>.</td></tr>
+						<tr><td><code>POST</code></td><td><code>{base}/config/publish</code></td><td>Publish: reload the saved config on every node running the CRUD service (409 when the service isn't deployed).</td></tr>
+						<tr><td><code>GET</code></td><td><code>{base}/config/versions</code></td><td>List <code>.versions/</code> snapshots: <code>{versions:[{timestamp,sizeBytes}]}</code>.</td></tr>
+						<tr><td><code>GET</code></td><td><code>{base}/config/versions/{ts}</code></td><td>One snapshot's content.</td></tr>
+						<tr><td><code>POST</code></td><td><code>{base}/config/versions/{ts}/restore</code></td><td>Restore a snapshot (the replaced file is backed up first).</td></tr>
 					</table>
-
-					<h2>Response shape</h2>
-					<p>List responses:</p>
-					<pre><code>{
-  "resource": "rules",
-  "rows": [
-    { "key": "...", "field1": "...", "field2": ... },
-    ...
-  ],
-  "schema": { /* JSON schema describing row shape */ }
-}</code></pre>
-
-					<p>The optional <code>schema</code> field lets the editor render typed form fields; without it, the editor falls back to free-form text editing.</p>
-
-					<h2>Dry-run preview</h2>
 					<p>
-						Mutating operations (PUT, DELETE) optionally route
-						through <code>POST {base}/{resource}/_preview</code>
-						first. The preview response describes the expected
-						effect:
+						The two dry-run endpoints also accept optional
+						<code>draftRuleSets</code>, <code>draftDefaultRuleSet</code>, and <code>draftPipeline</code>
+						fields — the rules editor's unsaved buffer — which replace the
+						live config's rule sets for that run only.
+					</p>
+					<p>
+						The servlet re-reads the live
+						<code>config/custom/vorpal/crud.json</code> on every
+						request, falling back to the built-in sample when no
+						config has been published yet.
+					</p>
+
+					<h2>Selection dry-run</h2>
+					<p>
+						<code>POST {base}/selection</code> — body:
 					</p>
 					<pre><code>{
-  "action": "update",
-  "key": "row-42",
-  "before": { ... },
-  "after":  { ... },
-  "diff":   [ { "field": "...", "from": ..., "to": ... } ],
-  "warnings": [ "..." ]
+  "message":   "INVITE sip:8003@pbx.example.com SIP/2.0\r\n...",
+  "variables": { "name": "value", ... }   // optional pre-set session state
+}</code></pre>
+					<p>Response:</p>
+					<pre><code>{
+  "ruleSet":   "example-update",          // null = passthrough (no match, no defaultRuleSet)
+  "variables": { "dialedNumber": "8003", ... },  // post-enrichment session snapshot
+  "warnings":  [ "..." ],                 // captured engine log lines (table misses etc.)
+  "error":     null
+}</code></pre>
+
+					<h2>Rule dry-run</h2>
+					<p>
+						<code>POST {base}/preview</code> — body:
+					</p>
+					<pre><code>{
+  "ruleSet":        "example-update",
+  "lifecycleEvent": "callStarted",        // null skips event filters
+  "message":        "INVITE ... SIP/2.0\r\n...",
+  "variables":      { "name": "value", ... }
+}</code></pre>
+					<p>Response:</p>
+					<pre><code>{
+  "output":     "INVITE ... SIP/2.0\r\n...",   // transformed message
+  "rulesFired": [ "rewrite-everything" ],
+  "variables":  { ... },                  // session snapshot after the run
+  "warnings":   [ "..." ],
+  "error":      null
 }</code></pre>
 					<p>
-						The editor renders the diff in a confirmation modal
-						before sending the actual mutating request. This is
-						how an operator can sanity-check a change before
-						committing — particularly valuable for table-shaped
-						data where one bad row can affect every call that
-						matches.
+						<code>error</code> non-null (HTTP 400) means the run
+						itself failed — unparseable message, unknown rule set,
+						missing config. <code>warnings</code> carry per-operation
+						errors the engine swallowed so the transformation could
+						continue.
 					</p>
 
 					<h2>Authentication</h2>
 					<p>
 						All endpoints inherit the BLADE admin tier's session
-						auth. No separate token; the same login that opens
-						the portal opens the CRUD API.
+						auth (Admin and Operator roles). No separate token; the
+						same login that opens the portal opens the preview API.
 					</p>
-
-					<div class="vorpal-callout vorpal-callout-note">
-						<div class="vorpal-callout-title">Server-side responsibility</div>
-						<p>
-							This page documents what the editor expects. The
-							actual REST handler lives in each BLADE service.
-							If a service doesn't implement these endpoints,
-							the editor will get 404s — that's the signal
-							that the service hasn't opted into CRUD-API
-							editability.
-						</p>
-					</div>
 				</article>
 			</section>
 

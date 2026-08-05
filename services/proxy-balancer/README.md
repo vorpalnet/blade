@@ -1,6 +1,6 @@
 # Proxy Balancer Service
 
-[Javadocs](https://vorpal.net/javadocs/blade/proxy-balancer)
+Javadocs: `/blade/javadoc/proxy-balancer/` on the Admin Portal
 
 A SIP load balancer: distributes initial INVITEs across tiered pools of
 downstream endpoints, selected by the request URI's host, skipping endpoints
@@ -38,7 +38,10 @@ the name is the endpoint's stable identity for health and the dashboard:
   `scheme` (`sip`/`sips`, default `sip`), `transport` (`udp`/`tcp`, default
   `udp`), `host` (required), `port` (blank = SIP default, 5060/5061). `weight`
   (for `weighted`); `enabled: false` drains the endpoint (no new calls, still
-  monitored); `ping: false` opts it out of the OPTIONS cycle. `user` and
+  monitored); `ping: false` opts it out of the OPTIONS cycle;
+  `pingRequire2xx: true` marks an endpoint as a BLADE engine — only a 2xx
+  ping marks it up (a booting container's error responses must not enroll a
+  half-started node). `user` and
   `uriParams` are optional escape hatches (a real SBC endpoint needs neither;
   `uriParams` exists so a test-harness target can still carry literal
   `status=501;delay=2`-style parameters).
@@ -75,7 +78,9 @@ name (no shared cluster state), with two writers:
 - **OPTIONS pings** — every `health.pingInterval` seconds the node pings
   every registry endpoint (minus `ping: false`). ANY final response except
   408/503 proves the box alive → UP (a 405 dislikes OPTIONS, it isn't dead);
-  the container-generated 408 (silence) or a 503 → DOWN. Publishing a config
+  the container-generated 408 (silence) or a 503 → DOWN (overloaded,
+  draining, or starting — the endpoint said so). With `pingRequire2xx: true`
+  (a BLADE engine) only a 2xx marks UP. Publishing a config
   reschedules the cycle immediately, so a changed `pingInterval` or
   `pingEnabled` applies at once — no redeploy, no waiting out the old
   interval. An unpingable endpoint (malformed URI) is marked DOWN with an

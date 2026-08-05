@@ -17,7 +17,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// ## Two phases
 ///
 /// 1. **Enrichment** — [#getPipeline] is an ordered list of
-///    [Connector]s (SIP, REST, JDBC, LDAP, Map, Table). Each connector
+///    [Connector]s (SIP, REST, JDBC, LDAP, Table). Each connector
 ///    writes values into the shared [Context] so that downstream
 ///    connectors' templates (`${var}`) resolve against what earlier
 ///    stages produced.

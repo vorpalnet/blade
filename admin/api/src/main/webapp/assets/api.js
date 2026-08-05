@@ -106,7 +106,7 @@
 				if (res.ok) {
 					showNotice('No OpenAPI documents found',
 						'No deployed app answered at <engineBaseUrl>/<contextRoot>/resources/openapi.json. ' +
-						'Check that the target services are deployed and that engineBaseUrl in api.json points at the engine tier (e.g. http://host:8001).');
+						'Check that the target services are deployed and that engineBaseUrl in blade-api.json points at the engine tier (e.g. http://host:8001).');
 				}
 				return;
 			}

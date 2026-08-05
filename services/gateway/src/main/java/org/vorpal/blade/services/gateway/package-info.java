@@ -1,11 +1,11 @@
-/// SIP **trunk gateway** — the PSTN front door into BLADE/Gryphon.
+/// SIP **trunk gateway** — the PSTN front door into BLADE.
 ///
 /// One SIP servlet ({@link org.vorpal.blade.services.gateway.GatewaySipServlet}) hosts N
 /// independent {@link org.vorpal.blade.services.gateway.VirtualGateway}s, each with its own
 /// Contact IP. How each stays registered with its carrier is a pluggable
 /// {@link org.vorpal.blade.services.gateway.RegistrationStyle} (Jackson‑polymorphic, `type`
 /// discriminator): {@link org.vorpal.blade.services.gateway.RegisterDigestStyle} keeps a
-/// credentialed trunk (Flowroute) alive with REGISTER + digest auth + a timer refresh
+/// credentialed trunk alive with REGISTER + digest auth + a timer refresh
 /// ({@link org.vorpal.blade.services.gateway.RegisterCallflow}); {@link org.vorpal.blade.services.gateway.IpAuthStyle}
 /// is for IP‑authenticated carriers that need no REGISTER. New carriers = a new style
 /// subclass. Modernized from the 2020 `vorpal-blade-gateway`; see the module README.

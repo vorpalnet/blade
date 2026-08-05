@@ -8,6 +8,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 
 import org.junit.Test;
 
@@ -109,5 +110,66 @@ public class GatewayConfigTest {
 		assertTrue("port 0 is a wildcard", vg.matchesInterface("203.0.113.10", 0));
 		assertFalse("wrong host", vg.matchesInterface("203.0.113.99", 5060));
 		assertFalse("wrong port", vg.matchesInterface("203.0.113.10", 5061));
+	}
+
+	// ---------------------------------------------------------------- inbound direction
+
+	@Test
+	public void sourceHostsMatchBareIpsAndCidrBlocks() {
+		VirtualGateway vg = new VirtualGateway();
+		vg.setSourceHosts(Arrays.asList("203.0.113.0/24", "198.51.100.7"));
+
+		assertTrue("inside the CIDR block", vg.matchesSource("203.0.113.55"));
+		assertTrue("the block's own boundaries count", vg.matchesSource("203.0.113.0"));
+		assertTrue("bare IP entry", vg.matchesSource("198.51.100.7"));
+		assertFalse("outside every entry", vg.matchesSource("192.0.2.1"));
+		assertFalse("adjacent to the block but outside it", vg.matchesSource("203.0.114.1"));
+		assertFalse("no source at all", vg.matchesSource(null));
+	}
+
+	@Test
+	public void emptySourceHostsAcceptsAnySourceOnTheInterface() {
+		VirtualGateway vg = new VirtualGateway();
+		assertTrue("unset means the Contact interface alone identifies the trunk",
+				vg.matchesSource("192.0.2.1"));
+
+		vg.setSourceHosts(null);
+		assertTrue("null is normalized to empty, not a reject-all", vg.matchesSource("192.0.2.1"));
+	}
+
+	@Test
+	public void malformedSourceHostEntryIsSkippedNotThrown() {
+		VirtualGateway vg = new VirtualGateway();
+		vg.setSourceHosts(Arrays.asList("not-an-ip", "", "203.0.113.0/24"));
+
+		assertTrue("a bad entry must not stop the good ones matching", vg.matchesSource("203.0.113.55"));
+		assertFalse(vg.matchesSource("192.0.2.1"));
+	}
+
+	@Test
+	public void sourceHostsRoundTripAndAreOptionalInExistingConfigs() throws Exception {
+		VirtualGateway vg = new VirtualGateway();
+		vg.setName("t");
+		vg.setSourceHosts(Arrays.asList("203.0.113.0/24"));
+
+		VirtualGateway back = M.readValue(M.writeValueAsString(vg), VirtualGateway.class);
+		assertEquals(Arrays.asList("203.0.113.0/24"), back.getSourceHosts());
+
+		// A gateway.json written before the field existed must still load, and must not
+		// start rejecting the carrier it was already accepting.
+		VirtualGateway legacy = M.readValue(
+				"{\"name\":\"t\",\"contactHost\":\"203.0.113.10\",\"registrarDomain\":\"sip.example.com\"}",
+				VirtualGateway.class);
+		assertNotNull("absent sourceHosts deserializes to empty, never null", legacy.getSourceHosts());
+		assertTrue(legacy.getSourceHosts().isEmpty());
+		assertTrue("legacy config keeps accepting its carrier", legacy.matchesSource("192.0.2.1"));
+	}
+
+	@Test
+	public void sampleFlowrouteTrunkDescribesBothDirections() {
+		VirtualGateway flowroute = new GatewaySettingsSample().getGateways().get(0);
+
+		assertNotNull("outbound: where we call the carrier", flowroute.getRegistrarDomain());
+		assertFalse("inbound: where the carrier calls us", flowroute.getSourceHosts().isEmpty());
 	}
 }

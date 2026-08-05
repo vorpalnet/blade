@@ -7,9 +7,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -142,6 +144,25 @@ public class FsmarExportServlet extends HttpServlet {
 		// Includes "null" (the default ingress box) and every ingress state.
 		Map<String, int[]> placements = new java.util.LinkedHashMap<>();
 
+		// Which cells have a transition pointing AT them. The palette has one cloud
+		// symbol with no direction on it, so direction is read off the arrows: a
+		// cloud that something routes INTO is where the call leaves OCCAS (an exit);
+		// a cloud with only out-edges is where calls arrive. The route-back line runs
+		// FROM an exit cloud back to a state, so it never makes its own cloud look
+		// like an entry. Older diagrams that stored role="egress" still win outright.
+		Set<String> cellsWithInboundEdge = new HashSet<>();
+		NodeList inboundScan = doc.getElementsByTagName("Transition");
+		for (int i = 0; i < inboundScan.getLength(); i++) {
+			Element mxCell = firstChildElement((Element) inboundScan.item(i), "mxCell");
+			if (mxCell == null) {
+				continue;
+			}
+			String targetId = mxCell.getAttribute("target");
+			if (targetId != null && !targetId.isEmpty()) {
+				cellsWithInboundEdge.add(targetId);
+			}
+		}
+
 		// First pass: walk all elements with mxCell children to find wrappers
 		NodeList allCells = doc.getElementsByTagName("mxCell");
 		for (int i = 0; i < allCells.getLength(); i++) {
@@ -186,15 +207,21 @@ public class FsmarExportServlet extends HttpServlet {
 				case "Egress":    // legacy saved XML, pre-unification
 					String gwRole = wrapper.getAttribute("role");
 					String gwLabel = wrapper.getAttribute("label");
-					if ("egress".equals(gwRole)) {
-						// An EGRESS exit node: not a state. It is the target of a
-						// terminal transition; the edge pass bakes this node's routes
-						// onto that transition. The route-modifier is INFERRED from
-						// topology, not stored: no out-edge → ROUTE_FINAL; an out-edge
-						// back to a state → ROUTE_BACK (resume there on return).
+					// Where the call LEAVES OCCAS: either the cell says so outright
+					// (saved before the two cloud symbols were merged) or a transition
+					// points at it, which is the same statement drawn instead of typed.
+					boolean leavesHere = "egress".equals(gwRole)
+							|| (gwRole.isEmpty() && cellsWithInboundEdge.contains(cellId));
+					if (leavesHere) {
+						// An EXIT node: not a state. It is the target of a terminal
+						// transition; the edge pass bakes this node's routes onto that
+						// transition. The route-modifier is INFERRED from topology, not
+						// stored: no out-edge → ROUTE_FINAL; an out-edge back to a state
+						// → ROUTE_BACK (resume there on return).
 						if (gwLabel == null || gwLabel.isEmpty()) {
-							throw new IllegalArgumentException("An egress node has no name. "
-									+ "Give it a label and export again.");
+							throw new IllegalArgumentException("A cloud that a transition points into is "
+									+ "where the call leaves OCCAS, and it needs a name. "
+									+ "Label it and export again.");
 						}
 						egressNameByCellId.put(cellId, gwLabel);
 						ObjectNode egDef = mapper.createObjectNode();

@@ -17,7 +17,18 @@
 	<servlet-mapping>
 		<servlet-name>preview</servlet-name>
 		<url-pattern>/resources/api/preview</url-pattern>
+		<url-pattern>/resources/api/selection</url-pattern>
 		<url-pattern>/resources/api/ruleSets</url-pattern>
+	</servlet-mapping>
+
+	<servlet>
+		<servlet-name>config</servlet-name>
+		<servlet-class>org.vorpal.blade.admin.crud.CrudConfigServlet</servlet-class>
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+	<servlet-mapping>
+		<servlet-name>config</servlet-name>
+		<url-pattern>/resources/api/config/*</url-pattern>
 	</servlet-mapping>
 
 	<security-constraint>

@@ -26,7 +26,7 @@ import org.vorpal.blade.framework.v3.configuration.routing.Routing;
 /// 1. Builds a [Context] around the request (hides the
 ///    `SipServletRequest` from the pipeline).
 /// 2. Chains every [Connector] in `config.pipeline` via
-///    [CompletableFuture#thenCompose]. Sync connectors (SIP, Map)
+///    [CompletableFuture#thenCompose]. Sync connectors (SIP, Table)
 ///    complete instantly; REST fires its HTTP call and returns a
 ///    real future; JDBC/LDAP run on a bounded thread pool. The SIP
 ///    container thread is released as soon as the chain starts.

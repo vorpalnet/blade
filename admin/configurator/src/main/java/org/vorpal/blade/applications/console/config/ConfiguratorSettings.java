@@ -26,6 +26,7 @@ public class ConfiguratorSettings extends Configuration implements Serializable 
 	private static final long serialVersionUID = 1L;
 
 	protected boolean autoPublish;
+	protected AiSettings ai = new AiSettings();
 
 	@JsonPropertyDescription("When true, on-disk *.json edits under ./config/custom/vorpal/ are auto-published to live services via JMX (the same behavior the standalone watcher WAR provides). When false, only explicit Save + Publish through the UI applies changes. Takes effect immediately when toggled.")
 	public boolean isAutoPublish() {
@@ -34,5 +35,14 @@ public class ConfiguratorSettings extends Configuration implements Serializable 
 
 	public void setAutoPublish(boolean autoPublish) {
 		this.autoPublish = autoPublish;
+	}
+
+	@JsonPropertyDescription("The AI config assistant: describe a configuration in plain language and Claude drafts it against the app's JSON Schema, as a proposal for review. Disabled by default.")
+	public AiSettings getAi() {
+		return ai;
+	}
+
+	public void setAi(AiSettings ai) {
+		this.ai = (ai != null) ? ai : new AiSettings();
 	}
 }

@@ -68,8 +68,20 @@ public class SdpHelper implements Serializable {
 		DocumentContext ctx = JsonPath.using(jsonPathConfig).parse(root);
 		Object resolved = (value instanceof String) ? MessageHelper.jsonOrString((String) value) : value;
 		Object spliced = splice(resolved);
-		if (key != null) ctx.put(parentPath, key, spliced);
-		else ctx.add(parentPath, spliced);
+		if (key != null) {
+			ctx.put(parentPath, key, spliced);
+		} else if (spliced instanceof java.util.List) {
+			// A JSON-array value splices elementwise into the array parent —
+			// the restore half of the filter-capture pattern, where an
+			// sdpRead of `$.media[?(...)]` saved SEVERAL media blocks in one
+			// variable. Appending the list as a single element could never
+			// produce valid SDP, so elementwise is the only useful meaning.
+			for (Object element : (java.util.List<?>) spliced) {
+				ctx.add(parentPath, element);
+			}
+		} else {
+			ctx.add(parentPath, spliced);
+		}
 		return collectionToSdp(ctx.json());
 	}
 

@@ -135,50 +135,39 @@ Generic prefix trie backing `MatchStrategy.prefix` lookups. O(key-length) longes
 
 ## Integration
 
-### Basic Usage
+Read the **[Framework Developer's Guide](../../DEVELOPING.md)**. It teaches the
+two methods the framework is built on — `sendRequest` and `sendResponse` — how a
+lambda continuation survives a network round trip and a node failure, and how to
+read a real callflow. Packaging a service is the short section at the end.
 
-1. **Extend Framework Classes**: Create SIP servlets by extending `org.vorpal.blade.framework.v2` base classes
-2. **Configure Applications**: Use the configuration framework to define application-specific settings
-3. **Implement Call Logic**: Utilize B2BUA or proxy classes for call handling logic
-4. **Add Analytics**: Integrate analytics components for monitoring and metrics
+For the pieces on their own:
 
-### Configuration
-
-The framework uses JSON-based configuration with schema validation. Configuration files should be structured according to the JSON schemas defined in the config package.
-
-### Logging
-
-Configure SLF4J-compatible loggers to take advantage of the framework's enhanced logging capabilities, including SIP message tracing and structured log output.
+- **Callflows** — the [v2 callflow guide](src/main/java/org/vorpal/blade/framework/v2/callflow/README.md) explains the lambda model; the [v3 API](src/main/java/org/vorpal/blade/framework/v3/README.md) is the line to write new code against
+- **B2BUA** — the [b2bua guide](src/main/java/org/vorpal/blade/framework/v2/b2bua/README.md) covers the pre-built callflows and the six lifecycle callbacks
+- **Configuration** — the [config guide](src/main/java/org/vorpal/blade/framework/v2/config/README.md) covers turning a POJO into a live, hot-reloadable JSON config file
+- **Logging** — the [logging guide](src/main/java/org/vorpal/blade/framework/v2/logging/README.md) covers the SIP-aware logger and its sequence diagrams
 
 ## Related Modules
 
+### API Guides
+- [v3 API](src/main/java/org/vorpal/blade/framework/v3/README.md) - the actively developed line: tracing, passthru, config-first routing
+- [v2 API](src/main/java/org/vorpal/blade/framework/v2/README.md) - the frozen line, with the callflow, b2bua, config, and logging guides
+
 ### Shared Libraries
-- [libs/shared/bin](../shared/bin) - Shared binary utilities
-- [libs/fsmar](../fsmar) - FSMAR, the Finite State Machine Application Router
+- [libs/shared](../shared/README.md) - the `blade-shared` WebLogic shared library (all 3rd-party JARs)
+- [libs/fsmar](../fsmar/README.md) - FSMAR, the Finite State Machine Application Router
 
 ### Administrative Tools
-- [admin/console](../../admin/console) - Web-based administration console
-- [admin/configurator](../../admin/configurator) - Configuration management tools
+- [admin/configurator](../../admin/configurator/README.md) - schema-driven configuration editing and publishing
+- [admin/callflow](../../admin/callflow/README.md) - the Trace viewer over the v3 tracing spine
 
 ### Services
-- [services/acl](../../services/acl) - Access Control Lists
-- [services/analytics](../../services/analytics) - Analytics collection service
-- [services/hold](../../services/hold) - Call hold functionality
-- [services/irouter](../../services/irouter) - **v3** — config-driven SIP proxy (universal router; the reference consumer of the v3 configuration model)
-- [services/options](../../services/options) - SIP OPTIONS handling
-- [services/presence](../../services/presence) - SIP presence server
-- [services/proxy-balancer](../../services/proxy-balancer) - Load balancing proxy
-- [services/proxy-block](../../services/proxy-block) - Call blocking proxy
-- [services/proxy-registrar](../../services/proxy-registrar) - SIP registrar service
-- [services/proxy-router](../../services/proxy-router) - Call routing proxy
-- [services/queue](../../services/queue) - Call queuing service
-- [services/tpcc](../../services/tpcc) - Third-party call control
-- [services/transfer](../../services/transfer) - Call transfer service
+- [services/irouter](../../services/irouter/README.md) - **v3** — config-driven SIP proxy (universal router; the reference consumer of the v3 configuration model)
+- Every service module consumes this framework; see the [module tables in the project README](../../README.md#libraries)
 
 ## Maven Coordinates
 
 ```xml
 <groupId>org.vorpal.blade</groupId>
-<artifactId>framework</artifactId>
-<version>${project.version}</version>
+<artifactId>vorpal-blade-library-framework</artifactId>
 ```

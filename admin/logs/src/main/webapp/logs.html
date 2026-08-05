@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Viewer · BLADE Logs</title>
 	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
 	<link rel="stylesheet" href="logs.css">
@@ -10,10 +11,6 @@
 	     by the portal but keeps the brand topbar visible so navigation
 	     parity (Overview / Viewer / Documentation) is preserved whether
 	     the user reaches the app via the portal or directly. -->
-	<style>
-		body.embedded .work-sheet > header > h1 { display: none; }
-		body.embedded .work-sheet > header { padding-top: 8px; }
-	</style>
 	<script>
 		if (new URLSearchParams(location.search).get('embed') === '1') {
 			document.addEventListener('DOMContentLoaded', () => document.body.classList.add('embedded'));
@@ -21,6 +18,8 @@
 	</script>
 </head>
 <body class="vorpal-glass">
+<div class="vorpal-app">
+
 	<header class="vorpal-topbar">
 		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
 			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
@@ -36,30 +35,143 @@
 			<a href="docs/index.html">Documentation</a>
 		</nav>
 		<div class="vorpal-topbar-right">
-			<span class="vorpal-pill">Ready</span>
+			<span id="status-pill" class="vorpal-pill">Loading…</span>
 		</div>
 	</header>
-	<div class="work-sheet">
-	<header>
-		<h1>BLADE Cluster Logs</h1>
-		<div class="controls">
-			<label>Server
+
+	<main class="vorpal-main">
+	<div class="log-page">
+
+		<!-- Row A — what you are looking at, and what you can take away. -->
+		<div class="log-toolbar">
+			<label class="log-field">Server
 				<select id="server"></select>
 			</label>
-			<label>Log file
+			<label class="log-field">Log file
 				<select id="logFile"></select>
 			</label>
-			<label>Tail bytes
-				<input id="tailBytes" type="number" min="1024" step="1024" value="65536">
-			</label>
-			<button id="load">Load tail</button>
+			<span id="fileMeta" class="log-meta">—</span>
+			<span class="log-spacer"></span>
+			<button id="followBtn" class="vorpal-btn vorpal-btn-secondary" type="button"
+			        aria-pressed="false">Follow</button>
+			<button id="reloadBtn" class="vorpal-btn vorpal-btn-secondary" type="button">Reload</button>
+			<div class="log-menu">
+				<button id="downloadBtn" class="vorpal-btn vorpal-btn-secondary" type="button"
+				        aria-haspopup="menu" aria-expanded="false">Download <span aria-hidden="true">▾</span></button>
+				<div class="log-menu-items" id="downloadMenu" role="menu" hidden>
+					<button type="button" role="menuitem" data-download="file">Whole file…</button>
+					<button type="button" role="menuitem" data-download="window">Visible window</button>
+					<button type="button" role="menuitem" data-download="matches">Search matches</button>
+				</div>
+			</div>
 		</div>
-	</header>
-	<main>
-		<div id="status" class="status"></div>
-		<pre id="output" class="output">Pick a server and a log file, then click <strong>Load tail</strong>.</pre>
-	</main>
+
+		<!-- Row B — where in the file you are. The pane's own scrollbar covers
+		     the loaded window; this slider covers the whole file. -->
+		<div class="log-toolbar">
+			<button id="topBtn" class="log-mini" type="button" title="Jump to the start of the file.">⇱ Top</button>
+			<input id="scrubber" class="log-scrubber" type="range" min="0" max="1000" value="1000"
+			       aria-label="Position in file">
+			<button id="bottomBtn" class="log-mini" type="button" title="Jump to the end of the file.">⇲ End</button>
+			<label class="log-field log-field-wide">Go to
+				<input id="goto" type="text" placeholder="byte offset, 14:32:05, or 2026-08-04 14:32"
+				       autocomplete="off">
+			</label>
+			<button id="gotoBtn" class="log-mini" type="button">Go</button>
+		</div>
+
+		<!-- Row C — narrowing what you see. -->
+		<div class="log-toolbar">
+			<label class="log-field log-field-wide">Find
+				<input id="find" type="search" placeholder="text in the loaded window" autocomplete="off">
+			</label>
+			<button id="findPrev" class="log-mini" type="button" title="Previous match (Shift+Enter)">▲</button>
+			<button id="findNext" class="log-mini" type="button" title="Next match (Enter)">▼</button>
+			<span id="findCount" class="log-meta">—</span>
+			<button id="searchFile" class="log-mini" type="button"
+			        title="Scan the whole file on the server that holds it (Ctrl+Enter)">Search file</button>
+			<label class="log-toggle"><input type="checkbox" id="optRegex"> Regex</label>
+
+			<span class="log-sep" role="separator"></span>
+
+			<span class="log-chips" id="sevChips" role="group" aria-label="Severity filter">
+				<button type="button" class="log-chip" data-sev="error"   aria-pressed="true">Errors</button>
+				<button type="button" class="log-chip" data-sev="warning" aria-pressed="true">Warnings</button>
+				<button type="button" class="log-chip" data-sev="info"    aria-pressed="true">Info</button>
+				<button type="button" class="log-chip" data-sev="debug"   aria-pressed="true">Debug</button>
+				<button type="button" class="log-chip" data-sev="plain"   aria-pressed="true">Unparsed</button>
+			</span>
+
+			<span class="log-spacer"></span>
+
+			<label class="log-toggle"><input type="checkbox" id="optWrap"> Wrap</label>
+			<label class="log-toggle"><input type="checkbox" id="optOffsets"> Offsets</label>
+			<label class="log-toggle"><input type="checkbox" id="optAnsi" checked> Colour</label>
+			<label class="log-field">Size
+				<select id="optFont">
+					<option value="11">11</option>
+					<option value="12" selected>12</option>
+					<option value="13">13</option>
+					<option value="15">15</option>
+				</select>
+			</label>
+		</div>
+
+		<div class="log-panel">
+			<header>
+				<span id="paneTitle">No file selected</span>
+				<span id="panePill" class="vorpal-pill">idle</span>
+			</header>
+
+			<div id="notice" class="vorpal-callout vorpal-callout-warn" hidden>
+				<div class="vorpal-callout-title" id="noticeTitle"></div>
+				<div id="noticeBody"></div>
+			</div>
+
+			<div class="log-split">
+				<!-- The scroll container. Its scrollbar covers the loaded window
+				     only; the slider above covers the file. -->
+				<div id="pane" class="log-pane" tabindex="0" role="log" aria-label="Log contents">
+					<div class="log-placeholder">
+						Pick a server and a log file. The viewer loads a window around your
+						position and moves it as you scroll, so a multi-gigabyte log opens
+						as fast as a small one.
+					</div>
+				</div>
+
+				<!-- Whole-file search results. Every match carries a byte offset,
+				     so the list is an index into the pane rather than a second
+				     copy of the log. -->
+				<aside id="results" class="log-results" hidden aria-label="Search results">
+					<header>
+						<span>Matches in file</span>
+						<button id="resultsClose" class="log-mini" type="button" aria-label="Close results">✕</button>
+					</header>
+					<div id="resultsMeta" class="log-results-meta">—</div>
+					<ol id="resultsList" class="log-results-list"></ol>
+					<div class="log-results-foot">
+						<button id="searchMore" class="log-mini" type="button" hidden>Scan further…</button>
+					</div>
+				</aside>
+			</div>
+
+			<div class="log-status">
+				<span id="statusRange">—</span>
+				<span class="log-spacer"></span>
+				<span id="statusHint" class="log-keys">
+					<kbd>g</kbd>/<kbd>G</kbd> ends · <kbd>/</kbd> find · <kbd>n</kbd>/<kbd>N</kbd> next
+				</span>
+			</div>
+		</div>
+
 	</div>
-	<script src="logs.js"></script>
+	</main>
+	<!-- No footer. This is a work page, like the Configurator and both
+	     editors, none of which carry one: the brand footer budgets ~114px of
+	     margin and padding for a document, and here that is log the operator
+	     cannot see. The status strip is this page's bottom chrome. -->
+</div>
+<script src="logsParse.js"></script>
+<script src="logs.js"></script>
 </body>
 </html>

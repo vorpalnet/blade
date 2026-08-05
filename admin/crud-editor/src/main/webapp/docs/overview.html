@@ -36,9 +36,9 @@
 				<div class="vorpal-eyebrow">Documentation · Architecture</div>
 				<h1 class="vorpal-page-title">Overview</h1>
 				<p class="vorpal-page-subtitle">
-					What a "resource table" is in BLADE, how the CRUD Editor
-					relates to the Configurator, and which services have CRUD
-					resources to edit.
+					What the CRUD service does, how the editor's three-step
+					model maps onto it, and where the Configurator still
+					fits.
 				</p>
 			</div>
 
@@ -66,60 +66,96 @@
 				<article class="vorpal-docs-content">
 					<h1>Overview</h1>
 
-					<h2>Configuration vs. resources</h2>
+					<h2>The CRUD service</h2>
 					<p>
-						BLADE services have two kinds of editable state:
+						CRUD is the classic data acronym —
+						<strong>Create, Read, Update, Delete</strong> — and
+						the service earns the name literally: those are the
+						four verbs a rule can apply to a SIP message. Create
+						adds something that wasn't there (a header, a body
+						part); Read captures a value into a variable for
+						later rules to use; Update rewrites in place; Delete
+						removes.
+					</p>
+					<p>
+						Each verb works on any form of message data. The
+						plain operations address SIP headers, the
+						Request-URI, and the raw body by regular expression;
+						the <code>xml</code> operations address XML bodies by
+						XPath; the <code>json</code> operations address JSON
+						bodies by JsonPath; and the <code>sdp</code>
+						operations address SDP — parsed to a structured
+						model, so <code>$.media[0].port</code> means the
+						first media line's port, not a lucky text match.
+						Multipart MIME bodies are handled part by part: an
+						operation targets one part by content type and the
+						others ride through untouched.
+					</p>
+					<p>
+						The service itself is a B2BUA that applies the
+						selected rule set at every point in a call's life —
+						the outbound INVITE, the answer, the ACK, the BYE,
+						and in-dialog traffic. The rules are data, not code;
+						a new transformation is a config change, not a
+						deployment.
+					</p>
+
+					<h2>The three-step model</h2>
+					<p>
+						The editor presents the service's configuration the
+						way the service itself thinks:
 					</p>
 					<dl class="vorpal-kv">
-						<dt>Configuration</dt>
-						<dd>One JSON document per service — settings, defaults, thresholds. Edited by the <a href="/blade/configurator/configurator.html">Configurator</a>.</dd>
-						<dt>Resources</dt>
-						<dd>Table-shaped data — multiple rows. Each row is independent. Examples: ACL entries, routing rules, customer records, blocked-number lists. Edited by the CRUD Editor.</dd>
+						<dt>1 · Pipeline</dt>
+						<dd>Decides which rule set each call gets. Connectors run
+						in order on each initial request, extracting values from
+						the message into variables; selection happens when one of
+						them writes the <code>ruleSet</code> variable. Unmatched
+						calls take the default rule set, or pass through
+						untransformed.</dd>
+						<dt>2 · Rule sets</dt>
+						<dd>Say what happens to the selected calls. Each rule
+						filters by method, lifecycle event, status range, or a
+						<code>when</code> expression, then runs its operations in
+						order.</dd>
+						<dt>3 · Preview</dt>
+						<dd>Proves it. Paste a real SIP message and the editor
+						replays your <em>unsaved draft</em> through the same
+						engine production runs — Auto-select shows which rule set
+						the pipeline picks; Run shows the before/after diff, the
+						rules that fired, and the variables captured.</dd>
 					</dl>
+
+					<h2>Division of labour with the Configurator</h2>
 					<p>
-						The line between them is a design choice per service.
-						If a service exposes a small number of well-defined
-						knobs, those go in the Configurator. If it owns a
-						growing list of similarly-shaped rows, those go in
-						CRUD.
+						This editor owns the CRUD-specific sections of
+						<code>crud.json</code>: the pipeline, the default rule
+						set, and the rule sets. Logging, session settings, and
+						per-cluster/per-server overlays stay in the
+						<a href="/blade/configurator/configurator.html?schema=crud">Configurator</a>.
+						Both tools read and write the same file; each leaves the
+						other's sections untouched.
 					</p>
 
-					<h2>Which services expose CRUD</h2>
+					<h2>Save and Publish are separate acts</h2>
 					<p>
-						Any BLADE service can mount the CRUD REST API. The
-						editor doesn't have a pre-baked list — it discovers
-						the API base from the page URL and points there. Add
-						a new service that implements the contract, browse
-						to <code>/blade/crud-editor/?app=&lt;new-service&gt;</code>,
-						and the editor will work without changes.
-					</p>
-
-					<h2>What it doesn't do</h2>
-					<ul>
-						<li>Bulk import/export (use the service's own API directly for that).</li>
-						<li>Cross-service joins (the editor sees one resource table at a time).</li>
-						<li>Schema authoring (the form is generated from the API response shape, not edited here — for schema authoring use Configurator).</li>
-					</ul>
-
-					<h2>How the URL works</h2>
-					<p>
-						The editor's base API URL is computed from
-						<code>location.pathname</code>: the first path
-						segment becomes the app name, and the API base
-						becomes <code>/&lt;app&gt;/resources/api/</code>.
-						This means the editor doesn't need configuration
-						to know which app to edit — it picks up the app
-						from where it's deployed (or from a query string,
-						when iframed through the portal).
+						Save validates the document exactly as the CRUD service
+						would load it — a config the service couldn't parse is
+						rejected with the parse error — then writes
+						<code>crud.json</code>, keeping the previous version
+						restorable from the Versions panel. Publish tells every
+						node running the CRUD service to reload what was last
+						saved. Nothing reaches the wire until you publish.
 					</p>
 
 					<div class="vorpal-callout vorpal-callout-tip">
-						<div class="vorpal-callout-title">Same WAR, many apps</div>
+						<div class="vorpal-callout-title">Forms follow the schema</div>
 						<p>
-							The editor WAR is generic. The browser-side
-							script derives the target API base from the URL.
-							So one CRUD Editor deployment can edit any
-							service's resources just by varying the URL.
+							Every form in the editor — connectors, selectors,
+							operations — is generated from the service's own
+							JSON Schema. When the framework grows a new
+							connector or operation type, it appears in the
+							editor without an editor change.
 						</p>
 					</div>
 				</article>

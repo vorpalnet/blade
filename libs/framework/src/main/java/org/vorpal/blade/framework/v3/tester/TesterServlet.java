@@ -13,7 +13,8 @@ import javax.servlet.sip.URI;
 import org.vorpal.blade.framework.v3.B2buaServlet;
 import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.v3.media.CallflowHold;
-import org.vorpal.blade.framework.v2.config.Translation;
+import org.vorpal.blade.framework.v3.configuration.Context;
+import org.vorpal.blade.framework.v3.crud.CrudConfiguration;
 import org.vorpal.blade.framework.v3.crud.RuleSet;
 
 /// Abstract base for BLADE test apps (test-uac, test-uas). Resolves a
@@ -28,8 +29,8 @@ import org.vorpal.blade.framework.v3.crud.RuleSet;
 /// ## Scenario resolution, in priority order
 ///
 /// 1. `scenario=` Request-URI parameter
-/// 2. translation plan match carrying a `scenario` attribute — or a bare
-///    `ruleSet` attribute, which acts as an unnamed b2bua scenario (drop-in
+/// 2. enrichment pipeline writing a `scenario` context variable — or a bare
+///    `ruleSet` variable, which acts as an unnamed b2bua scenario (drop-in
 ///    CRUD-service compatibility)
 /// 3. `status=` / `delay=` / `refer=` Request-URI shorthands → ephemeral
 ///    answer scenario (backward compatible with existing test scripts)
@@ -141,28 +142,26 @@ public abstract class TesterServlet extends B2buaServlet {
 			}
 		}
 
-		// 2. Translation plan: a `scenario` attribute, or a bare `ruleSet`
-		// attribute acting as an unnamed b2bua scenario.
-		if (scenario == null && config != null) {
-			Translation translation = config.findTranslation(request);
-			if (translation != null) {
-				String scenarioAttr = (String) translation.getAttribute("scenario");
-				if (scenarioAttr != null) {
-					scenario = config.getScenarios().get(scenarioAttr);
-					name = scenarioAttr;
-					if (scenario == null) {
-						sipLogger.warning(request,
-								"TesterServlet: translation names unknown scenario '" + scenarioAttr + "'");
-					}
-				}
+		// 2. Enrichment pipeline: a `scenario` context variable, or a bare
+		// `ruleSet` variable acting as an unnamed b2bua scenario.
+		if (scenario == null && config != null && !config.getPipeline().isEmpty()) {
+			Context ctx = config.enrich(request);
+			String scenarioVar = ctx.get("scenario");
+			if (scenarioVar != null) {
+				scenario = config.getScenarios().get(scenarioVar);
+				name = scenarioVar;
 				if (scenario == null) {
-					String ruleSetAttr = (String) translation.getAttribute("ruleSet");
-					if (ruleSetAttr != null && config.getRuleSets().get(ruleSetAttr) != null) {
-						scenario = new Scenario();
-						scenario.setRole(Scenario.ROLE_B2BUA);
-						scenario.setRuleSet(ruleSetAttr);
-						name = ruleSetAttr;
-					}
+					sipLogger.warning(request,
+							"TesterServlet: pipeline names unknown scenario '" + scenarioVar + "'");
+				}
+			}
+			if (scenario == null) {
+				String ruleSetVar = ctx.get(CrudConfiguration.RULESET_VARIABLE);
+				if (ruleSetVar != null && config.getRuleSets().get(ruleSetVar) != null) {
+					scenario = new Scenario();
+					scenario.setRole(Scenario.ROLE_B2BUA);
+					scenario.setRuleSet(ruleSetVar);
+					name = ruleSetVar;
 				}
 			}
 		}

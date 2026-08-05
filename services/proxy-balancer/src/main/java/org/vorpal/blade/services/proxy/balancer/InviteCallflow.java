@@ -170,7 +170,7 @@ public class InviteCallflow extends Callflow implements Serializable {
 
 				if (successful(bobResponse)) {
 					sendResponse(aliceResponse, (aliceAck) -> {
-						sendRequest(copyContentAndHeaders(aliceAck, bobResponse.createAck()));
+						sendAcknowledgement(aliceAck, bobResponse);
 					});
 				} else {
 					sendResponse(aliceResponse);

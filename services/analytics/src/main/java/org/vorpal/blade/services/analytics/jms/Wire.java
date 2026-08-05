@@ -68,7 +68,7 @@ final class Wire {
 	}
 
 	/// The last dotted segment of a CloudEvents type:
-	/// `net.vorpal.blade.transfer.requested` becomes `requested`.
+	/// `org.vorpal.blade.transfer.requested` becomes `requested`.
 	///
 	/// Only used for a type carrying no `eventName` of its own — an event an
 	/// operator declared and marked persisted. The framework's own events all

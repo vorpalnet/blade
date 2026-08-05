@@ -484,11 +484,17 @@ h2 {
     min-width: 0;
 }
 /* Children size to their content vertically — never flex-grow or use a
-   percentage basis here: in a column container those are HEIGHT, and Safari
-   resolves the percentage against the ancestor, ballooning one-line tiles.
-   Full column width comes free from the column's align-items stretch. */
+   length/percentage basis here: in a column container those are HEIGHT. A bare
+   220px basis balloons a one-line tile into a 220px-tall box; a percentage is
+   worse, since Safari resolves it against the ancestor.
+   Full column width comes free from the column's align-items stretch.
+   The .nested variants are listed explicitly so this outranks the later
+   .form-group.nested / .add-property-placeholder.nested row-flow rules, which
+   would otherwise win on source order at equal specificity. */
 .form-layout-column > .form-group,
-.form-layout-column > .add-property-placeholder {
+.form-layout-column > .add-property-placeholder,
+.form-layout-column > .form-group.nested,
+.form-layout-column > .add-property-placeholder.nested {
     flex: 0 0 auto;
     margin-bottom: 0;
 }
@@ -824,6 +830,9 @@ body.view-mode #dynamicForm .add-menu-select,
 body.view-mode #dynamicForm .reference-picker,
 body.view-mode #dynamicForm .array-header > button,
 body.view-mode #dynamicForm .extras-add-btn {
+    display: none !important;
+}
+body.view-mode #btn-ai {
     display: none !important;
 }
 

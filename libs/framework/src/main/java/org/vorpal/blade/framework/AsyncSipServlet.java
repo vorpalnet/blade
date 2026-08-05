@@ -407,6 +407,7 @@ public abstract class AsyncSipServlet extends SipServlet
 			EventPublisher publisher = new EventPublisher(settings.getConnectionFactoryJndi(),
 					settings.getDestinationJndi());
 			publisher.init();
+			meterEventBus(publisher);
 			EventBus.register(publisher);
 			EventBus.setDefaultDestinationJndi(settings.getDestinationJndi());
 			sipLogger.info("AsyncSipServlet.initializeEventBus - publishing to " + settings.getDestinationJndi());
@@ -414,6 +415,33 @@ public abstract class AsyncSipServlet extends SipServlet
 			sipLogger.severe("AsyncSipServlet.initializeEventBus - cannot reach the event bus. Ensure "
 					+ settings.getConnectionFactoryJndi() + " and " + settings.getDestinationJndi()
 					+ " are provisioned. Publishing will be a no-op until they are.");
+		}
+	}
+
+	/// Counts this app's bus publishes in its metrics registry, beside the SIP
+	/// counters.
+	///
+	/// The failure count is the one worth watching: a failed send is a **dropped
+	/// event** — the shared destination quota filling behind a stalled subscriber
+	/// looks exactly like this — and `Analytics` deliberately swallows the
+	/// exception so call processing survives, which used to make the drop
+	/// invisible. Never fatal, same as [#initializeMetrics]: an app that cannot
+	/// count must still publish.
+	private void meterEventBus(EventPublisher publisher) {
+		try {
+			MetricsRegistry metrics = MetricsRegistry.from(getServletContext());
+			if (metrics == null) {
+				return;
+			}
+			publisher.meter(
+					metrics.counter("events.published", "CloudEvents successfully handed to the bus").series(),
+					metrics.counter("events.publish.failures",
+							"Sends the bus refused — broker down or destination quota full. Each one is a dropped event.")
+							.series());
+		} catch (Throwable t) {
+			if (sipLogger != null) {
+				sipLogger.warning("AsyncSipServlet.meterEventBus - publish counters unavailable: " + t);
+			}
 		}
 	}
 
@@ -581,7 +609,7 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// session attribute extraction based on configured selectors, and proxy
 	/// request logging.
 	///
-	/// @param _request the incoming SIP request
+	/// @param request the incoming SIP request
 	/// @throws ServletException if a servlet error occurs during processing
 	/// @throws IOException if an I/O error occurs during processing
 	@SuppressWarnings("unchecked")

@@ -8,27 +8,33 @@
 </head>
 <body>
 
+<!-- Field explanations live in .info-tip-text spans, shown as a popup by
+     flowUtils.initInfoTips when the ⓘ icon is hovered, focused or clicked.
+     Inline they made the panel unreadable — keep new help text in tips. -->
 <div id="state-view">
-	<label>Name</label>
+	<label>Name
+		<span class="info-tip" tabindex="0" role="button" aria-label="About Name"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
+			For a State, this is the BLADE <b>application</b> it invokes. For a cloud
+			(a trunk, an SBC, a carrier &mdash; anything outside OCCAS), this is the
+			entry point's name &mdash; a real FSMAR state with its own selectors and
+			arrows. A cloud with no <b>Source match</b> is the default entry, the
+			<code>null</code> state (any source).
+		</span></span>
+	</label>
 	<input class="node-name" type="text" placeholder="e.g. b2bua, proxy-registrar, SBC-Dallas" />
-	<div class="state-hint">
-		For a State, this is the BLADE <b>application</b> it invokes. For an ingress
-		(SBC, trunk, carrier), this is the entry state's name &mdash; a real FSMAR
-		state with its own selectors and arrows. The <b>default</b> ingress is the
-		<code>null</code> state (any source).
-	</div>
 
 	<!-- State ID: the unique key in the states map, separate from the
 	     application name above. Leave blank to use the name as the id (the
 	     usual case). Set a distinct id to invoke the SAME application from two
 	     states — e.g. a B2BUA once per subscriber leg. -->
 	<div class="state-id-section">
-		<label style="margin-top: 14px;">State ID <span class="hint">(unique key; blank = same as the name)</span></label>
-		<div class="state-hint" style="margin-top: 0;">
-			Set a distinct id to invoke the same application from more than one
-			state (e.g. <code>b2bua-caller</code> and <code>b2bua-callee</code>,
-			both running <code>b2bua</code>).
-		</div>
+		<label style="margin-top: 14px;">State ID <span class="hint">(unique key; blank = same as the name)</span>
+			<span class="info-tip" tabindex="0" role="button" aria-label="About State ID"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
+				Set a distinct id to invoke the same application from more than one
+				state (e.g. <code>b2bua-caller</code> and <code>b2bua-callee</code>,
+				both running <code>b2bua</code>).
+			</span></span>
+		</label>
 		<input class="node-stateid" type="text" placeholder="(same as the name)" />
 	</div>
 
@@ -36,12 +42,14 @@
 	     Compiles to a dispatch transition on the null state, classifying inbound
 	     traffic into this ingress. The editor shows this only for ingress boxes. -->
 	<div class="ingress-match-section">
-		<label style="margin-top: 14px;">Source match</label>
-		<div class="state-hint" style="margin-top: 0;">
-			A <code>when</code> expression over the inbound request that routes its
-			traffic to this ingress, e.g. <code>${originIP} insubnet '10.20.0.0/16'</code>.
-			Leave blank on the <b>default</b> ingress (it catches any source).
-		</div>
+		<label style="margin-top: 14px;">Source match
+			<span class="info-tip" tabindex="0" role="button" aria-label="About Source match"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
+				A <code>when</code> expression over the inbound request that routes its
+				traffic to this cloud, e.g. <code>${originIP} insubnet '10.20.0.0/16'</code>,
+				or <code>${localIP} == '203.0.113.10'</code> to match the SIP interface a
+				trunk arrives on. Leave blank for the <b>default</b> entry (any source).
+			</span></span>
+		</label>
 		<input class="node-match" type="text" placeholder="${originIP} insubnet '10.20.0.0/16'" />
 	</div>
 
@@ -51,16 +59,17 @@
 	     but never shown. One row per SIP method leaving this ingress, since
 	     that is the set the export generates a dispatch for. -->
 	<div class="ingress-dispatch-section">
-		<label style="margin-top: 14px;">Entry transition</label>
-		<div class="state-hint" style="margin-top: 0;">
-			Carried on the generated entry transition, and applied only when this
-			ingress's name is a <b>deployed application</b> (the entry transition
-			then invokes it directly): <b>subscriber</b> names the header whose URI
-			the container is handed; <b>region</b> is the JSR-289 routing region
-			(blank = NEUTRAL). For a pure ingress (SBC, trunk &mdash; not an
-			application) the entry transition is bypassed &mdash; set subscriber
-			and region on this ingress's <b>outgoing arrows</b> instead.
-		</div>
+		<label style="margin-top: 14px;">Entry transition
+			<span class="info-tip" tabindex="0" role="button" aria-label="About Entry transition"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
+				Carried on the generated entry transition, and applied only when this
+				cloud's name is a <b>deployed application</b> (the entry transition
+				then invokes it directly): <b>subscriber</b> names the header whose URI
+				the container is handed; <b>region</b> is the JSR-289 routing region
+				(blank = NEUTRAL). For a plain cloud (an SBC or trunk &mdash; not an
+				application) the entry transition is bypassed &mdash; set subscriber
+				and region on this cloud's <b>outgoing arrows</b> instead.
+			</span></span>
+		</label>
 		<div class="ingress-dispatch-rows"></div>
 	</div>
 
@@ -69,58 +78,57 @@
 	     route templates. Hidden for Egress (nothing routes FROM egress). -->
 	<div class="state-selectors-section">
 		<label style="margin-top: 14px;">Selectors
+			<span class="info-tip" tabindex="0" role="button" aria-label="About Selectors"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
+				Run when a request enters this state. Each extracts a value into the
+				routing context; transition conditions (<code>when</code>) and
+				<code>${...}</code> route templates read from it.
+			</span></span>
 			<svg class="add-btn add-state-selector" title="Add selector" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>
 		</label>
-		<div class="state-hint" style="margin-top: 0;">
-			Run when a request enters this state. Each extracts a value into the
-			routing context; transition conditions (<code>when</code>) and
-			<code>${...}</code> route templates read from it.
-		</div>
 		<div class="state-selectors"></div>
 	</div>
 
 	<!-- Service plans: generate a family of mutually exclusive dispatch
 	     transitions (gold/silver/bronze) from this state. Hidden for Egress. -->
 	<div class="state-dispatch-section">
-		<label style="margin-top: 14px;">Service Plans</label>
-		<div class="state-hint" style="margin-top: 0;">
-			Route by plan (e.g. gold / silver / bronze): one transition per plan
-			with mutually exclusive conditions, so evaluation order cannot matter.
-		</div>
+		<label style="margin-top: 14px;">Service Plans
+			<span class="info-tip" tabindex="0" role="button" aria-label="About Service Plans"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
+				Route by plan (e.g. gold / silver / bronze): one transition per plan
+				with mutually exclusive conditions, so evaluation order cannot matter.
+			</span></span>
+		</label>
 		<button class="add-plan-dispatch" type="button" style="margin-top: 6px;">Add plan dispatch&hellip;</button>
 	</div>
 
-	<!-- Egress exit node: where the call LEAVES OCCAS. The mirror of an
-	     ingress. Shown only for an egress node. Its routes are baked onto each
-	     transition that targets it; the EXIT KIND is inferred from topology —
-	     draw a line from the egress back to a state to make it route-back. -->
+	<!-- Shown when a transition points INTO this cloud, which is what makes it the
+	     place the call leaves OCCAS. Its routes are baked onto each transition that
+	     targets it; the EXIT KIND is inferred from topology too — draw a line from
+	     the cloud back to a state to make it route-back. -->
 	<div class="egress-section">
-		<label style="margin-top: 14px;">Exit kind</label>
-		<div class="state-hint" style="margin-top: 0;">
-			Inferred from the diagram: with no line out, the call leaves OCCAS for
-			good (<b>ROUTE_FINAL</b>). Draw a line from this egress back to a state
-			and it becomes <b>ROUTE_BACK</b> — the call goes out to the routes
-			below, then resumes the flow at that state when it returns. With no
-			routes at all it is the <b>downstream</b> exit: nothing is pushed and
-			the call simply leaves the application chain on its Request-URI.
-		</div>
+		<label style="margin-top: 14px;">Exit kind
+			<span class="info-tip" tabindex="0" role="button" aria-label="About Exit kind"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
+				Inferred from the diagram: with no line out, the call leaves OCCAS for
+				good (<b>ROUTE_FINAL</b>). Draw a line from this cloud back to a state
+				and it becomes <b>ROUTE_BACK</b> &mdash; the call goes out to the routes
+				below, then resumes the flow at that state when it returns. With no
+				routes at all it is the <b>downstream</b> exit: nothing is pushed and
+				the call simply leaves the application chain on its Request-URI.
+			</span></span>
+		</label>
 		<div class="egress-kind" style="font-weight:bold; margin-top:2px;"></div>
 
-		<label style="margin-top: 14px;">Virtual gateway <span class="hint">(trunk)</span></label>
-		<div class="state-hint" style="margin-top: 0;">
-			Pick a virtual gateway from the deployed <code>gateway</code> app; the editor keeps
-			<code>;vgw=&lt;name&gt;</code> on the route(s) below, so the gateway app forwards the call
-			out that trunk (binding its Contact IP and trunk identity).
-		</div>
-		<select class="egress-vgw"><option value="">(none)</option></select>
+		<!-- No trunk picker here. A cloud is where the call leaves OCCAS with no
+		     further application invoked, so a ;vgw= param on these routes would
+		     reach nothing. To send a call out a trunk, route it to the gateway app
+		     (a State) and pick the trunk on the transition INTO that state. -->
 
 		<label style="margin-top: 14px;">Route URIs
+			<span class="info-tip" tabindex="0" role="button" aria-label="About Route URIs"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/></svg><span class="info-tip-text">
+				Where the call exits; <code>${...}</code> placeholders resolve against
+				the routing context, e.g. <code>sip:${To.user}@carrier-trunk.example.com</code>.
+			</span></span>
 			<svg class="add-btn add-egress-route" title="Add route" viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.5"/></svg>
 		</label>
-		<div class="state-hint" style="margin-top: 0;">
-			Where the call exits; <code>${...}</code> placeholders resolve against
-			the routing context, e.g. <code>sip:${To.user}@carrier-trunk.example.com</code>.
-		</div>
 		<div class="egress-routes"></div>
 	</div>
 </div>

@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /// Unit tests for the player app's config model. The media path itself (offer/play/record) needs a
-/// live OCCAS + 309 driver + Kurento and is verified at deploy time; these cover the serializable
+/// live OCCAS + a JSR-309 media controller and is verified at deploy time; these cover the serializable
 /// configuration the Configurator drives.
 public class PlayerConfigTest {
 

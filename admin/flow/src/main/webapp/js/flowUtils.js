@@ -25,8 +25,7 @@ window.flowUtils = (function() {
 		'object-group.svg':      'Group selection',
 		'object-ungroup.svg':    'Ungroup selection',
 		'auto-layout.svg':       'Auto-position: re-arrange the whole diagram left-to-right and center it',
-		'cloud-download.svg':    'Add Ingress (SBC/trunk/carrier) — a real entry state; set its Source match to classify inbound traffic. Matchless = the default ingress (null).',
-		'cloud-upload.svg':      'Add Egress (exit) — where the call leaves OCCAS. Draw a transition INTO it; set its route URIs, and draw a line back to a state for a return-to-origin (ROUTE_BACK) exit.',
+		'cloud.svg':             'Add a cloud — the network outside OCCAS (a carrier, an SBC, anything not BLADE). The arrows say which way traffic runs: draw one OUT of it for calls arriving (set a Source match to classify them; matchless = the default entry), or INTO it for calls leaving (set its route URIs, and draw a line back to a state to return and resume there).',
 		'rectangle-landscape.svg':'Add State (BLADE application)',
 		'cut.svg':               'Cut',
 		'copy.svg':              'Copy',
@@ -188,12 +187,175 @@ window.flowUtils = (function() {
 		URL.revokeObjectURL(url);
 	}
 
+	// --- Field-help popups (ⓘ icons in the property panels) -------------
+	//
+	// The long field explanations that used to sit inline in state.html /
+	// transition.html / the selector fieldsets ride hidden inside an ⓘ icon
+	// (`.info-tip > .info-tip-text`) and show in ONE shared popup. Handlers
+	// are delegated from the document because the panels are injected later
+	// by jQuery .load() and selector fieldsets are rebuilt on every
+	// selection; the popup is position:fixed because the tasks window
+	// scrolls and would clip an absolutely-positioned bubble at its edges.
+	//
+	// Hover/focus shows it transiently; click (or Enter/Space) pins it so
+	// the example text inside can be selected and copied; Escape, a click
+	// elsewhere, or scrolling dismisses it.
+
+	var infoPop = null;
+	var infoPinned = null;
+	var infoHideTimer = null;
+
+	function infoPopEl() {
+		if (!infoPop) {
+			infoPop = document.createElement('div');
+			infoPop.id = 'info-tip-pop';
+			infoPop.style.display = 'none';
+			document.body.appendChild(infoPop);
+			// Moving from the icon onto the popup must not dismiss it — the
+			// examples in it are meant to be selectable.
+			infoPop.addEventListener('mouseenter', cancelInfoHide);
+			infoPop.addEventListener('mouseleave', function() {
+				if (!infoPinned) scheduleInfoHide();
+			});
+		}
+		return infoPop;
+	}
+
+	function cancelInfoHide() {
+		if (infoHideTimer) {
+			clearTimeout(infoHideTimer);
+			infoHideTimer = null;
+		}
+	}
+
+	function scheduleInfoHide() {
+		cancelInfoHide();
+		infoHideTimer = setTimeout(function() {
+			infoHideTimer = null;
+			if (!infoPinned) hideInfoTip();
+		}, 250);
+	}
+
+	function showInfoTip(tip) {
+		var text = tip.querySelector('.info-tip-text');
+		if (!text) return;
+		cancelInfoHide();
+		var pop = infoPopEl();
+		pop.innerHTML = text.innerHTML;
+		// Measure invisibly at 0,0 so max-width wrapping settles before we
+		// clamp the final position to the viewport.
+		pop.style.visibility = 'hidden';
+		pop.style.display = 'block';
+		pop.style.left = '0px';
+		pop.style.top = '0px';
+		var r = tip.getBoundingClientRect();
+		var pw = pop.offsetWidth;
+		var ph = pop.offsetHeight;
+		var x = Math.max(8, Math.min(r.left - 8, window.innerWidth - pw - 8));
+		var y = r.bottom + 6;
+		if (y + ph > window.innerHeight - 8) {
+			y = Math.max(8, r.top - ph - 6);
+		}
+		pop.style.left = x + 'px';
+		pop.style.top = y + 'px';
+		pop.style.visibility = '';
+	}
+
+	function hideInfoTip() {
+		cancelInfoHide();
+		if (infoPinned) {
+			infoPinned.classList.remove('info-tip-pinned');
+			infoPinned = null;
+		}
+		if (infoPop) infoPop.style.display = 'none';
+	}
+
+	function closestInfoTip(target) {
+		return (target && target.closest) ? target.closest('.info-tip') : null;
+	}
+
+	function initInfoTips() {
+		document.addEventListener('mouseover', function(e) {
+			var tip = closestInfoTip(e.target);
+			if (tip) showInfoTip(tip);
+		});
+		document.addEventListener('mouseout', function(e) {
+			if (closestInfoTip(e.target) && !infoPinned) scheduleInfoHide();
+		});
+		document.addEventListener('focusin', function(e) {
+			var tip = closestInfoTip(e.target);
+			if (tip) showInfoTip(tip);
+		});
+		document.addEventListener('focusout', function(e) {
+			if (closestInfoTip(e.target) && !infoPinned) scheduleInfoHide();
+		});
+		document.addEventListener('click', function(e) {
+			var tip = closestInfoTip(e.target);
+			if (tip) {
+				// An ⓘ inside a <label> wrapping a checkbox (sel-check) would
+				// otherwise toggle the box.
+				e.preventDefault();
+				e.stopPropagation();
+				if (infoPinned === tip) {
+					hideInfoTip();
+					return;
+				}
+				if (infoPinned) infoPinned.classList.remove('info-tip-pinned');
+				infoPinned = tip;
+				tip.classList.add('info-tip-pinned');
+				showInfoTip(tip);
+			} else if (infoPinned && !(infoPop && infoPop.contains(e.target))) {
+				hideInfoTip();
+			}
+		});
+		document.addEventListener('keydown', function(e) {
+			if (e.key === 'Escape') {
+				hideInfoTip();
+				return;
+			}
+			var tip = closestInfoTip(e.target);
+			if (tip && (e.key === 'Enter' || e.key === ' ')) {
+				e.preventDefault();
+				tip.click();
+			}
+		});
+		// The popup is viewport-anchored; any scroll (the tasks window
+		// scrolls internally, so listen in capture) invalidates its position.
+		document.addEventListener('scroll', function() {
+			if (infoPop && infoPop.style.display !== 'none') hideInfoTip();
+		}, true);
+	}
+
+	// The node test harness evaluates this file with no DOM; only wire the
+	// document listeners in a real browser.
+	if (typeof document !== 'undefined') initInfoTips();
+
+	// True when a cloud is where the call LEAVES OCCAS. The palette has one cloud
+	// symbol carrying no direction, so the arrows decide: a transition pointing AT
+	// the cloud makes it an exit. Its own out-edge is the route-back line, which is
+	// why only inbound edges count. Diagrams saved before the two cloud symbols
+	// were merged still carry role="egress" and win outright.
+	//
+	// Same rule as FsmarExportServlet — keep the two in step.
+	function isExitCloud(cell) {
+		if (!cell || !cell.value || !cell.value.tagName) return false;
+		if (cell.getAttribute('role') === 'egress') return true;
+		if (cell.value.tagName !== 'Gateway') return false;
+		var edges = cell.edges || [];
+		for (var i = 0; i < edges.length; i++) {
+			if (edges[i].target === cell) return true;
+		}
+		return false;
+	}
+
 	return {
 		selectFile: selectFile,
 		saveFile: saveFile,
 		applyToolbarTooltips: applyToolbarTooltips,
 		graphToSvgString: graphToSvgString,
-		downloadSvg: downloadSvg
+		downloadSvg: downloadSvg,
+		isExitCloud: isExitCloud,
+		hideInfoTip: hideInfoTip
 	};
 
 })();

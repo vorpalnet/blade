@@ -36,26 +36,26 @@
 				return '<b>' + esc(tag) + ': ' + esc(label) + '</b>' + info;
 			}
 
-			// Egress exit node (Gateway with role="egress"): where the call
-			// leaves OCCAS. The kind is inferred from topology — an out-edge back
-			// to a state makes it ROUTE_BACK (resume there on return), else
-			// ROUTE_FINAL.
-			if (cell.getAttribute('role') === 'egress') {
+			// A cloud something routes INTO is where the call leaves OCCAS. The
+			// kind is inferred from topology too — an out-edge back to a state
+			// makes it ROUTE_BACK (resume there on return), else ROUTE_FINAL.
+			// Same rule as flowUtils.isExitCloud and FsmarExportServlet.
+			if (flowUtils.isExitCloud(cell)) {
 				var egReturn = null;
 				var egEdges = cell.edges || [];
 				for (var ei = 0; ei < egEdges.length; ei++) {
 					var ee = egEdges[ei];
-					if (ee.source === cell &amp;&amp; ee.target &amp;&amp; ee.target.value
-							&amp;&amp; ee.target.getAttribute('role') !== 'egress') {
+					if (ee.source === cell && ee.target && ee.target.value
+							&& !flowUtils.isExitCloud(ee.target)) {
 						egReturn = ee.target.getAttribute('stateId') || ee.target.getAttribute('label');
 						break;
 					}
 				}
-				info += '<br>egress exit (the call leaves OCCAS here)';
-				if (cell.value &amp;&amp; cell.value.childNodes) {
+				info += '<br>the call leaves OCCAS here';
+				if (cell.value && cell.value.childNodes) {
 					for (var k = 0; k < cell.value.childNodes.length; k++) {
 						var rc = cell.value.childNodes[k];
-						if (rc.nodeType === 1 &amp;&amp; rc.nodeName === 'route') {
+						if (rc.nodeType === 1 && rc.nodeName === 'route') {
 							info += '<br>route: ' + esc(rc.getAttribute('uri') || '');
 						}
 					}
@@ -63,7 +63,7 @@
 				info += egReturn
 						? '<br>ROUTE_BACK &#8594; resumes at ' + esc(egReturn)
 						: '<br>ROUTE_FINAL (leaves for good)';
-				return '<b>Egress: ' + esc(label) + '</b>' + info;
+				return '<b>Cloud (exit): ' + esc(label) + '</b>' + info;
 			}
 
 			if (tag === 'State' || tag === 'Gateway' || tag === 'Ingress') {
@@ -86,9 +86,9 @@
 				if (tag === 'Gateway' || tag === 'Ingress') {
 					var match = cell.getAttribute('match');
 					if (match) {
-						info += '<br>ingress entry state; source match: ' + esc(match);
+						info += '<br>calls arrive here; source match: ' + esc(match);
 					} else {
-						info += '<br>default ingress (the "null" state — any source)';
+						info += '<br>the default entry point (the "null" state — any source)';
 					}
 				}
 				return '<b>' + esc(tag) + ': ' + esc(label) + '</b>' + info +
@@ -199,11 +199,11 @@
 			<add as="fontSize" value="12"/>
 			<add as="fontStyle" value="1"/>
 		</add>
-		<!-- Ingress entry node: a filled cloud (cloud-ingress stencil) with a
-		     fat down block-arrow low on the cloud. The state name/id sits dead
-		     center; the arrow lives below it near the cloud's bottom line. -->
+		<!-- The cloud: the network outside OCCAS. One symbol for both directions —
+		     the transition arrows say which way traffic runs, so the shape carries
+		     no arrow of its own. The name sits dead center. -->
 		<add as="gateway">
-			<add as="shape" value="cloud-ingress"/>
+			<add as="shape" value="cloud"/>
 			<add as="fillColor" value="#F8F8FA"/>
 			<add as="strokeColor" value="#545454"/>
 			<add as="strokeWidth" value="2"/>
@@ -211,12 +211,11 @@
 			<add as="fontStyle" value="1"/>
 			<add as="verticalLabelPosition" value="middle"/>
 			<add as="verticalAlign" value="middle"/>
-			<add as="spacingBottom" value="30"/>
 			<add as="whiteSpace" value="wrap"/>
 		</add>
-		<!-- Egress exit node: the mirror of an ingress. Distinguished from
-		     ingress by SHAPE (the up-arrow vs the ingress down-arrow), not color
-		     alone, plus its right-column placement and "Egress:" tooltip. -->
+		<!-- LEGACY (pre-merge): the separate arrowed exit cloud. Saved diagrams
+		     that still carry style="egress" keep rendering; new clouds all use
+		     the gateway style above. -->
 		<add as="egress">
 			<add as="shape" value="cloud-egress"/>
 			<add as="fillColor" value="#F8F8FA"/>

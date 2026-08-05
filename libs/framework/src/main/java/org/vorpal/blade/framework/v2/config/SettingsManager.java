@@ -95,23 +95,37 @@ import inet.ipaddr.IPAddress;
 import inet.ipaddr.ipv4.IPv4Address;
 import inet.ipaddr.ipv6.IPv6Address;
 
-/**
- * The SettingsManager class automatically reads a JSON formated configuration
- * file. Actually, there can be three configuration files, one for the DOMAIN,
- * CLUSTER, and MACHINE. All three files are merged together.
- * <p>
- * A fourth, SAMPLE, configuration file is automatically generated and saved for
- * ease of use. (You can find it in the 'config/custom/vorpal/samples'
- * directory.
- * <p>
- * Any serializable class (POJO) can be used as a config file. Extending the
- * class from the Configuration class will provide extra benefits, like
- * controlling the level of logging.
- * 
- * @author Jeff McDonald
- * @param <T> any type of serializable class
- *
- */
+/// Reads a JSON-formatted configuration file into a POJO and keeps it current.
+///
+/// There can be three configuration files — one each for the DOMAIN, CLUSTER
+/// and SERVER scope, under `config/custom/vorpal/`:
+///
+/// ```
+/// config/custom/vorpal/<name>.json                      (domain)
+/// config/custom/vorpal/_clusters/<cluster>/<name>.json  (cluster)
+/// config/custom/vorpal/_servers/<server>/<name>.json    (server)
+/// ```
+///
+/// [Settings#reload] reads the domain file, overlays the cluster file on it,
+/// then overlays the server file — so the narrowest scope wins, field by field,
+/// and a cluster or server file need only carry what it changes. The
+/// underscore-prefixed plural directory names are exact; a file placed anywhere
+/// else is never read.
+///
+/// Two more files are generated for ease of use: a sample at
+/// `config/custom/vorpal/_samples/<name>.json.SAMPLE` and the JSON Schema the
+/// Configurator renders as a form at
+/// `config/custom/vorpal/_schemas/<name>.jschema`.
+///
+/// `<name>` is the flattened deployment name — see [#flatten] — not the
+/// artifact name. `blade-api.war` reads `blade-api.json`.
+///
+/// Any serializable class (POJO) can be used as a config file. Extending
+/// [Configuration] provides extra benefits, like controlling the level of
+/// logging.
+///
+/// @author Jeff McDonald
+/// @param <T> any type of serializable class
 public class SettingsManager<T> {
 	protected T sample = null;
 	protected T current;
@@ -169,10 +183,12 @@ public class SettingsManager<T> {
 	public static SipSessionsUtil sipUtil;
 	public static Logger sipLogger;
 
+	// The three scopes the Configurator reads and writes over JMX. Merging them
+	// is NOT done here — [Settings#reload] reads the domain file, overlays the
+	// cluster file, then overlays the server file, so the narrowest scope wins.
 	protected JsonNode domainNode = NullNode.getInstance();
 	protected JsonNode clusterNode = NullNode.getInstance();
 	protected JsonNode serverNode = NullNode.getInstance();
-	protected JsonNode mergedNode = NullNode.getInstance();
 
 	// Config path constant
 	private static final String CONFIG_BASE_PATH = "config/custom/vorpal/";
@@ -857,10 +873,6 @@ public class SettingsManager<T> {
 
 	public static void setClusterName(String clusterName) {
 		SettingsManager.clusterName = clusterName;
-	}
-
-	public JsonNode merge(JsonNode mainNode, JsonNode updateNode) throws IOException {
-		return mapper.readerForUpdating(mainNode).readValue(updateNode);
 	}
 
 	public String getServletContextName() {

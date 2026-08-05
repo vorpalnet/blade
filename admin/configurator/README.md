@@ -12,6 +12,32 @@ The configurator module serves as the central configuration hub for the Vorpal B
 - Integration with console applications
 - Test utilities for configuration validation
 
+## The AI config assistant ("Use AI")
+
+The editor's Use AI button lets an operator describe a configuration in plain
+language — "add a queue named support that releases 2 calls every 10 seconds" —
+and have Claude draft it. The draft is constrained by the app's own JSON Schema
+(the same schema that generates the form, `@JsonPropertyDescription` docs and
+all), validated server-side with one automatic repair retry, and loaded into
+the editor as a **proposal**: the diff view opens showing exactly what changed
+against the running config, and Save and Publish remain the operator's explicit
+steps. Nothing is ever applied automatically.
+
+Two guarantees:
+
+- **Off by default, nothing leaves the box.** The feature is gated by the
+  Configurator's own settings (`ai.enabled`, `ai.apiKey`, `ai.model`,
+  `ai.baseUrl`). Until an operator enables it and supplies a key, the button is
+  hidden and the AdminServer makes no outbound calls.
+- **Secrets never reach the API.** Values in password-format schema fields and
+  values carrying the `{AES}`/`{CLEARTEXT}` credential prefixes are redacted
+  before the request and restored from the operator's own baseline afterward.
+
+The same capability is scriptable —
+`POST /api/v1/ai/generate/{app}` with the instruction as a plain-text body
+returns `{config, valid, errors}` (see the REST table below). It, too, only
+proposes; feed the result to the deploy APIs yourself if you want it applied.
+
 ## Command-Line Validation & REST API
 
 The Configurator exposes a REST API that validates every app's JSON config
@@ -190,49 +216,28 @@ Framework-level configuration management for Vorpal Blade v2. Handles core frame
 ## Related Modules
 
 ### Core Framework
-- [libs/framework](../libs/framework) - Base framework components and interfaces
-- [libs/shared/bin](../libs/shared/bin) - Shared binary utilities and helper classes
-- [libs/fsmar](../../libs/fsmar) - FSMAR, the Finite State Machine Application Router
+- [libs/framework](../../libs/framework/README.md) - the config model this app edits (v2 `config`, v3 `configuration`)
+- [libs/fsmar](../../libs/fsmar/README.md) - FSMAR, whose `fsmar.json` this app publishes (topology edited visually in [Flow](../flow/README.md))
 
 ### Administrative Components
-- [admin/console](../admin/console) - Administrative console interface and management tools
+- [admin/portal](../portal/README.md) - hosts the launcher card and the master login page
+- [admin/files](../files/README.md) - for the domain files that have no JSON Schema
 
 ### Configurable Services
-- [services/acl](../services/acl) - Access control list management service
-- [services/analytics](../services/analytics) - Analytics and reporting service
-- [services/hold](../services/hold) - Call hold management service
-- [services/options](../services/options) - SIP OPTIONS handling service
-- [services/presence](../services/presence) - Presence and availability service
-- [services/proxy-balancer](../services/proxy-balancer) - Load balancing proxy service
-- [services/proxy-block](../services/proxy-block) - Request blocking proxy service
-- [services/proxy-registrar](../services/proxy-registrar) - SIP registrar proxy service
-- [services/proxy-router](../services/proxy-router) - SIP routing proxy service
-- [services/queue](../services/queue) - Message queuing service
-- [services/tpcc](../services/tpcc) - Third-party call control service
-- [services/transfer](../services/transfer) - Call transfer management service
+Every service with a `SettingsManager` appears in the Configurator automatically — see
+the [service table in the project README](../../README.md#services) for the full list.
 
 ## Integration Guide
 
-### Configuration Management
-
-1. **Service Configuration**: Use the framework v2 config package to manage service-level configurations
-2. **Web Interface**: Leverage the console webapp package for browser-based configuration management
-3. **Testing**: Utilize the test package utilities for validating configuration changes
-
-### Web Application Integration
-
-The webapp package provides servlet-based configuration interfaces that integrate with the main admin console. JSP pages use the Apache Taglibs for dynamic content rendering and form processing.
-
-### Framework Integration
-
-The module integrates with the core framework through the v2 config package, enabling runtime configuration updates without service restarts. Configuration changes are propagated to dependent services through the framework's event system.
-
-## Build Requirements
-
-- Maven 3.x
-- Java 8 or higher
-- Access to Vorpal Blade framework libraries
+An application opts in by creating a `SettingsManager` for its config class (see the
+[v2 config guide](../../libs/framework/src/main/java/org/vorpal/blade/framework/v2/config/README.md)).
+That one step registers the app's Configuration MBean, which is everything the
+Configurator needs: it discovers the JSON Schema over JMX, renders the form, keeps
+version history, and publishes changes to the running cluster — no restarts, and no
+Configurator changes when a new app appears.
 
 ## Usage
 
-This module is typically deployed as part of the larger Vorpal Blade administrative suite. It should be configured alongside the admin console module and requires proper integration with the target services that need configuration management capabilities.
+Deployed to the AdminServer inside `blade-admin.ear` (see
+[apps/admin](../../apps/admin/README.md)) and reached from the
+[Portal](../portal/README.md) at `/blade/configurator`.

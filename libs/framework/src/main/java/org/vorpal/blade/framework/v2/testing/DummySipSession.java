@@ -31,12 +31,23 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
  * Provides basic attribute storage and session management without
  * requiring a SIP container.
  *
- * <p>Most methods are stub implementations that return null or default values.
- * The attribute-related methods are fully functional for testing attribute storage.
+ * <p>Attributes, identity ({@link #getId()}), validity, dialog state, and
+ * {@link #createRequest(String)} are fully functional, which is enough for
+ * {@code Callflow.getLinkedSession} to walk between two linked legs. The
+ * remaining methods are stubs returning null or default values.
  */
 public class DummySipSession implements SipSession {
 
+	private static final java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger();
+
 	private SipApplicationSession appSession;
+	private final String id;
+	private boolean valid = true;
+	private State state = State.INITIAL;
+	private final long creationTime = System.currentTimeMillis();
+	private boolean invalidateWhenReady;
+	private javax.servlet.sip.Flow flow;
+	private SipServletRequest activeInvite;
 
 	// LinkedHashMap so getAttributeNameSet returns attributes in insertion
 	// order — gives tests that snapshot session state a stable iteration.
@@ -49,6 +60,15 @@ public class DummySipSession implements SipSession {
 	 */
 	public DummySipSession(SipApplicationSession appSession) {
 		this.appSession = appSession;
+		this.id = "dummy-" + counter.incrementAndGet();
+		if (appSession instanceof DummyApplicationSession) {
+			((DummyApplicationSession) appSession).register(this);
+		}
+	}
+
+	/** Sets the dialog state reported by {@link #getState()}. */
+	public void setState(State state) {
+		this.state = state;
 	}
 
 	/** {@inheritDoc} */
@@ -81,23 +101,46 @@ public class DummySipSession implements SipSession {
 		attributes.put(key, value);
 	}
 
-	/** Creates a DummyRequest for the specified method. Returns null on error. */
+	/**
+	 * Creates a DummyRequest for the specified method, attached to this session so
+	 * {@code request.getSession()} resolves the way a container-created request
+	 * would. Returns null only if construction fails.
+	 *
+	 * <p>Mirrors the container in refusing ACK and CANCEL — both
+	 * {@code SipSession.createRequest} and {@code SipFactory.createRequest} throw
+	 * {@code IllegalArgumentException} for those, since each has to be derived from
+	 * the message it answers.
+	 */
 	@Override
 	public SipServletRequest createRequest(String method) {
+		if ("ACK".equalsIgnoreCase(method) || "CANCEL".equalsIgnoreCase(method)) {
+			throw new IllegalArgumentException("Invalid request method: [" + method + "]");
+		}
 		try {
-			SipServletRequest request = new DummyRequest(this.getApplicationSession(), method);
+			DummyRequest request = new DummyRequest(this.getApplicationSession(), method);
+			request.setSession(this);
+			return request;
 		} catch (Exception ex) {
 			Callflow.getSipLogger()
-					.severe("DummSipSession.createRequest - " + ex.getClass().getName() + ": " + ex.getMessage());
+					.severe("DummySipSession.createRequest - " + ex.getClass().getName() + ": " + ex.getMessage());
 			Callflow.getSipLogger().severe(ex);
+			return null;
 		}
-		return null;
 	}
 
-	/** Stub implementation - returns null. */
+	/**
+	 * Returns whatever {@link #setActiveInvite(SipServletRequest)} was given,
+	 * regardless of UAMode. Enough to exercise the {@code getActiveInvite(UAC)}
+	 * then {@code createCancel()} pattern that Terminate and ReferTransfer use.
+	 */
 	@Override
 	public SipServletRequest getActiveInvite(UAMode arg0) {
-		return null;
+		return activeInvite;
+	}
+
+	/** Sets the request {@link #getActiveInvite(UAMode)} will hand back. */
+	public void setActiveInvite(SipServletRequest activeInvite) {
+		this.activeInvite = activeInvite;
 	}
 
 	/** Stub implementation - returns null. */
@@ -118,16 +161,16 @@ public class DummySipSession implements SipSession {
 		return null;
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public SipApplicationSession getApplicationSession() {
-		return null;
+		return appSession;
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public Enumeration<String> getAttributeNames() {
-		return null;
+		return java.util.Collections.enumeration(attributes.keySet());
 	}
 
 	/** Stub implementation - returns null. */
@@ -136,16 +179,16 @@ public class DummySipSession implements SipSession {
 		return null;
 	}
 
-	/** Stub implementation - returns 0. */
+	/** {@inheritDoc} */
 	@Override
 	public long getCreationTime() {
-		return 0;
+		return creationTime;
 	}
 
-	/** Stub implementation - returns null. */
+	/** {@inheritDoc} */
 	@Override
 	public Flow getFlow() {
-		return null;
+		return flow;
 	}
 
 	/** Stub implementation - returns null. */
@@ -154,16 +197,16 @@ public class DummySipSession implements SipSession {
 		return null;
 	}
 
-	/** Stub implementation - returns null. */
+	/** Returns this session's generated id, unique within the JVM. */
 	@Override
 	public String getId() {
-		return null;
+		return id;
 	}
 
-	/** Stub implementation - returns false. */
+	/** {@inheritDoc} */
 	@Override
 	public boolean getInvalidateWhenReady() {
-		return false;
+		return invalidateWhenReady;
 	}
 
 	/** Stub implementation - returns null. */
@@ -172,10 +215,10 @@ public class DummySipSession implements SipSession {
 		return null;
 	}
 
-	/** Stub implementation - returns 0. */
+	/** {@inheritDoc} */
 	@Override
 	public long getLastAccessedTime() {
-		return 0;
+		return creationTime;
 	}
 
 	/** Stub implementation - returns null. */
@@ -202,10 +245,10 @@ public class DummySipSession implements SipSession {
 		return null;
 	}
 
-	/** Stub implementation - returns null. */
+	/** Returns the dialog state; INITIAL unless set by {@link #setState(State)}. */
 	@Override
 	public State getState() {
-		return null;
+		return state;
 	}
 
 	/** Stub implementation - returns null. */
@@ -226,9 +269,11 @@ public class DummySipSession implements SipSession {
 		return null;
 	}
 
-	/** Stub implementation - does nothing. */
+	/** Marks the session invalid and moves it to TERMINATED. */
 	@Override
 	public void invalidate() {
+		this.valid = false;
+		this.state = State.TERMINATED;
 	}
 
 	/** Stub implementation - returns false. */
@@ -237,15 +282,16 @@ public class DummySipSession implements SipSession {
 		return false;
 	}
 
-	/** Stub implementation - returns false. */
+	/** True until {@link #invalidate()} is called. */
 	@Override
 	public boolean isValid() {
-		return false;
+		return valid;
 	}
 
-	/** Stub implementation - does nothing. */
+	/** {@inheritDoc} */
 	@Override
 	public void setFlow(Flow arg0) {
+		this.flow = arg0;
 	}
 
 	/** Stub implementation - does nothing. */
@@ -253,9 +299,10 @@ public class DummySipSession implements SipSession {
 	public void setHandler(String arg0) throws ServletException {
 	}
 
-	/** Stub implementation - does nothing. */
+	/** {@inheritDoc} */
 	@Override
 	public void setInvalidateWhenReady(boolean arg0) {
+		this.invalidateWhenReady = arg0;
 	}
 
 	/** Stub implementation - does nothing. */
@@ -268,9 +315,10 @@ public class DummySipSession implements SipSession {
 	public void setOutboundInterface(InetAddress arg0) {
 	}
 
-	/** Stub implementation - does nothing. */
+	/** Moves the session to TERMINATED, as ending the dialog would. */
 	@Override
 	public void terminateDialog() {
+		this.state = State.TERMINATED;
 	}
 
 	/** Stub implementation - does nothing. */

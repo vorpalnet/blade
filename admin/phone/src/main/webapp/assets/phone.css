@@ -13,10 +13,18 @@
 
 /* ---------------------------------------------------------------- layout */
 
+/* Narrower than the 1200px house page. This app is a handset beside three short
+   panels, not a table; at full width the form fields stretch far past the length
+   of anything ever typed into them. */
+.phone-page {
+	max-width: 1000px;
+	padding: 24px 32px 40px;
+}
+
 .phone-grid {
 	display: grid;
-	grid-template-columns: minmax(340px, 420px) minmax(320px, 1fr);
-	gap: 24px;
+	grid-template-columns: minmax(320px, 380px) minmax(300px, 1fr);
+	gap: 20px;
 	align-items: start;
 }
 
@@ -24,7 +32,19 @@
 	.phone-grid { grid-template-columns: 1fr; }
 }
 
-.phone-stack { display: flex; flex-direction: column; gap: 20px; }
+.phone-stack { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------------------------------------------------------------- hero */
+
+/* One line of orientation. What the call is actually doing is reported live in the
+   Media panel, so prose describing it here would only repeat the running state. */
+.phone-hero {
+	padding: 20px 24px;
+	margin-bottom: 20px;
+}
+
+.phone-hero h1 { font-size: 21px; margin-bottom: 4px; }
+.phone-hero p  { font-size: 14px; }
 
 /* ---------------------------------------------------------------- panels */
 
@@ -33,11 +53,11 @@
 	border: 1px solid var(--vorpal-divider);
 	border-radius: var(--vorpal-radius-lg);
 	box-shadow: var(--vorpal-shadow-sm);
-	padding: 20px;
+	padding: 16px 18px;
 }
 
 .phone-panel-title {
-	margin: 0 0 14px;
+	margin: 0 0 12px;
 	font-size: .72rem;
 	font-weight: 700;
 	letter-spacing: .1em;
@@ -61,7 +81,7 @@
 	background: linear-gradient(168deg, var(--vorpal-purple) 0%, var(--vorpal-purple-700) 100%);
 	border-radius: var(--vorpal-radius-lg);
 	box-shadow: var(--vorpal-shadow-lg);
-	padding: 22px;
+	padding: 18px;
 	color: #fff;
 	position: relative;
 	overflow: hidden;
@@ -81,8 +101,8 @@
 	background: rgba(0, 0, 0, .22);
 	border: 1px solid rgba(255, 255, 255, .16);
 	border-radius: var(--vorpal-radius-md);
-	padding: 16px 18px;
-	min-height: 104px;
+	padding: 14px 16px;
+	min-height: 92px;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
@@ -143,7 +163,7 @@
 /* ---------------------------------------------------------------- dial field */
 
 .phone-dial-field {
-	margin-top: 16px;
+	margin-top: 14px;
 	display: flex;
 	gap: 8px;
 }
@@ -183,7 +203,7 @@
 /* ---------------------------------------------------------------- keypad */
 
 .phone-keypad {
-	margin-top: 14px;
+	margin-top: 12px;
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
 	gap: 8px;
@@ -195,7 +215,7 @@
 	background: rgba(255, 255, 255, .1);
 	color: #fff;
 	border-radius: var(--vorpal-radius-md);
-	padding: 12px 0 9px;
+	padding: 10px 0 8px;
 	cursor: pointer;
 	transition: transform .06s ease, background .12s ease;
 	font-family: inherit;
@@ -217,7 +237,7 @@
 /* ---------------------------------------------------------------- actions */
 
 .phone-actions {
-	margin-top: 16px;
+	margin-top: 14px;
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	gap: 8px;
@@ -226,7 +246,7 @@
 .phone-btn {
 	font: inherit;
 	font-weight: 600;
-	padding: 12px 14px;
+	padding: 11px 14px;
 	border-radius: var(--vorpal-radius-md);
 	border: 1px solid rgba(255, 255, 255, .3);
 	background: rgba(255, 255, 255, .12);
@@ -249,7 +269,7 @@
 	border-color: #fff;
 	grid-column: span 2;
 	font-size: 1.02rem;
-	padding: 14px;
+	padding: 13px;
 }
 
 .phone-btn-primary:hover:not(:disabled) { background: rgba(255, 255, 255, .88); }
@@ -268,7 +288,7 @@
 /* ---------------------------------------------------------------- incoming */
 
 .phone-incoming {
-	margin-top: 16px;
+	margin-top: 14px;
 	border: 3px solid #fff;
 	border-radius: var(--vorpal-radius-md);
 	padding: 14px;
@@ -300,19 +320,26 @@
 
 /* ---------------------------------------------------------------- form rows */
 
-.phone-field { margin-bottom: 12px; }
+/* Capped rather than filling the panel: a gateway URL is the longest value here and
+   fits well inside this, so a wider box would only add empty space. The panel stays
+   full width for the meters and the log below it. */
+.phone-field, .phone-row { max-width: 420px; }
+
+.phone-field { margin-bottom: 10px; }
 
 .phone-field label {
-	display: block;
+	display: flex;
+	align-items: center;
+	gap: 6px;
 	font-size: .74rem;
 	font-weight: 600;
 	color: var(--vorpal-slate-600);
-	margin-bottom: 5px;
+	margin-bottom: 4px;
 }
 
 .phone-field input {
 	width: 100%;
-	padding: 9px 11px;
+	padding: 8px 11px;
 	border: 1px solid var(--vorpal-slate-300);
 	border-radius: var(--vorpal-radius-sm);
 	font: inherit;
@@ -327,19 +354,82 @@
 	box-shadow: 0 0 0 3px var(--vorpal-purple-100);
 }
 
-.phone-field-hint {
-	font-size: .72rem;
-	color: var(--vorpal-slate-400);
-	margin-top: 4px;
-	line-height: 1.45;
-}
-
 .phone-row { display: flex; gap: 8px; }
 .phone-row > * { flex: 1; }
 
+/* ---------------------------------------------------------------- tooltips */
+
+/* The explanation a field needs once, on demand, instead of a paragraph under every
+   input. The marker is a glyph in a ring -- a shape, legible with no hue at all --
+   and it is focusable, so the text is reachable from the keyboard and not only on
+   hover. */
+.phone-tip {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex: 0 0 auto;
+	border: 1px solid var(--vorpal-slate-400);
+	border-radius: 50%;
+	font-size: .6rem;
+	font-weight: 700;
+	line-height: 1;
+	color: var(--vorpal-slate-600);
+	cursor: help;
+}
+
+.phone-tip:hover, .phone-tip:focus-visible {
+	outline: none;
+	border-color: var(--vorpal-purple);
+	color: var(--vorpal-purple-700);
+	background: var(--vorpal-purple-soft);
+}
+
+.phone-tip-bubble {
+	position: absolute;
+	top: calc(100% + 8px);
+	left: -8px;
+	z-index: 20;
+	width: 270px;
+	padding: 9px 11px;
+	border-radius: var(--vorpal-radius-sm);
+	background: var(--vorpal-ink-900);
+	color: #fff;
+	font-size: .72rem;
+	font-weight: 400;
+	line-height: 1.5;
+	letter-spacing: 0;
+	text-transform: none;
+	box-shadow: var(--vorpal-shadow-lg);
+	/* Hidden without display:none so it keeps its accessible name for a screen
+	   reader following aria-describedby. */
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity .12s ease;
+	pointer-events: none;
+}
+
+.phone-tip:hover .phone-tip-bubble,
+.phone-tip:focus-visible .phone-tip-bubble {
+	opacity: 1;
+	visibility: visible;
+}
+
+.phone-tip-bubble code {
+	font-family: var(--vorpal-font-mono);
+	font-size: .95em;
+	background: rgba(255, 255, 255, .14);
+	padding: 0 3px;
+	border-radius: 3px;
+}
+
+.phone-tip-bubble strong { font-weight: 700; }
+
 /* ---------------------------------------------------------------- meters */
 
-.phone-meter { margin-bottom: 12px; }
+.phone-meter { margin-bottom: 10px; }
 
 .phone-meter-head {
 	display: flex;
@@ -379,7 +469,7 @@
 	justify-content: space-between;
 	align-items: baseline;
 	gap: 12px;
-	padding: 9px 0;
+	padding: 8px 0;
 	border-bottom: 1px solid var(--vorpal-divider);
 	font-size: .84rem;
 }
@@ -426,7 +516,7 @@
 	margin: 0;
 	padding: 0;
 	list-style: none;
-	max-height: 260px;
+	max-height: 220px;
 	overflow-y: auto;
 	font-family: var(--vorpal-font-mono);
 	font-size: .76rem;

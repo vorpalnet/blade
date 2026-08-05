@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.vorpal.blade</groupId>
+		<artifactId>vorpal-blade</artifactId>
+		<version>${revision}</version>
+		<relativePath>../../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>vorpal-blade-admin-irouter-editor</artifactId>
+	<packaging>war</packaging>
+	<name>BLADE Admin iRouter Editor</name>
+
+	<dependencies>
+		<!-- Brings in the v3 router model (pipeline, routing, RoutePreviewEngine)
+		     plus Jackson, servlet-api etc. via transitive deps. -->
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>blade-irouter</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<configuration>
+					<!-- The login page is the portal master, injected at build time:
+					     one source file, no per-app copies to drift. Edit
+					     admin/portal/src/main/webapp/login.jsp, never add a per-app
+					     login page. See SECURITY.md. -->
+					<webResources>
+						<resource>
+							<directory>${project.basedir}/../portal/src/main/webapp</directory>
+							<includes>
+								<include>login.jsp</include>
+							</includes>
+						</resource>
+					</webResources>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

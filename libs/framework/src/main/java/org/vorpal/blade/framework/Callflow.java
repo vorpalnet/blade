@@ -690,8 +690,8 @@ public abstract class Callflow implements Serializable {
 							+ "': " + ex.getClass().getSimpleName() + " " + ex.getMessage());
 				}
 
-				// Fall back to X-Vorpal-Session (legacy colon format). Optum
-				// still has clusters emitting this in cluster-to-cluster
+				// Fall back to X-Vorpal-Session (legacy colon format). Some
+				// customer clusters still emit this in cluster-to-cluster
 				// traffic; the standalone X-Vorpal-Timestamp header is no longer
 				// read (legacy peers carry no birth instant — Analytics falls
 				// back to receipt time for those). The Vorpal-ID + dialog chain
@@ -1435,6 +1435,12 @@ public abstract class Callflow implements Serializable {
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
 
+		// Matches sendRequest above, and the v3 override — a null message is
+		// nothing to send, not a crash.
+		if (response == null) {
+			return;
+		}
+
 		SipApplicationSession appSession = response.getApplicationSession();
 		SipSession sipSession = response.getSession();
 		String method = response.getMethod();
@@ -1544,155 +1550,44 @@ public abstract class Callflow implements Serializable {
 	}
 
 	/**
-	 * Creates a SipServletRequest from a SipSession, copying the method, headers
-	 * and body content.
-	 * 
-	 * @param destSession
-	 * @param originRequest
-	 * @return
-	 * @throws ServletParseException
-	 * @throws UnsupportedEncodingException
-	 * @throws IOException
-	 */
-	public static SipServletRequest continueRequest(SipSession destSession, SipServletRequest originRequest)
-			throws ServletParseException, UnsupportedEncodingException, IOException {
-		SipServletRequest destRequest = destSession.createRequest(originRequest.getMethod());
-		copyContentAndHeaders(originRequest, destRequest);
-		return destRequest;
-	}
-
-	/**
-	 * Creates a SipServletRequest from SipFactory by copying the
-	 * SipApplicationSession, method, From and To. It also copies the headers, body
-	 * content and sets the routing directive to continue. Finally, it sets the
-	 * request URI as specified and links the two sessions.
-	 * 
-	 * @param uri           the SIP request URI
-	 * @param originRequest to be copied
-	 * @return request
-	 * @throws ServletParseException
-	 * @throws UnsupportedEncodingException
-	 * @throws IOException
-	 */
-	public static SipServletRequest continueRequest(URI uri, SipServletRequest originRequest)
-			throws ServletParseException, UnsupportedEncodingException, IOException {
-		SipServletRequest destRequest;
-
-		destRequest = sipFactory.createRequest(originRequest.getApplicationSession(), originRequest.getMethod(),
-				originRequest.getFrom(), originRequest.getTo());
-		destRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, originRequest);
-		copyContentAndHeaders(originRequest, destRequest);
-		destRequest.setRequestURI(uri);
-
-		return destRequest;
-	}
-
-	/**
-	 * Creates a SipServletRequest from SipFactory by copying the
-	 * SipApplicationSession, method, From and To. It also copies the headers, body
-	 * content and sets the routing directive to continue. Finally, it sets the
-	 * request URI from the specified String.
-	 * 
-	 * @param strUri        as a Java String
-	 * @param originRequest to be copied
-	 * @return request
-	 * @throws ServletParseException
-	 * @throws UnsupportedEncodingException
-	 * @throws IOException
-	 */
-	public static SipServletRequest continueRequest(String strUri, SipServletRequest originRequest)
-			throws ServletParseException, UnsupportedEncodingException, IOException {
-		return continueRequest(sipFactory.createURI(strUri), originRequest);
-	}
-
-	/**
-	 * Creates a SipServletResponse from a SipServletRequest, copying the status
-	 * code, reason phrase, headers and body content.
-	 * 
-	 * @param destRequest
-	 * @param originResponse
-	 * @return
-	 * @throws ServletParseException
-	 * @throws UnsupportedEncodingException
-	 * @throws IOException
-	 */
-	public static SipServletResponse continueResponse(SipServletRequest destRequest, SipServletResponse originResponse)
-			throws ServletParseException, UnsupportedEncodingException, IOException {
-		SipServletResponse destResponse = null;
-		destResponse = destRequest.createResponse(originResponse.getStatus(), originResponse.getReasonPhrase());
-
-		if (destResponse != null) {
-			copyContentAndHeaders(originResponse, destResponse);
-		}
-
-		return destResponse;
-	}
-
-	@Deprecated
-	public static SipServletRequest createNewRequest(SipServletRequest origin)
-			throws IOException, ServletParseException {
-
-		SipServletRequest destination = sipFactory.createRequest(//
-				origin.getApplicationSession(), //
-				origin.getMethod(), //
-				origin.getFrom(), //
-				origin.getTo()); //
-
-		copyContentAndHeaders(origin, destination);
-		return destination;
-	}
-
-	/**
-	 * Creates a new SIP request with a different To address, copying content and
-	 * headers from the original request.
+	 * Acknowledges a downstream response with whichever method arrived upstream,
+	 * and sends it. This is the one call a B2BUA needs inside a
+	 * {@code sendResponse()} continuation — it replaces the hand-written
+	 * {@code if (ack.getMethod().equals(PRACK)) … else …} branch:
 	 *
-	 * @param origin the original SIP request to copy from
-	 * @param to     the new destination address
-	 * @return the new SIP request
-	 * @throws IOException           if an I/O error occurs
-	 * @throws ServletParseException if address parsing fails
-	 */
-	public static SipServletRequest createNewRequest(SipServletRequest origin, Address to)
-			throws IOException, ServletParseException {
-
-		SipServletRequest destination = sipFactory.createRequest(//
-				origin.getApplicationSession(), //
-				origin.getMethod(), //
-				origin.getFrom(), //
-				to); //
-
-		copyContentAndHeaders(origin, destination);
-		return destination;
-	}
-
-	/**
-	 * Creates a new SIP request with the specified method on the same session as
-	 * the response.
+	 * <ul>
+	 *   <li><b>PRACK</b> &mdash; builds the downstream PRACK, sends it, and relays
+	 *       the PRACK's own response back upstream.</li>
+	 *   <li><b>ACK</b> &mdash; builds the downstream ACK and sends it.</li>
+	 *   <li><b>anything else</b> &mdash; treated as glare; answers 486 Busy Here
+	 *       upstream and sends nothing downstream.</li>
+	 * </ul>
 	 *
-	 * @param response the SIP response whose session will be used to create the
-	 *                 request
-	 * @param method   the SIP method for the new request (e.g., "BYE", "INFO")
-	 * @return the new SIP request
-	 * @throws IOException           if an I/O error occurs
-	 * @throws ServletParseException if parsing fails
-	 */
-	public static SipServletRequest createRequest(SipServletResponse response, String method)
-			throws IOException, ServletParseException {
-		SipServletRequest request = response.getSession().createRequest(method);
-		return request;
-	}
-
-	/**
-	 * Sends an ACK or PRACK request downstream based on an upstream request. For
-	 * PRACK, also sends the response back upstream. For other methods, treats it as
-	 * a glare condition and sends 486 Busy.
+	 * Every branch carries the body and non-system headers across with
+	 * {@link #copyContentAndHeaders(SipServletMessage, SipServletRequest)}.
+	 * <p>
+	 * <b>This fires once per acknowledgement, and forwarding a PRACK does not end
+	 * the exchange.</b> On a dialog using reliable provisional responses it runs
+	 * twice: {@code sendResponse} registers its callback under
+	 * {@code REQUEST_CALLBACK_PRACK} as well as {@code REQUEST_CALLBACK_ACK}, so
+	 * the PRACK invokes it, and then the callee's 200 re-fires the enclosing
+	 * {@code sendRequest} callback, which sends the 200 upstream and registers the
+	 * callback again for the ACK. The call site therefore never has to ask which
+	 * one it is — it hands over whatever arrived and this matches it.
+	 * <p>
+	 * When something must modify the outbound request before it is sent — a
+	 * {@link org.vorpal.blade.framework.v2.b2bua.B2buaListener} hook, typically —
+	 * build it with
+	 * {@link #createAcknowledgement(SipServletResponse, SipServletRequest)
+	 * createAcknowledgement} and send it yourself instead.
 	 *
 	 * @param origin the upstream ACK or PRACK request
 	 * @param dest   the downstream response to acknowledge
 	 * @throws IOException      if an I/O error occurs
 	 * @throws ServletException if a servlet error occurs
 	 */
-	public void sendAckOrPrack(SipServletRequest origin, SipServletResponse dest) throws IOException, ServletException {
+	public void sendAcknowledgement(SipServletRequest origin, SipServletResponse dest)
+			throws IOException, ServletException {
 		if (origin.getMethod().equals(PRACK)) {
 			SipServletRequest destPrack = copyContentAndHeaders(origin, dest.createPrack());
 			sendRequest(destPrack, (prackResponse) -> {
@@ -1774,7 +1669,7 @@ public abstract class Callflow implements Serializable {
 	 * Copies the content body from one SIP message to a request. Automatically
 	 * links the two sessions in the case of INVITE or ACK.
 	 *
-	 * @param copyFrom the source SIP request
+	 * @param copyFrom the source SIP message
 	 * @param copyTo   the destination SIP request
 	 * @return the destination request with copied content
 	 * @throws UnsupportedEncodingException if the content encoding is not supported
@@ -1802,12 +1697,12 @@ public abstract class Callflow implements Serializable {
 	/**
 	 * Copies the content body from one SIP message to a response. Automatically
 	 * links the two sessions in the case of a successful response to INVITE.
-	 * 
-	 * @param copyFrom
-	 * @param copyTo
-	 * @return
-	 * @throws UnsupportedEncodingException
-	 * @throws IOException
+	 *
+	 * @param copyFrom the source SIP message
+	 * @param copyTo   the destination SIP response
+	 * @return the destination response with copied content
+	 * @throws UnsupportedEncodingException if the content encoding is not supported
+	 * @throws IOException                  if an I/O error occurs
 	 */
 	public static SipServletResponse copyContent(SipServletMessage copyFrom, SipServletResponse copyTo)
 			throws UnsupportedEncodingException, IOException {
@@ -1988,12 +1883,13 @@ public abstract class Callflow implements Serializable {
 	}
 
 	/**
-	 * Copy non-system headers with the exception of Contact for REGISTER requests.
-	 * 
-	 * @param copyFrom
-	 * @param copyTo
+	 * Copy non-system headers, and Contact as well for REGISTER requests, where the
+	 * spec does not treat it as a system header.
+	 *
+	 * @param copyFrom the source SIP request
+	 * @param copyTo   the destination SIP request
 	 * @return copyTo
-	 * @throws ServletParseException
+	 * @throws ServletParseException if a header fails to parse
 	 */
 	public static SipServletRequest copyHeaders(SipServletRequest copyFrom, SipServletRequest copyTo)
 			throws ServletParseException {
@@ -2012,13 +1908,14 @@ public abstract class Callflow implements Serializable {
 	}
 
 	/**
-	 * Copy non-system headers with the exception of Contact for REGISTER responses,
-	 * 3xx and 485 responses, and 200/OPTIONS responses.
-	 * 
-	 * @param copyFrom
-	 * @param copyTo
+	 * Copy non-system headers, and Contact as well for REGISTER responses, 3xx and
+	 * 485 responses, and 200/OPTIONS responses — the cases where the spec does not
+	 * treat Contact as a system header.
+	 *
+	 * @param copyFrom the source SIP response
+	 * @param copyTo   the destination SIP response
 	 * @return copyTo
-	 * @throws ServletParseException
+	 * @throws ServletParseException if a header fails to parse
 	 */
 	public static SipServletResponse copyHeaders(SipServletResponse copyFrom, SipServletResponse copyTo)
 			throws ServletParseException {
@@ -2049,9 +1946,12 @@ public abstract class Callflow implements Serializable {
 	}
 
 	/**
-	 * Copies both headers and content body from one SIP request to another.
+	 * Copies both headers and content body from one SIP message to a request.
+	 * Copies the non-system headers only; unlike
+	 * {@link #copyHeaders(SipServletRequest, SipServletRequest)} it does not carry
+	 * Contact across on a REGISTER.
 	 *
-	 * @param copyFrom the source SIP request
+	 * @param copyFrom the source SIP message
 	 * @param copyTo   the destination SIP request
 	 * @return the destination request with copied headers and content
 	 * @throws ServletParseException        if parsing fails
@@ -2069,6 +1969,9 @@ public abstract class Callflow implements Serializable {
 
 	/**
 	 * Copies both headers and content body from one SIP response to another.
+	 * Copies the non-system headers only; unlike
+	 * {@link #copyHeaders(SipServletResponse, SipServletResponse)} it does not
+	 * carry Contact across on a REGISTER, 3xx, 485, or 200/OPTIONS response.
 	 *
 	 * @param copyFrom the source SIP response
 	 * @param copyTo   the destination SIP response
@@ -2086,6 +1989,27 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
+	/**
+	 * Records the inbound message's session on the outbound message's session, so
+	 * {@link #getLinkedSession(SipSession) getLinkedSession(outboundSession)} finds
+	 * the inbound leg.
+	 * <p>
+	 * <b>This links one way only.</b> The attribute is written on the outbound
+	 * session; the inbound session is not touched. A B2BUA ends up linked in both
+	 * directions because it copies in both directions — forwarding the request runs
+	 * {@code copyContentAndHeaders(aliceRequest, bobRequest)} and links Bob to
+	 * Alice, then relaying the response runs
+	 * {@code copyContentAndHeaders(bobResponse, aliceResponse)} and links Alice to
+	 * Bob. A callflow that skips one of those copies leaves that direction
+	 * unlinked.
+	 * <p>
+	 * Called for you by {@link #copyContent(SipServletMessage, SipServletRequest)}
+	 * on INVITE and ACK requests, and on successful INVITE responses; call it
+	 * directly only when neither copy applies.
+	 *
+	 * @param inbound  the message whose session is being pointed at
+	 * @param outbound the message whose session records the link
+	 */
 	public static void linkSession(SipServletMessage inbound, SipServletMessage outbound) {
 		if (inbound.getSession().isValid() && outbound.getSession().isValid()) {
 
@@ -2097,6 +2021,14 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
+	/**
+	 * Session-level form of
+	 * {@link #linkSession(SipServletMessage, SipServletMessage)}. Links one way
+	 * only: the attribute is written on {@code outbound}, naming {@code inbound}.
+	 *
+	 * @param inbound  the session being pointed at
+	 * @param outbound the session that records the link
+	 */
 	public static void linkSession(SipSession inbound, SipSession outbound) {
 		if (inbound.isValid() && outbound.isValid()) {
 			if (sipLogger.isLoggable(Level.FINER)) {
@@ -2180,49 +2112,91 @@ public abstract class Callflow implements Serializable {
 	}
 
 	/**
-	 * Creates a response for the upstream request by copying status, headers, and
-	 * content from a downstream response. Links the sessions on successful
-	 * responses.
+	 * Answers the upstream request with the downstream response's status code and
+	 * reason phrase, plus its body and non-system headers. A successful INVITE
+	 * response links the two sessions as a side effect of the content copy.
+	 * <p>
+	 * <b>Never returns null.</b> It used to return null when the upstream leg had
+	 * gone away, which pushed the failure to whatever dereferenced the result — a
+	 * NullPointerException nowhere near the cause. It now says what happened:
+	 * It throws {@code ServletParseException} instead, with a message naming the
+	 * cause:
+	 * <ul>
+	 * <li>either argument was null &mdash; a coding mistake.</li>
+	 * <li>the upstream leg is gone: its session is null, invalid, or TERMINATED.
+	 * That is a race rather than a bug &mdash; the caller hung up or CANCELed
+	 * before the downstream response arrived. Callflows that expect it already
+	 * guard with {@code !aliceRequest.isCommitted()} before calling; the far leg
+	 * does not leak, because {@code Terminate} tears it down when the upstream BYE
+	 * or CANCEL arrives.</li>
+	 * </ul>
+	 * The exception was already declared, so no caller needs a new try/catch. This
+	 * matches {@code v3.Callflow.createRequest}, which reports its failures the
+	 * same way.
 	 *
-	 * @param aliceRequest the upstream request to create a response for
+	 * @param aliceRequest the upstream request to answer
 	 * @param bobResponse  the downstream response to copy from
-	 * @return the created response, or null if either parameter is null or session
-	 *         is invalid
+	 * @return the created response, never null
 	 * @throws ServletParseException        if header parsing fails
 	 * @throws UnsupportedEncodingException if the content encoding is not supported
 	 * @throws IOException                  if an I/O error occurs
 	 */
 	public static SipServletResponse createResponse(SipServletRequest aliceRequest, SipServletResponse bobResponse)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
-		SipServletResponse aliceResponse = null;
 
-		if (aliceRequest != null && bobResponse != null) {
-
-			SipSession aliceSession = aliceRequest.getSession();
-
-			if (aliceSession != null && aliceSession.isValid() && aliceSession.getState() != State.TERMINATED) {
-				aliceResponse = aliceRequest.createResponse(bobResponse.getStatus(), bobResponse.getReasonPhrase());
-
-				if (aliceResponse != null) {
-					copyContentAndHeaders(bobResponse, aliceResponse);
-				}
-
-			}
+		if (aliceRequest == null || bobResponse == null) {
+			throw new ServletParseException("createResponse needs both messages, but "
+					+ (aliceRequest == null ? "aliceRequest" : "bobResponse") + " was null.");
 		}
+
+		SipSession aliceSession = aliceRequest.getSession();
+		if (aliceSession == null || !aliceSession.isValid() || aliceSession.getState() == State.TERMINATED) {
+			throw new ServletParseException("Cannot answer the upstream " + aliceRequest.getMethod()
+					+ " with " + bobResponse.getStatus() + ": that leg is already gone (session="
+					+ (aliceSession == null ? "null"
+							: "valid=" + aliceSession.isValid() + ", state=" + aliceSession.getState())
+					+ "). The caller hung up or CANCELed before the downstream response arrived; test "
+					+ "aliceRequest.isCommitted() first where that race is expected.");
+		}
+
+		SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus(),
+				bobResponse.getReasonPhrase());
+
+		if (aliceResponse == null) {
+			throw new ServletParseException("The container returned no response for the upstream "
+					+ aliceRequest.getMethod() + " at status " + bobResponse.getStatus() + ".");
+		}
+
+		copyContentAndHeaders(bobResponse, aliceResponse);
 		return aliceResponse;
 	}
 
 	/**
-	 * Creates an ACK or PRACK request for a downstream response by copying content
-	 * and headers from the upstream acknowledgement request.
+	 * Builds the acknowledgement for a downstream response, matching whichever
+	 * method arrived upstream &mdash; an ACK for an ACK, a PRACK for a PRACK
+	 * &mdash; and copying the body and non-system headers across. The request is
+	 * returned, not sent.
+	 * <p>
+	 * Reach for this only when something has to touch the request before it goes
+	 * on the wire; a {@link org.vorpal.blade.framework.v2.b2bua.B2buaListener}
+	 * hook is the usual reason, since those are handed a modifiable outbound
+	 * request. Otherwise call
+	 * {@link #sendAcknowledgement(SipServletRequest, SipServletResponse)
+	 * sendAcknowledgement}, which builds and sends in one step and additionally
+	 * relays the PRACK's own response back upstream.
+	 * <p>
+	 * <b>Throws for any other method.</b> Only ACK and PRACK can be built here, so
+	 * an unexpected in-dialog request raises {@code ServletParseException} rather
+	 * than returning null. A caller that would rather ignore such a request must
+	 * check the method itself first.
 	 *
 	 * @param bobResponse     the downstream response to acknowledge
 	 * @param aliceAckOrPrack the upstream ACK or PRACK request to copy from
-	 * @return the created ACK or PRACK request
+	 * @return the created ACK or PRACK request, never null
 	 * @throws ServletParseException if the method is neither ACK nor PRACK, or if
 	 *                               parsing fails
 	 */
-	public static SipServletRequest createAcknowlegement(SipServletResponse bobResponse,
+	public static SipServletRequest createAcknowledgement(SipServletResponse bobResponse,
 			SipServletRequest aliceAckOrPrack) throws ServletParseException {
 		SipServletRequest bobAckOrPrack = null;
 
@@ -2233,138 +2207,16 @@ public abstract class Callflow implements Serializable {
 				bobAckOrPrack = copyContentAndHeaders(aliceAckOrPrack, bobResponse.createAck());
 			}
 		} catch (Exception ex) {
-			sipLogger.warning(bobResponse, "#5.99 Callflow.createAcknowlegement - Exception "
+			sipLogger.warning(bobResponse, "#5.99 Callflow.createAcknowledgement - Exception "
 					+ ex.getClass().getSimpleName() + ": " + ex.getMessage());
 			throw new ServletParseException(ex);
 		}
 
 		if (bobAckOrPrack == null) {
-			throw new ServletParseException("Acknowlegement for " + aliceAckOrPrack.getMethod() + " not allowed.");
+			throw new ServletParseException("Acknowledgement for " + aliceAckOrPrack.getMethod() + " not allowed.");
 		}
 
 		return bobAckOrPrack;
-	}
-
-	/**
-	 * Creates a new request by copying the content and headers from an initial
-	 * request.
-	 * 
-	 * @param endpoint
-	 * @param directive
-	 * @param initialRequest
-	 * @return copy of initial request
-	 * @throws ServletParseException
-	 * @throws IOException
-	 * @throws UnsupportedEncodingException
-	 */
-	public static SipServletRequest createInitialRequest(URI endpoint, SipApplicationRoutingDirective directive,
-			SipServletRequest initialRequest) throws ServletParseException, UnsupportedEncodingException, IOException {
-		SipServletRequest bobRequest;
-
-		bobRequest = sipFactory.createRequest( //
-				initialRequest.getApplicationSession(), //
-				initialRequest.getMethod(), //
-				initialRequest.getFrom(), //
-				initialRequest.getTo());
-
-		copyContentAndHeaders(initialRequest, bobRequest);
-
-		bobRequest.setRequestURI(copyParameters(initialRequest.getRequestURI(), endpoint));
-		bobRequest.setRoutingDirective(directive, initialRequest);
-
-		return bobRequest;
-	}
-
-	/**
-	 * Creates a new request with the NEW routing directive by copying the content
-	 * and headers from an initial request.
-	 * 
-	 * @param endpoint
-	 * @param initialRequest
-	 * @return copy of initial request with the NEW routing directive
-	 * @throws ServletParseException
-	 * @throws IOException
-	 * @throws UnsupportedEncodingException
-	 */
-	public static SipServletRequest createNewInitialRequest(URI endpoint, SipServletRequest initialRequest)
-			throws ServletParseException, UnsupportedEncodingException, IOException {
-		return createInitialRequest(endpoint, SipApplicationRoutingDirective.NEW, initialRequest);
-	}
-
-	/**
-	 * Creates a new request with the CONTINUE routing directive by copying the
-	 * content and headers from an initial request.
-	 * 
-	 * @param endpoint
-	 * @param initialRequest
-	 * @return copy of initial request with the CONTINUE routing directive
-	 * @throws ServletParseException
-	 * @throws IOException
-	 * @throws UnsupportedEncodingException
-	 */
-	public static SipServletRequest createContinueInitialRequest(URI endpoint, SipServletRequest initialRequest)
-			throws ServletParseException, UnsupportedEncodingException, IOException {
-		return createInitialRequest(endpoint, SipApplicationRoutingDirective.CONTINUE, initialRequest);
-	}
-
-	/**
-	 * Creates a new request with the CONTINUE routing directive using a template
-	 * request for content and headers, while using the original request for routing
-	 * directive linkage.
-	 *
-	 * @param endpoint     the destination URI for the request
-	 * @param template     the template request to copy content and headers from
-	 * @param aliceRequest the original request for routing directive linkage
-	 * @return the new SIP request with CONTINUE routing directive
-	 * @throws ServletParseException        if parsing fails
-	 * @throws UnsupportedEncodingException if the content encoding is not supported
-	 * @throws IOException                  if an I/O error occurs
-	 */
-	public static SipServletRequest createContinueInitialRequest(URI endpoint, SipServletRequest template,
-			SipServletRequest aliceRequest) throws ServletParseException, UnsupportedEncodingException, IOException {
-
-		SipServletRequest bobRequest;
-
-		bobRequest = sipFactory.createRequest( //
-				template.getApplicationSession(), //
-				template.getMethod(), //
-				template.getFrom(), //
-				template.getTo());
-
-		copyContentAndHeaders(template, bobRequest);
-
-		if (endpoint != null) {
-			bobRequest.setRequestURI(copyParameters(template.getRequestURI(), endpoint));
-		}
-
-		bobRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, aliceRequest);
-		return bobRequest;
-	}
-
-	/**
-	 * Creates a copy of a SIP request, duplicating the method, From, To, content,
-	 * headers, and request URI.
-	 *
-	 * @param aliceRequest the request to copy
-	 * @return the new SIP request
-	 * @throws ServletParseException        if parsing fails
-	 * @throws UnsupportedEncodingException if the content encoding is not supported
-	 * @throws IOException                  if an I/O error occurs
-	 */
-	public static SipServletRequest createRequest(SipServletRequest aliceRequest)
-			throws ServletParseException, UnsupportedEncodingException, IOException {
-		SipServletRequest bobRequest;
-
-		bobRequest = sipFactory.createRequest( //
-				aliceRequest.getApplicationSession(), //
-				aliceRequest.getMethod(), //
-				aliceRequest.getFrom(), //
-				aliceRequest.getTo());
-
-		copyContentAndHeaders(aliceRequest, bobRequest);
-		bobRequest.setRequestURI(aliceRequest.getRequestURI());
-
-		return bobRequest;
 	}
 
 	/**

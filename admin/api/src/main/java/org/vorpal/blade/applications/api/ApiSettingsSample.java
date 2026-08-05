@@ -6,6 +6,6 @@ public class ApiSettingsSample extends ApiSettings {
 	private static final long serialVersionUID = 1L;
 
 	public ApiSettingsSample() {
-		this.engineBaseUrl = "https://localhost:8002";
+		this.engineBaseUrl = "http://localhost:8001";
 	}
 }

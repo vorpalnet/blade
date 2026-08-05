@@ -1,16 +1,20 @@
 package org.vorpal.blade.framework.v3;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 import javax.servlet.ServletException;
 import javax.servlet.sip.Address;
+import javax.servlet.sip.ServletParseException;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
+import javax.servlet.sip.URI;
+import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.Callback;
@@ -81,7 +85,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 	// ================================================================= tracing
 
-	/// `SipApplicationSession` attribute (Boolean) — is this call armed for tracing?
+	/// `SipApplicationSession` attribute (Boolean) — is this call armed for
+	/// tracing?
 	public static final String TRACE_ARMED_ATTR = "org.vorpal.blade.v3.callflow.traceArmed";
 
 	/// `SipApplicationSession` attribute holding the ordered `List<CallStep>`.
@@ -131,6 +136,99 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 	private static boolean isPassthruArmed(SipApplicationSession app) {
 		return app != null && Boolean.TRUE.equals(app.getAttribute(PASSTHRU_ARMED_ATTR));
+	}
+
+	/// Clones an inbound request into an outbound one on the peer leg, keeping its
+	/// destination. Shorthand for `createRequest(null, inboundRequest)` — see that
+	/// method for what is copied and what is refused.
+	///
+	/// @param inboundRequest the request to clone
+	/// @return the outbound request, ready to send
+	/// @throws ServletParseException if a header fails to parse, or the method is
+	///                               one this cannot build
+	/// @throws IOException           if reading the body fails
+	public static SipServletRequest createRequest(SipServletRequest inboundRequest)
+			throws ServletParseException, IOException {
+		return createRequest(null, inboundRequest);
+	}
+
+	/// Clones an inbound request into an outbound one on the peer leg — the single
+	/// request builder in v3, replacing v2's `createInitialRequest`,
+	/// `createContinueInitialRequest`, `createNewRequest`, and `continueRequest`.
+	///
+	/// It picks its path from the state of the call:
+	///
+	/// - **The legs are already linked** — the request is created on the peer's
+	///   `SipSession`, which makes it in-dialog: a re-INVITE, BYE, INFO, and so on.
+	///   `uri` is **ignored**, because an established dialog can only be addressed
+	///   at its remote target.
+	/// - **No linked leg yet** — the initial case. The request is built from the
+	///   `SipFactory` carrying the inbound From and To, its routing directive set
+	///   to `CONTINUE`, and its request URI taken from `uri` — merged with the
+	///   inbound request URI by [#copyParameters], so the user part and any URI
+	///   parameters survive — or from the inbound request URI when `uri` is null.
+	///
+	/// Either way the body and the non-system headers are copied over, which also
+	/// links the two sessions for INVITE and ACK.
+	///
+	/// ## What it will not build
+	///
+	/// ACK, CANCEL, and PRACK are refused. Each has to be derived from the message
+	/// it answers rather than created fresh. The container enforces two of those
+	/// itself — `SipSession.createRequest` and `SipFactory.createRequest` both throw
+	/// `IllegalArgumentException` on ACK and CANCEL — and BLADE refuses PRACK as
+	/// well, so that a PRACK always carries the `RAck` of the reliable response it
+	/// acknowledges. Reach for these instead:
+	///
+	/// - ACK and PRACK — [org.vorpal.blade.framework.Callflow#sendAcknowledgement]
+	///   or [org.vorpal.blade.framework.Callflow#createAcknowledgement], which match
+	///   whichever acknowledgement arrived upstream
+	/// - CANCEL — `createCancel()` on the INVITE being cancelled, which
+	///   `session.getActiveInvite(UAMode.UAC)` will hand you
+	///
+	/// @param uri            where to send it, or null to reuse the inbound request
+	///                       URI; ignored once the legs are linked
+	/// @param inboundRequest the request to clone
+	/// @return the outbound request, ready to send
+	/// @throws ServletParseException if a header fails to parse, if the method is
+	///                               ACK, CANCEL, or PRACK, or if the peer leg has
+	///                               already terminated
+	/// @throws IOException           if reading the body fails
+	public static SipServletRequest createRequest(URI uri, SipServletRequest inboundRequest)
+			throws ServletParseException, IOException {
+		SipServletRequest outboundRequest;
+
+		String method = inboundRequest.getMethod();
+		if (ACK.equalsIgnoreCase(method) || CANCEL.equalsIgnoreCase(method) || PRACK.equalsIgnoreCase(method)) {
+			throw new ServletParseException("Cannot create a " + method + " with createRequest - an acknowledgement"
+					+ " or a cancellation must be derived from the message it answers. Use"
+					+ " sendAcknowledgement/createAcknowledgement for ACK and PRACK, or createCancel() on the"
+					+ " INVITE being cancelled.");
+		}
+
+		try {
+
+			SipSession outboundSession = getLinkedSession(inboundRequest.getSession());
+			if (outboundSession != null) {
+				outboundRequest = outboundSession.createRequest(inboundRequest.getMethod());
+			} else {
+				outboundRequest = sipFactory.createRequest( //
+						inboundRequest.getApplicationSession(), //
+						inboundRequest.getMethod(), //
+						inboundRequest.getFrom(), //
+						inboundRequest.getTo());
+				outboundRequest.setRequestURI(uri != null ? copyParameters(inboundRequest.getRequestURI(), uri)
+						: inboundRequest.getRequestURI());
+				outboundRequest.setRoutingDirective(SipApplicationRoutingDirective.CONTINUE, inboundRequest);
+			}
+
+			copyContentAndHeaders(inboundRequest, outboundRequest);
+
+		} catch (RuntimeException ex) {
+			throw new ServletParseException(ex);
+		}
+
+		return outboundRequest;
 	}
 
 	// ================================================================ send API
@@ -184,8 +282,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 					applySessionExpiration(request, appSession);
 					applyKeepAlive(request, appSession);
 				} catch (Exception exk) {
-					sipLogger.severe(request,
-							"Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
+					sipLogger.severe(request, "Callflow.sendRequest - Unable to set keep alive: " + exk.getMessage());
 				}
 
 				if (lambdaFunction != null) {
@@ -243,10 +340,10 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			return;
 		}
 
-		boolean dropOut = INVITE.equalsIgnoreCase(response.getMethod())
-				&& successful(response) && isPassthruArmed(response.getApplicationSession());
+		boolean dropOut = INVITE.equalsIgnoreCase(response.getMethod()) && successful(response)
+				&& isPassthruArmed(response.getApplicationSession());
 		if (dropOut) {
-			passthruStitchAndRoute(response);   // must happen BEFORE the 2xx is sent
+			passthruStitchAndRoute(response); // must happen BEFORE the 2xx is sent
 		}
 
 		SipApplicationSession appSession = response.getApplicationSession();
@@ -326,7 +423,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 		}
 
 		if (dropOut) {
-			passthruInvalidate(response);        // must happen AFTER the 2xx is sent
+			passthruInvalidate(response); // must happen AFTER the 2xx is sent
 		}
 
 	}
@@ -456,15 +553,15 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// nothing to dedupe.
 	///
 	/// - `direction` RECEIVE records an `in` step pinned to the handling code.
-	///   `handler` is either a String FQN (the chosen callflow at dispatch, the
-	///   servlet, or "proxy") used with `methodHint` (`process` for dispatched
-	///   callflows), or the callback OBJECT — introspected via [#lambdaTarget]
-	///   to its owner class + enclosing method (e.g.
-	///   `InitialInvite.processContinue`). The viewer highlights the resolved
-	///   method's declaration.
+	/// `handler` is either a String FQN (the chosen callflow at dispatch, the
+	/// servlet, or "proxy") used with `methodHint` (`process` for dispatched
+	/// callflows), or the callback OBJECT — introspected via [#lambdaTarget]
+	/// to its owner class + enclosing method (e.g.
+	/// `InitialInvite.processContinue`). The viewer highlights the resolved
+	/// method's declaration.
 	/// - `direction` SEND with a non-null `sender` pins the exact source line
-	///   that emitted the message ([#captureStep]); a null sender (servlet-level
-	///   sends: glare 491, 501, server-generated) pins the servlet class.
+	/// that emitted the message ([#captureStep]); a null sender (servlet-level
+	/// sends: glare 491, 501, server-generated) pins the servlet class.
 	///
 	/// Arming is decided here too ([#maybeArm]) — the receive of the initial
 	/// request is the first event a call ever fires. The session id keeps the
@@ -472,8 +569,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	/// attribute isn't populated yet, but the inbound X-Vorpal-ID header names
 	/// the call; `getVorpalSessionId(request)` resolves exactly like v2 does
 	/// moments later (minting only at the true chain head).
-	static void traceEvent(Direction direction, SipServletRequest request, SipServletResponse response,
-			Object handler, String methodHint, Callflow sender) {
+	static void traceEvent(Direction direction, SipServletRequest request, SipServletResponse response, Object handler,
+			String methodHint, Callflow sender) {
 		try {
 			javax.servlet.sip.SipServletMessage message = response != null ? response : request;
 			if (message == null) {
@@ -527,8 +624,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 			} else {
 				boolean in = Direction.RECEIVE.equals(direction);
 				step = new CallStep(sessionId, System.currentTimeMillis(), trace.size() + 1,
-						in ? CallStep.IN : CallStep.OUT, kind, label,
-						handlerClass != null ? handlerClass : "?",
+						in ? CallStep.IN : CallStep.OUT, kind, label, handlerClass != null ? handlerClass : "?",
 						methodHint != null ? methodHint : (in ? "received" : "send"), -1, text);
 			}
 			store(appSession, trace, step);
@@ -646,8 +742,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	CallStep captureStep(String sessionId, int order, String kind, String label, String message) {
 		long now = System.currentTimeMillis();
 		java.util.HashSet<String> owners = new java.util.HashSet<>();
-		for (Class<?> c = this.getClass(); c != null
-				&& c != Callflow.class
+		for (Class<?> c = this.getClass(); c != null && c != Callflow.class
 				&& c != org.vorpal.blade.framework.Callflow.class; c = c.getSuperclass()) {
 			owners.add(c.getName());
 		}
@@ -657,8 +752,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 						e.getMethodName(), e.getLineNumber(), message);
 			}
 		}
-		return new CallStep(sessionId, now, order, CallStep.OUT, kind, label, this.getClass().getName(),
-				"?", -1, message);
+		return new CallStep(sessionId, now, order, CallStep.OUT, kind, label, this.getClass().getName(), "?", -1,
+				message);
 	}
 
 	/// The ordered trace captured for this app's part of a call, or an empty list.

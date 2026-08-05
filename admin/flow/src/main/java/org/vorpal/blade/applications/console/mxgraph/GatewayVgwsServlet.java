@@ -15,8 +15,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 
-/// Exposes a gateway app's **virtual-gateway names** to the Flow editor, so an egress node can offer
-/// a dropdown instead of a hand-typed `;vgw=<name>` param.
+/// Exposes a gateway app's **virtual-gateway names** to the Flow editor, so the transition into that
+/// app can offer a dropdown instead of a hand-typed `;vgw=<name>` param.
+///
+/// The editor also uses the ANSWER as the question: it asks about whichever application a transition
+/// targets, and an app that reports no virtual gateways simply isn't a gateway app, so the picker
+/// stays hidden. That keeps the editor free of a hard-coded `gateway` app name and works for several
+/// gateway apps under different context roots.
 ///
 /// Reads the gateway app's `SettingsManager` JSON under `config/custom/vorpal/<app>.json` (the same
 /// domain-root convention {@link FsmarPublishServlet} uses), falling back to the generated

@@ -12,9 +12,9 @@ import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
 /// Configuration for the player/recorder app.
 ///
 /// The app is **vendor-neutral JSR-309**: it names a 309 driver and hands it a bag of driver
-/// properties, but knows nothing about which media server sits behind it. In the Gryphon deployment
-/// the driver is `org.vorpal.gryphon.kurento` and the one property that matters is `kurento.ws.url`,
-/// but this app would run unchanged against any registered 309 driver.
+/// properties, but knows nothing about which media server sits behind it. In a typical deployment
+/// the one property that matters is the media server's WebSocket URL, but this app runs unchanged
+/// against any registered 309 driver.
 @SchemaAbout(
 		name = "Player",
 		tagline = "Media Player / Recorder",
@@ -42,7 +42,7 @@ public class PlayerSettings extends Configuration implements Serializable {
 	}
 
 	@JsonPropertyDescription("Driver-specific factory properties passed verbatim to the 309 driver "
-			+ "(e.g. \"kurento.ws.url\": \"ws://media-node:8888/kurento\").")
+			+ "(e.g. the media server's WebSocket URL).")
 	public Map<String, String> getDriverProperties() {
 		return driverProperties;
 	}
@@ -81,7 +81,7 @@ public class PlayerSettings extends Configuration implements Serializable {
 	}
 
 	@JsonPropertyDescription("Destination URI the caller's audio is recorded to when recording is on "
-			+ "(e.g. file:///var/kurento/recordings/${callId}.webm).")
+			+ "(e.g. file:///var/recordings/${callId}.webm).")
 	public String getRecordUri() {
 		return recordUri;
 	}

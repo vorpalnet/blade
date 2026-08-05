@@ -9,6 +9,9 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
+import org.vorpal.blade.framework.v3.configuration.expressions.Expression;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
@@ -29,6 +32,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// | `messageType` | `request` or `response`                                           | `request`                                      |
 /// | `event`       | B2BUA lifecycle event; comma-separated for OR; `!event` to negate | `callStarted` · `callAnswered,callConnected`   |
 /// | `statusRange` | response-only status filter (see syntax below)                    | `200-299` · `4xx` · `!5xx` · `200,301,302`     |
+/// | `when`        | boolean expression over session variables (Expression grammar)    | `${customerTier} == premium` · `${a} && ${b}`  |
 ///
 /// ### Comma + negation semantics (method, event, statusRange)
 ///
@@ -71,7 +75,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 /// matches leaking into a later create/update.
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @JsonPropertyOrder({ "id", "description", "method", "messageType", "event",
-		"statusRange", "resetVariables", "operations" })
+		"statusRange", "when", "resetVariables", "operations" })
 public class Rule implements Serializable {
 	private static final long serialVersionUID = 1L;
 
@@ -81,8 +85,12 @@ public class Rule implements Serializable {
 	private String messageType;
 	private String event;
 	private String statusRange;
+	private String when;
 	private boolean resetVariables;
 	private List<Operation> operations = new LinkedList<>();
+
+	@JsonIgnore
+	private transient Expression compiledWhen;
 
 	public Rule() {
 	}
@@ -108,7 +116,22 @@ public class Rule implements Serializable {
 			if (!(msg instanceof SipServletResponse)) return false;
 			if (!matchesStatus(statusRange, ((SipServletResponse) msg).getStatus())) return false;
 		}
+		if (when != null && !when.isEmpty() && !whenApplies(msg)) return false;
 		return true;
+	}
+
+	/// Evaluates the `when` expression against the message's session
+	/// variables. Compiles lazily; parse errors resolve to false so a bad
+	/// expression never accidentally fires the rule — same policy as
+	/// [org.vorpal.blade.framework.v3.configuration.routing.ConditionalHeader].
+	private boolean whenApplies(SipServletMessage msg) {
+		try {
+			if (compiledWhen == null) compiledWhen = new Expression(when);
+			return compiledWhen.evaluate(new SessionVariablesContext(
+					MessageHelper.getSessionVariables(msg.getApplicationSession())));
+		} catch (Exception e) {
+			return false;
+		}
 	}
 
 	/// Runs every operation against `msg` in declaration order. If
@@ -255,6 +278,16 @@ public class Rule implements Serializable {
 
 	public void setStatusRange(String statusRange) {
 		this.statusRange = statusRange;
+	}
+
+	@JsonPropertyDescription("Boolean expression over session variables gating this rule, e.g. ${customerTier} == premium. Comparisons (== != < <= > >=), matches/contains/insubnet, and && || ! combinators. Null matches always; a malformed expression never matches.")
+	public String getWhen() {
+		return when;
+	}
+
+	public void setWhen(String when) {
+		this.when = when;
+		this.compiledWhen = null;
 	}
 
 	@JsonPropertyDescription("Clear this rule's read variables from the session before running. Default false.")

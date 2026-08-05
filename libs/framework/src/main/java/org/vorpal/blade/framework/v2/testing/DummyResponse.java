@@ -32,11 +32,25 @@ import javax.servlet.sip.SipWebSocketContext;
  * Provides response functionality including status codes and reason phrases
  * without requiring a SIP container.
  *
- * <p>Most getter methods delegate to the associated request. The send() and
- * sendReliably() methods are no-ops. Includes an inner ReasonPhrase class
- * that maps standard SIP status codes to their reason phrases.
+ * <p>Extends {@link DummyMessage}, so headers, attributes and content are its
+ * own and behave like any other message — set a header, read it back. The
+ * constructor seeds the headers from the request, the way a real response
+ * echoes From, To, Call-ID and CSeq, and takes its method and sessions from the
+ * request permanently.
+ *
+ * <p>This used to implement the interface directly and forward every getter to
+ * the request while the setters were empty, so anything written to a response
+ * vanished and its content was always null. Tests written against that had to
+ * work around it; they no longer do.
+ *
+ * <p>Status, reason phrase and buffer size are real, {@code createAck()} and
+ * {@code createPrack()} build usable requests on the same session, and
+ * {@code isReliableProvisional()} is settable so the 100rel path can be driven.
+ * The send() and sendReliably() methods are no-ops and {@code isCommitted()}
+ * always reports true. Includes an inner ReasonPhrase class that maps standard
+ * SIP status codes to their reason phrases.
  */
-public class DummyResponse implements SipServletResponse, Serializable {
+public class DummyResponse extends DummyMessage implements SipServletResponse, Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private final SipServletRequest request;
@@ -63,6 +77,16 @@ public class DummyResponse implements SipServletResponse, Serializable {
 		this.request = req;
 		this.status = status;
 		this.reason = reason;
+
+		// A response carries its own headers and content, seeded from the request
+		// the way a real one echoes From, To, Call-ID and CSeq back. Method and
+		// sessions come from the request and never change.
+		this.method = req.getMethod();
+		this.session = req.getSession();
+		this.sipApplicationSession = req.getApplicationSession();
+		for (String name : req.getHeaderNameList()) {
+			this.headers.put(name, req.getHeader(name));
+		}
 	}
 
 	@Override
@@ -71,17 +95,7 @@ public class DummyResponse implements SipServletResponse, Serializable {
 
 	@Override
 	public int getBufferSize() {
-		return 0;
-	}
-
-	@Override
-	public String getCharacterEncoding() {
-		return request.getCharacterEncoding();
-	}
-
-	@Override
-	public String getContentType() {
-		return null;
+		return bufferSize;
 	}
 
 	@Override
@@ -104,14 +118,17 @@ public class DummyResponse implements SipServletResponse, Serializable {
 
 	@Override
 	public void setBufferSize(int arg0) {
+		this.bufferSize = arg0;
 	}
 
+	/**
+	 * Narrows the inherited signature: {@code SipServletMessage} declares this
+	 * throwing UnsupportedEncodingException, {@code ServletResponse} does not, so
+	 * the inherited method cannot satisfy both. Stores the value either way.
+	 */
 	@Override
-	public void setCharacterEncoding(String arg0) {
-	}
-
-	@Override
-	public void setContentLength(int arg0) {
+	public void setCharacterEncoding(String encoding) {
+		this.characterEncoding = encoding;
 	}
 
 	@Override
@@ -119,329 +136,40 @@ public class DummyResponse implements SipServletResponse, Serializable {
 	}
 
 	@Override
-	public void setContentType(String arg0) {
-	}
-
-	@Override
 	public void setLocale(Locale arg0) {
 	}
 
-	@Override
-	public void addAcceptLanguage(Locale arg0) {
-	}
-
-	@Override
-	public void addAddressHeader(String arg0, Address arg1, boolean arg2) {
-	}
-
-	@Override
-	public void addHeader(String arg0, String arg1) {
-	}
-
-	@Override
-	public void addParameterableHeader(String arg0, Parameterable arg1, boolean arg2) {
-	}
-
-	@Override
-	public Locale getAcceptLanguage() {
-		return request.getAcceptLanguage();
-	}
-
-	@Override
-	public Set<Locale> getAcceptLanguageSet() {
-		return request.getAcceptLanguageSet();
-	}
-
-	@Override
-	public Iterator<Locale> getAcceptLanguages() {
-		return request.getAcceptLanguages();
-	}
-
-	@Override
-	public Address getAddressHeader(String arg0) throws ServletParseException {
-		return request.getAddressHeader(arg0);
-	}
-
-	@Override
-	public List<Address> getAddressHeaderList(String arg0) throws ServletParseException {
-		return request.getAddressHeaderList(arg0);
-	}
-
-	@Override
-	public ListIterator<Address> getAddressHeaders(String arg0) throws ServletParseException {
-		return request.getAddressHeaders(arg0);
-	}
-
-	@Override
-	public SipApplicationSession getApplicationSession() {
-		return request.getApplicationSession();
-	}
-
-	@Override
-	public SipApplicationSession getApplicationSession(boolean arg0) {
-		return request.getApplicationSession(arg0);
-	}
-
-	@Override
-	public Enumeration<String> getAttributeNames() {
-		return request.getAttributeNames();
-	}
-
-	@Override
-	public String getCallId() {
-		return request.getCallId();
-	}
-
-	@Override
-	public Object getContent() throws IOException, UnsupportedEncodingException {
-		return null;
-	}
-
-	@Override
-	public Locale getContentLanguage() {
-		return request.getContentLanguage();
-	}
-
-	@Override
-	public int getContentLength() {
-		return 0;
-	}
-
-	@Override
-	public int getExpires() {
-		return request.getExpires();
-	}
-
-	@Override
-	public Address getFrom() {
-		return request.getFrom();
-	}
-
-	@Override
-	public String getHeader(String arg0) {
-		return request.getHeader(arg0);
-	}
-
-	@Override
-	public HeaderForm getHeaderForm() {
-		return request.getHeaderForm();
-	}
-
-	@Override
-	public List<String> getHeaderList(String arg0) {
-		return request.getHeaderList(arg0);
-	}
-
-	@Override
-	public List<String> getHeaderNameList() {
-		return request.getHeaderNameList();
-	}
-
-	@Override
-	public Iterator<String> getHeaderNames() {
-		return request.getHeaderNames();
-	}
-
-	@Override
-	public ListIterator<String> getHeaders(String arg0) {
-		return request.getHeaders(arg0);
-	}
-
-	@Override
-	public String getInitialRemoteAddr() {
-		return request.getInitialRemoteAddr();
-	}
-
-	@Override
-	public int getInitialRemotePort() {
-		return request.getInitialRemotePort();
-	}
-
-	@Override
-	public String getInitialTransport() {
-		return request.getInitialTransport();
-	}
-
-	@Override
-	public String getLocalAddr() {
-		return request.getLocalAddr();
-	}
-
-	@Override
-	public int getLocalPort() {
-		return request.getLocalPort();
-	}
-
-	@Override
-	public SipWebSocketContext getLocalSipWebSocketContext() {
-		return request.getLocalSipWebSocketContext();
-	}
-
-	@Override
-	public String getMethod() {
-		return request.getMethod();
-	}
-
-	@Override
-	public Parameterable getParameterableHeader(String arg0) throws ServletParseException {
-		return request.getParameterableHeader(arg0);
-	}
-
-	@Override
-	public List<? extends Parameterable> getParameterableHeaderList(String arg0) throws ServletParseException {
-		return request.getParameterableHeaderList(arg0);
-	}
-
-	@Override
-	public ListIterator<? extends Parameterable> getParameterableHeaders(String arg0) throws ServletParseException {
-		return request.getParameterableHeaders(arg0);
-	}
-
-	@Override
-	public String getProtocol() {
-		return request.getProtocol();
-	}
-
-	@Override
-	public byte[] getRawContent() throws IOException {
-		return null;
-	}
-
-	@Override
-	public String getRemoteAddr() {
-		return request.getRemoteAddr();
-	}
-
-	@Override
-	public int getRemotePort() {
-		return request.getRemotePort();
-	}
-
-	@Override
-	public String getRemoteUser() {
-		return request.getRemoteUser();
-	}
-
-	@Override
-	public SipSession getSession() {
-		return request.getSession();
-	}
-
-	@Override
-	public SipSession getSession(boolean arg0) {
-		return request.getSession(arg0);
-	}
-
-	@Override
-	public Preference getSessionKeepAlivePreference() {
-		// TODO Auto-generated method stub
-		return request.getSessionKeepAlivePreference();
-	}
-
-	@Override
-	public Address getTo() {
-		return request.getTo();
-	}
-
-	@Override
-	public String getTransport() {
-		return request.getTransport();
-	}
-
-	@Override
-	public Principal getUserPrincipal() {
-		return request.getUserPrincipal();
-	}
-
-	@Override
-	public boolean isInternallyRouted() {
-		return request.isInternallyRouted();
-	}
-
-	@Override
-	public boolean isSecure() {
-		return request.isSecure();
-	}
-
-	@Override
-	public boolean isUserInRole(String arg0) {
-		return request.isUserInRole(arg0);
-	}
-
-	@Override
-	public void pushLocalPath() {
-	}
-
-	@Override
-	public void pushPath(Address arg0) {
-	}
-
-	@Override
-	public void removeHeader(String arg0) {
-	}
-
-	@Override
-	public void setAcceptLanguage(Locale arg0) {
-	}
-
-	@Override
-	public void setAddressHeader(String arg0, Address arg1) {
-	}
-
-	@Override
-	public void setContent(Object arg0, String arg1) throws UnsupportedEncodingException {
-	}
-
-	@Override
-	public void setContentLanguage(Locale arg0) {
-	}
-
-	@Override
-	public void setExpires(int arg0) {
-	}
-
-	@Override
-	public void setHeader(String arg0, String arg1) {
-	}
-
-	@Override
-	public void setHeaderForm(HeaderForm arg0) {
-	}
-
-	@Override
-	public void setParameterableHeader(String arg0, Parameterable arg1) {
-	}
-
-	@Override
-	public void clearAttributes() {
-	}
-
-	@Override
-	public Object getAttribute(String arg0) {
-		return request.getAttribute(arg0);
-	}
-
-	@Override
-	public Set<String> getAttributeNameSet() {
-		return request.getAttributeNameSet();
-	}
-
-	@Override
-	public void removeAttribute(String arg0) {
-	}
-
-	@Override
-	public void setAttribute(String arg0, Object arg1) {
-	}
-
+	/**
+	 * Builds an ACK for this response on the same session, so
+	 * {@code createAcknowledgement} and {@code sendAcknowledgement} can be
+	 * exercised without a container. Real containers only allow this on a 2xx to
+	 * an INVITE; this mock does not enforce that.
+	 */
 	@Override
 	public SipServletRequest createAck() {
-		return null;
+		try {
+			DummyRequest ack = new DummyRequest(getApplicationSession(), "ACK");
+			ack.setSession(getSession());
+			return ack;
+		} catch (ServletParseException neverThrownByThisConstructor) {
+			throw new IllegalStateException(neverThrownByThisConstructor);
+		}
 	}
 
+	/**
+	 * Builds a PRACK for this response on the same session. A real container
+	 * requires a reliable provisional response and stamps RAck from its RSeq;
+	 * this mock does neither.
+	 */
 	@Override
 	public SipServletRequest createPrack() throws Rel100Exception {
-		return null;
+		try {
+			DummyRequest prack = new DummyRequest(getApplicationSession(), "PRACK");
+			prack.setSession(getSession());
+			return prack;
+		} catch (ServletParseException neverThrownByThisConstructor) {
+			throw new IllegalStateException(neverThrownByThisConstructor);
+		}
 	}
 
 	@Override
@@ -504,13 +232,15 @@ public class DummyResponse implements SipServletResponse, Serializable {
 		return false;
 	}
 
+	/** Reports what {@link #setReliableProvisional(boolean)} was told; false by default. */
 	@Override
 	public boolean isReliableProvisional() {
-		return false;
+		return reliableProvisional;
 	}
 
-	@Override
-	public void send() throws IOException {
+	/** Lets a test drive the 100rel branch of sendAcknowledgement. */
+	public void setReliableProvisional(boolean reliableProvisional) {
+		this.reliableProvisional = reliableProvisional;
 	}
 
 	@Override
@@ -533,6 +263,8 @@ public class DummyResponse implements SipServletResponse, Serializable {
 //	private static final String VERSION = "SIP/2.0 ";
 	protected int status;
 	protected String reason;
+	private int bufferSize;
+	private boolean reliableProvisional;
 //	private boolean rel100;
 //	private boolean isBranchResponse;
 //	private boolean isForgedResponse;

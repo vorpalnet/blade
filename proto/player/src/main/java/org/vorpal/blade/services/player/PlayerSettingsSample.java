@@ -3,7 +3,7 @@ package org.vorpal.blade.services.player;
 import org.vorpal.blade.framework.v2.config.SessionParametersDefault;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 
-/// Sample defaults for the player app: the Gryphon Kurento driver on the local media node, playing a
+/// Sample defaults for the player app: the JSR-309 media controller driver on the local media node, playing a
 /// placeholder prompt. Real deployments edit these via the Configurator.
 public class PlayerSettingsSample extends PlayerSettings {
 	private static final long serialVersionUID = 1L;

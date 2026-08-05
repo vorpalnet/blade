@@ -1,6 +1,6 @@
 # BLADE Intelligent Router (iRouter)
 
-[Javadocs](https://vorpal.net/javadocs/blade/irouter)
+Javadocs: `/blade/javadoc/irouter/` on the Admin Portal
 
 **Universal, config-driven SIP proxy.** The iRouter is the operator's answer to "please stop writing custom SIP services for every customer." Everything a routing decision needs — how to parse the inbound INVITE, which external systems to consult, what to use as the routing key, where to send the call, what outbound headers to stamp — lives in one JSON configuration file that the Configurator form editor edits visually. No Java knowledge required on the operator's side; no recompile for a new use case.
 
@@ -26,7 +26,7 @@ Why two phases? Jeff's formulation: *"first we gather all the information via th
 
 ## Proxy, not B2BUA
 
-iRouter uses the JSR 289 Proxy API. Re-INVITEs and in-dialog traffic pass through the container's proxy machinery unchanged once `proxy.proxyTo()` has been called for the initial INVITE. The servlet stays out of the mid-call path — the routing decision is made once, on the initial INVITE, and the proxy handles everything after. Use [`proxy-router`](../proxy-router/) if you need a stateless SIP proxy without iRouter's pipeline, or a B2BUA-based service (e.g. call queueing) if you need dialog-mid intervention.
+iRouter uses the JSR 289 Proxy API. Re-INVITEs and in-dialog traffic pass through the container's proxy machinery unchanged once `proxy.proxyTo()` has been called for the initial INVITE. The servlet stays out of the mid-call path — the routing decision is made once, on the initial INVITE, and the proxy handles everything after. Use a B2BUA-based service (e.g. [call queueing](../queue/README.md)) if you need dialog-mid intervention. (The old stateless `proxy-router` this section once pointed to is retired — iRouter superseded it.)
 
 ## Pipeline connectors
 
@@ -54,6 +54,8 @@ Each has ONE spelling — lowerCamelCase, acronyms uppercase. (SIP header names,
 | `requestURI` | Request URI of the inbound INVITE |
 | `originIP` | Original caller IP with the five-step fallback chain (X-Vorpal-ID origin → `getInitialRemoteAddr` → Via `received` → Via `sent-by` → `getRemoteAddr`) |
 | `peerIP` | Immediate transport peer — typically the upstream OCCAS service when iRouter isn't first in the chain |
+| `localIP` | The local SIP interface the message arrived on — the multi-homed discriminator (which of your channels the far end was told to use) |
+| `localPort` | The local SIP port it arrived on |
 | `body` | INVITE message body (SDP, MIME, whatever) |
 | `transport` | Inbound transport: `UDP`, `TCP`, `TLS`, `WS`, `WSS` |
 | `isSecure` | `"true"` when transport is `TLS` or `WSS`, else `"false"` |
@@ -477,37 +479,37 @@ Context root: `/irouter`. The WAR depends on the `blade-shared` shared library f
 
 **Service classes**
 
-- [IRouterServlet](https://vorpal.net/javadocs/blade/irouter) — proxy servlet, pipeline orchestration
-- [IRouterConfig](https://vorpal.net/javadocs/blade/irouter) — concrete `RouterConfiguration` binding
-- [IRouterConfigSample](https://vorpal.net/javadocs/blade/irouter) — the canonical showcase config
+- `IRouterServlet` — proxy servlet, pipeline orchestration
+- `IRouterConfig` — concrete `RouterConfiguration` binding
+- `IRouterConfigSample` — the canonical showcase config
 
 **Framework — configuration model**
 
-- [RouterConfiguration](https://vorpal.net/javadocs/blade/framework) — pipeline + routing + session + logging
-- [Context](https://vorpal.net/javadocs/blade/framework) — per-call state and `${var}` resolution
-- [MatchStrategy](https://vorpal.net/javadocs/blade/framework) — `hash` / `prefix` / `range` lookup modes
-- [RangeKey](https://vorpal.net/javadocs/blade/framework) — parser for `"lo-hi"` range keys
+- `RouterConfiguration` — pipeline + routing + session + logging
+- `Context` — per-call state and `${var}` resolution
+- `MatchStrategy` — `hash` / `prefix` / `range` lookup modes
+- `RangeKey` — parser for `"lo-hi"` range keys
 
 **Framework — pipeline**
 
-- [Connector](https://vorpal.net/javadocs/blade/framework) — polymorphic pipeline-step base (sip, rest, jdbc, ldap, map, table)
-- [TableConnector](https://vorpal.net/javadocs/blade/framework) — first-match-wins table lookup in the pipeline
-- [TranslationTable](https://vorpal.net/javadocs/blade/framework), [Translation](https://vorpal.net/javadocs/blade/framework) — enrichment lookup + entry
-- [Selector](https://vorpal.net/javadocs/blade/framework) — pattern-based extraction (attribute / regex / json / xml / sdp)
+- `Connector` — polymorphic pipeline-step base (sip, rest, jdbc, ldap, map, table)
+- `TableConnector` — first-match-wins table lookup in the pipeline
+- `TranslationTable`, `Translation` — enrichment lookup + entry
+- `Selector` — pattern-based extraction (attribute / regex / json / xml / sdp)
 
 **Framework — routing**
 
-- [Routing](https://vorpal.net/javadocs/blade/framework) — polymorphic routing-decision base
-- [TableRouting](https://vorpal.net/javadocs/blade/framework), [RoutingTable](https://vorpal.net/javadocs/blade/framework) — multi-table routing with first-match-wins
-- [ConditionalRouting](https://vorpal.net/javadocs/blade/framework) — if/elif/else clauses with boolean expressions
-- [DirectRouting](https://vorpal.net/javadocs/blade/framework) — single fixed Route, no lookup
-- [Route](https://vorpal.net/javadocs/blade/framework), [ConditionalHeader](https://vorpal.net/javadocs/blade/framework) — decision payload + optional gated headers
+- `Routing` — polymorphic routing-decision base
+- `TableRouting`, `RoutingTable` — multi-table routing with first-match-wins
+- `ConditionalRouting` — if/elif/else clauses with boolean expressions
+- `DirectRouting` — single fixed Route, no lookup
+- `Route`, `ConditionalHeader` — decision payload + optional gated headers
 
 **Framework — authentication**
 
-- [Authentication](https://vorpal.net/javadocs/blade/framework) — eight auth subtypes for `RestConnector`
-- [AbstractOAuth2Authentication](https://vorpal.net/javadocs/blade/framework) — shared Nimbus-backed token cache + refresh
+- `Authentication` — eight auth subtypes for `RestConnector`
+- `AbstractOAuth2Authentication` — shared Nimbus-backed token cache + refresh
 
 **Framework — expressions**
 
-- [Expression](https://vorpal.net/javadocs/blade/framework) — boolean expression parser + evaluator for `ConditionalRouting` and `ConditionalHeader`
+- `Expression` — boolean expression parser + evaluator for `ConditionalRouting` and `ConditionalHeader`

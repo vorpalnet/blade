@@ -74,6 +74,19 @@ window.flowTasks = (function() {
 		return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 	}
 
+	// An ⓘ field-help icon carrying its popup text (html), shown by
+	// flowUtils.initInfoTips. Same markup as the static tips in state.html.
+	function infoTipHtml(ariaLabel, html) {
+		return '<span class="info-tip" tabindex="0" role="button" aria-label="' + escapeAttr(ariaLabel) + '">' +
+			'<svg viewBox="0 0 16 16" aria-hidden="true">' +
+				'<circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
+				'<path d="M8 7v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' +
+				'<circle cx="8" cy="4.7" r="1" fill="currentColor" stroke="none"/>' +
+			'</svg>' +
+			'<span class="info-tip-text">' + html + '</span>' +
+		'</span>';
+	}
+
 	// Scope a jQuery selector to the panel of the currently-selected cell's
 	// tag. state.html is loaded into #State, #Ingress AND #Egress, so every
 	// lookup must be scoped or we'd read inputs from a hidden sibling panel.
@@ -88,12 +101,12 @@ window.flowTasks = (function() {
 		var $p = panel(cell);
 		$p.find('.node-name').val(cell.getAttribute('label') || '');
 
-		// Egress exit node (Gateway with role="egress"): the mirror of an
-		// ingress. It owns the routes baked onto each transition targeting it.
-		// Nothing routes FROM it as a state, so hide selectors/dispatch/match/id.
-		// The exit KIND is inferred from topology — a line back to a state makes
-		// it ROUTE_BACK; otherwise ROUTE_FINAL.
-		var isExitEgress = cell.getAttribute('role') === 'egress';
+		// A cloud that a transition points INTO is where the call leaves OCCAS.
+		// It owns the routes baked onto each transition targeting it. Nothing
+		// routes FROM it as a state, so hide selectors/dispatch/match/id. The exit
+		// KIND is inferred from topology too — a line back to a state makes it
+		// ROUTE_BACK; otherwise ROUTE_FINAL.
+		var isExitEgress = flowUtils.isExitCloud(cell);
 		$p.find('.egress-section').css('display', isExitEgress ? '' : 'none');
 		if (isExitEgress) {
 			$p.find('.state-selectors-section, .state-dispatch-section, .ingress-match-section, .state-id-section')
@@ -122,7 +135,6 @@ window.flowTasks = (function() {
 			}
 			$p.find('.egress-kind').text(kind);
 			renderEgressRoutes(cell);
-			populateVgws(cell);
 			return;
 		}
 
@@ -301,7 +313,7 @@ window.flowTasks = (function() {
 		for (var i = 0; i < cell.edges.length; i++) {
 			var e = cell.edges[i];
 			if (e.source === cell && e.target && e.target.value
-					&& e.target.getAttribute('role') !== 'egress') {
+					&& !flowUtils.isExitCloud(e.target)) {
 				return e.target.getAttribute('stateId') || e.target.getAttribute('label') || '?';
 			}
 		}
@@ -344,16 +356,34 @@ window.flowTasks = (function() {
 		return vgw ? stripped + ';vgw=' + vgw : stripped;
 	}
 
-	// Populate the egress's virtual-gateway dropdown from the deployed gateway
-	// app's config (/gatewayVgws), pre-selecting whatever ;vgw= the first route
-	// already carries. If the app isn't reachable, keep the existing value.
-	function populateVgws(cell) {
-		var $sel = panel(cell).find('.egress-vgw');
-		if (!$sel.length) return;
+	// The trunk picker on a TRANSITION. FSMAR can only push Route headers, so the
+	// trunk for an outbound call rides ;vgw=<name> on the Route pushed by the
+	// transition INTO the gateway app, which reads it back with getPoppedRoute().
+	// It therefore belongs on the arrow, not on a cloud: a cloud is where the call
+	// leaves with no further application invoked, so a ;vgw= there reaches nothing.
+	//
+	// Whether the target IS a gateway app is asked, not assumed — /gatewayVgws
+	// answers for any app name, and an app with no virtual gateways isn't one, so
+	// the picker stays hidden. That works whatever context root a gateway app is
+	// deployed under, and for more than one of them.
+	function populateTransitionVgw(cell, target) {
+		var $section = $('#transition-vgw-section');
+		var $sel = $('#transition-vgw');
+		var app = (target && target.value && target.value.tagName === 'State')
+				? (target.getAttribute('label') || '') : '';
 		var routes = getChildElements(cell, 'route');
 		var current = routes.length ? getVgwParam(routes[0].getAttribute('uri') || '') : '';
-		$.get('gatewayVgws').done(function(data) {
+		if (!app) {
+			$section.hide();
+			return;
+		}
+		$.get('gatewayVgws', { app: app }).done(function(data) {
 			var names = Array.isArray(data) ? data : [];
+			// Not a gateway app (and nothing already set) — nothing to offer.
+			if (!names.length && !current) {
+				$section.hide();
+				return;
+			}
 			var html = '<option value="">(none)</option>';
 			for (var i = 0; i < names.length; i++) {
 				html += '<option value="' + escapeAttr(names[i]) + '">' + escapeAttr(names[i]) + '</option>';
@@ -362,12 +392,16 @@ window.flowTasks = (function() {
 				html += '<option value="' + escapeAttr(current) + '">' + escapeAttr(current) + ' (not deployed)</option>';
 			}
 			$sel.html(html).val(current);
+			$section.show();
 		}).fail(function() {
-			var html = '<option value="">(none)</option>';
-			if (current) {
-				html += '<option value="' + escapeAttr(current) + '" selected>' + escapeAttr(current) + '</option>';
+			// Editor offline or the app name isn't one the servlet will look up.
+			// Keep a value that is already set rather than silently dropping it.
+			if (!current) {
+				$section.hide();
+				return;
 			}
-			$sel.html(html);
+			$sel.html('<option value="' + escapeAttr(current) + '" selected>' + escapeAttr(current) + '</option>');
+			$section.show();
 		});
 	}
 
@@ -388,16 +422,6 @@ window.flowTasks = (function() {
 			return false;
 		});
 		$(document).off('change.flowEg', '.egress-routes input').on('change.flowEg', '.egress-routes input', function() {
-			saveEgressRoutes();
-		});
-		// Virtual-gateway dropdown: stamp/replace ;vgw=<name> on every egress route, then persist.
-		$(document).off('change.flowEgVgw', '.egress-vgw').on('change.flowEgVgw', '.egress-vgw', function() {
-			var cell = window.flowSelectedCell;
-			if (!cell) return;
-			var vgw = $(this).val();
-			panel(cell).find('.egress-routes .egress-route-uri').each(function() {
-				$(this).val(setVgwParam($(this).val(), vgw));
-			});
 			saveEgressRoutes();
 		});
 	}
@@ -442,6 +466,8 @@ window.flowTasks = (function() {
 		['requestURI',        'the request URI'],
 		['originIP',          'originating IP (X-Vorpal-ID, Via received=, remote addr)'],
 		['peerIP',            'immediate peer IP'],
+		['localIP',           'local SIP interface the message arrived on'],
+		['localPort',         'local SIP port it arrived on'],
 		['body',              'the message body'],
 		['transport',         'UDP | TCP | TLS | WS | WSS'],
 		['isSecure',          '"true" | "false"'],
@@ -683,8 +709,9 @@ window.flowTasks = (function() {
 					'<label class="sel-check">' +
 						'<input class="sel-allinstances" type="checkbox"' + (allInstances ? ' checked' : '') + ' /> ' +
 						'Read every instance of a repeating header' +
+						infoTipHtml('About repeating headers',
+							'Joins all instances so a <b>matches</b> condition is true if <i>any</i> instance matches. Off = first instance only.') +
 					'</label>' +
-					'<span class="hint">Joins all instances so a <b>matches</b> condition is true if <i>any</i> instance matches. Off = first instance only.</span>' +
 				'</div>' : '') +
 
 				(isXml ?
@@ -906,9 +933,14 @@ window.flowTasks = (function() {
 		// pointless — AppRouter passes them to createRouterInfo alongside the
 		// resolved app (AppRouter.java:381-385, Transition.java:207-213), which
 		// is the JSR-289 "invoke this app AND push these Route headers" shape.
-		var targetIsEgress = !!(target && target.getAttribute('role') === 'egress');
+		var targetIsEgress = flowUtils.isExitCloud(target);
 		$('#transition-egress-note').css('display', targetIsEgress ? '' : 'none');
 		$('#transition-routes-section').css('display', targetIsEgress ? 'none' : '');
+		if (targetIsEgress) {
+			$('#transition-vgw-section').hide();
+		} else {
+			populateTransitionVgw(cell, target);
+		}
 	}
 
 	function renderRoutes(cell) {
@@ -991,6 +1023,26 @@ window.flowTasks = (function() {
 			$(this).closest('.route-row').remove();
 			saveRoutes();
 			return false;
+		});
+
+		// Trunk picker: stamp/replace ;vgw=<name> on this transition's routes. With
+		// no route yet there is nothing to stamp, so seed the documented form —
+		// sip:${To.user}@<app>;vgw=<name> — rather than leaving the pick inert.
+		$(document).off('change.flowTxVgw', '#transition-vgw').on('change.flowTxVgw', '#transition-vgw', function() {
+			var cell = window.flowSelectedCell;
+			if (!cell || !cell.value) return;
+			var vgw = $(this).val();
+			if (vgw && !$('#transition-routes .route-row').length) {
+				var target = cell.target;
+				var app = (target && target.getAttribute('label')) || '';
+				cell.value.appendChild(cell.value.ownerDocument.createElement('route'));
+				renderRoutes(cell);
+				$('#transition-routes .route-uri').val('sip:${To.user}@' + app);
+			}
+			$('#transition-routes .route-uri').each(function() {
+				$(this).val(setVgwParam($(this).val(), vgw));
+			});
+			saveRoutes();
 		});
 
 		// Save route field changes

@@ -119,45 +119,145 @@
 					<h2>Tail mode</h2>
 					<p>
 						Pass <code>offset=-1</code> to read the <em>last</em>
-						<code>max</code> bytes of the file. This is the
-						standard "tail -c" semantics. The response's
-						<code>X-Log-NewOffset</code> header gives you the
-						current EOF position — use it for subsequent
-						follow-mode reads.
+						<code>max</code> bytes of the file — standard
+						<code>tail -c</code> semantics.
+					</p>
+					<p>
+						<code>offset=-1&amp;max=0</code> is the cheap "how big is
+						this file right now" probe. It is not a special case: the
+						window starts at the end, reads nothing, and reports the
+						current length in <code>X-Log-NewOffset</code>. The viewer
+						uses it instead of re-listing the directory.
 					</p>
 
 					<h2>Why bytes, not lines</h2>
 					<p>
-						Lines are a UI concern; the wire protocol is bytes.
-						This keeps the slice deterministic and avoids edge
-						cases like "how do you tail N lines of a file with
-						300-character lines?" The viewer renders bytes as text
-						in the browser, where a trailing partial line is
-						visible but harmless.
+						Lines are a rendering concern; the wire protocol is bytes.
+						That keeps a slice deterministic and avoids questions like
+						"how do you tail N lines of a file with 300-character
+						lines?" It also means the client, not the server, decides
+						where a window begins and ends.
+					</p>
+
+					<h2>Trimming a window to whole lines</h2>
+					<p>
+						A window cut at an arbitrary byte offset starts and ends
+						mid-line, and — more awkwardly — possibly mid-character.
+						The viewer therefore fetches each slice as an
+						<code>ArrayBuffer</code>, scans the <em>bytes</em> for
+						<code>0x0A</code>, discards the partial line at each end,
+						and only then decodes.
+					</p>
+					<p>
+						Order matters here. Because the trimmed window always
+						begins and ends just after a newline, it can never split a
+						multi-byte UTF-8 character, so the decode that follows is
+						always safe. Decoding first and trimming the resulting
+						string would have corrupted the edges before anything got
+						the chance to fix them, and would also break the byte
+						arithmetic: the start of a window is
+						<code>X-Log-NewOffset</code> minus the response's
+						<em>byte</em> length, which a decoded string can no longer
+						tell you.
+					</p>
+					<p>
+						Two edges are already real boundaries and are left alone:
+						byte 0, and end-of-file. A caller extending a window
+						upward also suppresses the end trim, because it requested
+						exactly <code>[start - n, start)</code> and trimming that
+						end would leave a gap between the new chunk and the one it
+						has to join.
 					</p>
 
 					<div class="vorpal-callout vorpal-callout-note">
-						<div class="vorpal-callout-title">Encoding</div>
+						<div class="vorpal-callout-title">Lines longer than a window</div>
 						<p>
-							Reads assume UTF-8. Logs that contain raw bytes
-							outside the UTF-8 range will show replacement
-							characters in the viewer but the byte slice
-							itself is faithful.
+							If a window contains no newline at all there is
+							nothing to trim to, so the request is retried once,
+							eight times larger, up to the reader's 1 MiB ceiling.
+							Should that still fail, the window is trimmed to a
+							character boundary instead. Half a line is honest;
+							a replacement glyph reads as a bug in the viewer.
 						</p>
 					</div>
 
-					<h2>Follow-mode loop</h2>
+					<h2>Following a live file</h2>
 					<p>
-						A polling follow-mode is straightforward:
+						Follow mode has its own endpoint,
+						<code>GET api/servers/{name}/tail/{path:.+}?cursor=N&amp;max=M</code>,
+						rather than reusing the slice route. The difference is
+						what happens when the file rotates: the reader treats a
+						cursor past end-of-file as a new file, restarts from byte
+						0, and reports it in
+						<code>X-Log-TruncatedAtStart</code>. A slice would clamp
+						silently to the new length and the viewer would redisplay
+						the same bytes forever.
 					</p>
 					<ol>
-						<li>Read with <code>offset=-1, max=&lt;tail-size&gt;</code> to seed the viewer.</li>
-						<li>Note <code>X-Log-NewOffset</code> from the response.</li>
-						<li>Wait briefly (1–3s).</li>
-						<li>Read again with <code>offset=&lt;newOffset&gt;, max=&lt;big-enough&gt;</code>.</li>
-						<li>If response body is non-empty, append; update <code>newOffset</code>.</li>
+						<li>Seed the pane with <code>offset=-1</code> on the slice route.</li>
+						<li>Poll <code>tail</code> with <code>cursor</code> set to the end of what you hold.</li>
+						<li>If <code>X-Log-TruncatedAtStart</code> is <code>true</code>, the file rotated — reload from the beginning.</li>
+						<li>Otherwise advance the cursor <em>only to the last newline received.</em></li>
 						<li>Loop.</li>
 					</ol>
+					<p>
+						Step four is the one that is easy to get wrong. Bytes
+						after the last newline are a line the writer has not
+						finished; consuming them renders half a line that never
+						completes. Leaving the cursor short re-reads those few
+						bytes on the next poll, by which time the line is whole.
+					</p>
+
+					<h2>Searching</h2>
+					<p>
+						<code>GET api/search/{name}/{path:.+}?q=…&amp;regex=…&amp;from=N</code>
+						scans on the node that holds the file, so only matches
+						cross the wire. Each match carries the byte offset of its
+						line, which is what lets a result list steer the viewer
+						instead of duplicating it.
+					</p>
+					<p>
+						A pass is bounded by both <code>maxMatches</code> and
+						<code>maxScan</code> — the file may be gigabytes and the
+						node is carrying calls. When <code>complete</code> is
+						<code>false</code>, resume from <code>nextOffset</code>.
+						The default treats <code>q</code> as literal text; regex
+						is opt-in, and is matched against a bounded prefix of each
+						line so a pathological pattern cannot run away.
+					</p>
+
+					<div class="vorpal-callout vorpal-callout-warn">
+						<div class="vorpal-callout-title">Search needs a restarted node</div>
+						<p>
+							The <code>VorpalLogReader</code> in a JVM is
+							registered by the first BLADE application to start
+							there and is deliberately left registered when an
+							application stops, so redeploying does not replace it
+							— only restarting the server does. A node that has
+							not restarted since <code>search</code> was added to
+							the MBean will not have it. The endpoint answers
+							<code>supported: false</code> with that explanation
+							rather than failing; it checks
+							<code>MBeanServer.getMBeanInfo</code>, which works
+							against readers built before the method existed.
+						</p>
+					</div>
+
+					<h2>Downloading</h2>
+					<p>
+						<code>GET api/download/{name}/{path:.+}</code> streams a
+						whole file as an attachment, one MiB per JMX call, with
+						nothing buffered on the AdminServer. Its length is fixed
+						at the size observed when the request starts, which is the
+						right meaning for a download — you get the file as of now,
+						not a tail that never ends on a busy server.
+					</p>
+					<p>
+						Download and search sit under their own path prefixes for
+						a reason beyond tidiness: servlet security constraints
+						match by path prefix, so a query flag on the slice route
+						could not be held to a narrower role set. A prefix can.
+					</p>
 				</article>
 			</section>
 

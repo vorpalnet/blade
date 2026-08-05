@@ -13,6 +13,8 @@ import javax.jms.TextMessage;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 
+import org.vorpal.blade.framework.v3.metrics.Counter;
+
 /// Publishes [CloudEvent]s to an event-bus destination as JSON `TextMessage`s.
 ///
 /// **The only publisher.** Analytics used to have a second one of its own,
@@ -68,6 +70,11 @@ public class EventPublisher {
 	/// idempotency / dedupe.
 	public static final String PROP_ID = "eventId";
 
+	/// JMS int-property name carrying the CloudEvents `dataversion` extension —
+	/// the [EventType#getVersion] the producer was generated against. Absent when
+	/// the producer predates versioning or the type is undeclared.
+	public static final String PROP_VERSION = "eventVersion";
+
 	/// How many sessions a publisher retains between sends. Sized for the number
 	/// of threads realistically publishing at once on one engine node, not for
 	/// the number of threads that exist.
@@ -81,6 +88,10 @@ public class EventPublisher {
 	private Connection connection;
 	private Destination destination;
 	private volatile boolean closed;
+
+	/// Optional publish meters — see [#meter]. Null when nobody is counting.
+	private volatile Counter.Series published;
+	private volatile Counter.Series failed;
 
 	/// A session and its producer, borrowed and returned as one unit.
 	private final class Sender {
@@ -130,6 +141,21 @@ public class EventPublisher {
 		return destinationJndi;
 	}
 
+	/// Wire the publish meters — pre-resolved [Counter.Series] handles, so
+	/// counting costs one `LongAdder` increment on the SIP container thread.
+	///
+	/// Optional: an unmetered publisher publishes exactly the same, it just is
+	/// not counted. The failure count is the one that matters — a failed send is
+	/// a **dropped event** (the quota-full scenario), and without this the only
+	/// trace was a warning line in a log nobody reads.
+	///
+	/// @param published incremented once per successful send
+	/// @param failed    incremented once per send that threw
+	public void meter(Counter.Series published, Counter.Series failed) {
+		this.published = published;
+		this.failed = failed;
+	}
+
 	/// Look up the connection factory and destination, open the shared
 	/// connection, and start delivery. Sessions are created on demand.
 	///
@@ -164,29 +190,44 @@ public class EventPublisher {
 	}
 
 	/// Publish a CloudEvent. The envelope is serialized to JSON and sent as a
-	/// `TextMessage`; `type`, `subject`, and `id` are copied into JMS string
-	/// properties for selector-based routing.
+	/// `TextMessage`; `type`, `subject`, `id`, and `dataversion` are copied into
+	/// JMS properties for selector-based routing and version checks.
 	///
 	/// @param event the event to publish
 	/// @throws JMSException        if the send fails
 	/// @throws java.io.IOException if the envelope cannot be serialized
 	public void publish(CloudEvent event) throws JMSException, java.io.IOException {
-		String json = event.toJson();
-		Sender sender = borrow();
 		try {
-			TextMessage message = sender.session.createTextMessage(json);
-			if (event.getType() != null) {
-				message.setStringProperty(PROP_TYPE, event.getType());
+			String json = event.toJson();
+			Sender sender = borrow();
+			try {
+				TextMessage message = sender.session.createTextMessage(json);
+				if (event.getType() != null) {
+					message.setStringProperty(PROP_TYPE, event.getType());
+				}
+				if (event.getSubject() != null) {
+					message.setStringProperty(PROP_SUBJECT, event.getSubject());
+				}
+				if (event.getId() != null) {
+					message.setStringProperty(PROP_ID, event.getId());
+				}
+				if (event.getDataversion() != null) {
+					message.setIntProperty(PROP_VERSION, event.getDataversion().intValue());
+				}
+				sender.producer.send(message);
+			} finally {
+				release(sender);
 			}
-			if (event.getSubject() != null) {
-				message.setStringProperty(PROP_SUBJECT, event.getSubject());
+		} catch (JMSException | java.io.IOException | RuntimeException e) {
+			Counter.Series counter = failed;
+			if (counter != null) {
+				counter.increment();
 			}
-			if (event.getId() != null) {
-				message.setStringProperty(PROP_ID, event.getId());
-			}
-			sender.producer.send(message);
-		} finally {
-			release(sender);
+			throw e;
+		}
+		Counter.Series counter = published;
+		if (counter != null) {
+			counter.increment();
 		}
 	}
 

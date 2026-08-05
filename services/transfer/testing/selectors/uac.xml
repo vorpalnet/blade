@@ -25,9 +25,9 @@
 
 	<send retrans="500">
     <![CDATA[
-      INVITE sip:+18442820485@elr11.uhgvcc.globalipcom.com;calluuid=029TVUHRHKBA34546D51O2LAES0002JS;dn=1992177021;otherdn=7637176791;agentid=OptumCarePatientService_Test4;ani=7637176791;connid=01920379ada9ba7c;datetime=2024-07-25T19:19:59Z;dnis=8008987029;gvp-tenant-id=Environment.record;recorddn=1992177021;sipsappname=cl2-sips-ELR_1a;media-id=029TVUHRHKBA34546D51O2LAES0002JS SIP/2.0 
+      INVITE sip:+18442820485@elr11.vcc.example-co.net;calluuid=029TVUHRHKBA34546D51O2LAES0002JS;dn=1992177021;otherdn=7637176791;agentid=ExampleCareService_Test4;ani=7637176791;connid=01920379ada9ba7c;datetime=2024-07-25T19:19:59Z;dnis=8008987029;gvp-tenant-id=Environment.record;recorddn=1992177021;sipsappname=cl2-sips-ELR_1a;media-id=029TVUHRHKBA34546D51O2LAES0002JS SIP/2.0 
       From: <sip:+18325150855@152.190.45.36:5060;user=phone>;tag=1b3f6f89 
-      To: <sip:+18442820485@elr11.uhgvcc.globalipcom.com>;initialip=10.173.101.140 
+      To: <sip:+18442820485@elr11.vcc.example-co.net>;initialip=10.173.101.140 
       Via: SIP/2.0/[transport] [local_ip]:[local_port];branch=[branch]
       Allow: INVITE, ACK, BYE, CANCEL, REGISTER, OPTIONS, INFO 
       Allow-Events: refer 

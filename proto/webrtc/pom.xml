@@ -21,7 +21,10 @@
 		the framework's vendor-neutral WebRTC SPI, so no media-server vendor is named here.</description>
 
 	<build>
-		<finalName>blade-webrtc</finalName>
+		<!-- A SIP servlet application is named for its context root: that is the
+		     name the container reports to the App Router, and the name FSMAR
+		     configs target. Do not prefix it. -->
+		<finalName>webrtc</finalName>
 	</build>
 
 	<dependencies>

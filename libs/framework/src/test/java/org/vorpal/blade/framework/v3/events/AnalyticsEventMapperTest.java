@@ -234,6 +234,9 @@ class AnalyticsEventMapperTest {
 				JsonSchema schema = FACTORY.getSchema(EventSourceGenerator.schema(declaration, MAPPER));
 				java.util.Set<com.networknt.schema.ValidationMessage> errors = schema.validate(event.getData());
 				assertTrue(errors.isEmpty(), event.getType() + " fails its own declared schema: " + errors);
+
+				assertEquals(declaration.getVersion(), event.getDataversion(),
+						event.getType() + " must stamp the declared version as dataversion");
 			}
 		}
 	}

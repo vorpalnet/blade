@@ -84,13 +84,11 @@ public class Reinvite extends org.vorpal.blade.framework.v3.Callflow {
 					}
 
 					sendResponse(aliceResponse, (aliceAck) -> {
-						if (aliceAck.getMethod().equals(ACK)) {
-							SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-							if (b2buaListener != null) {
-								b2buaListener.requestEvent(bobAck);
-							}
-							sendRequest(bobAck);
+						SipServletRequest bobAck = createAcknowledgement(bobResponse, aliceAck);
+						if (b2buaListener != null) {
+							b2buaListener.requestEvent(bobAck);
 						}
+						sendRequest(bobAck);
 					});
 				}
 

@@ -38,6 +38,15 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 ///
 /// Failing open is right for the thing whose job is to miss nothing, and failing
 /// closed is right for the thing that takes action.
+///
+/// **The redelivery contract.** Delivery is at-least-once: a rolling restart, a
+/// failover or a rollback can replay events, the generated consumers
+/// auto-acknowledge and consume on exception, and nothing is transactional. An
+/// actor must therefore tolerate seeing an event twice — the generated
+/// `firstSight` LRU is a cheap first filter, not a guarantee; an action that
+/// must not repeat dedupes against the durable state it already writes, keyed
+/// on the CloudEvent `id`. This is the contract, not an open item: there is
+/// deliberately no cluster-wide dedup service behind the bus.
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class EventSubscription implements Serializable {
 
@@ -96,7 +105,7 @@ public class EventSubscription implements Serializable {
 
 	/// The JMS durable subscription name — the subscription's own name, always.
 	///
-	/// [#getClientId] returns the same string. They may equal each other; what
+	/// [#clientId] returns the same string. They may equal each other; what
 	/// matters is that they differ *between* subscriptions, which they do because
 	/// [#getName] is unique within the catalog.
 	@JsonIgnore
@@ -129,7 +138,7 @@ public class EventSubscription implements Serializable {
 	/// subscription while still consuming the destination's quota, which is why
 	/// the ingress rejects events without a type.
 	///
-	/// @return e.g. `eventType IN ('net.vorpal.blade.transfer.requested')`, or null
+	/// @return e.g. `eventType IN ('org.vorpal.blade.transfer.requested')`, or null
 	@JsonIgnore
 	public String selector() {
 		if (selectorMode == SelectorMode.NONE) {

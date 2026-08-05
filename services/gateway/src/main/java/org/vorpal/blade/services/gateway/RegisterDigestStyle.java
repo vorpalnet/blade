@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 /// `type: "register-digest"` — keep the trunk alive with an outbound SIP REGISTER and
-/// HTTP‑digest authentication on the 401/407 challenge (Flowroute and most credentialed
+/// HTTP‑digest authentication on the 401/407 challenge (most credentialed
 /// SIP trunks). Refreshed by a SIP servlet timer before {@link #getExpires()} lapses.
 @JsonPropertyOrder({ "type", "userId", "authName", "password", "expires", "allow", "userAgent" })
 public class RegisterDigestStyle extends RegistrationStyle {

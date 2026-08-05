@@ -42,6 +42,12 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 
 	private static final long serialVersionUID = 1L;
 	private URI requestUri;
+	private static final java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger();
+	private final String id = "dummy-req-" + counter.incrementAndGet();
+	private boolean initial = true;
+	private int maxForwards = 70;
+	private int maxBreadth = -1;
+	private SipApplicationRoutingDirective routingDirective;
 
 	/**
 	 * Constructs a DummyRequest with the specified application session and method.
@@ -135,121 +141,101 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 
 	@Override
 	public AsyncContext getAsyncContext() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public long getContentLengthLong() {
-		// TODO Auto-generated method stub
 		return 0;
 	}
 
 	@Override
 	public DispatcherType getDispatcherType() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public String getLocalName() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Locale getLocale() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Enumeration<Locale> getLocales() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public String getParameter(String name) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Map<String, String[]> getParameterMap() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Enumeration<String> getParameterNames() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public String[] getParameterValues(String name) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public String getRealPath(String path) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public String getRemoteHost() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public RequestDispatcher getRequestDispatcher(String path) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public String getScheme() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public String getServerName() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public int getServerPort() {
-		// TODO Auto-generated method stub
 		return 0;
 	}
 
 	@Override
 	public ServletContext getServletContext() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public boolean isAsyncStarted() {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public boolean isAsyncSupported() {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public AsyncContext startAsync() throws IllegalStateException {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
@@ -274,13 +260,19 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 
 	@Override
 	public SipServletRequest createCancel() {
-		// TODO Auto-generated method stub
-		return null;
+		try {
+			DummyRequest cancel = new DummyRequest(this.getApplicationSession(), "CANCEL");
+			cancel.setSession(this.getSession());
+			cancel.setRequestURI(this.getRequestURI());
+			cancel.setInitial(false);
+			return cancel;
+		} catch (ServletParseException neverThrownByThisConstructor) {
+			throw new IllegalStateException(neverThrownByThisConstructor);
+		}
 	}
 
 	@Override
 	public InviteBranch createInviteBranch() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
@@ -296,109 +288,96 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 
 	@Override
 	public SipServletResponse getAcknowledgedResponse() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public B2buaHelper getB2buaHelper() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public SipServletResponse getFinalResponse() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public String getId() {
-		// TODO Auto-generated method stub
-		return null;
+		return id;
 	}
 
 	@Override
 	public Address getInitialPoppedRoute() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public ServletInputStream getInputStream() throws IOException {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public int getMaxBreadth() {
-		// TODO Auto-generated method stub
-		return 0;
+		return maxBreadth;
 	}
 
 	@Override
 	public int getMaxForwards() {
-		// TODO Auto-generated method stub
-		return 0;
+		return maxForwards;
 	}
 
 	@Override
 	public Address getPoppedRoute() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Proxy getProxy() throws TooManyHopsException {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public Proxy getProxy(boolean arg0) throws TooManyHopsException {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public BufferedReader getReader() throws IOException {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public SipApplicationRoutingRegion getRegion() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public URI getRequestURI() {
-		// TODO Auto-generated method stub
 		return requestUri;
 	}
 
 	@Override
 	public SipApplicationRoutingDirective getRoutingDirective() throws IllegalStateException {
-		// TODO Auto-generated method stub
-		return null;
+		return routingDirective;
 	}
 
 	@Override
 	public URI getSubscriberURI() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
 	public boolean isInitial() {
-		// TODO Auto-generated method stub
-		return false;
+		return initial;
+	}
+
+	/** Lets a test mark this request as in-dialog; requests start out initial. */
+	public void setInitial(boolean initial) {
+		this.initial = initial;
 	}
 
 	@Override
 	public boolean isRequestUriInternal() {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -416,14 +395,12 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 
 	@Override
 	public void setMaxBreadth(int arg0) {
-		// TODO Auto-generated method stub
-
+		this.maxBreadth = arg0;
 	}
 
 	@Override
 	public void setMaxForwards(int arg0) {
-		// TODO Auto-generated method stub
-
+		this.maxForwards = arg0;
 	}
 
 	@Override
@@ -434,8 +411,7 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	@Override
 	public void setRoutingDirective(SipApplicationRoutingDirective arg0, SipServletRequest arg1)
 			throws IllegalStateException {
-		// TODO Auto-generated method stub
-
+		this.routingDirective = arg0;
 	}
 
 }

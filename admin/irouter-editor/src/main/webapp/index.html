@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>BLADE iRouter Editor</title>
+	<link rel="stylesheet" href="/blade/portal/brand/brand.css">
+	<link rel="icon" type="image/svg+xml" href="/blade/irouter-editor/favicon.svg">
+</head>
+<body class="vorpal-glass">
+<div class="vorpal-app">
+
+	<header class="vorpal-topbar">
+		<a class="vorpal-brand" href="/blade/portal/" title="Return to portal.">
+			<img class="vorpal-brand-mark" src="/blade/portal/brand/vorpal_splotch.svg" alt="Vorpal">
+			<span class="vorpal-brand-text">
+				<span class="vorpal-brand-product">BLADE Admin Portal</span>
+				<span class="vorpal-brand-tagline">Unified Administration</span>
+			</span>
+		</a>
+		<a class="vorpal-appmark" href="/blade/irouter-editor/">IROUTER</a>
+		<nav class="vorpal-nav" aria-label="Primary">
+			<a href="index.html" class="vorpal-active">Overview</a>
+			<a href="irouter-editor.html">Editor</a>
+		</nav>
+		<div class="vorpal-topbar-right">
+			<span class="vorpal-pill">Ready</span>
+		</div>
+	</header>
+
+	<main class="vorpal-main">
+		<div class="vorpal-page">
+
+			<section class="vorpal-hero">
+				<div>
+					<h1>BLADE iRouter Editor</h1>
+					<p>
+						The iRouter turns "write a custom SIP service per
+						customer" into one JSON config: a pipeline of
+						connectors gathers facts about each call into
+						variables, and a single routing strategy turns them
+						into a Route. This editor authors both phases and
+						dry-runs any pasted request against the unsaved
+						draft — you see the exact Route before you publish.
+					</p>
+				</div>
+				<div class="vorpal-hero-meta">
+					<span>Edits · irouter.json</span>
+					<span>Dry-run · production decision code, in-process</span>
+				</div>
+			</section>
+
+			<section class="vorpal-card-grid">
+				<a href="irouter-editor.html" class="vorpal-card">
+					<span class="vorpal-card-icon">⌘</span>
+					<h3>Open Editor</h3>
+					<p>
+						Pipeline, routing, and dry-run in one page. Paste an
+						INVITE and the decision panel states in words what
+						production would do — the forward URI, the final
+						response, and every header stamped.
+					</p>
+					<span class="vorpal-card-link">Open iRouter Editor</span>
+				</a>
+
+				<a href="irouter-editor.html" class="vorpal-card"
+					onclick="sessionStorage.setItem('openHelp','1')">
+					<span class="vorpal-card-icon">📖</span>
+					<h3>How it works</h3>
+					<p>
+						The editor's built-in Help walks the whole model:
+						connectors and selectors, the three routing
+						strategies, Routes and conditional headers, and
+						the Save / Publish lifecycle.
+					</p>
+					<span class="vorpal-card-link">Open Editor Help</span>
+				</a>
+
+				<a href="/blade/configurator/configurator.html?schema=irouter" class="vorpal-card">
+					<span class="vorpal-card-icon">≡</span>
+					<h3>Everything else</h3>
+					<p>
+						Logging, session settings, and per-cluster or
+						per-server overlays are edited in the Configurator.
+						Both tools share <code>irouter.json</code> politely.
+					</p>
+					<span class="vorpal-card-link">Open Configurator</span>
+				</a>
+			</section>
+
+		</div>
+
+		<footer class="vorpal-footer">
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener" title="Source on GitHub">
+				<img src="/blade/portal/brand/vorpal_logo_white.svg" alt="Vorpal Networks">
+			</a>
+			<span>&copy; Vorpal Networks 2013&ndash;2026 &middot; MIT License</span>
+			<a href="https://github.com/vorpalnet/blade" target="_blank" rel="noopener">View on GitHub</a>
+		</footer>
+	</main>
+
+</div>
+</body>
+</html>

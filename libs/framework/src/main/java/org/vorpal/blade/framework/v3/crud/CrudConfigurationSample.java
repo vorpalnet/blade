@@ -1,11 +1,12 @@
 package org.vorpal.blade.framework.v3.crud;
 
-import org.vorpal.blade.framework.v2.config.ConfigHashMap;
-import org.vorpal.blade.framework.v2.config.Selector;
-import org.vorpal.blade.framework.v2.config.Translation;
-import org.vorpal.blade.framework.v2.config.TranslationsMap;
 import org.vorpal.blade.framework.v2.logging.LogParameters;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
+import org.vorpal.blade.framework.v3.configuration.MatchStrategy;
+import org.vorpal.blade.framework.v3.configuration.connectors.SipConnector;
+import org.vorpal.blade.framework.v3.configuration.connectors.TableConnector;
+import org.vorpal.blade.framework.v3.configuration.selectors.RegexSelector;
+import org.vorpal.blade.framework.v3.configuration.translations.TranslationTable;
 
 /// Canonical sample that demonstrates every addressing mode (regex / XPath /
 /// JsonPath / SDP) inside each of the four CRUD verbs:
@@ -19,8 +20,13 @@ import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 /// 4. **example-delete** — strip a private header plus matching values
 ///    inside XML, JSON, and SDP parts
 ///
-/// Selectors / maps / plan map dialed numbers `8001..8004` onto these rule
-/// sets so each can be exercised independently from a SIPp dialer.
+/// The pipeline — a [SipConnector] extracting the dialed number, then a
+/// [TableConnector] writing the `ruleSet` variable — maps dialed numbers
+/// `8001..8004` onto these rule sets so each can be exercised independently
+/// from a SIPp dialer. Any other number falls back to `defaultRuleSet`
+/// (example-create), so dialing anything demonstrates the service.
+/// Example-create's `trace-${dialedNumber}` header shows a
+/// pipeline-extracted variable being referenced inside a rule template.
 public class CrudConfigurationSample extends CrudSettings {
 	private static final long serialVersionUID = 1L;
 
@@ -28,9 +34,23 @@ public class CrudConfigurationSample extends CrudSettings {
 		this.logging = new LogParametersDefault();
 		this.logging.setLoggingLevel(LogParameters.LoggingLevel.FINER);
 
-		Selector dialedNumber = new Selector("dialed-number", "To", SIP_ADDRESS_PATTERN, "${user}");
-		dialedNumber.setDescription("Extract dialed number from To header");
-		this.selectors.add(dialedNumber);
+		SipConnector sip = new SipConnector();
+		sip.setId("sip");
+		sip.setDescription("Extract the dialed number from the To header");
+		sip.addSelector(new RegexSelector("dialedNumber", "To",
+				".*<?sips?:\\+?(?<did>[^@;>]+)@.*", "${did}"));
+
+		TableConnector ruleSelection = new TableConnector();
+		ruleSelection.setId("rule-selection");
+		ruleSelection.setDescription("Map the dialed number to a rule set");
+
+		TranslationTable byDialedNumber = new TranslationTable();
+		byDialedNumber.setMatch(MatchStrategy.hash);
+		byDialedNumber.setKeyExpression("${dialedNumber}");
+		ruleSelection.addTable(byDialedNumber);
+
+		this.getPipeline().add(sip);
+		this.getPipeline().add(ruleSelection);
 
 		RuleSet create = exampleCreate();
 		RuleSet read = exampleRead();
@@ -42,22 +62,12 @@ public class CrudConfigurationSample extends CrudSettings {
 		this.getRuleSets().put(update.getId(), update);
 		this.getRuleSets().put(delete.getId(), delete);
 
-		TranslationsMap dialedMap = new ConfigHashMap();
-		dialedMap.id = "dialed-number-map";
-		dialedMap.description = "Map dialed numbers to rule sets";
-		dialedMap.addSelector(dialedNumber);
+		byDialedNumber.createTranslation("8001").put(RULESET_VARIABLE, create.getId());
+		byDialedNumber.createTranslation("8002").put(RULESET_VARIABLE, read.getId());
+		byDialedNumber.createTranslation("8003").put(RULESET_VARIABLE, update.getId());
+		byDialedNumber.createTranslation("8004").put(RULESET_VARIABLE, delete.getId());
 
-		dialedMap.createTranslation("8001").addAttribute("ruleSet", create.getId());
-		dialedMap.createTranslation("8002").addAttribute("ruleSet", read.getId());
-		dialedMap.createTranslation("8003").addAttribute("ruleSet", update.getId());
-		dialedMap.createTranslation("8004").addAttribute("ruleSet", delete.getId());
-
-		this.maps.add(dialedMap);
-		this.plan.add(dialedMap);
-
-		this.defaultRoute = new Translation();
-		this.defaultRoute.setId("default");
-		this.defaultRoute.addAttribute("ruleSet", create.getId());
+		this.setDefaultRuleSet(create.getId());
 	}
 
 	private static RuleSet exampleCreate() {
@@ -70,7 +80,7 @@ public class CrudConfigurationSample extends CrudSettings {
 		r.setMethod("INVITE");
 		r.setEvent("callStarted");
 		r.getOperations().add(new CreateOperation("X-Caller-Region", "us-west-2"));
-		r.getOperations().add(new CreateOperation("X-Trace-Id", "trace-${userPart}"));
+		r.getOperations().add(new CreateOperation("X-Trace-Id", "trace-${dialedNumber}"));
 
 		CreateOperation attach = new CreateOperation();
 		attach.setAttribute("body");

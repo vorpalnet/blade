@@ -35,7 +35,7 @@ public final class SignalProtocol {
 	public static final String SUBPROTOCOL = "blade.webrtc.v1";
 
 	/// CloudEvents `source` for everything this gateway emits.
-	public static final String SOURCE = "/blade/webrtc";
+	public static final String SOURCE = "/webrtc";
 
 	// ---- browser -> gateway -------------------------------------------------------------------
 

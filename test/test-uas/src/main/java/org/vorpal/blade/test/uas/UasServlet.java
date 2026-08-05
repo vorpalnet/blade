@@ -19,7 +19,7 @@ import org.vorpal.blade.test.uas.config.TestUasConfigSample;
 /// SIP test server — the terminator end of the BLADE test pair. All
 /// behavior comes from the framework [TesterServlet] scenario machinery:
 ///
-/// - `scenario=` Request-URI parameter, translation-plan matches, and the
+/// - `scenario=` Request-URI parameter, enrichment-pipeline matches, and the
 ///   classic `status` / `delay` / `refer` shorthands select per-call
 ///   behavior (answer locally, transfer, or transform-and-forward)
 /// - configured scenarios live in `test-uas.json`, edited in the

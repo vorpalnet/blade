@@ -1,6 +1,6 @@
 # Proxy Registrar Service
 
-[Javadocs](https://vorpal.net/javadocs/blade/proxy-registrar)
+Javadocs: `/blade/javadoc/proxy-registrar/` on the Admin Portal
 
 A SIP registrar with call forwarding: REGISTER requests maintain an in-memory
 location database, and initial INVITEs are forwarded to the registered contact.

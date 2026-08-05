@@ -66,9 +66,9 @@ window.flowSimulate = (function() {
 		if (!v || !v.value || !v.value.tagName) return null;
 		var tag = v.value.tagName;
 		if (tag === 'Gateway') {
-			// An egress Gateway is an exit, not a state — it's a transition
-			// target, never a source. Excluded so it can't be mistaken for null.
-			if (v.getAttribute('role') === 'egress') return null;
+			// An exit cloud is not a state — it's a transition target, never a
+			// source. Excluded so it can't be mistaken for null.
+			if (flowUtils.isExitCloud(v)) return null;
 			var match = v.getAttribute('match');
 			return (match && match.length > 0) ? (v.getAttribute('label') || '') : 'null';
 		}

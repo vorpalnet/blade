@@ -1,6 +1,6 @@
-# BLADE Framework Callflow
+# BLADE Framework Callflow (v2)
 
-See Javadocs: [org.vorpal.blade.framework.callflow](https://vorpalnet.github.io/blade/vorpal-blade-library-framework/org/vorpal/blade/framework/callflow/Callflow.html)
+Javadocs: package `org.vorpal.blade.framework.v2.callflow` — browse at `/blade/javadoc/framework/` on the Admin Portal
 
 A Callflow is a base class intended to be extended to implement one or more SIP dialogs in a session.
 
@@ -34,11 +34,11 @@ But this gets confusing very fast. Consider "doResponse()". Response to what? No
 every response. Pretty quickly, you will find yourself implementing state variables to keep
 track of all the dialogs. It gets ugly real fast.
 
-Instead, the BLADE APIs utilize lambda expressions to simplify things.
+Instead, the BLADE APIs use lambda expressions to simplify things.
 
 For instance, here's an example:
 
-```
+```java
 public class InitialInvite extends Callflow {
 	private SipServletRequest aliceRequest;
 
@@ -69,39 +69,40 @@ public class InitialInvite extends Callflow {
 	}
 
 }
-
-
 ```
 
 That's a lot to digest, but let's just look at the "where the fun begins" part of the code.
 
 You can see there's a method on Callflow called "sendRequest()". It's meant to replace the SipServletRequest.send() method.
-It take a SipServletRequest and returns a SipServetResponse (bobResponse). When the SipServletResponse is received,
-the you have some code to create the return response and you call the matching "sendResponse()" method.
-It accepts an ACK (aliceAck). At that point, you can create the outgoing ACK for bob and send it via sendRequest() method again.
+It takes a SipServletRequest and hands your lambda the SipServletResponse (bobResponse). When the response arrives,
+you write the code to create the return response and call the matching "sendResponse()" method.
+Its lambda accepts an ACK (aliceAck). At that point, you create the outgoing ACK for Bob and send it via the sendRequest() method again.
 Now you're done with the callflow.
 
 Wait, how did that work?
 
-The methods "sendRequest()" and "sendResponse()" utilize lambda expressions. Under the covers, they're inserting SipSession
-state variables, calling ".send()" and awaiting the response from the container. Once a response is received, your
+The methods "sendRequest()" and "sendResponse()" use lambda expressions. Under the covers, they insert SipSession
+state variables, call ".send()" and await the response from the container. Once a response is received, your
 code within the lambda expression is invoked. Pretty neat, huh? It sure makes things more readable.
 
-Wait, there's something funny going on... What's up with the 180 Ringing and 200 Ok messages? It doesn't seem like you're
+Wait, there's something funny going on... What's up with the 180 Ringing and 200 OK messages? It doesn't seem like you're
 checking for them.
 
-That's right... For the lambda expression for "sendRequest(bobRequest, (bobResponse) -> { //lambda expression });"
-will get invoked twice: Once for 180 Ringing and again for 200 OK. That's actually cool, because we're waiting for return ACK
-as seen in "sendResponse(aliceResponse, (aliceAck) -> { //lambda expression });" When that ACK comes in, you won't get any more
+That's right... The lambda expression in "sendRequest(bobRequest, (bobResponse) -> { ... });"
+gets invoked twice: once for 180 Ringing and again for 200 OK. That's actually cool, because we're waiting for the return ACK
+as seen in "sendResponse(aliceResponse, (aliceAck) -> { ... });" When that ACK comes in, you won't get any more
 SipServletResponse messages.
 
-Finally, you'll notice the final method "sendRequest(bobAck);" doesn't have a lambda expression associated with it.
-That makes sense because none is possible. You can use "sendRequest()" without an associated lambda expression if
-you just don't care and want to let the container eat it message. For instance, sending a BYE request will always return a 200 OK.
+Finally, you'll notice the final method call "sendRequest(bobAck);" doesn't have a lambda expression associated with it.
+That makes sense because none is possible. You can use "sendRequest()" without a lambda expression if
+you just don't care and want to let the container eat the message. For instance, sending a BYE request will always return a 200 OK.
 There's no need to define a lambda expression that has no logic in it.
 
 Now you have the basic understanding of how the BLADE framework works. Everything else is simply implementations of specific
 callflows and variations on this major theme.
 
+## See also
 
-
+- [v2 API overview](../README.md)
+- [b2bua](../b2bua/README.md) — pre-built callflows so you don't write the above by hand
+- [v3 API](../../v3/README.md) — the same model plus call tracing and passthru drop-out
