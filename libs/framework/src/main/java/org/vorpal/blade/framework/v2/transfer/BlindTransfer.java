@@ -140,7 +140,12 @@ public class BlindTransfer extends Transfer {
 	private static final long serialVersionUID = 1L;
 
 	// Session attribute keys
-	private static final String INITIAL_INVITE_ATTR = "INITIAL_INVITE";
+	// "initial_invite" is written by TransferInitialInvite (line 34) and
+	// InitialInvite (line 115), both onto the SipSession — not "INITIAL_INVITE",
+	// and not the application session. INITIAL_REFER below is the opposite: an
+	// application-session attribute written by TransferAPI. They do not match
+	// each other, which is what made the mismatch here easy to miss.
+	private static final String INITIAL_INVITE_ATTR = "initial_invite";
 	private static final String INITIAL_REFER_ATTR = "INITIAL_REFER";
 	private static final String X_ORIGINAL_DN_ATTR = "X-Original-DN";
 	private static final String X_PREVIOUS_DN_ATTR = "X-Previous-DN";
@@ -206,8 +211,9 @@ public class BlindTransfer extends Transfer {
 
 			createRequests(referRequest);
 
-			// First copy any specified INVITE headers
-			SipServletRequest initialInvite = (SipServletRequest) referRequest.getApplicationSession()
+			// First copy any specified INVITE headers. The REFER is in-dialog, so it
+			// arrives on the same SipSession the initial INVITE was stored on.
+			SipServletRequest initialInvite = (SipServletRequest) referRequest.getSession()
 					.getAttribute(INITIAL_INVITE_ATTR);
 			if (initialInvite != null) {
 				preserveInviteHeaders(initialInvite, this.targetRequest);

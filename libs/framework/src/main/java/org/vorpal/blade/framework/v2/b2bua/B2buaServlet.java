@@ -36,15 +36,21 @@ import javax.servlet.sip.UAMode;
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.Callflow;
 
-/**
- * This class implements a simple back-to-back user agent. It accepts an
- * incoming SipServletRequest object and creates an outgoing copy of it. By
- * extending this class and overriding the B2buaListener interface methods,
- * users can create simple routing applications by modifying the outgoing
- * request or response objects before they are sent.
- * 
- * @author Jeff McDonald
- */
+/// This class implements a simple back-to-back user agent. It accepts an
+/// incoming SipServletRequest object and creates an outgoing copy of it. By
+/// extending this class and overriding the B2buaListener interface methods,
+/// users can create simple routing applications by modifying the outgoing
+/// request or response objects before they are sent.
+///
+/// @author Jeff McDonald
+/// @deprecated Superseded by [org.vorpal.blade.framework.v3.B2buaServlet], which
+///             every application now extends. Nothing in blade, optum, gryphon
+///             or bond subclasses this one. It is kept for v2 applications
+///             outside this workspace, and for the record — the v2 b2bua
+///             *callflows* beside it are very much alive, since
+///             `v3.B2buaServlet.chooseCallflow` still builds [InitialInvite] and
+///             [Reinvite] from this package.
+@Deprecated
 public abstract class B2buaServlet extends AsyncSipServlet implements B2buaListener {
 	private static final long serialVersionUID = 1L;
 

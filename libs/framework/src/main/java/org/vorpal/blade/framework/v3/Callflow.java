@@ -153,8 +153,8 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	}
 
 	/// Clones an inbound request into an outbound one on the peer leg — the single
-	/// request builder in v3, replacing v2's `createInitialRequest`,
-	/// `createContinueInitialRequest`, `createNewRequest`, and `continueRequest`.
+	/// request builder in v3, and the replacement for the family of builders v2
+	/// once carried.
 	///
 	/// It picks its path from the state of the call:
 	///

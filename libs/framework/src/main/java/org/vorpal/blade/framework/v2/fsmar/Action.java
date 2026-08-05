@@ -35,6 +35,20 @@ import org.vorpal.blade.framework.v2.config.SettingsManager;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 
+/// @deprecated The FSMAR 2 configuration model. v3 has no `Action` class because it
+///             does not need one: all five fields were flattened onto
+///             [org.vorpal.blade.framework.v3.fsmar.Transition] itself, which carries
+///             `subscriber`, `region`, `routes` and `routeModifier` directly. A
+///             transition no longer holds a separate action object.
+///             [org.vorpal.blade.framework.v3.fsmar.Fsmar2Converter] applies the
+///             mapping: `originating` and `terminating` become `subscriber` plus an
+///             ORIGINATING or TERMINATING `region`, and `route` / `route_back` /
+///             `route_final` become `routes` plus the matching `routeModifier`. It
+///             preserves this class's precedence rules — originating over
+///             terminating, and route over route_back over route_final — warning
+///             where a config relied on them. Nothing in the standard build uses
+///             this package; the only reader is `retired/fsmar2`.
+@Deprecated
 public class Action implements Serializable {
 	private static final long serialVersionUID = 1L;
 

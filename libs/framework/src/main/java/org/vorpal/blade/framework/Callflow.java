@@ -24,27 +24,18 @@
 
 package org.vorpal.blade.framework;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.Level;
 
-import javax.mail.MessagingException;
-import javax.mail.internet.MimeBodyPart;
-import javax.mail.internet.MimeMultipart;
-import javax.mail.util.ByteArrayDataSource;
 import javax.servlet.ServletException;
-import javax.servlet.sip.Address;
 import javax.servlet.sip.Parameterable;
 import javax.servlet.sip.Proxy;
 import javax.servlet.sip.ServletParseException;
@@ -63,19 +54,16 @@ import javax.servlet.sip.SipURI;
 import javax.servlet.sip.TimerService;
 import javax.servlet.sip.UAMode;
 import javax.servlet.sip.URI;
-import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.callflow.Expectation;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters.KeepAlive;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
-import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.keepalive.KeepAliveExpiry;
 import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
-import org.vorpal.blade.framework.v2.sdp.Sdp;
 import org.vorpal.blade.framework.v2.testing.DummyResponse;
 
 public abstract class Callflow implements Serializable {
@@ -128,7 +116,6 @@ public abstract class Callflow implements Serializable {
 	protected static final String RESPONSE_CALLBACK_ = "RESPONSE_CALLBACK_";
 	protected static final String PROXY_CALLBACK_ = "PROXY_CALLBACK_";
 	protected static final String LINKED_SESSION = "LINKED_SESSION";
-	protected static final String DELAYED_REQUEST = "DELAYED_REQUEST";
 	protected static final String WITHHOLD_RESPONSE = "WITHHOLD_RESPONSE";
 
 	private static final String VORPAL_SESSION = "VORPAL_SESSION";
@@ -398,54 +385,6 @@ public abstract class Callflow implements Serializable {
 	 * @throws IOException      if an I/O error occurs during processing
 	 */
 	public abstract void process(SipServletRequest request) throws ServletException, IOException;
-
-	@Deprecated
-	public String schedulePeriodicTimer(SipApplicationSession appSession, int seconds,
-			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
-		long delay = seconds * 1000;
-		long period = seconds * 1000;
-		boolean fixedDelay = false;
-		boolean isPersistent = false;
-		return timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction).getId();
-	}
-
-	@Deprecated
-	public String schedulePeriodicTimerInMilliseconds(SipApplicationSession appSession, long milliseconds,
-			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
-		long delay = milliseconds;
-		long period = milliseconds;
-		boolean fixedDelay = false;
-		boolean isPersistent = false;
-		return timerService.createTimer(appSession, delay, period, fixedDelay, isPersistent, lambdaFunction).getId();
-	}
-
-	@Deprecated
-	public String scheduleTimer(SipApplicationSession appSession, int seconds, Callback<ServletTimer> lambdaFunction)
-			throws ServletException, IOException {
-		long delay = seconds * 1000;
-		boolean isPersistent = false;
-		return timerService.createTimer(appSession, delay, isPersistent, lambdaFunction).getId();
-	}
-
-	@Deprecated
-	public String scheduleTimerInMilliseconds(SipApplicationSession appSession, long milliseconds,
-			Callback<ServletTimer> lambdaFunction) throws ServletException, IOException {
-		long delay = milliseconds;
-		boolean isPersistent = false;
-		return timerService.createTimer(appSession, delay, isPersistent, lambdaFunction).getId();
-	}
-
-	@Deprecated
-	public void cancelTimer(SipApplicationSession appSession, String timerId) {
-
-		if (appSession != null && timerId != null) {
-			ServletTimer timer = appSession.getTimer(timerId);
-			if (timer != null) {
-				timer.cancel();
-			}
-		}
-
-	}
 
 	/**
 	 * Creates a one-time ServletTimer and schedules it to expire after the
@@ -1723,165 +1662,6 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
-	/// Build a hold-answer SDP body from the request's offer and return it as a
-	/// `String`. Multipart input (e.g. SIPREC `application/sdp` +
-	/// `application/rs-metadata+xml`) is accepted; the SDP part is extracted
-	/// and any other parts are dropped. The returned SDP has `c=` zeroed,
-	/// direction attributes replaced with `a=inactive`, and ports preserved
-	/// from the offer. Returns `null` if the request has no parseable SDP body.
-	///
-	/// Use this when a servlet wants to answer a (re-)INVITE locally with a
-	/// hold body — it bundles `extractSdpBody` + `Sdp.parse` +
-	/// [#rewriteSdpDirectionInPlace] in one call.
-	public static String buildHoldAnswerSdp(SipServletRequest request) {
-		try {
-			String sdpText = extractSdpBody(request);
-			if (sdpText == null) {
-				return null;
-			}
-			Sdp sdp;
-			try {
-				sdp = Sdp.parse(sdpText);
-			} catch (RuntimeException e) {
-				sipLogger.warning(request,
-						"Callflow.buildHoldAnswerSdp - failed to parse SDP body: " + e.getMessage());
-				return null;
-			}
-			rewriteSdpDirectionInPlace(sdp, "inactive", true);
-			return sdp.toString();
-		} catch (IOException | MessagingException e) {
-			sipLogger.warning(request,
-					"Callflow.buildHoldAnswerSdp - failed to extract SDP: " + e.getMessage());
-			return null;
-		}
-	}
-
-	/// Build a "hold" / blackhole answer from the request's offer and write it
-	/// onto `response`. Every `m=` port is set to `0`, the connection address
-	/// (`c=`, both session-level and per-m-line) is set to `0.0.0.0` (or `::`
-	/// for IPv6), and every direction attribute is replaced with `a=inactive`.
-	/// Multipart input (e.g. SIPREC `application/sdp` + `application/rs-metadata+xml`)
-	/// is accepted; the SDP part is extracted and any other parts are dropped.
-	/// The response body is always plain `application/sdp`.
-	///
-	/// The caller is responsible for creating the response (status code,
-	/// `Allow`, `Session-Expires`, etc.) and for sending it. This method only
-	/// fills the body.
-	///
-	/// @param request  the incoming (re-)INVITE carrying the offer
-	/// @param response the response to populate
-	/// @return the same `response`, for fluent chaining
-	public static SipServletResponse hold(SipServletRequest request, SipServletResponse response)
-			throws IOException, MessagingException {
-		return rewriteSdpDirection(request, response, "inactive", true);
-	}
-
-	private static SipServletResponse rewriteSdpDirection(SipServletRequest request, SipServletResponse response,
-			String direction, boolean blackhole) throws IOException, MessagingException {
-
-		String sdpText = extractSdpBody(request);
-		if (sdpText == null) {
-			sipLogger.warning(request, "Callflow.rewriteSdpDirection - no application/sdp body found in request");
-			return response;
-		}
-
-		Sdp sdp;
-		try {
-			sdp = Sdp.parse(sdpText);
-		} catch (RuntimeException e) {
-			// Sdp.parse throws IllegalArgumentException for malformed m= lines and
-			// NumberFormatException for non-numeric ports. Fall back to the no-SDP
-			// path so callers (e.g. CallflowHold) can emit a safe static answer
-			// rather than the handler crashing on hostile input.
-			sipLogger.warning(request,
-					"Callflow.rewriteSdpDirection - failed to parse SDP body: " + e.getMessage());
-			return response;
-		}
-
-		rewriteSdpDirectionInPlace(sdp, direction, blackhole);
-
-		response.setContent(sdp.toString().getBytes("UTF-8"), "application/sdp");
-		return response;
-	}
-
-	/// Apply the direction-rewrite to a parsed [Sdp] in place. Session-level
-	/// and per-m-line direction attributes are replaced with `direction`; if
-	/// `blackhole` is true, every `c=` line is zeroed to `0.0.0.0` (or `::`).
-	/// **Ports are preserved from the offer.** Per RFC 3264 §6.1, port 0 in an
-	/// answer means the stream is rejected — and §8 says rejected streams can't
-	/// be reused without a new offer with new m= lines. Hold needs "paused,
-	/// recoverable", which is non-zero-port + `a=inactive` (the RFC 2543 hold
-	/// pattern updated with explicit direction).
-	static void rewriteSdpDirectionInPlace(Sdp sdp, String direction, boolean blackhole) {
-		if (sdp.getAttributes() != null) {
-			sdp.getAttributes().removeIf(a -> isDirectionAttribute(a.getName()));
-		}
-		if (blackhole) {
-			zeroConnection(sdp.getConnection());
-		}
-
-		if (sdp.getMedia() != null) {
-			for (Sdp.Media m : sdp.getMedia()) {
-				if (blackhole) {
-					zeroConnection(m.getConnection());
-				}
-				List<Sdp.Attribute> attrs = m.getAttributes();
-				if (attrs == null) {
-					attrs = new ArrayList<>();
-					m.setAttributes(attrs);
-				} else {
-					attrs.removeIf(a -> isDirectionAttribute(a.getName()));
-				}
-				attrs.add(new Sdp.Attribute(direction, null));
-			}
-		}
-	}
-
-	private static void zeroConnection(Sdp.Connection c) {
-		if (c == null) {
-			return;
-		}
-		c.setAddress("IP6".equalsIgnoreCase(c.getAddressType()) ? "::" : "0.0.0.0");
-	}
-
-	private static boolean isDirectionAttribute(String name) {
-		return "sendrecv".equalsIgnoreCase(name)
-				|| "sendonly".equalsIgnoreCase(name)
-				|| "recvonly".equalsIgnoreCase(name)
-				|| "inactive".equalsIgnoreCase(name);
-	}
-
-	private static String extractSdpBody(SipServletRequest request) throws IOException, MessagingException {
-		byte[] body = request.getRawContent();
-		String contentType = request.getContentType();
-		if (body == null || body.length == 0 || contentType == null) {
-			return null;
-		}
-		String ctLower = contentType.toLowerCase();
-		if (ctLower.startsWith("application/sdp")) {
-			return new String(body, "UTF-8");
-		}
-		if (ctLower.startsWith("multipart/")) {
-			MimeMultipart mp = new MimeMultipart(new ByteArrayDataSource(body, contentType));
-			for (int i = 0; i < mp.getCount(); i++) {
-				MimeBodyPart part = (MimeBodyPart) mp.getBodyPart(i);
-				String partType = part.getContentType();
-				if (partType != null && partType.toLowerCase().startsWith("application/sdp")) {
-					ByteArrayOutputStream baos = new ByteArrayOutputStream();
-					try (InputStream is = part.getInputStream()) {
-						byte[] buf = new byte[4096];
-						int n;
-						while ((n = is.read(buf)) > 0) {
-							baos.write(buf, 0, n);
-						}
-					}
-					return baos.toString("UTF-8");
-				}
-			}
-		}
-		return null;
-	}
-
 	/**
 	 * Copy non-system headers, and Contact as well for REGISTER requests, where the
 	 * spec does not treat it as a system header.
@@ -1945,19 +1725,22 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
-	/**
-	 * Copies both headers and content body from one SIP message to a request.
-	 * Copies the non-system headers only; unlike
-	 * {@link #copyHeaders(SipServletRequest, SipServletRequest)} it does not carry
-	 * Contact across on a REGISTER.
-	 *
-	 * @param copyFrom the source SIP message
-	 * @param copyTo   the destination SIP request
-	 * @return the destination request with copied headers and content
-	 * @throws ServletParseException        if parsing fails
-	 * @throws UnsupportedEncodingException if the content encoding is not supported
-	 * @throws IOException                  if an I/O error occurs
-	 */
+	/// Copies the non-system headers and the content body from one SIP message to a
+	/// request.
+	///
+	/// Contact is deliberately **not** carried across, which is where this differs
+	/// from [#copyHeaders(SipServletRequest,SipServletRequest)] on a REGISTER. A
+	/// B2BUA sending a request upstream must present its own Contact; relaying the
+	/// caller's would register the caller's address at the upstream registrar. The
+	/// response direction is the opposite case and does relay it — see
+	/// [#copyContentAndHeaders(SipServletResponse,SipServletResponse)].
+	///
+	/// @param copyFrom the source SIP message
+	/// @param copyTo   the destination SIP request
+	/// @return the destination request with copied headers and content
+	/// @throws ServletParseException        if parsing fails
+	/// @throws UnsupportedEncodingException if the content encoding is not supported
+	/// @throws IOException                  if an I/O error occurs
 	public static SipServletRequest copyContentAndHeaders(SipServletMessage copyFrom, SipServletRequest copyTo)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
@@ -1967,23 +1750,25 @@ public abstract class Callflow implements Serializable {
 		return copyTo;
 	}
 
-	/**
-	 * Copies both headers and content body from one SIP response to another.
-	 * Copies the non-system headers only; unlike
-	 * {@link #copyHeaders(SipServletResponse, SipServletResponse)} it does not
-	 * carry Contact across on a REGISTER, 3xx, 485, or 200/OPTIONS response.
-	 *
-	 * @param copyFrom the source SIP response
-	 * @param copyTo   the destination SIP response
-	 * @return the destination response with copied headers and content
-	 * @throws ServletParseException        if parsing fails
-	 * @throws UnsupportedEncodingException if the content encoding is not supported
-	 * @throws IOException                  if an I/O error occurs
-	 */
+	/// Copies the non-system headers and the content body from one SIP response to
+	/// another, and carries **Contact** across in the cases where the spec does not
+	/// treat it as a system header — see
+	/// [#copyHeaders(SipServletResponse,SipServletResponse)], which does that work.
+	///
+	/// Relaying Contact matters upstream: it is the whole payload of a 3xx, it names
+	/// the alternatives in a 485, and it carries the registrar's bindings on a
+	/// REGISTER or the reachable target on a 200/OPTIONS.
+	///
+	/// @param copyFrom the source SIP response
+	/// @param copyTo   the destination SIP response
+	/// @return the destination response with copied headers and content
+	/// @throws ServletParseException        if parsing fails
+	/// @throws UnsupportedEncodingException if the content encoding is not supported
+	/// @throws IOException                  if an I/O error occurs
 	public static SipServletResponse copyContentAndHeaders(SipServletResponse copyFrom, SipServletResponse copyTo)
 			throws ServletParseException, UnsupportedEncodingException, IOException {
 		if (copyFrom != null && copyTo != null) {
-			copyHeadersMsg(copyFrom, copyTo);
+			copyHeaders(copyFrom, copyTo);
 			copyContent(copyFrom, copyTo);
 		}
 		return copyTo;
@@ -2056,9 +1841,18 @@ public abstract class Callflow implements Serializable {
 		}
 	}
 
+	/// Removes the link recorded on this message's own session, so
+	/// [#getLinkedSession(SipSession)] on that session no longer finds a peer.
+	///
+	/// Because [#linkSession(SipServletMessage,SipServletMessage)] writes one way
+	/// only, this clears one direction. Severing a B2BUA's two legs takes a call
+	/// on each side, or [#unlinkSessions(SipSession,SipSession)].
+	///
+	/// @param msg the message whose session should forget its peer
 	public static void unlinkSession(SipServletMessage msg) {
-		if (msg != null && msg.getSession().isValid()) {
-			msg.getSession().removeAttribute(LINKED_SESSION);
+		SipSession session = (msg != null) ? msg.getSession() : null;
+		if (session != null && session.isValid()) {
+			session.removeAttribute(LINKED_SESSION);
 		}
 	}
 
@@ -2094,21 +1888,6 @@ public abstract class Callflow implements Serializable {
 	 */
 	public void processContinue() throws ServletException, IOException {
 		// Must be overloaded
-	}
-
-	/**
-	 * Schedules a request to be processed after a specified delay. The request is
-	 * stored in the application session and a timer is created to trigger
-	 * processing after the delay.
-	 *
-	 * @param request               the SIP request to process later
-	 * @param delay_in_milliseconds the delay in milliseconds before processing
-	 */
-	public void processLater(SipServletRequest request, long delay_in_milliseconds) {
-		if (request != null && request.getApplicationSession().isValid()) {
-			request.getApplicationSession().setAttribute(DELAYED_REQUEST, request);
-			timerService.createTimer(request.getApplicationSession(), delay_in_milliseconds, false, this);
-		}
 	}
 
 	/**
@@ -2250,33 +2029,6 @@ public abstract class Callflow implements Serializable {
 				}
 			}
 
-		}
-
-		return to;
-	}
-
-	/**
-	 * Copies both Address and URI parameters that do not already exist. Will copy
-	 * the user-part of the URI if it doesn't exist.
-	 * 
-	 * @param from
-	 * @param to
-	 * @return
-	 * @throws ServletParseException
-	 */
-	public static Address copyParameters(Address from, Address to) throws ServletParseException {
-
-		if (from != null && to != null) {
-
-			copyParameters(from.getURI(), to.getURI());
-
-			String value;
-			for (String name : from.getParameterNameSet()) {
-				value = from.getParameter(name);
-				if (value != null && to.getParameter(name) == null && !"tag".equals(name)) {
-					to.setParameter(name, value);
-				}
-			}
 		}
 
 		return to;

@@ -53,7 +53,7 @@
 /// individual queue instances. [QueueSettingsManager][org.vorpal.blade.services.queue.config.QueueSettingsManager] handles initialization and
 /// creation of actual FIFO queue objects.
 ///
-/// @see [org.vorpal.blade.framework.v2.b2bua.B2buaServlet]
-/// @see [org.vorpal.blade.framework.v2.callflow.Callflow]
+/// @see [org.vorpal.blade.framework.v3.B2buaServlet]
+/// @see [org.vorpal.blade.framework.v3.Callflow]
 /// @see [javax.servlet.sip.SipServlet]
 package org.vorpal.blade.services.queue;

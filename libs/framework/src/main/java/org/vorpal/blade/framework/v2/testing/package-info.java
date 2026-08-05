@@ -1,55 +1,63 @@
-/// This package provides comprehensive mock implementations of SIP servlet interfaces for unit testing
-/// SIP applications without requiring a full SIP container environment. The mock classes enable
-/// isolated testing of SIP application logic by providing functional implementations of core
-/// SIP servlet APIs with in-memory storage and stub behaviors for container-specific operations.
+/// Mock implementations of the SIP servlet interfaces, so callflows can be unit
+/// tested without a SIP container.
 ///
-/// ## Key Classes
+/// A `SipServlet` subclass cannot be instantiated outside OCCAS, but a
+/// [org.vorpal.blade.framework.Callflow] is an ordinary object. Install the
+/// doubles below in place of the container services and a callflow will build
+/// requests, link sessions, and run its callbacks in a plain JUnit test.
 ///
-/// - [DummyApplicationSession] - Mock implementation of `SipApplicationSession` with functional attribute storage, session management, and configurable expiration handling
-/// - [DummyMessage] - Base mock implementation of `SipServletMessage` providing comprehensive message functionality including header management, attribute storage, and content handling
-/// - [DummyRequest] - Mock implementation of `SipServletRequest` for testing SIP request handling with support for response creation, URI management, and servlet request operations
-/// - [DummyResponse] - Mock implementation of `SipServletResponse` for testing SIP response handling with status code management, reason phrase mapping, and response-specific operations
-/// - [DummySipSession] - Mock implementation of `SipSession` with functional attribute storage and basic request creation capabilities
+/// **Start with the testing README** (`README.md` beside this file) — it has the
+/// required setup and a worked example. The short version:
 ///
-/// ## Core Features
+/// ```java
+/// Callflow.setSipFactory(new DummySipFactory());
+/// Callflow.setSipLogger(new CapturingLogger());
+/// Callflow.setSipUtil(new DummySipSessionsUtil());
+/// ```
 ///
-/// ### Functional Implementations
-/// - **Attribute Management** - All mock classes provide fully functional `get`/`set`/`remove`/`clear` attribute operations for testing state management
-/// - **Header Operations** - Complete header management including standard, address, and parameterable headers with proper storage and retrieval
-/// - **Session Relationships** - Proper associations between application sessions, SIP sessions, and messages maintain realistic object hierarchies
-/// - **Message Creation** - [DummyRequest] creates [DummyResponse] instances with appropriate status codes and [DummySipSession] creates [DummyRequest] instances for various SIP methods
+/// All three are required. Omitting [DummySipSessionsUtil] is the one that
+/// misleads: `sendRequest` mints a Vorpal-ID on an initial INVITE, the missing
+/// util throws, and `sendRequest`'s own error handling converts that into a
+/// synthetic `500` delivered to your callback — so the test looks like a
+/// declined call rather than a setup mistake.
 ///
-/// ### Testing Support
-/// - **Multiple Constructors** - Flexible construction options using strings, URIs, or Address objects to accommodate different testing scenarios  
-/// - **No-op Operations** - Container-dependent methods like `send()`, proxy operations, and timer management are implemented as safe no-ops
-/// - **Sensible Defaults** - Stub methods return appropriate default values (`null`, `false`, `0`) rather than throwing exceptions
-/// - **Status Code Mapping** - [DummyResponse.ReasonPhrase] utility provides standard SIP reason phrases for all valid status code ranges
+/// ## The doubles
 ///
-/// ## Implementation Architecture
+/// - [DummySipFactory] — builds requests, URIs and addresses. Refuses ACK and
+///   CANCEL with the same `IllegalArgumentException` OCCAS throws, since each
+///   must be derived from the message it answers.
+/// - [DummySipSessionsUtil] — application-session lookups, backed by whatever
+///   has been registered. Unregistered is not an error: an id-uniqueness check
+///   simply comes back empty.
+/// - [DummyApplicationSession] — attribute storage, a registry of its
+///   [DummySipSession]s, and index keys.
+/// - [DummySipSession] — attributes, session state including `TERMINATED`,
+///   `createRequest`, and active-INVITE tracking for `createCancel`.
+/// - [DummyMessage] — the shared base class: headers, address headers,
+///   parameterable headers, content, character encoding, network defaults.
+/// - [DummyRequest] — `createResponse`, `createCancel`, routing directive,
+///   Max-Forwards, and a settable `isInitial` that defaults to true.
+/// - [DummyResponse] — extends [DummyMessage]. Status and reason phrase,
+///   `createAck`, `createPrack`, and a settable reliable-provisional flag. It
+///   seeds its headers from the request it answers, then owns them: writing a
+///   header on a response does not disturb the request.
+/// - [DummySipURI] — parses and renders `scheme:user:password@host:port;params?headers`,
+///   including flag parameters, which must not gain an `=` on the way out.
+/// - [DummyAddress] — parses `"Alice" <sip:alice@example.com;transport=tcp>;tag=abc`,
+///   keeping header parameters distinct from URI parameters. A `tag` must never
+///   reach a request URI.
 ///
-/// The mock implementations use simple in-memory data structures for all storage operations:
-/// - `HashMap` instances for attribute and header storage
-/// - Direct field storage for message properties and session state
-/// - Delegation patterns where [DummyResponse] methods delegate to associated request objects for consistency
+/// ## What they do not do
 ///
-/// Container services that require external dependencies (network operations, container lifecycle,
-/// proxy functionality) are implemented as no-ops to ensure tests remain isolated and executable
-/// without a SIP container runtime.
+/// `send()` is a no-op everywhere, so nothing leaves the test and no response
+/// arrives by itself — deliver one with `Callflow.pullCallback(response)` and
+/// invoke the callback. Timers do not fire. There is no container dispatch, so
+/// call `process(request)` yourself.
 ///
-/// ## Usage Patterns
+/// These are test doubles, not a SIP stack: they are as correct as the tests
+/// using them require. Several methods became real implementations only because
+/// a test needed them to be, and that is the right way to extend them.
 ///
-/// These mock classes support direct instantiation through provided constructors, allowing test
-/// code to create realistic SIP message flows and session hierarchies. The functional attribute
-/// and header storage enables verification of application state changes, while the stub implementations
-/// prevent tests from failing due to missing container services.
-///
-/// Tests can construct complete request/response pairs, verify header manipulations, and
-/// validate session attribute management without requiring actual SIP network infrastructure
-/// or container deployment.
-///
-/// @see javax.servlet.sip.SipApplicationSession
-/// @see javax.servlet.sip.SipServletMessage
-/// @see javax.servlet.sip.SipServletRequest
-/// @see javax.servlet.sip.SipServletResponse
-/// @see javax.servlet.sip.SipSession
+/// @see org.vorpal.blade.framework.Callflow
+/// @see org.vorpal.blade.framework.v2.logging.CapturingLogger
 package org.vorpal.blade.framework.v2.testing;

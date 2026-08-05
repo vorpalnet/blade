@@ -57,7 +57,6 @@ import org.vorpal.blade.framework.v2.config.AttributesKey;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.keepalive.KeepAlive;
-import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
@@ -1401,12 +1400,10 @@ public abstract class AsyncSipServlet extends SipServlet
 	///
 	/// @param timer the expired servlet timer containing the callback in its info
 	/// object
-	@SuppressWarnings("unchecked")
 	@Override
 	final public void timeout(ServletTimer timer) {
 		try {
-			Callback<ServletTimer> callback;
-			callback = (Callback<ServletTimer>) timer.getInfo();
+			Callback<ServletTimer> callback = Callflow.pullCallback(timer);
 
 			if (callback != null) {
 				// callback.accept(timer);

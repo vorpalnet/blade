@@ -31,6 +31,13 @@ import org.vorpal.blade.framework.v2.config.Condition;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+/// @deprecated The FSMAR 2 configuration model. Superseded by
+///             [org.vorpal.blade.framework.v3.fsmar.Transition], the model the shipping
+///             App Router (`libs/fsmar`) and both editors read. An existing FSMAR 2
+///             configuration converts with
+///             [org.vorpal.blade.framework.v3.fsmar.Fsmar2Converter]. Nothing in the
+///             standard build uses this package; the only reader is `retired/fsmar2`.
+@Deprecated
 @JsonPropertyOrder({ "id", "condition", "action", "next" })
 public class Transition implements Serializable {
 

@@ -24,6 +24,7 @@ import javax.ws.rs.core.UriInfo;
 
 import org.vorpal.blade.framework.v2.AsyncSipServlet;
 import org.vorpal.blade.framework.Callflow;
+import org.vorpal.blade.framework.Callflow.GlareState;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Color;
@@ -51,7 +52,6 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 	// Session attribute keys
 	private static final String TXFER_REQUEST = "TXFER_REQUEST";
 	private static final String INITIAL_REFER_ATTR = "INITIAL_REFER";
-	private static final String EXPECT_ACK_ATTR = "EXPECT_ACK";
 	private static final String SIP_ADDRESS_ATTR = "sipAddress";
 
 	// SIP header names
@@ -296,8 +296,17 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 								+ Logger.serializeObjectWithoutCRLF(transferRequest));
 					}
 
-					// handle glare
-					if (transfereeSession.getAttribute(EXPECT_ACK_ATTR) != null) {
+					// Handle glare. This is the REST face of the rule
+					// AsyncSipServlet.doRequest applies to inbound SIP: a session in
+					// PROTECT has a transaction outstanding, and a second request
+					// against it glares. A REFER puts the session in PROTECT until
+					// its 200/NOTIFY, which is exactly the fire-and-forget case —
+					// a caller issuing transfers back to back gets 491 Request
+					// Pending instead of two overlapping transfers on one leg.
+					//
+					// getGlareState defaults to ALLOW, so a leg that has never sent
+					// anything is never rejected here.
+					if (Callflow.getGlareState(transfereeSession) == GlareState.PROTECT) {
 						TransferResponse transferResponse = new TransferResponse();
 						transferResponse.status = 491;
 						transferResponse.description = DESC_REQUEST_PENDING;

@@ -34,6 +34,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
+/// @deprecated The FSMAR 2 configuration model. Superseded by
+///             [org.vorpal.blade.framework.v3.fsmar.AppRouterConfigurationSample], the model the shipping
+///             App Router (`libs/fsmar`) and both editors read. An existing FSMAR 2
+///             configuration converts with
+///             [org.vorpal.blade.framework.v3.fsmar.Fsmar2Converter]. Nothing in the
+///             standard build uses this package; the only reader is `retired/fsmar2`.
+@Deprecated
 //public class Configuration extends HashMap<String, State> implements Serializable {
 public class AppRouterConfigurationSample extends AppRouterConfiguration implements Serializable {
 

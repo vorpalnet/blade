@@ -33,6 +33,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.vorpal.blade.framework.v2.config.SchemaTitle;
 
+/// @deprecated The FSMAR 2 configuration model. Superseded by
+///             [org.vorpal.blade.framework.v3.fsmar.AppRouterConfiguration], the model the shipping
+///             App Router (`libs/fsmar`) and both editors read. An existing FSMAR 2
+///             configuration converts with
+///             [org.vorpal.blade.framework.v3.fsmar.Fsmar2Converter]. Nothing in the
+///             standard build uses this package; the only reader is `retired/fsmar2`.
+@Deprecated
 @SchemaTitle(value = "FSMAR (2)")
 public class AppRouterConfiguration extends Configuration implements Serializable {
 

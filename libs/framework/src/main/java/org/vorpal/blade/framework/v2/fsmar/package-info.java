@@ -1,3 +1,11 @@
+/// **Superseded — this is the FSMAR 2 configuration model, and every class in it is
+/// deprecated.** The shipping App Router (`libs/fsmar`, packaged as `blade-fsmar.jar`)
+/// reads the v3 model in `org.vorpal.blade.framework.v3.fsmar`, which is also what the
+/// Flow and Configurator editors edit. An existing FSMAR 2 configuration converts with
+/// [org.vorpal.blade.framework.v3.fsmar.Fsmar2Converter]. Nothing in the standard build
+/// reads this package — its only consumer is `retired/fsmar2`, which is not built.
+/// It is kept for reference and for converting old configurations.
+///
 /// This package implements a SIP Application Router (SAR) based on JSR-289's
 /// `javax.servlet.sip.ar.SipApplicationRouter` interface. FSMAR2 uses a finite state machine
 /// model to determine which SIP servlet application should handle each incoming request,

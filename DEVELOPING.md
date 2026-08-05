@@ -18,6 +18,7 @@ at the end — it is the least interesting part and it is mostly cross-reference
 
 ## Contents
 
+- [Before you start: v2 or v3?](#before-you-start-v2-or-v3)
 1. [The problem](#1-the-problem)
 2. [sendRequest](#2-sendrequest)
 3. [sendResponse](#3-sendresponse)
@@ -25,7 +26,49 @@ at the end — it is the least interesting part and it is mostly cross-reference
 5. [What survives, and how](#5-what-survives-and-how)
 6. [expectRequest: messages that may never come](#6-expectrequest-messages-that-may-never-come)
 7. [Packaging a service](#7-packaging-a-service)
+- [When something goes wrong](#when-something-goes-wrong)
 8. [House rules](#8-house-rules)
+
+---
+
+## Before you start: v2 or v3?
+
+**Writing something new? Use v3.** It is the actively developed line. v2 is frozen
+and maintained for existing applications, and a v2 application migrates with a
+one-line base-class swap.
+
+Both extend a small version-neutral baseline package,
+`org.vorpal.blade.framework`, which is where the shared machinery actually lives.
+That is why `v2.Callback` and `v3.Callback` interoperate — they are two *faces* of
+one baseline type, so an application can keep its imports consistently `v2.*` or
+`v3.*` without the two generations fighting. Import the face that matches your base
+class and stay there.
+
+The one thing that will bite you: **sixteen class names exist in both packages**,
+including `Callflow`, `Callback`, `AsyncSipServlet`, `B2buaServlet`, `Analytics`,
+`Selector`, `Translation` and `Sdp`. Autocomplete offers both, and the wrong import
+compiles cleanly right up until it doesn't. What a new application wants:
+
+| You want | Import |
+|---|---|
+| a callflow to extend | `org.vorpal.blade.framework.v3.Callflow` |
+| a B2BUA servlet | `org.vorpal.blade.framework.v3.B2buaServlet` |
+| a bare SIP servlet | `org.vorpal.blade.framework.v3.AsyncSipServlet` |
+| a lambda continuation | `org.vorpal.blade.framework.v3.Callback` |
+| **configuration** | `org.vorpal.blade.framework.v2.config.SettingsManager` |
+
+That last row is not a typo, and it is the exception worth knowing. `v2.config.SettingsManager`
+is imported by 124 files in this repo; the v3 one by a single service. The v3 version is a
+different, more type-safe design that requires a subclass binding the config type
+(`class FooManager extends v3.configuration.SettingsManager<FooConfig>`), and it is not yet
+the default. Use the v2 one unless you have a reason.
+
+The other exception: **the container-proxy API exists only in v2**
+(`v2.callflow.Callflow.proxyRequest`). v3 answers the same need with passthru
+drop-out on `sendRequest`, which is configuration-driven — but if you need a real
+`javax.servlet.sip.Proxy`, v2 is where it lives.
+
+Everything below is the same in both generations.
 
 ---
 
@@ -395,8 +438,43 @@ See [DEPLOYMENT.md](DEPLOYMENT.md).
 `Callflow`; pass the message first — `sipLogger.info(request, "…")` — and it
 stamps session hashes so you can follow one call through a busy file. It draws
 the sequence-diagram arrows you see in `<domain>/servers/<server>/logs/vorpal/`.
-The [Trace viewer](admin/callflow/README.md) records a whole call across every
-application in a chain and pins each message to the source line that sent it.
+
+---
+
+## When something goes wrong
+
+Two tools, and most people reach for the second one far too late.
+
+**Locally, run the callflow in a test.** If the question is "what did my code
+build," you do not need a deployment. Install the
+[test doubles](libs/framework/src/main/java/org/vorpal/blade/framework/v2/testing/README.md),
+call `process(request)`, hand it a response, and assert. Seconds, not a deploy cycle.
+
+**On a server, record the call.** The [Trace viewer](admin/callflow/README.md) is
+the fastest way to answer "which app in the chain misbehaved, and on which line."
+It records every message every application sent and received, stitches them into
+one ladder diagram using the `X-Vorpal-Session` id, and pins each arrow to the
+source line that emitted it — read live from the deployed code, so it cannot drift
+from what is running.
+
+It is off until armed, and arming is per-rule rather than global, so you record
+your own test call and nothing else:
+
+1. Open **Trace** on the Admin Portal.
+2. Arm a rule that matches your call — a [`Selector`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/config/README.md)
+   on any header, so "calls from my desk phone" is a match on `From`. Arming fans
+   out to every application in the domain, so the rule catches the call wherever
+   it lands.
+3. Place the call.
+4. Read the recording, then disarm.
+
+A rule carries a capture cap (`maxCaptures`, default 5) precisely so a match on a
+busy header cannot quietly record thousands of calls if you forget step 4. Nothing
+is persisted — a trace session is arm, reproduce, disarm — and a disarmed call
+costs one boolean read per event, which is why this can ship enabled in production.
+
+From code, `Callflow.enableTrace(appSession)` arms one call directly, and
+`Callflow.getTrace(appSession)` returns that call's steps in-process.
 
 ## 8. House rules
 
@@ -409,13 +487,18 @@ application in a chain and pins each message to the source line that sent it.
 - **Prefer `switch` over chained `String.equals()`.**
 - **Markdown Javadoc** (`///`), not legacy HTML `/** */`.
 - **Test with JUnit.** A `SipServlet` subclass cannot be instantiated outside the
-  container, so keep testable logic in plain classes.
+  container — but a callflow can. Install the
+  [test doubles](libs/framework/src/main/java/org/vorpal/blade/framework/v2/testing/README.md)
+  and you can run a whole callflow, deliver it a response and assert on what it
+  built, in milliseconds. Keep decisions in callflows and plain classes, keep the
+  servlet thin, and nearly everything is testable on your laptop.
 
 ## Where to go next
 
 - [`BlindTransfer`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/transfer/BlindTransfer.java) — the deep end, with sequence diagrams
 - [`InitialInvite`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/b2bua/InitialInvite.java) — the B2BUA callflow in full
 - [test/test-b2bua](test/test-b2bua/README.md) — the template most people copy
+- [testing without a container](libs/framework/src/main/java/org/vorpal/blade/framework/v2/testing/README.md) — run a callflow in a JUnit test
 - [b2bua guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/b2bua/README.md) · [callflow guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/callflow/README.md) · [config guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/config/README.md)
 - [v3 API](libs/framework/src/main/java/org/vorpal/blade/framework/v3/README.md) — tracing, passthru, config-first routing
 - [DEPLOYMENT.md](DEPLOYMENT.md) · [BLADE](README.md)
