@@ -15,10 +15,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.vorpal.blade.framework.v2.logging.CapturingLogger;
-import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
-import org.vorpal.blade.framework.v2.testing.DummySipFactory;
-import org.vorpal.blade.framework.v2.testing.DummySipSession;
+import org.vorpal.blade.framework.sip.DetachedApplicationSession;
+import org.vorpal.blade.framework.sip.DetachedRequest;
+import org.vorpal.blade.framework.sip.DetachedSipFactory;
+import org.vorpal.blade.framework.sip.DetachedSipSession;
 
 /// Pins the contract of [Callflow#createResponse(javax.servlet.sip.SipServletRequest,SipServletResponse)]:
 /// it answers the upstream request, and it never returns null. It used to return
@@ -30,7 +30,7 @@ class CreateResponseSmokeTest {
 
 	@BeforeAll
 	static void installContainerStandIns() {
-		Callflow.setSipFactory(new DummySipFactory());
+		Callflow.setSipFactory(new DetachedSipFactory());
 		Callflow.setSipLogger(new CapturingLogger());
 	}
 
@@ -40,9 +40,9 @@ class CreateResponseSmokeTest {
 		Callflow.setSipLogger(null);
 	}
 
-	private static DummyRequest inbound(DummyApplicationSession appSession, String method) throws Exception {
-		DummyRequest request = new DummyRequest(appSession, method);
-		request.setSession(new DummySipSession(appSession));
+	private static DetachedRequest inbound(DetachedApplicationSession appSession, String method) throws Exception {
+		DetachedRequest request = new DetachedRequest(appSession, method);
+		request.setSession(new DetachedSipSession(appSession));
 		return request;
 	}
 
@@ -52,9 +52,9 @@ class CreateResponseSmokeTest {
 
 		@Test
 		void copiesStatusAndReasonPhrase() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
-			DummyRequest aliceRequest = inbound(appSession, "INVITE");
-			DummyRequest bobRequest = inbound(appSession, "INVITE");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+			DetachedRequest aliceRequest = inbound(appSession, "INVITE");
+			DetachedRequest bobRequest = inbound(appSession, "INVITE");
 			SipServletResponse bobResponse = bobRequest.createResponse(486, "Busy Here");
 
 			SipServletResponse aliceResponse = Callflow.createResponse(aliceRequest, bobResponse);
@@ -66,9 +66,9 @@ class CreateResponseSmokeTest {
 
 		@Test
 		void copiesNonSystemHeaders() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
-			DummyRequest aliceRequest = inbound(appSession, "INVITE");
-			DummyRequest bobRequest = inbound(appSession, "INVITE");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+			DetachedRequest aliceRequest = inbound(appSession, "INVITE");
+			DetachedRequest bobRequest = inbound(appSession, "INVITE");
 			SipServletResponse bobResponse = bobRequest.createResponse(200, "OK");
 			bobResponse.setHeader("X-Custom", "carried-across");
 
@@ -84,7 +84,7 @@ class CreateResponseSmokeTest {
 
 		@Test
 		void nullRequestIsRejected() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
 			SipServletResponse bobResponse = inbound(appSession, "INVITE").createResponse(200);
 
 			ServletParseException ex = assertThrows(ServletParseException.class,
@@ -94,8 +94,8 @@ class CreateResponseSmokeTest {
 
 		@Test
 		void nullResponseIsRejected() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
-			DummyRequest aliceRequest = inbound(appSession, "INVITE");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+			DetachedRequest aliceRequest = inbound(appSession, "INVITE");
 
 			ServletParseException ex = assertThrows(ServletParseException.class,
 					() -> Callflow.createResponse(aliceRequest, null));
@@ -112,12 +112,12 @@ class CreateResponseSmokeTest {
 		/// null that fails somewhere else.
 		@Test
 		void terminatedSessionIsReported() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
-			DummyRequest aliceRequest = inbound(appSession, "INVITE");
-			DummyRequest bobRequest = inbound(appSession, "INVITE");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+			DetachedRequest aliceRequest = inbound(appSession, "INVITE");
+			DetachedRequest bobRequest = inbound(appSession, "INVITE");
 			SipServletResponse bobResponse = bobRequest.createResponse(200, "OK");
 
-			((DummySipSession) aliceRequest.getSession()).setState(SipSession.State.TERMINATED);
+			((DetachedSipSession) aliceRequest.getSession()).setState(SipSession.State.TERMINATED);
 
 			ServletParseException ex = assertThrows(ServletParseException.class,
 					() -> Callflow.createResponse(aliceRequest, bobResponse));
@@ -127,9 +127,9 @@ class CreateResponseSmokeTest {
 
 		@Test
 		void invalidatedSessionIsReported() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
-			DummyRequest aliceRequest = inbound(appSession, "INVITE");
-			DummyRequest bobRequest = inbound(appSession, "INVITE");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+			DetachedRequest aliceRequest = inbound(appSession, "INVITE");
+			DetachedRequest bobRequest = inbound(appSession, "INVITE");
 			SipServletResponse bobResponse = bobRequest.createResponse(200, "OK");
 
 			aliceRequest.getSession().invalidate();
@@ -141,9 +141,9 @@ class CreateResponseSmokeTest {
 		/// what could not be delivered.
 		@Test
 		void messageNamesTheStatusItCouldNotRelay() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
-			DummyRequest aliceRequest = inbound(appSession, "INVITE");
-			DummyRequest bobRequest = inbound(appSession, "INVITE");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+			DetachedRequest aliceRequest = inbound(appSession, "INVITE");
+			DetachedRequest bobRequest = inbound(appSession, "INVITE");
 			SipServletResponse bobResponse = bobRequest.createResponse(200, "OK");
 
 			aliceRequest.getSession().invalidate();

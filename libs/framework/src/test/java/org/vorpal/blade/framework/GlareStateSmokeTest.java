@@ -13,11 +13,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.vorpal.blade.framework.Callflow.GlareState;
 import org.vorpal.blade.framework.v2.logging.CapturingLogger;
-import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
-import org.vorpal.blade.framework.v2.testing.DummySipFactory;
-import org.vorpal.blade.framework.v2.testing.DummySipSession;
-import org.vorpal.blade.framework.v2.testing.DummySipSessionsUtil;
+import org.vorpal.blade.framework.sip.DetachedApplicationSession;
+import org.vorpal.blade.framework.sip.DetachedRequest;
+import org.vorpal.blade.framework.sip.DetachedSipFactory;
+import org.vorpal.blade.framework.sip.DetachedSipSession;
+import org.vorpal.blade.framework.sip.DetachedSipSessionsUtil;
 
 /// Guards the glare contract that both `AsyncSipServlet.doRequest` and the REST
 /// [org.vorpal.blade.framework.v2.transfer.api.TransferAPI] depend on:
@@ -40,16 +40,16 @@ class GlareStateSmokeTest {
 		}
 	}
 
-	private DummyApplicationSession appSession;
-	private DummySipSession session;
+	private DetachedApplicationSession appSession;
+	private DetachedSipSession session;
 
 	@BeforeEach
 	void setUp() throws Exception {
-		Callflow.setSipFactory(new DummySipFactory());
+		Callflow.setSipFactory(new DetachedSipFactory());
 		Callflow.setSipLogger(new CapturingLogger());
-		Callflow.setSipUtil(new DummySipSessionsUtil());
-		appSession = new DummyApplicationSession("glare");
-		session = new DummySipSession(appSession);
+		Callflow.setSipUtil(new DetachedSipSessionsUtil());
+		appSession = new DetachedApplicationSession("glare");
+		session = new DetachedSipSession(appSession);
 	}
 
 	@AfterEach
@@ -60,7 +60,7 @@ class GlareStateSmokeTest {
 	}
 
 	private void send(String method) throws Exception {
-		DummyRequest request = new DummyRequest(appSession, method);
+		DetachedRequest request = new DetachedRequest(appSession, method);
 		request.setSession(session);
 		new Sender().process(request);
 	}

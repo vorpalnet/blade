@@ -5,8 +5,8 @@ import javax.servlet.sip.SipApplicationSession;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
-import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
+import org.vorpal.blade.framework.sip.DetachedApplicationSession;
+import org.vorpal.blade.framework.sip.DetachedRequest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -69,10 +69,10 @@ public final class ExamplesSmokeTest {
 
 		// Starting message: outbound INVITE with SDP, plus a session var that
 		// Trace-Id will pick up via ${userPart}.
-		DummyRequest msg = new DummyRequest("INVITE",
+		DetachedRequest msg = new DetachedRequest("INVITE",
 				"<sip:alice@vorpal.net>;tag=1",
 				"<sip:bob@example.com>");
-		SipApplicationSession appSession = new DummyApplicationSession("dialog");
+		SipApplicationSession appSession = new DetachedApplicationSession("dialog");
 		appSession.setAttribute("userPart", "alice");
 		msg.setApplicationSession(appSession);
 		msg.setContent("v=0\r\no=- 0 0 IN IP4 1.1.1.1\r\ns=-\r\nt=0 0\r\nm=audio 8000 RTP/AVP 0\r\n",
@@ -134,7 +134,7 @@ public final class ExamplesSmokeTest {
 
 		rs.getRules().add(r);
 
-		DummyRequest msg = mixedBodyRequest();
+		DetachedRequest msg = mixedBodyRequest();
 		Example ex = new Example("read", rs, msg);
 		ex.assertion = (req) -> {
 			SipApplicationSession s = req.getApplicationSession();
@@ -187,7 +187,7 @@ public final class ExamplesSmokeTest {
 
 		rs.getRules().add(r);
 
-		DummyRequest msg = mixedBodyRequest();
+		DetachedRequest msg = mixedBodyRequest();
 		Example ex = new Example("update", rs, msg);
 		ex.assertion = (req) -> {
 			check("update.from-anonymous",
@@ -234,7 +234,7 @@ public final class ExamplesSmokeTest {
 
 		rs.getRules().add(r);
 
-		DummyRequest msg = mixedBodyRequest();
+		DetachedRequest msg = mixedBodyRequest();
 		msg.setHeader("P-Asserted-Identity", "<sip:secret@internal>");
 		Example ex = new Example("delete", rs, msg);
 		ex.assertion = (req) -> {
@@ -252,7 +252,7 @@ public final class ExamplesSmokeTest {
 	// Sample message used by READ / UPDATE / DELETE
 	// =========================================================================
 
-	private static DummyRequest mixedBodyRequest() throws Exception {
+	private static DetachedRequest mixedBodyRequest() throws Exception {
 		String boundary = "demo-bnd";
 		String body = "--" + boundary + "\r\n"
 				+ "Content-Type: application/sdp\r\n"
@@ -275,10 +275,10 @@ public final class ExamplesSmokeTest {
 				+ "{\"agent\":{\"id\":\"A-42\",\"name\":\"Carol\"}}\r\n"
 				+ "--" + boundary + "--\r\n";
 
-		DummyRequest msg = new DummyRequest("INVITE",
+		DetachedRequest msg = new DetachedRequest("INVITE",
 				"<sip:alice@vorpal.net>;tag=1",
 				"<sip:bob@example.com>");
-		msg.setApplicationSession(new DummyApplicationSession("dialog"));
+		msg.setApplicationSession(new DetachedApplicationSession("dialog"));
 		msg.setContent(body, "multipart/mixed;boundary=" + boundary);
 		return msg;
 	}
@@ -289,16 +289,16 @@ public final class ExamplesSmokeTest {
 
 	@FunctionalInterface
 	private interface MessageAssertion {
-		void check(DummyRequest msg) throws Exception;
+		void check(DetachedRequest msg) throws Exception;
 	}
 
 	private static final class Example {
 		final String name;
 		final RuleSet ruleSet;
-		final DummyRequest msg;
+		final DetachedRequest msg;
 		MessageAssertion assertion;
 
-		Example(String name, RuleSet ruleSet, DummyRequest msg) {
+		Example(String name, RuleSet ruleSet, DetachedRequest msg) {
 			this.name = name;
 			this.ruleSet = ruleSet;
 			this.msg = msg;

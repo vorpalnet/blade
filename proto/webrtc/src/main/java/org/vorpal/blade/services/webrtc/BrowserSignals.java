@@ -5,7 +5,7 @@ import javax.servlet.sip.SipApplicationSession;
 import com.bea.wcp.sip.WlssAction;
 import com.bea.wcp.sip.WlssSipApplicationSession;
 
-import org.vorpal.blade.framework.v2.callflow.Callback;
+import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 

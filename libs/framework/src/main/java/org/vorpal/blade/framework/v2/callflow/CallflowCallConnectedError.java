@@ -7,7 +7,7 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.UAMode;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
 

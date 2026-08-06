@@ -53,7 +53,7 @@ import javax.servlet.sip.SipSessionsUtil;
 import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
 import org.vorpal.blade.framework.v2.callflow.Callflow;

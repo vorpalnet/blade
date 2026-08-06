@@ -33,7 +33,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.v2.analytics.AnalyticsB2buaSample;
 import org.vorpal.blade.framework.v2.callflow.Callflow;

@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -22,7 +22,7 @@ import javax.servlet.sip.URI;
  * <p>{@code getQ()} and {@code getExpires()} read the {@code q} and
  * {@code expires} parameters, returning -1 when absent.
  */
-public class DummyAddress implements Address {
+public class DetachedAddress implements Address {
 	private static final long serialVersionUID = 1L;
 
 	private String displayName;
@@ -34,7 +34,7 @@ public class DummyAddress implements Address {
 	 *
 	 * @param address the address text, for example {@code "Alice" <sip:alice@example.com>;tag=1}
 	 */
-	public DummyAddress(String address) {
+	public DetachedAddress(String address) {
 		if (address == null) {
 			return;
 		}
@@ -58,7 +58,7 @@ public class DummyAddress implements Address {
 						this.displayName = bare;
 					}
 				}
-				this.uri = new DummySipURI(rest.substring(open + 1, close));
+				this.uri = new DetachedSipURI(rest.substring(open + 1, close));
 				parseParameters(rest.substring(close + 1));
 				return;
 			}
@@ -69,10 +69,10 @@ public class DummyAddress implements Address {
 		// them here keeps the mock forgiving.
 		int semi = rest.indexOf(';');
 		if (semi >= 0) {
-			this.uri = new DummySipURI(rest.substring(0, semi));
+			this.uri = new DetachedSipURI(rest.substring(0, semi));
 			parseParameters(rest.substring(semi));
 		} else {
-			this.uri = new DummySipURI(rest);
+			this.uri = new DetachedSipURI(rest);
 		}
 	}
 
@@ -81,7 +81,7 @@ public class DummyAddress implements Address {
 	 *
 	 * @param uri the address's URI
 	 */
-	public DummyAddress(URI uri) {
+	public DetachedAddress(URI uri) {
 		this.uri = uri;
 	}
 
@@ -190,7 +190,7 @@ public class DummyAddress implements Address {
 	/** {@inheritDoc} */
 	@Override
 	public void setValue(String value) {
-		this.uri = new DummySipURI(value);
+		this.uri = new DetachedSipURI(value);
 	}
 
 	/** Header parameters only; the URI keeps its own. */
@@ -231,14 +231,14 @@ public class DummyAddress implements Address {
 
 	/** {@inheritDoc} */
 	@Override
-	public DummyAddress clone() {
-		return new DummyAddress(this.toString());
+	public DetachedAddress clone() {
+		return new DetachedAddress(this.toString());
 	}
 
 	/** Two addresses are equal when they render identically. */
 	@Override
 	public boolean equals(Object other) {
-		return other instanceof DummyAddress && other.toString().equals(this.toString());
+		return other instanceof DetachedAddress && other.toString().equals(this.toString());
 	}
 
 	/** {@inheritDoc} */

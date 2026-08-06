@@ -1,11 +1,30 @@
-# Testing callflows without a container
+# Detached SIP objects
 
-Javadocs: package `org.vorpal.blade.framework.v2.testing` — browse at `/blade/javadoc/framework/` on the Admin Portal
+Javadocs: package `org.vorpal.blade.framework.sip` — browse at `/blade/javadoc/framework/` on the Admin Portal
+
+Implementations of the `javax.servlet.sip` interfaces that are **detached** — no
+transaction, no dialog, no socket, no container behind them. A `DetachedResponse`
+is a real `SipServletResponse` holding real headers and a real body; it simply was
+not delivered by OCCAS.
+
+The framework uses them in three places, and so can you:
+
+- **Manufacturing a response locally.** When a callflow throws, `sendRequest`
+  hands your callback a `DetachedResponse` carrying `500` and the exception —
+  which is why a callflow never has to handle both an exception path and an
+  error-response path.
+- **Parsing SIP text into objects.** `v3.crud.SipMessageParser` turns a message
+  template into a detached request or response the CRUD rules can be previewed
+  against, and `SipMessageSerializer` renders it back to RFC 3261 text.
+- **Testing without a container.** This is the big one for application authors,
+  and the rest of this page is about it.
+
+## Testing callflows
 
 A `SipServlet` subclass cannot be instantiated outside OCCAS. **A callflow can.**
-It is an ordinary Java object, and the doubles in this package stand in for the
-container underneath it — so you can build an INVITE, run a callflow against it,
-hand it a response, and assert on what came out, in a JUnit test that finishes in
+It is an ordinary Java object, and these classes stand in for the container
+underneath it — so you can build an INVITE, run a callflow against it, hand it a
+response, and assert on what came out, in a JUnit test that finishes in
 milliseconds.
 
 That is the practical split: keep decisions in callflows and plain classes, keep
@@ -20,9 +39,9 @@ fresh JVM-wide copy, so set them up and tear them down:
 ```java
 @BeforeEach
 void installContainerStandIns() {
-    Callflow.setSipFactory(new DummySipFactory());
+    Callflow.setSipFactory(new DetachedSipFactory());
     Callflow.setSipLogger(new CapturingLogger());
-    Callflow.setSipUtil(new DummySipSessionsUtil());
+    Callflow.setSipUtil(new DetachedSipSessionsUtil());
 }
 
 @AfterEach
@@ -53,7 +72,7 @@ looks like Bob declined the call.
 
 The whole cycle: build the inbound INVITE, run the callflow, deliver a response,
 assert. This is
-[`CallflowHarnessSmokeTest`](../../../../../../../../test/java/org/vorpal/blade/framework/v2/testing/CallflowHarnessSmokeTest.java),
+[`CallflowHarnessSmokeTest`](../../../../../../../test/java/org/vorpal/blade/framework/sip/CallflowHarnessSmokeTest.java),
 which runs in the suite — copy it rather than the fragments below.
 
 The callflow under test, a minimal B2BUA leg:
@@ -78,10 +97,10 @@ An inbound request, assembled the way the container would hand you one — note 
 session, which nothing works without:
 
 ```java
-DummyApplicationSession appSession = new DummyApplicationSession("harness");
-DummyRequest alice = new DummyRequest(appSession, "INVITE");
-alice.setSession(new DummySipSession(appSession));
-alice.setRequestURI(new DummySipURI("sip:bob@example.com"));
+DetachedApplicationSession appSession = new DetachedApplicationSession("harness");
+DetachedRequest alice = new DetachedRequest(appSession, "INVITE");
+alice.setSession(new DetachedSipSession(appSession));
+alice.setRequestURI(new DetachedSipURI("sip:bob@example.com"));
 alice.setHeader("X-Trace", "abc123");
 alice.setContent(sdp.getBytes("UTF-8"), "application/sdp");
 ```
@@ -99,7 +118,7 @@ assertNotNull(callflow.outbound.getRawContent());                  // so does th
 
 ## Delivering a response
 
-This is the one step a test does that production code never does. `DummyRequest.send()`
+This is the one step a test does that production code never does. `DetachedRequest.send()`
 goes nowhere, so no response ever comes back on its own. In OCCAS the container
 matches an inbound response to its session and fires the callback `sendRequest`
 stored there; in a test you do that yourself:
@@ -116,7 +135,7 @@ Build the response against the **outbound** request, so it lands on the right
 session, then deliver it:
 
 ```java
-DummyResponse bobAnswer = new DummyResponse((DummyRequest) callflow.outbound, 200, "OK");
+DetachedResponse bobAnswer = new DetachedResponse((DetachedRequest) callflow.outbound, 200, "OK");
 bobAnswer.setHeader("X-Answered-By", "bob");
 deliver(bobAnswer);
 
@@ -134,21 +153,21 @@ sequence.
 
 | Class | Stands in for | Notes |
 |---|---|---|
-| `DummySipFactory` | `SipFactory` | builds requests, URIs and addresses; refuses ACK and CANCEL exactly as OCCAS does |
-| `DummySipSessionsUtil` | `SipSessionsUtil` | real lookups over registered application sessions |
-| `DummyApplicationSession` | `SipApplicationSession` | attribute store, session registry, index keys |
-| `DummySipSession` | `SipSession` | attributes, state, `createRequest`, active-INVITE tracking |
-| `DummyMessage` | `SipServletMessage` | the shared base: headers, content, character encoding |
-| `DummyRequest` | `SipServletRequest` | `createResponse`, `createCancel`, routing directive, `isInitial` |
-| `DummyResponse` | `SipServletResponse` | status and reason, `createAck`, `createPrack`, reliable provisionals |
-| `DummySipURI` | `SipURI` | full parse and render of `scheme:user@host:port;params` |
-| `DummyAddress` | `Address` | parses `"Alice" <sip:…>;tag=abc`, keeping header and URI parameters apart |
+| `DetachedSipFactory` | `SipFactory` | builds requests, URIs and addresses; refuses ACK and CANCEL exactly as OCCAS does |
+| `DetachedSipSessionsUtil` | `SipSessionsUtil` | real lookups over registered application sessions |
+| `DetachedApplicationSession` | `SipApplicationSession` | attribute store, session registry, index keys |
+| `DetachedSipSession` | `SipSession` | attributes, state, `createRequest`, active-INVITE tracking |
+| `DetachedMessage` | `SipServletMessage` | the shared base: headers, content, character encoding |
+| `DetachedRequest` | `SipServletRequest` | `createResponse`, `createCancel`, routing directive, `isInitial` |
+| `DetachedResponse` | `SipServletResponse` | status and reason, `createAck`, `createPrack`, reliable provisionals |
+| `DetachedSipURI` | `SipURI` | full parse and render of `scheme:user@host:port;params` |
+| `DetachedAddress` | `Address` | parses `"Alice" <sip:…>;tag=abc`, keeping header and URI parameters apart |
 
-`DummySipURI` and `DummyAddress` parse and render properly rather than storing a
+`DetachedSipURI` and `DetachedAddress` parse and render properly rather than storing a
 string, which is what makes request-URI work testable — including the
 `copyParameters` merge that carries the inbound user part onto a configured
 destination. See
-[`SipUriAndAddressSmokeTest`](../../../../../../../../test/java/org/vorpal/blade/framework/v2/testing/SipUriAndAddressSmokeTest.java).
+[`SipUriAndAddressSmokeTest`](../../../../../../../test/java/org/vorpal/blade/framework/sip/SipUriAndAddressSmokeTest.java).
 
 ## Limits
 
@@ -158,12 +177,14 @@ destination. See
   a timer needs that branch invoked directly.
 - **No container dispatch.** Call `process(request)` yourself. `chooseCallflow`
   lives on the servlet, which is the part that genuinely cannot run outside OCCAS.
-- **These are test doubles, not a SIP stack.** They are as correct as the tests
-  that use them demand. When one is wrong for your case, fix it — they are
-  ordinary source in this package, and several methods became real precisely
-  because a test needed them to be.
+- **These are detached objects, not a SIP stack.** They are as correct as the code
+  using them demands. When one is wrong for your case, fix it — they are ordinary
+  source in this package, and several methods became real implementations
+  precisely because a test needed them to be. Note that the framework itself ships
+  three of them at runtime, so a fix here is a change to production behaviour, not
+  just to a test helper.
 
 ## Related
 
-- [Framework Developer's Guide](../../../../../../../../../../../DEVELOPING.md) — how callflows work
-- [callflow guide](../callflow/README.md) · [b2bua guide](../b2bua/README.md)
+- [Framework Developer's Guide](../../../../../../../../../../DEVELOPING.md) — how callflows work
+- [callflow guide](../v2/callflow/README.md) · [b2bua guide](../v2/b2bua/README.md)

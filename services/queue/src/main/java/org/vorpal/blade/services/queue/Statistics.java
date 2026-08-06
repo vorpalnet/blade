@@ -4,7 +4,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ThreadLocalRandom;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
 public class Statistics {

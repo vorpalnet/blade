@@ -16,15 +16,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.vorpal.blade.framework.v2.logging.CapturingLogger;
-import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
-import org.vorpal.blade.framework.v2.testing.DummySipFactory;
-import org.vorpal.blade.framework.v2.testing.DummySipSession;
-import org.vorpal.blade.framework.v2.testing.DummySipURI;
+import org.vorpal.blade.framework.sip.DetachedApplicationSession;
+import org.vorpal.blade.framework.sip.DetachedRequest;
+import org.vorpal.blade.framework.sip.DetachedSipFactory;
+import org.vorpal.blade.framework.sip.DetachedSipSession;
+import org.vorpal.blade.framework.sip.DetachedSipURI;
 
 /// Exercises [Callflow#createRequest(javax.servlet.sip.URI,SipServletRequest)]
 /// without a SIP container, using the mock objects in
-/// `org.vorpal.blade.framework.v2.testing`.
+/// `org.vorpal.blade.framework.sip`.
 ///
 /// Covers the two paths the method chooses between — in-dialog on the linked leg
 /// versus a fresh initial request from the factory — and the methods it refuses
@@ -35,7 +35,7 @@ class CreateRequestSmokeTest {
 
 	@BeforeAll
 	static void installContainerStandIns() {
-		org.vorpal.blade.framework.Callflow.setSipFactory(new DummySipFactory());
+		org.vorpal.blade.framework.Callflow.setSipFactory(new DetachedSipFactory());
 		// linkSession consults sipLogger before writing the attribute; CapturingLogger
 		// is the one Logger that survives without the framework's logging stack.
 		org.vorpal.blade.framework.Callflow.setSipLogger(new CapturingLogger());
@@ -49,10 +49,10 @@ class CreateRequestSmokeTest {
 
 	/// Builds an inbound request sitting on its own session, the way a container
 	/// hands one to a callflow.
-	private static DummyRequest inbound(String method) throws Exception {
-		DummyApplicationSession appSession = new DummyApplicationSession("test");
-		DummyRequest request = new DummyRequest(appSession, method);
-		request.setSession(new DummySipSession(appSession));
+	private static DetachedRequest inbound(String method) throws Exception {
+		DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+		DetachedRequest request = new DetachedRequest(appSession, method);
+		request.setSession(new DetachedSipSession(appSession));
 		return request;
 	}
 
@@ -97,7 +97,7 @@ class CreateRequestSmokeTest {
 			try {
 				assertThrows(ServletParseException.class, () -> Callflow.createRequest(inbound("CANCEL")));
 			} finally {
-				org.vorpal.blade.framework.Callflow.setSipFactory(new DummySipFactory());
+				org.vorpal.blade.framework.Callflow.setSipFactory(new DetachedSipFactory());
 			}
 		}
 	}
@@ -111,13 +111,13 @@ class CreateRequestSmokeTest {
 		/// through the factory.
 		@Test
 		void createsOnTheLinkedSession() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
 
-			DummySipSession aliceSession = new DummySipSession(appSession);
-			DummySipSession bobSession = new DummySipSession(appSession);
+			DetachedSipSession aliceSession = new DetachedSipSession(appSession);
+			DetachedSipSession bobSession = new DetachedSipSession(appSession);
 			aliceSession.setAttribute(LINKED_SESSION, bobSession.getId());
 
-			DummyRequest aliceRequest = new DummyRequest(appSession, "INVITE");
+			DetachedRequest aliceRequest = new DetachedRequest(appSession, "INVITE");
 			aliceRequest.setSession(aliceSession);
 			aliceRequest.setHeader("X-Custom", "carried-across");
 
@@ -133,13 +133,13 @@ class CreateRequestSmokeTest {
 		/// points back at alice's. That is the direction the request path writes.
 		@Test
 		void linksBobBackToAlice() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
 
-			DummySipSession aliceSession = new DummySipSession(appSession);
-			DummySipSession bobSession = new DummySipSession(appSession);
+			DetachedSipSession aliceSession = new DetachedSipSession(appSession);
+			DetachedSipSession bobSession = new DetachedSipSession(appSession);
 			aliceSession.setAttribute(LINKED_SESSION, bobSession.getId());
 
-			DummyRequest aliceRequest = new DummyRequest(appSession, "INVITE");
+			DetachedRequest aliceRequest = new DetachedRequest(appSession, "INVITE");
 			aliceRequest.setSession(aliceSession);
 
 			Callflow.createRequest(aliceRequest);
@@ -151,13 +151,13 @@ class CreateRequestSmokeTest {
 		/// not trigger session linking.
 		@Test
 		void carriesMidDialogMethods() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
 
-			DummySipSession aliceSession = new DummySipSession(appSession);
-			DummySipSession bobSession = new DummySipSession(appSession);
+			DetachedSipSession aliceSession = new DetachedSipSession(appSession);
+			DetachedSipSession bobSession = new DetachedSipSession(appSession);
 			aliceSession.setAttribute(LINKED_SESSION, bobSession.getId());
 
-			DummyRequest aliceRequest = new DummyRequest(appSession, "INFO");
+			DetachedRequest aliceRequest = new DetachedRequest(appSession, "INFO");
 			aliceRequest.setSession(aliceSession);
 
 			SipServletRequest bobRequest = Callflow.createRequest(aliceRequest);
@@ -175,7 +175,7 @@ class CreateRequestSmokeTest {
 		/// session rather than from an existing dialog.
 		@Test
 		void createsThroughTheFactory() throws Exception {
-			DummyRequest aliceRequest = inbound("INVITE");
+			DetachedRequest aliceRequest = inbound("INVITE");
 			aliceRequest.setHeader("X-Custom", "carried-across");
 
 			SipServletRequest bobRequest = Callflow.createRequest(aliceRequest);
@@ -192,12 +192,12 @@ class CreateRequestSmokeTest {
 		/// through `copyParameters`, rather than going out userless.
 		@Test
 		void retargetsWhileKeepingTheUserPartAndParameters() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
-			DummyRequest aliceRequest = new DummyRequest(appSession, "INVITE");
-			aliceRequest.setSession(new DummySipSession(appSession));
-			aliceRequest.setRequestURI(new DummySipURI("sip:alice@caller.example.com;transport=tcp"));
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+			DetachedRequest aliceRequest = new DetachedRequest(appSession, "INVITE");
+			aliceRequest.setSession(new DetachedSipSession(appSession));
+			aliceRequest.setRequestURI(new DetachedSipURI("sip:alice@caller.example.com;transport=tcp"));
 
-			SipServletRequest bobRequest = Callflow.createRequest(new DummySipURI("sip:10.0.0.5:5060"),
+			SipServletRequest bobRequest = Callflow.createRequest(new DetachedSipURI("sip:10.0.0.5:5060"),
 					aliceRequest);
 
 			assertEquals("sip:alice@10.0.0.5:5060;transport=tcp", bobRequest.getRequestURI().toString());
@@ -206,10 +206,10 @@ class CreateRequestSmokeTest {
 		/// A null destination reuses the inbound request URI untouched.
 		@Test
 		void aNullDestinationKeepsTheInboundRequestUri() throws Exception {
-			DummyApplicationSession appSession = new DummyApplicationSession("test");
-			DummyRequest aliceRequest = new DummyRequest(appSession, "INVITE");
-			aliceRequest.setSession(new DummySipSession(appSession));
-			aliceRequest.setRequestURI(new DummySipURI("sip:alice@caller.example.com"));
+			DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+			DetachedRequest aliceRequest = new DetachedRequest(appSession, "INVITE");
+			aliceRequest.setSession(new DetachedSipSession(appSession));
+			aliceRequest.setRequestURI(new DetachedSipURI("sip:alice@caller.example.com"));
 
 			SipServletRequest bobRequest = Callflow.createRequest(aliceRequest);
 
@@ -220,7 +220,7 @@ class CreateRequestSmokeTest {
 		/// two sessions first get joined.
 		@Test
 		void linksTheNewLegBackToTheInbound() throws Exception {
-			DummyRequest aliceRequest = inbound("INVITE");
+			DetachedRequest aliceRequest = inbound("INVITE");
 
 			SipServletRequest bobRequest = Callflow.createRequest(aliceRequest);
 

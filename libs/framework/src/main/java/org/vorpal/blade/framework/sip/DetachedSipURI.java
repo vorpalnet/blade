@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -21,7 +21,7 @@ import javax.servlet.sip.SipURI;
  *
  * <p>{@code isSecure()} reports whether the scheme is {@code sips}.
  */
-public class DummySipURI implements SipURI {
+public class DetachedSipURI implements SipURI {
 	private static final long serialVersionUID = 1L;
 
 	private String scheme = "sip";
@@ -37,7 +37,7 @@ public class DummySipURI implements SipURI {
 	 *
 	 * @param uri the URI text, for example {@code sip:alice@example.com;transport=tcp}
 	 */
-	public DummySipURI(String uri) {
+	public DetachedSipURI(String uri) {
 		if (uri == null) {
 			return;
 		}
@@ -178,14 +178,14 @@ public class DummySipURI implements SipURI {
 
 	/** {@inheritDoc} */
 	@Override
-	public DummySipURI clone() {
-		return new DummySipURI(this.toString());
+	public DetachedSipURI clone() {
+		return new DetachedSipURI(this.toString());
 	}
 
 	/** Two URIs are equal when they render identically. */
 	@Override
 	public boolean equals(Object other) {
-		return other instanceof DummySipURI && other.toString().equals(this.toString());
+		return other instanceof DetachedSipURI && other.toString().equals(this.toString());
 	}
 
 	/** {@inheritDoc} */

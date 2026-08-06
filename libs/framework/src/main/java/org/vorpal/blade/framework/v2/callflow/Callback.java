@@ -36,7 +36,14 @@ package org.vorpal.blade.framework.v2.callflow;
  * are inherited from the baseline.
  *
  * @param <T> the type of the input to the callback (typically SipServletRequest or SipServletResponse)
+ * @deprecated Import the baseline
+ *             {@link org.vorpal.blade.framework.Callback} instead. There is one
+ *             callback type; this is a second name for it, and the framework is
+ *             collapsing onto the baseline. Blade no longer imports this face —
+ *             existing applications still may, so it stays, and a serialized
+ *             lambda naming this interface still resolves on failover.
  */
+@Deprecated
 @FunctionalInterface
 public interface Callback<T> extends org.vorpal.blade.framework.Callback<T> {
 }

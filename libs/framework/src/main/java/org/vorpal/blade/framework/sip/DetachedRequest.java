@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -35,10 +35,10 @@ import javax.servlet.sip.ar.SipApplicationRoutingRegion;
  * a SIP container.
  *
  * <p>
- * Creates DummyResponse instances when createResponse() is called. Most proxy
+ * Creates DetachedResponse instances when createResponse() is called. Most proxy
  * and routing methods are stub implementations.
  */
-public class DummyRequest extends DummyMessage implements SipServletRequest, Serializable {
+public class DetachedRequest extends DetachedMessage implements SipServletRequest, Serializable {
 
 	private static final long serialVersionUID = 1L;
 	private URI requestUri;
@@ -50,19 +50,19 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	private SipApplicationRoutingDirective routingDirective;
 
 	/**
-	 * Constructs a DummyRequest with the specified application session and method.
+	 * Constructs a DetachedRequest with the specified application session and method.
 	 *
 	 * @param appSession the application session for this request
 	 * @param method     the SIP method (e.g., "INVITE", "BYE", "REFER")
 	 * @throws ServletParseException if parsing fails
 	 */
-	public DummyRequest(SipApplicationSession appSession, String method) throws ServletParseException {
+	public DetachedRequest(SipApplicationSession appSession, String method) throws ServletParseException {
 		this.setApplicationSession(appSession);
 		this.setMethod(method);
 	}
 
 	/**
-	 * Constructs a DummyRequest with the specified parameters using string
+	 * Constructs a DetachedRequest with the specified parameters using string
 	 * addresses.
 	 *
 	 * @param appSession the application session for this request
@@ -71,7 +71,7 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	 * @param to         the To address as a string
 	 * @throws ServletParseException if address parsing fails
 	 */
-	public DummyRequest(SipApplicationSession appSession, String method, String from, String to)
+	public DetachedRequest(SipApplicationSession appSession, String method, String from, String to)
 			throws ServletParseException {
 		this.setApplicationSession(appSession);
 		this.method = method;
@@ -80,7 +80,7 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	}
 
 	/**
-	 * Constructs a DummyRequest with the specified parameters using string
+	 * Constructs a DetachedRequest with the specified parameters using string
 	 * addresses.
 	 *
 	 * @param method the SIP method
@@ -88,19 +88,19 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	 * @param to     the To address as a string
 	 * @throws ServletParseException if address parsing fails
 	 */
-	public DummyRequest(String method, String from, String to) throws ServletParseException {
-		this(new DummyApplicationSession("test"), method, from, to);
+	public DetachedRequest(String method, String from, String to) throws ServletParseException {
+		this(new DetachedApplicationSession("test"), method, from, to);
 	}
 
 	/**
-	 * Constructs a DummyRequest with the specified parameters using URI objects.
+	 * Constructs a DetachedRequest with the specified parameters using URI objects.
 	 *
 	 * @param appSession the application session for this request
 	 * @param method     the SIP method
 	 * @param from       the From URI
 	 * @param to         the To URI (also used as the request URI)
 	 */
-	public DummyRequest(SipApplicationSession appSession, String method, URI from, URI to) {
+	public DetachedRequest(SipApplicationSession appSession, String method, URI from, URI to) {
 		this.setApplicationSession(appSession);
 		this.method = method;
 		this.headers.put("From", from.toString());
@@ -109,7 +109,7 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	}
 
 	/**
-	 * Constructs a DummyRequest with the specified parameters using Address
+	 * Constructs a DetachedRequest with the specified parameters using Address
 	 * objects.
 	 *
 	 * @param appSession the application session for this request
@@ -117,7 +117,7 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	 * @param from       the From address
 	 * @param to         the To address
 	 */
-	public DummyRequest(SipApplicationSession appSession, String method, Address from, Address to) {
+	public DetachedRequest(SipApplicationSession appSession, String method, Address from, Address to) {
 		this.setApplicationSession(appSession);
 		this.method = method;
 		this.headers.put("From", from.toString());
@@ -125,7 +125,7 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	}
 
 	/**
-	 * Constructs a DummyRequest with the specified method and addresses. The
+	 * Constructs a DetachedRequest with the specified method and addresses. The
 	 * application session should be set separately using
 	 * {@link #setApplicationSession(SipApplicationSession)}.
 	 *
@@ -133,7 +133,7 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	 * @param from   the From address
 	 * @param to     the To address
 	 */
-	public DummyRequest(String method, Address from, Address to) {
+	public DetachedRequest(String method, Address from, Address to) {
 		this.method = method;
 		this.headers.put("From", from.toString());
 		this.headers.put("To", to.toString());
@@ -261,7 +261,7 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 	@Override
 	public SipServletRequest createCancel() {
 		try {
-			DummyRequest cancel = new DummyRequest(this.getApplicationSession(), "CANCEL");
+			DetachedRequest cancel = new DetachedRequest(this.getApplicationSession(), "CANCEL");
 			cancel.setSession(this.getSession());
 			cancel.setRequestURI(this.getRequestURI());
 			cancel.setInitial(false);
@@ -278,12 +278,12 @@ public class DummyRequest extends DummyMessage implements SipServletRequest, Ser
 
 	@Override
 	public SipServletResponse createResponse(int status) {
-		return new DummyResponse(this, status);
+		return new DetachedResponse(this, status);
 	}
 
 	@Override
 	public SipServletResponse createResponse(int status, String reasonPhrase) {
-		return new DummyResponse(this, status, reasonPhrase);
+		return new DetachedResponse(this, status, reasonPhrase);
 	}
 
 	@Override

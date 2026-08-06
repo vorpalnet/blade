@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -32,7 +32,7 @@ import javax.servlet.sip.SipWebSocketContext;
  * Provides response functionality including status codes and reason phrases
  * without requiring a SIP container.
  *
- * <p>Extends {@link DummyMessage}, so headers, attributes and content are its
+ * <p>Extends {@link DetachedMessage}, so headers, attributes and content are its
  * own and behave like any other message — set a header, read it back. The
  * constructor seeds the headers from the request, the way a real response
  * echoes From, To, Call-ID and CSeq, and takes its method and sessions from the
@@ -50,30 +50,30 @@ import javax.servlet.sip.SipWebSocketContext;
  * always reports true. Includes an inner ReasonPhrase class that maps standard
  * SIP status codes to their reason phrases.
  */
-public class DummyResponse extends DummyMessage implements SipServletResponse, Serializable {
+public class DetachedResponse extends DetachedMessage implements SipServletResponse, Serializable {
 	private static final long serialVersionUID = 1L;
 
 	private final SipServletRequest request;
 
 	/**
-	 * Constructs a DummyResponse with the specified status code.
+	 * Constructs a DetachedResponse with the specified status code.
 	 * The reason phrase is automatically determined from the status code.
 	 *
 	 * @param req the request this response is for
 	 * @param status the SIP status code
 	 */
-	public DummyResponse(SipServletRequest req, int status) {
+	public DetachedResponse(SipServletRequest req, int status) {
 		this(req, status, ReasonPhrase.getPhrase(status));
 	}
 
 	/**
-	 * Constructs a DummyResponse with the specified status code and reason phrase.
+	 * Constructs a DetachedResponse with the specified status code and reason phrase.
 	 *
 	 * @param req the request this response is for
 	 * @param status the SIP status code
 	 * @param reason the custom reason phrase
 	 */
-	public DummyResponse(SipServletRequest req, int status, String reason) {
+	public DetachedResponse(SipServletRequest req, int status, String reason) {
 		this.request = req;
 		this.status = status;
 		this.reason = reason;
@@ -148,7 +148,7 @@ public class DummyResponse extends DummyMessage implements SipServletResponse, S
 	@Override
 	public SipServletRequest createAck() {
 		try {
-			DummyRequest ack = new DummyRequest(getApplicationSession(), "ACK");
+			DetachedRequest ack = new DetachedRequest(getApplicationSession(), "ACK");
 			ack.setSession(getSession());
 			return ack;
 		} catch (ServletParseException neverThrownByThisConstructor) {
@@ -164,7 +164,7 @@ public class DummyResponse extends DummyMessage implements SipServletResponse, S
 	@Override
 	public SipServletRequest createPrack() throws Rel100Exception {
 		try {
-			DummyRequest prack = new DummyRequest(getApplicationSession(), "PRACK");
+			DetachedRequest prack = new DetachedRequest(getApplicationSession(), "PRACK");
 			prack.setSession(getSession());
 			return prack;
 		} catch (ServletParseException neverThrownByThisConstructor) {

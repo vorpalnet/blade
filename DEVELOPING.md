@@ -33,28 +33,30 @@ at the end — it is the least interesting part and it is mostly cross-reference
 
 ## Before you start: v2 or v3?
 
-**Writing something new? Use v3.** It is the actively developed line. v2 is frozen
-and maintained for existing applications, and a v2 application migrates with a
-one-line base-class swap.
+**Writing something new? Use the table below and don't think about it again.**
 
-Both extend a small version-neutral baseline package,
-`org.vorpal.blade.framework`, which is where the shared machinery actually lives.
-That is why `v2.Callback` and `v3.Callback` interoperate — they are two *faces* of
-one baseline type, so an application can keep its imports consistently `v2.*` or
-`v3.*` without the two generations fighting. Import the face that matches your base
-class and stay there.
+The longer answer, because you will see two of some things. The framework is
+consolidating onto one version-neutral package, `org.vorpal.blade.framework` — the
+*baseline*. Work that used to live in `v2.*` and `v3.*` is moving there, and the old
+names are being left behind as **faces**: four-line shells that extend the real class
+so existing applications keep compiling. `v2.AsyncSipServlet` is one — its entire body
+is a `serialVersionUID`, because the implementation is already in the baseline.
 
-The one thing that will bite you: **sixteen class names exist in both packages**,
-including `Callflow`, `Callback`, `AsyncSipServlet`, `B2buaServlet`, `Analytics`,
-`Selector`, `Translation` and `Sdp`. Autocomplete offers both, and the wrong import
-compiles cleanly right up until it doesn't. What a new application wants:
+Faces are marked `@Deprecated`, so your IDE will strike through the ones you should
+not be typing. There is only ever one implementation behind them; a `v2.Callback` and
+a baseline `Callback` are the same type, and passing one where the other is expected
+always works.
+
+Where you still have to choose, **sixteen class names exist in both packages** —
+`Callflow`, `Callback`, `AsyncSipServlet`, `B2buaServlet`, `Analytics`, `Selector`,
+`Sdp` and more — and autocomplete will offer you both. What a new application wants:
 
 | You want | Import |
 |---|---|
 | a callflow to extend | `org.vorpal.blade.framework.v3.Callflow` |
 | a B2BUA servlet | `org.vorpal.blade.framework.v3.B2buaServlet` |
-| a bare SIP servlet | `org.vorpal.blade.framework.v3.AsyncSipServlet` |
-| a lambda continuation | `org.vorpal.blade.framework.v3.Callback` |
+| a bare SIP servlet | `org.vorpal.blade.framework.AsyncSipServlet` |
+| a lambda continuation | `org.vorpal.blade.framework.Callback` |
 | **configuration** | `org.vorpal.blade.framework.v2.config.SettingsManager` |
 
 That last row is not a typo, and it is the exception worth knowing. `v2.config.SettingsManager`
@@ -62,6 +64,9 @@ is imported by 124 files in this repo; the v3 one by a single service. The v3 ve
 different, more type-safe design that requires a subclass binding the config type
 (`class FooManager extends v3.configuration.SettingsManager<FooConfig>`), and it is not yet
 the default. Use the v2 one unless you have a reason.
+
+Two rows point at the baseline rather than `v3.*`, which is the direction everything is
+heading: the versioned name is the one that goes away.
 
 The other exception: **the container-proxy API exists only in v2**
 (`v2.callflow.Callflow.proxyRequest`). v3 answers the same need with passthru
@@ -447,7 +452,7 @@ Two tools, and most people reach for the second one far too late.
 
 **Locally, run the callflow in a test.** If the question is "what did my code
 build," you do not need a deployment. Install the
-[test doubles](libs/framework/src/main/java/org/vorpal/blade/framework/v2/testing/README.md),
+[detached SIP objects](libs/framework/src/main/java/org/vorpal/blade/framework/sip/README.md),
 call `process(request)`, hand it a response, and assert. Seconds, not a deploy cycle.
 
 **On a server, record the call.** The [Trace viewer](admin/callflow/README.md) is
@@ -488,7 +493,7 @@ From code, `Callflow.enableTrace(appSession)` arms one call directly, and
 - **Markdown Javadoc** (`///`), not legacy HTML `/** */`.
 - **Test with JUnit.** A `SipServlet` subclass cannot be instantiated outside the
   container — but a callflow can. Install the
-  [test doubles](libs/framework/src/main/java/org/vorpal/blade/framework/v2/testing/README.md)
+  [detached SIP objects](libs/framework/src/main/java/org/vorpal/blade/framework/sip/README.md)
   and you can run a whole callflow, deliver it a response and assert on what it
   built, in milliseconds. Keep decisions in callflows and plain classes, keep the
   servlet thin, and nearly everything is testable on your laptop.
@@ -498,7 +503,7 @@ From code, `Callflow.enableTrace(appSession)` arms one call directly, and
 - [`BlindTransfer`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/transfer/BlindTransfer.java) — the deep end, with sequence diagrams
 - [`InitialInvite`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/b2bua/InitialInvite.java) — the B2BUA callflow in full
 - [test/test-b2bua](test/test-b2bua/README.md) — the template most people copy
-- [testing without a container](libs/framework/src/main/java/org/vorpal/blade/framework/v2/testing/README.md) — run a callflow in a JUnit test
+- [detached SIP objects](libs/framework/src/main/java/org/vorpal/blade/framework/sip/README.md) — run a callflow in a JUnit test
 - [b2bua guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/b2bua/README.md) · [callflow guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/callflow/README.md) · [config guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/config/README.md)
 - [v3 API](libs/framework/src/main/java/org/vorpal/blade/framework/v3/README.md) — tracing, passthru, config-first routing
 - [DEPLOYMENT.md](DEPLOYMENT.md) · [BLADE](README.md)

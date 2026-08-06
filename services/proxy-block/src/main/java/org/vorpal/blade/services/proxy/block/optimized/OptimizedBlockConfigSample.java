@@ -16,7 +16,7 @@ import org.vorpal.blade.framework.v2.config.AttributeSelector;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
+import org.vorpal.blade.framework.sip.DetachedRequest;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
 
@@ -125,7 +125,7 @@ public class OptimizedBlockConfigSample extends OptimizedBlockConfig {
 	 * sipFactory.createURI("sip:+18165551234@att.com"); // works URI to =
 	 * sipFactory.createURI("sip:19135550001@att.com");
 	 * 
-	 * DummyRequest rqst1 = new DummyRequest("INVITE", from, to);
+	 * DetachedRequest rqst1 = new DetachedRequest("INVITE", from, to);
 	 * 
 	 * String forwardTo = forwardTo(config1, rqst1);
 	 * 

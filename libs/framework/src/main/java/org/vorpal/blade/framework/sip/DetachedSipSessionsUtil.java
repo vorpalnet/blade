@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import java.lang.annotation.Annotation;
 import java.util.LinkedHashMap;
@@ -11,7 +11,7 @@ import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipSessionsUtil;
 
 /// A mock [SipSessionsUtil] for unit testing. Install it with
-/// `Callflow.setSipUtil(new DummySipSessionsUtil())`.
+/// `Callflow.setSipUtil(new DetachedSipSessionsUtil())`.
 ///
 /// **A callflow test needs this one.** `Callflow.sendRequest` stamps the Vorpal
 /// tracking headers on every initial INVITE, and minting a Vorpal-ID calls
@@ -25,14 +25,14 @@ import javax.servlet.sip.SipSessionsUtil;
 /// Lookups are real, backed by whatever application sessions have been
 /// [#register]ed. An unregistered session is not an error: the id-uniqueness
 /// check simply comes back empty, which is what a fresh id should do.
-public class DummySipSessionsUtil implements SipSessionsUtil {
+public class DetachedSipSessionsUtil implements SipSessionsUtil {
 
 	private final Map<String, SipApplicationSession> byId = new LinkedHashMap<>();
 	private SipApplicationSession current;
 
 	/// Adds an application session to the registry that the lookup methods
 	/// search, and makes it the one [#getCurrentApplicationSession] returns.
-	public DummySipSessionsUtil register(SipApplicationSession appSession) {
+	public DetachedSipSessionsUtil register(SipApplicationSession appSession) {
 		if (appSession != null) {
 			byId.put(appSession.getId(), appSession);
 			current = appSession;
@@ -42,7 +42,7 @@ public class DummySipSessionsUtil implements SipSessionsUtil {
 
 	/// Sets what [#getCurrentApplicationSession] returns, without changing the
 	/// registry.
-	public DummySipSessionsUtil setCurrentApplicationSession(SipApplicationSession appSession) {
+	public DetachedSipSessionsUtil setCurrentApplicationSession(SipApplicationSession appSession) {
 		current = appSession;
 		return this;
 	}
@@ -56,7 +56,7 @@ public class DummySipSessionsUtil implements SipSessionsUtil {
 	/**
 	 * Returns the registered application session whose index keys contain
 	 * {@code key}. When {@code create} is true and none matches, a new
-	 * {@link DummyApplicationSession} is created, given that index key and
+	 * {@link DetachedApplicationSession} is created, given that index key and
 	 * registered — mirroring the container's create-on-demand behaviour.
 	 */
 	@Override
@@ -67,7 +67,7 @@ public class DummySipSessionsUtil implements SipSessionsUtil {
 			}
 		}
 		if (create) {
-			DummyApplicationSession created = new DummyApplicationSession("test");
+			DetachedApplicationSession created = new DetachedApplicationSession("test");
 			created.addIndexKey(key);
 			register(created);
 			return created;

@@ -22,14 +22,14 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 import javax.ws.rs.core.UriInfo;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.Callflow;
 import org.vorpal.blade.framework.Callflow.GlareState;
 import org.vorpal.blade.framework.v2.callflow.ClientCallflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Color;
 import org.vorpal.blade.framework.v2.logging.Logger;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
+import org.vorpal.blade.framework.sip.DetachedRequest;
 import org.vorpal.blade.framework.v2.transfer.BlindTransfer;
 import org.vorpal.blade.framework.v2.transfer.ReferTransfer;
 import org.vorpal.blade.framework.v2.transfer.Transfer;
@@ -351,7 +351,7 @@ public class TransferAPI extends ClientCallflow implements TransferListener {
 //								+ ", target=" + target + ", transferor=" + transferor);
 
 						// bob (transferee) is doing the 'transfer', to alice
-						DummyRequest refer = new DummyRequest(REFER, transferor, transferee);
+						DetachedRequest refer = new DetachedRequest(REFER, transferor, transferee);
 						refer.setRequestURI(transferee.getURI());
 						refer.setApplicationSession(appSession);
 						refer.setSession(transferorSession);

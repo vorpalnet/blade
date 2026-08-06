@@ -22,7 +22,7 @@ import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.LogParameters.LoggingLevel;
 import org.vorpal.blade.framework.v2.logging.LogParametersDefault;
 import org.vorpal.blade.framework.v2.logging.Logger;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
+import org.vorpal.blade.framework.sip.DetachedRequest;
 
 import com.bea.wcp.sip.engine.server.SipFactoryImpl;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;

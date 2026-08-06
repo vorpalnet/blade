@@ -8,7 +8,7 @@ import javax.servlet.ServletException;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.callflow.Callback;
+import org.vorpal.blade.framework.Callback;
 
 /// A callflow that answers the inbound request with one configurable response —
 /// any status code, with an optional reason phrase, optional headers, and an

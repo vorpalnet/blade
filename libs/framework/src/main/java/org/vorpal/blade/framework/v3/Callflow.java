@@ -20,7 +20,7 @@ import org.vorpal.blade.framework.v2.analytics.Analytics;
 import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
-import org.vorpal.blade.framework.v2.testing.DummyResponse;
+import org.vorpal.blade.framework.sip.DetachedResponse;
 import org.vorpal.blade.framework.v3.configuration.routing.LooseRoutingHelper;
 import org.vorpal.blade.framework.v3.diagnostics.Diagnostics;
 import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
@@ -311,7 +311,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 
 				// It's too maddening to write callflows where you have to worry about both
 				// error responses and exceptions. Let's create a dummy error response.
-				SipServletResponse errorResponse = new DummyResponse(request, RESPONSE_CODE_500,
+				SipServletResponse errorResponse = new DetachedResponse(request, RESPONSE_CODE_500,
 						ex300.getClass().getSimpleName());
 				errorResponse.setContent(ex300.getMessage(), "text/plain");
 

@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -36,7 +36,7 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
  * {@code Callflow.getLinkedSession} to walk between two linked legs. The
  * remaining methods are stubs returning null or default values.
  */
-public class DummySipSession implements SipSession {
+public class DetachedSipSession implements SipSession {
 
 	private static final java.util.concurrent.atomic.AtomicInteger counter = new java.util.concurrent.atomic.AtomicInteger();
 
@@ -54,15 +54,15 @@ public class DummySipSession implements SipSession {
 	private Map<String, Object> attributes = new LinkedHashMap<>();
 
 	/**
-	 * Constructs a DummySipSession associated with the specified application session.
+	 * Constructs a DetachedSipSession associated with the specified application session.
 	 *
 	 * @param appSession the parent application session
 	 */
-	public DummySipSession(SipApplicationSession appSession) {
+	public DetachedSipSession(SipApplicationSession appSession) {
 		this.appSession = appSession;
 		this.id = "dummy-" + counter.incrementAndGet();
-		if (appSession instanceof DummyApplicationSession) {
-			((DummyApplicationSession) appSession).register(this);
+		if (appSession instanceof DetachedApplicationSession) {
+			((DetachedApplicationSession) appSession).register(this);
 		}
 	}
 
@@ -102,7 +102,7 @@ public class DummySipSession implements SipSession {
 	}
 
 	/**
-	 * Creates a DummyRequest for the specified method, attached to this session so
+	 * Creates a DetachedRequest for the specified method, attached to this session so
 	 * {@code request.getSession()} resolves the way a container-created request
 	 * would. Returns null only if construction fails.
 	 *
@@ -117,12 +117,12 @@ public class DummySipSession implements SipSession {
 			throw new IllegalArgumentException("Invalid request method: [" + method + "]");
 		}
 		try {
-			DummyRequest request = new DummyRequest(this.getApplicationSession(), method);
+			DetachedRequest request = new DetachedRequest(this.getApplicationSession(), method);
 			request.setSession(this);
 			return request;
 		} catch (Exception ex) {
 			Callflow.getSipLogger()
-					.severe("DummySipSession.createRequest - " + ex.getClass().getName() + ": " + ex.getMessage());
+					.severe("DetachedSipSession.createRequest - " + ex.getClass().getName() + ": " + ex.getMessage());
 			Callflow.getSipLogger().severe(ex);
 			return null;
 		}

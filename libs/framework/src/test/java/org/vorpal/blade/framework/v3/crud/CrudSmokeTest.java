@@ -12,10 +12,10 @@ import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.Logger;
-import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
-import org.vorpal.blade.framework.v2.testing.DummyResponse;
-import org.vorpal.blade.framework.v2.testing.DummySipSession;
+import org.vorpal.blade.framework.sip.DetachedApplicationSession;
+import org.vorpal.blade.framework.sip.DetachedRequest;
+import org.vorpal.blade.framework.sip.DetachedResponse;
+import org.vorpal.blade.framework.sip.DetachedSipSession;
 import org.vorpal.blade.framework.v3.configuration.Context;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,7 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /// Smoke-test driver for the CRUD service. Exercises:
 ///
 /// - Rule filtering (method / messageType / event)
-/// - Each operation type against a DummyRequest / DummyResponse
+/// - Each operation type against a DetachedRequest / DetachedResponse
 /// - MIME multipart preservation of non-Content-Type headers
 /// - Polymorphic JSON round-trip of the unified `operations` list
 /// - `Rule.resetVariables` clearing read-op variables
@@ -133,7 +133,7 @@ public final class CrudSmokeTest {
 	// --- regex ops ---
 
 	private static void testReadAndCreate() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setHeader("From", "<sip:alice@example.com>;tag=1");
 
 		new ReadOperation("From", "sip:(?<callerUser>[^@]+)@(?<callerHost>[^;>]+)").process(req);
@@ -145,7 +145,7 @@ public final class CrudSmokeTest {
 	}
 
 	private static void testUpdateRegex() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setHeader("From", "<sip:alice@example.com>;tag=1");
 		new UpdateOperation("From",
 				"sip:(?<u>[^@]+)@(?<h>[^;>]+)",
@@ -155,7 +155,7 @@ public final class CrudSmokeTest {
 	}
 
 	private static void testDelete() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setHeader("P-Asserted-Identity", "<sip:secret@internal>");
 		new DeleteOperation("P-Asserted-Identity").process(req);
 		check("delete.gone", req.getHeader("P-Asserted-Identity") == null);
@@ -164,7 +164,7 @@ public final class CrudSmokeTest {
 	// --- json ops ---
 
 	private static void testJsonRead() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setContent("{\"agent\":{\"id\":\"A123\",\"name\":\"Carol\"}}", "application/json");
 
 		JsonPathReadOperation read = new JsonPathReadOperation();
@@ -177,7 +177,7 @@ public final class CrudSmokeTest {
 	}
 
 	private static void testJsonCreate() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setContent("{\"agent\":{\"id\":\"A123\"}}", "application/json");
 
 		JsonPathCreateOperation add = new JsonPathCreateOperation("$.agent", "department", "sales");
@@ -188,7 +188,7 @@ public final class CrudSmokeTest {
 	}
 
 	private static void testJsonDelete() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setContent("{\"agent\":{\"id\":\"A\",\"private\":\"x\"}}", "application/json");
 
 		new JsonPathDeleteOperation("$.agent.private").process(req);
@@ -201,7 +201,7 @@ public final class CrudSmokeTest {
 	// --- xml ops ---
 
 	private static void testXmlRead() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setContent("<recording session-id=\"abc-123\"><meta/></recording>", "application/xml");
 
 		XPathReadOperation read = new XPathReadOperation();
@@ -212,7 +212,7 @@ public final class CrudSmokeTest {
 	}
 
 	private static void testXmlUpdate() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setContent("<msg><greet>hi</greet></msg>", "application/xml");
 
 		new XPathUpdateOperation("//greet", "hello").process(req);
@@ -224,7 +224,7 @@ public final class CrudSmokeTest {
 	// --- sdp ops ---
 
 	private static void testSdpRoundTripPreservesBandwidth() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		String sdp = "v=0\r\n"
 				+ "o=- 0 0 IN IP4 1.1.1.1\r\n"
 				+ "s=-\r\n"
@@ -246,7 +246,7 @@ public final class CrudSmokeTest {
 	}
 
 	private static void testSdpUpdateAddress() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		String sdp = "v=0\r\n"
 				+ "o=- 0 0 IN IP4 1.1.1.1\r\n"
 				+ "s=-\r\n"
@@ -268,7 +268,7 @@ public final class CrudSmokeTest {
 	// --- MIME multipart ---
 
 	private static void testMimePreservesPartHeaders() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		String body = "--bnd\r\n"
 				+ "Content-Type: application/sdp\r\n"
 				+ "Content-Disposition: session;handling=required\r\n"
@@ -302,7 +302,7 @@ public final class CrudSmokeTest {
 	}
 
 	private static void testMimeRemovePartUnwrapsToSole() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		String body = "--bnd\r\n"
 				+ "Content-Type: application/sdp\r\n"
 				+ "\r\n"
@@ -325,7 +325,7 @@ public final class CrudSmokeTest {
 	// --- attachments ---
 
 	private static void testCreateAttachesXmlPart() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		String sdp = "v=0\r\no=- 0 0 IN IP4 1.1.1.1\r\ns=-\r\nt=0 0\r\nm=audio 8000 RTP/AVP 0\r\n";
 		req.setContent(sdp, "application/sdp");
 
@@ -344,7 +344,7 @@ public final class CrudSmokeTest {
 	}
 
 	private static void testCreateAttachesXmlPartToMultipart() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		String existing = "--bnd\r\n"
 				+ "Content-Type: application/sdp\r\n"
 				+ "\r\n"
@@ -369,11 +369,11 @@ public final class CrudSmokeTest {
 	/// `sdpCreate` parses JSON-shaped values so a saved media block round
 	/// trips back into the SDP as a structured object — not a literal string.
 	private static void testReadDeleteRestoreAcrossMessages() throws Exception {
-		DummyApplicationSession appSession = new DummyApplicationSession("dialog");
+		DetachedApplicationSession appSession = new DetachedApplicationSession("dialog");
 
 		// Outbound INVITE: audio + video. We want to strip video before sending,
 		// remembering it so we can splice it back into the 200 OK.
-		DummyRequest invite = new DummyRequest("INVITE", "<sip:a@x>", "<sip:b@y>");
+		DetachedRequest invite = new DetachedRequest("INVITE", "<sip:a@x>", "<sip:b@y>");
 		invite.setApplicationSession(appSession);
 		String inviteSdp = "v=0\r\n"
 				+ "o=- 0 0 IN IP4 1.1.1.1\r\n"
@@ -399,9 +399,9 @@ public final class CrudSmokeTest {
 
 		// 200 OK comes back from the far side carrying audio-only SDP. We
 		// want to splice the video block we saved earlier back in. Modeled
-		// here as another DummyRequest sharing the same SipApplicationSession,
-		// since DummyResponse's content storage is stubbed out.
-		DummyRequest ok = new DummyRequest("INVITE", "<sip:a@x>", "<sip:b@y>");
+		// here as another DetachedRequest sharing the same SipApplicationSession,
+		// since DetachedResponse's content storage is stubbed out.
+		DetachedRequest ok = new DetachedRequest("INVITE", "<sip:a@x>", "<sip:b@y>");
 		ok.setApplicationSession(appSession);
 		String okSdp = "v=0\r\n"
 				+ "o=- 0 0 IN IP4 2.2.2.2\r\n"
@@ -429,10 +429,10 @@ public final class CrudSmokeTest {
 	/// them as one JSON-array variable), then splice them all back into the
 	/// answer. `sdpCreate` appends a JSON-array value elementwise.
 	private static void testFilterCaptureRestoreMultiple() throws Exception {
-		DummyApplicationSession appSession = new DummyApplicationSession("siprec-dialog");
+		DetachedApplicationSession appSession = new DetachedApplicationSession("siprec-dialog");
 		String filter = "$.media[?('inactive' in @.attributes[*].name)]";
 
-		DummyRequest invite = new DummyRequest("INVITE", "<sip:rec@x>", "<sip:srs@y>");
+		DetachedRequest invite = new DetachedRequest("INVITE", "<sip:rec@x>", "<sip:srs@y>");
 		invite.setApplicationSession(appSession);
 		String offer = "v=0\r\n"
 				+ "o=- 1 1 IN IP4 1.1.1.1\r\n"
@@ -466,7 +466,7 @@ public final class CrudSmokeTest {
 		check("minsdp.offer-stripped", !offerOut.contains("a=inactive"));
 		check("minsdp.offer-kept-both", offerOut.contains("a=label:101") && offerOut.contains("a=label:103"));
 
-		DummyRequest ok = new DummyRequest("INVITE", "<sip:rec@x>", "<sip:srs@y>");
+		DetachedRequest ok = new DetachedRequest("INVITE", "<sip:rec@x>", "<sip:srs@y>");
 		ok.setApplicationSession(appSession);
 		String answer = "v=0\r\n"
 				+ "o=- 2 1 IN IP4 2.2.2.2\r\n"
@@ -496,7 +496,7 @@ public final class CrudSmokeTest {
 
 		// An offer with nothing to strip stashes "[]"; restoring it appends
 		// nothing rather than corrupting the answer.
-		DummyRequest clean = new DummyRequest("INVITE", "<sip:rec@x>", "<sip:srs@y>");
+		DetachedRequest clean = new DetachedRequest("INVITE", "<sip:rec@x>", "<sip:srs@y>");
 		clean.setApplicationSession(appSession);
 		clean.setContent(answer, "application/sdp");
 		save.process(clean);
@@ -533,7 +533,7 @@ public final class CrudSmokeTest {
 	// --- order matters ---
 
 	private static void testRuleProcessOrder() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setHeader("From", "<sip:bob@example.com>;tag=1");
 
 		Rule r = new Rule();
@@ -543,7 +543,7 @@ public final class CrudSmokeTest {
 		check("order.create-after-read", "bob".equals(req.getHeader("X-Stamp")));
 
 		// Reversed order: create runs before read produces the variable
-		DummyRequest req2 = invite();
+		DetachedRequest req2 = invite();
 		req2.setHeader("From", "<sip:bob@example.com>;tag=1");
 		Rule r2 = new Rule();
 		r2.getOperations().add(new CreateOperation("X-Stamp", "${u}"));
@@ -556,10 +556,10 @@ public final class CrudSmokeTest {
 	// --- resetVariables ---
 
 	private static void testRuleResetVariables() throws Exception {
-		SipApplicationSession appSession = new DummyApplicationSession("test");
+		SipApplicationSession appSession = new DetachedApplicationSession("test");
 		appSession.setAttribute("u", "stale-value");
 
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.setApplicationSession(appSession);
 		req.setHeader("From", "<sip:no-match-here>");
 
@@ -577,14 +577,14 @@ public final class CrudSmokeTest {
 	// --- v3 Context: meta-vars, env fallback, iteration ---
 
 	private static void testNowMetaVar() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		new CreateOperation("X-Stamp", "${now}").process(req);
 		String stamped = req.getHeader("X-Stamp");
 		check("now.numeric", stamped != null && stamped.matches("\\d+"));
 	}
 
 	private static void testUuidMetaVar() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		new CreateOperation("X-Trace", "${uuid}").process(req);
 		String stamped = req.getHeader("X-Trace");
 		check("uuid.shape",
@@ -596,7 +596,7 @@ public final class CrudSmokeTest {
 		if (home == null) home = System.getProperty("user.home");
 		check("env.fallback-precondition", home != null);
 
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		new CreateOperation("X-User-Home", "${HOME:-}${user.home}").process(req);
 		// `${HOME:-}` isn't a valid form (we ignore unknown args on plain
 		// names), so it lookups env "HOME" directly. `${user.home}` falls
@@ -631,29 +631,29 @@ public final class CrudSmokeTest {
 	// --- new pseudo-headers ---
 
 	private static void testOriginIpFallback() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		String origin = MessageHelper.getAttributeValue(req, "originIP", null);
-		// DummyRequest has no X-Vorpal-ID, no Via stack, no remote addr;
+		// DetachedRequest has no X-Vorpal-ID, no Via stack, no remote addr;
 		// the v3 Selector fallback chain bottoms out at "127.0.0.1".
 		check("originIP.fallback", "127.0.0.1".equals(origin));
 	}
 
 	private static void testPeerIpPseudoHeader() throws Exception {
-		DummyRequest req = invite();
-		// DummyMessage.getRemoteAddr returns null; the test confirms the
+		DetachedRequest req = invite();
+		// DetachedMessage.getRemoteAddr returns null; the test confirms the
 		// pseudo-header is wired (no exception, no header-lookup fallthrough).
 		String peer = MessageHelper.getAttributeValue(req, "peerIP", null);
 		check("peerIP.no-throw", peer == null);
 	}
 
 	private static void testTransportPseudoHeader() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		String transport = MessageHelper.getAttributeValue(req, "transport", null);
 		check("transport.no-throw", transport == null);
 	}
 
 	private static void testIsSecurePseudoHeader() throws Exception {
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		String secure = MessageHelper.getAttributeValue(req, "isSecure", null);
 		// Null transport → derives "false".
 		check("isSecure.derives-false", "false".equals(secure));
@@ -667,8 +667,8 @@ public final class CrudSmokeTest {
 		check("method.or.invite-matches", r.matches(invite(), null));
 		check("method.or.bye-no-match", !r.matches(bye(), null));
 
-		DummyRequest reg = new DummyRequest("REGISTER", "<sip:a@x>", "<sip:b@y>");
-		reg.setApplicationSession(new DummyApplicationSession("test"));
+		DetachedRequest reg = new DetachedRequest("REGISTER", "<sip:a@x>", "<sip:b@y>");
+		reg.setApplicationSession(new DetachedApplicationSession("test"));
 		check("method.or.register-matches", r.matches(reg, null));
 	}
 
@@ -685,8 +685,8 @@ public final class CrudSmokeTest {
 		check("method.mixed.invite-matches", r.matches(invite(), null));
 		check("method.mixed.bye-no-match", !r.matches(bye(), null));
 
-		DummyRequest opt = new DummyRequest("OPTIONS", "<sip:a@x>", "<sip:b@y>");
-		opt.setApplicationSession(new DummyApplicationSession("test"));
+		DetachedRequest opt = new DetachedRequest("OPTIONS", "<sip:a@x>", "<sip:b@y>");
+		opt.setApplicationSession(new DetachedApplicationSession("test"));
 		check("method.mixed.options-no-match", !r.matches(opt, null));
 	}
 
@@ -754,9 +754,9 @@ public final class CrudSmokeTest {
 
 	// --- helpers ---
 
-	private static DummyRequest invite() throws Exception {
-		DummyRequest req = new DummyRequest("INVITE", "<sip:a@x>", "<sip:b@y>");
-		req.setApplicationSession(new DummyApplicationSession("test"));
+	private static DetachedRequest invite() throws Exception {
+		DetachedRequest req = new DetachedRequest("INVITE", "<sip:a@x>", "<sip:b@y>");
+		req.setApplicationSession(new DetachedApplicationSession("test"));
 		return req;
 	}
 
@@ -769,22 +769,22 @@ public final class CrudSmokeTest {
 	private static void testPipelineRuleSetSelection() throws Exception {
 		CrudConfigurationSample cfg = new CrudConfigurationSample();
 
-		DummyRequest hit = new DummyRequest("INVITE", "<sip:alice@x>", "<sip:8003@pbx.example.com>");
-		hit.setSession(new DummySipSession(hit.getApplicationSession()));
+		DetachedRequest hit = new DetachedRequest("INVITE", "<sip:alice@x>", "<sip:8003@pbx.example.com>");
+		hit.setSession(new DetachedSipSession(hit.getApplicationSession()));
 		Context ctx = cfg.enrich(hit);
 		check("pipeline.selects-update",
 				cfg.selectedRuleSet(ctx) == cfg.getRuleSets().get("example-update"));
 		check("pipeline.promoted-to-appsession",
 				"8003".equals(hit.getApplicationSession().getAttribute("dialedNumber")));
 
-		DummyRequest miss = new DummyRequest("INVITE", "<sip:alice@x>", "<sip:5551000@pbx.example.com>");
-		miss.setSession(new DummySipSession(miss.getApplicationSession()));
+		DetachedRequest miss = new DetachedRequest("INVITE", "<sip:alice@x>", "<sip:5551000@pbx.example.com>");
+		miss.setSession(new DetachedSipSession(miss.getApplicationSession()));
 		check("pipeline.unmatched-default",
 				cfg.selectedRuleSet(cfg.enrich(miss)) == cfg.getRuleSets().get("example-create"));
 
 		cfg.setDefaultRuleSet(null);
-		DummyRequest miss2 = new DummyRequest("INVITE", "<sip:alice@x>", "<sip:5551000@pbx.example.com>");
-		miss2.setSession(new DummySipSession(miss2.getApplicationSession()));
+		DetachedRequest miss2 = new DetachedRequest("INVITE", "<sip:alice@x>", "<sip:5551000@pbx.example.com>");
+		miss2.setSession(new DetachedSipSession(miss2.getApplicationSession()));
 		check("pipeline.no-default-passthrough", cfg.selectedRuleSet(cfg.enrich(miss2)) == null);
 	}
 
@@ -793,8 +793,8 @@ public final class CrudSmokeTest {
 	/// stamps `X-Trace-Id: trace-${dialedNumber}`.
 	private static void testPromotedVarInRuleTemplate() throws Exception {
 		CrudConfigurationSample cfg = new CrudConfigurationSample();
-		DummyRequest req = new DummyRequest("INVITE", "<sip:alice@x>", "<sip:8001@pbx.example.com>");
-		req.setSession(new DummySipSession(req.getApplicationSession()));
+		DetachedRequest req = new DetachedRequest("INVITE", "<sip:alice@x>", "<sip:8001@pbx.example.com>");
+		req.setSession(new DetachedSipSession(req.getApplicationSession()));
 		RuleSet rs = cfg.selectedRuleSet(cfg.enrich(req));
 		rs.applyRules(req, "callStarted");
 		check("promotion.rule-template-resolves", "trace-8001".equals(req.getHeader("X-Trace-Id")));
@@ -808,7 +808,7 @@ public final class CrudSmokeTest {
 		r.setId("gated");
 		r.setWhen("${tier} == premium");
 
-		DummyRequest req = invite();
+		DetachedRequest req = invite();
 		req.getApplicationSession().setAttribute("tier", "standard");
 		check("when.blocks", !r.matches(req, null));
 
@@ -850,18 +850,18 @@ public final class CrudSmokeTest {
 		check("config.rejects-unknown-field", threw);
 	}
 
-	private static DummyRequest bye() throws Exception {
-		DummyRequest req = new DummyRequest("BYE", "<sip:a@x>", "<sip:b@y>");
-		req.setApplicationSession(new DummyApplicationSession("test"));
+	private static DetachedRequest bye() throws Exception {
+		DetachedRequest req = new DetachedRequest("BYE", "<sip:a@x>", "<sip:b@y>");
+		req.setApplicationSession(new DetachedApplicationSession("test"));
 		return req;
 	}
 
-	private static DummyResponse response200() throws Exception {
-		return new DummyResponse(invite(), 200);
+	private static DetachedResponse response200() throws Exception {
+		return new DetachedResponse(invite(), 200);
 	}
 
-	private static DummyResponse responseStatus(int status) throws Exception {
-		return new DummyResponse(invite(), status);
+	private static DetachedResponse responseStatus(int status) throws Exception {
+		return new DetachedResponse(invite(), status);
 	}
 
 	private static void check(String name, boolean condition) {

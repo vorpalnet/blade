@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -20,9 +20,9 @@ import org.vorpal.blade.framework.v2.logging.CapturingLogger;
 import org.vorpal.blade.framework.v3.Callflow;
 
 /// Runs a whole callflow — `process()`, the outbound request, the response
-/// callback — with no SIP container, using the doubles in this package.
+/// callback — with no SIP container, using the detached objects in this package.
 ///
-/// This is the template the [testing README](README.md) documents. The one thing
+/// This is the template the package README documents. The one thing
 /// a test has to do that production code does not is deliver the response: the
 /// container normally matches an inbound response to the session and fires the
 /// stored callback, so a test does that step itself with [#deliver].
@@ -49,12 +49,12 @@ class CallflowHarnessSmokeTest {
 
 	@BeforeEach
 	void installContainerStandIns() {
-		Callflow.setSipFactory(new DummySipFactory());
+		Callflow.setSipFactory(new DetachedSipFactory());
 		Callflow.setSipLogger(new CapturingLogger());
 		// Required: sendRequest mints a Vorpal-ID on an initial INVITE, which
 		// asks the util whether the id is taken. Without it the NPE becomes a
 		// synthetic 500 delivered to your callback.
-		Callflow.setSipUtil(new DummySipSessionsUtil());
+		Callflow.setSipUtil(new DetachedSipSessionsUtil());
 	}
 
 	@AfterEach
@@ -72,11 +72,11 @@ class CallflowHarnessSmokeTest {
 		callback.acceptThrows(response);
 	}
 
-	private static DummyRequest inboundInvite() throws Exception {
-		DummyApplicationSession appSession = new DummyApplicationSession("harness");
-		DummyRequest request = new DummyRequest(appSession, "INVITE");
-		request.setSession(new DummySipSession(appSession));
-		request.setRequestURI(new DummySipURI("sip:bob@example.com"));
+	private static DetachedRequest inboundInvite() throws Exception {
+		DetachedApplicationSession appSession = new DetachedApplicationSession("harness");
+		DetachedRequest request = new DetachedRequest(appSession, "INVITE");
+		request.setSession(new DetachedSipSession(appSession));
+		request.setRequestURI(new DetachedSipURI("sip:bob@example.com"));
 		request.setHeader("X-Trace", "abc123");
 		request.setContent("v=0\r\no=alice 1 1 IN IP4 10.0.0.1\r\n".getBytes("UTF-8"), "application/sdp");
 		return request;
@@ -84,7 +84,7 @@ class CallflowHarnessSmokeTest {
 
 	@Test
 	void forwardsTheInviteOnANewLeg() throws Exception {
-		DummyRequest alice = inboundInvite();
+		DetachedRequest alice = inboundInvite();
 		ForwardingCallflow callflow = new ForwardingCallflow();
 
 		callflow.process(alice);
@@ -97,11 +97,11 @@ class CallflowHarnessSmokeTest {
 
 	@Test
 	void relaysTheAnswerUpstream() throws Exception {
-		DummyRequest alice = inboundInvite();
+		DetachedRequest alice = inboundInvite();
 		ForwardingCallflow callflow = new ForwardingCallflow();
 		callflow.process(alice);
 
-		DummyResponse bobAnswer = new DummyResponse((DummyRequest) callflow.outbound, 200, "OK");
+		DetachedResponse bobAnswer = new DetachedResponse((DetachedRequest) callflow.outbound, 200, "OK");
 		bobAnswer.setHeader("X-Answered-By", "bob");
 		deliver(bobAnswer);
 
@@ -113,11 +113,11 @@ class CallflowHarnessSmokeTest {
 
 	@Test
 	void relaysAFailureUpstreamToo() throws Exception {
-		DummyRequest alice = inboundInvite();
+		DetachedRequest alice = inboundInvite();
 		ForwardingCallflow callflow = new ForwardingCallflow();
 		callflow.process(alice);
 
-		deliver(new DummyResponse((DummyRequest) callflow.outbound, 486, "Busy Here"));
+		deliver(new DetachedResponse((DetachedRequest) callflow.outbound, 486, "Busy Here"));
 
 		assertEquals(486, callflow.upstreamAnswer.getStatus());
 		assertTrue(Callflow.failure(callflow.upstreamAnswer), "486 is a failure");

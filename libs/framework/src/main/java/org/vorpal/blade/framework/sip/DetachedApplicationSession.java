@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import java.net.URL;
 import java.util.Collection;
@@ -21,7 +21,7 @@ import javax.servlet.sip.URI;
  * <p>Most methods are stub implementations that return null or default values.
  * The attribute-related methods are fully functional for testing attribute storage.
  */
-public class DummyApplicationSession implements SipApplicationSession {
+public class DetachedApplicationSession implements SipApplicationSession {
 	// LinkedHashMap so getAttributeNameSet returns attributes in insertion
 	// order — gives tests that snapshot session state a stable iteration.
 	private Map<String, Object> attributes = new LinkedHashMap<>();
@@ -47,11 +47,11 @@ public class DummyApplicationSession implements SipApplicationSession {
 	}
 
 	/**
-	 * Constructs a DummyApplicationSession with the specified application name.
+	 * Constructs a DetachedApplicationSession with the specified application name.
 	 *
 	 * @param appName the application name for this session
 	 */
-	public DummyApplicationSession(String appName) {
+	public DetachedApplicationSession(String appName) {
 		this.appName = appName;
 	}
 

@@ -9,8 +9,8 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
 /// Renders a [SipServletMessage] (typically a parsed-and-mutated
-/// [org.vorpal.blade.framework.v2.testing.DummyRequest] /
-/// [org.vorpal.blade.framework.v2.testing.DummyResponse]) back to RFC 3261
+/// [org.vorpal.blade.framework.sip.DetachedRequest] /
+/// [org.vorpal.blade.framework.sip.DetachedResponse]) back to RFC 3261
 /// wire text for the preview endpoint to return to the operator.
 public class SipMessageSerializer implements Serializable {
 	private static final long serialVersionUID = 1L;
@@ -53,7 +53,7 @@ public class SipMessageSerializer implements Serializable {
 	private static void appendHeaders(StringBuilder sb, SipServletMessage msg) {
 		// Emit headers in the original input order (stashed by the parser),
 		// then any headers added by operations after parsing. Without this
-		// the underlying DummyMessage's HashMap iteration shuffles every
+		// the underlying DetachedMessage's HashMap iteration shuffles every
 		// header on every run and makes the diff impossible to read.
 		LinkedHashSet<String> emitted = new LinkedHashSet<>();
 		boolean ctSeen = false;

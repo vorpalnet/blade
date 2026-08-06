@@ -6,7 +6,7 @@ import java.util.List;
 
 import javax.servlet.sip.SipServletRequest;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.crud.MessageHelper;
 import org.vorpal.blade.framework.v3.crud.MimeHelper;

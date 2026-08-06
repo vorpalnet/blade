@@ -11,7 +11,7 @@ import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 
-import org.vorpal.blade.framework.v2.callflow.Callback;
+import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v2.logging.Logger.Direction;
 import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 

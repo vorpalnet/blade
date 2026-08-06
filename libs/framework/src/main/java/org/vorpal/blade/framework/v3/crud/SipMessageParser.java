@@ -9,13 +9,13 @@ import javax.servlet.sip.SipServletMessage;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.URI;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
-import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
-import org.vorpal.blade.framework.v2.testing.DummyResponse;
-import org.vorpal.blade.framework.v2.testing.DummySipSession;
+import org.vorpal.blade.framework.AsyncSipServlet;
+import org.vorpal.blade.framework.sip.DetachedApplicationSession;
+import org.vorpal.blade.framework.sip.DetachedRequest;
+import org.vorpal.blade.framework.sip.DetachedResponse;
+import org.vorpal.blade.framework.sip.DetachedSipSession;
 
-/// Parses raw SIP wire text into a [DummyRequest] or [DummyResponse]. Used
+/// Parses raw SIP wire text into a [DetachedRequest] or [DetachedResponse]. Used
 /// by the preview endpoint so operators can paste a captured SIP message
 /// (e.g. from a wireshark trace or service log) and see what a rule set
 /// would do to it.
@@ -35,7 +35,7 @@ public class SipMessageParser implements Serializable {
 
 	/// Message attribute holding the original header order (List<String>).
 	/// [SipMessageSerializer] iterates it so the output preserves the input
-	/// order; without this the underlying DummyMessage's HashMap iteration
+	/// order; without this the underlying DetachedMessage's HashMap iteration
 	/// order shuffles every header on every run.
 	public static final String ATTR_HEADER_ORDER = "preview.headerOrder";
 
@@ -95,12 +95,12 @@ public class SipMessageParser implements Serializable {
 		if (from == null) from = "<sip:anonymous@unknown>";
 		if (to == null) to = "<sip:anonymous@unknown>";
 
-		DummyRequest req = new DummyRequest(method, from, to);
-		DummyApplicationSession appSession = new DummyApplicationSession("preview");
+		DetachedRequest req = new DetachedRequest(method, from, to);
+		DetachedApplicationSession appSession = new DetachedApplicationSession("preview");
 		req.setApplicationSession(appSession);
 		// A SipSession too, or the enrichment pipeline's Context.put writes
 		// (selection preview) silently vanish.
-		req.setSession(new DummySipSession(appSession));
+		req.setSession(new DetachedSipSession(appSession));
 
 		// Always stash the raw URI so the serializer has a fallback when
 		// no SipFactory is available (AdminServer-side, no SIP container).
@@ -143,9 +143,9 @@ public class SipMessageParser implements Serializable {
 		if (from == null) from = "<sip:anonymous@unknown>";
 		if (to == null) to = "<sip:anonymous@unknown>";
 
-		DummyRequest req = new DummyRequest(method, from, to);
-		req.setApplicationSession(new DummyApplicationSession("preview"));
-		return new DummyResponse(req, status, reason);
+		DetachedRequest req = new DetachedRequest(method, from, to);
+		req.setApplicationSession(new DetachedApplicationSession("preview"));
+		return new DetachedResponse(req, status, reason);
 	}
 
 	private static void applyHeaders(SipServletMessage msg, String[] foldedLines) {

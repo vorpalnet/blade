@@ -40,7 +40,7 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 import javax.servlet.sip.SipURI;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v3.events.AnalyticsEvent;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.SettingsManager;

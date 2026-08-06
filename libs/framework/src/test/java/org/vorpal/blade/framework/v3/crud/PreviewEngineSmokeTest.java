@@ -463,7 +463,7 @@ public final class PreviewEngineSmokeTest {
 						|| logFail("got start line: " + out.split("\r\n")[0]));
 	}
 
-	/// Headers must come back in the order they went in. DummyMessage's
+	/// Headers must come back in the order they went in. DetachedMessage's
 	/// underlying HashMap doesn't preserve insertion order; the parser
 	/// stashes the original order and the serializer iterates by it.
 	private static void testRoundTripPreservesHeaderOrder() throws Exception {

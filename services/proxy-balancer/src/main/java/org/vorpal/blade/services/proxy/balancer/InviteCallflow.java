@@ -21,7 +21,7 @@ import javax.servlet.sip.SipURI;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.v2.callflow.Callback;
+import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.services.proxy.balancer.config.BalancerConfig;
 import org.vorpal.blade.services.proxy.balancer.config.Endpoint;

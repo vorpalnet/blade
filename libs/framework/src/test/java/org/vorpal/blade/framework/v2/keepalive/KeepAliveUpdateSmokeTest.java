@@ -8,8 +8,8 @@ import javax.servlet.sip.SipApplicationSession;
 import org.vorpal.blade.framework.v2.callflow.Callflow;
 import org.vorpal.blade.framework.v2.config.KeepAliveParameters;
 import org.vorpal.blade.framework.v2.config.SessionParameters;
-import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
-import org.vorpal.blade.framework.v2.testing.DummySipSession;
+import org.vorpal.blade.framework.sip.DetachedApplicationSession;
+import org.vorpal.blade.framework.sip.DetachedSipSession;
 
 /// Smoke test for the UPDATE-style keep-alive decision logic:
 /// [KeepAlive#allowsUpdate] (Allow header parsing),
@@ -22,12 +22,12 @@ public final class KeepAliveUpdateSmokeTest {
 	private static int passed;
 	private static int failed;
 
-	/// DummySipSession.isValid() is hardwired to false; the decision logic
+	/// DetachedSipSession.isValid() is hardwired to false; the decision logic
 	/// requires a valid session, so flip it for testing.
-	private static final class ValidDummySipSession extends DummySipSession {
+	private static final class ValidDetachedSipSession extends DetachedSipSession {
 		private static final long serialVersionUID = 1L;
 
-		ValidDummySipSession(SipApplicationSession appSession) {
+		ValidDetachedSipSession(SipApplicationSession appSession) {
 			super(appSession);
 		}
 
@@ -89,9 +89,9 @@ public final class KeepAliveUpdateSmokeTest {
 	}
 
 	private static void testSupportsUpdate() {
-		DummyApplicationSession appSession = new DummyApplicationSession("KeepAliveUpdateSmokeTest");
+		DetachedApplicationSession appSession = new DetachedApplicationSession("KeepAliveUpdateSmokeTest");
 
-		ValidDummySipSession session = new ValidDummySipSession(appSession);
+		ValidDetachedSipSession session = new ValidDetachedSipSession(appSession);
 		check("supports.absent-attribute", !KeepAlive.supportsUpdate(session));
 
 		session.setAttribute(Callflow.ALLOW_UPDATE, Boolean.TRUE);
@@ -100,7 +100,7 @@ public final class KeepAliveUpdateSmokeTest {
 		session.setAttribute(Callflow.ALLOW_UPDATE, Boolean.FALSE);
 		check("supports.false", !KeepAlive.supportsUpdate(session));
 
-		DummySipSession invalid = new DummySipSession(appSession); // isValid() == false
+		DetachedSipSession invalid = new DetachedSipSession(appSession); // isValid() == false
 		invalid.setAttribute(Callflow.ALLOW_UPDATE, Boolean.TRUE);
 		check("supports.invalid-session", !KeepAlive.supportsUpdate(invalid));
 	}

@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -31,10 +31,10 @@ import org.vorpal.blade.framework.Callflow;
  * Provides basic message functionality including header and attribute storage
  * without requiring a SIP container.
  *
- * <p>This class serves as the base for DummyRequest and DummyResponse,
+ * <p>This class serves as the base for DetachedRequest and DetachedResponse,
  * implementing common message operations. The send() method is a no-op.
  */
-public class DummyMessage implements SipServletMessage, Serializable {
+public class DetachedMessage implements SipServletMessage, Serializable {
 	private static final long serialVersionUID = 1L;
 
 	protected Map<String, Object> attributes = new LinkedHashMap<>();

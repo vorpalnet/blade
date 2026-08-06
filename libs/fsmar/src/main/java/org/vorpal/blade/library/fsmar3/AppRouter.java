@@ -24,7 +24,7 @@ import javax.servlet.sip.ar.SipApplicationRoutingRegion;
 import javax.servlet.sip.ar.SipRouteModifier;
 import javax.servlet.sip.ar.SipTargetedRequestInfo;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
+import org.vorpal.blade.framework.AsyncSipServlet;
 import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v2.logging.LogManager;
 import org.vorpal.blade.framework.v2.logging.Logger;

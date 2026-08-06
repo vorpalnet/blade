@@ -182,12 +182,6 @@
 /// hierarchical routing strategies supporting both parallel and serial execution modes with
 /// configurable timeouts.
 ///
-/// ### [org.vorpal.blade.framework.v2.testing]
-/// Contains mock implementations of SIP servlet interfaces for unit testing without a full
-/// SIP container. Classes like [DummyRequest][org.vorpal.blade.framework.v2.testing.DummyRequest], [DummyResponse][org.vorpal.blade.framework.v2.testing.DummyResponse], [DummySipSession][org.vorpal.blade.framework.v2.testing.DummySipSession], and
-/// [DummyApplicationSession][org.vorpal.blade.framework.v2.testing.DummyApplicationSession] provide functional attribute storage, header operations, and
-/// session relationships while stubbing container-dependent operations as safe no-ops.
-///
 /// ### [org.vorpal.blade.framework.v2.transfer]
 /// Implements SIP call transfer operations supporting blind, attended, conference, and
 /// REFER-based transfer patterns. The [Transfer][org.vorpal.blade.framework.v2.transfer.Transfer] base class and [TransferInitialInvite][org.vorpal.blade.framework.v2.transfer.TransferInitialInvite]

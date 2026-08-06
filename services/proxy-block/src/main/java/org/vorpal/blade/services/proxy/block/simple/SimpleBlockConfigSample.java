@@ -139,7 +139,7 @@ public class SimpleBlockConfigSample extends SimpleBlockConfig {
 	 * sipFactory.createURI("sip:+18165551234@att.com"); // works URI to =
 	 * sipFactory.createURI("sip:19135550001@att.com");
 	 * 
-	 * DummyRequest rqst1 = new DummyRequest("INVITE", from, to);
+	 * DetachedRequest rqst1 = new DetachedRequest("INVITE", from, to);
 	 * 
 	 * // String forwardTo = forwardTo(config1, rqst1); // //
 	 * System.out.println("forwardTo: " + forwardTo);

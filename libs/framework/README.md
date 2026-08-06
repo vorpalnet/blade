@@ -80,7 +80,7 @@ Enhanced logging framework with SIP-aware formatters, structured logging, and de
 #### `org.vorpal.blade.framework.v2.proxy`
 High-level proxy implementations for common SIP proxy patterns including stateful and stateless proxying.
 
-#### `org.vorpal.blade.framework.v2.testing`
+#### `org.vorpal.blade.framework.sip`
 Testing utilities and mock objects for unit testing SIP applications and integration testing.
 
 #### `org.vorpal.blade.framework.v2.transfer`

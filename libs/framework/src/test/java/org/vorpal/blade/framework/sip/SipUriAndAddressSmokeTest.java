@@ -1,4 +1,4 @@
-package org.vorpal.blade.framework.v2.testing;
+package org.vorpal.blade.framework.sip;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.vorpal.blade.framework.Callflow;
 
-/// Covers [DummySipURI] and [DummyAddress], and through them the
+/// Covers [DetachedSipURI] and [DetachedAddress], and through them the
 /// [Callflow#copyParameters(URI,URI)] merge that every request builder relies on
 /// to carry the user part and URI parameters onto a configured destination.
 class SipUriAndAddressSmokeTest {
@@ -24,7 +24,7 @@ class SipUriAndAddressSmokeTest {
 
 		@Test
 		void roundTripsAFullUri() {
-			DummySipURI uri = new DummySipURI("sip:alice@example.com:5080;transport=tcp");
+			DetachedSipURI uri = new DetachedSipURI("sip:alice@example.com:5080;transport=tcp");
 
 			assertEquals("sip", uri.getScheme());
 			assertEquals("alice", uri.getUser());
@@ -36,7 +36,7 @@ class SipUriAndAddressSmokeTest {
 
 		@Test
 		void handlesAHostOnlyUri() {
-			DummySipURI uri = new DummySipURI("sip:10.0.0.5");
+			DetachedSipURI uri = new DetachedSipURI("sip:10.0.0.5");
 
 			assertNull(uri.getUser());
 			assertEquals("10.0.0.5", uri.getHost());
@@ -47,7 +47,7 @@ class SipUriAndAddressSmokeTest {
 		/// A flag parameter has no value and must not gain an '=' on the way out.
 		@Test
 		void keepsFlagParametersFlat() {
-			DummySipURI uri = new DummySipURI("sip:proxy.example.com;lr");
+			DetachedSipURI uri = new DetachedSipURI("sip:proxy.example.com;lr");
 
 			assertTrue(uri.getLrParam());
 			assertEquals("sip:proxy.example.com;lr", uri.toString());
@@ -55,13 +55,13 @@ class SipUriAndAddressSmokeTest {
 
 		@Test
 		void sipsIsSecure() {
-			assertTrue(new DummySipURI("sips:alice@example.com").isSecure());
-			assertFalse(new DummySipURI("sip:alice@example.com").isSecure());
+			assertTrue(new DetachedSipURI("sips:alice@example.com").isSecure());
+			assertFalse(new DetachedSipURI("sip:alice@example.com").isSecure());
 		}
 
 		@Test
 		void cloneIsIndependent() {
-			DummySipURI original = new DummySipURI("sip:alice@example.com");
+			DetachedSipURI original = new DetachedSipURI("sip:alice@example.com");
 			SipURI copy = original.clone();
 			copy.setUser("bob");
 
@@ -76,7 +76,7 @@ class SipUriAndAddressSmokeTest {
 
 		@Test
 		void separatesHeaderParametersFromUriParameters() {
-			DummyAddress address = new DummyAddress("\"Alice\" <sip:alice@example.com;transport=tcp>;tag=abc123");
+			DetachedAddress address = new DetachedAddress("\"Alice\" <sip:alice@example.com;transport=tcp>;tag=abc123");
 
 			assertEquals("Alice", address.getDisplayName());
 			assertEquals("abc123", address.getParameter("tag"), "tag is a header parameter");
@@ -86,7 +86,7 @@ class SipUriAndAddressSmokeTest {
 
 		@Test
 		void acceptsABareUri() {
-			DummyAddress address = new DummyAddress("sip:bob@example.com");
+			DetachedAddress address = new DetachedAddress("sip:bob@example.com");
 
 			assertNull(address.getDisplayName());
 			assertEquals("sip:bob@example.com", address.getURI().toString());
@@ -95,7 +95,7 @@ class SipUriAndAddressSmokeTest {
 		@Test
 		void roundTripsThroughToString() {
 			String text = "\"Alice\" <sip:alice@example.com>;tag=xyz";
-			assertEquals(text, new DummyAddress(text).toString());
+			assertEquals(text, new DetachedAddress(text).toString());
 		}
 	}
 
@@ -108,8 +108,8 @@ class SipUriAndAddressSmokeTest {
 		/// `sip:alice@10.0.0.5`. Losing this is what a plain setRequestURI would do.
 		@Test
 		void fillsInTheUserPart() throws Exception {
-			URI inbound = new DummySipURI("sip:alice@caller.example.com");
-			URI destination = new DummySipURI("sip:10.0.0.5:5060");
+			URI inbound = new DetachedSipURI("sip:alice@caller.example.com");
+			URI destination = new DetachedSipURI("sip:10.0.0.5:5060");
 
 			URI merged = Callflow.copyParameters(inbound, destination);
 
@@ -118,8 +118,8 @@ class SipUriAndAddressSmokeTest {
 
 		@Test
 		void carriesParametersTheDestinationLacks() throws Exception {
-			URI inbound = new DummySipURI("sip:alice@caller.example.com;transport=tcp;custom=keep");
-			URI destination = new DummySipURI("sip:10.0.0.5");
+			URI inbound = new DetachedSipURI("sip:alice@caller.example.com;transport=tcp;custom=keep");
+			URI destination = new DetachedSipURI("sip:10.0.0.5");
 
 			Callflow.copyParameters(inbound, destination);
 
@@ -129,8 +129,8 @@ class SipUriAndAddressSmokeTest {
 
 		@Test
 		void doesNotOverrideWhatTheDestinationAlreadySets() throws Exception {
-			URI inbound = new DummySipURI("sip:alice@caller.example.com;transport=tcp");
-			URI destination = new DummySipURI("sip:10.0.0.5;transport=udp");
+			URI inbound = new DetachedSipURI("sip:alice@caller.example.com;transport=tcp");
+			URI destination = new DetachedSipURI("sip:10.0.0.5;transport=udp");
 
 			Callflow.copyParameters(inbound, destination);
 
@@ -140,8 +140,8 @@ class SipUriAndAddressSmokeTest {
 		/// A dialog tag must never be copied onto a request URI.
 		@Test
 		void neverCopiesTag() throws Exception {
-			URI inbound = new DummySipURI("sip:alice@caller.example.com;tag=should-not-travel");
-			URI destination = new DummySipURI("sip:10.0.0.5");
+			URI inbound = new DetachedSipURI("sip:alice@caller.example.com;tag=should-not-travel");
+			URI destination = new DetachedSipURI("sip:10.0.0.5");
 
 			Callflow.copyParameters(inbound, destination);
 
@@ -152,7 +152,7 @@ class SipUriAndAddressSmokeTest {
 		/// v3.Callflow.createRequest guards for it before calling setRequestURI.
 		@Test
 		void nullDestinationComesBackNull() throws Exception {
-			assertNull(Callflow.copyParameters(new DummySipURI("sip:alice@example.com"), null));
+			assertNull(Callflow.copyParameters(new DetachedSipURI("sip:alice@example.com"), null));
 		}
 	}
 }

@@ -13,8 +13,8 @@ import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.URI;
 import javax.servlet.sip.ar.SipApplicationRoutingDirective;
 
-import org.vorpal.blade.framework.v2.AsyncSipServlet;
-import org.vorpal.blade.framework.v2.callflow.Callback;
+import org.vorpal.blade.framework.AsyncSipServlet;
+import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v3.Callflow;
 
 /// Forks an initial INVITE to every contact registered for the account — a

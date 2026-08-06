@@ -30,7 +30,7 @@ import javax.servlet.sip.SipServletResponse;
 import com.bea.wcp.sip.WlssAction;
 import com.bea.wcp.sip.WlssSipApplicationSession;
 
-import org.vorpal.blade.framework.v2.callflow.Callback;
+import org.vorpal.blade.framework.Callback;
 import org.vorpal.blade.framework.v3.Callflow;
 
 /// A [Callflow] with **JSR-309 media-server verbs written in the lambda-continuation

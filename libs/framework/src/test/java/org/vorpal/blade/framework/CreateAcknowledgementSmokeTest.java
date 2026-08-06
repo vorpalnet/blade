@@ -15,10 +15,10 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.vorpal.blade.framework.v2.logging.CapturingLogger;
-import org.vorpal.blade.framework.v2.testing.DummyApplicationSession;
-import org.vorpal.blade.framework.v2.testing.DummyRequest;
-import org.vorpal.blade.framework.v2.testing.DummySipFactory;
-import org.vorpal.blade.framework.v2.testing.DummySipSession;
+import org.vorpal.blade.framework.sip.DetachedApplicationSession;
+import org.vorpal.blade.framework.sip.DetachedRequest;
+import org.vorpal.blade.framework.sip.DetachedSipFactory;
+import org.vorpal.blade.framework.sip.DetachedSipSession;
 
 /// Covers [Callflow#createAcknowledgement(SipServletResponse,SipServletRequest)]
 /// — that it matches whichever acknowledgement arrived upstream, and refuses
@@ -31,7 +31,7 @@ class CreateAcknowledgementSmokeTest {
 
 	@BeforeAll
 	static void installContainerStandIns() {
-		Callflow.setSipFactory(new DummySipFactory());
+		Callflow.setSipFactory(new DetachedSipFactory());
 		Callflow.setSipLogger(new CapturingLogger());
 	}
 
@@ -41,16 +41,16 @@ class CreateAcknowledgementSmokeTest {
 		Callflow.setSipLogger(null);
 	}
 
-	private static DummyRequest inbound(DummyApplicationSession appSession, String method) throws Exception {
-		DummyRequest request = new DummyRequest(appSession, method);
-		request.setSession(new DummySipSession(appSession));
+	private static DetachedRequest inbound(DetachedApplicationSession appSession, String method) throws Exception {
+		DetachedRequest request = new DetachedRequest(appSession, method);
+		request.setSession(new DetachedSipSession(appSession));
 		return request;
 	}
 
 	@Test
 	void anAckUpstreamProducesAnAckDownstream() throws Exception {
-		DummyApplicationSession appSession = new DummyApplicationSession("test");
-		DummyRequest aliceAck = inbound(appSession, "ACK");
+		DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+		DetachedRequest aliceAck = inbound(appSession, "ACK");
 		aliceAck.setHeader("X-Custom", "carried-across");
 		SipServletResponse bobResponse = inbound(appSession, "INVITE").createResponse(200, "OK");
 
@@ -63,8 +63,8 @@ class CreateAcknowledgementSmokeTest {
 
 	@Test
 	void aPrackUpstreamProducesAPrackDownstream() throws Exception {
-		DummyApplicationSession appSession = new DummyApplicationSession("test");
-		DummyRequest alicePrack = inbound(appSession, "PRACK");
+		DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+		DetachedRequest alicePrack = inbound(appSession, "PRACK");
 		SipServletResponse bobResponse = inbound(appSession, "INVITE").createResponse(183, "Session Progress");
 
 		SipServletRequest bobPrack = Callflow.createAcknowledgement(bobResponse, alicePrack);
@@ -76,8 +76,8 @@ class CreateAcknowledgementSmokeTest {
 	/// producing the wrong message.
 	@Test
 	void anythingElseIsRefused() throws Exception {
-		DummyApplicationSession appSession = new DummyApplicationSession("test");
-		DummyRequest aliceInfo = inbound(appSession, "INFO");
+		DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+		DetachedRequest aliceInfo = inbound(appSession, "INFO");
 		SipServletResponse bobResponse = inbound(appSession, "INVITE").createResponse(200, "OK");
 
 		ServletParseException ex = assertThrows(ServletParseException.class,
@@ -90,9 +90,9 @@ class CreateAcknowledgementSmokeTest {
 	/// `Terminate` uses and the one `ReferTransfer` was fixed to use.
 	@Test
 	void cancelComesFromTheOutstandingInvite() throws Exception {
-		DummyApplicationSession appSession = new DummyApplicationSession("test");
-		DummyRequest bobInvite = inbound(appSession, "INVITE");
-		DummySipSession bobSession = (DummySipSession) bobInvite.getSession();
+		DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+		DetachedRequest bobInvite = inbound(appSession, "INVITE");
+		DetachedSipSession bobSession = (DetachedSipSession) bobInvite.getSession();
 		bobSession.setActiveInvite(bobInvite);
 
 		SipServletRequest outstanding = bobSession.getActiveInvite(UAMode.UAC);
@@ -108,8 +108,8 @@ class CreateAcknowledgementSmokeTest {
 	/// mirrors that so the mistake cannot come back unnoticed.
 	@Test
 	void sessionsRefuseToBuildAcksAndCancels() throws Exception {
-		DummyApplicationSession appSession = new DummyApplicationSession("test");
-		DummySipSession session = new DummySipSession(appSession);
+		DetachedApplicationSession appSession = new DetachedApplicationSession("test");
+		DetachedSipSession session = new DetachedSipSession(appSession);
 
 		assertThrows(IllegalArgumentException.class, () -> session.createRequest("CANCEL"));
 		assertThrows(IllegalArgumentException.class, () -> session.createRequest("ACK"));
