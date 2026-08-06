@@ -14,12 +14,28 @@
 	<artifactId>vorpal-blade-admin-phone</artifactId>
 	<packaging>war</packaging>
 	<name>BLADE WebRTC Phone</name>
-	<description>Browser softphone for the BLADE WebRTC gateway. A static admin app:
-		it serves the UI and the client library, and every call is negotiated over a
-		WebSocket to the webrtc service on the ENGINE tier. Nothing here talks to SIP
-		or to a media server, so the app has no Java, no framework dependency and no
-		server-side state — the gateway address is configuration, which is what lets
-		the same page be hosted anywhere.</description>
+	<description>Browser softphone for the BLADE WebRTC gateway. It serves the UI and the
+		client library, and every call is negotiated over a WebSocket to the webrtc service
+		on the ENGINE tier. Nothing here talks to SIP or to a media server. Its only server
+		side is identity: the page is behind the admin login, and it mints the short-lived
+		signed token that carries the signed-in user — and the one address they may
+		claim — across to a gateway on another host.</description>
+
+	<dependencies>
+		<!-- The framework JAR (SettingsManager, Configuration, JwtIssuer) is the
+		     only compile dep; JAX-RS, Servlet and Jackson come from the blade-shared
+		     shared library at runtime. Inherits the parent pom's packagingExcludes
+		     regex, which bundles ONLY the framework JAR. -->
+		<dependency>
+			<groupId>org.vorpal.blade</groupId>
+			<artifactId>vorpal-blade-library-framework</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
 
 	<build>
 		<finalName>blade-phone</finalName>

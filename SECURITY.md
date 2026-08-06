@@ -13,13 +13,14 @@ shared picture.
 
 ## The three authentication surfaces
 
-BLADE authenticates in three independent places. WebLogic security realms own
-the first; they *can* own the second; they are deliberately not involved in the
-third.
+BLADE authenticates in four independent places. WebLogic security realms own the
+first, and stand behind the second; they *can* own the third; they are
+deliberately not involved in the fourth.
 
 | Surface | What it protects | Mechanism | Realm-backed? |
 |---|---|---|---|
 | **Inbound HTTP** | Admin consoles + their REST APIs | Container FORM / BASIC + (new) bearer JWT | Yes |
+| **Inbound WebSocket** | Browsers signaling to the WebRTC gateway | First-party bearer JWT, minted by the app that ran the FORM login | Indirectly — the token restates a realm login |
 | **Inbound SIP** | Calls arriving from the SBC / network | Configurable: trusted-core (default) or digest (opt-in) | Only in digest mode |
 | **Outbound REST** | BLADE calling external services | The v3 `Authentication` hierarchy | No — by design |
 
@@ -193,6 +194,116 @@ In the `security` app config: set `jwt.issuer`, `jwt.jwksUri`, `jwt.audience`,
 
 ---
 
+## 2a. First-party tokens — carrying identity across a tier boundary
+
+§2 consumes tokens an outside IdP issued. This section is the other direction:
+BLADE minting its own, for a hop no session cookie can make.
+
+### The problem it solves
+
+The WebRTC phone (`admin/phone`) is an ordinary admin app behind the FORM login,
+so by the time the page loads, the container has already established who the user
+is. None of that reaches the `webrtc` gateway. The gateway runs on the **engine**
+tier — a different host and port — so `BLADEADMINSESSION` is not sent to it, and
+the browser's WebSocket API cannot attach an `Authorization` header to a handshake
+even if there were a session to attach.
+
+That is a token-carrying problem, not an identity problem. Routing it through an
+external IdP would add an outage mode without adding a fact, so the app that
+already authenticated the caller mints the token itself.
+
+### How it works
+
+| Step | Where |
+|---|---|
+| User signs in (FORM, WebLogic realm) | `admin/phone`, container |
+| `GET /blade/phone/api/v1/session` → identity + what the deployment allows | `TokenResource` |
+| `POST /blade/phone/api/v1/token` → short-lived RS256 JWT | `TokenResource` |
+| `GET /blade/phone/api/v1/jwks.json` → public keys, **unauthenticated** | `TokenResource` |
+| Browser presents the token in `session.connect` | `blade-webrtc.js` |
+| Gateway validates it offline against the JWKS | `BrowserAuthenticator` |
+
+Framework classes: `JwtIssuer` + `JwtIssuerConfig` (mint and publish),
+`JwtValidator` (unchanged — it cannot tell a BLADE issuer from Okta),
+`JwtIdentity.claim(String)` (read app-specific claims).
+
+### The claim is the authorization, not the signature
+
+The token carries an `aor` claim naming the one address its holder may bind, and
+the gateway honors the claim and refuses a browser asking for anything else. That
+part is unconditional: a browser can never register an address the server did not
+put in its token.
+
+Which address the *phone* will put there is a policy, in `AddressPolicy`:
+
+- `allowChosenAddress = false` — `<username>@<aorDomain>` and nothing else. One
+  person, one address.
+- `allowChosenAddress = true` (**default**) — the caller may name any well-formed
+  `user@host`.
+
+The default is the permissive one, and that is a deliberate trade rather than an
+oversight. A browser-to-browser call needs two addresses; a deployment typically
+has one `weblogic` operator. Binding strictly would mean the app could not be
+tested or demonstrated without minting realm users, and demonstration is most of
+what it is for.
+
+What the permissive mode gives up is the restriction, and nothing else:
+
+- the caller is still authenticated and must still hold a BLADE role, so nothing
+  is available to an anonymous client on the network;
+- the gateway rule is untouched — the token still names the single address it
+  will honor;
+- the token's `sub` is always the real WebLogic user, never the chosen address,
+  so `webrtc` logs `registered on this node as '<user>'` and a registration stays
+  attributable even when the address is someone else's name.
+
+The address is validated as `user@host` in either mode. That is the exact form
+`InboundToBrowser.addressOf` derives from an inbound request URI, so anything
+else would register successfully and then never ring — and the check also keeps
+CRLF out of a string that ends up in SIP.
+
+### The signing key is deliberately ephemeral
+
+`JwtIssuer` generates an RSA keypair at startup, holds it in memory, never writes
+it down and never rotates it. Tokens live 60 seconds, so none outlives the process
+that signed it; a restart mints a new `kid` and the consumer's JWKS cache refetches
+on the miss. Key storage would buy nothing and would put a private key on disk.
+
+### Fail-closed, and loudly
+
+Unlike §2 — where JWT is additive and a disabled config falls through to the
+FORM login still sitting underneath — there is **nothing underneath the gateway**.
+So `BrowserAuthenticator` refuses when it cannot decide:
+
+- no config loaded (settings failed, or the endpoint started first) → refuse.
+  "We could not read the rule" must never mean "there is no rule".
+- `jwt.enabled` true but unusable (blank/unreachable `jwksUri`) → refuse, naming
+  the setting.
+- `jwt.enabled` explicitly false → open, and the service logs SEVERE at startup
+  *and* sets `authenticated: false` in `session.ready` so the page shows it.
+
+The shipped `WebrtcSettingsSample` has `enabled = true` and a blank `jwksUri`,
+which fails closed: a half-configured deployment gets a gateway that does not
+work, not one that works and is open.
+
+### Replacing it with a real IdP
+
+Point `WebrtcSettings.jwt` at the customer's issuer and JWKS, arrange for the
+page to obtain the IdP's token instead of calling `TokenResource`, and delete the
+issuer. `JwtValidator` does not change, because nothing in the consumer's
+configuration says the issuer was BLADE. That symmetry is the reason the issuer
+publishes a JWKS at all rather than sharing a secret.
+
+> **Not built:** the OIDC redirect dance (authorization code + PKCE) in the
+> browser. Same position as §2 — terminate it at a reverse proxy, or point these
+> settings at the IdP directly. WebLogic cannot stand in as the issuer: its
+> Embedded LDAP is an identity *store*, and every OAuth artifact Oracle ships in
+> OCCAS 8.1 is client-side (`oauth2-client`, `oauth1-client`, the IDCS
+> integrator asserter). There is no authorization endpoint, no token endpoint and
+> no JWKS anywhere in the install.
+
+---
+
 ## 3. Inbound SIP — configurable trust model
 
 Who authenticates the SIP user is a **deployment** choice, selected by which
@@ -344,10 +455,28 @@ deployment when going SIPS-only, and re-point the SBC at :5061.
 
 Locally verifiable (CI / build box):
 
-- **JWT validation** — `JwtValidatorSmokeTest` (offline, locally-signed token):
+- **JWT validation** — `JwtValidatorTest` (offline, locally-signed token):
   signature, issuer, audience, expiry, claim→role mapping, string-vs-list roles,
-  username-claim override, and rejection of wrong-issuer/wrong-audience/expired/
-  foreign-signature/garbage tokens.
+  username-claim override, app-specific string claims, and rejection of
+  wrong-issuer/wrong-audience/expired/foreign-signature/garbage tokens.
+- **JWT issuing** — `JwtIssuerTest`: the issuer→validator round trip, wired
+  together only through the serialized JWKS document, as a deployment is. Covers
+  claim carriage, that the published JWKS holds no private material, and that a
+  token from a second issuer with identical claims does not verify.
+- **Browser authorization** — `BrowserAuthenticatorTest` (`proto/webrtc`): the
+  gateway's own rule, against tokens from a real `JwtIssuer`. The cases that
+  matter are the ones where a valid token from a genuine signed-in user is still
+  refused because it asks for an address it was not granted, plus the three
+  fail-closed paths (no config, unusable config, no token).
+- **Address policy** — `AddressPolicyTest` (`admin/phone`): what the phone will
+  mint for. Both modes, plus rejection of addresses that are not `user@host` —
+  including a CRLF header-injection attempt.
+
+  > These three replace `JwtValidatorSmokeTest`, a `main()`-driven pass/fail
+  > driver that Surefire never ran — it carried no JUnit annotations, so the JWT
+  > path had **no** coverage in the build while this section claimed it was
+  > verified. `TlsClientConfigSmokeTest` below is still in that shape and still
+  > does not run.
 - **Descriptors / build** — `proto/security` packages as a skinny WAR (only
   `vorpal-blade-library-framework.jar` in `WEB-INF/lib`); the three hardened
   WARs and the admin EAR build.
@@ -355,10 +484,15 @@ Locally verifiable (CI / build box):
   JVM default, truststore → working SSLContext, missing/garbage store → throws
   (fail closed).
 - **Anti-regression grep** — every admin WAR except `watcher`/`redirect`/
-  `javadoc` contains an `<auth-constraint>`; **every** active WAR (all trees,
-  `retired/` excluded) carries the `CONFIDENTIAL` transport-guarantee and a
-  `cookie-secure` session-descriptor (`libs/shared` is a library container, not
-  an app, and inherits nothing here):
+  `javadoc` contains an `<auth-constraint>`. That half passes.
+
+  The transport-guarantee and `cookie-secure` half is an **intent, not a
+  statement of the tree**: as of 2026-08-06 no WAR in any tree carries either,
+  so all 44 lines report MISSING. Closing it means editing every descriptor in
+  `admin`, `services`, `proto` and `test`, which is a cross-cutting change and
+  its own piece of work. Until then, read the second and third loops below as
+  the work list they are (`libs/shared` is a library container, not an app, and
+  inherits nothing here):
 
   ```sh
   for d in admin/*/src/main/webapp/WEB-INF/web.xml; do
@@ -391,6 +525,26 @@ Deploy-only (Jeff, in an OCCAS domain — "after you deploy, look for…"):
 - Mutual TLS outbound: point a `RestConnector` `tls.keyStore` at
   `identity.p12` against an endpoint requiring client certs (the generated
   cert carries EKU clientAuth).
+- WebRTC browser authentication, which has run only against unit tests here.
+  After deploying `blade-phone` and `webrtc`, and setting `jwt.jwksUri` in
+  `webrtc.json` to the phone's JWKS URL:
+  1. `curl -k https://<admin>:7002/blade/phone/api/v1/jwks.json` from an
+     **engine** node — it must return a `keys` array with no admin session. If
+     that call fails, nothing else will work, and the gateway will say
+     "misconfigured (jwksUri)" rather than guess.
+  2. `curl -k https://<admin>:7002/blade/phone/api/v1/token` with no cookie must
+     redirect to the login form, not mint anything.
+  3. Register in the phone: the vorpal log should show
+     `webrtc: <user>@<domain> registered on this node as '<user>'`, and the page
+     should read "verified by the gateway".
+  4. Two tabs, two addresses (`alice@…` and `bob@…`), call one from the other —
+     the browser-to-browser path, and the reason `allowChosenAddress` defaults on.
+  5. The hijack case, which needs devtools: register normally, then edit the
+     `session.connect` frame's `aor` so it differs from the one in the token.
+     The gateway must refuse with "token … grants X, not Y". Editing the page's
+     address field alone will *not* reproduce it — the token is minted for
+     whatever that field says, so the two agree and the socket is allowed. That
+     is the mode working as configured, not the check failing.
 
 ## Open items (next refinement)
 
@@ -400,6 +554,10 @@ Deploy-only (Jeff, in an OCCAS domain — "after you deploy, look for…"):
    group→role map); wire the planned cloud OCCAS+BLADE test instance as the IdP.
 3. **Refinement** Distribute one `blade-security` JWT config to every admin WAR
    (JMX or shared store) so JWT can guard the whole tier, not just `security`.
+   §2a now has a second consumer of `JwtAuthConfig` living in its own app's
+   settings, which makes the case for one distributed config stronger, not
+   weaker — `webrtc.json` and `blade-phone.json` currently have to agree by
+   hand on issuer and audience, and nothing checks that they do.
 4. **TODO** Exact OCCAS 8.1 JDBC digest provider class + install steps, for the
    edge/digest SIP mode.
 5. **Design** Ship the digest `sip.xml` variant (and decide whether it lives in

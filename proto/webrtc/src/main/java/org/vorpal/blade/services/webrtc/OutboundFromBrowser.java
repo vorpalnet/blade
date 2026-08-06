@@ -12,33 +12,48 @@ import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipSession;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
 import org.vorpal.blade.framework.v3.media.MediaConfigs;
 
-/// A browser calls out to the SIP network.
+/// A browser calls out — and *every* browser call goes out this way, including one whose far end is
+/// another browser. Signaling always rides SIP: the INVITE goes through the App Router, past the
+/// location service, visible to FSMAR and analytics like any other call on the network. There is no
+/// WebSocket-only shortcut.
 ///
 /// Started from a WebSocket thread rather than an inbound SIP request, so [#process] is never
 /// called — [#start] is the entry point, the way `services/transfer` originates from a REST thread.
 /// Everything after the first `sendRequest` is ordinary BLADE: continuations run on SIP threads
 /// under the application-session lock.
 ///
-/// **Always anchored**, because the far end is a phone. Two independent negotiations that never see
-/// each other's SDP:
+/// ## What varies is the media, and only the media
 ///
-/// ```
-/// browser  --offer-->  [ webrtc leg | rtp leg ]  --offer-->  network
-///          <-answer--                           <-answer--
-/// ```
+/// [MediaMode] decides what SDP the INVITE carries:
 ///
-/// Joining the two legs is what connects them. Neither side's ICE, DTLS or codec choices leak into
-/// the other's SDP, which is the entire reason a media server sits in the middle.
+/// - **Anchored** — two independent negotiations that never see each other's SDP:
 ///
-/// ## The browser is answered before the far end picks up
+///   ```
+///   browser  --offer-->  [ webrtc leg | rtp leg ]  --offer-->  network
+///            <-answer--                           <-answer--
+///   ```
+///
+///   Joining the legs is what connects them. Required when the far end is a phone, and for
+///   recording — nothing can tap media it never carries.
+///
+/// - **Pass-through** — the browser's own offer goes in the INVITE body untouched, and the far
+///   answer comes back untouched. If a browser answers (through the location service and a second
+///   gateway leg), DTLS-SRTP runs endpoint to endpoint and this gateway could not decrypt a packet
+///   if it wanted to; that property is RFC 8827's, not ours. Complete SDP both ways — no trickle,
+///   so the candidates ride inside the offer and answer.
+///
+/// ## The browser is answered before the far end picks up (anchored path)
 ///
 /// Our SDP answer goes out on `call.progress`, not `call.established`. Waiting for the `200 OK`
 /// would leave the browser with no media path during alerting — no ringback, no carrier early
-/// media, silence until the moment of connect.
+/// media, silence until the moment of connect. On the pass-through path there is no local answer
+/// to give: SDP is forwarded as the far end produces it, early or final.
 public class OutboundFromBrowser extends MediaCallflow {
 	private static final long serialVersionUID = 1L;
 
@@ -80,6 +95,14 @@ public class OutboundFromBrowser extends MediaCallflow {
 		String callId = app.getId();
 		app.setAttribute(BrowserSignals.BROWSER_AOR, aor);
 
+		MediaMode mode = WebrtcServlet.mediaMode()
+				.resolve(BrowserRegistry.isLocal(targetAor(target, aor)), getMsControlFactory() != null);
+
+		if (mode == MediaMode.RELAY) {
+			passThrough(invite, app, aor, callId, browserOffer);
+			return callId;
+		}
+
 		MediaSession media = createMediaSession(app);
 		NetworkConnection browserLeg = media.createNetworkConnection(MediaConfigs.WEBRTC);
 		NetworkConnection networkLeg = media.createNetworkConnection(MediaConfigs.RTP);
@@ -102,6 +125,117 @@ public class OutboundFromBrowser extends MediaCallflow {
 
 		return callId;
 	}
+
+	// ---- pass-through -------------------------------------------------------------------------
+
+	/// [SipApplicationSession] attribute (Boolean): an SDP answer has already been forwarded to the
+	/// browser. A far end that puts the same answer in a `183` and the `200` is normal SIP; a
+	/// browser told to apply a second answer throws. First one wins.
+	private static final String ANSWER_FORWARDED = "org.vorpal.blade.webrtc.answerForwarded";
+
+	/// Send the browser's own offer and forward whatever comes back. No media objects exist on
+	/// this path — the gateway is a signaling participant only.
+	private void passThrough(SipServletRequest invite, SipApplicationSession app, String aor, String callId,
+			String browserOffer) throws Exception {
+		invite.setContent(browserOffer.getBytes(StandardCharsets.UTF_8), SDP_TYPE);
+		BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, hangup -> cancelOrBye(invite, app));
+		sendRequest(invite, response -> onPassThroughResponse(response, aor, callId));
+	}
+
+	/// The far end responded to a pass-through offer: forward its SDP verbatim and keep the
+	/// browser's picture of the call current.
+	private void onPassThroughResponse(SipServletResponse response, String aor, String callId) {
+		SipApplicationSession app = response.getApplicationSession();
+		int status = response.getStatus();
+
+		if (status < 200) {
+			BrowserRegistry.deliver(aor, SignalProtocol.event(SignalProtocol.CALL_PROGRESS, callId,
+					progressData(response, app, status)));
+			return;
+		}
+
+		if (status >= 300) {
+			BrowserSignals.cancel(app, SignalProtocol.CALL_HANGUP);
+			BrowserRegistry.deliver(aor, SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId,
+					status + " " + response.getReasonPhrase()));
+			return;
+		}
+
+		// 200 OK. ACK first either way — the transaction must complete before anything else.
+		try {
+			response.createAck().send();
+		} catch (Exception e) {
+			sipLogger.warning("webrtc: ACK failed for " + callId + ": " + e);
+		}
+		BrowserSignals.cancel(app, SignalProtocol.CALL_HANGUP);
+
+		// The mismatch a pass-through call cannot survive: our offer demanded DTLS-SRTP and the
+		// far end answered without a fingerprint — it accepted the call but holds no key, so the
+		// browser can never complete media with it (it will refuse the SDP outright). Stripping
+		// or forging SDP cannot fix an endpoint that did not do the handshake; only enabling
+		// SRTP/ICE on it, or anchoring on a media server, can. Say that, hang up, and leave the
+		// diagnosis in both the log and the browser instead of a silent dead call.
+		byte[] content = rawContent(response);
+		if (content != null && !InboundToBrowser.isWebrtcOffer(content)) {
+			sipLogger.warning("webrtc: " + callId + " answered without DTLS (no a=fingerprint) — "
+					+ "tearing down; enable SRTP/ICE on the far endpoint or install a media server to interwork");
+			byeAndRelease(response.getSession(), app);
+			BrowserRegistry.deliver(aor, SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId,
+					"far end answered without DTLS; enable SRTP/ICE on it or anchor on a media server"));
+			return;
+		}
+
+		BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP,
+				hangup -> byeAndRelease(response.getSession(), app));
+		expectRequest(response.getSession(), "BYE", bye -> onFarEndHungUp(bye, app, aor, callId));
+
+		ObjectNode data = SignalProtocol.data();
+		String answer = firstAnswer(response, app);
+		if (answer != null) {
+			data.put("sdp", answer);
+		}
+		BrowserRegistry.deliver(aor, SignalProtocol.event(SignalProtocol.CALL_ESTABLISHED, callId, data));
+	}
+
+	private ObjectNode progressData(SipServletResponse response, SipApplicationSession app, int status) {
+		ObjectNode data = SignalProtocol.data().put("status", status == 180 ? "ringing" : "progress");
+		String answer = firstAnswer(response, app);
+		if (answer != null) {
+			data.put("sdp", answer);
+		}
+		return data;
+	}
+
+	/// This response's SDP, or null when it has none, an answer was already forwarded, or the SDP
+	/// is not a WebRTC answer — handing the browser a fingerprint-less SDP would make its
+	/// `setRemoteDescription` throw, which is a worse failure report than the teardown the 200
+	/// path produces.
+	private String firstAnswer(SipServletResponse response, SipApplicationSession app) {
+		byte[] content = rawContent(response);
+		if (content == null || Boolean.TRUE.equals(app.getAttribute(ANSWER_FORWARDED))
+				|| !InboundToBrowser.isWebrtcOffer(content)) {
+			return null;
+		}
+		app.setAttribute(ANSWER_FORWARDED, Boolean.TRUE);
+		return new String(content, StandardCharsets.UTF_8);
+	}
+
+	/// The dialed target as `user@host`, for asking [BrowserRegistry] whether it is a browser on
+	/// this node. `tel:` targets are never browsers; URI parameters and schemes are shed.
+	static String targetAor(String target, String callerAor) {
+		String normalized = normalizeTarget(target, callerAor);
+		if (!normalized.startsWith("sip:") && !normalized.startsWith("sips:")) {
+			return normalized;
+		}
+		String bare = normalized.substring(normalized.indexOf(':') + 1);
+		int semi = bare.indexOf(';');
+		if (semi >= 0) {
+			bare = bare.substring(0, semi);
+		}
+		return bare.toLowerCase();
+	}
+
+	// ---- anchored -----------------------------------------------------------------------------
 
 	/// The far end responded: ring, answer, or refuse.
 	private void onNetworkResponse(SipServletResponse response, NetworkConnection networkLeg, String aor,

@@ -188,32 +188,5 @@
 /// handler integrate with B2BUA functionality, while [TransferSettings][org.vorpal.blade.framework.v2.transfer.TransferSettings] and [TransferListener][org.vorpal.blade.framework.v2.transfer.TransferListener]
 /// provide configurable behavior and lifecycle event notifications.
 ///
-/// ## Bundled Libraries
-///
-/// This module also bundles the following library packages that provide SDP parsing
-/// and manipulation capabilities used by the framework:
-///
-/// ### `javax.sdp`
-/// Provides a comprehensive Java API for parsing, creating, and manipulating Session
-/// Description Protocol (SDP) messages as defined in RFC 2327. Includes the [SdpFactory][javax.sdp.SdpFactory]
-/// for creating and parsing SDP objects, interfaces for all standard SDP fields ([SessionDescription][javax.sdp.SessionDescription],
-/// [MediaDescription][javax.sdp.MediaDescription], [Connection][javax.sdp.Connection], [Attribute][javax.sdp.Attribute], etc.), and [SdpConstants][javax.sdp.SdpConstants] with RTP/AVP
-/// payload type mappings for standard audio and video codecs.
-///
-/// ### `gov.nist.core`
-/// Provides foundational core classes and utilities for the NIST SIP/SDP implementation.
-/// Contains base classes [GenericObject][gov.nist.core.GenericObject] and [GenericObjectList][gov.nist.core.GenericObjectList] for protocol objects,
-/// data structures like [NameValue][gov.nist.core.NameValue] and [NameValueList][gov.nist.core.NameValueList] for parameter handling, network
-/// host representation via [Host][gov.nist.core.Host] and [HostPort][gov.nist.core.HostPort], and parsing infrastructure including
-/// [LexerCore][gov.nist.core.LexerCore], [ParserCore][gov.nist.core.ParserCore], and [HostNameParser][gov.nist.core.HostNameParser] for tokenization and protocol parsing.
-///
-/// ### `gov.nist.javax.sdp`
-/// Provides a concrete implementation of the SDP API based on JSR 141. Contains
-/// [SessionDescriptionImpl][gov.nist.javax.sdp.SessionDescriptionImpl], [MediaDescriptionImpl][gov.nist.javax.sdp.MediaDescriptionImpl], and [TimeDescriptionImpl][gov.nist.javax.sdp.TimeDescriptionImpl] for
-/// creating and manipulating SDP session descriptions with deep cloning support,
-/// dynamic payload handling, and IMS precondition integration. Includes sub-packages
-/// `gov.nist.javax.sdp.fields` for field-level implementations and
-/// `gov.nist.javax.sdp.parser` for SDP message parsing.
-///
 /// @see AsyncSipServlet
 package org.vorpal.blade.framework.v2;

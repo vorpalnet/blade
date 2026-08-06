@@ -12,7 +12,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import org.vorpal.blade.framework.v2.io.VersionedFileStore;
+import org.vorpal.blade.framework.io.VersionedFileStore;
 import org.vorpal.blade.framework.v3.events.BladeEventCatalog;
 import org.vorpal.blade.framework.v3.events.EventCatalog;
 

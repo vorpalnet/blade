@@ -3,7 +3,7 @@
 /// to control and manipulate SIP calls through REST APIs.
 ///
 /// Cross-Origin Resource Sharing (CORS) is handled fleet-wide by the framework's
-/// `org.vorpal.blade.framework.v2.cors.CorsFilter`, registered in every WAR via
+/// `org.vorpal.blade.framework.cors.CorsFilter`, registered in every WAR via
 /// the framework JAR's `META-INF/web-fragment.xml`. It is a no-op until an
 /// operator sets `-Dblade.cors.allowedOrigins` (and optionally
 /// `-Dblade.cors.exposeHeaders`) on the domain.

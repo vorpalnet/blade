@@ -404,6 +404,10 @@ var events = (function () {
 		el('d-download').addEventListener('click', download);
 		el('s-download').addEventListener('click', downloadSubscription);
 
+		// The long-form prose lives in the <dialog>; close is a method="dialog"
+		// form inside it, so only opening needs script.
+		el('d-help-open').addEventListener('click', function () { el('d-help').showModal(); });
+
 		addFieldRow();
 		schedule();
 	}

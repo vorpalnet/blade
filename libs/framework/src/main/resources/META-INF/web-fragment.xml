@@ -19,7 +19,7 @@
          servlet filters, so there is no CPS-path impact. -->
     <filter>
         <filter-name>BladeCorsFilter</filter-name>
-        <filter-class>org.vorpal.blade.framework.v2.cors.CorsFilter</filter-class>
+        <filter-class>org.vorpal.blade.framework.cors.CorsFilter</filter-class>
         <async-supported>true</async-supported>
     </filter>
     <filter-mapping>

@@ -21,7 +21,7 @@ const els = {
   pill: $('pill'), display: $('display'), state: $('state-label'), party: $('party'),
   timer: $('timer'), incoming: $('incoming'), incomingFrom: $('incoming-from'),
   target: $('target'), keypad: $('keypad'), log: $('log'), remote: $('remote'),
-  gateway: $('gateway'), aor: $('aor'), stun: $('stun'),
+  gateway: $('gateway'), aor: $('aor'), stun: $('stun'), authState: $('auth-state'),
   micState: $('mic-state'), rxState: $('rx-state'),
   factPath: $('fact-path'), factIce: $('fact-ice'), factPair: $('fact-pair'), factCodec: $('fact-codec'),
   btn: {
@@ -43,13 +43,98 @@ let timerHandle = null;
 // so this page's own origin is the wrong default. Guess the engine's HTTP port on the
 // same host, which is right for a single-box lab and obviously editable otherwise.
 const ENGINE_HTTP_PORT = 8001;
-{
+function guessGateway() {
   const secure = location.protocol === 'https:';
   const scheme = secure ? 'wss' : 'ws';
   const port = secure ? location.port : ENGINE_HTTP_PORT;
   const host = location.hostname + (port ? `:${port}` : '');
-  els.gateway.value = `${scheme}://${host}/webrtc/signal`;
+  return `${scheme}://${host}/webrtc/signal`;
 }
+els.gateway.value = guessGateway();
+
+// ---------------------------------------------------------------- identity
+
+/*
+ * Whatever address is registered, the gateway learns it from a signed token rather than from this
+ * page -- so a browser can never claim an address the server did not issue it. Whether you may ASK
+ * for a particular address is a separate question, and a deployment setting: on by default, because
+ * a browser-to-browser call needs two addresses and most deployments have one operator account.
+ *
+ * The token is fetched per registration rather than held: it lives about a minute, so caching one
+ * across a page that might sit open all afternoon would only produce expired-token failures.
+ */
+
+/** Ask the server who we are and what it will let us do. Fills the form in before anything is clicked. */
+async function loadSession() {
+  const response = await fetch('api/v1/session', {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
+}
+
+async function mintToken(aor) {
+  const query = aor ? `?aor=${encodeURIComponent(aor)}` : '';
+  const response = await fetch(`api/v1/token${query}`, {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    // The admin session cookie is what authenticates this call.
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`;
+    try {
+      const body = await response.json();
+      if (body && body.error) detail = body.error;
+    } catch {
+      // Non-JSON body: a container-generated error page, most likely the login
+      // form after the session expired. The status is all we can honestly report.
+      if (response.status === 401 || response.status === 403) {
+        detail = 'your session has expired — reload the page to sign in again';
+      }
+    }
+    throw new Error(detail);
+  }
+  return response.json();
+}
+
+/*
+ * Prefill from the server's answer. The address arrives as this user's default; it stays editable
+ * when the deployment allows a chosen one, and goes read-only when it does not -- so the field's
+ * own behaviour tells you which deployment you are on, before you press anything.
+ */
+loadSession().then((s) => {
+  els.aor.value = s.aor;
+  if (s.stunServer) els.stun.value = s.stunServer;
+
+  if (s.gateway) {
+    els.gateway.value = s.gateway;
+  } else {
+    // Say so. The guess is this page's own hostname with the engine's default port, which is
+    // right only when the engine listens on the address you happen to be browsing to. An engine
+    // bound to a specific interface -- the normal case -- rejects it as "could not connect",
+    // and there is nothing on screen to suggest the address was invented rather than configured.
+    log(`no gateway configured; guessing ${els.gateway.value}. `
+      + 'Set "gateway" in blade-phone.json if the engine listens elsewhere.', 'err');
+  }
+
+  if (s.allowChosenAddress) {
+    els.aor.readOnly = false;
+    els.aor.removeAttribute('aria-readonly');
+    els.aor.placeholder = 'user@host';
+    els.authState.textContent = `Signed in as ${s.user}. Not registered.`;
+  } else {
+    els.aor.readOnly = true;
+    els.aor.setAttribute('aria-readonly', 'true');
+    els.authState.textContent =
+      `Signed in as ${s.user}. This deployment issues one address per user. Not registered.`;
+  }
+}).catch((e) => {
+  log(`could not read this session: ${e.message}`, 'err');
+});
 
 // ---------------------------------------------------------------- log
 
@@ -197,6 +282,28 @@ function setState(state) {
   if (!onCall) stopTimer();
 }
 
+/*
+ * Report whether the gateway verified this browser.
+ *
+ * Spelled out in words rather than signalled by colour: "the gateway is not checking anybody" is
+ * exactly the kind of fact that must not depend on noticing a shade.
+ */
+function setAuthPill(verified, user) {
+  els.authState.dataset.verified = String(!!verified);
+  const address = phone?.aor ?? els.aor.value;
+  // Name the account as well as the address: with a chosen address the two differ, and "who
+  // registered this" is the question a log or a puzzled colleague will actually ask.
+  const who = user && user !== address ? `${address} (signed in as ${user})` : address;
+  els.authState.textContent = verified
+    ? `Registered as ${who} — verified by the gateway`
+    : `Registered as ${address}. The gateway is not verifying browsers: any client that can reach it may claim any address.`;
+}
+
+function clearAuthPill() {
+  els.authState.dataset.verified = 'unknown';
+  els.authState.textContent = 'Not registered.';
+}
+
 function startTimer() {
   callStartedAt = Date.now();
   timerHandle = setInterval(() => {
@@ -293,15 +400,40 @@ function press(digit) {
 els.btn.back.addEventListener('click', () => { els.target.value = els.target.value.slice(0, -1); });
 
 els.btn.register.addEventListener('click', async () => {
+  els.btn.register.disabled = true;
+
+  let grant;
+  try {
+    log('requesting a token for this session', 'out');
+    grant = await mintToken(els.aor.value.trim());
+  } catch (e) {
+    log(`could not obtain a token: ${e.message}`, 'err');
+    els.btn.register.disabled = false;
+    return;
+  }
+
+  // Show what was actually issued rather than what was asked for -- they differ when the
+  // deployment declined the request, and the token is what the gateway will act on.
+  els.aor.value = grant.aor;
+
   const stun = els.stun.value.trim();
   phone = new BladePhone({
     url: els.gateway.value.trim(),
-    aor: els.aor.value.trim(),
+    aor: grant.aor,
+    token: grant.token,
     iceServers: stun ? [{ urls: stun }] : [],
   });
 
   phone.onStateChange = setState;
-  phone.onRegistered = (d) => log(`registered as ${d?.aor ?? phone.aor}`);
+  phone.onRegistered = (d) => {
+    log(`registered as ${d?.aor ?? phone.aor}`);
+    // An unauthenticated gateway is a deployment mistake, not a mode to be quiet about: say it
+    // where the operator is already looking rather than only in a server log.
+    if (d && d.authenticated === false) {
+      log('this gateway is NOT authenticating browsers — anyone who can reach it may claim any address', 'err');
+    }
+    setAuthPill(d && d.authenticated !== false, grant.user);
+  };
   phone.onIncoming = (c) => { setParty(c.from); els.incomingFrom.textContent = c.from; log(`incoming from ${c.from}`); };
   phone.onProgress = (d) => log(`progress: ${d.status ?? 'trying'}`);
   phone.onEstablished = () => {
@@ -334,11 +466,16 @@ els.btn.register.addEventListener('click', async () => {
     await phone.connect();
   } catch (e) {
     log(`could not register: ${e.message}`, 'err');
+    clearAuthPill();
     setState('idle');
   }
 });
 
-els.btn.unregister.addEventListener('click', () => { phone?.disconnect(); log('disconnected', 'out'); });
+els.btn.unregister.addEventListener('click', () => {
+  phone?.disconnect();
+  clearAuthPill();
+  log('disconnected', 'out');
+});
 
 els.btn.call.addEventListener('click', async () => {
   const target = els.target.value.trim();

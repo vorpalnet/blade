@@ -32,21 +32,28 @@ about that are worth keeping in mind, because they drove the design:
 3. **The client rotted.** Its JavaScript still feature-detects `webkitGetUserMedia` and
    uses `URL.createObjectURL(stream)`, both long gone from browsers.
 
-## Media is optional
+## Signaling is always SIP; only the media varies
 
-Two browsers calling each other need **no media server at all**. Their SDP is relayed verbatim,
-candidates are forwarded both ways, and the media flows peer-to-peer. Deploy this WAR on its
-own and browser-to-browser works.
+Every call is a SIP INVITE through the App Router — browser-to-browser included. There is
+no WebSocket-only shortcut: a call between two tabs on the same engine still traverses
+FSMAR and the location service like any other call on the network, so it is routable,
+loggable and visible to analytics. What `MediaMode` decides (`webrtc.json`, default
+`AUTO`) is only what SDP that INVITE carries:
 
-A media server becomes necessary the moment either of two things is true:
+- **Pass-through (RELAY)** — the browser's own offer rides the INVITE body untouched and
+  the far answer comes back untouched, so two browsers key DTLS directly to each other and
+  need **no media server at all**. Deploy this WAR on its own and browser-to-browser works.
+- **Anchored (ANCHOR)** — a media server's SDP rides the INVITE; required the moment one
+  end is not a browser (a phone cannot speak ICE or DTLS-SRTP) or somebody wants the media
+  (recording, conferencing, transcription, scoring, intercept).
+- **AUTO** — relay when the dialed target is a browser on this node; otherwise anchor when
+  a media server is installed and relay when none is.
 
-- **One end is not a browser.** A phone cannot speak ICE or DTLS-SRTP, so browser↔PSTN is
-  always anchored.
-- **Somebody wants the media.** Recording, conferencing, transcription, scoring, intercept.
-
-`MediaMode` makes that a per-deployment policy (`auto` / `relay` / `anchor`) rather than a
-code path, mirroring `session.passthru` in `v3/Callflow.java:49`, where the same callflow
-runs as a dropped-out proxy or a full B2BUA depending on config.
+The caller side resolves that policy blind — it cannot know what will answer. The
+answering side needs no policy at all: an arriving offer with a DTLS fingerprint
+(`a=fingerprint:`) is from a WebRTC endpoint and passes through; one without is from a
+phone or trunk and anchors. This mirrors `session.passthru` in `v3/Callflow.java:49`,
+where the same callflow runs as a dropped-out proxy or a full B2BUA depending on config.
 
 ## Recording a peer-to-peer call is a re-key, not a tap
 
@@ -55,12 +62,13 @@ complete a DTLS handshake **directly with each other** and derive their SRTP key
 master secret the signaling path never sees — RFC 8827 is built so it cannot. The gateway
 forwarded fingerprints and nothing more, so it cannot decrypt a single packet.
 
-So pressing record does not attach a listener. It re-offers **both** legs from the media
-server (`call.update`), each browser answers, and the media server becomes a legitimate DTLS
+So recording a pass-through call means re-offering **both** legs from the media server
+(`call.update`), each browser answering, and the media server becoming a legitimate DTLS
 endpoint on each — at which point it can mix, record and transcribe. Each leg does an ICE
-restart and a fresh handshake, so there is a brief audible gap.
-
-A deployment that would rather never have that gap sets `mediaMode: anchor` and pays for a
+restart and a fresh handshake, so there is a brief audible gap. That escalation is
+**designed but not currently implemented** — it existed for the retired WebSocket-relay
+path and has to be rebuilt across the two SIP legs of a pass-through call (see the gap
+list). Today, a deployment that wants recording sets `mediaMode: anchor` and pays for a
 media server on every call. That trade is the whole reason the setting exists.
 
 ## Not SIP over WebSocket
@@ -82,7 +90,7 @@ CloudEvents 1.0 envelopes, subprotocol `blade.webrtc.v1`. Thirteen types, all in
 
 | browser → gateway | gateway → browser |
 |---|---|
-| `session.connect` | `session.ready` |
+| `session.connect` (`aor` + `token`) | `session.ready` |
 | `call.offer` | `call.incoming` |
 | `call.answer` | `call.progress` |
 | `call.accept` | `call.established` |
@@ -96,18 +104,97 @@ already up. Without it a call's media path could never change after setup. It is
 mechanism WSC's mobile SDKs exposed as `Call.update()` for audio↔video upgrade, and BLADE
 already has the SIP analog in `v2/b2bua/Reinvite.java` and `v3/media/CallflowHold`.
 
-**ICE direction depends on the mode.** In a *relayed* call both ends trickle: both are
-browsers, both support it natively, and there is no server in the middle whose gathering
-anyone is waiting on. In an *anchored* call the gateway trickles to the browser but the
-browser sends one complete offer or answer, because browsers only send candidates
-incrementally when told the far side can take them, and the media server is not told so. The
-gateway signals which applies per call with a `trickle` flag on `call.incoming` /
-`call.progress`.
+**ICE is not trickled — complete SDP both ways.** A browser sends its whole offer or
+answer after gathering finishes, candidates included, and the gateway forwards SDP whole.
+On the anchored path that is because the media server does not advertise inbound trickle;
+on the pass-through path it is because the SDP crosses a SIP fabric whose forks and B2BUA
+hops have no channel for mid-flight candidates. Half-trickle also removes an entire class
+of ordering bug from the client. (The `ice.candidate` type remains in the protocol; the
+gateway may still trickle *its* candidates browser-ward on anchored calls.)
 
-**Outbound calls answer the browser during alerting, not at pickup.** `call.progress`
-carries the gateway's SDP answer, so the browser has a media path while the far end is
-still ringing. Deferring it to `call.established` would mean no ringback and no carrier
-early media — the call would be silent until the moment it connected.
+**Anchored outbound calls answer the browser during alerting, not at pickup.**
+`call.progress` carries the gateway's SDP answer, so the browser has a media path while
+the far end is still ringing. Deferring it to `call.established` would mean no ringback
+and no carrier early media. On the pass-through path there is no local answer to give
+early: SDP is forwarded as the far end produces it — on `call.progress` when an 18x
+carries it, else on `call.established` — and exactly once, because a browser cannot
+apply a second answer.
+
+## Authenticating a browser
+
+A socket arriving here says nothing about who is on the other end. It came from a page
+served by a different server on a different port, so no admin session cookie reaches this
+tier, and the browser WebSocket API cannot attach an `Authorization` header to a handshake.
+Left alone, "who are you" is answered by whatever the client typed — which is how a gateway
+ends up placing calls for anyone who can reach port 8001.
+
+So `session.connect` carries a signed token beside the address, and `BrowserAuthenticator`
+decides. Configuration lives in `WebrtcSettings.jwt` (`webrtc.json`) and is an ordinary
+`JwtAuthConfig` — the same fields that would describe Okta or Entra. Pointing this at a
+corporate IdP instead of the bundled phone app is a configuration change with no code behind
+it. Today the issuer is [admin/phone](../../admin/phone/README.md), which authenticates the
+user against the WebLogic realm before minting.
+
+**The address comes from the token, not from the request.** The token names the one address
+its holder may bind; a browser asking for a different one is refused rather than quietly
+corrected. Checking only the signature would leave every signed-in employee able to register
+as a colleague and take their calls — a hijack performed by a fully authenticated user.
+
+**It fails closed.** No configuration loaded, or configuration that cannot be used (a blank
+or unreachable `jwksUri`), refuses the browser and names the setting to fix. "We could not
+read the rule" must never mean "there is no rule". The one open path is explicit:
+`jwt.enabled = false` lets any browser claim any address, and when it is set the service
+logs SEVERE at startup and reports `authenticated: false` in `session.ready` so the phone
+shows it on screen rather than only in a log.
+
+The shipped sample has `enabled = true` and a blank `jwksUri`, so a half-configured
+deployment gets a gateway that does not work rather than one that works and is open.
+
+## Location service — the gateway REGISTERs on the browser's behalf
+
+`BrowserRegistry` is only the socket table: which browsers hold a live WebSocket on
+*this node*. The network's location service is `proxy-registrar`, and browsers appear
+in it because this gateway speaks SIP for them — the SBC arrangement. On a successful
+`session.connect`, `BrowserRegistration` sends a real REGISTER (From = To = the AOR,
+so the registrar files it under the address the browser claimed) whose contact is
+**routable** — this engine's own SIP interface carrying the container's `encodeURI`
+targeting parameters, bound to a long-lived per-browser application session:
+
+```
+Contact: <sip:alice@172.16.32.129:5060;transport=tcp;sipappsessionid=<prefix>:<callId>:webrtc;wlsscid=…>
+```
+
+That header is the whole inbound routing story. The registrar stores it verbatim and
+forks an inbound INVITE with it as the Request-URI; the container recognizes its own
+targeting parameters, hands the App Router `SipTargetedRequestInfo(ENCODED_URI,
+"webrtc", …)`, and the FSMAR's targeted branch dispatches the fork into the
+registration's session on this app **before the state machine runs**. No FSMAR
+transition names this application for inbound calls — the REGISTER said everything,
+which is what a registrar's contact is for. (The app-originated REGISTER itself still
+consults the AR normally, so a `webrtc` state routing REGISTER to `proxy-registrar`
+remains ordinary deployment routing.)
+
+Because the contact names the registering engine, a fork in a cluster is *delivered
+to the node holding the WebSocket* — the contact routes to the node, which is exactly
+right for a socket that cannot replicate.
+
+On socket close or error the gateway sends `Expires: 0`. A page reload never tears
+down its successor's binding: the superseded socket's unregister returns null, and
+the replacement's re-REGISTER finds the same by-key session, produces the identical
+contact string, and refreshes the same binding. Registration is best-effort — a
+REGISTER failure logs a WARNING and the browser keeps its session.
+
+One call at a time per browser follows from the session-per-AOR shape: inbound
+targeted calls land on the registration's session, so a second simultaneous INVITE
+for the same AOR would collide with the first's continuations. A browser tab is a
+one-call phone; this is the honest shape, not a limitation.
+
+There is no refresh timer yet: browsers re-register on every reconnect, and a tab
+left open longer than `registerExpiresSeconds` (settings, default 3600) simply ages
+out of the location service until it reconnects — its socket, and browser-to-browser
+calling, are unaffected. When the timer becomes worth building, the gateway service's
+trunk registration (`services/gateway/RegisterCallflow`) is the proven pattern: arm
+`startTimer` in the 2xx callback, resolve the session by a stashed id.
 
 ## Late media
 
@@ -145,15 +232,17 @@ Built and unit-tested:
 |---|---|
 | `SignalProtocol` — the event vocabulary | done |
 | `SignalEndpoint` — `@ServerEndpoint`, registration, event dispatch | done |
-| `BrowserRegistry` — node-local socket bindings | done, 7 tests |
+| `BrowserRegistry` — node-local socket table | done, 7 tests |
 | `BrowserSignals` — browser event → callflow continuation, under the SAS lock | done |
 | `InboundToBrowser` — network calls a browser, both SDP directions | done |
 | `OutboundFromBrowser` — browser calls the network (3PCC) | done, 6 tests |
-| `BrowserToBrowser` — peer-to-peer relay + escalation to recording | done |
-| `MediaMode` — relay/anchor policy | done, 3 tests |
+| Pass-through media in both callflows (browser↔browser via SIP, media P2P) | done |
+| `MediaMode` — media policy, wired to `webrtc.json` | done, 4 tests |
 | `call.update` renegotiation | done, 5 protocol tests |
 | JSR-309 driver: `generateSdpOffer` / `processSdpAnswer` / WebRTC legs | done, 17 tests |
-| `WebrtcServlet` — SIP entry, provider install | done |
+| `WebrtcServlet` — SIP entry, provider install, settings | done |
+| `BrowserAuthenticator` — who may claim which address | done, 12 tests |
+| `BrowserRegistration` — REGISTER/deregister on the browser's behalf | done, 5 tests |
 | `MediaCallflow.generateOffer` / `answerWithLateMedia` | done |
 | JSR-309 media controller WebRTC endpoint facade | done, 10 tests |
 
@@ -173,20 +262,21 @@ a static page; it can be hosted anywhere.
    browser-directed events over the existing `v3.events.EventBus` JMS topic and let the
    node holding the socket deliver. Outbound calls are unaffected, since the browser that
    originates is by definition on the node handling it.
-2. **Authentication.** `session.connect` claims an address with no credential check. Any
-   connected browser can claim any address, including one already in use.
-3. **`call.dtmf` and `call.accept`** are declared and accepted but not yet acted on — DTMF
+2. **`call.dtmf` and `call.accept`** are declared and accepted but not yet acted on — DTMF
    needs an RFC 4733 or INFO path on the media leg.
-4. **No `.jschema` settings file.** Media-plane configuration is read from servlet context
-   parameters rather than a BLADE settings object, so it is not editable from the
-   Configurator, and `MediaMode` is not yet wired to a config key.
-5. **Recording captures one leg, not the mix.** Escalation now completes: both legs are
-   re-offered, answered, and joined (the driver's `NetworkConnection.join` wires the media
-   paths in each direction). But the driver's recorder connects a single
-   `NetworkConnection` to its recorder endpoint, and its `createMediaMixer` still throws —
-   so a two-party recording gets one side of the conversation. Mixing needs the JSR-309
-   media controller's compositing hub, which is the largest single item left. Everything up
-   to and including "the media server is now in the media path of both browsers" works.
+3. **Driver configuration** is still read from servlet context parameters rather than from
+   `WebrtcSettings` (`mediaMode`, `jwt` and `registerExpiresSeconds` *are* settings now;
+   the 309 driver's own keys have yet to follow).
+4. **Registration refresh timer** — see the Location service section: a tab open longer
+   than `registerExpiresSeconds` ages out of the registrar until it reconnects.
+5. **Recording escalation of a pass-through call.** `call.record` on a pass-through call
+   currently does nothing — the `call.update` re-key implementation was retired with the
+   WebSocket-relay path it was written for, and has to be rebuilt across the two SIP legs
+   (each gateway leg re-offers its own browser from the media server). Until then,
+   recording requires `mediaMode: anchor` from call start. Within an anchored call, the
+   remaining media-server gap is unchanged: the driver records a single
+   `NetworkConnection`, and mixing two parties needs the JSR-309 media controller's
+   compositing hub (`createMediaMixer` still throws).
 
 ## Build
 
@@ -199,8 +289,9 @@ comes from the inherited `javaee-api` (provided); WebLogic supplies Tyrus at run
 
 ## Related modules
 
-- [admin/phone](../../admin/phone/README.md) — the browser softphone that speaks this protocol
+- [admin/phone](../../admin/phone/README.md) — the browser softphone that speaks this protocol, and mints the tokens it presents
 - [proto/player](../player/README.md) — the vendor-neutral JSR-309 player, same driver deployment story
+- [SECURITY.md](../../SECURITY.md) §2a — the token design in full
 - [BLADE](../../README.md) — project home
 
 ## Maven Coordinates

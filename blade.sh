@@ -1069,11 +1069,14 @@ _done_glyph() {
 }
 
 # Read one keypress; echo a token: up|down|space|enter|dry|quit|other.
+# Fractional read -t needs bash 4; on 3.2 (stock macOS) fall back to 1s, which
+# only delays a bare Esc press -- arrow-key bytes arrive together.
+_ESC_T=0.05; [ "${BASH_VERSINFO[0]}" -lt 4 ] && _ESC_T=1
 _read_key() {
     local k r
     IFS= read -rsn1 k 2>/dev/null || { printf 'quit'; return; }
     case "$k" in
-        $'\e') IFS= read -rsn2 -t 0.05 r 2>/dev/null || r=""
+        $'\e') IFS= read -rsn2 -t "$_ESC_T" r 2>/dev/null || r=""
                case "$r" in '[A'|'OA') printf 'up' ;; '[B'|'OB') printf 'down' ;; *) printf 'other' ;; esac ;;
         '')    printf 'enter' ;;
         ' ')   printf 'space' ;;
@@ -1086,7 +1089,10 @@ _read_key() {
 # Cursor-driven TUI: ↑/↓ move, space toggles [x], Enter runs the checked set
 # (or the highlighted row if none checked), d toggles dry-run, q quits.
 dashboard_tui() {
-    declare -A CHK=()
+    # Checked row ids as a space-delimited string, not an associative array --
+    # macOS ships bash 3.2 and `declare -A` doesn't exist there.
+    local CHK=""
+    _chk_has() { case " $CHK " in *" $1 "*) return 0 ;; esac; return 1; }
     local sel=0
     printf '\e[?25l'                                   # hide cursor
     trap 'printf "\e[?25h\n"' EXIT INT
@@ -1106,7 +1112,7 @@ dashboard_tui() {
                 printf '\n  %s%s%s\n' "$C_BOLD" "${MR_LABEL[$i]}" "$C_RESET"
                 continue
             fi
-            local box="[ ]"; [ -n "${CHK[${MR_ID[$i]}]:-}" ] && box="[x]"
+            local box="[ ]"; _chk_has "${MR_ID[$i]}" && box="[x]"
             local g=" "; case "${MR_DONE[$i]}" in 1) g="✓" ;; 0) g="○" ;; esac
             local arrow="  "; [ "${MR_TYPE[$i]}" = action ] && arrow="→ "
             if [ "$i" = "$cur" ]; then
@@ -1122,18 +1128,23 @@ dashboard_tui() {
             up)    sel=$((sel - 1)) ;;
             down)  sel=$((sel + 1)) ;;
             space) local id="${MR_ID[$cur]}"
-                   if [ -n "${CHK[$id]:-}" ]; then unset 'CHK[$id]'; else CHK[$id]=1; fi ;;
+                   if _chk_has "$id"; then
+                       CHK=" $CHK "; CHK="${CHK/ $id / }"
+                       CHK="${CHK# }"; CHK="${CHK% }"
+                   else
+                       CHK="${CHK:+$CHK }$id"
+                   fi ;;
             dry)   [ "$DRY" = "on" ] && DRY="off" || DRY="on" ;;
             enter) local runids=() j id
                    for j in "${!MR_TYPE[@]}"; do
                        [ "${MR_TYPE[$j]}" = head ] && continue
-                       id="${MR_ID[$j]}"; [ -n "${CHK[$id]:-}" ] && runids+=("$id")
+                       id="${MR_ID[$j]}"; _chk_has "$id" && runids+=("$id")
                    done
                    [ "${#runids[@]}" -eq 0 ] && runids=("${MR_ID[$cur]}")
                    printf '\e[?25h'; trap - INT
                    printf '\e[2J\e[H'
                    local rid; for rid in "${runids[@]}"; do dispatch_row "$rid"; done
-                   CHK=()
+                   CHK=""
                    { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && break
                    printf '\n  %s[done] press Enter to return…%s' "$C_DIM" "$C_RESET"; IFS= read -r _ || true
                    load_profile
@@ -1925,7 +1936,8 @@ do_add_machine() {
     #    receives a config that already knows about itself.
     if ! cluster_resize "$name" "$addr" "$newmatch" "$DCOUNT"; then
         warn "could not add ${name} to the domain — nothing changed."
-        unset 'H_NAME[-1]' 'H_ADDR[-1]' 'H_PORT[-1]' 'H_TYPE[-1]' 'H_PUB[-1]' 'H_FQDN[-1]' 'H_ROLE[-1]'
+        local last=$(( ${#H_NAME[@]} - 1 ))
+        unset "H_NAME[$last]" "H_ADDR[$last]" "H_PORT[$last]" "H_TYPE[$last]" "H_PUB[$last]" "H_FQDN[$last]" "H_ROLE[$last]"
         return 1
     fi
 
@@ -1965,7 +1977,8 @@ do_remove_machine() {
     remove_engine_systemd_units "$domhome" "${DOMAINS_DIR}/${NM_DOMAIN}"
     H_NAME=("${keep_name[@]}"); H_ADDR=("${keep_addr[@]}"); H_ROLE=("${keep_role[@]}")
 
-    unset 'H_NAME[-1]' 'H_ADDR[-1]' 'H_PORT[-1]' 'H_TYPE[-1]' 'H_PUB[-1]' 'H_FQDN[-1]' 'H_ROLE[-1]'
+    local last=$(( ${#H_NAME[@]} - 1 ))
+    unset "H_NAME[$last]" "H_ADDR[$last]" "H_PORT[$last]" "H_TYPE[$last]" "H_PUB[$last]" "H_FQDN[$last]" "H_ROLE[$last]"
     DCOUNT="${#H_NAME[@]}"; match="$newmatch"
     save_profile
     ok "${name} removed — cluster is now ${DCOUNT} engine(s)."

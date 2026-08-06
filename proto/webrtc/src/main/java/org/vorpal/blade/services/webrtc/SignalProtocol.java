@@ -39,8 +39,13 @@ public final class SignalProtocol {
 
 	// ---- browser -> gateway -------------------------------------------------------------------
 
-	/// Claim an address on this gateway. `data.aor` is the address; credentials, when the
-	/// deployment requires them, ride alongside.
+	/// Claim an address on this gateway. `data.aor` is the address and `data.token` is the signed
+	/// JWT proving the browser may have it.
+	///
+	/// This is the only authenticated step in the protocol, and it is enough: every other event
+	/// requires the socket to be registered already, so refusing here refuses all of them. The
+	/// token names its own address, so `aor` is a statement the gateway checks rather than
+	/// obeys — a mismatch is refused, not silently corrected.
 	public static final String SESSION_CONNECT = "session.connect";
 	/// Place a call. `data.target` is who to reach, `data.sdp` the browser's complete offer.
 	public static final String CALL_OFFER = "call.offer";
@@ -54,13 +59,17 @@ public final class SignalProtocol {
 	public static final String CALL_DTMF = "call.dtmf";
 	/// Start or stop recording this call. `data.on` is a boolean.
 	///
-	/// In a relayed (peer-to-peer) call this is what pulls the media server in, which is not a
-	/// tap — see [#CALL_UPDATE].
+	/// Acted on only when the call is anchored. On a pass-through call this is currently ignored:
+	/// pulling the media server into an established peer-to-peer call is a re-key of both legs —
+	/// see [#CALL_UPDATE] — and that escalation is designed but not yet rebuilt for the SIP path.
 	public static final String CALL_RECORD = "call.record";
 
 	// ---- gateway -> browser -------------------------------------------------------------------
 
-	/// The address is claimed and calls can now arrive.
+	/// The address is claimed and calls can now arrive. `data.aor` is the address that was actually
+	/// bound — the token's, which may differ from the one asked for. `data.authenticated` is false
+	/// when the deployment has browser authentication switched off, so a page can show that its
+	/// identity was taken on trust rather than proved.
 	public static final String SESSION_READY = "session.ready";
 	/// A call is arriving. `data.from` identifies the caller; `data.sdp`, when present, is the
 	/// media server's offer for the browser to answer.

@@ -50,4 +50,29 @@ public class OutboundFromBrowserTest {
 		assertEquals("sip:13125551212", OutboundFromBrowser.normalizeTarget("13125551212", "alice"));
 		assertEquals("sip:13125551212", OutboundFromBrowser.normalizeTarget("13125551212", null));
 	}
+
+	// ---- targetAor: what the media-mode decision asks BrowserRegistry about --------------------
+
+	@Test
+	public void targetAorReducesEveryDialableFormToUserAtHost() {
+		// However the target was typed, the socket-table lookup key is the same.
+		assertEquals("bob@vorpal.net", OutboundFromBrowser.targetAor("bob@vorpal.net", "alice@vorpal.net"));
+		assertEquals("bob@vorpal.net", OutboundFromBrowser.targetAor("sip:bob@vorpal.net", "alice@vorpal.net"));
+		assertEquals("bob@vorpal.net",
+				OutboundFromBrowser.targetAor("sip:bob@vorpal.net;transport=tcp", "alice@vorpal.net"));
+		assertEquals("bob@vorpal.net", OutboundFromBrowser.targetAor("Bob@Vorpal.Net", "alice@vorpal.net"));
+	}
+
+	@Test
+	public void targetAorGivesABareNumberTheCallersDomain() {
+		// Matches normalizeTarget, so "dial 1234" and a browser registered as
+		// 1234@vorpal.net find each other.
+		assertEquals("1234@vorpal.net", OutboundFromBrowser.targetAor("1234", "alice@vorpal.net"));
+	}
+
+	@Test
+	public void telTargetsAreNeverBrowsers() {
+		// A tel: URI stays as-is, which matches no AOR in the socket table.
+		assertEquals("tel:+13125551212", OutboundFromBrowser.targetAor("tel:+13125551212", "alice@vorpal.net"));
+	}
 }

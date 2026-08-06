@@ -14,9 +14,11 @@ import javax.servlet.sip.annotation.SipApplication;
 import javax.servlet.sip.annotation.SipListener;
 import javax.servlet.sip.annotation.SipServlet;
 
+import org.vorpal.blade.framework.v2.config.SettingsManager;
 import org.vorpal.blade.framework.v3.AsyncSipServlet;
 import org.vorpal.blade.framework.v3.Callflow;
 import org.vorpal.blade.framework.v3.media.MediaCallflow;
+import org.vorpal.blade.framework.v3.security.JwtAuthConfig;
 
 /// The SIP half of the WebRTC gateway.
 ///
@@ -40,8 +42,43 @@ import org.vorpal.blade.framework.v3.media.MediaCallflow;
 public class WebrtcServlet extends AsyncSipServlet {
 	private static final long serialVersionUID = 1L;
 
+	/// Read by [SignalEndpoint] on every `session.connect`. Static because the
+	/// WebSocket container builds its own endpoint instances and hands them no
+	/// reference to the SIP servlet; this is the seam between the two halves of
+	/// the converged application.
+	public static SettingsManager<WebrtcSettings> settings;
+
+	/// This engine's SIP interface, captured at startup from the standard
+	/// `javax.servlet.sip.outboundInterfaces` context attribute. It is the host
+	/// and port [BrowserRegistration] writes into every contact — the address
+	/// that makes a registered browser's contact routable back to this node.
+	private static volatile javax.servlet.sip.SipURI outboundInterface;
+
+	public static javax.servlet.sip.SipURI outboundInterface() {
+		return outboundInterface;
+	}
+
 	@Override
 	protected void servletCreated(SipServletContextEvent event) {
+		captureOutboundInterface(event);
+		try {
+			settings = new SettingsManager<>(event, WebrtcSettings.class, new WebrtcSettingsSample());
+			JwtAuthConfig jwt = jwtConfig();
+			if (jwt == null || !jwt.isEnabled()) {
+				sipLogger.severe("WebrtcServlet: browser authentication is DISABLED — "
+						+ "any client that can reach this node may claim any address and place calls. "
+						+ "Set jwt.enabled and jwt.jwksUri in webrtc.json to close it.");
+			} else {
+				sipLogger.info("WebrtcServlet: browser authentication enabled; issuer=" + jwt.getIssuer()
+						+ ", jwks=" + jwt.getJwksUri());
+			}
+		} catch (Exception e) {
+			// Without settings the authenticator sees a null config, which is the
+			// open path — so this cannot be allowed to pass quietly.
+			sipLogger.severe("WebrtcServlet: could not load settings, so browser authentication "
+					+ "is NOT in force: " + e.getMessage());
+		}
+
 		try {
 			Driver driver = findDriver();
 			if (driver == null) {
@@ -70,6 +107,53 @@ public class WebrtcServlet extends AsyncSipServlet {
 			return new InboundToBrowser();
 		}
 		return null;
+	}
+
+	/// The live browser-authentication settings, or null when the app has none —
+	/// which [BrowserAuthenticator] treats as "refuse", not as "allow".
+	public static JwtAuthConfig jwtConfig() {
+		SettingsManager<WebrtcSettings> sm = settings;
+		WebrtcSettings current = (sm == null) ? null : sm.getCurrent();
+		return (current == null) ? null : current.getJwt();
+	}
+
+	/// The configured media policy, AUTO when settings are not loaded.
+	public static MediaMode mediaMode() {
+		SettingsManager<WebrtcSettings> sm = settings;
+		WebrtcSettings current = (sm == null) ? null : sm.getCurrent();
+		return (current == null || current.getMediaMode() == null) ? MediaMode.AUTO : current.getMediaMode();
+	}
+
+	/// Expires for the REGISTER sent on a browser's behalf. The setter clamps,
+	/// so the only case handled here is settings not being loaded at all.
+	public static int registerExpiresSeconds() {
+		SettingsManager<WebrtcSettings> sm = settings;
+		WebrtcSettings current = (sm == null) ? null : sm.getCurrent();
+		return (current == null || current.getRegisterExpiresSeconds() == null)
+				? 3600 : current.getRegisterExpiresSeconds();
+	}
+
+	/// Pick the interface browsers' contacts will name. First TCP interface,
+	/// else the first of any transport — TCP because the fork that comes back
+	/// through it carries a full SDP body, which UDP would fragment.
+	@SuppressWarnings("unchecked")
+	private void captureOutboundInterface(SipServletContextEvent event) {
+		Object attribute = event.getServletContext().getAttribute("javax.servlet.sip.outboundInterfaces");
+		if (!(attribute instanceof java.util.List) || ((java.util.List<?>) attribute).isEmpty()) {
+			sipLogger.severe("WebrtcServlet: no javax.servlet.sip.outboundInterfaces — "
+					+ "browser registrations cannot build a routable contact");
+			return;
+		}
+		java.util.List<javax.servlet.sip.SipURI> interfaces = (java.util.List<javax.servlet.sip.SipURI>) attribute;
+		javax.servlet.sip.SipURI chosen = interfaces.get(0);
+		for (javax.servlet.sip.SipURI candidate : interfaces) {
+			if ("tcp".equalsIgnoreCase(candidate.getTransportParam())) {
+				chosen = candidate;
+				break;
+			}
+		}
+		outboundInterface = chosen;
+		sipLogger.info("WebrtcServlet: contact interface " + chosen);
 	}
 
 	/// The installed JSR-309 driver, or null if none is on the classpath.

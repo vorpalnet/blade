@@ -32,6 +32,11 @@ import org.vorpal.blade.framework.v3.events.CloudEvent;
 @ServerEndpoint(value = "/signal", subprotocols = { SignalProtocol.SUBPROTOCOL })
 public class SignalEndpoint {
 
+	/// Shared across sockets so the JWKS it caches is fetched once per node
+	/// rather than once per browser. The container creates a new endpoint
+	/// instance per connection, which is why this is static.
+	private static final BrowserAuthenticator AUTHENTICATOR = new BrowserAuthenticator();
+
 	/// The framework logger, installed by [org.vorpal.blade.framework.AsyncSipServlet] at init. The
 	/// WebSocket container can start before the SIP servlet does, so this is null for a short
 	/// window at deployment.
@@ -105,6 +110,7 @@ public class SignalEndpoint {
 		String aor = BrowserRegistry.unregister(session);
 		fine("webrtc: socket closed, " + session.getId() + (aor != null ? " (" + aor + ")" : "")
 				+ " reason=" + reason.getCloseCode());
+		deregisterQuietly(aor);
 	}
 
 	@OnError
@@ -113,28 +119,96 @@ public class SignalEndpoint {
 		if (logger != null) {
 			logger.warning("webrtc: socket error on " + session.getId() + ": " + t);
 		}
-		BrowserRegistry.unregister(session);
+		deregisterQuietly(BrowserRegistry.unregister(session));
 	}
 
 	// ---- handlers -----------------------------------------------------------------------------
 
 	/// Claim an address so calls can be routed to this browser.
+	///
+	/// This is the gate. Everything else the browser can ask for — placing a
+	/// call, answering one, sending DTMF — first checks that the socket is
+	/// registered, so refusing here refuses all of it. The address that gets
+	/// bound is the one the token grants, never the one the browser typed; see
+	/// [BrowserAuthenticator].
 	private void connect(Session session, CloudEvent event) {
-		String aor = SignalProtocol.field(event, "aor");
-		if (aor == null) {
-			send(session, SignalProtocol.reason(SignalProtocol.ERROR, null, "session.connect requires an aor"));
+		String requestedAor = SignalProtocol.field(event, "aor");
+		String token = SignalProtocol.field(event, "token");
+
+		BrowserAuthenticator.Decision decision =
+				AUTHENTICATOR.authorize(WebrtcServlet.jwtConfig(), token, requestedAor);
+
+		Logger logger = log();
+		if (!decision.isAllowed()) {
+			if (logger != null) {
+				logger.warning("webrtc: refused " + session.getId()
+						+ (requestedAor != null ? " claiming " + requestedAor : "")
+						+ ": " + decision.getReason());
+			}
+			send(session, SignalProtocol.reason(SignalProtocol.ERROR, null, decision.getReason()));
+			// Say why, then hang up. onOpen disables the idle timeout so a
+			// registered browser's socket survives a quiet call; without closing
+			// here, a socket that was refused would enjoy the same courtesy and
+			// sit open indefinitely having proved nothing.
+			closeQuietly(session);
 			return;
 		}
+
+		// One canonical form end-to-end: the location service lowercases its
+		// keys (getAccountName), BrowserRegistry compares exactly. Lowercasing
+		// once here is what keeps the two stores naming the same browser.
+		String aor = decision.getAor().toLowerCase();
 		BrowserRegistry.register(aor, session);
-		Logger logger = log();
 		if (logger != null) {
-			logger.info("webrtc: " + aor + " registered on this node");
+			logger.info("webrtc: " + aor + " registered on this node"
+					+ (decision.isAuthenticated()
+							? " as '" + decision.getUser() + "'"
+							: " WITHOUT authentication (browser authentication is disabled)"));
 		}
+		// `authenticated` tells the page whether the address it just claimed was
+		// proved or merely accepted, so an open gateway is visible in the UI
+		// rather than only in a log nobody is reading.
 		send(session, SignalProtocol.event(SignalProtocol.SESSION_READY, null,
-				SignalProtocol.data().put("aor", aor)));
+				SignalProtocol.data()
+						.put("aor", aor)
+						.put("authenticated", decision.isAuthenticated())));
+
+		// Announce the browser to the SIP location service — after ready, and
+		// best-effort: a browser the registrar cannot reach still relays
+		// browser-to-browser, so a failure here degrades to exactly today's
+		// behavior and must never cost the socket its session.
+		try {
+			new BrowserRegistration().register(aor);
+		} catch (Exception e) {
+			if (logger != null) {
+				logger.warning("webrtc: could not send REGISTER for " + aor + ": " + e);
+			}
+		}
+	}
+
+	/// Withdraw `aor` from the location service, if it was ours to withdraw.
+	/// Null means this socket had no binding or was already superseded — in the
+	/// superseded case the replacement owns the registration now, and a
+	/// deregister from the dying socket would tear down the live browser's.
+	private void deregisterQuietly(String aor) {
+		if (aor == null) {
+			return;
+		}
+		try {
+			new BrowserRegistration().deregister(aor);
+		} catch (Exception e) {
+			// Expiry is the backstop: the binding ages out at registerExpiresSeconds.
+			fine("webrtc: could not send deregister for " + aor + ": " + e);
+		}
 	}
 
 	/// Originate a call on the browser's behalf.
+	///
+	/// Every call goes out as a SIP INVITE — there is no WebSocket-only path, even when the target
+	/// is a browser on this same node. Signaling always rides the SIP fabric, where the App Router,
+	/// the location service and analytics can see it; what varies per call is only the media, which
+	/// [OutboundFromBrowser] resolves via [MediaMode] (a browser-to-browser call still runs its
+	/// media peer-to-peer — the SDP passes through the INVITE untouched).
 	///
 	/// The callflow runs on this WebSocket thread only until the INVITE is sent; everything after
 	/// that is a continuation on a SIP thread under the application-session lock.
@@ -145,19 +219,9 @@ public class SignalEndpoint {
 					"session.connect required first"));
 			return;
 		}
-		// Which callflow depends on what is on the other end. A registered browser can be reached
-		// peer-to-peer with no media server at all; anything else is a phone, and a phone cannot do
-		// ICE or DTLS-SRTP, so the media server is not optional.
-		String target = SignalProtocol.field(event, "target");
-		boolean targetIsBrowser = target != null && BrowserRegistry.isLocal(target);
-
-		String callId = targetIsBrowser
-				? new BrowserToBrowser().start(aor, target, event)
-				: new OutboundFromBrowser().start(aor, event);
-
+		String callId = new OutboundFromBrowser().start(aor, event);
 		if (callId != null) {
-			fine("webrtc: " + aor + " placed call " + callId
-					+ (targetIsBrowser ? " (relayed, no media server)" : " (anchored)"));
+			fine("webrtc: " + aor + " placed call " + callId);
 		}
 	}
 
@@ -189,13 +253,21 @@ public class SignalEndpoint {
 			return;
 		}
 
-		// Stamp the sender: a relayed call has two browsers on one session and has to know which
-		// way to forward.
+		// Stamp the sender, so a continuation never has to trust an event's own claim about who
+		// sent it — the socket it arrived on is the authority.
 		if (event.getData() != null && event.getData().isObject()) {
 			((com.fasterxml.jackson.databind.node.ObjectNode) event.getData())
 					.put("from", BrowserRegistry.addressOf(session));
 		}
 		BrowserSignals.deliver(app, event);
+	}
+
+	private void closeQuietly(Session session) {
+		try {
+			session.close();
+		} catch (IOException e) {
+			fine("webrtc: could not close " + session.getId() + ": " + e);
+		}
 	}
 
 	private void send(Session session, CloudEvent event) {

@@ -33,7 +33,7 @@ import javax.websocket.server.ServerEndpoint;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import org.vorpal.blade.framework.v2.io.VersionedFileStore;
+import org.vorpal.blade.framework.io.VersionedFileStore;
 import org.vorpal.blade.framework.v2.config.ConfigPublisher;
 import org.vorpal.blade.framework.v2.config.SettingsMXBean;
 

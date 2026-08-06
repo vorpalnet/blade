@@ -9,10 +9,13 @@ import javax.websocket.Session;
 
 import org.vorpal.blade.framework.v3.events.CloudEvent;
 
-/// Which browsers are connected **to this node**, and how to write to them.
+/// Which browsers are connected **to this node**, and how to write to them — the socket table,
+/// not a registrar. The SIP location service for browsers is `proxy-registrar`, which
+/// [BrowserRegistration] feeds on their behalf; this class answers only "do I hold the live
+/// socket for this address, and how do I write a frame to it".
 ///
 /// A [javax.websocket.Session] is a live socket: it cannot be serialized, cannot be replicated, and
-/// is meaningless on any other engine. So this registry is deliberately node-local and deliberately
+/// is meaningless on any other engine. So this table is deliberately node-local and deliberately
 /// static — the same shape `services/transfer` uses for the `AsyncResponse` it cannot serialize
 /// either.
 ///

@@ -39,10 +39,8 @@
 				<div>
 					<h1>Designer</h1>
 					<p>
-						Describe an event once. The payload class, its JSON Schema, a
-						consumer already bound to the right selector, a producer snippet
-						and a sample envelope all regenerate as you type — from the same
-						declaration, so none of them can drift from the others.
+						Describe an event once — everything a producer or consumer needs
+						regenerates from that one declaration.
 					</p>
 				</div>
 			</section>
@@ -50,7 +48,10 @@
 			<div class="ev-grid">
 
 				<div class="ev-panel">
-					<header><span>Declaration</span></header>
+					<header>
+						<span>Declaration</span>
+						<button id="d-help-open" class="vorpal-btn vorpal-btn-secondary" type="button">Help</button>
+					</header>
 					<div class="ev-body">
 						<div class="vorpal-form-row">
 							<label for="d-type">Event type</label>
@@ -86,32 +87,30 @@
 						<div class="vorpal-form-row">
 							<label for="d-persist">Persist</label>
 							<input id="d-persist" type="checkbox">
-							<span class="ev-muted">The analytics sink writes this event to the database. Read from the live catalog per message, so turning it on takes effect without a redeploy.</span>
+							<button class="ev-help" type="button"
+								aria-label="The analytics sink writes this event to the database. Read from the live catalog per message, so turning it on takes effect without a redeploy."
+								data-tip="The analytics sink writes this event to the database. Read from the live catalog per message, so turning it on takes effect without a redeploy.">?</button>
 						</div>
 
-						<h3 style="margin-top:1rem">Fields</h3>
-						<p class="ev-muted">
-							The wire name is what appears in the JSON. A snake_case name
-							becomes a camelCase Java property with the wire form preserved
-							by <code>@JsonProperty</code> — the bytes never change shape to
-							suit Java.
-						</p>
+						<h3 class="ev-subhead">Fields
+							<button class="ev-help" type="button"
+								aria-label="The wire name is what appears in the JSON. A snake_case name becomes a camelCase Java property with the wire form preserved by @JsonProperty — the bytes never change shape to suit Java."
+								data-tip="The wire name is what appears in the JSON. A snake_case name becomes a camelCase Java property with the wire form preserved by @JsonProperty — the bytes never change shape to suit Java.">?</button>
+						</h3>
 						<div id="d-fields"></div>
 						<button id="d-add-field" class="vorpal-btn vorpal-btn-secondary" type="button">Add field</button>
 
-						<h3 style="margin-top:1.25rem">Subscriber</h3>
-						<p class="ev-muted">
-							Who listens is a separate declaration from what an event is,
-							because several applications may want the same event and each
-							needs its own subscription identity to receive its own copy.
-							Two subscribers sharing a name are not two subscriptions — they
-							are one subscription named twice, and the two applications
-							compete for a single stream.
-						</p>
+						<h3 class="ev-subhead">Subscriber
+							<button class="ev-help" type="button"
+								aria-label="Who listens is declared separately from what an event is: several applications may want the same event, and each needs its own subscription identity to receive its own copy. Two subscribers sharing a name are one subscription named twice — the apps compete for a single stream."
+								data-tip="Who listens is declared separately from what an event is: several applications may want the same event, and each needs its own subscription identity to receive its own copy. Two subscribers sharing a name are one subscription named twice — the apps compete for a single stream.">?</button>
+						</h3>
 						<div class="vorpal-form-row">
 							<label for="s-name">Subscription name</label>
 							<input id="s-name" type="text" placeholder="calendar">
-							<span class="ev-muted">Name the <em>subscriber</em>, not the event. Becomes the JMS client id, the durable subscription name and the consumer's class name.</span>
+							<button class="ev-help" type="button"
+								aria-label="Name the subscriber, not the event. Becomes the JMS client id, the durable subscription name and the consumer's class name."
+								data-tip="Name the subscriber, not the event. Becomes the JMS client id, the durable subscription name and the consumer's class name.">?</button>
 						</div>
 						<div class="vorpal-form-row">
 							<label for="s-description">What it does</label>
@@ -127,19 +126,27 @@
 								<option value="DERIVED">At the broker — a selector naming this event type</option>
 								<option value="NONE">In code — take everything on the destination</option>
 							</select>
-							<span class="ev-muted" id="s-mode-note">A selector fails closed: an event type nobody added is never enqueued. Filtering in code fails open, which is what a sink wants.</span>
+							<button class="ev-help" type="button"
+								aria-label="A selector fails closed: an event type nobody added is never enqueued. Filtering in code fails open, which is what a sink wants."
+								data-tip="A selector fails closed: an event type nobody added is never enqueued. Filtering in code fails open, which is what a sink wants.">?</button>
 						</div>
 						<div class="vorpal-form-row">
 							<label for="s-durable">Durable</label>
 							<input id="s-durable" type="checkbox" checked>
-							<span class="ev-muted">Hold events while this subscriber is down. On for a sink; consider off for something that takes action, where a stale action can be worse than a missed one. Ignored on a queue.</span>
+							<button class="ev-help" type="button"
+								aria-label="Hold events while this subscriber is down. On for a sink; consider off for something that takes action, where a stale action can be worse than a missed one. Ignored on a queue."
+								data-tip="Hold events while this subscriber is down. On for a sink; consider off for something that takes action, where a stale action can be worse than a missed one. Ignored on a queue.">?</button>
 						</div>
 					</div>
 				</div>
 
 				<div class="ev-panel">
 					<header>
-						<span>Preview</span>
+						<span>Preview
+							<button class="ev-help" type="button"
+								aria-label="Source only — the server never compiles this or publishes a jar; the wire contract is the schema. The consumer module goes into the consuming application's own source tree, never into the framework. See Help for why."
+								data-tip="Source only — the server never compiles this or publishes a jar; the wire contract is the schema. The consumer module goes into the consuming application's own source tree, never into the framework. See Help for why.">?</button>
+						</span>
 						<span id="d-selector" class="vorpal-pill">—</span>
 					</header>
 					<div class="ev-body">
@@ -157,15 +164,6 @@
 							<button id="d-download" class="vorpal-btn" type="button">Download event .zip</button>
 							<button id="s-download" class="vorpal-btn vorpal-btn-secondary" type="button">Download consumer .zip</button>
 						</div>
-						<p class="ev-muted" style="margin-top:.5rem">
-							Source only — the server never compiles this or publishes a jar.
-							The wire contract is the schema. The consumer module goes into
-							the consuming application's own source tree, never into the
-							framework: every BLADE WAR bundles the framework jar and EJB
-							scanning covers <code>WEB-INF/lib</code>, so a consumer placed
-							there would activate in every deployed application at once, all
-							of them contending for one client id.
-						</p>
 					</div>
 				</div>
 
@@ -173,6 +171,77 @@
 
 		</div>
 	</main>
+
+	<dialog id="d-help" class="ev-help-dialog" aria-labelledby="d-help-title">
+		<header>
+			<span id="d-help-title">Designer help</span>
+			<form method="dialog"><button class="vorpal-btn vorpal-btn-secondary">Close</button></form>
+		</header>
+		<div class="ev-help-body">
+			<h3>What the designer does</h3>
+			<p>
+				Describe an event once. The payload class, its JSON Schema, a consumer
+				already bound to the right selector, a producer snippet and a sample
+				envelope all regenerate as you type — from the same declaration, so none
+				of them can drift from the others.
+			</p>
+
+			<h3>Fields</h3>
+			<p>
+				The wire name is what appears in the JSON. A snake_case name becomes a
+				camelCase Java property with the wire form preserved by
+				<code>@JsonProperty</code> — the bytes never change shape to suit Java.
+			</p>
+
+			<h3>Persist</h3>
+			<p>
+				The analytics sink writes events marked persist to the database. It reads
+				the flag from the live catalog per message, so turning it on takes effect
+				without a redeploy.
+			</p>
+
+			<h3>Subscriber identity</h3>
+			<p>
+				Who listens is a separate declaration from what an event is, because
+				several applications may want the same event and each needs its own
+				subscription identity to receive its own copy. Two subscribers sharing a
+				name are not two subscriptions — they are one subscription named twice,
+				and the two applications compete for a single stream.
+			</p>
+			<p>
+				Name the <em>subscriber</em>, not the event. The name becomes the JMS
+				client id, the durable subscription name and the consumer's class name.
+			</p>
+
+			<h3>Filtering — at the broker or in code</h3>
+			<p>
+				A derived selector filters at the broker and fails closed: an event type
+				nobody added is never enqueued. Filtering in code takes everything on the
+				destination and fails open — right for a sink whose job is to miss
+				nothing, at the cost of holding messages it will drop.
+			</p>
+
+			<h3>Durable</h3>
+			<p>
+				A durable subscription holds events while the subscriber is down. On for
+				a sink; consider off for something that takes action, where a stale
+				action can be worse than a missed one. Ignored on a queue. Delivery is
+				at-least-once either way — a subscriber that acts must tolerate seeing an
+				event twice.
+			</p>
+
+			<h3>Generated source</h3>
+			<p>
+				Source only — the server never compiles this or publishes a jar. The wire
+				contract is the schema. The consumer module goes into the consuming
+				application's own source tree, never into the framework: every BLADE WAR
+				bundles the framework jar and EJB scanning covers
+				<code>WEB-INF/lib</code>, so a consumer placed there would activate in
+				every deployed application at once, all of them contending for one
+				client id.
+			</p>
+		</div>
+	</dialog>
 
 	<footer class="vorpal-footer">
 		<div class="vorpal-footer-meta">BLADE Events Console</div>

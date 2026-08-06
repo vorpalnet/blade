@@ -49,12 +49,22 @@ export class BladePhone {
    * @param {object} options
    * @param {string} options.url        wss:// URL of the gateway's /signal endpoint
    * @param {string} options.aor        the address to claim, e.g. "alice@example.com"
+   * @param {string} [options.token]    signed token proving who is claiming it. Obtained from
+   *                                    whatever authenticated the user -- for the bundled phone
+   *                                    app, POST /blade/phone/api/v1/token. A gateway with
+   *                                    authentication enabled refuses a socket without one.
    * @param {RTCIceServer[]} [options.iceServers] STUN/TURN for the browser's own gathering
    */
-  constructor({ url, aor, iceServers = [] }) {
+  constructor({ url, aor, token = null, iceServers = [] }) {
     this.url = url;
     this.aor = aor;
+    this.token = token;
     this.iceServers = iceServers;
+    /**
+     * Whether the gateway actually verified who we are, as opposed to taking the address on
+     * trust because authentication is switched off there. Set from session.ready.
+     */
+    this.authenticated = false;
     this.ws = null;
     this.pc = null;
     this.callId = null;
@@ -65,9 +75,9 @@ export class BladePhone {
     /**
      * Whether to trickle our own candidates rather than holding the SDP until gathering ends.
      *
-     * Set per call by the gateway. A relayed browser-to-browser call trickles both ways — both ends
-     * are browsers and there is no server in the middle to wait on. An anchored call does not: the
-     * media server does not advertise inbound trickle, so we send one complete offer or answer.
+     * False unless the gateway says otherwise, and today it never does: every call crosses the SIP
+     * fabric, where SDP travels whole — candidates ride inside the offer and answer. The flag stays
+     * because the gateway may still enable it for some future path without a client change.
      */
     this.trickle = false;
 
@@ -87,10 +97,13 @@ export class BladePhone {
   /** Open the socket and claim the address. Resolves once the gateway says session.ready. */
   connect() {
     return new Promise((resolve, reject) => {
+      // Distinguishes "the gateway refused this socket" from "a call went wrong later": both
+      // arrive as an error frame, and only the first one means connect() failed.
+      let registered = false;
       this.ws = new WebSocket(this.url, SUBPROTOCOL);
 
       this.ws.onopen = () => {
-        this.#send(EVENT.SESSION_CONNECT, null, { aor: this.aor });
+        this.#send(EVENT.SESSION_CONNECT, null, { aor: this.aor, token: this.token });
       };
 
       this.ws.onmessage = (frame) => {
@@ -102,9 +115,26 @@ export class BladePhone {
         }
         if (event.type === EVENT.SESSION_READY) {
           if (event.data && typeof event.data.trickle === 'boolean') this.trickle = event.data.trickle;
+          this.authenticated = !!(event.data && event.data.authenticated);
+          // The gateway decides the address, not us: it honours the one in the token and tells us
+          // which that was. Adopting it here keeps the client's idea of its own identity equal to
+          // the server's, instead of showing whatever was typed into the form.
+          if (event.data && event.data.aor) this.aor = event.data.aor;
+          registered = true;
           this.#setState('registered');
           this.onRegistered(event.data);
           resolve();
+          return;
+        }
+        // A refusal arrives as an ordinary error frame. Before we are registered it means the
+        // gateway turned this socket away -- wrong token, no token, or an address we may not
+        // have -- so reject connect() rather than leave the caller waiting on a session that
+        // will never become ready. After registration the same frame is a per-call error and
+        // belongs to the normal handler.
+        if (event.type === EVENT.ERROR && !registered) {
+          const reason = (event.data && event.data.reason) || 'refused by the gateway';
+          reject(new Error(reason));
+          if (this.ws) this.ws.close();
           return;
         }
         this.#handle(event).catch((e) => this.onError(String(e)));

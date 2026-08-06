@@ -7,7 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import org.vorpal.blade.framework.v2.io.VersionedFileStore;
+import org.vorpal.blade.framework.io.VersionedFileStore;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;

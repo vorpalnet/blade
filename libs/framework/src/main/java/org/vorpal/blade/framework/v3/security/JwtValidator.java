@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -103,7 +104,22 @@ public final class JwtValidator {
 		} catch (Exception e) {
 			throw new JwtAuthException("JWT validation failed: " + e.getMessage(), e);
 		}
-		return new JwtIdentity(resolveUsername(claims), mapRoles(claims));
+		return new JwtIdentity(resolveUsername(claims), mapRoles(claims), stringClaims(claims));
+	}
+
+	/// The token's string-valued claims, handed to [JwtIdentity] so a consumer
+	/// can read app-specific ones (see [JwtIdentity#claim]). Non-string claims
+	/// are skipped rather than stringified: `groups` is already resolved into
+	/// roles, and rendering a list or object as text would invite a caller to
+	/// parse it back out.
+	private Map<String, String> stringClaims(JWTClaimsSet claims) {
+		Map<String, String> out = new LinkedHashMap<>();
+		for (Map.Entry<String, Object> entry : claims.getClaims().entrySet()) {
+			if (entry.getValue() instanceof String) {
+				out.put(entry.getKey(), (String) entry.getValue());
+			}
+		}
+		return out;
 	}
 
 	private String resolveUsername(JWTClaimsSet claims) {

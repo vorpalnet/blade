@@ -30,14 +30,36 @@
 	overflow: hidden;
 }
 
+/* Panel headers and subheads are bands, not bare text: a filled strip with
+   uppercase letterspacing reads as a heading even zoomed out, where a
+   slightly-bolder line of body text does not. */
 .ev-panel > header {
 	padding: .6rem .85rem;
 	border-bottom: 1px solid var(--vorpal-slate-300, #cbd2da);
-	font-weight: 600;
+	background: var(--vorpal-slate-100, #f4f6f8);
+	font-weight: 700;
+	font-size: 14px;
+	text-transform: uppercase;
+	letter-spacing: .07em;
+	color: var(--vorpal-ink-900, #1a2434);
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 	gap: .5rem;
+}
+
+.ev-subhead {
+	margin: 1.25rem 0 .5rem;
+	padding-bottom: .3rem;
+	border-bottom: 1px solid var(--vorpal-slate-200, #e3e8ed);
+	font-size: 13px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: .07em;
+	color: var(--vorpal-ink-700, #2c374b);
+	display: flex;
+	align-items: center;
+	gap: .4rem;
 }
 
 .ev-panel > .ev-body { padding: .85rem; }
@@ -109,3 +131,95 @@ table.ev-table td.ev-num { text-align: right; font-variant-numeric: tabular-nums
 
 .ev-muted { color: var(--vorpal-slate-600, #5b6672); font-size: 13px; }
 .ev-empty { padding: 1.25rem; text-align: center; }
+
+/* The prose that used to sit inline now lives in tooltips and the Help
+   dialog. The ? is a real button: hover OR keyboard focus shows the tip, and
+   the same text is its aria-label, so a screen reader hears what a mouse
+   sees. */
+.ev-help {
+	position: relative;
+	flex: none;
+	width: 1.15rem;
+	height: 1.15rem;
+	padding: 0;
+	border: 1px solid var(--vorpal-slate-400, #9aa5b1);
+	border-radius: 50%;
+	background: #fff;
+	color: var(--vorpal-slate-600, #5b6672);
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1;
+	cursor: help;
+}
+
+.ev-help::after {
+	content: attr(data-tip);
+	position: absolute;
+	top: calc(100% + .4rem);
+	left: 50%;
+	transform: translateX(-50%);
+	width: max-content;
+	max-width: min(36ch, 70vw);
+	padding: .5rem .65rem;
+	border-radius: 6px;
+	background: var(--vorpal-ink-900, #1a2434);
+	color: #fff;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1.45;
+	letter-spacing: normal;
+	text-transform: none;
+	text-align: left;
+	white-space: normal;
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transition: opacity .12s;
+	z-index: 30;
+}
+
+.ev-help:hover::after,
+.ev-help:focus-visible::after {
+	opacity: 1;
+	visibility: visible;
+}
+
+.ev-help-dialog {
+	max-width: 44rem;
+	width: calc(100vw - 3rem);
+	padding: 0;
+	border: 1px solid var(--vorpal-slate-300, #cbd2da);
+	border-radius: 10px;
+}
+
+.ev-help-dialog::backdrop { background: rgba(26, 36, 52, .45); }
+
+.ev-help-dialog > header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: .75rem 1rem;
+	border-bottom: 1px solid var(--vorpal-slate-200, #e3e8ed);
+	background: var(--vorpal-slate-100, #f4f6f8);
+	font-weight: 700;
+}
+
+.ev-help-dialog .ev-help-body {
+	padding: 1rem 1.25rem;
+	max-height: 70vh;
+	overflow: auto;
+	font-size: 14px;
+	line-height: 1.55;
+}
+
+.ev-help-dialog h3 {
+	margin: 1.1rem 0 .35rem;
+	font-size: 13px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: .06em;
+	color: var(--vorpal-ink-700, #2c374b);
+}
+
+.ev-help-dialog h3:first-child { margin-top: 0; }
+.ev-help-dialog p { margin: 0 0 .6rem; }

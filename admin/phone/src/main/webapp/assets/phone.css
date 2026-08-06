@@ -357,6 +357,52 @@
 .phone-row { display: flex; gap: 8px; }
 .phone-row > * { flex: 1; }
 
+/* An address the server issued, not a field to fill in. */
+.phone-field input[readonly] {
+	background: var(--vorpal-slate-100, rgba(0, 0, 0, .04));
+	cursor: default;
+}
+
+/* ---------------------------------------------------------------- auth state */
+
+/* Whether the gateway actually checked this browser. Carries a leading glyph and its own
+   border so the three states differ in shape and text, not only in hue -- an unverified
+   gateway is the last thing that should rely on someone noticing a colour. */
+.phone-auth {
+	max-width: 420px;
+	margin: 10px 0 0;
+	padding: 8px 10px 8px 26px;
+	position: relative;
+	border: 1px solid var(--vorpal-divider);
+	border-radius: var(--vorpal-radius-sm);
+	font-size: .74rem;
+	line-height: 1.45;
+	color: var(--vorpal-slate-600);
+}
+
+.phone-auth::before {
+	position: absolute;
+	left: 9px;
+	top: 8px;
+	font-weight: 700;
+}
+
+.phone-auth[data-verified="unknown"]::before { content: "\2013"; }        /* en dash: nothing to report */
+
+.phone-auth[data-verified="true"] {
+	border-color: var(--vorpal-purple);
+	color: var(--vorpal-ink-900);
+}
+.phone-auth[data-verified="true"]::before { content: "\2713"; }           /* check mark */
+
+.phone-auth[data-verified="false"] {
+	border-width: 3px;
+	border-style: dashed;
+	font-weight: 600;
+	color: var(--vorpal-ink-900);
+}
+.phone-auth[data-verified="false"]::before { content: "\26A0"; }          /* warning sign */
+
 /* ---------------------------------------------------------------- tooltips */
 
 /* The explanation a field needs once, on demand, instead of a paragraph under every

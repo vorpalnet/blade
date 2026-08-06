@@ -22,11 +22,17 @@ import org.vorpal.blade.framework.v3.media.MediaConfigs;
 /// a Groovy criterion keyed on `FROM_NET / INVITE / request` and maintained in an admin console.
 /// Here it is compiled, shipped once, and reads top to bottom.
 ///
-/// **Always anchored.** There is no peer-to-peer option: the caller is a phone, and a phone cannot
-/// do ICE or DTLS-SRTP. The media server terminates WebRTC on the browser side and plain RTP on the
-/// network side, and bridging the two legs is what makes the call.
+/// ## The offer itself says whether to anchor
 ///
-/// ## Both network-side offer directions
+/// The caller needed policy to pick a media path, because it could not know what would answer. This
+/// side needs none: the INVITE that arrives *is* the evidence. An offer carrying a DTLS fingerprint
+/// (`a=fingerprint:`) came from a WebRTC endpoint — the far browser, through the location service
+/// and another leg of this gateway — and is passed to the browser untouched, so the two endpoints
+/// key to each other and media never comes near this server. An offer without one came from a phone
+/// or a trunk, which a browser cannot talk to directly, so the media server terminates WebRTC on
+/// the browser side and plain RTP on the network side, and bridging the legs makes the call.
+///
+/// ## Both network-side offer directions (anchored path)
 ///
 /// The browser is always offered to — it is the party being asked. The network side varies, and
 /// handling both is the difference between working on a carrier trunk and working in a lab:
@@ -35,6 +41,7 @@ import org.vorpal.blade.framework.v3.media.MediaConfigs;
 /// - **INVITE with no SDP** — late media. The media server offers in the `200 OK` and the caller's
 ///   answer arrives in the `ACK`: [MediaCallflow#answerWithLateMedia]. This is the case the prior
 ///   art dropped; its published default script forwarded an empty message and engaged no media.
+///   Late media cannot pass through — there is no offer to forward — so it always anchors.
 public class InboundToBrowser extends MediaCallflow {
 	private static final long serialVersionUID = 1L;
 
@@ -42,25 +49,53 @@ public class InboundToBrowser extends MediaCallflow {
 
 	@Override
 	public void process(SipServletRequest invite) {
+		byte[] content = rawContent(invite);
+		if (content != null && isWebrtcOffer(content)) {
+			try {
+				passThroughAndRing(invite, content);
+			} catch (Exception e) {
+				sipLogger.severe(invite, "webrtc: could not ring browser: " + e.getMessage());
+				refuse(invite);
+			}
+			return;
+		}
 		try {
 			anchorAndRing(invite);
 		} catch (Exception e) {
 			// No media plane, or it refused. A browser cannot be reached from the PSTN without one.
 			sipLogger.severe(invite, "webrtc: media unavailable for inbound call: " + e.getMessage());
-			try {
-				sendResponse(invite.createResponse(503, "Service Unavailable"));
-			} catch (Exception ignore) {
-				// The caller is already gone; nothing left to tell.
-			}
+			refuse(invite);
 		}
 	}
 
-	private void anchorAndRing(SipServletRequest invite) throws Exception {
-		SipApplicationSession app = invite.getApplicationSession();
-		String aor = addressOf(invite);
-		// The browser's handle is the application-session id, not the SIP Call-ID — that is what
-		// SignalEndpoint can resolve with getApplicationSessionById.
-		String callId = app.getId();
+	private void refuse(SipServletRequest invite) {
+		try {
+			sendResponse(invite.createResponse(503, "Service Unavailable"));
+		} catch (Exception ignore) {
+			// The caller is already gone; nothing left to tell.
+		}
+	}
+
+	/// A WebRTC endpoint's offer: it carries a DTLS certificate fingerprint (RFC 8122), which no
+	/// phone or trunk produces and every browser must.
+	static boolean isWebrtcOffer(byte[] sdp) {
+		return new String(sdp, StandardCharsets.UTF_8).contains("a=fingerprint:");
+	}
+
+	/// Bind this call to the browser it is for, or answer 480 and return null. Shared prologue of
+	/// both media paths.
+	///
+	/// A registrar-forked INVITE arrives *targeted* — the container recognized the `encodeURI`
+	/// parameters [BrowserRegistration] put in the registered contact and dispatched the request
+	/// into the registration's own application session, which already knows its browser. That is
+	/// the authoritative answer, and it has to be: the fork's Request-URI names this engine, not
+	/// the browser's domain, so parsing it would yield `alice@172.16.32.129`. The Request-URI
+	/// fallback remains for INVITEs addressed to the browser directly.
+	private String claimBrowser(SipServletRequest invite, SipApplicationSession app) throws Exception {
+		String aor = (String) app.getAttribute(BrowserSignals.BROWSER_AOR);
+		if (aor == null) {
+			aor = addressOf(invite);
+		}
 
 		// Index by the id the browser quotes back, so a WebSocket thread on any node can find this
 		// call. Without it the browser's answer has nowhere to go.
@@ -71,6 +106,68 @@ public class InboundToBrowser extends MediaCallflow {
 			// up yet, so refuse honestly rather than ring a socket we do not hold.
 			sipLogger.warning(invite, "webrtc: " + aor + " is not connected to this node; rejecting");
 			sendResponse(invite.createResponse(480, "Temporarily Unavailable"));
+			return null;
+		}
+		return aor;
+	}
+
+	// ---- pass-through -------------------------------------------------------------------------
+
+	/// Ring the browser with the caller's own offer; its answer goes back in the `200 OK`
+	/// untouched. No media objects exist on this path.
+	private void passThroughAndRing(SipServletRequest invite, byte[] offer) throws Exception {
+		SipApplicationSession app = invite.getApplicationSession();
+		// The browser's handle is the application-session id, not the SIP Call-ID — that is what
+		// SignalEndpoint can resolve with getApplicationSessionById.
+		String callId = app.getId();
+		String aor = claimBrowser(invite, app);
+		if (aor == null) {
+			return;
+		}
+
+		BrowserSignals.expect(app, SignalProtocol.CALL_ANSWER,
+				answer -> onBrowserAnsweredPassThrough(invite, app, aor, callId, answer));
+		BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, declined -> onBrowserDeclined(invite, app));
+
+		boolean rang = BrowserRegistry.deliver(aor,
+				SignalProtocol.event(SignalProtocol.CALL_INCOMING, callId,
+						SignalProtocol.data().put("from", callerOf(invite))
+								.put("sdp", new String(offer, StandardCharsets.UTF_8))));
+		if (!rang) {
+			// The socket died between routing and here.
+			sendResponse(invite.createResponse(480, "Temporarily Unavailable"));
+			return;
+		}
+		sendResponse(invite.createResponse(180, "Ringing"));
+		expectRequest(invite.getSession(), "BYE", bye -> onCallerHungUp(bye, app, aor, callId));
+	}
+
+	/// The browser accepted a pass-through call: its answer is the SIP answer, verbatim.
+	private void onBrowserAnsweredPassThrough(SipServletRequest invite, SipApplicationSession app, String aor,
+			String callId, CloudEvent answerEvent) throws Exception {
+
+		String browserAnswer = SignalProtocol.field(answerEvent, "sdp");
+		if (browserAnswer == null) {
+			BrowserRegistry.deliver(aor,
+					SignalProtocol.reason(SignalProtocol.ERROR, callId, "call.answer requires an sdp"));
+			return;
+		}
+
+		BrowserSignals.cancel(app, SignalProtocol.CALL_HANGUP);
+		BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, hangup -> onBrowserHungUp(invite, app));
+
+		SipServletResponse ok = invite.createResponse(200);
+		ok.setContent(browserAnswer.getBytes(StandardCharsets.UTF_8), SDP_TYPE);
+		sendResponse(ok, ack -> established(aor, callId));
+	}
+
+	// ---- anchored -----------------------------------------------------------------------------
+
+	private void anchorAndRing(SipServletRequest invite) throws Exception {
+		SipApplicationSession app = invite.getApplicationSession();
+		String callId = app.getId();
+		String aor = claimBrowser(invite, app);
+		if (aor == null) {
 			return;
 		}
 

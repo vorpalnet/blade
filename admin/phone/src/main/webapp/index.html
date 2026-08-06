@@ -96,8 +96,13 @@
 							<label for="aor">Your address<span class="phone-tip" tabindex="0"
 								aria-describedby="tip-aor"><span class="phone-tip-mark" aria-hidden="true">?</span><span
 								class="phone-tip-bubble" role="tooltip" id="tip-aor">The address other browsers dial to reach
-								you, and the one the gateway binds this WebSocket to.</span></span></label>
-							<input id="aor" value="alice@vorpal.net" autocomplete="off" spellcheck="false">
+								you, as <code>user@host</code>. It starts as your username plus the configured domain; edit it
+								to register as someone else, which is what testing a browser&#8209;to&#8209;browser call from one
+								account needs. Whichever address you get, the gateway honours the one inside your signed token
+								and refuses any other &mdash; and the token still records the account you signed in
+								with.</span></span></label>
+							<input id="aor" placeholder="user@host" autocomplete="off" spellcheck="false"
+							       readonly aria-readonly="true">
 						</div>
 						<div class="phone-field">
 							<label for="stun">STUN server<span class="phone-tip" tabindex="0"
@@ -111,6 +116,7 @@
 							<button class="vorpal-btn" id="btn-register">Register</button>
 							<button class="vorpal-btn vorpal-btn-secondary" id="btn-unregister" disabled>Disconnect</button>
 						</div>
+						<p class="phone-auth" id="auth-state" data-verified="unknown">Not registered.</p>
 					</section>
 
 					<section class="phone-panel">

@@ -9,11 +9,26 @@
 		<welcome-file>index.html</welcome-file>
 	</welcome-file-list>
 
-	<!-- no security required -->
+	<!-- no security required: the login form and its assets -->
 	<security-constraint>
 		<web-resource-collection>
 			<web-resource-name>login</web-resource-name>
 			<url-pattern>/login/*</url-pattern>
+		</web-resource-collection>
+	</security-constraint>
+
+	<!-- The public signing keys, deliberately open. The webrtc service fetches
+	     this from the engine tier, where it has no admin session and could not
+	     get one; an IdP's JWKS is public for the same reason. Nothing secret is
+	     served here — the private key never leaves this JVM.
+
+	     An EXACT pattern, not a prefix: /api/v1/token must stay behind the FORM
+	     constraint below, and it does, because /api/v1/* is never declared. A
+	     prefix carve-out here would mint tokens for anyone who asked. -->
+	<security-constraint>
+		<web-resource-collection>
+			<web-resource-name>jwks</web-resource-name>
+			<url-pattern>/api/v1/jwks.json</url-pattern>
 		</web-resource-collection>
 	</security-constraint>
 
