@@ -428,6 +428,13 @@ MW_HOME/wlserver). If OCCAS is already installed at MW_HOME, I read the version
 from the install instead and skip the install step.
 EOF
     # 1. Installer first — derive the OCCAS version from its path/name.
+    # No usable jar on file? Hunt the home tree for one before asking — the
+    # media usually landed somewhere under ~ and the path is a pain to type.
+    if [ ! -f "${INSTALLER_JAR:-}" ]; then
+        log "  ${C_DIM}looking for occas_generic.jar under ${HOME} …${C_RESET}"
+        local _jar; _jar="$(find "$HOME" -name occas_generic.jar -not -path '*/.*' 2>/dev/null | head -1 || true)"
+        [ -n "$_jar" ] && { INSTALLER_JAR="$_jar"; ok "found ${_jar}"; }
+    fi
     ask INSTALLER_JAR "OCCAS installer jar (occas_generic.jar; Enter to skip if already installed)" "$INSTALLER_JAR"
     local dv=""
     [ -n "$INSTALLER_JAR" ] && dv="$(installer_version "$INSTALLER_JAR")"
