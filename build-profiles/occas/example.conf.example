@@ -1,37 +1,38 @@
 # OCCAS silent install + dynamic-cluster domain config — EXAMPLE TEMPLATE.
-# Copy to <env>.conf and edit, or better: run './install-occas.sh <env> init'
-# and let the interview write it for you. Real env confs are gitignored —
-# they carry your site's hostnames/IPs and must never be committed.
+# LEGACY REFERENCE. The installer is ./blade.sh, which creates and edits its
+# own profiles under .conf/<name>/ (gitignored) — start there, not here. An
+# <env>.conf in this directory only feeds the standalone './certs.sh <env> …'
+# form. Real env confs are gitignored — they carry your site's hostnames/IPs
+# and must never be committed.
 # Full walkthrough: build-profiles/occas/README.md
 # Admin password lives in <env>.secret (gitignored), not here.
 
 # ============================================================================
-# Step -1 — prep (runs AUTOMATICALLY via sudo when first needed)
+# Step -1 — prep (user, group, directories)
 # ============================================================================
-# Creates install.user + inventory.group and the oracle.home / installer /
-# inventory / java directories, owned by YOU (group-shared with the oracle
-# user via setgid). Manual form:  sudo ./install-occas.sh <env> prep
+# blade.sh's dashboard rows create install.user + inventory.group and the
+# oracle.home / installer / inventory / java directories, owned so every
+# later step runs without sudo.
 # install.user=oracle
 
 # ============================================================================
 # Step 0 — download the media from Oracle eDelivery
 # ============================================================================
-# './install-occas.sh <env> download' fetches the installer media headlessly
-# (curl); 'install' auto-runs it when installer.jar is missing. One-time
-# browser step per release (license click + wget.sh + access token) — the
-# script walks you through it; details in the README.
-# download.urls.file=build-profiles/occas/<env>.urls
+# blade.sh's download row fetches the installer media headlessly (curl); its
+# install step auto-runs it when installer.jar is missing. One-time browser
+# step per release (license click + wget.sh + access token) — the dashboard
+# walks you through it and stashes the URLs as .conf/<name>/occas.urls;
+# details in the README.
 # download.dir=<dirname of installer.jar; falls back to ~/occas-media>
 
-# --- Oracle JDKs (official tarballs from download.oracle.com — no login) ---
-# java.runtime: what OCCAS runs on — keep to Oracle's certification matrix
-# for this OCCAS release (8.3 → JDK 21). java.javadoc: for blade javadoc
-# builds (Markdown /// needs JDK 23+). Blank/absent = skip that one.
-java.runtime=21
-java.javadoc=25
-# Shared location (created by prep) — NOT under a user home: the servers run
-# as the oracle user, which can't traverse /home/<you> (mode 700).
+# --- Oracle JDK (official tarballs from download.oracle.com — no login) ---
+# JDKs sit side by side under java.dir, and java.home is the
+# <java.dir>/current SYMLINK — a Java upgrade is a flip of that one link,
+# offered by blade.sh's patch step. Shared location — NOT under a user home:
+# the servers run as the oracle user, which can't traverse /home/<you>
+# (mode 700).
 java.dir=/opt/oracle/java
+# java.home=/opt/oracle/java/current
 
 # ============================================================================
 # Step 1 — silent product install
@@ -69,32 +70,36 @@ dynamic.server.count=2
 # MaxDynamicClusterSize — the growth ceiling.
 max.dynamic.cluster.size=99
 
-# --- Cluster firewall (prep + engines steps) ---
+# --- Cluster firewall ---
 # firewalld on OCI/OEL images allows only ssh, which blocks NodeManager (5556),
-# t3 (7001), SIP, and coherence replication between the machines. prep/engines
-# add this source to the trusted zone on every box (public stays filtered).
-# Default: machine0's /24. Set 'none' to manage the firewall yourself.
+# t3 (7001), SIP, and coherence replication between the machines. blade.sh's
+# 'Open firewall ports' row (and engine provisioning) opens the NM/admin/ssl/sip
+# ports on every box; firewall.trusted.source was the old installer's key and
+# nothing reads it now.
 # firewall.trusted.source=10.0.0.0/24
 
 # --- Physical machines + their Node Managers ---
 # CSV per machine: name:nmListenAddress:nmListenPort:nmType  (nmType = ssl|plain)
-# machine0 = the admin box (NM-managed, but no engines). To ADD A NODE: add a
-# machine.N line, append its name to machine.match.expression, bump
-# dynamic.server.count, re-run:  ./install-occas.sh <env> configure
+# machine0 = the admin box (NM-managed, but no engines). To ADD A NODE:
+# blade.sh's 'Add a machine' row grows the cluster online and provisions the
+# host. Keep this list in sync anyway — certs.sh reads machine.N for the
+# certificate SANs.
 machine.1=machine0:10.0.0.11:5556:ssl
 machine.2=machine1:10.0.0.12:5556:ssl
 machine.3=machine2:10.0.0.13:5556:ssl
 
-# --- Optional static test engine on the admin box ---
-# A fixed engine-tier member for testing / BLADE config-file generation, on
-# machine0. Leave blank to skip.
+# --- Static test engine on the admin box (HISTORICAL) ---
+# blade.sh dropped static.server: engines follow the machines, so machine0
+# runs engine0 from the same template as every other engine. Kept as a record
+# of the pre-blade.sh domain shape.
 # Format: name:machine:listenPort:sipPort:sipsPort
 static.server=engine0:machine0:8001:5060:5061
 
-# --- TLS (steps: certs.sh + 'install-occas.sh <env> secure') ---
+# --- TLS (steps: certs.sh + blade.sh's HTTPS / SIP-TLS row) ---
 # 1. ./certs.sh <env> generate      (test PKI)  — or 'import' for customer-issued
-# 2. ./install-occas.sh <env> secure  (domain stopped) — wires the keystores +
-#    SSL ports into AdminServer, the engine template, and the static engine.
+# 2. ./blade.sh <profile> → the 'Turn on HTTPS / SIP-TLS' row (tls/make-certs.sh
+#    + tls/install-ssl.sh) wires the keystores + SSL ports into AdminServer and
+#    the engine template.
 # Defaults shown; uncomment to override. store.password lives in <env>.secret.
 # certs.dir=~/.blade/certs/<env>
 # admin.ssl.port=7002

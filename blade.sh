@@ -286,6 +286,10 @@ load_profile() {
     INSTALL_GID="$(d install.gid "")"
     INSTALL_TYPE="$(d install.type 'Complete with Examples')"
     JAVA_HOME_VAL="$(d java.home "${JAVA_HOME:-}")"
+    # Like the Oracle home, java.home is a SYMLINK on Linux: JDKs sit side by
+    # side under java.dir and java.home points at <java.dir>/current, so a
+    # Java upgrade is a flip of that one link (the patch step offers it).
+    JAVA_BASE="$(d java.dir /opt/oracle/java)"
     prefix="$(d server.name.prefix engine)"
     match="$(d machine.match.expression "")"
     NM_DOMAIN="$(d nm.domain.name nmdomain)"
@@ -491,8 +495,8 @@ EOF
         if [ -n "$_found" ]; then
             ok "OCCAS ${OCCAS_VERSION} runs on JDK ${_want} — found one at ${_found}"
         elif jdk_dl_supported "$_want" \
-             && yesno "OCCAS ${OCCAS_VERSION} runs on JDK ${_want} — none found. Download it from Oracle into /usr/lib/jvm?" "Y"; then
-            download_jdk "$_want" && _found="$JDK_DL_HOME"
+             && yesno "OCCAS ${OCCAS_VERSION} runs on JDK ${_want} — none found. Download it from Oracle into ${JAVA_BASE}?" "Y"; then
+            download_jdk "$_want" "$JAVA_BASE" && _found="$JDK_DL_HOME"
         else
             warn "OCCAS ${OCCAS_VERSION} runs on JDK ${_want} — none found here; install it or point me at one."
         fi
@@ -515,6 +519,25 @@ EOF
         fi
         break
     done
+
+    # Mirror ORACLE_HOME: store the LINK, not the versioned path, so a JDK
+    # upgrade is a flip of <java.dir>/current. macOS dev profiles keep the raw
+    # path — host prep is for the Linux install target.
+    if [ "$(uname -s)" = "Linux" ] && [ "$JAVA_HOME_VAL" != "${JAVA_BASE}/current" ]; then
+        local _real; _real="$(readlink -f "$JAVA_HOME_VAL" 2>/dev/null || printf '%s' "$JAVA_HOME_VAL")"
+        if yesno "point ${JAVA_BASE}/current -> ${_real} and use the link as java.home?" "Y"; then
+            if [ "$DRY" = "on" ]; then
+                log "${C_DIM}  [dry-run] ln -sfn ${_real} ${JAVA_BASE}/current${C_RESET}"
+                JAVA_HOME_VAL="${JAVA_BASE}/current"
+            elif { mkdir -p "$JAVA_BASE" && ln -sfn "$_real" "${JAVA_BASE}/current"; } 2>/dev/null \
+              || { sudo mkdir -p "$JAVA_BASE" && sudo ln -sfn "$_real" "${JAVA_BASE}/current"; } 2>/dev/null; then
+                JAVA_HOME_VAL="${JAVA_BASE}/current"
+                ok "java.home is the link: ${JAVA_BASE}/current -> ${_real}"
+            else
+                warn "could not create ${JAVA_BASE}/current — keeping ${JAVA_HOME_VAL}."
+            fi
+        fi
+    fi
     return 0
 }
 
@@ -767,7 +790,10 @@ save_profile() {
         echo "install.uid=${INSTALL_UID}"
         echo "install.gid=${INSTALL_GID}"
         echo "install.type=${INSTALL_TYPE}"
-        echo "# JDK the installer (and the servers it configures) run on."
+        echo "# JDK the installer (and the servers it configures) run on. On Linux"
+        echo "# java.home is the <java.dir>/current LINK: JDKs sit side by side under"
+        echo "# java.dir and a Java upgrade is a flip of that one link (RUN patch)."
+        echo "java.dir=${JAVA_BASE}"
         echo "java.home=${JAVA_HOME_VAL}"
         echo ""
         echo "# --- Step 2: dynamic-cluster domain ---"
@@ -915,6 +941,15 @@ _sum_patch() {
             "$(grep -cvE '^\s*(#|$)' "${PROFILE_DIR}/patches.list" 2>/dev/null || echo 0)"
     else
         printf 'current=%s · no patches.list' "$now"
+    fi
+    # jdk=<version> when java.home is the link; jdk=unlinked advertises the
+    # one-question migration this row offers (Linux targets only).
+    if [ "${JAVA_HOME_VAL:-}" = "${JAVA_BASE:-/opt/oracle/java}/current" ]; then
+        local jt; jt="$(readlink -f "$JAVA_HOME_VAL" 2>/dev/null || true)"
+        jt="${jt##*/}"
+        printf ' · jdk=%s' "${jt:-dangling}"
+    elif [ -n "${JAVA_HOME_VAL:-}" ] && [ "$(uname -s)" = "Linux" ]; then
+        printf ' · jdk=unlinked'
     fi
 }
 _sum_lastmachine() {
@@ -1742,6 +1777,14 @@ provision_one_host() {
     local domhome="${DOMAINS_DIR}/${dom}"
     local nmhome="${DOMAINS_DIR}/${nmdom}"
     local jdk="${JAVA_HOME_VAL:-}"
+    # java.home may be the <java.dir>/current symlink; ship the REAL JDK it
+    # resolves to and repoint the link on the far side, same as the Oracle home
+    # below -- rsync'ing the link path would land the link itself, dangling.
+    local jdk_real="" jdk_link=""
+    if [ -n "$jdk" ]; then
+        jdk_real="$(readlink -f "$jdk" 2>/dev/null || printf '%s' "$jdk")"
+        [ "$jdk_real" != "$jdk" ] && jdk_link="$jdk"
+    fi
     local adminurl="${ADMINURL:-t3://${H_ADDR[0]}:7001}"
     local pw; pw="${BLADE_WLS_PASSWORD:-}"
     [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
@@ -1760,9 +1803,10 @@ provision_one_host() {
 
     if [ "$DRY" = "on" ]; then
         log "${C_DIM}  [dry-run] ssh ${tgt} true${C_RESET}"
-        log "${C_DIM}  [dry-run] sudo install -d $(dirname "$mw") $(dirname "$cdir")${jdk:+ $(dirname "$jdk")}${C_RESET}"
+        log "${C_DIM}  [dry-run] sudo install -d $(dirname "$mw") $(dirname "$cdir")${jdk_real:+ $(dirname "$jdk_real")}${jdk_link:+ $(dirname "$jdk_link")}${C_RESET}"
         log "${C_DIM}  [dry-run] rsync -a ${mw}/ ${tgt}:${mw}/   (first run moves several GB)${C_RESET}"
-        [ -n "$jdk" ] && log "${C_DIM}  [dry-run] rsync -a ${jdk} ${tgt}:$(dirname "$jdk")/${C_RESET}"
+        [ -n "$jdk_real" ] && log "${C_DIM}  [dry-run] rsync -a ${jdk_real} ${tgt}:$(dirname "$jdk_real")/${C_RESET}"
+        [ -n "$jdk_link" ] && log "${C_DIM}  [dry-run] ssh ${tgt} ln -sfn ${jdk_real} ${jdk_link}${C_RESET}"
         log "${C_DIM}  [dry-run] rsync -a ${cdir}/ ${tgt}:${cdir}/${C_RESET}"
         log "${C_DIM}  [dry-run] write ${domhome}/servers/${eng}/security/boot.properties${C_RESET}"
         install_systemd_unit_remote "$tgt" nodemanager.service \
@@ -1813,7 +1857,7 @@ provision_one_host() {
     real_home="$(readlink -f "$mw" 2>/dev/null || printf '%s' "$mw")"
     ver="$(basename "$real_home")"
     if ! ssh -o BatchMode=yes "$tgt" \
-         "sudo install -d -o '${sshu}' '$(dirname "$real_home")' '${DOMAINS_DIR}' '$(dirname "$cdir")'${jdk:+ '$(dirname "$jdk")'}" 2>/dev/null; then
+         "sudo install -d -o '${sshu}' '$(dirname "$real_home")' '${DOMAINS_DIR}' '$(dirname "$cdir")'${jdk_real:+ '$(dirname "$jdk_real")'}${jdk_link:+ '$(dirname "$jdk_link")'}" 2>/dev/null; then
         warn "${name}: could not create target dirs — skipped."
         return 1
     fi
@@ -1842,8 +1886,11 @@ provision_one_host() {
             warn "${name}: rsync of domain ${_d} failed — skipped."; return 1
         fi
     done
-    if [ -n "$jdk" ] && ! rsync -a "$jdk" "${tgt}:$(dirname "$jdk")/"; then
-        warn "${name}: rsync of ${jdk} failed — skipped."; return 1
+    if [ -n "$jdk_real" ] && ! rsync -a "$jdk_real" "${tgt}:$(dirname "$jdk_real")/"; then
+        warn "${name}: rsync of ${jdk_real} failed — skipped."; return 1
+    fi
+    if [ -n "$jdk_link" ] && ! ssh -o BatchMode=yes "$tgt" "ln -sfn '${jdk_real}' '${jdk_link}'"; then
+        warn "${name}: could not point ${jdk_link} at $(basename "$jdk_real") — skipped."; return 1
     fi
     if [ -d "$cdir" ] && ! rsync -a "${cdir}/" "${tgt}:${cdir}/"; then
         warn "${name}: rsync of ${cdir} failed — skipped."; return 1
@@ -2092,6 +2139,94 @@ patch_levels() {
     return 0
 }
 
+# JDK leg of patch (see do_patch below). The OCCAS leg is copy-and-switch-
+# NOTHING; for the JDK the flip IS the patch -- there is no domain state inside
+# a JDK for an out-of-place copy to protect. Every flip is asked, and rollback
+# is one flip back. Sets _JDK_DID=1 when it migrated or flipped, so a JDK-only
+# run counts as a complete patch run.
+_JDK_DID=0
+patch_jdk() {
+    _JDK_DID=0
+    [ "$(uname -s)" = "Linux" ] || return 0
+    local base="${JAVA_BASE:-/opt/oracle/java}" link="${JAVA_BASE:-/opt/oracle/java}/current"
+    local jh; jh="$(read_prop "$OCCAS_CONF" java.home)"
+    [ -n "$jh" ] || return 0
+    local ver want
+    ver="$(read_prop "$OCCAS_CONF" occas.version)"
+    [ -z "$ver" ] && ver="$(detect_occas_version "$MWHOME")"
+    want="$(occas_jdk_major "$ver")"
+    [ -n "$want" ] || return 0
+
+    # Migration: a raw versioned java.home predates the link scheme. One flip
+    # converts it; the units and engines pick the link up on their next re-run.
+    if [ "$jh" != "$link" ] && [ -x "${jh}/bin/java" ]; then
+        yesno "java.home is the versioned path ${jh} — switch to the ${link} link so JDK upgrades become a flip?" "Y" || return 0
+        local realjh; realjh="$(readlink -f "$jh" 2>/dev/null || printf '%s' "$jh")"
+        if [ "$DRY" = "on" ]; then
+            log "${C_DIM}  [dry-run] ln -sfn ${realjh} ${link}; java.home=${link}${C_RESET}"
+            return 0
+        fi
+        if { mkdir -p "$base" && ln -sfn "$realjh" "$link"; } 2>/dev/null \
+          || { sudo mkdir -p "$base" && sudo ln -sfn "$realjh" "$link"; } 2>/dev/null; then
+            set_conf_prop "$OCCAS_CONF" java.home "$link"
+            JAVA_HOME_VAL="$link"
+            _JDK_DID=1
+            ok "${link} -> $(basename "$realjh"); java.home is now the link."
+            log "  ${C_DIM}Re-run 'e'/'w' (and E for engines) so the units carry the link, then restart NM.${C_RESET}"
+        else
+            warn "could not create ${link} — keeping ${jh}."
+            return 0
+        fi
+        jh="$link"
+    fi
+    [ "$jh" = "$link" ] || return 0
+
+    local cur; cur="$(readlink -f "$link" 2>/dev/null || true)"
+    [ -n "$cur" ] && [ -x "${cur}/bin/java" ] || { warn "no usable JDK behind ${link}."; return 0; }
+    local curmaj; curmaj="$(jdk_major "${cur}/bin/java")"
+    [ "$curmaj" = "$want" ] \
+        || warn "current JDK is ${curmaj} but OCCAS ${ver} wants ${want} — install JDK ${want} beside it and re-run patch."
+
+    # Newest same-major JDK on the host that sort -V says is newer than the one
+    # in use. Same basename in another dir is the same JDK -- not a candidate.
+    local best="" d
+    for d in "$base"/* /usr/lib/jvm/*; do
+        [ -d "$d" ] && [ "${d##*/}" != "current" ] && [ -x "${d}/bin/java" ] || continue
+        [ "${d##*/}" = "${cur##*/}" ] && continue
+        [ "$(jdk_major "${d}/bin/java")" = "$want" ] || continue
+        [ "$(printf '%s\n%s\n' "${cur##*/}" "${d##*/}" | sort -V | tail -1)" = "${d##*/}" ] || continue
+        if [ -z "$best" ] || [ "$(printf '%s\n%s\n' "${best##*/}" "${d##*/}" | sort -V | tail -1)" = "${d##*/}" ]; then
+            best="$d"
+        fi
+    done
+
+    if [ -z "$best" ] && jdk_dl_supported "$want" \
+       && yesno "JDK: current -> $(basename "$cur"); no newer JDK ${want} on this host. Download Oracle's latest into ${base}?" "N"; then
+        if download_jdk "$want" "$base"; then
+            if [ "$(basename "$JDK_DL_HOME")" = "$(basename "$cur")" ]; then
+                ok "already on Oracle's latest ($(basename "$cur"))."
+            else
+                best="$JDK_DL_HOME"
+            fi
+        fi
+    fi
+    [ -n "$best" ] || return 0
+
+    yesno "JDK: current -> $(basename "$cur"); flip to $(basename "$best")?" "N" || return 0
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] ln -sfn ${best} ${link}${C_RESET}"
+        return 0
+    fi
+    ln -sfn "$best" "$link" 2>/dev/null || sudo ln -sfn "$best" "$link" 2>/dev/null \
+        || { warn "could not flip ${link}."; return 0; }
+    _JDK_DID=1
+    ok "${link} -> $(basename "$best")"
+    log "  ${C_DIM}Nothing restarts itself. Restart NM + the servers to pick it up ('n', 's'),${C_RESET}"
+    log "  ${C_DIM}and re-run E so the engines receive $(basename "$best") and the flip.${C_RESET}"
+    log "  ${C_DIM}Rollback is one flip back:  ln -sfn ${cur} ${link}${C_RESET}"
+    return 0
+}
+
 # Build a PATCHED Oracle home, out-of-place (dashboard: patch).
 #
 # Oracle's eDelivery media ships buggy and the fixes come from My Oracle Support,
@@ -2110,12 +2245,19 @@ do_patch() {
     local pdir; pdir="$(read_prop "$OCCAS_CONF" patch.dir)"; pdir="${pdir/#\~/$HOME}"
     pdir="${pdir:-${HOME}/occas-patches}"
     local plist="${PROFILE_DIR}/patches.list"
-    local jre; jre="$(read_prop "$OCCAS_CONF" java.home)"
 
     local real; real="$(readlink -f "$link" 2>/dev/null)"
     [ -n "$real" ] && [ -d "${real}/wlserver" ] || { warn "no Oracle home behind ${link} — install first."; return 1; }
 
+    patch_jdk
+    # Read java.home AFTER the JDK leg — migration may have just rewritten it.
+    local jre; jre="$(read_prop "$OCCAS_CONF" java.home)"
+
     if [ ! -f "$plist" ]; then
+        if [ "${_JDK_DID}" = "1" ]; then
+            log "  ${C_DIM}No OCCAS patch list (${plist}) — JDK-only run.${C_RESET}"
+            return 0
+        fi
         warn "no patch list: ${plist}"
         log  "  ${C_DIM}One patch ID per line, in the order they must be applied.${C_RESET}"
         log  "  ${C_DIM}Download the zips from My Oracle Support into ${pdir}.${C_RESET}"
@@ -2437,8 +2579,11 @@ find_jdk() {
         done
     fi
     # Linux / common layouts: scan the usual JVM dirs, match by reported major.
-    for d in /usr/lib/jvm/* /usr/java/* /opt/java/*; do
+    # java.dir first (it's where downloads land); skip the 'current' link so we
+    # return a real versioned home, never the link pointing at one.
+    for d in "${JAVA_BASE:-/opt/oracle/java}"/* /usr/lib/jvm/* /usr/java/* /opt/java/*; do
         [ -d "$d" ] || continue
+        [ "${d##*/}" = "current" ] && continue
         jbin="${d}/bin/java"; [ -x "$jbin" ] || continue
         [ "$(jdk_major "$jbin")" = "$want" ] && { printf '%s' "$d"; return 0; }
     done
@@ -2454,14 +2599,14 @@ jdk_dl_supported() {
     case "$1" in 17|21|22|23|24|25) return 0 ;; *) return 1 ;; esac
 }
 
-# Download + verify + unpack Oracle's NFTC JDK <major> into /usr/lib/jvm (using
-# sudo if that dir isn't writable). On success sets JDK_DL_HOME to the resulting
-# JAVA_HOME and returns 0; otherwise warns and returns 1. All chatter goes to
-# stderr so callers can run it inline without capturing stdout.
+# Download + verify + unpack Oracle's NFTC JDK <major> into <dest> (default
+# /usr/lib/jvm; sudo if it isn't writable). On success sets JDK_DL_HOME to the
+# resulting JAVA_HOME and returns 0; otherwise warns and returns 1. All chatter
+# goes to stderr so callers can run it inline without capturing stdout.
 JDK_DL_HOME=""
 download_jdk() {
     JDK_DL_HOME=""
-    local want="$1"
+    local want="$1" dest="${2:-/usr/lib/jvm}"
     jdk_dl_supported "$want" || {
         warn "Oracle only offers no-login downloads for JDK 17+ on Linux x64/aarch64;" >&2
         warn "JDK ${want} on $(uname -s)/$(uname -m) isn't available that way — install it manually." >&2
@@ -2470,7 +2615,6 @@ download_jdk() {
     local arch
     case "$(uname -m)" in x86_64|amd64) arch="x64" ;; aarch64|arm64) arch="aarch64" ;; esac
     local url="https://download.oracle.com/java/${want}/latest/jdk-${want}_linux-${arch}_bin.tar.gz"
-    local dest="/usr/lib/jvm"
 
     info "Oracle JDK ${want} (${arch}) — No-Fee Terms: https://www.oracle.com/java/technologies/downloads/license/" >&2
     local tmp; tmp="$(mktemp -d /tmp/blade-jdk.XXXXXX)" || return 1
@@ -2604,6 +2748,13 @@ do_makedirs() {
         $SUDO mkdir -p "$OCCAS_BASE" && $SUDO chown "${user}:${grp}" "$OCCAS_BASE" \
             && ok "chowned ${OCCAS_BASE} (holds the versioned homes + the 'current' link)." \
             || warn "could not chown ${OCCAS_BASE} — the symlink flip and patching will need sudo."
+    fi
+    # Same deal for the JDKs: 'current' is a link written here and new JDKs
+    # unpack in beside it -- unprivileged operations only if this is owned.
+    if [ -n "${JAVA_BASE:-}" ]; then
+        $SUDO mkdir -p "$JAVA_BASE" && $SUDO chown "${user}:${grp}" "$JAVA_BASE" \
+            && ok "chowned ${JAVA_BASE} (holds the JDKs + the 'current' link)." \
+            || warn "could not chown ${JAVA_BASE} — JDK flips will need sudo."
     fi
     if [ -n "${DOMAINS_DIR:-}" ]; then
         $SUDO mkdir -p "$DOMAINS_DIR" && $SUDO chown -R "${user}:${grp}" "$DOMAINS_DIR" \
@@ -3157,10 +3308,20 @@ do_preflight() {
     # the problem. If we can fetch the one OCCAS wants, offer it here too — same
     # path as the wizard — and write it back into the profile's java.home.
     if [ -n "$PF_NEED" ] && jdk_dl_supported "$want" \
-       && yesno "Download JDK ${want} from Oracle into /usr/lib/jvm and set it as this profile's java.home?" "Y"; then
-        if download_jdk "$want"; then
-            set_conf_prop "$OCCAS_CONF" java.home "$JDK_DL_HOME"
-            ok "java.home set to ${JDK_DL_HOME} in ${OCCAS_CONF#${SCRIPT_DIR}/}"
+       && yesno "Download JDK ${want} from Oracle into ${JAVA_BASE} and set it as this profile's java.home?" "Y"; then
+        if download_jdk "$want" "$JAVA_BASE"; then
+            # Record the <java.dir>/current LINK, not the versioned path, so a
+            # later JDK upgrade is a flip (raw path only if the ln fails).
+            local _jlink="${JAVA_BASE}/current"
+            ln -sfn "$JDK_DL_HOME" "$_jlink" 2>/dev/null \
+                || sudo ln -sfn "$JDK_DL_HOME" "$_jlink" 2>/dev/null || true
+            if [ "$(readlink "$_jlink" 2>/dev/null)" = "$JDK_DL_HOME" ]; then
+                set_conf_prop "$OCCAS_CONF" java.home "$_jlink"
+                ok "java.home set to ${_jlink} -> $(basename "$JDK_DL_HOME") in ${OCCAS_CONF#${SCRIPT_DIR}/}"
+            else
+                set_conf_prop "$OCCAS_CONF" java.home "$JDK_DL_HOME"
+                ok "java.home set to ${JDK_DL_HOME} in ${OCCAS_CONF#${SCRIPT_DIR}/}"
+            fi
             PF_NEED=""   # the JDK prerequisite is now satisfied
         fi
     fi

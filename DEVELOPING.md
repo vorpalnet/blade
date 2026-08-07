@@ -1,509 +1,398 @@
-# Framework Developer's Guide
+# BLADE Developer's Guide
 
-How to write BLADE code.
+How to write a BLADE application.
 
-This guide is about `sendRequest` and `sendResponse` — the two methods the whole
-framework is built on. Everything else in BLADE is a variation on what they do.
-If you understand them, you can read any callflow in the tree.
-
-The worked examples are real code you can open alongside this:
-[`InitialInvite`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/b2bua/InitialInvite.java),
-the callflow `B2buaServlet` runs for every initial INVITE, and
-[`BlindTransfer`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/transfer/BlindTransfer.java),
-which the [transfer service](services/transfer/README.md) uses to move a call
-from one party to another.
-
-For packaging, building and deploying a service, see [§7](#7-packaging-a-service)
-at the end — it is the least interesting part and it is mostly cross-references.
+This guide is for two readers: the developer who knows Java but not SIP, and the
+network engineer who knows SIP but not Java. Each chapter introduces one part of
+the framework and links to a README that goes deeper. Building and deploying are
+covered separately in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Contents
 
-- [Before you start: v2 or v3?](#before-you-start-v2-or-v3)
-1. [The problem](#1-the-problem)
-2. [sendRequest](#2-sendrequest)
-3. [sendResponse](#3-sendresponse)
-4. [Nesting: a callflow is a conversation](#4-nesting-a-callflow-is-a-conversation)
-5. [What survives, and how](#5-what-survives-and-how)
-6. [expectRequest: messages that may never come](#6-expectrequest-messages-that-may-never-come)
-7. [Packaging a service](#7-packaging-a-service)
-- [When something goes wrong](#when-something-goes-wrong)
-8. [House rules](#8-house-rules)
+1. [The Problem](#1-the-problem)
+2. [OCCAS and the SIP Servlet API](#2-occas-and-the-sip-servlet-api)
+3. [Callflow](#3-callflow)
+4. [AsyncSipServlet](#4-asyncsipservlet)
+5. [SettingsManager](#5-settingsmanager)
+6. [Timers](#6-timers)
+7. [Expectations](#7-expectations)
+8. [Logging](#8-logging)
+9. [Testing](#9-testing)
+10. [Events](#10-events)
 
 ---
 
-## Before you start: v2 or v3?
+## 1. The Problem
 
-**Writing something new? Use the table below and don't think about it again.**
+A phone call is a conversation: an INVITE, some ringing, an answer, an
+acknowledgement, and eventually a hang-up. The standard servlet model chops that
+conversation into separate handler methods — one for requests, one for
+responses, one for acknowledgements — each called at a different moment, none
+aware of what the others saw. To connect two events in the same call, you store
+state in one handler and retrieve it in another. The state variables multiply,
+the switch statements grow, and the logic of a single call ends up scattered
+across the whole class. Reading it is like reading a Choose Your Own Adventure
+book: to follow one story, you keep turning to page 57.
 
-The longer answer, because you will see two of some things. The framework is
-consolidating onto one version-neutral package, `org.vorpal.blade.framework` — the
-*baseline*. Work that used to live in `v2.*` and `v3.*` is moving there, and the old
-names are being left behind as **faces**: four-line shells that extend the real class
-so existing applications keep compiling. `v2.AsyncSipServlet` is one — its entire body
-is a `serialVersionUID`, because the implementation is already in the baseline.
+BLADE turns the book into a collection of poems. Each conversation is written
+once, top to bottom, in a single method. The events still arrive one at a time,
+minutes apart, perhaps on different machines — but the code reads in the order
+the conversation happens.
 
-Faces are marked `@Deprecated`, so your IDE will strike through the ones you should
-not be typing. There is only ever one implementation behind them; a `v2.Callback` and
-a baseline `Callback` are the same type, and passing one where the other is expected
-always works.
+> **PLACEHOLDER:** code snippet contrasting the traditional style with the
+> BLADE style. *(Jeff to supply.)*
 
-Where you still have to choose, **sixteen class names exist in both packages** —
-`Callflow`, `Callback`, `AsyncSipServlet`, `B2buaServlet`, `Analytics`, `Selector`,
-`Sdp` and more — and autocomplete will offer you both. What a new application wants:
+## 2. OCCAS and the SIP Servlet API
 
-| You want | Import |
-|---|---|
-| a callflow to extend | `org.vorpal.blade.framework.v3.Callflow` |
-| a B2BUA servlet | `org.vorpal.blade.framework.v3.B2buaServlet` |
-| a bare SIP servlet | `org.vorpal.blade.framework.AsyncSipServlet` |
-| a lambda continuation | `org.vorpal.blade.framework.Callback` |
-| **configuration** | `org.vorpal.blade.framework.v2.config.SettingsManager` |
+BLADE applications run on OCCAS — Oracle Communications Converged Application
+Server, a WebLogic application server with a built-in SIP container. An
+application is a WAR file; it deploys, clusters, and fails over like any
+WebLogic application, and it may serve SIP and HTTP from the same WAR.
 
-That last row is not a typo, and it is the exception worth knowing. `v2.config.SettingsManager`
-is imported by 124 files in this repo; the v3 one by a single service. The v3 version is a
-different, more type-safe design that requires a subclass binding the config type
-(`class FooManager extends v3.configuration.SettingsManager<FooConfig>`), and it is not yet
-the default. Use the v2 one unless you have a reason.
+The SIP Servlet API (JSR 359) presents SIP to Java. Each SIP message is an
+object — a `SipServletRequest` or a `SipServletResponse` — with methods to read
+and set headers and content. The container does the plumbing: parsing,
+transactions, retransmission, dialog bookkeeping, and the system headers
+(`Via`, `Call-ID`, `CSeq`, and the rest) that applications must not touch.
 
-Two rows point at the baseline rather than `v3.*`, which is the direction everything is
-heading: the versioned name is the one that goes away.
+For the reader new to SIP: a request names an action (INVITE starts a call, BYE
+ends one, CANCEL retracts an unanswered INVITE); a response answers a request
+with a status code. Responses below 200 are *provisional* — `180 Ringing`
+reports progress. Responses of 200 and above are *final* — `200 OK` accepts,
+`486 Busy Here` declines. A caller confirms a final answer to an INVITE with an
+ACK. A basic call is INVITE, 180, 200, ACK — conversation — BYE, 200.
 
-The other exception: **the container-proxy API exists only in v2**
-(`v2.callflow.Callflow.proxyRequest`). v3 answers the same need with passthru
-drop-out on `sendRequest`, which is configuration-driven — but if you need a real
-`javax.servlet.sip.Proxy`, v2 is where it lives.
+> **PLACEHOLDER:** sequence diagram, call setup. *(Jeff to supply.)*
 
-Everything below is the same in both generations.
+> **PLACEHOLDER:** sequence diagram, call teardown. *(Jeff to supply.)*
 
----
+Import BLADE classes from `org.vorpal.blade.framework.v3`. Your IDE will also
+offer older packages whose names it strikes through as deprecated; skip them.
 
-## 1. The problem
+## 3. Callflow
 
-A SIP servlet is a callback machine. The container hands you `doInvite`,
-`doResponse`, `doAck`, `doBye` — each one a separate method, each called at a
-different moment, none of them knowing what the others saw.
-
-Consider forwarding a call. INVITE arrives in `doInvite`; you build an outbound
-INVITE and send it. Some time later a `180 Ringing` arrives in `doResponse`, and
-you must work out which call it belongs to and what to do about it. Then a `200
-OK` arrives — in the same `doResponse`, with nothing but session attributes to
-tell it apart from the 180. Then an ACK arrives in `doAck`, and you must
-reconstruct enough context to build the matching ACK for the other leg.
-
-Response to *what*? You end up writing a state variable, then another, then a
-switch over both. The logic of one conversation is smeared across four methods
-and a bag of attributes, and reading it means jumping between pages like a
-choose-your-own-adventure book.
-
-BLADE's answer is to keep the conversation in one place:
+A callflow is the poem: one SIP conversation, written as one method. Extend
+`Callflow` and implement `process()`, which receives the request that starts
+the conversation:
 
 ```java
-sendRequest(bobRequest, (bobResponse) -> {
-    SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
-    sendResponse(aliceResponse, (aliceAck) -> {
-        sendRequest(bobResponse.createAck());
-    });
-});
-```
+public class Connect extends Callflow {
 
-Send an INVITE to Bob. When he answers, answer Alice. When Alice acknowledges,
-acknowledge Bob. Four SIP transactions, one method, read top to bottom.
-
-The question is how that actually works, because those lambdas do not run on the
-thread that created them, may not run on the *machine* that created them, and
-`aliceRequest` is somehow still in scope minutes later.
-
-## 2. sendRequest
-
-`sendRequest` replaces `SipServletRequest.send()`. Two forms:
-
-```java
-void sendRequest(SipServletRequest request, Callback<SipServletResponse> lambda)
-void sendRequest(SipServletRequest request)
-```
-
-Stripped of glare handling and header stamping, the two-argument form does this
-([`Callflow.java:935`](libs/framework/src/main/java/org/vorpal/blade/framework/Callflow.java)):
-
-```java
-request.getSession().setAttribute(RESPONSE_CALLBACK_ + request.getMethod(), lambdaFunction);
-request.send();
-```
-
-**Your lambda is stored in the SIP session, keyed by the method you just sent.**
-That is the entire trick. The request goes on the wire, the thread returns, and
-the continuation waits in session memory under a name like
-`RESPONSE_CALLBACK_INVITE`.
-
-When a response arrives, the framework's dispatcher looks in that same slot
-([`AsyncSipServlet.doResponse`](libs/framework/src/main/java/org/vorpal/blade/framework/AsyncSipServlet.java)
-→ `Callflow.pullCallback`), finds your lambda, and invokes it with the response.
-No `doResponse` to write, no correlation to do — the response found its
-continuation because they share a session and a method name.
-
-### Why the lambda fires more than once
-
-This is the part that surprises people, and it falls out of four lines in
-`pullCallback` ([`Callflow.java:297`](libs/framework/src/main/java/org/vorpal/blade/framework/Callflow.java)):
-
-```java
-if (response.getProxyBranch() == null && response.getStatus() >= 200) {
-    sipSession.removeAttribute(attribute);
-}
-```
-
-The callback is read on every response but **removed only when the status is 200
-or above**. A `180 Ringing` leaves it in place, so the next response finds it
-again. A `200 OK` — or any final response — takes it out, and the lambda is done.
-
-So one `sendRequest` lambda receives every response to that request, in order,
-ending with the final one. That is why real callflows branch on the response
-class rather than assuming a single answer. From `BlindTransfer`:
-
-```java
-sendRequest(targetRequest, (targetResponse) -> {
-    if (provisional(targetResponse)) {
-        // Carol is ringing; nothing to do but log it
-    } else if (successful(targetResponse)) {
-        // Carol answered — connect her to Alice
-    } else if (failure(targetResponse)) {
-        // Carol declined, or Alice gave up (487)
+    @Override
+    public void process(SipServletRequest request) throws ServletException, IOException {
+        // the conversation, top to bottom
     }
-});
-```
-
-`provisional`, `successful`, `redirection` and `failure` are static helpers on
-`Callflow`: 1xx, 2xx, 3xx and 400-or-above respectively. Note that 3xx belongs to
-none of the three branches above — on an outbound INVITE the framework
-auto-follows redirects for you, up to five hops, so your lambda normally sees the
-final response from wherever the call ended up.
-
-### The one-argument form
-
-`sendRequest(request)` registers nothing, so the response is absorbed by the
-framework and your code never sees it. That is the right choice when there is
-genuinely nothing to decide — an ACK, or a BYE whose `200 OK` you do not care
-about. `BlindTransfer` uses it for exactly those:
-
-```java
-sendRequest(transfereeResponse.createAck());
-```
-
-Do not write an empty lambda to "handle" a response you are going to ignore. The
-absence of a lambda is the statement.
-
-### Exceptions come back as responses
-
-If sending throws, `sendRequest` does not propagate the exception. It builds a
-synthetic `500` response naming the exception class, and hands it to your lambda
-([`Callflow.java:959`](libs/framework/src/main/java/org/vorpal/blade/framework/Callflow.java)).
-The comment in the source says why: *"It's too maddening to write callflows where
-you have to worry about both error responses and exceptions."* Your failure
-handling lives in one place — the `failure()` branch — and covers both a remote
-`503` and a local `NullPointerException`.
-
-## 3. sendResponse
-
-`sendResponse` is the mirror image, and the asymmetry is worth understanding:
-after you answer, the thing you wait for is not a response but a **request** —
-the ACK.
-
-```java
-void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambda)
-void sendResponse(SipServletResponse response)
-```
-
-The lambda is stored under the ACK's request-callback key
-([`Callflow.java:1477`](libs/framework/src/main/java/org/vorpal/blade/framework/Callflow.java)):
-
-```java
-response.getSession().setAttribute(REQUEST_CALLBACK_ + ACK, lambdaFunction);
-```
-
-So `sendResponse(aliceResponse, (aliceAck) -> {...})` reads as "answer Alice, and
-when she acknowledges, do this." If the response is a reliable provisional, the
-same lambda is also registered under `PRACK` and the response goes out via
-`sendReliably()` — one lambda, whichever acknowledgement the far end chooses.
-
-The single-argument form is *not* "no callback". It registers a lambda that does
-nothing ([`Callflow.java:1523`](libs/framework/src/main/java/org/vorpal/blade/framework/Callflow.java)):
-
-```java
-public void sendResponse(SipServletResponse response) throws ServletException, IOException {
-    sendResponse(response, (ackOrPrack) -> {
-        // do nothing;
-    });
 }
 ```
 
-That matters. A registered no-op absorbs the ACK; *no* registration would let the
-ACK fall through to `chooseCallflow` as an unhandled request. Answering with
-`sendResponse(request.createResponse(202))` — as `BlindTransfer` does for the
-inbound REFER — quietly swallows the acknowledgement, which is what you want.
-
-## 4. Nesting: a callflow is a conversation
-
-Now the two compose, and nesting depth becomes conversational depth. Here is the
-heart of `InitialInvite` — the callflow every `B2buaServlet` runs for an initial
-INVITE. Logging, analytics events, listener null-checks, the caller/callee
-session tagging, the `doNotProcess` escape hatch and the PRACK branch are all
-elided; what remains is the shape:
+Inside `process()`, three methods carry the conversation forward. Each takes a
+message to send and, optionally, a *lambda* — a block of code to run when the
+reply arrives. If lambdas are new to you, read
 
 ```java
 sendRequest(bobRequest, (bobResponse) -> {
+    // ...
+});
+```
 
+as: "Send `bobRequest`. When a response arrives, name it `bobResponse` and do
+this." The method returns immediately; the block runs later, when the far end
+answers.
+
+**`sendRequest(request, lambda)`** sends a request; the lambda receives each
+response. **`sendResponse(response, lambda)`** sends a response; the lambda
+receives the acknowledgement (the ACK or PRACK) — for after you answer, what
+you wait for is not a response but a request.
+**`sendAcknowledgement(ackOrPrack, response)`** forwards an acknowledgement
+received on one call leg to the other, whichever kind it is.
+
+Here is a complete two-party bridge — Alice calls, we invite Bob:
+
+```java
+sendRequest(bobRequest, (bobResponse) -> {
     SipServletResponse aliceResponse = aliceRequest.createResponse(bobResponse.getStatus());
     copyContentAndHeaders(bobResponse, aliceResponse);
-
-    if (successful(bobResponse)) {
-        b2buaListener.callAnswered(aliceResponse);
-    } else if (failure(bobResponse)) {
-        b2buaListener.callDeclined(aliceResponse);
-    }
-
     sendResponse(aliceResponse, (aliceAck) -> {
-        if (aliceAck.getMethod().equals(ACK)) {
-            SipServletRequest bobAck = copyContentAndHeaders(aliceAck, bobResponse.createAck());
-            b2buaListener.callConnected(bobAck);
-            sendRequest(bobAck);
-        }
+        sendAcknowledgement(aliceAck, bobResponse);
     });
 });
 ```
 
-Read it as a sentence. *Invite Bob. Whatever he says, say the same thing to
-Alice. When Alice acknowledges, acknowledge Bob.*
+Read it as a sentence: *invite Bob; whatever he says, say the same to Alice;
+when Alice acknowledges, acknowledge Bob.*
 
-Every response Bob sends runs the outer lambda: the 180 becomes a 180 to Alice,
-the 200 becomes a 200 to Alice. Only the 2xx and the failures fire a lifecycle
-callback, because only they are decisions. The `sendResponse` inside the outer
-lambda re-registers on each pass — harmless, because the ACK only ever arrives
-after a 2xx.
+### One request, several responses
 
-That is a complete B2BUA. Three hundred lines of handler-and-attribute
-bookkeeping, expressed as the shape of the conversation.
-
-## 5. What survives, and how
-
-`aliceRequest` is used inside a lambda that runs after a network round trip,
-possibly on another machine. Here is why that works.
-
-`Callback` extends both `Consumer` and **`Serializable`**
-([`Callback.java`](libs/framework/src/main/java/org/vorpal/blade/framework/Callback.java)).
-A serializable lambda drags its captured state with it. Storing it in a SIP
-session attribute means the container serializes and replicates it exactly as it
-would any other attribute — and because the application is declared
-`distributable`, that replication spans the cluster.
-
-Two things get carried, and the distinction matters when you write your own:
-
-**Captured locals.** A lambda that mentions `bobResponse` captures that reference,
-and it is serialized with the lambda.
-
-**The callflow itself.** `Callflow implements Serializable`
-([`Callflow.java:81`](libs/framework/src/main/java/org/vorpal/blade/framework/Callflow.java)),
-and this is the subtler half. `InitialInvite` keeps `aliceRequest` and
-`bobRequest` as *instance fields*. A lambda that reads an instance field captures
-`this` — so serializing the lambda serializes the whole `InitialInvite` object,
-fields and all. The callflow object *is* the state container. That is why
-`Callflow` implements `Serializable` and why every callflow declares a
-`serialVersionUID`.
-
-The practical consequences:
-
-- **Everything reachable from the lambda is written to session memory on every
-  hop.** Capture the two messages you need, not the configuration tree they came
-  from. Read settings into locals at the top of `process` and keep only the
-  fields you use.
-- **Anything captured must be serializable.** A non-serializable handle — a
-  database connection, an executor, a logger you built yourself — fails at
-  replication time, on a different node, under load. Not in your unit test.
-- **Do not hold a callflow reference longer than the callflow.** `InitialInvite`
-  parks itself in a message attribute so the listener can see which callflow ran,
-  then immediately removes it — *"Remove the callflow so it's not serialized."*
-
-## 6. expectRequest: messages that may never come
-
-`sendRequest` and `sendResponse` cover messages you asked for. Some messages
-arrive because the other side decided — a CANCEL, a BYE mid-transfer. For those
-there is `expectRequest`:
+An INVITE draws more than one response: first `180 Ringing`, then the answer.
+The `sendRequest` lambda runs for **every** response to its request — once for
+the 180, again for the 200 — and stops after a final response arrives. Branch
+on the kind of response with the helpers `provisional()` (1xx), `successful()`
+(2xx), `redirection()` (3xx), and `failure()` (4xx and above):
 
 ```java
-Expectation expectRequest(SipSession session, String method, Callback<SipServletRequest> lambda)
-```
-
-It registers your lambda in the same `REQUEST_CALLBACK_<METHOD>` slot that
-`sendResponse` uses for ACK, and hands back an `Expectation` you can `clear()`
-when the situation no longer applies. As the source puts it, *"you don't have to
-write a complete CANCEL Callflow class. How convenient!"*
-
-`BlindTransfer` is the reason this exists. Bob asks to transfer Alice to Carol.
-Between that REFER and Carol answering, either Alice or Bob may hang up, and each
-needs different treatment:
-
-```java
-// in the event the transferee hangs up before the transfer completes
-Expectation aliceExpectation = expectRequest(transfereeRequest.getSession(), BYE, (bye) -> {
-    sendResponse(bye.createResponse(200));
-    if (targetRequest.getSession().isValid()
-            && targetRequest.getSession().getState() == SipSession.State.EARLY) {
-        sendRequest(targetRequest.createCancel());
+sendRequest(bobRequest, (bobResponse) -> {
+    if (provisional(bobResponse)) {
+        // Bob is ringing
+    } else if (successful(bobResponse)) {
+        // Bob answered
+    } else if (failure(bobResponse)) {
+        // Bob declined
     }
-    transferListener.transferAbandoned(bye);
-});
-
-// In case transferor (bob) hangs up.
-Expectation bobExpectation = expectRequest(transferorRequest.getSession(), BYE, (bye) -> {
-    sendResponse(bye.createResponse(200));
 });
 ```
 
-Then, once Carol answers, Alice's hang-up stops being an abandonment and becomes
-an ordinary end of call, so the expectation is withdrawn:
+Failures of your own arrive the same way: if a send fails locally, your lambda
+receives a `500` response rather than an exception, so one `failure()` branch
+covers both a remote decline and a local error.
+
+The one-argument forms, `sendRequest(request)` and `sendResponse(response)`,
+take no lambda; whatever comes back is absorbed. Use them when there is nothing
+to decide — an ACK, or a BYE whose `200 OK` you do not care about. Do not write
+an empty lambda for a reply you mean to ignore; the absence of a lambda is the
+statement.
+
+### The cluster keeps your place
+
+A callflow survives failover. Send an INVITE from one engine node, and the
+response may run your lambda on another; the conversation continues as if
+nothing happened. BLADE preserves the callflow object — its fields and the
+variables its lambdas use — across the cluster. In return, two obligations:
+
+- Every field and captured variable must be serializable. SIP messages,
+  strings, and numbers are; a database connection or an open socket is not.
+- Keep them small. Capture the two messages you need, not the object tree they
+  came from.
+
+*More:* [v3 framework README](libs/framework/src/main/java/org/vorpal/blade/framework/v3/README.md) ·
+[callflow README](libs/framework/src/main/java/org/vorpal/blade/framework/v2/callflow/README.md)
+
+## 4. AsyncSipServlet
+
+The servlet is the front door: the container hands it every message, and it
+decides which callflow runs. Extend `AsyncSipServlet` and implement three
+methods — `servletCreated` and `servletDestroyed`, called once each at
+deployment and undeployment, and `chooseCallflow`, called for each new
+conversation:
 
 ```java
-// Alice will no longer hangup, expect a BYE from Bob
-aliceExpectation.clear();
+@WebListener
+@SipApplication(distributable = true)
+@SipServlet(loadOnStartup = 1)
+@SipListener
+public class ExampleServlet extends AsyncSipServlet {
+    private static final long serialVersionUID = 1L;
+
+    public static ExampleSettingsManager settingsManager;
+
+    @Override
+    public void servletCreated(SipServletContextEvent event) throws ServletException, IOException {
+        settingsManager = new ExampleSettingsManager(event);
+    }
+
+    @Override
+    public void servletDestroyed(SipServletContextEvent event) throws ServletException, IOException {
+        settingsManager.unregister();
+    }
+
+    @Override
+    protected Callflow chooseCallflow(SipServletRequest request) throws ServletException, IOException {
+        if (request.isInitial() && request.getMethod().equals("INVITE")) {
+            return new Connect();
+        }
+        return null;
+    }
+}
 ```
 
-Follow `aliceExpectation` through that file and you have the whole model in one
-variable. It is created before the INVITE to Carol goes out. It is serialized
-with the callflow. It may be invoked seconds later on a different node. And it is
-cleared from inside a lambda nested two levels deep in a different transaction.
-None of that required a state machine, a correlation table, or a single
-`getAttribute`.
+`chooseCallflow` examines the request and returns the callflow to run, or
+`null` to let the framework respond on its own. The four annotations are
+required; `distributable = true` is what turns on failover.
 
-Read [`BlindTransfer.process`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/transfer/BlindTransfer.java)
-end to end when you have twenty minutes. It handles a REFER, a 202, a pending
-NOTIFY, an INVITE to the target, a re-INVITE to the transferee, two ACKs, a
-terminating NOTIFY, and three distinct failure paths — and the PlantUML sequence
-diagrams at the top of the file are drawn from the same code. It is the most
-instructive file in the repository.
+For the common case — receive a call, place a call, bridge them — extend
+`B2buaServlet` instead. It supplies `chooseCallflow` and runs the bridge for
+you; you override any of six lifecycle callbacks: `callStarted`,
+`callAnswered`, `callConnected`, `callDeclined`, `callAbandoned`, and
+`callCompleted`. Each hands you the message about to be sent, so changing the
+message changes what goes on the wire. To reject a call instead of connecting
+it, call `doNotProcess(outboundRequest, 403, "Forbidden")` from `callStarted`.
 
-## 7. Packaging a service
+*More:* [b2bua README](libs/framework/src/main/java/org/vorpal/blade/framework/v2/b2bua/README.md) ·
+[test/test-b2bua](test/test-b2bua/README.md), the template most services copy
 
-The mechanics, briefly. A service is one WAR on the OCCAS engine tier: a servlet,
-its callflows, a config class, and two descriptors.
+## 5. SettingsManager
 
-**The servlet.** Extend `v3.AsyncSipServlet` and implement its three abstract
-methods — `servletCreated`, `servletDestroyed`, and `chooseCallflow`, which picks
-the callflow per inbound request (return `null` to let the container absorb the
-message). Or extend `v3.B2buaServlet`, which writes `chooseCallflow` for you and
-gives you six lifecycle callbacks instead. Four annotations are required:
-`@WebListener`, `@SipApplication(distributable = true)`,
-`@SipServlet(loadOnStartup = 1)`, `@SipListener`. `distributable` is what makes
-§5 work.
+A configuration class becomes a configuration file. Write a plain Java object
+for your settings; BLADE turns it into a JSON config file, a schema that
+validates it, a web form in the Admin Portal's Configurator, and a live reload
+whenever an operator publishes a change. You write no parsing code and no admin
+screens.
 
-Every `B2buaServlet` callback hands you **the message about to be sent**, so
-changing it changes what goes on the wire:
+```java
+@SchemaAbout("Connects callers to the example service.")
+public class ExampleConfig extends Configuration {
+    private int maxCalls;
 
-| Callback | The message you receive | Emitted at |
-| --- | --- | --- |
-| `callStarted` | the outbound INVITE to the callee | `InitialInvite.java:125` |
-| `callAnswered` | the 2xx **to the caller**, copied from the callee's | `InitialInvite.java:184` |
-| `callConnected` | the outbound **ACK** to the callee | `InitialInvite.java:226` |
-| `callDeclined` | the failure response to the caller (4xx, 5xx, 6xx) | `InitialInvite.java:199` |
-| `callAbandoned` | the outbound **CANCEL** to the callee | `Terminate.java:130` |
-| `callCompleted` | the outbound **BYE** to the other leg | `Terminate.java:146` |
+    @JsonPropertyDescription("Maximum simultaneous calls")
+    public int getMaxCalls() { return maxCalls; }
+    public void setMaxCalls(int maxCalls) { this.maxCalls = maxCalls; }
+}
+```
 
-Two of those mislead if read casually. `callConnected` is the ACK, not the
-answer. `callCompleted` and `callAbandoned` give you the request you are
-*sending onward*, not the BYE or CANCEL that arrived. To stop a call instead of
-passing it on, call `doNotProcess(outboundRequest, 403, "Forbidden")` from
-`callStarted`.
+Extending `Configuration` adds the sections every application shares — logging
+levels, session parameters — so operators find them in every config file in the
+same place.
 
-**Configuration.** A POJO extending `Configuration`, managed by a
-`SettingsManager`. Put `@SchemaAbout` on the class — it is the app's identity in
-the Admin Portal — and `@JsonPropertyDescription` on getters, never fields, since
-that text becomes the operator's help in the Configurator. Read the config once
-at the top of a callflow, not repeatedly: an operator can republish mid-call. See
-the [config guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/config/README.md)
-for file locations and the domain/cluster/server merge.
+```java
+public class ExampleSettingsManager extends SettingsManager<ExampleConfig> {
+    public ExampleSettingsManager(SipServletContextEvent event) throws ServletException, IOException {
+        super(event);
+    }
+}
+```
 
-**Naming.** `<finalName>` in `pom.xml` must equal `<wls:context-root>` in
-`weblogic.xml`, and both must be one flat segment. That name is what the
-container reports to the application router, so it is what FSMAR's `next`
-resolves against. Get it wrong and the service deploys, answers nothing, and
-gives you no error to search for. Module directory names must also be unique
-across `libs/`, `admin/`, `services/`, `test/`, `apps/` and `proto/`; `build.sh`
-fails the build if they collide.
+Create the manager in `servletCreated`, as in the previous chapter. Wherever
+configuration is needed, `settingsManager.getCurrent()` returns the live
+config. Read it once at the top of a callflow and work from what you read — an
+operator can publish a new configuration in the middle of a call.
 
-**Descriptors.** `weblogic.xml` needs the `blade-shared` `library-ref` — that is
-where every third-party JAR comes from at runtime. Do not add third-party
-dependencies to a service pom; the parent's war plugin strips everything but the
-framework JAR from `WEB-INF/lib`.
+Two annotations feed the Configurator. `@SchemaAbout` on the class describes
+the application; `@JsonPropertyDescription` on each getter — on the getter, not
+the field — becomes the operator's help text for that form field.
 
-**Build and deploy.** New apps start in `proto/`. Add a profile to the root
-`pom.xml` (`!skip.<name>` plus the `<module>` line) and the bare name to
-`build-profiles/full.conf`, then `./build.sh full`. Services deploy to the engine
-cluster with `./deploy.sh <env> services`; `proto/` modules are deployed by hand.
-See [DEPLOYMENT.md](DEPLOYMENT.md).
+Three optional refinements: override `sample()` to supply the configuration a
+fresh install starts with; override `onRefresh()` to run code on every load and
+reload; pass a second constructor argument, a name, to manage additional
+config files beyond the application's own.
 
-**Watching it run.** `sipLogger` is a protected static on both the servlet and
-`Callflow`; pass the message first — `sipLogger.info(request, "…")` — and it
-stamps session hashes so you can follow one call through a busy file. It draws
-the sequence-diagram arrows you see in `<domain>/servers/<server>/logs/vorpal/`.
+*More:* [config README](libs/framework/src/main/java/org/vorpal/blade/framework/v2/config/README.md) —
+file locations and how domain, cluster, and server files merge
+
+## 6. Timers
+
+`sendRequest` and `sendResponse` wait for messages. Some situations are defined
+by the absence of one: nobody answered within fifteen seconds. For those,
+`startTimer`:
+
+```java
+String timerId = startTimer(request.getApplicationSession(), 15000, false, (timer) -> {
+    sendRequest(bobRequest.createCancel());
+});
+
+sendRequest(bobRequest, (bobResponse) -> {
+    if (!provisional(bobResponse)) {
+        stopTimer(bobResponse.getApplicationSession(), timerId);
+    }
+    // ...
+});
+```
+
+Send the INVITE and start a fifteen-second timer. If a final response arrives
+first, stop the timer; if the timer fires first, CANCEL the call. `startTimer`
+returns an id — keep it in a field when the code that cancels is not the code
+that started. A second form takes an additional period and repeats until
+stopped; the third argument, `false` above, says whether the timer should
+survive a server restart (almost never).
+
+Two habits keep timers honest. First, a timer races the thing it guards, and
+the race can be decided but not prevented — a CANCELed INVITE still delivers a
+final response (a 487) to your lambda moments later, so expect it. Second, a
+timer always fires late relative to something: begin every timer lambda by
+checking that its purpose still applies, and do nothing if it does not.
+
+If your timer is really a no-answer timeout across several destinations, the
+callflow you are about to write already exists: `sendRequestsInSerial` tries a
+list of destinations one at a time, and `sendRequestsInParallel` races them and
+takes the first answer.
+
+## 7. Expectations
+
+The messages so far were invited: a response to your request, an ACK to your
+response. Some messages arrive because the far end decided — a BYE or CANCEL in
+the middle of something else. Declare them with `expectRequest`:
+
+```java
+Expectation aliceHangsUp = expectRequest(aliceRequest.getSession(), BYE, (bye) -> {
+    sendResponse(bye.createResponse(200));
+    // Alice gave up before the transfer finished
+});
+```
+
+The lambda runs if and when that request arrives on that session. The returned
+`Expectation` is the off switch: when events overtake the concern — the
+transfer completed, so a BYE is now an ordinary hang-up — withdraw it with
+`aliceHangsUp.clear()`.
+
+Expectations are what let a callflow state its exceptional paths beside its
+normal one. The [transfer service](services/transfer/README.md) is the worked
+example: one expectation covers "the caller hung up mid-transfer," another
+covers "the transferring party hung up," and each is cleared the moment it no
+longer applies.
+
+## 8. Logging
+
+Every servlet and callflow has `sipLogger`. Pass the message as the first
+argument and the log entry is stamped with the call it belongs to, so one call
+can be followed through a busy log:
+
+```java
+sipLogger.info(request, "transferring to " + target);
+```
+
+The usual levels apply — `severe`, `warning`, `info`, `fine`, `finer` — and the
+level is set per application, live, from the Admin Portal. Each application
+writes its own log under `<domain>/servers/<server>/logs/vorpal/`, where SIP
+messages appear as sequence-diagram arrows: what arrived, what was sent, and in
+which direction.
+
+When the question is "which application in the chain misbehaved," record the
+call instead of reading logs. The [Trace viewer](admin/callflow/README.md) on
+the Admin Portal captures every message each BLADE application sent and
+received for a matching call and stitches them into a single ladder diagram.
+Arm a rule that matches your test call, place the call, read the diagram,
+disarm. It is safe to leave deployed in production; a disarmed rule costs
+almost nothing.
+
+*More:* [logging README](libs/framework/src/main/java/org/vorpal/blade/framework/v2/logging/README.md)
+
+## 9. Testing
+
+A callflow is a plain Java class, and it runs without OCCAS. The framework
+ships *detached* SIP objects — requests, responses, and sessions that exist
+without a container — so a JUnit test can construct an INVITE, hand it to
+`process()`, deliver a response, and assert on what the callflow sent:
+milliseconds per test, no deployment.
+
+Keep decisions in callflows and plain classes; keep the servlet thin. The
+servlet itself cannot be instantiated outside the container, so anything worth
+testing should live below it — which is where it belongs anyway.
+
+*More:* [detached SIP objects README](libs/framework/src/main/java/org/vorpal/blade/framework/sip/README.md)
+
+## 10. Events
+
+Applications tell the rest of the system what happened by publishing events: a
+call answered, a meeting scheduled, a threshold crossed. An event is a
+[CloudEvent](https://cloudevents.io/) — a small JSON envelope with a type, a
+source, a subject, and data — published to the BLADE event bus, where any
+number of applications may subscribe:
+
+```java
+EventBus.publish(CloudEvent.create(
+        "net.vorpal.example.call.answered",   // type
+        "/example",                           // source: this application
+        getVorpalSessionId(request),          // subject: the call
+        data));                               // your JSON payload
+```
+
+Publishing is fire-and-forget and always safe: if the bus is not provisioned,
+`publish` quietly does nothing. Subscribers select events by type or subject
+without parsing bodies, and more than one application can consume the same
+event, each receiving its own copy. The event catalog — itself ordinary BLADE
+configuration — names the event types and decides where each is delivered.
+
+*More:* [events service README](services/events/README.md)
 
 ---
 
-## When something goes wrong
-
-Two tools, and most people reach for the second one far too late.
-
-**Locally, run the callflow in a test.** If the question is "what did my code
-build," you do not need a deployment. Install the
-[detached SIP objects](libs/framework/src/main/java/org/vorpal/blade/framework/sip/README.md),
-call `process(request)`, hand it a response, and assert. Seconds, not a deploy cycle.
-
-**On a server, record the call.** The [Trace viewer](admin/callflow/README.md) is
-the fastest way to answer "which app in the chain misbehaved, and on which line."
-It records every message every application sent and received, stitches them into
-one ladder diagram using the `X-Vorpal-Session` id, and pins each arrow to the
-source line that emitted it — read live from the deployed code, so it cannot drift
-from what is running.
-
-It is off until armed, and arming is per-rule rather than global, so you record
-your own test call and nothing else:
-
-1. Open **Trace** on the Admin Portal.
-2. Arm a rule that matches your call — a [`Selector`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/config/README.md)
-   on any header, so "calls from my desk phone" is a match on `From`. Arming fans
-   out to every application in the domain, so the rule catches the call wherever
-   it lands.
-3. Place the call.
-4. Read the recording, then disarm.
-
-A rule carries a capture cap (`maxCaptures`, default 5) precisely so a match on a
-busy header cannot quietly record thousands of calls if you forget step 4. Nothing
-is persisted — a trace session is arm, reproduce, disarm — and a disarmed call
-costs one boolean read per event, which is why this can ship enabled in production.
-
-From code, `Callflow.enableTrace(appSession)` arms one call directly, and
-`Callflow.getTrace(appSession)` returns that call's steps in-process.
-
-## 8. House rules
-
-- **No singletons.** Every node runs independently at 1000+ CPS. Shared state
-  belongs in the session or a real external store.
-- **Keep WARs skinny.** Only the framework JAR in `WEB-INF/lib`.
-- **Never remove the `library-ref`**, and never change a shipped
-  `context-root` — it is the config file name, the JMX name and the FSMAR target
-  at once.
-- **Prefer `switch` over chained `String.equals()`.**
-- **Markdown Javadoc** (`///`), not legacy HTML `/** */`.
-- **Test with JUnit.** A `SipServlet` subclass cannot be instantiated outside the
-  container — but a callflow can. Install the
-  [detached SIP objects](libs/framework/src/main/java/org/vorpal/blade/framework/sip/README.md)
-  and you can run a whole callflow, deliver it a response and assert on what it
-  built, in milliseconds. Keep decisions in callflows and plain classes, keep the
-  servlet thin, and nearly everything is testable on your laptop.
-
-## Where to go next
-
-- [`BlindTransfer`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/transfer/BlindTransfer.java) — the deep end, with sequence diagrams
-- [`InitialInvite`](libs/framework/src/main/java/org/vorpal/blade/framework/v2/b2bua/InitialInvite.java) — the B2BUA callflow in full
-- [test/test-b2bua](test/test-b2bua/README.md) — the template most people copy
-- [detached SIP objects](libs/framework/src/main/java/org/vorpal/blade/framework/sip/README.md) — run a callflow in a JUnit test
-- [b2bua guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/b2bua/README.md) · [callflow guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/callflow/README.md) · [config guide](libs/framework/src/main/java/org/vorpal/blade/framework/v2/config/README.md)
-- [v3 API](libs/framework/src/main/java/org/vorpal/blade/framework/v3/README.md) — tracing, passthru, config-first routing
-- [DEPLOYMENT.md](DEPLOYMENT.md) · [BLADE](README.md)
+*Packaging, building, and deploying a finished service — WAR layout, naming
+rules, build profiles — are covered in [DEPLOYMENT.md](DEPLOYMENT.md).*
