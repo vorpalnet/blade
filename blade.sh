@@ -492,37 +492,63 @@ EOF
         ask INSTALL_TYPE "Install type"              "$INSTALL_TYPE"
     fi
 
-    # JDK for the INSTALLER + servers — version-locked to the OCCAS release.
+    # JDK for the INSTALLER + servers. The certification matrix names a major
+    # per OCCAS release, but it's a recommendation, not a gate — newer majors
+    # are known to run (Oracle says 8.3 runs fine on 25). List what's
+    # installed, flag the certified one, and let the user decide. Only a JDK
+    # BELOW the certified major is worth a fight — that rarely runs at all.
     # This is NOT the build JDK: ./build.sh wants 23+ (it emits Java 11 bytecode).
     log ""
-    local _want _found
-    _want="$(occas_jdk_major "$OCCAS_VERSION")"
-    _found="$(find_jdk "$_want")"
-    if [ -n "$_want" ]; then
-        if [ -n "$_found" ]; then
-            ok "OCCAS ${OCCAS_VERSION} runs on JDK ${_want} — found one at ${_found}"
-        elif jdk_dl_supported "$_want" \
-             && yesno "OCCAS ${OCCAS_VERSION} runs on JDK ${_want} — none found. Download it from Oracle into ${JAVA_BASE}?" "Y"; then
-            download_jdk "$_want" "$JAVA_BASE" && _found="$JDK_DL_HOME"
-        else
-            warn "OCCAS ${OCCAS_VERSION} runs on JDK ${_want} — none found here; install it or point me at one."
-        fi
+    local _want; _want="$(occas_jdk_major "$OCCAS_VERSION")"
+    local _jdks=() _line _cert=""
+    while IFS= read -r _line; do
+        _jdks+=("$_line")
+        [ -n "$_want" ] && [ -z "$_cert" ] && [ "${_line##*$'\t'}" = "$_want" ] \
+            && _cert="${_line%%$'\t'*}"
+    done < <(list_jdks)
+    if [ "${#_jdks[@]}" -gt 0 ]; then
+        log "  installed JDKs:"
+        local _i=1 _tag
+        for _line in "${_jdks[@]}"; do
+            _tag=""
+            [ -n "$_want" ] && [ "${_line##*$'\t'}" = "$_want" ] \
+                && _tag="   <- certified for OCCAS ${OCCAS_VERSION}"
+            log "    [${_i}] JDK ${_line##*$'\t'}   ${_line%%$'\t'*}${_tag}"
+            _i=$((_i + 1))
+        done
+        [ -n "$_want" ] && [ -z "$_cert" ] \
+            && log "  ${C_DIM}none is the certified JDK ${_want} — fine if you know yours runs.${C_RESET}"
+    elif [ -n "$_want" ] && jdk_dl_supported "$_want" \
+         && yesno "no JDKs found; OCCAS ${OCCAS_VERSION} is certified on JDK ${_want} — download it from Oracle into ${JAVA_BASE}?" "Y"; then
+        download_jdk "$_want" "$JAVA_BASE" \
+            && _jdks=("${JDK_DL_HOME}"$'\t'"${_want}") && _cert="$JDK_DL_HOME"
     else
-        log "  ${C_DIM}no JDK recommendation on file for OCCAS ${OCCAS_VERSION} — see Oracle's certification matrix.${C_RESET}"
+        warn "no JDKs found here — install one or point me at it."
     fi
     log "  ${C_DIM}(the build JDK is separate — ./build.sh wants 23+.)${C_RESET}"
-    local _jdef="$JAVA_HOME_VAL"; [ -n "$_jdef" ] || _jdef="${_found:-${JAVA_HOME:-}}"
+    local _jdef="$JAVA_HOME_VAL"; [ -n "$_jdef" ] || _jdef="${_cert:-${JAVA_HOME:-}}"
     while :; do
-        ask JAVA_HOME_VAL "JDK home for OCCAS (installer + servers run on this)" "$_jdef"
+        ask JAVA_HOME_VAL "JDK home for OCCAS (a number above, or a path)" "$_jdef"
         [ -n "$JAVA_HOME_VAL" ] || { warn "a JDK home is required."; continue; }
+        case "$JAVA_HOME_VAL" in
+            *[!0-9]*) : ;;   # a path — take it as typed
+            *) if [ "$JAVA_HOME_VAL" -ge 1 ] && [ "$JAVA_HOME_VAL" -le "${#_jdks[@]}" ]; then
+                   JAVA_HOME_VAL="${_jdks[$((JAVA_HOME_VAL - 1))]%%$'\t'*}"
+               else
+                   warn "no [$JAVA_HOME_VAL] in the list."; continue
+               fi ;;
+        esac
         if [ ! -x "${JAVA_HOME_VAL}/bin/java" ]; then
             warn "no bin/java under ${JAVA_HOME_VAL} — that's not a JDK home."
             yesno "use it anyway?" "N" && break || continue
         fi
         local _got; _got="$(jdk_major "${JAVA_HOME_VAL}/bin/java")"
         if [ -n "$_want" ] && [ -n "$_got" ] && [ "$_got" != "$_want" ]; then
-            warn "that's JDK ${_got}, but OCCAS ${OCCAS_VERSION} wants JDK ${_want}."
-            yesno "use JDK ${_got} anyway?" "N" && break || continue
+            if [ "$_got" -lt "$_want" ] 2>/dev/null; then
+                warn "that's JDK ${_got}, BELOW OCCAS ${OCCAS_VERSION}'s certified JDK ${_want} — unlikely to run."
+                yesno "use JDK ${_got} anyway?" "N" && break || continue
+            fi
+            log "  ${C_DIM}JDK ${_got} is newer than the certified JDK ${_want} — your call, proceeding.${C_RESET}"
         fi
         break
     done
@@ -2162,7 +2188,6 @@ patch_jdk() {
     ver="$(read_prop "$OCCAS_CONF" occas.version)"
     [ -z "$ver" ] && ver="$(detect_occas_version "$MWHOME")"
     want="$(occas_jdk_major "$ver")"
-    [ -n "$want" ] || return 0
 
     # Migration: a raw versioned java.home predates the link scheme. One flip
     # converts it; the units and engines pick the link up on their next re-run.
@@ -2191,25 +2216,30 @@ patch_jdk() {
     local cur; cur="$(readlink -f "$link" 2>/dev/null || true)"
     [ -n "$cur" ] && [ -x "${cur}/bin/java" ] || { warn "no usable JDK behind ${link}."; return 0; }
     local curmaj; curmaj="$(jdk_major "${cur}/bin/java")"
-    [ "$curmaj" = "$want" ] \
-        || warn "current JDK is ${curmaj} but OCCAS ${ver} wants ${want} — install JDK ${want} beside it and re-run patch."
+    [ -n "$curmaj" ] || return 0
+    # Certification is a recommendation; the wizard let the user pick the major
+    # and flips stay WITHIN it (changing majors is a wizard decision, not a
+    # patch). Only below the certified floor is worth a warning.
+    if [ -n "$want" ] && [ "$curmaj" -lt "$want" ] 2>/dev/null; then
+        warn "current JDK is ${curmaj}, BELOW OCCAS ${ver}'s certified JDK ${want} — unlikely to run; re-run the occas phase to change majors."
+    fi
 
-    # Newest same-major JDK on the host that sort -V says is newer than the one
+    # Newest JDK of the RUNNING major that sort -V says is newer than the one
     # in use. Same basename in another dir is the same JDK -- not a candidate.
     local best="" d
     for d in "$base"/* /usr/lib/jvm/*; do
         [ -d "$d" ] && [ "${d##*/}" != "current" ] && [ -x "${d}/bin/java" ] || continue
         [ "${d##*/}" = "${cur##*/}" ] && continue
-        [ "$(jdk_major "${d}/bin/java")" = "$want" ] || continue
+        [ "$(jdk_major "${d}/bin/java")" = "$curmaj" ] || continue
         [ "$(printf '%s\n%s\n' "${cur##*/}" "${d##*/}" | sort -V | tail -1)" = "${d##*/}" ] || continue
         if [ -z "$best" ] || [ "$(printf '%s\n%s\n' "${best##*/}" "${d##*/}" | sort -V | tail -1)" = "${d##*/}" ]; then
             best="$d"
         fi
     done
 
-    if [ -z "$best" ] && jdk_dl_supported "$want" \
-       && yesno "JDK: current -> $(basename "$cur"); no newer JDK ${want} on this host. Download Oracle's latest into ${base}?" "N"; then
-        if download_jdk "$want" "$base"; then
+    if [ -z "$best" ] && jdk_dl_supported "$curmaj" \
+       && yesno "JDK: current -> $(basename "$cur"); no newer JDK ${curmaj} on this host. Download Oracle's latest into ${base}?" "N"; then
+        if download_jdk "$curmaj" "$base"; then
             if [ "$(basename "$JDK_DL_HOME")" = "$(basename "$cur")" ]; then
                 ok "already on Oracle's latest ($(basename "$cur"))."
             else
@@ -2571,28 +2601,23 @@ occas_jdk_major() {
 }
 
 # Find an installed JDK of major version $1. Echoes its home, or "" if none.
-find_jdk() {
-    local want="$1" h q d jbin
-    [ -n "$want" ] || return 0
-    # macOS: the system tool already indexes every installed JDK. It returns the
-    # DEFAULT jdk when nothing matches (e.g. -v 8, since 8 registers as 1.8), so
-    # always verify the returned home's actual major before trusting it.
-    if [ -x /usr/libexec/java_home ]; then
-        for q in "$want" "1.$want"; do
-            h="$(/usr/libexec/java_home -v "$q" 2>/dev/null || true)"
-            if [ -n "$h" ] && [ -x "${h}/bin/java" ] && [ "$(jdk_major "${h}/bin/java")" = "$want" ]; then
-                printf '%s' "$h"; return 0
-            fi
-        done
-    fi
-    # Linux / common layouts: scan the usual JVM dirs, match by reported major.
-    # java.dir first (it's where downloads land); skip the 'current' link so we
-    # return a real versioned home, never the link pointing at one.
-    for d in "${JAVA_BASE:-/opt/oracle/java}"/* /usr/lib/jvm/* /usr/java/* /opt/java/*; do
+# Every installed JDK, one per line as "<home>\t<major>". Scans java.dir first
+# (it's where downloads land), then the common Linux layouts, then the macOS
+# JVM dir; skips the 'current' link (a real versioned home always stands for
+# it) and dedups by resolved path so /usr/lib/jvm alias links don't repeat.
+list_jdks() {
+    local d jbin m r seen=""
+    for d in "${JAVA_BASE:-/opt/oracle/java}"/* /usr/lib/jvm/* /usr/java/* /opt/java/* \
+             /Library/Java/JavaVirtualMachines/*/Contents/Home; do
         [ -d "$d" ] || continue
         [ "${d##*/}" = "current" ] && continue
         jbin="${d}/bin/java"; [ -x "$jbin" ] || continue
-        [ "$(jdk_major "$jbin")" = "$want" ] && { printf '%s' "$d"; return 0; }
+        r="$(readlink -f "$d" 2>/dev/null || printf '%s' "$d")"
+        case "$seen" in *"|${r}|"*) continue ;; esac
+        seen="${seen}|${r}|"
+        m="$(jdk_major "$jbin")"
+        [ -n "$m" ] || continue
+        printf '%s\t%s\n' "$d" "$m"
     done
     return 0
 }
@@ -3303,9 +3328,16 @@ do_preflight() {
     [ -z "$cfgver" ] && cfgver="$(detect_occas_version "$mwhome")"
     want="$(occas_jdk_major "$cfgver")"
     jmajor=""; [ -n "$jhome" ] && [ -x "${jhome}/bin/java" ] && jmajor="$(jdk_major "${jhome}/bin/java")"
+    # Certification is a recommendation, not a gate: newer majors are known to
+    # run and the wizard let the user choose one. Only BELOW the certified
+    # major is a real problem worth blocking on.
     if [ -n "$want" ] && [ -n "$jmajor" ]; then
-        if [ "$jmajor" = "$want" ]; then ok "JDK ${jmajor} matches OCCAS ${cfgver}."
-        else warn "JDK is ${jmajor} but OCCAS ${cfgver} wants JDK ${want}."; PF_NEED="yes"; fi
+        if [ "$jmajor" = "$want" ]; then ok "JDK ${jmajor} matches OCCAS ${cfgver}'s certification."
+        elif [ "$jmajor" -gt "$want" ] 2>/dev/null; then
+            ok "JDK ${jmajor} — newer than OCCAS ${cfgver}'s certified JDK ${want}; your choice stands."
+        else
+            warn "JDK is ${jmajor}, BELOW OCCAS ${cfgver}'s certified JDK ${want} — unlikely to run."; PF_NEED="yes"
+        fi
     else
         log "  ${C_DIM}match the JDK to the OCCAS release per Oracle's certification matrix.${C_RESET}"
     fi
