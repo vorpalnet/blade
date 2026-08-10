@@ -272,7 +272,7 @@ fi
 							     this by hand only when the bundled 3rd-party JARs change, so
 							     a framework-only build doesn't look like a shared-library
 							     change users must redeploy. -->
-							<Implementation-Version>3.0.0</Implementation-Version>
+							<Implementation-Version>3.0.5</Implementation-Version>
 							<Implementation-Vendor>Vorpal Networks, LLC</Implementation-Vendor>
 							<Extension-Name>blade-shared</Extension-Name>
 							<Copyright>${blade.copyright}</Copyright>
