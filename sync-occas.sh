@@ -62,6 +62,11 @@ ok()   { printf '%s✓%s %s\n' "$C_GREEN" "$C_RESET" "$*"; }
 warn() { printf '%s⚠%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 die()  { printf '%s✗%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 
+# Privileged transfer + run-as helpers (shared with blade.sh): the versioned
+# homes are the install user's, ssh reaches the nodes as the login user.
+# shellcheck source=misc/xfer.sh
+. "${SCRIPT_DIR}/misc/xfer.sh"
+
 # --- Parse args ---
 ENV_ARG=""; ACTION=""; VERSION=""; NODES_OVERRIDE=""; DO_LOCAL=false; DELETE=false; DRY_RUN=false
 POSITIONAL=()
@@ -131,16 +136,27 @@ do_distribute() {
     fi
     [ ${#NODES[@]} -ge 1 ] || die "No engine.nodes to distribute to."
     need_ssh_user
-    local rsync_opts=(-a -h --stats); [ "$DELETE" = true ] && rsync_opts+=(--delete)
+    # Owner of the local home decides the transport: the invoker's own tree
+    # goes plain (legacy installs); the install user's goes through xfer_rsync
+    # (root reads, remote root writes, --chown keeps the owner by name).
+    local own; own="$(xfer_owner_of "$VER_PATH")"; own="${own:-$(id -un)}"
+    local ownu="${own%%:*}" owng=""
+    case "$own" in *:*) owng="${own##*:}" ;; esac
+    local rsync_opts=(-h --stats); [ "$DELETE" = true ] && rsync_opts+=(--delete)
     local n
     for n in "${NODES[@]}"; do
-        info "distribute ${VERSION} → ${SSH_USER}@${n}:${VER_PATH}/"
+        info "distribute ${VERSION} → ${SSH_USER}@${n}:${VER_PATH}/  (owner ${own})"
         if [ "$DRY_RUN" = true ]; then
-            log "${C_DIM}  [dry-run] ssh ${SSH_USER}@${n} mkdir -p ${VER_PATH}${C_RESET}"
-            log "${C_DIM}  [dry-run] rsync ${rsync_opts[*]} ${VER_PATH}/ ${SSH_USER}@${n}:${VER_PATH}/${C_RESET}"
+            log "${C_DIM}  [dry-run] ssh ${SSH_USER}@${n} install -d ${VER_PATH} (owner ${own})${C_RESET}"
+            log "${C_DIM}  [dry-run] xfer_rsync ${own} ${rsync_opts[*]} ${VER_PATH}/ ${SSH_USER}@${n}:${VER_PATH}/${C_RESET}"
         else
-            ssh "${SSH_USER}@${n}" "mkdir -p '${VER_PATH}'"
-            rsync "${rsync_opts[@]}" "${VER_PATH}/" "${SSH_USER}@${n}:${VER_PATH}/"
+            if [ "$ownu" = "$SSH_USER" ]; then
+                ssh "${SSH_USER}@${n}" "mkdir -p '${VER_PATH}'"
+            else
+                ssh "${SSH_USER}@${n}" "sudo install -d -o '${ownu}' ${owng:+-g '${owng}'} '${VER_PATH}'" \
+                    || die "cannot create ${VER_PATH} on ${n} (passwordless sudo for ${SSH_USER}?)"
+            fi
+            xfer_rsync "$own" "${VER_PATH}/" "${SSH_USER}@${n}:${VER_PATH}/" "${rsync_opts[@]}"
         fi
     done
     ok "distributed ${VERSION}. Next: ./sync-occas.sh ${ENV_NAME} switch ${VERSION} --nodes <canary>"
@@ -148,17 +164,26 @@ do_distribute() {
 
 # Build the remote/local switch command (atomic symlink repoint, guarded on the
 # target version existing so we never point 'current' at a missing home).
+# $1 = "sudo " when the ssh user doesn't own the base dir, else empty.
 switch_cmd() {
-    printf "test -d '%s' && ln -sfn '%s' '%s' && readlink '%s'" "$VER_PATH" "$VER_PATH" "$CURRENT_LINK" "$CURRENT_LINK"
+    printf "test -d '%s' && %sln -sfn '%s' '%s' && readlink '%s'" "$VER_PATH" "${1:-}" "$VER_PATH" "$CURRENT_LINK" "$CURRENT_LINK"
 }
 
 do_switch() {
-    local cmd; cmd="$(switch_cmd)"
+    # The link lives in the base dir, so its OWNER does the flip — locally by
+    # becoming them, remotely via sudo (the cluster is homogeneous by
+    # construction: provisioning stamps every node with the admin box's owner).
+    local own; own="$(xfer_owner_of "$BASE_DIR")"
+    local ownu="${own%%:*}"; ownu="${ownu:-$(id -un)}"
     if [ "$DO_LOCAL" = true ]; then
-        info "switch (local/admin) ${CURRENT_LINK} → ${VER_PATH}"
-        if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ${cmd}${C_RESET}"
-        else eval "$cmd" || die "local switch failed (does ${VER_PATH} exist here?)"; fi
+        local lcmd; lcmd="$(switch_cmd)"
+        info "switch (local/admin) ${CURRENT_LINK} → ${VER_PATH}  (as ${ownu})"
+        if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ${lcmd}${C_RESET}"
+        else xfer_run_as "$ownu" sh -c "$lcmd" || die "local switch failed (does ${VER_PATH} exist here?)"; fi
     fi
+    local cmd rsudo=""
+    [ "$ownu" = "$SSH_USER" ] || rsudo="sudo "
+    cmd="$(switch_cmd "$rsudo")"
     local n
     for n in "${NODES[@]}"; do
         need_ssh_user

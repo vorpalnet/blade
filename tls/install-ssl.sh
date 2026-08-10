@@ -53,6 +53,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DEPLOY_DIR="${REPO_ROOT}/build-profiles/deploy"
 
+# Owner/transfer helpers shared with blade.sh and sync-occas.sh.
+# shellcheck source=../misc/xfer.sh
+. "${REPO_ROOT}/misc/xfer.sh"
+
 ALL_TIERS=(keystores ssl sip)
 
 if [ -z "${NO_COLOR:-}" ] && [ -t 1 ]; then
@@ -202,8 +206,18 @@ tier_keystores() {
     info "keystores → (local) ${KS_DIR}/"
     if [ "$DRY_RUN" = true ]; then
         log "${C_DIM}  [dry-run] mkdir -p ${KS_DIR}; cp ${ID_P12} ${TRUST_P12} ${KS_DIR}/${C_RESET}"
+    elif mkdir -p "$KS_DIR" 2>/dev/null && [ -w "$KS_DIR" ]; then
+        cp "$ID_P12" "$TRUST_P12" "$KS_DIR/"; chmod 600 "${KS_DIR}/${ID_BASENAME}" "${KS_DIR}/${TRUST_BASENAME}" 2>/dev/null || true
+    elif command -v sudo >/dev/null 2>&1; then
+        # KS_DIR belongs to the install user (blade.sh 'm' chowns it). The
+        # servers read these at runtime, so the copies match the dir's owner.
+        sudo mkdir -p "$KS_DIR"
+        sudo cp "$ID_P12" "$TRUST_P12" "$KS_DIR/"
+        sudo chmod 600 "${KS_DIR}/${ID_BASENAME}" "${KS_DIR}/${TRUST_BASENAME}"
+        local _own; _own="$(stat -c '%U:%G' "$KS_DIR" 2>/dev/null || true)"
+        [ -n "$_own" ] && sudo chown "$_own" "${KS_DIR}/${ID_BASENAME}" "${KS_DIR}/${TRUST_BASENAME}"
     else
-        mkdir -p "$KS_DIR"; cp "$ID_P12" "$TRUST_P12" "$KS_DIR/"; chmod 600 "${KS_DIR}/${ID_BASENAME}" "${KS_DIR}/${TRUST_BASENAME}" 2>/dev/null || true
+        die "cannot write ${KS_DIR} (not writable, no sudo)"
     fi
     # Engine nodes — skipped on a shared filesystem (the local copy is visible
     # to every node at the same path).
@@ -213,12 +227,27 @@ tier_keystores() {
         local n; for n in "${ENGINE_NODES[@]}"; do
             [ -n "$SSH_USER" ] || die "${CONF_FILE}: engine.nodes set but ssh.user missing"
             info "keystores → ${SSH_USER}@${n}:${KS_DIR}/"
+            # The remote dir belongs to whoever owns it locally (the servers
+            # read these at runtime). When that isn't the ssh user, privilege
+            # comes from the far side's sudo, and the file content goes over
+            # ssh stdin under a tight umask — never a command line.
+            local kown; kown="$(xfer_owner_of "$KS_DIR")"; kown="${kown:-$(id -un)}"
+            local kownu="${kown%%:*}"
             if [ "$DRY_RUN" = true ]; then
-                log "${C_DIM}  [dry-run] ssh ${SSH_USER}@${n} mkdir -p ${KS_DIR}; scp ${ID_BASENAME},${TRUST_BASENAME} → ${n}:${KS_DIR}/${C_RESET}"
-            else
+                log "${C_DIM}  [dry-run] ssh ${SSH_USER}@${n} install -d ${KS_DIR} (owner ${kown}); push ${ID_BASENAME},${TRUST_BASENAME} → ${n}:${KS_DIR}/${C_RESET}"
+            elif [ "$kownu" = "$SSH_USER" ]; then
                 ssh "${SSH_USER}@${n}" "mkdir -p '${KS_DIR}' && chmod 700 '${KS_DIR}'"
                 scp "$ID_P12" "$TRUST_P12" "${SSH_USER}@${n}:${KS_DIR}/"
                 ssh "${SSH_USER}@${n}" "chmod 600 '${KS_DIR}/${ID_BASENAME}' '${KS_DIR}/${TRUST_BASENAME}'"
+            else
+                ssh "${SSH_USER}@${n}" "sudo install -d -m 700 -o '${kownu}' '${KS_DIR}'" \
+                    || die "cannot create ${KS_DIR} on ${n} (passwordless sudo for ${SSH_USER}?)"
+                local _f
+                for _f in "$ID_P12" "$TRUST_P12"; do
+                    ssh "${SSH_USER}@${n}" \
+                        "sudo sh -c 'umask 077 && cat > \"${KS_DIR}/$(basename "$_f")\" && chown ${kown} \"${KS_DIR}/$(basename "$_f")\"'" \
+                        < "$_f" || die "could not push $(basename "$_f") to ${n}"
+                done
             fi
         done
     fi

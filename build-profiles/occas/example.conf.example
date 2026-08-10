@@ -23,7 +23,8 @@
 # step per release (license click + wget.sh + access token) — the dashboard
 # walks you through it and stashes the URLs as .conf/<name>/occas.urls;
 # details in the README.
-# download.dir=<dirname of installer.jar; falls back to ~/occas-media>
+# download.dir=<dirname of installer.jar; falls back to /opt/oracle/media —
+#               beside the install, where the install user can read it>
 
 # --- Oracle JDK (official tarballs from download.oracle.com — no login) ---
 # JDKs sit side by side under java.dir, and java.home is the

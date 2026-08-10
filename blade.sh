@@ -128,6 +128,11 @@ set_conf_prop() {
     fi
 }
 
+# Privileged engine transfer (xfer_rsync/xfer_run_as/xfer_owner_of) — shared
+# with sync-occas.sh and tls/install-ssl.sh.
+# shellcheck source=misc/xfer.sh
+. "${SCRIPT_DIR}/misc/xfer.sh"
+
 # --- args ---------------------------------------------------------------------
 # Version tracks pom.xml's <revision>, so a dev's bug report pins to a build.
 BLADE_VERSION="$(sed -n 's/.*<revision>\(.*\)<\/revision>.*/\1/p' "${SCRIPT_DIR}/pom.xml" 2>/dev/null | head -1)"
@@ -278,7 +283,9 @@ load_profile() {
     DOMAINS_DIR="$(d domains.dir "$(dirname "$OCCAS_BASE")/domains")"
     OCCAS_VERSION="$(d occas.version "")"
     INSTALLER_JAR="$(d installer.jar "")"
-    INV_LOC="$(d inventory.loc /home/oracle/oraInventory)"
+    # Beside the install, never under a home dir: the OUI runs as install.user,
+    # and a 0700 /home/<anyone> is a wall for every other user on the box.
+    INV_LOC="$(d inventory.loc "$(dirname "${OCCAS_BASE:-/opt/oracle/occas}")/oraInventory")"
     INV_GRP="$(d inventory.group oinstall)"
     INSTALL_USER="$(d install.user oracle)"
     # Optional numeric IDs — empty means "let the OS pick". See phase_occas.
@@ -304,7 +311,10 @@ load_profile() {
     SRV_START_INDEX="$(d server.name.starting.index 0)"
     SHARED_FS="$(d shared.filesystem true)"
     BUILD_PROFILE="$(d build.profile production)"
-    SSH_USER="$(d ssh.user oracle)"
+    # The LOGIN user, not the install user: cloud images only plant the ssh key
+    # for their login account (opc, ec2-user). Privilege on the far side comes
+    # from that user's sudo, applied per command — never from oracle-owned keys.
+    SSH_USER="$(d ssh.user "$(id -un)")"
     # Never default to localhost — the AdminServer is reached over the network.
     # blade.sh runs ON the admin box, so its own hostname is the right default.
     ADMINURL="$(d wls.adminurl "t3://$(hostname -f 2>/dev/null || hostname):7001")"
@@ -993,7 +1003,7 @@ _sum_engines() {
     local n=0 i
     for i in "${!H_NAME[@]}"; do [ "${H_ROLE[$i]}" = "engine" ] && n=$((n + 1)); done
     [ "$n" -eq 0 ] && { printf 'none — single host'; return; }
-    printf '%d host(s) as %s' "$n" "${SSH_USER:-oracle}"
+    printf '%d host(s) as %s' "$n" "${SSH_USER:-$(id -un)}"
 }
 
 # Build the current menu into MR_* parallel arrays (shared by TUI + fallback):
@@ -1308,6 +1318,10 @@ stop_nm() {
     # here with "couldn't resolve the PID" and leave the old NM running --
     # which then serves a stale nodemanager.domains.
     local _nmhome="${DOMAINS_DIR}/${NM_DOMAIN}"
+    # Kill as the OWNER of the running NM's domain, not install.user — a signal
+    # sent as oracle to a legacy login-user-owned JVM is EPERM, and proc_alive
+    # would then watch a process nothing actually signaled.
+    local IU_USER; IU_USER="$(iu_owner_user "$_nmhome")"
     if command -v systemctl >/dev/null 2>&1 \
        && grep -qsF -- "$_nmhome" /etc/systemd/system/nodemanager.service; then
         if sudo -n systemctl stop nodemanager.service 2>/dev/null; then
@@ -1318,12 +1332,15 @@ stop_nm() {
     command -v ss >/dev/null 2>&1 || { warn "need 'ss' to find the Node Manager PID — stop it manually."; return 1; }
     local pids p killed=0 cmd
     pids="$(ss -ltnpH "( sport = :${port} )" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)"
+    # An unprivileged ss cannot see another user's PID — root's can.
+    [ -z "$pids" ] && command -v sudo >/dev/null 2>&1 \
+        && pids="$(sudo ss -ltnpH "( sport = :${port} )" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)"
     [ -n "$pids" ] || { warn "couldn't resolve the PID on :${port} (try as root) — stop it manually."; return 1; }
     local killpids=""
     for p in $pids; do
         cmd="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)"
         case "$cmd" in
-            *NodeManager*|*nodemanager*|*"${NM_DOMAIN}"*) kill "$p" 2>/dev/null && { killed=1; killpids="${killpids} ${p}"; } ;;
+            *NodeManager*|*nodemanager*|*"${NM_DOMAIN}"*) as_install_user kill "$p" 2>/dev/null && { killed=1; killpids="${killpids} ${p}"; } ;;
             *) warn "pid ${p} on :${port} doesn't look like Node Manager — left alone." ;;
         esac
     done
@@ -1334,7 +1351,7 @@ stop_nm() {
     while nm_listening "$port" && [ "$i" -lt 15 ]; do sleep 1; i=$((i + 1)); done
     if nm_listening "$port"; then
         warn "Node Manager still on :${port} after ${i}s — sending SIGKILL."
-        for p in $killpids; do kill -9 "$p" 2>/dev/null || true; done
+        for p in $killpids; do as_install_user kill -9 "$p" 2>/dev/null || true; done
         i=0; while nm_listening "$port" && [ "$i" -lt 5 ]; do sleep 1; i=$((i + 1)); done
     fi
     if nm_listening "$port"; then warn "could not free :${port}."; return 1; fi
@@ -1383,7 +1400,7 @@ remove_domain_systemd_unit() {
 # Reachability problems are warnings, not failures: the admin-side teardown must
 # still proceed.
 remove_engine_systemd_units() {
-    local domhome="$1" nmhome="$2" sshu="${SSH_USER:-oracle}" i tgt unit
+    local domhome="$1" nmhome="$2" sshu="${SSH_USER:-$(id -un)}" i tgt unit
     [ "${#H_NAME[@]}" -gt 1 ] || return 0
     for i in "${!H_NAME[@]}"; do
         [ "${H_ROLE[$i]}" = "engine" ] || continue
@@ -1461,14 +1478,123 @@ owner_of_path() {
         out="$(ssh -o BatchMode=yes -o ConnectTimeout=8 "$host" \
                    "stat -c '%U:%G' '${path}' 2>/dev/null" 2>/dev/null)"
     else
-        # GNU stat first, then BSD/macOS — blade.sh dry-runs on a Mac.
-        out="$(stat -c '%U:%G' "$path" 2>/dev/null)" \
-            || out="$(stat -f '%Su:%Sg' "$path" 2>/dev/null)" || out=""
+        out="$(xfer_owner_of "$path")"
     fi
     case "$out" in
         ?*:?*) printf '%s' "$out" ;;
         *)     printf '%s:%s' "${INSTALL_USER:-oracle}" "${INV_GRP:-oinstall}" ;;
     esac
+}
+
+# --- install-user identity ---------------------------------------------------
+# STEP 1 ('u'/'m') hands the whole install to install.user, so every step that
+# writes into it must RUN as that user — while the invoker stays whoever the
+# cloud image logs in (opc, ec2-user, …). These wrap the difference: a no-op
+# when the invoker IS the install user, or the user doesn't exist yet (the
+# pre-'u' case), or off Linux; else sudo. -H matters: the OUI and WLST both
+# scribble under $HOME, and without it sudo keeps the INVOKER's HOME — which
+# the install user cannot even traverse (home dirs are 0700 on OL8+).
+
+iu_name() {
+    # IU_USER (dynamically scoped: `local IU_USER=...` in a caller re-targets
+    # every iu_*/as_install_user beneath it) overrides for operations on an
+    # EXISTING tree — set it from owner_of_path so patching a legacy install
+    # owned by the login user runs as THAT user, not install.user.
+    local u="${IU_USER:-}"
+    [ -n "$u" ] || u="${INSTALL_USER:-}"
+    [ -n "$u" ] || u="$(read_prop "$OCCAS_CONF" install.user)"
+    printf '%s' "${u:-oracle}"
+}
+
+# True when commands must switch identity to reach the install.
+iu_switching() {
+    [ "$(uname -s)" = "Linux" ] || return 1
+    local u; u="$(iu_name)"
+    [ "$(id -un)" != "$u" ] || return 1
+    id "$u" >/dev/null 2>&1 || return 1
+    command -v sudo >/dev/null 2>&1 || return 1
+    return 0
+}
+
+as_install_user() {
+    if iu_switching; then sudo -H -u "$(iu_name)" "$@"; else "$@"; fi
+}
+
+# Write stdin to a path the install user owns. The mode is applied via umask
+# first, so a secret never exists world-readable even transiently.
+iu_write() {
+    local path="$1" mode="${2:-644}" um="022"
+    case "$mode" in 6??|7??) um="077" ;; esac
+    as_install_user sh -c "umask ${um}; cat > '${path}' && chmod ${mode} '${path}'"
+}
+
+# set_conf_prop against a file the install user owns: stage the edit on a copy,
+# write it back through the identity switch (plain set_conf_prop otherwise).
+iu_set_conf_prop() {
+    local file="$1" key="$2" val="$3"
+    if ! iu_switching; then set_conf_prop "$file" "$key" "$val"; return; fi
+    local tmp rc=0; tmp="$(mktemp)"
+    # Empty-stage only a file that genuinely doesn't exist. A read failure on
+    # an EXISTING file must abort — writing the stage back would silently
+    # truncate every other key (think nodemanager.domains losing enrollments).
+    if as_install_user test -f "$file"; then
+        as_install_user cat "$file" > "$tmp" \
+            || { rm -f "$tmp"; warn "cannot read ${file} as $(iu_name) — not rewriting it."; return 1; }
+    else
+        : > "$tmp"
+    fi
+    set_conf_prop "$tmp" "$key" "$val"
+    iu_write "$file" 644 < "$tmp" || rc=$?
+    rm -f "$tmp"; return $rc
+}
+
+# Hand a /tmp workdir staged by the invoker to the install user. The chown
+# needs root; the caller's cleanup must then also run as_install_user rm -rf.
+iu_adopt_dir() {
+    iu_switching || return 0
+    sudo chown -R "$(iu_name)" "$1"
+}
+
+# The owner (user only) of an existing tree — for `local IU_USER` retargeting.
+# Operations on an EXISTING tree run as whoever owns it, not install.user: a
+# legacy install owned by the login user keeps working after the conf gains
+# install.user=oracle. Falls back to the configured pair for missing paths.
+iu_owner_user() {
+    local o; o="$(owner_of_path "$1")"; printf '%s' "${o%%:*}"
+}
+
+# Run a WLST script as the install user: generate a runner in the caller's
+# staged workdir (sudo can't cross a function boundary), hand the dir over,
+# execute. The caller still owns cleanup (as_install_user rm -rf "$work").
+# A fresh bash has no nounset, so Oracle's setWLSEnv.sh (which references
+# unbound vars) sources cleanly. Args: workdir pyfile mwhome java_home.
+iu_wlst_run() {
+    local work="$1" py="$2" mw="$3" jh="$4"
+    local setwls="${mw}/wlserver/server/bin/setWLSEnv.sh"
+    # A stale java.home must fall back to the ambient environment, exactly as
+    # the pre-runner code did — exporting a dead JAVA_HOME aborts WLST with an
+    # opaque rc far from the actual cause.
+    if [ -n "$jh" ] && [ ! -d "$jh" ]; then
+        warn "java.home ${jh} does not exist — using the environment's JAVA_HOME."
+        jh=""
+    fi
+    cat > "${work}/run.sh" <<EOF
+#!/bin/bash
+cd '${work}'
+${jh:+export JAVA_HOME='${jh}'; PATH='${jh}/bin':"\$PATH"}
+export MW_HOME='${mw}' BEA_HOME='${mw}'
+. '${setwls}' >/dev/null
+exec java weblogic.WLST '${py}'
+EOF
+    chmod 700 "${work}/run.sh"
+    iu_adopt_dir "$work" || { warn "could not hand ${work} to $(iu_name)."; return 1; }
+    as_install_user bash "${work}/run.sh"
+}
+
+# Is this pid alive? kill -0 lies across users (EPERM reads as "gone"), so
+# prefer /proc; fall back to kill -0 where there is no /proc (macOS).
+proc_alive() {
+    if [ -d /proc ]; then [ -d "/proc/$1" ]; else kill -0 "$1" 2>/dev/null; fi
 }
 
 # --- systemd boot services -------------------------------------------------
@@ -1633,6 +1759,7 @@ stage_boot_scripts() {
     local dest="${domhome}/${BOOT_SCRIPT_SUBDIR}"
     local s
     [ -n "$domhome" ] || { warn "stage_boot_scripts: no domain home given."; return 1; }
+    local IU_USER; IU_USER="$(iu_owner_user "$domhome")"   # stage as the domain's owner
     for s in start-admin-nm.sh stop-admin-os.sh; do
         [ -f "${SCRIPT_DIR}/misc/${s}" ] || { warn "missing ${SCRIPT_DIR}/misc/${s}."; return 1; }
     done
@@ -1640,10 +1767,11 @@ stage_boot_scripts() {
         log "${C_DIM}  [dry-run] copy misc/{start-admin-nm,stop-admin-os}.sh -> ${dest}/${C_RESET}"
         return 0
     fi
-    mkdir -p "$dest" || { warn "could not create ${dest}."; return 1; }
+    as_install_user mkdir -p "$dest" || { warn "could not create ${dest}."; return 1; }
+    # Through the identity switch: the domain is the install user's, and they
+    # cannot read the repo checkout (invoker's $HOME) — so pipe, don't cp.
     for s in start-admin-nm.sh stop-admin-os.sh; do
-        cp "${SCRIPT_DIR}/misc/${s}" "${dest}/${s}" || { warn "could not stage ${s}."; return 1; }
-        chmod +x "${dest}/${s}"
+        iu_write "${dest}/${s}" 755 < "${SCRIPT_DIR}/misc/${s}" || { warn "could not stage ${s}."; return 1; }
     done
     ok "staged boot scripts in ${dest}."
 }
@@ -1797,7 +1925,7 @@ provision_one_host() {
     local idx="$1"
 
     local mw="$MWHOME" dom="$DOMAIN" nmdom="$NM_DOMAIN"
-    local sshu="${SSH_USER:-oracle}"
+    local sshu="${SSH_USER:-$(id -un)}"
     local nhosts="${#H_NAME[@]}"
     [ -n "$mw" ] && [ -n "$dom" ] || { warn "profile incomplete (oracle.home / domain.name)."; return 1; }
     if [ "$nhosts" -le 1 ]; then
@@ -1835,13 +1963,13 @@ provision_one_host() {
     info "${name} (${addr}) → server ${eng}"
 
     if [ "$DRY" = "on" ]; then
-        log "${C_DIM}  [dry-run] ssh ${tgt} true${C_RESET}"
-        log "${C_DIM}  [dry-run] sudo install -d $(dirname "$mw") $(dirname "$cdir")${jdk_real:+ $(dirname "$jdk_real")}${jdk_link:+ $(dirname "$jdk_link")}${C_RESET}"
-        log "${C_DIM}  [dry-run] rsync -a ${mw}/ ${tgt}:${mw}/   (first run moves several GB)${C_RESET}"
-        [ -n "$jdk_real" ] && log "${C_DIM}  [dry-run] rsync -a ${jdk_real} ${tgt}:$(dirname "$jdk_real")/${C_RESET}"
-        [ -n "$jdk_link" ] && log "${C_DIM}  [dry-run] ssh ${tgt} ln -sfn ${jdk_real} ${jdk_link}${C_RESET}"
+        log "${C_DIM}  [dry-run] ssh ${tgt} true; ensure ${grp} + ${user} exist there${C_RESET}"
+        log "${C_DIM}  [dry-run] sudo install -d -o ${user} -g ${grp} $(dirname "$mw")${jdk_real:+ $(dirname "$jdk_real")}${jdk_link:+ $(dirname "$jdk_link")}; -o ${sshu} $(dirname "$cdir")${C_RESET}"
+        log "${C_DIM}  [dry-run] xfer_rsync ${user}:${grp} ${mw}/ ${tgt}:${mw}/   (first run moves several GB)${C_RESET}"
+        [ -n "$jdk_real" ] && log "${C_DIM}  [dry-run] xfer_rsync ${user}:${grp} ${jdk_real} ${tgt}:$(dirname "$jdk_real")/${C_RESET}"
+        [ -n "$jdk_link" ] && log "${C_DIM}  [dry-run] ssh ${tgt} sudo ln -sfn ${jdk_real} ${jdk_link}${C_RESET}"
         log "${C_DIM}  [dry-run] rsync -a ${cdir}/ ${tgt}:${cdir}/${C_RESET}"
-        log "${C_DIM}  [dry-run] write ${domhome}/servers/${eng}/security/boot.properties${C_RESET}"
+        log "${C_DIM}  [dry-run] write ${domhome}/servers/${eng}/security/boot.properties (as ${user})${C_RESET}"
         install_systemd_unit_remote "$tgt" nodemanager.service \
             "$(render_systemd_unit "WebLogic Node Manager (BLADE ${nmdom})" \
                 "$nmhome" "${nmhome}/bin/startNodeManager.sh" "${nmhome}/bin/stopNodeManager.sh" \
@@ -1851,7 +1979,7 @@ provision_one_host() {
             "$(render_admin_nm_unit "$dom" "$domhome" "${domhome}/${BOOT_SCRIPT_SUBDIR}" "$user" "$grp" \
                 "${domhome}/.blade-nm.env" "$eng" "$adminurl")"
         log "${C_DIM}  [dry-run] systemctl start nodemanager.service weblogic-engine.service${C_RESET}"
-        continue
+        return 0
     fi
 
     # --- reachability -----------------------------------------------------
@@ -1865,21 +1993,32 @@ provision_one_host() {
     fi
 
     # The units name User=/Group= from the ADMIN box's owner, so BOTH have to
-    # exist here. A missing group is not a warning you get to ignore: systemd
+    # exist there. A missing group is not a warning you get to ignore: systemd
     # refuses the unit with 216/GROUP ("Failed to determine group
     # credentials"), which says nothing about which group or which host.
-    # Create it with the SAME gid so the two boxes agree.
-    if ! ssh -o BatchMode=yes "$tgt" "id '${user}' >/dev/null 2>&1"; then
-        warn "${name}: user '${user}' does not exist there — the boot services would fail. Run 'u' on that host first. Skipped."
-        return 1
-    fi
+    # Create both — engine hosts have no repo clone, so "run 'u' over there"
+    # was never an instruction anyone could follow. Numeric ids are pinned to
+    # the local ones when free; ownership itself travels BY NAME (xfer_rsync
+    # --chown), so a differing uid is cosmetic, not a failure.
     local ggid; ggid="$(getent group "$grp" 2>/dev/null | cut -d: -f3)"
     if ! ssh -o BatchMode=yes "$tgt" "getent group '${grp}' >/dev/null 2>&1"; then
         info "  group '${grp}' missing there — creating it${ggid:+ (gid ${ggid})}"
-        if ! ssh -o BatchMode=yes "$tgt" "sudo groupadd ${ggid:+-g ${ggid}} '${grp}' && sudo usermod -aG '${grp}' '${user}'"; then
+        if ! ssh -o BatchMode=yes "$tgt" "sudo groupadd ${ggid:+-g ${ggid}} '${grp}'"; then
             warn "${name}: could not create group '${grp}' — the boot services would fail with 216/GROUP. Skipped."
             return 1
         fi
+    fi
+    if ! ssh -o BatchMode=yes "$tgt" "id '${user}' >/dev/null 2>&1"; then
+        local luid; luid="$(id -u "$user" 2>/dev/null || true)"
+        info "  user '${user}' missing there — creating${luid:+ (uid ${luid})}"
+        if ! ssh -o BatchMode=yes "$tgt" "sudo useradd ${luid:+-u ${luid}} -g '${grp}' -m '${user}' \
+                || sudo useradd -g '${grp}' -m '${user}'"; then
+            warn "${name}: could not create user '${user}' — the boot services would fail. Skipped."
+            return 1
+        fi
+    else
+        ssh -o BatchMode=yes "$tgt" "id -nG '${user}' | tr ' ' '\n' | grep -qx '${grp}' || sudo usermod -aG '${grp}' '${user}'" \
+            || warn "${name}: could not ensure '${user}' is in '${grp}'."
     fi
 
     # --- landing zone -----------------------------------------------------
@@ -1889,8 +2028,11 @@ provision_one_host() {
     local real_home ver
     real_home="$(readlink -f "$mw" 2>/dev/null || printf '%s' "$mw")"
     ver="$(basename "$real_home")"
+    # Install trees land under the install user; only the cert staging dir
+    # (inside the login user's own home) stays the ssh user's.
     if ! ssh -o BatchMode=yes "$tgt" \
-         "sudo install -d -o '${sshu}' '$(dirname "$real_home")' '${DOMAINS_DIR}' '$(dirname "$cdir")'${jdk_real:+ '$(dirname "$jdk_real")'}${jdk_link:+ '$(dirname "$jdk_link")'}" 2>/dev/null; then
+         "sudo install -d -o '${user}' -g '${grp}' '$(dirname "$real_home")' '${DOMAINS_DIR}'${jdk_real:+ '$(dirname "$jdk_real")'}${jdk_link:+ '$(dirname "$jdk_link")'} \
+          && sudo install -d -o '${sshu}' '$(dirname "$cdir")'" 2>/dev/null; then
         warn "${name}: could not create target dirs — skipped."
         return 1
     fi
@@ -1900,44 +2042,47 @@ provision_one_host() {
     # Binaries and domains are separate trees now, so they are separate copies.
     # This is also the whole patch story for an engine: it never runs OPatch, it
     # receives a home that was patched and validated once, on machine0.
+    # The owner's trees go through xfer_rsync: local root reads the 0600
+    # secrets, remote root writes them, --chown keeps the owner by name.
     info "  rsync OCCAS home ${ver} (~1GB) …"
-    if ! rsync -a "${real_home}/" "${tgt}:${real_home}/"; then
+    if ! xfer_rsync "${user}:${grp}" "${real_home}/" "${tgt}:${real_home}/"; then
         warn "${name}: rsync of ${real_home} failed — skipped."; return 1
     fi
-    if ! ssh -o BatchMode=yes "$tgt" "ln -sfn '${real_home}' '${mw}'"; then
+    if ! ssh -o BatchMode=yes "$tgt" "sudo ln -sfn '${real_home}' '${mw}'"; then
         warn "${name}: could not point ${mw} at ${ver} — skipped."; return 1
     fi
     info "  rsync domains …"
     local _d
     for _d in "$dom" "$nmdom"; do
         [ -d "${DOMAINS_DIR}/${_d}" ] || continue
-        if ! rsync -a \
+        if ! xfer_rsync "${user}:${grp}" \
+              "${DOMAINS_DIR}/${_d}/" "${tgt}:${DOMAINS_DIR}/${_d}/" \
               --exclude 'servers/*/logs/' --exclude 'servers/*/tmp/' \
               --exclude 'servers/*/cache/' --exclude 'nodemanager/*.log*' \
-              --exclude 'nodemanager/*.pid' \
-              "${DOMAINS_DIR}/${_d}/" "${tgt}:${DOMAINS_DIR}/${_d}/"; then
+              --exclude 'nodemanager/*.pid'; then
             warn "${name}: rsync of domain ${_d} failed — skipped."; return 1
         fi
     done
-    if [ -n "$jdk_real" ] && ! rsync -a "$jdk_real" "${tgt}:$(dirname "$jdk_real")/"; then
+    if [ -n "$jdk_real" ] && ! xfer_rsync "${user}:${grp}" "$jdk_real" "${tgt}:$(dirname "$jdk_real")/"; then
         warn "${name}: rsync of ${jdk_real} failed — skipped."; return 1
     fi
-    if [ -n "$jdk_link" ] && ! ssh -o BatchMode=yes "$tgt" "ln -sfn '${jdk_real}' '${jdk_link}'"; then
+    if [ -n "$jdk_link" ] && ! ssh -o BatchMode=yes "$tgt" "sudo ln -sfn '${jdk_real}' '${jdk_link}'"; then
         warn "${name}: could not point ${jdk_link} at $(basename "$jdk_real") — skipped."; return 1
     fi
+    # The cert staging dir is the invoker's on both sides — plain copy.
     if [ -d "$cdir" ] && ! rsync -a "${cdir}/" "${tgt}:${cdir}/"; then
         warn "${name}: rsync of ${cdir} failed — skipped."; return 1
     fi
     # Keystores live outside the Oracle home, so they are their own copy.
     local ksd="${KEYSTORE_DIR:-}"
     if [ -n "$ksd" ] && [ -d "$ksd" ]; then
-        ssh -o BatchMode=yes "$tgt" "sudo install -d -o '${sshu}' '${ksd}'" 2>/dev/null
-        if ! rsync -a "${ksd}/" "${tgt}:${ksd}/"; then
+        ssh -o BatchMode=yes "$tgt" "sudo install -d -o '${user}' -g '${grp}' '${ksd}'" 2>/dev/null
+        if ! xfer_rsync "${user}:${grp}" "${ksd}/" "${tgt}:${ksd}/"; then
             warn "${name}: rsync of keystores (${ksd}) failed — skipped."; return 1
         fi
     fi
     ssh -o BatchMode=yes "$tgt" \
-        "chmod -R g-w,o-rwx '${domhome}'; f='${domhome}/config/nodemanager/nm_password.properties'; [ -f \"\$f\" ] && chmod 600 \"\$f\"; true" \
+        "sudo chmod -R g-w,o-rwx '${domhome}'; f='${domhome}/config/nodemanager/nm_password.properties'; [ -f \"\$f\" ] && sudo chmod 600 \"\$f\"; true" \
         || warn "${name}: domain permission hardening failed (non-fatal)."
 
     # --- boot identity ----------------------------------------------------
@@ -1948,7 +2093,7 @@ provision_one_host() {
     # be lost, so it goes over ssh stdin here (never a command line).
     if ! printf 'username=%s\npassword=%s\n' "${ADMIN_USER:-weblogic}" "$pw" \
          | ssh -o BatchMode=yes "$tgt" \
-               "d='${domhome}/servers/${eng}/security'; mkdir -p \"\$d\" && umask 177 && cat > \"\$d/boot.properties\""; then
+               "sudo -u '${user}' sh -c 'd=\"${domhome}/servers/${eng}/security\"; mkdir -p \"\$d\" && umask 177 && cat > \"\$d/boot.properties\"'"; then
         warn "${name}: could not write ${eng} boot.properties — skipped."
         return 1
     fi
@@ -2145,7 +2290,7 @@ PYEOF
 # on different binaries with nothing to show for it until they behave
 # differently. Reads only -- a mismatch is a warning, never a failure.
 patch_levels() {
-    local mw="${MWHOME}" sshu="${SSH_USER:-oracle}" i host addr lvl cnt ref=""
+    local mw="${MWHOME}" sshu="${SSH_USER:-$(id -un)}" i host addr lvl cnt ref=""
     local drift=0
     for i in "${!H_NAME[@]}"; do
         host="${H_NAME[$i]}"; addr="${H_ADDR[$i]}"
@@ -2337,44 +2482,55 @@ do_patch() {
         return 0
     fi
 
-    info "Copying the home (the live one is not touched) …"
-    cp -a "$real" "$copy" || { warn "copy to ${copy} failed (disk space?)."; return 1; }
+    # Everything from here runs as the OWNER of the live home — not blindly
+    # install.user: a legacy install owned by the login user patches as that
+    # user, and opatch writes the central inventory the same owner holds.
+    # IU_USER is dynamically scoped; every iu_*/as_install_user below follows.
+    local IU_USER; IU_USER="$(iu_owner_user "$real")"
 
-    local work; work="$(mktemp -d /tmp/blade-patch.XXXXXX)"
-    local op="${copy}/OPatch/opatch"
+    info "Copying the home (the live one is not touched) …"
+    as_install_user cp -a "$real" "$copy" || { warn "copy to ${copy} failed (disk space?)."; return 1; }
+
+    local op="${copy}/OPatch/opatch" zb work pd
     for z in "${zips[@]}"; do
-        local zb; zb="$(basename "$z")"
-        rm -rf "${work:?}"/*; unzip -q "$z" -d "$work" || { warn "${zb}: unzip failed."; rm -rf "$work" "$copy"; return 1; }
+        zb="$(basename "$z")"
+        # Fresh workdir per zip: unzip + inspect as the invoker (who owns the
+        # zips), THEN hand it to the home's owner for opatch. Cleanup runs as
+        # whoever owns the dir at that moment — /tmp is sticky.
+        work="$(mktemp -d /tmp/blade-patch.XXXXXX)"
+        unzip -q "$z" -d "$work" \
+            || { warn "${zb}: unzip failed."; rm -rf "$work"; as_install_user rm -rf "$copy"; return 1; }
 
         # An OPatch update is a replacement of the OPatch directory, not an
         # interim patch. Detect it by shape so the changing patch ID never matters.
         if [ -d "${work}/OPatch" ]; then
             info "  ${zb}: OPatch update"
-            rm -rf "${copy}/OPatch" && cp -a "${work}/OPatch" "${copy}/OPatch" \
-                || { warn "${zb}: could not replace OPatch."; rm -rf "$work" "$copy"; return 1; }
+            iu_adopt_dir "$work" || { rm -rf "$work"; as_install_user rm -rf "$copy"; return 1; }
+            as_install_user sh -c "rm -rf '${copy}/OPatch' && cp -a '${work}/OPatch' '${copy}/OPatch'" \
+                || { warn "${zb}: could not replace OPatch."; as_install_user rm -rf "$work" "$copy"; return 1; }
+            as_install_user rm -rf "$work"
             continue
         fi
 
         # The unpacked patch is a single directory named after the patch id.
-        local pd; pd="$(find "$work" -maxdepth 1 -mindepth 1 -type d | head -1)"
-        [ -n "$pd" ] || { warn "${zb}: nothing unpacked."; rm -rf "$work" "$copy"; return 1; }
+        pd="$(find "$work" -maxdepth 1 -mindepth 1 -type d | head -1)"
+        [ -n "$pd" ] || { warn "${zb}: nothing unpacked."; rm -rf "$work"; as_install_user rm -rf "$copy"; return 1; }
+        iu_adopt_dir "$work" || { rm -rf "$work"; as_install_user rm -rf "$copy"; return 1; }
 
         info "  ${zb}: conflict check"
-        if ! (cd "$pd" && ORACLE_HOME="$copy" "$op" prereq CheckConflictAgainstOHWithDetail \
-                -ph "$pd" -oh "$copy" ${jre:+-jre "$jre"} -silent) >/dev/null 2>&1; then
+        if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${copy}' '${op}' prereq CheckConflictAgainstOHWithDetail -ph '${pd}' -oh '${copy}' ${jre:+-jre '${jre}'} -silent" >/dev/null 2>&1; then
             warn "${zb}: conflict check FAILED — stopping. ${copy} discarded, live home untouched."
-            rm -rf "$work" "$copy"; return 1
+            as_install_user rm -rf "$work" "$copy"; return 1
         fi
         info "  ${zb}: applying"
-        if ! (cd "$pd" && ORACLE_HOME="$copy" "$op" apply -silent -oh "$copy" ${jre:+-jre "$jre"}) ; then
+        if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${copy}' '${op}' apply -silent -oh '${copy}' ${jre:+-jre '${jre}'}"; then
             warn "${zb}: APPLY FAILED — stopping. ${copy} discarded, live home untouched."
-            rm -rf "$work" "$copy"; return 1
+            as_install_user rm -rf "$work" "$copy"; return 1
         fi
+        as_install_user rm -rf "$work"
     done
-    rm -rf "$work"
 
-    ORACLE_HOME="$copy" "$op" lsinventory -oh "$copy" ${jre:+-jre "$jre"} \
-        > "${copy}/.blade-patch-manifest" 2>&1 || true
+    as_install_user sh -c "ORACLE_HOME='${copy}' '${op}' lsinventory -oh '${copy}' ${jre:+-jre '${jre}'} > '${copy}/.blade-patch-manifest' 2>&1" || true
     ok "Patched home ready: ${copy}"
     grep -cE "^Patch  *[0-9]+" "${copy}/.blade-patch-manifest" 2>/dev/null \
         | sed 's/^/  interim patches now present: /'
@@ -2394,7 +2550,7 @@ do_provision_engines() {
         return 0
     fi
     stage_boot_scripts "${DOMAINS_DIR}/${DOMAIN}" || return 1
-    info "Re-provision ${neng} engine host(s) as ${SSH_USER:-oracle}"
+    info "Re-provision ${neng} engine host(s) as ${SSH_USER:-$(id -un)}"
     for idx in $(seq 1 $((nhosts - 1))); do
         [ "${H_ROLE[$idx]}" = "engine" ] || continue
         provision_one_host "$idx" || failed="${failed} ${H_NAME[$idx]}"
@@ -2484,6 +2640,10 @@ PYEOF
     occas_installed "$mw" || { warn "OCCAS not installed at ${mw} — run the install step first."; return 1; }
     [ -f "$tmpl" ]        || { warn "WLS template not found: ${tmpl}"; return 1; }
 
+    # An existing nmdomain is reconfigured/started as its OWNER (legacy trees
+    # are the login user's); a fresh one is created as install.user.
+    local IU_USER; IU_USER="$(iu_owner_user "$nmhome")"
+
     # 1. Create the domain (skip if it already exists — idempotent).
     if [ -d "${nmhome}/config" ]; then
         ok "nmdomain already exists at ${nmhome} — reconfiguring Node Manager, not rebuilding."
@@ -2494,9 +2654,11 @@ PYEOF
         local work; work="$(mktemp -d /tmp/nmdom.XXXXXX)"
         ( umask 077; printf '%s\n' "${py/__PW__/$pw}" > "${work}/nmdomain.py" )
         info "Creating basic domain via WLST..."
-        local rc=0
-        ( cd "$work" && "$wlst" "${work}/nmdomain.py" ) || rc=$?
-        rm -rf "$work"
+        local rc=0 jh; jh="$(read_prop "$OCCAS_CONF" java.home)"
+        [ -n "$jh" ] && [ ! -d "$jh" ] && jh=""   # stale conf value → ambient JAVA_HOME
+        iu_adopt_dir "$work" || { rm -rf "$work"; warn "could not hand ${work} to $(iu_name)."; return 1; }
+        as_install_user bash -c "cd '${work}' && ${jh:+JAVA_HOME='${jh}'} '${wlst}' '${work}/nmdomain.py'" || rc=$?
+        as_install_user rm -rf "$work"
         [ "$rc" -eq 0 ] || { warn "WLST failed creating nmdomain (rc=${rc})"; return 1; }
         ok "nmdomain created at ${nmhome}"
     fi
@@ -2504,15 +2666,14 @@ PYEOF
     # 2. Point Node Manager at all interfaces on our port/type. nodemanager.properties
     #    is plain key=value, so set_conf_prop updates it in place (appends if absent).
     local nmprops="${nmhome}/nodemanager/nodemanager.properties"
-    mkdir -p "$(dirname "$nmprops")"
-    [ -f "$nmprops" ] || : > "$nmprops"
-    set_conf_prop "$nmprops" ListenAddress  "$bind"
-    set_conf_prop "$nmprops" ListenPort     "$port"
-    set_conf_prop "$nmprops" SecureListener "$secure"
+    as_install_user mkdir -p "$(dirname "$nmprops")"
+    iu_set_conf_prop "$nmprops" ListenAddress  "$bind"
+    iu_set_conf_prop "$nmprops" ListenPort     "$port"
+    iu_set_conf_prop "$nmprops" SecureListener "$secure"
     # Use pure-Java process control: OCCAS ships no native Node Manager library
     # for every platform (e.g. aarch64), and the native one fails with
     # UnsatisfiedLinkError. Java-based control is portable and sufficient here.
-    set_conf_prop "$nmprops" NativeVersionEnabled false
+    iu_set_conf_prop "$nmprops" NativeVersionEnabled false
     ok "Node Manager bind set: ${bind}:${port} (SecureListener=${secure}, native=off)"
 
     # 3. Start Node Manager in the background. If it's already up, offer to
@@ -2528,12 +2689,14 @@ PYEOF
     fi
     local nmlog="${nmhome}/nodemanager/nodemanager.out"
     info "Starting Node Manager: ${nmhome}/bin/startNodeManager.sh"
-    JAVA_HOME="${JAVA_HOME_VAL:-${JAVA_HOME:-}}" nohup "${nmhome}/bin/startNodeManager.sh" > "$nmlog" 2>&1 &
-    local pid=$!
+    # Node Manager launches every server, so IT sets their identity — it must
+    # run as the install user (the redirect too: nmlog is in their domain).
+    local pid
+    pid="$(as_install_user sh -c "JAVA_HOME='${JAVA_HOME_VAL:-${JAVA_HOME:-}}' nohup '${nmhome}/bin/startNodeManager.sh' > '${nmlog}' 2>&1 & echo \$!")"
     local i=0
     while [ "$i" -lt 30 ]; do
         if nm_listening "$port"; then ok "Node Manager up (pid ${pid}), listening on ${bind}:${port}."; log "  log: ${nmlog}"; return 0; fi
-        kill -0 "$pid" 2>/dev/null || { warn "Node Manager exited early — tail of ${nmlog}:"; tail -n 15 "$nmlog" 2>/dev/null | sed 's/^/    /'; return 1; }
+        proc_alive "$pid" || { warn "Node Manager exited early — tail of ${nmlog}:"; tail -n 15 "$nmlog" 2>/dev/null | sed 's/^/    /'; return 1; }
         sleep 1; i=$((i + 1))
     done
     warn "Node Manager didn't reach listening on :${port} within 30s — check ${nmlog}."
@@ -2752,7 +2915,7 @@ do_makeuser() {
 # MW_HOME is left untouched (we don't recursively chown an existing install).
 # ----------------------------------------------------------------------------
 do_makedirs() {
-    local mw="$MWHOME" inv="${INV_LOC:-/home/oracle/oraInventory}"
+    local mw="$MWHOME" inv="${INV_LOC:-/opt/oracle/oraInventory}"
     local user="${INSTALL_USER:-oracle}" grp="${INV_GRP:-oinstall}"
     [ -n "$mw" ] || { warn "occas.conf: missing oracle.home (MW_HOME)"; return 1; }
     info "Install dirs: ${mw}  +  ${inv}   (owner ${user}:${grp})"
@@ -2793,6 +2956,13 @@ do_makedirs() {
             && ok "created + chowned ${DOMAINS_DIR} (domains live outside the Oracle home)." \
             || warn "could not set up ${DOMAINS_DIR}."
     fi
+    # The servers read the TLS keystores at runtime — install-user territory too
+    # (and outside the Oracle home, so a patch flip cannot swap them).
+    if [ -n "${KEYSTORE_DIR:-}" ]; then
+        $SUDO mkdir -p "$KEYSTORE_DIR" && $SUDO chown "${user}:${grp}" "$KEYSTORE_DIR" \
+            && ok "created + chowned ${KEYSTORE_DIR} (TLS keystores)." \
+            || warn "could not set up ${KEYSTORE_DIR}."
+    fi
     if $SUDO mkdir -p "$inv" && $SUDO chown -R "${user}:${grp}" "$inv"; then
         ok "created + chowned ${inv}."
     else
@@ -2828,7 +2998,10 @@ do_download() {
     # else a per-user default that is always writable.
     DL_DIR="$(read_prop "$OCCAS_CONF" download.dir)"; DL_DIR="${DL_DIR/#\~/$HOME}"
     if [ -z "$DL_DIR" ]; then
-        [ -n "$INSTALLER_JAR" ] && DL_DIR="$(dirname "$INSTALLER_JAR")" || DL_DIR="${HOME}/occas-media"
+        # Media lives beside the install, not under anyone's $HOME — the OUI
+        # later runs as the install user, who cannot read a 0700 home dir.
+        [ -n "$INSTALLER_JAR" ] && DL_DIR="$(dirname "$INSTALLER_JAR")" \
+            || DL_DIR="$(dirname "${OCCAS_BASE:-/opt/oracle/occas}")/media"
     fi
     URLS_FILE="${PROFILE_DIR}/occas.urls"
 
@@ -2886,8 +3059,15 @@ do_download() {
     command -v curl  >/dev/null || { warn "curl not found."; return 1; }
     command -v unzip >/dev/null || { warn "unzip not found."; return 1; }
     if ! mkdir -p "$DL_DIR" 2>/dev/null || [ ! -w "$DL_DIR" ]; then
-        warn "Can't write to ${DL_DIR} — downloading to ${HOME}/occas-media instead."
-        DL_DIR="${HOME}/occas-media"; mkdir -p "$DL_DIR" || { warn "Can't create ${DL_DIR}."; return 1; }
+        # /opt/... needs root once; hand the dir to the invoker — downloads run
+        # as the invoker, the install user only ever READS the media.
+        if command -v sudo >/dev/null 2>&1 \
+           && sudo mkdir -p "$DL_DIR" 2>/dev/null && sudo chown "$(id -un)" "$DL_DIR" 2>/dev/null; then
+            ok "created ${DL_DIR} (owner $(id -un))."
+        else
+            warn "Can't write to ${DL_DIR} — downloading to ${HOME}/occas-media instead (the install step will stage a copy)."
+            DL_DIR="${HOME}/occas-media"; mkdir -p "$DL_DIR" || { warn "Can't create ${DL_DIR}."; return 1; }
+        fi
     fi
 
     local token="${BLADE_EDELIVERY_TOKEN:-}" dest zips=()
@@ -3000,15 +3180,36 @@ EOF
 inventory_loc=${inv_loc}
 inst_group=${inv_grp}
 EOF
+    # Paths only, no secrets — and the OUI runs as the install user, who must
+    # be able to read them (mktemp creates 0600, invoker-owned).
+    chmod 644 "$rsp" "$inv"
 
     if [ "$DRY" = "on" ]; then
+        local runas=""; iu_switching && runas="sudo -H -u $(iu_name) "
         log "${C_DIM}  [dry-run] response file:${C_RESET}"; sed 's/^/    /' "$rsp"
         log "${C_DIM}  [dry-run] oraInst.loc:${C_RESET}";   sed 's/^/    /' "$inv"
-        log "${C_DIM}  [dry-run] $(java_bin) -jar ${installer} -silent -responseFile <rsp> -invPtrLoc <loc> -ignoreSysPrereqs${C_RESET}"
+        log "${C_DIM}  [dry-run] ${runas}$(java_bin) -jar ${installer} -silent -responseFile <rsp> -invPtrLoc <loc> -ignoreSysPrereqs${C_RESET}"
         rm -f "$rsp" "$inv"; return 0
     fi
     if [ ! -f "$installer" ]; then rm -f "$rsp" "$inv"; warn "installer.jar not found: ${installer}"; return 1; fi
-    if "$(java_bin)" -jar "$installer" -silent -responseFile "$rsp" -invPtrLoc "$inv" -ignoreSysPrereqs; then
+    # The install user cannot read into the invoker's $HOME (0700 on OL8+) —
+    # where older profiles keep the media. Stage the jar beside the install
+    # once and repoint the profile at the copy.
+    if iu_switching && ! as_install_user test -r "$installer"; then
+        local mdir staged
+        mdir="$(dirname "${OCCAS_BASE:-/opt/oracle/occas}")/media"
+        staged="${mdir}/$(basename "$installer")"
+        info "Staging the installer where $(iu_name) can read it: ${staged}"
+        if sudo mkdir -p "$mdir" && sudo cp "$installer" "$staged" \
+           && sudo chmod 755 "$mdir" && sudo chmod 644 "$staged"; then
+            set_conf_prop "$OCCAS_CONF" installer.jar "$staged"
+            ok "staged; installer.jar now points at ${staged}."
+            installer="$staged"
+        else
+            rm -f "$rsp" "$inv"; warn "could not stage ${installer} for $(iu_name)."; return 1
+        fi
+    fi
+    if as_install_user "$(java_bin)" -jar "$installer" -silent -responseFile "$rsp" -invPtrLoc "$inv" -ignoreSysPrereqs; then
         rm -f "$rsp" "$inv"; ok "Product installed at ${mwhome}"
     else
         rm -f "$rsp" "$inv"; warn "silent install failed"; return 1
@@ -3018,7 +3219,7 @@ EOF
     # a patch later is a flip of this one symlink.
     local link="${OCCAS_BASE}/current"
     if [ "$mwhome" != "$link" ]; then
-        ln -sfn "$mwhome" "$link" 2>/dev/null \
+        as_install_user ln -sfn "$mwhome" "$link" 2>/dev/null \
             || sudo ln -sfn "$mwhome" "$link" 2>/dev/null \
             || { warn "could not create ${link} — nothing will resolve the Oracle home."; return 1; }
         ok "${link} -> $(basename "$mwhome")"
@@ -3274,18 +3475,9 @@ Machine${idx}NodemanagerNMType=${type}"
     fi
 
     local jh rc=0; jh="$(read_prop "$OCCAS_CONF" java.home)"
-    (
-        cd "$work"
-        if [ -n "$jh" ] && [ -d "$jh" ]; then export JAVA_HOME="$jh"; PATH="${jh}/bin:$PATH"; fi
-        export MW_HOME="$mwhome" BEA_HOME="$mwhome"   # Oracle env + the .py's domain dir
-        # Oracle's setWLSEnv.sh/commEnv.sh reference unbound vars — they predate
-        # 'set -u', so disable nounset before sourcing them (this is a subshell).
-        set +u
-        # shellcheck disable=SC1090
-        . "$setwls" >/dev/null
-        java weblogic.WLST occas-replicated-dynamiccluster.py
-    ) || rc=$?
-    rm -rf "$work"
+    # The domain lands in the install user's DOMAINS_DIR, so WLST runs as them.
+    iu_wlst_run "$work" occas-replicated-dynamiccluster.py "$mwhome" "$jh" || rc=$?
+    as_install_user rm -rf "$work"
     [ "$rc" -eq 0 ] || { warn "configure failed (WLST rc=${rc})"; return 1; }
     ok "Domain '${domain}' written under ${DOMAINS_DIR}/"
     # Give the domain's servers enough heap/metaspace (the admin EAR OOMs the
@@ -3306,7 +3498,10 @@ do_preflight() {
     inv_grp="$(read_prop "$OCCAS_CONF" inventory.group)"; inv_grp="${inv_grp:-oinstall}"
     installer="$(read_prop "$OCCAS_CONF" installer.jar)"
     os="$(uname -s)"
+    # PF_NEED is the aggregate; the _pf_* flags remember WHICH category failed
+    # so the footer prescribes only the fixes that apply.
     PF_NEED=""
+    local _pf_jdk="" _pf_grp="" _pf_sudo="" _pf_dirs="" _pf_tmpl=""
 
     info "Preflight — host prerequisites (install user, group, dirs, Java)"
     log  "  MW_HOME: ${mwhome}    inventory: ${inv_loc}    group: ${inv_grp}"
@@ -3319,8 +3514,8 @@ do_preflight() {
     jdesc="$(jdk_describe "$jhome")" && jrc=0 || jrc=$?
     case "$jrc" in
         0) ok "JDK: ${jdesc}" ;;
-        1) warn "JDK: ${jdesc} — the installer needs a full JDK."; PF_NEED="yes" ;;
-        *) warn "JDK: ${jdesc} — the installer needs one."; PF_NEED="yes" ;;
+        1) warn "JDK: ${jdesc} — the installer needs a full JDK."; PF_NEED="yes"; _pf_jdk="yes" ;;
+        *) warn "JDK: ${jdesc} — the installer needs one."; PF_NEED="yes"; _pf_jdk="yes" ;;
     esac
     # Validate the JDK major against the OCCAS release (version from the conf, or
     # detected from a real install). This is the runtime JDK, not the build JDK.
@@ -3336,7 +3531,7 @@ do_preflight() {
         elif [ "$jmajor" -gt "$want" ] 2>/dev/null; then
             ok "JDK ${jmajor} — newer than OCCAS ${cfgver}'s certified JDK ${want}; your choice stands."
         else
-            warn "JDK is ${jmajor}, BELOW OCCAS ${cfgver}'s certified JDK ${want} — unlikely to run."; PF_NEED="yes"
+            warn "JDK is ${jmajor}, BELOW OCCAS ${cfgver}'s certified JDK ${want} — unlikely to run."; PF_NEED="yes"; _pf_jdk="yes"
         fi
     else
         log "  ${C_DIM}match the JDK to the OCCAS release per Oracle's certification matrix.${C_RESET}"
@@ -3361,7 +3556,7 @@ do_preflight() {
                 set_conf_prop "$OCCAS_CONF" java.home "$JDK_DL_HOME"
                 ok "java.home set to ${JDK_DL_HOME} in ${OCCAS_CONF#${SCRIPT_DIR}/}"
             fi
-            PF_NEED=""   # the JDK prerequisite is now satisfied
+            PF_NEED=""; _pf_jdk=""   # the JDK prerequisite is now satisfied
         fi
     fi
 
@@ -3369,17 +3564,43 @@ do_preflight() {
         warn "macOS — skipping user/group/dir checks (host prep is for the Linux install target)."
     else
         if getent group "$inv_grp" >/dev/null 2>&1; then ok "group '${inv_grp}' exists"
-        else warn "group '${inv_grp}' missing"; PF_NEED="yes"; fi
-        if id -nG 2>/dev/null | tr ' ' '\n' | grep -qx "$inv_grp"; then ok "user '$(id -un)' is in '${inv_grp}'"
-        else warn "user '$(id -un)' not in '${inv_grp}' — install as a user that is, or add it"; PF_NEED="yes"; fi
+        else warn "group '${inv_grp}' missing"; PF_NEED="yes"; _pf_grp="yes"; fi
+        # Identity: the write steps (install/configure/starts) run AS the
+        # install user — the invoker only needs a way to become them.
+        local iu_u; iu_u="$(iu_name)"
+        if [ "$(id -un)" = "$iu_u" ]; then
+            ok "running as the install user '${iu_u}'"
+        elif ! id "$iu_u" >/dev/null 2>&1; then
+            warn "install user '${iu_u}' missing"; PF_NEED="yes"; _pf_grp="yes"
+        elif sudo -n -H -u "$iu_u" true 2>/dev/null; then
+            ok "write steps will run as '${iu_u}' via sudo (you are $(id -un))"
+        elif command -v sudo >/dev/null 2>&1; then
+            # sudo -n can't tell "needs a password" from "not allowed" — an
+            # interactive run may still work, so advise instead of failing.
+            log "  ${C_DIM}sudo to '${iu_u}' may prompt for a password (fine interactively; NOPASSWD needed for unattended runs).${C_RESET}"
+        else
+            warn "no sudo on this host — the install/configure steps must run as '${iu_u}'"; PF_NEED="yes"; _pf_sudo="yes"
+        fi
+        # Who the writability checks below are FOR: the identity the steps use.
+        local pf_as; if iu_switching; then pf_as="$iu_u"; else pf_as="$(id -un)"; fi
         # MW_HOME: present means already installed; else parent must be writable.
         if [ -d "${mwhome}/wlserver" ]; then ok "OCCAS already installed at ${mwhome}"
-        elif [ -d "$mwhome" ] && [ -w "$mwhome" ]; then ok "MW_HOME exists and is writable: ${mwhome}"
-        elif [ -d "$(dirname "$mwhome")" ] && [ -w "$(dirname "$mwhome")" ]; then ok "MW_HOME parent writable (dir will be created)"
-        else warn "MW_HOME not writable: ${mwhome}"; PF_NEED="yes"; fi
-        if [ -d "$inv_loc" ] && [ -w "$inv_loc" ]; then ok "inventory dir writable: ${inv_loc}"
-        elif [ -d "$(dirname "$inv_loc")" ] && [ -w "$(dirname "$inv_loc")" ]; then ok "inventory parent writable (dir will be created)"
-        else warn "inventory location not writable: ${inv_loc}"; PF_NEED="yes"; fi
+        elif [ -d "$mwhome" ] && as_install_user test -w "$mwhome"; then ok "MW_HOME writable by ${pf_as}: ${mwhome}"
+        elif [ -d "$(dirname "$mwhome")" ] && as_install_user test -w "$(dirname "$mwhome")"; then ok "MW_HOME parent writable by ${pf_as} (dir will be created)"
+        else warn "MW_HOME not writable by '${pf_as}': ${mwhome}"; PF_NEED="yes"; _pf_dirs="yes"; fi
+        if [ -d "$inv_loc" ] && as_install_user test -w "$inv_loc"; then ok "inventory dir writable by ${pf_as}: ${inv_loc}"
+        elif [ -d "$(dirname "$inv_loc")" ] && as_install_user test -w "$(dirname "$inv_loc")"; then ok "inventory parent writable by ${pf_as} (dir will be created)"
+        else warn "inventory location not writable by '${pf_as}': ${inv_loc}"; PF_NEED="yes"; _pf_dirs="yes"; fi
+        # Media + JDK must be READABLE by the install user — anything parked
+        # under the invoker's 0700 home dir is not.
+        if iu_switching && [ -n "$installer" ] && [ -f "$installer" ]; then
+            if as_install_user test -r "$installer"; then ok "installer readable by ${pf_as}"
+            else log "  ${C_DIM}installer not readable by ${pf_as} — the install step stages a copy beside the install.${C_RESET}"; fi
+        fi
+        if iu_switching && [ -x "${jhome}/bin/java" ] && ! as_install_user test -x "${jhome}/bin/java"; then
+            warn "JDK ${jhome} not usable by '${pf_as}' (under a private home?) — put it under $(dirname "${OCCAS_BASE:-/opt/oracle/occas}")/java"
+            PF_NEED="yes"; _pf_jdk="yes"
+        fi
 
         # Capacity + OS advisories. The silent install runs with -ignoreSysPrereqs,
         # so Oracle WON'T flag these — we surface them here rather than let an
@@ -3412,7 +3633,7 @@ do_preflight() {
     local nmport; nmport="$(read_prop "$OCCAS_CONF" nm.listen.port)"; nmport="${nmport:-5556}"
     if occas_installed "$mwhome"; then
         [ -f "$nmtmpl" ] && ok "WLS basic template present (for the nmdomain): ${nmtmpl#${mwhome}/}" \
-                         || { warn "WLS basic template missing: ${nmtmpl} — 'n' (create NM domain) needs it."; PF_NEED="yes"; }
+                         || { warn "WLS basic template missing: ${nmtmpl} — 'n' (create NM domain) needs it."; PF_NEED="yes"; _pf_tmpl="yes"; }
     fi
     if nm_listening "$nmport"; then ok "Node Manager already listening on :${nmport}."
     else log "  ${C_DIM}Node Manager port :${nmport} is free (it'll start with the 'n' step).${C_RESET}"; fi
@@ -3420,10 +3641,24 @@ do_preflight() {
     local pf_user; pf_user="$(read_prop "$OCCAS_CONF" install.user)"; pf_user="${pf_user:-oracle}"
     log ""
     if [ -n "$PF_NEED" ]; then
-        warn "Prerequisites missing. Fix them from STEP 1 (these use sudo for you):"
-        log  "    'u'  Create install user & group   (${pf_user}:${inv_grp})"
-        log  "    'm'  Create install dirs & chown   (${mwhome} + ${inv_loc})"
-        log  "  ${C_DIM}…or as root: groupadd ${inv_grp}; useradd -g ${inv_grp} -m ${pf_user}; mkdir -p; chown -R.${C_RESET}"
+        warn "Prerequisites missing — fixes for what failed above:"
+        if [ -n "$_pf_grp" ]; then
+            log "    'u'  Create install user & group   (${pf_user}:${inv_grp}; uses sudo for you)"
+            log "  ${C_DIM}         …or as root: groupadd ${inv_grp}; useradd -g ${inv_grp} -m ${pf_user}${C_RESET}"
+        fi
+        if [ -n "$_pf_sudo" ]; then
+            log "    grant $(id -un) sudo (NOPASSWD covers unattended runs), or run ./blade.sh as '${pf_user}'."
+        fi
+        if [ -n "$_pf_dirs" ]; then
+            log "    'm'  Create install dirs & chown   (${mwhome} + ${inv_loc}; uses sudo for you)"
+            log "  ${C_DIM}         …or as root: mkdir -p ${mwhome} ${inv_loc}; chown -R ${pf_user}:${inv_grp} ${mwhome} ${inv_loc}${C_RESET}"
+        fi
+        if [ -n "$_pf_jdk" ]; then
+            log "    pick a usable JDK: re-run the wizard's OCCAS phase (it lists what's installed)."
+        fi
+        if [ -n "$_pf_tmpl" ]; then
+            log "    the wlserver template is missing from ${mwhome} — re-run 'i' (install)."
+        fi
         log  "  Then re-run Preflight ('p')."
     elif [ "$os" != "Darwin" ]; then
         ok "Preflight looks good — ready for step 1 (install)."
@@ -3443,7 +3678,9 @@ register_domain_with_nm() {
         warn "Node Manager domain '${nmdom}' not set up yet — run the 'n' step first."
         return 1
     fi
-    set_conf_prop "$nmfile" "$domname" "$domhome"
+    # The enrollment file belongs to the nmdomain's owner.
+    local IU_USER; IU_USER="$(iu_owner_user "${DOMAINS_DIR}/${nmdom}")"
+    iu_set_conf_prop "$nmfile" "$domname" "$domhome"
     ok "enrolled ${domname} → ${domhome} in ${nmdom}'s nodemanager.domains"
     # Registering the PATH is only half of enrollment; NM also has to accept our
     # credentials for this domain. Skipped when the domain is running, since this
@@ -3480,8 +3717,9 @@ write_boot_properties() {
         log "${C_DIM}  [dry-run] write ${dir}/boot.properties (0600)${C_RESET}"
         return 0
     fi
-    mkdir -p "$dir" || { warn "could not create ${dir}."; return 1; }
-    ( umask 177; printf 'username=%s\npassword=%s\n' "$auser" "$pw" > "${dir}/boot.properties"; ) \
+    local IU_USER; IU_USER="$(iu_owner_user "$domhome")"   # write as the domain's owner
+    as_install_user mkdir -p "$dir" || { warn "could not create ${dir}."; return 1; }
+    printf 'username=%s\npassword=%s\n' "$auser" "$pw" | iu_write "${dir}/boot.properties" 600 \
         || { warn "could not write ${dir}/boot.properties."; return 1; }
     ok "wrote boot identity for ${server}."
 }
@@ -3519,16 +3757,10 @@ closeDomain()
 PYEOF
     chmod 600 "${work}/nmcred.py"
     local jh rc=0; jh="$(read_prop "$OCCAS_CONF" java.home)"
-    (
-        cd "$work"
-        if [ -n "$jh" ] && [ -d "$jh" ]; then export JAVA_HOME="$jh"; PATH="${jh}/bin:$PATH"; fi
-        export MW_HOME="$mw" BEA_HOME="$mw"
-        set +u
-        # shellcheck disable=SC1090
-        . "$setwls" >/dev/null
-        java weblogic.WLST nmcred.py
-    ) >/dev/null 2>&1 || rc=$?
-    rm -rf "$work"
+    # updateDomain() writes into the domain — run as its owner.
+    local IU_USER; IU_USER="$(iu_owner_user "$domhome")"
+    iu_wlst_run "$work" nmcred.py "$mw" "$jh" >/dev/null 2>&1 || rc=$?
+    as_install_user rm -rf "$work"
     [ "$rc" -eq 0 ] || { warn "could not set Node Manager credentials for '${domname}' (WLST rc=${rc})."; return 1; }
     ok "Node Manager credentials set on '${domname}' (user ${auser})."
 }
@@ -3587,6 +3819,7 @@ restart_nm() {
     local nmhome="${DOMAINS_DIR}/${nmdom}"
     [ -d "$nmhome" ] || { warn "nmdomain not found: ${nmhome}"; return 1; }
     if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] restart Node Manager (${nmhome})${C_RESET}"; return 0; fi
+    local IU_USER; IU_USER="$(iu_owner_user "$nmhome")"   # run as the tree's owner
 
     # Prefer the boot service when it's installed and owns this nmdomain: that
     # keeps systemd's idea of the process and ours from diverging.
@@ -3596,7 +3829,7 @@ restart_nm() {
     else
         stop_nm || true
         local nmlog="${nmhome}/nodemanager/nodemanager.out"
-        JAVA_HOME="${JAVA_HOME_VAL:-${JAVA_HOME:-}}" nohup "${nmhome}/bin/startNodeManager.sh" > "$nmlog" 2>&1 &
+        as_install_user sh -c "JAVA_HOME='${JAVA_HOME_VAL:-${JAVA_HOME:-}}' nohup '${nmhome}/bin/startNodeManager.sh' > '${nmlog}' 2>&1 &"
     fi
     local i=0
     while [ "$i" -lt 40 ]; do
@@ -3616,9 +3849,10 @@ restart_nm() {
 write_user_overrides() {
     local domhome="$1" mem
     [ -d "${domhome}/bin" ] || return 0
+    local IU_USER; IU_USER="$(iu_owner_user "$domhome")"   # write as the domain's owner
     mem="$(read_prop "$OCCAS_CONF" server.mem.args)"
     mem="${mem:--Xms512m -Xmx1024m -XX:MaxMetaspaceSize=512m}"
-    cat > "${domhome}/bin/setUserOverrides.sh" <<EOF
+    iu_write "${domhome}/bin/setUserOverrides.sh" 755 <<EOF
 # BLADE - generated by blade.sh. Node Manager's start script sources
 # setDomainEnv.sh, which sources this; USER_MEM_ARGS overrides the OCCAS dev
 # default (-Xmx512m -XX:MaxMetaspaceSize=256m) that OOMs on Metaspace when the
@@ -3628,7 +3862,6 @@ write_user_overrides() {
 USER_MEM_ARGS="${mem}"
 export USER_MEM_ARGS
 EOF
-    chmod +x "${domhome}/bin/setUserOverrides.sh"
     log "  ${C_DIM}wrote setUserOverrides.sh — server memory: ${mem}${C_RESET}"
 }
 
@@ -3646,20 +3879,38 @@ nm_admin() {
     fi
     [ -d "$domhome" ] || { warn "app domain not found: ${domhome} — create it first (configure / 'c')."; return 1; }
     nm_listening "$nmport" || { warn "Node Manager isn't listening on :${nmport} — start it first ('n')."; return 1; }
+    # Everything below touches or runs against the EXISTING domain — as its owner.
+    local IU_USER; IU_USER="$(iu_owner_user "$domhome")"
     # Starting needs the domain enrolled (no-op if already) + adequate launch memory.
     [ "$action" = "start" ] && { register_domain_with_nm "$dom" "$domhome" || true; write_user_overrides "$domhome"; }
-    # NM credentials = the admin creds (env > occas.secret).
+    # NM credentials = the admin creds (env > occas.secret > misc/.nmsecret).
+    # The .nmsecret fallback is resolved HERE, not in the piped script: under
+    # `bash -s` its $(dirname "$0") is the CWD, not misc/, and the checkout
+    # isn't readable by the install user anyway.
     local pw="${BLADE_WLS_PASSWORD:-}"
     [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
+    [ -z "$pw" ] && [ -f "${SCRIPT_DIR}/misc/.nmsecret" ] && pw="$(read_prop "${SCRIPT_DIR}/misc/.nmsecret" NM_PASSWORD)"
     # Production mode dies on a missing boot identity (BEA-090782).
     [ "$action" = "start" ] && write_boot_properties "$domhome" "AdminServer" "$auser" "$pw"
     info "${verb} AdminServer for '${dom}' via Node Manager localhost:${nmport} (${nmtype})"
     # NM's listener is SSL; without a truststore WLST fails with a bare PKIX error.
     local wlstp; wlstp="$(nm_wlst_props)"
-    MW_HOME="$oh" DOMAIN_NAME="$dom" DOMAIN_HOME="$domhome" ADMIN_SERVER="AdminServer" NM_ACTION="$action" \
-        NM_HOST="localhost" NM_PORT="$nmport" NM_USER="$auser" NM_TYPE="$nmtype" NM_PASSWORD="$pw" \
-        WLST_PROPERTIES="$wlstp" \
-        bash "${SCRIPT_DIR}/misc/start-admin-nm.sh" || warn "start-admin-nm returned an error"
+    # Runs as the install user, who cannot read the repo checkout — so the
+    # script goes over stdin (bash -s), and the environment travels WITH it:
+    # a sudo env argv would put the password where ps can read it.
+    # The piped script can't prompt (its stdin IS the script) — prompt here,
+    # where the terminal still is, exactly as start-admin-nm.sh used to.
+    if [ -z "$pw" ] && [ -t 0 ]; then
+        read -rs -p "  Node Manager password for ${auser}: " pw || pw=""; echo
+    fi
+    [ -z "$pw" ] && { warn "no admin password (env / occas.secret / misc/.nmsecret) — cannot nmConnect; aborting the ${action}."; return 1; }
+    { printf 'export MW_HOME=%q DOMAIN_NAME=%q DOMAIN_HOME=%q ADMIN_SERVER=%q NM_ACTION=%q\n' \
+             "$oh" "$dom" "$domhome" "AdminServer" "$action"
+      printf 'export NM_HOST=localhost NM_PORT=%q NM_USER=%q NM_TYPE=%q NM_PASSWORD=%q\n' \
+             "$nmport" "$auser" "$nmtype" "$pw"
+      printf 'export WLST_PROPERTIES=%q\n' "$wlstp"
+      cat "${SCRIPT_DIR}/misc/start-admin-nm.sh"
+    } | as_install_user bash -s || warn "start-admin-nm returned an error"
 }
 start_admin() { nm_admin start "$@"; }
 
@@ -3680,20 +3931,22 @@ stop_admin() {
 kill_domain_procs() {
     local home="$1" p cmd pids="" n=0 i=0
     command -v pgrep >/dev/null 2>&1 || { warn "no pgrep — can't OS-stop servers."; return 1; }
+    # Signal as the domain's owner (see stop_nm) — EPERM is a silent no-op kill.
+    local IU_USER; IU_USER="$(iu_owner_user "$home")"
     for p in $(pgrep -f weblogic.Name 2>/dev/null || true); do
         cmd="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)"
         case "$cmd" in *"$home"*) pids="${pids} ${p}" ;; esac
     done
     [ -n "$pids" ] || { ok "no running servers for $(basename "$home")."; return 0; }
-    for p in $pids; do kill "$p" 2>/dev/null && n=$((n + 1)); done
+    for p in $pids; do as_install_user kill "$p" 2>/dev/null && n=$((n + 1)); done
     ok "signaled ${n} server process(es) for $(basename "$home") — waiting for exit…"
     while [ "$i" -lt 20 ]; do
-        local alive=0; for p in $pids; do kill -0 "$p" 2>/dev/null && alive=1; done
+        local alive=0; for p in $pids; do proc_alive "$p" && alive=1; done
         [ "$alive" = 0 ] && { ok "servers stopped."; return 0; }
         sleep 1; i=$((i + 1))
     done
     warn "servers still up after ${i}s — SIGKILL."
-    for p in $pids; do kill -9 "$p" 2>/dev/null || true; done
+    for p in $pids; do as_install_user kill -9 "$p" 2>/dev/null || true; done
     return 0
 }
 
@@ -3729,14 +3982,19 @@ do_remove_domain() {
         kill_domain_procs "$domhome"
         local nmdom="${NM_DOMAIN:-$(read_prop "$OCCAS_CONF" nm.domain.name)}"
         local nmfile="${DOMAINS_DIR}/${nmdom}/nodemanager/nodemanager.domains"
+        local IU_USER   # retargeted per tree: the enrollment file is the
+                        # NM domain's, the deletion below is the app domain's
         if [ -f "$nmfile" ] && grep -q "^${dom}=" "$nmfile"; then
-            local tmp; tmp="$(mktemp)" && grep -v "^${dom}=" "$nmfile" > "$tmp" && mv "$tmp" "$nmfile" \
+            IU_USER="$(iu_owner_user "${DOMAINS_DIR}/${nmdom}")"
+            local tmp; tmp="$(mktemp)" && { grep -v "^${dom}=" "$nmfile" || true; } > "$tmp" \
+                && iu_write "$nmfile" 644 < "$tmp" && rm -f "$tmp" \
                 && ok "un-enrolled '${dom}' from ${nmdom} (restart NM with 'k' then 'n' to apply)."
         fi
         remove_domain_systemd_unit "$domhome" weblogic.service
         # Engines first: once $domhome is gone the guard below can't match.
         remove_engine_systemd_units "$domhome" "${DOMAINS_DIR}/${NM_DOMAIN}"
-        rm -rf "$domhome" && ok "removed ${domhome}."
+        IU_USER="$(iu_owner_user "$domhome")"
+        as_install_user rm -rf "$domhome" && ok "removed ${domhome}."
     fi
     # Delete the profile last: the domain teardown above reads OCCAS_CONF, which
     # lives inside the profile directory we're about to remove. Skipped when the
@@ -3772,7 +4030,8 @@ do_remove_nmdomain() {
         || { warn "kept '${nmdom}' — nothing removed."; return 1; }
     stop_nm || true
     remove_domain_systemd_unit "$nmhome" nodemanager.service
-    rm -rf "$nmhome" && ok "removed ${nmhome}."
+    local IU_USER; IU_USER="$(iu_owner_user "$nmhome")"
+    as_install_user rm -rf "$nmhome" && ok "removed ${nmhome}."
 }
 
 # --- uninstall the rest of STEP 1 (deinstall product, dirs, user, repo) -----
@@ -4139,7 +4398,16 @@ do_backup() {
     if [ "${#items[@]}" -eq 0 ]; then warn "nothing to back up yet."; return 0; fi
     if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] tar czf ${dest}  (profile conf/secrets + ${domhome}/config)${C_RESET}"; return 0; fi
     mkdir -p "$bdir" || { warn "could not create ${bdir}."; return 1; }
-    if tar czf "$dest" "${items[@]}" 2>/dev/null; then ok "backup → ${dest#${SCRIPT_DIR}/}"; else warn "backup failed (continuing)."; return 1; fi
+    # The domain config holds 0600 install-user files the invoker can't read;
+    # a mixed archive (their config + our profile) needs root, then handed back.
+    if tar czf "$dest" "${items[@]}" 2>/dev/null; then
+        ok "backup → ${dest#${SCRIPT_DIR}/}"
+    elif command -v sudo >/dev/null 2>&1 \
+         && sudo tar czf "$dest" "${items[@]}" 2>/dev/null && sudo chown "$(id -un)" "$dest"; then
+        ok "backup → ${dest#${SCRIPT_DIR}/} (via sudo — the domain config is the install user's)"
+    else
+        rm -f "$dest"; warn "backup failed (continuing)."; return 1
+    fi
 }
 
 # Open the ports OCCAS needs on firewalld. Server installs need this; laptops
