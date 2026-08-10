@@ -114,6 +114,13 @@
 			<groupId>com.squareup.okhttp3</groupId>
 			<artifactId>logging-interceptor</artifactId>
 		</dependency>
+		<!-- Apache Oltu OAuth2 client — required at runtime by the
+		     OpenAPI-generated client in Optum's cloud-routing. Pulls
+		     org.apache.oltu.oauth2.common + org.json transitively. -->
+		<dependency>
+			<groupId>org.apache.oltu.oauth2</groupId>
+			<artifactId>org.apache.oltu.oauth2.client</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>com.nimbusds</groupId>
 			<artifactId>oauth2-oidc-sdk</artifactId>

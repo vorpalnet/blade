@@ -89,6 +89,9 @@
 		<commons-lang3.version>3.18.0</commons-lang3.version>
 		<jakarta-mail.version>1.6.8</jakarta-mail.version>
 		<nimbus-oauth2-oidc-sdk.version>11.10.1</nimbus-oauth2-oidc-sdk.version>
+		<oauth2.version>1.0.2</oauth2.version>
+		<!-- Oltu's json transitive, pinned up off 20140107 (two High CVEs). -->
+		<org.json.version>20231013</org.json.version>
 
 		<!-- Plugin versions -->
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
@@ -264,13 +267,27 @@
 			<!-- OAuth2 — Nimbus OAuth 2.0 + OIDC SDK: the comprehensive
 			     OAuth/OIDC client library. Drives every RestConnector
 			     Authentication subtype (password, client credentials,
-			     refresh token, JWT bearer, SAML bearer, token exchange).
-			     (Apache Oltu is gone: retired project, nothing imported it,
-			     and its org.json:20140107 transitive carried two High CVEs.) -->
+			     refresh token, JWT bearer, SAML bearer, token exchange). -->
 			<dependency>
 				<groupId>com.nimbusds</groupId>
 				<artifactId>oauth2-oidc-sdk</artifactId>
 				<version>${nimbus-oauth2-oidc-sdk.version}</version>
+			</dependency>
+			<!-- Apache Oltu OAuth2 client — retired (Attic), but the
+			     OpenAPI-generated okhttp-gson client in Optum's cloud-routing
+			     imports it (ApiClient / RetryingOAuth / OAuthOkHttpClient), so
+			     it must ship in blade-shared. Brings the .common jar + org.json
+			     transitively; org.json is pinned up below off the CVE-bearing
+			     20140107 the token flow would otherwise drag in. -->
+			<dependency>
+				<groupId>org.apache.oltu.oauth2</groupId>
+				<artifactId>org.apache.oltu.oauth2.client</artifactId>
+				<version>${oauth2.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.json</groupId>
+				<artifactId>json</artifactId>
+				<version>${org.json.version}</version>
 			</dependency>
 			<!-- Transitive of oauth2-oidc-sdk; managed up for GHSA-xwmg-2g98-w7v9. -->
 			<dependency>
