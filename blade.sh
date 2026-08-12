@@ -509,6 +509,39 @@ EOF
         ask INSTALL_TYPE "Install type"              "$INSTALL_TYPE"
     fi
 
+    # MW_HOME must be the STABLE '<base>/current' symlink, with the real versioned
+    # home beside it. Everything downstream — the domain's setDomainEnv.sh, the
+    # systemd units, Node Manager — bakes in whatever path this is, so pointing it
+    # at 'current' is what makes a later patch a one-flip switch (sync-occas.sh
+    # switch) with symmetric rollback, instead of a hunt-and-edit of every domain
+    # config. Mirrors the java.home 'current' link below. Linux only; macOS dev
+    # profiles keep the raw versioned path (they never patch or run servers).
+    if [ "$(uname -s)" = "Linux" ]; then
+        local _obase _ocur _oreal
+        _obase="$(dirname "$MWHOME")"; _ocur="${_obase}/current"
+        if occas_installed "$MWHOME"; then _oreal="$(readlink -f "$MWHOME")"   # adopt the real home
+        elif [ "$MWHOME" = "$_ocur" ]; then _oreal="${_obase}/${OCCAS_VERSION}" # fresh: version names the dir
+        else _oreal="$MWHOME"; fi                                              # fresh: honor the versioned path typed
+        OCCAS_BASE="$_obase"
+        OCCAS_VER="$(basename "$_oreal")"
+        if [ "$MWHOME" != "$_ocur" ]; then
+            if yesno "Use ${_ocur} as MW_HOME — a stable link to ${_oreal}? Lets a patch flip in one step and roll back the same way." "Y"; then
+                # An existing install is published through the link now; a fresh
+                # install's link is created by the install step once it lands.
+                if occas_installed "$MWHOME"; then
+                    if [ "$DRY" = "on" ]; then
+                        log "${C_DIM}  [dry-run] ln -sfn ${_oreal} ${_ocur}${C_RESET}"
+                    elif ln -sfn "$_oreal" "$_ocur" 2>/dev/null || sudo ln -sfn "$_oreal" "$_ocur" 2>/dev/null; then
+                        ok "${_ocur} -> ${_oreal}"
+                    else
+                        warn "could not create ${_ocur} — keeping MW_HOME=${MWHOME}."; _ocur=""
+                    fi
+                fi
+                [ -n "$_ocur" ] && MWHOME="$_ocur"
+            fi
+        fi
+    fi
+
     # JDK for the INSTALLER + servers. The certification matrix names a major
     # per OCCAS release, but it's a recommendation, not a gate — newer majors
     # are known to run (Oracle says 8.3 runs fine on 25). List what's
