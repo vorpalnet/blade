@@ -986,11 +986,13 @@ _pw_set() { [ -f "$OCCAS_SECRET" ] && [ -n "$(read_prop "$OCCAS_SECRET" admin.pa
 _sum_patch() {
     local real; real="$(readlink -f "${MWHOME}" 2>/dev/null)"
     local now="${real##*/}"; now="${now:-not installed}"
-    if [ -f "${PROFILE_DIR}/patches.list" ]; then
-        printf 'current=%s · %s patch(es) listed' "$now" \
-            "$(grep -cvE '^\s*(#|$)' "${PROFILE_DIR}/patches.list" 2>/dev/null || echo 0)"
+    local pdir; pdir="$(read_prop "$OCCAS_CONF" patch.dir)"; pdir="${pdir/#\~/$HOME}"
+    pdir="${pdir:-${HOME}/occas-patches}"
+    if [ -d "$pdir" ]; then
+        printf 'current=%s · %s zip(s) in %s' "$now" \
+            "$(ls "$pdir"/*.zip 2>/dev/null | wc -l | tr -d ' ')" "$pdir"
     else
-        printf 'current=%s · no patches.list' "$now"
+        printf 'current=%s · patch dir %s (create/populate it)' "$now" "$pdir"
     fi
     # jdk=<version> when java.home is the link; jdk=unlinked advertises the
     # one-question migration this row offers (Linux targets only).
@@ -2470,9 +2472,15 @@ patch_jdk() {
     ok "${link} -> $(basename "$best")"
     log "  ${C_DIM}Nothing restarts itself — the JDK swap only takes hold on restart.${C_RESET}"
     log "  ${C_DIM}Rollback is one flip back:  ln -sfn ${cur} ${link}${C_RESET}"
-    next_step n "restart Node Manager so it runs on JDK ${newver}"
-    next_step s "restart the AdminServer"
-    next_step E "re-provision the engines with JDK ${newver} + the flip"
+    # Suggest restarts only for what already exists — a JDK flip must not push you
+    # into first-time domain creation ('n' is Create & start, not a pure restart).
+    [ -d "${DOMAINS_DIR}/${NM_DOMAIN}/config" ] && next_step n "restart Node Manager on JDK ${newver}"
+    [ -d "${DOMAINS_DIR}/${DOMAIN}/config" ]    && next_step s "restart the AdminServer on JDK ${newver}"
+    local _r _ne=0
+    if [ "${#H_ROLE[@]}" -gt 0 ]; then
+        for _r in "${H_ROLE[@]}"; do [ "$_r" = engine ] && _ne=$((_ne + 1)); done
+    fi
+    [ "$_ne" -gt 0 ] && next_step E "re-provision ${_ne} engine host(s) with JDK ${newver} + the flip"
     return 0
 }
 
@@ -2484,6 +2492,13 @@ patch_jdk() {
 # Nothing is switched. If a patch fails, the copy is discarded and the live
 # install is exactly as it was.
 #
+# Patch source: a directory of downloaded Oracle patch .zip files. Every zip is
+# unzipped and the OPatch patches are discovered from what unpacks — no hand-kept
+# list. Numbered patches apply lowest-number-first; an OPatch-tool update (a zip
+# that unpacks its own 'OPatch/' dir) applies first, since later patches may need
+# the newer OPatch. A patch's directory (holding etc/config/inventory.xml) is
+# named for its patch number, which is how they're ordered.
+#
 # Promotion is deliberate and separate:  sync-occas.sh distribute <ver> / switch <ver>
 # Rollback is flipping 'current' back -- the old home is still there.
 #
@@ -2491,9 +2506,6 @@ patch_jdk() {
 # once, here, on machine0.
 do_patch() {
     local base="${OCCAS_BASE:-/opt/oracle/occas}" link="${MWHOME}"
-    local pdir; pdir="$(read_prop "$OCCAS_CONF" patch.dir)"; pdir="${pdir/#\~/$HOME}"
-    pdir="${pdir:-${HOME}/occas-patches}"
-    local plist="${PROFILE_DIR}/patches.list"
 
     local real; real="$(readlink -f "$link" 2>/dev/null)"
     [ -n "$real" ] && [ -d "${real}/wlserver" ] || { warn "no Oracle home behind ${link} — install first."; return 1; }
@@ -2502,15 +2514,65 @@ do_patch() {
     # Read java.home AFTER the JDK leg — migration may have just rewritten it.
     local jre; jre="$(read_prop "$OCCAS_CONF" java.home)"
 
-    if [ ! -f "$plist" ]; then
+    # --- where the downloaded patches live -----------------------------------
+    local pdir; pdir="$(read_prop "$OCCAS_CONF" patch.dir)"; pdir="${pdir/#\~/$HOME}"
+    pdir="${pdir:-${HOME}/occas-patches}"
+    if [ -t 0 ] && [ "${ASSUME_YES:-0}" != 1 ]; then
+        ask pdir "Patch directory (holds Oracle patch .zip files)" "$pdir"
+    fi
+    pdir="${pdir/#\~/$HOME}"
+    [ -d "$pdir" ] || {
+        warn "patch directory not found: ${pdir}"
+        log  "  ${C_DIM}Download the OCCAS/WebLogic patch zips from My Oracle Support into it.${C_RESET}"
+        return 1
+    }
+    [ "$DRY" = "on" ] || set_conf_prop "$OCCAS_CONF" patch.dir "$pdir"
+
+    # Unzip every zip into a staging area, then discover what unpacked. Both the
+    # stage and the patch dir are searched, so already-unzipped patches work too.
+    local stage; stage="$(mktemp -d /tmp/blade-patch.XXXXXX)"
+    local z
+    for z in "$pdir"/*.zip; do
+        [ -f "$z" ] || continue
+        info "unzip $(basename "$z")"
+        unzip -q -o "$z" -d "$stage" || warn "unzip failed: $(basename "$z") — skipping."
+    done
+
+    # OPatch-tool update: a zip unpacking its own 'OPatch/' dir (with an 'opatch'
+    # launcher). A normal patch is a home carrying OPatch metadata at
+    # etc/config/inventory.xml; its directory name is the patch number.
+    local opdirs=() pnum=() ppath=()
+    local seen=" " d bn key f
+    while IFS= read -r d; do
+        [ -n "$d" ] && [ -f "${d}/opatch" ] && opdirs+=("$d")
+    done < <(find "$stage" "$pdir" -maxdepth 4 -type d -name OPatch 2>/dev/null)
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        d="$(dirname "$(dirname "$(dirname "$f")")")"   # …/etc/config/inventory.xml → patch home
+        bn="$(basename "$d")"
+        key="$(printf '%s' "$bn" | tr -cd '0-9')"; key="${key:-0}"
+        case "$seen" in *" ${key} "*) continue ;; esac   # same patch found in stage AND pdir
+        seen="${seen}${key} "
+        pnum+=("$key"); ppath+=("$d")
+    done < <(find "$stage" "$pdir" -type f -name inventory.xml -path '*/etc/config/inventory.xml' 2>/dev/null)
+
+    if [ "${#opdirs[@]}" -eq 0 ] && [ "${#pnum[@]}" -eq 0 ]; then
+        rm -rf "$stage"
         if [ "${_JDK_DID}" = "1" ]; then
-            log "  ${C_DIM}No OCCAS patch list (${plist}) — JDK-only run.${C_RESET}"
+            log "  ${C_DIM}No OCCAS/WebLogic patches found in ${pdir} — JDK-only run.${C_RESET}"
             return 0
         fi
-        warn "no patch list: ${plist}"
-        log  "  ${C_DIM}One patch ID per line, in the order they must be applied.${C_RESET}"
-        log  "  ${C_DIM}Download the zips from My Oracle Support into ${pdir}.${C_RESET}"
+        warn "no patches found in ${pdir} (looked for .zip files and unpacked patch homes)."
         return 1
+    fi
+
+    # Order the numbered patches lowest-first (the leading number sorts the line).
+    local order=() pth
+    if [ "${#pnum[@]}" -gt 0 ]; then
+        local i
+        while IFS= read -r pth; do order+=("$pth"); done < <(
+            for i in "${!pnum[@]}"; do printf '%s\t%s\n' "${pnum[$i]}" "${ppath[$i]}"; done | sort -n | cut -f2-
+        )
     fi
 
     # Next free <ver>_p<n>. The base version never gains a suffix, so the GA home
@@ -2519,33 +2581,23 @@ do_patch() {
     local n=1; while [ -e "${base}/${stem}_p${n}" ]; do n=$((n + 1)); done
     local copy="${base}/${stem}_p${n}"
 
-    local ids=() id
-    while IFS= read -r id; do
-        id="${id%%#*}"; id="$(printf '%s' "$id" | tr -d '[:space:]')"
-        [ -n "$id" ] && ids+=("$id")
-    done < "$plist"
-    [ "${#ids[@]}" -ge 1 ] || { warn "${plist} lists no patches."; return 1; }
-
-    info "Patch ${stem} -> $(basename "$copy")   (${#ids[@]} patch(es), from ${pdir})"
-
-    # Locate every zip BEFORE copying a gigabyte for nothing.
-    local zips=() z
-    for id in "${ids[@]}"; do
-        z="$(ls "${pdir}"/p${id}_*.zip "${pdir}"/${id}.zip 2>/dev/null | head -1)"
-        [ -n "$z" ] || { warn "patch ${id}: no zip in ${pdir} (expected p${id}_*.zip)"; return 1; }
-        zips+=("$z"); log "    ${id} → $(basename "$z")"
-    done
+    info "Patch ${stem} -> $(basename "$copy")   (${#opdirs[@]} OPatch update(s), ${#pnum[@]} patch(es), from ${pdir})"
+    if [ "${#order[@]}" -gt 0 ]; then
+        for pth in "${order[@]}"; do log "    $(basename "$pth")"; done
+    fi
 
     if [ "$DRY" = "on" ]; then
         log "${C_DIM}  [dry-run] cp -a ${real} ${copy}${C_RESET}"
-        for z in "${zips[@]}"; do
-            if unzip -l "$z" 2>/dev/null | grep -qE ' OPatch/'; then
-                log "${C_DIM}  [dry-run] $(basename "$z"): OPatch update — unzip over ${copy}${C_RESET}"
-            else
-                log "${C_DIM}  [dry-run] $(basename "$z"): prereq CheckConflictAgainstOHWithDetail, then opatch apply -oh ${copy}${C_RESET}"
-            fi
-        done
+        if [ "${#opdirs[@]}" -gt 0 ]; then
+            for d in "${opdirs[@]}"; do log "${C_DIM}  [dry-run] OPatch update ← ${d} (replace ${copy}/OPatch)${C_RESET}"; done
+        fi
+        if [ "${#order[@]}" -gt 0 ]; then
+            for pth in "${order[@]}"; do
+                log "${C_DIM}  [dry-run] $(basename "$pth"): prereq CheckConflictAgainstOHWithDetail, then opatch apply -oh ${copy}${C_RESET}"
+            done
+        fi
         log "${C_DIM}  [dry-run] opatch lsinventory -oh ${copy} > ${copy}/.blade-patch-manifest${C_RESET}"
+        rm -rf "$stage"
         return 0
     fi
 
@@ -2556,46 +2608,40 @@ do_patch() {
     local IU_USER; IU_USER="$(iu_owner_user "$real")"
 
     info "Copying the home (the live one is not touched) …"
-    as_install_user cp -a "$real" "$copy" || { warn "copy to ${copy} failed (disk space?)."; return 1; }
+    as_install_user cp -a "$real" "$copy" || { warn "copy to ${copy} failed (disk space?)."; rm -rf "$stage"; return 1; }
 
-    local op="${copy}/OPatch/opatch" zb work pd
-    for z in "${zips[@]}"; do
-        zb="$(basename "$z")"
-        # Fresh workdir per zip: unzip + inspect as the invoker (who owns the
-        # zips), THEN hand it to the home's owner for opatch. Cleanup runs as
-        # whoever owns the dir at that moment — /tmp is sticky.
-        work="$(mktemp -d /tmp/blade-patch.XXXXXX)"
-        unzip -q "$z" -d "$work" \
-            || { warn "${zb}: unzip failed."; rm -rf "$work"; as_install_user rm -rf "$copy"; return 1; }
+    # Hand the unpacked patches to the home's owner so opatch (run as that user)
+    # can read them; cleanup then runs as the same owner.
+    iu_adopt_dir "$stage" || { rm -rf "$stage"; as_install_user rm -rf "$copy"; return 1; }
 
-        # An OPatch update is a replacement of the OPatch directory, not an
-        # interim patch. Detect it by shape so the changing patch ID never matters.
-        if [ -d "${work}/OPatch" ]; then
-            info "  ${zb}: OPatch update"
-            iu_adopt_dir "$work" || { rm -rf "$work"; as_install_user rm -rf "$copy"; return 1; }
-            as_install_user sh -c "rm -rf '${copy}/OPatch' && cp -a '${work}/OPatch' '${copy}/OPatch'" \
-                || { warn "${zb}: could not replace OPatch."; as_install_user rm -rf "$work" "$copy"; return 1; }
-            as_install_user rm -rf "$work"
-            continue
-        fi
+    local op="${copy}/OPatch/opatch"
+    # OPatch-tool updates first — later patches may require the newer OPatch.
+    if [ "${#opdirs[@]}" -gt 0 ]; then
+        for d in "${opdirs[@]}"; do
+            info "  OPatch update ← $(basename "$(dirname "$d")")"
+            as_install_user sh -c "rm -rf '${copy}/OPatch' && cp -a '${d}' '${copy}/OPatch'" \
+                || { warn "could not replace OPatch."; as_install_user rm -rf "$stage" "$copy"; return 1; }
+        done
+    fi
 
-        # The unpacked patch is a single directory named after the patch id.
-        pd="$(find "$work" -maxdepth 1 -mindepth 1 -type d | head -1)"
-        [ -n "$pd" ] || { warn "${zb}: nothing unpacked."; rm -rf "$work"; as_install_user rm -rf "$copy"; return 1; }
-        iu_adopt_dir "$work" || { rm -rf "$work"; as_install_user rm -rf "$copy"; return 1; }
-
-        info "  ${zb}: conflict check"
-        if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${copy}' '${op}' prereq CheckConflictAgainstOHWithDetail -ph '${pd}' -oh '${copy}' ${jre:+-jre '${jre}'} -silent" >/dev/null 2>&1; then
-            warn "${zb}: conflict check FAILED — stopping. ${copy} discarded, live home untouched."
-            as_install_user rm -rf "$work" "$copy"; return 1
-        fi
-        info "  ${zb}: applying"
-        if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${copy}' '${op}' apply -silent -oh '${copy}' ${jre:+-jre '${jre}'}"; then
-            warn "${zb}: APPLY FAILED — stopping. ${copy} discarded, live home untouched."
-            as_install_user rm -rf "$work" "$copy"; return 1
-        fi
-        as_install_user rm -rf "$work"
-    done
+    # Numbered patches, lowest-first. cd into the patch home; opatch applies it.
+    local pd zb
+    if [ "${#order[@]}" -gt 0 ]; then
+        for pd in "${order[@]}"; do
+            zb="$(basename "$pd")"
+            info "  ${zb}: conflict check"
+            if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${copy}' '${op}' prereq CheckConflictAgainstOHWithDetail -ph '${pd}' -oh '${copy}' ${jre:+-jre '${jre}'} -silent" >/dev/null 2>&1; then
+                warn "${zb}: conflict check FAILED — stopping. ${copy} discarded, live home untouched."
+                as_install_user rm -rf "$stage" "$copy"; return 1
+            fi
+            info "  ${zb}: applying"
+            if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${copy}' '${op}' apply -silent -oh '${copy}' ${jre:+-jre '${jre}'}"; then
+                warn "${zb}: APPLY FAILED — stopping. ${copy} discarded, live home untouched."
+                as_install_user rm -rf "$stage" "$copy"; return 1
+            fi
+        done
+    fi
+    as_install_user rm -rf "$stage"
 
     as_install_user sh -c "ORACLE_HOME='${copy}' '${op}' lsinventory -oh '${copy}' ${jre:+-jre '${jre}'} > '${copy}/.blade-patch-manifest' 2>&1" || true
     ok "Patched home ready: ${copy}"
