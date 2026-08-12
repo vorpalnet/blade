@@ -1160,6 +1160,7 @@ _read_key() {
         ' ')   printf 'space' ;;
         d|D)   printf 'dry' ;;
         q|Q)   printf 'quit' ;;
+        [a-zA-Z]) printf 'key:%s' "$k" ;;   # a row-id hotkey (m, p, u, i, E, …)
         *)     printf 'other' ;;
     esac
 }
@@ -1171,6 +1172,19 @@ dashboard_tui() {
     # macOS ships bash 3.2 and `declare -A` doesn't exist there.
     local CHK=""
     _chk_has() { case " $CHK " in *" $1 "*) return 0 ;; esac; return 1; }
+    # Run one or more row ids: leave the alt-screen, dispatch each, then pause and
+    # reload the profile. Returns 1 when the profile/repo vanished (caller breaks).
+    _tui_run() {
+        printf '\e[?25h'; trap - INT
+        printf '\e[2J\e[H'
+        local rid; for rid in "$@"; do dispatch_row "$rid"; done
+        CHK=""
+        { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
+        printf '\n  %s[done] press Enter to return…%s' "$C_DIM" "$C_RESET"; IFS= read -r _ || true
+        load_profile
+        printf '\e[?25l'; trap 'printf "\e[?25h\n"' EXIT INT
+        return 0
+    }
     local sel=0
     printf '\e[?25l'                                   # hide cursor
     trap 'printf "\e[?25h\n"' EXIT INT
@@ -1199,10 +1213,11 @@ dashboard_tui() {
                 printf '   %s %s %s%-42s %s%s%s\n' "$box" "$g" "$arrow" "${MR_LABEL[$i]}" "$C_DIM" "${MR_VAL[$i]}" "$C_RESET"
             fi
         done
-        printf '\n  %s↑/↓%s move · %sspace%s select · %senter%s run · %sd%s dry-run · %sq%s quit\n' \
-               "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET"
+        printf '\n  %s↑/↓%s move · %sspace%s select · %senter%s run · %sletter%s run that row · %sd%s dry-run · %sq%s quit\n' \
+               "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET"
 
-        case "$(_read_key)" in
+        local kpress; kpress="$(_read_key)"
+        case "$kpress" in
             up)    sel=$((sel - 1)) ;;
             down)  sel=$((sel + 1)) ;;
             space) local id="${MR_ID[$cur]}"
@@ -1219,14 +1234,14 @@ dashboard_tui() {
                        id="${MR_ID[$j]}"; _chk_has "$id" && runids+=("$id")
                    done
                    [ "${#runids[@]}" -eq 0 ] && runids=("${MR_ID[$cur]}")
-                   printf '\e[?25h'; trap - INT
-                   printf '\e[2J\e[H'
-                   local rid; for rid in "${runids[@]}"; do dispatch_row "$rid"; done
-                   CHK=""
-                   { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && break
-                   printf '\n  %s[done] press Enter to return…%s' "$C_DIM" "$C_RESET"; IFS= read -r _ || true
-                   load_profile
-                   printf '\e[?25l'; trap 'printf "\e[?25h\n"' EXIT INT ;;
+                   _tui_run "${runids[@]}" || break ;;
+            key:*) # a single-letter row-id hotkey (the letters the help text names)
+                   local kc="${kpress#key:}" j hit=""
+                   for j in "${!MR_TYPE[@]}"; do
+                       [ "${MR_TYPE[$j]}" = action ] || continue
+                       [ "${MR_ID[$j]}" = "$kc" ] && { hit="$kc"; break; }
+                   done
+                   [ -n "$hit" ] && { _tui_run "$hit" || break; } ;;
             quit)  break ;;
             *)     : ;;
         esac
@@ -1268,7 +1283,13 @@ dashboard_menu() {
                 all) local k; for k in occas ident hosts cluster tls runtime; do dispatch_row "$k"; done ;;
                 d)   [ "$DRY" = "on" ] && DRY="off" || DRY="on"; log "  dry-run: ${DRY}" ;;
                 q)   quit=1 ;;
-                *[!0-9]*) warn "unknown choice: $tok" ;;
+                *[!0-9]*)  # a row-id token (the letters the help text names: m, p, patch, …)
+                    local mj matched=""
+                    for mj in "${!MR_TYPE[@]}"; do
+                        [ "${MR_TYPE[$mj]}" = head ] && continue
+                        [ "${MR_ID[$mj]}" = "$tok" ] && { matched="$tok"; break; }
+                    done
+                    if [ -n "$matched" ]; then dispatch_row "$matched"; else warn "unknown choice: $tok"; fi ;;
                 *)   [ -n "${idmap[$tok]:-}" ] && dispatch_row "${idmap[$tok]}" || warn "no row ${tok}" ;;
             esac
             { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && break
