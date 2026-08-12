@@ -1180,7 +1180,24 @@ dashboard_tui() {
         local rid; for rid in "$@"; do dispatch_row "$rid"; done
         CHK=""
         { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
-        printf '\n  %s[done] press Enter to return…%s' "$C_DIM" "$C_RESET"; IFS= read -r _ || true
+        # Chain another step straight from here: fix advice (e.g. preflight's
+        # "press 'm', then re-run 'p'") names row-id letters, so honor them right
+        # where the advice appears. Enter — or any non-step key — returns.
+        while :; do
+            printf '\n  %spress a step letter to run it, or Enter to return…%s ' "$C_DIM" "$C_RESET"
+            local kp; kp="$(_read_key)"; printf '\n'
+            local kc="" j hit=""
+            case "$kp" in key:*) kc="${kp#key:}" ;; *) break ;; esac
+            for j in "${!MR_TYPE[@]}"; do
+                [ "${MR_TYPE[$j]}" = action ] || continue
+                [ "${MR_ID[$j]}" = "$kc" ] && { hit="$kc"; break; }
+            done
+            [ -n "$hit" ] || break
+            load_profile
+            printf '\e[2J\e[H'
+            dispatch_row "$hit"
+            { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
+        done
         load_profile
         printf '\e[?25l'; trap 'printf "\e[?25h\n"' EXIT INT
         return 0
