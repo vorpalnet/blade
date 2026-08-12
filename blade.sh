@@ -112,6 +112,13 @@ gen_pass() {
 }
 is_ip() { case "$1" in *[!0-9.]*) return 1 ;; *.*.*.*) return 0 ;; *) return 1 ;; esac; }
 
+# Follow-up steps the just-run action wants to offer at the TUI return prompt.
+# Each becomes one pressable line ("'n'  restart Node Manager"). The runner
+# clears the list before dispatching, so hints never carry over between steps.
+NEXT_K=(); NEXT_D=()
+next_step()       { NEXT_K+=("$1"); NEXT_D+=("$2"); }
+next_step_reset() { NEXT_K=(); NEXT_D=(); }
+
 read_prop() {
     local file="$1" key="$2"
     { grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
@@ -1174,17 +1181,32 @@ dashboard_tui() {
     _chk_has() { case " $CHK " in *" $1 "*) return 0 ;; esac; return 1; }
     # Run one or more row ids: leave the alt-screen, dispatch each, then pause and
     # reload the profile. Returns 1 when the profile/repo vanished (caller breaks).
+    # Print the return prompt. When the last action registered follow-up steps
+    # (next_step), list them as pressable lines instead of a vague "press a letter".
+    _return_prompt() {
+        if [ "${#NEXT_K[@]}" -gt 0 ]; then
+            printf '\n  %sNext:%s\n' "$C_BOLD" "$C_RESET"
+            local i
+            for i in "${!NEXT_K[@]}"; do
+                printf "    %s'%s'%s  %s\n" "$C_BOLD" "${NEXT_K[$i]}" "$C_RESET" "${NEXT_D[$i]}"
+            done
+            printf '  %spress one of the letters above, or Enter to return…%s ' "$C_DIM" "$C_RESET"
+        else
+            printf '\n  %spress a step letter to run it, or Enter to return…%s ' "$C_DIM" "$C_RESET"
+        fi
+    }
     _tui_run() {
         printf '\e[?25h'; trap - INT
         printf '\e[2J\e[H'
+        next_step_reset
         local rid; for rid in "$@"; do dispatch_row "$rid"; done
         CHK=""
         { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
-        # Chain another step straight from here: fix advice (e.g. preflight's
-        # "press 'm', then re-run 'p'") names row-id letters, so honor them right
-        # where the advice appears. Enter — or any non-step key — returns.
+        # Chain another step straight from here: an action can name its likely
+        # follow-ups (next_step), and any row-id letter works regardless. Enter —
+        # or any non-step key — returns to the dashboard.
         while :; do
-            printf '\n  %spress a step letter to run it, or Enter to return…%s ' "$C_DIM" "$C_RESET"
+            _return_prompt
             local kp; kp="$(_read_key)"; printf '\n'
             local kc="" j hit=""
             case "$kp" in key:*) kc="${kp#key:}" ;; *) break ;; esac
@@ -1195,6 +1217,7 @@ dashboard_tui() {
             [ -n "$hit" ] || break
             load_profile
             printf '\e[2J\e[H'
+            next_step_reset
             dispatch_row "$hit"
             { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
         done
@@ -2423,8 +2446,11 @@ patch_jdk() {
     if [ -z "$best" ] && jdk_dl_supported "$curmaj" \
        && yesno "JDK: current -> $(basename "$cur"); no newer JDK ${curmaj} on this host. Download Oracle's latest into ${base}?" "N"; then
         if download_jdk "$curmaj" "$base"; then
-            if [ "$(basename "$JDK_DL_HOME")" = "$(basename "$cur")" ]; then
-                ok "already on Oracle's latest ($(basename "$cur"))."
+            # Compare by version, not dir name: a distro build named
+            # jdk-25.0.4-oracle-aarch64 is the SAME release as Oracle's jdk-25.0.4,
+            # so flipping between them would churn the symlink for nothing.
+            if [ "$(jdk_version "${JDK_DL_HOME}/bin/java")" = "$(jdk_version "${cur}/bin/java")" ]; then
+                ok "already on Oracle's latest (JDK $(jdk_version "${cur}/bin/java"))."
             else
                 best="$JDK_DL_HOME"
             fi
@@ -2440,10 +2466,13 @@ patch_jdk() {
     ln -sfn "$best" "$link" 2>/dev/null || sudo ln -sfn "$best" "$link" 2>/dev/null \
         || { warn "could not flip ${link}."; return 0; }
     _JDK_DID=1
+    local newver; newver="$(jdk_version "${best}/bin/java")"
     ok "${link} -> $(basename "$best")"
-    log "  ${C_DIM}Nothing restarts itself. Restart NM + the servers to pick it up ('n', 's'),${C_RESET}"
-    log "  ${C_DIM}and re-run E so the engines receive $(basename "$best") and the flip.${C_RESET}"
+    log "  ${C_DIM}Nothing restarts itself — the JDK swap only takes hold on restart.${C_RESET}"
     log "  ${C_DIM}Rollback is one flip back:  ln -sfn ${cur} ${link}${C_RESET}"
+    next_step n "restart Node Manager so it runs on JDK ${newver}"
+    next_step s "restart the AdminServer"
+    next_step E "re-provision the engines with JDK ${newver} + the flip"
     return 0
 }
 
@@ -2784,6 +2813,16 @@ jdk_major() {
     raw="$("$1" -version 2>&1 | sed -n 's/.*version "\([^"]*\)".*/\1/p' | head -1)" || raw=""
     case "$raw" in 1.*) raw="${raw#1.}" ;; esac   # 1.8.0_201 -> 8.0_201
     printf '%s' "${raw%%.*}"                       # 8.0_201 -> 8 ; 21.0.1 -> 21
+}
+# Full JDK version token (25.0.4, 21.0.8, 1.8.0_201 -> 8.0_201). Same parse as
+# jdk_major but keeps the whole string, so two JDKs of the same release compare
+# equal even when their install dirs are named differently (Oracle's own tarball
+# unpacks to jdk-25.0.4, a distro build might be jdk-25.0.4-oracle-aarch64).
+jdk_version() {
+    local raw
+    raw="$("$1" -version 2>&1 | sed -n 's/.*version "\([^"]*\)".*/\1/p' | head -1)" || raw=""
+    case "$raw" in 1.*) raw="${raw#1.}" ;; esac
+    printf '%s' "$raw"
 }
 
 # Recommended JDK major for an OCCAS release — Oracle's certification matrix.
@@ -3386,7 +3425,10 @@ get_admin_pw() {
     local v="${BLADE_WLS_PASSWORD:-}"
     [ -z "$v" ] && [ -f "$OCCAS_SECRET" ] && v="$(read_prop "$OCCAS_SECRET" admin.password)"
     if [ -z "$v" ] && [ "$DRY" != "on" ]; then
-        read -rs -p "  Admin password for the new domain: " v || v=""; echo
+        # The cursor-newline must go to stderr: callers capture this function's
+        # stdout via $(get_admin_pw), and a stray newline there prepends to the
+        # password (breaking e.g. the WLST setPassword('…') literal).
+        read -rs -p "  Admin password for the new domain: " v || v=""; echo >&2
         [ -n "$v" ] || { warn "no password provided."; return 1; }
     fi
     printf '%s' "$v"
@@ -3683,6 +3725,7 @@ do_preflight() {
         if [ -n "$_pf_grp" ]; then
             log "    'u'  Create install user & group   (${pf_user}:${inv_grp}; uses sudo for you)"
             log "  ${C_DIM}         …or as root: groupadd ${inv_grp}; useradd -g ${inv_grp} -m ${pf_user}${C_RESET}"
+            next_step u "create the install user & group (${pf_user}:${inv_grp})"
         fi
         if [ -n "$_pf_sudo" ]; then
             log "    grant $(id -un) sudo (NOPASSWD covers unattended runs), or run ./blade.sh as '${pf_user}'."
@@ -3690,14 +3733,17 @@ do_preflight() {
         if [ -n "$_pf_dirs" ]; then
             log "    'm'  Create install dirs & chown   (${mwhome} + ${inv_loc}; uses sudo for you)"
             log "  ${C_DIM}         …or as root: mkdir -p ${mwhome} ${inv_loc}; chown -R ${pf_user}:${inv_grp} ${mwhome} ${inv_loc}${C_RESET}"
+            next_step m "create the install dirs & chown them (${mwhome} + ${inv_loc})"
         fi
         if [ -n "$_pf_jdk" ]; then
             log "    pick a usable JDK: re-run the wizard's OCCAS phase (it lists what's installed)."
         fi
         if [ -n "$_pf_tmpl" ]; then
             log "    the wlserver template is missing from ${mwhome} — re-run 'i' (install)."
+            next_step i "install OCCAS (lays down the wlserver template)"
         fi
         log  "  Then re-run Preflight ('p')."
+        next_step p "re-run Preflight to re-check"
     elif [ "$os" != "Darwin" ]; then
         ok "Preflight looks good — ready for step 1 (install)."
     fi
