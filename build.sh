@@ -12,6 +12,7 @@
 #   ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
 #   ./build.sh production clean package     # with explicit Maven goals
 #   ./build.sh clean                        # also purges org.vorpal.blade from ~/.m2
+#   ./build.sh cleanAll                      # clean + delete the entire dist/ tree
 #   ./build.sh --no-dist                    # full build, skip dist/ copy
 #   ./build.sh --no-javadoc                 # full build, skip javadoc generation
 #   ./build.sh                              # dev versioning (default): app version 3.0.4
@@ -54,7 +55,11 @@
 #                                    the admin tier's only deployable.
 #     dist/<ver>-<build>/services/   Service WARs (the services deploy units)
 #   Plus the active build profile + platform conf files at the root for
-#   traceability. On failure: the current build's dist directory is deleted.
+#   traceability, and build.log — the full build console (Maven output +
+#   summary) so administrators can see how the build went after the fact.
+#   On failure: the current build's dist directory is deleted (so build.log is
+#   retained only for builds that produced a dist — the terminal still shows a
+#   failed run's output).
 #
 #   To skip the copy entirely (useful in local dev loops where you don't need
 #   the dist/ folder rewritten on every build):
@@ -81,6 +86,34 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="${SCRIPT_DIR}/build-profiles"
 PLATFORMS_DIR="${PROFILES_DIR}/platforms"
 DEFAULT_PROFILE="default"
+
+# --- Capture the full build console into dist/<ver>-<build>/build.log ---
+# Everything printed from here on (this header, Maven's reactor output, the
+# post-build summary — stdout and stderr merged) is teed to a temp file so
+# administrators can see after the fact how the build went: what profile and
+# platform, which modules, and Maven's PASS/FAIL. On a successful build the
+# log is copied into that build's dist directory alongside DEPLOYMENT.txt.
+# A trap on EXIT restores the terminal, flushes tee, and does the copy — so it
+# runs no matter how the script leaves (normal end, mvn failure, early error).
+BUILD_LOG="$(mktemp -t blade-build.XXXXXX)"
+exec 3>&1 4>&2
+exec > >(tee "$BUILD_LOG") 2>&1
+finalize_build_log() {
+    # Restore the real stdout/stderr, which closes the pipe feeding tee; then
+    # wait for tee to flush and exit before we read the log file.
+    exec 1>&3 2>&4 || true
+    wait 2>/dev/null || true
+    # Only land the log when this build produced a dist directory. Config
+    # errors (bad platform, etc.) exit before DISTDIR is defined; clean-only
+    # and --no-dist runs set SKIP_DIST=true and have no dist to copy into; a
+    # failed Maven run has already had its DISTDIR removed by cleanup.
+    if [ "${SKIP_DIST:-true}" != true ] && [ -n "${DISTDIR:-}" ] && [ -d "${DISTDIR:-}" ]; then
+        cp -f "$BUILD_LOG" "${DISTDIR}/build.log" 2>/dev/null \
+            && echo "Wrote dist/${REVISION}-${BUILD_NUM}/build.log" >&3
+    fi
+    rm -f "$BUILD_LOG" 2>/dev/null || true
+}
+trap finalize_build_log EXIT
 
 # --- Default platform resolution, in order:
 #       1. $MW_HOME env var → parse inventory/registry.xml for the active install
@@ -472,6 +505,11 @@ case "${BLADE_SKIP_JAVADOC:-}" in
     1|true|yes|on) SKIP_JAVADOC=true ;;
 esac
 
+# `cleanAll`: same as `clean` plus wiping the whole dist/ tree (not just this
+# build's dist/<ver>-<build>/). We translate it to Maven's `clean` here and
+# remember to nuke dist/ after the clean-purge block below.
+REMOVE_ALL_DIST=false
+
 # App-version mode. WebLogic side-by-side versioning keys off
 # WebLogic-Application-Version, so a build number that moves every build mints a
 # NEW application version each time -- the old one stays registered and must be
@@ -497,6 +535,9 @@ for arg in "$@"; do
         BLADE_MODE=prod
     elif [ "$arg" = "--dev" ]; then
         BLADE_MODE=dev
+    elif [ "$arg" = "cleanAll" ]; then
+        REMOVE_ALL_DIST=true
+        MAVEN_ARGS+=("clean")
     elif [[ "$arg" == -* ]]; then
         MAVEN_ARGS+=("$arg")
     elif [ -f "${PROFILES_DIR}/${arg}.conf" ]; then
@@ -701,6 +742,15 @@ fi
 if [ "$HAS_CLEAN" = true ]; then
     echo "Purging BLADE artifacts from ${M2_REPO}/org/vorpal/blade"
     rm -rf "${M2_REPO}/org/vorpal/blade"
+fi
+
+# --- cleanAll: also wipe the entire dist/ tree ---
+# `clean` only reaches each module's target/; the accumulated dist/<ver>-<build>/
+# directories survive. cleanAll removes the whole dist/ folder for a from-scratch
+# checkout.
+if [ "$REMOVE_ALL_DIST" = true ] && [ -d "${SCRIPT_DIR}/dist" ]; then
+    echo "Removing ${SCRIPT_DIR}/dist"
+    rm -rf "${SCRIPT_DIR}/dist"
 fi
 
 # Clean-only runs have no dist to copy. Force SKIP_DIST so we don't write
