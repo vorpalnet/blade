@@ -367,10 +367,12 @@ load_profile() {
     SIP_PLAIN_PORT="$(d sip.plain.port 5060)"
     # generate = self-signed internal CA; supply = the site's own certificate.
     # The WebLogic demo certificate is never an option: it is publicly known.
-    # Where the p12s live on every node, and the private-key alias inside them.
-    # emit_tls_block writes both into the server template, so they must come from
-    # the profile -- not a default that silently disagrees with what certs.sh made.
-    KEYSTORE_DIR="$(d tls.keystore.dir "$(dirname "${OCCAS_BASE:-/opt/oracle/occas}")/security")"
+    # Keystores live in the domain's own config/certs: WebLogic replicates the
+    # config tree to every managed server at startup, so the engines get their
+    # keystores automatically -- no per-node push. It is still outside the Oracle
+    # home (domains are), so a patch 'current' flip can't swap the certificates.
+    # emit_tls_block writes this path + alias into the server template.
+    KEYSTORE_DIR="$(d tls.keystore.dir "${DOMAINS_DIR}/${DOMAIN}/config/certs")"
     ID_ALIAS="$(d tls.identity.alias blade-identity)"
     # false = every engine on the template's ports (the production shape);
     # true = base+index, which only suits several engines on one host.
@@ -786,10 +788,10 @@ save_profile() {
     local OCCAS_BASE OCCAS_CURRENT KEYSTORE_DIR APPROUTER_DIR ENGINE_NODES SAN idx
     OCCAS_BASE="$(dirname "$MWHOME")"
     OCCAS_CURRENT="${OCCAS_BASE}/current"
-    # Outside the Oracle home, for the same reason domains are: keystores inside
-    # it get copied into every patched home, so flipping 'current' would swap
-    # which certificates are live -- silently reverting a cert rotation.
-    KEYSTORE_DIR="$(dirname "${OCCAS_BASE:-/opt/oracle/occas}")/security"
+    # In the domain's config/certs so it replicates to managed servers on start;
+    # under DOMAINS_DIR (outside the Oracle home), so a patch 'current' flip can't
+    # swap which certificates are live.
+    KEYSTORE_DIR="${DOMAINS_DIR}/${DOMAIN}/config/certs"
     APPROUTER_DIR="${DOMAINS_DIR}/${DOMAIN}/approuter"
 
     ENGINE_NODES=""; idx=0
@@ -2874,6 +2876,33 @@ PYEOF
     # for every platform (e.g. aarch64), and the native one fails with
     # UnsatisfiedLinkError. Java-based control is portable and sufficient here.
     iu_set_conf_prop "$nmprops" NativeVersionEnabled false
+
+    # A secure Node Manager presents the BLADE identity, never WebLogic's demo
+    # cert. NM is its OWN domain (not config-replicated), so its keystores live in
+    # the nmdomain's config/certs -- placed now (the domain already exists from
+    # step 1, so no writeDomain clobber). NM encrypts the plaintext passphrases
+    # into nodemanager.properties on first start. Refuse rather than fall back to
+    # demo (which every client would then have to trust, and the demo key is public).
+    if [ "$secure" = "true" ]; then
+        ensure_certs_source || { warn "secure Node Manager needs real TLS keystores and none could be produced — refusing to fall back to demo certs. Run 'g' (generate) then retry."; return 1; }
+        local ksdir kspw trpw alias
+        ksdir="${nmhome}/config/certs"
+        place_keystores "$ksdir" || { warn "could not place Node Manager keystores in ${ksdir}."; return 1; }
+        alias="${ID_ALIAS:-blade-identity}"
+        kspw="${BLADE_KEYSTORE_PASSWORD:-}"; [ -z "$kspw" ] && [ -f "$WLS_SECRET" ] && kspw="$(read_prop "$WLS_SECRET" tls.keystore.passphrase)"
+        trpw="${BLADE_TRUST_PASSWORD:-}";   [ -z "$trpw" ] && [ -f "$WLS_SECRET" ] && trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
+        [ -n "$kspw" ] && [ -n "$trpw" ] || { warn "tls.keystore.passphrase / tls.trust.passphrase missing — cannot give Node Manager a real identity."; return 1; }
+        iu_set_conf_prop "$nmprops" KeyStores                        CustomIdentityAndCustomTrust
+        iu_set_conf_prop "$nmprops" CustomIdentityKeyStoreFileName   "${ksdir}/blade-identity.p12"
+        iu_set_conf_prop "$nmprops" CustomIdentityKeyStoreType       PKCS12
+        iu_set_conf_prop "$nmprops" CustomIdentityKeyStorePassPhrase "$kspw"
+        iu_set_conf_prop "$nmprops" CustomIdentityAlias              "$alias"
+        iu_set_conf_prop "$nmprops" CustomIdentityPrivateKeyPassPhrase "$kspw"
+        iu_set_conf_prop "$nmprops" CustomTrustKeyStoreFileName      "${ksdir}/blade-trust.p12"
+        iu_set_conf_prop "$nmprops" CustomTrustKeyStoreType          PKCS12
+        iu_set_conf_prop "$nmprops" CustomTrustKeyStorePassPhrase    "$trpw"
+        ok "Node Manager identity: ${ksdir}/blade-identity.p12 (alias ${alias}); trust: blade-trust.p12"
+    fi
     ok "Node Manager bind set: ${bind}:${port} (SecureListener=${secure}, native=off)"
 
     # 3. Start Node Manager in the background. If it's already up, offer to
@@ -3212,13 +3241,10 @@ do_makedirs() {
             && ok "created + chowned ${DOMAINS_DIR} (domains live outside the Oracle home)." \
             || warn "could not set up ${DOMAINS_DIR}."
     fi
-    # The servers read the TLS keystores at runtime — install-user territory too
-    # (and outside the Oracle home, so a patch flip cannot swap them).
-    if [ -n "${KEYSTORE_DIR:-}" ]; then
-        $SUDO mkdir -p "$KEYSTORE_DIR" && $SUDO chown "${user}:${grp}" "$KEYSTORE_DIR" \
-            && ok "created + chowned ${KEYSTORE_DIR} (TLS keystores)." \
-            || warn "could not set up ${KEYSTORE_DIR}."
-    fi
+    # TLS keystores are NOT pre-created here any more: they live in the domain's
+    # config/certs, which configure/nmdomain create and populate after WLST writes
+    # the domain (pre-creating it would spawn the domain dir and trip the
+    # overwrite guard). DOMAINS_DIR above already covers the parent ownership.
     if $SUDO mkdir -p "$inv" && $SUDO chown -R "${user}:${grp}" "$inv"; then
         ok "created + chowned ${inv}."
     else
@@ -3554,6 +3580,57 @@ EOF
 # Emit the WLST that adds the optional static test engine as a configured member
 # of BEA_ENGINE_TIER_CLUST (a configured server doesn't inherit the dynamic
 # template, so its sip/sips channels are added by hand). Arg: name:mach:listen:sip:sips
+# Generate (or import) the env's TLS source keystores into tls/out/<env> and
+# persist the passphrases into the conf. Called BEFORE emit_tls_block, which
+# reads those passphrases. There is deliberately NO demo-cert fallback anywhere
+# in BLADE -- callers that require TLS fail instead of letting WebLogic drop back
+# to its demo identity/trust. Returns 0 only when the source p12 exists.
+ensure_certs_source() {
+    [ "$DRY" = "on" ] && return 0
+    local envname srcp12
+    envname="$(basename "${DEPLOY_CONF%.conf}")"
+    srcp12="${SCRIPT_DIR}/tls/out/${envname}/blade-identity.p12"
+    if [ ! -f "$srcp12" ]; then
+        if [ "${CERT_SOURCE:-generate}" = supply ]; then
+            info "No certificates for '${envname}' yet — importing the supplied cert (the 'g' step) …"
+            "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
+        else
+            info "No certificates for '${envname}' yet — generating a self-signed CA (the 'g' step) …"
+            "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
+        fi
+    fi
+    [ -f "$srcp12" ]
+}
+
+# Copy the generated blade-{identity,trust}.p12 (tls/out/<env>, login-user owned)
+# into a domain's config/certs (install-user owned). The domain must already be
+# WRITTEN -- WLST writeDomain would clobber anything placed beforehand. config/certs
+# rides along with the domain's config sync, so managed servers on other hosts get
+# the keystores at startup with no per-node push. Returns 0 only when the
+# destination identity keystore exists.
+place_keystores() {  # $1 = destination dir (a domain's config/certs)
+    [ "$DRY" = "on" ] && return 0
+    local dest="$1" envname srcdir own
+    local SUDO=""; [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && SUDO="sudo"
+    envname="$(basename "${DEPLOY_CONF%.conf}")"
+    srcdir="${SCRIPT_DIR}/tls/out/${envname}"
+    [ -f "${srcdir}/blade-identity.p12" ] || { warn "no source keystores at ${srcdir} — run 'g' first."; return 1; }
+    if mkdir -p "$dest" 2>/dev/null && [ -w "$dest" ]; then
+        cp "${srcdir}/blade-identity.p12" "${srcdir}/blade-trust.p12" "$dest/" \
+            && chmod 600 "${dest}/blade-identity.p12" "${dest}/blade-trust.p12" || { warn "could not place keystores in ${dest}."; return 1; }
+    else
+        $SUDO mkdir -p "$dest" \
+            && $SUDO cp "${srcdir}/blade-identity.p12" "${srcdir}/blade-trust.p12" "$dest/" \
+            && $SUDO chmod 600 "${dest}/blade-identity.p12" "${dest}/blade-trust.p12" \
+            || { warn "could not place keystores in ${dest} (needs sudo?)."; return 1; }
+        # Own them like the domain they live in (the install user).
+        own="$(stat -c '%U:%G' "$(dirname "$dest")" 2>/dev/null || true)"
+        [ -n "$own" ] && $SUDO chown "$own" "$dest" "${dest}/blade-identity.p12" "${dest}/blade-trust.p12"
+    fi
+    ok "keystores placed in ${dest}"
+    [ -f "${dest}/blade-identity.p12" ]
+}
+
 # Emit the offline-WLST that puts the real certificate and the SIP channels onto
 # the domain at CREATE time.
 #
@@ -3570,22 +3647,27 @@ EOF
 # ...PassPhrase setters while a domain is being created. The Encrypted variants
 # accept plaintext and store it encrypted with the new domain's key.
 emit_tls_block() {
-    local tmpl="${1}-template" ksdir="${KEYSTORE_DIR:-/opt/oracle/security}"
+    local tmpl="${1}-template"
     local kspw trpw
     kspw="$(read_prop "$WLS_SECRET" tls.keystore.passphrase)"
     trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
     local alias="${ID_ALIAS:-blade-identity}"
     [ -n "$kspw" ] && [ -n "$trpw" ] || { warn "TLS passphrases missing from the config."; return 1; }
 
-    # Identity + trust, applied to the template AND to the real servers.
+    # Keystore paths are RELATIVE to the domain root (./config/certs), NOT absolute.
+    # WebLogic resolves a relative keystore path against the server's root (the
+    # domain home), so every managed server -- including engines that received
+    # config/certs by config replication onto a possibly different absolute path --
+    # loads its own copy. Only what's baked into config.xml is relative; the WLST
+    # client trust args elsewhere stay absolute.
     _emit_keystores() {
         cat <<PYBLOCK
 cd('${1}')
 set('KeyStores','CustomIdentityAndCustomTrust')
-set('CustomIdentityKeyStoreFileName','${ksdir}/blade-identity.p12')
+set('CustomIdentityKeyStoreFileName','./config/certs/blade-identity.p12')
 set('CustomIdentityKeyStoreType','PKCS12')
 set('CustomIdentityKeyStorePassPhraseEncrypted','${kspw}')
-set('CustomTrustKeyStoreFileName','${ksdir}/blade-trust.p12')
+set('CustomTrustKeyStoreFileName','./config/certs/blade-trust.p12')
 set('CustomTrustKeyStoreType','PKCS12')
 set('CustomTrustKeyStorePassPhraseEncrypted','${trpw}')
 # Offline, a Server has no SSL child until one is created (the ServerTemplate
@@ -3777,28 +3859,11 @@ Machine${idx}NodemanagerNMType=${type}"
         "${work}/occas-replicated-dynamiccluster.py" > "${work}/.py.tmp" \
         && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
 
-    # The template is about to reference blade-identity.p12 / blade-trust.p12 by
-    # path, so they have to exist first. Two steps: generate the source certs
-    # (the 'g' step) if they've never been made for this env, then place them
-    # (install-ssl's 'keystores' tier; its ssl/sip tiers are NOT used any more).
-    # This is where dynamic servers can actually get the keystore.
-    local envname; envname="$(basename "${DEPLOY_CONF%.conf}")"
-    local srcp12="${SCRIPT_DIR}/tls/out/${envname}/blade-identity.p12"
-    if [ "$DRY" != "on" ] && [ ! -f "$srcp12" ]; then
-        if [ "${CERT_SOURCE:-generate}" = supply ]; then
-            info "No certificates for '${envname}' yet — importing the supplied cert (the 'g' step) …"
-            "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
-        else
-            info "No certificates for '${envname}' yet — generating a self-signed CA (the 'g' step) …"
-            "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
-        fi
-    fi
-    local ksdir="${KEYSTORE_DIR:-/opt/oracle/security}"
-    if [ "$DRY" != "on" ] && [ ! -f "${ksdir}/blade-identity.p12" ]; then
-        info "Placing keystores in ${ksdir} …"
-        "${SCRIPT_DIR}/tls/install-ssl.sh" "$DEPLOY_CONF" keystores apply \
-            || warn "keystore placement failed — the domain will be built without TLS."
-    fi
+    # Generate the source certs (the 'g' step) if they've never been made, so the
+    # template can reference them and emit_tls_block can read their passphrases.
+    # The p12 FILES are placed into the domain's config/certs AFTER writeDomain,
+    # below -- placing them first would let writeDomain clobber them.
+    ensure_certs_source || warn "no TLS source certs — the domain will be built without TLS."
 
     # TLS goes in FIRST so the template already carries the real certificate
     # before any server is written from it.
@@ -3822,6 +3887,13 @@ Machine${idx}NodemanagerNMType=${type}"
     as_install_user rm -rf "$work"
     [ "$rc" -eq 0 ] || { warn "configure failed (WLST rc=${rc})"; return 1; }
     ok "Domain '${domain}' written under ${DOMAINS_DIR}/"
+    # Now the domain dir exists, drop the keystores into its config/certs (the
+    # exact path emit_tls_block baked into the template). config/certs replicates
+    # to the engines on start, so no per-node push. Only when TLS is in play.
+    if [ "${SIP_TLS:-}" != "" ] || [ "${CERT_SOURCE:-}" != "" ]; then
+        place_keystores "${KEYSTORE_DIR}" \
+            || warn "keystores not placed — servers will fail TLS until 'g'+'t' run and the domain is rebuilt."
+    fi
     # Give the domain's servers enough heap/metaspace (the admin EAR OOMs the
     # OCCAS dev default) via setUserOverrides.sh, which the NM start path sources.
     write_user_overrides "${DOMAINS_DIR}/${domain}"
@@ -4140,47 +4212,30 @@ PYEOF
 
 # WLST_PROPERTIES needed to nmConnect to OUR Node Manager, echoed to stdout.
 #
-# NM's listener is SSL, so WLST must trust whatever cert NM presents — and WLST
-# trusts only the JDK cacerts by default, which contains neither. That surfaces
-# as a bare PKIX "unable to find valid certification path", nowhere near the
-# actual cause.
+# NM's listener is SSL and presents the BLADE identity (blade-identity.p12), so
+# WLST must trust the BLADE CA — WLST trusts only the JDK cacerts by default,
+# which don't contain it. That surfaces as a bare PKIX "unable to find valid
+# certification path", nowhere near the actual cause.
 #
-# Two cases, and both need handling:
-#   * NM on the env PKI (after the TLS step) -> CustomTrust + the env trust.p12
-#   * NM on WebLogic's DemoIdentity (a fresh nmdomain) -> DemoTrust
-# Hostname verification is off either way: the cert names the host, while the
-# units and interactive runs both nmConnect to 'localhost'.
+# There is no demo path: NM is configured with a real identity in do_nmdomain,
+# so we always trust the env's blade-trust.p12. If it's missing we warn and emit
+# no trust store — the nmConnect then fails with a real error instead of quietly
+# leaning on the public demo CA. Always returns 0 (callers assign it directly
+# under `set -e`). Hostname verification is off: the cert names the host, while
+# the units and interactive runs both nmConnect to 'localhost'.
 nm_wlst_props() {
-    local mw="${MWHOME:-$(read_prop "$OCCAS_CONF" oracle.home)}"
-    local nmdom="${NM_DOMAIN:-$(read_prop "$OCCAS_CONF" nm.domain.name)}"
-    local nmprops="${DOMAINS_DIR}/${nmdom}/nodemanager/nodemanager.properties"
     local common="-Dweblogic.security.SSL.ignoreHostnameVerification=true"
-    if grep -q "^CustomIdentityKeyStoreFileName=" "$nmprops" 2>/dev/null; then
-        local pw cdir
-        pw="${BLADE_STORE_PASSWORD:-}"
-        [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" store.password)"
-        cdir="$(read_prop "$OCCAS_CONF" certs.dir)"; cdir="${cdir/#\~/$HOME}"
-        cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
-        if [ -n "$pw" ] && [ -f "${cdir}/trust.p12" ]; then
-            printf '%s' "-Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${cdir}/trust.p12 -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=${pw} ${common}"
-            return 0
-        fi
-        # Custom identity but no usable truststore — say so rather than fall
-        # through to the demo store, which fails with the same opaque PKIX error.
-        warn "Node Manager uses a custom identity but ${cdir}/trust.p12 or store.password is missing." >&2
-    fi
-    # Demo certs. NOT -Dweblogic.security.TrustKeyStore=DemoTrust: that resolves
-    # to $WL_HOME/server/lib/DemoTrust.jks, which contains only the 2012
-    # 'wlscertgenca'. WLS 14.1.2 generates a PER-DOMAIN demo CA instead
-    # (CN=CertGenCA_<domain>) and keeps it in the domain's own
-    # security/DemoTrust.p12, so the shipped store can never validate it — the
-    # symptom is a bare PKIX failure that looks like a broken install.
-    local demotrust="${DOMAINS_DIR}/${nmdom}/security/DemoTrust.p12"
-    if [ -f "$demotrust" ]; then
-        printf '%s' "-Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${demotrust} -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=DemoTrustKeyStorePassPhrase ${common}"
+    local nmdom ksdir trpw
+    nmdom="${NM_DOMAIN:-$(read_prop "$OCCAS_CONF" nm.domain.name)}"; nmdom="${nmdom:-nmdomain}"
+    ksdir="${DOMAINS_DIR}/${nmdom}/config/certs"   # NM's own domain, where do_nmdomain placed its identity/trust
+    trpw="${BLADE_TRUST_PASSWORD:-}"; [ -z "$trpw" ] && [ -f "$WLS_SECRET" ] && trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
+    if [ -f "${ksdir}/blade-trust.p12" ] && [ -n "$trpw" ]; then
+        printf '%s' "-Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${ksdir}/blade-trust.p12 -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=${trpw} ${common}"
         return 0
     fi
-    printf '%s' "-Dweblogic.security.TrustKeyStore=DemoTrust ${common}"
+    warn "Node Manager trust: ${ksdir}/blade-trust.p12 or tls.trust.passphrase missing — run 'n' to (re)configure a secure Node Manager (demo certs are not used)." >&2
+    printf '%s' "$common"
+    return 0
 }
 
 # Stop Node Manager and start it again from its own domain. Used after an
@@ -4574,15 +4629,24 @@ _deploy_one() {
     fi
     [ "$action" = "deploy" ] && [ ! -f "$source" ] && { warn "missing artifact: ${source} — run ./build.sh first."; return 1; }
     pw="${BLADE_WLS_PASSWORD:-}"; [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" admin.password)"
-    # t3s trust: the occas conf's trust keystore (certs.sh layout) + store password.
+    # t3s trust: the AdminServer presents the BLADE identity, so trust the BLADE CA.
+    # Prefer blade-trust.p12 + tls.trust.passphrase (what make-certs/install-ssl
+    # produce); fall back to the legacy certs.sh layout (trust.keystore / certs.dir
+    # + store.password) only if the BLADE store isn't there.
     local trust="" trustpw=""
     case "$url" in t3s://*)
-        trust="$(read_prop "$OCCAS_CONF" trust.keystore)"; trust="${trust/#\~/$HOME}"
-        if [ -z "$trust" ]; then
-            local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"; cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
-            [ -f "${cdir}/trust.p12" ] && trust="${cdir}/trust.p12"
+        local ksdir="${KEYSTORE_DIR:-/opt/oracle/security}"
+        if [ -f "${ksdir}/blade-trust.p12" ]; then
+            trust="${ksdir}/blade-trust.p12"
+            trustpw="${BLADE_TRUST_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$WLS_SECRET" ] && trustpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
+        else
+            trust="$(read_prop "$OCCAS_CONF" trust.keystore)"; trust="${trust/#\~/$HOME}"
+            if [ -z "$trust" ]; then
+                local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"; cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
+                [ -f "${cdir}/trust.p12" ] && trust="${cdir}/trust.p12"
+            fi
+            trustpw="${BLADE_STORE_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$WLS_SECRET" ] && trustpw="$(read_prop "$WLS_SECRET" store.password)"
         fi
-        trustpw="${BLADE_STORE_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$WLS_SECRET" ] && trustpw="$(read_prop "$WLS_SECRET" store.password)"
         ;;
     esac
     MW_HOME="$MWHOME" JAVA_HOME="${JAVA_HOME_VAL:-${JAVA_HOME:-}}" \

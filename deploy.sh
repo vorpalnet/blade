@@ -287,22 +287,27 @@ if [ "$NEEDS_WLS" = true ]; then
 fi
 
 # --- t3s: SSL trust for the WebLogic Maven plugin's Deployer JVM ---
-# A t3s:// admin URL needs the AdminServer's CA trusted. Two ways:
-#   1. wls.truststore=<trust.p12 from certs.sh>  (+ wls.truststore.password in
-#      the secret, else $BLADE_STORE_PASSWORD) — explicit CustomTrust.
-#   2. No wls.truststore — rely on the JVM default truststore (works when the
-#      CA was imported via `keytool -importcert -cacerts`, certs.sh step 2).
+# A t3s:// admin URL needs the AdminServer's CA trusted. In order:
+#   1. wls.truststore=<explicit trust.p12> (+ wls.truststore.password / secret).
+#   2. The BLADE trust store make-certs produced (tls/out/<env>/blade-trust.p12)
+#      with tls.trust.passphrase — the default when the conf names none.
+#   3. Neither present — rely on the JVM default truststore (CA must be in cacerts).
 case "$WLS_ADMINURL" in
     t3s://*)
+        if [ -z "$WLS_TRUSTSTORE" ] && [ -f "${SCRIPT_DIR}/tls/out/${ENV_NAME}/blade-trust.p12" ]; then
+            WLS_TRUSTSTORE="${SCRIPT_DIR}/tls/out/${ENV_NAME}/blade-trust.p12"
+            WLS_TRUSTSTORE_TYPE=PKCS12
+        fi
         if [ -n "$WLS_TRUSTSTORE" ]; then
             [ -f "$WLS_TRUSTSTORE" ] || die "wls.truststore not found: ${WLS_TRUSTSTORE}"
-            TRUST_PW="${BLADE_STORE_PASSWORD:-}"
+            TRUST_PW="${BLADE_TRUST_PASSWORD:-${BLADE_STORE_PASSWORD:-}}"
+            [ -z "$TRUST_PW" ] && [ -f "$SECRET_FILE" ] && TRUST_PW=$(read_prop "$SECRET_FILE" "tls.trust.passphrase")
             [ -z "$TRUST_PW" ] && [ -f "$SECRET_FILE" ] && TRUST_PW=$(read_prop "$SECRET_FILE" "store.password")
             export MAVEN_OPTS="${MAVEN_OPTS:-} -Dweblogic.security.TrustKeyStore=CustomTrust \
 -Dweblogic.security.CustomTrustKeyStoreFileName=${WLS_TRUSTSTORE} \
 -Dweblogic.security.CustomTrustKeyStoreType=${WLS_TRUSTSTORE_TYPE}${TRUST_PW:+ -Dweblogic.security.CustomTrustKeyStorePassPhrase=${TRUST_PW}}"
         else
-            warn "t3s admin URL with no wls.truststore — relying on the JVM default truststore (CA must be in cacerts)."
+            warn "t3s admin URL with no trust store — relying on the JVM default truststore (CA must be in cacerts)."
         fi
         ;;
 esac

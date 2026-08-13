@@ -31,21 +31,26 @@
 #                cert.import.chain=<chain.pem> CA chain PEM → trust keystore
 #   show       List the contents of the env's keystores.
 #
-# Conf keys (build-profiles/occas/<env>.conf):
-#   certs.dir     output directory — default ~/.blade/certs/<env>
-#                 NEVER a path inside the repo; keys must not be committable.
+# Output matches tls/make-certs.sh exactly, so import and generate are
+# interchangeable and install-ssl / emit_tls_block consume either.
+#
+# Conf keys (~/.blade/<env>.conf):
+#   certs.dir     output directory — default tls/out/<env> (gitignored). Any
+#                 other in-repo path is refused (keys must not be committable).
 #   certs.hosts   extra SAN entries (CSV of dns:/ip: or bare hostnames)
+#   tls.identity.alias  key alias (default blade-identity)
 #   cert.import.* see import above
-# Secrets (<env>.secret or environment):
-#   store.password / $BLADE_STORE_PASSWORD — one password for all stores +
-#                 keys (WebLogic wants keystore pass = key pass anyway).
+# Secrets (keys in the same conf, ENC()-wrapped; prompted-and-persisted if unset):
+#   tls.keystore.passphrase   identity keystore + its private key
+#   tls.trust.passphrase      trust keystore
+#   (WebLogic wants keystore pass == key pass, so each store's key reuses it.)
 #
 # Files produced in certs.dir:
-#   ca.p12            test CA key (generate only — guard it like a password)
-#   ca.pem            CA certificate, PEM — import this into client browsers,
-#                     the JVM truststore of callers, and hand to peers
-#   identity.p12      server identity (cert + key) → CustomIdentityKeyStore
-#   trust.p12         trusted CAs                  → CustomTrustKeyStore
+#   blade-ca.p12        test CA key (generate only — guard it like a password)
+#   blade-ca.pem        CA certificate, PEM — import into client browsers, the
+#                       JVM truststore of callers, and hand to peers
+#   blade-identity.p12  server identity (cert + key) → CustomIdentityKeyStore
+#   blade-trust.p12     trusted CAs                  → CustomTrustKeyStore
 # ============================================================================
 
 set -euo pipefail
@@ -98,18 +103,30 @@ read_prop() {
     printf '%s' "$v"
 }
 
+# Output goes to the SAME place make-certs uses (tls/out/<env>), so install-ssl
+# and blade.sh's emit_tls_block consume import and generate output identically.
+# tls/out is gitignored; any other in-repo certs.dir is refused (uncommittable).
 CERTS_DIR="$(read_prop "$CONF_FILE" "certs.dir")"; CERTS_DIR="${CERTS_DIR/#\~/$HOME}"
-[ -z "$CERTS_DIR" ] && CERTS_DIR="${HOME}/.blade/certs/${ENV_NAME}"
-case "$CERTS_DIR" in "$SCRIPT_DIR"/*) die "certs.dir is inside the repo (${CERTS_DIR}) — keys must not be committable. Move it out (default: ~/.blade/certs/${ENV_NAME})." ;; esac
+[ -z "$CERTS_DIR" ] && CERTS_DIR="${SCRIPT_DIR}/tls/out/${ENV_NAME}"
+case "$CERTS_DIR" in
+    "${SCRIPT_DIR}/tls/out"/*) ;;                                   # the gitignored default — fine
+    "$SCRIPT_DIR"/*) die "certs.dir is inside the repo (${CERTS_DIR}) but not under tls/out — keys must not be committable. Use ~/.blade/certs/${ENV_NAME} or the default." ;;
+esac
 
-get_store_pw() {
-    local v="${BLADE_STORE_PASSWORD:-}"
-    [ -z "$v" ] && [ -f "$SECRET_FILE" ] && v=$(read_prop "$SECRET_FILE" "store.password")
-    if [ -z "$v" ] && [ "$DRY_RUN" = false ]; then
-        read -rs -p "Keystore password for ${ENV_NAME} (stores + keys): " v; echo
-        [ -n "$v" ] || die "No password provided."
+# Passphrases live in the one env conf as key=ENC(value); a prompted value is
+# persisted so make-certs, install-ssl and emit_tls_block all read the same
+# secret (they REQUIRE these keys present). WebLogic wants keystore pass == key
+# pass, so each store's key uses the same passphrase as the store.
+get_secret() {  # $1=conf-key  $2=prompt-label
+    local v="" from_file=""
+    [ -f "$SECRET_FILE" ] && { v=$(read_prop "$SECRET_FILE" "$1"); [ -n "$v" ] && from_file=1; }
+    if [ -z "$v" ]; then
+        [ "$DRY_RUN" = true ] && { printf 'dry-run-passphrase'; return 0; }
+        read -rs -p "$2: " v; echo
+        [ -n "$v" ] || die "No value for $2"
     fi
-    [ "${#v}" -ge 6 ] || [ "$DRY_RUN" = true ] || die "keytool requires a password of 6+ characters."
+    [ "$DRY_RUN" = true ] || [ "${#v}" -ge 6 ] || die "keytool requires a passphrase of 6+ characters."
+    [ -z "$from_file" ] && [ "$DRY_RUN" = false ] && printf '%s=ENC(%s)\n' "$1" "$v" >> "$CONF_FILE"
     printf '%s' "$v"
 }
 
@@ -166,49 +183,52 @@ command -v "$KEYTOOL" >/dev/null 2>&1 || KEYTOOL="keytool"
 command -v "$KEYTOOL" >/dev/null 2>&1 || die "keytool not found (need a JDK on PATH or JAVA_HOME set)."
 
 do_generate() {
-    local san pw
+    local san id_pw trust_pw alias
     san="$(build_san)"
+    alias="$(read_prop "$CONF_FILE" tls.identity.alias)"; alias="${alias:-blade-identity}"
     info "Self-signed test PKI for '${ENV_NAME}' → ${CERTS_DIR}"
     log  "  SAN: ${san}"
     if [ "$DRY_RUN" = true ]; then
-        log "${C_DIM}  [dry-run] keytool: test CA (bc:c, 10y) → ca.p12 / ca.pem${C_RESET}"
-        log "${C_DIM}  [dry-run] keytool: server keypair + CA-signed cert (san, eku serverAuth+clientAuth) → identity.p12${C_RESET}"
-        log "${C_DIM}  [dry-run] keytool: trust store with CA cert → trust.p12${C_RESET}"
+        log "${C_DIM}  [dry-run] keytool: test CA (bc:c, 10y) → blade-ca.p12 / blade-ca.pem${C_RESET}"
+        log "${C_DIM}  [dry-run] keytool: server keypair + CA-signed cert (san, eku serverAuth+clientAuth) → blade-identity.p12 (alias ${alias})${C_RESET}"
+        log "${C_DIM}  [dry-run] keytool: trust store with CA cert → blade-trust.p12${C_RESET}"
         return 0
     fi
-    pw="$(get_store_pw)"
+    id_pw="$(get_secret tls.keystore.passphrase "Identity keystore passphrase for ${ENV_NAME}")"
+    trust_pw="$(get_secret tls.trust.passphrase "Trust keystore passphrase for ${ENV_NAME}")"
     mkdir -p "$CERTS_DIR"; chmod 700 "$CERTS_DIR"
-    [ -f "${CERTS_DIR}/identity.p12" ] && die "${CERTS_DIR}/identity.p12 exists — refusing to overwrite. Delete the directory to re-generate."
+    [ -f "${CERTS_DIR}/blade-identity.p12" ] && die "${CERTS_DIR}/blade-identity.p12 exists — refusing to overwrite. Delete it to re-generate."
 
-    # 1. Test CA (self-signed, CA basic constraint).
+    # 1. Test CA (self-signed, CA basic constraint). Its key is never consumed
+    #    downstream (only the public blade-ca.pem is), so it shares the id passphrase.
     "$KEYTOOL" -genkeypair -alias ca -keyalg RSA -keysize 3072 -validity 3650 \
         -dname "CN=BLADE Test CA (${ENV_NAME}), O=Vorpal" -ext bc:c \
-        -keystore "${CERTS_DIR}/ca.p12" -storetype PKCS12 -storepass "$pw" -keypass "$pw"
+        -keystore "${CERTS_DIR}/blade-ca.p12" -storetype PKCS12 -storepass "$id_pw" -keypass "$id_pw"
     "$KEYTOOL" -exportcert -alias ca -rfc \
-        -keystore "${CERTS_DIR}/ca.p12" -storepass "$pw" > "${CERTS_DIR}/ca.pem"
+        -keystore "${CERTS_DIR}/blade-ca.p12" -storepass "$id_pw" > "${CERTS_DIR}/blade-ca.pem"
 
     # 2. Server identity, signed by the CA. EKU includes clientAuth so the
     #    same keystore serves as the client certificate for mutual TLS.
-    "$KEYTOOL" -genkeypair -alias server -keyalg RSA -keysize 3072 -validity 825 \
+    "$KEYTOOL" -genkeypair -alias "$alias" -keyalg RSA -keysize 3072 -validity 825 \
         -dname "CN=blade-${ENV_NAME}, O=Vorpal" \
-        -keystore "${CERTS_DIR}/identity.p12" -storetype PKCS12 -storepass "$pw" -keypass "$pw"
-    "$KEYTOOL" -certreq -alias server \
-        -keystore "${CERTS_DIR}/identity.p12" -storepass "$pw" \
+        -keystore "${CERTS_DIR}/blade-identity.p12" -storetype PKCS12 -storepass "$id_pw" -keypass "$id_pw"
+    "$KEYTOOL" -certreq -alias "$alias" \
+        -keystore "${CERTS_DIR}/blade-identity.p12" -storepass "$id_pw" \
     | "$KEYTOOL" -gencert -alias ca -validity 825 -rfc \
         -ext "san=${san}" -ext "ku:c=digitalSignature,keyEncipherment" -ext "eku=serverAuth,clientAuth" \
-        -keystore "${CERTS_DIR}/ca.p12" -storepass "$pw" > "${CERTS_DIR}/server.pem"
+        -keystore "${CERTS_DIR}/blade-ca.p12" -storepass "$id_pw" > "${CERTS_DIR}/blade-server.pem"
     # Import chain: CA first, then the signed server cert.
-    "$KEYTOOL" -importcert -alias ca -noprompt -file "${CERTS_DIR}/ca.pem" \
-        -keystore "${CERTS_DIR}/identity.p12" -storepass "$pw"
-    "$KEYTOOL" -importcert -alias server -file "${CERTS_DIR}/server.pem" \
-        -keystore "${CERTS_DIR}/identity.p12" -storepass "$pw"
+    "$KEYTOOL" -importcert -alias ca -noprompt -file "${CERTS_DIR}/blade-ca.pem" \
+        -keystore "${CERTS_DIR}/blade-identity.p12" -storepass "$id_pw"
+    "$KEYTOOL" -importcert -alias "$alias" -file "${CERTS_DIR}/blade-server.pem" \
+        -keystore "${CERTS_DIR}/blade-identity.p12" -storepass "$id_pw"
 
     # 3. Trust store = just the CA.
-    "$KEYTOOL" -importcert -alias ca -noprompt -file "${CERTS_DIR}/ca.pem" \
-        -keystore "${CERTS_DIR}/trust.p12" -storetype PKCS12 -storepass "$pw"
+    "$KEYTOOL" -importcert -alias ca -noprompt -file "${CERTS_DIR}/blade-ca.pem" \
+        -keystore "${CERTS_DIR}/blade-trust.p12" -storetype PKCS12 -storepass "$trust_pw"
 
     chmod 600 "${CERTS_DIR}"/*.p12
-    ok "Wrote ${CERTS_DIR}/{ca.p12,ca.pem,identity.p12,trust.p12}"
+    ok "Wrote ${CERTS_DIR}/{blade-ca.p12,blade-ca.pem,blade-identity.p12,blade-trust.p12}"
     next_steps
 }
 
@@ -222,32 +242,36 @@ do_import() {
 
     info "Import customer-issued certs for '${ENV_NAME}' → ${CERTS_DIR}"
     if [ "$DRY_RUN" = true ]; then
-        [ -n "$p12" ]   && log "${C_DIM}  [dry-run] validate + copy ${p12} → identity.p12${C_RESET}"
-        [ -n "$cert" ]  && log "${C_DIM}  [dry-run] openssl pkcs12 -export ${cert} + ${key} → identity.p12${C_RESET}"
-        [ -n "$chain" ] && log "${C_DIM}  [dry-run] import ${chain} → trust.p12${C_RESET}"
+        [ -n "$p12" ]   && log "${C_DIM}  [dry-run] validate + copy ${p12} → blade-identity.p12${C_RESET}"
+        [ -n "$cert" ]  && log "${C_DIM}  [dry-run] openssl pkcs12 -export ${cert} + ${key} → blade-identity.p12${C_RESET}"
+        [ -n "$chain" ] && log "${C_DIM}  [dry-run] import ${chain} → blade-trust.p12${C_RESET}"
         return 0
     fi
-    pw="$(get_store_pw)"
+    local id_pw trust_pw
+    id_pw="$(get_secret tls.keystore.passphrase "Identity keystore passphrase for ${ENV_NAME}")"
     mkdir -p "$CERTS_DIR"; chmod 700 "$CERTS_DIR"
 
     if [ -n "$p12" ]; then
         [ -f "$p12" ] || die "cert.import.p12 not found: ${p12}"
-        # Validate it opens with the store password before installing it.
-        "$KEYTOOL" -list -keystore "$p12" -storetype PKCS12 -storepass "$pw" >/dev/null \
-            || die "Cannot open ${p12} with the configured store.password."
-        cp "$p12" "${CERTS_DIR}/identity.p12"
+        # Validate it opens with tls.keystore.passphrase before installing it —
+        # the supplied p12's password MUST equal that passphrase.
+        "$KEYTOOL" -list -keystore "$p12" -storetype PKCS12 -storepass "$id_pw" >/dev/null \
+            || die "Cannot open ${p12} with tls.keystore.passphrase. Re-key the p12 to that passphrase, or set tls.keystore.passphrase to the p12's password."
+        cp "$p12" "${CERTS_DIR}/blade-identity.p12"
     else
         [ -f "$cert" ] || die "cert.import.cert not found: ${cert}"
         [ -f "$key" ]  || die "cert.import.key not found: ${key}"
         command -v openssl >/dev/null 2>&1 || die "PEM import needs openssl (PKCS12 assembly from a bare key). Ask for a .p12 instead, or install openssl."
-        openssl pkcs12 -export -name server -in "$cert" -inkey "$key" \
+        local alias; alias="$(read_prop "$CONF_FILE" tls.identity.alias)"; alias="${alias:-blade-identity}"
+        openssl pkcs12 -export -name "$alias" -in "$cert" -inkey "$key" \
             ${chain:+-certfile "$chain"} \
-            -out "${CERTS_DIR}/identity.p12" -passout "pass:${pw}"
+            -out "${CERTS_DIR}/blade-identity.p12" -passout "pass:${id_pw}"
     fi
 
     if [ -n "$chain" ]; then
         [ -f "$chain" ] || die "cert.import.chain not found: ${chain}"
-        rm -f "${CERTS_DIR}/trust.p12"
+        trust_pw="$(get_secret tls.trust.passphrase "Trust keystore passphrase for ${ENV_NAME}")"
+        rm -f "${CERTS_DIR}/blade-trust.p12"
         # Split the chain into individual certs; import each under ca-N.
         awk -v dir="$CERTS_DIR" 'BEGIN{n=0} /BEGIN CERT/{n++} n{print > (dir "/.chain-" n ".pem")}' "$chain"
         local f i=0
@@ -255,22 +279,24 @@ do_import() {
             [ -f "$f" ] || die "No certificates found in ${chain}"
             i=$((i + 1))
             "$KEYTOOL" -importcert -alias "ca-${i}" -noprompt -file "$f" \
-                -keystore "${CERTS_DIR}/trust.p12" -storetype PKCS12 -storepass "$pw"
+                -keystore "${CERTS_DIR}/blade-trust.p12" -storetype PKCS12 -storepass "$trust_pw"
             rm -f "$f"
         done
     else
-        warn "No cert.import.chain — trust.p12 not (re)built. The 'secure' step needs one; point cert.import.chain at the issuing CA chain PEM."
+        warn "No cert.import.chain — blade-trust.p12 not (re)built. The 'secure' step needs one; point cert.import.chain at the issuing CA chain PEM."
     fi
 
     chmod 600 "${CERTS_DIR}"/*.p12 2>/dev/null || true
-    ok "Wrote ${CERTS_DIR}/identity.p12$([ -n "$chain" ] && echo ' and trust.p12')"
+    ok "Wrote ${CERTS_DIR}/blade-identity.p12$([ -n "$chain" ] && echo ' and blade-trust.p12')"
     next_steps
 }
 
 do_show() {
-    local pw f
-    pw="$(get_store_pw)"
-    for f in ca.p12 identity.p12 trust.p12; do
+    local id_pw trust_pw f pw
+    id_pw="$(get_secret tls.keystore.passphrase "Identity keystore passphrase for ${ENV_NAME}")"
+    trust_pw="$(get_secret tls.trust.passphrase "Trust keystore passphrase for ${ENV_NAME}")"
+    for f in blade-ca.p12 blade-identity.p12 blade-trust.p12; do
+        case "$f" in blade-trust.p12) pw="$trust_pw" ;; *) pw="$id_pw" ;; esac
         if [ -f "${CERTS_DIR}/${f}" ]; then
             info "${CERTS_DIR}/${f}"
             "$KEYTOOL" -list -v -keystore "${CERTS_DIR}/${f}" -storetype PKCS12 -storepass "$pw" \
@@ -285,12 +311,11 @@ do_show() {
 next_steps() {
     log ""
     log "${C_BOLD}Next steps${C_RESET}"
-    log "  1. Wire the domain:        ./blade.sh ${ENV_NAME}  -> Turn on HTTPS / SIP-TLS"
-    log "  2. Trust the CA JVM-wide on every box that CALLS this environment"
-    log "     (deploy hosts for t3s, peers for REST):"
-    log "       keytool -importcert -cacerts -alias blade-${ENV_NAME} -file ${CERTS_DIR}/ca.pem"
-    log "  3. Point the deploy conf at the trust store (wls.adminurl=t3s://…,"
-    log "     wls.truststore=${CERTS_DIR}/trust.p12) — see build-profiles/deploy/*.conf"
+    log "  1. Place on the servers:   ./blade.sh ${ENV_NAME}  -> install TLS ('t')"
+    log "                             (configure/nmdomain also place them automatically)."
+    log "  2. Trust the CA on any box that CALLS this env over t3s/https that isn't"
+    log "     already covered (peers for REST; deploy.sh auto-trusts blade-trust.p12):"
+    log "       keytool -importcert -cacerts -alias blade-${ENV_NAME} -file ${CERTS_DIR}/blade-ca.pem"
 }
 
 log "${C_BOLD}BLADE certs${C_RESET}"
