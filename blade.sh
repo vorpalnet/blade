@@ -1287,14 +1287,32 @@ dashboard_tui() {
         [ "$sel" -ge "$nsel" ] && sel=0
         local cur="${selrows[$sel]}"
 
+        # Accordion: expand only the STEP section holding the highlighted row;
+        # the rest collapse to a one-line header (with a hidden-row count). Keeps
+        # the whole board inside a short terminal — a PuTTY window won't scroll.
+        # Pre-pass: which section is 'cur' in, and how many rows each section has.
+        local _sec=-1 _cursec=0 _k; local _seccount=()
+        for _k in "${!MR_TYPE[@]}"; do
+            if [ "${MR_TYPE[$_k]}" = head ]; then _sec=$((_sec + 1)); _seccount[$_sec]=0
+            else _seccount[$_sec]=$(( ${_seccount[$_sec]:-0} + 1 )); fi
+            [ "$_k" = "$cur" ] && _cursec=$_sec
+        done
+
         printf '\e[2J\e[H'
         banner
         printf '  %sprofile %s%s        dry-run: %s\n' "$C_DIM" "$NAME" "$C_RESET" "$DRY"
+        local _rs=-1
         for i in "${!MR_TYPE[@]}"; do
             if [ "${MR_TYPE[$i]}" = head ]; then
-                printf '\n  %s%s%s\n' "$C_BOLD" "${MR_LABEL[$i]}" "$C_RESET"
+                _rs=$((_rs + 1))
+                if [ "$_rs" = "$_cursec" ]; then
+                    printf '\n  %s▾ %s%s\n' "$C_BOLD" "${MR_LABEL[$i]}" "$C_RESET"
+                else
+                    printf '  %s▸ %s%s %s(%s)%s\n' "$C_BOLD" "${MR_LABEL[$i]}" "$C_RESET" "$C_DIM" "${_seccount[$_rs]:-0}" "$C_RESET"
+                fi
                 continue
             fi
+            [ "$_rs" = "$_cursec" ] || continue   # collapsed section — hide its rows
             local box="[ ]"; _chk_has "${MR_ID[$i]}" && box="[x]"
             local g=" "; case "${MR_DONE[$i]}" in 1) g="✓" ;; 0) g="○" ;; esac
             local arrow="  "; [ "${MR_TYPE[$i]}" = action ] && arrow="→ "
