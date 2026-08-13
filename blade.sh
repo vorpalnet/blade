@@ -2500,16 +2500,27 @@ patch_jdk() {
         fi
     done
 
-    if [ -z "$best" ] && jdk_dl_supported "$curmaj" \
-       && yesno "JDK: current -> $(basename "$cur"); no newer JDK ${curmaj} on this host. Download Oracle's latest into ${base}?" "N"; then
-        if download_jdk "$curmaj" "$base"; then
-            # Compare by version, not dir name: a distro build named
-            # jdk-25.0.4-oracle-aarch64 is the SAME release as Oracle's jdk-25.0.4,
-            # so flipping between them would churn the symlink for nothing.
-            if [ "$(jdk_version "${JDK_DL_HOME}/bin/java")" = "$(jdk_version "${cur}/bin/java")" ]; then
-                ok "already on Oracle's latest (JDK $(jdk_version "${cur}/bin/java"))."
-            else
-                best="$JDK_DL_HOME"
+    if [ -z "$best" ] && jdk_dl_supported "$curmaj"; then
+        # Detect "no new JDK" WITHOUT the ~200MB pull: Oracle's published .sha256
+        # is a tiny, stable fingerprint. If it matches the sha we recorded on the
+        # last download, the remote 'latest' hasn't changed — we're already current.
+        local _rsha _ssha
+        _rsha="$(jdk_remote_sha "$curmaj")"
+        _ssha="$(read_prop "$OCCAS_CONF" jdk.latest.sha256)"
+        if [ -n "$_rsha" ] && [ "$_rsha" = "$_ssha" ]; then
+            ok "already on Oracle's latest JDK ${curmaj} ($(basename "$cur")) — checked remotely, no download."
+        elif yesno "JDK: current -> $(basename "$cur"); no newer JDK ${curmaj} on this host. Download Oracle's latest into ${base}?" "Y"; then
+            if download_jdk "$curmaj" "$base"; then
+                # Record the remote sha so the next run can skip the download.
+                if [ -n "$JDK_DL_SHA" ] && [ -f "$OCCAS_CONF" ]; then set_conf_prop "$OCCAS_CONF" jdk.latest.sha256 "$JDK_DL_SHA"; fi
+                # Compare by version, not dir name: a distro build named
+                # jdk-25.0.4-oracle-aarch64 is the SAME release as Oracle's jdk-25.0.4,
+                # so flipping between them would churn the symlink for nothing.
+                if [ "$(jdk_version "${JDK_DL_HOME}/bin/java")" = "$(jdk_version "${cur}/bin/java")" ]; then
+                    ok "already on Oracle's latest (JDK $(jdk_version "${cur}/bin/java"))."
+                else
+                    best="$JDK_DL_HOME"
+                fi
             fi
         fi
     fi
@@ -2611,8 +2622,17 @@ do_patch() {
         pnum+=("$key"); ppath+=("$d")
     done < <(find "$stage" "$pdir" -type f -name inventory.xml -path '*/etc/config/inventory.xml' 2>/dev/null)
 
-    if [ "${#opdirs[@]}" -eq 0 ] && [ "${#pnum[@]}" -eq 0 ]; then
+    # No INTERIM patches means nothing to patch — don't copy a whole home. An
+    # OPatch tool update on its own doesn't change the product (it just updates the
+    # patcher), and it's applied alongside real patches anyway; building a new home
+    # for it is pointless and reads like a patch happened when none did.
+    if [ "${#pnum[@]}" -eq 0 ]; then
         rm -rf "$stage"
+        if [ "${#opdirs[@]}" -gt 0 ]; then
+            ok "No interim patches in ${pdir} — only an OPatch tool update, so nothing to patch."
+            log "  ${C_DIM}An OPatch update applies together with real fixes; add OCCAS patch zips to ${pdir} to patch.${C_RESET}"
+            return 0
+        fi
         if [ "${_JDK_DID}" = "1" ]; then
             log "  ${C_DIM}No OCCAS/WebLogic patches found in ${pdir} — JDK-only run.${C_RESET}"
             return 0
@@ -2699,7 +2719,7 @@ do_patch() {
     as_install_user rm -rf "$stage"
 
     as_install_user sh -c "ORACLE_HOME='${copy}' '${op}' lsinventory -oh '${copy}' ${jre:+-jre '${jre}'} > '${copy}/.blade-patch-manifest' 2>&1" || true
-    ok "Patched home ready: ${copy}"
+    ok "Patched home ready: ${copy} — ${#order[@]} interim patch(es) applied."
     grep -cE "^Patch  *[0-9]+" "${copy}/.blade-patch-manifest" 2>/dev/null \
         | sed 's/^/  interim patches now present: /'
     log "  ${C_DIM}Nothing switched. Validate it, then:${C_RESET}"
@@ -2976,9 +2996,21 @@ jdk_dl_supported() {
 # /usr/lib/jvm; sudo if it isn't writable). On success sets JDK_DL_HOME to the
 # resulting JAVA_HOME and returns 0; otherwise warns and returns 1. All chatter
 # goes to stderr so callers can run it inline without capturing stdout.
+# The sha256 of Oracle's CURRENT 'latest' JDK <major> tarball, from the tiny
+# .sha256 sidecar (a stable published fingerprint — NOT HTML scraping). Empty when
+# unsupported/unreachable. Lets a caller detect "no new JDK" and skip the ~200MB
+# pull by comparing this to the sha recorded on the last download.
+jdk_remote_sha() {
+    local want="$1" arch
+    jdk_dl_supported "$want" || return 0
+    case "$(uname -m)" in x86_64|amd64) arch="x64" ;; aarch64|arm64) arch="aarch64" ;; *) return 0 ;; esac
+    curl -fsSL --max-time 15 "https://download.oracle.com/java/${want}/latest/jdk-${want}_linux-${arch}_bin.tar.gz.sha256" 2>/dev/null | tr -d '[:space:]'
+}
+
 JDK_DL_HOME=""
+JDK_DL_SHA=""   # sha256 of the tarball the last download_jdk fetched
 download_jdk() {
-    JDK_DL_HOME=""
+    JDK_DL_HOME=""; JDK_DL_SHA=""
     local want="$1" dest="${2:-/usr/lib/jvm}"
     jdk_dl_supported "$want" || {
         warn "Oracle only offers no-login downloads for JDK 17+ on Linux x64/aarch64;" >&2
@@ -3007,6 +3039,7 @@ download_jdk() {
             rm -rf "$tmp"; return 1
         fi
         ok "checksum verified (sha256)" >&2
+        JDK_DL_SHA="$exp"
     else
         warn "could not fetch Oracle's .sha256 — skipping verification" >&2
     fi
