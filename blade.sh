@@ -75,6 +75,8 @@ ok()   { printf '%s\xe2\x9c\x93%s %s\n' "$C_GREEN" "$C_RESET" "$*"; }
 warn() { printf '%s\xe2\x9a\xa0%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
 die()  { printf '%s\xe2\x9c\x97%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; exit 1; }
 rule() { printf '%s%s%s\n' "$C_DIM" "  ----------------------------------------------------------------------" "$C_RESET"; }
+# Product/license header shown at the top of every screen (\xc2\xb7 = ·, \xc2\xa9 = ©).
+banner() { printf '  %sBLADE installer%s  \xc2\xb7  MIT License  \xc2\xb7  \xc2\xa9 vorpal.net\n' "$C_BOLD" "$C_RESET"; }
 
 # Dimmed, indented explanatory text. Feed it a heredoc.
 help() { local l; while IFS= read -r l; do printf '%s  %s%s\n' "$C_DIM" "$l" "$C_RESET"; done; }
@@ -987,7 +989,7 @@ save_profile() {
 run_wizard() {
     set_paths
     log ""
-    log "${C_BOLD}BLADE installer${C_RESET}"
+    banner
     [ -n "$NAME" ] && [ -f "$OCCAS_CONF" ] && log "  editing profile '${NAME}' (its values are offered as defaults)"
     load_profile
     # Journey order; phase_occas opens with the environment scan.
@@ -1083,10 +1085,12 @@ build_menu_rows() {
 
     local a_u=0; id "${INSTALL_USER:-oracle}" >/dev/null 2>&1 && a_u=1
     local a_m=0; [ -n "$MWHOME" ] && [ -d "$MWHOME" ] && a_m=1
+    local a_L=0; [ -f /etc/security/limits.d/99-blade-nofile.conf ] && a_L=1
     _row head ""      "STEP 1 · Point at OCCAS, then install it" "" "-"
     _row phase  occas "Where OCCAS lives — home, version, Java"  "$(_sum_occas)" "$p_occas"
     _row action u     "Create install user & group"             "${INSTALL_USER:-oracle}:${INV_GRP:-oinstall}" "$a_u"
     _row action m     "Create install dirs & chown"             "MW_HOME + inventory" "$a_m"
+    _row action L     "Raise open-files limit (nofile)"         "now $(ulimit -n 2>/dev/null || echo '?') → 65536" "$a_L"
     # "Done" means the media is no longer needed — either it's downloaded, or the
     # product is already installed and never will be.
     local a_dl=0 dl_lbl=""
@@ -1151,6 +1155,7 @@ dispatch_row() {
         runtime) phase_runtime; save_profile ;;
         u) do_makeuser  || true ;;
         m) do_makedirs  || true ;;
+        L) do_raise_limits || true ;;
         dl) do_download  || true ;;
         patch) do_patch  || true ;;
         p) do_preflight || true ;;
@@ -1242,7 +1247,7 @@ dashboard_tui() {
     }
     _tui_run() {
         printf '\e[?25h'; trap - INT
-        printf '\e[2J\e[H'
+        printf '\e[2J\e[H'; banner; printf '\n'
         next_step_reset
         local rid; for rid in "$@"; do dispatch_row "$rid"; done
         CHK=""
@@ -1261,7 +1266,7 @@ dashboard_tui() {
             done
             [ -n "$hit" ] || break
             load_profile
-            printf '\e[2J\e[H'
+            printf '\e[2J\e[H'; banner; printf '\n'
             next_step_reset
             dispatch_row "$hit"
             { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
@@ -1283,7 +1288,8 @@ dashboard_tui() {
         local cur="${selrows[$sel]}"
 
         printf '\e[2J\e[H'
-        printf '  %sBLADE installer%s · %s        dry-run: %s\n' "$C_BOLD" "$C_RESET" "$NAME" "$DRY"
+        banner
+        printf '  %sprofile %s%s        dry-run: %s\n' "$C_DIM" "$NAME" "$C_RESET" "$DRY"
         for i in "${!MR_TYPE[@]}"; do
             if [ "${MR_TYPE[$i]}" = head ]; then
                 printf '\n  %s%s%s\n' "$C_BOLD" "${MR_LABEL[$i]}" "$C_RESET"
@@ -1348,7 +1354,8 @@ dashboard_menu() {
     while :; do
         build_menu_rows
         log ""
-        log "${C_BOLD}BLADE installer — profile '${NAME}'${C_RESET}    dry-run: ${DRY}"
+        banner
+        log "  ${C_DIM}profile '${NAME}'${C_RESET}    dry-run: ${DRY}"
         local i n=0; local -a idmap=()
         for i in "${!MR_TYPE[@]}"; do
             if [ "${MR_TYPE[$i]}" = head ]; then
@@ -3137,6 +3144,46 @@ do_makedirs() {
     return 0
 }
 
+# Raise the open-files / process ulimits for the install user + root (dashboard: L).
+# WebLogic wants >=4096 open files; the distro's 1024 SOFT default is a select()
+# FD_SETSIZE relic (fds >= 1024 overflow that fixed bitmap), kept conservative to
+# catch fd leaks — it's a soft cap meant to be raised for servers, not a ceiling.
+# Boot-service NM/servers already get LimitNOFILE from their systemd unit; this
+# drop-in covers the install, WLST, and the manually-started n/s runs, which
+# inherit a login/sudo session's limit. It applies to NEW sessions only.
+do_raise_limits() {
+    [ "$(uname -s)" = "Linux" ] || { warn "ulimit tuning is Linux-only (host prep)."; return 0; }
+    local u; u="$(read_prop "$OCCAS_CONF" install.user)"; u="${u:-oracle}"
+    local drop="/etc/security/limits.d/99-blade-nofile.conf"
+    # Hard = the kernel per-process ceiling (fs.nr_open, usually 1048576). Soft is
+    # generous but deliberately NOT the ceiling: some fork-heavy tools close every
+    # fd up to the soft limit, so an enormous soft makes them crawl.
+    local hard; hard="$(cat /proc/sys/fs/nr_open 2>/dev/null || echo 1048576)"
+    local soft=65536; [ "$soft" -gt "$hard" ] && soft="$hard"
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] write ${drop}: ${u}/root nofile soft=${soft} hard=${hard}; ${u} nproc 65536${C_RESET}"
+        return 0
+    fi
+    local SUDO=""; [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && SUDO="sudo"
+    if printf '%s\n' \
+        "# BLADE host prep — raise open files / processes for WebLogic (OCCAS)." \
+        "${u} soft nofile ${soft}" \
+        "${u} hard nofile ${hard}" \
+        "root soft nofile ${soft}" \
+        "root hard nofile ${hard}" \
+        "${u} soft nproc 65536" \
+        "${u} hard nproc 65536" \
+        | $SUDO tee "$drop" >/dev/null && $SUDO chmod 644 "$drop"; then
+        ok "wrote ${drop} — nofile soft=${soft} hard=${hard} for ${u} & root."
+    else
+        warn "could not write ${drop} (need root?)."; return 1
+    fi
+    log "  ${C_DIM}Boot-service NM/servers already carry LimitNOFILE=65535 in their unit.${C_RESET}"
+    log "  ${C_DIM}Takes effect on NEW login/sudo sessions — reconnect ssh so 'ulimit -n' reflects it.${C_RESET}"
+    log "  ${C_DIM}This shell stays at $(ulimit -n 2>/dev/null || echo '?') until you re-login.${C_RESET}"
+    return 0
+}
+
 # ----------------------------------------------------------------------------
 # Fetch the OCCAS media from Oracle eDelivery (RUN: d).
 #
@@ -3782,7 +3829,11 @@ do_preflight() {
         [ "${swapkb:-0}" -gt 0 ] && ok "swap configured" || log "  ${C_DIM}no swap (ok on a big-RAM box).${C_RESET}"
         nofile="$(ulimit -n 2>/dev/null || echo 0)"
         if [ "$nofile" = unlimited ] || { [ "$nofile" -ge 4096 ] 2>/dev/null; }; then ok "open-files ulimit: ${nofile}"
-        else warn "open-files ulimit ${nofile} is low — WebLogic wants ≥4096 (set in /etc/security/limits.conf)."; fi
+        else
+            warn "open-files ulimit ${nofile} is low — WebLogic wants ≥4096."
+            log  "  ${C_DIM}(boot-service NM/servers already get LimitNOFILE from their unit; this bites the install + manual n/s runs.)${C_RESET}"
+            next_step L "raise the open-files limit (persists via /etc/security/limits.d)"
+        fi
         freekb="$(df -Pk "$(dirname "$mwhome")" 2>/dev/null | awk 'NR==2{print $4}')"; freegb=$(( ${freekb:-0} / 1024 / 1024 ))
         if [ "${freekb:-0}" -ge 10485760 ]; then ok "disk free where MW_HOME goes: ${freegb} GiB"
         else warn "only ${freegb} GiB free where MW_HOME goes — a full OCCAS install needs ~10 GiB."; fi
