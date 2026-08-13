@@ -107,13 +107,20 @@ if [ -z "$ID_CN" ]; then
 fi
 
 # --- Passphrases: env > secret file > prompt ---
+# A freshly supplied passphrase (from the environment or a prompt) is persisted
+# back into the one env conf as key=ENC(value). install-ssl and blade.sh's
+# emit_tls_block REQUIRE these keys to be present in the conf, so a passphrase
+# that only lived in a prompt would silently disable TLS on the next step.
 get_secret() {  # $1=env-var-name $2=secret-key $3=prompt-label
-    local v="${!1:-}"
-    [ -z "$v" ] && [ -f "$SECRET_FILE" ] && v=$(read_prop "$SECRET_FILE" "$2")
+    local v="${!1:-}" from_file=""
+    if [ -z "$v" ] && [ -f "$SECRET_FILE" ]; then
+        v=$(read_prop "$SECRET_FILE" "$2"); [ -n "$v" ] && from_file=1
+    fi
     if [ -z "$v" ]; then
         read -rs -p "$3: " v; echo >&2
         [ -n "$v" ] || { echo "No value for $3" >&2; exit 1; }
     fi
+    [ -z "$from_file" ] && printf '%s=ENC(%s)\n' "$2" "$v" >> "$CONF_FILE"
     printf '%s' "$v"
 }
 CA_PASS=$(get_secret      BLADE_TLS_CA_PASS       "tls.ca.passphrase"       "CA keystore passphrase")

@@ -3778,9 +3778,21 @@ Machine${idx}NodemanagerNMType=${type}"
         && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
 
     # The template is about to reference blade-identity.p12 / blade-trust.p12 by
-    # path, so they have to exist first. Placing them is install-ssl's
-    # 'keystores' tier; its ssl/sip tiers are NOT used any more -- that work now
-    # happens here, on the template, where dynamic servers can actually get it.
+    # path, so they have to exist first. Two steps: generate the source certs
+    # (the 'g' step) if they've never been made for this env, then place them
+    # (install-ssl's 'keystores' tier; its ssl/sip tiers are NOT used any more).
+    # This is where dynamic servers can actually get the keystore.
+    local envname; envname="$(basename "${DEPLOY_CONF%.conf}")"
+    local srcp12="${SCRIPT_DIR}/tls/out/${envname}/blade-identity.p12"
+    if [ "$DRY" != "on" ] && [ ! -f "$srcp12" ]; then
+        if [ "${CERT_SOURCE:-generate}" = supply ]; then
+            info "No certificates for '${envname}' yet — importing the supplied cert (the 'g' step) …"
+            "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
+        else
+            info "No certificates for '${envname}' yet — generating a self-signed CA (the 'g' step) …"
+            "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
+        fi
+    fi
     local ksdir="${KEYSTORE_DIR:-/opt/oracle/security}"
     if [ "$DRY" != "on" ] && [ ! -f "${ksdir}/blade-identity.p12" ]; then
         info "Placing keystores in ${ksdir} …"
