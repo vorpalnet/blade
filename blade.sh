@@ -2550,13 +2550,14 @@ patch_jdk() {
     return 0
 }
 
-# Build a PATCHED Oracle home, out-of-place (dashboard: patch).
+# Patch the Oracle home IN PLACE with OPatch (dashboard: patch).
 #
-# Oracle's eDelivery media ships buggy and the fixes come from My Oracle Support,
-# so patching sits between install and configure. This never touches the running
-# home: it copies the one 'current' resolves to, patches the COPY, and stops.
-# Nothing is switched. If a patch fails, the copy is discarded and the live
-# install is exactly as it was.
+# Oracle's eDelivery media ships buggy and the fixes come from My Oracle Support.
+# opatch patches the LIVE, inventory-registered home ('current' -> <ver>): a raw
+# copy of the home can't be patched — opatch rejects an unregistered ORACLE_HOME
+# ("RawInventory gets null OracleHomeInfo"), and this OCCAS build has no tool to
+# register one. Safety is opatch's own transactional apply + `rollback -id`, not a
+# throwaway copy. The home must be idle (servers stopped) before patching.
 #
 # Patch source: a directory of downloaded Oracle patch .zip files. Every zip is
 # unzipped and the OPatch patches are discovered from what unpacks — no hand-kept
@@ -2565,11 +2566,8 @@ patch_jdk() {
 # the newer OPatch. A patch's directory (holding etc/config/inventory.xml) is
 # named for its patch number, which is how they're ordered.
 #
-# Promotion is deliberate and separate:  sync-occas.sh distribute <ver> / switch <ver>
-# Rollback is flipping 'current' back -- the old home is still there.
-#
-# Engines are never patched. They receive a home that was patched and validated
-# once, here, on machine0.
+# Engines get the patched home by rsync: sync-occas.sh distribute <ver>. They are
+# not patched individually — machine0's validated home is the source of truth.
 do_patch() {
     local base="${OCCAS_BASE:-/opt/oracle/occas}" link="${MWHOME}"
 
@@ -2601,7 +2599,12 @@ do_patch() {
     for z in "$pdir"/*.zip; do
         [ -f "$z" ] || continue
         info "unzip $(basename "$z")"
-        unzip -q -o "$z" -d "$stage" || warn "unzip failed: $(basename "$z") — skipping."
+        unzip -q -o "$z" -d "$stage" || { warn "unzip failed: $(basename "$z") — skipping."; continue; }
+        # A patch zip carries OPatch metadata (etc/config/inventory.xml) or is an
+        # OPatch tool update (OPatch/opatch). Anything else — product media, docs —
+        # is not a patch; say so, so a wrong file dropped here isn't a silent no-op.
+        unzip -l "$z" 2>/dev/null | grep -qE 'etc/config/inventory\.xml|OPatch/opatch' \
+            || warn "$(basename "$z") is not an OPatch patch (no patch metadata — looks like product media/docs); ignoring it."
     done
 
     # OPatch-tool update: a zip unpacking its own 'OPatch/' dir (with an 'opatch'
@@ -2650,81 +2653,82 @@ do_patch() {
         )
     fi
 
-    # Next free <ver>_p<n>. The base version never gains a suffix, so the GA home
-    # stays identifiable however many rounds happen.
-    local stem="${real##*/}"; stem="${stem%%_p*}"
-    local n=1; while [ -e "${base}/${stem}_p${n}" ]; do n=$((n + 1)); done
-    local copy="${base}/${stem}_p${n}"
+    # In-place: patch the LIVE, inventory-registered home. Out-of-place (cp -a a
+    # copy, opatch it, flip 'current') can't work — opatch rejects an unregistered
+    # copy with "RawInventory gets null OracleHomeInfo", and this OCCAS build ships
+    # no tool to register one (opatch attachHome / FMW pasteBinary absent). opatch's
+    # own `rollback -id` is the safety net the copy was trying to provide.
+    local target="$real"
+    local op="${target}/OPatch/opatch"
 
-    info "Patch ${stem} -> $(basename "$copy")   (${#opdirs[@]} OPatch update(s), ${#pnum[@]} patch(es), from ${pdir})"
+    info "Patch $(basename "$target") in place   (${#opdirs[@]} OPatch update(s), ${#pnum[@]} patch(es), from ${pdir})"
     if [ "${#order[@]}" -gt 0 ]; then
         for pth in "${order[@]}"; do log "    $(basename "$pth")"; done
     fi
 
     if [ "$DRY" = "on" ]; then
-        log "${C_DIM}  [dry-run] cp -a ${real} ${copy}${C_RESET}"
-        if [ "${#opdirs[@]}" -gt 0 ]; then
-            for d in "${opdirs[@]}"; do log "${C_DIM}  [dry-run] OPatch update ← ${d} (replace ${copy}/OPatch)${C_RESET}"; done
-        fi
-        if [ "${#order[@]}" -gt 0 ]; then
-            for pth in "${order[@]}"; do
-                log "${C_DIM}  [dry-run] $(basename "$pth"): prereq CheckConflictAgainstOHWithDetail, then opatch apply -oh ${copy}${C_RESET}"
-            done
-        fi
-        log "${C_DIM}  [dry-run] opatch lsinventory -oh ${copy} > ${copy}/.blade-patch-manifest${C_RESET}"
+        local d0 p0
+        for d0 in ${opdirs[@]+"${opdirs[@]}"}; do log "${C_DIM}  [dry-run] replace ${target}/OPatch with the OPatch tool update${C_RESET}"; done
+        for p0 in ${order[@]+"${order[@]}"}; do log "${C_DIM}  [dry-run] $(basename "$p0"): prereq CheckConflictAgainstOHWithDetail, then opatch apply -oh ${target}${C_RESET}"; done
+        log "${C_DIM}  [dry-run] opatch lsinventory -oh ${target} > ${target}/.blade-patch-manifest${C_RESET}"
         rm -rf "$stage"
         return 0
     fi
 
-    # Everything from here runs as the OWNER of the live home — not blindly
-    # install.user: a legacy install owned by the login user patches as that
-    # user, and opatch writes the central inventory the same owner holds.
-    # IU_USER is dynamically scoped; every iu_*/as_install_user below follows.
-    local IU_USER; IU_USER="$(iu_owner_user "$real")"
+    # opatch rewrites files in the home — it MUST be idle, or running JVMs break and
+    # the patch can corrupt. Refuse while any WebLogic server or Node Manager is up.
+    if pgrep -f 'weblogic.Server' >/dev/null 2>&1 || pgrep -f 'weblogic.NodeManager' >/dev/null 2>&1; then
+        warn "WebLogic / Node Manager is running — an in-place patch needs the home idle."
+        log  "  ${C_DIM}Stop it first: dashboard 'x' (AdminServer) then 'k' (Node Manager), or: sudo systemctl stop weblogic nodemanager${C_RESET}"
+        rm -rf "$stage"; return 1
+    fi
 
-    info "Copying the home (the live one is not touched) …"
-    as_install_user cp -a "$real" "$copy" || { warn "copy to ${copy} failed (disk space?)."; rm -rf "$stage"; return 1; }
+    # Runs as the OWNER of the home (a legacy login-user install patches as that
+    # user; opatch writes the inventory the same owner holds).
+    local IU_USER; IU_USER="$(iu_owner_user "$target")"
+    iu_adopt_dir "$stage" || { rm -rf "$stage"; return 1; }
 
-    # Hand the unpacked patches to the home's owner so opatch (run as that user)
-    # can read them; cleanup then runs as the same owner.
-    iu_adopt_dir "$stage" || { rm -rf "$stage"; as_install_user rm -rf "$copy"; return 1; }
-
-    local op="${copy}/OPatch/opatch"
     # OPatch-tool updates first — later patches may require the newer OPatch.
-    if [ "${#opdirs[@]}" -gt 0 ]; then
-        for d in "${opdirs[@]}"; do
-            info "  OPatch update ← $(basename "$(dirname "$d")")"
-            as_install_user sh -c "rm -rf '${copy}/OPatch' && cp -a '${d}' '${copy}/OPatch'" \
-                || { warn "could not replace OPatch."; as_install_user rm -rf "$stage" "$copy"; return 1; }
-        done
-    fi
+    local d
+    for d in ${opdirs[@]+"${opdirs[@]}"}; do
+        info "  OPatch tool update ← $(basename "$(dirname "$d")")"
+        as_install_user sh -c "rm -rf '${target}/OPatch' && cp -a '${d}' '${target}/OPatch'" \
+            || { warn "could not update OPatch in ${target}."; as_install_user rm -rf "$stage"; return 1; }
+    done
 
-    # Numbered patches, lowest-first. cd into the patch home; opatch applies it.
-    local pd zb
-    if [ "${#order[@]}" -gt 0 ]; then
-        for pd in "${order[@]}"; do
-            zb="$(basename "$pd")"
-            info "  ${zb}: conflict check"
-            if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${copy}' '${op}' prereq CheckConflictAgainstOHWithDetail -ph '${pd}' -oh '${copy}' ${jre:+-jre '${jre}'} -silent" >/dev/null 2>&1; then
-                warn "${zb}: conflict check FAILED — stopping. ${copy} discarded, live home untouched."
-                as_install_user rm -rf "$stage" "$copy"; return 1
-            fi
-            info "  ${zb}: applying"
-            if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${copy}' '${op}' apply -silent -oh '${copy}' ${jre:+-jre '${jre}'}"; then
-                warn "${zb}: APPLY FAILED — stopping. ${copy} discarded, live home untouched."
-                as_install_user rm -rf "$stage" "$copy"; return 1
-            fi
-        done
-    fi
+    # Numbered patches, lowest-first, in place. A failed conflict check changes
+    # nothing for that patch; a failed apply is rolled back by opatch itself — but
+    # EARLIER patches in the batch are already applied, so stop and report so you
+    # can inspect (opatch lsinventory) before deciding to continue or roll back.
+    local pd zb applied=0
+    for pd in ${order[@]+"${order[@]}"}; do
+        zb="$(basename "$pd")"
+        info "  ${zb}: conflict check"
+        local _cc
+        if ! _cc="$(as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${target}' '${op}' prereq CheckConflictAgainstOHWithDetail -ph '${pd}' -oh '${target}' ${jre:+-jre '${jre}'} -silent" 2>&1)"; then
+            warn "${zb}: conflict check FAILED — stopping (${applied} patch(es) applied so far; ${zb} not applied)."
+            printf '%s\n' "$_cc" | strip_jdk_noise | grep -vE '^\s*$' | sed 's/^/    /' | tail -18
+            as_install_user rm -rf "$stage"; return 1
+        fi
+        info "  ${zb}: applying"
+        if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${target}' '${op}' apply -silent -oh '${target}' ${jre:+-jre '${jre}'}"; then
+            warn "${zb}: APPLY FAILED — stopping (opatch rolled ${zb} back; ${applied} earlier patch(es) remain applied)."
+            as_install_user rm -rf "$stage"; return 1
+        fi
+        applied=$((applied + 1))
+    done
     as_install_user rm -rf "$stage"
 
-    as_install_user sh -c "ORACLE_HOME='${copy}' '${op}' lsinventory -oh '${copy}' ${jre:+-jre '${jre}'} > '${copy}/.blade-patch-manifest' 2>&1" || true
-    ok "Patched home ready: ${copy} — ${#order[@]} interim patch(es) applied."
-    grep -cE "^Patch  *[0-9]+" "${copy}/.blade-patch-manifest" 2>/dev/null \
+    as_install_user sh -c "ORACLE_HOME='${target}' '${op}' lsinventory -oh '${target}' ${jre:+-jre '${jre}'} > '${target}/.blade-patch-manifest' 2>&1" || true
+    ok "Patched ${target} in place — ${applied} interim patch(es) applied."
+    grep -cE "^Patch  *[0-9]+" "${target}/.blade-patch-manifest" 2>/dev/null \
         | sed 's/^/  interim patches now present: /'
-    log "  ${C_DIM}Nothing switched. Validate it, then:${C_RESET}"
-    log "  ${C_DIM}  ./sync-occas.sh ${NAME} distribute $(basename "$copy")${C_RESET}"
-    log "  ${C_DIM}  ./sync-occas.sh ${NAME} switch     $(basename "$copy")${C_RESET}"
+    log "  ${C_DIM}Restart the servers to run on the patched home ('n', 's').${C_RESET}"
+    log "  ${C_DIM}Roll a patch back:  ${op} rollback -id <patch-number> -oh ${target}${C_RESET}"
+    if [ "${#H_ROLE[@]}" -gt 0 ]; then
+        local _ne=0 _r; for _r in "${H_ROLE[@]}"; do [ "$_r" = engine ] && _ne=$((_ne + 1)); done
+        [ "$_ne" -gt 0 ] && log "  ${C_DIM}Push the patched home to the ${_ne} engine host(s):  ./sync-occas.sh ${NAME} distribute $(basename "$target")${C_RESET}"
+    fi
     return 0
 }
 
