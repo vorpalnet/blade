@@ -2711,8 +2711,18 @@ do_patch() {
             as_install_user rm -rf "$stage"; return 1
         fi
         info "  ${zb}: applying"
-        if ! as_install_user sh -c "cd '${pd}' && ORACLE_HOME='${target}' '${op}' apply -silent -oh '${target}' ${jre:+-jre '${jre}'}"; then
+        # Explicit patch location (positional); capture the output so a failure
+        # shows opatch's real reason instead of a bare "FAILED".
+        local _ap
+        if ! _ap="$(as_install_user sh -c "ORACLE_HOME='${target}' '${op}' apply '${pd}' -silent -oh '${target}' ${jre:+-jre '${jre}'}" 2>&1)"; then
             warn "${zb}: APPLY FAILED — stopping (opatch rolled ${zb} back; ${applied} earlier patch(es) remain applied)."
+            printf '%s\n' "$_ap" | strip_jdk_noise | grep -vE '^\s*$' | sed 's/^/    /' | tail -18
+            # opatch's "Unable to parse the xml file" is what a too-old OPatch says
+            # about a PSU/system patch. If no OPatch updater was in the dir, that's
+            # the likely cause — the patch's own OPatch update must apply first.
+            if printf '%s' "$_ap" | grep -q 'Unable to parse the xml file' && [ "${#opdirs[@]}" -eq 0 ]; then
+                log "  ${C_DIM}Likely cause: OPatch is too old for this patch. Add the patch's OPatch updater zip (e.g. p28186730_*.zip) to ${pdir} — blade applies it first, then the patch.${C_RESET}"
+            fi
             as_install_user rm -rf "$stage"; return 1
         fi
         applied=$((applied + 1))
