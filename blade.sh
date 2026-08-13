@@ -1221,9 +1221,20 @@ dashboard_tui() {
             printf '\n  %spress Enter to return…%s ' "$C_DIM" "$C_RESET"
         fi
     }
+    # Breadcrumb under the banner naming the step(s) being run, so an action screen
+    # says which page you're on. Looks the label up from the row id(s).
+    _tui_subtitle() {
+        local id j lbl out=""
+        for id in "$@"; do
+            lbl=""
+            for j in "${!MR_ID[@]}"; do [ "${MR_ID[$j]}" = "$id" ] && { lbl="${MR_LABEL[$j]}"; break; }; done
+            [ -n "$lbl" ] && out="${out:+$out · }$lbl"
+        done
+        [ -n "$out" ] && printf '  %s%s%s\n' "$C_BOLD" "$out" "$C_RESET"
+    }
     _tui_run() {
         printf '\e[?25h'; trap - INT
-        printf '\e[2J\e[H'; banner; printf '\n'
+        printf '\e[2J\e[H'; banner; _tui_subtitle "$@"; printf '\n'
         next_step_reset
         local rid; for rid in "$@"; do dispatch_row "$rid"; done
         CHK=""
@@ -1241,7 +1252,7 @@ dashboard_tui() {
             done
             [ -n "$hit" ] || break
             load_profile
-            printf '\e[2J\e[H'; banner; printf '\n'
+            printf '\e[2J\e[H'; banner; _tui_subtitle "$hit"; printf '\n'
             next_step_reset
             dispatch_row "$hit"
             { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
@@ -3095,7 +3106,11 @@ do_makedirs() {
         return 0
     fi
 
-    if [ -d "${mw}/wlserver" ]; then
+    if [ "$mw" = "${OCCAS_BASE:-}/current" ]; then
+        : # 'current' is the stable symlink the install step publishes — it must
+          # NEVER be a real directory (mkdir'ing it breaks the install's ln -sfn).
+          # Only its parent (OCCAS_BASE, owned just below) has to exist.
+    elif [ -d "${mw}/wlserver" ]; then
         ok "MW_HOME already populated at ${mw} — leaving ownership as-is."
     elif $SUDO mkdir -p "$mw" && $SUDO chown -R "${user}:${grp}" "$mw"; then
         ok "created + chowned ${mw}."
@@ -3349,6 +3364,29 @@ strip_jdk_noise() {
     grep -vE 'A restricted method in java\.lang\.System has been called|System::load has been called by|Use --enable-native-access=ALL-UNNAMED|Restricted methods will be blocked in a future release|-mx option is deprecated and may be removed' || true
 }
 
+# Point the stable 'current' symlink (<link>) at a versioned home (<target>), as
+# the owner of the base dir. Robust two ways: it runs privileged so an oracle-owned
+# base doesn't EACCES, and if a stray REAL directory sits at <link> (an earlier
+# bug, or a mkdir'd path) it clears it first — otherwise `ln -sfn` would drop the
+# link INSIDE that dir instead of replacing it. Never removes a real install.
+publish_current_link() {
+    local target="$1" link="$2"
+    if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] ln -sfn ${target} ${link}${C_RESET}"; return 0; fi
+    local IU_USER; IU_USER="$(iu_owner_user "$(dirname "$link")")"
+    if [ -d "$link" ] && [ ! -L "$link" ]; then
+        if [ -d "${link}/wlserver" ]; then
+            warn "${link} is a real directory holding an install — refusing to replace it. Investigate."; return 1
+        fi
+        as_install_user rm -rf "$link" 2>/dev/null || sudo rm -rf "$link" 2>/dev/null \
+            || { warn "could not clear the stray directory at ${link}."; return 1; }
+    fi
+    as_install_user ln -sfn "$target" "$link" 2>/dev/null \
+        || sudo ln -sfn "$target" "$link" 2>/dev/null \
+        || { warn "could not create ${link} — nothing will resolve the Oracle home."; return 1; }
+    ok "${link} -> $(basename "$target")"
+    return 0
+}
+
 # ----------------------------------------------------------------------------
 # Step 1 — silent product install (java -jar <installer> -silent ...).
 # Idempotent: a populated MW_HOME means it's done (safe on a shared filesystem).
@@ -3371,7 +3409,7 @@ do_install() {
     fi
     if [ -d "${real}/wlserver" ]; then
         ok "OCCAS already present at ${real} — pointing ${mwhome} at it."
-        [ "$DRY" = "on" ] || ln -sfn "$real" "$mwhome"
+        publish_current_link "$real" "$mwhome" || return 1
         return 0
     fi
     mwhome="$real"
@@ -3435,12 +3473,7 @@ EOF
     # downstream -- the domain, the units, Node Manager -- resolves this path, so
     # a patch later is a flip of this one symlink.
     local link="${OCCAS_BASE}/current"
-    if [ "$mwhome" != "$link" ]; then
-        as_install_user ln -sfn "$mwhome" "$link" 2>/dev/null \
-            || sudo ln -sfn "$mwhome" "$link" 2>/dev/null \
-            || { warn "could not create ${link} — nothing will resolve the Oracle home."; return 1; }
-        ok "${link} -> $(basename "$mwhome")"
-    fi
+    [ "$mwhome" != "$link" ] && { publish_current_link "$mwhome" "$link" || return 1; }
 }
 
 # Emit the WLST that adds the optional static test engine as a configured member
