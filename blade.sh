@@ -3898,27 +3898,32 @@ Machine${idx}NodemanagerNMType=${type}"
         "${work}/occas-replicated-dynamiccluster.py" > "${work}/.py.tmp" \
         && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
 
-    # Generate the source certs (the 'g' step) if they've never been made, so the
-    # template can reference them and emit_tls_block can read their passphrases.
-    # The p12 FILES are placed into the domain's config/certs AFTER writeDomain,
-    # below -- placing them first would let writeDomain clobber them.
-    ensure_certs_source || warn "no TLS source certs — the domain will be built without TLS."
-
-    # TLS goes in FIRST so the template already carries the real certificate
-    # before any server is written from it.
-    if [ "${SIP_TLS:-}" != "" ] || [ "${CERT_SOURCE:-}" != "" ]; then
-        if emit_tls_block "BEA_ENGINE_TIER_CLUST" > "${work}/tls.block" 2>/dev/null; then
-            chmod 600 "${work}/tls.block"
-            awk 'NR==FNR { blk = blk $0 ORS; next }
-                 /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
-                 { print }' \
-                "${work}/tls.block" "${work}/occas-replicated-dynamiccluster.py" \
-                > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
-            log "  TLS: real certificate on the server template; sip=$([ "$SIP_PLAIN" = false ] && echo off || echo on):${SIP_PLAIN_PORT:-5060} sips=$([ "$SIP_TLS" = true ] && echo on:${SIP_PORT:-5061} || echo off)"
-        else
-            warn "TLS block not generated — domain will be built without it."
-        fi
+    # BLADE never ships a demo-cert domain: the certs must exist BEFORE writeDomain
+    # so emit_tls_block can bake their path + passphrases into config.xml. Generate
+    # (the 'g' step) if missing; the p12 FILES are placed into config/certs AFTER
+    # writeDomain (below) -- placing them first would let writeDomain clobber them.
+    # If the certs can't be produced (e.g. supply mode with nothing configured),
+    # refuse rather than silently fall back to WebLogic's demo identity.
+    if ! ensure_certs_source; then
+        rm -rf "$work"
+        warn "TLS certificates are not ready for '${NAME}' — refusing to build a demo-cert domain."
+        warn "Do STEP 4 first: 'g' (generate a CA) or 'sup' (supply your own), then configure."
+        return 1
     fi
+    # TLS goes in FIRST so the template already carries the real certificate before
+    # any server is written from it.
+    if ! emit_tls_block "BEA_ENGINE_TIER_CLUST" > "${work}/tls.block" 2>/dev/null; then
+        rm -rf "$work"
+        warn "TLS passphrases missing — refusing to build a demo-cert domain. Do STEP 4 ('g'/'sup') first."
+        return 1
+    fi
+    chmod 600 "${work}/tls.block"
+    awk 'NR==FNR { blk = blk $0 ORS; next }
+         /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
+         { print }' \
+        "${work}/tls.block" "${work}/occas-replicated-dynamiccluster.py" \
+        > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
+    log "  TLS: real certificate on the server template; sip=$([ "$SIP_PLAIN" = false ] && echo off || echo on):${SIP_PLAIN_PORT:-5060} sips=$([ "$SIP_TLS" = true ] && echo on:${SIP_PORT:-5061} || echo off)"
 
     local jh rc=0; jh="$(read_prop "$OCCAS_CONF" java.home)"
     # The domain lands in the install user's DOMAINS_DIR, so WLST runs as them.
@@ -3928,11 +3933,10 @@ Machine${idx}NodemanagerNMType=${type}"
     ok "Domain '${domain}' written under ${DOMAINS_DIR}/"
     # Now the domain dir exists, drop the keystores into its config/certs (the
     # exact path emit_tls_block baked into the template). config/certs replicates
-    # to the engines on start, so no per-node push. Only when TLS is in play.
-    if [ "${SIP_TLS:-}" != "" ] || [ "${CERT_SOURCE:-}" != "" ]; then
-        place_keystores "${KEYSTORE_DIR}" \
-            || warn "keystores not placed — servers will fail TLS until 'g'+'t' run and the domain is rebuilt."
-    fi
+    # to the engines on start, so no per-node push. Certs are guaranteed present
+    # (ensure_certs_source above), so a failure here is a real placement error.
+    place_keystores "${KEYSTORE_DIR}" \
+        || warn "keystores not placed — the AdminServer will fail to load its identity until 't' runs."
     # Give the domain's servers enough heap/metaspace (the admin EAR OOMs the
     # OCCAS dev default) via setUserOverrides.sh, which the NM start path sources.
     write_user_overrides "${DOMAINS_DIR}/${domain}"
