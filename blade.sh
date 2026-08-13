@@ -303,6 +303,7 @@ load_profile() {
     INSTALL_GID="$(d install.gid "")"
     INSTALL_TYPE="$(d install.type 'Complete with Examples')"
     JAVA_HOME_VAL="$(d java.home "${JAVA_HOME:-}")"
+    JAVA_BUILD_VAL="$(d java.build.home "")"   # the 23+ JDK for ./build.sh
     # Like the Oracle home, java.home is a SYMLINK on Linux: JDKs sit side by
     # side under java.dir and java.home points at <java.dir>/current, so a
     # Java upgrade is a flip of that one link (the patch step offers it).
@@ -545,94 +546,34 @@ EOF
         fi
     fi
 
-    # JDK for the INSTALLER + servers. The certification matrix names a major
-    # per OCCAS release, but it's a recommendation, not a gate — newer majors
-    # are known to run (Oracle says 8.3 runs fine on 25). List what's
-    # installed, flag the certified one, and let the user decide. Only a JDK
-    # BELOW the certified major is worth a fight — that rarely runs at all.
-    # This is NOT the build JDK: ./build.sh wants 23+ (it emits Java 11 bytecode).
+    # Two JDKs, on purpose. OCCAS ${OCCAS_VERSION} is CERTIFIED on a specific major
+    # and it is NOT optional: a newer JDK breaks opatch's PSU/system-patch parsing
+    # ("Unable to parse the xml file"), so the runtime — servers AND opatch — runs
+    # the certified JDK, published as java.home (<java.dir>/current). The BLADE
+    # build (./build.sh) separately needs 23+, so a newer JDK is fetched for the
+    # build and published as <java.dir>/build. A JDK upgrade is then a link flip.
     log ""
-    local _want; _want="$(occas_jdk_major "$OCCAS_VERSION")"
-    local _jdks=() _line _cert=""
-    while IFS= read -r _line; do
-        _jdks+=("$_line")
-        [ -n "$_want" ] && [ -z "$_cert" ] && [ "${_line##*$'\t'}" = "$_want" ] \
-            && _cert="${_line%%$'\t'*}"
-    done < <(list_jdks)
-    if [ "${#_jdks[@]}" -gt 0 ]; then
-        log "  installed JDKs:"
-        local _i=1 _tag
-        for _line in "${_jdks[@]}"; do
-            _tag=""
-            [ -n "$_want" ] && [ "${_line##*$'\t'}" = "$_want" ] \
-                && _tag="   <- certified for OCCAS ${OCCAS_VERSION}"
-            log "    [${_i}] JDK ${_line##*$'\t'}   ${_line%%$'\t'*}${_tag}"
-            _i=$((_i + 1))
-        done
-        [ -n "$_want" ] && [ -z "$_cert" ] \
-            && log "  ${C_DIM}none is the certified JDK ${_want} — fine if you know yours runs.${C_RESET}"
-    elif [ -n "$_want" ] && jdk_dl_supported "$_want" \
-         && yesno "no JDKs found; OCCAS ${OCCAS_VERSION} is certified on JDK ${_want} — download it from Oracle into ${JAVA_BASE}?" "Y"; then
-        download_jdk "$_want" "$JAVA_BASE" \
-            && _jdks=("${JDK_DL_HOME}"$'\t'"${_want}") && _cert="$JDK_DL_HOME"
-    else
-        warn "no JDKs found here — install one or point me at it."
+    local _runmaj; _runmaj="$(occas_jdk_major "$OCCAS_VERSION")"; _runmaj="${_runmaj:-21}"
+    local _bldmaj; _bldmaj="$(d java.build.major 25)"
+    if [ "$(uname -s)" != "Linux" ]; then
+        # macOS dev: no auto-download; the two JDKs are set up on the Linux target.
+        [ -x "${JAVA_HOME_VAL}/bin/java" ] || JAVA_HOME_VAL="${JAVA_HOME:-}"
+        log "  ${C_DIM}runtime JDK ${_runmaj} + build JDK ${_bldmaj} are for the Linux install target; set them up there.${C_RESET}"
+        return 0
     fi
-    log "  ${C_DIM}(the build JDK is separate — ./build.sh wants 23+.)${C_RESET}"
-    # Default JDK home: keep a saved java.home only if it still resolves. A
-    # persisted <java.dir>/current link goes dead when the JDK isn't installed
-    # yet, or /opt/oracle was rebuilt — never offer a path with no bin/java.
-    # Fall back to the certified JDK, else the first one listed, else $JAVA_HOME.
-    local _jdef="$JAVA_HOME_VAL"
-    if [ -n "$_jdef" ] && [ ! -x "${_jdef}/bin/java" ]; then _jdef=""; fi
-    if [ -z "$_jdef" ]; then
-        if [ -n "$_cert" ]; then _jdef="$_cert"
-        elif [ "${#_jdks[@]}" -gt 0 ]; then _jdef="${_jdks[0]%%$'\t'*}"
-        else _jdef="${JAVA_HOME:-}"; fi
-    fi
-    while :; do
-        ask JAVA_HOME_VAL "JDK home for OCCAS (a number above, or a path)" "$_jdef"
-        [ -n "$JAVA_HOME_VAL" ] || { warn "a JDK home is required."; continue; }
-        case "$JAVA_HOME_VAL" in
-            *[!0-9]*) : ;;   # a path — take it as typed
-            *) if [ "$JAVA_HOME_VAL" -ge 1 ] && [ "$JAVA_HOME_VAL" -le "${#_jdks[@]}" ]; then
-                   JAVA_HOME_VAL="${_jdks[$((JAVA_HOME_VAL - 1))]%%$'\t'*}"
-               else
-                   warn "no [$JAVA_HOME_VAL] in the list."; continue
-               fi ;;
-        esac
-        if [ ! -x "${JAVA_HOME_VAL}/bin/java" ]; then
-            warn "no bin/java under ${JAVA_HOME_VAL} — that's not a JDK home."
-            yesno "use it anyway?" "N" && break || continue
-        fi
-        local _got; _got="$(jdk_major "${JAVA_HOME_VAL}/bin/java")"
-        if [ -n "$_want" ] && [ -n "$_got" ] && [ "$_got" != "$_want" ]; then
-            if [ "$_got" -lt "$_want" ] 2>/dev/null; then
-                warn "that's JDK ${_got}, BELOW OCCAS ${OCCAS_VERSION}'s certified JDK ${_want} — unlikely to run."
-                yesno "use JDK ${_got} anyway?" "N" && break || continue
-            fi
-            log "  ${C_DIM}JDK ${_got} is newer than the certified JDK ${_want} — your call, proceeding.${C_RESET}"
-        fi
-        break
-    done
 
-    # Mirror ORACLE_HOME: store the LINK, not the versioned path, so a JDK
-    # upgrade is a flip of <java.dir>/current. macOS dev profiles keep the raw
-    # path — host prep is for the Linux install target.
-    if [ "$(uname -s)" = "Linux" ] && [ "$JAVA_HOME_VAL" != "${JAVA_BASE}/current" ]; then
-        local _real; _real="$(readlink -f "$JAVA_HOME_VAL" 2>/dev/null || printf '%s' "$JAVA_HOME_VAL")"
-        if yesno "point ${JAVA_BASE}/current -> ${_real} and use the link as java.home?" "Y"; then
-            if [ "$DRY" = "on" ]; then
-                log "${C_DIM}  [dry-run] ln -sfn ${_real} ${JAVA_BASE}/current${C_RESET}"
-                JAVA_HOME_VAL="${JAVA_BASE}/current"
-            elif { mkdir -p "$JAVA_BASE" && ln -sfn "$_real" "${JAVA_BASE}/current"; } 2>/dev/null \
-              || { sudo mkdir -p "$JAVA_BASE" && sudo ln -sfn "$_real" "${JAVA_BASE}/current"; } 2>/dev/null; then
-                JAVA_HOME_VAL="${JAVA_BASE}/current"
-                ok "java.home is the link: ${JAVA_BASE}/current -> ${_real}"
-            else
-                warn "could not create ${JAVA_BASE}/current — keeping ${JAVA_HOME_VAL}."
-            fi
-        fi
+    info "Runtime JDK ${_runmaj} — certified for OCCAS ${OCCAS_VERSION} (servers + opatch); build JDK ${_bldmaj} — for ./build.sh."
+    local _rt; _rt="$(ensure_jdk "$_runmaj")"
+    if [ -n "$_rt" ] && [ -x "${_rt}/bin/java" ]; then
+        JAVA_HOME_VAL="$(link_jdk "$_rt" current)"
+    else
+        warn "no runtime JDK ${_runmaj} available — OCCAS + opatch require it. Install it under ${JAVA_BASE:-/opt/oracle/java} and re-run this phase."
+    fi
+    local _bd; _bd="$(ensure_jdk "$_bldmaj")"
+    if [ -n "$_bd" ] && [ -x "${_bd}/bin/java" ]; then
+        JAVA_BUILD_VAL="$(link_jdk "$_bd" build)"
+    else
+        log "  ${C_DIM}build JDK ${_bldmaj} not set up — ./build.sh will need a 23+ JDK on its PATH.${C_RESET}"
     fi
     return 0
 }
@@ -891,6 +832,10 @@ save_profile() {
         echo "# java.dir and a Java upgrade is a flip of that one link (RUN patch)."
         echo "java.dir=${JAVA_BASE}"
         echo "java.home=${JAVA_HOME_VAL}"
+        echo "# java.build.home is the 23+ JDK for ./build.sh (<java.dir>/build); the"
+        echo "# runtime above is the OCCAS-certified major. java.build.major sets which."
+        echo "java.build.home=${JAVA_BUILD_VAL:-}"
+        echo "java.build.major=$(d java.build.major 25)"
         echo ""
         echo "# --- Step 2: dynamic-cluster domain ---"
         echo "# WebLogic domain = administrative container, NOT a DNS name. configure"
@@ -2578,6 +2523,27 @@ do_patch() {
     # Read java.home AFTER the JDK leg — migration may have just rewritten it.
     local jre; jre="$(read_prop "$OCCAS_CONF" java.home)"
 
+    # opatch MUST run on the OCCAS-certified JDK, not the server JDK. A newer JDK
+    # (e.g. 25) breaks opatch's PSU/composite XML parsing ("Unable to parse the xml
+    # file") even though the servers run fine on it. If java.home is a different
+    # major than certified, find a certified-major JDK — or fetch one — for opatch.
+    local _wm; _wm="$(occas_jdk_major "$OCCAS_VERSION")"
+    if [ -n "$_wm" ] && [ -x "${jre}/bin/java" ] && [ "$(jdk_major "${jre}/bin/java")" != "$_wm" ]; then
+        local _cj="" _ln
+        while IFS= read -r _ln; do
+            [ "${_ln##*$'\t'}" = "$_wm" ] && { _cj="${_ln%%$'\t'*}"; break; }
+        done < <(list_jdks)
+        if [ -z "$_cj" ] && jdk_dl_supported "$_wm"; then
+            info "opatch needs the certified JDK ${_wm} (java.home is $(jdk_major "${jre}/bin/java")); fetching it…"
+            download_jdk "$_wm" "${JAVA_BASE:-/opt/oracle/java}" && _cj="$JDK_DL_HOME"
+        fi
+        if [ -n "$_cj" ] && [ -x "${_cj}/bin/java" ]; then
+            jre="$_cj"; info "opatch will use the certified JDK ${_wm} at ${jre}."
+        else
+            warn "no certified JDK ${_wm} available for opatch — PSU/system patches may fail to parse on JDK $(jdk_major "${jre}/bin/java")."
+        fi
+    fi
+
     # --- where the downloaded patches live -----------------------------------
     local pdir; pdir="$(read_prop "$OCCAS_CONF" patch.dir)"; pdir="${pdir/#\~/$HOME}"
     pdir="${pdir:-${HOME}/occas-patches}"
@@ -2603,18 +2569,22 @@ do_patch() {
         # A patch zip carries OPatch metadata (etc/config/inventory.xml) or is an
         # OPatch tool update (OPatch/opatch). Anything else — product media, docs —
         # is not a patch; say so, so a wrong file dropped here isn't a silent no-op.
-        unzip -l "$z" 2>/dev/null | grep -qE 'etc/config/inventory\.xml|OPatch/opatch' \
+        unzip -l "$z" 2>/dev/null | grep -qE 'etc/config/inventory\.xml|OPatch/opatch|opatch_generic\.jar' \
             || warn "$(basename "$z") is not an OPatch patch (no patch metadata — looks like product media/docs); ignoring it."
     done
 
-    # OPatch-tool update: a zip unpacking its own 'OPatch/' dir (with an 'opatch'
-    # launcher). A normal patch is a home carrying OPatch metadata at
-    # etc/config/inventory.xml; its directory name is the patch number.
-    local opdirs=() pnum=() ppath=()
+    # OPatch-tool update, two shipping formats: an 'OPatch/' dir to drop in (with an
+    # 'opatch' launcher), or an 'opatch_generic.jar' installer to run. A normal patch
+    # is a home carrying OPatch metadata at etc/config/inventory.xml; its directory
+    # name is the patch number.
+    local opdirs=() opjars=() pnum=() ppath=()
     local seen=" " d bn key f
     while IFS= read -r d; do
         [ -n "$d" ] && [ -f "${d}/opatch" ] && opdirs+=("$d")
     done < <(find "$stage" "$pdir" -maxdepth 4 -type d -name OPatch 2>/dev/null)
+    while IFS= read -r f; do
+        [ -n "$f" ] && opjars+=("$f")
+    done < <(find "$stage" "$pdir" -maxdepth 4 -type f -name opatch_generic.jar 2>/dev/null)
     while IFS= read -r f; do
         [ -n "$f" ] || continue
         d="$(dirname "$(dirname "$(dirname "$f")")")"   # …/etc/config/inventory.xml → patch home
@@ -2631,7 +2601,7 @@ do_patch() {
     # for it is pointless and reads like a patch happened when none did.
     if [ "${#pnum[@]}" -eq 0 ]; then
         rm -rf "$stage"
-        if [ "${#opdirs[@]}" -gt 0 ]; then
+        if [ "$(( ${#opdirs[@]} + ${#opjars[@]} ))" -gt 0 ]; then
             ok "No interim patches in ${pdir} — only an OPatch tool update, so nothing to patch."
             log "  ${C_DIM}An OPatch update applies together with real fixes; add OCCAS patch zips to ${pdir} to patch.${C_RESET}"
             return 0
@@ -2661,7 +2631,7 @@ do_patch() {
     local target="$real"
     local op="${target}/OPatch/opatch"
 
-    info "Patch $(basename "$target") in place   (${#opdirs[@]} OPatch update(s), ${#pnum[@]} patch(es), from ${pdir})"
+    info "Patch $(basename "$target") in place   ($(( ${#opdirs[@]} + ${#opjars[@]} )) OPatch update(s), ${#pnum[@]} patch(es), from ${pdir})"
     if [ "${#order[@]}" -gt 0 ]; then
         for pth in "${order[@]}"; do log "    $(basename "$pth")"; done
     fi
@@ -2669,6 +2639,7 @@ do_patch() {
     if [ "$DRY" = "on" ]; then
         local d0 p0
         for d0 in ${opdirs[@]+"${opdirs[@]}"}; do log "${C_DIM}  [dry-run] replace ${target}/OPatch with the OPatch tool update${C_RESET}"; done
+        for d0 in ${opjars[@]+"${opjars[@]}"}; do log "${C_DIM}  [dry-run] java -jar $(basename "$d0") -silent oracle_home=${target}  (OPatch tool update)${C_RESET}"; done
         for p0 in ${order[@]+"${order[@]}"}; do log "${C_DIM}  [dry-run] $(basename "$p0"): prereq CheckConflictAgainstOHWithDetail, then opatch apply -oh ${target}${C_RESET}"; done
         log "${C_DIM}  [dry-run] opatch lsinventory -oh ${target} > ${target}/.blade-patch-manifest${C_RESET}"
         rm -rf "$stage"
@@ -2689,11 +2660,22 @@ do_patch() {
     iu_adopt_dir "$stage" || { rm -rf "$stage"; return 1; }
 
     # OPatch-tool updates first — later patches may require the newer OPatch.
+    # Dir format: drop the OPatch/ tree in. Jar format: run the opatch_generic.jar
+    # installer (java -jar … -silent oracle_home=<OH>).
     local d
     for d in ${opdirs[@]+"${opdirs[@]}"}; do
         info "  OPatch tool update ← $(basename "$(dirname "$d")")"
         as_install_user sh -c "rm -rf '${target}/OPatch' && cp -a '${d}' '${target}/OPatch'" \
             || { warn "could not update OPatch in ${target}."; as_install_user rm -rf "$stage"; return 1; }
+    done
+    local _jb; _jb="${jre:+${jre}/bin/java}"; [ -x "$_jb" ] || _jb="$(java_bin)"
+    for d in ${opjars[@]+"${opjars[@]}"}; do
+        info "  OPatch tool update ← $(basename "$(dirname "$d")") (opatch_generic.jar)"
+        local _oj
+        if ! _oj="$(as_install_user sh -c "'${_jb}' -jar '${d}' -silent oracle_home='${target}'" 2>&1)"; then
+            warn "OPatch update failed."; printf '%s\n' "$_oj" | strip_jdk_noise | grep -vE '^\s*$' | sed 's/^/    /' | tail -12
+            as_install_user rm -rf "$stage"; return 1
+        fi
     done
 
     # Numbered patches, lowest-first, in place. A failed conflict check changes
@@ -2720,8 +2702,8 @@ do_patch() {
             # opatch's "Unable to parse the xml file" is what a too-old OPatch says
             # about a PSU/system patch. If no OPatch updater was in the dir, that's
             # the likely cause — the patch's own OPatch update must apply first.
-            if printf '%s' "$_ap" | grep -q 'Unable to parse the xml file' && [ "${#opdirs[@]}" -eq 0 ]; then
-                log "  ${C_DIM}Likely cause: OPatch is too old for this patch. Add the patch's OPatch updater zip (e.g. p28186730_*.zip) to ${pdir} — blade applies it first, then the patch.${C_RESET}"
+            if printf '%s' "$_ap" | grep -q 'Unable to parse the xml file'; then
+                log "  ${C_DIM}\"Unable to parse the xml file\" on a PSU/system patch usually means a JDK mismatch (opatch fails on a newer JDK — OCCAS 8.3 is certified on 21) or an OPatch too old. blade now runs opatch on the certified JDK and applies an OPatch updater (p28186730_*.zip) first if present.${C_RESET}"
             fi
             as_install_user rm -rf "$stage"; return 1
         fi
@@ -3080,6 +3062,34 @@ download_jdk() {
     ok "JDK ${want} ready at ${home}" >&2
     JDK_DL_HOME="$home"
     return 0
+}
+
+# Ensure a JDK of <major> exists under JAVA_BASE and echo its path. Reuses one
+# that's already installed; otherwise downloads Oracle's latest of that major.
+# All chatter goes to stderr so the path is the only thing on stdout.
+ensure_jdk() {
+    local maj="$1" line path=""
+    while IFS= read -r line; do
+        [ "${line##*$'\t'}" = "$maj" ] && { path="${line%%$'\t'*}"; break; }
+    done < <(list_jdks)
+    if [ -z "$path" ] && jdk_dl_supported "$maj"; then
+        download_jdk "$maj" "${JAVA_BASE:-/opt/oracle/java}" >&2 && path="$JDK_DL_HOME"
+    fi
+    printf '%s' "$path"
+}
+
+# Point JAVA_BASE/<name> at a real JDK path (a JDK upgrade is then a link flip).
+# Echoes the link on success, the raw path if the link couldn't be made.
+link_jdk() {
+    local real="$1" name="$2" link="${JAVA_BASE:-/opt/oracle/java}/${name}"
+    real="$(readlink -f "$real" 2>/dev/null || printf '%s' "$real")"
+    if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] ln -sfn ${real} ${link}${C_RESET}" >&2; printf '%s' "$link"; return 0; fi
+    if { mkdir -p "$(dirname "$link")" && ln -sfn "$real" "$link"; } 2>/dev/null \
+       || { sudo mkdir -p "$(dirname "$link")" && sudo ln -sfn "$real" "$link"; } 2>/dev/null; then
+        ok "${link} -> ${real}" >&2; printf '%s' "$link"
+    else
+        warn "could not create ${link} — using ${real} directly." >&2; printf '%s' "$real"
+    fi
 }
 
 # ----------------------------------------------------------------------------
