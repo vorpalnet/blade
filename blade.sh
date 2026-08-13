@@ -264,6 +264,7 @@ installer_version() {
 # All state lives in globals (no 'local') so the phases can share and update it.
 load_profile() {
     set_paths
+    PF_OK="$(d preflight.passed "")"   # last preflight result, for the dashboard ✓
     DOMAIN="$(d domain.name "")"
     START_MODE="$(d server.start.mode dev)"
     ADMIN_USER="$(d admin.username weblogic)"
@@ -3846,9 +3847,9 @@ do_preflight() {
         else warn "inventory location not writable by '${pf_as}': ${inv_loc}"; PF_NEED="yes"; _pf_dirs="yes"; fi
         # Media + JDK must be READABLE by the install user — anything parked
         # under the invoker's 0700 home dir is not.
-        if iu_switching && [ -n "$installer" ] && [ -f "$installer" ]; then
+        if iu_switching && ! occas_installed "$mwhome" && [ -n "$installer" ] && [ -f "$installer" ]; then
             if as_install_user test -r "$installer"; then ok "installer readable by ${pf_as}"
-            else log "  ${C_DIM}installer not readable by ${pf_as} — the install step stages a copy beside the install.${C_RESET}"; fi
+            else log "  ${C_DIM}installer not readable by ${pf_as} — the install step will stage a copy where ${pf_as} can read it.${C_RESET}"; fi
         fi
         if iu_switching && [ -x "${jhome}/bin/java" ] && ! as_install_user test -x "${jhome}/bin/java"; then
             warn "JDK ${jhome} not usable by '${pf_as}' (under a private home?) — put it under $(dirname "${OCCAS_BASE:-/opt/oracle/occas}")/java"
@@ -3942,8 +3943,11 @@ do_preflight() {
 
     # Remember the outcome so the dashboard's Preflight row shows a ✓ once it has
     # passed (build_menu_rows reads this — it must NOT re-run preflight, which now
-    # has a side effect). A later config change just means re-running it.
+    # has a side effect). Persist it to the profile so a fresh launch reflects the
+    # last run; editing any phase rewrites the conf (save_profile truncates), which
+    # drops this key and forces a re-run — automatic, correct invalidation.
     [ -n "$PF_NEED" ] && PF_OK=0 || PF_OK=1
+    if [ "$DRY" != on ] && [ -f "$OCCAS_CONF" ]; then set_conf_prop "$OCCAS_CONF" preflight.passed "$PF_OK"; fi
 }
 
 # Register an app domain with the standalone Node Manager (nmdomain) so that
