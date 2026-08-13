@@ -576,7 +576,17 @@ EOF
         warn "no JDKs found here — install one or point me at it."
     fi
     log "  ${C_DIM}(the build JDK is separate — ./build.sh wants 23+.)${C_RESET}"
-    local _jdef="$JAVA_HOME_VAL"; [ -n "$_jdef" ] || _jdef="${_cert:-${JAVA_HOME:-}}"
+    # Default JDK home: keep a saved java.home only if it still resolves. A
+    # persisted <java.dir>/current link goes dead when the JDK isn't installed
+    # yet, or /opt/oracle was rebuilt — never offer a path with no bin/java.
+    # Fall back to the certified JDK, else the first one listed, else $JAVA_HOME.
+    local _jdef="$JAVA_HOME_VAL"
+    if [ -n "$_jdef" ] && [ ! -x "${_jdef}/bin/java" ]; then _jdef=""; fi
+    if [ -z "$_jdef" ]; then
+        if [ -n "$_cert" ]; then _jdef="$_cert"
+        elif [ "${#_jdks[@]}" -gt 0 ]; then _jdef="${_jdks[0]%%$'\t'*}"
+        else _jdef="${JAVA_HOME:-}"; fi
+    fi
     while :; do
         ask JAVA_HOME_VAL "JDK home for OCCAS (a number above, or a path)" "$_jdef"
         [ -n "$JAVA_HOME_VAL" ] || { warn "a JDK home is required."; continue; }
