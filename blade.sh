@@ -93,14 +93,16 @@ PAGE_ABORT=0
 # (Cooked mode can't see a lone Esc keypress before Enter — that's the price of
 # leaving paste to the terminal instead of reading it byte-by-byte.)
 _read_or_abort() {  # $1=destvar  $2=hidden(1|0)
-    local __in
+    # Internal temp must not collide with the caller's var name (bash has dynamic
+    # scope; ask/ask_secret pass __in/__a/__b) or printf -v would write our local.
+    local __roa
     if [ "${2:-0}" = 1 ]; then
-        IFS= read -rs __in 2>/dev/null || { printf -v "$1" '%s' ""; return 0; }; echo
+        IFS= read -rs __roa 2>/dev/null || { printf -v "$1" '%s' ""; return 0; }; echo
     else
-        IFS= read -r  __in 2>/dev/null || { printf -v "$1" '%s' ""; return 0; }
+        IFS= read -r  __roa 2>/dev/null || { printf -v "$1" '%s' ""; return 0; }
     fi
-    case "$__in" in $'\e'*) PAGE_ABORT=1; return 1 ;; esac
-    printf -v "$1" '%s' "$__in"
+    case "$__roa" in $'\e'*) PAGE_ABORT=1; return 1 ;; esac
+    printf -v "$1" '%s' "$__roa"
 }
 # ask VAR "label" "default"   — Enter accepts the default; Esc cancels the page.
 ask() {
