@@ -3171,9 +3171,8 @@ do_raise_limits() {
     else
         warn "could not write ${drop} (need root?)."; return 1
     fi
+    log "  ${C_DIM}${u}'s sudo sessions — which run the install and the servers — get it immediately; a fresh preflight will confirm it. Your own login shell is unaffected.${C_RESET}"
     log "  ${C_DIM}Boot-service NM/servers already carry LimitNOFILE=65535 in their unit.${C_RESET}"
-    log "  ${C_DIM}Takes effect on NEW login/sudo sessions — reconnect ssh so 'ulimit -n' reflects it.${C_RESET}"
-    log "  ${C_DIM}This shell stays at $(ulimit -n 2>/dev/null || echo '?') until you re-login.${C_RESET}"
     return 0
 }
 
@@ -3340,6 +3339,16 @@ EOF
     fi
 }
 
+# Drop the benign JVM/OUI warnings that JDK 24+ prints around Oracle's installer:
+# it relaunches a child JVM we can't pass flags to, and its JNI use trips the
+# "restricted method / native-access" notes (JEP 472) plus a "-mx deprecated"
+# note. Filter EXACTLY those lines — progress, success, and any real error pass
+# through untouched. `|| true` so the filter itself never fails the pipe; the
+# installer's own exit status still governs success (via pipefail).
+strip_jdk_noise() {
+    grep -vE 'A restricted method in java\.lang\.System has been called|System::load has been called by|Use --enable-native-access=ALL-UNNAMED|Restricted methods will be blocked in a future release|-mx option is deprecated and may be removed' || true
+}
+
 # ----------------------------------------------------------------------------
 # Step 1 — silent product install (java -jar <installer> -silent ...).
 # Idempotent: a populated MW_HOME means it's done (safe on a shared filesystem).
@@ -3415,7 +3424,9 @@ EOF
             rm -f "$rsp" "$inv"; warn "could not stage ${installer} for $(iu_name)."; return 1
         fi
     fi
-    if as_install_user "$(java_bin)" -jar "$installer" -silent -responseFile "$rsp" -invPtrLoc "$inv" -ignoreSysPrereqs; then
+    # 2>&1 so the JDK warnings (on stderr) reach the filter; pipefail + the if
+    # keep the installer's real exit as the pass/fail signal (grep never fails it).
+    if as_install_user "$(java_bin)" -jar "$installer" -silent -responseFile "$rsp" -invPtrLoc "$inv" -ignoreSysPrereqs 2>&1 | strip_jdk_noise; then
         rm -f "$rsp" "$inv"; ok "Product installed at ${mwhome}"
     else
         rm -f "$rsp" "$inv"; warn "silent install failed"; return 1
@@ -3820,13 +3831,20 @@ do_preflight() {
         else warn "RAM: ${memgb} GiB — OCCAS wants ~4 GiB+; installs and servers may thrash."; fi
         swapkb="$(awk '/SwapTotal/{print $2}' /proc/meminfo 2>/dev/null)"
         [ "${swapkb:-0}" -gt 0 ] && ok "swap configured" || log "  ${C_DIM}no swap (ok on a big-RAM box).${C_RESET}"
-        nofile="$(ulimit -n 2>/dev/null || echo 0)"
-        if [ "$nofile" = unlimited ] || { [ "$nofile" -ge 4096 ] 2>/dev/null; }; then ok "open-files ulimit: ${nofile}"
-        elif [ -f /etc/security/limits.d/99-blade-nofile.conf ]; then
-            ok "open-files limit set in limits.d (65536) — active on your NEXT login; this session is still ${nofile}."
+        # The install + servers run as the INSTALL USER via sudo, so measure THAT
+        # user's effective limit — not this login shell's, which is irrelevant and
+        # never gets raised. A fresh sudo session reads limits.d immediately, so
+        # after the auto-fix below the very next preflight sees the new value —
+        # no logout/login, no reboot.
+        local _pfu; _pfu="$(read_prop "$OCCAS_CONF" install.user)"; _pfu="${_pfu:-oracle}"
+        if [ "$(id -un)" = "$_pfu" ]; then nofile="$(ulimit -n 2>/dev/null || echo 0)"
+        elif id "$_pfu" >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+            nofile="$(sudo -n -u "$_pfu" bash -c 'ulimit -n' 2>/dev/null || echo 0)"
+        else nofile="$(ulimit -n 2>/dev/null || echo 0)"; fi   # user not created yet
+        if [ "$nofile" = unlimited ] || { [ "$nofile" -ge 4096 ] 2>/dev/null; }; then
+            ok "open-files limit (${_pfu}): ${nofile}"
         else
-            warn "open-files ulimit ${nofile} is low — WebLogic wants ≥4096."
-            log  "  ${C_DIM}(boot-service NM/servers already get LimitNOFILE from their unit; this bites the install + manual n/s runs.)${C_RESET}"
+            warn "open-files limit for '${_pfu}' is ${nofile} — WebLogic wants ≥4096."
             _pf_nofile=low
         fi
         freekb="$(df -Pk "$(dirname "$mwhome")" 2>/dev/null | awk 'NR==2{print $4}')"; freegb=$(( ${freekb:-0} / 1024 / 1024 ))
@@ -4291,7 +4309,7 @@ do_deinstall() {
     fi
     yesno "Deinstall the OCCAS product at ${mw}? Runs Oracle's deinstaller (detaches the central inventory and removes the software)." "N" \
         || { warn "kept the OCCAS product at ${mw}."; return 1; }
-    if $SUDO "$deinst" -silent; then ok "deinstalled the OCCAS product at ${mw}."
+    if $SUDO "$deinst" -silent 2>&1 | strip_jdk_noise; then ok "deinstalled the OCCAS product at ${mw}."
     else warn "Oracle deinstaller returned an error — you may need the 'Remove install dirs' row."; return 1; fi
 }
 
