@@ -2673,8 +2673,14 @@ do_patch() {
         info "  OPatch tool update ← $(basename "$(dirname "$d")") (opatch_generic.jar)"
         local _oj
         if ! _oj="$(as_install_user sh -c "'${_jb}' -jar '${d}' -silent oracle_home='${target}'" 2>&1)"; then
-            warn "OPatch update failed."; printf '%s\n' "$_oj" | strip_jdk_noise | grep -vE '^\s*$' | sed 's/^/    /' | tail -12
-            as_install_user rm -rf "$stage"; return 1
+            # The installer exits non-zero when OPatch is ALREADY current ("already
+            # been installed") — that's a no-op, not a failure. Only stop on a real error.
+            if printf '%s' "$_oj" | grep -qi 'already been installed'; then
+                ok "  OPatch already current — nothing to update."
+            else
+                warn "OPatch update failed."; printf '%s\n' "$_oj" | strip_jdk_noise | grep -vE '^\s*$' | sed 's/^/    /' | tail -12
+                as_install_user rm -rf "$stage"; return 1
+            fi
         fi
     done
 
