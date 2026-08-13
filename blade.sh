@@ -339,7 +339,10 @@ load_profile() {
     NM_PORT="$(d nm.listen.port 5556)"
     NM_TYPE="$(d nm.type ssl)"
     DCOUNT="$(d dynamic.server.count "")"
-    DMAX=2147483647   # dynamic-cluster ceiling removed — pinned to INT_MAX (the cap is a no-op per the RE'd OCCAS code; MaximumDynamicServerCount=DCOUNT is the real count)
+    # No dynamic-cluster ceiling: MaximumDynamicServerCount (=DCOUNT) is the real
+    # cap; setMaxDynamicClusterSize is a no-op per the RE'd OCCAS code AND the WLS
+    # setter rejects INT_MAX, so configure() never calls it (the template line is
+    # commented out at stage time).
     # Server names follow the machines: machine0 runs <prefix>0, machine1 runs
     # <prefix>1. Starting at 0 is what lets the local machine's engine come from
     # the same template as every other one -- there is no static server any more.
@@ -860,7 +863,6 @@ save_profile() {
         echo "server.name.prefix=${prefix}"
         echo "machine.match.expression=${match}"
         echo "dynamic.server.count=${DCOUNT}"
-        echo "max.dynamic.cluster.size=${DMAX}"
         echo ""
         echo "# --- Node Manager: its own basic domain '${NM_DOMAIN}', stable across app"
         echo "# domain rebuilds. NM binds ${NM_BIND} (all interfaces); each machine below"
@@ -3686,7 +3688,7 @@ get_admin_pw() {
 # existing domain dir of the same name.
 # ----------------------------------------------------------------------------
 do_configure() {
-    local mwhome domain mode auser prefix match dcount dmax static chk
+    local mwhome domain mode auser prefix match dcount static chk
     mwhome="$(read_prop "$OCCAS_CONF" oracle.home)"
     domain="$(read_prop "$OCCAS_CONF" domain.name)"
     mode="$(read_prop "$OCCAS_CONF" server.start.mode)";   mode="${mode:-dev}"
@@ -3694,8 +3696,7 @@ do_configure() {
     prefix="$(read_prop "$OCCAS_CONF" server.name.prefix)"
     match="$(read_prop "$OCCAS_CONF" machine.match.expression)"
     dcount="$(read_prop "$OCCAS_CONF" dynamic.server.count)"
-    dmax="$(read_prop "$OCCAS_CONF" max.dynamic.cluster.size)"; dmax="${dmax:-2147483647}"   # ceiling removed → INT_MAX
-    for chk in mwhome domain prefix match dcount dmax; do
+    for chk in mwhome domain prefix match dcount; do
         [ -n "${!chk}" ] || { warn "occas.conf: missing $chk (required for configure)"; return 1; }
     done
 
@@ -3709,15 +3710,14 @@ do_configure() {
     local pw; pw="$(get_admin_pw)" || return 1
 
     info "Configure domain '${domain}' (${mode}) — dynamic cluster"
-    log  "  prefix=${prefix}  match=${match}  count=${dcount}  max=${dmax}"
+    log  "  prefix=${prefix}  match=${match}  count=${dcount}  (no ceiling)"
 
     local props name addr port type idx=1
     props="ADMIN_USERNAME=${auser}
 ADMIN_PASSWORD=__PW__
 ServerNamePrefix=${prefix}
 MachineNameMatchExpression=${match}
-MaximumDynamicServerCount=${dcount}
-MaxDynamicClusterSize=${dmax}"
+MaximumDynamicServerCount=${dcount}"
     for m in "${machines[@]}"; do
         IFS=: read -r name addr port type <<< "$m"
         [ -n "$name" ] && [ -n "$addr" ] && [ -n "$port" ] && [ -n "$type" ] \
@@ -3767,8 +3767,12 @@ Machine${idx}NodemanagerNMType=${type}"
     # Oracle's template computes domainDir from beaHome + user_projects/domains.
     # Point it at DOMAINS_DIR instead: a domain inside the Oracle home cannot
     # survive a patch symlink flip (it would swing onto the copy's snapshot).
+    # Neutralize the dynamic-cluster ceiling: setMaxDynamicClusterSize is a no-op
+    # per the RE'd OCCAS code, and the WLS setter rejects INT_MAX outright. Comment
+    # the call out so only setMaximumDynamicServerCount (the real count) governs.
     sed "s/^domainName=.*/domainName='${domain}'/; \
          s|^domainDir=.*|domainDir='${DOMAINS_DIR}/${domain}'|; \
+         s/^dynServers\.setMaxDynamicClusterSize/#no-ceiling: &/; \
          s/setOption('ServerStartMode', '[^']*')/setOption('ServerStartMode', '${mode}')/" \
         "${work}/occas-replicated-dynamiccluster.py" > "${work}/.py.tmp" \
         && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
