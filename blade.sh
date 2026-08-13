@@ -3081,7 +3081,8 @@ ensure_jdk() {
 # Point JAVA_BASE/<name> at a real JDK path (a JDK upgrade is then a link flip).
 # Echoes the link on success, the raw path if the link couldn't be made.
 link_jdk() {
-    local real="$1" name="$2" link="${JAVA_BASE:-/opt/oracle/java}/${name}"
+    local real="$1" name="$2"
+    local link="${JAVA_BASE:-/opt/oracle/java}/${name}"
     real="$(readlink -f "$real" 2>/dev/null || printf '%s' "$real")"
     if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] ln -sfn ${real} ${link}${C_RESET}" >&2; printf '%s' "$link"; return 0; fi
     if { mkdir -p "$(dirname "$link")" && ln -sfn "$real" "$link"; } 2>/dev/null \
