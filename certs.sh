@@ -182,6 +182,26 @@ KEYTOOL="${JAVA_HOME:+$JAVA_HOME/bin/}keytool"
 command -v "$KEYTOOL" >/dev/null 2>&1 || KEYTOOL="keytool"
 command -v "$KEYTOOL" >/dev/null 2>&1 || die "keytool not found (need a JDK on PATH or JAVA_HOME set)."
 
+# Import sources can be root-only — Let's Encrypt keeps /etc/letsencrypt/{live,
+# archive} at 0700 root, so certs.sh (running as the login user) can't read
+# fullchain.pem or privkey.pem directly. Stage such a file through sudo into a
+# private temp and hand back that readable path; the temp is shredded on exit.
+STAGE_DIR=""; STAGE_N=0
+cleanup_stage() { [ -n "$STAGE_DIR" ] && rm -rf "$STAGE_DIR"; }
+trap cleanup_stage EXIT
+stage_readable() {  # $1=path  ->  echoes a readable path; non-zero if truly absent/unreadable
+    local src="$1" S=""
+    [ -r "$src" ] && { printf '%s' "$src"; return 0; }
+    [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && S="sudo"
+    [ -n "$S" ] || return 1
+    $S test -e "$src" 2>/dev/null || return 1
+    [ -n "$STAGE_DIR" ] || { STAGE_DIR="$(mktemp -d)"; chmod 700 "$STAGE_DIR"; }
+    STAGE_N=$((STAGE_N + 1))
+    local dst="${STAGE_DIR}/stage-${STAGE_N}-$(basename "$src")"
+    ( umask 077; $S cat "$src" > "$dst" ) || return 1
+    printf '%s' "$dst"
+}
+
 do_generate() {
     local san id_pw trust_pw alias
     san="$(build_san)"
@@ -251,29 +271,34 @@ do_import() {
     id_pw="$(get_secret tls.keystore.passphrase "Identity keystore passphrase for ${ENV_NAME}")"
     mkdir -p "$CERTS_DIR"; chmod 700 "$CERTS_DIR"
 
+    # Stage any root-only sources (e.g. Let's Encrypt under /etc/letsencrypt).
+    local p12r="" certr="" keyr="" chainr=""
+    [ -n "$p12" ]   && { p12r="$(stage_readable "$p12")"     || die "cert.import.p12 not found or unreadable (need sudo?): ${p12}"; }
+    [ -n "$cert" ]  && { certr="$(stage_readable "$cert")"   || die "cert.import.cert not found or unreadable (need sudo?): ${cert}"; }
+    [ -n "$key" ]   && { keyr="$(stage_readable "$key")"     || die "cert.import.key not found or unreadable (need sudo?): ${key}"; }
+    [ -n "$chain" ] && { chainr="$(stage_readable "$chain")" || die "cert.import.chain not found or unreadable (need sudo?): ${chain}"; }
+
     if [ -n "$p12" ]; then
-        [ -f "$p12" ] || die "cert.import.p12 not found: ${p12}"
         # Validate it opens with tls.keystore.passphrase before installing it —
         # the supplied p12's password MUST equal that passphrase.
-        "$KEYTOOL" -list -keystore "$p12" -storetype PKCS12 -storepass "$id_pw" >/dev/null \
+        "$KEYTOOL" -list -keystore "$p12r" -storetype PKCS12 -storepass "$id_pw" >/dev/null \
             || die "Cannot open ${p12} with tls.keystore.passphrase. Re-key the p12 to that passphrase, or set tls.keystore.passphrase to the p12's password."
-        cp "$p12" "${CERTS_DIR}/blade-identity.p12"
+        cp "$p12r" "${CERTS_DIR}/blade-identity.p12"
     else
-        [ -f "$cert" ] || die "cert.import.cert not found: ${cert}"
-        [ -f "$key" ]  || die "cert.import.key not found: ${key}"
+        [ -n "$certr" ] || die "${CONF_FILE}: cert.import.cert required when cert.import.p12 is unset"
+        [ -n "$keyr" ]  || die "${CONF_FILE}: cert.import.key required with cert.import.cert"
         command -v openssl >/dev/null 2>&1 || die "PEM import needs openssl (PKCS12 assembly from a bare key). Ask for a .p12 instead, or install openssl."
         local alias; alias="$(read_prop "$CONF_FILE" tls.identity.alias)"; alias="${alias:-blade-identity}"
-        openssl pkcs12 -export -name "$alias" -in "$cert" -inkey "$key" \
-            ${chain:+-certfile "$chain"} \
+        openssl pkcs12 -export -name "$alias" -in "$certr" -inkey "$keyr" \
+            ${chainr:+-certfile "$chainr"} \
             -out "${CERTS_DIR}/blade-identity.p12" -passout "pass:${id_pw}"
     fi
 
     if [ -n "$chain" ]; then
-        [ -f "$chain" ] || die "cert.import.chain not found: ${chain}"
         trust_pw="$(get_secret tls.trust.passphrase "Trust keystore passphrase for ${ENV_NAME}")"
         rm -f "${CERTS_DIR}/blade-trust.p12"
         # Split the chain into individual certs; import each under ca-N.
-        awk -v dir="$CERTS_DIR" 'BEGIN{n=0} /BEGIN CERT/{n++} n{print > (dir "/.chain-" n ".pem")}' "$chain"
+        awk -v dir="$CERTS_DIR" 'BEGIN{n=0} /BEGIN CERT/{n++} n{print > (dir "/.chain-" n ".pem")}' "$chainr"
         local f i=0
         for f in "${CERTS_DIR}"/.chain-*.pem; do
             [ -f "$f" ] || die "No certificates found in ${chain}"
