@@ -86,21 +86,21 @@ help() { local l; while IFS= read -r l; do printf '%s  %s%s\n' "$C_DIM" "$l" "$C
 # makes every remaining prompt on the page a no-op so the form unwinds back to
 # the menu (dispatch_row then skips the save). dispatch_row clears it per action.
 PAGE_ABORT=0
-# Read a line into $1 (hidden when $2=1), with the prompt already printed. A
-# leading Esc cancels the page (PAGE_ABORT=1, returns 1); a leading Enter is the
-# empty/default line; otherwise normal typing, Enter ends it.
+# Read a line into $1 (hidden when $2=1), with the prompt already printed. Uses a
+# native cooked-mode read, so paste and line editing (backspace) work exactly as
+# the terminal does them. A line that STARTS with Esc cancels the page (press Esc
+# then Enter). EOF / no TTY (piped --yes install) takes the default, not an abort.
+# (Cooked mode can't see a lone Esc keypress before Enter — that's the price of
+# leaving paste to the terminal instead of reading it byte-by-byte.)
 _read_or_abort() {  # $1=destvar  $2=hidden(1|0)
-    local __c __rest __hidden="${2:-0}"
-    # EOF / no TTY (e.g. piped --yes install): take the default, don't abort.
-    IFS= read -rsn1 __c 2>/dev/null || { printf -v "$1" '%s' ""; return 0; }
-    if [ "$__c" = $'\e' ]; then
-        IFS= read -rsn3 -t "${_ESC_T:-0.05}" __rest 2>/dev/null || true   # drain any trailing escape bytes
-        PAGE_ABORT=1; echo; return 1
+    local __in
+    if [ "${2:-0}" = 1 ]; then
+        IFS= read -rs __in 2>/dev/null || { printf -v "$1" '%s' ""; return 0; }; echo
+    else
+        IFS= read -r  __in 2>/dev/null || { printf -v "$1" '%s' ""; return 0; }
     fi
-    if [ -z "$__c" ]; then printf -v "$1" '%s' ""; echo; return 0; fi     # bare Enter
-    if [ "$__hidden" = 1 ]; then IFS= read -rs __rest 2>/dev/null || __rest=""; echo
-    else printf '%s' "$__c"; IFS= read -r __rest 2>/dev/null || __rest=""; fi
-    printf -v "$1" '%s' "${__c}${__rest}"
+    case "$__in" in $'\e'*) PAGE_ABORT=1; return 1 ;; esac
+    printf -v "$1" '%s' "$__in"
 }
 # ask VAR "label" "default"   — Enter accepts the default; Esc cancels the page.
 ask() {
