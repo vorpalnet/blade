@@ -1074,7 +1074,7 @@ build_menu_rows() {
     if [ -d "${MWHOME}/wlserver" ]; then a_dl=1; dl_lbl="not needed — installed"
     elif [ -n "$INSTALLER_JAR" ] && [ -f "$INSTALLER_JAR" ]; then a_dl=1; dl_lbl="installer present"; fi
     _row action dl    "Download OCCAS media (eDelivery)"        "$dl_lbl" "$a_dl"
-    _row action p     "Preflight host checks"                    "" "-"
+    _row action p     "Preflight host checks"                    "" "$(case "${PF_OK:-}" in 1) echo 1;; 0) echo 0;; *) echo -;; esac)"
     _row action i     "Install OCCAS"                            "$([ "$a_i" = 1 ] && echo installed || echo '')" "$a_i"
     _row action patch "Patch" "" "-"
     _row head ""      "STEP 2 · Name it & set the admin login"   "" "-"
@@ -3888,6 +3888,11 @@ do_preflight() {
     # (this session keeps the old value, reported above), so once it's written
     # preflight just notes it's set and never raises the topic again.
     if [ "$_pf_nofile" = low ]; then log ""; do_raise_limits || true; fi
+
+    # Remember the outcome so the dashboard's Preflight row shows a ✓ once it has
+    # passed (build_menu_rows reads this — it must NOT re-run preflight, which now
+    # has a side effect). A later config change just means re-running it.
+    [ -n "$PF_NEED" ] && PF_OK=0 || PF_OK=1
 }
 
 # Register an app domain with the standalone Node Manager (nmdomain) so that
