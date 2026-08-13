@@ -49,7 +49,7 @@
 #   ./blade.sh <name>          open profile <name> in the dashboard
 #   ./blade.sh <name> wizard      run the full linear interview first
 #   ./blade.sh <name> preflight   run host-prerequisite checks first
-#   ./blade.sh <name> install     unattended install (STEP 1-4), no menu
+#   ./blade.sh <name> install     unattended install (install → TLS → start), no menu
 #   ./blade.sh <name> uninstall   unattended teardown (app+NM domains)
 #                                   add --purge to also remove product/dirs/user
 #   ./blade.sh <name> status      one-shot health snapshot of the profile
@@ -82,29 +82,53 @@ banner() { printf '  %sBLADE installer%s  \xc2\xb7  MIT License  \xc2\xb7  \xc2\
 help() { local l; while IFS= read -r l; do printf '%s  %s%s\n' "$C_DIM" "$l" "$C_RESET"; done; }
 
 # --- prompt helpers -----------------------------------------------------------
-# ask VAR "label" "default"   — Enter accepts the default.
+# Esc-to-cancel: pressing Esc at the start of any prompt sets PAGE_ABORT, which
+# makes every remaining prompt on the page a no-op so the form unwinds back to
+# the menu (dispatch_row then skips the save). dispatch_row clears it per action.
+PAGE_ABORT=0
+# Read a line into $1 (hidden when $2=1), with the prompt already printed. A
+# leading Esc cancels the page (PAGE_ABORT=1, returns 1); a leading Enter is the
+# empty/default line; otherwise normal typing, Enter ends it.
+_read_or_abort() {  # $1=destvar  $2=hidden(1|0)
+    local __c __rest __hidden="${2:-0}"
+    # EOF / no TTY (e.g. piped --yes install): take the default, don't abort.
+    IFS= read -rsn1 __c 2>/dev/null || { printf -v "$1" '%s' ""; return 0; }
+    if [ "$__c" = $'\e' ]; then
+        IFS= read -rsn3 -t "${_ESC_T:-0.05}" __rest 2>/dev/null || true   # drain any trailing escape bytes
+        PAGE_ABORT=1; echo; return 1
+    fi
+    if [ -z "$__c" ]; then printf -v "$1" '%s' ""; echo; return 0; fi     # bare Enter
+    if [ "$__hidden" = 1 ]; then IFS= read -rs __rest 2>/dev/null || __rest=""; echo
+    else printf '%s' "$__c"; IFS= read -r __rest 2>/dev/null || __rest=""; fi
+    printf -v "$1" '%s' "${__c}${__rest}"
+}
+# ask VAR "label" "default"   — Enter accepts the default; Esc cancels the page.
 ask() {
     local __v="$1" __l="$2" __d="${3:-}" __in
-    if [ -n "$__d" ]; then read -r -p "  ${__l} [${__d}]: " __in || __in=""
-    else read -r -p "  ${__l}: " __in || __in=""; fi
+    [ "${PAGE_ABORT:-0}" = 1 ] && return 1
+    if [ -n "$__d" ]; then printf '  %s [%s]: ' "$__l" "$__d"; else printf '  %s: ' "$__l"; fi
+    _read_or_abort __in 0 || return 1
     [ -z "$__in" ] && __in="$__d"
     printf -v "$__v" '%s' "$__in"
 }
-# yesno "label" "Y|N"  — returns 0 for yes. Default shown in caps.
+# yesno "label" "Y|N"  — returns 0 for yes. Default shown in caps. Esc cancels.
 yesno() {
     local __l="$1" __d="${2:-Y}" __in __hint
+    [ "${PAGE_ABORT:-0}" = 1 ] && return 1
     if [ "${ASSUME_YES:-0}" = 1 ]; then log "  ${__l} ${C_DIM}[--yes]${C_RESET}"; return 0; fi
     [ "$__d" = "Y" ] && __hint="Y/n" || __hint="y/N"
-    read -r -p "  ${__l} [${__hint}]: " __in || __in=""
+    printf '  %s [%s]: ' "$__l" "$__hint"
+    _read_or_abort __in 0 || return 1
     [ -z "$__in" ] && __in="$__d"
     case "$__in" in [Yy]*) return 0 ;; *) return 1 ;; esac
 }
-# ask_secret VAR "label"  — hidden, confirmed; empty is allowed (skips).
+# ask_secret VAR "label"  — hidden, confirmed; empty is allowed (skips). Esc cancels.
 ask_secret() {
     local __v="$1" __l="$2" __a __b
-    read -rs -p "  ${__l}: " __a || __a=""; echo
+    [ "${PAGE_ABORT:-0}" = 1 ] && return 1
+    printf '  %s: ' "$__l"; _read_or_abort __a 1 || return 1
     if [ -z "$__a" ]; then printf -v "$__v" '%s' ""; return 0; fi
-    read -rs -p "  confirm: " __b || __b=""; echo
+    printf '  confirm: '; _read_or_abort __b 1 || return 1
     if [ "$__a" != "$__b" ]; then warn "didn't match — try again"; ask_secret "$__v" "$__l"; return; fi
     printf -v "$__v" '%s' "$__a"
 }
@@ -680,40 +704,10 @@ Optional now — you can run the TLS steps later. If you set it up, the cert's
 SAN list is built from every host name / FQDN / IP you entered above so one
 identity cert satisfies hostname verification however a client connects.
 EOF
-    [ -n "$ID_CN" ] || ID_CN="${H_FQDN[0]:-${H_NAME[0]:-}}"
     if yesno "Set up TLS settings now?" "Y"; then
-        # --- where the certificate comes from --------------------------------
-        # A production site almost always has its own. Generating one is for test
-        # rigs. Either way the SAME keystore layout comes out, so everything
-        # downstream (the server template, the engines) is identical.
-        help <<'EOF'
-Two ways to get a server certificate:
-
-  supply    you already have one (the normal production answer) — a PKCS12,
-            or a PEM cert + key, optionally with a CA chain
-  generate  create a self-signed internal CA and a server identity from it.
-            Fine for a lab; browsers and SBCs will not trust it by default.
-
-Whichever you pick, WebLogic's built-in DEMO certificate is never used — it is
-publicly known and is a real security risk on an internet-facing SIPS port.
-EOF
-        ask CERT_SOURCE "  Certificate: supply or generate?" "${CERT_SOURCE:-generate}"
-        case "$CERT_SOURCE" in
-            [Ss]*) CERT_SOURCE=supply ;;
-            *)     CERT_SOURCE=generate ;;
-        esac
-        if [ "$CERT_SOURCE" = supply ]; then
-            log "  ${C_DIM}Give a PKCS12, or a PEM cert+key. Enter to skip a field.${C_RESET}"
-            ask CERT_P12   "    PKCS12 file (.p12/.pfx)"      "$CERT_P12"
-            if [ -z "$CERT_P12" ]; then
-                ask CERT_PEM   "    server certificate (PEM)" "$CERT_PEM"
-                ask CERT_KEY   "    private key (PEM)"        "$CERT_KEY"
-            fi
-            ask CERT_CHAIN "    CA chain (PEM, optional)"     "$CERT_CHAIN"
-        else
-            ask CA_CN "  Internal CA common name"   "$CA_CN"
-        fi
-        ask ID_CN "  Identity cert common name" "$ID_CN"
+        # Where the certificate comes from is now two explicit menu pages:
+        # 'g' (generate a self-signed CA) and 'sup' (supply your own). This page
+        # is the TLS TRANSPORT only -- SSL/SIPS ports and the keystore passphrases.
 
         # --- SIP channels ----------------------------------------------------
         # OCCAS gives every engine a plain 'sip' channel by default. These two
@@ -743,6 +737,49 @@ EOF
         fi
     fi
     return 0
+}
+
+# ----- TLS certificate: generate a self-signed CA (the 'g' page) -------------
+# Records cert.source=generate, collects the CA/identity CN, then runs make-certs.
+do_cert_generate() {
+    CERT_SOURCE=generate
+    log ""; log "${C_BOLD}Generate a self-signed CA${C_RESET}"
+    help <<'EOF'
+Creates an internal CA and a server identity signed by it. Fine for a lab;
+browsers and SBCs will NOT trust it by default. The identity SAN covers every
+host / FQDN / IP you entered, so one cert satisfies hostname verification.
+WebLogic's demo certificate is never used -- it is publicly known.
+EOF
+    ask CA_CN "  Internal CA common name"   "${CA_CN:-BLADE Internal CA}"
+    [ -n "$ID_CN" ] || ID_CN="${H_FQDN[0]:-${H_NAME[0]:-}}"
+    ask ID_CN "  Identity cert common name" "$ID_CN"
+    [ "${PAGE_ABORT:-0}" = 1 ] && { warn "cancelled."; return 0; }
+    save_profile
+    "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
+}
+
+# ----- TLS certificate: supply your own (the 'sup' page) ---------------------
+# Records cert.source=supply, collects the PKCS12 / PEM (+chain), then imports
+# into the SAME keystore layout generate produces, so downstream is identical.
+# Root-only sources (e.g. Let's Encrypt) are read via sudo by certs.sh.
+do_cert_supply() {
+    CERT_SOURCE=supply
+    log ""; log "${C_BOLD}Supply your own certificate${C_RESET}"
+    help <<'EOF'
+Point at a PKCS12, or a PEM cert + key, optionally with a CA chain -- the normal
+production answer. Root-only files (e.g. Let's Encrypt under /etc/letsencrypt)
+are read via sudo. WebLogic's demo certificate is never used.
+EOF
+    log "  ${C_DIM}Give a PKCS12, or a PEM cert+key. Enter to skip a field.${C_RESET}"
+    ask CERT_P12 "    PKCS12 file (.p12/.pfx)" "$CERT_P12"
+    if [ -z "$CERT_P12" ]; then
+        ask CERT_PEM "    server certificate (PEM)" "$CERT_PEM"
+        ask CERT_KEY "    private key (PEM)"        "$CERT_KEY"
+    fi
+    ask CERT_CHAIN "    CA chain (PEM, optional)"   "$CERT_CHAIN"
+    [ "${PAGE_ABORT:-0}" = 1 ] && { warn "cancelled."; return 0; }
+    save_profile
+    "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
 }
 
 # ----- phase 8: admin password (writes the gitignored secret files) ----------
@@ -1041,7 +1078,12 @@ build_menu_rows() {
     _row phase  ident "Domain name + admin user & password"      "${DOMAIN:-—} / ${ADMIN_USER} · pw ${pwlbl}" "$p_ident"
     _row head ""      "STEP 3 · Describe your machines"          "" "-"
     _row phase  hosts   "Hosts & Node Manager"     "${nhosts} host(s) · ${NM_DOMAIN}@${NM_BIND}:${NM_PORT} ${NM_TYPE}" "$p_hosts"
-    _row head ""      "STEP 4 · Start it up (in order)"          "" "-"
+    _row head ""      "STEP 4 · TLS (certificate, then HTTPS/SIP-TLS)" "" "-"
+    _row phase  tls "TLS settings"          "$(_sum_tls)" "$p_tls"
+    _row action g   "Generate a self-signed CA"   "self-signed internal CA$([ "${CERT_SOURCE:-generate}" = generate ] && echo ' · current')" "-"
+    _row action sup "Supply your own certificate" "PKCS12 / PEM (e.g. Let’s Encrypt)$([ "${CERT_SOURCE:-}" = supply ] && echo " · current: ${CERT_P12:-${CERT_PEM:-set}}")" "-"
+    _row action t "Turn on HTTPS / SIP-TLS" "" "-"
+    _row head ""      "STEP 5 · Start it up (in order)"          "" "-"
     _row action n "Create & start Node Manager" "${NM_DOMAIN} — ${nm_state}" "$a_n"
     _row action c "Create the cluster domain"   "${DOMAIN:-?}" "$a_c"
     _row action s "Start the AdminServer"       "" "-"
@@ -1054,10 +1096,6 @@ build_menu_rows() {
     _row action E "Re-provision every engine host"               "$(_sum_engines)" "-"
     _row action o "Deploy WebLogic Remote Console (/rconsole)" "" "-"
     _row action f "Open firewall ports (firewalld)"              "NM/admin/ssl$([ "${SIP_TLS:-false}" = true ] && printf /sip)" "-"
-    _row head ""      "STEP 5 · TLS (optional)"                  "" "-"
-    _row phase  tls "TLS settings"          "$(_sum_tls)" "$p_tls"
-    _row action g "Certificate (${CERT_SOURCE:-generate})" "$([ "${CERT_SOURCE:-generate}" = supply ] && echo "${CERT_P12:-${CERT_PEM:-not set}}" || echo "self-signed CA")" "-"
-    _row action t "Turn on HTTPS / SIP-TLS" "" "-"
     _row head ""      "STEP 6 · Deploy settings (build profile, SSH, admin URL)" "" "-"
     _row phase runtime "Build profile, SSH user, admin URL" "${BUILD_PROFILE} · ${ADMINURL}" "$p_run"
     local distlbl; distlbl="$(ls -1t "${SCRIPT_DIR}/dist" 2>/dev/null | head -1)"; distlbl="${distlbl:-no build — run ./build.sh}"
@@ -1080,14 +1118,17 @@ build_menu_rows() {
 }
 
 # Run one row by id (phase → edit + save; action → its worker). Shared dispatch.
+# Esc during a phase form cancels it: _save() skips the save so partial edits are
+# discarded (the menu reloads clean). PAGE_ABORT is cleared per dispatch.
 dispatch_row() {
-    local dr=""
+    local dr=""; PAGE_ABORT=0
+    _save() { if [ "${PAGE_ABORT:-0}" = 1 ]; then warn "cancelled — no changes saved."; else save_profile; fi; }
     case "$1" in
-        occas)   phase_occas;   save_profile ;;
-        ident)   phase_domain;  phase_password; save_profile ;;
-        hosts)   phase_hosts;   save_profile ;;
-        tls)     phase_tls;     save_profile ;;
-        runtime) phase_runtime; save_profile ;;
+        occas)   phase_occas;   _save ;;
+        ident)   phase_domain;  phase_password; _save ;;
+        hosts)   phase_hosts;   _save ;;
+        tls)     phase_tls;     _save ;;
+        runtime) phase_runtime; _save ;;
         u) do_makeuser  || true ;;
         m) do_makedirs  || true ;;
         dl) do_download  || true ;;
@@ -1115,14 +1156,8 @@ dispatch_row() {
         md)   do_remove_dirs   || true ;;
         ug)   do_remove_usergrp || true ;;
         repo) do_remove_repo   || true ;;
-        g) if [ "${CERT_SOURCE:-generate}" = supply ]; then
-               # The site's own certificate -- certs.sh packages a PKCS12, or a
-               # PEM cert+key(+chain), into the same keystore layout generate
-               # produces, so everything downstream is identical either way.
-               "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
-           else
-               "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
-           fi ;;
+        g)   do_cert_generate || true ;;
+        sup) do_cert_supply   || true ;;
         t) [ "$DRY" = "on" ] && dr="--dry-run"; "${SCRIPT_DIR}/tls/install-ssl.sh" "$DEPLOY_CONF" $dr || warn "install-ssl returned an error" ;;
         *) warn "unknown row: $1" ;;
     esac
@@ -1146,7 +1181,9 @@ _read_key() {
     IFS= read -rsn1 k 2>/dev/null || { printf 'quit'; return; }
     case "$k" in
         $'\e') IFS= read -rsn2 -t "$_ESC_T" r 2>/dev/null || r=""
-               case "$r" in '[A'|'OA') printf 'up' ;; '[B'|'OB') printf 'down' ;; *) printf 'other' ;; esac ;;
+               # Bare Esc (no trailing bytes) = go up a level → quit here at the
+               # top; arrows move; any other escape sequence is ignored.
+               case "$r" in '[A'|'OA') printf 'up' ;; '[B'|'OB') printf 'down' ;; '') printf 'quit' ;; *) printf 'other' ;; esac ;;
         '')    printf 'enter' ;;
         ' ')   printf 'space' ;;
         d|D)   printf 'dry' ;;
@@ -1174,9 +1211,9 @@ dashboard_tui() {
             for i in "${!NEXT_K[@]}"; do
                 printf "    %s'%s'%s  %s\n" "$C_BOLD" "${NEXT_K[$i]}" "$C_RESET" "${NEXT_D[$i]}"
             done
-            printf '  %spress one of the letters above, or Enter to return…%s ' "$C_DIM" "$C_RESET"
+            printf '  %spress one of the letters above, or Enter/Esc to return…%s ' "$C_DIM" "$C_RESET"
         else
-            printf '\n  %spress Enter to return…%s ' "$C_DIM" "$C_RESET"
+            printf '\n  %spress Enter/Esc to return…%s ' "$C_DIM" "$C_RESET"
         fi
     }
     # Breadcrumb under the banner naming the step(s) being run, so an action screen
@@ -1266,7 +1303,7 @@ dashboard_tui() {
                 printf '   %s %s %s%-42s %s%s%s\n' "$box" "$g" "$arrow" "${MR_LABEL[$i]}" "$C_DIM" "${MR_VAL[$i]}" "$C_RESET"
             fi
         done
-        printf '\n  %s↑/↓%s move · %sspace%s select · %senter%s run · %sletter%s run that row · %sd%s dry-run · %sq%s quit\n' \
+        printf '\n  %s↑/↓%s move · %sspace%s select · %senter%s run · %sletter%s run that row · %sd%s dry-run · %sEsc/q%s quit\n' \
                "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET"
 
         local kpress; kpress="$(_read_key)"
@@ -4747,7 +4784,8 @@ admin_running() {
     return 1
 }
 
-# Unattended install: STEP 1→4 in order, no menu. Each worker is idempotent and
+# Unattended install: the full ladder (install → certs → domain → start) in
+# order, no menu. TLS 'g' runs before 'n'/'c' so certs exist first. Each worker is idempotent and
 # skips when its target already exists, so this is safe to re-run. Boot services
 # The boot services (e/w) and the engine hosts (E) ARE part of the ladder: an
 # install that does not survive a reboot is not finished, and that is exactly how
@@ -4760,8 +4798,9 @@ run_install_ladder() {
     info "Unattended install of profile '${NAME}' → ${MWHOME:-?}"
     yesno "Install OCCAS + Node Manager + cluster domain for '${NAME}' now?" "Y" \
         || { warn "aborted."; return 1; }
-    local id
-    for id in u m dl i g n c f s e w o; do
+    local id cert_step=g
+    [ "${CERT_SOURCE:-generate}" = supply ] && cert_step=sup
+    for id in u m dl i "$cert_step" n c f s e w o; do
         rule; info "install step '${id}'"
         dispatch_row "$id"
     done
