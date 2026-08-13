@@ -186,18 +186,22 @@ command -v "$KEYTOOL" >/dev/null 2>&1 || die "keytool not found (need a JDK on P
 # archive} at 0700 root, so certs.sh (running as the login user) can't read
 # fullchain.pem or privkey.pem directly. Stage such a file through sudo into a
 # private temp and hand back that readable path; the temp is shredded on exit.
-STAGE_DIR=""; STAGE_N=0
-cleanup_stage() { [ -n "$STAGE_DIR" ] && rm -rf "$STAGE_DIR"; }
+STAGE_DIR=""
+# return 0 explicitly: as an EXIT-trap handler its final status becomes the
+# script's exit code, and a bare `[ -n "" ]` would make a clean run exit 1.
+cleanup_stage() { [ -n "${STAGE_DIR:-}" ] && rm -rf "$STAGE_DIR"; return 0; }
 trap cleanup_stage EXIT
+# stage_readable runs inside $(...) (command substitution), i.e. a subshell, so
+# it can't create STAGE_DIR for the parent -- the caller (do_import) creates it
+# first with ensure_stage_dir, and this only writes a unique temp file into it.
+ensure_stage_dir() { [ -n "$STAGE_DIR" ] || { STAGE_DIR="$(mktemp -d)"; chmod 700 "$STAGE_DIR"; }; }
 stage_readable() {  # $1=path  ->  echoes a readable path; non-zero if truly absent/unreadable
-    local src="$1" S=""
+    local src="$1" S="" dst
     [ -r "$src" ] && { printf '%s' "$src"; return 0; }
     [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && S="sudo"
     [ -n "$S" ] || return 1
     $S test -e "$src" 2>/dev/null || return 1
-    [ -n "$STAGE_DIR" ] || { STAGE_DIR="$(mktemp -d)"; chmod 700 "$STAGE_DIR"; }
-    STAGE_N=$((STAGE_N + 1))
-    local dst="${STAGE_DIR}/stage-${STAGE_N}-$(basename "$src")"
+    dst="$(mktemp "${STAGE_DIR}/stage-XXXXXX")" || return 1
     ( umask 077; $S cat "$src" > "$dst" ) || return 1
     printf '%s' "$dst"
 }
@@ -272,6 +276,9 @@ do_import() {
     mkdir -p "$CERTS_DIR"; chmod 700 "$CERTS_DIR"
 
     # Stage any root-only sources (e.g. Let's Encrypt under /etc/letsencrypt).
+    # Create the staging dir HERE (parent), since stage_readable runs in a $()
+    # subshell and its own assignment to STAGE_DIR would not survive.
+    ensure_stage_dir
     local p12r="" certr="" keyr="" chainr=""
     [ -n "$p12" ]   && { p12r="$(stage_readable "$p12")"     || die "cert.import.p12 not found or unreadable (need sudo?): ${p12}"; }
     [ -n "$cert" ]  && { certr="$(stage_readable "$cert")"   || die "cert.import.cert not found or unreadable (need sudo?): ${cert}"; }
