@@ -1028,27 +1028,6 @@ _sum_tls() {
     else printf 'https :%s · sip-tls off' "$SSL_PORT"; fi
 }
 _pw_set() { [ -f "$OCCAS_SECRET" ] && [ -n "$(read_prop "$OCCAS_SECRET" admin.password)" ]; }
-_sum_patch() {
-    local real; real="$(readlink -f "${MWHOME}" 2>/dev/null)"
-    local now="${real##*/}"; now="${now:-not installed}"
-    local pdir; pdir="$(read_prop "$OCCAS_CONF" patch.dir)"; pdir="${pdir/#\~/$HOME}"
-    pdir="${pdir:-${HOME}/occas-patches}"
-    if [ -d "$pdir" ]; then
-        printf 'current=%s · %s zip(s) in %s' "$now" \
-            "$(ls "$pdir"/*.zip 2>/dev/null | wc -l | tr -d ' ')" "$pdir"
-    else
-        printf 'current=%s · patch dir %s (create/populate it)' "$now" "$pdir"
-    fi
-    # jdk=<version> when java.home is the link; jdk=unlinked advertises the
-    # one-question migration this row offers (Linux targets only).
-    if [ "${JAVA_HOME_VAL:-}" = "${JAVA_BASE:-/opt/oracle/java}/current" ]; then
-        local jt; jt="$(readlink -f "$JAVA_HOME_VAL" 2>/dev/null || true)"
-        jt="${jt##*/}"
-        printf ' · jdk=%s' "${jt:-dangling}"
-    elif [ -n "${JAVA_HOME_VAL:-}" ] && [ "$(uname -s)" = "Linux" ]; then
-        printf ' · jdk=unlinked'
-    fi
-}
 _sum_lastmachine() {
     local n=$(( ${#H_NAME[@]} - 1 ))
     [ "$n" -ge 1 ] && printf '%s (%s%s)' "${H_NAME[$n]}" "${prefix:-engine}" "$n" || printf 'none — single machine'
@@ -1085,12 +1064,10 @@ build_menu_rows() {
 
     local a_u=0; id "${INSTALL_USER:-oracle}" >/dev/null 2>&1 && a_u=1
     local a_m=0; [ -n "$MWHOME" ] && [ -d "$MWHOME" ] && a_m=1
-    local a_L=0; [ -f /etc/security/limits.d/99-blade-nofile.conf ] && a_L=1
     _row head ""      "STEP 1 · Point at OCCAS, then install it" "" "-"
     _row phase  occas "Where OCCAS lives — home, version, Java"  "$(_sum_occas)" "$p_occas"
     _row action u     "Create install user & group"             "${INSTALL_USER:-oracle}:${INV_GRP:-oinstall}" "$a_u"
     _row action m     "Create install dirs & chown"             "MW_HOME + inventory" "$a_m"
-    _row action L     "Raise open-files limit (nofile)"         "now $(ulimit -n 2>/dev/null || echo '?') → 65536" "$a_L"
     # "Done" means the media is no longer needed — either it's downloaded, or the
     # product is already installed and never will be.
     local a_dl=0 dl_lbl=""
@@ -1099,7 +1076,7 @@ build_menu_rows() {
     _row action dl    "Download OCCAS media (eDelivery)"        "$dl_lbl" "$a_dl"
     _row action p     "Preflight host checks"                    "" "-"
     _row action i     "Install OCCAS"                            "$([ "$a_i" = 1 ] && echo installed || echo '')" "$a_i"
-    _row action patch "Patch (build a patched home, out-of-place)" "$(_sum_patch)" "-"
+    _row action patch "Patch" "" "-"
     _row head ""      "STEP 2 · Name it & set the admin login"   "" "-"
     _row phase  ident "Domain name + admin user & password"      "${DOMAIN:-—} / ${ADMIN_USER} · pw ${pwlbl}" "$p_ident"
     _row head ""      "STEP 3 · Describe your machines"          "" "-"
@@ -1155,7 +1132,6 @@ dispatch_row() {
         runtime) phase_runtime; save_profile ;;
         u) do_makeuser  || true ;;
         m) do_makedirs  || true ;;
-        L) do_raise_limits || true ;;
         dl) do_download  || true ;;
         patch) do_patch  || true ;;
         p) do_preflight || true ;;
@@ -1242,7 +1218,7 @@ dashboard_tui() {
             done
             printf '  %spress one of the letters above, or Enter to return…%s ' "$C_DIM" "$C_RESET"
         else
-            printf '\n  %spress a step letter to run it, or Enter to return…%s ' "$C_DIM" "$C_RESET"
+            printf '\n  %spress Enter to return…%s ' "$C_DIM" "$C_RESET"
         fi
     }
     _tui_run() {
@@ -1252,17 +1228,16 @@ dashboard_tui() {
         local rid; for rid in "$@"; do dispatch_row "$rid"; done
         CHK=""
         { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
-        # Chain another step straight from here: an action can name its likely
-        # follow-ups (next_step), and any row-id letter works regardless. Enter —
-        # or any non-step key — returns to the dashboard.
+        # Chain a follow-up step ONLY from the advertised "Next:" letters — a stray
+        # or wrong-case keypress must never launch a surprise action. Anything else
+        # (Enter included) returns to the dashboard, where every row is visible.
         while :; do
             _return_prompt
             local kp; kp="$(_read_key)"; printf '\n'
             local kc="" j hit=""
             case "$kp" in key:*) kc="${kp#key:}" ;; *) break ;; esac
-            for j in "${!MR_TYPE[@]}"; do
-                [ "${MR_TYPE[$j]}" = action ] || continue
-                [ "${MR_ID[$j]}" = "$kc" ] && { hit="$kc"; break; }
+            for j in "${!NEXT_K[@]}"; do
+                [ "${NEXT_K[$j]}" = "$kc" ] && { hit="$kc"; break; }
             done
             [ -n "$hit" ] || break
             load_profile
@@ -3735,7 +3710,7 @@ do_preflight() {
     # PF_NEED is the aggregate; the _pf_* flags remember WHICH category failed
     # so the footer prescribes only the fixes that apply.
     PF_NEED=""
-    local _pf_jdk="" _pf_grp="" _pf_sudo="" _pf_dirs="" _pf_tmpl=""
+    local _pf_jdk="" _pf_grp="" _pf_sudo="" _pf_dirs="" _pf_tmpl="" _pf_nofile=""
 
     info "Preflight — host prerequisites (install user, group, dirs, Java)"
     log  "  MW_HOME: ${mwhome}    inventory: ${inv_loc}    group: ${inv_grp}"
@@ -3847,10 +3822,12 @@ do_preflight() {
         [ "${swapkb:-0}" -gt 0 ] && ok "swap configured" || log "  ${C_DIM}no swap (ok on a big-RAM box).${C_RESET}"
         nofile="$(ulimit -n 2>/dev/null || echo 0)"
         if [ "$nofile" = unlimited ] || { [ "$nofile" -ge 4096 ] 2>/dev/null; }; then ok "open-files ulimit: ${nofile}"
+        elif [ -f /etc/security/limits.d/99-blade-nofile.conf ]; then
+            ok "open-files limit set in limits.d (65536) — active on your NEXT login; this session is still ${nofile}."
         else
             warn "open-files ulimit ${nofile} is low — WebLogic wants ≥4096."
             log  "  ${C_DIM}(boot-service NM/servers already get LimitNOFILE from their unit; this bites the install + manual n/s runs.)${C_RESET}"
-            next_step L "raise the open-files limit (persists via /etc/security/limits.d)"
+            _pf_nofile=low
         fi
         freekb="$(df -Pk "$(dirname "$mwhome")" 2>/dev/null | awk 'NR==2{print $4}')"; freegb=$(( ${freekb:-0} / 1024 / 1024 ))
         if [ "${freekb:-0}" -ge 10485760 ]; then ok "disk free where MW_HOME goes: ${freegb} GiB"
@@ -3905,6 +3882,12 @@ do_preflight() {
     elif [ "$os" != "Darwin" ]; then
         ok "Preflight looks good — ready for step 1 (install)."
     fi
+
+    # Open-files limit: raise it AUTOMATICALLY when low — a one-time, idempotent
+    # limits.d drop-in, no prompt and no menu row. It applies on the NEXT login
+    # (this session keeps the old value, reported above), so once it's written
+    # preflight just notes it's set and never raises the topic again.
+    if [ "$_pf_nofile" = low ]; then log ""; do_raise_limits || true; fi
 }
 
 # Register an app domain with the standalone Node Manager (nmdomain) so that
