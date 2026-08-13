@@ -71,19 +71,23 @@ done
 [ -n "$ENV_ARG" ] || { echo "Usage: ./tls/make-certs.sh <env> [--new-ca] [--csr-only] [--force]" >&2; exit 1; }
 
 # --- Resolve <env> to conf + secret (name or path), mirroring deploy.sh ---
+# One config file per env holds config + secrets: ~/.blade/<env>.conf (legacy
+# build-profiles path is a fallback). Secrets are keys in the same file.
+BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
 if [ -f "$ENV_ARG" ]; then
     CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"
-    SECRET_FILE="${ENV_ARG%.conf}.secret"
 else
-    ENV_NAME="$ENV_ARG"
-    CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
-    SECRET_FILE="${DEPLOY_DIR}/${ENV_NAME}.secret"
+    ENV_NAME="$ENV_ARG"; CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"
+    [ -f "$CONF_FILE" ] || CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
 fi
+SECRET_FILE="$CONF_FILE"
 [ -f "$CONF_FILE" ] || { echo "Conf not found: ${CONF_FILE}" >&2; exit 1; }
 
 read_prop() {
-    local file="$1" key="$2"
-    { grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+    local file="$1" key="$2" v
+    v="$({ grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    case "$v" in ENC\(*\)) v="${v#ENC(}"; v="${v%)}" ;; esac   # secret: strip ENC() wrapper
+    printf '%s' "$v"
 }
 
 SAN=$(read_prop          "$CONF_FILE" "tls.san")

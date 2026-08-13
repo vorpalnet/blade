@@ -124,16 +124,19 @@ for i in "${!POSITIONAL[@]}"; do
     esac
 done
 
-# --- Resolve <env> to a conf file (path or name) ---
+# --- Resolve <env> to the ONE config file (path or name). Config + secrets now
+# live together in ~/.blade/<env>.conf; the old build-profiles/deploy path is a
+# fallback for legacy setups. ---
+BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
 if [ -f "$ENV_ARG" ]; then
     CONF_FILE="$ENV_ARG"
     ENV_NAME="$(basename "${ENV_ARG%.conf}")"
-    SECRET_FILE="${ENV_ARG%.conf}.secret"
 else
     ENV_NAME="$ENV_ARG"
-    CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
-    SECRET_FILE="${DEPLOY_DIR}/${ENV_NAME}.secret"
+    CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"
+    [ -f "$CONF_FILE" ] || CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
 fi
+SECRET_FILE="$CONF_FILE"   # secrets are keys in the same file (key=ENC(...))
 
 if [ ! -f "$CONF_FILE" ]; then
     err "Deploy profile not found: ${CONF_FILE}"
@@ -149,10 +152,12 @@ fi
 
 # --- Load non-secret properties ---
 read_prop() {
-    local file="$1" key="$2"
+    local file="$1" key="$2" v
     # `|| true`: a missing key is normal (optional props) — don't let grep's
     # non-zero exit trip `set -o pipefail` + `set -e` and abort the script.
-    { grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+    v="$({ grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    case "$v" in ENC\(*\)) v="${v#ENC(}"; v="${v%)}" ;; esac   # secret: strip ENC() wrapper
+    printf '%s' "$v"
 }
 
 BUILD_PROFILE=$(read_prop  "$CONF_FILE" "build.profile")
@@ -260,7 +265,7 @@ if [ "$NEEDS_WLS" = true ]; then
     if [ -n "${BLADE_WLS_PASSWORD:-}" ]; then
         WLS_PASSWORD="$BLADE_WLS_PASSWORD"
     elif [ -f "$SECRET_FILE" ]; then
-        WLS_PASSWORD=$(read_prop "$SECRET_FILE" "wls.password")
+        WLS_PASSWORD=$(read_prop "$SECRET_FILE" "admin.password")
     fi
 
     if [ -z "$WLS_PASSWORD" ] && [ "$DRY_RUN" = false ] && [ "$ACTION" != "status" ]; then
@@ -271,9 +276,11 @@ if [ "$NEEDS_WLS" = true ]; then
         printf 'Save to %s? [y/N] ' "$SECRET_FILE"
         read -r save_choice
         if [[ "$save_choice" =~ ^[Yy]$ ]]; then
-            printf 'wls.password=%s\n' "$WLS_PASSWORD" > "$SECRET_FILE"
+            # APPEND (never truncate — this is the whole config file now); the key
+            # was absent (WLS_PASSWORD was empty above), so no duplicate. ENC()-wrapped.
+            printf 'admin.password=ENC(%s)\n' "$WLS_PASSWORD" >> "$SECRET_FILE"
             chmod 600 "$SECRET_FILE"
-            ok "Saved password to ${SECRET_FILE} (mode 600)"
+            ok "Saved admin.password to ${SECRET_FILE} (mode 600)"
             check_secret_safety "$SECRET_FILE"
         fi
     fi
@@ -290,7 +297,7 @@ case "$WLS_ADMINURL" in
         if [ -n "$WLS_TRUSTSTORE" ]; then
             [ -f "$WLS_TRUSTSTORE" ] || die "wls.truststore not found: ${WLS_TRUSTSTORE}"
             TRUST_PW="${BLADE_STORE_PASSWORD:-}"
-            [ -z "$TRUST_PW" ] && [ -f "$SECRET_FILE" ] && TRUST_PW=$(read_prop "$SECRET_FILE" "wls.truststore.password")
+            [ -z "$TRUST_PW" ] && [ -f "$SECRET_FILE" ] && TRUST_PW=$(read_prop "$SECRET_FILE" "store.password")
             export MAVEN_OPTS="${MAVEN_OPTS:-} -Dweblogic.security.TrustKeyStore=CustomTrust \
 -Dweblogic.security.CustomTrustKeyStoreFileName=${WLS_TRUSTSTORE} \
 -Dweblogic.security.CustomTrustKeyStoreType=${WLS_TRUSTSTORE_TYPE}${TRUST_PW:+ -Dweblogic.security.CustomTrustKeyStorePassPhrase=${TRUST_PW}}"

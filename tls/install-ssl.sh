@@ -95,16 +95,23 @@ for i in "${!POSITIONAL[@]}"; do
 done
 
 # --- Resolve conf + secret ---
+# One config file per env holds config + secrets: ~/.blade/<env>.conf (legacy
+# build-profiles path is a fallback). Secrets are keys in the same file.
+BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"
 if [ -f "$ENV_ARG" ]; then
-    CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"; SECRET_FILE="${ENV_ARG%.conf}.secret"
+    CONF_FILE="$ENV_ARG"; ENV_NAME="$(basename "${ENV_ARG%.conf}")"
 else
-    ENV_NAME="$ENV_ARG"; CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"; SECRET_FILE="${DEPLOY_DIR}/${ENV_NAME}.secret"
+    ENV_NAME="$ENV_ARG"; CONF_FILE="${BLADE_HOME}/${ENV_NAME}.conf"
+    [ -f "$CONF_FILE" ] || CONF_FILE="${DEPLOY_DIR}/${ENV_NAME}.conf"
 fi
+SECRET_FILE="$CONF_FILE"
 [ -f "$CONF_FILE" ] || die "Conf not found: ${CONF_FILE}"
 
 read_prop() {
-    local file="$1" key="$2"
-    { grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+    local file="$1" key="$2" v
+    v="$({ grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    case "$v" in ENC\(*\)) v="${v#ENC(}"; v="${v%)}" ;; esac   # secret: strip ENC() wrapper
+    printf '%s' "$v"
 }
 
 WLS_ADMINURL=$(read_prop "$CONF_FILE" "wls.adminurl")
@@ -161,7 +168,7 @@ WLS_PASSWORD=""; KS_PASS=""; TRUST_PASS=""
 if [ "$NEEDS_WLST" = true ]; then
     [ -n "$WLS_ADMINURL" ] || die "${CONF_FILE}: missing wls.adminurl"
     [ -n "$WLS_USER" ]     || die "${CONF_FILE}: missing wls.user"
-    WLS_PASSWORD=$(get_secret BLADE_WLS_PASSWORD      "wls.password"            "WebLogic password for ${WLS_USER}@${WLS_ADMINURL}")
+    WLS_PASSWORD=$(get_secret BLADE_WLS_PASSWORD      "admin.password"          "WebLogic password for ${WLS_USER}@${WLS_ADMINURL}")
     KS_PASS=$(get_secret      BLADE_TLS_KEYSTORE_PASS "tls.keystore.passphrase" "Identity keystore passphrase")
     TRUST_PASS=$(get_secret   BLADE_TLS_TRUST_PASS    "tls.trust.passphrase"    "Trust keystore passphrase")
 fi

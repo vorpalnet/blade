@@ -7,8 +7,7 @@
 #
 #   .conf/<name>/occas.conf     silent install + domain + patching
 #   .conf/<name>/deploy.conf    ./deploy.sh, ./tls/* (deploy + TLS)
-#   .conf/<name>/occas.secret   admin password
-#   .conf/<name>/deploy.secret  wls password + TLS passphrases
+#   .conf/<name>/the config     admin password + store password + TLS passphrases
 #
 # The whole .conf/ directory is gitignored — profiles describe YOUR hosts/IPs
 # and must never land in the (open-source) repo. The committed examples under
@@ -63,7 +62,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONF_BASE="${SCRIPT_DIR}/.conf"
+CONF_BASE="${SCRIPT_DIR}/.conf"                     # legacy per-profile dir (migration source only)
+BLADE_HOME="${BLADE_HOME:-$HOME/.blade}"            # ONE config file per env lives here: <env>.conf
 
 if [ -z "${NO_COLOR:-}" ] && [ -t 1 ]; then
     C_BLUE=$'\033[34m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RED=$'\033[31m'
@@ -122,8 +122,12 @@ next_step()       { NEXT_K+=("$1"); NEXT_D+=("$2"); }
 next_step_reset() { NEXT_K=(); NEXT_D=(); }
 
 read_prop() {
-    local file="$1" key="$2"
-    { grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+    local file="$1" key="$2" v
+    v="$({ grep "^${key}=" "$file" 2>/dev/null || true; } | head -1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    # Secrets are stored as key=ENC(value); strip the wrapper on read. Config
+    # values have no ENC() and pass through. (Future: decrypt inside ENC() here.)
+    case "$v" in ENC\(*\)) v="${v#ENC(}"; v="${v%)}" ;; esac
+    printf '%s' "$v"
 }
 
 # Set key=value in a conf file: update in place if the key exists, else append.
@@ -177,7 +181,7 @@ for __a in "${@:${__rest_from}}"; do
 done
 
 # Existing-profile scalar defaults (edit mode). Set once NAME/paths are known.
-OCCAS_CONF=""; DEPLOY_CONF=""; OCCAS_SECRET=""; DEPLOY_SECRET=""
+OCCAS_CONF=""; DEPLOY_CONF=""; WLS_SECRET=""
 # Set by do_remove_domain after it deletes the active profile, so the dashboard
 # loops know to drop out instead of redrawing a profile that no longer exists.
 PROFILE_GONE=0
@@ -185,11 +189,31 @@ PROFILE_GONE=0
 # included): the dashboard loops drop out so we exit before the tree disappears.
 REPO_GONE=0
 set_paths() {
-    PROFILE_DIR="${CONF_BASE}/${NAME}"
-    OCCAS_CONF="${PROFILE_DIR}/occas.conf"
-    DEPLOY_CONF="${PROFILE_DIR}/deploy.conf"
-    OCCAS_SECRET="${PROFILE_DIR}/occas.secret"
-    DEPLOY_SECRET="${PROFILE_DIR}/deploy.secret"
+    # ONE file per env holds config + secrets: ~/.blade/<env>.conf. The three var
+    # names all alias it, so every existing read/write just targets the one file.
+    BLADE_CONF="${BLADE_HOME}/${NAME}.conf"
+    OCCAS_CONF="$BLADE_CONF"; DEPLOY_CONF="$BLADE_CONF"; WLS_SECRET="$BLADE_CONF"
+    PROFILE_DIR="$BLADE_HOME"                       # ancillary files, keyed by name
+    BLADE_LOG="${BLADE_HOME}/${NAME}.log"
+    URLS_FILE="${BLADE_HOME}/${NAME}.urls"
+    [ -n "$NAME" ] || return 0
+    mkdir -p "$BLADE_HOME" 2>/dev/null || true
+    # One-time migration: fold a legacy .conf/<name>/{occas,deploy}.conf + its
+    # secrets into ~/.blade/<name>.conf. Config keys stay plain; secret keys are
+    # wrapped ENC(...) (plaintext for now; a decrypt hook slots in later). The dead
+    # wls.password copy is dropped. Old files are left in place for rollback.
+    if [ ! -f "$BLADE_CONF" ]; then
+        local _old="${CONF_BASE}/${NAME}"
+        if [ -f "${_old}/occas.conf" ] || [ -f "${_old}/deploy.conf" ]; then
+            ( umask 077
+              cat "${_old}/occas.conf" "${_old}/deploy.conf" 2>/dev/null | grep -vE '^[[:space:]]*(#|$)'
+              cat "${_old}/wls.secret" "${_old}/occas.secret" "${_old}/deploy.secret" 2>/dev/null \
+                | grep -E '^[a-zA-Z][a-zA-Z0-9._]*=' | grep -v '^wls\.password=' \
+                | sed -E 's/^([a-zA-Z0-9._]+)=(.*)$/\1=ENC(\2)/'
+            ) > "$BLADE_CONF" 2>/dev/null || true
+            chmod 600 "$BLADE_CONF" 2>/dev/null || true
+        fi
+    fi
 }
 # exget <key>  — value from an existing conf (for edit defaults), else "".
 exget() {
@@ -315,7 +339,7 @@ load_profile() {
     NM_PORT="$(d nm.listen.port 5556)"
     NM_TYPE="$(d nm.type ssl)"
     DCOUNT="$(d dynamic.server.count "")"
-    DMAX="$(d max.dynamic.cluster.size "")"
+    DMAX=2147483647   # dynamic-cluster ceiling removed — pinned to INT_MAX (the cap is a no-op per the RE'd OCCAS code; MaximumDynamicServerCount=DCOUNT is the real count)
     # Server names follow the machines: machine0 runs <prefix>0, machine1 runs
     # <prefix>1. Starting at 0 is what lets the local machine's engine come from
     # the same template as every other one -- there is no static server any more.
@@ -632,25 +656,6 @@ EOF
 }
 
 # ----- phase 4: dynamic cluster shape ----------------------------------------
-phase_cluster() {
-    log ""; log "${C_BOLD}Dynamic cluster${C_RESET}"
-    help <<'EOF'
-Every engine in BEA_ENGINE_TIER_CLUST is generated from one server template, so
-they all carry the same certificate, the same SIP channels and the same ports.
-Server names start at 0 and follow the machines: machine0 runs engine0,
-machine1 runs engine1, and so on.
-
-The server COUNT is not asked for -- it is however many machines you have, and
-"Add a machine" maintains it. Only the ceiling is a choice.
-EOF
-    local defmax="${DMAX:-8}"; case "$defmax" in ''|*[!0-9]*) defmax=8 ;; esac
-    ask DMAX "Max dynamic cluster size (ceiling)" "$defmax"
-    # Count always tracks the machine list; nothing else may set it.
-    DCOUNT="${#H_NAME[@]}"
-    [ "$DCOUNT" -ge 1 ] || DCOUNT=1
-    [ "$DCOUNT" -gt "$DMAX" ] && DMAX=$((DCOUNT * 2))
-    return 0
-}
 
 # ----- phase 6: runtime / deploy ---------------------------------------------
 phase_runtime() {
@@ -722,14 +727,14 @@ EOF
         fi
         [ "$SIP_PLAIN" != false ] && ask SIP_PLAIN_PORT "  Plain SIP port" "${SIP_PLAIN_PORT:-5060}"
         # Generate passphrases once; keep existing ones so re-running TLS is safe.
-        if [ -z "$(read_prop "$DEPLOY_SECRET" tls.ca.passphrase)" ]; then
-            if write_secret "$DEPLOY_SECRET" tls.ca.passphrase "$(gen_pass)"; then
-                write_secret "$DEPLOY_SECRET" tls.keystore.passphrase "$(gen_pass)"
-                write_secret "$DEPLOY_SECRET" tls.trust.passphrase "$(gen_pass)"
-                ok "generated 3 random TLS keystore passphrases (saved to deploy.secret)"
+        if [ -z "$(read_prop "$WLS_SECRET" tls.ca.passphrase)" ]; then
+            if write_secret "$WLS_SECRET" tls.ca.passphrase "$(gen_pass)"; then
+                write_secret "$WLS_SECRET" tls.keystore.passphrase "$(gen_pass)"
+                write_secret "$WLS_SECRET" tls.trust.passphrase "$(gen_pass)"
+                ok "generated 3 random TLS keystore passphrases (saved to the config)"
             fi
         else
-            log "  ${C_DIM}TLS passphrases already present in deploy.secret — kept.${C_RESET}"
+            log "  ${C_DIM}TLS passphrases already present in the config — kept.${C_RESET}"
         fi
     fi
     return 0
@@ -746,22 +751,23 @@ EOF
     local pw=""
     ask_secret pw "Password for '${ADMIN_USER}'"
     if [ -z "$pw" ]; then warn "no password entered — left unchanged."; return 0; fi
-    write_secret "$OCCAS_SECRET"  admin.password "$pw" && ok "saved admin.password to occas.secret (600)"
-    write_secret "$DEPLOY_SECRET" wls.password   "$pw" && ok "saved wls.password to deploy.secret (600)"
+    write_secret "$WLS_SECRET" admin.password "$pw" && ok "saved admin.password to the config (600)"
     return 0
 }
 
 # Write/update one key=value in a gitignored secret file (creates it 600).
 write_secret() {
     local file="$1" key="$2" val="$3"
-    if ! git -C "$SCRIPT_DIR" check-ignore -q "$file" 2>/dev/null; then
-        warn "${file#${SCRIPT_DIR}/} is not gitignored — refusing to write a secret. Fix .gitignore."
-        return 1
-    fi
+    # A file OUTSIDE the repo (e.g. ~/.blade/<env>.conf) can't be committed — safe.
+    # A file INSIDE the repo must be gitignored before we write a secret to it.
+    case "$file" in
+        "$SCRIPT_DIR"/*) git -C "$SCRIPT_DIR" check-ignore -q "$file" 2>/dev/null \
+            || { warn "${file#${SCRIPT_DIR}/} is inside the repo but not gitignored — refusing to write a secret."; return 1; } ;;
+    esac
     if [ ! -f "$file" ]; then
-        ( umask 077; printf '# BLADE secret — profile %s (gitignored). chmod 600.\n' "$NAME" > "$file" )
+        ( umask 077; printf '# BLADE config for %s (mode 600). Secrets are key=ENC(...).\n' "$NAME" > "$file" )
     fi
-    set_conf_prop "$file" "$key" "$val"
+    set_conf_prop "$file" "$key" "ENC(${val})"   # ENC() marks a secret; decrypt hook lands later
     chmod 600 "$file"
     return 0
 }
@@ -769,8 +775,10 @@ write_secret() {
 # Rewrite occas.conf + deploy.conf from the current globals (keeps comments).
 save_profile() {
     [ -n "$NAME" ] || { warn "no profile name — cannot save."; return 1; }
-    ensure_gitignore
-    mkdir -p "$PROFILE_DIR"
+    mkdir -p "$BLADE_HOME" 2>/dev/null || true
+    # Secrets share this file now, so capture them before the config rewrite and
+    # re-append after (the config blocks below truncate then append to the file).
+    local _secrets=""; [ -f "$BLADE_CONF" ] && _secrets="$(grep -E '^[a-zA-Z0-9._]+=ENC\(' "$BLADE_CONF" 2>/dev/null || true)"
     local stamp; stamp="$(date '+%Y-%m-%d %H:%M')"
     local OCCAS_BASE OCCAS_CURRENT KEYSTORE_DIR APPROUTER_DIR ENGINE_NODES SAN idx
     OCCAS_BASE="$(dirname "$MWHOME")"
@@ -804,7 +812,7 @@ save_profile() {
     {
         echo "# BLADE — OCCAS silent install + dynamic-cluster domain. Profile '${NAME}'."
         echo "# Generated by blade.sh on ${stamp}. Re-run: ./blade.sh ${NAME}"
-        echo "# Consumed by ./blade.sh. Admin password lives in occas.secret."
+        echo "# Consumed by ./blade.sh. Admin password lives in the config."
         echo ""
         echo "# --- Step 1: silent product install (runs once; MW_HOME may be shared) ---"
         echo "# ORACLE_HOME is a SYMLINK to a versioned home. Patching builds a new"
@@ -876,7 +884,7 @@ save_profile() {
     # --- deploy.conf ---
     {
         echo "# BLADE — deploy + TLS profile '${NAME}'. Generated by blade.sh on ${stamp}."
-        echo "# Consumed by ./deploy.sh and ./tls/*. Secrets live in deploy.secret."
+        echo "# Consumed by ./deploy.sh and ./tls/*. Secrets live in the config."
         echo ""
         echo "build.profile=${BUILD_PROFILE}"
         echo "shared.filesystem=${SHARED_FS}"
@@ -927,7 +935,10 @@ save_profile() {
         echo "sip.tls.port=${SIP_PORT}"
         echo "sip.tls.versions=${SIP_VER}"
         echo "sip.tls.twoway=${SIP_TWOWAY}"
-    } > "$DEPLOY_CONF"
+    } >> "$DEPLOY_CONF"
+    # Restore the secrets captured before the rewrite (ENC()-wrapped, mode 600).
+    [ -n "$_secrets" ] && printf '%s\n' "$_secrets" >> "$BLADE_CONF"
+    chmod 600 "$BLADE_CONF" 2>/dev/null || true
     return 0
 }
 
@@ -939,7 +950,7 @@ run_wizard() {
     [ -n "$NAME" ] && [ -f "$OCCAS_CONF" ] && log "  editing profile '${NAME}' (its values are offered as defaults)"
     load_profile
     # Journey order; phase_occas opens with the environment scan.
-    phase_occas; phase_domain; phase_hosts; phase_cluster
+    phase_occas; phase_domain; phase_hosts
     phase_tls; phase_runtime
     if [ -z "$NAME" ]; then ask NAME "Save profile as" "$DOMAIN"; set_paths; fi
     [ -n "$NAME" ] || die "a profile name is required."
@@ -973,7 +984,7 @@ _sum_tls() {
     if [ "$SIP_TLS" = "true" ]; then printf 'https :%s · sips :%s %s' "$SSL_PORT" "$SIP_PORT" "$SIP_VER"
     else printf 'https :%s · sip-tls off' "$SSL_PORT"; fi
 }
-_pw_set() { [ -f "$OCCAS_SECRET" ] && [ -n "$(read_prop "$OCCAS_SECRET" admin.password)" ]; }
+_pw_set() { [ -f "$WLS_SECRET" ] && [ -n "$(read_prop "$WLS_SECRET" admin.password)" ]; }
 _sum_lastmachine() {
     local n=$(( ${#H_NAME[@]} - 1 ))
     [ "$n" -ge 1 ] && printf '%s (%s%s)' "${H_NAME[$n]}" "${prefix:-engine}" "$n" || printf 'none — single machine'
@@ -993,7 +1004,6 @@ build_menu_rows() {
     local p_occas=0; { [ -n "$MWHOME" ] && [ -n "$OCCAS_VERSION" ] && [ -n "$JAVA_HOME_VAL" ]; } && p_occas=1
     local p_ident=0; [ -n "$DOMAIN" ] && p_ident=1
     local p_hosts=0; [ "$nhosts" -ge 1 ] && p_hosts=1
-    local p_clu=0;   { [ -n "$DCOUNT" ] && [ -n "$DMAX" ]; } && p_clu=1
     local p_tls=0;   [ -n "$SSL_PORT" ] && p_tls=1
     local p_run=0;   { [ -n "$BUILD_PROFILE" ] && [ -n "$ADMINURL" ]; } && p_run=1
     local a_i=0; [ -d "${MWHOME}/wlserver" ] && a_i=1
@@ -1027,7 +1037,6 @@ build_menu_rows() {
     _row phase  ident "Domain name + admin user & password"      "${DOMAIN:-—} / ${ADMIN_USER} · pw ${pwlbl}" "$p_ident"
     _row head ""      "STEP 3 · Describe your machines"          "" "-"
     _row phase  hosts   "Hosts & Node Manager"     "${nhosts} host(s) · ${NM_DOMAIN}@${NM_BIND}:${NM_PORT} ${NM_TYPE}" "$p_hosts"
-    _row phase  cluster "Dynamic cluster ceiling"  "$(printf '%s engine(s) · max %s' "${#H_NAME[@]}" "${DMAX:-—}")" "$p_clu"
     _row head ""      "STEP 4 · Start it up (in order)"          "" "-"
     _row action n "Create & start Node Manager" "${NM_DOMAIN} — ${nm_state}" "$a_n"
     _row action c "Create the cluster domain"   "${DOMAIN:-?}" "$a_c"
@@ -1073,7 +1082,6 @@ dispatch_row() {
         occas)   phase_occas;   save_profile ;;
         ident)   phase_domain;  phase_password; save_profile ;;
         hosts)   phase_hosts;   save_profile ;;
-        cluster) phase_cluster; save_profile ;;
         tls)     phase_tls;     save_profile ;;
         runtime) phase_runtime; save_profile ;;
         u) do_makeuser  || true ;;
@@ -1894,7 +1902,7 @@ do_install_wls_service() {
     # domain so the unit doesn't depend on this checkout still being here.
     stage_boot_scripts "$domhome" || return 1
     local pw="${BLADE_WLS_PASSWORD:-}"
-    [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
+    [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" admin.password)"
     local envfile="${domhome}/.blade-nm.env"
     write_nm_envfile "$envfile" "$user" "$pw" || true
     local text
@@ -2011,7 +2019,7 @@ provision_one_host() {
     fi
     local adminurl="${ADMINURL:-t3://${H_ADDR[0]}:7001}"
     local pw; pw="${BLADE_WLS_PASSWORD:-}"
-    [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
+    [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" admin.password)"
     local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$mw")"
 
     # Stage the boot helpers into the domain BEFORE the rsync, so each engine
@@ -2721,7 +2729,7 @@ do_patch() {
     ok "Patched ${target} in place — ${applied} interim patch(es) applied."
     grep -cE "^Patch  *[0-9]+" "${target}/.blade-patch-manifest" 2>/dev/null \
         | sed 's/^/  interim patches now present: /'
-    log "  ${C_DIM}Restart the servers to run on the patched home ('n', 's').${C_RESET}"
+    log "  ${C_DIM}The servers are down (patching needs them idle) — start them on the patched home: 'n' (Node Manager), 's' (AdminServer).${C_RESET}"
     log "  ${C_DIM}Roll a patch back:  ${op} rollback -id <patch-number> -oh ${target}${C_RESET}"
     if [ "${#H_ROLE[@]}" -gt 0 ]; then
         local _ne=0 _r; for _r in "${H_ROLE[@]}"; do [ "$_r" = engine ] && _ne=$((_ne + 1)); done
@@ -3288,7 +3296,7 @@ do_download() {
         [ -n "$INSTALLER_JAR" ] && DL_DIR="$(dirname "$INSTALLER_JAR")" \
             || DL_DIR="$(dirname "${OCCAS_BASE:-/opt/oracle/occas}")/media"
     fi
-    URLS_FILE="${PROFILE_DIR}/occas.urls"
+    URLS_FILE="${BLADE_HOME}/${NAME}.urls"
 
     # Already installed beats already downloaded. Rebuilding a domain on a box
     # that has the product is the common case, and there is no reason to send
@@ -3562,10 +3570,10 @@ EOF
 emit_tls_block() {
     local tmpl="${1}-template" ksdir="${KEYSTORE_DIR:-/opt/oracle/security}"
     local kspw trpw
-    kspw="$(read_prop "$DEPLOY_SECRET" tls.keystore.passphrase)"
-    trpw="$(read_prop "$DEPLOY_SECRET" tls.trust.passphrase)"
+    kspw="$(read_prop "$WLS_SECRET" tls.keystore.passphrase)"
+    trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
     local alias="${ID_ALIAS:-blade-identity}"
-    [ -n "$kspw" ] && [ -n "$trpw" ] || { warn "TLS passphrases missing from deploy.secret."; return 1; }
+    [ -n "$kspw" ] && [ -n "$trpw" ] || { warn "TLS passphrases missing from the config."; return 1; }
 
     # Identity + trust, applied to the template AND to the real servers.
     _emit_keystores() {
@@ -3658,10 +3666,10 @@ PYBLOCK
     unset -f _emit_keystores
 }
 
-# Admin password: env > occas.secret > prompt (skipped under dry-run).
+# Admin password: env > the config > prompt (skipped under dry-run).
 get_admin_pw() {
     local v="${BLADE_WLS_PASSWORD:-}"
-    [ -z "$v" ] && [ -f "$OCCAS_SECRET" ] && v="$(read_prop "$OCCAS_SECRET" admin.password)"
+    [ -z "$v" ] && [ -f "$WLS_SECRET" ] && v="$(read_prop "$WLS_SECRET" admin.password)"
     if [ -z "$v" ] && [ "$DRY" != "on" ]; then
         # The cursor-newline must go to stderr: callers capture this function's
         # stdout via $(get_admin_pw), and a stray newline there prepends to the
@@ -3686,7 +3694,7 @@ do_configure() {
     prefix="$(read_prop "$OCCAS_CONF" server.name.prefix)"
     match="$(read_prop "$OCCAS_CONF" machine.match.expression)"
     dcount="$(read_prop "$OCCAS_CONF" dynamic.server.count)"
-    dmax="$(read_prop "$OCCAS_CONF" max.dynamic.cluster.size)"
+    dmax="$(read_prop "$OCCAS_CONF" max.dynamic.cluster.size)"; dmax="${dmax:-2147483647}"   # ceiling removed → INT_MAX
     for chk in mwhome domain prefix match dcount dmax; do
         [ -n "${!chk}" ] || { warn "occas.conf: missing $chk (required for configure)"; return 1; }
     done
@@ -4036,7 +4044,7 @@ register_domain_with_nm() {
     # is an offline edit and WebLogic would overwrite it on shutdown.
     if ! pgrep -f "weblogic.Name=.*${domname}" >/dev/null 2>&1; then
         local apw="${BLADE_WLS_PASSWORD:-}"
-        [ -z "$apw" ] && [ -f "$OCCAS_SECRET" ] && apw="$(read_prop "$OCCAS_SECRET" admin.password)"
+        [ -z "$apw" ] && [ -f "$WLS_SECRET" ] && apw="$(read_prop "$WLS_SECRET" admin.password)"
         set_domain_nm_credentials "$domhome" "$domname" "${ADMIN_USER:-weblogic}" "$apw" || true
     fi
     # Node Manager reads nodemanager.domains ONCE, at startup. A running NM has
@@ -4134,7 +4142,7 @@ nm_wlst_props() {
     if grep -q "^CustomIdentityKeyStoreFileName=" "$nmprops" 2>/dev/null; then
         local pw cdir
         pw="${BLADE_STORE_PASSWORD:-}"
-        [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" store.password)"
+        [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" store.password)"
         cdir="$(read_prop "$OCCAS_CONF" certs.dir)"; cdir="${cdir/#\~/$HOME}"
         cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
         if [ -n "$pw" ] && [ -f "${cdir}/trust.p12" ]; then
@@ -4232,12 +4240,12 @@ nm_admin() {
     local IU_USER; IU_USER="$(iu_owner_user "$domhome")"
     # Starting needs the domain enrolled (no-op if already) + adequate launch memory.
     [ "$action" = "start" ] && { register_domain_with_nm "$dom" "$domhome" || true; write_user_overrides "$domhome"; }
-    # NM credentials = the admin creds (env > occas.secret > misc/.nmsecret).
+    # NM credentials = the admin creds (env > the config > misc/.nmsecret).
     # The .nmsecret fallback is resolved HERE, not in the piped script: under
     # `bash -s` its $(dirname "$0") is the CWD, not misc/, and the checkout
     # isn't readable by the install user anyway.
     local pw="${BLADE_WLS_PASSWORD:-}"
-    [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
+    [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" admin.password)"
     [ -z "$pw" ] && [ -f "${SCRIPT_DIR}/misc/.nmsecret" ] && pw="$(read_prop "${SCRIPT_DIR}/misc/.nmsecret" NM_PASSWORD)"
     # Production mode dies on a missing boot identity (BEA-090782).
     [ "$action" = "start" ] && write_boot_properties "$domhome" "AdminServer" "$auser" "$pw"
@@ -4252,7 +4260,7 @@ nm_admin() {
     if [ -z "$pw" ] && [ -t 0 ]; then
         read -rs -p "  Node Manager password for ${auser}: " pw || pw=""; echo
     fi
-    [ -z "$pw" ] && { warn "no admin password (env / occas.secret / misc/.nmsecret) — cannot nmConnect; aborting the ${action}."; return 1; }
+    [ -z "$pw" ] && { warn "no admin password (env / the config / misc/.nmsecret) — cannot nmConnect; aborting the ${action}."; return 1; }
     { printf 'export MW_HOME=%q DOMAIN_NAME=%q DOMAIN_HOME=%q ADMIN_SERVER=%q NM_ACTION=%q\n' \
              "$oh" "$dom" "$domhome" "AdminServer" "$action"
       printf 'export NM_HOST=localhost NM_PORT=%q NM_USER=%q NM_TYPE=%q NM_PASSWORD=%q\n' \
@@ -4308,13 +4316,13 @@ do_remove_domain() {
     local domhome="${DOMAINS_DIR}/${dom}"
     [ -n "$dom" ] || { warn "no domain name."; return 1; }
     local have_dom=0;  [ -d "$domhome" ] && have_dom=1
-    local have_prof=0; [ -n "${PROFILE_DIR:-}" ] && [ -d "$PROFILE_DIR" ] && have_prof=1
+    local have_prof=0; [ -n "${BLADE_CONF:-}" ] && [ -f "$BLADE_CONF" ] && have_prof=1
     if [ "$have_dom" = 0 ] && [ "$have_prof" = 0 ]; then
         ok "domain '${dom}' and its profile already gone — nothing to remove."; return 0
     fi
     # The uninstall ladder sets KEEP_PROFILE so an iterate-fast reinstall can reuse
     # the profile's config + secrets; interactive 'r' clears it (removes both).
-    local profnote="; rm -rf ${PROFILE_DIR}"; local proflabel=" AND profile '${NAME}'"
+    local profnote="; rm ${BLADE_CONF}"; local proflabel=" AND profile '${NAME}'"
     if [ "${KEEP_PROFILE:-0}" = 1 ]; then profnote=" (keeping the profile config)"; proflabel=""; fi
     if [ "$DRY" = "on" ]; then
         log "${C_DIM}  [dry-run] stop AdminServer; kill stray JVMs; un-enroll ${dom}; rm -rf ${domhome}; remove weblogic.service (if it points here)${profnote}${C_RESET}"
@@ -4322,7 +4330,7 @@ do_remove_domain() {
         remove_engine_systemd_units "$domhome" "${DOMAINS_DIR}/${NM_DOMAIN}"
         return 0
     fi
-    yesno "Remove domain '${dom}'${proflabel}? Stops its servers, DELETES ${domhome}, removes its weblogic.service unit${proflabel:+, and erases the profile config + secrets at ${PROFILE_DIR}}." "N" \
+    yesno "Remove domain '${dom}'${proflabel}? Stops its servers, DELETES ${domhome}, removes its weblogic.service unit${proflabel:+, and erases the profile config + secrets at ${BLADE_CONF}}." "N" \
         || { warn "kept '${dom}'${proflabel} — nothing removed."; return 1; }
     # Safety net before anything irreversible (skippable with --no-backup).
     [ "${BACKUP:-1}" = 1 ] && [ "$have_dom" = 1 ] && do_backup || true
@@ -4349,9 +4357,9 @@ do_remove_domain() {
     # lives inside the profile directory we're about to remove. Skipped when the
     # uninstall ladder asked to keep it (KEEP_PROFILE) for a fast reinstall.
     if [ "$have_prof" = 1 ] && [ "${KEEP_PROFILE:-0}" != 1 ]; then
-        rm -rf "$PROFILE_DIR" && { ok "removed profile '${NAME}' (${PROFILE_DIR})."; PROFILE_GONE=1; }
+        rm -f "$BLADE_CONF" "$BLADE_LOG" "$URLS_FILE" && { ok "removed profile '${NAME}' (${BLADE_CONF})."; PROFILE_GONE=1; }
     elif [ "$have_prof" = 1 ]; then
-        ok "kept profile '${NAME}' (${PROFILE_DIR}) — reinstall with: ./blade.sh ${NAME} install"
+        ok "kept profile '${NAME}' (${BLADE_CONF}) — reinstall with: ./blade.sh ${NAME} install"
     fi
 }
 
@@ -4549,7 +4557,7 @@ _deploy_one() {
         return 0
     fi
     [ "$action" = "deploy" ] && [ ! -f "$source" ] && { warn "missing artifact: ${source} — run ./build.sh first."; return 1; }
-    pw="${BLADE_WLS_PASSWORD:-}"; [ -z "$pw" ] && [ -f "$OCCAS_SECRET" ] && pw="$(read_prop "$OCCAS_SECRET" admin.password)"
+    pw="${BLADE_WLS_PASSWORD:-}"; [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" admin.password)"
     # t3s trust: the occas conf's trust keystore (certs.sh layout) + store password.
     local trust="" trustpw=""
     case "$url" in t3s://*)
@@ -4558,7 +4566,7 @@ _deploy_one() {
             local cdir; cdir="$(read_prop "$OCCAS_CONF" certs.dir)"; cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
             [ -f "${cdir}/trust.p12" ] && trust="${cdir}/trust.p12"
         fi
-        trustpw="${BLADE_STORE_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$OCCAS_SECRET" ] && trustpw="$(read_prop "$OCCAS_SECRET" store.password)"
+        trustpw="${BLADE_STORE_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$WLS_SECRET" ] && trustpw="$(read_prop "$WLS_SECRET" store.password)"
         ;;
     esac
     MW_HOME="$MWHOME" JAVA_HOME="${JAVA_HOME_VAL:-${JAVA_HOME:-}}" \
@@ -4632,8 +4640,9 @@ do_deploy_status() { _deploy_one status "" "" "" ; }
 # deliberately NOT teed — it would fill the log with terminal escape codes.
 start_logging() {
     local what="$1"
-    { [ -n "${PROFILE_DIR:-}" ] && [ -d "$PROFILE_DIR" ]; } || return 0
-    local lf="${PROFILE_DIR}/blade.log"
+    [ -n "${BLADE_LOG:-}" ] || return 0
+    mkdir -p "$BLADE_HOME" 2>/dev/null || true
+    local lf="$BLADE_LOG"
     exec > >(tee -a "$lf") 2>&1
     LOGGING=1
     log ""
@@ -4729,7 +4738,7 @@ do_status() {
     unset -f _st
     rule
     log "  admin URL: $(_wls_adminurl 2>/dev/null || true)"
-    log "  session log: ${PROFILE_DIR}/blade.log"
+    log "  session log: ${BLADE_LOG:-—}"
 }
 
 # Snapshot the profile (configs + secrets) and the domain's config tree to a tgz
@@ -4737,12 +4746,11 @@ do_status() {
 # profile dir (under .conf/.backups/) so removing the profile doesn't take the
 # backups with it. Best-effort: never blocks the operation it precedes.
 do_backup() {
-    { [ -n "${PROFILE_DIR:-}" ] && [ -d "$PROFILE_DIR" ]; } || { warn "no profile dir — nothing to back up."; return 1; }
-    local bdir="${CONF_BASE}/.backups"
+    { [ -n "${BLADE_CONF:-}" ] && [ -f "$BLADE_CONF" ]; } || { warn "no profile config — nothing to back up."; return 1; }
+    local bdir="${BLADE_HOME}/.backups"
     local dest="${bdir}/${NAME}-$(date '+%Y%m%d-%H%M%S').tgz"
     local domhome="${DOMAINS_DIR}/${DOMAIN:-}"
-    local -a items=()
-    local f; for f in "$PROFILE_DIR"/*.conf "$PROFILE_DIR"/*.secret; do [ -f "$f" ] && items+=("$f"); done
+    local -a items=("$BLADE_CONF")
     [ -d "${domhome}/config" ] && items+=("${domhome}/config")
     if [ "${#items[@]}" -eq 0 ]; then warn "nothing to back up yet."; return 0; fi
     if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] tar czf ${dest}  (profile conf/secrets + ${domhome}/config)${C_RESET}"; return 0; fi
@@ -4790,9 +4798,15 @@ if [ "${BASH_SOURCE[0]}" != "${0}" ]; then return 0 2>/dev/null || true; fi
 if [ -z "$NAME" ]; then
     # No name given: list profiles, let the user pick or create.
     profiles=()
+    if [ -d "$BLADE_HOME" ]; then
+        for cpath in "$BLADE_HOME"/*.conf; do
+            [ -f "$cpath" ] && profiles+=("$(basename "${cpath%.conf}")")
+        done
+    fi
+    # Legacy .conf/<name>/ profiles still show (they migrate on first load).
     if [ -d "$CONF_BASE" ]; then
         for dpath in "$CONF_BASE"/*/; do
-            [ -f "${dpath}occas.conf" ] && profiles+=("$(basename "$dpath")")
+            [ -f "${dpath}occas.conf" ] && case " ${profiles[*]:-} " in *" $(basename "$dpath") "*) : ;; *) profiles+=("$(basename "$dpath")") ;; esac
         done
     fi
     if [ "${#profiles[@]}" -eq 0 ]; then
