@@ -350,12 +350,10 @@ do_show() {
 
 next_steps() {
     log ""
-    log "${C_BOLD}Next steps${C_RESET}"
-    log "  1. Place on the servers:   ./blade.sh ${ENV_NAME}  -> install TLS ('t')"
-    log "                             (configure/nmdomain also place them automatically)."
-    log "  2. Trust the CA on any box that CALLS this env over t3s/https that isn't"
-    log "     already covered (peers for REST; deploy.sh auto-trusts blade-trust.p12):"
-    log "       keytool -importcert -cacerts -alias blade-${ENV_NAME} -file ${CERTS_DIR}/blade-ca.pem"
+    log "  ${C_DIM}The domain picks these up automatically when you configure it — nothing else to run here.${C_RESET}"
+    # Only self-signed CAs need distributing; a real cert's issuer is already trusted.
+    [ "$MODE" = generate ] && \
+        log "  ${C_DIM}(Self-signed CA: to trust it elsewhere, hand out ${CERTS_DIR}/blade-ca.pem.)${C_RESET}"
 }
 
 log "${C_BOLD}BLADE certs${C_RESET}"

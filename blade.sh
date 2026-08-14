@@ -788,13 +788,20 @@ EOF
         log "${C_DIM}  [dry-run] would import your certificate into tls/out/${NAME} (certs.sh import)${C_RESET}"
         return 0
     fi
-    log "  ${C_DIM}Give a PKCS12, or a PEM cert+key. Enter to skip a field.${C_RESET}"
-    ask CERT_P12 "    PKCS12 file (.p12/.pfx)" "$CERT_P12"
-    if [ -z "$CERT_P12" ]; then
-        ask CERT_PEM "    server certificate (PEM)" "$CERT_PEM"
-        ask CERT_KEY "    private key (PEM)"        "$CERT_KEY"
-    fi
-    ask CERT_CHAIN "    CA chain (PEM, optional)"   "$CERT_CHAIN"
+    log "  Which format is your certificate in?"
+    log "     ${C_BOLD}1${C_RESET}) PKCS12 — one .p12/.pfx bundling the cert + private key"
+    log "     ${C_BOLD}2${C_RESET}) PEM    — separate cert and key files (Let's Encrypt, most CAs)"
+    local fmt deffmt=2; [ -n "$CERT_P12" ] && deffmt=1
+    ask fmt "  Choose 1 or 2" "$deffmt"
+    [ "${PAGE_ABORT:-0}" = 1 ] && { warn "cancelled."; return 0; }
+    case "$fmt" in
+        1) CERT_PEM=""; CERT_KEY=""
+           ask CERT_P12 "  PKCS12 file (.p12/.pfx)"    "$CERT_P12" ;;
+        *) CERT_P12=""
+           ask CERT_PEM "  server certificate (PEM)"   "$CERT_PEM"
+           ask CERT_KEY "  private key (PEM)"          "$CERT_KEY" ;;
+    esac
+    ask CERT_CHAIN   "  CA chain (PEM, optional)"      "$CERT_CHAIN"
     [ "${PAGE_ABORT:-0}" = 1 ] && { warn "cancelled."; return 0; }
     save_profile
     "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
