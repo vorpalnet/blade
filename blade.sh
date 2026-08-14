@@ -4078,6 +4078,11 @@ Machine${idx}NodemanagerNMType=${type}"
     # Stage in a temp workdir (the .py reads the .properties by relative name).
     local work; work="$(mktemp -d /tmp/occas-cfg.XXXXXX)"
     cp "$src_py" "${work}/occas-replicated-dynamiccluster.py"
+    # Jython aborts on any non-ASCII byte unless the file declares an encoding
+    # (PEP 263). The stock Oracle template has none, and the injected TLS/SIP
+    # comments use em-dashes etc. — declare UTF-8 on line 1 so it can't recur.
+    { printf '%s\n' '# -*- coding: utf-8 -*-'; cat "${work}/occas-replicated-dynamiccluster.py"; } > "${work}/.py.hdr" \
+        && mv "${work}/.py.hdr" "${work}/occas-replicated-dynamiccluster.py"
     printf '%s\n' "${props/__PW__/$pw}" > "${work}/occas-replicated-dynamiccluster.properties"
     chmod 600 "${work}/occas-replicated-dynamiccluster.properties"
 
