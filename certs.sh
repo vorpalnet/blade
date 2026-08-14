@@ -314,6 +314,14 @@ do_import() {
                 -keystore "${CERTS_DIR}/blade-trust.p12" -storetype PKCS12 -storepass "$trust_pw"
             rm -f "$f"
         done
+        # Keep the Node Manager's permanent cert (blade.sh ensure_nm_cert) across
+        # trust rebuilds — the AdminServer's NM client validates NM against this
+        # store, and losing the entry cuts the control plane to every machine.
+        if [ -f "${CERTS_DIR}/nm-cert.pem" ]; then
+            "$KEYTOOL" -importcert -alias "blade-nm" -noprompt -file "${CERTS_DIR}/nm-cert.pem" \
+                -keystore "${CERTS_DIR}/blade-trust.p12" -storetype PKCS12 -storepass "$trust_pw"
+            ok "kept the Node Manager cert in blade-trust.p12 (alias blade-nm)"
+        fi
     else
         warn "No cert.import.chain — blade-trust.p12 not (re)built. The 'secure' step needs one; point cert.import.chain at the issuing CA chain PEM."
     fi

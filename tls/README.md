@@ -22,6 +22,19 @@ trust store once. After that you can reissue server certs freely — re-run
 you're ready for a real CA, the same identity CSR goes to it instead (see
 *Real-CA path* below); nothing else changes.
 
+## Node Manager is deliberately NOT on this identity
+
+Node Manager presents its own **permanent** self-signed certificate
+(`nm-identity.p12`, alias `blade-nm`, ~100-year validity), generated once by
+blade.sh's `n` step into the same `tls/out/<env>/` directory. The NM channel is
+a closed loop — AdminServer ↔ NM inside the cluster, authenticated by the NM
+username/password — so it gets the ssh-host-key treatment: one pinned cert,
+never rotated, never expiring in practice. Reissuing or replacing the identity
+cert above (including short-lived certs from a real CA) therefore **never
+touches the control plane**. `make-certs.sh` keeps the `blade-nm` entry in
+`blade-trust.p12` on every rebuild so the AdminServer's NM client continues to
+validate NM.
+
 ## Conf keys
 
 These are added to the env conf alongside the deploy keys. See the committed

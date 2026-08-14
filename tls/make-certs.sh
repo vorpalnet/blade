@@ -225,6 +225,15 @@ if [ "$SIP_TWOWAY" = "true" ]; then
         -keystore "$TRUST_P12" -storetype PKCS12 -storepass "$TRUST_PASS" >/dev/null
     echo "    + SBC CA imported (alias sbc-ca) for SIP mTLS"
 fi
+# The Node Manager's own permanent certificate (blade.sh ensure_nm_cert) rides
+# in the shared trust store so the AdminServer's built-in NM client — which
+# validates against the DOMAIN CustomTrust, not nm-trust.p12 — can reach NM.
+# Imported on every rebuild so replacing the CA never drops the NM entry.
+if [ -f "${OUTDIR}/nm-cert.pem" ]; then
+    keytool -importcert -noprompt -alias "blade-nm" -file "${OUTDIR}/nm-cert.pem" \
+        -keystore "$TRUST_P12" -storetype PKCS12 -storepass "$TRUST_PASS" >/dev/null
+    echo "    + Node Manager cert imported (alias blade-nm)"
+fi
 
 chmod 600 "$CA_P12" "$ID_P12" "$TRUST_P12" 2>/dev/null || true
 

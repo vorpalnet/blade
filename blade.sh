@@ -363,7 +363,11 @@ load_profile() {
     NM_DOMAIN="$(d nm.domain.name nmdomain)"
     NM_BIND="$(d nm.bind.address 0.0.0.0)"
     NM_PORT="$(d nm.listen.port 5556)"
+    # Pinned: Node Manager always runs an SSL listener with its own permanent
+    # blade-nm certificate (see do_nmdomain). An old profile saying nm.type=plain
+    # is overridden — there is no un-certificated Node Manager deployment.
     NM_TYPE="$(d nm.type ssl)"
+    [ "$NM_TYPE" = "ssl" ] || { warn "nm.type='${NM_TYPE}' is no longer supported — Node Manager is always SSL with its own certificate."; NM_TYPE=ssl; }
     DCOUNT="$(d dynamic.server.count "")"
     # No dynamic-cluster ceiling: MaximumDynamicServerCount (=DCOUNT) is the real
     # cap; setMaxDynamicClusterSize is a no-op per the RE'd OCCAS code AND the WLS
@@ -400,6 +404,10 @@ load_profile() {
     # emit_tls_block writes this path + alias into the server template.
     KEYSTORE_DIR="$(d tls.keystore.dir "${DOMAINS_DIR}/${DOMAIN}/config/certs")"
     ID_ALIAS="$(d tls.identity.alias blade-identity)"
+    # Logs live OUTSIDE the domain so they never clutter it or fill the data
+    # volume: local, rotatable (logrotate), shippable. Node Manager's own log
+    # goes to ${LOG_DIR}/nodemanager; server logs will follow here later.
+    LOG_DIR="$(d log.dir /var/log/weblogic)"
     # false = every engine on the template's ports (the production shape);
     # true = base+index, which only suits several engines on one host.
     DYN_CALC_PORTS="$(d dynamic.calculated.ports false)"
@@ -655,7 +663,7 @@ EOF
     log "  ${C_BOLD}Node Manager (same on every host)${C_RESET}"
     log "  ${C_DIM}binds to ${NM_BIND}; runs in its own basic domain '${NM_DOMAIN}', independent of the app domains.${C_RESET}"
     ask NM_PORT "  Node Manager listen port"      "$NM_PORT"
-    ask NM_TYPE "  Node Manager type (ssl|plain)" "$NM_TYPE"
+    log "  ${C_DIM}listener: always SSL, with NM's own permanent certificate (alias blade-nm) — not configurable.${C_RESET}"
     ask prefix  "SIP engine server name prefix"   "$prefix"
     match="${prefix}*"
 
@@ -868,6 +876,9 @@ save_profile() {
         echo "# Domains live OUTSIDE the Oracle home; inside it, a symlink flip"
         echo "# would swing them onto the patched copy's stale snapshot."
         echo "domains.dir=${DOMAINS_DIR}"
+        echo "# Logs live outside the domain (local, rotatable). NM writes to"
+        echo "# \${log.dir}/nodemanager; set to /tmp/... if you want them ephemeral."
+        echo "log.dir=${LOG_DIR}"
         echo "occas.version=${OCCAS_VERSION}"
         echo "installer.jar=${INSTALLER_JAR}"
         echo "inventory.loc=${INV_LOC}"
@@ -1298,11 +1309,13 @@ dashboard_tui() {
             [ "$_rs" = "$_cursec" ] || continue   # collapsed section — hide its rows
             local box="[ ]"; _chk_has "${MR_ID[$i]}" && box="[x]"
             local g=" "; case "${MR_DONE[$i]}" in 1) g="✓" ;; 0) g="○" ;; esac
-            local arrow="  "; [ "${MR_TYPE[$i]}" = action ] && arrow="→ "
+            # The key you press (or select + Enter) -- shown so the row IDs the
+            # installer refers to are visible, not guessed.
+            local key="${MR_ID[$i]}"
             if [ "$i" = "$cur" ]; then
-                printf '\e[7m   %s %s %s%-42s %s \e[0m\n' "$box" "$g" "$arrow" "${MR_LABEL[$i]}" "${MR_VAL[$i]}"
+                printf '\e[7m   %s %s %-5s %-40s %s \e[0m\n' "$box" "$g" "$key" "${MR_LABEL[$i]}" "${MR_VAL[$i]}"
             else
-                printf '   %s %s %s%-42s %s%s%s\n' "$box" "$g" "$arrow" "${MR_LABEL[$i]}" "$C_DIM" "${MR_VAL[$i]}" "$C_RESET"
+                printf '   %s %s %s%-5s%s %-40s %s%s%s\n' "$box" "$g" "$C_BOLD" "$key" "$C_RESET" "${MR_LABEL[$i]}" "$C_DIM" "${MR_VAL[$i]}" "$C_RESET"
             fi
         done
         printf '\n  %s↑/↓%s move · %sspace%s select · %senter%s run · %sletter%s run that row · %sd%s dry-run · %sEsc/q%s quit\n' \
@@ -1724,15 +1737,33 @@ proc_alive() {
 # tuning applies under systemd exactly as under RUN n/s.
 
 # Emit a systemd unit to stdout. after = extra ordering deps (may be empty).
+# The JAVA_HOME to bake into systemd units and remote provisioning: prefer the
+# <java.dir>/current link whenever it resolves to the same JDK as java.home. A
+# unit pinning a versioned dir (Environment=JAVA_HOME=.../jdk-21.0.11) dies the
+# day a JDK upgrade removes that dir; the link survives every flip. This never
+# CREATES or repoints the link — that is the JDK phase's / patch_jdk's
+# (interactive) job, and a silent repoint here could fight a deliberate pin —
+# it only chooses the stable name when both names already mean the same JDK.
+java_home_stable() {
+    local jh="${JAVA_HOME_VAL:-}" link="${JAVA_BASE:-/opt/oracle/java}/current"
+    [ -n "$jh" ] || return 0
+    if [ "$jh" != "$link" ]; then
+        local lreal; lreal="$(readlink -f "$link" 2>/dev/null || true)"
+        [ -n "$lreal" ] && [ "$lreal" = "$(readlink -f "$jh" 2>/dev/null)" ] && jh="$link"
+    fi
+    printf '%s' "$jh"
+}
+
 render_systemd_unit() {
     local desc="$1" workdir="$2" start="$3" stop="$4" user="$5" group="$6" after="$7"
+    local jh; jh="$(java_home_stable)"
     printf '%s\n' "[Unit]"
     printf 'Description=%s\n' "$desc"
     printf 'After=network-online.target%s\n' "${after:+ ${after}}"
     printf 'Wants=network-online.target\n'
     printf '\n[Service]\n'
     printf 'Type=simple\n'
-    [ -n "${JAVA_HOME_VAL:-}" ] && printf 'Environment=JAVA_HOME=%s\n' "$JAVA_HOME_VAL"
+    [ -n "$jh" ] && printf 'Environment=JAVA_HOME=%s\n' "$jh"
     printf 'WorkingDirectory=%s\n' "$workdir"
     printf 'ExecStart=%s\n' "$start"
     printf 'ExecStop=%s\n'  "$stop"
@@ -1828,6 +1859,7 @@ render_admin_nm_unit() {
     local dom="$1" domhome="$2" scriptdir="$3" user="$4" group="$5" envfile="$6"
     local server="${7:-AdminServer}" adminurl="${8:-}"
     local nmport="${NM_PORT:-5556}" nmtype="${NM_TYPE:-ssl}" nmuser="${ADMIN_USER:-weblogic}"
+    local jh; jh="$(java_home_stable)"
     printf '%s\n' "[Unit]"
     printf 'Description=WebLogic %s via Node Manager (BLADE %s)\n' "$server" "$dom"
     printf 'After=network-online.target nodemanager.service\n'
@@ -1836,7 +1868,7 @@ render_admin_nm_unit() {
     printf '\n[Service]\n'
     printf 'Type=oneshot\n'
     printf 'RemainAfterExit=yes\n'
-    [ -n "${JAVA_HOME_VAL:-}" ] && printf 'Environment=JAVA_HOME=%s\n' "$JAVA_HOME_VAL"
+    [ -n "$jh" ] && printf 'Environment=JAVA_HOME=%s\n' "$jh"
     printf 'Environment=MW_HOME=%s\n' "$MWHOME"
     printf 'Environment=DOMAIN_NAME=%s\n' "$dom"
     printf 'Environment=DOMAIN_HOME=%s\n' "$domhome"
@@ -2051,7 +2083,7 @@ provision_one_host() {
     cdir="${cdir/#\~/$HOME}"; cdir="${cdir:-${HOME}/.blade/certs/${NAME}}"
     local domhome="${DOMAINS_DIR}/${dom}"
     local nmhome="${DOMAINS_DIR}/${nmdom}"
-    local jdk="${JAVA_HOME_VAL:-}"
+    local jdk; jdk="$(java_home_stable)"   # the link when it matches java.home
     # java.home may be the <java.dir>/current symlink; ship the REAL JDK it
     # resolves to and repoint the link on the far side, same as the Oracle home
     # below -- rsync'ing the link path would land the link itself, dangling.
@@ -2832,23 +2864,27 @@ do_open_firewall_remote() {
 # can be clobbered and recreated (configure writes OverwriteDomain=true) without
 # ever taking Node Manager down. This:
 #   1. creates the basic domain from Oracle's wls.jar template (offline WLST),
-#   2. sets Node Manager to bind ${NM_BIND} on ${NM_PORT} (ssl|plain),
+#   2. sets Node Manager to bind ${NM_BIND} on ${NM_PORT} — always SSL, with
+#      NM's own permanent blade-nm certificate (ensure_nm_cert),
 #   3. starts Node Manager in the background and waits for it to listen.
 # Enrolling app domains into this NM (nmEnroll) happens at configure/start time.
 # Idempotent: an existing nmdomain is reconfigured + (re)started, not rebuilt.
 # ----------------------------------------------------------------------------
 do_nmdomain() {
-    local mw="$MWHOME" nmdom="$NM_DOMAIN" bind="$NM_BIND" port="$NM_PORT" type="$NM_TYPE"
+    local mw="$MWHOME" nmdom="$NM_DOMAIN" bind="$NM_BIND" port="$NM_PORT"
     local auser="${ADMIN_USER:-weblogic}" mode="${START_MODE:-dev}"
     [ -n "$mw" ]    || { warn "occas.conf: missing oracle.home"; return 1; }
     [ -n "$nmdom" ] || { warn "occas.conf: missing nm.domain.name"; return 1; }
     [ -n "$port" ]  || { warn "occas.conf: missing nm.listen.port"; return 1; }
     local nmhome="${DOMAINS_DIR}/${nmdom}"
     local tmpl="${mw}/wlserver/common/templates/wls/wls.jar"
-    local secure; [ "$type" = "ssl" ] && secure="true" || secure="false"
+    # Always an SSL listener with the dedicated blade-nm cert — there is no
+    # plain option (that puts the NM password on the wire) and no env-identity
+    # option (that couples the control plane to cert rotation).
+    local secure="true"
 
     info "Node Manager domain '${nmdom}'  →  ${nmhome}"
-    log  "  bind=${bind}  port=${port}  type=${type} (SecureListener=${secure})  admin=${auser}"
+    log  "  bind=${bind}  port=${port}  SSL with the blade-nm certificate  admin=${auser}"
 
     # Offline WLST: a basic domain whose only job is to host Node Manager.
     local py
@@ -2915,34 +2951,67 @@ PYEOF
     # for every platform (e.g. aarch64), and the native one fails with
     # UnsatisfiedLinkError. Java-based control is portable and sufficient here.
     iu_set_conf_prop "$nmprops" NativeVersionEnabled false
-
-    # A secure Node Manager presents the BLADE identity, never WebLogic's demo
-    # cert. NM is its OWN domain (not config-replicated), so its keystores live in
-    # the nmdomain's config/certs -- placed now (the domain already exists from
-    # step 1, so no writeDomain clobber). NM encrypts the plaintext passphrases
-    # into nodemanager.properties on first start. Refuse rather than fall back to
-    # demo (which every client would then have to trust, and the demo key is public).
-    if [ "$secure" = "true" ]; then
-        ensure_certs_source || { warn "secure Node Manager needs real TLS keystores and none could be produced — refusing to fall back to demo certs. Run 'g' (generate) then retry."; return 1; }
-        local ksdir kspw trpw alias
-        ksdir="${nmhome}/config/certs"
-        place_keystores "$ksdir" || { warn "could not place Node Manager keystores in ${ksdir}."; return 1; }
-        alias="${ID_ALIAS:-blade-identity}"
-        kspw="${BLADE_KEYSTORE_PASSWORD:-}"; [ -z "$kspw" ] && [ -f "$WLS_SECRET" ] && kspw="$(read_prop "$WLS_SECRET" tls.keystore.passphrase)"
-        trpw="${BLADE_TRUST_PASSWORD:-}";   [ -z "$trpw" ] && [ -f "$WLS_SECRET" ] && trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
-        [ -n "$kspw" ] && [ -n "$trpw" ] || { warn "tls.keystore.passphrase / tls.trust.passphrase missing — cannot give Node Manager a real identity."; return 1; }
-        iu_set_conf_prop "$nmprops" KeyStores                        CustomIdentityAndCustomTrust
-        iu_set_conf_prop "$nmprops" CustomIdentityKeyStoreFileName   "${ksdir}/blade-identity.p12"
-        iu_set_conf_prop "$nmprops" CustomIdentityKeyStoreType       PKCS12
-        iu_set_conf_prop "$nmprops" CustomIdentityKeyStorePassPhrase "$kspw"
-        iu_set_conf_prop "$nmprops" CustomIdentityAlias              "$alias"
-        iu_set_conf_prop "$nmprops" CustomIdentityPrivateKeyPassPhrase "$kspw"
-        iu_set_conf_prop "$nmprops" CustomTrustKeyStoreFileName      "${ksdir}/blade-trust.p12"
-        iu_set_conf_prop "$nmprops" CustomTrustKeyStoreType          PKCS12
-        iu_set_conf_prop "$nmprops" CustomTrustKeyStorePassPhrase    "$trpw"
-        ok "Node Manager identity: ${ksdir}/blade-identity.p12 (alias ${alias}); trust: blade-trust.p12"
+    # MBean-mode start: NM builds each server's java line from its ServerStart
+    # MBean in config.xml (emit_serverstart_block) instead of running
+    # startWebLogic.sh — that is what makes Tuning-driven ServerStart.Arguments
+    # actually govern the JVM. NOTE: this OCCAS Node Manager honors the
+    # PREFIXED key 'weblogic.StartScriptEnabled'; the plain key is silently
+    # ignored (cost hours to find — install-occas.sh commit 7428496b). Both are
+    # written so a stock-NM future behaves identically.
+    iu_set_conf_prop "$nmprops" weblogic.StartScriptEnabled false
+    iu_set_conf_prop "$nmprops" StartScriptEnabled false
+    # NM's own log + startup .out live OUTSIDE the domain (LOG_DIR, default
+    # /var/log/weblogic) so they never clutter it. NM runs as the install user,
+    # so the dir must be theirs; /var/log needs sudo to create. Fall back under
+    # the domain only if we genuinely can't make the dir.
+    local nmlogdir="${LOG_DIR:-/var/log/weblogic}/nodemanager"
+    local _lsudo=""; [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && _lsudo="sudo"
+    if $_lsudo mkdir -p "$nmlogdir" 2>/dev/null; then
+        local _lown; _lown="$(stat -c '%U:%G' "$nmhome" 2>/dev/null || true)"
+        [ -n "$_lown" ] && $_lsudo chown "$_lown" "$nmlogdir" 2>/dev/null || true
+    else
+        warn "could not create ${nmlogdir} — NM logs stay under the domain."
+        nmlogdir="${nmhome}/nodemanager"
     fi
-    ok "Node Manager bind set: ${bind}:${port} (SecureListener=${secure}, native=off)"
+    iu_set_conf_prop "$nmprops" LogFile "${nmlogdir}/nodemanager.log"
+    # Mixed-state guard: an app domain created BEFORE MBean-mode has no
+    # ServerStart MBeans — an MBean-mode NM would then boot its servers without
+    # the SIP classpath (no SIP container, nothing obvious in the log). The
+    # fresh-install ladder is safe (n runs before c; c writes ServerStart), so
+    # this only fires on a re-run against an old domain.
+    local appdom_cfg="${DOMAINS_DIR}/${DOMAIN:-}/config/config.xml"
+    if [ -n "${DOMAIN:-}" ] && [ -f "$appdom_cfg" ] \
+       && ! grep -q '<server-start>' "$appdom_cfg" 2>/dev/null; then
+        warn "domain '${DOMAIN}' predates MBean-mode start (no ServerStart in config.xml) — re-run configure ('c') BEFORE starting servers, or they will boot without the SIP container."
+    fi
+
+    # Node Manager presents its OWN permanent certificate (alias blade-nm, see
+    # ensure_nm_cert) — never the env identity, never WebLogic's demo cert. NM
+    # is its OWN domain (not config-replicated), so its keystores live in the
+    # nmdomain's config/certs -- placed now (the domain already exists from
+    # step 1, so no writeDomain clobber). NM encrypts the plaintext passphrases
+    # into nodemanager.properties on first start. Refuse rather than fall back:
+    # there is no un-certificated Node Manager deployment.
+    ensure_nm_cert || { warn "could not produce the Node Manager certificate — refusing to start an un-certificated Node Manager."; return 1; }
+    local ksdir nmpw
+    ksdir="${nmhome}/config/certs"
+    place_nm_keystores "$ksdir" || { warn "could not place Node Manager keystores in ${ksdir}."; return 1; }
+    nmpw="${BLADE_NM_KEYSTORE_PASSWORD:-}"; [ -z "$nmpw" ] && [ -f "$WLS_SECRET" ] && nmpw="$(read_prop "$WLS_SECRET" nm.keystore.passphrase)"
+    [ -n "$nmpw" ] || { warn "nm.keystore.passphrase missing — cannot give Node Manager its identity."; return 1; }
+    iu_set_conf_prop "$nmprops" KeyStores                        CustomIdentityAndCustomTrust
+    iu_set_conf_prop "$nmprops" CustomIdentityKeyStoreFileName   "${ksdir}/nm-identity.p12"
+    iu_set_conf_prop "$nmprops" CustomIdentityKeyStoreType       PKCS12
+    iu_set_conf_prop "$nmprops" CustomIdentityKeyStorePassPhrase "$nmpw"
+    iu_set_conf_prop "$nmprops" CustomIdentityAlias              blade-nm
+    iu_set_conf_prop "$nmprops" CustomIdentityPrivateKeyPassPhrase "$nmpw"
+    iu_set_conf_prop "$nmprops" CustomTrustKeyStoreFileName      "${ksdir}/nm-trust.p12"
+    iu_set_conf_prop "$nmprops" CustomTrustKeyStoreType          PKCS12
+    iu_set_conf_prop "$nmprops" CustomTrustKeyStorePassPhrase    "$nmpw"
+    # The file holds plaintext passphrases until NM's first start encrypts them
+    # in place — keep it owner-only.
+    as_install_user chmod 600 "$nmprops" 2>/dev/null || true
+    ok "Node Manager identity: ${ksdir}/nm-identity.p12 (alias blade-nm, permanent); trust: nm-trust.p12"
+    ok "Node Manager bind set: ${bind}:${port} (SecureListener=true, native=off)"
 
     # 3. Start Node Manager in the background. If it's already up, offer to
     #    restart it — that's how new domain enrollments / prop changes take effect
@@ -2955,7 +3024,7 @@ PYEOF
             return 0
         fi
     fi
-    local nmlog="${nmhome}/nodemanager/nodemanager.out"
+    local nmlog="${nmlogdir}/nodemanager.out"
     info "Starting Node Manager: ${nmhome}/bin/startNodeManager.sh"
     # Node Manager launches every server, so IT sets their identity — it must
     # run as the install user (the redirect too: nmlog is in their domain).
@@ -3641,33 +3710,170 @@ ensure_certs_source() {
     [ -f "$srcp12" ]
 }
 
-# Copy the generated blade-{identity,trust}.p12 (tls/out/<env>, login-user owned)
-# into a domain's config/certs (install-user owned). The domain must already be
-# WRITTEN -- WLST writeDomain would clobber anything placed beforehand. config/certs
-# rides along with the domain's config sync, so managed servers on other hosts get
-# the keystores at startup with no per-node push. Returns 0 only when the
-# destination identity keystore exists.
-place_keystores() {  # $1 = destination dir (a domain's config/certs)
+# The Node Manager certificate is its OWN permanent PKI, separate from the env
+# identity on purpose. The NM channel is a closed loop — the AdminServer's
+# built-in NM client and our WLST are the only callers, the real authentication
+# is the NM username/password, and hostname verification is off — so TLS here
+# is confidentiality only: the ssh-host-key model. A self-signed ~100-year cert
+# means rotating or replacing the real TLS identity (including a 90-day Let's
+# Encrypt lease on the 'sup' path) can NEVER take down the control plane — and
+# the control plane is exactly the channel you'd need to fix a botched rotation.
+#
+# Generates once into tls/out/<env>/: nm-identity.p12 (alias blade-nm),
+# nm-cert.pem, nm-trust.p12. Also idempotently imports the cert into an
+# existing blade-trust.p12 — the AdminServer's built-in NM client validates NM
+# against the DOMAIN trust store, not nm-trust.p12 — and refreshes the app
+# domain's placed copy. make-certs.sh / certs.sh import re-add the entry on
+# every trust rebuild. Returns 0 only when nm-identity.p12 exists.
+ensure_nm_cert() {
     [ "$DRY" = "on" ] && return 0
-    local dest="$1" envname srcdir own
+    local envname outdir nmpw keytool jh
+    envname="$(basename "${DEPLOY_CONF%.conf}")"
+    outdir="${SCRIPT_DIR}/tls/out/${envname}"
+    # Its own passphrase, minted like the tls.* three — the NM step depends on
+    # nothing from the TLS phase.
+    nmpw="${BLADE_NM_KEYSTORE_PASSWORD:-}"
+    [ -z "$nmpw" ] && [ -f "$WLS_SECRET" ] && nmpw="$(read_prop "$WLS_SECRET" nm.keystore.passphrase)"
+    if [ -z "$nmpw" ]; then
+        nmpw="$(gen_pass)"
+        write_secret "$WLS_SECRET" nm.keystore.passphrase "$nmpw" \
+            || { warn "could not persist nm.keystore.passphrase."; return 1; }
+        ok "generated the Node Manager keystore passphrase (saved to the config)"
+    fi
+    jh="$(read_prop "$OCCAS_CONF" java.home)"
+    local kt="${jh:+${jh}/bin/}keytool"
+    command -v "$kt" >/dev/null 2>&1 || kt="keytool"
+    command -v "$kt" >/dev/null 2>&1 || { warn "keytool not found (need a JDK) — cannot generate the Node Manager certificate."; return 1; }
+    mkdir -p "$outdir"
+    if [ ! -f "${outdir}/nm-identity.p12" ]; then
+        info "Generating the permanent Node Manager certificate (self-signed, alias blade-nm, ~100 years)"
+        "$kt" -genkeypair -alias blade-nm -keyalg RSA -keysize 2048 \
+            -dname "CN=blade-nodemanager" -validity 36500 \
+            -keystore "${outdir}/nm-identity.p12" -storetype PKCS12 \
+            -storepass "$nmpw" -keypass "$nmpw" \
+            || { warn "keytool failed generating nm-identity.p12."; return 1; }
+    fi
+    # (Re)export the cert and (re)build the one-entry trust store — cheap, and
+    # self-healing if either derived file went missing.
+    "$kt" -exportcert -rfc -alias blade-nm -keystore "${outdir}/nm-identity.p12" \
+        -storepass "$nmpw" -file "${outdir}/nm-cert.pem" >/dev/null 2>&1 \
+        || { warn "could not export nm-cert.pem."; return 1; }
+    if ! "$kt" -list -alias blade-nm -keystore "${outdir}/nm-trust.p12" \
+            -storepass "$nmpw" >/dev/null 2>&1; then
+        rm -f "${outdir}/nm-trust.p12"
+        "$kt" -importcert -noprompt -alias blade-nm -file "${outdir}/nm-cert.pem" \
+            -keystore "${outdir}/nm-trust.p12" -storetype PKCS12 -storepass "$nmpw" >/dev/null \
+            || { warn "could not build nm-trust.p12."; return 1; }
+    fi
+    chmod 600 "${outdir}/nm-identity.p12" "${outdir}/nm-trust.p12" 2>/dev/null || true
+    # Existing installs: get the NM cert into the env trust store NOW (future
+    # rebuilds keep it — make-certs.sh / certs.sh both import nm-cert.pem).
+    local trpw="${BLADE_TRUST_PASSWORD:-}"
+    [ -z "$trpw" ] && [ -f "$WLS_SECRET" ] && trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
+    if [ -f "${outdir}/blade-trust.p12" ] && [ -n "$trpw" ]; then
+        if ! "$kt" -list -alias blade-nm -keystore "${outdir}/blade-trust.p12" \
+                -storepass "$trpw" >/dev/null 2>&1; then
+            if "$kt" -importcert -noprompt -alias blade-nm -file "${outdir}/nm-cert.pem" \
+                    -keystore "${outdir}/blade-trust.p12" -storepass "$trpw" >/dev/null; then
+                ok "imported the NM cert into blade-trust.p12 (alias blade-nm)"
+                # Refresh the app domain's placed copy so the AdminServer's NM
+                # client trusts NM after its next restart; engines then get it
+                # via config replication.
+                local domcerts="${KEYSTORE_DIR:-${DOMAINS_DIR}/${DOMAIN}/config/certs}"
+                if [ -d "$domcerts" ]; then
+                    place_keystores "$domcerts" \
+                        || warn "could not refresh ${domcerts} — re-place keystores before the AdminServer restart."
+                fi
+            else
+                warn "could not import the NM cert into blade-trust.p12."
+            fi
+        fi
+    fi
+    [ -f "${outdir}/nm-identity.p12" ]
+}
+
+# Copy named keystores from tls/out/<env> (login-user owned) into a domain dir
+# (install-user owned). The domain must already be WRITTEN -- WLST writeDomain
+# would clobber anything placed beforehand. Returns 0 only when the first named
+# keystore exists at the destination.
+place_p12s() {  # $1 = destination dir, $2... = filenames in tls/out/<env>
+    [ "$DRY" = "on" ] && return 0
+    local dest="$1"; shift
+    local envname srcdir own f srcs="" dsts=""
     local SUDO=""; [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1 && SUDO="sudo"
     envname="$(basename "${DEPLOY_CONF%.conf}")"
     srcdir="${SCRIPT_DIR}/tls/out/${envname}"
-    [ -f "${srcdir}/blade-identity.p12" ] || { warn "no source keystores at ${srcdir} — run 'g' first."; return 1; }
+    for f in "$@"; do
+        [ -f "${srcdir}/${f}" ] || { warn "no ${f} at ${srcdir} — run the certificate step first."; return 1; }
+        srcs="${srcs} ${srcdir}/${f}"; dsts="${dsts} ${dest}/${f}"
+    done
+    # shellcheck disable=SC2086  # srcs/dsts are intentionally word-split
     if mkdir -p "$dest" 2>/dev/null && [ -w "$dest" ]; then
-        cp "${srcdir}/blade-identity.p12" "${srcdir}/blade-trust.p12" "$dest/" \
-            && chmod 600 "${dest}/blade-identity.p12" "${dest}/blade-trust.p12" || { warn "could not place keystores in ${dest}."; return 1; }
+        cp ${srcs} "$dest/" && chmod 600 ${dsts} \
+            || { warn "could not place keystores in ${dest}."; return 1; }
     else
         $SUDO mkdir -p "$dest" \
-            && $SUDO cp "${srcdir}/blade-identity.p12" "${srcdir}/blade-trust.p12" "$dest/" \
-            && $SUDO chmod 600 "${dest}/blade-identity.p12" "${dest}/blade-trust.p12" \
+            && $SUDO cp ${srcs} "$dest/" \
+            && $SUDO chmod 600 ${dsts} \
             || { warn "could not place keystores in ${dest} (needs sudo?)."; return 1; }
         # Own them like the domain they live in (the install user).
         own="$(stat -c '%U:%G' "$(dirname "$dest")" 2>/dev/null || true)"
-        [ -n "$own" ] && $SUDO chown "$own" "$dest" "${dest}/blade-identity.p12" "${dest}/blade-trust.p12"
+        [ -n "$own" ] && $SUDO chown "$own" "$dest" ${dsts}
     fi
     ok "keystores placed in ${dest}"
-    [ -f "${dest}/blade-identity.p12" ]
+    [ -f "${dest}/${1:-}" ]
+}
+
+# The env identity + trust pair, into a domain's config/certs. config/certs
+# rides along with the domain's config sync, so managed servers on other hosts
+# get the keystores at startup with no per-node push.
+place_keystores() {  # $1 = destination dir (a domain's config/certs)
+    place_p12s "$1" blade-identity.p12 blade-trust.p12
+}
+
+# The Node Manager pair (permanent blade-nm identity + its one-cert trust),
+# into the nmdomain's config/certs. The nmdomain tree is rsynced verbatim to
+# every engine host by provision_one_host, so these propagate for free.
+place_nm_keystores() {  # $1 = destination dir (the nmdomain's config/certs)
+    place_p12s "$1" nm-identity.p12 nm-trust.p12
+}
+
+# Per-server ServerStart, so Node Manager — in MBean-mode start
+# (weblogic.StartScriptEnabled=false, written by do_nmdomain) — builds each
+# server's java line from the ServerStart MBean in config.xml instead of
+# sourcing setDomainEnv.sh. That is what lets the Tuning app drive JVM args
+# PER SERVER (ServerStart.Arguments). The block carries what setDomainEnv used
+# to supply: the SIP jars on ClassPath and the wlss/security flags in
+# Arguments — without them an MBean-mode server boots with NO SIP container.
+# Ported from install-occas.sh (commit 7428496b), live-proven on the ashburn
+# cluster (SIP + the flowstate Coherence mesh intact). The heap here is only a
+# baseline (server.mem.args); Tuning overwrites Arguments per server, and its
+# extend/parse model preserves the SIP flags. Applied to the engine
+# ServerTemplate (dynamic engines have no per-server MBean) and the
+# AdminServer. The Oracle-home paths ride the 'current' symlink (MWHOME), so a
+# patch flip never strands them; the NM hostname-verification flag lives here
+# too because setUserOverrides.sh is not sourced on an MBean-mode start.
+emit_serverstart_block() {
+    local tmpl="${1}-template" OH="$MWHOME"
+    local mem; mem="$(read_prop "$OCCAS_CONF" server.mem.args)"
+    mem="${mem:--Xms512m -Xmx1024m -XX:MaxMetaspaceSize=512m}"
+    local cp="${OH}/wlserver/server/lib/weblogic.jar:${OH}/wlserver/../oracle_common/modules/thirdparty/ant-contrib-1.0b3.jar:${OH}/wlserver/modules/features/oracle.wls.common.nodemanager.jar:${OH}/occas/server/lib/platform/oracle.sdp.occas.depended.jar:${OH}/wlserver/sip/server/lib/wlss-runtime-rest-proxy.jar:${OH}/wlserver/sip/server/lib/weblogic_sip.jar:${OH}/wlserver/common/derby/lib/derbytools.jar:${OH}/wlserver/common/derby/lib/derbyclient.jar:${OH}/wlserver/common/derby/lib/derby.jar:${OH}/wlserver/common/derby/lib/derbyshared.jar"
+    local args="${mem} -da -javaagent:${OH}/wlserver/server/lib/debugpatch-agent.jar -Dwls.home=${OH}/wlserver/server -Dweblogic.home=${OH}/wlserver/server -Dwlss.maddr.enable=true -Dwlss.replication=on -Dwlss.callstate.manager.classname=com.bea.wcp.sip.replicatedstore.server.CoherenceCallStateManager -Dweblogic.security.SSL.minimumProtocolVersion=TLSv1.2 -Dweblogic.servlet.ClasspathServlet.disableSecureMode=false -Dweblogic.nodemanager.sslHostNameVerificationEnabled=false"
+    echo "# --- BLADE: per-server ServerStart (MBean-mode JVM args + SIP classpath) ---"
+    local spec coll nm
+    for spec in "ServerTemplates:${tmpl}" "Servers:AdminServer"; do
+        coll="${spec%%:*}"; nm="${spec##*:}"
+        cat <<PYSS
+cd('/${coll}/${nm}')
+try:
+    create('${nm}','ServerStart')
+except:
+    pass
+cd('/${coll}/${nm}/ServerStart/${nm}')
+set('ClassPath','${cp}')
+set('Arguments','${args}')
+PYSS
+    done
 }
 
 # Emit the offline-WLST that puts the real certificate and the SIP channels onto
@@ -3720,6 +3926,13 @@ set('Enabled','true')
 set('ListenPort',${SSL_PORT:-7002})
 set('ServerPrivateKeyAlias','${alias}')
 set('ServerPrivateKeyPassPhraseEncrypted','${kspw}')
+# No hostname verification on the servers' outbound SSL. Inside the VCN,
+# machines get dialed by whatever address is configured (private IP, OCI
+# metadata FQDN) and the identity cert's SAN list can't cover them all — the
+# AdminServer's own Node Manager client dies on exactly that (SSLKeyException,
+# SSLWLSHostnameVerifier). Trust in our CA is the authentication; name pinning
+# adds nothing between our own boxes.
+set('HostnameVerificationIgnored','true')
 PYBLOCK
     }
 
@@ -3925,6 +4138,18 @@ Machine${idx}NodemanagerNMType=${type}"
         > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
     log "  TLS: real certificate on the server template; sip=$([ "$SIP_PLAIN" = false ] && echo off || echo on):${SIP_PLAIN_PORT:-5060} sips=$([ "$SIP_TLS" = true ] && echo on:${SIP_PORT:-5061} || echo off)"
 
+    # Per-server ServerStart (MBean-mode JVM args + SIP classpath), injected the
+    # same way so the template and AdminServer already exist when it runs. This
+    # is the config.xml half of MBean-mode start; do_nmdomain writes the
+    # nodemanager.properties half (weblogic.StartScriptEnabled=false).
+    emit_serverstart_block "BEA_ENGINE_TIER_CLUST" > "${work}/serverstart.block"
+    awk 'NR==FNR { blk = blk $0 ORS; next }
+         /OverwriteDomain/ && !ins { printf "%s", blk; ins = 1 }
+         { print }' \
+        "${work}/serverstart.block" "${work}/occas-replicated-dynamiccluster.py" \
+        > "${work}/.py.tmp" && mv "${work}/.py.tmp" "${work}/occas-replicated-dynamiccluster.py"
+    log "  ServerStart: MBean-mode JVM args + SIP classpath on the template and AdminServer"
+
     local jh rc=0; jh="$(read_prop "$OCCAS_CONF" java.home)"
     # The domain lands in the install user's DOMAINS_DIR, so WLST runs as them.
     iu_wlst_run "$work" occas-replicated-dynamiccluster.py "$mwhome" "$jh" || rc=$?
@@ -3937,8 +4162,8 @@ Machine${idx}NodemanagerNMType=${type}"
     # (ensure_certs_source above), so a failure here is a real placement error.
     place_keystores "${KEYSTORE_DIR}" \
         || warn "keystores not placed — the AdminServer will fail to load its identity until 't' runs."
-    # Give the domain's servers enough heap/metaspace (the admin EAR OOMs the
-    # OCCAS dev default) via setUserOverrides.sh, which the NM start path sources.
+    # Heap/metaspace for NM-launched servers rides ServerStart.Arguments
+    # (emit_serverstart_block above); this hook covers hand-run start scripts.
     write_user_overrides "${DOMAINS_DIR}/${domain}"
     # Enroll the new app domain into the standalone Node Manager so it can start
     # the AdminServer/engines. No-op-with-hint if the NM domain isn't built yet.
@@ -4260,23 +4485,33 @@ PYEOF
 # which don't contain it. That surfaces as a bare PKIX "unable to find valid
 # certification path", nowhere near the actual cause.
 #
-# There is no demo path: NM is configured with a real identity in do_nmdomain,
-# so we always trust the env's blade-trust.p12. If it's missing we warn and emit
-# no trust store — the nmConnect then fails with a real error instead of quietly
-# leaning on the public demo CA. Always returns 0 (callers assign it directly
-# under `set -e`). Hostname verification is off: the cert names the host, while
-# the units and interactive runs both nmConnect to 'localhost'.
+# There is no demo path: NM presents its own permanent blade-nm certificate
+# (do_nmdomain), so we trust the nmdomain's nm-trust.p12 — that one cert and
+# nothing else. If it's missing we warn and emit no trust store — the nmConnect
+# then fails with a real error instead of quietly leaning on the public demo
+# CA. Always returns 0 (callers assign it directly under `set -e`). Hostname
+# verification is off: the cert names no host at all (CN=blade-nodemanager),
+# and the units and interactive runs both nmConnect to 'localhost'.
+#
+# Back-compat: an nmdomain configured before the dedicated NM cert has only
+# blade-trust.p12 — fall back to it so 'n' can be re-run THROUGH a working
+# blade.sh against the old layout.
 nm_wlst_props() {
     local common="-Dweblogic.security.SSL.ignoreHostnameVerification=true"
-    local nmdom ksdir trpw
+    local nmdom ksdir nmpw
     nmdom="${NM_DOMAIN:-$(read_prop "$OCCAS_CONF" nm.domain.name)}"; nmdom="${nmdom:-nmdomain}"
     ksdir="${DOMAINS_DIR}/${nmdom}/config/certs"   # NM's own domain, where do_nmdomain placed its identity/trust
-    trpw="${BLADE_TRUST_PASSWORD:-}"; [ -z "$trpw" ] && [ -f "$WLS_SECRET" ] && trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
+    nmpw="${BLADE_NM_KEYSTORE_PASSWORD:-}"; [ -z "$nmpw" ] && [ -f "$WLS_SECRET" ] && nmpw="$(read_prop "$WLS_SECRET" nm.keystore.passphrase)"
+    if [ -f "${ksdir}/nm-trust.p12" ] && [ -n "$nmpw" ]; then
+        printf '%s' "-Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${ksdir}/nm-trust.p12 -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=${nmpw} ${common}"
+        return 0
+    fi
+    local trpw="${BLADE_TRUST_PASSWORD:-}"; [ -z "$trpw" ] && [ -f "$WLS_SECRET" ] && trpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
     if [ -f "${ksdir}/blade-trust.p12" ] && [ -n "$trpw" ]; then
         printf '%s' "-Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${ksdir}/blade-trust.p12 -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=${trpw} ${common}"
         return 0
     fi
-    warn "Node Manager trust: ${ksdir}/blade-trust.p12 or tls.trust.passphrase missing — run 'n' to (re)configure a secure Node Manager (demo certs are not used)." >&2
+    warn "Node Manager trust: ${ksdir}/nm-trust.p12 or nm.keystore.passphrase missing — run 'n' to (re)configure Node Manager (demo certs are not used)." >&2
     printf '%s' "$common"
     return 0
 }
@@ -4299,7 +4534,11 @@ restart_nm() {
         sudo systemctl restart nodemanager.service 2>/dev/null || { warn "systemctl restart nodemanager.service failed."; return 1; }
     else
         stop_nm || true
-        local nmlog="${nmhome}/nodemanager/nodemanager.out"
+        # Match do_nmdomain: NM's .out lives in LOG_DIR (created there when the NM
+        # was set up). Fall back under the domain only if that dir isn't present.
+        local nmlogdir="${LOG_DIR:-/var/log/weblogic}/nodemanager"
+        [ -d "$nmlogdir" ] || nmlogdir="${nmhome}/nodemanager"
+        local nmlog="${nmlogdir}/nodemanager.out"
         as_install_user sh -c "JAVA_HOME='${JAVA_HOME_VAL:-${JAVA_HOME:-}}' nohup '${nmhome}/bin/startNodeManager.sh' > '${nmlog}' 2>&1 &"
     fi
     local i=0
@@ -4311,12 +4550,14 @@ restart_nm() {
     return 1
 }
 
-# Write <domain>/bin/setUserOverrides.sh so every server launched in this domain
-# gets enough heap/metaspace. Node Manager starts servers via the start script,
-# which sources setDomainEnv.sh, which sources THIS hook — so USER_MEM_ARGS here
-# is what an NM-launched AdminServer/engine actually runs with. (The OCCAS dev
-# default -Xmx512m -XX:MaxMetaspaceSize=256m OOMs on Metaspace when the admin EAR
-# deploys.) Tune with server.mem.args in occas.conf. Idempotent; survives reconfig.
+# Write <domain>/bin/setUserOverrides.sh. NM-launched servers do NOT source it:
+# Node Manager runs MBean-mode (weblogic.StartScriptEnabled=false), building the
+# java line from each server's ServerStart MBean (emit_serverstart_block), which
+# carries the same server.mem.args baseline and the NM hostname-verification
+# flag. This hook remains for anyone running startWebLogic.sh BY HAND — a
+# hand-run server still gets sane memory (the OCCAS dev default -Xmx512m
+# -XX:MaxMetaspaceSize=256m OOMs on Metaspace when the admin EAR deploys) and
+# the same flags. Tune with server.mem.args in occas.conf; idempotent.
 write_user_overrides() {
     local domhome="$1" mem
     [ -d "${domhome}/bin" ] || return 0
@@ -4324,14 +4565,24 @@ write_user_overrides() {
     mem="$(read_prop "$OCCAS_CONF" server.mem.args)"
     mem="${mem:--Xms512m -Xmx1024m -XX:MaxMetaspaceSize=512m}"
     iu_write "${domhome}/bin/setUserOverrides.sh" 755 <<EOF
-# BLADE - generated by blade.sh. Node Manager's start script sources
-# setDomainEnv.sh, which sources this; USER_MEM_ARGS overrides the OCCAS dev
-# default (-Xmx512m -XX:MaxMetaspaceSize=256m) that OOMs on Metaspace when the
-# admin EAR deploys. Applies to every server; change server.mem.args in
-# occas.conf and re-run configure (or 's') to update. To split AdminServer vs
-# engines, branch on \$SERVER_NAME here.
+# BLADE - generated by blade.sh. NM-launched servers do NOT run this: Node
+# Manager starts servers MBean-mode from their config.xml ServerStart MBeans
+# (Tuning drives the JVM args there). This hook covers HAND-RUN start scripts
+# only — startWebLogic.sh sources setDomainEnv.sh, which sources this, so a
+# manual start still gets the same memory baseline (the OCCAS dev default
+# -Xmx512m -XX:MaxMetaspaceSize=256m OOMs on Metaspace when the admin EAR
+# deploys) and flags. Change server.mem.args in occas.conf and re-run
+# configure (or 's') to update.
 USER_MEM_ARGS="${mem}"
 export USER_MEM_ARGS
+# The AdminServer's built-in Node Manager client verifies each machine's NM
+# certificate hostname; VCN-internal addresses (private IPs, OCI metadata
+# FQDNs) don't reliably match the identity cert's SANs, and our CA trust is
+# the real authentication. This is Oracle's documented switch for the
+# AdminServer->NM path; the servers' own SSL is covered by
+# HostnameVerificationIgnored in config.xml.
+JAVA_OPTIONS="\${JAVA_OPTIONS} -Dweblogic.nodemanager.sslHostNameVerificationEnabled=false"
+export JAVA_OPTIONS
 EOF
     log "  ${C_DIM}wrote setUserOverrides.sh — server memory: ${mem}${C_RESET}"
 }

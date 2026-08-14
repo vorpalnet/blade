@@ -67,6 +67,38 @@ editing panels and a dispatch-fidelity test suite for the round-trip.
 
 ### Installer and operations
 
+- Node Manager now has its **own permanent certificate**: a self-signed
+  ~100-year `blade-nm` cert (`nm-identity.p12`/`nm-trust.p12`, minted once by
+  blade.sh's `n` step, its passphrase auto-generated as
+  `nm.keystore.passphrase`) replaces the env identity on NM's listener — and
+  is the only supported NM deployment (the `nm.type=plain` option is gone; a
+  plain listener carries the NM password cleartext). The NM channel is a
+  closed loop authenticated by NM username/password, so this is the
+  ssh-host-key model: rotating or replacing the env identity — including a
+  90-day Let's Encrypt lease on the supply path — can never take down the
+  control plane. WLST `nmConnect` now trusts `nm-trust.p12`; the trust-store
+  builders (`make-certs.sh`, `certs.sh import`) keep a `blade-nm` entry in
+  `blade-trust.p12` so the AdminServer's built-in NM client validates NM too.
+  Also: AdminServer→NM hostname verification is off
+  (`-Dweblogic.nodemanager.sslHostNameVerificationEnabled=false` via
+  `setUserOverrides.sh`, `HostnameVerificationIgnored` on the server SSL
+  MBeans) — inside the cluster, machines get dialed by addresses no SAN list
+  reliably covers, and trust is the real authentication; and
+  `nodemanager.properties` is now written mode 600 (it holds plaintext
+  passphrases until NM's first start encrypts them).
+- **MBean-mode server start restored** (blade.sh had regressed to script mode;
+  install-occas.sh gained this in 3.0.3): `weblogic.StartScriptEnabled=false`
+  (the prefixed key — the plain one is silently ignored by this OCCAS NM) plus
+  per-server `ServerStart` MBeans on the engine ServerTemplate and the
+  AdminServer, baked in at domain create — SIP jars on ClassPath, wlss/
+  security flags + the `server.mem.args` heap baseline + the NM
+  hostname-verification flag in Arguments. Node Manager builds each server's
+  java line from config.xml, so Tuning-driven `ServerStart.Arguments` govern
+  the JVM again. `setUserOverrides.sh` remains for hand-run start scripts
+  only. Paths in ClassPath/Arguments ride the Oracle-home `current` symlink,
+  and systemd units now prefer the `<java.dir>/current` JDK link over a
+  versioned path when both resolve to the same JDK — neither a PSU flip nor a
+  JDK upgrade strands them.
 - `install-occas.sh`: servers are configured for MBean-mode start so
   Tuning-driven JVM arguments actually apply; production-mode hardening
   (domain file permissions, internal servlets); a new `console` step deploys
