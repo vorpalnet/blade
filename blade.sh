@@ -760,6 +760,10 @@ browsers and SBCs will NOT trust it by default. The identity SAN covers every
 host / FQDN / IP you entered, so one cert satisfies hostname verification.
 WebLogic's demo certificate is never used -- it is publicly known.
 EOF
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] would generate a self-signed CA + identity into tls/out/${NAME} (make-certs)${C_RESET}"
+        return 0
+    fi
     ask CA_CN "  Internal CA common name"   "${CA_CN:-BLADE Internal CA}"
     [ -n "$ID_CN" ] || ID_CN="${H_FQDN[0]:-${H_NAME[0]:-}}"
     ask ID_CN "  Identity cert common name" "$ID_CN"
@@ -780,6 +784,10 @@ Point at a PKCS12, or a PEM cert + key, optionally with a CA chain -- the normal
 production answer. Root-only files (e.g. Let's Encrypt under /etc/letsencrypt)
 are read via sudo. WebLogic's demo certificate is never used.
 EOF
+    if [ "$DRY" = "on" ]; then
+        log "${C_DIM}  [dry-run] would import your certificate into tls/out/${NAME} (certs.sh import)${C_RESET}"
+        return 0
+    fi
     log "  ${C_DIM}Give a PKCS12, or a PEM cert+key. Enter to skip a field.${C_RESET}"
     ask CERT_P12 "    PKCS12 file (.p12/.pfx)" "$CERT_P12"
     if [ -z "$CERT_P12" ]; then
@@ -1201,7 +1209,7 @@ _read_key() {
         ' ')   printf 'space' ;;
         d|D)   printf 'dry' ;;
         q|Q)   printf 'quit' ;;
-        [a-zA-Z]) printf 'key:%s' "$k" ;;   # a row-id hotkey (m, p, u, i, E, …)
+        [a-zA-Z]) printf 'other' ;;          # no per-row letter shortcuts
         *)     printf 'other' ;;
     esac
 }
@@ -1216,18 +1224,16 @@ dashboard_tui() {
     # Run one or more row ids: leave the alt-screen, dispatch each, then pause and
     # reload the profile. Returns 1 when the profile/repo vanished (caller breaks).
     # Print the return prompt. When the last action registered follow-up steps
-    # (next_step), list them as pressable lines instead of a vague "press a letter".
+    # (next_step), name them (by description, no letters) as guidance for what to
+    # select next on the dashboard.
     _return_prompt() {
-        if [ "${#NEXT_K[@]}" -gt 0 ]; then
-            printf '\n  %sNext:%s\n' "$C_BOLD" "$C_RESET"
-            local i
-            for i in "${!NEXT_K[@]}"; do
-                printf "    %s'%s'%s  %s\n" "$C_BOLD" "${NEXT_K[$i]}" "$C_RESET" "${NEXT_D[$i]}"
-            done
-            printf '  %spress one of the letters above, or Enter/Esc to return…%s ' "$C_DIM" "$C_RESET"
-        else
-            printf '\n  %spress Enter/Esc to return…%s ' "$C_DIM" "$C_RESET"
+        if [ "${#NEXT_D[@]}" -gt 0 ]; then
+            printf '\n  %sNext:%s ' "$C_BOLD" "$C_RESET"
+            local i sep=""
+            for i in "${!NEXT_D[@]}"; do printf '%s%s' "$sep" "${NEXT_D[$i]}"; sep=" · "; done
+            printf '\n'
         fi
+        printf '  %spress Enter to return…%s ' "$C_DIM" "$C_RESET"
     }
     # Breadcrumb under the banner naming the step(s) being run, so an action screen
     # says which page you're on. Looks the label up from the row id(s).
@@ -1247,24 +1253,10 @@ dashboard_tui() {
         local rid; for rid in "$@"; do dispatch_row "$rid"; done
         CHK=""
         { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
-        # Chain a follow-up step ONLY from the advertised "Next:" letters — a stray
-        # or wrong-case keypress must never launch a surprise action. Anything else
-        # (Enter included) returns to the dashboard, where every row is visible.
-        while :; do
-            _return_prompt
-            local kp; kp="$(_read_key)"; printf '\n'
-            local kc="" j hit=""
-            case "$kp" in key:*) kc="${kp#key:}" ;; *) break ;; esac
-            for j in "${!NEXT_K[@]}"; do
-                [ "${NEXT_K[$j]}" = "$kc" ] && { hit="$kc"; break; }
-            done
-            [ -n "$hit" ] || break
-            load_profile
-            printf '\e[2J\e[H'; banner; _tui_subtitle "$hit"; printf '\n'
-            next_step_reset
-            dispatch_row "$hit"
-            { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && return 1
-        done
+        # Pause so the action's output is readable, then return to the dashboard
+        # (arrow-navigate to whatever's next). No letter chaining, no shortcuts.
+        _return_prompt
+        _read_key >/dev/null
         load_profile
         printf '\e[?25l'; trap 'printf "\e[?25h\n"' EXIT INT
         return 0
@@ -1309,17 +1301,14 @@ dashboard_tui() {
             [ "$_rs" = "$_cursec" ] || continue   # collapsed section — hide its rows
             local box="[ ]"; _chk_has "${MR_ID[$i]}" && box="[x]"
             local g=" "; case "${MR_DONE[$i]}" in 1) g="✓" ;; 0) g="○" ;; esac
-            # The key you press (or select + Enter) -- shown so the row IDs the
-            # installer refers to are visible, not guessed.
-            local key="${MR_ID[$i]}"
             if [ "$i" = "$cur" ]; then
-                printf '\e[7m   %s %s %-5s %-40s %s \e[0m\n' "$box" "$g" "$key" "${MR_LABEL[$i]}" "${MR_VAL[$i]}"
+                printf '\e[7m   %s %s %-44s %s \e[0m\n' "$box" "$g" "${MR_LABEL[$i]}" "${MR_VAL[$i]}"
             else
-                printf '   %s %s %s%-5s%s %-40s %s%s%s\n' "$box" "$g" "$C_BOLD" "$key" "$C_RESET" "${MR_LABEL[$i]}" "$C_DIM" "${MR_VAL[$i]}" "$C_RESET"
+                printf '   %s %s %-44s %s%s%s\n' "$box" "$g" "${MR_LABEL[$i]}" "$C_DIM" "${MR_VAL[$i]}" "$C_RESET"
             fi
         done
-        printf '\n  %s↑/↓%s move · %sspace%s select · %senter%s run · %sletter%s run that row · %sd%s dry-run · %sEsc/q%s quit\n' \
-               "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET"
+        printf '\n  %s↑/↓%s move · %sspace%s select · %senter%s run · %sd%s dry-run · %sEsc/q%s quit\n' \
+               "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET"
 
         local kpress; kpress="$(_read_key)"
         case "$kpress" in
@@ -1340,15 +1329,8 @@ dashboard_tui() {
                    done
                    [ "${#runids[@]}" -eq 0 ] && runids=("${MR_ID[$cur]}")
                    _tui_run "${runids[@]}" || break ;;
-            key:*) # a single-letter row-id hotkey (the letters the help text names)
-                   local kc="${kpress#key:}" j hit=""
-                   for j in "${!MR_TYPE[@]}"; do
-                       [ "${MR_TYPE[$j]}" = action ] || continue
-                       [ "${MR_ID[$j]}" = "$kc" ] && { hit="$kc"; break; }
-                   done
-                   [ -n "$hit" ] && { _tui_run "$hit" || break; } ;;
             quit)  break ;;
-            *)     : ;;
+            *)     : ;;   # no per-row letter shortcuts — navigate + Enter
         esac
     done
     printf '\e[?25h'; trap - EXIT INT
@@ -1386,16 +1368,10 @@ dashboard_menu() {
         local tok quit=0
         for tok in $(printf '%s' "$line" | tr ',' ' '); do
             case "$tok" in
-                all) local k; for k in occas ident hosts cluster tls runtime; do dispatch_row "$k"; done ;;
+                all) local k; for k in occas ident hosts tls runtime; do dispatch_row "$k"; done ;;
                 d)   [ "$DRY" = "on" ] && DRY="off" || DRY="on"; log "  dry-run: ${DRY}" ;;
                 q)   quit=1 ;;
-                *[!0-9]*)  # a row-id token (the letters the help text names: m, p, patch, …)
-                    local mj matched=""
-                    for mj in "${!MR_TYPE[@]}"; do
-                        [ "${MR_TYPE[$mj]}" = head ] && continue
-                        [ "${MR_ID[$mj]}" = "$tok" ] && { matched="$tok"; break; }
-                    done
-                    if [ -n "$matched" ]; then dispatch_row "$matched"; else warn "unknown choice: $tok"; fi ;;
+                *[!0-9]*) warn "unknown choice: ${tok} (use a number, or all/d/q)" ;;
                 *)   [ -n "${idmap[$tok]:-}" ] && dispatch_row "${idmap[$tok]}" || warn "no row ${tok}" ;;
             esac
             { [ "$PROFILE_GONE" = 1 ] || [ "$REPO_GONE" = 1 ]; } && break
@@ -1947,7 +1923,7 @@ do_install_nm_service() {
     local mw="$MWHOME" nmdom="$NM_DOMAIN"
     [ -n "$nmdom" ] || { warn "no nm.domain.name."; return 1; }
     local nmhome="${DOMAINS_DIR}/${nmdom}"
-    [ "$DRY" = "on" ] || [ -d "$nmhome" ] || { warn "nmdomain not found: ${nmhome} — create it first ('n')."; return 1; }
+    [ "$DRY" = "on" ] || [ -d "$nmhome" ] || { warn "nmdomain not found: ${nmhome} — create the Node Manager domain first."; return 1; }
     local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$nmhome")"
     local text
     text="$(render_systemd_unit "WebLogic Node Manager (BLADE ${nmdom})" \
@@ -1965,13 +1941,13 @@ do_install_wls_service() {
     local mw="$MWHOME" dom="$DOMAIN"
     [ -n "$dom" ] || { warn "no domain name."; return 1; }
     local domhome="${DOMAINS_DIR}/${dom}"
-    [ "$DRY" = "on" ] || [ -d "$domhome" ] || { warn "app domain not found: ${domhome} — create it first ('c')."; return 1; }
+    [ "$DRY" = "on" ] || [ -d "$domhome" ] || { warn "app domain not found: ${domhome} — create the cluster domain first (configure)."; return 1; }
     local user grp; IFS=: read -r user grp <<< "$(owner_of_path "$domhome")"
     # Boot start is nmConnect/nmStart, so the domain must be enrolled in NM. Warn
     # (don't fail) if it isn't yet — 'c' or a first 's' enrolls it persistently.
     local nmfile="${DOMAINS_DIR}/${NM_DOMAIN}/nodemanager/nodemanager.domains"
     if [ "$DRY" != "on" ] && { [ ! -f "$nmfile" ] || ! grep -q "^${dom}=" "$nmfile" 2>/dev/null; }; then
-        warn "'${dom}' isn't enrolled in ${NM_DOMAIN} yet — run 'c' (or 's') once so boot start works."
+        warn "'${dom}' isn't enrolled in ${NM_DOMAIN} yet — run configure (or start the AdminServer) once so boot start works."
     fi
     # The boot service runs the same scripts blade.sh uses, but from inside the
     # domain so the unit doesn't depend on this checkout still being here.
@@ -2495,7 +2471,7 @@ patch_jdk() {
             JAVA_HOME_VAL="$link"
             _JDK_DID=1
             ok "${link} -> $(basename "$realjh"); java.home is now the link."
-            log "  ${C_DIM}Re-run 'e'/'w' (and E for engines) so the units carry the link, then restart NM.${C_RESET}"
+            log "  ${C_DIM}Re-run the boot-service steps (and re-provision the engines) so the units carry the link, then restart Node Manager.${C_RESET}"
         else
             warn "could not create ${link} — keeping ${jh}."
             return 0
@@ -2733,7 +2709,7 @@ do_patch() {
     # the patch can corrupt. Refuse while any WebLogic server or Node Manager is up.
     if pgrep -f 'weblogic.Server' >/dev/null 2>&1 || pgrep -f 'weblogic.NodeManager' >/dev/null 2>&1; then
         warn "WebLogic / Node Manager is running — an in-place patch needs the home idle."
-        log  "  ${C_DIM}Stop it first: dashboard 'x' (AdminServer) then 'k' (Node Manager), or: sudo systemctl stop weblogic nodemanager${C_RESET}"
+        log  "  ${C_DIM}Stop it first: stop the AdminServer, then Node Manager, or: sudo systemctl stop weblogic nodemanager${C_RESET}"
         rm -rf "$stage"; return 1
     fi
 
@@ -2804,7 +2780,7 @@ do_patch() {
     ok "Patched ${target} in place — ${applied} interim patch(es) applied."
     grep -cE "^Patch  *[0-9]+" "${target}/.blade-patch-manifest" 2>/dev/null \
         | sed 's/^/  interim patches now present: /'
-    log "  ${C_DIM}The servers are down (patching needs them idle) — start them on the patched home: 'n' (Node Manager), 's' (AdminServer).${C_RESET}"
+    log "  ${C_DIM}The servers are down (patching needs them idle) — start them on the patched home: Node Manager, then the AdminServer.${C_RESET}"
     log "  ${C_DIM}Roll a patch back:  ${op} rollback -id <patch-number> -oh ${target}${C_RESET}"
     if [ "${#H_ROLE[@]}" -gt 0 ]; then
         local _ne=0 _r; for _r in "${H_ROLE[@]}"; do [ "$_r" = engine ] && _ne=$((_ne + 1)); done
@@ -2982,7 +2958,7 @@ PYEOF
     local appdom_cfg="${DOMAINS_DIR}/${DOMAIN:-}/config/config.xml"
     if [ -n "${DOMAIN:-}" ] && [ -f "$appdom_cfg" ] \
        && ! grep -q '<server-start>' "$appdom_cfg" 2>/dev/null; then
-        warn "domain '${DOMAIN}' predates MBean-mode start (no ServerStart in config.xml) — re-run configure ('c') BEFORE starting servers, or they will boot without the SIP container."
+        warn "domain '${DOMAIN}' predates MBean-mode start (no ServerStart in config.xml) — re-run configure BEFORE starting servers, or they will boot without the SIP container."
     fi
 
     # Node Manager presents its OWN permanent certificate (alias blade-nm, see
@@ -3466,7 +3442,7 @@ do_download() {
         log "  3. in the same dialog, click 'Generate Token' -> Copy — you'll paste it here"
         local wsh=""
         [ -t 0 ] && ask wsh "Path to that wget.sh (Enter to stop)" ""
-        [ -n "$wsh" ] || { warn "No wget.sh yet — do the browser step above, then re-run 'd'; it resumes."; return 1; }
+        [ -n "$wsh" ] || { warn "No wget.sh yet — do the browser step above, then re-run the download step; it resumes."; return 1; }
         wsh="${wsh/#\~/$HOME}"
         [ -f "$wsh" ] || { warn "Not found: ${wsh}"; return 1; }
         cp "$wsh" "$URLS_FILE" || { warn "could not save ${URLS_FILE}."; return 1; }
@@ -3522,7 +3498,7 @@ header = "Authorization: Bearer ${token}"
 EOF
             then
                 warn "Download failed: ${f} — 401/403 means the access token (~1 h) or the URLs (~8 h) expired."
-                warn "Re-run 'd' with a fresh token; if it still fails, delete ${URLS_FILE} for a fresh wget.sh."
+                warn "Re-run the download step with a fresh token; if it still fails, delete ${URLS_FILE} for a fresh wget.sh."
                 return 1
             fi
             if ! unzip -tqq "$dest" >/dev/null 2>&1; then
@@ -3700,10 +3676,10 @@ ensure_certs_source() {
     srcp12="${SCRIPT_DIR}/tls/out/${envname}/blade-identity.p12"
     if [ ! -f "$srcp12" ]; then
         if [ "${CERT_SOURCE:-generate}" = supply ]; then
-            info "No certificates for '${envname}' yet — importing the supplied cert (the 'g' step) …"
+            info "No certificates for '${envname}' yet — importing the supplied cert (the TLS certificate step) …"
             "${SCRIPT_DIR}/certs.sh" "$DEPLOY_CONF" import || warn "certificate import returned an error"
         else
-            info "No certificates for '${envname}' yet — generating a self-signed CA (the 'g' step) …"
+            info "No certificates for '${envname}' yet — generating a self-signed CA (the TLS certificate step) …"
             "${SCRIPT_DIR}/tls/make-certs.sh" "$DEPLOY_CONF" || warn "make-certs returned an error"
         fi
     fi
@@ -4120,14 +4096,14 @@ Machine${idx}NodemanagerNMType=${type}"
     if ! ensure_certs_source; then
         rm -rf "$work"
         warn "TLS certificates are not ready for '${NAME}' — refusing to build a demo-cert domain."
-        warn "Do STEP 4 first: 'g' (generate a CA) or 'sup' (supply your own), then configure."
+        warn "Do STEP 4 (TLS) first — generate a CA, or supply your own certificate — then configure."
         return 1
     fi
     # TLS goes in FIRST so the template already carries the real certificate before
     # any server is written from it.
     if ! emit_tls_block "BEA_ENGINE_TIER_CLUST" > "${work}/tls.block" 2>/dev/null; then
         rm -rf "$work"
-        warn "TLS passphrases missing — refusing to build a demo-cert domain. Do STEP 4 ('g'/'sup') first."
+        warn "TLS passphrases missing — refusing to build a demo-cert domain. Do STEP 4 (TLS) first."
         return 1
     fi
     chmod 600 "${work}/tls.block"
@@ -4161,14 +4137,14 @@ Machine${idx}NodemanagerNMType=${type}"
     # to the engines on start, so no per-node push. Certs are guaranteed present
     # (ensure_certs_source above), so a failure here is a real placement error.
     place_keystores "${KEYSTORE_DIR}" \
-        || warn "keystores not placed — the AdminServer will fail to load its identity until 't' runs."
+        || warn "keystores not placed — the AdminServer will fail to load its identity until the HTTPS/SIP-TLS step runs."
     # Heap/metaspace for NM-launched servers rides ServerStart.Arguments
     # (emit_serverstart_block above); this hook covers hand-run start scripts.
     write_user_overrides "${DOMAINS_DIR}/${domain}"
     # Enroll the new app domain into the standalone Node Manager so it can start
     # the AdminServer/engines. No-op-with-hint if the NM domain isn't built yet.
     register_domain_with_nm "$domain" "${DOMAINS_DIR}/${domain}" || true
-    warn "Next: run 'n' (start/restart Node Manager so it sees this domain), then 's' to start the AdminServer."
+    warn "Next: start Node Manager (so it sees this domain), then start the AdminServer."
 }
 
 # Host prerequisites for the install/configure steps. Real checks on the Linux
@@ -4328,10 +4304,10 @@ do_preflight() {
     local nmport; nmport="$(read_prop "$OCCAS_CONF" nm.listen.port)"; nmport="${nmport:-5556}"
     if occas_installed "$mwhome"; then
         [ -f "$nmtmpl" ] && ok "WLS basic template present (for the nmdomain): ${nmtmpl#${mwhome}/}" \
-                         || { warn "WLS basic template missing: ${nmtmpl} — 'n' (create NM domain) needs it."; PF_NEED="yes"; _pf_tmpl="yes"; }
+                         || { warn "WLS basic template missing: ${nmtmpl} — the Node Manager step needs it."; PF_NEED="yes"; _pf_tmpl="yes"; }
     fi
     if nm_listening "$nmport"; then ok "Node Manager already listening on :${nmport}."
-    else log "  ${C_DIM}Node Manager port :${nmport} is free (it'll start with the 'n' step).${C_RESET}"; fi
+    else log "  ${C_DIM}Node Manager port :${nmport} is free (it'll start with the Node Manager step).${C_RESET}"; fi
 
     local pf_user; pf_user="$(read_prop "$OCCAS_CONF" install.user)"; pf_user="${pf_user:-oracle}"
     log ""
@@ -4354,7 +4330,7 @@ do_preflight() {
             log "    pick a usable JDK: re-run the wizard's OCCAS phase (it lists what's installed)."
         fi
         if [ -n "$_pf_tmpl" ]; then
-            log "    the wlserver template is missing from ${mwhome} — re-run 'i' (install)."
+            log "    the wlserver template is missing from ${mwhome} — re-run the Install OCCAS step."
             next_step i "install OCCAS (lays down the wlserver template)"
         fi
         log  "  Then re-run Preflight ('p')."
@@ -4388,7 +4364,7 @@ register_domain_with_nm() {
     [ -n "$mw" ] && [ -n "$nmdom" ] || { warn "cannot register: missing oracle.home / nm.domain.name"; return 1; }
     local nmfile="${DOMAINS_DIR}/${nmdom}/nodemanager/nodemanager.domains"
     if [ ! -d "$(dirname "$nmfile")" ]; then
-        warn "Node Manager domain '${nmdom}' not set up yet — run the 'n' step first."
+        warn "Node Manager domain '${nmdom}' not set up yet — set up the Node Manager first."
         return 1
     fi
     # The enrollment file belongs to the nmdomain's owner.
@@ -4410,7 +4386,7 @@ register_domain_with_nm() {
     # half-done operation behind, so finish it here.
     if nm_listening "${NM_PORT:-$(read_prop "$OCCAS_CONF" nm.listen.port)}"; then
         info "Restarting Node Manager so it picks up the '${domname}' enrollment …"
-        restart_nm || { warn "could not restart Node Manager — run 'k' then 'n', or the AdminServer start will fail."; return 1; }
+        restart_nm || { warn "could not restart Node Manager — stop, then start Node Manager, or the AdminServer start will fail."; return 1; }
     fi
     return 0
 }
@@ -4511,7 +4487,7 @@ nm_wlst_props() {
         printf '%s' "-Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${ksdir}/blade-trust.p12 -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=${trpw} ${common}"
         return 0
     fi
-    warn "Node Manager trust: ${ksdir}/nm-trust.p12 or nm.keystore.passphrase missing — run 'n' to (re)configure Node Manager (demo certs are not used)." >&2
+    warn "Node Manager trust: ${ksdir}/nm-trust.p12 or nm.keystore.passphrase missing — re-run the Node Manager step to (re)configure it (demo certs are not used)." >&2
     printf '%s' "$common"
     return 0
 }
@@ -4599,8 +4575,8 @@ nm_admin() {
         log "${C_DIM}  [dry-run] nmConnect ${auser}@localhost:${nmport} (${nmtype}); nm${action} AdminServer${C_RESET}"
         return 0
     fi
-    [ -d "$domhome" ] || { warn "app domain not found: ${domhome} — create it first (configure / 'c')."; return 1; }
-    nm_listening "$nmport" || { warn "Node Manager isn't listening on :${nmport} — start it first ('n')."; return 1; }
+    [ -d "$domhome" ] || { warn "app domain not found: ${domhome} — create it first (configure)."; return 1; }
+    nm_listening "$nmport" || { warn "Node Manager isn't listening on :${nmport} — start the Node Manager first."; return 1; }
     # Everything below touches or runs against the EXISTING domain — as its owner.
     local IU_USER; IU_USER="$(iu_owner_user "$domhome")"
     # Starting needs the domain enrolled (no-op if already) + adequate launch memory.
@@ -4710,7 +4686,7 @@ do_remove_domain() {
             IU_USER="$(iu_owner_user "${DOMAINS_DIR}/${nmdom}")"
             local tmp; tmp="$(mktemp)" && { grep -v "^${dom}=" "$nmfile" || true; } > "$tmp" \
                 && iu_write "$nmfile" 644 < "$tmp" && rm -f "$tmp" \
-                && ok "un-enrolled '${dom}' from ${nmdom} (restart NM with 'k' then 'n' to apply)."
+                && ok "un-enrolled '${dom}' from ${nmdom} (restart Node Manager (stop, then start) to apply)."
         fi
         remove_domain_systemd_unit "$domhome" weblogic.service
         # Engines first: once $domhome is gone the guard below can't match.
