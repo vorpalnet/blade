@@ -6,7 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-/// The browser signaling vocabulary: thirteen event types in CloudEvents 1.0 envelopes, carried as
+/// The browser signaling vocabulary: sixteen event types in CloudEvents 1.0 envelopes, carried as
 /// text frames over one WebSocket.
 ///
 /// ## Why not SIP over WebSocket
@@ -76,8 +76,31 @@ public final class SignalProtocol {
 	public static final String CALL_INCOMING = "call.incoming";
 	/// The far end is ringing (a SIP 180/183).
 	public static final String CALL_PROGRESS = "call.progress";
-	/// Media is negotiated and the call is up. `data.sdp` carries the answer when we owed one.
+	/// The call was answered. `data.sdp` carries the answer when we owed one.
+	///
+	/// This is the `200 OK`, not the end of setup. The handshake is not finished until the `ACK`,
+	/// which is [#CALL_CONNECTED].
 	public static final String CALL_ESTABLISHED = "call.established";
+
+	/// The `ACK` completed the handshake. **After [#CALL_ESTABLISHED], never before it.**
+	///
+	/// SIP answers a call in three messages, not two, and the third one carries information. This
+	/// event is that third message, which the browser previously never saw: `call.established` was
+	/// emitted *from* the ACK continuation and said nothing about it, so a browser could not tell an
+	/// answered call from a completed one, and the SDP an ACK can carry was dropped on the floor.
+	/// The names and the ordering rule are the framework's own — see
+	/// `org.vorpal.blade.framework.v3.events.BladeEventTypes.CALL_CONNECTED`.
+	///
+	/// `data.negotiated` is whether the media path is actually negotiated at this instant. It is
+	/// false when the far end answered without SDP and nothing was applied to the media leg — a call
+	/// that is up for signaling and silent for media. Saying so lets a browser show that, instead of
+	/// reporting a healthy call and leaving the user to wonder why nobody can hear them.
+	///
+	/// `data.sdp` is **reserved and unset on every path this gateway ships.** It exists because the
+	/// ACK is a real SDP-carrying moment — in late media the caller's answer arrives there — and
+	/// declaring it now means the type describes the ACK honestly and a future late-media path needs
+	/// no protocol revision. Clients must tolerate its absence, which is the ordinary case.
+	public static final String CALL_CONNECTED = "call.connected";
 	/// The call is over. `data.reason` says why.
 	public static final String CALL_ENDED = "call.ended";
 	/// An error tied to a specific call or to the session. `data.reason`, optional `data.code`.

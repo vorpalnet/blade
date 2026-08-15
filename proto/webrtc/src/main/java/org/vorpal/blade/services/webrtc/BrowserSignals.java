@@ -66,6 +66,34 @@ public final class BrowserSignals {
 		app.removeAttribute(BROWSER_CB_ + eventType + REPEATING);
 	}
 
+	/// Run `body` under the application-session lock, re-entering it exactly the way [#deliver] does.
+	///
+	/// For work that starts on a WebSocket thread and touches replicated call state. There is one
+	/// such place: a RELAY-mode outbound call is placed straight from the thread that carried
+	/// `call.offer`, and nothing on that path defers to a continuation, so the INVITE is on the wire
+	/// while this thread is still working — a fast `100` or `180` can be inside a SIP continuation
+	/// touching the same session concurrently. Everywhere else in this application already runs
+	/// either on a SIP container thread or inside a continuation that took the lock first.
+	public static void underLock(final SipApplicationSession app, final Runnable body) {
+		if (app instanceof WlssSipApplicationSession) {
+			try {
+				((WlssSipApplicationSession) app).doAction(new WlssAction() {
+					@Override
+					public Object run() {
+						body.run();
+						return null;
+					}
+				});
+			} catch (Exception e) {
+				if (Callflow.getSipLogger() != null) {
+					Callflow.getSipLogger().severe("BrowserSignals.underLock failed: " + e);
+				}
+			}
+		} else {
+			body.run(); // no container lock (tests / non-Wlss sessions)
+		}
+	}
+
 	/// Run whatever continuation is waiting on `event`'s type, under the application-session lock.
 	/// A no-op when nothing is waiting — a browser may send a hangup for a call the network already
 	/// tore down, and that race is normal rather than exceptional.

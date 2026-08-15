@@ -211,10 +211,18 @@ public class Analytics implements Serializable {
 			// Swallowed on purpose — a lost event must not cost a call — but say
 			// what was dropped and where. A full destination quota lands here, and
 			// this line plus the events.publish.failures counter is its only trace.
-			Callflow.getSipLogger()
-					.warning("Analytics.sendEvent - " + event.getName() + " DROPPED, not published to "
-							+ EventBus.getDefaultDestinationJndi() + ": " + t.getClass().getSimpleName() + ": "
-							+ t.getMessage());
+			//
+			// The logger is resolved defensively because it is not always installed
+			// yet: an application whose WebSocket container starts before its SIP
+			// servlet can reach this line during deployment, and turning a dropped
+			// event into a NullPointerException would defeat the whole point of the
+			// catch it is standing in.
+			org.vorpal.blade.framework.v2.logging.Logger logger = Callflow.getSipLogger();
+			if (logger != null) {
+				logger.warning("Analytics.sendEvent - " + event.getName() + " DROPPED, not published to "
+						+ EventBus.getDefaultDestinationJndi() + ": " + t.getClass().getSimpleName() + ": "
+						+ t.getMessage());
+			}
 		}
 	}
 

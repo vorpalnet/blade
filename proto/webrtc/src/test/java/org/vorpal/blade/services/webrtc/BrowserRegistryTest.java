@@ -24,7 +24,8 @@ import org.vorpal.blade.framework.v3.events.CloudEvent;
 /// [BrowserRegistry] is the only piece of this application that holds non-replicable state, so its
 /// edge cases are where a browser silently stops receiving calls. These cover the three that matter:
 /// a page reload replacing a binding, a socket that dies between the liveness check and the write,
-/// and the "not on this node" answer that a cluster has to be able to distinguish from "gone".
+/// and the "not on this node" answer, which means the binding is stale rather than that the address
+/// is unknown.
 public class BrowserRegistryTest {
 
 	private final List<FakeSocket> opened = new ArrayList<>();
@@ -79,8 +80,8 @@ public class BrowserRegistryTest {
 
 	@Test
 	public void deliveryToAnUnknownAddressIsFalseNotAnError() {
-		// False means "not mine" — the caller has to route it elsewhere in the cluster rather than
-		// conclude the browser is gone.
+		// False means "not mine", which is a stale binding rather than an error — the caller
+		// answers 480 rather than treating it as a malformed address.
 		assertFalse(BrowserRegistry.deliver("nobody@example.com", event()));
 	}
 

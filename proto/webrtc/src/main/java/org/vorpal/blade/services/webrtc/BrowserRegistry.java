@@ -19,12 +19,14 @@ import org.vorpal.blade.framework.v3.events.CloudEvent;
 /// static — the same shape `services/transfer` uses for the `AsyncResponse` it cannot serialize
 /// either.
 ///
-/// That creates the one genuinely distributed problem in this application. A browser's WebSocket
-/// lands on whichever engine the HTTP load balancer picked; an inbound INVITE for that browser
-/// lands on whichever engine the SIP load balancer picked, and in a replicated cluster any engine
-/// can service any call. The two are unrelated. [#deliver] therefore answers only "is this browser
-/// mine?", and a caller that gets `false` must publish the event to the cluster instead of assuming
-/// the browser is gone.
+/// Node-local is not a cluster limitation here, because nothing ever has to reach this table from
+/// another engine. [BrowserRegistration] registers a contact naming **this** engine, so the
+/// registrar's fork — and with it the whole call, its dialog and its media — is routed to the node
+/// holding the socket before it arrives. The socket table is node-local; the contact is what routes.
+///
+/// [#deliver] therefore answers "is this browser mine?", and a `false` means the binding is stale:
+/// the socket has gone and the browser has not yet re-registered from wherever it reconnected.
+/// Until it does, it is unreachable from every engine, not just this one.
 public final class BrowserRegistry {
 
 	/// Address-of-record -> the browser's socket on this node.
@@ -79,9 +81,9 @@ public final class BrowserRegistry {
 
 	/// Write `event` to `aor` if that browser is connected here.
 	///
-	/// @return true when the event was written; false when this node does not hold the socket, in
-	///         which case the caller must route the event to the node that does rather than treat
-	///         the browser as unreachable.
+	/// @return true when the event was written; false when this node does not hold the socket —
+	///         a stale binding, since a call for this browser would otherwise have been routed to
+	///         the node that does hold it.
 	public static boolean deliver(String aor, CloudEvent event) {
 		Session session = BY_AOR.get(aor);
 		if (session == null || !session.isOpen()) {

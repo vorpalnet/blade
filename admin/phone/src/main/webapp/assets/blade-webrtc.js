@@ -31,6 +31,7 @@ const EVENT = {
   CALL_INCOMING: 'call.incoming',
   CALL_PROGRESS: 'call.progress',
   CALL_ESTABLISHED: 'call.established',
+  CALL_CONNECTED: 'call.connected',
   CALL_ENDED: 'call.ended',
   CALL_UPDATE: 'call.update',
   ERROR: 'error',
@@ -41,8 +42,8 @@ const EVENT = {
 /**
  * A phone. Construct it, connect(), then call() or wait for onIncoming.
  *
- * Events you can assign: onRegistered, onIncoming, onProgress, onEstablished, onEnded, onError,
- * onRemoteStream, onStateChange.
+ * Events you can assign: onRegistered, onIncoming, onProgress, onEstablished, onConnected, onEnded,
+ * onError, onRemoteStream, onStateChange.
  */
 export class BladePhone {
   /**
@@ -85,6 +86,7 @@ export class BladePhone {
     this.onIncoming = () => {};
     this.onProgress = () => {};
     this.onEstablished = () => {};
+    this.onConnected = () => {};
     this.onEnded = () => {};
     this.onError = () => {};
     this.onRemoteStream = () => {};
@@ -278,8 +280,8 @@ export class BladePhone {
 
       case EVENT.CALL_ESTABLISHED:
         this.callId = event.subject;
-        // In a relayed call the far browser's answer arrives here, since there was no media server
-        // to answer us earlier.
+        // The call was answered -- this is the 200 OK, not the end of setup. In a relayed call the
+        // far browser's answer arrives here, since there was no media server to answer us earlier.
         if (event.data && event.data.sdp && this.pc && !this.pc.currentRemoteDescription) {
           await this.pc.setRemoteDescription({ type: 'answer', sdp: event.data.sdp });
           await this.#drainCandidates();
@@ -287,6 +289,27 @@ export class BladePhone {
         this.#setState('established');
         this.onEstablished({ callId: this.callId });
         break;
+
+      case EVENT.CALL_CONNECTED: {
+        // The ACK. SIP answers a call in three messages and this is the third, so setup finishes
+        // here rather than at call.established. The state deliberately stays 'established': that is
+        // what a UI gates its in-call controls on, and the call is usable from the 200 OK onward.
+        this.callId = event.subject;
+        // Reserved by the protocol -- an ACK can carry SDP on a late-media call. No gateway path
+        // sends it today, so tolerate its absence instead of depending on it.
+        if (event.data?.sdp && this.pc && !this.pc.currentRemoteDescription) {
+          await this.pc.setRemoteDescription({ type: 'answer', sdp: event.data.sdp });
+          await this.#drainCandidates();
+        }
+        const negotiated = event.data?.negotiated !== false;
+        this.onConnected({ callId: this.callId, negotiated });
+        if (!negotiated) {
+          // Signaling succeeded and media did not. Left unsaid, this is a call that looks perfectly
+          // healthy and carries no audio -- the hardest kind of failure to diagnose afterwards.
+          this.onError('call connected but media was never negotiated — the far end answered with no SDP');
+        }
+        break;
+      }
 
       case EVENT.CALL_ENDED:
         this.#teardown();

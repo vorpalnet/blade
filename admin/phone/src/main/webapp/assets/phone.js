@@ -437,11 +437,16 @@ els.btn.register.addEventListener('click', async () => {
   phone.onIncoming = (c) => { setParty(c.from); els.incomingFrom.textContent = c.from; log(`incoming from ${c.from}`); };
   phone.onProgress = (d) => log(`progress: ${d.status ?? 'trying'}`);
   phone.onEstablished = () => {
-    log('call established');
-    const relayed = phone.trickle === false;
+    log('call answered');
     els.factPath.textContent = phone.trickle ? 'peer-to-peer' : 'anchored';
     els.factPath.dataset.strong = String(!!phone.trickle);
     meterStream(phone.localStream, $('meter-mic'), els.micState);
+  };
+  phone.onConnected = (d) => {
+    // The ACK, one message after the answer. Worth its own line in the log: when a call is up and
+    // silent, knowing whether media was ever negotiated is the first thing you want to see.
+    log(d.negotiated ? 'call connected' : 'call connected WITHOUT media negotiation',
+        d.negotiated ? 'in' : 'err');
   };
   phone.onRenegotiated = () => {
     log('renegotiated — media server now in the path');

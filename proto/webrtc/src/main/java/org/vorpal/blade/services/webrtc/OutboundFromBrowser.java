@@ -120,6 +120,10 @@ public class OutboundFromBrowser extends MediaCallflow {
 				invite.setContent(networkOffer.getMediaServerSdp(), SDP_TYPE);
 				BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, hangup -> cancelOrBye(invite, app));
 				sendRequest(invite, response -> onNetworkResponse(response, networkLeg, aor, callId));
+				// After sendRequest, never before: a call originated from a WebSocket thread has no
+				// inbound request to have stamped a Vorpal-ID, so the correlator is minted on the way
+				// out. Publish first and the fact carries no subject to join it to anything.
+				CallEvents.started(invite, CallEvents.OUTBOUND);
 			});
 		});
 
@@ -140,6 +144,12 @@ public class OutboundFromBrowser extends MediaCallflow {
 		invite.setContent(browserOffer.getBytes(StandardCharsets.UTF_8), SDP_TYPE);
 		BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, hangup -> cancelOrBye(invite, app));
 		sendRequest(invite, response -> onPassThroughResponse(response, aor, callId));
+
+		// The one emit point in this application that is not already on a SIP thread. Nothing on the
+		// RELAY path defers, so we are still here on the WebSocket thread that carried `call.offer`
+		// while the INVITE is already on the wire and a fast provisional response may be inside a
+		// continuation touching this same session.
+		BrowserSignals.underLock(app, () -> CallEvents.started(invite, CallEvents.OUTBOUND));
 	}
 
 	/// The far end responded to a pass-through offer: forward its SDP verbatim and keep the
@@ -156,14 +166,18 @@ public class OutboundFromBrowser extends MediaCallflow {
 
 		if (status >= 300) {
 			BrowserSignals.cancel(app, SignalProtocol.CALL_HANGUP);
+			CallEvents.declined(response, CallEvents.OUTBOUND);
 			BrowserRegistry.deliver(aor, SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId,
 					status + " " + response.getReasonPhrase()));
 			return;
 		}
 
 		// 200 OK. ACK first either way — the transaction must complete before anything else.
+		CallEvents.answered(response, CallEvents.OUTBOUND);
 		try {
-			response.createAck().send();
+			SipServletRequest ack = response.createAck();
+			ack.send();
+			CallEvents.fact(CallEvents.CONNECTED, ack, CallEvents.OUTBOUND);
 		} catch (Exception e) {
 			sipLogger.warning("webrtc: ACK failed for " + callId + ": " + e);
 		}
@@ -195,6 +209,14 @@ public class OutboundFromBrowser extends MediaCallflow {
 			data.put("sdp", answer);
 		}
 		BrowserRegistry.deliver(aor, SignalProtocol.event(SignalProtocol.CALL_ESTABLISHED, callId, data));
+
+		// The ACK went out at the top of this method, so the handshake is already complete. Whether
+		// media can flow is a separate question and worth answering separately: it can only if an
+		// answer actually reached the browser — in this 200 or in an earlier 18x. A 200 with no body
+		// and no preceding early answer leaves the browser holding an offer nobody replied to.
+		BrowserRegistry.deliver(aor, SignalProtocol.event(SignalProtocol.CALL_CONNECTED, callId,
+				SignalProtocol.data().put("negotiated",
+						Boolean.TRUE.equals(app.getAttribute(ANSWER_FORWARDED)))));
 	}
 
 	private ObjectNode progressData(SipServletResponse response, SipApplicationSession app, int status) {
@@ -260,24 +282,36 @@ public class OutboundFromBrowser extends MediaCallflow {
 
 		if (status >= 300) {
 			BrowserSignals.cancel(app, SignalProtocol.CALL_HANGUP);
+			CallEvents.declined(response, CallEvents.OUTBOUND);
 			BrowserRegistry.deliver(aor, SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId,
 					status + " " + response.getReasonPhrase()));
 			InboundToBrowser.releaseMedia(app);
 			return;
 		}
 
-		// 200 OK: apply the answer, acknowledge, and the call is up.
+		// 200 OK: the call is answered. Applying the answer and acknowledging it come next.
 		byte[] answer = rawContent(response);
+		CallEvents.answered(response, CallEvents.OUTBOUND);
+		BrowserRegistry.deliver(aor,
+				SignalProtocol.event(SignalProtocol.CALL_ESTABLISHED, callId, SignalProtocol.data()));
+
 		if (answer != null) {
-			processAnswer(networkLeg, answer, done -> acknowledge(response, app, aor, callId));
+			processAnswer(networkLeg, answer, done -> acknowledge(response, app, aor, callId, true));
 		} else {
-			acknowledge(response, app, aor, callId);
+			// Answered with no SDP, so processAnswer never runs and the network leg is never
+			// negotiated: the media server has nowhere to send audio. The call is up for signaling
+			// and silent. This branch used to reach the same "established" the negotiated one did,
+			// which reported a healthy call to a browser that would never hear anything.
+			acknowledge(response, app, aor, callId, false);
 		}
 	}
 
-	private void acknowledge(SipServletResponse response, SipApplicationSession app, String aor, String callId) {
+	private void acknowledge(SipServletResponse response, SipApplicationSession app, String aor, String callId,
+			boolean negotiated) {
 		try {
-			response.createAck().send();
+			SipServletRequest ack = response.createAck();
+			ack.send();
+			CallEvents.fact(CallEvents.CONNECTED, ack, CallEvents.OUTBOUND);
 		} catch (Exception e) {
 			sipLogger.warning("webrtc: ACK failed for " + callId + ": " + e);
 		}
@@ -286,14 +320,19 @@ public class OutboundFromBrowser extends MediaCallflow {
 				hangup -> byeAndRelease(response.getSession(), app));
 		expectRequest(response.getSession(), "BYE", bye -> onFarEndHungUp(bye, app, aor, callId));
 
-		BrowserRegistry.deliver(aor,
-				SignalProtocol.event(SignalProtocol.CALL_ESTABLISHED, callId, SignalProtocol.data()));
+		BrowserRegistry.deliver(aor, SignalProtocol.event(SignalProtocol.CALL_CONNECTED, callId,
+				SignalProtocol.data().put("negotiated", negotiated)));
 	}
 
 	/// The browser hung up before the far end answered — CANCEL the INVITE.
 	private void cancelOrBye(SipServletRequest invite, SipApplicationSession app) {
 		try {
-			invite.createCancel().send();
+			SipServletRequest cancel = invite.createCancel();
+			cancel.send();
+			// Published after the send, so what is recorded is what actually happened. Whether this
+			// is an abandon or a completion is not this method's call: it depends on whether a 200
+			// already arrived, which CallEvents knows and this code path does not.
+			CallEvents.hungUp(cancel, CallEvents.OUTBOUND);
 		} catch (Exception alreadyFinal) {
 			// The 200 OK beat the hangup; tear the dialog down instead.
 			byeAndRelease(invite.getSession(), app);
@@ -305,7 +344,9 @@ public class OutboundFromBrowser extends MediaCallflow {
 	/// The browser hung up an established call.
 	private void byeAndRelease(SipSession session, SipApplicationSession app) {
 		try {
-			sendRequest(session.createRequest("BYE"), response -> InboundToBrowser.releaseMedia(app));
+			SipServletRequest bye = session.createRequest("BYE");
+			CallEvents.hungUp(bye, CallEvents.OUTBOUND);
+			sendRequest(bye, response -> InboundToBrowser.releaseMedia(app));
 		} catch (Exception alreadyGone) {
 			InboundToBrowser.releaseMedia(app);
 		}
@@ -314,6 +355,7 @@ public class OutboundFromBrowser extends MediaCallflow {
 	/// The far end hung up.
 	private void onFarEndHungUp(SipServletRequest bye, SipApplicationSession app, String aor, String callId)
 			throws Exception {
+		CallEvents.hungUp(bye, CallEvents.OUTBOUND);
 		sendResponse(bye.createResponse(200));
 		BrowserSignals.cancel(app, SignalProtocol.CALL_HANGUP);
 		BrowserRegistry.deliver(aor, SignalProtocol.reason(SignalProtocol.CALL_ENDED, callId, "far end hung up"));

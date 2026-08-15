@@ -85,7 +85,7 @@ or transaction state.
 
 ## The protocol
 
-CloudEvents 1.0 envelopes, subprotocol `blade.webrtc.v1`. Thirteen types, all in
+CloudEvents 1.0 envelopes, subprotocol `blade.webrtc.v1`. Sixteen types, all in
 `SignalProtocol`:
 
 | browser → gateway | gateway → browser |
@@ -94,10 +94,24 @@ CloudEvents 1.0 envelopes, subprotocol `blade.webrtc.v1`. Thirteen types, all in
 | `call.offer` | `call.incoming` |
 | `call.answer` | `call.progress` |
 | `call.accept` | `call.established` |
-| `call.hangup` | `call.ended` |
-| `call.dtmf` | `error` |
+| `call.hangup` | `call.connected` |
+| `call.dtmf` | `call.ended` |
 | `call.record` | `call.update` |
-| `ice.candidate` (both directions) | |
+| `ice.candidate` (both directions) | `error` |
+
+**Answered and connected are two events, because SIP answers a call in three messages.**
+`call.established` is the `200 OK`; `call.connected` is the `ACK` that completes the
+handshake, and never arrives before it. The split follows the framework's own call
+lifecycle — `BladeEventTypes.CALL_ANSWERED` then `CALL_CONNECTED` — and it exists because
+the third message carries information. `call.connected` reports `negotiated`, which is
+false when the far end answered with no SDP and nothing was applied to the media leg: a
+call that is up for signaling and silent for media. Previously that case was reported as
+an ordinary `call.established` and looked healthy.
+
+`call.connected` also declares an `sdp` field, **reserved and unset on every path today**.
+The ACK is a real SDP-carrying moment — in late media the caller's answer arrives there —
+so the field is declared to describe the message honestly. Clients must tolerate its
+absence, which is the ordinary case.
 
 `call.update` is the one that makes escalation possible: a fresh SDP offer for a call that is
 already up. Without it a call's media path could never change after setup. It is the same
@@ -178,6 +192,12 @@ Because the contact names the registering engine, a fork in a cluster is *delive
 to the node holding the WebSocket* — the contact routes to the node, which is exactly
 right for a socket that cannot replicate.
 
+So `BrowserRegistry` being node-local is not a cluster limitation, and there is nothing
+to fan out: the call, its dialog and its media all arrive where the socket already is.
+The `480` that `InboundToBrowser` answers when the socket is not here means the binding
+is stale — it has gone and the browser has not yet re-registered from wherever it
+reconnected — and until it does, it is unreachable from every engine, not just this one.
+
 On socket close or error the gateway sends `Expires: 0`. A page reload never tears
 down its successor's binding: the superseded socket's unregister returns null, and
 the replacement's re-REGISTER finds the same by-key session, produces the identical
@@ -202,6 +222,61 @@ An INVITE with no SDP is handled, and it is the case the prior art dropped. The 
 server offers in the `200 OK` and the caller's answer is read out of the `ACK` —
 `MediaCallflow.answerWithLateMedia`, on `SdpPortManager.generateSdpOffer()`. No new machinery
 was needed: `Callflow.sendResponse` already delivers the ACK to a continuation.
+
+This is the one path where `call.established` and `call.connected` are genuinely far
+apart, and the only one where the ACK can arrive owing an answer it does not carry —
+hence `negotiated: false`.
+
+**Late media always anchors, and cannot be made to work without a media server.** Having
+the browser offer instead, so an install with no 309 driver could take these calls, was
+considered and rejected: late media is a third-party-call-control pattern browsers never
+originate, so the caller is a phone or a trunk, and the answer coming back in the `ACK` is
+plain RTP with no `a=fingerprint`. A browser will not complete media against it — the same
+dead end the pass-through path already fails fast on. On this call shape the media server
+is not a convenience; it is the only party present that can speak to both ends. Without a
+driver installed the gateway refuses with `503` and says so by name in the log.
+
+## What a call puts on the event bus
+
+A WebRTC call used to be invisible to analytics. This servlet extends `AsyncSipServlet`
+rather than `B2buaServlet`, so none of the publishers that live in `InitialInvite` and
+`Terminate` ever ran for it, and a browser call left no trace in any report.
+
+It now publishes the framework's own six call facts — `callStarted`, `callAnswered`,
+`callConnected`, `callCompleted`, `callAbandoned`, `callDeclined` — which
+`BladeEventTypes.forEventName` maps onto the canonical `org.vorpal.blade.call.*` types.
+Reusing them is the point: one subscription gets browser calls and phone calls together,
+with no webrtc-specific clause, and the payload is `AnalyticsEventMapper`'s shape rather
+than a second dialect that merely resembles it.
+
+Two things are worth knowing before reading a report:
+
+- **Every fact carries a `leg` attribute**, `inbound` or `outbound`. A browser-to-browser
+  call is one call that crosses this application twice — out through `OutboundFromBrowser`,
+  back in through `InboundToBrowser` via the location service — and the second leg inherits
+  the first's `X-Vorpal-ID`. Both legs publish under the same correlator, source and
+  application name; `leg` is the only thing that tells them apart.
+- **`analytics.enabled` is the switch, not `events.enabled`.** `AsyncSipServlet` stands the
+  publisher up on either, but `SettingsManager.collecting()` — which decides whether a fact
+  is built at all — reads only `analytics`. Setting `events.enabled` alone yields a live bus
+  connection carrying no `call.*` facts, and session events whose `appStartedAt` was never
+  populated. The shipped sample fills in the selectors and leaves the switch off, the way
+  every other BLADE application samples itself.
+
+- **A CANCEL is observed, not answered.** A caller who gives up while the browser is still
+  ringing arrives as a CANCEL, which reaches an `expectRequest` expectation rather than a
+  callflow — `chooseCallflow` answers only initial INVITEs. The handler publishes
+  `callAbandoned`, stops the browser ringing and frees the media, and deliberately sends no
+  response: the container issues the `200 OK` to the CANCEL and the `487` to the INVITE
+  itself. That is the same reason `Terminate` guards its own `sendResponse` down to BYE
+  only. Sending one here would be a second response to a transaction the container has
+  already finished.
+
+The browser signaling protocol is a separate channel and keeps its own short, imperative
+names. Seven of those are commands a client sends (`call.offer`, `call.hangup`, …), and the
+bus grammar is deliberately facts-not-commands, so a reverse-DNS name on an imperative
+would describe it wrongly. `BladeEventTypes.forEventName` is the sanctioned bridge between
+the two conventions.
 
 ## Deployment requirements
 
@@ -244,6 +319,9 @@ Built and unit-tested:
 | `BrowserAuthenticator` — who may claim which address | done, 12 tests |
 | `BrowserRegistration` — REGISTER/deregister on the browser's behalf | done, 5 tests |
 | `MediaCallflow.generateOffer` / `answerWithLateMedia` | done |
+| `call.connected` — the ACK as its own event, with `negotiated` | done, 2 protocol tests |
+| `CallEvents` — the six call facts on the event bus, with `leg` | done, 5 tests |
+| CANCEL while the browser rings — stop ringing, free media, `callAbandoned` | done |
 | JSR-309 media controller WebRTC endpoint facade | done, 10 tests |
 
 This WAR is Java only. It serves no page and ships no script: the browser side —
@@ -255,21 +333,14 @@ a static page; it can be hosted anywhere.
 
 **Not yet built** — real gaps, not polish:
 
-1. **Cross-node delivery.** `BrowserRegistry` is node-local by necessity, but a browser's
-   WebSocket and its inbound INVITE land on independently chosen engines. Today
-   `InboundToBrowser` rejects with `480` when the browser is not on this node — correct,
-   but it means the gateway only works end-to-end on a single engine. The fix is to fan
-   browser-directed events over the existing `v3.events.EventBus` JMS topic and let the
-   node holding the socket deliver. Outbound calls are unaffected, since the browser that
-   originates is by definition on the node handling it.
-2. **`call.dtmf` and `call.accept`** are declared and accepted but not yet acted on — DTMF
+1. **`call.dtmf` and `call.accept`** are declared and accepted but not yet acted on — DTMF
    needs an RFC 4733 or INFO path on the media leg.
-3. **Driver configuration** is still read from servlet context parameters rather than from
+2. **Driver configuration** is still read from servlet context parameters rather than from
    `WebrtcSettings` (`mediaMode`, `jwt` and `registerExpiresSeconds` *are* settings now;
    the 309 driver's own keys have yet to follow).
-4. **Registration refresh timer** — see the Location service section: a tab open longer
+3. **Registration refresh timer** — see the Location service section: a tab open longer
    than `registerExpiresSeconds` ages out of the registrar until it reconnects.
-5. **Recording escalation of a pass-through call.** `call.record` on a pass-through call
+4. **Recording escalation of a pass-through call.** `call.record` on a pass-through call
    currently does nothing — the `call.update` re-key implementation was retired with the
    WebSocket-relay path it was written for, and has to be rebuilt across the two SIP legs
    (each gateway leg re-offers its own browser from the media server). Until then,

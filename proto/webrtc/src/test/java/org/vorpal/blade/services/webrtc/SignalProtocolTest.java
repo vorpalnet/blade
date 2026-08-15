@@ -1,6 +1,7 @@
 package org.vorpal.blade.services.webrtc;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -68,6 +69,33 @@ public class SignalProtocolTest {
 		assertEquals("1.0", received.getSpecversion());
 		assertEquals(SignalProtocol.SOURCE, received.getSource());
 		assertNull("session-scoped events belong to no call", received.getSubject());
+	}
+
+	@Test
+	public void callConnectedCarriesNegotiatedAsARealBoolean() throws Exception {
+		// The client decides with `event.data?.negotiated !== false`. If this ever serialized as the
+		// string "false" that comparison would be true, and a call with no media would be reported
+		// as healthy — the exact failure the field exists to prevent. Pin the JSON type, not just
+		// the value.
+		CloudEvent received = CloudEvent.fromJson(SignalProtocol.event(SignalProtocol.CALL_CONNECTED,
+				"call-7", SignalProtocol.data().put("negotiated", false)).toJson());
+
+		assertEquals(SignalProtocol.CALL_CONNECTED, received.getType());
+		assertEquals("call-7", received.getSubject());
+		assertTrue("negotiated must be a JSON boolean, not a string",
+				received.getData().get("negotiated").isBoolean());
+		assertFalse(received.getData().get("negotiated").booleanValue());
+	}
+
+	@Test
+	public void callConnectedHasNoSdpOnTheOrdinaryPath() throws Exception {
+		// `sdp` is reserved on this type for a late-media ACK and unset on every path the gateway
+		// ships, so a client must tolerate its absence rather than depend on it.
+		CloudEvent received = CloudEvent.fromJson(SignalProtocol.event(SignalProtocol.CALL_CONNECTED,
+				"call-8", SignalProtocol.data().put("negotiated", true)).toJson());
+
+		assertNull(SignalProtocol.field(received, "sdp"));
+		assertTrue(received.getData().get("negotiated").booleanValue());
 	}
 
 	@Test

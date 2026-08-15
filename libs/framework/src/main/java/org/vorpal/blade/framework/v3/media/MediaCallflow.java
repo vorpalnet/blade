@@ -249,10 +249,37 @@ public abstract class MediaCallflow extends Callflow {
 	/// @param onNegotiated run once the answer from the ACK has been applied; may be null
 	protected void answerWithLateMedia(SipServletRequest invite, NetworkConnection nc,
 			Callback<SipServletRequest> onNegotiated) throws MsControlException {
+		answerWithLateMedia(invite, nc, null, onNegotiated);
+	}
+
+	/// [#answerWithLateMedia(SipServletRequest, NetworkConnection, Callback)] plus a hook at the
+	/// answer itself.
+	///
+	/// The `200 OK` is built and sent inside this method, so an application that wants to act when
+	/// the call is answered — publish a fact, tell a client, add a header — has no moment to do it
+	/// in. `onAnswering` is handed that response **before it goes out**, the same arrangement
+	/// `B2buaListener.callAnswered` offers ("This response object may be modified before it is sent
+	/// back"). Do not send it yourself.
+	///
+	/// The distinction matters most on this path: `onAnswering` fires when the media server's offer
+	/// is on its way to the caller, and `onNegotiated` fires only once the caller's answer has come
+	/// back in the `ACK` and been applied. Those are different instants, and on a late-media call
+	/// they can be far apart.
+	///
+	/// @param invite       the SDP-less initial INVITE
+	/// @param nc           the media leg facing the caller
+	/// @param onAnswering  run with the `200 OK` just before it is sent; may be null
+	/// @param onNegotiated run once the answer from the ACK has been applied; may be null
+	protected void answerWithLateMedia(SipServletRequest invite, NetworkConnection nc,
+			Callback<SipServletResponse> onAnswering, Callback<SipServletRequest> onNegotiated)
+			throws MsControlException {
 
 		generateOffer(nc, offerEvent -> {
 			SipServletResponse ok = invite.createResponse(200);
 			ok.setContent(offerEvent.getMediaServerSdp(), "application/sdp");
+			if (onAnswering != null) {
+				onAnswering.accept(ok);
+			}
 			sendResponse(ok, ack -> {
 				byte[] answer = rawContent(ack);
 				if (answer != null) {
