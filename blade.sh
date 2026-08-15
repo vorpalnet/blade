@@ -377,15 +377,16 @@ load_profile() {
     # <prefix>1. Starting at 0 is what lets the local machine's engine come from
     # the same template as every other one -- there is no static server any more.
     SRV_START_INDEX="$(d server.name.starting.index 0)"
-    SHARED_FS="$(d shared.filesystem true)"
     BUILD_PROFILE="$(d build.profile production)"
     # The LOGIN user, not the install user: cloud images only plant the ssh key
     # for their login account (opc, ec2-user). Privilege on the far side comes
     # from that user's sudo, applied per command — never from oracle-owned keys.
     SSH_USER="$(d ssh.user "$(id -un)")"
-    # Never default to localhost — the AdminServer is reached over the network.
-    # blade.sh runs ON the admin box, so its own hostname is the right default.
-    ADMINURL="$(d wls.adminurl "t3://$(hostname -f 2>/dev/null || hostname):7001")"
+    # Default from the LIVE domain, not a hardcoded t3:7001 — once STEP 4 turns on
+    # SSL, _wls_adminurl reads config.xml and returns t3s://<addr>:7002, so the
+    # deploy page reflects the domain you actually built. Before any domain exists
+    # it falls back to this box's own routable name (never localhost).
+    ADMINURL="$(d wls.adminurl "$(_wls_adminurl)")"
     SSL_PORT="$(d tls.ssl.port 7002)"
     SIP_TLS="$(d sip.tls.enabled true)"
     SIP_PORT="$(d sip.tls.port 5061)"
@@ -699,9 +700,8 @@ EOF
 # ----- phase 6: runtime / deploy ---------------------------------------------
 phase_runtime() {
     log ""; log "${C_BOLD}Runtime / deploy settings${C_RESET}"
-    if yesno "Shared filesystem across nodes (install/domain artifacts copy once)?" "$([ "$SHARED_FS" = false ] && echo N || echo Y)"; then SHARED_FS=true; else SHARED_FS=false; fi
     ask BUILD_PROFILE "Build profile to deploy (production|minimal|full)" "$BUILD_PROFILE"
-    ask SSH_USER      "SSH user for pushing to engine nodes"              "$SSH_USER"
+    ask SSH_USER      "SSH user for reaching engine nodes (reboot/provision)" "$SSH_USER"
     ask ADMINURL      "WebLogic admin URL (deploy runs ON the AdminServer)" "$ADMINURL"
     return 0
 }
@@ -956,7 +956,6 @@ save_profile() {
         echo "# Consumed by ./deploy.sh and ./tls/*. Secrets live in the config."
         echo ""
         echo "build.profile=${BUILD_PROFILE}"
-        echo "shared.filesystem=${SHARED_FS}"
         echo ""
         echo "# --- OCCAS binaries (sync-occas.sh) ---"
         echo "occas.base.dir=${OCCAS_BASE}"

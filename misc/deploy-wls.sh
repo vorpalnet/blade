@@ -29,15 +29,23 @@ WLST="$MW_HOME/oracle_common/common/bin/wlst.sh"
 # t3s: hand SSL trust to the WLST JVM (wlst.sh honors WLST_PROPERTIES).
 case "$WLS_ADMINURL" in
     t3s://*)
+        # The AdminServer's identity cert names its own hostname (e.g. the CA CN),
+        # but T3 rebinds the connection to the server's configured ListenAddress,
+        # so the client verifies the cert against THAT and rejects the mismatch.
+        # A blade domain is reached by its routable name, not the cert CN, so turn
+        # hostname verification off — the trust check below still authenticates the
+        # server. wlst.sh puts WLST_PROPERTIES on the java command line, so this is
+        # a real startup property (unlike a late env-var read).
+        WLST_PROPERTIES="${WLST_PROPERTIES:-} -Dweblogic.security.SSL.ignoreHostnameVerification=true"
         if [ -n "${WLS_TRUSTSTORE:-}" ]; then
             [ -f "$WLS_TRUSTSTORE" ] || { echo "WLS_TRUSTSTORE not found: $WLS_TRUSTSTORE" >&2; exit 1; }
-            WLST_PROPERTIES="${WLST_PROPERTIES:-} -Dweblogic.security.TrustKeyStore=CustomTrust"
+            WLST_PROPERTIES="${WLST_PROPERTIES} -Dweblogic.security.TrustKeyStore=CustomTrust"
             WLST_PROPERTIES="${WLST_PROPERTIES} -Dweblogic.security.CustomTrustKeyStoreFileName=${WLS_TRUSTSTORE}"
             WLST_PROPERTIES="${WLST_PROPERTIES} -Dweblogic.security.CustomTrustKeyStoreType=${WLS_TRUSTSTORE_TYPE:-PKCS12}"
             [ -n "${WLS_TRUSTSTORE_PASSWORD:-}" ] && \
                 WLST_PROPERTIES="${WLST_PROPERTIES} -Dweblogic.security.CustomTrustKeyStorePassPhrase=${WLS_TRUSTSTORE_PASSWORD}"
-            export WLST_PROPERTIES
         fi
+        export WLST_PROPERTIES
         ;;
 esac
 

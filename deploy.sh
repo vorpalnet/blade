@@ -174,7 +174,6 @@ APPROUTER_DIR=$(read_prop  "$CONF_FILE" "approuter.dir")
 ENGINE_NODES_RAW=$(read_prop "$CONF_FILE" "engine.nodes")
 DEPLOY_SERVICES=$(read_prop "$CONF_FILE" "deploy.services")
 WLS_PLUGIN_VERSION=$(read_prop "$CONF_FILE" "wls.plugin.version")
-SHARED_FS=$(read_prop      "$CONF_FILE" "shared.filesystem")
 
 [ -n "$BUILD_PROFILE" ] || die "${CONF_FILE}: missing build.profile"
 
@@ -487,11 +486,16 @@ deploy_shared() {
     esac
 }
 
-# Copy / remove the FSMAR fat JAR to each engine node's approuter/ directory.
-# The jar is loaded by the WLSS Application Router at boot (not a WebLogic
-# deployment). engine.nodes lists every engine host; with no nodes — or when
-# shared.filesystem=true (approuter.dir is on a filesystem every node mounts) —
-# we do a single local cp into approuter.dir instead of an scp per node.
+# Copy / remove the FSMAR fat JAR into the AdminServer's approuter/ directory.
+# The jar is loaded by the WLSS Application Router, NOT a WebLogic deployment,
+# and ONLY the admin needs the file: each engine is a managed server that fetches
+# the App Router from the admin over the internal management channel (RMI
+# AppRouterResource) at AR activation and caches it locally — so a single copy
+# into the admin's approuter/ reaches the whole cluster. (Verified by decompiling
+# wlss.jar: ApplicationRouterClassLoaderCluster.getRemoteFileContent /
+# createUpdateLocalFile.) No per-engine scp, no shared filesystem. APPROUTER_DIR
+# must be the AdminServer domain's approuter/, and — like the WLST tiers — deploy
+# runs ON the admin box.
 deploy_fsmar() {
     local action="$1"
     [ -f "$FSMAR_JAR" ] || die "Missing: ${FSMAR_JAR}"
@@ -500,44 +504,22 @@ deploy_fsmar() {
     local dest_file="${APPROUTER_DIR}/${jar_name}"
     local rc=0
 
-    if [ "$SHARED_FS" = "true" ] || [ ${#ENGINE_NODES[@]} -eq 0 ]; then
-        # Shared filesystem (or no ssh targets): one local cp reaches every node.
-        [ "$SHARED_FS" = "true" ] && info "Tier: fsmar → (shared filesystem, single copy) ${dest_file}" \
-                                  || info "Tier: fsmar → (local) ${dest_file}"
-        case "$action" in
-            deploy)
-                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] cp ${FSMAR_JAR} ${dest_file}${C_RESET}"
-                else [ -d "$APPROUTER_DIR" ] || die "approuter.dir does not exist: ${APPROUTER_DIR}"; cp "$FSMAR_JAR" "$dest_file"; fi ;;
-            undeploy)
-                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] rm -f ${dest_file}${C_RESET}"
-                else rm -f "$dest_file"; fi ;;
-            status)
-                if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ls -l ${dest_file}${C_RESET}"
-                else ls -l "$dest_file" 2>&1 || warn "${jar_name} not present at ${dest_file}"; fi ;;
-        esac
-    else
-        [ -n "$SSH_USER" ] || die "${CONF_FILE}: engine.nodes set but ssh.user missing"
-        local node sshdest
-        for node in "${ENGINE_NODES[@]}"; do
-            sshdest="${SSH_USER}@${node}"
-            info "Tier: fsmar → ${sshdest}:${dest_file}"
-            case "$action" in
-                deploy)
-                    if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] scp ${FSMAR_JAR} ${sshdest}:${dest_file}${C_RESET}"
-                    else scp "$FSMAR_JAR" "${sshdest}:${dest_file}" || rc=$?; fi ;;
-                undeploy)
-                    if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ssh ${sshdest} rm -f ${dest_file}${C_RESET}"
-                    else ssh "$sshdest" rm -f "$dest_file" || rc=$?; fi ;;
-                status)
-                    if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ssh ${sshdest} ls -l ${dest_file}${C_RESET}"
-                    else ssh "$sshdest" ls -l "$dest_file" 2>&1 || warn "${jar_name} not present on ${node}"; fi ;;
-            esac
-        done
-    fi
+    info "Tier: fsmar → (admin approuter; engines fetch from admin) ${dest_file}"
+    case "$action" in
+        deploy)
+            if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] cp ${FSMAR_JAR} ${dest_file}${C_RESET}"
+            else [ -d "$APPROUTER_DIR" ] || die "approuter.dir does not exist: ${APPROUTER_DIR}"; cp "$FSMAR_JAR" "$dest_file" || rc=$?; fi ;;
+        undeploy)
+            if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] rm -f ${dest_file}${C_RESET}"
+            else rm -f "$dest_file" || rc=$?; fi ;;
+        status)
+            if [ "$DRY_RUN" = true ]; then log "${C_DIM}  [dry-run] ls -l ${dest_file}${C_RESET}"
+            else ls -l "$dest_file" 2>&1 || warn "${jar_name} not present at ${dest_file}"; fi ;;
+    esac
 
     case "$action" in
-        deploy)   warn "Engine tier reboot required for FSMAR changes to take effect." ;;
-        undeploy) warn "Engine tier reboot required for FSMAR removal to take effect." ;;
+        deploy)   warn "Restart the engine tier so each engine re-fetches the App Router from the admin." ;;
+        undeploy) warn "Restart the engine tier so the removed App Router is cleared." ;;
     esac
     return $rc
 }
