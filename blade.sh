@@ -1679,7 +1679,7 @@ iu_owner_user() {
 # A fresh bash has no nounset, so Oracle's setWLSEnv.sh (which references
 # unbound vars) sources cleanly. Args: workdir pyfile mwhome java_home.
 iu_wlst_run() {
-    local work="$1" py="$2" mw="$3" jh="$4"
+    local work="$1" py="$2" mw="$3" jh="$4" wlp="${5:-}"   # $5 = optional WLST_PROPERTIES
     local setwls="${mw}/wlserver/server/bin/setWLSEnv.sh"
     # A stale java.home must fall back to the ambient environment, exactly as
     # the pre-runner code did — exporting a dead JAVA_HOME aborts WLST with an
@@ -1693,6 +1693,7 @@ iu_wlst_run() {
 cd '${work}'
 ${jh:+export JAVA_HOME='${jh}'; PATH='${jh}/bin':"\$PATH"}
 export MW_HOME='${mw}' BEA_HOME='${mw}'
+${wlp:+export WLST_PROPERTIES='${wlp}'}
 . '${setwls}' >/dev/null
 exec java weblogic.WLST '${py}'
 EOF
@@ -4637,25 +4638,79 @@ start_admin() { nm_admin start "$@"; }
 # pure-Java Node Manager (NativeVersionEnabled=false, required on aarch64) when a
 # server is script-launched with a child JVM, so we stop at the OS level.
 stop_admin() {
-    local oh="$1" dom="$2"
+    local oh="$1" dom="$2" auser="${3:-weblogic}"
     local domhome="${DOMAINS_DIR}/${dom}"
-    if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] OS-stop servers under ${domhome}${C_RESET}"; return 0; fi
+    if [ "$DRY" = "on" ]; then log "${C_DIM}  [dry-run] graceful WLST shutdown of AdminServer (OS-signal only a hung remainder)${C_RESET}"; return 0; fi
     [ -d "$domhome" ] || { warn "app domain not found: ${domhome}."; return 1; }
-    info "Stopping servers for '${dom}' (OS-level — pure-Java NM can't nmKill child JVMs)"
+    [ -n "$(_server_pids_for "$domhome")" ] || { ok "no running servers for '${dom}'."; return 0; }
+    # A controlled shutdown, NOT a signal: connect to the AdminServer and shutdown()
+    # so it drains and stops its services cleanly. Over t3s with the domain trust
+    # store (the AdminServer presents the blade identity); we OS-signal only a
+    # server still up afterwards (hung).
+    local pw; pw="${BLADE_WLS_PASSWORD:-}"; [ -z "$pw" ] && [ -f "$WLS_SECRET" ] && pw="$(read_prop "$WLS_SECRET" admin.password)"
+    if [ -n "$pw" ]; then
+        local url; url="$(_wls_adminurl)"
+        # t3s needs the blade CA trusted, else a bare PKIX error. Same store the
+        # servers load (blade-trust.p12 in the domain's config/certs).
+        local wlp=""
+        case "$url" in t3s://*)
+            local trustpw; trustpw="${BLADE_TRUST_PASSWORD:-}"; [ -z "$trustpw" ] && [ -f "$WLS_SECRET" ] && trustpw="$(read_prop "$WLS_SECRET" tls.trust.passphrase)"
+            wlp="-Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.security.TrustKeyStore=CustomTrust -Dweblogic.security.CustomTrustKeyStoreFileName=${KEYSTORE_DIR}/blade-trust.p12 -Dweblogic.security.CustomTrustKeyStoreType=PKCS12 -Dweblogic.security.CustomTrustKeyStorePassPhrase=${trustpw}"
+            ;;
+        esac
+        info "Shutting down AdminServer for '${dom}' — graceful WLST shutdown (${url}) …"
+        local work; work="$(mktemp -d /tmp/blade-shut.XXXXXX)"
+        cat > "${work}/shutdown.py" <<PYEOF
+# -*- coding: utf-8 -*-
+try:
+    connect('${auser}', '${pw}', '${url}')
+    try:
+        shutdown('AdminServer', 'Server', force='false', block='true')
+        print('AdminServer shut down cleanly.')
+    except Exception, se:
+        # Shutting down the server we are connected to severs the connection --
+        # expected; the controlled shutdown still proceeds.
+        print('shutdown issued (connection dropped, expected): ' + str(se))
+except Exception, e:
+    print('could not connect to the AdminServer: ' + str(e))
+    exit(exitcode=1)
+PYEOF
+        chmod 600 "${work}/shutdown.py"
+        local jh; jh="$(read_prop "$OCCAS_CONF" java.home)"
+        iu_wlst_run "$work" shutdown.py "${MWHOME:-$oh}" "$jh" "$wlp" || warn "graceful shutdown WLST returned an error (see above)."
+        as_install_user rm -rf "$work"
+        # Give the controlled shutdown time to finish before resorting to a signal.
+        local i=0
+        while [ "$i" -lt 40 ]; do
+            [ -z "$(_server_pids_for "$domhome")" ] && { ok "AdminServer stopped (graceful)."; return 0; }
+            sleep 1; i=$((i + 1))
+        done
+        warn "AdminServer still up ${i}s after graceful shutdown — OS-stopping the remainder."
+    else
+        warn "no admin password (env / config) — can't do a graceful WLST shutdown; using a signal."
+    fi
     kill_domain_procs "$domhome"
 }
 
 # Synchronously kill the JVMs belonging to a domain (matched by domain home in
 # their cmdline — never a blind pkill). Waits for exit, escalates to SIGKILL.
+# PIDs (space-separated) of this domain's running WebLogic servers on this box.
+_server_pids_for() {
+    local home="$1" p cmd out=""
+    command -v pgrep >/dev/null 2>&1 || return 0
+    for p in $(pgrep -f weblogic.Name 2>/dev/null || true); do
+        cmd="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)"
+        case "$cmd" in *"$home"*) out="${out} ${p}" ;; esac
+    done
+    printf '%s' "${out# }"
+}
+
 kill_domain_procs() {
-    local home="$1" p cmd pids="" n=0 i=0
+    local home="$1" p pids n=0 i=0
     command -v pgrep >/dev/null 2>&1 || { warn "no pgrep — can't OS-stop servers."; return 1; }
     # Signal as the domain's owner (see stop_nm) — EPERM is a silent no-op kill.
     local IU_USER; IU_USER="$(iu_owner_user "$home")"
-    for p in $(pgrep -f weblogic.Name 2>/dev/null || true); do
-        cmd="$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null || true)"
-        case "$cmd" in *"$home"*) pids="${pids} ${p}" ;; esac
-    done
+    pids="$(_server_pids_for "$home")"
     [ -n "$pids" ] || { ok "no running servers for $(basename "$home")."; return 0; }
     for p in $pids; do as_install_user kill "$p" 2>/dev/null && n=$((n + 1)); done
     ok "signaled ${n} server process(es) for $(basename "$home") — waiting for exit…"
