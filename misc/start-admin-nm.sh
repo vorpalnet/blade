@@ -89,8 +89,12 @@ trap 'rm -f "$PY"' EXIT
 # hand these to nmStart as props; without them NM launches a bare weblogic.Server
 # that dies on ClassNotFoundException SipServerBean. Sourced in a subshell so it
 # can't pollute this script's env or the WLST launch.
-eval "$(cd "$DOMAIN_HOME/bin" 2>/dev/null && . ./setDomainEnv.sh >/dev/null 2>&1; \
+# set +u +e inside the subshell: Oracle's setDomainEnv references many unset vars
+# and would abort under this script's nounset/errexit before we can read CLASSPATH.
+eval "$(set +u +e; cd "$DOMAIN_HOME/bin" 2>/dev/null && . ./setDomainEnv.sh >/dev/null 2>&1; \
         printf 'SRV_CP=%q\nSRV_ARGS=%q\n' "${CLASSPATH#:}" "${MEM_ARGS} ${JAVA_OPTIONS}")"
+# If the source failed, these stay empty and _nmstart falls back (with a warning).
+: "${SRV_CP:=}" "${SRV_ARGS:=}"
 
 # WLST is Jython 2.x — note the 'except Exception, e' syntax. The generated
 # file must declare an encoding (PEP 263): Jython hard-fails on any non-ASCII
