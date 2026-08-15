@@ -1216,6 +1216,7 @@ _read_key() {
         ' ')   printf 'space' ;;
         d|D)   printf 'dry' ;;
         q|Q)   printf 'quit' ;;
+        [0-9]) printf 'num:%s' "$k" ;;       # jump the cursor to that STEP
         [a-zA-Z]) printf 'other' ;;          # no per-row letter shortcuts
         *)     printf 'other' ;;
     esac
@@ -1314,8 +1315,8 @@ dashboard_tui() {
                 printf '   %s %s %-44s %s%s%s\n' "$box" "$g" "${MR_LABEL[$i]}" "$C_DIM" "${MR_VAL[$i]}" "$C_RESET"
             fi
         done
-        printf '\n  %s↑/↓%s move · %sspace%s select · %senter%s run · %sd%s dry-run · %sEsc/q%s quit\n' \
-               "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET"
+        printf '\n  %s↑/↓%s move · %s1-8%s jump to step · %sspace%s select · %senter%s run · %sd%s dry-run · %sEsc/q%s quit\n' \
+               "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET" "$C_BOLD" "$C_RESET"
 
         local kpress; kpress="$(_read_key)"
         case "$kpress" in
@@ -1337,6 +1338,20 @@ dashboard_tui() {
                    [ "${#runids[@]}" -eq 0 ] && runids=("${MR_ID[$cur]}")
                    _tui_run "${runids[@]}" || break ;;
             quit)  break ;;
+            num:*) # Jump the highlight to the first row of STEP <n> (1-based).
+                   # The accordion follows the cursor, so this expands that step
+                   # and collapses the rest. Out-of-range digits are a no-op.
+                   local _want="${kpress#num:}" _s=-1 _kk _tgt=-1
+                   for _kk in "${!MR_TYPE[@]}"; do
+                       if [ "${MR_TYPE[$_kk]}" = head ]; then _s=$((_s + 1))
+                       elif [ "$_s" = "$((_want - 1))" ]; then _tgt=$_kk; break; fi
+                   done
+                   if [ "$_tgt" -ge 0 ]; then
+                       local _jj
+                       for _jj in "${!selrows[@]}"; do
+                           [ "${selrows[$_jj]}" = "$_tgt" ] && { sel=$_jj; break; }
+                       done
+                   fi ;;
             *)     : ;;   # no per-row letter shortcuts — navigate + Enter
         esac
     done
@@ -1688,14 +1703,20 @@ iu_wlst_run() {
         warn "java.home ${jh} does not exist — using the environment's JAVA_HOME."
         jh=""
     fi
+    # $5 goes on the java command line, NOT via the WLST_PROPERTIES env var.
+    # weblogic.WLST applies WLST_PROPERTIES late (after the security subsystem
+    # has initialized): a trust store set that way is still honored (read lazily
+    # at connect()), but the hostname verifier is already captured, so a late
+    # ignoreHostnameVerification is silently missed and the default verifier
+    # fires. Real -D startup properties are set before any WLS class loads, so
+    # both trust AND the hostname-ignore take effect.
     cat > "${work}/run.sh" <<EOF
 #!/bin/bash
 cd '${work}'
 ${jh:+export JAVA_HOME='${jh}'; PATH='${jh}/bin':"\$PATH"}
 export MW_HOME='${mw}' BEA_HOME='${mw}'
-${wlp:+export WLST_PROPERTIES='${wlp}'}
 . '${setwls}' >/dev/null
-exec java weblogic.WLST '${py}'
+exec java ${wlp} weblogic.WLST '${py}'
 EOF
     chmod 700 "${work}/run.sh"
     iu_adopt_dir "$work" || { warn "could not hand ${work} to $(iu_name)."; return 1; }
