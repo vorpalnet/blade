@@ -112,6 +112,10 @@ try:
             if s != 'RUNNING':
                 break
             time.sleep(2)
+        try:
+            nmGenBootStartupProps('${ADMIN_SERVER}')
+        except Exception, ge:
+            print('nmGenBootStartupProps (continuing): ' + str(ge))
         nmStart('${ADMIN_SERVER}')
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     else:
@@ -120,10 +124,20 @@ try:
         # so skip it — leave the running server as-is and report success.
         if nmServerStatus('${ADMIN_SERVER}') == 'RUNNING':
             print('${ADMIN_SERVER} already RUNNING — nothing to start')
-        elif '${NM_ADMINURL}' != '':
-            nmStart('${ADMIN_SERVER}', props=makePropertiesObject('AdminURL=${NM_ADMINURL}'))
         else:
-            nmStart('${ADMIN_SERVER}')
+            # MBean-mode NM (StartScriptEnabled=false) builds the JVM command from
+            # startup.properties, NOT config.xml. Materialize it from the server's
+            # ServerStart (SIP classpath + args) so the server isn't launched as a
+            # bare weblogic.Server that dies on ClassNotFoundException SipServerBean.
+            # Guarded: a dynamic engine has no /Servers/<name> ServerStart of its own.
+            try:
+                nmGenBootStartupProps('${ADMIN_SERVER}')
+            except Exception, ge:
+                print('nmGenBootStartupProps (continuing): ' + str(ge))
+            if '${NM_ADMINURL}' != '':
+                nmStart('${ADMIN_SERVER}', props=makePropertiesObject('AdminURL=${NM_ADMINURL}'))
+            else:
+                nmStart('${ADMIN_SERVER}')
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     nmDisconnect()
 except Exception, e:

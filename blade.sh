@@ -4144,6 +4144,16 @@ Machine${idx}NodemanagerNMType=${type}"
     as_install_user rm -rf "$work"
     [ "$rc" -eq 0 ] || { warn "configure failed (WLST rc=${rc})"; return 1; }
     ok "Domain '${domain}' written under ${DOMAINS_DIR}/"
+    # Verify the injected server-level config actually persisted. Offline WLST can
+    # silently drop server sets; if it did, the servers boot bare (no SIP classpath
+    # -> SipServerBean ClassNotFound) or on demo certs. Read as the domain's owner.
+    local _cfg="${DOMAINS_DIR}/${domain}/config/config.xml"
+    if as_install_user test -f "$_cfg"; then
+        as_install_user grep -q '<server-start>' "$_cfg" \
+            || warn "config.xml has NO <server-start> — the injected ServerStart did not persist; the AdminServer will boot bare (SipServerBean ClassNotFound)."
+        as_install_user grep -q 'custom-identity-key-store-file-name' "$_cfg" \
+            || warn "config.xml has NO keystores — the injected TLS did not persist; servers would fall back to demo certs."
+    fi
     # Now the domain dir exists, drop the keystores into its config/certs (the
     # exact path emit_tls_block baked into the template). config/certs replicates
     # to the engines on start, so no per-node push. Certs are guaranteed present
