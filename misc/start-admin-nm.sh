@@ -83,11 +83,40 @@ fi
 PY="$(mktemp /tmp/nmstart.XXXXXX.py)"
 trap 'rm -f "$PY"' EXIT
 
+# Derive the launch classpath + JVM args from the domain's own setDomainEnv --
+# the canonical, version-correct source (it already folds in the memory tuning
+# from setUserOverrides.sh). MBean-mode Node Manager has no start script, so we
+# hand these to nmStart as props; without them NM launches a bare weblogic.Server
+# that dies on ClassNotFoundException SipServerBean. Sourced in a subshell so it
+# can't pollute this script's env or the WLST launch.
+eval "$(cd "$DOMAIN_HOME/bin" 2>/dev/null && . ./setDomainEnv.sh >/dev/null 2>&1; \
+        printf 'SRV_CP=%q\nSRV_ARGS=%q\n' "${CLASSPATH#:}" "${MEM_ARGS} ${JAVA_OPTIONS}")"
+
 # WLST is Jython 2.x — note the 'except Exception, e' syntax. The generated
 # file must declare an encoding (PEP 263): Jython hard-fails on any non-ASCII
 # byte without it, with the real error otherwise easy to miss.
 cat > "$PY" <<EOF
 # -*- coding: utf-8 -*-
+from java.util import Properties
+def _nmstart(sv):
+    # MBean-mode NM builds the JVM command from these startup props, NOT config.xml.
+    # ClassPath + Arguments come from the domain's setDomainEnv, so the SIP classpath,
+    # LaunchClassLoader, ClasspathServlet allow-list and -ea are all present -- a bare
+    # nmStart would launch a weblogic.Server that dies on SipServerBean ClassNotFound.
+    cp = '${SRV_CP}'
+    if cp == '':
+        print('WARNING: no setDomainEnv classpath derived -- bare nmStart (will fail on OCCAS)')
+        if '${NM_ADMINURL}' != '':
+            nmStart(sv, props=makePropertiesObject('AdminURL=${NM_ADMINURL}'))
+        else:
+            nmStart(sv)
+        return
+    p = Properties()
+    p.put('ClassPath', cp)
+    p.put('Arguments', '${SRV_ARGS}')
+    if '${NM_ADMINURL}' != '':
+        p.put('AdminURL', '${NM_ADMINURL}')
+    nmStart(sv, props=p)
 try:
     nmConnect('${NM_USER}', '${NM_PASSWORD}', '${NM_HOST}', '${NM_PORT}',
               '${DOMAIN_NAME}', '${DOMAIN_HOME}', '${NM_TYPE}')
@@ -112,11 +141,7 @@ try:
             if s != 'RUNNING':
                 break
             time.sleep(2)
-        try:
-            nmGenBootStartupProps('${ADMIN_SERVER}')
-        except Exception, ge:
-            print('nmGenBootStartupProps (continuing): ' + str(ge))
-        nmStart('${ADMIN_SERVER}')
+        _nmstart('${ADMIN_SERVER}')
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     else:
         # Idempotent: a re-sync run may target an engine (or admin) that's
@@ -125,19 +150,7 @@ try:
         if nmServerStatus('${ADMIN_SERVER}') == 'RUNNING':
             print('${ADMIN_SERVER} already RUNNING — nothing to start')
         else:
-            # MBean-mode NM (StartScriptEnabled=false) builds the JVM command from
-            # startup.properties, NOT config.xml. Materialize it from the server's
-            # ServerStart (SIP classpath + args) so the server isn't launched as a
-            # bare weblogic.Server that dies on ClassNotFoundException SipServerBean.
-            # Guarded: a dynamic engine has no /Servers/<name> ServerStart of its own.
-            try:
-                nmGenBootStartupProps('${ADMIN_SERVER}')
-            except Exception, ge:
-                print('nmGenBootStartupProps (continuing): ' + str(ge))
-            if '${NM_ADMINURL}' != '':
-                nmStart('${ADMIN_SERVER}', props=makePropertiesObject('AdminURL=${NM_ADMINURL}'))
-            else:
-                nmStart('${ADMIN_SERVER}')
+            _nmstart('${ADMIN_SERVER}')
         print('Status: ' + nmServerStatus('${ADMIN_SERVER}'))
     nmDisconnect()
 except Exception, e:

@@ -4144,13 +4144,12 @@ Machine${idx}NodemanagerNMType=${type}"
     as_install_user rm -rf "$work"
     [ "$rc" -eq 0 ] || { warn "configure failed (WLST rc=${rc})"; return 1; }
     ok "Domain '${domain}' written under ${DOMAINS_DIR}/"
-    # Verify the injected server-level config actually persisted. Offline WLST can
-    # silently drop server sets; if it did, the servers boot bare (no SIP classpath
-    # -> SipServerBean ClassNotFound) or on demo certs. Read as the domain's owner.
+    # Verify the injected TLS keystores actually persisted (offline WLST can silently
+    # drop server sets). Without them the servers fall back to demo certs. The SIP
+    # classpath no longer rides config.xml -- the start step derives it from
+    # setDomainEnv and hands it to nmStart -- so we don't check <server-start> here.
     local _cfg="${DOMAINS_DIR}/${domain}/config/config.xml"
     if as_install_user test -f "$_cfg"; then
-        as_install_user grep -q '<server-start>' "$_cfg" \
-            || warn "config.xml has NO <server-start> — the injected ServerStart did not persist; the AdminServer will boot bare (SipServerBean ClassNotFound)."
         as_install_user grep -q 'custom-identity-key-store-file-name' "$_cfg" \
             || warn "config.xml has NO keystores — the injected TLS did not persist; servers would fall back to demo certs."
     fi
