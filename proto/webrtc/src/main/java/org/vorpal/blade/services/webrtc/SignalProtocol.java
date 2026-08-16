@@ -35,7 +35,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 ///
 /// RFC 7118 exists and works, but OCCAS 8.1 does not implement it — the JSR-359 API jar ships
 /// `SipWebSocketContext` while the container has no WebSocket transport behind it — so a browser
-/// cannot register as a SIP UA against this server no matter how the application is written. That
+/// cannot register as a SIP UA against this server no matter how the application is written.
+///
+/// Checked rather than assumed, because the interfaces being present makes it look supported:
+/// `wlss.jar` is the actual SIP container, 933 classes, and it references none of
+/// `SipWebSocketContext`, `Flow` or `FlowListener`. The only network-channel protocol literals in
+/// it are `sip` and `sips`. Not verified on 8.3 — if that changes, this is the evidence to redo.
+/// That
 /// settles the question for us, and it also happens to be the design we would choose: a browser
 /// that speaks "a call is arriving, do you want it?" does not need to own SIP dialogs, Via headers,
 /// registration refreshes or transaction state, and every one of those is a thing that can be got

@@ -55,8 +55,8 @@ loggable and visible to analytics. What `MediaMode` decides (`webrtc.json`, defa
 The caller side resolves that policy blind — it cannot know what will answer. The
 answering side needs no policy at all: an arriving offer with a DTLS fingerprint
 (`a=fingerprint:`) is from a WebRTC endpoint and passes through; one without is from a
-phone or trunk and anchors. This mirrors `session.passthru` in `v3/Callflow.java:49`,
-where the same callflow runs as a dropped-out proxy or a full B2BUA depending on config.
+phone or trunk and anchors. This mirrors the framework's `session.passthru`, where one
+callflow runs as a dropped-out proxy or a full B2BUA depending on configuration.
 
 ## A relayed call's media cannot be reached, by anyone
 
@@ -81,10 +81,8 @@ media server on every call. That trade is the whole reason the setting exists.
 ## A re-INVITE is handled, on both paths
 
 A far end re-offers for ordinary reasons — hold, unhold, a session refresh, a codec change —
-and until recently every one of them got a `501`, because `chooseCallflow` answers only
-*initial* INVITEs and a re-offer matched no callflow. It is now handled by an expectation
-armed at answer time, the same mechanism as BYE and CANCEL, and re-armed after each one
-since a call is re-offered repeatedly.
+and every one is handled, on both media paths. The gateway watches for a re-offer from the
+moment a call is answered, and keeps watching, because a call is re-offered repeatedly.
 
 What happens depends on the media path, and the split is the same one everything else in
 this application turns on:
@@ -99,12 +97,28 @@ this application turns on:
   produce an offer, and without a media server there is nothing to produce one with — a
   browser cannot be made to offer on demand.
 
+## A CANCEL is observed, not answered
+
+A caller who gives up while the browser is still ringing arrives as a CANCEL. The gateway
+stops the ring, frees the media, tells the browser and records the call as abandoned — and
+sends nothing back. The container owns that transaction: it answers the CANCEL itself and
+kills the INVITE with a `487`. An application that answers as well puts a second final
+response on the wire, so the framework drops one if you try.
+
+## DTMF rides the signaling plane
+
+`call.dtmf` becomes a SIP `INFO` carrying `application/dtmf-relay` toward the far end.
+
+Not a preference: no JSR-309 driver behind this framework implements tone generation, so a
+digit cannot be injected into the media stream at all. That is also why DTMF works the same
+on both media paths — a relayed call has no media session to inject into, and the INFO rides
+the dialog either way.
+
 ## Not SIP over WebSocket
 
-RFC 7118 exists and works, but **OCCAS 8.1 does not implement it**. The JSR-359 API jar
-ships `SipWebSocketContext`, `Flow` and `FlowListener`, but `wlss.jar` — 933 classes, the
-actual SIP container — contains no reference to any of them, and the only network-channel
-protocol literals present are `sip` and `sips`. So a browser cannot register as a SIP UA
+RFC 7118 exists and works, but **OCCAS 8.1 does not implement it**. The JSR-359 interfaces
+ship in the API jar; the container behind them has no WebSocket transport, and the only
+network channels it offers are `sip` and `sips`. So a browser cannot register as a SIP UA
 against this server regardless of how the application is written.
 
 That settles it, and it is also the design we would pick: a browser answering "a call is
@@ -127,19 +141,20 @@ CloudEvents 1.0 envelopes, subprotocol `blade.webrtc.v1`. Fourteen types, all in
 | | `call.update` |
 | | `signal.error` |
 
+**Every type names its scope, then its verb** — `<scope>.<verb>`, lower case. `signal.error`
+is neither `session.` nor `call.` because it is both: the `subject` says which one an error
+is about, set for a call and absent for the socket itself.
+
 **Two verbs were declared once and are deliberately gone.**
 
-`call.accept` meant "yes, without SDP". There is no SIP message it can honestly produce:
-both answer paths build the `200 OK` from an SDP only the browser has, answering the
-network early would start a call whose browser has no media path yet, and a `183` instead
-tends to stop the caller's ringback and replace it with silence for as long as ICE
-gathering takes. `call.answer` is a moment away and does the job properly.
+`call.accept` meant "yes, without SDP", and there is no SIP message it can honestly produce:
+both answer paths build the `200 OK` from an SDP only the browser has. `call.answer` is a
+moment away and does the job properly.
 
-`call.record` was a browser asking this gateway to record. Recording belongs to a service
-of its own; routing a browser's button through a gateway with no recording responsibility
-only re-creates the coupling that separation exists to remove. What the gateway owes such
-a service is the one decision only it can make — whether the call's media is anchored at
-all — and that is `mediaMode`, a configuration field, not an event.
+`call.record` was a browser asking this gateway to record. Recording belongs to a service of
+its own. What the gateway owes such a service is the one decision only it can make — whether
+the call's media is anchored at all — and that is `mediaMode`, a configuration field, not an
+event.
 
 **Answered and connected are two events, because SIP answers a call in three messages.**
 `call.established` is the `200 OK`; `call.connected` is the `ACK` that completes the
@@ -220,15 +235,13 @@ targeting parameters, bound to a long-lived per-browser application session:
 Contact: <sip:alice@172.16.32.129:5060;transport=tcp;sipappsessionid=<prefix>:<callId>:webrtc;wlsscid=…>
 ```
 
-That header is the whole inbound routing story. The registrar stores it verbatim and
-forks an inbound INVITE with it as the Request-URI; the container recognizes its own
-targeting parameters, hands the App Router `SipTargetedRequestInfo(ENCODED_URI,
-"webrtc", …)`, and the FSMAR's targeted branch dispatches the fork into the
-registration's session on this app **before the state machine runs**. No FSMAR
-transition names this application for inbound calls — the REGISTER said everything,
-which is what a registrar's contact is for. (The app-originated REGISTER itself still
-consults the AR normally, so a `webrtc` state routing REGISTER to `proxy-registrar`
-remains ordinary deployment routing.)
+That header is the whole inbound routing story. The registrar stores it verbatim and forks
+an inbound INVITE with it as the Request-URI; the container recognizes its own targeting
+parameters and dispatches the fork into the registration's session before the router's state
+machine runs. **No FSMAR transition names this application for inbound calls** — the REGISTER
+said everything, which is what a registrar's contact is for. The app-originated REGISTER
+itself routes normally, so a `webrtc` state sending REGISTER to `proxy-registrar` is ordinary
+deployment routing.
 
 Because the contact names the registering engine, a fork in a cluster is *delivered
 to the node holding the WebSocket* — the contact routes to the node, which is exactly
@@ -251,38 +264,31 @@ targeted calls land on the registration's session, so a second simultaneous INVI
 for the same AOR would collide with the first's continuations. A browser tab is a
 one-call phone; this is the honest shape, not a limitation.
 
-A binding lapses, so a timer on the registration session re-REGISTERs shortly before
-it does — the pattern `services/gateway/RegisterCallflow` proved: armed in the `2xx`
-callback, because a timer created during servlet initialization does not fire on this
-container. It refreshes at the expiry the registrar **granted**, not the one requested,
-since a registrar may shorten a binding and refreshing on the asked-for value would let
-it lapse early.
+A binding lapses, so a timer on the registration session re-REGISTERs shortly before it
+does — at the expiry the registrar **granted**, not the one requested, since a registrar may
+shorten a binding and refreshing on the asked-for value would let it lapse early.
 
-The timer stops when the socket does. If the browser is no longer connected to this
-node — it disconnected without a clean close, or the session failed over to a node that
-never held it — the refresh cancels itself instead of re-asserting a contact naming an
-engine that can no longer deliver. Letting the binding lapse is the honest outcome; a
-browser that comes back registers again from wherever it lands.
+The timer stops when the socket does. If the browser is no longer connected to this node the
+refresh cancels itself rather than re-asserting a contact naming an engine that can no longer
+deliver. Letting the binding lapse is the honest outcome; a browser that comes back registers
+again from wherever it lands.
 
 ## Late media
 
-An INVITE with no SDP is handled, and it is the case the prior art dropped. The media
-server offers in the `200 OK` and the caller's answer is read out of the `ACK` —
-`MediaCallflow.answerWithLateMedia`, on `SdpPortManager.generateSdpOffer()`. No new machinery
-was needed: `Callflow.sendResponse` already delivers the ACK to a continuation.
+An INVITE with no SDP is handled, and it is the case the prior art dropped. Offer and answer
+run backwards on the network leg: the media server offers in the `200 OK`, and the caller's
+answer is read out of the `ACK`.
 
 This is the one path where `call.established` and `call.connected` are genuinely far
 apart, and the only one where the ACK can arrive owing an answer it does not carry —
 hence `negotiated: false`.
 
-**Late media always anchors, and cannot be made to work without a media server.** Having
-the browser offer instead, so an install with no 309 driver could take these calls, was
-considered and rejected: late media is a third-party-call-control pattern browsers never
+**Late media always anchors, and cannot be made to work without a media server.** Having the
+browser offer instead was considered and rejected: late media is a pattern browsers never
 originate, so the caller is a phone or a trunk, and the answer coming back in the `ACK` is
-plain RTP with no `a=fingerprint`. A browser will not complete media against it — the same
-dead end the pass-through path already fails fast on. On this call shape the media server
-is not a convenience; it is the only party present that can speak to both ends. Without a
-driver installed the gateway refuses with `503` and says so by name in the log.
+plain RTP with no `a=fingerprint` — which a browser will not complete media against. On this
+call shape the media server is the only party present that can speak to both ends. Without a
+driver the gateway refuses with `503` and says so by name in the log.
 
 ## What a call puts on the event bus
 
@@ -304,27 +310,15 @@ Two things are worth knowing before reading a report:
   back in through `InboundToBrowser` via the location service — and the second leg inherits
   the first's `X-Vorpal-ID`. Both legs publish under the same correlator, source and
   application name; `leg` is the only thing that tells them apart.
-- **`analytics.enabled` is the switch, not `events.enabled`.** `AsyncSipServlet` stands the
-  publisher up on either, but `SettingsManager.collecting()` — which decides whether a fact
-  is built at all — reads only `analytics`. Setting `events.enabled` alone yields a live bus
-  connection carrying no `call.*` facts, and session events whose `appStartedAt` was never
-  populated. The shipped sample fills in the selectors and leaves the switch off, the way
-  every other BLADE application samples itself.
-
-- **A CANCEL is observed, not answered.** A caller who gives up while the browser is still
-  ringing arrives as a CANCEL, which reaches an `expectRequest` expectation rather than a
-  callflow — `chooseCallflow` answers only initial INVITEs. The handler publishes
-  `callAbandoned`, stops the browser ringing and frees the media, and deliberately sends no
-  response: the container issues the `200 OK` to the CANCEL and the `487` to the INVITE
-  itself. That is the same reason `Terminate` guards its own `sendResponse` down to BYE
-  only. Sending one here would be a second response to a transaction the container has
-  already finished.
+- **`analytics.enabled` is the switch, not `events.enabled`.** Setting `events.enabled` alone
+  gives a live bus connection carrying no call facts. The shipped sample fills in the
+  selectors and leaves the switch off, the way every other BLADE application samples itself.
 
 The browser signaling protocol is a separate channel and keeps its own short, imperative
-names. Seven of those are commands a client sends (`call.offer`, `call.hangup`, …), and the
-bus grammar is deliberately facts-not-commands, so a reverse-DNS name on an imperative
-would describe it wrongly. `BladeEventTypes.forEventName` is the sanctioned bridge between
-the two conventions.
+names. Five of them are commands a client sends — `session.connect`, `call.offer`,
+`call.answer`, `call.hangup`, `call.dtmf` — and the bus grammar is deliberately
+facts-not-commands, so a reverse-DNS name on an imperative would describe it wrongly.
+`BladeEventTypes.forEventName` is the sanctioned bridge between the two conventions.
 
 ## Deployment requirements
 
@@ -348,7 +342,7 @@ the two conventions.
   see, so the JSR-309 media controller driver jars must be deployed into the `blade-shared`
   shared library or the domain's `lib/` — the same deployment story as the driver behind
   `proto/player`. Without it the servlet logs "no JSR-309 driver registered" and says so
-  plainly: browser-to-browser still works, PSTN and recording do not.
+  plainly: browser-to-browser still works, calls to phones do not.
 
 ## Status
 
@@ -358,26 +352,28 @@ Built and unit-tested:
 |---|---|
 | `SignalProtocol` — the event vocabulary | done |
 | `SignalEndpoint` — `@ServerEndpoint`, registration, event dispatch | done |
-| `BrowserRegistry` — node-local socket table | done, 7 tests |
+| `BrowserRegistry` — node-local socket table | done |
 | `BrowserSignals` — browser event → callflow continuation, under the SAS lock | done |
 | `InboundToBrowser` — network calls a browser, both SDP directions | done |
-| `OutboundFromBrowser` — browser calls the network (3PCC) | done, 6 tests |
+| `OutboundFromBrowser` — browser calls the network (3PCC) | done |
 | Pass-through media in both callflows (browser↔browser via SIP, media P2P) | done |
-| `MediaMode` — media policy, wired to `webrtc.json` | done, 4 tests |
-| `call.update` renegotiation | done, 5 protocol tests |
-| JSR-309 driver: `generateSdpOffer` / `processSdpAnswer` / WebRTC legs | done, 17 tests |
+| `MediaMode` — media policy, wired to `webrtc.json` | done |
+| `call.update` renegotiation | done |
+| JSR-309 driver: `generateSdpOffer` / `processSdpAnswer` / WebRTC legs | done |
 | `WebrtcServlet` — SIP entry, provider install, settings | done |
-| `BrowserAuthenticator` — who may claim which address | done, 12 tests |
-| `BrowserRegistration` — REGISTER/deregister on the browser's behalf | done, 5 tests |
-| `MediaCallflow.generateOffer` / `answerWithLateMedia` | done |
-| `call.connected` — the ACK as its own event, with `negotiated` | done, 2 protocol tests |
-| `CallEvents` — the six call facts on the event bus, with `leg` | done, 5 tests |
+| `BrowserAuthenticator` — who may claim which address | done |
+| `BrowserRegistration` — REGISTER/deregister on the browser's behalf | done |
+| `call.connected` — the ACK as its own event, with `negotiated` | done |
+| `CallEvents` — the six call facts on the event bus, with `leg` | done |
 | CANCEL while the browser rings — stop ringing, free media, `callAbandoned` | done |
 | re-INVITE (hold, refresh, far-side escalation) on both media paths | done |
 | `call.dtmf` — digits to the far end as `application/dtmf-relay` INFO | done |
+| `WebrtcCallflow` — DTMF and re-INVITE, shared by both directions | done |
+| `signal.error`, and the `<scope>.<verb>` grammar enforced by test | done |
+| `WebrtcSettings` round-trip and defaults | done |
 | Registration refresh timer — re-REGISTER at the granted expiry | done |
 | Driver name and properties in `webrtc.json` | done |
-| JSR-309 media controller WebRTC endpoint facade | done, 10 tests |
+| JSR-309 media controller WebRTC endpoint facade | done |
 
 This WAR is Java only. It serves no page and ships no script: the browser side —
 the client library and the softphone UI — is [admin/phone](../../admin/phone/README.md),
