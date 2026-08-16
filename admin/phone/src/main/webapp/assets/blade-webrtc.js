@@ -33,7 +33,7 @@ const EVENT = {
   CALL_CONNECTED: 'call.connected',
   CALL_ENDED: 'call.ended',
   CALL_UPDATE: 'call.update',
-  ERROR: 'error',
+  ERROR: 'signal.error',
   // both
   ICE_CANDIDATE: 'ice.candidate',
 };

@@ -72,6 +72,24 @@ public class SignalProtocolTest {
 	}
 
 	@Test
+	public void everyEventTypeNamesItsScope() throws Exception {
+		// `error` was a bare single segment for a while, and nothing caught it — the grammar lived in
+		// prose. Every type is `<scope>.<verb>`, lower case, so a reader can tell from the name alone
+		// what an event is about. Checked by reflection so a new constant cannot quietly break it.
+		for (java.lang.reflect.Field field : SignalProtocol.class.getDeclaredFields()) {
+			int mods = field.getModifiers();
+			if (!java.lang.reflect.Modifier.isPublic(mods) || !java.lang.reflect.Modifier.isStatic(mods)
+					|| field.getType() != String.class
+					|| "SUBPROTOCOL".equals(field.getName()) || "SOURCE".equals(field.getName())) {
+				continue; // not an event type
+			}
+			String type = (String) field.get(null);
+			assertTrue(field.getName() + " = \"" + type + "\" is not <scope>.<verb>",
+					type.matches("[a-z]+\\.[a-z]+"));
+		}
+	}
+
+	@Test
 	public void callConnectedCarriesNegotiatedAsARealBoolean() throws Exception {
 		// The client decides with `event.data?.negotiated !== false`. If this ever serialized as the
 		// string "false" that comparison would be true, and a call with no media would be reported

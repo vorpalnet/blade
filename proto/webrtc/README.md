@@ -125,7 +125,7 @@ CloudEvents 1.0 envelopes, subprotocol `blade.webrtc.v1`. Fourteen types, all in
 | `call.dtmf` | `call.connected` |
 | `ice.candidate` (both directions) | `call.ended` |
 | | `call.update` |
-| | `error` |
+| | `signal.error` |
 
 **Two verbs were declared once and are deliberately gone.**
 

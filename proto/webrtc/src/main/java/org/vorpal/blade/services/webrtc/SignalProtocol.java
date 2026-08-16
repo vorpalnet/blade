@@ -118,7 +118,14 @@ public final class SignalProtocol {
 	/// The call is over. `data.reason` says why.
 	public static final String CALL_ENDED = "call.ended";
 	/// An error tied to a specific call or to the session. `data.reason`, optional `data.code`.
-	public static final String ERROR = "error";
+	///
+	/// **`signal.` and not `session.` or `call.`, because it is both.** Every other type names the
+	/// scope it belongs to, and the `subject` says which one an error is about: set for a call,
+	/// absent for the socket itself — a refused token, a malformed frame, an event sent before
+	/// `session.connect`. Filing it under either scope would be wrong half the time, and splitting
+	/// it into two types would duplicate a distinction `subject` already draws. `signal` is this
+	/// protocol's own name, which is what the odd one out should be filed under.
+	public static final String ERROR = "signal.error";
 
 	/// **A new SDP offer for a call that is already up.** `data.sdp`; the browser replies with
 	/// [#CALL_ANSWER].
@@ -163,7 +170,7 @@ public final class SignalProtocol {
 		return M.createObjectNode();
 	}
 
-	/// An event carrying nothing but a reason — `call.ended`, `error`.
+	/// An event carrying nothing but a reason — `call.ended`, `signal.error`.
 	public static CloudEvent reason(String type, String callId, String reason) {
 		return event(type, callId, data().put("reason", reason));
 	}
