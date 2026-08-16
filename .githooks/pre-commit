@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# Refuses a commit that would publish Oracle container internals.
+#
+# This repository is public (github.com/vorpalnet/blade) and its Javadoc ships to
+# customers in blade-javadoc.war. Two things must not go into either:
+#
+#   1. Any claim that OCCAS was decompiled.
+#   2. Oracle's private implementation classes named in prose — comments, Javadoc,
+#      Markdown — where they document internals rather than describe our own code.
+#
+# Code that genuinely depends on those internals is NOT blocked: some of it has to
+# exist, the dependency is already visible in the code itself, and a maintainer
+# needs the comments around it. Those files are listed in ALLOW below, deliberately
+# and with a reason. Adding to that list should be a decision, not a reflex.
+#
+# Install:  git config core.hooksPath .githooks
+# Bypass:   git commit --no-verify        (know why you are doing it)
+# Run ad hoc: .githooks/pre-commit --all  (checks the whole tree, not just staged)
+
+set -uo pipefail
+
+# --- POSIX ERE only. `\s` is a GNU extension that `git grep -E` silently ignores,
+# --- which is exactly how an earlier version of this check passed everything.
+WS='[[:space:]]'
+COMMENT="^${WS}*(///|//|\*|#)"
+INTERNALS='SipServletRequestImpl|SipServletResponseImpl|SipServletMessageImpl|SipApplicationSessionImpl|WlssSipTargetedRequestInfo|LocalTransport|ProxyImpl|ProxyAdapter|CallStateManager|ContainerProcessRequest|NetworkAccessPointMBeanUtil|SipConstants|wlss\.jar|wlssapi\.jar'
+DECOMPILE='[Dd]ecompil'
+
+# Files where the dependency is structural: the code itself casts to or reflects on
+# these classes, so scrubbing the comments would hide nothing and cost the next
+# maintainer the explanation they need.
+ALLOW='libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingFilter\.java|libs/framework/src/main/java/org/vorpal/blade/framework/v3/configuration/routing/LooseRoutingHelper\.java|\.githooks/pre-commit'
+
+if [ "${1:-}" = "--all" ]; then
+    files=$(git ls-files '*.java' '*.md' '*.txt')
+else
+    files=$(git diff --cached --name-only --diff-filter=ACM -- '*.java' '*.md' '*.txt')
+fi
+[ -z "$files" ] && exit 0
+
+fail=0
+report() {                                   # $1 file  $2 line  $3 why  $4 text
+    [ "$fail" -eq 0 ] && printf '\n  Commit refused — this repository is public.\n\n'
+    fail=1
+    printf '    %s:%s\n      %s\n      %s\n\n' "$1" "$2" "$3" "$(echo "$4" | cut -c1-96)"
+}
+
+for f in $files; do
+    [ -f "$f" ] || continue
+    echo "$f" | grep -qE "^($ALLOW)$" && continue
+
+    while IFS=: read -r n line; do
+        [ -n "${n:-}" ] && report "$f" "$n" "says the container was decompiled" "$line"
+    done < <(grep -nE "$DECOMPILE" "$f" 2>/dev/null)
+
+    case "$f" in
+        *.md|*.txt) pat="$INTERNALS" ;;      # prose files: anywhere on the line
+        *)          pat="${COMMENT}.*($INTERNALS)" ;;
+    esac
+    while IFS=: read -r n line; do
+        [ -n "${n:-}" ] && report "$f" "$n" "names an Oracle private class in prose" "$line"
+    done < <(grep -nE "$pat" "$f" 2>/dev/null)
+done
+
+if [ "$fail" -ne 0 ]; then
+    cat <<'EOF'
+  State the behaviour, not the internals or how you learned them:
+
+      no:   SipServletResponseImpl.sendIt exempts CANCEL from the completed check
+      yes:  the container does not refuse a late response to a CANCEL the way it
+            refuses every other late response
+
+  Forensics themselves belong in the private workspace, never in this repo.
+  If the dependency is structural and the comment has to stay, add the file to
+  ALLOW in .githooks/pre-commit with a reason.
+
+EOF
+    exit 1
+fi
+exit 0
