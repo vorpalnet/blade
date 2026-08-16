@@ -745,8 +745,8 @@ in `blade-admin.ear` like every other admin app.)
   `Transfer` + all four flavors, `TransferInitialInvite`, `TransferAPI`/`CallflowAckBye`/
   `KeepAlive` (via `ClientCallflow`) and `TransferServlet` were already on v3.
 - **Traces carry the raw SIP messages, coming AND going.** Every recorded step now embeds the
-  wire message (`CallStep.message` — OCCAS `SipServletMessageImpl.toString()` renders
-  `getBytes()` UTF-8; capped at 16KiB with a truncation marker) plus a `direction` field.
+  wire message (`CallStep.message` — the container renders the message as UTF-8 text;
+  capped at 16KiB with a truncation marker) plus a `direction` field.
   Outbound (`out`) steps are the existing send-override capture, message attached. Inbound
   (`in`) steps come from the only seams v3 owns without touching frozen v2: the response/ACK
   callbacks of `sendRequest`/`sendResponse` are WRAPPED on armed calls (recording each arrival
@@ -1268,8 +1268,7 @@ there's no modifier dropdown anymore.
 This works because OCCAS already round-trips our routing state: on `ROUTE_BACK`
 the container BASE64-encodes the App Router's `stateInfo` into the route it
 pushes back to itself, and re-invokes the AR (directive CONTINUE) with that
-exact `stateInfo` when the call returns (verified in the decompiled
-`ContainerProcessRequest`). So FSMAR needs no special detection — it sets the
+exact `stateInfo` when the call returns. So FSMAR needs no special detection — it sets the
 return state as its `currentStateId` when issuing the `ROUTE_BACK`, and resumes
 there on the continuation hop. In the config a route-back egress is a transition
 with `routeModifier: ROUTE_BACK` whose `next` is the resume state; `diagram`

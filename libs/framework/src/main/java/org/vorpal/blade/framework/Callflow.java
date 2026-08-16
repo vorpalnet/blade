@@ -1485,11 +1485,10 @@ public abstract class Callflow implements Serializable {
 	 * response to a transaction that has already finished.
 	 *
 	 * <p>
-	 * Nothing beneath us stops it. {@code SipServletRequestImpl.createResponse} throws only for ACK,
-	 * so building the response succeeds; and {@code SipServletResponseImpl.sendIt} explicitly
-	 * exempts CANCEL from the "transaction has been completed" check that refuses every other late
-	 * response — so it goes out. The result is a protocol violation that shows up nowhere but a
-	 * trace.
+	 * Nothing beneath us stops it. Building a response to a CANCEL succeeds — only ACK is refused —
+	 * and the container does not decline to send it the way it declines every other response to a
+	 * finished transaction. So it goes out, and the result is a protocol violation that shows up
+	 * nowhere but a trace.
 	 *
 	 * <p>
 	 * Any status, not just 2xx: the whole transaction belongs to the container, so there is no

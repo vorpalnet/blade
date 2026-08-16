@@ -23,27 +23,25 @@ import org.vorpal.blade.framework.v3.Callflow;
 /// ```
 ///
 /// That single header is the entire inbound routing story. When the registrar
-/// forks an INVITE to it, the container recognizes its own parameters
-/// (`SipServletRequestImpl.isInitialRequestWithEncodeURI`), hands the App Router
-/// a `SipTargetedRequestInfo(ENCODED_URI, "webrtc", …)` — which the FSMAR's
-/// targeted branch honors before its state machine even runs — and dispatches
-/// the INVITE **into the registration's own application session** on this app.
-/// No router configuration names this application; the REGISTER said everything,
-/// which is how a registrar is supposed to learn where things live.
+/// forks an INVITE to it, the container recognizes its own targeting parameters,
+/// hands the App Router a targeted request naming this application — which the
+/// FSMAR's targeted branch honors before its state machine even runs — and
+/// dispatches the INVITE **into the registration's own application session** on
+/// this app. No router configuration names this application; the REGISTER said
+/// everything, which is how a registrar is supposed to learn where things live.
 ///
-/// Verified against the decompiled container (OCCAS 8.1), not assumed:
+/// Three container behaviours this rides on. None is guaranteed by the
+/// specification, so treat them as constraints rather than assumptions:
 ///
-/// - the three-part `sipappsessionid` written by
-///   `SipApplicationSessionImpl.encodeURI` is what
-///   `WlssSipTargetedRequestInfo.generateTargetedRequestInfo` requires — the
-///   short form the container stamps on its *default* contacts is for in-dialog
-///   affinity only and does not target initial requests;
-/// - an app-set REGISTER Contact with a real host is left untouched by
-///   `SipServletRequestImpl.addOrUpdateContact`, which rewrites only the
-///   `wlsshost.bea.com` placeholder — so exactly one contact, ours, is
-///   registered;
-/// - `LocalTransport.isLocalServer` requires an explicit `transport` parameter
-///   before it will call a URI local, so the contact always carries one.
+/// - **The full targeting parameters are required.** The short form the container
+///   stamps on its own default contacts gives in-dialog affinity only; it does not
+///   target an initial request. The contact must carry what
+///   [SipApplicationSession#encodeURI] writes.
+/// - **An app-set Contact with a real host is left alone.** The container rewrites
+///   only its own placeholder host, so exactly one contact — ours — is registered.
+/// - **The transport parameter is not optional.** Without an explicit
+///   `;transport=` the container will not judge the fork's Request-URI local, and
+///   the whole design depends on it doing so.
 ///
 /// A welcome consequence of the contact naming this engine: in a cluster, the
 /// registrar's fork is *delivered to the node that holds the WebSocket*, because

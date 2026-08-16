@@ -166,7 +166,7 @@ public class AppRouter implements SipApplicationRouter {
 			// We must NOT blindly read the previous app off the session here: for a
 			// second initial INVITE that the container has joined to an existing
 			// SipApplicationSession via an @SipApplicationKey (e.g. a second SIPREC
-			// recording dialog keyed on the same UCID), getSipApplicationSessionImpl()
+			// recording dialog keyed on the same UCID), the container's own accessor
 			// returns the session owned by the LAST application in the chain. Starting
 			// the FSM from that terminal state finds no forward INVITE transition,
 			// getNextApplication returns null, and OCCAS 8.3 renders that as a 500

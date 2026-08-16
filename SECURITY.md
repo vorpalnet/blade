@@ -343,7 +343,7 @@ For deployments where BLADE itself challenges SIP (acting as registrar/edge):
   one-way hashes and **cannot** drive digest. Enabling digest means provisioning
   a digest-capable provider in the realm.
 - The OCCAS digest provider is **JDBC-backed and manually installed** into the
-  domain (it won't appear in decompiled OCCAS code). **TODO (Jeff):** record the
+  domain, so it is not present in a stock install. **TODO (Jeff):** record the
   exact provider class / install steps once confirmed.
 
 ---

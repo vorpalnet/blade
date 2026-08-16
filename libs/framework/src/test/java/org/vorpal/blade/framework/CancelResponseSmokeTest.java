@@ -21,10 +21,9 @@ import org.vorpal.blade.framework.v2.logging.CapturingLogger;
 /// Pins [Callflow#dropResponseToCancel]: an application must never answer a CANCEL, and the
 /// framework drops the attempt rather than letting it reach the wire.
 ///
-/// The container gives an application no protection here. `SipServletRequestImpl.createResponse`
-/// throws only for ACK, so building a response to a CANCEL succeeds, and
-/// `SipServletResponseImpl.sendIt` exempts CANCEL from the "transaction has been completed" check
-/// that refuses every other late response — so it really is sent, as a second final response to a
+/// The container gives an application no protection here. Building a response to a CANCEL succeeds
+/// — only ACK is refused — and the container does not decline to send it the way it declines every
+/// other response to a finished transaction. So it really is sent, as a second final response to a
 /// transaction the container already answered. That is invisible except in a trace, which is why
 /// the rule lives in the framework instead of in each author's memory.
 class CancelResponseSmokeTest {

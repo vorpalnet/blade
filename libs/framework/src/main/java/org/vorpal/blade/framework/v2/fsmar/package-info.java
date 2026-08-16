@@ -27,7 +27,7 @@
 /// ### State Resolution
 ///
 /// The router determines the current [State] based on the name of the previously invoked SIP
-/// application (obtained from the `SipApplicationSessionImpl`). A special `"null"` state represents
+/// application (which the container reports to the router). A special `"null"` state represents
 /// the initial state when no application has yet processed the request. States are stored in the
 /// [AppRouterConfiguration] as a `HashMap` keyed by application basename.
 ///

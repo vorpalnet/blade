@@ -92,7 +92,7 @@ public class AppRouter implements SipApplicationRouter {
 //		try {			
 //        	Method getMessageImpl =  SipServletMessageAdapter.class.getDeclaredMethod("getMessageImpl");
 //        	getMessageImpl.setAccessible(true);
-//        	SipServletMessageImpl impl = (SipServletMessageImpl) getMessageImpl.invoke(request);
+//        	(dead experiment: unwrapping the container's message implementation by reflection)
 //        	impl.setHeaderFromAdapter("X-Jeff", "is_cool", false); //true if address header
 //		} catch (Exception e) {
 //			e.printStackTrace();

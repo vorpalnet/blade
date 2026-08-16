@@ -125,6 +125,6 @@ verified:
 - **Not verifiable off-box**: the WLST in `install-ssl.sh` needs a running OCCAS
   domain. The WebLogic SSL MBean attributes are standard; the `sips` protocol and
   the `EnabledProtocolVersions`-defaults-to-TLSv1 behavior were confirmed against
-  the decompiled OCCAS 8.1 source (`SipConstants`, `NetworkAccessPointMBeanUtil`).
+  OCCAS 8.1.
   Run `--dry-run` first, and `status` after, to confirm against your 8.3 domain.
 ```

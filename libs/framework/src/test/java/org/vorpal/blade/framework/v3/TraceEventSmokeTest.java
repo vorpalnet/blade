@@ -20,7 +20,7 @@ import org.vorpal.blade.framework.v3.diagnostics.TraceLog;
 /// Run via `main`, like the other v3 smoke tests. Container-free: the SIP
 /// interfaces are `java.lang.reflect.Proxy` stand-ins backed by attribute
 /// maps, with `toString()` returning the raw message text (the same contract
-/// OCCAS's `SipServletMessageImpl` honors).
+/// the container honors).
 ///
 /// Proves: (1) a RECEIVE on an armed session records an `in` step pinned to
 /// the handler FQN + method hint, raw message attached, no line; (2) a
