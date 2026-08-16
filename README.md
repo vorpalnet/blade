@@ -193,7 +193,7 @@ Both scripts read `$MW_HOME/inventory/registry.xml` to derive the OCCAS and WebL
 To switch OCCAS versions, point `$MW_HOME` at a different install — no edits to build configs
 required. You can keep multiple installs side-by-side (e.g. `/Users/jeff/Oracle/occas-8.1`,
 `.../occas-8.3`). For a one-off build against a different version, pass the platform on the
-command line instead of re-exporting: `./build.sh occas-8.1 …` overrides `$MW_HOME` for that run.
+command line instead of re-exporting: `./build.sh default occas-8.1 …` overrides `$MW_HOME` for that run.
 
 > **Whichever way you switch, add `clean`.** Bytecode target is invisible to Maven's up-to-date
 > check, so an incremental build after a switch silently ships classes compiled for the old
@@ -219,9 +219,19 @@ This only needs to be run once per OCCAS version. The artifacts are installed in
 
 ## Build
 
+A build **requires a profile** — BLADE is a development framework, so you name
+what to build rather than always building everything:
+
 ```bash
-./build.sh
+./build.sh default        # the base set: every admin app + service, no proto/ incubator
 ```
+
+Run `./build.sh` with no profile on a terminal and it lists the profiles and
+offers to build a new one; without a terminal (CI, another build script) it
+exits non-zero naming the choices. `./build.sh --list` shows them; `./build.sh
+--init` builds a custom profile interactively (saved under `.conf/`, gitignored).
+See **[Build Profiles](#build-profiles)** below. (Clean-only runs need no
+profile: `./build.sh clean`.)
 
 ### Building Individual Modules
 
@@ -295,18 +305,18 @@ Admin-tier WARs are named `blade-<app>.war` so their WebLogic app names never co
 The dist copy can get noisy during fast inner-loop development. Two ways to skip it:
 
 ```bash
-./build.sh --no-dist             # one-off
+./build.sh default --no-dist     # one-off
 export BLADE_SKIP_DIST=1         # sticky for the current shell
 ```
 
-`--no-dist` on the CLI always wins, so you can opt back in for a single build even with the env var set: just don't pass `--no-dist`. (To force the env var off temporarily, run `BLADE_SKIP_DIST=0 ./build.sh ...`.)
+`--no-dist` on the CLI always wins, so you can opt back in for a single build even with the env var set: just don't pass `--no-dist`. (To force the env var off temporarily, run `BLADE_SKIP_DIST=0 ./build.sh default ...`.)
 
 ### Deployment
 
 BLADE deploys in four tiers — shared library, admin apps, services (+ test apps), and FSMAR. The `<env>.conf` profile is the single source of truth (admin URL, per-tier WebLogic targets, engine node list, approuter path, app allowlist); `./deploy.sh <env>` with no tier deploys the **whole environment** in dependency-safe order. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full guide. The short version:
 
 ```bash
-./build.sh production                 # produce dist/<ver>-<build>/
+./build.sh default                    # produce dist/<ver>-<build>/
 cp build-profiles/deploy/production.conf.example \
    build-profiles/deploy/production.conf               # then edit: adminurl, user, targets, engine.nodes
 cp build-profiles/deploy/production.secret.example \
@@ -324,21 +334,30 @@ Each `./build.sh` invocation auto-increments a build number stored in `build.num
 
 ## Build Profiles
 
-The `build.sh` script accepts one or more **module profiles** (which apps to build), an optional **platform** (which OCCAS/Java version to target), and optional Maven arguments.
+The `build.sh` script takes exactly one **module profile** (which apps to build — required for any build), an optional **platform** (which OCCAS/Java version to target), and optional Maven arguments.
 
-A profile decides which modules are built, and therefore what lands in `dist/`: the admin tier as `blade-admin.ear`, the test tier as `blade-test.ear`, and each service as its own WAR under `dist/<ver>-<build>/services/`.
+A profile decides which modules are built, and therefore what lands in `dist/`: the admin tier as `blade-admin.ear`, the test tier as `blade-test.ear`, and each service as its own WAR under `dist/<ver>-<build>/services/`. The canonical profiles are:
+
+| Profile | Builds |
+|---|---|
+| `default` | The base set — every admin app + service, but **not** the `proto/` incubator apps. |
+| `full`    | `default` **plus** the `proto/` incubator apps (built standalone into `dist/proto/`). |
+| `minimal` | Core routing only (framework + shared + proxy-registrar). |
+
+Need a different subset? `./build.sh --init` builds one interactively and saves it under `.conf/` (gitignored, yours alone); rebuild it any time by name. `./build.sh --list` shows every profile, canonical and local.
 
 ```bash
-./build.sh                              # full build, platform from $MW_HOME
-./build.sh production                   # production services only
-./build.sh production occas-8.2         # production services, OCCAS 8.2 (overrides $MW_HOME)
+./build.sh default                      # base set, platform from $MW_HOME
+./build.sh default occas-8.2            # base set, OCCAS 8.2 (overrides $MW_HOME)
 ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3 (overrides $MW_HOME)
-./build.sh production minimal           # both profiles' modules
-./build.sh production clean package     # with explicit Maven goals
-./build.sh occas-8.1 clean package      # REQUIRED shape when switching platforms
-./build.sh --no-javadoc                 # skip javadoc generation (fast dev loop)
-./build.sh -- -Dfoo=bar                 # full build with extra Maven flags
+./build.sh full                         # base set + proto/ incubator apps
+./build.sh default clean package        # with explicit Maven goals
+./build.sh default occas-8.1 clean package   # REQUIRED shape when switching platforms
+./build.sh --no-javadoc default         # skip javadoc generation (fast dev loop)
+./build.sh default -- -Dfoo=bar         # extra Maven flags
 ```
+
+One profile per invocation: each build is one Maven reactor and produces one `blade-admin.ear` whose contents match that profile, so profiles can't be combined.
 
 ### Platform auto-detection
 
@@ -394,7 +413,7 @@ see `copy_all_to_dist`), so after switching platforms it recompiles only the sou
 you edited and repackages every untouched class at the *previous* target.
 
 ```bash
-./build.sh occas-8.1 clean package     # switching from 8.3 to 8.1
+./build.sh default occas-8.1 clean package     # switching from 8.3 to 8.1
 ```
 
 The build summary is not a safety net here: `Target: Java 11 bytecode` describes what
@@ -436,7 +455,7 @@ To skip generation deliberately (fast dev loops — the javadoc WAR is ~150 MB a
 module in the build):
 
 ```bash
-./build.sh --no-javadoc          # one-off
+./build.sh default --no-javadoc  # one-off
 export BLADE_SKIP_JAVADOC=1      # sticky for the current shell
 ```
 

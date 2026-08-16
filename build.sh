@@ -2,30 +2,39 @@
 # ============================================================================
 # build.sh - Profile-driven build wrapper for BLADE
 #
+# A build REQUIRES a profile — there is no "build everything" default. BLADE is a
+# development framework; not every module needs building or deploying, so naming a
+# profile is a deliberate choice. With no profile on an interactive terminal you
+# get a picker (existing profiles, or create one); without a terminal you get a
+# non-zero error naming the available profiles. Clean-only runs need no profile.
+#
 # Usage:
-#   ./build.sh [profile...] [platform] [--dev|--prod] [--no-dist] [--no-javadoc] [maven-args...]
+#   ./build.sh <profile> [platform] [--dev|--prod] [--no-dist] [--no-javadoc] [maven-args...]
+#   ./build.sh --init                       # build a new profile interactively, then build it
+#   ./build.sh --list                       # list available profiles and exit
 #
 # Examples:
-#   ./build.sh                              # full build, auto-detected platform
-#   ./build.sh production                   # production services, auto-detected
-#   ./build.sh production occas-8.2         # production services, OCCAS 8.2
+#   ./build.sh default                      # the base set (all but proto/), auto-detected platform
+#   ./build.sh default occas-8.2            # base set, OCCAS 8.2
 #   ./build.sh minimal occas-8.3            # core routing, OCCAS 8.3
-#   ./build.sh production clean package     # with explicit Maven goals
-#   ./build.sh clean                        # also purges org.vorpal.blade from ~/.m2
-#   ./build.sh cleanAll                      # clean + delete the entire dist/ tree
-#   ./build.sh --no-dist                    # full build, skip dist/ copy
-#   ./build.sh --no-javadoc                 # full build, skip javadoc generation
-#   ./build.sh                              # dev versioning (default): app version 3.0.4
-#   ./build.sh --prod                       # release versioning: app version 3.0.4-<build>
+#   ./build.sh full                         # base set PLUS the proto/ incubator apps
+#   ./build.sh default clean package        # with explicit Maven goals
+#   ./build.sh clean                        # clean-only (no profile needed); purges org.vorpal.blade from ~/.m2
+#   ./build.sh cleanAll                     # clean + delete the entire dist/ tree
+#   ./build.sh default --no-dist            # skip dist/ copy
+#   ./build.sh default --no-javadoc         # skip javadoc generation
+#   ./build.sh default                      # dev versioning (default): app version 3.0.4
+#   ./build.sh default --prod               # release versioning: app version 3.0.4-<build>
 #
 # Dev vs prod versioning: WebLogic side-by-side versioning keys off
 # WebLogic-Application-Version, so a build number that moves every build mints a NEW
 # application version -- the previous one stays registered and blocks an in-place
 # redeploy until undeployed by name. dev keeps the version stable (3.0.4) so OCCAS
 # replaces the app on redeploy; prod appends the build number for traceable releases.
-#   ./build.sh -- -Pfoo                     # full build with extra Maven flags
+#   ./build.sh default -- -Pfoo             # build with extra Maven flags
 #
-# Module profiles:   build-profiles/*.conf
+# Module profiles:   build-profiles/*.conf   (canonical, committed: default, full, minimal)
+#                    .conf/*.conf            (local, gitignored — written by --init)
 # Platform profiles: build-profiles/platforms/*.conf
 #
 # Default platform resolution (when none given on the command line):
@@ -85,7 +94,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILES_DIR="${SCRIPT_DIR}/build-profiles"
 PLATFORMS_DIR="${PROFILES_DIR}/platforms"
-DEFAULT_PROFILE="default"
+# Local (gitignored) profiles the --init builder writes, resolved after the
+# canonical build-profiles/ ones. Shares the .conf/ dir blade.sh already uses.
+LOCAL_PROFILES_DIR="${SCRIPT_DIR}/.conf"
+# The base profile. No longer applied automatically (a build now requires an
+# explicit profile) — this only names the set --init pre-checks as a starting
+# point, and the profile the picker/docs point at first.
+BASE_PROFILE="default"
 
 # --- Capture the full build console into dist/<ver>-<build>/build.log ---
 # Everything printed from here on (this header, Maven's reactor output, the
@@ -332,7 +347,7 @@ copy_all_to_dist() {
         [ $produced -eq 0 ] && missing=$((missing + 1))
     done <<< "$INCLUDED_MODULES"
 
-    cp -f "${PROFILES_DIR}/${PROFILE}.conf"   "$DISTDIR/" 2>/dev/null && copied=$((copied + 1))
+    [ -n "$CONF_FILE" ] && cp -f "$CONF_FILE" "$DISTDIR/" 2>/dev/null && copied=$((copied + 1))
     cp -f "${PLATFORMS_DIR}/${PLATFORM}.conf" "$DISTDIR/" 2>/dev/null && copied=$((copied + 1))
 
     echo "Copied ${copied} artifacts to dist/${REVISION}-${BUILD_NUM}/"
@@ -485,10 +500,307 @@ write_deployment_manifest() {
 #     done
 # }
 
-# --- Parse arguments: collect multiple profiles, one platform, and Maven args ---
+# ---------------------------------------------------------------------------
+# Profiles: resolution, listing, interactive picker, and the --init builder.
+#
+# A build requires a profile. These support that: resolve a name to its conf
+# (canonical build-profiles/ first, then local .conf/); list what's available;
+# pick one interactively; or build a new one. The picker/builder render to the
+# terminal and set the global PROFILES array — no command substitution, so their
+# menus display normally.
+# ---------------------------------------------------------------------------
+
+# Echo the conf-file path for a profile name, or nothing if it doesn't exist.
+# Canonical (committed) profiles win over local (.conf/) ones of the same name.
+profile_conf_path() {
+    if [ -f "${PROFILES_DIR}/$1.conf" ]; then
+        echo "${PROFILES_DIR}/$1.conf"
+    elif [ -f "${LOCAL_PROFILES_DIR}/$1.conf" ]; then
+        echo "${LOCAL_PROFILES_DIR}/$1.conf"
+    fi
+}
+
+# One-line banner for the first screen.
+print_banner() {
+    echo "BLADE ${REVISION}  ·  MIT License  ·  (c) vorpal.net"
+}
+
+# A short description for a profile: the conf's "# desc:" line if present, else a
+# module count. Keeps the listings self-documenting and local profiles readable.
+profile_desc() {
+    local conf desc
+    conf=$(profile_conf_path "$1")
+    [ -n "$conf" ] || return 0
+    desc=$(grep -m1 -E '^# *desc:' "$conf" | sed -E 's/^# *desc: *//')
+    if [ -n "$desc" ]; then
+        echo "$desc"
+    else
+        echo "$(read_modules "$conf" | grep -c .) modules"
+    fi
+}
+
+# Print the available profiles with a short description of each: the committed
+# ones first, then any local (--init) ones.
+list_profiles() {
+    local f name any=0
+    echo "Existing profiles include:"
+    for f in "${PROFILES_DIR}"/*.conf; do
+        [ -e "$f" ] || continue
+        name=$(basename "${f%.conf}")
+        printf '  %-10s %s\n' "$name" "$(profile_desc "$name")"
+    done
+    for f in "${LOCAL_PROFILES_DIR}"/*.conf; do
+        [ -e "$f" ] || continue
+        name=$(basename "${f%.conf}")
+        [ "$any" = 0 ] && { echo "  ── your own (.conf/, gitignored) ──"; any=1; }
+        printf '  %-10s %s\n' "$name" "$(profile_desc "$name")"
+    done
+}
+
+# Interactive picker: numbered list of profiles + "create" + "quit". Sets the
+# global PROFILES array, or exits. Shown when a build is requested on a TTY with
+# no profile named.
+pick_profile() {
+    local -a names=()
+    local f
+    for f in "${PROFILES_DIR}"/*.conf; do
+        [ -e "$f" ] || continue
+        names+=("$(basename "${f%.conf}")")
+    done
+    for f in "${LOCAL_PROFILES_DIR}"/*.conf; do
+        [ -e "$f" ] || continue
+        names+=("$(basename "${f%.conf}")")
+    done
+
+    echo ""
+    print_banner
+    echo ""
+    echo "Which would you like to build? BLADE is a development framework, so you"
+    echo "pick a profile rather than building everything."
+    echo ""
+    local i=1 n
+    for n in "${names[@]}"; do
+        printf '  %2d  %-10s %s\n' "$i" "$n" "$(profile_desc "$n")"
+        i=$((i + 1))
+    done
+    echo "   c  create a new profile (pick modules interactively)"
+    echo "   q  quit"
+    echo ""
+
+    local choice
+    while true; do
+        read -r -p "  profile: " choice || choice="q"
+        case "$choice" in
+            q|Q|"") echo "No profile chosen — nothing built."; exit 1 ;;
+            c|C)    init_profile; return ;;
+            *[!0-9]*) echo "  please enter a number, or c / q: ${choice}" ;;
+            *)      if [ "$choice" -ge 1 ] && [ "$choice" -le "${#names[@]}" ]; then
+                        PROFILES=("${names[$((choice - 1))]}"); return
+                    fi
+                    echo "  out of range: ${choice}" ;;
+        esac
+    done
+}
+
+# Read one keystroke, mapping arrows/space/enter/q to words. Mirrors blade.sh's
+# _read_key: an Esc is followed by a short timed read to tell a lone Esc from an
+# arrow sequence. On EOF (no TTY, closed pipe) it returns 'quit' so --init fails
+# safe. j/k double for down/up.
+_INIT_ESC_T=0.05; [ "${BASH_VERSINFO[0]}" -lt 4 ] && _INIT_ESC_T=1
+_init_read_key() {
+    local k r
+    IFS= read -rsn1 k 2>/dev/null || { printf 'quit'; return; }
+    case "$k" in
+        $'\e') IFS= read -rsn2 -t "$_INIT_ESC_T" r 2>/dev/null || r=""
+               case "$r" in
+                   '[A'|'OA') printf 'up' ;;
+                   '[B'|'OB') printf 'down' ;;
+                   *)         printf 'other' ;;
+               esac ;;
+        ' ')            printf 'space' ;;
+        ''|$'\n'|$'\r') printf 'enter' ;;
+        j|J)            printf 'down' ;;
+        k|K)            printf 'up' ;;
+        q|Q)            printf 'quit' ;;
+        *)              printf 'other' ;;
+    esac
+}
+
+# The --init profile builder: a blade.sh-style accordion. Every discovered module
+# is grouped by tier; exactly one tier is expanded (the one the cursor is in),
+# the rest collapse to a header with an n/total count. Up/Down (or j/k) move the
+# cursor and flow between tiers; Space toggles the item under the cursor (or, on
+# a tier header, every item in that tier); Enter saves + builds; q quits. The
+# cursor row is marked with a '›' AND inverse video, and checkboxes are [x]/[ ] —
+# shape and position carry the state, never color. Writes .conf/<name>.conf in
+# the bare-name format read_modules parses, then sets PROFILES.
+init_profile() {
+    # Discovered modules with their tier, in discovery order (same set as
+    # discover_modules; contiguous per tier because the outer loop is the tier).
+    local -a mods=() tiers=()
+    local tier dir name
+    for tier in libs admin services test proto apps; do
+        for dir in "${SCRIPT_DIR}/${tier}"/*/; do
+            [ -e "$dir" ] || continue
+            name=$(basename "$dir")
+            [ "$name" = "applications" ] && continue
+            [ -f "${dir}pom.xml" ] || continue
+            mods+=("$name"); tiers+=("$tier")
+        done
+    done
+    if [ "${#mods[@]}" -eq 0 ]; then
+        echo "No modules found to choose from." >&2; exit 1
+    fi
+
+    # Pre-check the base profile's module set. Membership is a padded string
+    # (bash 3.2 has no associative arrays).
+    local checked=" " base_conf m
+    base_conf=$(profile_conf_path "$BASE_PROFILE")
+    if [ -n "$base_conf" ]; then
+        while IFS= read -r m; do
+            [ -n "$m" ] && checked="${checked}${m} "
+        done <<< "$(read_modules "$base_conf")"
+    fi
+    _chk_has() { case "$checked" in *" $1 "*) return 0 ;; esac; return 1; }
+
+    # Build the linear position list: one header per tier, then that tier's items.
+    # pos_cat = tier id, pos_mod = global module index (-1 for a header row).
+    # Rendering expands only the cursor's tier, but the cursor walks every row, so
+    # moving past a tier's last item lands on the next header and flows onward.
+    local -a pos_cat=() pos_mod=()
+    local gi prev="__none__"
+    for gi in "${!mods[@]}"; do
+        if [ "${tiers[$gi]}" != "$prev" ]; then
+            prev="${tiers[$gi]}"
+            pos_cat+=("$prev"); pos_mod+=("-1")   # header row
+        fi
+        pos_cat+=("${tiers[$gi]}"); pos_mod+=("$gi")
+    done
+    local npos=${#pos_cat[@]}
+
+    # Count checked / total modules in a tier (for the header badge).
+    _tier_stats() {
+        local t="$1" n=0 tot=0 g
+        for g in "${!mods[@]}"; do
+            [ "${tiers[$g]}" = "$t" ] || continue
+            tot=$((tot + 1)); _chk_has "${mods[$g]}" && n=$((n + 1))
+        done
+        printf '%d/%d' "$n" "$tot"
+    }
+
+    # Start on the first item (first row after the first header).
+    local cursor=1
+
+    local tty=0; [ -t 1 ] && tty=1
+    # `return 0` matters under `set -e`: without it, a false `[ tty = 1 ]` test
+    # makes the function return 1 and aborts the script (e.g. non-TTY --init).
+    _home()  { [ "$tty" = 1 ] && printf '\e[H\e[J'; return 0; }
+    _show()  { [ "$tty" = 1 ] && printf '\e[?25h'; return 0; }
+    _hide()  { [ "$tty" = 1 ] && printf '\e[?25l'; return 0; }
+    # Restore the cursor if the user interrupts.
+    trap '_show; exit 130' INT
+    _hide
+
+    local key expanded p c mi arrow box label pre
+    while true; do
+        _home
+        echo ""
+        print_banner
+        echo ""
+        echo "  Build a profile — choose the modules to include:"
+        echo ""
+        expanded="${pos_cat[$cursor]}"
+        for p in $(seq 0 $((npos - 1))); do
+            c="${pos_cat[$p]}"; mi="${pos_mod[$p]}"
+            [ "$p" = "$cursor" ] && pre="›" || pre=" "
+            if [ "$mi" = "-1" ]; then
+                [ "$c" = "$expanded" ] && arrow="▾" || arrow="▸"
+                label=$(printf '%s %-9s %s' "$arrow" "$(echo "$c" | tr '[:lower:]' '[:upper:]')" "($(_tier_stats "$c"))")
+            else
+                [ "$c" = "$expanded" ] || continue
+                box="[ ]"; _chk_has "${mods[$mi]}" && box="[x]"
+                label=$(printf '    %s %s' "$box" "${mods[$mi]}")
+            fi
+            if [ "$p" = "$cursor" ] && [ "$tty" = 1 ]; then
+                printf '\e[7m %s %s \e[0m\n' "$pre" "$label"
+            else
+                printf ' %s %s\n' "$pre" "$label"
+            fi
+        done
+        echo ""
+        echo "  ↑/↓ move · space toggle · enter save & build · q quit"
+
+        key=$(_init_read_key)
+        case "$key" in
+            up)    [ "$cursor" -gt 0 ] && cursor=$((cursor - 1)) ;;
+            down)  [ "$cursor" -lt $((npos - 1)) ] && cursor=$((cursor + 1)) ;;
+            space)
+                mi="${pos_mod[$cursor]}"
+                if [ "$mi" != "-1" ]; then
+                    local sel="${mods[$mi]}"
+                    if _chk_has "$sel"; then checked="${checked/ $sel / }"
+                    else checked="${checked}${sel} "; fi
+                else
+                    # Header: toggle the whole tier (all on → all off, else all on).
+                    c="${pos_cat[$cursor]}"; local g all=1
+                    for g in "${!mods[@]}"; do
+                        [ "${tiers[$g]}" = "$c" ] || continue
+                        _chk_has "${mods[$g]}" || { all=0; break; }
+                    done
+                    for g in "${!mods[@]}"; do
+                        [ "${tiers[$g]}" = "$c" ] || continue
+                        local mm="${mods[$g]}"
+                        if [ "$all" = 1 ]; then checked="${checked/ $mm / }"
+                        elif ! _chk_has "$mm"; then checked="${checked}${mm} "; fi
+                    done
+                fi ;;
+            enter) break ;;
+            quit)  _home; _show; trap - INT; echo "No profile created."; exit 1 ;;
+            *) ;;
+        esac
+    done
+    _home; _show; trap - INT
+
+    local -a selected=()
+    local mm
+    for mm in "${mods[@]}"; do _chk_has "$mm" && selected+=("$mm"); done
+    if [ "${#selected[@]}" -eq 0 ]; then
+        echo "No modules selected — nothing to build."; exit 1
+    fi
+    echo "Selected ${#selected[@]} modules."
+
+    local pname=""
+    while [ -z "$pname" ]; do
+        read -r -p "  name this profile: " pname || { echo "Aborted."; exit 1; }
+        case "$pname" in
+            "") ;;
+            *[!A-Za-z0-9_-]*) echo "  use letters, digits, - or _ only"; pname="" ;;
+            *) if [ -f "${PROFILES_DIR}/${pname}.conf" ]; then
+                   echo "  '${pname}' is a built-in profile — pick another name"; pname=""
+               fi ;;
+        esac
+    done
+
+    mkdir -p "$LOCAL_PROFILES_DIR"
+    local out="${LOCAL_PROFILES_DIR}/${pname}.conf"
+    {
+        echo "# desc: your own selection of ${#selected[@]} modules (via ./build.sh --init)"
+        echo "# Gitignored (.conf/); yours alone. Bare module names, one per line."
+        echo "# Rebuild it any time with:  ./build.sh ${pname}"
+        echo ""
+        for mm in "${selected[@]}"; do echo "$mm"; done
+    } > "$out"
+    echo "Wrote ${out}"
+
+    PROFILES=("$pname")
+}
+
+# --- Parse arguments: collect the profile, one platform, and Maven args ---
 PROFILES=()
 PLATFORM=""
 MAVEN_ARGS=()
+LIST_ONLY=false
+INIT_REQUESTED=false
 
 # Sticky dev-mode switch: BLADE_SKIP_DIST=1 in the env disables dist copying.
 # The CLI flag --no-dist always wins (for one-off explicit override).
@@ -535,12 +847,16 @@ for arg in "$@"; do
         BLADE_MODE=prod
     elif [ "$arg" = "--dev" ]; then
         BLADE_MODE=dev
+    elif [ "$arg" = "--list" ]; then
+        LIST_ONLY=true
+    elif [ "$arg" = "--init" ]; then
+        INIT_REQUESTED=true
     elif [ "$arg" = "cleanAll" ]; then
         REMOVE_ALL_DIST=true
         MAVEN_ARGS+=("clean")
     elif [[ "$arg" == -* ]]; then
         MAVEN_ARGS+=("$arg")
-    elif [ -f "${PROFILES_DIR}/${arg}.conf" ]; then
+    elif [ -n "$(profile_conf_path "$arg")" ]; then
         PROFILES+=("$arg")
     elif [ -z "$PLATFORM" ] && [ -f "${PLATFORMS_DIR}/${arg}.conf" ]; then
         PLATFORM="$arg"
@@ -549,13 +865,26 @@ for arg in "$@"; do
     fi
 done
 
+# --list: print what's available and stop, before any build setup.
+if [ "$LIST_ONLY" = true ]; then
+    list_profiles
+    exit 0
+fi
+
+# --init: build a new profile interactively now; it sets PROFILES so the build
+# below proceeds with it. (Runs before platform/goal setup — it only needs the
+# module tree.)
+if [ "$INIT_REQUESTED" = true ]; then
+    init_profile
+fi
+
 # Note: the old -Dblade.skip.dist flag (read by services/pom.xml's copy-dist
 # exec step) is no longer passed — that exec step is commented out along with
 # the EAR. The dist copy is now done entirely from build.sh, gated by SKIP_DIST.
 
-if [ ${#PROFILES[@]} -eq 0 ]; then
-    PROFILES=("$DEFAULT_PROFILE")
-fi
+# A profile is now required for any build, but the requirement is enforced AFTER
+# goal classification below (clean-only runs are exempt), so nothing is defaulted
+# here. PROFILES may still be empty at this point.
 if [ -z "$PLATFORM" ]; then
     PLATFORM="$DEFAULT_PLATFORM"
     PLATFORM_SOURCE="$DEFAULT_PLATFORM_SOURCE"
@@ -731,6 +1060,31 @@ elif [ "$HAS_INSTALL" = false ] && [ "$HAS_BUILD_GOAL" = true ]; then
     MAVEN_GOALS+=("install")
 fi
 
+# --- Require a profile for any build (clean-only runs are exempt) ---
+# A build compiles/produces artifacts, and the admin EAR's contents are derived
+# from the profile's module set — so a build must name one. A clean-only run
+# (HAS_BUILD_GOAL=false) has no module allowlist and cleans the whole reactor, so
+# it needs no profile: that keeps profile-free callers like `./build.sh clean`
+# working. On a TTY we offer a picker; without one we fail loudly (never hang).
+if [ ${#PROFILES[@]} -eq 0 ] && [ "$HAS_BUILD_GOAL" = true ]; then
+    if [ -t 0 ] && [ -t 1 ]; then
+        pick_profile
+    else
+        # No terminal to prompt at (CI, a wrapping build script). Ask politely,
+        # but still exit non-zero so the caller knows the build didn't run.
+        print_banner >&2
+        echo "" >&2
+        echo "Please name a build profile — BLADE builds what you ask for, not" >&2
+        echo "everything by default." >&2
+        echo "" >&2
+        list_profiles >&2
+        echo "" >&2
+        echo "e.g.  ./build.sh ${BASE_PROFILE}      ( ./build.sh --list to see them," >&2
+        echo "                          ./build.sh --init to make your own )" >&2
+        exit 1
+    fi
+fi
+
 # --- Purge installed BLADE artifacts on clean ---
 # `mvn clean` only reaches target/; installed artifacts in ~/.m2 are the
 # other place build output lands, and version-range consumers (optum's
@@ -798,14 +1152,25 @@ if [ ${#PROFILES[@]} -gt 1 ]; then
     exit 1
 fi
 
-PROFILE="${PROFILES[0]}"
-CONF_FILE="${PROFILES_DIR}/${PROFILE}.conf"
-INCLUDED_MODULES=$(read_modules "$CONF_FILE")
+if [ ${#PROFILES[@]} -eq 0 ]; then
+    # Clean-only run with no profile (the only way PROFILES is still empty here —
+    # a build would have required one above). No allowlist, so no -Dskip flags:
+    # the clean reaches the whole reactor. Dist copy is already forced off for
+    # clean-only runs, so PROFILE/CONF_FILE are display-only.
+    PROFILE="(clean-only — no profile)"
+    CONF_FILE=""
+    INCLUDED_MODULES=""
+    SKIP_FLAGS=()
+else
+    PROFILE="${PROFILES[0]}"
+    CONF_FILE="$(profile_conf_path "$PROFILE")"
+    INCLUDED_MODULES=$(read_modules "$CONF_FILE")
 
-SKIP_FLAGS=()
-while IFS= read -r flag; do
-    [ -n "$flag" ] && SKIP_FLAGS+=("$flag")
-done < <(compute_skip_flags "$CONF_FILE" "$ALL_MODULES")
+    SKIP_FLAGS=()
+    while IFS= read -r flag; do
+        [ -n "$flag" ] && SKIP_FLAGS+=("$flag")
+    done < <(compute_skip_flags "$CONF_FILE" "$ALL_MODULES")
+fi
 
 INCLUDED_COUNT=$(echo "$INCLUDED_MODULES" | wc -l | tr -d ' ')
 

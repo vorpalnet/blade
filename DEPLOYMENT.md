@@ -73,7 +73,7 @@ The production SIP applications themselves (ACL, Analytics, Hold, Proxy-Registra
 ## Quick start
 
 ```bash
-./build.sh production                 # produce dist/<ver>-<build>/ (admin EAR + service WARs)
+./build.sh default                    # produce dist/<ver>-<build>/ (admin EAR + service WARs)
 cp build-profiles/deploy/production.secret.example \
    build-profiles/deploy/production.secret
 chmod 600 build-profiles/deploy/production.secret
@@ -153,7 +153,7 @@ Password sourcing priority (highest wins):
 
 This is the one tier that isn't a WebLogic deployment, so it's worth spelling out.
 
-1. Build: `./build.sh production` produces the fat JAR in `dist/<ver>-<build>/`:
+1. Build: `./build.sh default` produces the fat JAR in `dist/<ver>-<build>/`:
    - `blade-fsmar.jar` — FSMAR (the App Router)
 2. Put the JAR in the OCCAS domain's `approuter/` directory on every engine-tier host:
    ```
