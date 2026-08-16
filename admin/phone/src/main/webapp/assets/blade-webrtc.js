@@ -25,7 +25,6 @@ const EVENT = {
   CALL_ANSWER: 'call.answer',
   CALL_HANGUP: 'call.hangup',
   CALL_DTMF: 'call.dtmf',
-  CALL_RECORD: 'call.record',
   // gateway -> browser
   SESSION_READY: 'session.ready',
   CALL_INCOMING: 'call.incoming',
@@ -210,18 +209,6 @@ export class BladePhone {
     this.#send(EVENT.CALL_DTMF, this.callId, { digit: String(digit) });
   }
 
-  /**
-   * Start or stop recording this call.
-   *
-   * On a relayed (peer-to-peer) call, turning this on makes the gateway pull a media server in,
-   * which arrives as a `call.update` and re-keys the connection. The media between two browsers is
-   * encrypted end to end, so there is no way to record it without doing that.
-   */
-  record(on = true) {
-    if (!this.callId) return;
-    this.#send(EVENT.CALL_RECORD, this.callId, { on });
-  }
-
   /** Mute or unmute the microphone locally. */
   setMuted(muted) {
     if (!this.localStream) return;
@@ -262,8 +249,8 @@ export class BladePhone {
 
       case EVENT.CALL_UPDATE: {
         // A fresh offer for a call already in progress — this is how the gateway drops a media
-        // server into a peer-to-peer call so it can be recorded. It is a full re-key: new ICE
-        // credentials and a new DTLS handshake, so expect a short gap in the audio.
+        // server into a peer-to-peer call, putting its audio somewhere reachable. A full re-key:
+        // new ICE credentials and a new DTLS handshake, so expect a short gap in the audio.
         this.callId = event.subject;
         // Escalation puts a media server in the path, and it does not take trickled candidates —
         // so from here the complete SDP carries them.

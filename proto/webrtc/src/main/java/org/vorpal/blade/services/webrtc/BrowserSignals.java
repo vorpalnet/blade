@@ -51,9 +51,8 @@ public final class BrowserSignals {
 
 	/// Wait for **every** `eventType` from the browser, not just the next one.
 	///
-	/// For events that recur across a call — trickled ICE candidates, DTMF digits, a record button
-	/// toggled on and off — where re-arming after each one would be noise and would leave a window
-	/// in which an event is dropped.
+	/// For events that recur across a call — trickled ICE candidates, DTMF digits — where re-arming
+	/// after each one would be noise and would leave a window in which an event is dropped.
 	public static void expectRepeating(SipApplicationSession app, String eventType,
 			Callback<CloudEvent> continuation) {
 		app.setAttribute(BROWSER_CB_ + eventType, continuation);

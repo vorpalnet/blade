@@ -25,7 +25,7 @@ const els = {
   micState: $('mic-state'), rxState: $('rx-state'),
   factPath: $('fact-path'), factIce: $('fact-ice'), factPair: $('fact-pair'), factCodec: $('fact-codec'),
   btn: {
-    call: $('btn-call'), hangup: $('btn-hangup'), mute: $('btn-mute'), record: $('btn-record'),
+    call: $('btn-call'), hangup: $('btn-hangup'), mute: $('btn-mute'),
     answer: $('btn-answer'), decline: $('btn-decline'), back: $('btn-back'),
     register: $('btn-register'), unregister: $('btn-unregister'),
   },
@@ -33,7 +33,6 @@ const els = {
 
 let phone = null;
 let muted = false;
-let recording = false;
 let callStartedAt = 0;
 let timerHandle = null;
 
@@ -270,7 +269,6 @@ function setState(state) {
   els.btn.call.disabled = state !== 'registered';
   els.btn.hangup.disabled = !onCall;
   els.btn.mute.disabled = state !== 'established';
-  els.btn.record.disabled = state !== 'established';
   els.btn.register.disabled = registered;
   els.btn.unregister.disabled = !registered;
 
@@ -450,13 +448,12 @@ els.btn.register.addEventListener('click', async () => {
   };
   phone.onRenegotiated = () => {
     log('renegotiated — media server now in the path');
-    els.factPath.textContent = 'anchored (recording)';
+    els.factPath.textContent = 'anchored';
     els.factPath.dataset.strong = 'false';
   };
   phone.onEnded = (d) => {
     log(`call ended: ${d.reason ?? 'normal'}`);
-    setParty(null); resetFacts(); recording = false;
-    els.btn.record.setAttribute('aria-pressed', 'false');
+    setParty(null); resetFacts();
     paintMeter($('meter-mic'), 0); paintMeter($('meter-rx'), 0);
     els.micState.textContent = els.rxState.textContent = 'idle';
   };
@@ -505,16 +502,6 @@ els.btn.mute.addEventListener('click', () => {
   els.btn.mute.setAttribute('aria-pressed', String(muted));
   els.btn.mute.textContent = muted ? 'Unmute' : 'Mute';
   log(muted ? 'microphone muted' : 'microphone live', 'out');
-});
-
-els.btn.record.addEventListener('click', () => {
-  recording = !recording;
-  phone.record(recording);
-  els.btn.record.setAttribute('aria-pressed', String(recording));
-  els.btn.record.innerHTML = recording
-    ? '<span class="phone-btn-icon" aria-hidden="true">&#9632;</span> Stop recording'
-    : '<span class="phone-btn-icon" aria-hidden="true">&#9679;</span> Record';
-  log(recording ? 'recording requested' : 'recording stopped', 'out');
 });
 
 // ---------------------------------------------------------------- keyboard

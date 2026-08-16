@@ -6,8 +6,30 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-/// The browser signaling vocabulary: sixteen event types in CloudEvents 1.0 envelopes, carried as
+/// The browser signaling vocabulary: fourteen event types in CloudEvents 1.0 envelopes, carried as
 /// text frames over one WebSocket.
+///
+/// ## Two verbs that were declared and are deliberately gone
+///
+/// **`call.accept`** meant "yes, without SDP" — accepting a call before its media was negotiated.
+/// There is no SIP message it can honestly produce. Both answer paths build the `200 OK` out of an
+/// SDP only the browser has: pass-through puts the browser's own answer in it, and the anchored path
+/// needs the browser leg negotiated before the legs can be joined. Answering the network early would
+/// start a call whose browser has no media path yet — dead air on an answered call — and a `183`
+/// instead tends to stop the caller's ringback, replacing a ringing tone with silence for as long as
+/// ICE gathering takes. Neither beats waiting for [#CALL_ANSWER], which is a moment away.
+///
+/// **`call.record`** was a browser asking this gateway to record. Recording is not this
+/// application's job: it belongs to a recording service, and routing a browser's button through a
+/// gateway with no recording responsibility only re-creates the coupling that separation exists to
+/// remove. What the gateway owes such a service is the one thing only it can decide — whether the
+/// call's media is anchored at all — and that is [MediaMode], a configuration field, not an event.
+/// A relayed call cannot be recorded by anyone, this gateway included, because its two endpoints
+/// key DTLS to each other and the signaling path never sees the secret.
+///
+/// Both were removed rather than left declared-and-inert, because the whole point of a vocabulary
+/// this small is that reading it tells you what the protocol does. Restoring either is one constant
+/// and one `case`.
 ///
 /// ## Why not SIP over WebSocket
 ///
@@ -51,18 +73,10 @@ public final class SignalProtocol {
 	public static final String CALL_OFFER = "call.offer";
 	/// Answer a call we offered. `data.sdp` is the browser's complete answer.
 	public static final String CALL_ANSWER = "call.answer";
-	/// Accept an incoming call before media is negotiated (ringing -> answered).
-	public static final String CALL_ACCEPT = "call.accept";
 	/// Hang up, or decline a call that is still ringing.
 	public static final String CALL_HANGUP = "call.hangup";
 	/// Send a DTMF digit on an established call. `data.digit`.
 	public static final String CALL_DTMF = "call.dtmf";
-	/// Start or stop recording this call. `data.on` is a boolean.
-	///
-	/// Acted on only when the call is anchored. On a pass-through call this is currently ignored:
-	/// pulling the media server into an established peer-to-peer call is a re-key of both legs —
-	/// see [#CALL_UPDATE] — and that escalation is designed but not yet rebuilt for the SIP path.
-	public static final String CALL_RECORD = "call.record";
 
 	// ---- gateway -> browser -------------------------------------------------------------------
 
@@ -110,10 +124,10 @@ public final class SignalProtocol {
 	/// [#CALL_ANSWER].
 	///
 	/// This is a re-INVITE by another name, and without it the media path of a call could never
-	/// change after setup. It is what lets a peer-to-peer call become a recorded conference.
+	/// change after setup. It is what lets a relayed call be moved onto a media server.
 	///
-	/// The reason that transition needs a fresh offer at all — rather than quietly adding a
-	/// recorder — is cryptographic. In a relayed call the two browsers complete a DTLS handshake
+	/// The reason moving it needs a fresh offer at all — rather than quietly inserting a server
+	/// alongside — is cryptographic. In a relayed call the two browsers complete a DTLS handshake
 	/// directly with each other and derive their SRTP keys from a master secret the signaling path
 	/// never sees (RFC 8827 is built that way). The gateway forwarded fingerprints and nothing more,
 	/// so it cannot decrypt a single packet. The only way in is to re-offer **both** legs from the

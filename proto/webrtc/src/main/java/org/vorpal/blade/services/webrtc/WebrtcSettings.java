@@ -1,6 +1,8 @@
 package org.vorpal.blade.services.webrtc;
 
 import java.io.Serializable;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.vorpal.blade.framework.v2.config.Configuration;
 import org.vorpal.blade.framework.v3.configuration.SchemaAbout;
@@ -44,6 +46,8 @@ public class WebrtcSettings extends Configuration implements Serializable {
 	private JwtAuthConfig jwt = defaultJwt();
 	private Integer registerExpiresSeconds = 3600;
 	private MediaMode mediaMode = MediaMode.AUTO;
+	private String driverName;
+	private Map<String, String> driverProperties = new LinkedHashMap<>();
 
 	private static JwtAuthConfig defaultJwt() {
 		JwtAuthConfig cfg = new JwtAuthConfig();
@@ -79,5 +83,23 @@ public class WebrtcSettings extends Configuration implements Serializable {
 
 	public void setMediaMode(MediaMode mediaMode) {
 		this.mediaMode = (mediaMode == null) ? MediaMode.AUTO : mediaMode;
+	}
+
+	@JsonPropertyDescription("Which JSR-309 driver supplies the media server, by its driver name. Leave blank to use the single registered driver, which is the usual case. Naming a driver that is not installed is reported at startup and leaves the gateway with no media plane — browser-to-browser calls still work, calls to phones do not.")
+	public String getDriverName() {
+		return driverName;
+	}
+
+	public void setDriverName(String driverName) {
+		this.driverName = driverName;
+	}
+
+	@JsonPropertyDescription("Properties handed to the JSR-309 driver verbatim when the media server factory is created — typically the media server's WebSocket URL, and the STUN/TURN and public-address settings a browser needs to find a media path (stun.address, stun.port, turn.url, external.ipv4, network.interfaces). Each driver documents the keys it understands; this gateway does not interpret any of them. Read once at deployment: the factory is built at startup and is not rebuilt when configuration is republished, so a change here needs a redeploy to take effect.")
+	public Map<String, String> getDriverProperties() {
+		return driverProperties;
+	}
+
+	public void setDriverProperties(Map<String, String> driverProperties) {
+		this.driverProperties = (driverProperties == null) ? new LinkedHashMap<>() : driverProperties;
 	}
 }

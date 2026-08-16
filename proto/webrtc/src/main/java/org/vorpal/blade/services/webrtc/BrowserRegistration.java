@@ -1,8 +1,10 @@
 package org.vorpal.blade.services.webrtc;
 
 import javax.servlet.sip.Address;
+import javax.servlet.sip.ServletTimer;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
+import javax.servlet.sip.SipServletResponse;
 import javax.servlet.sip.SipURI;
 
 import org.vorpal.blade.framework.v3.Callflow;
@@ -61,12 +63,37 @@ import org.vorpal.blade.framework.v3.Callflow;
 /// for one AOR would share the session and its continuation slots. A browser
 /// tab is a one-call phone, so that is the honest shape, not a limitation.
 ///
-/// No refresh timer yet — a browser re-registers on every reconnect, and a tab
-/// older than [WebrtcSettings#getRegisterExpiresSeconds] ages out of the
-/// location service until it reconnects. No digest handling — the internal
-/// registrar never challenges.
+/// ## Refreshing
+///
+/// A binding lapses, so it has to be renewed. A timer armed on the registration session
+/// re-REGISTERs shortly before expiry, and because the session is the same one by key, a refresh,
+/// a page reload and an inbound call all still meet in one place.
+///
+/// Three things about the timer are deliberate:
+///
+/// - **It is armed in the `2xx` callback, not at startup.** A timer created during servlet
+///   initialization does not fire on this container; one armed inside a live request context does.
+///   `services/gateway/RegisterCallflow` learned this the hard way and says so.
+/// - **It refreshes at the *granted* expiry, not the requested one.** A registrar is free to shorten
+///   a binding, and refreshing on the value we asked for would let it lapse before the timer came
+///   round.
+/// - **It stops when the socket does.** If the browser is no longer connected to this node the timer
+///   cancels itself rather than re-asserting a contact that names an engine which can no longer
+///   deliver. Letting the binding lapse is the honest outcome; a browser that reconnects registers
+///   again from wherever it lands.
+///
+/// No digest handling — the internal registrar never challenges.
 public class BrowserRegistration extends Callflow {
 	private static final long serialVersionUID = 1L;
+
+	/// How long before expiry to refresh. Enough to survive a slow round trip without making the
+	/// refresh rate meaningfully higher than the binding requires.
+	private static final long REFRESH_MARGIN_SECONDS = 30;
+
+	/// [SipApplicationSession] attribute (String): the refresh timer's id. It lives on the session
+	/// rather than in a field because this callflow is created fresh for every register — there is
+	/// no long-lived object to hold it.
+	private static final String REFRESH_TIMER = "org.vorpal.blade.webrtc.refreshTimer";
 
 	@Override
 	public void process(SipServletRequest request) {
@@ -102,8 +129,18 @@ public class BrowserRegistration extends Callflow {
 		// way for the same reason.
 		sas.setInvalidateWhenReady(false);
 		// Outlive the binding by a margin so the session is still there to
-		// receive a call placed just before the registration would lapse.
+		// receive a call placed just before the registration would lapse. This
+		// also has to outlive the refresh timer that lives on it: the timer
+		// fires at expires-30s while the session runs to expires+2min, and each
+		// refresh re-runs this line, so the session is renewed for as long as
+		// refreshing continues and is reaped once it stops.
 		sas.setExpires(Math.max(2, (expires / 60) + 2));
+
+		if (expires == 0) {
+			// Deregistering. Stop refreshing before the binding goes, or the timer would put it
+			// straight back.
+			stopRefresh(sas);
+		}
 
 		// From = To = the AOR: the registrar keys its per-address session on
 		// getAccountName(From), so this is what files the binding under the
@@ -122,6 +159,9 @@ public class BrowserRegistration extends Callflow {
 			if (successful(response)) {
 				sipLogger.info("webrtc: " + verb + " " + aor + " -> " + response.getStatus()
 						+ " (contact " + response.getRequest().getHeader("Contact") + ", expires " + expires + "s)");
+				if (expires > 0) {
+					armRefresh(aor, grantedExpires(response, expires));
+				}
 			} else {
 				// The browser stays connected either way; this only costs
 				// reachability from the SIP side, which is worth a loud line.
@@ -129,6 +169,58 @@ public class BrowserRegistration extends Callflow {
 						+ " " + response.getReasonPhrase());
 			}
 		});
+	}
+
+	// ---- refresh ------------------------------------------------------------------------------
+
+	/// Start refreshing this binding, once. A page reload re-registers on the same by-key session,
+	/// so without the guard every reload would leave another timer running against it.
+	private void armRefresh(String aor, int expires) {
+		SipApplicationSession sas = getSipFactory().createApplicationSessionByKey(aor);
+		if (sas.getAttribute(REFRESH_TIMER) != null) {
+			return;
+		}
+		long periodMs = Math.max(30, expires - REFRESH_MARGIN_SECONDS) * 1000L;
+		String timerId = startTimer(sas, periodMs, periodMs, false, false, timer -> onRefresh(aor, timer));
+		sas.setAttribute(REFRESH_TIMER, timerId);
+		sipLogger.info("webrtc: refreshing " + aor + " every " + (periodMs / 1000) + "s");
+	}
+
+	/// Renew the binding, or give up on it.
+	private void onRefresh(String aor, ServletTimer timer) throws Exception {
+		SipApplicationSession sas = timer.getApplicationSession();
+		if (sas == null || !sas.isValid()) {
+			return;
+		}
+		if (!BrowserRegistry.isLocal(aor)) {
+			// No socket here: either the browser disconnected without a clean close, or this
+			// session failed over to a node that never held it. Either way the registered contact
+			// names an engine that cannot deliver, and re-asserting it would keep a dead address
+			// alive in the location service. Let the binding lapse — a browser that comes back
+			// registers again from wherever it lands.
+			stopRefresh(sas);
+			sipLogger.info("webrtc: stopped refreshing " + aor + "; no socket on this node");
+			return;
+		}
+		send(aor, WebrtcServlet.registerExpiresSeconds());
+	}
+
+	/// Cancel the refresh timer if one is armed. Safe to call when none is.
+	private static void stopRefresh(SipApplicationSession sas) {
+		String timerId = (String) sas.getAttribute(REFRESH_TIMER);
+		if (timerId != null) {
+			// By id, never `stopTimers` — this session is shared with whatever call the browser
+			// happens to be on, and its timers are not ours to cancel.
+			stopTimer(sas, timerId);
+			sas.removeAttribute(REFRESH_TIMER);
+		}
+	}
+
+	/// What the registrar actually granted, which it is free to shorten. Refreshing on the value we
+	/// asked for would let a shortened binding lapse before the timer came round.
+	private static int grantedExpires(SipServletResponse response, int requested) {
+		int granted = response.getExpires();
+		return (granted > 0) ? granted : requested;
 	}
 
 	/// The routable contact: this engine's SIP interface, the browser's user

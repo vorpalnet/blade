@@ -1,9 +1,6 @@
 package org.vorpal.blade.services.webrtc;
 
-import java.util.Enumeration;
 import java.util.Properties;
-
-import java.util.Iterator;
 import java.util.ServiceLoader;
 
 import javax.media.mscontrol.spi.Driver;
@@ -32,9 +29,10 @@ import org.vorpal.blade.framework.v3.security.JwtAuthConfig;
 /// driver, with its properties passed through verbatim — and **failing to find one is not fatal**.
 /// Browser-to-browser calls are relayed peer-to-peer and never touch a media server, so a
 /// deployment with no media plane at all still places and receives calls between browsers. What it
-/// cannot do is reach the PSTN, or record: both need a media server, the first because a phone
-/// cannot speak ICE or DTLS-SRTP, the second because two browsers' media is encrypted to each other
-/// and cannot be tapped.
+/// cannot do is reach a phone, because a phone cannot speak ICE or DTLS-SRTP and something has to
+/// terminate one side and speak the other. Nor can any downstream service — recording,
+/// transcription, conferencing — get at a relayed call's audio, which is encrypted directly between
+/// the two browsers; anchoring is what makes media available to anything at all.
 @WebListener
 @SipApplication(distributable = true)
 @SipServlet(loadOnStartup = 1)
@@ -80,13 +78,23 @@ public class WebrtcServlet extends AsyncSipServlet {
 		}
 
 		try {
-			Driver driver = findDriver();
+			WebrtcSettings current = (settings == null) ? null : settings.getCurrent();
+			String wanted = (current == null) ? null : current.getDriverName();
+			Driver driver = findDriver(wanted);
 			if (driver == null) {
-				sipLogger.info("WebrtcServlet: no JSR-309 driver registered — "
-						+ "browser-to-browser calls will work; PSTN and recording will not");
+				if (wanted != null && !wanted.isEmpty()) {
+					// Asked for a specific driver and it is not installed. Still not fatal — the
+					// relayed path needs no media plane — but it is a configuration mistake rather
+					// than a deployment without media, and the two deserve different volumes.
+					sipLogger.severe("WebrtcServlet: no JSR-309 driver named '" + wanted + "' is registered — "
+							+ "check driverName in webrtc.json; calls to phones will not work");
+				} else {
+					sipLogger.info("WebrtcServlet: no JSR-309 driver registered — "
+							+ "browser-to-browser calls will work; calls to phones will not");
+				}
 				return;
 			}
-			MediaCallflow.setMsControlFactory(driver.getFactory(mediaProperties(event)));
+			MediaCallflow.setMsControlFactory(driver.getFactory(mediaProperties(current)));
 			sipLogger.info("WebrtcServlet: media driver '" + driver.getName() + "' installed");
 		} catch (Exception e) {
 			// Don't fail deployment: the relayed path needs nothing from the media plane.
@@ -163,21 +171,34 @@ public class WebrtcServlet extends AsyncSipServlet {
 	/// `DriverManager` on a modern JVM throws `ClassNotFoundException: sun.misc.Service` and, from a
 	/// servlet with `loadOnStartup`, fails the whole deployment. `ServiceLoader` reads exactly the
 	/// same `META-INF/services/javax.media.mscontrol.spi.Driver` entries, so discovery is unchanged.
-	private static Driver findDriver() {
-		Iterator<Driver> drivers = ServiceLoader.load(Driver.class, WebrtcServlet.class.getClassLoader())
-				.iterator();
-		return drivers.hasNext() ? drivers.next() : null;
+	/// @param wanted the configured `driverName`, or null/blank to take whichever driver is
+	///               registered — the usual case, since a deployment installs one
+	private static Driver findDriver(String wanted) {
+		Driver first = null;
+		for (Driver driver : ServiceLoader.load(Driver.class, WebrtcServlet.class.getClassLoader())) {
+			if (wanted != null && !wanted.isEmpty()) {
+				if (wanted.equals(driver.getName())) {
+					return driver;
+				}
+			} else if (first == null) {
+				first = driver;
+			}
+		}
+		return first;
 	}
 
-	/// Driver settings, read from servlet context parameters so a deployment can point the gateway at
-	/// its media server, STUN and TURN without a rebuild. Keys pass through verbatim; each driver
-	/// documents the ones it understands (see the JSR-309 media controller driver's documentation).
-	private static Properties mediaProperties(SipServletContextEvent event) {
+	/// Driver settings from `webrtc.json`, handed to the driver verbatim.
+	///
+	/// These used to be harvested from servlet context init-parameters, which meant the one part of
+	/// this application an operator most needs to change — where the media server is — was the one
+	/// part not in its configuration file. It also swept in every unrelated context parameter the
+	/// container happened to expose. No BLADE application ships a `<context-param>`, so nothing was
+	/// configured this way in practice; `proto/player` already reads the same settings from its own
+	/// configuration, and this matches it.
+	private static Properties mediaProperties(WebrtcSettings current) {
 		Properties properties = new Properties();
-		Enumeration<String> names = event.getServletContext().getInitParameterNames();
-		while (names.hasMoreElements()) {
-			String name = names.nextElement();
-			properties.setProperty(name, event.getServletContext().getInitParameter(name));
+		if (current != null && current.getDriverProperties() != null) {
+			properties.putAll(current.getDriverProperties());
 		}
 		return properties;
 	}

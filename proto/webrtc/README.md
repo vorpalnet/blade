@@ -2,7 +2,8 @@
 
 Puts a browser on one end of a SIP call. JSON events over a WebSocket to the browser,
 ordinary SIP to the network. Two browsers call each other with no media server at all; a
-media server joins when the call reaches the PSTN, or when someone hits record.
+media server joins when the call reaches a phone, or when something downstream needs the
+audio.
 
 ```
 browser ──wss://──> [   webrtc   ] ──SIP──> network
@@ -44,8 +45,10 @@ loggable and visible to analytics. What `MediaMode` decides (`webrtc.json`, defa
   the far answer comes back untouched, so two browsers key DTLS directly to each other and
   need **no media server at all**. Deploy this WAR on its own and browser-to-browser works.
 - **Anchored (ANCHOR)** — a media server's SDP rides the INVITE; required the moment one
-  end is not a browser (a phone cannot speak ICE or DTLS-SRTP) or somebody wants the media
-  (recording, conferencing, transcription, scoring, intercept).
+  end is not a browser (a phone cannot speak ICE or DTLS-SRTP) or anything else needs the
+  audio — recording, conferencing, transcription, scoring, intercept. None of those are
+  features of this gateway; anchoring is simply what makes a call's media reachable by
+  the service that does provide them.
 - **AUTO** — relay when the dialed target is a browser on this node; otherwise anchor when
   a media server is installed and relay when none is.
 
@@ -55,21 +58,46 @@ answering side needs no policy at all: an arriving offer with a DTLS fingerprint
 phone or trunk and anchors. This mirrors `session.passthru` in `v3/Callflow.java:49`,
 where the same callflow runs as a dropped-out proxy or a full B2BUA depending on config.
 
-## Recording a peer-to-peer call is a re-key, not a tap
+## A relayed call's media cannot be reached, by anyone
 
-This is the constraint that shapes everything above. In a relayed call the two browsers
-complete a DTLS handshake **directly with each other** and derive their SRTP keys from a
-master secret the signaling path never sees — RFC 8827 is built so it cannot. The gateway
-forwarded fingerprints and nothing more, so it cannot decrypt a single packet.
+This is the constraint that shapes everything above, and the reason `mediaMode` exists. In
+a relayed call the two browsers complete a DTLS handshake **directly with each other** and
+derive their SRTP keys from a master secret the signaling path never sees — RFC 8827 is
+built so it cannot. The gateway forwarded fingerprints and nothing more, so it cannot
+decrypt a single packet.
 
-So recording a pass-through call means re-offering **both** legs from the media server
-(`call.update`), each browser answering, and the media server becoming a legitimate DTLS
-endpoint on each — at which point it can mix, record and transcribe. Each leg does an ICE
-restart and a fresh handshake, so there is a brief audible gap. That escalation is
-**designed but not currently implemented** — it existed for the retired WebSocket-relay
-path and has to be rebuilt across the two SIP legs of a pass-through call (see the gap
-list). Today, a deployment that wants recording sets `mediaMode: anchor` and pays for a
+That applies to everything downstream too. Recording, transcription, conferencing and
+scoring are not features of this gateway — each belongs to a service of its own — but no
+such service can reach a relayed call either, because the audio never leaves the two
+endpoints. Anchoring is the only thing that puts a call's media somewhere another system
+can use, which is why the choice lives here even though the features do not.
+
+A relayed call can still be moved onto a media server afterwards, by re-INVITE — see below;
+this gateway forwards the new SDP to its browser and answers back. It costs an ICE restart
+and a fresh DTLS handshake, so there is a brief audible gap. A deployment that wants a
+call's media available without that sets `mediaMode: anchor` from the start and pays for a
 media server on every call. That trade is the whole reason the setting exists.
+
+## A re-INVITE is handled, on both paths
+
+A far end re-offers for ordinary reasons — hold, unhold, a session refresh, a codec change —
+and until recently every one of them got a `501`, because `chooseCallflow` answers only
+*initial* INVITEs and a re-offer matched no callflow. It is now handled by an expectation
+armed at answer time, the same mechanism as BYE and CANCEL, and re-armed after each one
+since a call is re-offered repeatedly.
+
+What happens depends on the media path, and the split is the same one everything else in
+this application turns on:
+
+- **Anchored** — the re-offer belongs to the network leg alone. The media server answers it
+  and the browser is never told, because the two negotiations were independent from the
+  start. A no-SDP refresh is answered from the media server with the answer taken from the
+  `ACK`.
+- **Pass-through** — the browser owns both halves, so the SDP goes to it as `call.update`
+  and its answer becomes the `200 OK`. This is the path a far-side escalation arrives on. A
+  re-INVITE with **no** SDP is refused `488` here and only here: it asks this gateway to
+  produce an offer, and without a media server there is nothing to produce one with — a
+  browser cannot be made to offer on demand.
 
 ## Not SIP over WebSocket
 
@@ -85,7 +113,7 @@ or transaction state.
 
 ## The protocol
 
-CloudEvents 1.0 envelopes, subprotocol `blade.webrtc.v1`. Sixteen types, all in
+CloudEvents 1.0 envelopes, subprotocol `blade.webrtc.v1`. Fourteen types, all in
 `SignalProtocol`:
 
 | browser → gateway | gateway → browser |
@@ -93,11 +121,25 @@ CloudEvents 1.0 envelopes, subprotocol `blade.webrtc.v1`. Sixteen types, all in
 | `session.connect` (`aor` + `token`) | `session.ready` |
 | `call.offer` | `call.incoming` |
 | `call.answer` | `call.progress` |
-| `call.accept` | `call.established` |
-| `call.hangup` | `call.connected` |
-| `call.dtmf` | `call.ended` |
-| `call.record` | `call.update` |
-| `ice.candidate` (both directions) | `error` |
+| `call.hangup` | `call.established` |
+| `call.dtmf` | `call.connected` |
+| `ice.candidate` (both directions) | `call.ended` |
+| | `call.update` |
+| | `error` |
+
+**Two verbs were declared once and are deliberately gone.**
+
+`call.accept` meant "yes, without SDP". There is no SIP message it can honestly produce:
+both answer paths build the `200 OK` from an SDP only the browser has, answering the
+network early would start a call whose browser has no media path yet, and a `183` instead
+tends to stop the caller's ringback and replace it with silence for as long as ICE
+gathering takes. `call.answer` is a moment away and does the job properly.
+
+`call.record` was a browser asking this gateway to record. Recording belongs to a service
+of its own; routing a browser's button through a gateway with no recording responsibility
+only re-creates the coupling that separation exists to remove. What the gateway owes such
+a service is the one decision only it can make — whether the call's media is anchored at
+all — and that is `mediaMode`, a configuration field, not an event.
 
 **Answered and connected are two events, because SIP answers a call in three messages.**
 `call.established` is the `200 OK`; `call.connected` is the `ACK` that completes the
@@ -209,12 +251,18 @@ targeted calls land on the registration's session, so a second simultaneous INVI
 for the same AOR would collide with the first's continuations. A browser tab is a
 one-call phone; this is the honest shape, not a limitation.
 
-There is no refresh timer yet: browsers re-register on every reconnect, and a tab
-left open longer than `registerExpiresSeconds` (settings, default 3600) simply ages
-out of the location service until it reconnects — its socket, and browser-to-browser
-calling, are unaffected. When the timer becomes worth building, the gateway service's
-trunk registration (`services/gateway/RegisterCallflow`) is the proven pattern: arm
-`startTimer` in the 2xx callback, resolve the session by a stashed id.
+A binding lapses, so a timer on the registration session re-REGISTERs shortly before
+it does — the pattern `services/gateway/RegisterCallflow` proved: armed in the `2xx`
+callback, because a timer created during servlet initialization does not fire on this
+container. It refreshes at the expiry the registrar **granted**, not the one requested,
+since a registrar may shorten a binding and refreshing on the asked-for value would let
+it lapse early.
+
+The timer stops when the socket does. If the browser is no longer connected to this
+node — it disconnected without a clean close, or the session failed over to a node that
+never held it — the refresh cancels itself instead of re-asserting a contact naming an
+engine that can no longer deliver. Letting the binding lapse is the honest outcome; a
+browser that comes back registers again from wherever it lands.
 
 ## Late media
 
@@ -288,10 +336,13 @@ the two conventions.
   IP, so the provider must be given `external.ipv4` or it will advertise an unreachable
   candidate.
   Both apply only to anchored calls; a relayed browser-to-browser call needs neither.
-- Media-plane settings are passed as servlet context parameters and handed to the JSR-309
-  driver verbatim; see the JSR-309 media controller driver's documentation for the keys it
-  understands (the media server's WebSocket URL, `stun.address`, `stun.port`, `turn.url`,
-  `external.ipv4`, `network.interfaces`).
+- Media-plane settings live in `webrtc.json` under `driverProperties`, and are handed to the
+  JSR-309 driver verbatim; see the driver's own documentation for the keys it understands
+  (the media server's WebSocket URL, `stun.address`, `stun.port`, `turn.url`,
+  `external.ipv4`, `network.interfaces`). `driverName` picks between drivers when more than
+  one is installed; leave it blank for the usual single-driver case. Both are read **once,
+  at deployment** — the factory is built at startup and republishing configuration does not
+  rebuild it, so a change here needs a redeploy.
 - **The driver jar has to be visible to this WAR.** Skinny-WAR policy keeps everything but
   the framework out of `WEB-INF/lib` and `DriverManager` only finds what the classloader can
   see, so the JSR-309 media controller driver jars must be deployed into the `blade-shared`
@@ -322,6 +373,10 @@ Built and unit-tested:
 | `call.connected` — the ACK as its own event, with `negotiated` | done, 2 protocol tests |
 | `CallEvents` — the six call facts on the event bus, with `leg` | done, 5 tests |
 | CANCEL while the browser rings — stop ringing, free media, `callAbandoned` | done |
+| re-INVITE (hold, refresh, far-side escalation) on both media paths | done |
+| `call.dtmf` — digits to the far end as `application/dtmf-relay` INFO | done |
+| Registration refresh timer — re-REGISTER at the granted expiry | done |
+| Driver name and properties in `webrtc.json` | done |
 | JSR-309 media controller WebRTC endpoint facade | done, 10 tests |
 
 This WAR is Java only. It serves no page and ships no script: the browser side —
@@ -331,23 +386,11 @@ split is the point. A gateway that served its own client would keep a second cop
 the protocol in step with this one, and would pin the UI to the engine tier. The UI is
 a static page; it can be hosted anywhere.
 
-**Not yet built** — real gaps, not polish:
+**Not yet built.** Nothing.
 
-1. **`call.dtmf` and `call.accept`** are declared and accepted but not yet acted on — DTMF
-   needs an RFC 4733 or INFO path on the media leg.
-2. **Driver configuration** is still read from servlet context parameters rather than from
-   `WebrtcSettings` (`mediaMode`, `jwt` and `registerExpiresSeconds` *are* settings now;
-   the 309 driver's own keys have yet to follow).
-3. **Registration refresh timer** — see the Location service section: a tab open longer
-   than `registerExpiresSeconds` ages out of the registrar until it reconnects.
-4. **Recording escalation of a pass-through call.** `call.record` on a pass-through call
-   currently does nothing — the `call.update` re-key implementation was retired with the
-   WebSocket-relay path it was written for, and has to be rebuilt across the two SIP legs
-   (each gateway leg re-offers its own browser from the media server). Until then,
-   recording requires `mediaMode: anchor` from call start. Within an anchored call, the
-   remaining media-server gap is unchanged: the driver records a single
-   `NetworkConnection`, and mixing two parties needs the JSR-309 media controller's
-   compositing hub (`createMediaMixer` still throws).
+A re-INVITE is supported in both directions (see above), which is all this gateway needs to
+take part in a mid-call media change. What the call is re-INVITEd to, and what decides,
+belongs to whatever application is driving — not here.
 
 ## Build
 

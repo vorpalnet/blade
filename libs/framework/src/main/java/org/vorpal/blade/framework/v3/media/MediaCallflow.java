@@ -26,6 +26,7 @@ import javax.media.mscontrol.networkconnection.SdpPortManagerEvent;
 import javax.servlet.sip.SipApplicationSession;
 import javax.servlet.sip.SipServletRequest;
 import javax.servlet.sip.SipServletResponse;
+import javax.servlet.sip.SipSession;
 
 import com.bea.wcp.sip.WlssAction;
 import com.bea.wcp.sip.WlssSipApplicationSession;
@@ -366,6 +367,54 @@ public abstract class MediaCallflow extends Callflow {
 		}
 		String digits = parseDtmf(info.getContentType(), info.getContent());
 		return digits != null && deliverDtmf(info.getApplicationSession(), digits);
+	}
+
+	/// Send a DTMF digit out of band, as a SIP `INFO` carrying `application/dtmf-relay`.
+	///
+	/// The send half of [#deliverInfoDtmf], and out of band for the same reason the receive half is:
+	/// **there is no in-band alternative available.** JSR-309 nominally emits tones through
+	/// `MediaGroup.getSignalGenerator()`, but no driver behind this framework implements it — the
+	/// call throws — so a digit cannot be injected into the media stream at all. That makes INFO the
+	/// only path, not merely the convenient one.
+	///
+	/// Being signaling-plane also means it works identically whether a call is anchored on a media
+	/// server or relayed peer-to-peer. A relayed call has no media session to inject into and never
+	/// will, since its media is encrypted end to end; the INFO rides the SIP dialog either way.
+	///
+	/// The body is the de-facto Cisco format the field actually speaks, and the one [#parseDtmf]
+	/// reads back:
+	///
+	/// ```
+	/// Signal=5
+	/// Duration=250
+	/// ```
+	///
+	/// Fire-and-forget: the response is ignored, because there is nothing useful to do about a digit
+	/// the far end declined. `session` is the SIP session facing the party that should hear the tone.
+	///
+	/// @param session  the dialog to send on; must be confirmed
+	/// @param digit    one of `0`-`9`, `*`, `#`, `A`-`D`
+	/// @param duration tone duration in milliseconds, as advertised to the far end
+	/// @return true if the INFO was sent
+	public boolean sendInfoDtmf(SipSession session, String digit, int duration) {
+		if (session == null || digit == null || digit.isEmpty() || !session.isValid()) {
+			return false;
+		}
+		try {
+			SipServletRequest info = session.createRequest(INFO);
+			info.setContent(("Signal=" + digit + "\r\nDuration=" + duration + "\r\n")
+					.getBytes(StandardCharsets.US_ASCII), "application/dtmf-relay");
+			sendRequest(info, response -> {
+				// Nothing to do either way. A far end that refuses INFO cannot be made to accept a
+				// digit, and failing the call over one would be a worse answer than a missed tone.
+			});
+			return true;
+		} catch (Exception e) {
+			if (sipLogger != null) {
+				sipLogger.warning("MediaCallflow.sendInfoDtmf - could not send '" + digit + "': " + e);
+			}
+			return false;
+		}
 	}
 
 	/// Parse the DTMF string from an INFO body. Handles the two carriages seen in the field:

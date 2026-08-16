@@ -15,7 +15,6 @@ import javax.servlet.sip.SipSession;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.vorpal.blade.framework.v3.events.CloudEvent;
-import org.vorpal.blade.framework.v3.media.MediaCallflow;
 import org.vorpal.blade.framework.v3.media.MediaConfigs;
 
 /// A browser calls out — and *every* browser call goes out this way, including one whose far end is
@@ -39,8 +38,8 @@ import org.vorpal.blade.framework.v3.media.MediaConfigs;
 ///            <-answer--                           <-answer--
 ///   ```
 ///
-///   Joining the legs is what connects them. Required when the far end is a phone, and for
-///   recording — nothing can tap media it never carries.
+///   Joining the legs is what connects them. Required when the far end is a phone, and the only
+///   way any other service can reach this call's audio — nothing can tap media it never carries.
 ///
 /// - **Pass-through** — the browser's own offer goes in the INVITE body untouched, and the far
 ///   answer comes back untouched. If a browser answers (through the location service and a second
@@ -54,10 +53,8 @@ import org.vorpal.blade.framework.v3.media.MediaConfigs;
 /// would leave the browser with no media path during alerting — no ringback, no carrier early
 /// media, silence until the moment of connect. On the pass-through path there is no local answer
 /// to give: SDP is forwarded as the far end produces it, early or final.
-public class OutboundFromBrowser extends MediaCallflow {
+public class OutboundFromBrowser extends WebrtcCallflow {
 	private static final long serialVersionUID = 1L;
-
-	private static final String SDP_TYPE = "application/sdp";
 
 	@Override
 	public void process(SipServletRequest request) {
@@ -202,6 +199,8 @@ public class OutboundFromBrowser extends MediaCallflow {
 		BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP,
 				hangup -> byeAndRelease(response.getSession(), app));
 		expectRequest(response.getSession(), "BYE", bye -> onFarEndHungUp(bye, app, aor, callId));
+		expectDtmf(app, response.getSession());
+		expectReoffer(app, response.getSession(), aor, callId, null);
 
 		ObjectNode data = SignalProtocol.data();
 		String answer = firstAnswer(response, app);
@@ -296,18 +295,18 @@ public class OutboundFromBrowser extends MediaCallflow {
 				SignalProtocol.event(SignalProtocol.CALL_ESTABLISHED, callId, SignalProtocol.data()));
 
 		if (answer != null) {
-			processAnswer(networkLeg, answer, done -> acknowledge(response, app, aor, callId, true));
+			processAnswer(networkLeg, answer, done -> acknowledge(response, app, aor, callId, networkLeg, true));
 		} else {
 			// Answered with no SDP, so processAnswer never runs and the network leg is never
 			// negotiated: the media server has nowhere to send audio. The call is up for signaling
 			// and silent. This branch used to reach the same "established" the negotiated one did,
 			// which reported a healthy call to a browser that would never hear anything.
-			acknowledge(response, app, aor, callId, false);
+			acknowledge(response, app, aor, callId, networkLeg, false);
 		}
 	}
 
 	private void acknowledge(SipServletResponse response, SipApplicationSession app, String aor, String callId,
-			boolean negotiated) {
+			NetworkConnection networkLeg, boolean negotiated) {
 		try {
 			SipServletRequest ack = response.createAck();
 			ack.send();
@@ -319,6 +318,8 @@ public class OutboundFromBrowser extends MediaCallflow {
 		BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP,
 				hangup -> byeAndRelease(response.getSession(), app));
 		expectRequest(response.getSession(), "BYE", bye -> onFarEndHungUp(bye, app, aor, callId));
+		expectDtmf(app, response.getSession());
+		expectReoffer(app, response.getSession(), aor, callId, networkLeg);
 
 		BrowserRegistry.deliver(aor, SignalProtocol.event(SignalProtocol.CALL_CONNECTED, callId,
 				SignalProtocol.data().put("negotiated", negotiated)));

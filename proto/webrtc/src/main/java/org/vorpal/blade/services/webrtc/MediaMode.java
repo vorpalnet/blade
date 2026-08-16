@@ -23,8 +23,16 @@ package org.vorpal.blade.services.webrtc;
 public enum MediaMode {
 
 	/// Media server in the path. Required whenever one end is not a browser — a
-	/// phone cannot do ICE or DTLS-SRTP — and required for recording,
-	/// conferencing, transcription, scoring or intercept.
+	/// phone cannot do ICE or DTLS-SRTP.
+	///
+	/// It is also the only thing that makes a call's audio reachable by anything
+	/// else at all. Recording, transcription, conferencing, scoring and intercept
+	/// are not features of this gateway and are not implemented here; each is a
+	/// service of its own, and every one of them needs the media on a server
+	/// before it can do anything. Relayed media is encrypted directly between the
+	/// two endpoints, so it is unavailable to those services and to this gateway
+	/// alike — no amount of downstream software changes that. Choosing ANCHOR is
+	/// the whole of what this application contributes to any of them.
 	ANCHOR,
 
 	/// The browser's own SDP goes in the INVITE; media flows directly between

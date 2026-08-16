@@ -50,10 +50,8 @@ import org.vorpal.blade.framework.v3.media.MediaConfigs;
 ///   against it — the same dead end [OutboundFromBrowser] fails fast on when a pass-through far end
 ///   answers without DTLS. The media server is not a convenience on this path; it is the only party
 ///   present that can speak to both ends.
-public class InboundToBrowser extends MediaCallflow {
+public class InboundToBrowser extends WebrtcCallflow {
 	private static final long serialVersionUID = 1L;
-
-	private static final String SDP_TYPE = "application/sdp";
 
 	@Override
 	public void process(SipServletRequest invite) {
@@ -183,6 +181,8 @@ public class InboundToBrowser extends MediaCallflow {
 
 		BrowserSignals.cancel(app, SignalProtocol.CALL_HANGUP);
 		BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, hangup -> onBrowserHungUp(invite, app));
+		expectDtmf(app, invite.getSession());
+		expectReoffer(app, invite.getSession(), aor, callId, null);
 
 		SipServletResponse ok = invite.createResponse(200);
 		ok.setContent(browserAnswer.getBytes(StandardCharsets.UTF_8), SDP_TYPE);
@@ -261,6 +261,8 @@ public class InboundToBrowser extends MediaCallflow {
 			join(browserLeg, Joinable.Direction.DUPLEX, networkLeg);
 			BrowserSignals.cancel(app, SignalProtocol.CALL_HANGUP);
 			BrowserSignals.expect(app, SignalProtocol.CALL_HANGUP, hangup -> onBrowserHungUp(invite, app));
+			expectDtmf(app, invite.getSession());
+			expectReoffer(app, invite.getSession(), aor, callId, networkLeg);
 
 			if (networkAnswer != null) {
 				SipServletResponse ok = invite.createResponse(200);
@@ -278,6 +280,15 @@ public class InboundToBrowser extends MediaCallflow {
 		});
 	}
 
+	/// Forward every digit the browser presses to the far end for the rest of the call.
+	///
+	/// **Repeating, not one-shot.** Digits recur — a caller keying an account number sends a dozen —
+	/// and re-arming after each would leave a window in which one is dropped. [BrowserSignals] names
+	/// this exact case.
+	///
+	/// Armed at answer rather than at ring, because an `INFO` needs a confirmed dialog. The same call
+	/// works on both media paths: the digit rides the SIP dialog, so a relayed call whose media this
+	/// server never sees carries DTMF just as well as an anchored one.
 	/// The `200 OK` is on its way to the caller. Told to the browser and to the event bus, from the
 	/// one place, so the two can never disagree about when a call was answered.
 	private void established(SipServletResponse ok, String aor, String callId) {

@@ -81,11 +81,9 @@ public class SignalEndpoint {
 				connect(session, event);
 				break;
 			case SignalProtocol.CALL_ANSWER:
-			case SignalProtocol.CALL_ACCEPT:
 			case SignalProtocol.CALL_HANGUP:
 			case SignalProtocol.CALL_DTMF:
 			case SignalProtocol.ICE_CANDIDATE:
-			case SignalProtocol.CALL_RECORD:
 				forwardToCall(session, event);
 				break;
 			case SignalProtocol.CALL_OFFER:
