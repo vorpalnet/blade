@@ -1374,6 +1374,10 @@ public abstract class Callflow implements Serializable {
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
 
+		if (dropResponseToCancel(response)) {
+			return;
+		}
+
 		// Matches sendRequest above, and the v3 override — a null message is
 		// nothing to send, not a crash.
 		if (response == null) {
@@ -1468,6 +1472,45 @@ public abstract class Callflow implements Serializable {
 		sendResponse(response, (ackOrPrack) -> {
 			// do nothing;
 		});
+	}
+
+	/**
+	 * Drops an application's response to a CANCEL, and says so. Returns true when the response was
+	 * dropped and the caller should stop.
+	 *
+	 * <p>
+	 * RFC 3261 gives the CANCEL transaction to the server that receives it, and the container is
+	 * that server: it generates the 200 to the CANCEL and the 487 to the INVITE before an
+	 * application is ever called. An application's own response is therefore a <em>second</em> final
+	 * response to a transaction that has already finished.
+	 *
+	 * <p>
+	 * Nothing beneath us stops it. {@code SipServletRequestImpl.createResponse} throws only for ACK,
+	 * so building the response succeeds; and {@code SipServletResponseImpl.sendIt} explicitly
+	 * exempts CANCEL from the "transaction has been completed" check that refuses every other late
+	 * response — so it goes out. The result is a protocol violation that shows up nowhere but a
+	 * trace.
+	 *
+	 * <p>
+	 * Any status, not just 2xx: the whole transaction belongs to the container, so there is no
+	 * response an application could send that would be correct. Logged rather than swallowed
+	 * silently, because the message is the thing that teaches the rule — and in correct code this
+	 * never fires.
+	 *
+	 * @param response the response about to be sent
+	 * @return true if this was a response to a CANCEL and has been dropped
+	 */
+	public static boolean dropResponseToCancel(SipServletResponse response) {
+		if (response == null || !CANCEL.equals(response.getMethod())) {
+			return false;
+		}
+		if (sipLogger != null) {
+			sipLogger.warning(response,
+					"Callflow.sendResponse - dropping a " + response.getStatus() + " response to a CANCEL. "
+							+ "The container owns that transaction and has already answered it; sending "
+							+ "another would put a second final response on the wire.");
+		}
+		return true;
 	}
 
 	/**

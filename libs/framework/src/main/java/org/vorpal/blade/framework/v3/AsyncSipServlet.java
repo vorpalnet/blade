@@ -371,6 +371,9 @@ public abstract class AsyncSipServlet extends org.vorpal.blade.framework.AsyncSi
 	/// superArrow (server-generated sends: glare 491, errors).
 	@Override
 	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
+		if (Callflow.dropResponseToCancel(response)) {
+			return;
+		}
 		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 		Callflow.traceEvent(Direction.SEND, null, response, this.getClass().getName(), "sendResponse", null);
 		try {

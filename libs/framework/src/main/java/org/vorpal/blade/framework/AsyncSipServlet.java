@@ -1640,6 +1640,9 @@ public abstract class AsyncSipServlet extends SipServlet
 	/// @throws ServletException if a servlet error occurs while sending
 	/// @throws IOException if an I/O error occurs while sending
 	public void sendResponse(SipServletResponse response) throws ServletException, IOException {
+		if (Callflow.dropResponseToCancel(response)) {
+			return;
+		}
 		Callflow.getLogger().superArrow(Direction.SEND, null, response, this.getClass().getSimpleName());
 		try {
 			response.send();

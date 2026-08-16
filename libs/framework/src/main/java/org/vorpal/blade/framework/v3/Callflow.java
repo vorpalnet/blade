@@ -336,7 +336,7 @@ public abstract class Callflow extends org.vorpal.blade.framework.Callflow {
 	public void sendResponse(SipServletResponse response, Callback<SipServletRequest> lambdaFunction)
 			throws ServletException, IOException {
 
-		if (response == null) {
+		if (response == null || dropResponseToCancel(response)) {
 			return;
 		}
 

@@ -176,7 +176,13 @@ public class Terminate extends org.vorpal.blade.framework.v3.Callflow {
 
 		}
 
-		// Send response immediately for fear of a downstream process eating the BYE
+		// Send response immediately for fear of a downstream process eating the BYE.
+		//
+		// BYE only, never CANCEL: the container owns the CANCEL transaction and has already
+		// answered it. Callflow.sendResponse now drops a response to a CANCEL as well, so this
+		// test is belt to that braces — kept because it states the rule where somebody editing
+		// this method will read it, rather than leaving the code looking as though it answers a
+		// CANCEL and relying on a guard three files away to make that untrue.
 		if (request.getMethod().equals(BYE)) {
 			sendResponse(request.createResponse(STATUS_OK));
 		}
