@@ -697,7 +697,7 @@ fi
 		<profile>
 			<id>webrtc</id>
 			<activation><property><name>!skip.webrtc</name></property></activation>
-			<modules><module>proto/webrtc</module></modules>
+			<modules><module>services/webrtc</module></modules>
 		</profile>
 		<profile>
 			<id>demo</id>
@@ -890,29 +890,39 @@ fi
 			<modules><module>admin/callflow</module></modules>
 		</profile>
 
-		<!-- The two deployable EARs under apps/ — one per deploy target. Active
-		     by default; exclude with -Dskip.<name>. Each is assembled from its
+		<!-- One deployable EAR per tier, under apps/. Each is assembled from its
 		     component WARs via ear-<name> profiles inside the EAR pom (activated by
 		     !skip.<name>), so an EAR shrinks to match a trimmed build profile:
-		       apps/admin    -> blade-admin.ear     -> AdminServer    (skip.admin)
-		       apps/test     -> blade-test.ear      -> engine0        (skip.test)
-		     The javadoc WAR rides the `javadocs` profile id — blade-admin.ear
-		     carries javadoc.war exactly when docs are generated.
-
-		     There is deliberately NO services EAR. Oracle's Remote Console cannot
-		     show the status of an application bundled inside an EAR, so a single
-		     blade-services.ear left every service individually invisible — you
-		     could see the EAR was running, not which service inside it was. The
-		     service WARs ship loose in dist/services/ and deploy one by one. -->
+		       apps/admin    -> blade-admin.ear     -> AdminServer
+		       apps/services -> blade-services.ear  -> engine cluster
+		       apps/test     -> blade-test.ear      -> engine0
+		       apps/proto    -> blade-proto.ear     -> by hand (incubator)
+		     These build automatically — build.sh does not offer them as selectable
+		     modules, so their !skip.<name> activations are always on. The EAR is a
+		     packaging convenience: every tier's loose WARs ALSO ship in dist/<tier>/
+		     and remain the per-service deploy path (individually visible in Remote
+		     Console, which cannot see inside an EAR). Deploy whichever suits the
+		     tier. The javadoc WAR rides the `javadocs` profile id — blade-admin.ear
+		     carries javadoc.war exactly when docs are generated. -->
 		<profile>
 			<id>admin</id>
 			<activation><property><name>!skip.admin</name></property></activation>
 			<modules><module>apps/admin</module></modules>
 		</profile>
 		<profile>
+			<id>services-ear</id>
+			<activation><property><name>!skip.services</name></property></activation>
+			<modules><module>apps/services</module></modules>
+		</profile>
+		<profile>
 			<id>test</id>
 			<activation><property><name>!skip.test</name></property></activation>
 			<modules><module>apps/test</module></modules>
+		</profile>
+		<profile>
+			<id>proto-ear</id>
+			<activation><property><name>!skip.proto</name></property></activation>
+			<modules><module>apps/proto</module></modules>
 		</profile>
 
 

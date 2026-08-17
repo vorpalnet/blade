@@ -15,7 +15,7 @@ Copy the template, replace the placeholders, write the slides:
 | Placeholder | Is |
 |---|---|
 | `{{TITLE}}` | browser tab and gallery name — a short noun phrase, not a sentence |
-| `{{FOOTER}}` | the bottom-left label, e.g. `<b>BLADE</b> · proto/webrtc` |
+| `{{FOOTER}}` | the bottom-left label, e.g. `<b>BLADE</b> · services/webrtc` |
 | `{{YEAR}}` | copyright year |
 | `{{EYEBROW}}` `{{HEADLINE}}` `{{STANDFIRST}}` | the title slide |
 
@@ -23,7 +23,7 @@ Then replace the two example `<section class="slide">` blocks. The first slide c
 `class="slide on"`; every other is `class="slide"`. **The slide counter is computed at
 runtime**, so slides can be added or removed with nothing else to update.
 
-Decks live beside the application they describe — `proto/webrtc/deck.html` — so a deck
+Decks live beside the application they describe — `services/webrtc/deck.html` — so a deck
 versions with its code and staleness is a comparison against the README next to it.
 
 ## Writing the slides

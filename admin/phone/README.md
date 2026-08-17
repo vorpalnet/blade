@@ -64,7 +64,7 @@ that is sufficient rather than a shortcut.
 
 ## Related modules
 
-- [proto/webrtc](../../proto/webrtc/README.md) — the gateway this phone authenticates to
+- [services/webrtc](../../services/webrtc/README.md) — the gateway this phone authenticates to
 - [Portal](../portal/README.md) — the launcher deck this app's card appears on
 - [SECURITY.md](../../SECURITY.md) §2a — the token design in full
 - [BLADE](../../README.md) — project home

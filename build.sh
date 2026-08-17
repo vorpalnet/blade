@@ -46,15 +46,15 @@
 # The chosen source is shown in parentheses next to "Platform:" in the build
 # header (e.g. "Platform: occas-8.3 ($MW_HOME)").
 #
-# Admin EAR (profile-driven contents):
-#   When the active build-profiles/*.conf lists it, the admin tier EAR is built:
-#     ear → admin/ear → blade-admin.ear   (admin tier, AdminServer)
-#   Each admin WAR is contributed by an ear-<name> Maven profile activated by
-#   !skip.<name> — the same flags this script derives from the conf. The javadoc
-#   WAR rides the `javadocs` profile id: the admin EAR carries blade-javadoc.war
-#   when docs are generated, and assembles without it otherwise.
-#   The SERVICES tier has NO EAR — its WARs deploy individually (OCCAS 8.3 can't
-#   show an EAR's contents; deploy.sh loops the per-service WARs).
+# Per-tier EARs (automatic; contents track the profile):
+#   Every tier builds a per-tier EAR from apps/<tier> — blade-admin.ear,
+#   blade-services.ear, blade-test.ear, blade-proto.ear. Each component WAR is
+#   contributed by an ear-<name> Maven profile activated by !skip.<name> — the same
+#   flags this script derives from the conf — so an EAR shrinks to match a trimmed
+#   profile. The EAR modules are NOT discovered/selectable (see discover_modules),
+#   so they always build. The javadoc WAR rides the `javadocs` profile id: the
+#   admin EAR carries blade-javadoc.war when docs are generated.
+#   Both the loose WARs and the EAR land in dist/<tier>/ — deploy whichever suits.
 #
 # Dist management:
 #   Every WAR/JAR built during the run is copied to dist/<ver>-<build>/:
@@ -188,7 +188,10 @@ REVISION=$(grep '<revision>' "${SCRIPT_DIR}/pom.xml" | head -1 | sed 's/.*<revis
 # so a module that's discovered here but not listed in the active build-profiles/*.conf
 # will be excluded with -Dskip.<name>.
 discover_modules() {
-    for subdir in libs admin services test proto apps; do
+    # apps/ (the per-tier EAR modules) is intentionally NOT discovered: the EARs
+    # build automatically and aren't user-selectable, so they never get a
+    # -Dskip.<name> and never appear in the --init menu.
+    for subdir in libs admin services test proto; do
         for dir in "${SCRIPT_DIR}/${subdir}"/*/; do
             local name=$(basename "$dir")
             # Skip always-built modules
@@ -268,14 +271,18 @@ module_dir() {
 # blade-services.ear made every service invisible individually — you could see
 # that the EAR was running, not which service inside it was. Separate WARs cost
 # a longer deploy loop and buy per-service state, start/stop and targeting.
+# Every tier gets its own dist/ subdirectory holding its loose artifacts; each
+# tier's EAR is copied into the same subdir afterwards (see copy_all_to_dist), so
+# dist/<tier>/ is self-contained: loose WARs + the EAR, deploy whichever you want.
 dist_subdir_for() {
     case "$1" in
-        apps/*)                    echo "" ;;     # the EARs (blade-admin/test.ear) → dist root
-        services/*)                echo "services" ;; # each service WAR is its own deploy unit — see below
-        admin/*|test/*)            echo "skip" ;; # component WARs: the EAR is the deploy unit, not copied to dist
-        proto/*)                   echo "proto" ;; # incubator apps — built, deployed by hand
-        libs/*)                    echo "" ;;     # libraries at root (shared lib + approuter jar)
-        *)                         echo "" ;;
+        libs/*)      echo "lib" ;;
+        admin/*)     echo "admin" ;;
+        services/*)  echo "services" ;;
+        test/*)      echo "test" ;;
+        proto/*)     echo "proto" ;;
+        apps/*)      echo "skip" ;;    # the EARs — copied per-tier separately
+        *)           echo "" ;;
     esac
 }
 
@@ -346,6 +353,21 @@ copy_all_to_dist() {
         fi
         [ $produced -eq 0 ] && missing=$((missing + 1))
     done <<< "$INCLUDED_MODULES"
+
+    # Each tier's EAR (apps/<tier> → blade-<tier>.ear) into that tier's dir, so
+    # dist/<tier>/ holds the loose WARs AND the assembled EAR side by side. The
+    # apps/ subdir name is the tier name (admin/services/test/proto).
+    local eardir eartier earf
+    for eardir in "${SCRIPT_DIR}"/apps/*/; do
+        [ -d "${eardir}target" ] || continue
+        eartier=$(basename "$eardir")
+        for earf in "${eardir}target"/*.ear; do
+            [ -f "$earf" ] || continue
+            mkdir -p "$DISTDIR/$eartier"
+            cp -f "$earf" "$DISTDIR/$eartier/"
+            copied=$((copied + 1))
+        done
+    done
 
     [ -n "$CONF_FILE" ] && cp -f "$CONF_FILE" "$DISTDIR/" 2>/dev/null && copied=$((copied + 1))
     cp -f "${PLATFORMS_DIR}/${PLATFORM}.conf" "$DISTDIR/" 2>/dev/null && copied=$((copied + 1))
@@ -561,6 +583,9 @@ list_profiles() {
 # global PROFILES array, or exits. Shown when a build is requested on a TTY with
 # no profile named.
 pick_profile() {
+    # Wipe the terminal first so the picker lands on a clean screen (fd 3 is the
+    # real tty — see init_profile). `|| true` keeps set -e happy when fd 3 isn't.
+    [ -t 3 ] && printf '\033[H\033[2J' >&3 || true
     local -a names=()
     local f
     for f in "${PROFILES_DIR}"/*.conf; do
@@ -572,32 +597,37 @@ pick_profile() {
         names+=("$(basename "${f%.conf}")")
     done
 
-    echo ""
-    print_banner
-    echo ""
-    echo "Which would you like to build? BLADE is a development framework, so you"
-    echo "pick a profile rather than building everything."
-    echo ""
-    local i=1 n
-    for n in "${names[@]}"; do
-        printf '  %2d  %-10s %s\n' "$i" "$n" "$(profile_desc "$n")"
-        i=$((i + 1))
-    done
-    echo "   c  create a new profile (pick modules interactively)"
-    echo "   q  quit"
-    echo ""
+    # Paint to fd 3 (the real terminal, not the tee'd fd 1 — see init_profile),
+    # read from fd 0. Keeps the picker off build.log and its prompt on-screen.
+    {
+        echo ""
+        print_banner
+        echo ""
+        echo "Which would you like to build? BLADE is a development framework, so you"
+        echo "pick a profile rather than building everything."
+        echo ""
+        local i=1 n
+        for n in "${names[@]}"; do
+            printf '  %2d  %-10s %s\n' "$i" "$n" "$(profile_desc "$n")"
+            i=$((i + 1))
+        done
+        echo "   c  create a new profile (pick modules interactively)"
+        echo "   q  quit"
+        echo ""
+    } >&3
 
     local choice
     while true; do
-        read -r -p "  profile: " choice || choice="q"
+        printf '  profile: ' >&3
+        read -r choice || choice="q"
         case "$choice" in
-            q|Q|"") echo "No profile chosen — nothing built."; exit 1 ;;
+            q|Q|"") echo "No profile chosen — nothing built." >&3; exit 1 ;;
             c|C)    init_profile; return ;;
-            *[!0-9]*) echo "  please enter a number, or c / q: ${choice}" ;;
+            *[!0-9]*) echo "  please enter a number, or c / q: ${choice}" >&3 ;;
             *)      if [ "$choice" -ge 1 ] && [ "$choice" -le "${#names[@]}" ]; then
                         PROFILES=("${names[$((choice - 1))]}"); return
                     fi
-                    echo "  out of range: ${choice}" ;;
+                    echo "  out of range: ${choice}" >&3 ;;
         esac
     done
 }
@@ -639,7 +669,7 @@ init_profile() {
     # discover_modules; contiguous per tier because the outer loop is the tier).
     local -a mods=() tiers=()
     local tier dir name
-    for tier in libs admin services test proto apps; do
+    for tier in libs admin services test proto; do
         for dir in "${SCRIPT_DIR}/${tier}"/*/; do
             [ -e "$dir" ] || continue
             name=$(basename "$dir")
@@ -688,15 +718,30 @@ init_profile() {
         printf '%d/%d' "$n" "$tot"
     }
 
+    # Display label for a tier. The 'apps/' dir holds the EAR assemblers
+    # (blade-admin.ear, blade-test.ear), so show it as EARS, not the opaque dir
+    # name. Everything else is just its dir name, uppercased.
+    _tier_label() {
+        case "$1" in
+            apps) printf 'EARS' ;;
+            *)    printf '%s' "$1" | tr '[:lower:]' '[:upper:]' ;;
+        esac
+    }
+
     # Start on the first item (first row after the first header).
     local cursor=1
 
-    local tty=0; [ -t 1 ] && tty=1
+    # build.sh tees its own stdout to a build log, so fd 1 is a pipe, not the
+    # terminal, and [ -t 1 ] is always false. fd 3 is the pre-tee stdout (see the
+    # `exec 3>&1` redirect up top) — the real tty. Detect on it, paint the TUI to
+    # it (so the escapes reach the screen and never pollute build.log), and read
+    # keys from fd 0 (the terminal, which was never redirected).
+    local tty=0; [ -t 3 ] && tty=1
     # `return 0` matters under `set -e`: without it, a false `[ tty = 1 ]` test
     # makes the function return 1 and aborts the script (e.g. non-TTY --init).
-    _home()  { [ "$tty" = 1 ] && printf '\e[H\e[J'; return 0; }
-    _show()  { [ "$tty" = 1 ] && printf '\e[?25h'; return 0; }
-    _hide()  { [ "$tty" = 1 ] && printf '\e[?25l'; return 0; }
+    _home()  { [ "$tty" = 1 ] && printf '\e[H\e[J' >&3; return 0; }
+    _show()  { [ "$tty" = 1 ] && printf '\e[?25h' >&3; return 0; }
+    _hide()  { [ "$tty" = 1 ] && printf '\e[?25l' >&3; return 0; }
     # Restore the cursor if the user interrupts.
     trap '_show; exit 130' INT
     _hide
@@ -715,7 +760,7 @@ init_profile() {
             [ "$p" = "$cursor" ] && pre="›" || pre=" "
             if [ "$mi" = "-1" ]; then
                 [ "$c" = "$expanded" ] && arrow="▾" || arrow="▸"
-                label=$(printf '%s %-9s %s' "$arrow" "$(echo "$c" | tr '[:lower:]' '[:upper:]')" "($(_tier_stats "$c"))")
+                label=$(printf '%s %-9s %s' "$arrow" "$(_tier_label "$c")" "($(_tier_stats "$c"))")
             else
                 [ "$c" = "$expanded" ] || continue
                 box="[ ]"; _chk_has "${mods[$mi]}" && box="[x]"
@@ -755,28 +800,29 @@ init_profile() {
                     done
                 fi ;;
             enter) break ;;
-            quit)  _home; _show; trap - INT; echo "No profile created."; exit 1 ;;
+            quit)  _home; _show; trap - INT; echo "No profile created." >&3; exit 1 ;;
             *) ;;
         esac
-    done
+    done >&3
     _home; _show; trap - INT
 
     local -a selected=()
     local mm
     for mm in "${mods[@]}"; do _chk_has "$mm" && selected+=("$mm"); done
     if [ "${#selected[@]}" -eq 0 ]; then
-        echo "No modules selected — nothing to build."; exit 1
+        echo "No modules selected — nothing to build." >&3; exit 1
     fi
-    echo "Selected ${#selected[@]} modules."
+    echo "Selected ${#selected[@]} modules." >&3
 
     local pname=""
     while [ -z "$pname" ]; do
-        read -r -p "  name this profile: " pname || { echo "Aborted."; exit 1; }
+        printf '  name this profile: ' >&3
+        read -r pname || { echo "Aborted." >&3; exit 1; }
         case "$pname" in
             "") ;;
-            *[!A-Za-z0-9_-]*) echo "  use letters, digits, - or _ only"; pname="" ;;
+            *[!A-Za-z0-9_-]*) echo "  use letters, digits, - or _ only" >&3; pname="" ;;
             *) if [ -f "${PROFILES_DIR}/${pname}.conf" ]; then
-                   echo "  '${pname}' is a built-in profile — pick another name"; pname=""
+                   echo "  '${pname}' is a built-in profile — pick another name" >&3; pname=""
                fi ;;
         esac
     done
@@ -790,7 +836,7 @@ init_profile() {
         echo ""
         for mm in "${selected[@]}"; do echo "$mm"; done
     } > "$out"
-    echo "Wrote ${out}"
+    echo "Wrote ${out}" >&3
 
     PROFILES=("$pname")
 }
@@ -1067,7 +1113,10 @@ fi
 # it needs no profile: that keeps profile-free callers like `./build.sh clean`
 # working. On a TTY we offer a picker; without one we fail loudly (never hang).
 if [ ${#PROFILES[@]} -eq 0 ] && [ "$HAS_BUILD_GOAL" = true ]; then
-    if [ -t 0 ] && [ -t 1 ]; then
+    # Interactive when stdin is a tty AND fd 3 (the pre-tee real stdout — build.sh
+    # redirects fd 1 through tee) is a tty. Testing fd 1 here would always be
+    # false, forcing the non-interactive path even in a real terminal.
+    if [ -t 0 ] && [ -t 3 ]; then
         pick_profile
     else
         # No terminal to prompt at (CI, a wrapping build script). Ask politely,

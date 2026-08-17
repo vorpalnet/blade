@@ -40,9 +40,9 @@ A WebLogic shared library with `Extension-Name: blade-shared`, containing every 
 - **Why it's deployed twice:** WebLogic shared libraries are scoped to deployment targets. An admin app on AdminServer can only resolve a library that's also deployed to AdminServer, and the same goes for the cluster.
 - **Updating:** bumping a 3rd-party version requires one shared-library redeploy, not a rebuild of every service.
 
-### 3. Admin apps — `dist/<ver>/blade-admin.ear`
+### 3. Admin apps — `dist/<ver>/admin/`
 
-Management tools that run **only on AdminServer**, packaged as a single EAR (`blade-admin.ear` — at the **dist root**, alongside the other deploy units) so the whole admin tier deploys in one step. Each bundled WAR is self-contained exactly as it deploys standalone — it carries the framework jar and references the `blade-shared` shared library via its own `weblogic.xml`. The EAR is a packaging convenience over those WARs; it bundles no libraries itself. The admin EAR is the tier's only dist deployable — there is no `dist/<ver>/admin/` subdir. For a single-app test redeploy, each admin WAR is in its own module's exploded `target/` dir; `deploy.sh` deploys the EAR. The bundled web modules and their (unchanged) context-roots:
+Management tools that run **only on AdminServer**. `dist/<ver>/admin/` holds both the loose admin WARs **and** the assembled `blade-admin.ear`, so you can deploy the whole tier in one step (the EAR) or one app at a time (a WAR) — your call, per deploy. Each bundled WAR is self-contained exactly as it deploys standalone — it carries the framework jar and references the `blade-shared` shared library via its own `weblogic.xml`. The EAR is a packaging convenience over those WARs; it bundles no libraries itself. The bundled web modules and their (unchanged) context-roots:
 
 | Source module | WAR (in EAR) | Context root | Purpose |
 |---|---|---|---|
@@ -58,96 +58,95 @@ Management tools that run **only on AdminServer**, packaged as a single EAR (`bl
 | `admin/javadoc` | `blade-javadoc.war` | `/blade/javadoc` | Browsable Javadoc with UML diagrams |
 
 - **Why AdminServer only:** admin apps expose management endpoints; deploying them to the cluster would expose those endpoints on every engine node and duplicate state.
-- **EAR vs. individual WAR:** `deploy.sh ... admin` deploys `blade-admin.ear` (the whole tier). For a quick single-app test, redeploy that one WAR from its module's exploded `target/` dir — each is independently deployable.
+- **EAR or loose WAR:** deploy `blade-admin.ear` for the whole tier, or a single `blade-*.war` from `dist/<ver>/admin/` for a one-app test. Both are in the same directory.
 - **Watcher is retired.** The headless config auto-publish shim (`blade-watcher.war`) moved to `retired/watcher/` and is no longer built or shipped — the Configurator's auto-publish covers the same need. (It was always standalone-only, never in the EAR.)
 
-### 4. Services + test apps — individual WARs in `dist/<ver>/services/`
+### 4. Services + test apps — `dist/<ver>/services/` and `dist/<ver>/test/`
 
-The production SIP applications themselves (ACL, Analytics, Hold, Proxy-Registrar, Proxy-Router, etc.) deploy as **individual WARs**, one per service — there is **no services EAR**. (The old `blade-cluster.ear` was dropped: OCCAS 8.3 gives no visibility into what's deployed inside an EAR, and the services tier has no equivalent of the admin portal to enumerate its apps. Per-WAR deployment makes each a distinctly-named, visible WebLogic deployment.) Each WAR is self-contained exactly as it deploys standalone: framework JAR inside + the `blade-shared` shared-library reference in its own `weblogic.xml`. `./build.sh` drops every service WAR in `dist/<ver>/services/` (filenames match the context-root: `hold.war`, `proxy-router.war`).
+The SIP service applications (Analytics, Hold, Proxy-Registrar, Gateway, etc.). `dist/<ver>/services/` holds both the loose service WARs **and** `blade-services.ear`; `dist/<ver>/test/` likewise holds the test WARs and `blade-test.ear`. Deploy whichever suits you:
 
-- **Artifacts:** every WAR under `dist/<ver>-<build>/services/` (no EAR).
-- **Goes to:** the **cluster only** (engine tier). `deploy.sh ... services` loops the WARs, deploying each under its own name (`hold`, `proxy-router`, …) — visible individually in WebLogic.
-- **Why cluster only:** services handle live SIP traffic; AdminServer doesn't.
-- **Test apps deploy here too** (promoted to production 2026-06-05 as live-diagnostics tools): `test-uac`, `test-uas`, `test-b2bua`, plus `context`, are ordinary service WARs in `dist/<ver>/services/`.
+- **Loose WARs** — one WebLogic deployment per service (`hold`, `gateway`, …), each **individually visible** in Remote Console with its own state, start/stop and targeting. This is the model to reach for when you want per-service control (Remote Console cannot see inside an EAR).
+- **The EAR** — the whole tier in one deployment, when a single unit is more convenient than a longer per-WAR loop.
+
+Each WAR is self-contained exactly as it deploys standalone: framework JAR inside + the `blade-shared` shared-library reference in its own `weblogic.xml` (filenames match the context-root: `hold.war`, `gateway.war`).
+
+- **Goes to:** the **cluster only** (engine tier). Services handle live SIP traffic; AdminServer doesn't.
+- **Test apps** (promoted to production 2026-06-05 as live-diagnostics tools): `test-uac`, `test-uas`, `test-b2bua` in `dist/<ver>/test/`.
 
 ## Quick start
 
 ```bash
-./build.sh default                    # produce dist/<ver>-<build>/ (admin EAR + service WARs)
-cp build-profiles/deploy/production.secret.example \
-   build-profiles/deploy/production.secret
-chmod 600 build-profiles/deploy/production.secret
-$EDITOR build-profiles/deploy/production.secret        # fill in wls.password
-$EDITOR build-profiles/deploy/production.conf          # adminurl, user, targets, engine.nodes
-
-./deploy.sh production --dry-run                       # sanity check the whole environment
-./deploy.sh production                                 # deploy everything, in order
+./build.sh default                    # dist/<ver>-<build>/ with per-tier dirs: lib/ admin/ services/ test/ proto/
+$EDITOR ~/.blade/production.conf       # wls.adminurl, wls.user, admin.password (ENC), optional wls.target
 ```
 
-`./deploy.sh production` with no tier deploys the **whole environment** in
-dependency-safe order — **shared → fsmar → admin → services** — so the shared
-library is always in place (≥ spec-version 3.0) before any WAR that references it.
-The conf file is the single source of truth: each tier's WebLogic target is read
-from it (you no longer pass a target on the command line), the FSMAR jar is pushed
-to every host in `engine.nodes`, and `deploy.services` optionally narrows which
-service WARs go out.
+Deploy is **one artifact at a time** — you name the exact file and its WebLogic
+target, and `deploy.sh` does exactly that. There is no whole-environment
+orchestration and no built-in tier ordering: you sequence it. The usual order is
+shared library → FSMAR → apps, so every WAR's `<library-ref>` (≥ spec-version 3.0)
+resolves before the WARs that reference it:
 
-After deploy, **restart the engine tier** so the new `fsmar.jar` is picked up.
+```bash
+./deploy.sh production blade-shared.war   cluster1 --library   # shared library (deploy to admin + cluster targets)
+./deploy.sh production blade-fsmar.jar    --approuter          # FSMAR jar into approuter/
+./deploy.sh production blade-admin.ear    AdminServer          # admin tier as one EAR ...
+./deploy.sh production blade-portal.war   AdminServer          #   ... or a single admin WAR
+./deploy.sh production blade-services.ear cluster1             # services tier as one EAR ...
+./deploy.sh production gateway.war        cluster1             #   ... or one loose service WAR
+```
+
+After changing the FSMAR jar, **restart the engine tier** so each engine
+re-fetches the App Router from the admin.
 
 ## `./deploy.sh` reference
 
 ```
-./deploy.sh <env> [tier] [action] [--build VER] [--dry-run]
+./deploy.sh <env> <file> [target] [action] [--library|--approuter] [--name NAME] [--build VER] [--dry-run]
 ```
 
-`<env>` is a profile name (→ `build-profiles/deploy/<env>.conf`) or a path to a conf
-file. Omit `<tier>` to do the whole environment. `<tier>` ∈ `shared | fsmar | admin |
-services`. `<action>` ∈ `deploy | undeploy | status`, default `deploy`. **There is no
-target argument** — each tier's WebLogic target is read from the conf
-(`wls.targets.admin` / `wls.targets.cluster` / `wls.targets.both`).
+`<env>` is a conf name (→ `~/.blade/<env>.conf`, or `build-profiles/deploy/<env>.conf`)
+or a path. `<file>` is the exact artifact — a path, or a bare filename found in the
+newest `dist/<ver>/` tree (searched across `lib/ admin/ services/ test/ proto/`).
+`[target]` is the WebLogic target (server or cluster name); if omitted, `wls.target`
+from the conf is used. `[action]` ∈ `deploy | undeploy | status`, default `deploy`.
 
 | Invocation | Effect |
 |---|---|
-| `./deploy.sh production` | Whole environment, in order: shared → fsmar → admin → services |
-| `./deploy.sh production undeploy` | Whole environment, reverse order: services → admin → fsmar → shared (library last) |
-| `./deploy.sh production shared` | WebLogic shared library → `wls.targets.both` (AdminServer + cluster) |
-| `./deploy.sh production admin` | `dist/<ver>/blade-admin.ear` → `wls.targets.admin` |
-| `./deploy.sh production services` | service + test WARs in `dist/<ver>/services/` → `wls.targets.cluster` (narrowed by `deploy.services` if set) |
-| `./deploy.sh production fsmar` | `scp` FSMAR jar to `approuter/` on every host in `engine.nodes` (or `cp` locally) |
-| `./deploy.sh production admin undeploy` | Tear down every admin app from AdminServer |
-| `./deploy.sh production status` | `list-apps` against WebLogic (all tiers) |
-| `./deploy.sh production --build 2.9.5-320` | Pin to a specific dist build (default: newest) |
-| `./deploy.sh production --dry-run` | Print what would happen; run nothing |
+| `./deploy.sh production blade-admin.ear AdminServer` | Deploy the admin EAR to AdminServer |
+| `./deploy.sh production gateway.war cluster1` | Deploy one service WAR to the cluster |
+| `./deploy.sh production blade-services.ear cluster1` | Deploy the whole services tier as one EAR |
+| `./deploy.sh production blade-shared.war cluster1 --library` | Deploy as a WebLogic shared library |
+| `./deploy.sh production blade-fsmar.jar --approuter` | Copy the FSMAR jar into `approuter.dir` (no WebLogic) |
+| `./deploy.sh production gateway.war cluster1 undeploy` | Undeploy the app named `gateway` |
+| `./deploy.sh production blade-admin.ear AdminServer status` | `list-apps` against WebLogic |
+| `./deploy.sh production gateway.war cluster1 --build 3.0.5-880` | Take the file from a specific dist build |
+| `./deploy.sh production ./dist/3.0.6-908/admin/blade-portal.war AdminServer --dry-run` | Full path; print, change nothing |
 
-The whole-environment form gets the **ordering** right by construction: the shared
-library deploys first so it satisfies every WAR's `≥ 3.0` `<library-ref>` before those
-WARs deploy; undeploy reverses so nothing is torn out from under a still-referencing
-app.
-
-Each WAR is registered in WebLogic with `name = basename(war)` — so `blade-configurator.war` becomes the app `blade-configurator`. Admin-tier WARs are prefixed `blade-` (e.g. `blade-tuning`, `blade-crud`, `blade-analytics`) so their app names never collide with the like-named services-tier WARs (`hold`, `proxy-router`, …), whose filenames still match their context-root's last segment. The context-root itself is unchanged by the WAR name — `blade-configurator.war` still deploys at `/blade/configurator` — so bookmarks, portal cards, and config-file names are unaffected.
+The deployment name defaults to the filename without its extension
+(`blade-admin.ear` → `blade-admin`, `gateway.war` → `gateway`); override with
+`--name`. Admin-tier WARs are prefixed `blade-` so their app names never collide
+with the like-named services-tier WARs (`gateway`, `hold`, …). The context-root is
+unchanged by the WAR name — `blade-configurator.war` still deploys at
+`/blade/configurator`.
 
 ### Deploy profiles
 
-Every environment gets two files under `build-profiles/deploy/`:
+One file per environment, `~/.blade/<env>.conf`, holds both the connection and the
+(encrypted) password:
 
-| File | Status | Contains |
-|---|---|---|
-| `<env>.conf` | **committed** | Admin URL, WebLogic user, tier target names, engine node list, approuter path, optional service allowlist, build profile selection |
-| `<env>.secret` | **gitignored** | `wls.password=…` only |
-| `<env>.secret.example` | **committed** | Template for `.secret`, never contains a real password |
+| Key | Purpose |
+|---|---|
+| `wls.adminurl` | AdminServer URL (`t3://…` or `t3s://…`) |
+| `wls.user` | WebLogic admin user |
+| `admin.password=ENC(…)` | admin password, ENC()-wrapped (offered on first prompt) |
+| `wls.target` | *(optional)* default WebLogic target when none is given on the CLI |
+| `approuter.dir` | *(optional)* domain `approuter/` path for `--approuter` |
+| `wls.plugin.version` | *(optional)* override the weblogic-maven-plugin version |
 
-Four independent safeguards keep secrets out of git:
-
-1. Top-level `.gitignore`: `build-profiles/deploy/*.secret` with `!*.secret.example` negation.
-2. Nested `build-profiles/deploy/.gitignore` with the same rules (belt and suspenders).
-3. `deploy.sh` runs `git check-ignore` on the secret file before using it, and refuses if it's trackable.
-4. `deploy.sh` warns if a secret file is not mode 600.
-
-Password sourcing priority (highest wins):
-
-1. `BLADE_WLS_PASSWORD` environment variable
-2. `build-profiles/deploy/<env>.secret`
-3. Interactive prompt (with an offer to save into `<env>.secret`)
+Secret safeguards: `deploy.sh` runs `git check-ignore` on the conf if it's inside
+the repo and refuses to use a trackable one; a conf under `~/.blade` (outside the
+repo) is fine. Password priority (highest wins): `BLADE_WLS_PASSWORD` env var →
+`admin.password` in the conf → interactive prompt (with an offer to save it).
 
 ## FSMAR install walkthrough
 
@@ -159,7 +158,7 @@ This is the one tier that isn't a WebLogic deployment, so it's worth spelling ou
    ```
    $DOMAIN_HOME/approuter/blade-fsmar.jar
    ```
-   `./deploy.sh <env> fsmar` copies it from `dist/` via `scp` to every host listed in `engine.nodes` (or `cp` into `approuter.dir` locally if no nodes are configured).
+   `./deploy.sh <env> blade-fsmar.jar --approuter` copies it from `dist/` into `approuter.dir`. Only the admin needs the file — each engine fetches the App Router from the admin over the internal management channel at activation and caches it locally, so a single copy into the admin's `approuter/` reaches the whole cluster.
 3. Configure OCCAS to use FSMAR via the admin console. The exact navigation and field names change between OCCAS versions — check the OCCAS docs for your version.
 4. Restart the engine tier (not AdminServer). Node Manager or a rolling restart works.
 5. On first startup, FSMAR writes a sample config into the OCCAS `_samples` directory (same place every other BLADE app drops its samples). Copy it alongside your other BLADE app configs, rename, and edit — see `libs/fsmar/README.md` for the JSON schema.
@@ -170,30 +169,41 @@ The JARs can be updated in place and re-activated by a rolling engine-tier resta
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `NoClassDefFoundError` on an admin app | Shared library not deployed to AdminServer | `./deploy.sh <env> shared` |
-| `NoClassDefFoundError` on a service in the cluster | Shared library not deployed to the cluster | `./deploy.sh <env> shared` (`wls.targets.both` covers both) |
+| `NoClassDefFoundError` on an admin app | Shared library not deployed to AdminServer | `./deploy.sh <env> blade-shared.war AdminServer --library` |
+| `NoClassDefFoundError` on a service in the cluster | Shared library not deployed to the cluster | `./deploy.sh <env> blade-shared.war <cluster> --library` |
 | `ClassCastException: class X cannot be cast to class X` | Two copies of a class are visible — usually because a service WAR bundles a JAR that's also in the shared library | Rebuild the service WAR; check its `pom.xml` excludes 3rd-party JARs via `packagingExcludes` |
-| `missing wls.targets.admin` (or `.cluster`/`.both`) from `deploy.sh` | The conf doesn't define the target for a tier you're deploying | Set `wls.targets.admin` / `wls.targets.cluster` / `wls.targets.both` in `<env>.conf` |
-| `REFUSING: <env>.secret is not gitignored` | The secret file is tracked by git | Add to `.gitignore` and `git rm --cached <env>.secret` |
+| `No target given and no wls.target in …` | No target on the CLI and no `wls.target` in the conf | Name the WebLogic target, or set a default `wls.target` in `<env>.conf` |
+| `REFUSING: <env>.conf is not gitignored` | A conf inside the repo is tracked by git | Move it to `~/.blade/`, or gitignore it |
 | FSMAR config changes ignored | Engine tier not restarted | Rolling restart of the engine tier |
-| Service deployed to wrong target | Wrong target passed on the command line | Re-run with the correct target; the conf file no longer defaults a target for the generic admin/services tiers |
 
 ## Appendix: artifact-to-target map
 
 This is regenerated on every build as `dist/<ver>-<build>/DEPLOYMENT.txt`. The static view:
 
-**Dist root (deploy units + libraries):**
+Each tier has its own `dist/<ver>/` subdirectory holding its loose artifacts **and**, where applicable, its EAR — deploy whichever you want.
 
-| Artifact | Tier | Target | Purpose |
+**`dist/<ver>/lib/`** (libraries):
+
+| Artifact | Deploy as | Target | Purpose |
 |---|---|---|---|
-| `blade-admin.ear` | admin | AdminServer | All admin apps in one EAR (contents in tier 3 above) |
-| `blade-fsmar.jar` | fsmar | `approuter/` | SIP application router (reboot engine tier) |
-| `blade-shared.war` | shared-lib | AdminServer + cluster | WebLogic shared library (3rd-party JARs) |
-| `blade-framework.jar` | framework | bundled in WARs | BLADE framework library (not deployed directly) |
+| `blade-shared.war` | `--library` | AdminServer + cluster | WebLogic shared library (3rd-party JARs) |
+| `blade-fsmar.jar` | `--approuter` | `approuter/` | SIP application router (restart engine tier) |
+| `blade-framework.jar` | *(not deployed)* | bundled in WARs | BLADE framework library |
 
-**`dist/<ver>/services/`** (deploy to the cluster):
+**`dist/<ver>/admin/`** → AdminServer:
 
 | Artifact | Notes |
 |---|---|
-| `<service>.war` | one WAR per SIP service (`hold.war`, `proxy-router.war`, etc.) — context-root matches filename |
-| `test-uac.war`, `test-uas.war`, `test-b2bua.war` | test apps (cluster, same as services) |
+| `blade-admin.ear` | whole admin tier in one EAR |
+| `blade-*.war` | the same admin apps, loose, for single-app deploys |
+
+**`dist/<ver>/services/`** → the cluster:
+
+| Artifact | Notes |
+|---|---|
+| `blade-services.ear` | whole services tier in one EAR |
+| `<service>.war` | the same services, loose (`gateway.war`, `hold.war`, …) — individually visible in Remote Console; context-root matches filename |
+
+**`dist/<ver>/test/`** → engine0: `blade-test.ear`, or `test-uac.war` / `test-uas.war` / `test-b2bua.war` loose.
+
+**`dist/<ver>/proto/`** (incubator, deploy by hand): `blade-proto.ear`, or the individual proto WARs when built with the `full` profile.

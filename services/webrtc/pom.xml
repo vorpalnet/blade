@@ -11,7 +11,7 @@
 		<relativePath>../../pom.xml</relativePath>
 	</parent>
 
-	<artifactId>vorpal-blade-proto-webrtc</artifactId>
+	<artifactId>vorpal-blade-services-webrtc</artifactId>
 	<packaging>war</packaging>
 	<name>BLADE WebRTC Gateway (proto) — browser endpoints on OCCAS</name>
 	<description>Puts a browser on one end of a SIP call: JSON events over a WebSocket to the

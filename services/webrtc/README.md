@@ -391,7 +391,7 @@ belongs to whatever application is driving — not here.
 ## Build
 
 ```bash
-./blade/mvnw -f blade/proto/webrtc/pom.xml package
+./blade/mvnw -f blade/services/webrtc/pom.xml package
 ```
 
 Skinny WAR: `WEB-INF/lib` carries only `vorpal-blade-library-framework.jar`. `javax.websocket`
@@ -408,5 +408,5 @@ comes from the inherited `javaee-api` (provided); WebLogic supplies Tyrus at run
 
 ```xml
 <groupId>org.vorpal.blade</groupId>
-<artifactId>vorpal-blade-proto-webrtc</artifactId>
+<artifactId>vorpal-blade-services-webrtc</artifactId>
 ```

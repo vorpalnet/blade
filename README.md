@@ -82,7 +82,7 @@ Deployed to the WebLogic AdminServer as skinny WARs that reference the `blade-sh
 
 ### Services
 
-Deployed to the OCCAS cluster as individual WARs — one per service, deliberately no EAR (see [DEPLOYMENT.md](DEPLOYMENT.md)). Each WAR includes the framework JAR; 3rd-party libraries come from the shared library.
+Deployed to the OCCAS cluster as individual WARs — one per service — and also bundled into `blade-services.ear`; deploy either (see [DEPLOYMENT.md](DEPLOYMENT.md)). Each WAR includes the framework JAR; 3rd-party libraries come from the shared library.
 
 | Module | Description |
 | --- | --- |
@@ -101,6 +101,7 @@ Deployed to the OCCAS cluster as individual WARs — one per service, deliberate
 | [Queue](services/queue/README.md) | Call queuing and distribution |
 | [TPCC](services/tpcc/README.md) | Third-party call control |
 | [Transfer](services/transfer/README.md) | Implements REFER for transfer applications |
+| [WebRTC](services/webrtc/README.md) | WebRTC-to-SIP gateway |
 
 ### Incubator (`proto/`)
 
@@ -114,7 +115,6 @@ New apps start in `proto/` — they build under the `full` profile but stay out 
 | [Player](proto/player/README.md) | Vendor-neutral JSR-309 media player/recorder |
 | [Security](proto/security/README.md) | Admin-tier authentication configuration (JWT SSO) |
 | [Test Console](proto/test-console/README.md) | Cluster-wide control surface for the test apps |
-| [WebRTC](proto/webrtc/README.md) | WebRTC-to-SIP gateway |
 
 ### Test Applications
 
@@ -130,13 +130,13 @@ Deployed to the cluster alongside production applications (or to a standalone te
 
 # Deployment Model
 
-BLADE deploys in **four tiers**, each with its own scope:
+BLADE deploys across the OCCAS domain by scope. Each tier ships both as loose WARs and as a per-tier EAR (`blade-admin/services/test/proto.ear`); deploy whichever fits:
 
 ```
 OCCAS Domain
-├── approuter/               ← (1) fsmar.jar         [engine-tier reboot]
-├── AdminServer              ← (2) shared library  + (3) admin WARs
-└── Cluster (engine tier)    ← (2) shared library  + (4) service WARs (one each)
+├── approuter/               ← fsmar.jar                    [engine-tier restart]
+├── AdminServer              ← shared library  + admin WARs / blade-admin.ear
+└── Cluster (engine tier)    ← shared library  + service WARs / blade-services.ear
 ```
 
 See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full deployment guide, `./deploy.sh` reference, FSMAR install walkthrough, and troubleshooting.
@@ -295,8 +295,8 @@ directory is the authoritative per-artifact tier/target listing for the build yo
 Admin-tier WARs are named `blade-<app>.war` so their WebLogic app names never collide with the like-named services-tier WARs (e.g. admin `blade-crud.war` vs. a service `crud.war`); `blade-configurator.war` still deploys at `/blade/configurator` because the WAR filename and the `<wls:context-root>` are independent. **A SIP servlet application is always named for its context root** — `<finalName>` equals `<wls:context-root>`, with no prefix (`hold.war` → `/hold`, `gateway.war` → `/gateway`). That name is what the container reports to the App Router, so it is the name FSMAR configs target; a prefixed WAR would deploy under a name no FSMAR `next` could resolve. The `blade-` prefix belongs to admin-tier WARs only, and there it doesn't always equal the context — `blade-crud.war` → `/blade/crud-editor`, `blade-analytics.war` → `/blade/analytics`, `blade-test.war` → `/blade/test-console` — those three are deliberately shortened.
 
 - The dist contents are driven by the active build profile (`build-profiles/*.conf`). Stale artifacts from previous builds in unrelated `target/` directories do **not** leak in — only modules listed in the active conf are copied.
-- **No services EAR — by design.** Service WARs are copied to `dist/<ver>-<build>/services/` and deploy one at a time. Oracle's Remote Console cannot show the status of an application bundled inside an EAR, so a single `blade-services.ear` left every service individually invisible: you could see the EAR was running, not which service inside it was. Separate WARs cost a longer deploy loop and buy per-service state, start/stop and targeting. The admin and test tiers keep their EARs (`blade-admin.ear`, `blade-test.ear`).
-- **FSMAR JAR** must be installed manually into the OCCAS approuter `lib/` folder.
+- **Per-tier dist layout — loose WARs and an EAR, side by side.** Each tier gets its own `dist/<ver>-<build>/` subdirectory (`lib/ admin/ services/ test/ proto/`) holding its loose artifacts **and** the assembled EAR (`blade-admin.ear`, `blade-services.ear`, `blade-test.ear`, `blade-proto.ear`). Deploy the EAR for the whole tier in one step, or a loose WAR for per-service control — Remote Console can't see inside an EAR, so the loose WARs remain the way to get per-service state, start/stop and targeting. The EARs build automatically from whichever WARs the profile selected; they aren't `--init`-selectable modules.
+- **FSMAR JAR** must be installed manually into the OCCAS approuter folder (`./deploy.sh <env> blade-fsmar.jar --approuter`).
 - **Admin WARs** are skinny like service WARs — `WEB-INF/lib` carries only the framework jar; 3rd-party JARs come from the `blade-shared` shared library. They deploy to AdminServer (as `blade-admin.ear`, or individually).
 - On a failed build, the current build's `dist/` directory is deleted to prevent incomplete artifacts.
 
@@ -313,19 +313,18 @@ export BLADE_SKIP_DIST=1         # sticky for the current shell
 
 ### Deployment
 
-BLADE deploys in four tiers — shared library, admin apps, services (+ test apps), and FSMAR. The `<env>.conf` profile is the single source of truth (admin URL, per-tier WebLogic targets, engine node list, approuter path, app allowlist); `./deploy.sh <env>` with no tier deploys the **whole environment** in dependency-safe order. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full guide. The short version:
+`./deploy.sh` deploys **one named artifact to one WebLogic target** — you name the exact file and where it goes, and it does exactly that. No tiers, no ordering, no allowlists baked in; you sequence the deploy. The `<env>.conf` carries only the connection (admin URL, user, encrypted password, optional default target). See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full guide. The short version:
 
 ```bash
-./build.sh default                    # produce dist/<ver>-<build>/
-cp build-profiles/deploy/production.conf.example \
-   build-profiles/deploy/production.conf               # then edit: adminurl, user, targets, engine.nodes
-cp build-profiles/deploy/production.secret.example \
-   build-profiles/deploy/production.secret             # fill in wls.password
-# (env confs are gitignored — they carry your site's hostnames/IPs)
+./build.sh default                    # dist/<ver>-<build>/ with per-tier dirs: lib/ admin/ services/ test/ proto/
+$EDITOR ~/.blade/production.conf       # wls.adminurl, wls.user, admin.password (ENC), optional wls.target
 
-./deploy.sh production --dry-run      # sanity check the whole environment
-./deploy.sh production                # deploy everything, in order: shared → fsmar → admin → services
-./deploy.sh production services       # or just one tier (target read from the conf)
+# usual order: shared library → FSMAR → apps
+./deploy.sh production blade-shared.war   cluster1 --library
+./deploy.sh production blade-fsmar.jar    --approuter
+./deploy.sh production blade-admin.ear    AdminServer     # whole tier ...
+./deploy.sh production gateway.war        cluster1        # ... or one loose WAR
+./deploy.sh production gateway.war        cluster1 --dry-run   # print, change nothing
 ```
 
 ## Build Number

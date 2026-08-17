@@ -463,7 +463,7 @@ Locally verifiable (CI / build box):
   together only through the serialized JWKS document, as a deployment is. Covers
   claim carriage, that the published JWKS holds no private material, and that a
   token from a second issuer with identical claims does not verify.
-- **Browser authorization** — `BrowserAuthenticatorTest` (`proto/webrtc`): the
+- **Browser authorization** — `BrowserAuthenticatorTest` (`services/webrtc`): the
   gateway's own rule, against tokens from a real `JwtIssuer`. The cases that
   matter are the ones where a valid token from a genuine signed-in user is still
   refused because it asks for an address it was not granted, plus the three
